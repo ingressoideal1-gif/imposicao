@@ -1,0 +1,423 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   O comportamento do manual. Sem biblioteca, sem rede e sem armazenamento
+   local: o que a pessoa marca vive na memória desta aba, e só.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var $  = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+
+  var conves    = $('#conves');
+  var slides    = $$('.slide');
+  var total     = slides.length;
+  var contador  = $('#contador');
+  var barra     = $('#progresso');
+  var barraFill = barra.querySelector('i');
+  var setaEsq   = $('#seta-esq');
+  var setaDir   = $('#seta-dir');
+
+  var semMovimento = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var atual = 0;
+
+  /* ── Índice ───────────────────────────────────────────────────────────── */
+
+  var listaIndice = $('#lista-indice');
+  var secaoAnterior = '';
+  slides.forEach(function (slide, i) {
+    var li = document.createElement('li');
+    var a = document.createElement('a');
+    a.href = '#' + slide.id;
+    var secao = slide.getAttribute('data-secao') || '';
+    if (secao && secao !== secaoAnterior) {
+      var cabeca = document.createElement('li');
+      cabeca.setAttribute('aria-hidden', 'true');
+      cabeca.style.cssText = 'padding:14px 12px 4px;font-size:.72rem;letter-spacing:.14em;'
+        + 'text-transform:uppercase;font-weight:800;color:var(--texto-fraco);';
+      cabeca.textContent = secao;
+      listaIndice.appendChild(cabeca);
+      secaoAnterior = secao;
+    }
+    var num = document.createElement('i');
+    num.textContent = String(i + 1).padStart(2, '0');
+    var txt = document.createElement('span');
+    txt.textContent = slide.getAttribute('data-titulo') || ('Slide ' + (i + 1));
+    a.appendChild(num);
+    a.appendChild(txt);
+    a.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      irPara(i);
+      fecharIndice();
+    });
+    li.appendChild(a);
+    listaIndice.appendChild(li);
+  });
+  var linksIndice = $$('#lista-indice a');
+
+  /* ── Navegação ────────────────────────────────────────────────────────── */
+
+  function irPara(i, semHistorico) {
+    if (i < 0) { i = 0; }
+    if (i > total - 1) { i = total - 1; }
+    var alvo = slides[i];
+    conves.scrollTo({ top: alvo.offsetTop, behavior: semMovimento ? 'auto' : 'smooth' });
+    marcar(i, semHistorico);
+  }
+
+  function marcar(i, semHistorico) {
+    if (i === atual && linksIndice[i] && linksIndice[i].getAttribute('aria-current') === 'true') {
+      return;
+    }
+    atual = i;
+    contador.textContent = (i + 1) + ' / ' + total;
+    var pct = total > 1 ? (i / (total - 1)) * 100 : 100;
+    barraFill.style.width = pct + '%';
+    barra.setAttribute('aria-valuenow', Math.round(pct));
+    linksIndice.forEach(function (a, j) {
+      if (j === i) { a.setAttribute('aria-current', 'true'); }
+      else { a.removeAttribute('aria-current'); }
+    });
+    setaEsq.disabled = (i === 0);
+    setaDir.disabled = (i === total - 1);
+    if (!semHistorico) {
+      try { history.replaceState(null, '', '#' + slides[i].id); } catch (e) { /* file:// */ }
+    }
+  }
+
+  setaEsq.addEventListener('click', function () { irPara(atual - 1); });
+  setaDir.addEventListener('click', function () { irPara(atual + 1); });
+
+  /* Qual slide está na tela, pela POSIÇÃO da rolagem.
+     Por observador não servia: um slide mais alto que a janela — as tabelas
+     grandes, e todos eles no celular — nunca ocupa a fração exigida, e o
+     contador ficava parado num número antigo. */
+  var pedido = null;
+  function ondeEstamos() {
+    var meio = conves.scrollTop + conves.clientHeight * 0.35;
+    var achado = 0;
+    for (var i = 0; i < total; i++) {
+      if (slides[i].offsetTop <= meio) { achado = i; } else { break; }
+    }
+    // No fim da rolagem, o último slide é o que está sendo lido — mesmo que o
+    // topo dele ainda não tenha passado da linha acima.
+    if (conves.scrollTop + conves.clientHeight >= conves.scrollHeight - 4) {
+      achado = total - 1;
+    }
+    marcar(achado);
+  }
+  conves.addEventListener('scroll', function () {
+    if (pedido) { return; }
+    pedido = requestAnimationFrame(function () { pedido = null; ondeEstamos(); });
+  }, { passive: true });
+
+  var animar = new IntersectionObserver(function (entradas) {
+    entradas.forEach(function (e) {
+      if (!e.isIntersecting) { return; }
+      var alvos = Array.prototype.slice.call(e.target.querySelectorAll('[data-anim]'));
+      alvos.forEach(function (el, k) {
+        if (!el.style.getPropertyValue('--atraso')) {
+          el.style.setProperty('--atraso', (k * 60) + 'ms');
+        }
+        el.classList.add('dentro');
+      });
+      animar.unobserve(e.target);
+    });
+  }, { root: conves, threshold: 0.12 });
+  slides.forEach(function (s) { animar.observe(s); });
+
+  /* ── Teclado ──────────────────────────────────────────────────────────── */
+
+  function digitando(alvo) {
+    if (!alvo) { return false; }
+    var t = alvo.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || alvo.isContentEditable;
+  }
+
+  document.addEventListener('keydown', function (ev) {
+    if (buscaAberta()) { return teclaNaBusca(ev); }
+
+    if ((ev.key === 'k' || ev.key === 'K') && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault(); abrirBusca(); return;
+    }
+    if (ev.key === '/' && !digitando(ev.target)) {
+      ev.preventDefault(); abrirBusca(); return;
+    }
+    if (ev.key === 'Escape') { fecharIndice(); return; }
+    if (digitando(ev.target)) { return; }
+
+    switch (ev.key) {
+      case 'ArrowRight': case 'PageDown':
+        ev.preventDefault(); irPara(atual + 1); break;
+      case 'ArrowLeft': case 'PageUp':
+        ev.preventDefault(); irPara(atual - 1); break;
+      case ' ':
+        ev.preventDefault(); irPara(atual + (ev.shiftKey ? -1 : 1)); break;
+      case 'Home':
+        ev.preventDefault(); irPara(0); break;
+      case 'End':
+        ev.preventDefault(); irPara(total - 1); break;
+      default: break;
+    }
+  });
+
+  /* ── Deslizar com o dedo ──────────────────────────────────────────────── */
+
+  var toqueY = null, toqueX = null;
+  conves.addEventListener('touchstart', function (ev) {
+    if (ev.touches.length !== 1) { toqueY = null; return; }
+    toqueY = ev.touches[0].clientY;
+    toqueX = ev.touches[0].clientX;
+  }, { passive: true });
+  conves.addEventListener('touchend', function (ev) {
+    if (toqueY === null || !ev.changedTouches.length) { return; }
+    // Só em tela grande: no celular os slides são seções roláveis, e o
+    // deslize é a rolagem normal da página.
+    if (window.innerWidth <= 760) { toqueY = null; return; }
+    var dy = ev.changedTouches[0].clientY - toqueY;
+    var dx = ev.changedTouches[0].clientX - toqueX;
+    if (Math.abs(dy) > 70 && Math.abs(dy) > Math.abs(dx)) {
+      irPara(atual + (dy < 0 ? 1 : -1));
+    }
+    toqueY = null;
+  }, { passive: true });
+
+  /* ── Índice: abrir e fechar ───────────────────────────────────────────── */
+
+  var indice = $('#indice');
+  var fundo  = $('#fundo-painel');
+  var btnIndice = $('#btn-indice');
+
+  function abrirIndice() {
+    indice.classList.add('aberto');
+    indice.setAttribute('aria-hidden', 'false');
+    fundo.classList.add('aberto');
+    btnIndice.setAttribute('aria-expanded', 'true');
+    var atualLink = indice.querySelector('a[aria-current="true"]') || indice.querySelector('a');
+    if (atualLink) { atualLink.focus(); }
+  }
+  function fecharIndice() {
+    if (!indice.classList.contains('aberto')) { return; }
+    indice.classList.remove('aberto');
+    indice.setAttribute('aria-hidden', 'true');
+    fundo.classList.remove('aberto');
+    btnIndice.setAttribute('aria-expanded', 'false');
+    btnIndice.focus();
+  }
+  btnIndice.addEventListener('click', function () {
+    if (indice.classList.contains('aberto')) { fecharIndice(); } else { abrirIndice(); }
+  });
+  $('#btn-fechar-indice').addEventListener('click', fecharIndice);
+  fundo.addEventListener('click', fecharIndice);
+
+  /* ── Tema ─────────────────────────────────────────────────────────────── */
+
+  var raiz = document.documentElement;
+  var btnTema = $('#btn-tema');
+  var usoTema = $('#icone-tema').querySelector('use');
+  var rotuloTema = $('#rotulo-tema');
+
+  function sistemaEscuro() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function escuroAgora() {
+    var escolhido = raiz.getAttribute('data-tema');
+    if (escolhido === 'escuro') { return true; }
+    if (escolhido === 'claro') { return false; }
+    return sistemaEscuro();
+  }
+  function pintarBotaoTema() {
+    var escuro = escuroAgora();
+    usoTema.setAttribute('href', escuro ? '#i-sol' : '#i-lua');
+    rotuloTema.textContent = escuro ? 'Claro' : 'Escuro';
+    btnTema.setAttribute('aria-label', escuro
+      ? 'Mudar para o tema claro' : 'Mudar para o tema escuro');
+  }
+  btnTema.addEventListener('click', function () {
+    raiz.setAttribute('data-tema', escuroAgora() ? 'claro' : 'escuro');
+    pintarBotaoTema();
+  });
+  if (window.matchMedia) {
+    var consulta = window.matchMedia('(prefers-color-scheme: dark)');
+    var aoMudar = function () { if (!raiz.getAttribute('data-tema')) { pintarBotaoTema(); } };
+    if (consulta.addEventListener) { consulta.addEventListener('change', aoMudar); }
+    else if (consulta.addListener) { consulta.addListener(aoMudar); }
+  }
+  pintarBotaoTema();
+
+  /* ── Copiar ───────────────────────────────────────────────────────────── */
+
+  function copiarTexto(texto) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(texto);
+    }
+    // Reserva para quando a área de transferência moderna não existe — é o
+    // caso de abrir o arquivo direto do disco em alguns navegadores.
+    return new Promise(function (ok, falhou) {
+      try {
+        var caixa = document.createElement('textarea');
+        caixa.value = texto;
+        caixa.setAttribute('readonly', '');
+        caixa.style.cssText = 'position:fixed;top:-1000px;opacity:0;';
+        document.body.appendChild(caixa);
+        caixa.select();
+        var deu = document.execCommand('copy');
+        document.body.removeChild(caixa);
+        deu ? ok() : falhou();
+      } catch (e) { falhou(e); }
+    });
+  }
+
+  $$('.btn-copiar').forEach(function (botao) {
+    var rotulo = botao.lastChild;
+    botao.addEventListener('click', function () {
+      var alvo = document.getElementById(botao.getAttribute('data-copiar'));
+      if (!alvo) { return; }
+      copiarTexto(alvo.textContent).then(function () {
+        botao.classList.add('feito');
+        rotulo.textContent = 'Copiado';
+        setTimeout(function () {
+          botao.classList.remove('feito');
+          rotulo.textContent = 'Copiar';
+        }, 1800);
+      }).catch(function () {
+        rotulo.textContent = 'Selecione e copie';
+        setTimeout(function () { rotulo.textContent = 'Copiar'; }, 2600);
+      });
+    });
+  });
+
+  /* ── Listas de conferência ────────────────────────────────────────────── */
+  /* Só na memória desta aba, de propósito: o manual não guarda nada no
+     navegador de quem o lê. */
+  var marcados = Object.create(null);
+  $$('.conferir input[type="checkbox"]').forEach(function (caixa, i) {
+    var chave = 'c' + i;
+    caixa.checked = !!marcados[chave];
+    caixa.addEventListener('change', function () { marcados[chave] = caixa.checked; });
+  });
+
+  /* ── Busca ────────────────────────────────────────────────────────────── */
+
+  var busca      = $('#busca');
+  var campoBusca = $('#campo-busca');
+  var resultados = $('#resultados');
+  var buscaVazia = $('#busca-vazia');
+  var foco = 0;
+
+  var indexado = slides.map(function (s, i) {
+    var titulo = s.getAttribute('data-titulo') || ('Slide ' + (i + 1));
+    var corpo = (s.textContent || '').replace(/\s+/g, ' ').trim();
+    return {
+      i: i,
+      titulo: titulo,
+      secao: s.getAttribute('data-secao') || '',
+      chave: (titulo + ' ' + s.getAttribute('data-secao') + ' ' + corpo).toLowerCase()
+    };
+  });
+
+  function semAcento(t) {
+    return t.normalize ? t.normalize('NFD').replace(/[̀-ͯ]/g, '') : t;
+  }
+
+  function buscaAberta() { return busca.classList.contains('aberta'); }
+
+  function abrirBusca() {
+    busca.classList.add('aberta');
+    campoBusca.value = '';
+    desenharResultados('');
+    campoBusca.focus();
+  }
+  function fecharBusca() {
+    busca.classList.remove('aberta');
+    $('#btn-busca').focus();
+  }
+
+  function desenharResultados(termo) {
+    var t = semAcento(termo.toLowerCase()).trim();
+    var achados = indexado.filter(function (s) {
+      return !t || semAcento(s.chave).indexOf(t) >= 0;
+    });
+    resultados.innerHTML = '';
+    buscaVazia.hidden = achados.length > 0;
+    foco = 0;
+    achados.forEach(function (s, k) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      if (k === 0) { b.classList.add('ativo'); }
+      b.textContent = (s.i + 1) + '. ' + s.titulo;
+      var sub = document.createElement('small');
+      sub.textContent = s.secao;
+      b.appendChild(sub);
+      b.addEventListener('click', function () { fecharBusca(); irPara(s.i); });
+      li.appendChild(b);
+      resultados.appendChild(li);
+    });
+  }
+
+  function teclaNaBusca(ev) {
+    var botoes = $$('#resultados button');
+    if (ev.key === 'Escape') { ev.preventDefault(); fecharBusca(); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!botoes.length) { return; }
+      botoes[foco].classList.remove('ativo');
+      foco = (foco + (ev.key === 'ArrowDown' ? 1 : -1) + botoes.length) % botoes.length;
+      botoes[foco].classList.add('ativo');
+      botoes[foco].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (botoes.length) { botoes[foco].click(); }
+    }
+  }
+
+  $('#btn-busca').addEventListener('click', abrirBusca);
+  $('#btn-fechar-busca').addEventListener('click', fecharBusca);
+  campoBusca.addEventListener('input', function () { desenharResultados(campoBusca.value); });
+  busca.addEventListener('click', function (ev) { if (ev.target === busca) { fecharBusca(); } });
+
+  /* ── Abertura ─────────────────────────────────────────────────────────── */
+
+  function doHash() {
+    var h = (location.hash || '').replace('#', '');
+    if (!h) { return -1; }
+    for (var i = 0; i < total; i++) { if (slides[i].id === h) { return i; } }
+    return -1;
+  }
+
+  var inicial = doHash();
+  if (inicial > 0) {
+    // Sem animação de rolagem na abertura: quem recebeu o link de um passo
+    // específico precisa vê-lo direto, e não a capa passando na frente.
+    conves.scrollTo({ top: slides[inicial].offsetTop, behavior: 'auto' });
+    marcar(inicial, true);
+  } else {
+    marcar(0, true);
+  }
+
+  window.addEventListener('hashchange', function () {
+    var i = doHash();
+    if (i >= 0 && i !== atual) { irPara(i, true); }
+  });
+
+  // A primeira dobra aparece já animada, mesmo antes de qualquer rolagem.
+  setTimeout(function () {
+    var primeiro = slides[inicial > 0 ? inicial : 0];
+    Array.prototype.slice.call(primeiro.querySelectorAll('[data-anim]'))
+      .forEach(function (el) { el.classList.add('dentro'); });
+  }, 30);
+
+  // Ao imprimir, tudo precisa estar visível — inclusive o que nunca entrou na
+  // tela. O navegador dispara este evento antes de montar as páginas.
+  window.addEventListener('beforeprint', function () {
+    $$('[data-anim]').forEach(function (el) { el.classList.add('dentro'); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!-- ═══ 18 · A TELA DE LEITURA ═════════════════════════════════════════════ -->
+<section class="slide" id="slide-18" data-titulo="No dia: a tela de leitura" data-secao="No dia do evento">
+  <div class="dentro-do-slide">
+    <p class="sobre-titulo" data-anim>No dia do evento</p>
+    <h2 data-anim style="--atraso:60ms">A tela de leitura</h2>
+    <p class="linha-fina" data-anim style="--atraso:100ms">
+      É a tela que o porteiro usa a noite inteira. Ela foi desenhada para ser
+      lida de relance, com fila andando.
+    </p>
+
+    <div class="narracao" data-anim style="--atraso:140ms">
+      <svg aria-hidden="true"><use href="#i-fala"></use></svg>
+      <p>Vamos treinar a equipe em um minuto. Aponte a câmera para o ingresso —
+      não precisa tocar em nada. Ingresso bom: um bipe curto, a faixa verde
+      troca, e a câmera <strong>continua ligada</strong> para o próximo da fila.
+      Ingresso recusado: a tela inteira muda de cor, o aparelho vibra, e alguém
+      precisa tocar em “Ler o próximo”. Essa diferença é proposital: o que dá
+      certo não pode custar um toque, e o que dá errado não pode passar
+      despercebido.</p>
+    </div>
+
+    <div class="grade duas">
+      <div data-anim style="--atraso:180ms">
+        <div class="cartao">
+          <h3>O que tem na tela</h3>
+          <ul class="marcada">
+            <li><strong>No alto</strong>: o nome do setor em letra grande e, abaixo, o nome deste aparelho.</li>
+            <li><strong>No meio</strong>: a câmera, com as marcas de mira.</li>
+            <li><strong>Última leitura</strong>: setor, número e hora do último ingresso aceito.</li>
+            <li><strong>Na base</strong>: o contador, a lanterna e o “Digitar o número”.</li>
+          </ul>
+        </div>
+        <div class="bloco dica" style="margin-top:14px">
+          <svg aria-hidden="true"><use href="#i-dica"></use></svg>
+          <div>
+            <b class="rotulo-bloco">Dica</b>
+            O contador mostra <strong>quantos entraram sobre o total contratado</strong>
+            — por exemplo, <code>137 / 800</code>. Ele soma todos os setores que
+            aquele aparelho lê.
+          </div>
+        </div>
+      </div>
+
+      <div data-anim style="--atraso:240ms">
+        <div class="amostra">
+          <p class="titulo-amostra" style="color:var(--marca)">CAMAROTE SUPERIOR</p>
+          <p class="linha-amostra">Aparelho 1</p>
+        </div>
+        <div class="amostra" style="text-align:center">
+          <p class="linha-amostra">ÚLTIMA LEITURA</p>
+          <p class="faixa-verde" style="margin-top:8px">PISTA · 000123 · 21:14</p>
+        </div>
+        <div class="amostra" style="text-align:center">
+          <p class="titulo-amostra" style="color:var(--marca);font-size:1.4rem">137 / 800</p>
+          <p class="linha-amostra">entraram / contratado</p>
+        </div>
+        <p class="dim" style="margin-top:10px">Representação das telas. Substituir pelas capturas reais.</p>
+      </div>
+    </div>
+
+    <div class="bloco atencao" style="margin-top:16px" data-anim>
+      <svg aria-hidden="true"><use href="#i-atencao"></use></svg>
+      <div>
+        <b class="rotulo-bloco">Atenção</b>
+        O aplicativo pede <strong>um toque na tela</strong> quando a leitura
+        começa. É esse toque que libera o som no celular — sem ele, o navegador
+        não deixa o aparelho apitar.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 19 · AS RESPOSTAS DA PORTA ═════════════════════════════════════════ -->
+<section class="slide largo" id="slide-19" data-titulo="As respostas da porta" data-secao="No dia do evento">
+  <div class="dentro-do-slide">
+    <p class="sobre-titulo" data-anim>No dia do evento</p>
+    <h2 data-anim style="--atraso:60ms">As respostas da porta, uma a uma</h2>
+    <div class="narracao" data-anim style="--atraso:100ms">
+      <svg aria-hidden="true"><use href="#i-fala"></use></svg>
+      <p>Toda recusa vem com o motivo escrito — treine a equipe nestas oito
+      telas e a fila anda sem discussão. Repare que só uma delas é laranja: a
+      <strong>OUTRA PORTA</strong> quer dizer que o ingresso é bom e está só na
+      fila errada. As vermelhas significam que ele não entra em porta nenhuma agora.</p>
+    </div>
+
+    <p class="legenda-tabela" data-anim style="--atraso:160ms">O que aparece na tela do porteiro, e o que ele deve fazer.</p>
+    <div class="rolagem-lado" data-anim style="--atraso:180ms">
+      <table>
+        <thead>
+          <tr><th scope="col">A tela diz</th><th scope="col">Significa</th><th scope="col">O que a equipe faz</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Faixa verde</strong> com setor, número e hora</td><td>Ingresso aceito.</td><td>Nada. A câmera segue lendo o próximo.</td></tr>
+          <tr><td><strong>OUTRA PORTA</strong> <span class="selo" style="color:var(--destaque)">laranja</span></td><td>Ingresso bom, mas de outro setor.</td><td>A tela mostra de qual setor ele é e o que esta porta lê. Encaminhe a pessoa.</td></tr>
+          <tr><td><strong>JÁ ENTROU</strong></td><td>Este ingresso já foi usado.</td><td>A tela mostra a <strong>hora</strong> e em qual aparelho entrou. Chame a supervisão.</td></tr>
+          <tr><td><strong>NÃO É DESTE EVENTO</strong></td><td>O código não pertence a este evento.</td><td>Ingresso de outra data, ou falsificado. Chame a supervisão.</td></tr>
+          <tr><td><strong>FORA DO HORÁRIO</strong></td><td>O setor ainda não abriu, ou já fechou.</td><td>A tela diz a hora de abertura. Oriente a pessoa a voltar.</td></tr>
+          <tr><td><strong>SETOR BLOQUEADO</strong></td><td>Você bloqueou aquele setor inteiro.</td><td>O motivo que você escreveu aparece grande. Leia em voz alta.</td></tr>
+          <tr><td><strong>FAIXA BLOQUEADA</strong></td><td>O número está numa faixa que você suspendeu.</td><td>Idem: o motivo está na tela.</td></tr>
+          <tr><td><strong>EVENTO INATIVO</strong></td><td>O evento inteiro está desligado.</td><td>Fale com quem configurou: é o botão “Ativar este evento”.</td></tr>
+          <tr><td><strong>ERRO AO LER</strong></td><td>A câmera não conseguiu interpretar o código.</td><td>Limpe a lente, melhore a luz, ou use “Digitar o número”.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grade tres" style="margin-top:18px">
+      <div class="faixa-recusa" data-anim style="--atraso:240ms">
+        <b>JÁ ENTROU</b>
+        <span class="dim">PISTA · nº 000123<br>entrou 21:14 no Aparelho 1</span>
+      </div>
+      <div class="faixa-recusa faixa-porta" data-anim style="--atraso:290ms">
+        <b>OUTRA PORTA</b>
+        <span class="dim">Este ingresso é CAMAROTE.<br>Este aparelho lê PISTA.</span>
+      </div>
+      <div class="faixa-recusa" data-anim style="--atraso:340ms">
+        <b>SETOR BLOQUEADO</b>
+        <span class="dim">CAMAROTE · nº 000045<br>obra na entrada norte</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 20 · SEM INTERNET ══════════════════════════════════════════════════ -->
+<section class="slide" id="slide-20" data-titulo="Sem internet, na porta" data-secao="No dia do evento">
+  <div class="dentro-do-slide">
+    <p class="sobre-titulo" data-anim>No dia do evento</p>
+    <h2 data-anim style="--atraso:60ms">Sem internet, a porta continua</h2>
+    <p class="linha-fina" data-anim style="--atraso:100ms">
+      O evento inteiro fica guardado dentro do celular. A leitura não depende de
+      sinal — só o envio das leituras depende.
+    </p>
+
+    <div class="narracao" data-anim style="--atraso:140ms">
+      <svg aria-hidden="true"><use href="#i-fala"></use></svg>
+      <p>Esta é a parte que mais tranquiliza a produção. Quando o celular liga
+      no evento, ele <strong>baixa</strong> a lista de ingressos — você vê a
+      contagem subindo na tela “Baixando o evento”. A partir dali, cada leitura
+      é decidida ali dentro, em milissegundos, com ou sem 4G. As leituras ficam
+      numa fila e sobem sozinhas a cada cinco minutos, assim que houver
+      sinal.</p>
+    </div>
+
+    <div class="grade duas">
+      <div class="cartao" data-anim style="--atraso:180ms">
+        <h3>O que acontece sem sinal</h3>
+        <ul class="marcada">
+          <li>A leitura funciona normalmente, com a mesma velocidade.</li>
+          <li>O contador do aparelho continua subindo.</li>
+          <li>As leituras ficam guardadas no celular, sem limite prático.</li>
+          <li>Alterações que você fizer na configuração <strong>não chegam</strong> àquele aparelho até ele reconectar.</li>
+        </ul>
+      </div>
+      <div class="cartao" data-anim style="--atraso:240ms">
+        <h3>Quando o sinal volta</h3>
+        <ul class="marcada">
+          <li>A fila sobe sozinha, em segundo plano.</li>
+          <li>O contador se acerta com o total do evento.</li>
+          <li>Se dois aparelhos leram o mesmo ingresso offline, o servidor decide quem chegou primeiro — e o outro passa a constar como recusado.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bloco perigo" style="margin-top:16px" data-anim>
+      <svg aria-hidden="true"><use href="#i-perigo"></use></svg>
+      <div>
+        <b class="rotulo-bloco">Perigo</b>
+        <strong>Antes de tirar um celular do evento</strong> — em “Sair deste
+        aparelho”, ou trocando o aparelho de evento — conecte-o à internet e
+        espere a fila zerar. Sem o acesso daquele aparelho, as leituras
+        pendentes não sobem mais. O aplicativo trava essa saída justamente para
+        te avisar disso.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 21 · RECURSOS AVANÇADOS ════════════════════════════════════════════ -->
+<section class="slide" id="slide-21" data-titulo="Recursos que ajudam bastante" data-secao="No dia do evento">
+  <div class="dentro-do-slide">
+    <p class="sobre-titulo" data-anim>Recursos avançados</p>
+    <h2 data-anim style="--atraso:60ms">Recursos que ajudam bastante</h2>
+
+    <div class="narracao" data-anim style="--atraso:100ms">
+      <svg aria-hidden="true"><use href="#i-fala"></use></svg>
+      <p>Nada aqui é obrigatório — mas cada um destes recursos resolve uma
+      situação real que a gente já viu acontecer em porta de evento.</p>
+    </div>
+
+    <div class="grade tres">
+      <div class="cartao" data-anim style="--atraso:150ms">
+        <h3>Digitar o número</h3>
+        <p class="dim">Ingresso amassado, molhado ou com a impressão fraca? Toque em <strong>Digitar o número</strong> e informe a numeração impressa. Passa pelas mesmas regras.</p>
+      </div>
+      <div class="cartao" data-anim style="--atraso:200ms">
+        <h3>Uma porta, vários setores</h3>
+        <p class="dim">Um mesmo aparelho pode ler Pista e Camarote ao mesmo tempo. Útil na porta única, ou na madrugada, quando a equipe diminui.</p>
+      </div>
+      <div class="cartao" data-anim style="--atraso:250ms">
+        <h3>Pausar um aparelho</h3>
+        <p class="dim">Celular sumiu, ficou com alguém que saiu do turno, ou vai para o conserto? <strong>Pausar</strong> tira ele do ar na hora e você retoma quando quiser.</p>
+      </div>
+      <div class="cartao" data-anim style="--atraso:300ms">
+        <h3>Sair e voltar</h3>
+        <p class="dim">Setor configurado como <strong>“permite sair e voltar”</strong> aceita o mesmo ingresso várias vezes — a solução para área VIP e fumódromo.</p>
+      </div>
+      <div class="cartao" data-anim style="--atraso:350ms">
+        <h3>Juntar pedidos</h3>
+        <p class="dim">Vendeu mais do que esperava e mandou imprimir outro lote? Ao carregar, escolha <strong>juntar ao evento</strong>: um evento só, uma contagem só.</p>
+      </div>
+      <div class="cartao" data-anim style="--atraso:400ms">
+        <h3>Trocar de evento no mesmo celular</h3>
+        <p class="dim">O mesmo aparelho serve ao evento de sexta e ao de sábado. Toque na barra do outro evento — mas só depois que a fila do anterior tiver subido.</p>
+      </div>
+    </div>
+  </div>
+</section>
