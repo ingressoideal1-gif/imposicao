@@ -941,6 +941,12 @@
         });
     };
 
+    // O Enter do teclado numerico faz o mesmo que o toque em "Conferir": quem
+    // digitou o numero do ingresso quer a resposta sem procurar o botao.
+    $('campo-numero').onkeydown = function (ev) {
+        if (ev.key === 'Enter') { $('btn-conferir').click(); }
+    };
+
     // ── Partida ─────────────────────────────────────────────────────────────
 
     function recemConfigurado() {

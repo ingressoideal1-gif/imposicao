@@ -144,7 +144,7 @@
              ficha do evento, acima. -->
         <p class="config-ajuda carregar-conta">Conta: <strong id="carregar-email"></strong></p>
         <label for="carregar-senha">Sua senha</label>
-        <input id="carregar-senha" type="password" autocomplete="off">
+        <input id="carregar-senha" type="password" autocomplete="off" autocapitalize="none">
         <button id="btn-carregar-confirmar">Carregar</button>
         <button id="btn-carregar-cancelar" class="secundario">Cancelar</button>
         <div id="erro-carregar" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
@@ -204,9 +204,10 @@
             você. Se ainda não tem acesso, peça à gráfica.
         </p>
         <label for="email">E-mail</label>
-        <input id="email" type="email" autocomplete="username" inputmode="email">
+        <input id="email" type="email" autocomplete="username" inputmode="email"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
         <label for="senha">Senha</label>
-        <input id="senha" type="password" autocomplete="current-password">
+        <input id="senha" type="password" autocomplete="current-password" autocapitalize="none">
         <button id="btn-entrar">Entrar</button>
         <button id="btn-esqueci" class="secundario">Esqueci minha senha</button>
         <!-- SO aparece quando a pessoa escolheu vir para ca (o "Trocar minha
@@ -233,12 +234,12 @@
         </p>
         <div id="bloco-senha-atual">
             <label for="campo-senha-atual">Senha atual</label>
-            <input id="campo-senha-atual" type="password" autocomplete="current-password">
+            <input id="campo-senha-atual" type="password" autocomplete="current-password" autocapitalize="none">
         </div>
         <label for="campo-senha-nova">Senha nova</label>
-        <input id="campo-senha-nova" type="password" autocomplete="new-password">
+        <input id="campo-senha-nova" type="password" autocomplete="new-password" autocapitalize="none">
         <label for="campo-senha-confirma">Repita a senha nova</label>
-        <input id="campo-senha-confirma" type="password" autocomplete="new-password">
+        <input id="campo-senha-confirma" type="password" autocomplete="new-password" autocapitalize="none">
         <button id="btn-trocar-senha">Salvar a senha</button>
         <button id="btn-cancelar-trocar-senha" class="secundario">Cancelar</button>
         <div id="erro-trocar-senha" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
@@ -267,9 +268,10 @@
             aparelho quando você fechar a configuração.
         </p>
         <label for="entrar-config-email">E-mail</label>
-        <input id="entrar-config-email" type="email" autocomplete="off" inputmode="email">
+        <input id="entrar-config-email" type="email" autocomplete="off" inputmode="email"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
         <label for="entrar-config-senha">Senha</label>
-        <input id="entrar-config-senha" type="password" autocomplete="off">
+        <input id="entrar-config-senha" type="password" autocomplete="off" autocapitalize="none">
         <button id="btn-entrar-config">Entrar e configurar</button>
         <button id="btn-esqueci-entrar-config" class="secundario">Esqueci minha senha</button>
         <button id="btn-cancelar-entrar-config" class="secundario">Cancelar</button>
@@ -478,6 +480,10 @@
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
      ouvintes do login para cá. -->
 <script src="conta.js?v=632"></script>
+<!-- O olho de mostrar/ocultar senha, ao lado de cada campo de senha da casa.
+     Depois do `conta.js` por estilo -- ele nao depende de nenhum dos scripts
+     acima, so do DOM que o proprio `controle.html` ja declarou. -->
+<script src="mostrar-senha.js?v=632"></script>
 <!-- "Meus Pedidos": a lista dos pedidos já impressos e o Carregar. Depois do
      `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
      tem evento nenhum. -->

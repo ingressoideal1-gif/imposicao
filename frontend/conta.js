@@ -358,6 +358,24 @@
         $('senha').addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') { $('btn-entrar').click(); }
         });
+        // O Enter percorre o formulario como o dedo percorreria os campos:
+        // do e-mail para a senha, e so na senha ele confirma (acima).
+        $('email').addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { $('senha').focus(); }
+        });
+        // A troca de senha tem TRES campos, e o Enter avanca por eles como o
+        // "Ir" do teclado prometeria: atual -> nova -> confirma -> salvar. Os
+        // ouvintes vivem aqui, e nao em `mostrarTrocarSenha`, porque nao
+        // dependem de `obrigatoria` -- so precisam existir uma vez.
+        $('campo-senha-atual').addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { $('campo-senha-nova').focus(); }
+        });
+        $('campo-senha-nova').addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { $('campo-senha-confirma').focus(); }
+        });
+        $('campo-senha-confirma').addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { $('btn-trocar-senha').click(); }
+        });
         $('btn-esqueci').addEventListener('click', function () {
             window.AcessoConta.esqueciSenha().then(mostrarErroLogin);
         });

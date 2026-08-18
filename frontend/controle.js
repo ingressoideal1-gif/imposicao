@@ -1309,6 +1309,11 @@
             campoSenha.onkeydown = function (ev) {
                 if (ev.key === 'Enter') { botao.click(); }
             };
+            // Mesmo gesto do e-mail para a senha da tela de entrar da casa:
+            // o Enter leva ao proximo campo, e so na senha ele confirma.
+            campoEmail.onkeydown = function (ev) {
+                if (ev.key === 'Enter') { campoSenha.focus(); }
+            };
         });
     }
 

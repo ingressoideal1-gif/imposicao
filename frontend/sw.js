@@ -50,6 +50,7 @@ const ARQUIVOS = [
     'chaveiro.js?v=' + VERSAO,
     'lista-eventos.js?v=' + VERSAO,
     'conta.js?v=' + VERSAO,
+    'mostrar-senha.js?v=' + VERSAO,
     'meus-pedidos.js?v=' + VERSAO,
     'carregar-pedido.js?v=' + VERSAO,
     'virar-portao.js?v=' + VERSAO,

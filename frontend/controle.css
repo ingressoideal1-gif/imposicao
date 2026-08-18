@@ -163,6 +163,34 @@ input:disabled, select:disabled, textarea:disabled { opacity: .55; }
 /* O relogio/calendario nativo do campo de data, no escuro. */
 input[type="datetime-local"] { color-scheme: dark; }
 
+/* O olho de mostrar/ocultar senha (`mostrar-senha.js`). O envoltorio vira a
+   referencia de posicao do botao; o campo continua `width: 100%` (herdado
+   acima), so ganha `padding-right` para o texto digitado nunca passar por
+   baixo do olho. */
+.campo-senha { position: relative; display: block; }
+.campo-senha input { padding-right: 84px; }
+.olho-senha {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0 14px;
+    background: transparent;
+    border: 0;
+    border-radius: 0 var(--raio-p) var(--raio-p) 0;
+    box-shadow: none;
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--teal-claro);
+    cursor: pointer;
+}
+.olho-senha:hover:not(:disabled) { background: rgba(255, 255, 255, .05); filter: none; }
+
 /* ── Botoes ──────────────────────────────────────────────────────────────── */
 
 button {

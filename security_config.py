@@ -153,6 +153,10 @@ PAINEL_ARQUIVOS = [
     "chaveiro.js",
     "lista-eventos.js",
     "conta.js",
+    # O olho de mostrar/ocultar senha (18/08/2026), em cada campo de senha da
+    # casa. Sai junto com `conta.js`: e o mesmo arquivo que o `controle.html`
+    # carrega logo depois dele.
+    "mostrar-senha.js",
     "virar-portao.js",
     "fila-presa.js",
     "caixa-confirmar.js",
