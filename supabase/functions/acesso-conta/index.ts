@@ -258,7 +258,10 @@ async function meusEventos(donoId: string): Promise<any> {
   const eventos = (await banco(
     "GET",
     `producao_acesso_eventos?${filtro}` +
-      "&status=neq.excluido&select=id,nome_evento,data_evento,status,id_cliente" +
+      // `local_evento` entra aqui para a lista da casa poder mostrar onde e o
+      // evento, ao lado da data -- sem isso o cliente com dois eventos no
+      // mesmo dia nao tinha como distinguir um do outro so pelo nome.
+      "&status=neq.excluido&select=id,nome_evento,data_evento,local_evento,status,id_cliente" +
       "&order=created_at.desc",
   )) ?? [];
   for (const e of eventos) {
