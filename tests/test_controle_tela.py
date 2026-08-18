@@ -3073,6 +3073,38 @@ def test_a_frase_da_fila_presa_nunca_manda_so_esperar():
     assert "Enviar agora" in trecho and "descartá-las" in trecho
 
 
+# ── A saida da casa vazia ──────────────────────────────────────
+
+
+def test_o_botao_da_casa_vazia_abre_os_eventos_finalizados():
+    """Em 18/08/2026 uma conta com quatro eventos, todos finalizados, abriu a
+    casa vazia -- e "nenhum evento aqui ainda" foi lido como "o cadastro nao
+    funcionou". A frase agora conta quantos ha, e o botao leva ate eles."""
+    saida = _no_navegador("""
+        window.conta.esconderEntrar();
+        window.listaEventos.desenhar([]);
+        window.listaEventos.desenharFinalizados([
+            { id: 'a', nome: 'Festa da Uva', data: null, entradas: 0 },
+            { id: 'b', nome: 'Evento 2', data: null, entradas: 0 }
+        ]);
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        const antes = {
+            saidaVisivel: !sumiu('tem-finalizados'),
+            texto: document.getElementById('quantos-finalizados').textContent,
+        };
+        document.getElementById('btn-ver-finalizados').click();
+        await new Promise(r => setTimeout(r, 120));
+        return Object.assign(antes, {
+            menuAberto: !sumiu('menu-geral'),
+            finalizadosVisiveis: !sumiu('bloco-finalizados'),
+        });
+    """)
+    assert saida["saidaVisivel"] is True
+    assert "2 eventos finalizados" in saida["texto"]
+    assert saida["menuAberto"] is True, "o botao tem de LEVAR ate eles, nao so citar"
+    assert saida["finalizadosVisiveis"] is True
+
+
 # ── O menu geral, atras do olho do cabecalho ────────────────────────────────
 
 

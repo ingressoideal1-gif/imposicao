@@ -31,6 +31,15 @@ async function rodar(caso) {
                 contentType: 'text/html; charset=utf-8',
                 body: '<!doctype html><meta charset="utf-8"><title>lista</title>'
                     + '<div id="eventos"></div><p id="sem-eventos"></p>'
+                    // A saida da casa vazia, com os mesmos ids do
+                    // `controle.html`: sem eles o harness testaria uma tela
+                    // onde a saida nao existe, e o `desenhar()` passaria por
+                    // cima dela em silencio.
+                    + '<div id="tem-finalizados" class="sumindo">'
+                    + '<p id="quantos-finalizados"></p>'
+                    + '<button id="btn-ver-finalizados"></button></div>'
+                    + '<div id="bloco-finalizados"><div id="finalizados"></div></div>'
+                    + '<p id="sem-finalizados"></p>'
                     + '<div id="erro-arranque"></div>',
             });
         }
@@ -58,7 +67,15 @@ async function rodar(caso) {
     }
 
     const saida = await page.evaluate((c) => {
-        var r = window.listaEventos[c.chamada].apply(null, c.argumentos);
+        // Uma chamada so, como sempre -- ou uma SEQUENCIA, para o caso em que o
+        // resultado depende das duas: a saida da casa vazia so aparece quando
+        // `desenhar()` diz que a lista esta vazia E `desenharFinalizados()` diz
+        // quantos ha.
+        var passos = c.chamadas || [{ chamada: c.chamada, argumentos: c.argumentos }];
+        var r = null;
+        passos.forEach(function (p) {
+            r = window.listaEventos[p.chamada].apply(null, p.argumentos);
+        });
         var guardado = {};
         for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i);
@@ -69,7 +86,14 @@ async function rodar(caso) {
         // mostrou (o `.sub-evento`, por exemplo), sem inventar uma segunda
         // funcao so para o teste ler o mesmo resultado.
         var caixa = document.getElementById('eventos');
-        return { resultado: r, localStorage: guardado, eventosHtml: caixa ? caixa.innerHTML : null };
+        var saidaVazio = document.getElementById('tem-finalizados');
+        var quantos = document.getElementById('quantos-finalizados');
+        return {
+            resultado: r, localStorage: guardado,
+            eventosHtml: caixa ? caixa.innerHTML : null,
+            saidaEscondida: saidaVazio ? saidaVazio.classList.contains('sumindo') : null,
+            saidaTexto: quantos ? quantos.textContent : null,
+        };
     }, caso);
 
     await browser.close();

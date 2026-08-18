@@ -99,6 +99,23 @@
                 <li>Carregue um pedido que a gráfica já imprimiu</li>
                 <li>Diga se este aparelho vai ler os ingressos</li>
             </ol>
+
+            <!-- A SAIDA desta parede.
+
+                 "Nenhum evento aqui ainda" e verdade sobre a LISTA e mentira
+                 sobre a CONTA de quem finalizou todos os eventos que tinha. Em
+                 18/08/2026 foi exatamente o que aconteceu: uma conta com quatro
+                 eventos, todos finalizados, abriu a casa vazia — e a leitura
+                 natural foi "o cadastro nao funcionou".
+
+                 Preenchida e mostrada pelo `lista-eventos.js`, so quando ha
+                 finalizado: sem nenhum, os tres passos acima ja sao a saida. -->
+            <div id="tem-finalizados" class="sumindo">
+                <p id="quantos-finalizados"></p>
+                <button id="btn-ver-finalizados" class="secundario" type="button">
+                    Ver eventos finalizados
+                </button>
+            </div>
         </div>
 
     </div>

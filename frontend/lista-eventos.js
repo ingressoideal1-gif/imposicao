@@ -276,12 +276,42 @@
         return linha;
     }
 
+    // ── A saida da casa vazia ───────────────────────────────────────────────
+    //
+    // "Nenhum evento aqui ainda" fala da LISTA. Quem finalizou todos os eventos
+    // que tinha le a mesma frase e entende outra coisa: que a conta nao achou
+    // nada dele. Aconteceu em 18/08/2026, com uma conta recem-criada cujos
+    // quatro eventos estavam finalizados.
+    //
+    // Entao a casa vazia diz quantos finalizados existem e leva ate eles. Regra
+    // deste projeto: toda parede mostra, nela mesma, por onde se sai.
+    var casaVazia = false;
+    var quantosFinalizados = 0;
+
+    function saidaDaCasaVazia() {
+        var caixa = $('tem-finalizados');
+        // O harness de teste da lista monta uma pagina so com `#eventos`. Sem
+        // esta guarda, `desenhar()` quebraria la -- e ela e a funcao que nao
+        // pode falhar, porque e a que poe o portao na tela.
+        if (!caixa) { return; }
+        var mostrar = casaVazia && quantosFinalizados > 0;
+        caixa.classList.toggle('sumindo', !mostrar);
+        var frase = $('quantos-finalizados');
+        if (!frase || !mostrar) { return; }
+        frase.textContent = quantosFinalizados === 1
+            ? 'Você tem 1 evento finalizado. Para usá-lo de novo, reabra ele.'
+            : 'Você tem ' + quantosFinalizados + ' eventos finalizados. '
+              + 'Para usar um deles de novo, reabra ele.';
+    }
+
     function desenhar(linhas) {
         var caixa = $('eventos');
         if (!caixa) { return; }
         caixa.innerHTML = '';
         linhas.forEach(function (ev) { caixa.appendChild(linhaDeEvento(ev)); });
         $('sem-eventos').classList.toggle('sumindo', linhas.length > 0);
+        casaVazia = linhas.length === 0;
+        saidaDaCasaVazia();
     }
 
     // ── Os eventos finalizados ──────────────────────────────────────────────
@@ -428,6 +458,8 @@
         if (bloco) { bloco.classList.toggle('sumindo', vazio); }
         var frase = $('sem-finalizados');
         if (frase) { frase.classList.toggle('sumindo', !vazio); }
+        quantosFinalizados = linhas.length;
+        saidaDaCasaVazia();
     }
 
     /**
@@ -522,6 +554,15 @@
 
         window.chaveiro.migrar();
         explicarVoltaDaPortaria();
+
+        // Aqui e nao no `recarregar()`: um ouvinte a mais no mesmo botao faria
+        // um toque valer por dois.
+        var verFinalizados = $('btn-ver-finalizados');
+        if (verFinalizados) {
+            verFinalizados.addEventListener('click', function () {
+                if (window.menuGeral) { window.menuGeral.abrir(); }
+            });
+        }
 
         // A barra do topo e o `+` ao lado dela sao de quem os desenha: desde
         // 17/08/2026 os dois abrem "Meus Pedidos", e quem os liga e o

@@ -42,6 +42,23 @@ def _chamar(chamada, argumentos):
     return _chamar_completo(chamada, argumentos)["resultado"]
 
 
+def _sequencia(*passos):
+    """Roda varias funcoes em sequencia na MESMA pagina e devolve tudo o que o
+    harness observou. A saida da casa vazia depende de duas chamadas -- quantas
+    barras foram desenhadas e quantos finalizados vieram --, e testa-la com uma
+    so testaria outra coisa."""
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True,
+        encoding="utf-8",
+        input=json.dumps({"chamadas": [
+            {"chamada": c, "argumentos": a} for c, a in passos
+        ]}),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
 def unir(do_chaveiro, da_conta):
     return _chamar("unir", [do_chaveiro, da_conta])
 
@@ -440,3 +457,52 @@ def test_a_casa_vazia_ensina_os_tres_passos():
     assert "gráfica já imprimiu" in bloco
     assert "este aparelho vai ler os ingressos" in bloco
     assert 'class="aviso' in bloco, "a caixa perdeu o estilo de aviso"
+
+# ── A saida da casa vazia ───────────────────────────────────────────────────
+#
+# 18/08/2026: uma conta recem-criada, com quatro eventos, todos finalizados. A
+# casa abriu vazia dizendo "nenhum evento aqui ainda", e a leitura foi "o
+# cadastro nao funcionou". Os quatro estavam a um toque dali, no menu do olho.
+
+
+def _final(nome):
+    return {"id": nome, "nome": nome, "data": None, "entradas": 0}
+
+
+def test_a_casa_vazia_conta_os_eventos_finalizados():
+    r = _sequencia(("desenhar", [[]]),
+                   ("desenharFinalizados", [[_final("a"), _final("b"), _final("c")]]))
+    assert r["saidaEscondida"] is False
+    assert "3 eventos finalizados" in r["saidaTexto"]
+    assert "reabra" in r["saidaTexto"].lower(), "sem dizer o que fazer, so informa"
+
+
+def test_um_finalizado_so_fala_no_singular():
+    r = _sequencia(("desenhar", [[]]),
+                   ("desenharFinalizados", [[_final("a")]]))
+    assert "1 evento finalizado." in r["saidaTexto"]
+
+
+def test_sem_finalizado_nenhum_a_saida_nao_aparece():
+    """Os tres passos ja sao a saida de quem nunca teve evento. A linha dos
+    finalizados ali seria uma pergunta sem resposta."""
+    r = _sequencia(("desenhar", [[]]), ("desenharFinalizados", [[]]))
+    assert r["saidaEscondida"] is True
+
+
+def test_com_evento_na_lista_a_saida_some():
+    """Ela pertence a casa VAZIA. Com uma barra na tela, o dono ja tem para onde
+    ir, e a linha dos finalizados so competiria com ela."""
+    r = _sequencia(("desenhar", [[dict(LINHA_BASE)]]),
+                   ("desenharFinalizados", [[_final("a"), _final("b")]]))
+    assert r["saidaEscondida"] is True
+
+
+def test_a_casa_vazia_traz_o_botao_que_leva_aos_finalizados():
+    html = _ler("frontend/controle.html")
+    bloco = html[html.index('id="sem-eventos"'):html.index('id="meus-pedidos"')]
+    assert 'id="tem-finalizados"' in bloco
+    assert 'id="quantos-finalizados"' in bloco
+    assert 'id="btn-ver-finalizados"' in bloco
+    assert "Ver eventos finalizados" in bloco
+    assert 'class="sumindo"' in bloco, "a saida nasce escondida; quem a mostra e o JS"

@@ -310,6 +310,21 @@ button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
     counter-reset: passo;
 }
 .passos li { display: flex; align-items: center; gap: 8px; }
+/* A saida da casa vazia: a linha que conta os finalizados e o botao que leva
+   ate eles. Separada dos passos por um fio, porque e a outra resposta possivel
+   para "e agora?" -- e nao um quarto passo. */
+#tem-finalizados {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-forte);
+}
+#tem-finalizados p { margin: 0; }
+#tem-finalizados button { width: auto; }
+
 .passos li::before {
     counter-increment: passo;
     content: counter(passo);
