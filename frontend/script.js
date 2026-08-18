@@ -9579,6 +9579,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 // porque `nome` também alimenta as mensagens da tela ("o modelo
                 // X não possui arte"), e essas continuam precisando do número.
                 _imprimirNumero: imprimeNumeroDoModelo(sItem),
+                // O pedido DESTE modelo. Ver numeroDoPedidoDoItem().
+                _pedido: numeroDoPedidoDoItem(s.osId),
                 _itemId: s.itemId,
                 _osId: s.osId,
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
@@ -9851,7 +9853,12 @@ window.runImposition = async function (mode, returnBlob = false) {
                 // motor precisa saber de qual arte veio cada item. Arte montada
                 // a mao (Lista de Imposicao) nao tem modelo, e ai o motor recusa
                 // o trabalho — que e o certo: sem modelo o codigo nao existe.
-                modelo: arte.modelo || arte._itemId || null
+                modelo: arte.modelo || arte._itemId || null,
+
+                // E o pedido desta arte, pelo mesmo motivo: ele entra na coluna
+                // do pool E no conteudo do QR. Nulo significa "o pedido do
+                // trabalho", que e o caso de toda folha de um pedido so.
+                pedido: arte._pedido || null
 
             };
 
@@ -13621,6 +13628,26 @@ function imprimeNumeroDoModelo(item) {
 
 }
 window.imprimeNumeroDoModelo = imprimeNumeroDoModelo;
+
+
+
+/**
+ * O número do pedido a que um modelo pertence — o número que o ERP mostra, e que
+ * o QR Ideal escreve de trás para frente dentro do código.
+ *
+ * Viaja por arte no payload porque uma folha pode juntar modelos de pedidos
+ * diferentes. O pedido do trabalho é o de um deles, e serviria de resposta
+ * errada para os outros: coluna errada do pool e prefixo errado no QR — um
+ * ingresso que só falha na portaria. Ver docs/qr_ideal.md.
+ */
+function numeroDoPedidoDoItem(osId) {
+
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId));
+
+    return os && os.numero !== undefined && os.numero !== null ? String(os.numero) : null;
+
+}
+window.numeroDoPedidoDoItem = numeroDoPedidoDoItem;
 
 
 

@@ -59,7 +59,7 @@ def _linhas(prefixo, qtd):
     return [{"Nome": f"{prefixo}{i + 1}"} for i in range(qtd)]
 
 
-def _arte(prefixo, qtd, com_banco=True, modelo=None):
+def _arte(prefixo, qtd, com_banco=True, modelo=None, pedido=None):
     """Uma arte = um modelo do pedido, com a fatia dele do banco."""
     numeracao = {"tipo": "SEQUENCIAL", "start": 1, "elements": [ELEMENTO_NOME]}
     if com_banco:
@@ -73,6 +73,7 @@ def _arte(prefixo, qtd, com_banco=True, modelo=None):
         "pdf_verso_url": None,
         "local_path": None,
         "modelo": modelo,
+        "pedido": pedido,
     }
 
 
@@ -233,17 +234,13 @@ def test_folha_somada_com_qr_ideal_e_item_sem_modelo_falha_alto(tmp_path):
     recebia o modelo do trabalho; o caminho de montagem, que chama sem indice,
     dava a TODOS os itens o modelo da primeira arte. Os codigos saiam da coluna
     errada do pool — e isso so aparece na portaria."""
-    qr = {
-        "id": "q1", "type": "QR_IDEAL",
-        "x_mm": 50, "y_mm": 25, "size_mm": 15,
-        "color": "#000000", "rotation": 0,
-    }
     artes = [_arte("A", 4, modelo=1000270), _arte("B", 4, modelo=None)]
-    for a in artes:
-        a["numeracao"]["elements"] = [ELEMENTO_NOME, qr]
 
-    with pytest.raises(ValueError, match="QR Ideal"):
-        _impor(tmp_path, artes, pedido=20495)
+    # A mensagem tem de ser a ESPECIFICA, da conferencia previa, e nao a
+    # generica do meio da montagem das paginas: quem le precisa saber que falta
+    # o modelo, e de qual arte.
+    with pytest.raises(ValueError, match="o modelo de"):
+        _impor_com_qr(tmp_path, artes, pedido=20495)
 
 
 # ── Pose girada no caminho de montagem ───────────────────────────────────────
@@ -389,3 +386,171 @@ def test_sequencial_combinado_enche_a_folha_na_ordem(tmp_path):
         ["A5", "B1", "B2", "B3"],
         ["B4", "B5"],
     ], folhas
+
+
+# ── QR Ideal: o pedido de cada item ──────────────────────────────────────────
+#
+# O conteudo do QR e `reverso(pedido) + codigo`, e a COLUNA do pool e
+# `(ultimos2(pedido) - ultimos2(modelo)) mod 100`. As duas coisas dependem do
+# pedido, que ate 18/08/2026 era um so por trabalho.
+#
+# Numa folha que junta modelos de PEDIDOS diferentes, o pedido do trabalho e o de
+# um deles e serviria de resposta errada para os outros: coluna errada e prefixo
+# errado. Um ingresso assim nao parece defeituoso — ele e entregue, e falha na
+# portaria, com a fila na porta.
+
+QR_IDEAL_EL = {
+    "id": "q1", "type": "QR_IDEAL",
+    "x_mm": 50, "y_mm": 25, "size_mm": 15,
+    "color": "#000000", "rotation": 0,
+}
+
+
+def _numeracao(com_qr):
+    """A numeracao do TRABALHO.
+
+    O QR precisa estar aqui, e nao so dentro de cada arte: `cfg.elements` e
+    montado a partir desta numeracao, e e ele que `_usa_qr_ideal()` varre para
+    decidir se as travas previas rodam. Uma folha com QR so nas artes chega ao
+    desenho sem passar por nenhuma delas — e ai a mensagem de erro e a generica,
+    do meio da montagem.
+    """
+    els = [ELEMENTO_NOME] + ([QR_IDEAL_EL] if com_qr else [])
+    return {"tipo": "SEQUENCIAL", "elements": els}
+
+
+def _pool_ou_none():
+    """O pool de 24 MB da estacao, quando ele existe nesta maquina."""
+    try:
+        import qr_ideal as _qi
+        return _qi.PoolQR()
+    except Exception:
+        return None
+
+
+def _impor_com_qr(tmp_path, artes, pedido=None):
+    out = tmp_path / "com_qr.pdf"
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(out),
+        formato=FORMATO,
+        numeracao=_numeracao(True),
+        saida=SAIDA,
+        layout_schema="multi_artes",
+        multi_artes=artes,
+        pedido=pedido,
+        pool_qr=_pool_ou_none(),
+    )
+    ImpositionEngine(cfg).process()
+    return cfg, str(out)
+
+
+def _motor(artes, pedido=None, com_qr=False):
+    """Um motor montado so para perguntar coisas, sem gerar papel."""
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf="nao_sera_gravado.pdf",
+        formato=FORMATO,
+        numeracao=_numeracao(com_qr),
+        saida=SAIDA,
+        layout_schema="multi_artes",
+        multi_artes=artes,
+        pedido=pedido,
+        pool_qr=_pool_ou_none(),
+    )
+    return ImpositionEngine(cfg)
+
+
+def test_o_pedido_do_item_vence_o_do_trabalho():
+    """Cada item leva o pedido da SUA arte. O do trabalho e so o recuo."""
+    artes = [_arte("A", 4, modelo=1000270, pedido=20495),
+             _arte("B", 4, modelo=1000301, pedido=20508)]
+    motor = _motor(artes, pedido=20495)
+
+    assert motor._pedido_do_item({"pedido": 20508}) == "20508"
+    assert motor._pedido_do_item({"pedido": "20495"}) == "20495"
+
+
+def test_o_pedido_volta_como_texto_e_nunca_como_numero():
+    """O pedido 20270 invertido e "07202". Tratado como inteiro viraria 7202,
+    que invertido e 2027 — outro pedido, outro evento."""
+    motor = _motor([_arte("A", 4, modelo=1000270, pedido="00123")], pedido="00123")
+    assert motor._pedido_do_item({"pedido": "00123"}) == "00123"
+    assert motor._pedido_do_item(None) == "00123"
+
+
+def test_folha_de_um_pedido_so_continua_usando_o_do_trabalho():
+    """Nenhuma arte declara pedido: e toda folha que existia antes desta
+    mudanca, e ela nao pode mudar de comportamento."""
+    motor = _motor([_arte("A", 4, modelo=1000270), _arte("B", 4, modelo=1000271)],
+                   pedido=20495)
+    assert motor._pedidos_da_folha() == []
+    assert motor._pedido_do_item(None) == "20495"
+    assert motor._pedido_do_item({}) == "20495"
+
+
+def test_folha_que_mistura_pedidos_e_item_sem_pedido_falha_alto():
+    """A regra do QR Ideal: sem o dado, o trabalho para. Nunca calcular com
+    valor suposto — o erro so apareceria na portaria."""
+    artes = [_arte("A", 4, modelo=1000270, pedido=20495),
+             _arte("B", 4, modelo=1000301, pedido=20508)]
+    motor = _motor(artes, pedido=20495)
+
+    assert motor._pedidos_da_folha() == ["20495", "20508"]
+    with pytest.raises(ValueError, match="pedidos diferentes"):
+        motor._pedido_do_item({"modelo": 1000301})
+
+
+def test_a_conferencia_previa_diz_qual_arte_esta_sem_pedido(tmp_path):
+    """Recusar ANTES do papel, dizendo o que falta — e nao no meio da montagem
+    das paginas."""
+    artes = [_arte("A", 4, modelo=1000270, pedido=20495),
+             _arte("B", 4, modelo=1000301, pedido=20508),
+             _arte("C", 4, modelo=1000302, pedido=None)]
+
+    with pytest.raises(ValueError, match="o pedido de"):
+        _impor_com_qr(tmp_path, artes, pedido=20495)
+
+
+def test_colunas_repetidas_so_recusam_dentro_do_mesmo_pedido(tmp_path):
+    """1000270 e 1000370 terminam nos mesmos dois digitos, entao caem na mesma
+    coluna do pool.
+
+    No MESMO pedido isso produz QRs identicos no mesmo evento, e o trabalho e
+    recusado. Em pedidos DIFERENTES o prefixo separa o conteudo do QR, a portaria
+    distingue os dois, e recusar bloquearia uma combinacao legitima — o risco
+    residual (codigo de 8 caracteres repetido entre eventos) ja esta conhecido e
+    aceito em docs/qr_ideal.md.
+    """
+    mesmos = [_arte("A", 4, modelo=1000270, pedido=20495),
+              _arte("B", 4, modelo=1000370, pedido=20495)]
+    with pytest.raises(ValueError, match="mesma coluna"):
+        _impor_com_qr(tmp_path, mesmos, pedido=20495)
+
+    if _pool_ou_none() is None:
+        pytest.skip("estacao sem qr_ideal_pool.bin")
+    outros = [_arte("A", 4, modelo=1000270, pedido=20495),
+              _arte("B", 4, modelo=1000370, pedido=20508)]
+    _impor_com_qr(tmp_path, outros, pedido=20495)   # nao levanta
+
+
+def test_o_qr_de_cada_item_sai_com_o_pedido_da_sua_arte(tmp_path):
+    """A prova de ponta a ponta: dois pedidos na mesma folha, e o conteudo de
+    cada QR comeca pelo pedido invertido do modelo a que ele pertence."""
+    import qr_ideal as _qi
+
+    if _pool_ou_none() is None:
+        pytest.skip("estacao sem qr_ideal_pool.bin")
+    artes = [_arte("A", 4, modelo=1000270, pedido=20495),
+             _arte("B", 4, modelo=1000301, pedido=20508)]
+
+    cfg, _ = _impor_com_qr(tmp_path, artes, pedido=20495)
+
+    motor = ImpositionEngine(cfg)
+    a1 = motor._conteudo_qr_ideal(1, item_data={"modelo": 1000270, "pedido": 20495})
+    b1 = motor._conteudo_qr_ideal(1, item_data={"modelo": 1000301, "pedido": 20508})
+
+    assert a1.startswith(_qi.prefixo("20495"))
+    assert b1.startswith(_qi.prefixo("20508"))
+    # E o do segundo NAO pode ser o que sairia com o pedido do trabalho.
+    assert b1 != motor._conteudo_qr_ideal(1, item_data={"modelo": 1000301, "pedido": 20495})

@@ -4201,6 +4201,11 @@ window.runPedImposition = async function (mode, isRefazer) {
                 _imprimirNumero: (typeof imprimeNumeroDoModelo === 'function')
                     ? imprimeNumeroDoModelo(sItem)
                     : false,
+                // O pedido DESTE modelo, que entra na coluna do pool e no
+                // conteudo do QR Ideal. Ver numeroDoPedidoDoItem() no script.js.
+                _pedido: (typeof numeroDoPedidoDoItem === 'function')
+                    ? numeroDoPedidoDoItem(s.osId)
+                    : null,
                 // Por onde a fatia do CSV chega ao payload. Ver o bloco que monta
                 // `payloadMultiArtes`, mais abaixo.
                 _itemId: s.itemId,
@@ -4445,7 +4450,12 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // uma coluna diferente do pool por modelo, então o motor precisa
                 // saber de qual arte veio cada item. Sem isto ele recusa o
                 // trabalho inteiro — e por isto o QR Ideal nunca imprimiu.
-                modelo: arte.modelo || null
+                modelo: arte.modelo || null,
+
+                // E o pedido desta arte, pelo mesmo motivo: ele entra na coluna
+                // do pool E no conteúdo do QR. Nulo significa "o pedido do
+                // trabalho", que é o caso de toda folha de um pedido só.
+                pedido: arte._pedido || null
 
             };
 

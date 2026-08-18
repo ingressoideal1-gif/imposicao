@@ -1017,9 +1017,55 @@ class ImpositionEngine:
             )
         else:
             modelo = self._modelo_do_item(item_index or 0, None)
-        if not cfg.pedido or not modelo or cfg.pool_qr is None:
+
+        pedido = self._pedido_do_item(item_data)
+        if not pedido or not modelo or cfg.pool_qr is None:
             return None
-        return cfg.pool_qr.conteudo(cfg.pedido, modelo, val)
+        return cfg.pool_qr.conteudo(pedido, modelo, val)
+
+    def _pedidos_da_folha(self):
+        """Os pedidos distintos das artes desta folha, em texto.
+
+        Lista vazia quando nenhuma arte declara pedido — o caso de toda folha de
+        um pedido so, em que vale o pedido do trabalho. Mais de um significa
+        folha que junta pedidos diferentes.
+        """
+        vistos = []
+        for art in (self.cfg.multi_artes or []):
+            p = art.get("pedido")
+            if p in (None, ""):
+                continue
+            p = str(p).strip()
+            if p and p not in vistos:
+                vistos.append(p)
+        return vistos
+
+    def _pedido_do_item(self, item_data: dict = None):
+        """O pedido deste item, que entra na coluna do pool E no conteudo do QR.
+
+        O pedido do item vence o do trabalho. Nunca o contrario: numa folha que
+        junta modelos de dois pedidos, o pedido do trabalho e o de um deles, e
+        usa-lo para o outro daria coluna errada e prefixo errado — um ingresso
+        que nao abre a portaria, descoberto com o lote entregue.
+
+        **Numa folha que mistura pedidos, item sem pedido levanta erro.** Numa
+        folha de pedido unico, ausencia significa "o pedido do trabalho" e nada
+        muda em relacao ao que sempre foi.
+
+        O valor volta como TEXTO. O pedido 20270 invertido e "07202"; tratado
+        como inteiro viraria 7202, que invertido e 2027 — outro pedido.
+        """
+        if item_data is not None and item_data.get("pedido") not in (None, ""):
+            return str(item_data["pedido"]).strip()
+        if len(self._pedidos_da_folha()) > 1:
+            raise ValueError(
+                "QR Ideal: esta folha junta modelos de pedidos diferentes e um "
+                "dos itens chegou sem saber de qual pedido veio. O codigo sairia "
+                "com a coluna e o prefixo de outro pedido, e o ingresso nao "
+                "abriria a portaria. Refaca a selecao dos modelos e imponha de "
+                "novo."
+            )
+        return str(self.cfg.pedido).strip() if self.cfg.pedido else None
 
     def _usa_qr_ideal(self) -> bool:
         """Se algum elemento da numeracao e QR Ideal.
@@ -1033,32 +1079,43 @@ class ImpositionEngine:
         return any(el.get("type") == "QR_IDEAL" for el in (self.cfg.elements or []))
 
     def _conferir_colunas_qr_ideal(self):
-        """Duas artes da mesma folha nao podem cair na mesma coluna do pool.
+        """Duas artes DO MESMO PEDIDO nao podem cair na mesma coluna do pool.
 
         Modelos cujos `id` diferem em exatamente 100 dao a MESMA coluna, e ai
         sairiam QRs identicos no mesmo evento — o unico choque que o prefixo do
         pedido nao separa, porque o pedido dos dois e o mesmo. Melhor recusar o
         trabalho aqui do que descobrir na portaria, com a fila na porta.
+
+        A conferencia e POR PEDIDO desde 18/08/2026, quando a folha passou a
+        poder juntar modelos de pedidos diferentes. Dois modelos de pedidos
+        diferentes na mesma coluna recebem o mesmo codigo de 8 caracteres, mas
+        prefixos diferentes: o conteudo do QR difere e a portaria os distingue.
+        Isso e o risco ja conhecido e aceito em docs/qr_ideal.md, e nao motivo
+        para recusar o trabalho — recusar aqui bloquearia combinacoes legitimas.
         """
         cfg = self.cfg
-        if not cfg.pedido or not cfg.multi_artes or not self._usa_qr_ideal():
+        if not cfg.multi_artes or not self._usa_qr_ideal():
             return
         import qr_ideal as _qi
-        por_coluna = {}
+        por_pedido_e_coluna = {}
         for arte in cfg.multi_artes:
             modelo = arte.get("modelo")
             if modelo in (None, ""):
                 continue
             modelo = str(modelo).strip()
-            col = _qi.coluna_do_modelo(cfg.pedido, modelo)
-            anterior = por_coluna.get(col)
+            pedido = arte.get("pedido") or cfg.pedido
+            if not pedido:
+                continue
+            pedido = str(pedido).strip()
+            chave = (pedido, _qi.coluna_do_modelo(pedido, modelo))
+            anterior = por_pedido_e_coluna.get(chave)
             if anterior is not None and anterior != modelo:
                 raise ValueError(
-                    f"QR Ideal: os modelos {anterior} e {modelo} caem na mesma coluna "
-                    f"({col}) do pool e produziriam ingressos com o MESMO codigo no "
-                    f"mesmo evento. Trabalho recusado."
+                    f"QR Ideal: os modelos {anterior} e {modelo} do pedido {pedido} "
+                    f"caem na mesma coluna ({chave[1]}) do pool e produziriam "
+                    f"ingressos com o MESMO codigo no mesmo evento. Trabalho recusado."
                 )
-            por_coluna[col] = modelo
+            por_pedido_e_coluna[chave] = modelo
 
     def _conferir_dados_do_qr_ideal(self):
         """Recusa ANTES do papel, dizendo qual das tres coisas falta.
@@ -1076,20 +1133,33 @@ class ImpositionEngine:
             return
 
         faltando = []
-        if not cfg.pedido:
+        pedidos = self._pedidos_da_folha()
+        if not cfg.pedido and not pedidos:
             faltando.append("o numero do pedido")
         if cfg.pool_qr is None:
             faltando.append("a lista de codigos (qr_ideal_pool.bin) desta estacao")
 
         # O modelo vem por arte na folha multi_artes, e do config fora dela.
         if cfg.multi_artes:
+            rotulo = lambda i, a: (a.get("nome") or a.get("modelo") or f"arte {i + 1}")
             sem_modelo = [
-                (a.get("nome") or f"arte {i + 1}")
+                rotulo(i, a)
                 for i, a in enumerate(cfg.multi_artes)
                 if a.get("modelo") in (None, "")
             ]
             if sem_modelo:
-                faltando.append("o modelo de: " + ", ".join(sem_modelo))
+                faltando.append("o modelo de: " + ", ".join(str(x) for x in sem_modelo))
+            # Folha que junta pedidos: cada arte precisa trazer o seu. O pedido
+            # do trabalho e o de um deles, e serviria de resposta errada para os
+            # outros — coluna e prefixo de outro evento, descobertos na portaria.
+            if len(pedidos) > 1:
+                sem_pedido = [
+                    rotulo(i, a)
+                    for i, a in enumerate(cfg.multi_artes)
+                    if a.get("pedido") in (None, "")
+                ]
+                if sem_pedido:
+                    faltando.append("o pedido de: " + ", ".join(str(x) for x in sem_pedido))
         elif not cfg.modelo:
             faltando.append("o numero do modelo")
 
@@ -2057,7 +2127,13 @@ class ImpositionEngine:
                         # O modelo DESTA arte. O QR Ideal tira uma coluna do pool
                         # por modelo, e sem isto aqui o item nao tinha como dizer
                         # de que arte veio: ver _conteudo_qr_ideal().
-                        "modelo": art.get("modelo")
+                        "modelo": art.get("modelo"),
+                        # E o PEDIDO desta arte, pelo mesmo motivo. Numa folha que
+                        # junta modelos de pedidos diferentes, o pedido do trabalho
+                        # nao serve: ele entra na coluna do pool E no conteudo do
+                        # QR. Vazio aqui significa "o pedido do trabalho", que e o
+                        # caso de toda folha de um pedido so.
+                        "pedido": art.get("pedido")
                     })
 
         if is_strict_assembly:
