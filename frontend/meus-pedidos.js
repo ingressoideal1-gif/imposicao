@@ -146,6 +146,30 @@
     }
 
     /**
+     * Busca `/meus-pedidos` e desenha o resultado -- ou o aviso do erro.
+     *
+     * Separado de `abrir()` para o botao "Atualizar" poder chamar so esta
+     * parte: a MESMA sessao que abriu a tela continua valendo, entao refazer
+     * `fecharEngrenagemSeAberta()` e o "Buscando…" da primeira vez nao serve
+     * a nada aqui -- so atrasaria o toque.
+     */
+    function buscarPedidos(sessao) {
+        return window.AcessoConta.pedir('/meus-pedidos', {
+            headers: { Authorization: 'Bearer ' + sessao.access_token }
+        }).then(function (r) { desenhar(r, sessao); }).catch(function (e) {
+            // SESSAO VENCIDA e a falha mais provavel daqui: sessao no
+            // celular dura dias, e o cliente abre o aplicativo semanas
+            // depois. "Erro 401" na tela nao diz nada e nao oferece saida
+            // nenhuma -- entrar de novo E a saida, e o `depois` traz a
+            // pessoa de volta para os pedidos sem ela tocar em mais nada.
+            if (e && e.status === 401) { return pedirParaEntrar(); }
+            var vazio = $('sem-pedidos');
+            vazio.textContent = fraseDoErro(e);
+            vazio.classList.remove('sumindo');
+        });
+    }
+
+    /**
      * A frase de uma falha que NAO e sessao vencida.
      *
      * Sem status a rede e que faltou, e ai a frase tem de dizer o que fazer --
@@ -204,18 +228,7 @@
             var vazio = $('sem-pedidos');
             vazio.textContent = 'Buscando os seus pedidos…';
             vazio.classList.remove('sumindo');
-            return window.AcessoConta.pedir('/meus-pedidos', {
-                headers: { Authorization: 'Bearer ' + s.access_token }
-            }).then(function (r) { desenhar(r, s); }).catch(function (e) {
-                // SESSAO VENCIDA e a falha mais provavel daqui: sessao no
-                // celular dura dias, e o cliente abre o aplicativo semanas
-                // depois. "Erro 401" na tela nao diz nada e nao oferece saida
-                // nenhuma -- entrar de novo E a saida, e o `depois` traz a
-                // pessoa de volta para os pedidos sem ela tocar em mais nada.
-                if (e && e.status === 401) { return pedirParaEntrar(); }
-                vazio.textContent = fraseDoErro(e);
-                vazio.classList.remove('sumindo');
-            });
+            return buscarPedidos(s);
         });
     }
 
@@ -248,6 +261,30 @@
             if (b) { b.addEventListener('click', function () { abrir(); }); }
         });
         $('btn-voltar-pedidos').addEventListener('click', function () { fechar(); });
+
+        // "Atualizar": refaz a mesma busca de dentro da tela, sem ir e voltar
+        // pela lista de eventos. O cliente carregou um pedido agora mesmo na
+        // gráfica e quer ver se ele já entrou -- pedir para sair e entrar de
+        // novo seria dois toques a mais para a mesma coisa.
+        var atualizar = $('btn-atualizar-pedidos');
+        if (atualizar) {
+            atualizar.addEventListener('click', function () {
+                window.botaoEspera.comecar(atualizar, 'Atualizando…');
+                // A sessao e pedida de novo, e nao guardada de quando a tela
+                // abriu: e a mesma cautela do `abrir()` -- `sessao()` pode
+                // LANCAR de forma sincrona sem `supabaseClient`, e pode ter
+                // vencido entre a abertura da tela e este toque.
+                Promise.resolve().then(function () {
+                    return window.AcessoConta.sessao();
+                }).catch(function () { return null; }).then(function (s) {
+                    return s ? buscarPedidos(s) : pedirParaEntrar();
+                }).then(function () {
+                    window.botaoEspera.terminar(atualizar);
+                }, function () {
+                    window.botaoEspera.terminar(atualizar);
+                });
+            });
+        }
     }
 
     window.meusPedidos = { abrir: abrir, fechar: fechar, desenhar: desenhar };

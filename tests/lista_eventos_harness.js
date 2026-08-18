@@ -64,7 +64,12 @@ async function rodar(caso) {
             var k = localStorage.key(i);
             guardado[k] = localStorage.getItem(k);
         }
-        return { resultado: r, localStorage: guardado };
+        // `desenhar()` nao devolve nada -- ela pinta o DOM. O HTML de
+        // `#eventos` depois da chamada e o que prova o que a barra realmente
+        // mostrou (o `.sub-evento`, por exemplo), sem inventar uma segunda
+        // funcao so para o teste ler o mesmo resultado.
+        var caixa = document.getElementById('eventos');
+        return { resultado: r, localStorage: guardado, eventosHtml: caixa ? caixa.innerHTML : null };
     }, caso);
 
     await browser.close();

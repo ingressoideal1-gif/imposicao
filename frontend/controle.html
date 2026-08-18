@@ -88,10 +88,18 @@
     <div id="lista">
         <h1 class="rotulo-secao">Meus Eventos</h1>
         <div id="eventos"></div>
-        <p id="sem-eventos" class="aviso sumindo">
-            Nenhum evento aqui ainda. Toque em <strong>Meus Pedidos</strong> e
-            carregue um pedido que a gráfica já imprimiu.
-        </p>
+        <!-- Um `<div>`, e nao mais um `<p>`: a lista de passos abaixo e um
+             `<ol>`, e um paragrafo nao pode conter outro bloco -- o navegador
+             fecharia o `<p>` sozinho e a lista sairia da caixa `.aviso`, sem
+             o `sumindo` que este id controla. -->
+        <div id="sem-eventos" class="aviso sumindo">
+            <p>Nenhum evento aqui ainda.</p>
+            <ol class="passos">
+                <li>Toque em <strong>Meus Pedidos</strong></li>
+                <li>Carregue um pedido que a gráfica já imprimiu</li>
+                <li>Diga se este aparelho vai ler os ingressos</li>
+            </ol>
+        </div>
 
     </div>
 
@@ -103,7 +111,13 @@
          #trocar-senha. Quem esconde e devolve a tela inicial para todos eles é
          o `conta.js`, por `conta.esconderTelaInicial()`. -->
     <div id="meus-pedidos" class="sumindo">
-        <button id="btn-voltar-pedidos" class="secundario" type="button">← Voltar aos meus eventos</button>
+        <!-- "Voltar" e "Atualizar" lado a lado: navegar para fora da tela e
+             refazer a busca sem sair dela sao as duas coisas que se faz por
+             aqui antes de tocar num pedido. -->
+        <div class="linha-botoes">
+            <button id="btn-voltar-pedidos" class="secundario" type="button">← Voltar aos meus eventos</button>
+            <button id="btn-atualizar-pedidos" class="secundario" type="button">Atualizar</button>
+        </div>
         <h1 class="rotulo-secao">Meus Pedidos</h1>
         <p class="config-ajuda">Os pedidos que a gráfica já imprimiu para você. Carregar um pedido cria o evento dele em <strong>Meus Eventos</strong>.</p>
         <div id="pedidos"></div>
@@ -176,6 +190,12 @@
              dos finalizados porque é o que ela procura sem saber onde está —
              os eventos finalizados ela sabe que estão aqui. -->
         <h1 class="rotulo-secao">Minha conta</h1>
+        <!-- Qual conta esta aberta NESTE aparelho -- util no celular do
+             porteiro, que pode ter passado por mais de uma. Preenchido pelo
+             `menu-geral.js` a cada abertura do menu, e nao uma vez so: quem
+             entra ou sai da conta sem recarregar a pagina precisa ver o menu
+             seguinte ja certo. -->
+        <p id="menu-conta-email" class="config-ajuda"></p>
         <div class="cartao">
             <button id="btn-trocar-minha-senha" class="secundario">Trocar minha senha</button>
             <button id="btn-sair-conta" class="secundario">Sair da conta</button>
@@ -191,6 +211,11 @@
             Nenhum evento finalizado ainda. Quando você finalizar um evento na
             engrenagem dele, ele passa a aparecer aqui.
         </p>
+
+        <!-- A mesma versao que o rodape da casa mostra (`#versao-do-app`),
+             copiada pelo `menu-geral.js` ao abrir -- para quem relata um
+             defeito e nunca olhou o rodape encontrar o numero aqui tambem. -->
+        <p id="menu-versao" class="config-ajuda"></p>
     </div>
 
     <!-- A TELA DE ENTRAR. Aparece DIRETO quando o celular nao e aparelho de

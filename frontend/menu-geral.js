@@ -76,6 +76,50 @@
         return !!el && !el.classList.contains('sumindo');
     }
 
+    /**
+     * "Conta: fulano@x.com" ou "Sem conta neste aparelho", acima do cartao
+     * "Minha conta".
+     *
+     * Lido a cada `abrir()`, e nao uma vez so no arranque: quem entra e sai
+     * da conta sem fechar o aplicativo (login, logout) precisa ver o menu
+     * seguinte já certo.
+     */
+    function atualizarConta() {
+        var p = $('menu-conta-email');
+        if (!p) { return; }
+        // `AcessoConta.sessao()` LANCA de forma sincrona quando o
+        // `supabaseClient` e nulo -- sem rede na primeira abertura, ou o modo
+        // offline deliberado do `supabase-config.js`. Tratado como "sem
+        // sessao", que e exatamente a frase certa aqui.
+        Promise.resolve().then(function () {
+            return window.AcessoConta.sessao();
+        }).catch(function () { return null; }).then(function (sessao) {
+            var email = sessao && sessao.user && sessao.user.email;
+            p.innerHTML = '';
+            if (email) {
+                p.appendChild(document.createTextNode('Conta: '));
+                var forte = document.createElement('strong');
+                forte.textContent = email;      // vem do login: TEXTO
+                p.appendChild(forte);
+            } else {
+                p.textContent = 'Sem conta neste aparelho';
+            }
+        });
+    }
+
+    /**
+     * "Ideal Control · v632", no fim do menu -- a MESMA versao que o rodape
+     * mostra, copiada do texto dele. Nao ha uma segunda fonte da verdade
+     * aqui: reler o `?v=` do proprio script duplicaria a regra que o
+     * `controle.js` ja resolve.
+     */
+    function atualizarVersao() {
+        var p = $('menu-versao');
+        var origem = $('versao-do-app');
+        if (!p || !origem) { return; }
+        p.textContent = 'Ideal Control · ' + origem.textContent;
+    }
+
     function abrir() {
         if (!$('menu-geral')) { return; }
         // AS TELAS DE CONTA VENCEM O MENU. `#bloco-entrar` e `#trocar-senha`
@@ -94,6 +138,13 @@
         if (mp) { mp.classList.add('sumindo'); }
         $('menu-geral').classList.remove('sumindo');
         mostrarInicial(false);
+        // As duas linhas de rodape do menu, atualizadas TOCA A TOCA -- e nao
+        // uma vez so no arranque, porque `versao-do-app` ainda nao existe
+        // quando este script roda (o `controle.js`, que o escreve, carrega
+        // depois) e a conta muda de estado (login, logout) sem recarregar
+        // a pagina.
+        atualizarConta();
+        atualizarVersao();
     }
 
     function fechar() {

@@ -22,14 +22,24 @@ def _ler(caminho):
         return f.read()
 
 
-def _chamar(chamada, argumentos):
+def _chamar_completo(chamada, argumentos):
+    # `encoding="utf-8"` explicito, e nao so `text=True`: sem isto o Python
+    # decodifica o stdout do Node com `locale.getpreferredencoding()`, que numa
+    # maquina Windows em cp1252 troca acento por caracteres errados -- so nao
+    # apareceu ate agora porque nenhum caso deste arquivo tinha acento no
+    # resultado. O `console.log` do harness sempre escreve UTF-8.
     r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True,
+        encoding="utf-8",
         input=json.dumps({"chamada": chamada, "argumentos": argumentos}),
     )
     if r.returncode != 0:
         pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
-    return json.loads(r.stdout)["resultado"]
+    return json.loads(r.stdout)
+
+
+def _chamar(chamada, argumentos):
+    return _chamar_completo(chamada, argumentos)["resultado"]
 
 
 def unir(do_chaveiro, da_conta):
@@ -38,6 +48,20 @@ def unir(do_chaveiro, da_conta):
 
 def finalizados(da_conta):
     return _chamar("finalizados", [da_conta])
+
+
+def desenhar_html(linhas):
+    """Roda `desenhar()` de verdade, no navegador, e devolve o HTML de
+    `#eventos` -- a prova do que a barra REALMENTE mostra (o `.sub-evento`
+    incluso), e nao so o que uma funcao pura calculou."""
+    return _chamar_completo("desenhar", [linhas])["eventosHtml"]
+
+
+def _sub_evento(html):
+    """O texto de dentro do `.sub-evento` da primeira barra, ou None se o
+    span nao foi criado."""
+    m = re.search(r'class="sub-evento">([^<]*)<', html)
+    return m.group(1) if m else None
 
 
 P = {"evento_id": "e-1", "nome_evento": "Click", "aparelho_id": "d-1",
@@ -331,3 +355,88 @@ def test_o_menu_vazio_diz_que_esta_vazio_em_vez_de_ficar_em_branco():
     js = _ler("frontend/lista-eventos.js")
     trecho = js[js.index("function desenharFinalizados"):][:800]
     assert "sem-finalizados" in trecho
+
+
+# ── O subtitulo da barra: quando e, onde e, se este aparelho ja le ─────────
+
+
+def test_unir_traz_data_e_local_do_evento_da_conta():
+    """`local_evento` e novo no select do servidor -- sem ele passar por
+    `unir()`, o subtitulo da barra nunca teria o que mostrar."""
+    ev = dict(E1, data_evento="2026-09-12T22:00:00Z", local_evento="Arena")
+    linhas = unir([], [ev])
+    assert linhas[0]["data"] == "2026-09-12T22:00:00Z"
+    assert linhas[0]["local"] == "Arena"
+
+
+def test_evento_so_do_chaveiro_nao_tem_data_nem_local():
+    """O celular do porteiro, sem rede: so a conta sabe quando e onde e o
+    evento, e sem ela o subtitulo tem de se virar so com "le neste aparelho"."""
+    linhas = unir([P], [])
+    assert linhas[0]["data"] is None
+    assert linhas[0]["local"] == ""
+
+
+LINHA_BASE = {"id": "e-1", "nome": "Click", "ativo": True,
+              "ehAparelho": False, "nomeAparelho": "", "data": None, "local": ""}
+
+
+def test_a_barra_mostra_data_e_local_no_subtitulo():
+    linha = dict(LINHA_BASE, data="2026-09-12", local="Arena")
+    html = desenhar_html([linha])
+    assert _sub_evento(html) == "12/09 · Arena"
+
+
+def test_a_data_do_subtitulo_nao_leva_o_ano():
+    """O ano so tomaria espaco que a barra nao tem -- o nome do evento ja
+    esta bem ao lado."""
+    linha = dict(LINHA_BASE, data="2026-09-12", local="")
+    assert _sub_evento(desenhar_html([linha])) == "12/09"
+
+
+def test_a_barra_diz_le_neste_aparelho_quando_ja_e_portao():
+    linha = dict(LINHA_BASE, ehAparelho=True, nomeAparelho="")
+    assert _sub_evento(desenhar_html([linha])) == "lê neste aparelho"
+
+
+def test_a_barra_soma_o_nome_do_aparelho_quando_o_chaveiro_tem_um():
+    linha = dict(LINHA_BASE, ehAparelho=True, nomeAparelho="Aparelho 1")
+    assert _sub_evento(desenhar_html([linha])) == "lê neste aparelho como Aparelho 1"
+
+
+def test_o_subtitulo_junta_as_tres_partes_na_ordem_data_local_aparelho():
+    linha = dict(LINHA_BASE, data="2026-09-12", local="Arena",
+                 ehAparelho=True, nomeAparelho="Aparelho 1")
+    assert _sub_evento(desenhar_html([linha])) == "12/09 · Arena · lê neste aparelho como Aparelho 1"
+
+
+def test_sem_data_local_e_aparelho_o_subtitulo_nao_nasce():
+    """Um span vazio so ocuparia uma linha atoa embaixo do nome."""
+    html = desenhar_html([dict(LINHA_BASE)])
+    assert "sub-evento" not in html
+
+
+def test_o_nome_do_evento_continua_o_primeiro_no_de_texto_da_barra():
+    """O subtitulo entra DENTRO de `.nome-evento`, depois do nome -- nunca
+    antes dele, senao o nome perderia o destaque visual de vir primeiro."""
+    linha = dict(LINHA_BASE, data="2026-09-12")
+    html = desenhar_html([linha])
+    trecho = html[html.index('class="nome-evento"'):]
+    assert trecho.index("Click") < trecho.index("sub-evento")
+
+
+# ── A casa vazia, com os tres passos ────────────────────────────────────────
+
+
+def test_a_casa_vazia_ensina_os_tres_passos():
+    """A frase antiga ("Nenhum evento aqui ainda. Toque em Meus Pedidos e
+    carregue...") virou tres passos numerados -- a frase continua, porque um
+    teste existente ja garantia essas palavras exatas."""
+    html = _ler("frontend/controle.html")
+    bloco = html[html.index('id="sem-eventos"'):html.index('id="meus-pedidos"')]
+    assert "Nenhum evento aqui ainda" in bloco
+    assert bloco.count("<li>") == 3
+    assert "Meus Pedidos" in bloco
+    assert "gráfica já imprimiu" in bloco
+    assert "este aparelho vai ler os ingressos" in bloco
+    assert 'class="aviso' in bloco, "a caixa perdeu o estilo de aviso"

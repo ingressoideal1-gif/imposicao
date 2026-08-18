@@ -293,6 +293,29 @@ button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 11v5'/><path d='M12 8h.01'/></svg>");
             mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 11v5'/><path d='M12 8h.01'/></svg>");
 }
+#sem-eventos p { margin: 0; }
+/* Os tres passos da casa vazia: sem marcador padrao, bolinha numerada
+   verde-agua no lugar dele (a mesma cor do botao de acao, para ler como um
+   convite e nao como um alerta). */
+.passos {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    counter-reset: passo;
+}
+.passos li { display: flex; align-items: center; gap: 8px; }
+.passos li::before {
+    counter-increment: passo;
+    content: counter(passo);
+    display: flex; align-items: center; justify-content: center;
+    flex: none;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--teal-claro); color: #04201c;
+    font-size: .72rem; font-weight: 700;
+}
 
 /* A confirmação "tem certeza?", desenhada NA PÁGINA.
    `window.confirm` não responde no aplicativo instalado, e foi assim que
@@ -621,6 +644,9 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
 }
 .barra-evento:hover:not(:disabled) { border-color: rgba(148, 163, 184, .38); filter: none; }
 .barra-evento .nome-evento { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* O subtitulo da barra: quando e, onde e, e se este aparelho ja le o evento.
+   Uma segunda linha, discreta, embaixo do nome. */
+.sub-evento { display: block; font-size: .78rem; font-weight: 600; color: var(--dim); margin-top: 2px; }
 /* A barra "Meus Pedidos" é a única SEM evento dentro: e a PORTA de entrada dos
    pedidos, e por isso e a unica barra pintada com o degrade da marca. */
 .barra-evento.destaque {
@@ -709,9 +735,12 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
 }
 
 /* ── Os botoes de "voltar" ─────────────────────────────────────────────────
-   Pilulas discretas, alinhadas a esquerda: sao navegacao, nao acao. */
+   Pilulas discretas, alinhadas a esquerda: sao navegacao, nao acao. O
+   "Atualizar" de Meus Pedidos entra no mesmo estilo -- ele tambem nao muda
+   de tela, so refaz a busca dentro dela. */
 #menu-geral #btn-voltar-menu,
 #meus-pedidos #btn-voltar-pedidos,
+#meus-pedidos #btn-atualizar-pedidos,
 #engrenagem #btn-fechar-engrenagem {
     width: auto; padding: 9px 16px 9px 12px; min-height: 40px;
     font-size: .9rem; font-weight: 700; color: #cbd5e1;
@@ -719,6 +748,8 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
     border-radius: 999px; box-shadow: none; margin-top: 0;
 }
 #engrenagem #btn-fechar-engrenagem { margin-bottom: 14px; }
+/* "Voltar" e "Atualizar" lado a lado, no topo de Meus Pedidos. */
+.linha-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
 #engrenagem #nome-evento-titulo { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 14px; }
 
 /* ── O menu do olho: uma lista, com a seta a direita ────────────────────── */

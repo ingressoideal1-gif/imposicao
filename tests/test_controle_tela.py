@@ -2920,6 +2920,71 @@ def test_abrir_o_menu_TIRA_MEUS_PEDIDOS_do_caminho():
     )
 
 
+# ── O rodape do menu: quem esta logado, e qual versao esta rodando ─────────
+
+
+def test_o_menu_mostra_o_email_da_sessao_aberta():
+    saida = _no_navegador("""
+        window.conta.esconderEntrar();
+        window.supabaseClient = { auth: { getSession: async () => ({
+            data: { session: { access_token: 'jwt', user: { email: 'dono@x.com' } } }
+        }) } };
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 150));
+        return document.getElementById('menu-conta-email').textContent;
+    """)
+    assert saida == "Conta: dono@x.com"
+
+
+def test_o_email_do_menu_fica_num_strong_e_e_sempre_TEXTO():
+    """O e-mail vem do login: `textContent`, nunca `innerHTML` -- regra do
+    projeto para tudo que vem de fora. Um e-mail com `<b>` dentro nao pode
+    virar tag de verdade na tela."""
+    saida = _no_navegador("""
+        window.conta.esconderEntrar();
+        window.supabaseClient = { auth: { getSession: async () => ({
+            data: { session: { access_token: 'jwt', user: { email: '<b>x</b>@x.com' } } }
+        }) } };
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 150));
+        const p = document.getElementById('menu-conta-email');
+        const forte = p.querySelector('strong');
+        return {
+            textoForte: forte ? forte.textContent : null,
+            tagCrua: p.innerHTML.indexOf('<b>x</b>') !== -1,
+        };
+    """)
+    assert saida["textoForte"] == "<b>x</b>@x.com"
+    assert saida["tagCrua"] is False, "o e-mail virou HTML em vez de ficar como texto"
+
+
+def test_o_menu_sem_sessao_diz_que_nao_ha_conta_neste_aparelho():
+    saida = _no_navegador("""
+        window.conta.esconderEntrar();
+        window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 150));
+        return document.getElementById('menu-conta-email').textContent;
+    """)
+    assert saida == "Sem conta neste aparelho"
+
+
+def test_o_menu_mostra_a_mesma_versao_que_o_rodape():
+    """`copiar o texto dele ao abrir o menu` -- e nao reler o `?v=` do proprio
+    script, que duplicaria a regra que o `controle.js` ja resolve."""
+    saida = _no_navegador("""
+        window.conta.esconderEntrar();
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 150));
+        return {
+            rodape: document.getElementById('versao-do-app').textContent,
+            menu: document.getElementById('menu-versao').textContent,
+        };
+    """)
+    assert saida["rodape"], "o rodape nao tinha versao nenhuma para copiar"
+    assert saida["menu"] == "Ideal Control · " + saida["rodape"]
+
+
 # ── O que muda na engrenagem tem de aparecer na home ───────────────────────
 
 

@@ -25,7 +25,7 @@
      *
      * @param doChaveiro  o que `chaveiro.listar()` devolveu
      * @param daConta     o que `/meus-eventos` devolveu (vazio sem sessao)
-     * @returns [{ id, nome, ativo, ehAparelho, nomeAparelho }]
+     * @returns [{ id, nome, ativo, ehAparelho, nomeAparelho, data, local }]
      */
     function unir(doChaveiro, daConta) {
         var porId = {};
@@ -40,7 +40,12 @@
                 // desligaria um portao que esta trabalhando.
                 ativo: true,
                 ehAparelho: true,
-                nomeAparelho: p.nome_portao || ''
+                nomeAparelho: p.nome_portao || '',
+                // O chaveiro (celular sem rede) nao guarda data nem local --
+                // so a conta sabe disso. Sem elas o subtitulo da barra ainda
+                // mostra "le neste aparelho", que e o que importa aqui.
+                data: null,
+                local: ''
             };
         });
 
@@ -64,7 +69,9 @@
                 nome: ev.nome_evento || (ja ? ja.nome : 'Evento'),
                 ativo: ev.status !== 'encerrado',
                 ehAparelho: !!ja,
-                nomeAparelho: ja ? ja.nomeAparelho : ''
+                nomeAparelho: ja ? ja.nomeAparelho : '',
+                data: ev.data_evento || null,
+                local: ev.local_evento || ''
             };
         });
 
@@ -169,6 +176,30 @@
         ]);
     }
 
+    /**
+     * O subtitulo da barra: quando e, onde e, e se este aparelho ja le o
+     * evento -- na ordem que ajuda mais rapido quem esta procurando.
+     *
+     * Sem nenhuma das tres, o span nem nasce: um subtitulo vazio so ocuparia
+     * uma linha atoa embaixo do nome.
+     */
+    function subEvento(ev) {
+        var partes = [];
+        var data = diaEMes(ev.data);
+        if (data) { partes.push(data); }
+        if (ev.local) { partes.push(ev.local); }
+        if (ev.ehAparelho) {
+            // O nome do aparelho e OPCIONAL: nem todo mundo renomeia o dele.
+            partes.push('lê neste aparelho'
+                + (ev.nomeAparelho ? (' como ' + ev.nomeAparelho) : ''));
+        }
+        if (!partes.length) { return null; }
+        var span = document.createElement('span');
+        span.className = 'sub-evento';
+        span.textContent = partes.join(' · ');
+        return span;
+    }
+
     /** Uma barra de evento, com a engrenagem ao lado dela — e nao dentro. */
     function linhaDeEvento(ev) {
         var linha = document.createElement('div');
@@ -198,6 +229,8 @@
         var nome = document.createElement('span');
         nome.className = 'nome-evento';
         nome.textContent = ev.nome;          // digitado por pessoas: TEXTO
+        var sub = subEvento(ev);
+        if (sub) { nome.appendChild(sub); }
         barra.appendChild(nome);
 
         if (!ev.ativo) {
@@ -272,6 +305,14 @@
         var d = new Date(iso);
         if (isNaN(d.getTime())) { return ''; }
         return d.toLocaleDateString('pt-BR');
+    }
+
+    /** "12/09", sem ano -- o subtitulo da barra ja diz de qual evento se
+     *  trata; o ano so tomaria espaco que a tela nao tem. Reusa `dataCurta()`
+     *  para nao duplicar a regra de fuso, so cortando o terceiro pedaco. */
+    function diaEMes(iso) {
+        var completa = dataCurta(iso);
+        return completa ? completa.split('/').slice(0, 2).join('/') : '';
     }
 
     /** "4.812 entraram" — em pt-BR, que e como o resto do sistema escreve

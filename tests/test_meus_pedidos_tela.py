@@ -120,6 +120,87 @@ def test_o_vazio_e_o_sem_cliente_tem_frase():
     assert "não está ligada a um cliente" in sem and "gráfica" in sem
 
 
+# ── "Atualizar", ao lado do "Voltar" ────────────────────────────────────────
+
+
+def test_o_atualizar_fica_ao_lado_do_voltar_na_mesma_linha():
+    """Os dois num `<div class="linha-botoes">` -- lado a lado, e nao
+    empilhados como os botoes de acao normais desta tela."""
+    saida = _no_navegador("""
+        const pai = document.getElementById('btn-atualizar-pedidos').parentElement;
+        return {
+            mesmoPai: pai === document.getElementById('btn-voltar-pedidos').parentElement,
+            classe: pai.className,
+            rotulo: document.getElementById('btn-atualizar-pedidos').textContent.trim(),
+        };
+    """)
+    assert saida["mesmoPai"] is True
+    assert saida["classe"] == "linha-botoes"
+    assert saida["rotulo"] == "Atualizar"
+
+
+def test_btn_atualizar_pedidos_refaz_a_busca():
+    """Contar as chamadas a `/meus-pedidos` e o que prova que o toque buscou
+    de novo -- e nao so redesenhou o que ja estava na tela."""
+    saida = _no_navegador(_desvio() + """
+        await window.meusPedidos.abrir();
+        window.__chamadas = [];
+        document.getElementById('btn-atualizar-pedidos').click();
+        await new Promise(r => setTimeout(r, 80));
+        return {
+            chamadas: window.__chamadas.filter(c => c === '/meus-pedidos').length,
+            quantos: document.querySelectorAll('#pedidos .cartao-pedido').length,
+        };
+    """)
+    assert saida["chamadas"] == 1, "o toque no Atualizar nao refez a busca"
+    assert saida["quantos"] == 2
+
+
+def test_btn_atualizar_fica_Atualizando_durante_a_rede_e_volta_depois():
+    """O mesmo caso do brief para os outros botoes com espera: uma resposta
+    que fica PENDENTE prova que o rotulo muda enquanto a rede nao respondeu,
+    e nao so num teste que resolve tudo no mesmo microtask."""
+    saida = _no_navegador(_desvio() + """
+        await window.meusPedidos.abrir();
+        const pedirAtual = AcessoConta.pedir;
+        AcessoConta.pedir = (caminho, opcoes) => new Promise((resolver) => {
+            setTimeout(() => resolver(pedirAtual(caminho, opcoes)), 300);
+        });
+        const botao = document.getElementById('btn-atualizar-pedidos');
+        const original = botao.textContent;
+        botao.click();
+        await new Promise(r => setTimeout(r, 100));
+        const durante = { texto: botao.textContent, disabled: botao.disabled,
+                           busy: botao.getAttribute('aria-busy') };
+        await new Promise(r => setTimeout(r, 400));
+        const depois = { texto: botao.textContent, disabled: botao.disabled,
+                          busy: botao.getAttribute('aria-busy') };
+        return { original, durante, depois };
+    """)
+    assert saida["durante"] == {"texto": "Atualizando…", "disabled": True, "busy": "true"}, (
+        "o botao nao mostrou a espera enquanto a rede nao respondeu"
+    )
+    assert saida["depois"] == {"texto": saida["original"], "disabled": False, "busy": None}
+
+
+def test_btn_atualizar_sem_sessao_leva_a_entrar_de_novo():
+    """A sessao e pedida DE NOVO no toque, e nao guardada de quando a tela
+    abriu -- ela pode ter vencido nesse meio-tempo."""
+    saida = _no_navegador(_desvio() + """
+        await window.meusPedidos.abrir();
+        window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
+        window.conta.esconderEntrar();
+        document.getElementById('btn-atualizar-pedidos').click();
+        await new Promise(r => setTimeout(r, 80));
+        return {
+            entrar: !document.getElementById('bloco-entrar').classList.contains('sumindo'),
+            pediu: window.__pediuEntrar,
+        };
+    """)
+    assert saida["entrar"] is True
+    assert saida["pediu"] == 1
+
+
 def test_carregar_chama_a_caixa_com_o_numero_do_pedido():
     saida = _no_navegador(_desvio() + """
         await window.meusPedidos.abrir();
