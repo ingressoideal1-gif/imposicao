@@ -118,6 +118,40 @@ def test_sim_liga_este_aparelho_sem_pedir_a_senha_de_novo():
     assert saida["assumiu"]["dados"]["evento_id"] == "ev-novo"
 
 
+def test_o_Sim_leva_o_campo_de_nome_com_a_sugestao_do_painel():
+    """Task 6, 18/08/2026: "nome do aparelho na hora". O painel busca ANTES de
+    perguntar so para a sugestao saber o N certo -- aqui o evento ainda nao
+    tem nenhum aparelho, entao a sugestao e "Aparelho 1"."""
+    saida = _no_navegador(DESVIO + """
+        window.__opcoes = null;
+        window.caixaConfirmar.perguntar = async (texto, opcoes) => { window.__opcoes = opcoes; return false; };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 150));
+        return window.__opcoes;
+    """)
+    assert saida["campo"] == {
+        "id": "campo-nome-aparelho",
+        "rotulo": "Nome deste aparelho (opcional)",
+        "valor": "Aparelho 1",
+        "maxlength": 60,
+    }
+
+
+def test_o_nome_digitado_na_pergunta_vai_no_POST_no_lugar_do_automatico():
+    saida = _no_navegador(DESVIO + """
+        window.caixaConfirmar.perguntar = async () => 'Leitor da Bilheteria';
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 150));
+        const aqui = window.__chamadas.find(x => x.caminho === '/eventos/ev-novo/aparelhos/aqui');
+        return aqui && aqui.corpo;
+    """)
+    assert saida["nome"] == "Leitor da Bilheteria"
+
+
 def test_sem_a_elevacao_do_servidor_o_Sim_PEDE_a_senha_em_vez_de_ligar_sem_ela():
     """O servidor pode devolver `elevacao: null`.
 

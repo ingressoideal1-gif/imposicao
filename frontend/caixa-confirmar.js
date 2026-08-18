@@ -42,10 +42,16 @@
     }
 
     /**
-     * @param texto           a pergunta inteira, ja com as consequencias
-     * @param opcoes.rotulo   o que o botao de confirmar diz ("Finalizar", ...)
-     * @param opcoes.perigo   true pinta o confirmar de vermelho
-     * @returns Promise<boolean> — true so quando a pessoa confirmou
+     * @param texto            a pergunta inteira, ja com as consequencias
+     * @param opcoes.rotulo    o que o botao de confirmar diz ("Finalizar", ...)
+     * @param opcoes.perigo    true pinta o confirmar de vermelho
+     * @param opcoes.campo     { id, rotulo, valor, maxlength } — quando vem,
+     *                         a caixa ganha um `<label>` + `<input>` entre o
+     *                         texto e os botoes
+     * @returns Promise<boolean|string|null>
+     *          Sem `campo`: true so quando a pessoa confirmou (como sempre).
+     *          Com `campo`: a string digitada (`trim`; vazia vira o `valor`
+     *          sugerido) ao confirmar, `null` ao cancelar.
      */
     function perguntar(texto, opcoes) {
         opcoes = opcoes || {};
@@ -70,6 +76,23 @@
             frase.textContent = texto;
             caixa.appendChild(frase);
 
+            // Entre o texto e os botoes, so quando `opcoes.campo` vem.
+            var campo = null;
+            if (opcoes.campo) {
+                var rotuloCampo = document.createElement('label');
+                rotuloCampo.setAttribute('for', opcoes.campo.id);
+                rotuloCampo.textContent = opcoes.campo.rotulo;
+                caixa.appendChild(rotuloCampo);
+
+                campo = document.createElement('input');
+                campo.type = 'text';
+                campo.id = opcoes.campo.id;
+                campo.maxLength = opcoes.campo.maxlength;
+                campo.value = opcoes.campo.valor || '';
+                campo.autocomplete = 'off';
+                caixa.appendChild(campo);
+            }
+
             var acoes = document.createElement('div');
             acoes.className = 'acoes-confirmar';
             var nao = botao('Cancelar', 'btn-confirmar-nao', 'secundario');
@@ -86,7 +109,16 @@
                 document.removeEventListener('keydown', naTecla, true);
                 fundo.parentNode.removeChild(fundo);
                 abertaAgora = null;
-                resolver(!!resposta);
+                if (!campo) {
+                    resolver(!!resposta);
+                    return;
+                }
+                // Cancelar tem de dizer "nada foi escolhido", e um `''`
+                // resolvido tambem seria verdadeiro em `if (resultado)` --
+                // so `null` deixa a duvida fora do caminho de quem chama.
+                if (!resposta) { resolver(null); return; }
+                var digitado = campo.value.trim();
+                resolver(digitado || opcoes.campo.valor);
             }
 
             function naTecla(ev) {
@@ -104,9 +136,23 @@
                 if (ev.target === fundo) { fechar(false); }
             };
 
-            // O foco nasce em Cancelar: um "Enter" solto no teclado do celular
-            // nao pode finalizar o evento de ninguem.
-            nao.focus();
+            if (campo) {
+                // Aqui o Enter E o gesto esperado: a pessoa esta com o teclado
+                // aberto, digitando um nome, e o mesmo campo em toda outra
+                // caixa deste projeto confirma no Enter (`carregar-pedido.js`,
+                // a senha da engrenagem). Nao ha dado destrutivo em jogo --
+                // so um nome, sempre com uma sugestao pronta -- entao o foco
+                // nasce NELE, e nao em Cancelar.
+                campo.onkeydown = function (ev) {
+                    if (ev.key === 'Enter') { fechar(true); }
+                };
+                campo.focus();
+                campo.select();
+            } else {
+                // O foco nasce em Cancelar: um "Enter" solto no teclado do
+                // celular nao pode finalizar o evento de ninguem.
+                nao.focus();
+            }
             abertaAgora = function () { fechar(false); };
         });
     }

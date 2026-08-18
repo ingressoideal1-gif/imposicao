@@ -3725,3 +3725,83 @@ def test_o_cabecalho_da_secao_NAO_e_travado_pelo_modo_somente_leitura():
     assert saida["somenteLeitura"] is True, "o teste precisa comecar sem elevacao"
     assert saida["travados"] == []
     assert saida["abriu"] is True
+
+
+# ── Nome do aparelho na hora (Task 6, 18/08/2026) ───────────────────────────
+#
+# Decisao do usuario: ao criar um portao, um campo opcional com a sugestao
+# "Aparelho N" -- e isso vale tanto para o "Sim, usar este aparelho" que o
+# `carregar-pedido.js` cobre (ver `test_carregar_pedido_tela.py`) quanto para
+# o toque direto na barra de um evento que este aparelho ainda nao le, aqui.
+#
+# O painel busca ANTES de perguntar (para saber o N certo) e e REPASSADO ao
+# `criar`, que senao buscaria de novo -- por isso os testes contam quantas
+# vezes `/eventos/ev-9` foi pedido.
+
+_SETUP_CRIAR_AVULSO = """
+    // Sem elevacao valida, `abrir` pararia na caixa de senha (`prompt`-like)
+    // antes de chegar na pergunta do nome -- o mesmo atalho que os testes de
+    // "zerar"/"finalizar" ja usam.
+    Controle.estado.elevacao = { token: 'elev-1', expira_em: Math.floor(Date.now()/1000) + 900 };
+    window.__chamadas = [];
+    const pedirReal = AcessoConta.pedir;
+    AcessoConta.pedir = async (caminho, opcoes) => {
+        const corpo = opcoes && opcoes.body ? JSON.parse(opcoes.body) : null;
+        window.__chamadas.push({ caminho, corpo });
+        if (caminho === '/eventos/ev-9') {
+            return { evento: { id: 'ev-9', nome_evento: 'Feira X' }, setores: [{ id: 's1' }],
+                     aparelhos: [{ id: 'a1' }, { id: 'a2' }] };   // 2 aparelhos ja no evento
+        }
+        if (caminho === '/eventos/ev-9/aparelhos/aqui') {
+            return { id: 'a-novo', nome: corpo.nome, token: 'tok-novo' };
+        }
+        return pedirReal(caminho, opcoes);
+    };
+    window.aparelhoAqui.assumir = (token, nome, dados) => {
+        window.__assumiu = { token, nome, dados }; return Promise.resolve();
+    };
+"""
+
+
+def test_o_toque_num_evento_ainda_nao_ligado_pergunta_o_nome_com_a_sugestao_certa():
+    """A sugestao conta os aparelhos que o EVENTO ja tem (2), nao os deste
+    aparelho -- dois "Aparelho 1" na lista do dono seriam indistinguiveis."""
+    saida = _no_navegador(_SETUP_CRIAR_AVULSO + """
+        window.__perguntas = [];
+        window.caixaConfirmar.perguntar = async (texto, opcoes) => {
+            window.__perguntas.push({ texto, opcoes });
+            return opcoes.campo.valor;   // aceita a sugestao, sem editar
+        };
+        await window.virarPortao.abrir('ev-9', 'Feira X', false);
+        const aqui = window.__chamadas.find(c => c.caminho === '/eventos/ev-9/aparelhos/aqui');
+        const getsPainel = window.__chamadas.filter(c => c.caminho === '/eventos/ev-9').length;
+        return { pergunta: window.__perguntas[0], corpoFinal: aqui && aqui.corpo,
+                 getsPainel, assumiu: window.__assumiu };
+    """)
+    pergunta = saida["pergunta"]
+    assert "Feira X" in pergunta["texto"]
+    assert "usar este aparelho" in pergunta["texto"].lower()
+    assert pergunta["opcoes"]["rotulo"] == "Sim, usar este aparelho"
+    assert pergunta["opcoes"]["campo"]["valor"] == "Aparelho 3"
+    assert saida["corpoFinal"]["nome"] == "Aparelho 3"
+    assert saida["getsPainel"] == 1, "buscou o painel do evento duas vezes"
+    assert saida["assumiu"]["nome"] == "Aparelho 3"
+
+
+def test_digitar_um_nome_na_pergunta_cria_o_aparelho_com_esse_nome():
+    saida = _no_navegador(_SETUP_CRIAR_AVULSO + """
+        window.caixaConfirmar.perguntar = async () => 'Leitor da Entrada Principal';
+        await window.virarPortao.abrir('ev-9', 'Feira X', false);
+        const aqui = window.__chamadas.find(c => c.caminho === '/eventos/ev-9/aparelhos/aqui');
+        return aqui.corpo.nome;
+    """)
+    assert saida == "Leitor da Entrada Principal"
+
+
+def test_cancelar_a_pergunta_do_nome_nao_cria_nenhum_aparelho():
+    saida = _no_navegador(_SETUP_CRIAR_AVULSO + """
+        window.caixaConfirmar.perguntar = async () => null;   // cancelou
+        await window.virarPortao.abrir('ev-9', 'Feira X', false);
+        return window.__chamadas.some(c => c.caminho === '/eventos/ev-9/aparelhos/aqui');
+    """)
+    assert saida is False

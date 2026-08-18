@@ -302,14 +302,34 @@
      * `virarPortao.criar` com `null` ali mandaria `X-Elevacao: undefined`, o
      * servidor recusaria, e o dono veria o aparelho nao ligar sem nada para
      * fazer a respeito.
+     *
+     * @param nomeEscolhido  o nome que a pessoa digitou ou aceitou na caixa
+     *                       (Task 6: "nome do aparelho na hora")
+     * @param painel         o painel ja buscado para sugerir esse nome --
+     *                       repassado para o `criar` nao pedir de novo
      */
-    function ligarEsteAparelho(evento_id, sessao, elevacao) {
+    function ligarEsteAparelho(evento_id, sessao, elevacao, nomeEscolhido, painel) {
         if (elevacao) {
-            return window.virarPortao.criar(evento_id, sessao, elevacao);
+            return window.virarPortao.criar(evento_id, sessao, elevacao, nomeEscolhido, painel);
         }
         return window.Controle.comSenha(evento_id, function (s, e) {
-            return window.virarPortao.criar(evento_id, s, e);
+            return window.virarPortao.criar(evento_id, s, e, nomeEscolhido, painel);
         });
+    }
+
+    /** GET /eventos/{id}, so para saber quantos aparelhos ja existem e
+     * sugerir "Aparelho N" certo antes de perguntar. O `virarPortao.criar`
+     * pediria o mesmo painel de novo -- por isso ele segue adiante em
+     * `ligarEsteAparelho`, em vez de ser buscado duas vezes. */
+    function contarAparelhos(evento_id, sessao) {
+        return window.AcessoConta.pedir('/eventos/' + evento_id, {
+            headers: { Authorization: 'Bearer ' + sessao.access_token }
+        });
+    }
+
+    /** "Aparelho N", com N = quantos o evento ja tem + 1. */
+    function sugestaoDeNome(painel) {
+        return 'Aparelho ' + (((painel && painel.aparelhos) || []).length + 1);
     }
 
     /**
@@ -352,13 +372,29 @@
                     avisarNaCasa(fraseDaFilaPresa(naFila));
                 });
             }
-            return window.caixaConfirmar.perguntar(
-                prefixo + 'Quer usar este aparelho para ler os ingressos dele?',
-                { rotulo: 'Sim, usar este aparelho' }
-            ).then(function (sim) {
-                if (!sim) { return voltarParaACasa(); }
-                return ligarEsteAparelho(r.evento_id, sessao, r.elevacao);
-            });
+            // O painel busca ANTES de perguntar, so para a sugestao "Aparelho
+            // N" saber o numero certo. Se o GET falhar, a pergunta segue com
+            // "Aparelho 1" e sem `painel` nenhum -- o `criar` busca o dele de
+            // verdade, porque um painel incompleto aqui viraria um portao com
+            // os setores errados.
+            return contarAparelhos(r.evento_id, sessao).catch(function () { return null; })
+                .then(function (painel) {
+                    return window.caixaConfirmar.perguntar(
+                        prefixo + 'Quer usar este aparelho para ler os ingressos dele?',
+                        {
+                            rotulo: 'Sim, usar este aparelho',
+                            campo: {
+                                id: 'campo-nome-aparelho',
+                                rotulo: 'Nome deste aparelho (opcional)',
+                                valor: sugestaoDeNome(painel),
+                                maxlength: 60
+                            }
+                        }
+                    ).then(function (nomeEscolhido) {
+                        if (!nomeEscolhido) { return voltarParaACasa(); }
+                        return ligarEsteAparelho(r.evento_id, sessao, r.elevacao, nomeEscolhido, painel);
+                    });
+                });
         });
     }
 

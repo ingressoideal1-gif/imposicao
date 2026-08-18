@@ -136,27 +136,50 @@
         return (painel.setores || []).map(function (s) { return s.id; });
     }
 
+    /** GET /eventos/{id} -- os dois usos (sugerir o nome e criar o portao)
+     * pedem o mesmo painel, e por isso quem ja o tem passa adiante em vez de
+     * buscar de novo (ver `criar` e `perguntarNomeECriar`). */
+    function buscarPainel(evento_id, sessao) {
+        return window.AcessoConta.pedir('/eventos/' + evento_id, {
+            headers: { Authorization: 'Bearer ' + sessao.access_token }
+        });
+    }
+
+    /** "Aparelho N", com N = quantos portoes o evento ja tem + 1. O dono ve a
+     * lista inteira na engrenagem, e dois "Aparelho 1" ali seriam
+     * indistinguiveis -- por isso conta os do EVENTO, nao os deste aparelho. */
+    function sugestaoDeNome(painel) {
+        return 'Aparelho ' + (((painel && painel.aparelhos) || []).length + 1);
+    }
+
     /**
      * Cria o portao deste aparelho e assume.
+     *
+     * @param nomeEscolhido  o nome que a pessoa digitou ou aceitou (ver
+     *                       `perguntarNomeECriar`). Vazio ou ausente cai no
+     *                       automatico de sempre.
+     * @param painelPronto   o painel, se quem chamou ja buscou para sugerir o
+     *                       nome antes de perguntar -- evita um segundo GET
+     *                       identico. Sem ele, busca aqui, porque o POST
+     *                       precisa dos setores de qualquer jeito.
      *
      * `aparelhoAqui.assumir` e quem encerra a sessao, na ordem que ja esta
      * resolvida la: token, signOut, navegar. Inverte-la nao da erro na tela --
      * da um aparelho sem conta e sem token no meio de um evento.
      */
-    function criar(evento_id, sessao, elevacao) {
+    function criar(evento_id, sessao, elevacao, nomeEscolhido, painelPronto) {
         var cabecalhos = {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + sessao.access_token,
             'X-Elevacao': elevacao.token,
             'X-Navegador': window.AcessoConta.navegadorId()
         };
-        return window.AcessoConta.pedir('/eventos/' + evento_id, {
-            headers: { Authorization: 'Bearer ' + sessao.access_token }
-        }).then(function (painel) {
-            // O numero conta os portoes que ja existem NO EVENTO, e nao neste
-            // aparelho: o dono ve a lista inteira na engrenagem, e dois
-            // "Aparelho 1" ali seriam indistinguiveis.
-            var nome = 'Aparelho ' + ((painel.aparelhos || []).length + 1);
+        var pronto = painelPronto
+            ? Promise.resolve(painelPronto)
+            : buscarPainel(evento_id, sessao);
+        return pronto.then(function (painel) {
+            var digitado = typeof nomeEscolhido === 'string' ? nomeEscolhido.trim() : '';
+            var nome = digitado || sugestaoDeNome(painel);
             return window.AcessoConta.pedir(
                 '/eventos/' + evento_id + '/aparelhos/aqui',
                 {
@@ -180,6 +203,43 @@
                 });
             });
         });
+    }
+
+    /**
+     * "Usar este aparelho no evento X?", com o nome ja sugerido e pronto para
+     * editar -- a decisao do usuario de 18/08/2026 (Task 6: "nome do aparelho
+     * na hora") vale para TODO caminho que cria um portao novo, e este e o
+     * outro: o `carregar-pedido.js` cobre o "Sim, usar este aparelho" depois
+     * de um pedido virar evento; aqui e o toque direto na barra de um evento
+     * que este aparelho ainda nao le.
+     *
+     * O painel busca ANTES de perguntar, so para a sugestao saber o numero
+     * certo -- e o mesmo painel que o `criar` pediria de qualquer jeito, e por
+     * isso repassa em vez de deixar `criar` buscar de novo. Se o GET falhar,
+     * a pergunta segue com a sugestao generica "Aparelho 1" e SEM repassar o
+     * painel -- `criar` busca o dele, de verdade, porque um painel incompleto
+     * aqui viraria um portao com os setores errados.
+     */
+    function perguntarNomeECriar(evento_id, nomeEvento, sessao, elevacao) {
+        return buscarPainel(evento_id, sessao).catch(function () { return null; })
+            .then(function (painel) {
+                return window.caixaConfirmar.perguntar(
+                    'Usar este aparelho no evento ' + nomeEvento + '?',
+                    {
+                        rotulo: 'Sim, usar este aparelho',
+                        campo: {
+                            id: 'campo-nome-aparelho',
+                            rotulo: 'Nome deste aparelho (opcional)',
+                            valor: sugestaoDeNome(painel),
+                            maxlength: 60
+                        }
+                    }
+                ).then(function (nomeEscolhido) {
+                    // null: cancelou. Fica na lista, sem criar nada.
+                    if (!nomeEscolhido) { return; }
+                    return criar(evento_id, sessao, elevacao, nomeEscolhido, painel);
+                });
+            });
     }
 
     function irLer() { window.location.href = 'portaria.html'; }
@@ -250,7 +310,7 @@
                 return window.portariaDeposito.esquecerFila().then(irLer, irLer);
             }
             return window.Controle.comSenha(evento_id, function (sessao, elevacao) {
-                return criar(evento_id, sessao, elevacao);
+                return perguntarNomeECriar(evento_id, nome, sessao, elevacao);
             }).catch(function (e) {
                 // SEM este `catch`, uma senha que nao confere virava uma
                 // promessa rejeitada e nada mais: o dono tocava no evento,
