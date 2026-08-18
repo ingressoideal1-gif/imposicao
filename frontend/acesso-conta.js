@@ -21,14 +21,14 @@
     'use strict';
 
     // 16/08/2026: as telas do cliente passaram a falar com Edge Functions, ao
-    // lado do banco. Antes era `https://imposicao.onrender.com/api/acesso`, e
-    // cada toque pagava DUAS travessias de internet (navegador -> Render ->
-    // Supabase e volta) — mais uma terceira, escondida, porque o Render
-    // perguntava ao Supabase quem estava falando a cada chamada. Quem sente é o
-    // dono do evento no celular, no dia do evento.
+    // lado do banco. Antes era o `/api/acesso` de um servidor Python que ficava
+    // na nuvem, e cada toque pagava DUAS travessias de internet (navegador ->
+    // servidor -> Supabase e volta) — mais uma terceira, escondida, porque
+    // aquele servidor perguntava ao Supabase quem estava falando a cada
+    // chamada. Quem sente é o dono do evento no celular, no dia do evento.
     //
-    // O Python continua no ar no endereço antigo durante a transição. Para
-    // voltar atrás: troque estas duas linhas de volta e republique.
+    // Aquele servidor saiu do ar em 17/08/2026: não há mais para onde voltar
+    // atrás, e não deve haver. O endereço abaixo é o único.
     var BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-conta';
 
     // `/evento` mora numa função SEPARADA, e isso não é organização: é a única

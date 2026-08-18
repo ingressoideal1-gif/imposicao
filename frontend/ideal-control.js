@@ -25,18 +25,18 @@
     'use strict';
 
     // 16/08/2026: esta tela passou a falar com uma Edge Function, ao lado do
-    // banco. Antes era `https://imposicao.onrender.com/api/acesso/interno`, e
-    // cada consulta pagava DUAS travessias de internet (navegador -> Render ->
-    // Supabase e volta), num servico que dorme quando ninguem usa. Some-se a
-    // isso que o Render perguntava ao Supabase QUEM ESTA FALANDO a cada chamada;
-    // na Edge Function o proprio portao ja conferiu o JWT antes de invocar.
+    // banco. Antes era o `/api/acesso/interno` de um servidor Python que ficava
+    // na nuvem, e cada consulta pagava DUAS travessias de internet (navegador ->
+    // servidor -> Supabase e volta), num servico que dormia quando ninguem
+    // usava. Some-se a isso que aquele servidor perguntava ao Supabase QUEM
+    // ESTA FALANDO a cada chamada; na Edge Function o proprio portao ja
+    // conferiu o JWT antes de invocar.
     //
-    // O Python continua no ar no endereco antigo durante a transicao, e
-    // `tests/test_acesso_interno_paridade.py` compara os dois com o mesmo token.
-    // Para voltar atras: troque esta linha de volta e republique.
+    // Aquele servidor saiu do ar em 17/08/2026: nao ha mais para onde voltar
+    // atras, e nao deve haver. O endereco abaixo e o unico.
     //
     // O CAMINHO INTEIRO mora aqui, e nao so o host, de proposito. Os dois lados
-    // pedem prefixos diferentes (`/api/acesso/interno` contra
+    // pediam prefixos diferentes (`/api/acesso/interno` contra
     // `/functions/v1/acesso-interno`), e trocar so o host montaria uma URL sem
     // sentido que o roteamento da funcao aceitaria por acidente.
     //

@@ -19,36 +19,54 @@ if (typeof supabase !== 'undefined' && !forceOffline && !offlineModeSaved) {
     console.log("Operando em modo 100% local/offline (sem Supabase).");
 }
 
-// URL base do backend FastAPI.
-// Deixe vazio ("") para desenvolvimento local (mesmo domínio).
-// Altere para a URL de produção quando publicar o backend online (ex: "https://imposicao.onrender.com").
+// QUEM SERVIU ESTA PÁGINA — a estação da gráfica, ou a nuvem.
+//
+// É a pergunta que decide o destino de meia dúzia de chamadas mais abaixo
+// (`urlDoProxy`, `lerCatalogoDeFontes`, `urlDeEscritaDeFontes`), e ela não tem
+// nada a ver com endereço de servidor: sai de `window.location`, na hora.
+//
+// A estação serve o painel pela porta 9000 (o agente) ou pela 8080 (o motor em
+// desenvolvimento). `file:` fica de fora porque abrir o HTML pelo disco não é
+// estação nenhuma — é uma página sem servidor atrás.
 const isPort9000 = window.location.port === "9000";
-const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !== 'file:'
-    ? ""
-    : "https://imposicao.onrender.com";
+const SERVIDA_PELA_NUVEM = !((isLocalhost || isPort9000)
+    && window.location.protocol !== 'file:');
 
-// O motor da NUVEM, sempre — mesmo quando a página é servida pela estação.
+// URL base do motor da ESTAÇÃO, e só dela.
 //
-// Duas coisas só a nuvem faz: gravar permissões e gravar acessos locais. As duas
-// tabelas ganharam RLS em 16/08/2026, e escrever nelas exige a chave de serviço
-// do banco — que NÃO vai para as estações, por decisão registrada em
-// `acesso_api.py`: ela abre cliente, proposta e financeiro do parceiro.
+// Vazio SEMPRE, desde 17/08/2026. `${API_BASE_URL}/api/...` sai como caminho
+// relativo, e caminho relativo chega a quem serviu a página: na estação, o
+// agente na 9000, que responde do disco e sem rede. É a razão de o agente
+// existir — o operador está de pé na frente da impressora.
 //
-// Sem isto, o administrador que abrisse o Menu Usuários pelo painel da estação
-// receberia 503 num botão que sempre funcionou.
-const API_NUVEM = "https://imposicao.onrender.com";
+// Fora da estação essas mesmas chamadas não chegam a lugar nenhum, e isso é o
+// desenho, não um descuido. Até 16/08/2026 elas caíam num servidor Python que
+// ficava na nuvem; ele saiu, e o usuário fechou o assunto: "impressão só pode
+// acontecer pela estação da gráfica". Quem abre o painel abre por
+// `http://localhost:9000`.
+//
+// A constante continua existindo em vez de sumir porque há dezenas de pontos de
+// chamada montando `${API_BASE_URL}/api/...`, e o nome diz a qual motor eles
+// falam. Trocá-la por um endereço de nuvem é o que NÃO pode voltar a acontecer.
+const API_BASE_URL = "";
 
-// As rotas sensíveis do painel, já fora do Render.
+// As rotas sensíveis do painel — SEMPRE aqui, mesmo na estação.
 //
-// Porte de `/api/user/permissions` e `/api/acessos-locais` para Edge Function
-// (`supabase/functions/painel`). O caminho depois da base continua o MESMO — a
-// função aceita o prefixo `api/` de propósito —, então o corte é uma troca de
-// base e nada mais, e voltar atrás é trocar de volta.
+// `/api/user/permissions` e `/api/acessos-locais` mexem nas duas tabelas que
+// ganharam RLS em 16/08/2026: escrever nelas exige a chave de serviço do banco,
+// que NÃO vai para as estações, por decisão registrada em `acesso_api.py` — ela
+// abre cliente, proposta e financeiro do parceiro. Por isso estas duas são a
+// exceção à regra do `API_BASE_URL`: o administrador que abre o Menu Usuários
+// pelo painel da estação sai desta máquina, de propósito.
 //
-// A função corrige uma coisa que o Render não corrigia: lá, qualquer sessão
-// válida gravava na grade de permissões, e "qualquer sessão" inclui todo cliente
-// do ERP parceiro, porque a conta é a mesma. Aqui, mexer na grade de outra
-// pessoa exige o módulo Usuários, e o primeiro acesso é escrito pelo servidor.
+// O caminho depois da base é o MESMO de antes — a função aceita o prefixo
+// `api/` de propósito —, então o corte foi uma troca de base e nada mais.
+//
+// A função corrige uma coisa que o servidor Python não corrigia: lá, qualquer
+// sessão válida gravava na grade de permissões, e "qualquer sessão" inclui todo
+// cliente do ERP parceiro, porque a conta é a mesma. Aqui, mexer na grade de
+// outra pessoa exige o módulo Usuários, e o primeiro acesso é escrito pelo
+// servidor.
 const API_PAINEL = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel";
 
 // O proxy de arquivos, para quando o `fetch` direto não serve.
@@ -62,17 +80,18 @@ const API_ARQUIVO = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/arqui
  * Porque a resposta certa depende de QUEM está servindo a página, e há cinco
  * lugares que perguntam:
  *
- *   - servida pela ESTAÇÃO (`API_BASE_URL` vazio) → o agente local, sempre. Ele
- *     tem o arquivo em cache no disco e responde sem rede. Mandar a estação à
- *     nuvem para buscar um PDF que está do lado dela seria trocar disco por
- *     internet no caminho de quem espera na frente da impressora.
+ *   - servida pela ESTAÇÃO → o agente local, sempre. Ele tem o arquivo em cache
+ *     no disco e responde sem rede. Mandar a estação à nuvem para buscar um PDF
+ *     que está do lado dela seria trocar disco por internet no caminho de quem
+ *     espera na frente da impressora.
  *   - servida pela NUVEM → a Edge Function, ao lado do banco.
  *
  * Antes daqui, três dos cinco pontos usavam `/api/proxy` relativo — o que na
- * Vercel dependia de um desvio no `vercel.json` para chegar ao Render.
+ * Vercel dependia de um desvio no `vercel.json` para o servidor Python que
+ * ficava na nuvem. O desvio saiu em 17/08/2026, junto com o servidor.
  */
 function urlDoProxy(endereco) {
-    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_ARQUIVO : '';
+    const base = SERVIDA_PELA_NUVEM ? API_ARQUIVO : '';
     return `${base}/api/proxy?url=${encodeURIComponent(endereco)}`;
 }
 
@@ -93,12 +112,12 @@ function urlDoProxy(endereco) {
  * Nome de fonte e URL de Storage não são segredo; o que fechou naquele dia foi
  * a ESCRITA (`sql/fontes_so_escrevem_pelas_funcoes.sql`).
  *
- * Antes daqui esse caminho passava pelo Render, que fazia exatamente esta
- * consulta e devolvia o mesmo JSON — uma travessia a mais por nada.
+ * Antes daqui esse caminho passava pelo servidor Python que ficava na nuvem, e
+ * ele fazia exatamente esta consulta e devolvia o mesmo JSON — uma travessia a
+ * mais por nada.
  */
 async function lerCatalogoDeFontes() {
-    const naNuvem = (typeof API_BASE_URL !== 'undefined') && API_BASE_URL;
-    if (naNuvem && supabaseClient) {
+    if (SERVIDA_PELA_NUVEM && supabaseClient) {
         const { data, error } = await supabaseClient
             .from('catalogo_fontes').select('*').order('nome', { ascending: true });
         if (error) throw error;
@@ -106,7 +125,7 @@ async function lerCatalogoDeFontes() {
     }
     // Estação, desenvolvimento, ou modo offline: quem responde é o `/api/fontes`
     // de quem serviu a página.
-    const res = await fetch(`${naNuvem ? API_BASE_URL : ''}/api/fontes`);
+    const res = await fetch(`${API_BASE_URL}/api/fontes`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) || [];
 }
@@ -120,7 +139,7 @@ async function lerCatalogoDeFontes() {
  * do lado do banco, e é por isso que a regra de duplicata vale igual nos dois.
  */
 function urlDeEscritaDeFontes(sufixo) {
-    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_PAINEL : '';
+    const base = SERVIDA_PELA_NUVEM ? API_PAINEL : '';
     return `${base}/api/fontes${sufixo || ''}`;
 }
 
@@ -128,9 +147,9 @@ function urlDeEscritaDeFontes(sufixo) {
 //
 // Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia
 // nada: qualquer um, de qualquer lugar, lia os códigos de acesso local e a grade
-// de permissões de `imposicao.onrender.com`, e podia escrever nelas. O conserto
-// do lado do servidor está em `app.py` (`precisa_de_sessao`); este é o outro
-// lado dele.
+// de permissões do servidor Python que ficava na nuvem, e podia escrever nelas.
+// O conserto do lado do servidor está em `app.py` (`precisa_de_sessao`), que
+// hoje só roda na estação; este é o outro lado dele.
 //
 // ## Por que aqui, e não em cada chamada
 //
@@ -161,14 +180,18 @@ function urlDeEscritaDeFontes(sufixo) {
         if (u.startsWith(API_PAINEL)) return true;
         if (u.includes('supabase.co')) return false;
         if (!u.includes('/api/')) return false;
-        if (/^https?:\/\//i.test(u)) {
-            // `API_NUVEM` entra aqui de propósito: quando a página é servida
-            // pela estação, `API_BASE_URL` é vazio, e sem esta linha a chamada
-            // que vai à nuvem por obrigação (permissões, acessos locais) sairia
-            // sem sessão e levaria 401.
-            if (u.startsWith(API_NUVEM)) return true;
-            return API_BASE_URL !== '' && u.startsWith(API_BASE_URL);
-        }
+        // Endereço ABSOLUTO que não é a função do painel não é nosso motor.
+        //
+        // Sobrou um caso só, e ele é o do agente: `http://127.0.0.1:9000/api/…`.
+        // Ele não recebe cabeçalho, e nem precisa — vive na LAN da gráfica,
+        // atrás da trava do código local, e o operador que entrou offline não
+        // tem sessão nenhuma do Supabase para oferecer.
+        //
+        // Até 17/08/2026 havia aqui um terceiro ramo, para o servidor Python
+        // que ficava na nuvem. Saiu junto com o servidor.
+        if (/^https?:\/\//i.test(u)) return false;
+        // Caminho RELATIVO: quem serviu a página é quem responde. Na estação,
+        // o agente — e é assim que `${API_BASE_URL}/api/…` chega nele.
         return u.indexOf('/api/') === 0;
     }
 

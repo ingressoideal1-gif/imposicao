@@ -1,23 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-Configuração central de segurança — compartilhada pelo backend na nuvem (Render)
-e pelo agente local (NewProd.exe / local_print_agent.py).
+Configuração central de segurança — compartilhada pelo `app.py` (o motor da
+estação da gráfica) e pelo agente local (NewProd.exe / local_print_agent.py).
 
 Fica em um módulo único porque app.py e local_print_agent.py implementam os
 mesmos endpoints separadamente; sem isto, uma correção aplicada em um dos
 arquivos silenciosamente não vale para o outro.
+
+Até 16/08/2026 este mesmo módulo servia também a uma cópia do `app.py` que
+rodava num servidor na nuvem. Aquele servidor saiu em 17/08/2026: o que era
+dele virou Edge Function em `supabase/functions/`, e o `app.py` ficou sendo só o
+motor da estação.
 """
 
 import os
 from urllib.parse import urlparse
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# Origens fixas em uso hoje. As chamadas do frontend para /api/* passam tanto
-# direto no Render (cross-origin) quanto pelo rewrite do Vercel (same-origin).
+# As duas origens em que o site atende. O painel servido pela estação chama o
+# `/api/*` da própria máquina (same-origin), mas a tela do operador pode ter sido
+# baixada de qualquer uma destas duas, e é a origem dela que o navegador manda.
+#
+# A origem do servidor que ficava na nuvem saiu daqui em 17/08/2026, junto com o
+# servidor.
 ALLOWED_ORIGINS = [
     "https://ideal-imposition.vercel.app",
     "https://imposicao.vercel.app",
-    "https://imposicao.onrender.com",
 ]
 
 # Cobre os deploys de preview do Vercel (URL dinâmica por branch) e o
@@ -54,14 +62,11 @@ def is_allowed_release_url(url: str) -> bool:
 # atualizá-lo custava um release de agente por vez. Agora o agente baixa os
 # arquivos do painel desta origem e serve a cópia local.
 #
-# ISSO NÃO MOVE A IMPOSIÇÃO PARA A NUVEM. Quem decide o motor é o
-# supabase-config.js, em tempo de execução, pela porta da página:
-#
-#     const isPort9000 = window.location.port === "9000";
-#     const API_BASE_URL = (isLocalhost || isPort9000) ? "" : "https://imposicao.onrender.com";
-#
-# Servido pelo agente na 9000, API_BASE_URL fica vazio e o motor é o da própria
-# máquina. Baixar o arquivo da nuvem não altera essa decisão.
+# ISSO NÃO MOVE A IMPOSIÇÃO PARA A NUVEM. O `API_BASE_URL` do supabase-config.js
+# é vazio SEMPRE, e vazio quer dizer "quem serviu a página responde": servido
+# pelo agente na 9000, `${API_BASE_URL}/api/impose` é o motor da própria máquina.
+# Baixar o arquivo da nuvem não altera essa decisão — e não existe mais nenhum
+# endereço de nuvem para onde a imposição pudesse cair.
 #
 # Origem literal pelo mesmo motivo do manifesto: vinda de fora, quem controlasse
 # o ambiente controlaria o código que roda na estação.
@@ -201,9 +206,15 @@ def is_allowed_proxy_url(url: str) -> bool:
 
 # ─── Contexto de execução ─────────────────────────────────────────────────────
 def is_cloud_runtime() -> bool:
-    """True quando rodando no Render.
+    """True quando este `app.py` NÃO está rodando na estação da gráfica.
 
-    O mesmo app.py serve a nuvem e o agente da gráfica. Na nuvem o deploy é
-    feito por git, então a auto-atualização não tem uso legítimo e fica off.
+    Desde 17/08/2026 isto é sempre False em produção: não há mais cópia do
+    `app.py` na nuvem, e o que era dela virou Edge Function. A função continua
+    porque é um freio que falha para o lado seguro — se um dia alguém subir este
+    arquivo num serviço hospedado, a auto-atualização e os caminhos que exigem a
+    LAN da gráfica continuam desligados sem ninguém precisar lembrar.
+
+    As variáveis conferidas são as que o antigo serviço definia sozinho. Não são
+    nossas, e é isso que as torna difíceis de forjar por acidente.
     """
     return bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))

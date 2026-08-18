@@ -26,8 +26,16 @@ import urllib.error
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ferramentas"))
 
+import acesso_publicacao
 import agent_worker
 import estacoes
+
+
+# Para onde a estacao publica a faixa de codigos hoje. Sai do proprio modulo que
+# publica, e nao de um literal: se o padrao mudar, o teste acompanha em vez de
+# guardar um endereco que ninguem mais usa -- foi exatamente o que aconteceu com
+# o servidor Python da nuvem, que ficou aqui dentro depois de sair do ar.
+FUNCAO_DA_ESTACAO = acesso_publicacao.BASE_PADRAO
 
 
 RECUSA_PGRST204 = json.dumps({
@@ -228,11 +236,12 @@ def test_le_a_versao_da_coluna_quando_ela_existe():
 def test_cai_no_json_enquanto_a_coluna_nao_existe():
     """As duas metades da janela: banco sem coluna, ou agente que não a preenche."""
     versao, painel, base = estacoes._versoes({
-        "printers_json": {"version": "1.2.67", "painel": {"versao": "568"},
-                          "acesso_base": "https://imposicao.onrender.com"},
+        "printers_json": {
+            "version": "1.2.67", "painel": {"versao": "568"},
+            "acesso_base": FUNCAO_DA_ESTACAO},
     })
     assert (versao, painel) == ("1.2.67", "568")
-    assert base == "https://imposicao.onrender.com"
+    assert base == FUNCAO_DA_ESTACAO
 
 
 def test_estacao_que_nao_reporta_nada_nao_vira_versao_inventada():

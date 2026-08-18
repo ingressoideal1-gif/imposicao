@@ -159,8 +159,8 @@ const VENDEDORES_LISTA = [
 // - Utility -- fetchPdfBytes -
 // Busca os bytes de um PDF a partir de uma URL ou string base64.
 // Para URLs: tenta fetch DIRETO primeiro (funciona para URLs do Supabase que têm CORS público).
-// Só usa o proxy como fallback quando API_BASE_URL está disponível (backend local).
-// Isso evita o erro 404 no Vercel onde não há rota /api/proxy.
+// Só cai no proxy quando o direto falha, e quem escolhe o proxy é `urlDoProxy`:
+// o agente na estação, a Edge Function `arquivo` na nuvem.
 async function fetchPdfBytes(content) {
     if (!content) return null;
 
@@ -3525,7 +3525,8 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
  * NAO EXISTE motor de imposicao na nuvem, e nao deve voltar a existir.
  *
  * Ate 16/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
- * estava em localhost, mandava o upload para `imposicao.onrender.com`. Isso
+ * estava em localhost, mandava o upload para o servidor Python que ficava na
+ * nuvem — um servico de terceiro, fora da grafica. Isso
  * significava que a arte do cliente -- centenas de MB -- saia da grafica para um
  * servidor de terceiro, e o operador via so um selo discreto escrito "NUVEM".
  *
@@ -30193,9 +30194,9 @@ async function savePrintConfigForProduct() {
     try { localStorage.setItem(`printConfig_${info.prodId}`, JSON.stringify(config)); } catch(e) {}
 
     // 3. Gravar no agente desta máquina.
-    //    Sempre no agente local, nunca em API_BASE_URL: no painel da nuvem aquilo
-    //    aponta para o Render, que não tem — nem deve ter — a configuração da
-    //    estação. Impressora, bandeja e papel são físicos desta máquina.
+    //    Sempre no agente local, e nunca por caminho relativo: no painel da
+    //    nuvem um `/api/…` não chega a máquina nenhuma, e a configuração é
+    //    física DESTA aqui — impressora, bandeja e papel.
     const btn = document.getElementById('ped-print-save-btn');
     if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
     try {
@@ -30399,18 +30400,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// O PRE-AQUECIMENTO DO RENDER MORREU AQUI, em 16/08/2026.
+// O PRE-AQUECIMENTO DO SERVIDOR DA NUVEM MORREU AQUI, em 16/08/2026.
 //
-// Ele disparava um ping ao `imposicao.onrender.com/api/health` em TODA página
-// carregada da nuvem, só para acordar o servidor antes que alguém precisasse
-// dele — o Render dorme depois de um tempo sem uso, e o primeiro pedido depois
+// Ele disparava um ping ao `/api/health` do servidor Python que ficava na nuvem,
+// em TODA página carregada, só para acordá-lo antes que alguém precisasse dele —
+// aquele serviço dormia depois de um tempo sem uso, e o primeiro pedido depois
 // disso levava dezenas de segundos.
 //
-// Não há mais o que acordar. As telas falam com Edge Functions, que não dormem,
-// e o que ainda mora no Render são caminhos de reserva que rodam sem cliente
-// Supabase — desenvolvimento, não produção. Manter o ping seria pagar uma
-// requisição por carregamento de página para manter de pé um servidor que a
-// Fase 4 vai desligar.
+// Não há mais o que acordar, e desde 17/08/2026 não há mais servidor: as telas
+// falam com Edge Functions, que não dormem, e o `app.py` só roda na estação da
+// gráfica. Um ping por carregamento de página não sobreviveria a nada disso.
 
 // --- Exportação de PDF dos Modelos ---
 async function exportarPdfModelos() {

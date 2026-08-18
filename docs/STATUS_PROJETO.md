@@ -17,20 +17,13 @@ retomando depois de um tempo, comece por aqui.
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
 
-> ⚠️ **O motor está no tipo de instância `free` do Render**, em Ohio. Isso quer dizer que
-> ele **dorme** depois de ~15 minutos parado, e o primeiro acesso paga uma partida a frio —
-> **32,8 s medidos em 16/08**. Não é pane e não trava mais nenhuma tela; é espera.
->
-> O conserto é um ajuste por serviço, e a API do Render **recusa** fazê-lo (500) porque é
-> operação de cobrança: **painel do Render → serviço `imposicao` → Settings → Instance Type
-> → Starter**. Pagar o plano do workspace não basta — são coisas separadas.
->
-> Vale saber também que **todo `git push` dispara uma reconstrução de ~1 minuto**, e
-> `publicar_agente.ps1` empurra um segundo commit, logo uma segunda reconstrução. Abrir a
-> tela no minuto seguinte a publicar é pegar essa janela.
+> ✅ **A partida a frio acabou em 17/08/2026.** O backend na nuvem ficava num serviço de
+> instância `free`, que dormia depois de ~15 minutos parado — **32,8 s medidos em 16/08**
+> no primeiro acesso do dia. Aquele serviço foi desligado: o backend inteiro são Edge
+> Functions, e Edge Function não dorme.
 
 **O controle de acesso está inteiro no servidor — as quatro variáveis.** Conferido em 14/08
-contra o Render, não assumido:
+contra o backend de então, não assumido:
 
 ```
 GET /api/acesso/saude  →  200
@@ -47,12 +40,13 @@ As oito rotas `/api/acesso/*` respondem, e as quatro travas seguraram: publicar 
 segredo do agente, gerar QR sem login, listar eventos sem login e trocar um token falso
 pelo esqueleto — **401 em todas**.
 
-> **Há dois serviços no Render nesta conta.** O certo é o chamado **`imposicao`**, que
-> atende `https://imposicao.onrender.com`. As variáveis foram parar no outro na primeira
-> tentativa, e o sintoma foi enganoso: `/api/acesso/saude` respondendo **404**, não 503 —
-> porque sem a `SUPABASE_SERVICE_KEY` o `app.py` não monta o router, e a rota simplesmente
-> não existe. Para confirmar que é o serviço certo antes de colar, compare o commit que o
-> Render mostra com `git rev-parse --short origin/main`.
+> **Havia dois serviços com nomes parecidos na conta do servidor hospedado**, e as
+> variáveis foram parar no errado na primeira tentativa. O sintoma foi enganoso:
+> `/api/acesso/saude` respondendo **404**, não 503 — porque sem a `SUPABASE_SERVICE_KEY` o
+> `app.py` não monta o router, e a rota simplesmente não existe. Aquele serviço saiu do ar
+> em 17/08/2026, mas a armadilha ficou: a conta do Supabase também tem projetos vazios com
+> nomes parecidos, e função publicada no projeto errado sobe sem erro e não enxerga
+> credencial nenhuma. O `publicar.ps1` confere o `project-ref` por isso.
 
 ---
 
@@ -76,8 +70,8 @@ aplicativo, acha o pedido em **Meus Pedidos** e toca em **Carregar** para criar 
 Até 17/08/2026 este passo era outro — o atendente gerava o **QR do Pedido** e o cliente o
 lia com a câmera; o QR saiu de circulação naquele dia, junto com o `evento.html`.
 
-Publicada em 14/08/2026, com as três variáveis configuradas no Render e conferidas por
-fora. **Falta o teste de ponta a ponta com um pedido de verdade** — ver abaixo.
+Publicada em 14/08/2026, com as três variáveis configuradas no backend de então e
+conferidas por fora. **Falta o teste de ponta a ponta com um pedido de verdade** — ver abaixo.
 
 Documentação: [docs/controle_acesso.md](controle_acesso.md)
 Plano: [docs/superpowers/plans/2026-08-13-controle-acesso-parte2.md](superpowers/plans/2026-08-13-controle-acesso-parte2.md)
@@ -117,7 +111,8 @@ Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](supe
 
 **O servidor precisa de quatro variáveis, não três**: `SUPABASE_SERVICE_KEY`,
 `ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO` — as quatro estão
-no Render desde 14/08, conferidas pelo `/api/acesso/saude` acima.
+configuradas desde 14/08, conferidas pelo `/api/acesso/saude` acima. Desde 17/08/2026 elas
+moram nos segredos do Supabase.
 
 O código saiu na v569 e foi reafirmado na v570 / 1.2.69; a versão corrente está na tabela
 no topo deste documento. A
@@ -252,7 +247,7 @@ https://imposicao.vercel.app/api/status
 ```
 
 O painel procura o agente testando três endereços, e o **primeiro da lista é o endereço da
-própria página** — que na Vercel leva ao Render. Ele acreditava, parava de procurar, e
+própria página** — que na Vercel levava ao servidor Python hospedado na nuvem. Ele acreditava, parava de procurar, e
 mandava a imposição para a nuvem **mostrando na tela o selo "⚡ AGENTE LOCAL"**. Na nuvem, o
 catálogo de numerações é outro, o `qr_ideal_pool.bin` não existe (e nunca vai existir — é o
 segredo mestre) e não há agente com faixa a publicar. Daí os três estragos ao mesmo tempo:
@@ -262,8 +257,8 @@ folha sem código, "falta a lista de codigos desta estacao", e credencial que n�
 recusa quem se declara nuvem:
 
 ```
-imposicao.onrender.com/api/status → "onde":"nuvem"   → recusado
-127.0.0.1:9000/api/status         → "onde":"local"   → aceito
+<servidor da nuvem>/api/status → "onde":"nuvem"   → recusado
+127.0.0.1:9000/api/status      → "onde":"local"   → aceito
 ```
 
 A recusa é por `onde !== 'nuvem'`, e não por `onde === 'local'`, para que agente antigo — que
@@ -395,7 +390,7 @@ escondendo o outro, e os dois estão explicados em [controle_acesso.md](controle
   `.catch()` que nem existia ainda, e o "Carregando…" ficava para sempre.
 
 O segundo é o que tornou o primeiro caro. Sem mensagem na tela, levou duas publicações e o
-log do Render — que provou o essencial, **nenhuma requisição chegou ao motor** — para
+log do servidor — que provou o essencial, **nenhuma requisição chegou ao motor** — para
 chegar ao primeiro.
 
 **A lição de método, e ela é minha:** eu tinha uma otimização pendente em mãos (a tela fazia
@@ -478,38 +473,22 @@ Dois casos importam mais que os outros:
 > defeito da portaria. **O único evento testável é o "Teste Ideal Control"** (pedido 18560):
 > 2.000 de 2.000.
 
-### 5. Tirar o motor do plano `free` do Render
-
-Ver o aviso no topo deste documento. Enquanto estiver no `free`, o serviço dorme e o
-primeiro acesso do dia paga ~30 s. É um clique no painel do Render, que a API não faz.
-
-### 6. Usar o Ideal Control da gráfica e apontar o que não se explica
+### 5. Usar o Ideal Control da gráfica e apontar o que não se explica
 
 Foi o que rendeu as quatro correções da tela do dono. A tela da gráfica é maior, tem mais
 o que dar errado, e ninguém ainda pesquisou um pedido nela em condição de trabalho.
 
 ---
 
-## Como configurar as variáveis do Render (para a próxima vez)
+## Como configurar as quatro variáveis (para a próxima vez)
 
-As quatro foram feitas em 14/08. Este passo a passo fica registrado porque um serviço novo
-ou uma troca de segredo refazem o caminho.
+As quatro foram feitas em 14/08, quando ainda moravam no painel de um servidor hospedado.
+Desde 17/08/2026 elas moram nos **segredos do Supabase**, que é o que as Edge Functions
+leem, e os dois scripts que gravavam no painel antigo
+(`ferramentas/variavel_no_render.ps1` e `ferramentas/copiar_para_render.ps1`) saíram junto
+com o serviço.
 
-**O jeito curto, sem abrir o navegador:**
-
-```powershell
-.\ferramentas\variavel_no_render.ps1 ACESSO_ELEVACAO_SEGREDO -Conferir   # só mostra o alvo
-.\ferramentas\variavel_no_render.ps1 ACESSO_ELEVACAO_SEGREDO             # grava e redeploya
-```
-
-Ele lê o valor do `.env.local`, acha o serviço pelo **nome exato** (o filtro da API do
-Render casa por prefixo, e pegar o primeiro da lista repetiria o acidente descrito no
-começo deste documento), grava, pede o redeploy e nunca imprime o valor. Depende de
-`RENDER_API_KEY` no `.env.local` — Render → foto do perfil → Account Settings → API Keys.
-Essa chave abre a conta inteira do Render; trate-a como a `service_role`.
-
-**O jeito manual**, se preferir o painel. São quatro variáveis, todas com o valor que já
-está no `.env.local` desta máquina:
+São quatro, todas com o valor que já está no `.env.local` desta máquina:
 
 - `SUPABASE_SERVICE_KEY` — sem ela o router `/api/acesso/*` nem é montado
 - `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca chega à nuvem
@@ -517,25 +496,12 @@ está no `.env.local` desta máquina:
 - `ACESSO_ELEVACAO_SEGREDO` — sem ela o dono não configura o evento; a tela fica somente
   leitura
 
-```powershell
-.\ferramentas\copiar_para_render.ps1
-```
+Ao copiar a `SUPABASE_SERVICE_KEY`, cuidado com um caractere sobrando no começo ou um `=`
+no fim: o Supabase responde `401 Invalid API key` e a chave *parece* certa. A assinatura de
+um JWT tem **43 caracteres** e nunca termina em `=`.
 
-Ele confere as quatro, põe uma de cada vez na área de transferência (o valor **não** aparece
-na tela) e espera você colar no Render antes de passar para a próxima. Com `-Conferir`, só
-confere e sai; com `-Somente <NOME>`, copia uma e não limpa nada.
-
-**A ordem é: variáveis primeiro, publicação depois** — senão o primeiro deploy sobe sem a
-chave e o router não monta. Mas a conferência só funciona ao contrário: enquanto o Render
-rodar código sem o `acesso_api`, o `/api/acesso/saude` responde **404**, e isso não é erro
-de configuração.
-
-> **Armadilha já vivida, e a razão de o script existir.** Ao copiar a
-> `SUPABASE_SERVICE_KEY` com o mouse, um caractere sobrando no começo ou um `=` no fim fazem
-> o Supabase responder `401 Invalid API key` — e a chave *parece* certa, com
-> `role: service_role` e validade em 2035. A assinatura de um JWT tem **43 caracteres** e
-> nunca termina em `=`. Isso já custou meia hora de investigação, e o script pega as duas
-> violações.
+**A ordem é: segredos primeiro, publicação depois** — a função que sobe sem a chave
+responde erro em tudo o que toca o banco.
 
 E publicar é sempre os dois — site e agente, com número de versão novo:
 
@@ -545,8 +511,8 @@ E publicar é sempre os dois — site e agente, com número de versão novo:
 ```
 
 O executável embute uma cópia do frontend, e o build do agente exige o
-`ACESSO_AGENTE_SEGREDO` — ele lê do mesmo `.env.local` de onde saiu o valor colado no
-Render, então os dois lados batem sem ninguém conferir.
+`ACESSO_AGENTE_SEGREDO` — ele lê do mesmo `.env.local` de onde saiu o valor gravado nos
+segredos do Supabase, então os dois lados batem sem ninguém conferir.
 
 ---
 
@@ -608,9 +574,9 @@ ficam como rede de segurança se o defeito voltar.
 e imprimia duas linhas vermelhas por arranque. A decisão de então foi apagar o SQL e assumir
 o catálogo como local.
 
-O que aquela decisão não previu: quando o operador abre o painel pelo **site publicado**,
-quem responde é o Render, e o disco do Render volta ao conteúdo versionado a cada
-publicação. Quatro fontes cadastradas em 14/08 (Gotham Book, Gotham Bold, Swis721 LtCn BT
+O que aquela decisão não previu: quando o operador abria o painel pelo **site
+publicado**, quem respondia era o servidor da nuvem, e o disco dele voltava ao conteúdo
+versionado a cada publicação. Quatro fontes cadastradas em 14/08 (Gotham Book, Gotham Bold, Swis721 LtCn BT
 Light e Swiss 911 Extra Compressed) sumiram na publicação seguinte. A numeração **1000289**
 passou a mostrar o nome da fonte no seletor e a desenhar com outra, porque o elemento guarda
 apenas o NOME — o `arquivo_url` só entra no payload da imposição, nunca é salvo. Os binários
@@ -644,7 +610,7 @@ vermelha por elemento desenhado.
   que semeava `window.supabaseClient` onde a página usa uma ligação de escopo de script.
   Nos dois casos a suíte estava verde com o código quebrado em produção.
 - Em 13/08 a suíte foi recuperada: **dez** arquivos não rodavam, e um deles disparava um
-  POST de verdade contra o Render de produção a cada execução.
+  POST de verdade contra o servidor de produção a cada execução.
   `tests/test_a_suite_esta_sa.py` impede a reincidência.
 - Rode `.\ferramentas\conferir.ps1` antes de qualquer trabalho substantivo. Ele só consulta,
   e responde as seis perguntas que importam.

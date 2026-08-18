@@ -36,11 +36,15 @@ credenciais publicadas depois se ligam ao setor do mesmo jeito. Ver
 ## A regra que decide tudo: quem fala com o banco
 
 ```
-Agente (tem o pool)  ──hash──►  Render (service_role)  ──►  Supabase
+Agente (tem o pool)  ──hash──►  servidor com a service_role  ──►  Supabase
                                        ▲
                                        │ JWT do cliente
                               controle.html (o app no celular)
 ```
+
+(Esse "servidor com a service_role" foi, até 16/08/2026, um Python hospedado na nuvem.
+Hoje são as Edge Functions — ver a seção seguinte. O desenho é o mesmo; o que mudou foi
+onde o código roda.)
 
 **Nenhuma chave de banco chega ao celular nem ao navegador.** As onze tabelas
 `producao_acesso_*` nasceram com RLS ligado e **zero políticas**: com a chave anônima —
@@ -49,8 +53,8 @@ linha. Conferido contra o banco em 13/08/2026 para as sete primeiras (a `_bloque
 no dia seguinte, com o mesmo RLS no SQL): uma tentativa de escrita anônima volta
 `42501, new row violates row-level security policy`.
 
-A `service_role` vive só no Render, em variável de ambiente. Ela **não vai para as
-estações**: o agente não tem autenticação de verdade (o `AGENT_ID` é um UUID em arquivo
+A `service_role` vive só do lado do servidor, nos segredos do Supabase. Ela **não vai
+para as estações**: o agente não tem autenticação de verdade (o `AGENT_ID` é um UUID em arquivo
 local, que qualquer um forjaria), e distribuir a chave-mestra do banco — que abre cliente,
 proposta e financeiro do parceiro — em cada `NewProd.exe` seria bem pior do que a chave
 anônima que já circula.
@@ -63,8 +67,8 @@ defeito.
 ## Onde cada consumidor fala hoje (17/08/2026)
 
 O desenho acima continua valendo — o que mudou foi **onde o código roda**. Desde a Fase 2b
-o controle de acesso inteiro vive em Edge Functions, ao lado do banco, e o Render deixou de
-estar no caminho:
+o controle de acesso inteiro vive em Edge Functions, ao lado do banco, e em 17/08/2026 o
+servidor Python que ficava na nuvem foi desligado:
 
 ```
 Agente (tem o pool)  ──hash──►  Edge Function (service_role)  ──►  Supabase
@@ -73,7 +77,7 @@ Agente (tem o pool)  ──hash──►  Edge Function (service_role)  ──�
                               controle.html (o app no celular)
 ```
 
-| Quem fala | Função | Antes, no Render | `verify_jwt` |
+| Quem fala | Função | Rota antiga, no servidor da nuvem | `verify_jwt` |
 |---|---|---|---|
 | Ideal Control da gráfica (`ideal-control.js`) | `acesso-interno` | `/api/acesso/interno/*` | sim |
 | Tela do dono (`controle.html`) | `acesso-conta` | `/api/acesso/*` | sim |
@@ -89,9 +93,9 @@ As funções ficam publicadas um release, para nenhum QR que já circula por Wha
 em porta fechada antes da hora.
 
 O que cada corte economiza é uma travessia de internet inteira — antes toda chamada ia ao
-Render e o Render ia ao Supabase — mais, nas três primeiras, uma segunda ida escondida: o
-Render perguntava ao Supabase **quem está falando** a cada requisição, porque não tinha como
-conferir o JWT sozinho. Numa Edge Function o portão do Supabase já conferiu a assinatura
+servidor da nuvem e ele ia ao Supabase — mais, nas três primeiras, uma segunda ida
+escondida: aquele servidor perguntava ao Supabase **quem está falando** a cada requisição,
+porque não tinha como conferir o JWT sozinho. Numa Edge Function o portão do Supabase já conferiu a assinatura
 antes de invocar a função, e a identidade sai das claims sem rede nenhuma.
 
 As duas com `verify_jwt = false` não são exceção descuidada: quem fala com elas não tem
@@ -100,16 +104,16 @@ apresenta o `ACESSO_AGENTE_SEGREDO`, e o cliente que lê o QR ainda **nem tem co
 protege aquela rota é a assinatura do próprio token do QR. Ligar a verificação nelas
 recusaria tudo com 401 antes de o nosso código rodar.
 
-**O Python continua no ar em `imposicao.onrender.com`, respondendo o mesmo.** É a volta
-atrás: cada corte é uma linha, e trocá-la de volta devolve o consumidor à pilha antiga sem
-migração de dado nenhuma, porque as duas falam com o mesmo banco. Desligar o Render é a
-Fase 3, e só depois que as onze estações tiverem migrado — o `conferir.ps1` conta quantas
-já falam com cada pilha.
+**O servidor Python da nuvem saiu do ar em 17/08/2026** — a Fase 3, concluída depois que
+as onze estações migraram. Não existe volta atrás por troca de endereço: o que era dele
+está nas Edge Functions, e o `app.py` ficou sendo só o motor da estação da gráfica, em
+`http://localhost:9000`.
 
-Cada corte é guardado por um teste de paridade que bate nos **dois** endereços com a mesma
-credencial e compara: `tests/test_acesso_interno_paridade.py`,
-`tests/test_acesso_pedido_paridade.py`, `tests/test_acesso_estacao_paridade.py` e
-`tests/test_portaria_paridade.py`.
+Durante a transição cada corte foi guardado por um teste de paridade que batia nos **dois**
+endereços com a mesma credencial e comparava. Eles saíram junto com o servidor (commit
+`f959712`): teste que bate num endereço morto passa por vácuo, e passar por vácuo é pior
+que não existir. No lugar deles ficou o `tests/test_sem_render.py`, que cobra o contrário
+— que nenhum arquivo do aplicativo volte a citar aquele endereço.
 
 ## O que a nuvem guarda no lugar do código
 
@@ -524,10 +528,10 @@ frase para o cliente ler no celular; o `acesso-conta` de hoje segue a mesma regr
 
 | Variável | Onde | Sem ela |
 |---|---|---|
-| `SUPABASE_SERVICE_KEY` | Render | o router `/api/acesso/*` nem é montado |
-| `ACESSO_AGENTE_SEGREDO` | Render **e** no build do agente | a faixa nunca é publicada |
-| `QR_PEDIDO_SEGREDO` | Render | não dá para gerar QR do Pedido — que **saiu de circulação em 17/08/2026**. A variável continua exigida enquanto a função `acesso-pedido` estiver publicada |
-| `ACESSO_ELEVACAO_SEGREDO` | Render | o dono digita a senha e a tela responde "ACESSO_ELEVACAO_SEGREDO nao configurada neste servidor" (503) — continua somente leitura |
+| `SUPABASE_SERVICE_KEY` | segredos do Supabase | o router `/api/acesso/*` nem é montado |
+| `ACESSO_AGENTE_SEGREDO` | segredos do Supabase **e** no build do agente | a faixa nunca é publicada |
+| `QR_PEDIDO_SEGREDO` | segredos do Supabase | não dá para gerar QR do Pedido — que **saiu de circulação em 17/08/2026**. A variável continua exigida enquanto a função `acesso-pedido` estiver publicada |
+| `ACESSO_ELEVACAO_SEGREDO` | segredos do Supabase | o dono digita a senha e a tela responde "ACESSO_ELEVACAO_SEGREDO nao configurada neste servidor" (503) — continua somente leitura |
 
 `GET /api/acesso/saude` responde as quatro de uma vez — presença de cada variável e se o
 banco responde:
@@ -549,27 +553,15 @@ QR; sem a `ACESSO_ELEVACAO_SEGREDO` o dono descobre na hora de configurar o even
 falha é sempre **fechada** e com o nome da variável na mensagem — mas só o `saude` diz as
 quatro de uma vez, antes de alguém esbarrar nelas.
 
-Para pôr uma variável no Render sem abrir o painel deles:
+As quatro moram nos **segredos do Supabase**, que é o que as Edge Functions leem. Os dois
+scripts que gravavam variável no painel do serviço hospedado
+(`ferramentas/variavel_no_render.ps1` e `ferramentas/copiar_para_render.ps1`) saíram em
+17/08/2026, junto com o serviço.
 
-```powershell
-.\ferramentas\variavel_no_render.ps1 -Variavel ACESSO_ELEVACAO_SEGREDO
-```
-
-Ele lê o valor exato do `.env.local`, acha o serviço pelo nome **exato** (o filtro da API do
-Render é por prefixo, e "imposicao" casaria com mais de um), grava por API e dispara o
-deploy. Nunca imprime o valor. Precisa de `RENDER_API_KEY` no `.env.local` (Render →
-Account Settings → API Keys) e para com "RENDER_API_KEY ausente" sem ela; com `-Conferir`
-só mostra qual serviço achou, sem gravar.
-
-> Uma armadilha já vivida: ao copiar a `SUPABASE_SERVICE_KEY` do painel do Supabase, um
-> caractere sobrando no começo ou um `=` no fim fazem o Supabase responder `401 Invalid API
-> key` — e a chave *parece* certa, com `role: service_role` e validade em 2035. A
-> assinatura de um JWT tem **43 caracteres** e nunca termina em `=`.
->
-> `.\ferramentas\copiar_para_render.ps1` tira o mouse do caminho: lê o valor exato do
-> `.env.local`, confere o formato (as 3 partes, o `eyJ` do começo, os 43 caracteres da
-> assinatura) e põe na área de transferência **sem mostrar na tela**. Com `-Conferir`, só
-> confere.
+> Uma armadilha já vivida, e que continua valendo: ao copiar a `SUPABASE_SERVICE_KEY` do
+> painel do Supabase, um caractere sobrando no começo ou um `=` no fim fazem o Supabase
+> responder `401 Invalid API key` — e a chave *parece* certa, com `role: service_role` e
+> validade em 2035. A assinatura de um JWT tem **43 caracteres** e nunca termina em `=`.
 
 ## As onze tabelas
 
@@ -783,7 +775,7 @@ delas só para escrever números que ninguém tinha pedido.
 ### A tela que ficou três minutos carregando
 
 Na primeira vez que o usuário abriu esta tela em produção, ela ficou em
-"Carregando…" e nunca saiu. O log do Render provou o essencial: **nenhuma
+"Carregando…" e nunca saiu. O log do servidor provou o essencial: **nenhuma
 requisição chegou ao motor**. O problema estava antes da rede.
 
 Foram **dois** defeitos, um escondendo o outro.

@@ -124,19 +124,16 @@
 
     function base() {
         // 16/08/2026: a portaria passou a ser Edge Function, ao lado do banco.
-        // Antes era `https://imposicao.onrender.com/api/acesso/portaria`, e cada
-        // consulta pagava DUAS travessias de internet (celular -> Render ->
-        // Supabase e volta), num servico que dorme quando ninguem usa. No
-        // portao, com fila e 4G, isso se sentia.
+        // Antes era o `/api/acesso/portaria` de um servidor Python que ficava na
+        // nuvem, e cada consulta pagava DUAS travessias de internet (celular ->
+        // servidor -> Supabase e volta), num servico que dormia quando ninguem
+        // usava. No portao, com fila e 4G, isso se sentia.
         //
-        // O Python continua no ar no endereco antigo durante a transicao. Para
-        // voltar atras: troque esta linha de volta e republique. Os dois falam
-        // com o mesmo banco e dividem o mesmo freio de forca bruta, entao o
-        // aparelho nao percebe a diferenca -- o token continua valendo, e a
-        // fila que ele tiver acumulado sobe igual.
+        // Aquele servidor saiu do ar em 17/08/2026: nao ha mais para onde voltar
+        // atras, e nao deve haver. O endereco abaixo e o unico.
         //
         // O CAMINHO INTEIRO mora aqui, e nao so o host, de proposito. Os dois
-        // lados pedem prefixos diferentes (`/api/acesso/portaria` contra
+        // lados pediam prefixos diferentes (`/api/acesso/portaria` contra
         // `/functions/v1/portaria`), e trocar so o host montaria
         // `.../functions/v1/portaria/api/acesso/portaria/entrar` -- que o
         // `rotaPedida` da funcao ACEITARIA, porque o `.*` dele e guloso e casa

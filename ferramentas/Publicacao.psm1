@@ -127,7 +127,7 @@ function Find-SegredoNoTexto {
     }
 
     # Personal Access Token do Supabase, o `sbp_`. Entrou no radar em
-    # 16/08/2026, quando a migracao do Render para o Supabase passou a exigir um
+    # 16/08/2026, quando a migracao do backend para o Supabase passou a exigir um
     # para publicar Edge Functions.
     #
     # Ele merece freio proprio por duas razoes que a service_role nao tem:
@@ -428,7 +428,8 @@ function New-SegredoDoAgente {
         throw ("ACESSO_AGENTE_SEGREDO nao encontrado. Sem ele o agente imprime " +
                "normalmente mas NAO publica a faixa de codigos, e a portaria do " +
                "evento fica sem o que conferir. Ponha a linha no .env.local, com " +
-               "o MESMO valor configurado no Render: ACESSO_AGENTE_SEGREDO=<valor>")
+               "o MESMO valor gravado nos segredos do Supabase (a funcao " +
+               "`acesso-estacao` confere os dois): ACESSO_AGENTE_SEGREDO=<valor>")
     }
 
     # A barra invertida primeiro: invertida a ordem, o escape da aspa seria

@@ -5,10 +5,12 @@ Existe porque a conferencia diaria (`ferramentas/conferir.ps1`) so enxergava a
 maquina local. A pergunta que ela respondia era "esta maquina esta em dia?", e a
 que importa e outra: **as onze estacoes da grafica estao em dia?**
 
-A diferenca deixou de ser academica na Fase 2b. Para desligar o Render e preciso
-saber quando todas migraram, e desligar antes que a ultima migre significa uma
-grafica imprimindo ingressos que nunca sao publicados — o papel sai, a portaria
-nao tem o que conferir, e ninguem descobre ate alguem tentar entrar.
+A diferenca deixou de ser academica na Fase 2b, quando o backend saiu de um
+servidor Python na nuvem para as Edge Functions: era preciso saber quando todas
+as estacoes tinham migrado antes de desligar o servidor antigo, porque desligar
+cedo demais significaria uma grafica imprimindo ingressos que nunca sao
+publicados — o papel sai, a portaria nao tem o que conferir, e ninguem descobre
+ate alguem tentar entrar. O desligamento aconteceu em 17/08/2026.
 
 ## De onde sai cada numero
 
@@ -202,9 +204,11 @@ def main():
 
     print(f"     {len(linhas)} estacao(oes) registradas, {vivas} com sinal recente")
 
-    # Para onde cada estacao publica a faixa de codigos. E a conta da Fase 3: o
-    # Render so pode ser desligado quando ninguem mais estiver apontando para
-    # ele. So aparece depois que a estacao roda o agente que reporta isso.
+    # Para onde cada estacao publica a faixa de codigos. Foi a conta que permitiu
+    # desligar o servidor antigo em 17/08/2026, e continua util: estacao apontada
+    # para fora da funcao `acesso-estacao` nao publica faixa nenhuma, e este e o
+    # unico lugar em que isso aparece. So sai depois que a estacao roda o agente
+    # que reporta o campo.
     for base, quantas in sorted(por_base.items(), key=lambda x: -x[1]):
         print(f"     publica em {base}: {quantas}")
 

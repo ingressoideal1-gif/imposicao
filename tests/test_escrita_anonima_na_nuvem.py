@@ -3,8 +3,8 @@
 
 ## O que foi medido em 16/08/2026, sem credencial nenhuma, de fora
 
-    GET https://imposicao.onrender.com/api/acessos-locais   200
-    GET https://imposicao.onrender.com/api/user/permissions 200
+    GET  <servidor da nuvem>/api/acessos-locais   200
+    GET  <servidor da nuvem>/api/user/permissions 200
 
 A primeira devolvia os **códigos de acesso local em texto claro** — três pessoas
 da gráfica, uma delas com papel `admin`. É o código que destranca o painel do
@@ -12,9 +12,11 @@ NewProd numa estação. A segunda devolvia a grade de permissões inteira, e o
 `POST` dela deixaria qualquer um se dar `admin`.
 
 A causa não era um descuido pontual: `get_current_user` é um carimbo que devolve
-admin para todo mundo, e o **mesmo `app.py`** roda na estação (onde isso é
-inofensivo, atrás da LAN e da trava do código local) e no Render (onde é um
-endereço público).
+admin para todo mundo, e o **mesmo `app.py`** rodava na estação (onde isso é
+inofensivo, atrás da LAN e da trava do código local) e num servidor Python
+hospedado (onde era um endereço público). Aquele servidor saiu do ar em
+17/08/2026 e o `app.py` ficou só na estação — mas a regra abaixo fica, porque é
+ela que impede a próxima cópia de nascer aberta.
 
 ## Por que a regra é por MÉTODO, e não uma lista de rotas
 

@@ -25,12 +25,18 @@ Se terminar em **TUDO EM ORDEM**, não há nada esperando por você.
 | Peça | O que é | Onde roda |
 |---|---|---|
 | **Site** | as telas que você abre no navegador | Vercel |
-| **Motor** | quem monta o PDF e faz a imposição | Render |
+| **Backend** | as rotas que exigem a chave de serviço do banco | Edge Functions (Supabase) |
+| **Motor** | quem monta o PDF e faz a imposição | a estação da gráfica |
 | **Agente** | o `NewProd.exe` no computador da gráfica | a própria estação |
 
-**Site e motor andam juntos.** Publicar manda os dois, porque o Render escuta o mesmo
-repositório do GitHub que a Vercel. Não existe publicar só um dos dois por aqui — e é bom
-que seja assim, porque eles precisam combinar.
+**Site e Edge Functions andam juntos.** O `publicar.ps1` sobe as funções ANTES do push,
+e o push publica o site: a função chega antes da tela que aponta para ela. Não existe
+publicar só um dos dois por aqui — e é bom que seja assim, porque eles precisam
+combinar.
+
+**O motor não vai a lugar nenhum.** Ele mora na estação, e é por isso que o
+`publicar.ps1` só confere se ele SOBE (`import app, engine, db`) — quem o leva à
+gráfica é o build do agente.
 
 **O agente é separado.** Tem numeração própria (`1.2.22`) e sai por outro comando.
 
@@ -138,7 +144,7 @@ Detalhes de funcionamento em [GUIA_AGENTE.md](../GUIA_AGENTE.md).
 | O que você vê | Causa provável | O que fazer |
 |---|---|---|
 | `PAROU ANTES DE PUBLICAR` | um dos quatro freios | leia a linha "O que fazer" na tela — nada foi ao ar |
-| O site abre, mas dá erro em tudo | o motor não subiu no Render | veja os logs em `dashboard.render.com`; se persistir, `.\voltar.ps1` |
+| O site abre, mas dá erro em tudo | alguma Edge Function não subiu | `npx supabase functions list`; se persistir, `.\voltar.ps1` |
 | A tela é a antiga mesmo depois de publicar | cache do navegador | `Ctrl+Shift+R`; se persistir, confira se a versão em `frontend/index.html` subiu |
 | `O push falhou` | sem internet, ou alguém publicou antes | `git pull --rebase origin main` e publique de novo |
 | `O deploy da Vercel falhou` | problema só no site — o código já foi enviado | `cd frontend` e depois `vercel --prod --yes` |

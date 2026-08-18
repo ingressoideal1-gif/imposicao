@@ -92,7 +92,7 @@ O heartbeat leva o estado da estação em `print_agents.printers_json`:
 ```json
 "version": "1.2.37",
 "painel": { "versao": "537", "quando": "2026-08-12T12:58:45+00:00" },
-"acesso_base": "https://imposicao.onrender.com",
+"acesso_base": "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-estacao",
 "fontes": { "cache_arquivos": 270, "cache_mb": 142.8,
             "catalogo_total": 316, "catalogo_relativas": 0,
             "catalogo_gstatic": 0, "catalogo_storage": 316,
@@ -124,7 +124,7 @@ Como ler:
 | `version` desatualizada | ver a seção de auto-update |
 | `painel.versao` abaixo da `vNNN` publicada | a estação serve tela velha, com executável novo |
 | `version` ausente numa estação que falou hoje | agente anterior a agosto/2026: nem a versão ele reporta |
-| `acesso_base` apontando para o Render | aquela estação ainda publica a faixa pela pilha antiga |
+| `acesso_base` fora da função `acesso-estacao` | aquela estação não publica faixa nenhuma: o endereço saiu de `ACESSO_BASE_URL`, e não há mais pilha antiga do outro lado |
 | `painel.quando` parado há horas | `sincronizar_painel` está falhando — o download é tudo-ou-nada |
 
 Para investigar na própria máquina, existe o `Diagnostico_Fontes.ps1` na raiz do

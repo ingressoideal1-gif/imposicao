@@ -20,7 +20,7 @@
 11. [Regra de Centralização de Artes](#11-regra-de-centralização-de-artes)
 12. [Autenticação Firebase](#12-autenticação-firebase)
 13. [Serviço de Impressão Local](#13-serviço-de-impressão-local)
-14. [Deploy (Render / Firebase)](#14-deploy-render--firebase)
+14. [Deploy (Vercel / Supabase)](#14-deploy-vercel--render--supabase)
 
 ---
 
@@ -117,7 +117,7 @@ venv\Scripts\python.exe app.py
 
 O servidor sobe na porta **8080**. Acesse: **http://localhost:8080**
 
-O frontend detecta automaticamente se o servidor local está disponível e o usa. Caso contrário, cai para o servidor em nuvem (Render).
+O frontend detecta automaticamente se o servidor local está disponível e o usa. Não há alternativa na nuvem: imposição e impressão acontecem **só** na estação da gráfica, por decisão de 16/08/2026 (tempo e segurança). Sem estação, o trabalho para e o operador lê o motivo.
 
 ### Dependências principais (`requirements.txt`)
 
@@ -446,7 +446,7 @@ Itera sobre `currentNum.elements` e renderiza cada elemento no canvas 2D:
 Função principal que dispara a geração do PDF:
 1. Valida campos obrigatórios.
 2. **Abre o `showSaveFilePicker`** imediatamente (dentro do gesto do usuário, antes da requisição).
-3. Detecta disponibilidade do servidor local (porta 8080) ou agente local (porta 9000); cai para Render se nenhum está ativo.
+3. Detecta disponibilidade do servidor local (porta 8080) ou agente local (porta 9000); sem nenhum dos dois, a imposição não acontece — não existe motor na nuvem.
 4. Monta `FormData` com o arquivo, CSV e payload JSON.
 5. Faz `fetch POST /api/impose` com `AbortController` (cancelável pelo usuário).
 6. Salva via `fileHandle.createWritable()` ou baixa via `URL.createObjectURL()`.
@@ -604,7 +604,7 @@ O token JWT é obtido com `firebase.auth().currentUser.getIdToken()` e enviado e
 
 ### Backend
 
-`firebase_admin.initialize_app(options={"projectId": "ideal-arte-e64f6"})` sem chave de serviço — usa Application Default Credentials (ADC) no Render.
+`firebase_admin.initialize_app(options={"projectId": "ideal-arte-e64f6"})` sem chave de serviço — usa Application Default Credentials (ADC).
 
 Funções:
 - `get_current_user()`: verifica token ou retorna fallback local.
@@ -645,11 +645,11 @@ Parser simplificado de arquivos PPD que extrai:
 
 ### `local_print_agent.py`
 
-Servidor HTTP mínimo (porta 9000) que expõe o mesmo endpoint `/api/print/submit` e `/api/printers`. Permite que o browser envie o PDF diretamente para uma impressora local sem precisar do servidor FastAPI no Render.
+Servidor HTTP mínimo (porta 9000) que expõe o mesmo endpoint `/api/print/submit` e `/api/printers`. Permite que o browser envie o PDF diretamente para uma impressora local sem precisar do servidor FastAPI da porta 8080.
 
 ---
 
-## 14. Deploy (Vercel / Render / Supabase)
+## 14. Deploy (Vercel / Supabase)
 
 > **Como publicar, como voltar e o que fazer quando dá errado: [PUBLICAR.md](PUBLICAR.md).**
 > Aquele é o documento único de publicação. Esta seção descreve só onde cada peça roda.
@@ -659,11 +659,20 @@ Servidor HTTP mínimo (porta 9000) que expõe o mesmo endpoint `/api/print/submi
 - Projeto `ideal-imposition`, servido em `ideal-imposition.vercel.app`.
 - Publicado por `.\publicar.ps1 "mensagem"`, na raiz do repositório.
 
-### Backend (Render)
+### Backend na nuvem (Edge Functions)
 
-- Arquivo de configuração: `render.yaml`
-- Comando de start: `venv/bin/uvicorn app:app --host 0.0.0.0 --port 10000`
-- Sobe **no mesmo `git push`** que o site: o Render escuta o mesmo repositório que a Vercel.
+- Vivem em `supabase/functions/`, em Deno/TypeScript, no projeto `vwbtitjlpelrcnsytzqw`.
+- Sobem no `.\publicar.ps1`, **antes** do push: a função tem de chegar antes da tela
+  que aponta para ela.
+- Até 16/08/2026 este papel era de uma cópia do `app.py` hospedada num serviço na
+  nuvem. Ela foi desligada em 17/08/2026, e o `app.py` ficou sendo só o motor da
+  estação da gráfica.
+
+### Motor da estação (`app.py`)
+
+- Roda na máquina da gráfica, dentro do `NewProd.exe`, na porta 9000 (e na 8080 em
+  desenvolvimento). Não existe cópia dele na nuvem, e não deve voltar a existir:
+  imposição e impressão são locais por tempo e por segurança.
 
 ### Banco de dados e arquivos (Supabase)
 
@@ -696,7 +705,7 @@ if (apiCheck.ok) → baseUrl = "http://localhost:8080"
 const agentCheck = await fetch("http://localhost:9000/", { signal, timeout: 300ms });
 if (agentCheck.ok && data.status === "running") → baseUrl = "http://localhost:9000"
 
-// 3. Fallback: nuvem (Render)
+// 3. Sem fallback de nuvem: imposição é só na estação
 else → baseUrl = API_BASE_URL (definido no firebase-config.js)
 ```
 

@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """O /saude é a única chance de descobrir uma variável faltando ANTES do cliente.
 
+O último teste deste arquivo — o que conferia o nome do serviço escrito no
+`ferramentas/copiar_para_render.ps1` — saiu em 17/08/2026 junto com o script.
+As variáveis não moram mais num painel de serviço hospedado: vão para os
+segredos do Supabase, e quem as confere de fora é este mesmo `/saude`.
+
 Cada uma das quatro falha num lugar diferente e tarde. Conferir as quatro num
 endpoint só é o que transforma "não funcionou" em "falta a variável X".
 
@@ -56,18 +61,3 @@ def test_a_resposta_nunca_traz_o_VALOR_de_nenhuma_variavel(tudo_presente):
     resposta = acesso_api.saude()
     assert all(v is True for v in resposta["variaveis"].values())
 
-
-def test_o_nome_do_servico_no_render_esta_certo():
-    """`ideal-imposition-api` NAO existe; o servico e `imposicao`.
-
-    Esse texto errado mandou as chaves para o projeto errado em 14/08/2026. Um
-    endereco errado numa instrucao operacional custa mais que um bug: manda a
-    pessoa fazer a coisa certa no lugar errado, e o sintoma aparece longe dali.
-    """
-    import os
-    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(raiz, "ferramentas", "copiar_para_render.ps1"),
-              encoding="utf-8") as f:
-        texto = f.read()
-    assert "ideal-imposition-api" not in texto
-    assert "imposicao" in texto

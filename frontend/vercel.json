@@ -5,10 +5,6 @@
     { "source": "/controle.html", "destination": "/ic/controle.html" }
   ],
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://imposicao.onrender.com/api/:path*"
-    },
     { "source": "/ic", "destination": "/controle.html" },
     { "source": "/ic/", "destination": "/controle.html" },
     { "source": "/ic/:path*", "destination": "/:path*" },

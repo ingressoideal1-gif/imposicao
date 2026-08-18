@@ -117,11 +117,11 @@ def test_NENHUMA_tela_conhece_um_motor_de_imposicao_na_nuvem():
             culpados.append(f"{nome}: ainda mostra o selo NUVEM")
     assert not culpados, "\n  ".join(["tela com caminho para a nuvem:"] + culpados)
 
-    # NÃO se cobra aqui a ausência de `imposicao.onrender.com` no arquivo. O
-    # Render continua servindo controle de acesso e catálogo até as Fases 2 a 4
-    # da migração para o Supabase, e o `script.js` ainda tem um `fetch` de
-    # pré-aquecimento para acordá-lo. O que esta regra proíbe é mandar
-    # IMPOSIÇÃO para lá — não mencionar o endereço.
+    # O que esta regra proíbe é mandar IMPOSIÇÃO para a nuvem, e só isso. Quem
+    # cobra que nenhum arquivo do aplicativo cite o servidor que ficava lá é o
+    # `tests/test_sem_render.py`, desde 17/08/2026 — e as duas regras são
+    # separadas de propósito: esta aqui continuaria valendo mesmo que amanhã
+    # aparecesse outro servidor na nuvem por outro motivo.
 
 
 def test_o_registro_da_remocao_continua_no_arquivo():

@@ -42,9 +42,9 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 │  FRONTEND (Vercel)                                               │
 │  HTML + CSS + Vanilla JS (SPA)                                   │
 │  ├─ Supabase Client (CRUD direto no deploy)                     │
-│  └─ API_BASE_URL → Render (para /api/impose, /api/print)        │
+│  └─ API_BASE_URL = "" → a estação que serviu a página            │
 ├──────────────────────────────────────────────────────────────────┤
-│  BACKEND (Render / Local)                                        │
+│  BACKEND (só local: estação da gráfica)                          │
 │  FastAPI + Uvicorn (porta 8080)                                  │
 │  ├─ db.py → formats_db.json (JSON local)                        │
 │  ├─ engine.py → Motor de imposição PDF (PyMuPDF)                │
@@ -60,14 +60,24 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 ├──────────────────────────────────────────────────────────────────┤
 │  SISTEMA EXTERNO (Vibecode)                                      │
 │  └─ Conecta ao mesmo Supabase para gestão de OS                │
+├──────────────────────────────────────────────────────────────────┤
+│  EDGE FUNCTIONS (Supabase) — o backend na nuvem                  │
+│  supabase/functions/* (Deno/TypeScript)                          │
+│  └─ painel, arquivo, acesso-conta, acesso-interno, portaria...   │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+> Até 16/08/2026 havia uma cópia do backend Python hospedada na nuvem, e o
+> `API_BASE_URL` apontava para ela quando a página não era servida pela estação.
+> Ela foi desligada em 17/08/2026: o que era dela virou Edge Function, e imposição
+> e impressão acontecem **só** na estação da gráfica.
 
 ### Fluxo de Dados
 
 **Ambiente de Produção (Deploy):**
 - Frontend (Vercel) → Supabase (CRUD de dados)
-- Frontend (Vercel) → Backend Render (processamento de PDF)
+- Frontend (Vercel) → Edge Functions (rotas que exigem a chave de serviço)
+- Imposição e impressão: **não existem na nuvem**, só na estação
 
 **Ambiente Local (Desenvolvimento):**
 - Frontend → Backend local FastAPI (tudo via API REST)
@@ -105,7 +115,7 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 |---|---|
 | Supabase | Banco PostgreSQL + Storage |
 | Vercel | Hosting do frontend |
-| Render | Hosting do backend |
+| Edge Functions (Supabase) | Backend na nuvem, ao lado do banco |
 | GitHub | Repositório de código |
 
 ---
@@ -125,7 +135,6 @@ ideal-imposition/
 ├── formats_db.json           # Banco de dados JSON local
 ├── schema.sql                # Schema SQL base (Supabase)
 ├── schema_os.sql             # Schema SQL de Ordens de Serviço
-├── render.yaml               # Configuração de deploy (Render)
 ├── DEPLOY.md                 # Guia de deploy
 ├── iniciar_servidores.bat    # Script para iniciar servidores locais
 ├── installer.iss             # Script Inno Setup (instalador Windows)
@@ -388,8 +397,10 @@ Fallback do backend em modo local. Mesma estrutura das tabelas Supabase em arqui
 
 ### Lógica de Conexão (supabase-config.js)
 
-- **Localhost** → Supabase desativado, usa API local FastAPI
-- **Deploy (Vercel)** → Supabase ativo, API_BASE_URL = `https://imposicao.onrender.com`
+- `API_BASE_URL` é `""` **sempre**: `${API_BASE_URL}/api/…` sai relativo e chega a
+  quem serviu a página — na estação, o agente da porta 9000
+- `SERVIDA_PELA_NUVEM` é quem decide o resto (proxy de arquivo, catálogo de fontes,
+  escrita de fonte): na nuvem vai à Edge Function, na estação vai ao agente
 
 ---
 
@@ -441,12 +452,16 @@ colidam no Storage sem sujar o nome que o operador lê.
 | Componente | Serviço | URL |
 |------------|---------|-----|
 | Frontend | Vercel | (deploy automático via git push) |
-| Backend | Render | https://imposicao.onrender.com |
+| Backend (nuvem) | Edge Functions (Supabase) | `…/functions/v1/<nome>` |
+| Backend (estação) | `app.py` no NewProd.exe | `http://localhost:9000` |
 | Banco de Dados | Supabase | https://atsxtuibeitloosckmlc.supabase.co |
 | Repositório | GitHub | https://github.com/ingressoideal1-gif/imposicao |
 
 ### Deploy automático
-- **Push para `main`** → Vercel e Render detectam e fazem deploy automaticamente
+- **Push para `main`** → a Vercel detecta e publica o site
+- **Edge Functions** → sobem no `.\publicar.ps1`, antes do push
+- **Agente** → sai à parte, por `.\publicar_agente.ps1 <versão>`, e por regra do
+  projeto sai na mesma leva
 
 ---
 

@@ -61,8 +61,9 @@ def test_a_rota_e_mesmo_chamada_em_algum_lugar(rota):
 
 
 def test_o_ping_de_pre_aquecimento_do_render_nao_volta():
-    """Ele disparava em TODA página da nuvem só para acordar um servidor que a
-    Fase 4 vai desligar. As telas falam com Edge Functions, que não dormem."""
+    """Ele disparava em TODA página da nuvem só para acordar o servidor Python
+    que ficava lá. Aquele servidor saiu do ar em 17/08/2026, e as telas falam
+    com Edge Functions, que não dormem."""
     # Só as linhas de CÓDIGO: a lápide que ficou no lugar do ping cita o
     # endereço, e uma busca crua acharia o texto errado.
     codigo = [l for l in SCRIPT.splitlines() if not l.strip().startswith("//")]

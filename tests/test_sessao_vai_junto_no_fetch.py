@@ -23,6 +23,10 @@ import pytest
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# A origem do arnês. Um `fetch('/api/ordens')` dela vira este endereço absoluto
+# quando chega ao interceptador.
+PAGINA_DO_ARNES = "https://imposicao.vercel.app/"
+
 ARNES = r"""
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -32,9 +36,14 @@ const REPO = process.argv[2];
 // A página precisa de uma ORIGEM de verdade, e não `about:blank`: sem ela o
 // `localStorage` do `supabase-config.js` levanta SecurityError na linha 10, o
 // arquivo inteiro morre antes de instalar o embrulho, e o teste mediria o
-// arnês. A origem também precisa NÃO ser localhost, senão `API_BASE_URL` fica
-// vazio e não há chamada à nuvem para exercitar.
+// arnês.
 const PAGINA = 'https://imposicao.vercel.app/';
+
+// O motor a que o painel fala por endereço ABSOLUTO. Desde 17/08/2026 sobrou
+// um só: a Edge Function `painel`, que é quem grava a grade de permissões e os
+// códigos de acesso local. O servidor Python que ficava na nuvem — e que era o
+// que este teste exercitava até então — saiu do ar.
+const MOTOR = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel';
 
 (async () => {
   const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
@@ -106,14 +115,16 @@ const PAGINA = 'https://imposicao.vercel.app/';
   // O que interessa de verdade: os cabeçalhos que chegaram ao interceptador.
   capturando = true;
 
-  await page.evaluate(async () => {
-    await fetch('https://imposicao.onrender.com/api/user/permissions');
-    await fetch('https://imposicao.onrender.com/api/acessos-locais', { method: 'POST', body: '{}' });
-    await fetch('https://imposicao.onrender.com/api/formatos', {
+  await page.evaluate(async (MOTOR) => {
+    await fetch(MOTOR + '/api/user/permissions');
+    await fetch(MOTOR + '/api/acessos-locais', { method: 'POST', body: '{}' });
+    await fetch(MOTOR + '/api/formatos', {
       headers: { 'Authorization': 'Bearer ja-tinha-o-meu' } });
+    // Relativo: na estação é assim que `${API_BASE_URL}/api/…` sai.
+    await fetch('/api/ordens');
     await fetch('http://127.0.0.1:9000/api/status');
     await fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/rest/v1/qualquer');
-  });
+  }, MOTOR);
 
   const chamadas = await page.evaluate(() => window.__chamadasGetSession);
   console.log(JSON.stringify({ capturados, chamadas, erros }));
@@ -142,14 +153,33 @@ def test_a_pagina_carrega_sem_erro(resultado):
     assert resultado["erros"] == [], resultado["erros"]
 
 
+MOTOR = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel"
+
+
 def test_a_chamada_ao_motor_leva_a_sessao(resultado):
-    """Sem isto, fechar o servidor derrubaria a gráfica em vez de fechar o buraco."""
-    do_motor = [c for c in resultado["capturados"] if "onrender" in c["url"]]
+    """Sem isto, fechar o servidor derrubaria a gráfica em vez de fechar o buraco.
+
+    A função `painel` mora em `supabase.co`, e o embrulho corta `supabase.co`
+    por causa de recursão. Que ela passe MESMO ASSIM é o que este teste mede — é
+    a ordem de duas linhas em `eDoNossoMotor`, e inverter as duas deixaria as
+    rotas de permissões e de códigos de acesso saindo sem sessão.
+    """
+    do_motor = [c for c in resultado["capturados"] if c["url"].startswith(MOTOR)]
     assert do_motor, "nenhuma chamada ao motor foi capturada"
     for c in do_motor:
         if "formatos" in c["url"]:
             continue  # este mandou o dele; ver o teste seguinte
         assert c["auth"] == "Bearer jwt-do-painel", c
+
+
+def test_o_caminho_relativo_do_painel_tambem_leva_a_sessao(resultado):
+    """`${API_BASE_URL}/api/…` sai como `/api/…`, e é assim que dezenas de
+    chamadas do painel falam com quem serviu a página. Se o embrulho parasse de
+    reconhecer o caminho relativo, elas sairiam anônimas sem ninguém notar."""
+    relativas = [c for c in resultado["capturados"]
+                 if c["url"].startswith(PAGINA_DO_ARNES + "api/")]
+    assert relativas, "a chamada relativa não foi capturada"
+    assert relativas[0]["auth"] == "Bearer jwt-do-painel", relativas[0]
 
 
 def test_quem_ja_tinha_cabecalho_proprio_mantem_o_dele(resultado):
@@ -172,9 +202,10 @@ def test_o_sdk_do_supabase_nao_entra_em_recursao(resultado):
     a sessão de dentro do `fetch` chamaria `fetch` de novo, para sempre — e a
     página congelaria sem erro nenhum no console.
 
-    Duas chamadas ao motor, duas leituras de sessão. Se recursionasse, este
-    número não teria teto.
+    Quatro chamadas ao motor, quatro leituras de sessão. O teto é folgado de
+    propósito: o que se mede não é o número exato — é que ele TENHA teto. Se
+    recursionasse, não teria.
     """
-    assert resultado["chamadas"] <= 4, (
+    assert resultado["chamadas"] <= 8, (
         f"getSession chamada {resultado['chamadas']} vezes — recursão"
     )

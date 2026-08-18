@@ -161,13 +161,17 @@ def _e_coluna_ausente(codigo: int, corpo: str) -> bool:
 
 
 def _acesso_base() -> str:
-    """Para qual pilha esta estacao publica a faixa de codigos.
+    """Para onde esta estacao publica a faixa de codigos.
 
-    Vai no heartbeat porque e a pergunta da Fase 3: quando as onze estacoes
-    tiverem migrado, o Render pode ser desligado. A VERSAO sozinha nao responde
-    isso — o endereco sai de `ACESSO_BASE_URL`, uma variavel de ambiente, e uma
-    estacao pode ser migrada sem trocar de executavel. Perguntar ao proprio
-    modulo que publica e a unica resposta que nao pode mentir.
+    Vai no heartbeat porque a VERSAO sozinha nao responde isso: o endereco sai
+    de `ACESSO_BASE_URL`, uma variavel de ambiente, e uma estacao pode apontar
+    para outro lugar sem trocar de executavel. Perguntar ao proprio modulo que
+    publica e a unica resposta que nao pode mentir.
+
+    Foi assim que se acompanhou, em agosto/2026, a migracao das onze estacoes do
+    servidor Python que ficava na nuvem para a Edge Function. Continua util pelo
+    mesmo motivo: estacao apontada para fora do padrao nao publica faixa, e o
+    unico lugar em que isso aparece e aqui.
     """
     try:
         import acesso_publicacao

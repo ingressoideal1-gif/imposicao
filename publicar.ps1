@@ -1,12 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    Publica o site e o motor: confere, sobe a versao dos assets, commita,
-    empurra, faz o deploy na Vercel e marca a versao com uma tag.
+    Publica o site e as Edge Functions: confere, sobe a versao dos assets,
+    commita, empurra, faz o deploy na Vercel e marca a versao com uma tag.
 
 .DESCRIPTION
-    IMPORTANTE: um `git push origin main` publica DUAS coisas — o site na
-    Vercel e o motor no Render, que escuta o mesmo repositorio. Nao existe
-    publicar so o site por aqui.
+    IMPORTANTE: este script publica DUAS coisas — as Edge Functions do Supabase
+    (por `npx supabase functions deploy`, antes do push) e o site na Vercel. O
+    agente da grafica NAO vai junto: ele sai por `.\publicar_agente.ps1 <versao>`
+    e, por regra do projeto, sai na mesma leva.
 
     Antes de escrever qualquer coisa, roda quatro conferencias. Se alguma
     falhar, o script para ANTES do commit: nada foi ao ar e nada precisa
@@ -119,8 +120,9 @@ if ($SemFreio) {
         }
     }
 
-    # 4. O motor sobe? Pega erro de sintaxe antes de o Render falhar a build
-    #    — hoje isso passa direto e o motor fica para tras em silencio.
+    # 4. O motor sobe? Pega erro de sintaxe no `app.py`/`engine.py`/`db.py` ANTES
+    #    de eles irem para o build do agente. Sem esta conferencia, o erro so
+    #    aparece na estacao, na frente da impressora.
     Write-Host "  Conferindo se o motor sobe..." -ForegroundColor Gray
     & "$raiz\venv\Scripts\python.exe" -c "import app, engine, db" | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -142,7 +144,8 @@ if (-not $SemFreio) {
     Write-Host ""
     Write-Host "  Mensagem : $Mensagem" -ForegroundColor White
     Write-Host "  Versao   : v$proxima" -ForegroundColor White
-    Write-Host "  Publica  : o SITE (Vercel) e o MOTOR (Render) — os dois, juntos." -ForegroundColor Yellow
+    Write-Host "  Publica  : as EDGE FUNCTIONS (Supabase) e o SITE (Vercel)." -ForegroundColor Yellow
+    Write-Host "             O AGENTE nao vai junto: .\publicar_agente.ps1 <versao>" -ForegroundColor Yellow
     Write-Host ""
     if ($Sim) {
         # As conferencias acima JA rodaram e passaram: o -Sim responde a
@@ -159,8 +162,8 @@ if (-not $SemFreio) {
 }
 
 # ─── Edge Functions ──────────────────────────────────────────────────────────
-# Um `git push` publica o site E o motor, porque o Render escuta o mesmo
-# repositorio. As Edge Functions NAO vao junto: elas saem por comando proprio.
+# As Edge Functions sao o backend inteiro desde 17/08/2026, e elas NAO saem no
+# `git push`: cada uma sobe por comando proprio.
 #
 # Sem este passo, publicar daria a impressao de ter publicado tudo -- a mesma
 # armadilha que ja existe com o agente, onde a tela nova chegava a estacao sem o
@@ -261,8 +264,8 @@ try {
     vercel --prod --yes
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
-        Write-Host "  O deploy da Vercel falhou, mas o codigo JA foi empurrado." -ForegroundColor Red
-        Write-Host "  O motor (Render) vai atualizar mesmo assim." -ForegroundColor Red
+        Write-Host "  O deploy da Vercel falhou, mas o codigo JA foi empurrado," -ForegroundColor Red
+        Write-Host "  e as Edge Functions JA subiram. So a tela ficou para tras." -ForegroundColor Red
         Write-Host "  Rode de novo so o deploy: cd frontend; vercel --prod --yes" -ForegroundColor Yellow
         exit 1
     }

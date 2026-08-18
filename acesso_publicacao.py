@@ -11,11 +11,11 @@ Se a rede estiver fora, a publicação simplesmente não acontece nesta rodada. 
 papel já saiu, o evento é dias depois, e reimprimir republica — a operação toda
 é idempotente do lado do servidor.
 
-## Por que fala com o Render, e não com o próprio app local
+## Por que fala com a nuvem, e não com o próprio app local
 
 O `acesso_api.py` roda ao lado deste arquivo, mas na estação ele nem é montado:
 a `service_role` do banco não vai para as estações, por decisão registrada lá.
-Então este módulo é um CLIENTE HTTP do backend na nuvem, e se identifica com o
+Então este módulo é um CLIENTE HTTP da Edge Function, e se identifica com o
 `ACESSO_AGENTE_SEGREDO` — um segredo que só autoriza publicar faixa, e nada mais.
 """
 
@@ -30,20 +30,23 @@ import qr_ideal
 BASE_ENV = "ACESSO_BASE_URL"
 
 # 16/08/2026: a publicação da faixa passou a falar com uma Edge Function, ao
-# lado do banco. Antes era `https://imposicao.onrender.com`, e cada lote de 500
-# credenciais atravessava a internet duas vezes — estação -> Render -> Supabase.
-# Numa tiragem de 12.000 são 24 lotes, e o Render dorme quando ninguém usa.
+# lado do banco. Antes era um servidor Python na nuvem, e cada lote de 500
+# credenciais atravessava a internet duas vezes — estação -> servidor ->
+# Supabase. Numa tiragem de 12.000 são 24 lotes, e aquele serviço dormia quando
+# ninguém usava. Ele saiu do ar em 17/08/2026, e este é o único endereço.
 #
 # ## Por que o `/api/acesso/` continua no `_post`
 #
 # A função `acesso-estacao` aceita o prefixo antigo no meio do caminho, de
-# propósito. É o que torna a migração de cada estação uma variável de ambiente
+# propósito. É o que tornou a migração de cada estação uma variável de ambiente
 # (`ACESSO_BASE_URL`) em vez de um executável novo: numa gráfica com onze
 # máquinas que se atualizam cada uma no seu ritmo, essa diferença é a diferença
 # entre migrar uma por vez e migrar todas de uma vez.
 #
-# Voltar atrás, numa estação ou em todas, é apontar `ACESSO_BASE_URL` de volta
-# para o Render — que continua no ar, respondendo o mesmo, durante a transição.
+# A variável continua existindo — é por onde uma estação aponta para um ambiente
+# de teste. O que não existe mais é destino antigo para onde voltar: estação com
+# `ACESSO_BASE_URL` apontando para fora daqui não publica faixa nenhuma, e o
+# heartbeat mostra isso (`agent_worker._acesso_base`).
 BASE_PADRAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-estacao"
 
 SEGREDO_ENV = "ACESSO_AGENTE_SEGREDO"
