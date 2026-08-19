@@ -19617,6 +19617,12 @@ async function loadOrdens() {
                     cliente: clienteProposta,
                     vendedor: vendedorProposta,
                     id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
+                    // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
+                    // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
+                    // existe, porque serve para buscar dados de faturamento e para casar as
+                    // numerações do cliente. Os dois quase sempre coincidem, mas divergem
+                    // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                    numero_cliente: propReal?.id_cliente ?? null,
                     data_liberacao: os.data_liberacao || os.created_at,
                     prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
                     _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
@@ -19642,6 +19648,12 @@ async function loadOrdens() {
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
                         id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
+                        // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
+                        // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
+                        // existe, porque serve para buscar dados de faturamento e para casar as
+                        // numerações do cliente. Os dois quase sempre coincidem, mas divergem
+                        // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                        numero_cliente: propReal?.id_cliente ?? null,
                         status_arte: pedidoReal?.status_arte || os.status_arte || null,
                         status_interno: propReal?.status_interno || os.status_interno || null
                     };
@@ -19897,6 +19909,12 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                     cliente: cliente,
                     vendedor: vendedor,
                     id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
+                    // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
+                    // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
+                    // existe, porque serve para buscar dados de faturamento e para casar as
+                    // numerações do cliente. Os dois quase sempre coincidem, mas divergem
+                    // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                    numero_cliente: propReal?.id_cliente ?? null,
                     data_liberacao: dataLiberacao,
                     data_pedido: dataPedido,
                     valor_total: valorTotal,
@@ -21531,6 +21549,25 @@ window.atualizarPainelProducao = atualizarPainelProducao;
  */
 const SINAIS_SAIU_DA_ARTE = ['EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM IMPRESSÃO', 'PRODUCAO', 'PRODUÇÃO', 'FINALIZADA'];
 
+/**
+ * O nome do cliente com o número dele ao lado: "Patrick Soares Furtado - 28449".
+ *
+ * O número é o `id_cliente` da proposta — o mesmo que identifica a linha na
+ * tabela `clientes` —, e NÃO o `id_faturado`: quem paga pode ser outro. O
+ * pedido 20940 é do cliente 43520 e fatura no 66163, e ao lado de um NOME tem
+ * de vir o número de quem esse nome nomeia.
+ *
+ * Sem número devolve só o nome, e sem nome devolve só o número: um traço solto
+ * numa das pontas faria o operador procurar o que não existe.
+ */
+function rotuloDoCliente(os) {
+    const nome = (os && os.cliente ? String(os.cliente) : '').trim();
+    const numero = (os && (os.numero_cliente || os.numero_cliente === 0)) ? String(os.numero_cliente).trim() : '';
+    if (!nome) return numero;
+    return numero ? (nome + ' - ' + numero) : nome;
+}
+window.rotuloDoCliente = rotuloDoCliente;
+
 function pedidoSaiuDaArte(os) {
     if (!os) return false;
     const st = (os.status || '').trim().toUpperCase();
@@ -21625,7 +21662,7 @@ function renderOrdens() {
         // 1. Busca textual
         if (searchImpressao) {
             const num = String(os.numero || '');
-            const cli = (os.cliente || '').toLowerCase();
+            const cli = rotuloDoCliente(os).toLowerCase();
             const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
             
@@ -21844,7 +21881,7 @@ function renderOrdens() {
         // 1. Busca textual
         if (searchArte) {
             const num = String(os.numero || '');
-            const cli = (os.cliente || '').toLowerCase();
+            const cli = rotuloDoCliente(os).toLowerCase();
             const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
             
@@ -22069,7 +22106,7 @@ function renderOrdens() {
                         </td>
 
                         <td>
-                            <strong>${escapeHtml(os.cliente) || '--'}</strong>
+                            <strong>${escapeHtml(rotuloDoCliente(os)) || '--'}</strong>
                             ${nomeEventoHtml}
                         </td>
                         <td>${progressBarHtml}</td>
@@ -22212,7 +22249,7 @@ function renderOrdens() {
                         </td>
 
                         <td>
-                            <strong style="color: white;">${escapeHtml(os.cliente) || '--'}</strong>${nomeEventoHtml}
+                            <strong style="color: white;">${escapeHtml(rotuloDoCliente(os)) || '--'}</strong>${nomeEventoHtml}
                         </td>
                         <td>
                             <strong style="color: white;">${escapeHtml(os.vendedor) || '--'}</strong>${nomeDesignerHtml}
@@ -24697,7 +24734,7 @@ function renderAmostrasOSItens(osId) {
         const cliEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
         const countEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
         if (numEl) numEl.textContent = `#${os.numero}`;
-        if (cliEl) cliEl.textContent = os.cliente || '';
+        if (cliEl) cliEl.textContent = rotuloDoCliente(os);
         if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
     }
     if (containerId === 'amostras-itens-container' && avulsa) {
@@ -25330,7 +25367,7 @@ function renderAmostrasOSItens(osId) {
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; background: rgba(0,0,0,0.03); padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;">
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Cliente / Razão Social:</span>
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">${os.cliente || '--'}</div>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">${escapeHtml(rotuloDoCliente(os)) || '--'}</div>
                         </div>
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
@@ -25428,7 +25465,7 @@ function renderAmostrasOSItens(osId) {
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; background: rgba(0,0,0,0.02); padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;">
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Cliente / Razão Social:</span>
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">${os.cliente || '--'}</div>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">${escapeHtml(rotuloDoCliente(os)) || '--'}</div>
                         </div>
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Número do Pedido:</span>
