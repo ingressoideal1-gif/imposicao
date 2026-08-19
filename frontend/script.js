@@ -13553,6 +13553,98 @@ function quantidadeDoModelo(item) {
 }
 window.quantidadeDoModelo = quantidadeDoModelo;
 
+/** A numeração escolhida para este modelo, ou null. */
+function numeracaoDoModelo(item) {
+    const nid = numeracaoIdDoItem(item);
+    if (!nid) return null;
+    return (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+}
+window.numeracaoDoModelo = numeracaoDoModelo;
+
+/**
+ * Quantas linhas o banco deste modelo PRECISA ter para atender ao pedido.
+ *
+ * Regra do usuário, 19/08/2026: com Qtd X, a numeração tem de gerar X linhas
+ * quando ela imprime só a Frente, e 2X quando é FxVerso — no frente e verso
+ * cada peça consome duas linhas, uma por face.
+ *
+ * O modo vem do `print_mode` da NUMERAÇÃO ('front' ou 'duplex'), que é onde o
+ * usuário o define, e não do `verso_tipo` do modelo — os dois costumam andar
+ * juntos, mas quem manda é a numeração.
+ *
+ * A Qtd é lida e NUNCA escrita: ela chega do ERP e é a quantidade contratada,
+ * ou seja, o valor do pedido. Divergência se conserta na numeração.
+ *
+ * `null` quando não há o que comparar: sem Qtd do ERP ou sem numeração.
+ */
+function celulasEsperadasDoModelo(item) {
+    if (!item) return null;
+    const bruto = (item.quantidade !== undefined && item.quantidade !== null)
+        ? item.quantidade : item.qtd;
+    const qtd = parseInt(bruto);
+    if (!qtd || qtd <= 0) return null;
+    const num = numeracaoDoModelo(item);
+    if (!num) return null;
+    return qtd * (numeracaoEhDuplex(num) ? 2 : 1);
+}
+window.celulasEsperadasDoModelo = celulasEsperadasDoModelo;
+
+/** A numeração imprime frente e verso? É o "Modo de impressão" dela. */
+function numeracaoEhDuplex(num) {
+    return String((num && num.print_mode) || 'front').trim().toLowerCase() === 'duplex';
+}
+window.numeracaoEhDuplex = numeracaoEhDuplex;
+
+/**
+ * Quantas linhas do banco este modelo imprime hoje — o mesmo número que o botão
+ * "🧩 Linhas" mostra no card.
+ *
+ * `null` quando a numeração não tem banco (faixa de/até, PDF): aí não existe
+ * linha para contar, e por decisão do usuário a regra simplesmente não se
+ * aplica. Travar o que não dá para medir só pararia trabalho bom.
+ */
+function celulasGeradasDoModelo(item) {
+    const num = numeracaoDoModelo(item);
+    if (!num || !num.csv_data || !num.csv_data.length) return null;
+    return fatiaCsvDoItem(item, num).length;
+}
+window.celulasGeradasDoModelo = celulasGeradasDoModelo;
+
+/**
+ * A divergência entre o que o pedido comprou e o que a numeração gerou, ou
+ * `null` quando bate (ou quando não há como comparar).
+ *
+ * Devolve os números e não uma frase pronta: quem chama decide se vira aviso na
+ * tela ou motivo de bloqueio, e o teste consegue conferir a conta.
+ */
+function divergenciaDeCelulasDoModelo(item) {
+    const esperado = celulasEsperadasDoModelo(item);
+    const gerado = celulasGeradasDoModelo(item);
+    if (esperado === null || gerado === null || esperado === gerado) return null;
+    const bruto = (item.quantidade !== undefined && item.quantidade !== null)
+        ? item.quantidade : item.qtd;
+    return {
+        qtd: parseInt(bruto),
+        modo: numeracaoEhDuplex(numeracaoDoModelo(item)) ? 'FxVerso' : 'Frente',
+        esperado: esperado,
+        gerado: gerado,
+        diferenca: gerado - esperado
+    };
+}
+window.divergenciaDeCelulasDoModelo = divergenciaDeCelulasDoModelo;
+
+/**
+ * A frase do bloqueio. Diz a conta inteira porque quem lê é quem vai corrigi-la:
+ * "faltam 250" sozinho não conta de onde saiu o número esperado.
+ */
+function textoDaDivergenciaDeCelulas(d) {
+    if (!d) return '';
+    const falta = d.diferenca < 0 ? ('faltam ' + (-d.diferenca)) : ('sobram ' + d.diferenca);
+    return 'Qtd ' + d.qtd + ' · ' + d.modo + ' · esperado ' + d.esperado
+         + ' linha(s) · gerado ' + d.gerado + ' · ' + falta;
+}
+window.textoDaDivergenciaDeCelulas = textoDaDivergenciaDeCelulas;
+
 
 
 /**
@@ -15806,6 +15898,160 @@ const PERM_ACTIONS = [
     { key: 'gerar_pdf', icon: '📥', label: 'Gerar PDF',  tela: 'baixar o PDF imposto' },
     { key: 'imprimir',  icon: '🖨️', label: 'Imprimir',   tela: 'mandar para a impressora' },
 ];
+
+// ──── Regras de bloqueio por papel (regras do negócio, não da grade) ───────
+//
+// Estas NÃO são as permissões editáveis da tela de Usuários. São regras da
+// gráfica, ditadas pelo dono em 19/08/2026, e por isso moram no código: não há
+// caixa para desmarcar, porque não é decisão de configuração. A grade continua
+// governando o que cada pessoa ABRE; estas funções governam o que ela FAZ
+// dentro da tela que abriu.
+//
+// O papel é lido da sessão do site OU do acesso local da estação. Na gráfica o
+// operador entra só pelo código local, sem sessão do Supabase (ver
+// `permsDoOperadorLocal`), e uma regra que olhasse apenas `_currentPerms`
+// valeria em metade das máquinas.
+
+/** O papel de quem está usando o painel agora, em caixa baixa. '' se ainda não sei. */
+function papelAtual() {
+    const papel = (window._currentPerms && window._currentPerms.role)
+               || (window._acessoLocal && window._acessoLocal.role)
+               || '';
+    return String(papel).trim().toLowerCase();
+}
+window.papelAtual = papelAtual;
+
+/**
+ * Quem atribui o designer de um pedido.
+ *
+ * Regra do usuário: "O Designer não pode mudar o designer de um pedido, o
+ * atendente que define o designer". Distribuir trabalho é decisão de quem
+ * atende o cliente e conhece o prazo — não de quem vai executá-lo.
+ *
+ * Papel desconhecido responde NÃO, ao contrário de `podeAbrirView`. Lá negar
+ * trancaria a pessoa fora da aplicação inteira durante a partida; aqui o custo
+ * de negar é um select cinza por um instante, e o de liberar seria a regra não
+ * valer justamente na primeira tela desenhada.
+ */
+function podeDefinirDesigner() {
+    const papel = papelAtual();
+    return papel === 'admin' || papel === 'atendimento';
+}
+window.podeDefinirDesigner = podeDefinirDesigner;
+
+/**
+ * Quem devolve para alteração um modelo que o cliente já aprovou.
+ *
+ * Modelo aprovado é acordo fechado com o cliente: nada nele se altera. As duas
+ * únicas coisas que continuam de pé no card são o botão "Em Alteração" e a
+ * caixa de anotações, e são estas as pessoas que podem usá-las.
+ */
+function podeDestravarModeloAprovado() {
+    const papel = papelAtual();
+    return papel === 'admin' || papel === 'atendimento' || papel === 'gerente';
+}
+window.podeDestravarModeloAprovado = podeDestravarModeloAprovado;
+
+/**
+ * Modelo aprovado pelo cliente. O selo na tela escreve "✅ APROVADO".
+ *
+ * Lê os dois campos porque a tela e o banco falam línguas diferentes: a UI usa
+ * `amostra_status` ('APROVADA') e a coluna oficial do Supabase é `status_arte`
+ * ('APROVADA_CLIENTE'). Um pedido recém-carregado pode chegar com só um deles.
+ */
+function modeloEstaAprovado(item) {
+    if (!item) return false;
+    const st = String(item.amostra_status || item.status_arte || '').trim().toUpperCase();
+    return st === 'APROVADA' || st === 'APROVADO'
+        || st === 'APROVADA_CLIENTE' || st === 'ARTE_APROVADA';
+}
+window.modeloEstaAprovado = modeloEstaAprovado;
+
+/**
+ * Fecha os cards dos modelos já aprovados, depois de o HTML entrar no DOM.
+ *
+ * Percorre o card inteiro em vez de marcar controle por controle de propósito.
+ * O card tem quinze controles hoje — cor, numeração, os dois botões dela, as
+ * duas tabelas do banco, os uploads e botões de arte da frente e do verso, as
+ * decisões — e ganha outros com o tempo. Uma lista escrita aqui envelheceria em
+ * silêncio: o controle novo nasceria solto dentro de um modelo aprovado e
+ * ninguém perceberia, porque nada quebra. Assim o padrão é o contrário — tudo
+ * fecha, e o que pode continuar aberto diz isso de si mesmo com
+ * `data-libera-aprovado`.
+ *
+ * Isto é a camada da tela. Cada função que grava confere de novo por conta
+ * própria: controle cinza não impede ninguém de chamar a função pelo console.
+ */
+function travarCardsDeModelosAprovados(container) {
+    if (!container || !container.querySelectorAll) return;
+    // No link do cliente a regra não vale: é ELE quem aprova, e o card dele não
+    // tem painel de configuração nenhum.
+    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
+
+    const podeDestravar = podeDestravarModeloAprovado();
+
+    container.querySelectorAll('[data-modelo-aprovado="1"]').forEach(card => {
+        card.querySelectorAll('input, select, textarea, button').forEach(el => {
+            if (podeDestravar && el.hasAttribute('data-libera-aprovado')) return;
+            el.disabled = true;
+            el.style.opacity = '0.45';
+            el.style.cursor = 'not-allowed';
+            if (!el.title) el.title = 'Modelo aprovado pelo cliente — não pode ser alterado.';
+        });
+    });
+}
+window.travarCardsDeModelosAprovados = travarCardsDeModelosAprovados;
+
+/**
+ * Por que esta gravação não pode acontecer num modelo aprovado — ou `null`
+ * quando pode.
+ *
+ * Vive dentro do `saveAmostraToDB`, que é por onde passam TODAS as gravações de
+ * um modelo: cor, numeração, arte, anotação, status, modo PDF, o que o Criador
+ * de Arte salva. Conferir no funil, e não em cada uma das quinze funções que
+ * chamam, é o que faz a regra valer inclusive para as que ainda não existem.
+ *
+ * Duas coisas continuam passando num modelo aprovado, e só para quem pode
+ * destravá-lo: a anotação (`amostra_obs`) e a volta para alteração
+ * (`amostra_status: 'REPROVADA'`). É a saída da trava — sem ela o modelo
+ * aprovado por engano ficaria preso para sempre.
+ */
+function bloqueioDeModeloAprovado(item, dataToUpdate) {
+    // O link do cliente é a tela em que ELE aprova. Travar ali seria travar
+    // quem a regra existe para proteger.
+    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return null;
+    if (!modeloEstaAprovado(item)) return null;
+
+    const campos = Object.keys(dataToUpdate || {});
+
+    // A saída da trava: a anotação e a volta para alteração.
+    const ehSaidaDaTrava = campos.length > 0 && campos.every(c =>
+        c === 'amostra_obs' || c === 'observacao_arte'
+        || (c === 'amostra_status' && String(dataToUpdate[c]).toUpperCase() === 'REPROVADA'));
+    if (ehSaidaDaTrava) {
+        if (podeDestravarModeloAprovado()) return null;
+        return {
+            silencioso: false,
+            motivo: 'Modelo aprovado pelo cliente. Só o atendimento, o gerente ou o '
+                  + 'administrador podem colocá-lo em "Em Alteração".'
+        };
+    }
+
+    // A prévia composta (`amostra_arte_base64`) é gravada sozinha a cada desenho
+    // do card, pelo snapshot — ninguém pediu. Num modelo travado ela não tem o
+    // que atualizar, porque o modelo não mudou; então a gravação é descartada
+    // em SILÊNCIO. Avisar seria encher a tela de alertas sobre uma alteração que
+    // pessoa nenhuma tentou fazer.
+    const soPrevia = campos.length > 0 && campos.every(c =>
+        c === 'amostra_arte_base64' || c === 'verso_amostra_arte_base64');
+
+    return {
+        silencioso: soPrevia,
+        motivo: 'Modelo aprovado pelo cliente — nada nele pode ser alterado. '
+              + 'Para liberar, coloque o modelo em "Em Alteração".'
+    };
+}
+window.bloqueioDeModeloAprovado = bloqueioDeModeloAprovado;
 
 // ──── Aplicar permissões na sidebar ────────────────────────────────────────
 function applyPermissions(perms) {
@@ -20428,6 +20674,14 @@ function getOSDesigner(osId, osNumero) {
  * Define o designer responsável por uma OS (salva em localStorage)
  */
 function setOSDesigner(osId, designerName, osNumero) {
+    // Quem define o designer é o atendimento (regra do usuário, 19/08/2026).
+    // A conferência vem também aqui, e não só no select: este atalho grava no
+    // localStorage da máquina e vence tudo o que vier do banco em
+    // `getOSDesigner`. Sem a trava, a regra valeria até alguém achar o atalho.
+    if (!podeDefinirDesigner()) {
+        toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
+        return;
+    }
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     if (designerName) {
         if (osId) overrides[osId] = designerName;
@@ -20699,6 +20953,9 @@ function renderDesignersBoxHTML(osId, osNum) {
 
     const currentAssignedDesigner = getOSDesigner(osId, osNum);
     const allOrdens = state.ordens || [];
+    // Quem define o designer é o atendimento. Para os outros a caixa vira o que
+    // ela realmente é: uma consulta de quem está com o quê.
+    const podeTrocarDesigner = podeDefinirDesigner();
 
     return list.map(d => {
         const pedidosSet = new Set();
@@ -20732,8 +20989,8 @@ function renderDesignersBoxHTML(osId, osNum) {
             <div class="designer-card ${isSelected ? 'selected' : ''}" 
                  data-uid="${d.uid}" 
                  data-nome="${d.nome}"
-                 onclick="confirmAndSelectDesigner('${osId}', '${osNum}', '${d.uid}', '${safeNome}')" 
-                 style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: ${borderStyle}; border-radius: 10px; cursor: pointer; transition: all 0.25s ease; background: ${bgStyle}; box-shadow: ${boxShadowStyle};">
+                 ${podeTrocarDesigner ? `onclick="confirmAndSelectDesigner('${osId}', '${osNum}', '${d.uid}', '${safeNome}')"` : 'title="Quem define o designer de um pedido é o atendimento"'} 
+                 style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: ${borderStyle}; border-radius: 10px; cursor: ${podeTrocarDesigner ? 'pointer' : 'default'}; transition: all 0.25s ease; background: ${bgStyle}; box-shadow: ${boxShadowStyle};">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="width: 38px; height: 38px; border-radius: 50%; background: ${isSelected ? '#3b82f6' : '#a7f3d0'}; color: ${isSelected ? '#ffffff' : '#065f46'}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; transition: all 0.2s;">
                         ${d.init}
@@ -20755,6 +21012,11 @@ function renderDesignersBoxHTML(osId, osNum) {
 }
 
 async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
+    if (!podeDefinirDesigner()) {
+        toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
+        return;
+    }
+
     const currentAssigned = getOSDesigner(osId, osNum);
     
     if (currentAssigned && currentAssigned.toLowerCase() === nome.toLowerCase()) {
@@ -20832,7 +21094,14 @@ function renderDesignerSelect(osId, osNumero) {
         options += `<option value="${escapeHtml(d)}" ${selected}>${escapeHtml(d)}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);"
+    // Travado para quem não é atendimento nem administrador, com o motivo no
+    // título — a trava tem de dizer a quem pedir, senão vira porta sem saída.
+    const pode = podeDefinirDesigner();
+    const travaAttr = pode ? '' : ' disabled title="Quem define o designer de um pedido é o atendimento"';
+    const travaStyle = pode ? '' : 'opacity:0.5;cursor:not-allowed;';
+
+    return `<select class="form-control"${travaAttr}
+                style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);${travaStyle}"
                 onclick="event.stopPropagation()"
                 onchange="event.stopPropagation(); setOSDesigner('${escapeJsAttr(osId)}', this.value)">${options}</select>`;
 }
@@ -24498,13 +24767,45 @@ function renderAmostrasOSItens(osId) {
         ).join('');
         // Aprovar pelo painel e privilegio de ADM e Atendimento; o papel pode
         // ainda estar em viagem no primeiro desenho — sem ele, o botao nao nasce.
-        const roleAtual = (window._currentPerms && window._currentPerms.role)
-                       || (window._acessoLocal && window._acessoLocal.role)
-                       || '';
-        const podeAprovarPeloPainel = roleAtual === 'admin' || roleAtual === 'atendimento';
+        const podeAprovarPeloPainel = papelAtual() === 'admin' || papelAtual() === 'atendimento';
+
+        // ── Modelo aprovado pelo cliente: o card inteiro fecha ──
+        // No link do cliente a regra não vale — quem aprova é ele, e o card
+        // dele nem tem painel de configuração. `data-modelo-aprovado` é o que
+        // `travarCardsDeModelosAprovados()` procura depois de o HTML entrar no
+        // DOM; travar por atributo, e não controle a controle, é o que impede um
+        // controle novo de nascer solto dentro de um modelo aprovado.
+        const ehTelaDoCliente = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+        const modeloTravado = !ehTelaDoCliente && modeloEstaAprovado(item);
+        const podeDestravar = podeDestravarModeloAprovado();
+
+        // ── Qtd × linhas do banco ──
+        // A conta é do usuário: Qtd X pede X linhas na Frente e 2X no FxVerso.
+        // Enquanto não bater, o modelo não pode ser marcado PRONTO — e como o
+        // pedido só vira "Enviar Arte" com todos os modelos PRONTO, o pedido
+        // inteiro para até alguém corrigir a NUMERAÇÃO. A Qtd nunca é tocada.
+        const divergenciaCelulas = ehTelaDoCliente ? null : divergenciaDeCelulasDoModelo(item);
+        const travaDeCelulas = !!divergenciaCelulas;
+
+        const faixaModeloTravado = modeloTravado ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.35); color: #4ade80; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1rem;">🔒</span>
+                    <span>Modelo aprovado pelo cliente — nada aqui pode ser alterado.
+                    ${podeDestravar
+                        ? 'Para liberar, use <b>❌ EM ALTERAÇÃO</b> abaixo.'
+                        : 'Para liberar, peça ao atendimento para colocar o modelo <b>Em Alteração</b>.'}</span>
+                </div>` : '';
+
+        const faixaDivergenciaCelulas = travaDeCelulas ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">⚠️</span>
+                    <span>O banco não fecha com a quantidade do pedido, então este modelo não pode ser marcado PRONTO.<br>
+                    <span style="font-weight:700;color:#fca5a5;">${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}</span><br>
+                    Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.</span>
+                </div>` : '';
 
         return `
-        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;">
+        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ' data-modelo-aprovado="1"' : ''}>
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -24517,9 +24818,11 @@ function renderAmostrasOSItens(osId) {
                     <div class="amostra-decisao-panel" style="padding: 14px 16px;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
-                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="2" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="2" data-libera-aprovado="1" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
+                        ${faixaModeloTravado}
+                        ${faixaDivergenciaCelulas}
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `
@@ -24531,10 +24834,10 @@ function renderAmostrasOSItens(osId) {
                                 </button>
                                 `
                                 : `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                <button class="btn" data-libera-aprovado="1" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
                                     ❌ EM ALTERAÇÃO
                                 </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' ? 'disabled' : ''}>
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : ''}>
                                     🎨 MARCAR PRONTO
                                 </button>
                                 ${podeAprovarPeloPainel ? `
@@ -25106,6 +25409,9 @@ function renderAmostrasOSItens(osId) {
 
     container.innerHTML = entregaCardHtml + finalHtml;
 
+    // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
+    travarCardsDeModelosAprovados(container);
+
 
     
     if (isInternal) {
@@ -25134,6 +25440,10 @@ function renderAmostrasOSItens(osId) {
                 await new Promise(r => setTimeout(r, 20));
             }
         }
+        // De novo: `renderItemAmostraCombinada` reescreve pedaços do card, e um
+        // controle redesenhado volta habilitado.
+        travarCardsDeModelosAprovados(container);
+
         // Atualizar a barra final de ações do cliente dinamicamente
         atualizarBarraFinalCliente(osId);
     }, 50);
@@ -26032,6 +26342,16 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
         console.warn('[SAVE] Item não encontrado no state. itemId=', itemId, '| osId=', osId);
+        return;
+    }
+
+    // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
+    // Aqui, e não só nos controles da tela: botão cinza não impede ninguém de
+    // chamar a função pelo console, e esta é a única porta que todas as
+    // gravações de modelo atravessam.
+    const bloqueio = bloqueioDeModeloAprovado(itemLocal, dataToUpdate);
+    if (bloqueio) {
+        if (!bloqueio.silencioso) toast(bloqueio.motivo, 'warning');
         return;
     }
 
@@ -28070,6 +28390,24 @@ async function decisionAmostraItem(itemId, osId, status) {
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = obsEl ? obsEl.value : '';
 
+    // Qtd × linhas do banco (regra do usuário, 19/08/2026). O modelo não pode
+    // ser marcado PRONTO enquanto o banco não fechar com a quantidade que o
+    // pedido comprou — e, como o pedido só vira "Enviar Arte" com TODOS os
+    // modelos PRONTO, isso segura o pedido inteiro até alguém corrigir.
+    //
+    // Só o PRONTO do painel interno: o APROVAR/ALTERAR do link do cliente
+    // também passa por aqui, e travar o cliente seria travar justamente quem
+    // não tem como consertar a numeração.
+    if (status === 'PRONTO' && state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        const itemAlvo = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+        const divergencia = divergenciaDeCelulasDoModelo(itemAlvo);
+        if (divergencia) {
+            toast('Este modelo não pode ser marcado PRONTO: ' + textoDaDivergenciaDeCelulas(divergencia)
+                + '. Corrija as linhas do banco — a quantidade do pedido não se altera aqui.', 'warning');
+            return;
+        }
+    }
+
     if (status === 'REPROVADA' && (!obs || obs.trim() === '')) {
         toast('Anotar alteração no campo ANOTAÇÕES', 'warning');
         if (obsEl) obsEl.focus();
@@ -29004,6 +29342,11 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
 }
 
 async function selectDesigner(osIntId, uid, nome) {
+    if (!podeDefinirDesigner()) {
+        toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
+        return;
+    }
+
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
     if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
     state.pedidosArtesData[osIntId].designer_uid = uid;
