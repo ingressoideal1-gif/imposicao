@@ -4,11 +4,11 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v638** — 2026-08-18 | Agente **1.2.133**
+## Versão atual: **v644** — 2026-08-18 | Agente **1.2.139**
 
 ---
 
-## [v644 — 2026-08-18] *(a publicar)* — Transparência no elemento PDF e SVG, sem rasterizar
+## [v644 — 2026-08-18] — Transparência no elemento PDF e SVG, sem rasterizar
 
 **O card do elemento ganhou um controle de Opacidade**, de 0 a 100%, ao lado da Largura
 e da Altura. Vale para os dois tipos de arquivo, PDF e SVG. O padrão é 100%, e todo
@@ -39,7 +39,7 @@ a desenhar por uma função só, `drawArteDoElemento()`.
 
 ---
 
-## [v639 — 2026-08-18] *(a publicar)* — O menu Ideal Control da gráfica
+## [v639 — 2026-08-18] — O menu Ideal Control da gráfica
 
 **A busca é pelo número do cliente.** O atendente atende o telefone sabendo quem está do
 outro lado; o número do pedido ele teria de perguntar, e o cliente muitas vezes não tem em
@@ -2280,7 +2280,7 @@ Cabeçalhos conferidos um a um em produção: `script.js`, `style.css` e `pedido
 
 ---
 
-## [v510 — 2026-08-10] *(a publicar)* — O site parava de rebaixar 1,6 MB a cada carregamento
+## [v510 — 2026-08-10] — O site parava de rebaixar 1,6 MB a cada carregamento
 
 ### O que estava acontecendo
 Relato de que a janela tinha ficado mais lenta depois da v509. **Medido lado a lado, não tinha:** v509 em 386 ms de média contra 527 ms da v508, com as mesmas contagens de etapa, e a função de limpeza da v509 rodando **zero vezes** no caminho de carregamento — ela só é chamada quando não há arte.
@@ -2303,7 +2303,7 @@ O raciocínio ficou escrito no `docs/PUBLICAR.md`, junto com as três coisas que
 
 ---
 
-## [v509 — 2026-08-10] *(a publicar)* — Excluir a arte no modo PDF: a pergunta que sumia e o desenho que ficava
+## [v509 — 2026-08-10] — Excluir a arte no modo PDF: a pergunta que sumia e o desenho que ficava
 
 ### O sintoma
 Na janela combinada do pedido em arte, com o modelo em **modo PDF**, ao excluir a arte não aparecia a pergunta de confirmação e a visualização continuava na tela.

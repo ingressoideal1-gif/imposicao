@@ -1,6 +1,6 @@
 ---
 name: elementos-pdf-svg
-description: Leia ANTES de mexer em elementos de numeração do tipo PDF ou SVG — a box "Adicionar Pdf e Svg" do editor, o upload desses arquivos, o desenho deles em qualquer canvas, a escala/tamanho original, o ramo SVG ou PDF do engine.py, ou a Arte de Fundo do editor de numeração. Cobre as três regras que, se quebradas, fazem a tela mostrar uma coisa e o papel sair outra.
+description: Leia ANTES de mexer em elementos de numeração do tipo PDF ou SVG — a box "Adicionar Pdf e Svg" do editor, o upload desses arquivos, o desenho deles em qualquer canvas, a escala/tamanho original, o ramo SVG ou PDF do engine.py, ou a Arte de Fundo do editor de numeração. Cobre as regras que, se quebradas, fazem a tela mostrar uma coisa e o papel sair outra — a primeira delas, nunca rasterizar a arte do cliente, já custou uma reversão inteira.
 ---
 
 # Antes de mexer em elemento PDF ou SVG
@@ -9,30 +9,44 @@ Leia **`docs/fluxo_elementos_pdf_svg.md`** por inteiro. Ele mapeia as dez etapas
 caminho, do upload ao papel, com as linhas conferidas contra a v490, e registra o que
 foi **medido** em cada achado — não deduzido.
 
-Três regras carregam o resto:
+Quatro regras carregam o resto, e a primeira é a mais cara:
 
-1. **Nunca use `ctx.drawImage(img, x, y, w, h)` cru num elemento PDF/SVG.** Use
-   `drawImageContain()`. O `engine.py` impõe esses dois tipos com
+1. **Nunca rasterize a arte do cliente.** O PDF e o SVG do elemento entram no papel
+   como vetor, por `show_pdf_page`, e é assim que têm de continuar — texto continua
+   texto, fonte continua embutida, CMYK não vira RGB. Em 18/08/2026 a transparência
+   foi implementada rasterizando a 300 dpi quando a opacidade caía abaixo de 100%, e o
+   usuário mandou **reverter tudo**: *"rasterizar o pdf em imagem esta fora de
+   cogitação"*. Numa gráfica, trocar a resolução do RIP por uma escolhida no código é
+   perda que só aparece no papel impresso, onde nem teste nem tela conseguem medir. Se
+   a única implementação de um recurso passa por rasterizar, a resposta certa é dizer
+   que não dá. A transparência acabou saindo pelo caminho vetorial — `ExtGState` com
+   `/ca` mais um grupo de transparência, na `_colar_arte_pdf()` do `engine.py` — e a
+   seção "Opacidade" do documento explica os dois detalhes que a fazem sair certa.
+
+2. **Nunca use `ctx.drawImage(img, x, y, w, h)` cru num elemento PDF/SVG.** Use
+   **`drawArteDoElemento()`**, que desenha sem distorcer e com a opacidade do
+   elemento — são dez janelas, e cada uma que desenhe por conta própria é uma que
+   mostra o que o papel não faz. O `engine.py` impõe esses dois tipos com
    `keep_proportion=True` — as únicas duas ocorrências de `True` no arquivo, contra
    nove de `False` —, então um `drawImage` de cinco argumentos estica na tela o que o
    papel vai encaixar. A regra do produto, dada pelo usuário, é: **tamanho original,
    escala 100%, sem distorção**.
 
-2. **O tamanho impresso de um SVG é o que o `svglib` calcula, não o que o navegador
+3. **O tamanho impresso de um SVG é o que o `svglib` calcula, não o que o navegador
    mede.** Eles coincidem quando o arquivo declara dimensão absoluta e divergem
    quando não declara — aí o navegador chuta 300×150 px. Por isso o tamanho natural
    sai de `svgNaturalSizeMm()`, que lê o texto do arquivo. As oito convenções
    (`px`, `pt`, `cm`, `in`, `mm`, só `viewBox`, `%`, nenhuma) estão medidas nos dois
    lados no documento.
 
-3. **O arquivo é do elemento, não da numeração.** Cada elemento tem seu
+4. **O arquivo é do elemento, não da numeração.** Cada elemento tem seu
    `pdf_content`/`svg_content`, seu nome e seu `natural_w_mm`. As colunas
    `svg_content`/`pdf_content` da **numeração** ainda são escritas, derivadas do
    primeiro elemento de cada tipo — **não remova isso**: `svg_content` da numeração é
    o marcador de CAMAROTE lido por `engine.py:222` e mais três pontos, que testa se o
    nome do arquivo contém "CAMAROTE".
 
-Desde a v506 existe uma quarta regra: cada elemento PDF/SVG tem uma **Finalidade**
+Desde a v506 existe uma quinta regra: cada elemento PDF/SVG tem uma **Finalidade**
 (`render_mode`), `"print"` ou `"layout"`. Um elemento de Layout aparece nas janelas
 que mostram **como a peça vai ficar** (editor, janela de arte, modo PDF, link do
 cliente, Criador de Arte) e some das que prometem **o comportamento da impressão** —
