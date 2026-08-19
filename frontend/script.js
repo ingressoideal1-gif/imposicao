@@ -15968,6 +15968,42 @@ function modeloEstaAprovado(item) {
 window.modeloEstaAprovado = modeloEstaAprovado;
 
 /**
+ * Quem aprovou o modelo: 'cliente', 'atendente', ou null quando não dá para
+ * saber.
+ *
+ * A resposta está no valor do `status_arte`, gravado por quem aprovou:
+ * 'APROVADA_CLIENTE' vem do botão APROVAR do link do cliente; 'APROVADA' vem do
+ * ✅ APROVADO do painel. Ver a gravação em `saveAmostraToDB`.
+ *
+ * O `null` não é detalhe: todo modelo aprovado ANTES desta distinção existir
+ * ficou como 'APROVADA_CLIENTE', tenha sido o cliente ou o atendente. Aqui
+ * ainda respondemos 'cliente' nesse caso, porque é o que o dado diz — mas
+ * modelo sem `status_arte` nenhum não recebe atribuição inventada.
+ */
+function quemAprovouOModelo(item) {
+    if (!item || !modeloEstaAprovado(item)) return null;
+    const st = String(item.status_arte || '').trim().toUpperCase();
+    if (st === 'APROVADA_CLIENTE') return 'cliente';
+    if (st === 'APROVADA' || st === 'ARTE_APROVADA' || st === 'APROVADO') return 'atendente';
+    return null;
+}
+window.quemAprovouOModelo = quemAprovouOModelo;
+
+/**
+ * A frase de abertura do aviso: "Modelo aprovado pelo cliente" ou "Modelo
+ * aprovado pelo ATENDENTE". Sem atribuição quando não se sabe — dizer "pelo
+ * cliente" sobre uma aprovação do balcão seria contar a história errada, que é
+ * exatamente o defeito que esta distinção veio corrigir.
+ */
+function tituloDoModeloAprovado(item) {
+    const quem = quemAprovouOModelo(item);
+    if (quem === 'cliente') return 'Modelo aprovado pelo cliente';
+    if (quem === 'atendente') return 'Modelo aprovado pelo ATENDENTE';
+    return 'Modelo aprovado';
+}
+window.tituloDoModeloAprovado = tituloDoModeloAprovado;
+
+/**
  * Fecha os cards dos modelos já aprovados, depois de o HTML entrar no DOM.
  *
  * Percorre o card inteiro em vez de marcar controle por controle de propósito.
@@ -15996,7 +16032,10 @@ function travarCardsDeModelosAprovados(container) {
             el.disabled = true;
             el.style.opacity = '0.45';
             el.style.cursor = 'not-allowed';
-            if (!el.title) el.title = 'Modelo aprovado pelo cliente — não pode ser alterado.';
+            if (!el.title) {
+                el.title = (card.dataset.tituloAprovado || 'Modelo aprovado')
+                         + ' — não pode ser alterado.';
+            }
         });
     });
 }
@@ -16032,7 +16071,7 @@ function bloqueioDeModeloAprovado(item, dataToUpdate) {
         if (podeDestravarModeloAprovado()) return null;
         return {
             silencioso: false,
-            motivo: 'Modelo aprovado pelo cliente. Só o atendimento, o gerente ou o '
+            motivo: tituloDoModeloAprovado(item) + '. Só o atendimento, o gerente ou o '
                   + 'administrador podem colocá-lo em "Em Alteração".'
         };
     }
@@ -16047,7 +16086,7 @@ function bloqueioDeModeloAprovado(item, dataToUpdate) {
 
     return {
         silencioso: soPrevia,
-        motivo: 'Modelo aprovado pelo cliente — nada nele pode ser alterado. '
+        motivo: tituloDoModeloAprovado(item) + ' — nada nele pode ser alterado. '
               + 'Para liberar, coloque o modelo em "Em Alteração".'
     };
 }
@@ -24787,10 +24826,12 @@ function renderAmostrasOSItens(osId) {
         const divergenciaCelulas = ehTelaDoCliente ? null : divergenciaDeCelulasDoModelo(item);
         const travaDeCelulas = !!divergenciaCelulas;
 
+        const tituloAprovado = tituloDoModeloAprovado(item);
+
         const faixaModeloTravado = modeloTravado ? `
                 <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.35); color: #4ade80; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 1rem;">🔒</span>
-                    <span>Modelo aprovado pelo cliente — nada aqui pode ser alterado.
+                    <span>${escapeHtml(tituloAprovado)} — nada aqui pode ser alterado.
                     ${podeDestravar
                         ? 'Para liberar, use <b>❌ EM ALTERAÇÃO</b> abaixo.'
                         : 'Para liberar, peça ao atendimento para colocar o modelo <b>Em Alteração</b>.'}</span>
@@ -24805,7 +24846,7 @@ function renderAmostrasOSItens(osId) {
                 </div>` : '';
 
         return `
-        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ' data-modelo-aprovado="1"' : ''}>
+        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ` data-modelo-aprovado="1" data-titulo-aprovado="${escapeHtml(tituloAprovado)}"` : ''}>
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -26374,7 +26415,23 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             if (dbData.amostra_status === 'PRONTO') {
                 dbData.status_arte = 'AGUARDANDO_CLIENTE';
             } else if (dbData.amostra_status === 'APROVADA') {
-                dbData.status_arte = 'APROVADA_CLIENTE';
+                // QUEM aprovou fica registrado no próprio valor, e não numa coluna
+                // nova: 'APROVADA_CLIENTE' é o botão APROVAR do link do cliente;
+                // 'APROVADA' é o ✅ APROVADO do painel, apertado pelo atendente.
+                //
+                // Os dois valores já eram lidos como aprovado em todo o código
+                // (as `validApprovedList`, o mapa de selos, o remapeamento da
+                // carga em `statusFrontend`), e 'APROVADA' já é gravado NESTA
+                // MESMA coluna pelo modal de artes — então não é vocabulário
+                // novo para o sistema parceiro, é o que ele já recebe hoje.
+                //
+                // O link do cliente não passa por aqui: `cliente.js` tem o
+                // próprio `saveAmostraToDB` e a página dele não carrega este
+                // arquivo. A conferência abaixo é rede de segurança para o dia
+                // em que o painel desenhar a tela do cliente.
+                dbData.status_arte =
+                    (state.amostrasContainerId === 'cliente-amostras-itens-container')
+                        ? 'APROVADA_CLIENTE' : 'APROVADA';
             } else if (dbData.amostra_status === 'REPROVADA') {
                 dbData.status_arte = 'REPROVADA_CLIENTE';
             }
@@ -26582,6 +26639,9 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         Object.assign(itemLocal, dataToUpdate);
+        // `dataToUpdate` não tem `status_arte` — ele é derivado aqui. Sem copiar,
+        // a faixa do card só saberia quem aprovou depois de um F5.
+        if (dbData.status_arte) itemLocal.status_arte = dbData.status_arte;
         if ('arte_url' in dataToUpdate) {
             itemLocal.url_arquivo_arte = dataToUpdate.arte_url;
             itemLocal.url_arquivo = dataToUpdate.arte_url;

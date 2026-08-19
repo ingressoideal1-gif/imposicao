@@ -46,7 +46,7 @@ const FONTE = ['papelAtual', 'podeDestravarModeloAprovado', 'travarCardsDeModelo
 // lado — ele existe para provar que a trava nao vaza para o vizinho.
 const PAGINA = `
 <div id="raiz">
-  <div class="card" data-modelo-aprovado="1">
+  <div class="card" data-modelo-aprovado="1" data-titulo-aprovado="Modelo aprovado pelo ATENDENTE">
     <select id="a-cor"><option>Cor</option></select>
     <select id="a-num"><option>Numeracao</option></select>
     <button id="a-csv">Ver / editar</button>
@@ -75,9 +75,10 @@ async function travados(page, papel, containerId) {
         (0, eval)(fonte);
         travarCardsDeModelosAprovados(document.getElementById('raiz'));
 
-        const mapa = {};
+        const mapa = { _titulos: {} };
         document.querySelectorAll('select, button, input, textarea').forEach(el => {
             mapa[el.id] = !!el.disabled;
+            mapa._titulos[el.id] = el.title || '';
         });
         return mapa;
     }, FONTE, papel, containerId);
@@ -108,6 +109,12 @@ async function travados(page, papel, containerId) {
     ok(!atendimento['b-cor'], 'o card livre ao lado continua livre');
     ok(!atendimento['b-pronto'], 'inclusive o PRONTO dele');
     ok(!atendimento['b-obs'], 'e a anotacao dele');
+
+    // O aviso do controle travado repete QUEM aprovou, e nao uma frase fixa: um
+    // modelo aprovado no balcao dizendo "aprovado pelo cliente" e justamente o
+    // defeito que o dono apontou em 19/08/2026.
+    ok(/ATENDENTE/.test(atendimento._titulos['a-cor'] || ''),
+        'o aviso do controle travado nomeia quem aprovou', atendimento._titulos['a-cor']);
 
     const gerente = await travados(page, 'gerente', 'amostras-itens-container');
     ok(!gerente['a-alteracao'], 'o gerente tambem coloca em alteracao');

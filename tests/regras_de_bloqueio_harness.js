@@ -44,7 +44,8 @@ function extrairFuncao(src, nome) {
 }
 
 const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado',
-               'modeloEstaAprovado', 'bloqueioDeModeloAprovado',
+               'modeloEstaAprovado', 'quemAprovouOModelo', 'tituloDoModeloAprovado',
+               'bloqueioDeModeloAprovado',
                'linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
                'numeracaoDoModelo', 'numeracaoEhDuplex',
                'celulasEsperadasDoModelo', 'celulasGeradasDoModelo',
@@ -123,6 +124,58 @@ function comoOperadorLocal(papel, st) {
     ok(!A.modeloEstaAprovado({ amostra_status: 'PENDENTE' }), 'PENDENTE nao e aprovado');
     ok(!A.modeloEstaAprovado({}), 'modelo sem status nao e aprovado');
     ok(!A.modeloEstaAprovado(null), 'e modelo nulo nao quebra a regra');
+})();
+
+// ─── 4b. QUEM aprovou: o cliente ou o atendente ──────────────────────────────
+//
+// Usuario, 19/08/2026: aprovado pelo botao APROVAR do link do cliente, o
+// registro diz "aprovado pelo cliente"; aprovado pelo botao do pedido, diz
+// "aprovado pelo ATENDENTE". A resposta mora no valor do status_arte, escrito
+// por quem aprovou.
+
+const APROVADO_CLIENTE = { id: 'm1', amostra_status: 'APROVADA', status_arte: 'APROVADA_CLIENTE' };
+const APROVADO_BALCAO = { id: 'm1', amostra_status: 'APROVADA', status_arte: 'APROVADA' };
+
+(function oStatusArteDizQuemAprovou() {
+    const A = comoUsuario('admin');
+    ok(A.quemAprovouOModelo(APROVADO_CLIENTE) === 'cliente', 'APROVADA_CLIENTE veio do link');
+    ok(A.quemAprovouOModelo(APROVADO_BALCAO) === 'atendente', 'APROVADA veio do painel');
+    ok(A.quemAprovouOModelo({ amostra_status: 'PRONTO' }) === null, 'modelo em arte nao tem aprovador');
+    ok(A.quemAprovouOModelo(null) === null, 'e modelo nulo nao quebra');
+})();
+
+(function aFraseNomeiaQuemAprovou() {
+    const A = comoUsuario('admin');
+    ok(A.tituloDoModeloAprovado(APROVADO_CLIENTE) === 'Modelo aprovado pelo cliente',
+        'a frase do cliente', A.tituloDoModeloAprovado(APROVADO_CLIENTE));
+    ok(A.tituloDoModeloAprovado(APROVADO_BALCAO) === 'Modelo aprovado pelo ATENDENTE',
+        'a frase do atendente', A.tituloDoModeloAprovado(APROVADO_BALCAO));
+})();
+
+(function semDadoNaoSeInventaAtribuicao() {
+    // Dizer "pelo cliente" sobre uma aprovacao de balcao seria contar a historia
+    // errada -- que e exatamente o defeito que esta distincao veio corrigir.
+    const A = comoUsuario('admin');
+    const semStatusArte = { id: 'm1', amostra_status: 'APROVADA' };
+    ok(A.quemAprovouOModelo(semStatusArte) === null, 'sem status_arte nao ha aprovador');
+    ok(A.tituloDoModeloAprovado(semStatusArte) === 'Modelo aprovado',
+        'e a frase sai sem atribuicao', A.tituloDoModeloAprovado(semStatusArte));
+})();
+
+(function aRecusaTambemNomeiaQuemAprovou() {
+    const A = comoUsuario('designer');
+    const r = A.bloqueioDeModeloAprovado(APROVADO_BALCAO, { amostra_cor_id: 7 });
+    ok(r && /ATENDENTE/.test(r.motivo), 'a recusa diz que foi o atendente', r);
+    const rc = A.bloqueioDeModeloAprovado(APROVADO_CLIENTE, { amostra_cor_id: 7 });
+    ok(rc && /pelo cliente/.test(rc.motivo), 'e quando foi o cliente, diz o cliente', rc);
+})();
+
+(function aprovadoPeloBalcaoTravaIgual() {
+    // A origem muda a FRASE, nunca a trava: os dois sao acordo fechado.
+    const A = comoUsuario('atendimento');
+    ok(A.modeloEstaAprovado(APROVADO_BALCAO), 'aprovado no balcao tambem esta aprovado');
+    ok(A.bloqueioDeModeloAprovado(APROVADO_BALCAO, { amostra_num_id: 9 }) !== null,
+        'e trava a numeracao do mesmo jeito');
 })();
 
 // ─── 5. O que passa e o que nao passa num modelo aprovado ────────────────────
@@ -314,6 +367,24 @@ function cenario(qtd, linhas, printMode) {
             ok(/podeDefinirDesigner\(\)/.test(SCRIPT.slice(i, i + 700)),
                 assinatura + ' confere quem esta chamando');
         });
+})();
+
+(function oPainelGravaAPROVADAEOLinkDoClienteAPROVADA_CLIENTE() {
+    // As duas metades da distincao. O link do cliente tem o PROPRIO
+    // saveAmostraToDB, em cliente.js -- a pagina dele nao carrega o script.js --,
+    // entao a mudanca no painel nao pode ter mexido no que o cliente grava.
+    const i = SCRIPT.indexOf('async function saveAmostraToDB');
+    const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+    ok(/'APROVADA_CLIENTE' : 'APROVADA'/.test(trecho),
+        'o painel grava APROVADA e so a tela do cliente grava APROVADA_CLIENTE');
+    ok(/itemLocal\.status_arte = dbData\.status_arte/.test(trecho),
+        'e o item em memoria recebe o valor, senao a faixa so mudaria depois de um F5');
+
+    const CLIENTE_JS = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+    const j = CLIENTE_JS.indexOf('async function saveAmostraToDB');
+    ok(j > 0, 'o link do cliente continua com o proprio saveAmostraToDB');
+    ok(/status_arte = 'APROVADA_CLIENTE'/.test(CLIENTE_JS.slice(j, j + 2000)),
+        'e ele continua gravando APROVADA_CLIENTE');
 })();
 
 (function oCardFechadoEDesenhadoComOAtributoQueATravaProcura() {
