@@ -23,6 +23,7 @@ O arquivo é **do elemento**, não da numeração. Cada elemento PDF/SVG carrega
 | `natural_w_mm` / `natural_h_mm` | o tamanho natural, para o botão "Tamanho original (100%)" |
 | `width_mm` / `height_mm` | o tamanho em uso, sempre na proporção do natural |
 | `render_mode` | `"print"` (padrão) ou `"layout"` — ver "Finalidade", abaixo |
+| `opacity` | 0 a 1, ausente = 1 — ver "Opacidade", abaixo |
 | `_pdfCanvas` / `_svgImage` | cache de render, nunca persistido |
 
 Dá para ter quantos quiser, de qualquer mistura. Quem os cria é a box **Adicionar
@@ -53,8 +54,10 @@ Linhas conferidas contra a v490.
 | 9 | Geração do PDF | `engine.py:735` (SVG), `:775` (PDF) |
 | 10 | Impressão | `app.py:1024` — só reenvia o PDF do engine ao spooler |
 
-Funções de apoio que todo renderizador novo deve usar: `drawImageContain()` (`:3514`)
-para desenhar sem distorcer, `tamanhoNaturalDoElemento()` (`:4753`) para o tamanho
+Funções de apoio que todo renderizador novo deve usar: **`drawArteDoElemento()`**,
+que desenha sem distorcer **e** com a opacidade do elemento — é por ela que os dez
+renderizadores desenham esses dois tipos; `drawImageContain()`, que ela usa por baixo
+e continua servindo aos demais tipos; `tamanhoNaturalDoElemento()` (`:4753`) para o tamanho
 100%, `svgNaturalSizeMm()` (`:4707`) para medir um SVG como o `svglib` mede, e
 `precarregarArtesDosElementos()` (`:4842`) para carregar a arte de uma lista de
 elementos vinda do banco.
@@ -122,6 +125,73 @@ elemento PDF **de impressão** em vez de ler a coluna `pdf_content` da numeraç�
 primeiro. A coluna é apenas derivada do primeiro elemento PDF ao salvar; o arquivo é
 do elemento, e é no elemento que existe a finalidade. A coluna segue como fallback
 para registros legados, sem elemento PDF.
+
+---
+
+## Opacidade (v644)
+
+Cada elemento PDF/SVG tem um controle **Opacidade** no card de configuração, de 0 a
+100%, gravado em `opacity` como fração de 0 a 1. Campo ausente vale 1, e todo o acervo
+anterior continua saindo exatamente como sempre saiu.
+
+### A regra que define a implementação
+
+**Nada é rasterizado.** A arte que o cliente entrega em vetor continua vetor no papel,
+em qualquer porcentagem: o texto continua texto, a fonte continua embutida, a cor CMYK
+não é convertida. Essa não é uma qualidade acidental da implementação — é o requisito.
+Uma primeira versão deste recurso rasterizava a arte a 300 dpi quando a opacidade caía
+abaixo de 100%, e foi **revertida inteira** a pedido do usuário em 18/08/2026. O
+registro está em `nunca-rasterizar-o-pdf-da-arte`: numa gráfica, trocar a resolução do
+RIP da impressora por uma resolução fixa escolhida no código é perda de qualidade que
+só aparece no papel, onde ninguém consegue medir antes.
+
+### Como funciona
+
+A transparência é a do **próprio formato PDF**, que a tem desde a versão 1.4: um
+`ExtGState` com `/ca` e `/CA` aplicado à chamada do arquivo. Quem achata, quando
+achata, é o RIP da impressora — na resolução dele, e é exatamente o que já acontece
+hoje com um PDF que chega com transparência feita no Illustrator.
+
+| Lado | Como |
+|---|---|
+| Os dez renderizadores do frontend | `drawArteDoElemento()` multiplica o `ctx.globalAlpha` corrente e o restaura |
+| `engine.py` | `_colar_arte_pdf()`, usada pelos ramos `SVG` e `PDF` |
+
+Três detalhes que parecem menores e não são:
+
+1. **A 100% o caminho é o de sempre.** `_colar_arte_pdf()` desvia para o
+   `show_pdf_page` puro, e a página não ganha `ExtGState` nem grupo — nem um objeto
+   novo. Dois testes travam isso, incluindo um que compara o fluxo de conteúdo gerado
+   com e sem o campo e exige que sejam **idênticos**.
+
+2. **O grupo de transparência (`/Group`) é obrigatório.** Sem ele o `/ca` vale por
+   operação de pintura, e duas formas da mesma arte que se sobrepõem se enxergam uma
+   pela outra. **Medido:** a sobreposição saía `(189, 0, 64)` contra `(126, 0, 128)`
+   da camada única. Com o grupo, os dois pontos dão a mesma cor — o elemento é composto
+   como uma peça só, que é o que "opacidade do elemento" quer dizer. No canvas o
+   `globalAlpha` já se comporta assim, então os dois lados concordam.
+
+   O grupo vai **sem `/CS`**, de propósito: assim ele herda o espaço de cor de mistura
+   da página. Fixar `/DeviceRGB` obrigaria uma folha CMYK a misturar em RGB, que numa
+   gráfica é deslocamento de cor. Medido — com `/CS`, sem `/CS` e com o grupo mínimo o
+   resultado é o mesmo, então o que não é necessário não entra.
+
+3. **O `ExtGState` é cercado em `q`/`Q`,** valendo só para o fluxo daquele elemento.
+   Sem o cerco, a opacidade vazaria para tudo o que fosse desenhado depois na mesma
+   folha: a numeração, o picote, a célula seguinte. Há teste com uma folha de oito
+   células conferindo que todas saem com a mesma cor.
+
+O `_colar_arte_pdf()` **levanta erro** se o `show_pdf_page` não deixar exatamente um
+fluxo de conteúdo novo para cercar. Parar é melhor do que imprimir com a opacidade
+vazando pela folha.
+
+### Os testes
+
+`tests/test_engine_opacidade_arte.py`, 37 casos, divididos em quatro grupos: o que não
+pode se perder (vetor, texto, fonte, CMYK, o caminho de 100%), a transparência em si, o
+valor inválido, e uma imposição completa pelo `process()` com oito células na folha. Os
+testes de cor medem **tinta** — rasterizam a página e leem o pixel, em vez de
+inspecionar a árvore do PDF.
 
 ---
 

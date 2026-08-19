@@ -8,6 +8,37 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v644 — 2026-08-18] *(a publicar)* — Transparência no elemento PDF e SVG, sem rasterizar
+
+**O card do elemento ganhou um controle de Opacidade**, de 0 a 100%, ao lado da Largura
+e da Altura. Vale para os dois tipos de arquivo, PDF e SVG. O padrão é 100%, e todo
+elemento já gravado continua saindo exatamente como sempre saiu.
+
+**A arte não é rasterizada em momento nenhum.** Em qualquer porcentagem, o vetor
+continua vetor, o texto continua texto, a fonte continua embutida e a cor CMYK não é
+convertida. A transparência usada é a do próprio formato PDF, que a tem desde 1999 —
+quem achata é o RIP da impressora, na resolução dele, do mesmo jeito que já acontece
+com um PDF que chega com transparência feita no Illustrator. Uma primeira versão deste
+recurso rasterizava a arte a 300 dpi e foi revertida inteira: numa gráfica, trocar a
+resolução do equipamento por uma escolhida no código é perda que só aparece no papel.
+
+**A 100% o caminho da impressão é literalmente o mesmo de antes** — a página não ganha
+nem um objeto novo. Há teste comparando o arquivo gerado com e sem o campo e exigindo
+que o conteúdo seja idêntico.
+
+**Dois detalhes que decidem se a transparência sai certa ou só parecida.** O primeiro é
+o grupo de transparência: sem ele, duas formas da mesma arte que se sobrepõem se
+enxergam uma pela outra, e a sobreposição sai mais escura que o resto. O segundo é o
+cerco do estado gráfico: sem ele a opacidade vazaria para tudo o que fosse desenhado
+depois na folha — a numeração, o picote, a célula seguinte. Os dois estão cobertos por
+teste, incluindo uma imposição de oito células conferindo que todas saem iguais.
+
+**As dez janelas mostram a mesma coisa.** Editor, janela de arte, modo PDF, link do
+cliente, Criador de Arte, prévia de imposição (as duas cópias) e PDF Gabarito passaram
+a desenhar por uma função só, `drawArteDoElemento()`.
+
+---
+
 ## [v639 — 2026-08-18] *(a publicar)* — O menu Ideal Control da gráfica
 
 **A busca é pelo número do cliente.** O atendente atende o telefone sabendo quem está do

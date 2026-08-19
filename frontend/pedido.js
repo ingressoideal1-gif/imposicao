@@ -1985,7 +1985,7 @@ function drawPedPreview() {
                             // Tamanho original, escala 100%, sem distorcao: drawImage cru
                             // esticaria o SVG para dentro da caixa e faria a tela divergir
                             // do papel, onde o engine.py usa keep_proportion=True.
-                            drawImageContain(ctx, svgImg, -hw, -hh, sz_w, sz_h);
+                            drawArteDoElemento(ctx, svgImg, -hw, -hh, sz_w, sz_h, el);
 
                         } else {
 
@@ -2019,7 +2019,7 @@ function drawPedPreview() {
                         if (el._pdfCanvas) {
 
                             // Mesma regra do SVG acima: proporcao preservada, sobra centralizada
-                            drawImageContain(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h);
+                            drawArteDoElemento(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h, el);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
 

@@ -250,6 +250,104 @@ def _so_layout(el: dict) -> bool:
     return str(el.get("render_mode", "print")).strip().lower() == "layout"
 
 
+def _opacidade_arte(el: dict) -> float:
+    """Opacidade de um elemento PDF/SVG, de 0 (invisivel) a 1 (opaco).
+
+    Campo ausente vale 1: todo o acervo anterior a este recurso foi gravado sem
+    ele e precisa continuar saindo exatamente como sempre saiu. Valor invalido
+    tambem cai para 1 — diante de lixo, imprimir opaco e o unico erro seguro,
+    porque nao some com arte nenhuma.
+    """
+    v = el.get("opacity", None)
+    if v is None or v == "":
+        return 1.0
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return 1.0
+    if n != n:  # NaN
+        return 1.0
+    return max(0.0, min(1.0, n))
+
+
+def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
+    """Cola a primeira pagina de `doc_origem` em `rect`, com opacidade.
+
+    NADA E RASTERIZADO. A arte do cliente entra como veio — vetor continua
+    vetor, texto continua texto, a cor nao e convertida. A transparencia usa o
+    mecanismo do proprio formato PDF: um ExtGState com /ca e /CA, que existe
+    desde o PDF 1.4 e diz ao equipamento "pinte isto a tantos por cento". Quem
+    achata, quando achata, e o RIP da impressora, na resolucao dele.
+
+    Duas coisas que parecem detalhe e nao sao:
+
+    · O GRUPO DE TRANSPARENCIA (/Group) e obrigatorio. Sem ele o /ca vale por
+      operacao de pintura, e duas formas da MESMA arte que se sobrepoem se
+      enxergam uma pela outra: medido, a sobreposicao saia (189, 0, 64) contra
+      (126, 0, 128) da camada unica. Com o grupo, o elemento e composto como
+      uma peca so e os dois pontos dao a mesma cor.
+
+    · O ExtGState vale so para o fluxo de conteudo DESTE elemento, envolvido em
+      q/Q. Sem esse cerco a opacidade vazaria para tudo que fosse desenhado
+      depois na mesma folha — a numeracao, o picote, o proximo modelo.
+
+    A 100% (o padrao) nada disto acontece: a chamada e exatamente o
+    `show_pdf_page` de sempre, e a pagina nao ganha ExtGState nem grupo.
+    """
+    if opacidade >= 1.0:
+        page.show_pdf_page(
+            rect, doc_origem, 0,
+            keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
+        )
+        return
+
+    if opacidade <= 0.0:
+        return  # invisivel: nada a colar
+
+    antes = set(page.get_contents())
+    xref_form = page.show_pdf_page(
+        rect, doc_origem, 0,
+        keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
+    )
+    novos = [x for x in page.get_contents() if x not in antes]
+
+    if len(novos) != 1:
+        # O cerco q/Q depende de o show_pdf_page ter deixado um fluxo proprio, e
+        # ele sempre deixou. Se um dia deixar de deixar, e melhor parar do que
+        # imprimir com a opacidade vazando para o resto da folha.
+        raise RuntimeError(
+            "nao foi possivel isolar o desenho para aplicar a opacidade "
+            f"(fluxos novos: {len(novos)})"
+        )
+
+    # Sem /CS de proposito: o grupo herda o espaco de cor de mistura da pagina.
+    # Fixar /DeviceRGB aqui obrigaria uma folha CMYK a misturar em RGB, que numa
+    # grafica e deslocamento de cor. Medido: com CS, sem CS e com o grupo minimo
+    # dao o mesmo resultado, entao o que nao e necessario nao entra.
+    doc.xref_set_key(xref_form, "Group", "<</S/Transparency/I false/K false>>")
+
+    # Nome derivado do valor: dois elementos com a mesma opacidade compartilham
+    # o estado, e cada valor diferente ganha o seu.
+    nome = "IdealAlfa%03d" % round(opacidade * 100)
+    tipo, val = doc.xref_get_key(page.xref, "Resources")
+    res = int(val.split()[0]) if tipo == "xref" else page.xref
+    chave = "ExtGState" if res != page.xref else "Resources/ExtGState"
+    tipo_gs, val_gs = doc.xref_get_key(res, chave)
+    corpo = "<</Type/ExtGState/ca %g/CA %g/BM/Normal>>" % (opacidade, opacidade)
+    if tipo_gs == "xref":
+        doc.xref_set_key(int(val_gs.split()[0]), nome, corpo)
+    else:
+        if tipo_gs == "null":
+            doc.xref_set_key(res, chave, "<<>>")
+        doc.xref_set_key(res, chave + "/" + nome, corpo)
+
+    fluxo = novos[0]
+    doc.update_stream(
+        fluxo,
+        ("q /%s gs\n" % nome).encode("ascii") + doc.xref_stream(fluxo) + b"\nQ",
+    )
+
+
 def _linha_do_banco(item_data: dict | None, indice: int, csv_data: list | None):
     """A linha do banco de dados (CSV) que ESTE item imprime.
 
@@ -1710,7 +1808,7 @@ class ImpositionEngine:
                     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                     # keep_proportion=True: o desenho e encaixado na caixa do elemento
                     # sem distorcao, do mesmo jeito que os canvas do frontend desenham.
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
+                    _colar_arte_pdf(page.parent, page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
                     pdf_doc.close()
                 except Exception as ex:
                     # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
@@ -1744,7 +1842,7 @@ class ImpositionEngine:
                     rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                     py_rotate = (360 - angle) % 360
                     # keep_proportion=True: encaixa sem distorcer, igual ao canvas.
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
+                    _colar_arte_pdf(page.parent, page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
                     pdf_doc.close()
                 except Exception as ex:
                     # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
