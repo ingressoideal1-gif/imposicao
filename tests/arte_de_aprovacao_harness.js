@@ -199,6 +199,80 @@ const ESTADO = {
     ok(/N[ÃA]O foi marcado/.test(bloco), 'e o aviso diz que o modelo nao foi marcado');
 })();
 
+// ─── 6. O lote conta o que falhou ────────────────────────────────────────────
+
+/** O `forceRegenerateSnapshots` LIDO do script.js, com o mundo em dubles. */
+function montarLote(mundo) {
+    const fonte = extrairFuncao('forceRegenerateSnapshots', 'async ');
+    return new Function('state', 'console', 'ESCALA_DA_AMOSTRA', 'loadOSItens',
+        'garantirTabelasDaAmostra', 'regenerarAmostraDoModelo',
+        fonte + '\nreturn forceRegenerateSnapshots;')(
+        mundo.state, { log: () => {}, warn: () => {} }, 150 / 25.4,
+        async () => {}, async () => {}, mundo.regenerar);
+}
+
+(function oLoteDevolveOQueGerouEOQueFalhou() {
+    // Engolir o erro para nao parar os outros itens continua certo. O que estava
+    // errado era engolir e NAO CONTAR: quem chamou nao tinha como saber que a
+    // arte de um modelo ficou velha.
+    const itens = [{ id: 'a', nome_modelo: 'Pulseira' }, { id: 'b', nome_modelo: 'Credencial' }, { id: 'c' }];
+    const lote = montarLote({
+        state: { osItens: { os1: itens } },
+        regenerar: async (osId, item) => {
+            if (item.id === 'b') throw new Error('canvas morreu');
+            return item.id === 'a';
+        },
+    });
+    return lote('os1').then(r => {
+        ok(r && r.gerados === 1, 'conta quantos foram gerados', r);
+        ok(r && r.falhas.length === 1, 'e quantos falharam', r);
+        ok(r && r.falhas[0].nome === 'Credencial', 'nomeando o modelo que falhou', r.falhas);
+        ok(r && /canvas morreu/.test(r.falhas[0].motivo), 'e o motivo', r.falhas);
+    });
+})();
+
+(function pedidoSemItemNaoQuebraQuemEsperaOResumo() {
+    const lote = montarLote({ state: { osItens: {} }, regenerar: async () => true });
+    return lote('os1').then(r => {
+        ok(r && r.falhas.length === 0 && r.gerados === 0, 'devolve resumo vazio, e nao undefined', r);
+    });
+})();
+
+// ─── 7. O Gerar Link espera a arte ANTES de existir link para copiar ─────────
+
+(function oGerarLinkEsperaAArteAntesDeQualquerCoisa() {
+    const i = SCRIPT.indexOf('async function gerarLinkCliente');
+    ok(i > 0, 'o gerarLinkCliente continua existindo');
+    const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+
+    const posRegenera = trecho.indexOf('await forceRegenerateSnapshots(osId)');
+    const posLink = trecho.indexOf('await getOrCreateLinkCliente');
+    const posCopia = trecho.indexOf('navigator.clipboard.writeText');
+    const posStatus = trecho.indexOf('gravarStatusOverride(osId, novoStatus)');
+
+    ok(posRegenera > 0, 'ele espera a regeneracao');
+    ok(posLink > posRegenera, 'e so DEPOIS cria o link', { posRegenera, posLink });
+    ok(posCopia > posRegenera, 'e so depois copia', { posRegenera, posCopia });
+    // Antes do passo 1 de proposito: dali em diante o status ja foi mexido, e
+    // desistir no meio deixaria a tela contando uma coisa e o banco outra.
+    ok(posStatus > posRegenera, 'e antes de mexer no status do pedido', { posRegenera, posStatus });
+})();
+
+(function seAArteNaoAtualizarOLinkNaoSai() {
+    const i = SCRIPT.indexOf('async function gerarLinkCliente');
+    const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+    const bloco = trecho.slice(trecho.indexOf('regeneracao.falhas'), trecho.indexOf('regeneracao.falhas') + 700);
+    ok(/return;/.test(bloco), 'falha na arte interrompe o Gerar Link', bloco.slice(0, 160));
+    ok(/N[ÃA]O foi gerado/.test(bloco), 'e o aviso diz que o link nao saiu');
+    ok(/arte anterior/.test(bloco), 'e diz por que isso importa');
+})();
+
+(function oDisparoEmSegundoPlanoDoFimSumiu() {
+    // Era ele que deixava o atendente colar o link enquanto a imagem subia.
+    ok(!/forceRegenerateSnapshots\(osId\)\.catch\(snapErr/.test(SCRIPT),
+        'o Gerar Link nao dispara mais a regeneracao depois de copiar');
+})();
+
 (function aRegeneracaoEmLoteUsaAMesmaFuncao() {
     // Duas composicoes separadas fariam a arte que o cliente aprova divergir da
     // que o painel mostra, no dia em que so uma das duas fosse corrigida.

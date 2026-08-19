@@ -28271,18 +28271,27 @@ async function forceRegenerateSnapshots(osId) {
         try { await loadOSItens(osId); } catch (e) { console.warn('[Snapshot] Erro ao carregar itens:', e); }
     }
     const itens = state.osItens[osId] || [];
-    if (!itens.length) { console.log('[Snapshot] Nenhum item para OS', osId); return; }
+    if (!itens.length) { console.log('[Snapshot] Nenhum item para OS', osId); return { gerados: 0, falhas: [] }; }
 
     await garantirTabelasDaAmostra();
 
+    const falhas = [];
+    let gerados = 0;
+
     for (let idx = 0; idx < itens.length; idx++) {
         try {
-            await regenerarAmostraDoModelo(osId, itens[idx], idx, ESCALA_DA_AMOSTRA);
+            if (await regenerarAmostraDoModelo(osId, itens[idx], idx, ESCALA_DA_AMOSTRA)) gerados++;
         } catch (e) {
-            console.warn(`[Snapshot] Item ${idx}:`, e && e.message || e);
+            // Engolir para não parar os outros itens continua certo — o que
+            // estava errado era engolir e não CONTAR. Sem esta lista, quem
+            // chamou não tinha como saber que a arte de um modelo ficou velha.
+            const nome = itens[idx].nome_modelo || itens[idx].produto || ('modelo ' + (idx + 1));
+            console.warn(`[Snapshot] Item ${idx} (${nome}):`, e && e.message || e);
+            falhas.push({ idx: idx, nome: nome, motivo: (e && e.message) || String(e) });
         }
     }
-    console.log(`[Snapshot] Regeneração concluída para OS ${osId}`);
+    console.log(`[Snapshot] Regeneração concluída para OS ${osId}: ${gerados} gerado(s), ${falhas.length} falha(s)`);
+    return { gerados: gerados, falhas: falhas };
 }
 window.forceRegenerateSnapshots = forceRegenerateSnapshots;
 
@@ -30075,6 +30084,26 @@ async function gerarLinkCliente(osId, numero) {
         return;
     }
     try {
+        // 0. A ARTE DE APROVAÇÃO VEM PRIMEIRO, e é esperada até o fim.
+        //
+        // Ela era regerada no FIM desta função, disparada em segundo plano — ou
+        // seja, depois de o link já estar na área de transferência. O atendente
+        // podia colar o link no WhatsApp enquanto a imagem nova ainda subia, e
+        // o cliente aprovava a arte anterior à correção, sem nada dizendo isso.
+        //
+        // Antes do passo 1 de propósito: dali em diante o status do pedido já
+        // foi mexido, e desistir no meio deixaria a tela contando uma coisa e o
+        // banco outra.
+        toast('⏳ Atualizando a arte de aprovação...', 'info');
+        const regeneracao = await forceRegenerateSnapshots(osId);
+        if (regeneracao && regeneracao.falhas && regeneracao.falhas.length) {
+            const nomes = regeneracao.falhas.map(f => f.nome).join(', ');
+            toast('Não consegui atualizar a arte de aprovação de: ' + nomes
+                + '. O link NÃO foi gerado, porque o cliente veria a arte anterior. '
+                + 'Tente de novo; se insistir, avise o suporte.', 'error');
+            return;
+        }
+
         const novoStatus = 'Aguard. Aprovação';
 
         // 1. Atualizar overrides e estado local primeiro
@@ -30118,11 +30147,6 @@ async function gerarLinkCliente(osId, numero) {
 
         // 6. Recarregar lista
         loadOrdens();
-
-        // 7. Regenerar snapshots/imagens em segundo plano
-        forceRegenerateSnapshots(osId).catch(snapErr => {
-            console.warn('[Gerar Link] Erro ao regenerar snapshots:', snapErr);
-        });
 
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
