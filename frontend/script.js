@@ -21210,6 +21210,26 @@ function atualizarPainelProducao() {
 }
 window.atualizarPainelProducao = atualizarPainelProducao;
 
+/**
+ * Pedido que já saiu da arte para a produção.
+ *
+ * Na Lista de Arte ele conta SÓ no card "Pedidos Concluídos": não entra em
+ * "Em Arte", "Em Aprovação", "Pedidos Aprovados" nem "TODOS", e não aparece na
+ * tabela da página. O trabalho dele agora é na Lista de Impressão.
+ *
+ * A lista de sinais é a mesma que o card "Pedidos Concluídos" sempre usou, de
+ * propósito: usar um recorte mais estreito aqui deixaria pedido fora de todos
+ * os cards ao mesmo tempo. 'EM PRODUCAO' é o que liberarParaProducao() grava.
+ */
+const SINAIS_SAIU_DA_ARTE = ['EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM IMPRESSÃO', 'PRODUCAO', 'PRODUÇÃO', 'FINALIZADA'];
+
+function pedidoSaiuDaArte(os) {
+    if (!os) return false;
+    const st = (os.status || '').trim().toUpperCase();
+    const si = (os.status_interno || '').trim().toUpperCase();
+    return SINAIS_SAIU_DA_ARTE.includes(st) || SINAIS_SAIU_DA_ARTE.includes(si);
+}
+
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
     const tbodyArte = document.getElementById('tbody-arte');
@@ -21343,6 +21363,7 @@ function renderOrdens() {
     let ordensFilaArte = [];
     let ordensAprovacao = [];
     let ordensAprovados = [];
+    let ordensConcluidosArte = [];
 
     const validReprovadoList = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
     const validApprovedList = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
@@ -21401,7 +21422,11 @@ function renderOrdens() {
         const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
         const isEmAprovacaoFila = (os.status_calculado === 'Enviar Arte' || os.status_calculado === 'Aguard. Aprovação' || os.status_calculado === 'Arte Pronta' || os.status_calculado === 'Aprovada');
 
-        if (isTotalmenteAprovado) {
+        if (pedidoSaiuDaArte(os)) {
+            // status_calculado continua sendo calculado acima porque a tabela da
+            // Lista de Impressão usa esse campo para o badge do pedido.
+            ordensConcluidosArte.push(os);
+        } else if (isTotalmenteAprovado) {
             ordensAprovados.push(os);
         } else if (isEmAprovacaoFila) {
             ordensAprovacao.push(os);
@@ -21426,16 +21451,10 @@ function renderOrdens() {
     const statItensAprovadosArteEl = document.getElementById('stat-itens-aprovados-arte');
     if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = ordensAprovados.length;
 
-    // "Pedidos Concluídos" = pedidos que já saíram da arte para a produção.
-    // Este card repetia o valor de "Pedidos Aprovados" e por isso nunca dizia nada
-    // de novo. O sinal é o mesmo que liberarParaProducao() grava (EM PRODUCAO),
-    // mais os pedidos já finalizados.
-    const saiuDaArte = ['EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM IMPRESSÃO', 'PRODUCAO', 'PRODUÇÃO', 'FINALIZADA'];
-    const totalConcluidosArte = state.ordens.filter(os => {
-        const st = (os.status || '').trim().toUpperCase();
-        const si = (os.status_interno || '').trim().toUpperCase();
-        return saiuDaArte.includes(st) || saiuDaArte.includes(si);
-    }).length;
+    // "Pedidos Concluídos" = pedidos que já saíram da arte para a produção
+    // (o sinal é o mesmo que liberarParaProducao() grava, mais os finalizados).
+    // É o único card onde esses pedidos aparecem.
+    const totalConcluidosArte = ordensConcluidosArte.length;
 
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
     if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalConcluidosArte;
@@ -21448,7 +21467,8 @@ function renderOrdens() {
     if (state.filtroStatusArte === 'Aprovada') {
         baseOrdensArte = ordensAprovados;
     } else if (state.filtroStatusArte) {
-        baseOrdensArte = state.ordens;
+        // state.ordens não: traria de volta os pedidos que já saíram da arte.
+        baseOrdensArte = [...ordensFilaArte, ...ordensAprovacao, ...ordensAprovados];
     } else if (activeFilaTipo === 'aprovados') {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
