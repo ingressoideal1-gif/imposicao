@@ -15953,6 +15953,22 @@ function podeDestravarModeloAprovado() {
 window.podeDestravarModeloAprovado = podeDestravarModeloAprovado;
 
 /**
+ * Quem libera um pedido para a produção.
+ *
+ * Regra do usuário, 19/08/2026: só o administrador. É o clique que tira o
+ * pedido da arte e o põe na fila da impressora — depois dele o material vai
+ * para o papel, e papel impresso não volta atrás.
+ *
+ * Papel desconhecido responde NÃO, como nas outras regras de negócio: o custo
+ * de negar é um botão cinza por um instante durante a partida; o de liberar
+ * seria a regra não valer justamente no primeiro desenho da tela.
+ */
+function podeLiberarParaProducao() {
+    return papelAtual() === 'admin';
+}
+window.podeLiberarParaProducao = podeLiberarParaProducao;
+
+/**
  * Modelo aprovado pelo cliente. O selo na tela escreve "✅ APROVADO".
  *
  * Lê os dois campos porque a tela e o banco falam línguas diferentes: a UI usa
@@ -22316,7 +22332,11 @@ function renderOrdens() {
 
                                 // 4) Liberar p/ Produção (quando aprovada e entrega não está alterada/corrigir)
                                 if (isAprovada && !isEntregaAlterada) {
-                                    btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
+                                    // Só o administrador libera para produção. O botão
+                                    // continua à vista, travado, dizendo a quem pedir —
+                                    // escondê-lo faria o atendente procurar o que sumiu.
+                                    const podeLiberar = podeLiberarParaProducao();
+                                    btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${podeLiberar ? '' : 'disabled title="Só o administrador libera um pedido para produção"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!podeLiberar ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
                                 }
 
                                 // O botão do QR do pedido (5, aqui) saiu em 17/08/2026 junto
@@ -25823,6 +25843,12 @@ window.alterarEntregaDadosStatus = async function(osIntNum, currentStatus) {
  * Usado quando a arte foi aprovada e o pedido pode ir para impressão.
  */
 window.liberarParaProducao = async function(osId) {
+    // Aqui, e não só no botão: quem digitar a função no console passaria direto.
+    if (!podeLiberarParaProducao()) {
+        toast('Só o administrador libera um pedido para produção. Peça a ele.', 'warning');
+        return;
+    }
+
     if (!confirm('Liberar este pedido para PRODUÇÃO / IMPRESSÃO?')) return;
 
     try {

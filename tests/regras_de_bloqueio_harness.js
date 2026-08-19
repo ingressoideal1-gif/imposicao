@@ -44,6 +44,7 @@ function extrairFuncao(src, nome) {
 }
 
 const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado',
+               'podeLiberarParaProducao',
                'modeloEstaAprovado', 'quemAprovouOModelo', 'tituloDoModeloAprovado',
                'bloqueioDeModeloAprovado',
                'linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
@@ -109,6 +110,38 @@ function comoOperadorLocal(papel, st) {
     ok(comoUsuario('admin').podeDestravarModeloAprovado(), 'administrador destrava');
     ok(!comoUsuario('designer').podeDestravarModeloAprovado(), 'o designer nao destrava');
     ok(!api({}, {}).podeDestravarModeloAprovado(), 'sem papel conhecido, ninguem destrava');
+})();
+
+// ─── 3b. Quem libera o pedido para producao ──────────────────────────────────
+//
+// Usuario, 19/08/2026: so o ADM. E o clique que tira o pedido da arte e o poe na
+// fila da impressora -- depois dele o material vai para o papel, e papel
+// impresso nao volta atras.
+
+(function soOAdministradorLiberaParaProducao() {
+    ok(comoUsuario('admin').podeLiberarParaProducao(), 'o administrador libera');
+    ok(!comoUsuario('gerente').podeLiberarParaProducao(), 'o gerente NAO libera');
+    ok(!comoUsuario('atendimento').podeLiberarParaProducao(), 'o atendimento nao libera');
+    ok(!comoUsuario('designer').podeLiberarParaProducao(), 'o designer nao libera');
+    ok(!comoUsuario('impressor').podeLiberarParaProducao(), 'nem o impressor');
+    ok(!comoUsuario('visualizador').podeLiberarParaProducao(), 'nem o visualizador');
+    ok(!api({}, {}).podeLiberarParaProducao(), 'e sem papel conhecido, ninguem libera');
+    // Na estacao da grafica o operador entra so pelo codigo local.
+    ok(comoOperadorLocal('admin').podeLiberarParaProducao(), 'o adm da estacao tambem libera');
+})();
+
+(function oBotaoEAFuncaoConferemOsDois() {
+    // Botao cinza nao impede ninguem de chamar a funcao pelo console.
+    const i = SCRIPT.indexOf('window.liberarParaProducao = async function');
+    ok(i > 0, 'o liberarParaProducao continua existindo');
+    const trecho = SCRIPT.slice(i, i + 500);
+    ok(/podeLiberarParaProducao\(\)/.test(trecho), 'a funcao confere quem esta chamando');
+    ok(/return;/.test(trecho), 'e desiste quando nao pode');
+
+    ok(/const podeLiberar = podeLiberarParaProducao\(\);/.test(SCRIPT),
+        'e o botao da Lista de Arte tambem pergunta');
+    ok(/disabled title="Só o administrador libera um pedido para produção"/.test(SCRIPT),
+        'travado, dizendo a quem pedir');
 })();
 
 // ─── 4. Qual modelo esta aprovado ────────────────────────────────────────────
