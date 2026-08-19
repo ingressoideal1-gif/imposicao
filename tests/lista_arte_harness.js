@@ -13,6 +13,7 @@ const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+const INDEX = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 
 let falhas = 0;
 let total = 0;
@@ -95,6 +96,49 @@ const { pedidoSaiuDaArte } = new Function(
         'o filtro de status nao varre state.ordens');
     ok(/baseOrdensArte = \[\.\.\.ordensFilaArte, \.\.\.ordensAprovacao, \.\.\.ordensAprovados\];/.test(SCRIPT),
         'ele varre so quem continua na arte');
+})();
+
+// ─── Os cinco cards abrem a lista deles ──────────────────────────────────────
+//
+// Usuario, 19/08/2026: "ao clicar em qualquer um dos cards, deve atualizar a
+// pagina conforme os status de cada card". O de Concluidos era o unico mudo --
+// e, desde que os pedidos em producao passaram a contar SO nele, era tambem o
+// unico caminho para ve-los nesta pagina. Card que conta e nao abre vira beco.
+
+(function todosOsCincoCardsAbremAFilaDeles() {
+    const CARDS = [
+        ['card-stat-pedidos-todos', 'todos'],
+        ['card-stat-pedidos-fila', 'fila'],
+        ['card-stat-pedidos-aprovacao', 'aprovacao'],
+        ['card-stat-pedidos-aprovados', 'aprovados'],
+        ['card-stat-pedidos-concluidos', 'concluidos'],
+    ];
+    CARDS.forEach(([id, tipo]) => {
+        const i = INDEX.indexOf('id="' + id + '"');
+        ok(i > 0, 'o card ' + id + ' existe');
+        // A tag inteira: `class` vem ANTES do `id` no markup, e uma fatia que
+        // comecasse no id perderia justamente o `clickable-card`.
+        const linha = INDEX.slice(INDEX.lastIndexOf('<div', i), INDEX.indexOf('>', i));
+        ok(linha.includes(`setFiltroFilaArte('${tipo}')`), id + ' filtra por ' + tipo, linha);
+        ok(linha.includes('clickable-card'), id + ' se apresenta como clicavel');
+        ok(linha.includes('title="'), id + ' diz em texto o que o clique faz');
+    });
+})();
+
+(function oCardDeConcluidosAbreOBaldeDeConcluidos() {
+    ok(/activeFilaTipo === 'concluidos'\)\s*\{\s*baseOrdensArte = ordensConcluidosArte;/.test(SCRIPT),
+        'a fila de Concluidos e o balde que o card conta');
+    ok(/Pedidos Conclu[ií]dos`/.test(SCRIPT), 'e a tabela muda de titulo');
+    ok(/cardConcluidosEl\.style\.border/.test(SCRIPT), 'e o card escolhido se destaca');
+    ok(/\[cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl\]/.test(SCRIPT),
+        'e ele volta ao normal quando outro card e escolhido');
+})();
+
+(function aCasaVaziaDeConcluidosNaoFalaDeArte() {
+    // "Nenhum pedido em fase de arte" debaixo do card de Concluidos diria a
+    // coisa errada sobre a coisa certa: eles justamente nao estao mais em arte.
+    ok(/Nenhum pedido saiu da arte para a produ/.test(SCRIPT),
+        'a casa vazia de Concluidos tem frase propria');
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

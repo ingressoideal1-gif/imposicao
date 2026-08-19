@@ -21777,6 +21777,8 @@ function renderOrdens() {
     } else if (state.filtroStatusArte) {
         // state.ordens não: traria de volta os pedidos que já saíram da arte.
         baseOrdensArte = [...ordensFilaArte, ...ordensAprovacao, ...ordensAprovados];
+    } else if (activeFilaTipo === 'concluidos') {
+        baseOrdensArte = ordensConcluidosArte;
     } else if (activeFilaTipo === 'aprovados') {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
@@ -21792,7 +21794,9 @@ function renderOrdens() {
     // Atualizar título da tabela e destaque nos cards
     const tituloTabelaArteEl = document.getElementById('titulo-tabela-arte');
     if (tituloTabelaArteEl) {
-        if (activeFilaTipo === 'aprovados') {
+        if (activeFilaTipo === 'concluidos') {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">🏆</span> Pedidos Concluídos`;
+        } else if (activeFilaTipo === 'aprovados') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">✅</span> Fila de Aprovados`;
         } else if (activeFilaTipo === 'aprovacao') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">⏳</span> Fila de Aprovação`;
@@ -21807,15 +21811,19 @@ function renderOrdens() {
     const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
     const cardAprovacaoEl = document.getElementById('card-stat-pedidos-aprovacao');
     const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
+    const cardConcluidosEl = document.getElementById('card-stat-pedidos-concluidos');
 
-    [cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl].forEach(c => {
+    [cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl].forEach(c => {
         if (c) {
             c.style.border = '1px solid var(--border)';
             c.style.boxShadow = 'none';
         }
     });
 
-    if (activeFilaTipo === 'aprovados' && cardAprovadosEl) {
+    if (activeFilaTipo === 'concluidos' && cardConcluidosEl) {
+        cardConcluidosEl.style.border = '2px solid var(--amber)';
+        cardConcluidosEl.style.boxShadow = '0 0 12px rgba(245, 158, 11, 0.3)';
+    } else if (activeFilaTipo === 'aprovados' && cardAprovadosEl) {
         cardAprovadosEl.style.border = '2px solid var(--teal)';
         cardAprovadosEl.style.boxShadow = '0 0 12px rgba(20, 184, 166, 0.3)';
     } else if (activeFilaTipo === 'aprovacao' && cardAprovacaoEl) {
@@ -22085,6 +22093,15 @@ function renderOrdens() {
 
         if (!filteredArte.length) {
             tbodyArte.innerHTML = '';
+            // A frase segue a fila escolhida. "Nenhum pedido em fase de arte"
+            // debaixo do card de Concluídos diria a coisa errada sobre a coisa
+            // certa: eles justamente NÃO estão mais em arte.
+            const textoVazio = emptyArte ? emptyArte.querySelector('p') : null;
+            if (textoVazio) {
+                textoVazio.textContent = activeFilaTipo === 'concluidos'
+                    ? 'Nenhum pedido saiu da arte para a produção ainda.'
+                    : 'Nenhum pedido em fase de arte encontrado.';
+            }
             if (emptyArte) emptyArte.style.display = 'block';
             if (tableArte) tableArte.style.display = 'none';
         } else {
