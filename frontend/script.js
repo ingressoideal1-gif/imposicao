@@ -24537,31 +24537,22 @@ async function loadDadosEntregaInterno(osId, osNum) {
             }
         }
 
-        // Se ainda não achou o texto em pedidos_artes, buscar mensagens enviadas EXCLUSIVAMENTE pelo cliente em propostas_chat
-        if (!correcaoTexto) {
-            try {
-                const { data: chatData } = await supabaseClient
-                    .from('propostas_chat')
-                    .select('*')
-                    .eq('id_int', numInt)
-                    .order('id', { ascending: false })
-                    .limit(10);
-
-                if (chatData && chatData.length > 0) {
-                    const msgCliente = chatData.find(c => {
-                        const rNome = String(c.remetente_nome || c.setor || c.tipo || '').toLowerCase();
-                        const m = c.mensagem || '';
-                        const isEngineLog = m.toLowerCase().includes('engine') || m.toLowerCase().includes('motivo técnico') || m.toLowerCase().includes('status alterado pela');
-                        return !isEngineLog && (rNome.includes('cliente') || m.includes('REPORTOU') || m.includes('SOLICITAÇÃO') || m.includes('Novo Endereço') || m.includes('Dados Faturamento') || m.includes('ALTERAÇÃO') || m.length > 5);
-                    });
-                    if (msgCliente && msgCliente.mensagem) {
-                        correcaoTexto = msgCliente.mensagem;
-                    }
-                }
-            } catch (chatErr) {
-                console.warn('[loadDadosEntregaInterno] Erro ao buscar propostas_chat:', chatErr);
-            }
-        }
+        // A solicitação do cliente mora SÓ em `pedidos_artes.observacoes`, que é
+        // tabela NOSSA, na chave que a tela do cliente grava.
+        //
+        // Havia aqui um segundo caminho: não achando o texto, o painel lia
+        // `propostas_chat` — o chat do sistema PARCEIRO — e escolhia uma
+        // mensagem com um filtro que aceitava qualquer coisa com mais de 5
+        // caracteres. Foi assim que "Registrada nova cobrança PIX, valor:
+        // R$ 250,00", escrita pelo Financeiro do parceiro, apareceu no painel
+        // como pedido de alteração do cliente (pedido 20928, 19/08/2026).
+        //
+        // O caminho não foi consertado, foi REMOVIDO: nenhuma mensagem nossa
+        // jamais chegou àquele chat, porque todas as nossas gravações mandam a
+        // coluna `remetente_nome`, que não existe lá (a coluna é `autor_nome`),
+        // e o PostgREST recusa a linha inteira — com o erro engolido por um
+        // catch vazio. Ou seja: o que este trecho lia era, sempre e só, dado do
+        // parceiro apresentado como se fosse fala do cliente.
 
 
 
@@ -24617,8 +24608,14 @@ async function loadDadosEntregaInterno(osId, osNum) {
                     <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; padding: 12px 14px; color: #fca5a5; font-size: 0.92rem; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${correcaoTexto}</div>
                 </div>
             `;
-        } else if (obsContainer && !correcaoTexto) {
-            obsContainer.innerHTML = `
+        } else if (obsContainer) {
+            // Sem texto, a frase genérica só vale se o pedido REALMENTE está com
+            // correção pendente. Ela aparecia sempre, e num pedido em que o
+            // cliente não pediu nada — `entrega_dados` vazio — dizia que ele
+            // tinha pedido revisão.
+            const statusEntrega = String((paData && paData.entrega_dados) || '').trim().toUpperCase();
+            const temCorrecaoPendente = (statusEntrega === 'CORRIGIR' || statusEntrega === 'ALTERADO');
+            obsContainer.innerHTML = temCorrecaoPendente ? `
                 <div style="margin-top: 10px;">
                     <div style="font-size: 0.85rem; font-weight: 800; color: #f97316; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-comment-dots"></i> Solicitação de Alteração pelo Cliente:
@@ -24627,7 +24624,7 @@ async function loadDadosEntregaInterno(osId, osNum) {
                         O cliente solicitou revisão nos dados de entrega e faturamento.
                     </div>
                 </div>
-            `;
+            ` : '';
         }
     } catch (e) {
         console.error('Erro ao carregar detalhes de entrega interno:', e);
