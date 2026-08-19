@@ -216,17 +216,38 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
     // ele. E `noreferrer` implica `noopener`, entao os dois teriam de voltar
     // juntos. Quem reintroduzir qualquer um dos dois desliga o reaproveitamento
     // sem quebrar nada: o link continua abrindo, so que sempre em aba nova.
-    let iVibe = SCRIPT.indexOf('vibe.ai-ideal.com.br');
-    ok(iVibe > 0, 'o link do Vibe continua existindo');
-    while (true) {
-        const i = SCRIPT.indexOf('vibe.ai-ideal.com.br', iVibe);
-        if (i < 0) break;
+    let i = SCRIPT.indexOf('target="${ABA_DO_VIBE}"');
+    ok(i > 0, 'ha ancora abrindo na aba do Vibe');
+    let quantas = 0;
+    while (i > 0) {
         const tag = SCRIPT.slice(SCRIPT.lastIndexOf('<a ', i), SCRIPT.indexOf('>', i));
         ok(!/rel="[^"]*noopener/.test(tag) && !/rel="[^"]*noreferrer/.test(tag),
-            'o link do Vibe nao traz noopener/noreferrer, que anulariam o nome da aba',
+            'a ancora do Vibe nao traz noopener/noreferrer, que anulariam o nome da aba',
             tag.slice(0, 120));
-        iVibe = i + 1;
+        quantas++;
+        i = SCRIPT.indexOf('target="${ABA_DO_VIBE}"', i + 1);
     }
+    ok(quantas === 2, 'as duas ancoras foram conferidas', quantas);
+})();
+
+// ─── Em que menu do parceiro o pedido abre ───────────────────────────────────
+
+(function oVibeAbreNoMenuPedido() {
+    // Pedido do usuario em 19/08/2026: estava caindo no menu Produto.
+    const i = SCRIPT.indexOf('function linkDoPedidoNoVibe');
+    ok(i > 0, 'o endereco do Vibe mora numa funcao');
+    const aba = (SCRIPT.match(/const ABA_DO_PEDIDO_NO_VIBE = '([^']+)'/) || [null, ''])[1];
+    const link = new Function('ABA_DO_PEDIDO_NO_VIBE',
+        SCRIPT.slice(i, SCRIPT.indexOf('\n}', i) + 2) + '\nreturn linkDoPedidoNoVibe;')(aba);
+
+    ok(link('20928') === 'https://vibe.ai-ideal.com.br/orcamentos/20928/editar?tab=pedido',
+        'e ele leva ao menu Pedido', link('20928'));
+    ok(!/tab=produtos/.test(SCRIPT), 'nenhum link ficou no menu Produto');
+
+    // Duas ancoras, um endereco: sem a funcao, mudar o menu exigiria caçar as
+    // duas, e a que passasse batida abriria noutro lugar.
+    const usos = SCRIPT.match(/linkDoPedidoNoVibe\(os\.numero\)/g) || [];
+    ok(usos.length === 2, 'as duas telas montam o endereco pela mesma funcao', usos.length);
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

@@ -21596,6 +21596,21 @@ window.rotuloDoCliente = rotuloDoCliente;
 // perde é a proteção contra a página aberta mexer nesta pela `window.opener` —
 // e o destino aqui é o ERP do parceiro, o mesmo sistema de onde o pedido veio.
 const ABA_DO_VIBE = 'vibe-ideal';
+
+/**
+ * O endereço de um pedido no sistema parceiro.
+ *
+ * `tab` escolhe o menu em que a tela do Vibe abre. Estava em `produtos` e o
+ * usuário pediu `pedido` — é ali que ele quer cair ao clicar no ícone do Vibe.
+ * O nome da aba é vocabulário do parceiro, então mora nesta constante: se eles
+ * mudarem o rótulo, é uma palavra a trocar, e não dois links a caçar.
+ */
+const ABA_DO_PEDIDO_NO_VIBE = 'pedido';
+function linkDoPedidoNoVibe(numero) {
+    return 'https://vibe.ai-ideal.com.br/orcamentos/' + numero
+         + '/editar?tab=' + ABA_DO_PEDIDO_NO_VIBE;
+}
+window.linkDoPedidoNoVibe = linkDoPedidoNoVibe;
 const ABA_DO_CLIENTE = 'cliente-ideal';
 
 // ──── Link direto para um pedido ──────────────────────────────────────────
@@ -22358,7 +22373,7 @@ function renderOrdens() {
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
+                                <a href="${linkDoPedidoNoVibe(os.numero)}" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 22px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));" />
                                 </a>
                                 <button class="btn btn-sm" onclick="event.stopPropagation(); copiarLinkDoPedido('${os.numero}')" title="Copiar o link direto deste pedido — quem abrir cai dentro dele" style="padding: 3px 6px; font-size: 0.85rem; line-height: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer;">🔗</button>
@@ -25507,7 +25522,7 @@ function renderAmostrasOSItens(osId) {
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
                             <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                 <span>#${os.numero || '--'}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.78rem; color: #38bdf8;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
+                                <a href="${linkDoPedidoNoVibe(os.numero)}" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.78rem; color: #38bdf8;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 17px; width: auto; display: block; object-fit: contain;" />
                                     <span style="font-weight: 700;">Vibe</span>
                                 </a>
