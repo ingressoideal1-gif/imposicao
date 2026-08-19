@@ -3,6 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
+    <!-- O painel tambem atende em /pedido/<numero>, o link direto que se manda ao
+         parceiro. Naquele endereco os caminhos relativos desta pagina (e os que o
+         JS gera, como o icone do Vibe na linha do pedido) resolveriam para
+         /pedido/script.js e viriam de volta como HTML, quebrando a pagina
+         inteira. Esta base resolve todos eles contra a raiz, de uma vez.
+         Nao ha ancora relativa nenhuma no documento, entao nada mais muda. -->
+    <base href="/">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"

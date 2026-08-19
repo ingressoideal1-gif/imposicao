@@ -70,6 +70,10 @@
       "destination": "/frontend/cliente.html"
     },
     {
+      "source": "/pedido/:match*",
+      "destination": "/frontend/index.html"
+    },
+    {
       "source": "/",
       "destination": "/frontend/index.html"
     },

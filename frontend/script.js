@@ -21584,6 +21584,92 @@ function rotuloDoCliente(os) {
 }
 window.rotuloDoCliente = rotuloDoCliente;
 
+// ──── Link direto para um pedido ──────────────────────────────────────────
+//
+// `https://ideal-imposition.vercel.app/pedido/20928` abre o painel já dentro do
+// pedido 20928. É o endereço que se manda ao parceiro.
+//
+// CAMINHO, e não `?pedido=20928`, por um motivo prático: quando a pessoa não
+// está logada, o login do Supabase volta para
+// `window.location.origin + window.location.pathname` — e a query string se
+// perde no caminho de ida. O caminho sobrevive, então o link continua valendo
+// para quem precisa entrar antes.
+
+/** O endereço que se copia e manda. */
+function linkDiretoDoPedido(numero) {
+    return window.location.origin + '/pedido/' + String(numero);
+}
+window.linkDiretoDoPedido = linkDiretoDoPedido;
+
+/** O número que veio no endereço, ou null quando não é um link direto. */
+function pedidoDoLinkDireto() {
+    const m = String((window.location && window.location.pathname) || '').match(/^\/pedido\/(\d+)\/?$/i);
+    return m ? m[1] : null;
+}
+window.pedidoDoLinkDireto = pedidoDoLinkDireto;
+
+let _linkDiretoJaAberto = false;
+
+/**
+ * Abre o pedido que o endereço pediu — uma vez só, quando os pedidos já
+ * chegaram.
+ *
+ * Limpa os filtros e escreve o número na busca de propósito. O pedido pode
+ * estar escondido atrás do filtro de designer que o perfil aplica sozinho, ou
+ * de um recorte que ficou da sessão anterior, e um link que abre uma lista
+ * vazia é pior do que link nenhum. Escrever o número na caixa resolve E
+ * explica: quem chegou pelo link vê ali por que só há uma linha na tela.
+ *
+ * Escolhe a tela pelo estado do pedido: quem já saiu da arte mora no Painel de
+ * Produção, e mandá-lo para a Lista de Arte mostraria uma lista sem ele.
+ */
+function abrirPedidoDoLinkDireto() {
+    if (_linkDiretoJaAberto) return;
+    const numero = pedidoDoLinkDireto();
+    if (!numero) return;
+
+    const os = (state.ordens || []).find(o => String(o.numero) === String(numero));
+    if (!os) return;  // ainda carregando — tenta de novo no próximo desenho
+
+    _linkDiretoJaAberto = true;
+
+    // Exatamente o que clicar na linha da Lista de Arte faz: abre o pedido, com
+    // os modelos e as artes. "Cair dentro do pedido" é isto. Parar na lista com
+    // a linha só destacada deixaria para o parceiro mais um clique a dar, e um
+    // filtro qualquer da sessão anterior poderia esconder justamente aquela
+    // linha — link que abre lista vazia é pior do que link nenhum.
+    if (typeof navigateToAmostrasFromOS === 'function') {
+        navigateToAmostrasFromOS(os.id);
+        return;
+    }
+
+    // Sem ela, ao menos a lista em que o pedido está.
+    if (typeof window.showView === 'function') {
+        window.showView(pedidoSaiuDaArte(os) ? 'view-lista-impressao' : 'view-lista-arte');
+    }
+}
+
+/** Copia o link direto do pedido para a área de transferência. */
+async function copiarLinkDoPedido(numero) {
+    const url = linkDiretoDoPedido(numero);
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch (e) {
+        // Área de transferência bloqueada (acontece fora de HTTPS e em alguns
+        // navegadores da gráfica). O caminho velho ainda funciona.
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e2) {}
+        document.body.removeChild(ta);
+    }
+    toast('🔗 Link do pedido copiado: ' + url, 'success');
+}
+window.copiarLinkDoPedido = copiarLinkDoPedido;
+
+window.abrirPedidoDoLinkDireto = abrirPedidoDoLinkDireto;
+
 function pedidoSaiuDaArte(os) {
     if (!os) return false;
     const st = (os.status || '').trim().toUpperCase();
@@ -22261,6 +22347,7 @@ function renderOrdens() {
                                 <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 22px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));" />
                                 </a>
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); copiarLinkDoPedido('${os.numero}')" title="Copiar o link direto deste pedido — quem abrir cai dentro dele" style="padding: 3px 6px; font-size: 0.85rem; line-height: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer;">🔗</button>
                             </div>
                         </td>
 
@@ -22362,6 +22449,10 @@ function renderOrdens() {
             }).join('');
         }
     }
+
+    // Fora da pilha do próprio desenho: `abrirPedidoDoLinkDireto` chama
+    // `renderOrdens` de novo, e chamá-lo aqui direto seria recursão.
+    if (!_linkDiretoJaAberto && pedidoDoLinkDireto()) setTimeout(abrirPedidoDoLinkDireto, 0);
 }
 
 /**
