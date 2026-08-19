@@ -185,6 +185,50 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
         'o renderOrdens agenda a abertura');
 })();
 
+// ─── As abas que o painel reaproveita ────────────────────────────────────────
+//
+// `_blank` quer dizer "sempre outra aba": abrir cinco pedidos no Vibe deixava
+// cinco abas do Vibe. Um NOME faz o primeiro clique abrir a aba e os seguintes
+// trocarem o conteudo dela.
+
+(function asDuasAbasTemNome() {
+    ok(/const ABA_DO_VIBE = 'vibe-ideal';/.test(SCRIPT), 'a aba do sistema parceiro tem nome');
+    ok(/const ABA_DO_CLIENTE = 'cliente-ideal';/.test(SCRIPT), 'e a do link do cliente tambem');
+})();
+
+(function oIconeDoVibeAbreSempreNaMesmaAba() {
+    const usos = SCRIPT.match(/target="\$\{ABA_DO_VIBE\}"/g) || [];
+    ok(usos.length === 2, 'as duas telas que levam ao Vibe usam a mesma aba', usos.length);
+    ok(!/vibe\.ai-ideal\.com\.br[^`]*target="_blank"/.test(SCRIPT),
+        'e nenhuma delas ficou no _blank');
+})();
+
+(function oLinkDoClienteAbreSempreNaMesmaAba() {
+    const usos = SCRIPT.match(/ABA_DO_CLIENTE\)/g) || [];
+    ok(usos.length >= 1, 'o link do cliente abre na aba nomeada', usos.length);
+    ok(!/window\.open\('\$\{escapeJsAttr\(linkSalvo\)\}','_blank'\)/.test(SCRIPT),
+        'o botao da lista nao abre mais aba nova a cada clique');
+})();
+
+(function oNoopenerNaoPodeVoltarJuntoDoNome() {
+    // Medido num Chrome, nao suposto: com `rel="noopener"` o navegador IGNORA o
+    // nome e cria uma aba por clique -- +2 abas em dois cliques, contra +1 sem
+    // ele. E `noreferrer` implica `noopener`, entao os dois teriam de voltar
+    // juntos. Quem reintroduzir qualquer um dos dois desliga o reaproveitamento
+    // sem quebrar nada: o link continua abrindo, so que sempre em aba nova.
+    let iVibe = SCRIPT.indexOf('vibe.ai-ideal.com.br');
+    ok(iVibe > 0, 'o link do Vibe continua existindo');
+    while (true) {
+        const i = SCRIPT.indexOf('vibe.ai-ideal.com.br', iVibe);
+        if (i < 0) break;
+        const tag = SCRIPT.slice(SCRIPT.lastIndexOf('<a ', i), SCRIPT.indexOf('>', i));
+        ok(!/rel="[^"]*noopener/.test(tag) && !/rel="[^"]*noreferrer/.test(tag),
+            'o link do Vibe nao traz noopener/noreferrer, que anulariam o nome da aba',
+            tag.slice(0, 120));
+        iVibe = i + 1;
+    }
+})();
+
 // ─── Fim ─────────────────────────────────────────────────────────────────────
 
 if (falhas) {

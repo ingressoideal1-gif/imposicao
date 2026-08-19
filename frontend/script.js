@@ -21584,6 +21584,20 @@ function rotuloDoCliente(os) {
 }
 window.rotuloDoCliente = rotuloDoCliente;
 
+// ──── As abas que o painel reaproveita ────────────────────────────────────
+//
+// `_blank` quer dizer "sempre outra aba": abrir cinco pedidos no Vibe deixava
+// cinco abas do Vibe abertas. Um NOME faz o primeiro clique abrir a aba e os
+// seguintes trocarem o conteúdo dela.
+//
+// Sem `rel="noopener"` de propósito, e isto foi medido num Chrome, não
+// suposto: com `noopener` o navegador ignora o nome e cria uma aba por clique.
+// `noreferrer` implica `noopener`, então os dois tiveram de sair. O que se
+// perde é a proteção contra a página aberta mexer nesta pela `window.opener` —
+// e o destino aqui é o ERP do parceiro, o mesmo sistema de onde o pedido veio.
+const ABA_DO_VIBE = 'vibe-ideal';
+const ABA_DO_CLIENTE = 'cliente-ideal';
+
 // ──── Link direto para um pedido ──────────────────────────────────────────
 //
 // `https://ideal-imposition.vercel.app/pedido/20928` abre o painel já dentro do
@@ -22344,7 +22358,7 @@ function renderOrdens() {
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 22px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));" />
                                 </a>
                                 <button class="btn btn-sm" onclick="event.stopPropagation(); copiarLinkDoPedido('${os.numero}')" title="Copiar o link direto deste pedido — quem abrir cai dentro dele" style="padding: 3px 6px; font-size: 0.85rem; line-height: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer;">🔗</button>
@@ -22396,7 +22410,7 @@ function renderOrdens() {
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
-                                        <button onclick="window.open('${escapeJsAttr(linkSalvo)}','_blank')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
+                                        <button onclick="window.open('${escapeJsAttr(linkSalvo)}','${ABA_DO_CLIENTE}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
                                         <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${escapeJsAttr(os.id)}', '${escapeJsAttr(os.numero)}', '${escapeJsAttr(linkSalvo)}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
@@ -25493,7 +25507,7 @@ function renderAmostrasOSItens(osId) {
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
                             <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                 <span>#${os.numero || '--'}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.78rem; color: #38bdf8;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.78rem; color: #38bdf8;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 17px; width: auto; display: block; object-fit: contain;" />
                                     <span style="font-weight: 700;">Vibe</span>
                                 </a>
@@ -30194,9 +30208,9 @@ async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     const host = window.location.origin;
     const finalUrl = linkUrl || `${host}/cliente.html?os=${osId}`;
 
-    // Apenas abre o link na nova aba — modal de email é aberto SOMENTE quando o
+    // Sempre a MESMA aba do cliente — modal de email é aberto SOMENTE quando o
     // usuário clicar no ícone ✉️ separado na linha do pedido (não automaticamente)
-    window.open(finalUrl, '_blank');
+    window.open(finalUrl, ABA_DO_CLIENTE);
 
     // 2. Atualizar status e recarregar em segundo plano
     const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
