@@ -28139,8 +28139,132 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
     });
 }
 
-// Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
-// Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
+/**
+ * Cor, numeração e formato em memória. A regeneração pode ser chamada de fora do
+ * editor — do botão MARCAR PRONTO, do Criador de Arte —, e sem as tabelas o
+ * desenho sairia sem a camada que falta, calado.
+ */
+async function garantirTabelasDaAmostra() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select('*');       if (data) state.cores = data;       } catch(e) {}
+    if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
+    if (!state.formatos || !state.formatos.length)     try { const { data } = await supabaseClient.from('producao_formatos').select('*');   if (data) state.formatos = data;   } catch(e) {}
+}
+window.garantirTabelasDaAmostra = garantirTabelasDaAmostra;
+
+/** A escala da amostra: 150 DPI, a mesma da janela combinada do editor. */
+const ESCALA_DA_AMOSTRA = 150 / 25.4;
+
+/**
+ * Regera e salva a arte de amostra de UM modelo — a imagem que o cliente vê no
+ * link de aprovação.
+ *
+ * Saiu de dentro do `forceRegenerateSnapshots`, que continua chamando-a item a
+ * item: é o mesmo trabalho, e duplicá-lo faria a arte que o cliente aprova
+ * divergir da que o painel mostra no dia em que só um dos dois fosse corrigido.
+ *
+ * Compõe em canvas próprio, fora da tela, e por isso não depende de o card estar
+ * aberto nem de o desenho visível ter terminado.
+ *
+ * Devolve `false` quando não havia o que gerar (modo PDF, modelo sem camada
+ * nenhuma) e LANÇA quando a geração falhou. Quem chama decide o que fazer: a
+ * regeneração em lote engole, porque não pode parar por causa de um item; o
+ * MARCAR PRONTO avisa, porque ali uma amostra velha vira aprovação do cliente
+ * sobre uma arte que ele não viu.
+ */
+async function regenerarAmostraDoModelo(osId, item, idx, S) {
+    S = S || ESCALA_DA_AMOSTRA;
+    if (item.modo_pdf) return false;
+
+    resolveItemCorNumIds(item, idx);
+    const corId      = item.amostra_cor_id || '';
+    const numId      = item.amostra_num_id || '';
+    const hasArteUrl  = !!(item.arte_url);
+    const hasVersoUrl = !!(item.verso_arte_url);
+
+    if (!corId && !numId && !hasArteUrl && !hasVersoUrl) {
+        console.log(`[Snapshot] Item ${idx} sem camadas, nada a gerar.`);
+        return false;
+    }
+
+    console.log(`[Snapshot] Item ${idx} — cor:${corId||'—'} num:${numId||'—'} arte:${hasArteUrl} verso:${hasVersoUrl}`);
+
+    // ════════════════════════════════════════════════════════════════
+    // CAMINHO RÁPIDO: só tem arte_url — sem cor nem numeração
+    // Copia a URL diretamente para amostra_arte_base64 no banco
+    // (evita falha silenciosa de preload de elementos do DOM)
+    // ════════════════════════════════════════════════════════════════
+    if (!corId && !numId) {
+        try {
+            const updates = {};
+            if (hasArteUrl)  { updates.amostra_arte_base64       = item.arte_url;       item.amostra_arte_base64       = item.arte_url; }
+            if (hasVersoUrl) { updates.verso_amostra_arte_base64 = item.verso_arte_url; item.verso_amostra_arte_base64 = item.verso_arte_url; }
+            if (Object.keys(updates).length > 0 && typeof saveAmostraToDB === 'function') {
+                await saveAmostraToDB(item.id, osId, updates);
+                console.log(`[Snapshot] Item ${idx} — URL da arte copiada diretamente (sem canvas).`);
+            }
+        } catch(e) { throw new Error('não consegui salvar a arte de amostra: ' + (e && e.message || e)); }
+        return true;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // CAMINHO COMPOSTO: tem cor e/ou numeração — compor as camadas via canvas
+    // ════════════════════════════════════════════════════════════════
+    const cor = corId ? (state.cores || []).find(c => c.id === corId) : null;
+    const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
+
+    // Preload SVG/PDF e aguardar carregamento real dos elementos
+    if (num && num.elements && num.elements.length > 0 && typeof preloadAmostraItemPdfElements === 'function') {
+        preloadAmostraItemPdfElements(num, idx, osId, item);
+        const svgEls = num.elements.filter(e => e && (e.type === 'SVG' || e.type === 'PDF'));
+        if (svgEls.length > 0) {
+            await new Promise(resolve => {
+                let waited = 0;
+                const check = setInterval(() => {
+                    waited += 100;
+                    const allReady = svgEls.every(e => e._svgImage || e._pdfCanvas || waited >= 3000);
+                    if (allReady) { clearInterval(check); resolve(); }
+                }, 100);
+            });
+        } else {
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+
+    // Resolver formato: cor > num > primeiro do state > fallback
+    let fmt = null;
+    if (cor && cor.formato_id)  fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
+    if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
+    if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
+    if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+
+    try {
+        // ── FRENTE ──
+        const canvasFront = document.createElement('canvas');
+        await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
+        if (canvasFront.width > 0 && canvasFront.height > 0) {
+            await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
+            console.log(`[Snapshot] Item ${idx} FRENTE composto e salvo.`);
+        }
+        // ── VERSO ──
+        if (item.verso || hasVersoUrl) {
+            const canvasBack = document.createElement('canvas');
+            await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
+            if (canvasBack.width > 0 && canvasBack.height > 0) {
+                await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
+                console.log(`[Snapshot] Item ${idx} VERSO composto e salvo.`);
+            }
+        }
+    } catch (e) { throw new Error('não consegui compor a arte de amostra: ' + (e && e.message || e)); }
+
+    return true;
+}
+window.regenerarAmostraDoModelo = regenerarAmostraDoModelo;
+
+// Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen.
+// Garante que a imagem do link do cliente seja idêntica à janela combinada do
+// editor. Um item que falhar não pode parar os outros — por isso, e só por isso,
+// o erro é engolido aqui.
 async function forceRegenerateSnapshots(osId) {
     // SEMPRE recarregar do banco para pegar a arte mais recente (após alterações)
     if (typeof loadOSItens === 'function') {
@@ -28149,97 +28273,14 @@ async function forceRegenerateSnapshots(osId) {
     const itens = state.osItens[osId] || [];
     if (!itens.length) { console.log('[Snapshot] Nenhum item para OS', osId); return; }
 
-    // Garantir lookup tables carregadas (necessário quando chamado fora do editor)
-    if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select('*');       if (data) state.cores = data;       } catch(e) {}
-    if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
-    if (!state.formatos || !state.formatos.length)     try { const { data } = await supabaseClient.from('producao_formatos').select('*');   if (data) state.formatos = data;   } catch(e) {}
-
-    const S = 150 / 25.4; // 150 DPI — escala idêntica à janela combinada do editor
+    await garantirTabelasDaAmostra();
 
     for (let idx = 0; idx < itens.length; idx++) {
-        const item = itens[idx];
-        if (item.modo_pdf) continue;
-
-        resolveItemCorNumIds(item, idx);
-        const corId      = item.amostra_cor_id || '';
-        const numId      = item.amostra_num_id || '';
-        const hasArteUrl  = !!(item.arte_url);
-        const hasVersoUrl = !!(item.verso_arte_url);
-
-        if (!corId && !numId && !hasArteUrl && !hasVersoUrl) {
-            console.log(`[Snapshot] Item ${idx} sem camadas, pulando.`);
-            continue;
-        }
-
-        console.log(`[Snapshot] Item ${idx} — cor:${corId||'—'} num:${numId||'—'} arte:${hasArteUrl} verso:${hasVersoUrl}`);
-
-        // ════════════════════════════════════════════════════════════════
-        // CAMINHO RÁPIDO: só tem arte_url — sem cor nem numeração
-        // Copia a URL diretamente para amostra_arte_base64 no banco
-        // (evita falha silenciosa de preload de elementos do DOM)
-        // ════════════════════════════════════════════════════════════════
-        if (!corId && !numId) {
-            try {
-                const updates = {};
-                if (hasArteUrl)  { updates.amostra_arte_base64       = item.arte_url;       item.amostra_arte_base64       = item.arte_url; }
-                if (hasVersoUrl) { updates.verso_amostra_arte_base64 = item.verso_arte_url; item.verso_amostra_arte_base64 = item.verso_arte_url; }
-                if (Object.keys(updates).length > 0 && typeof saveAmostraToDB === 'function') {
-                    await saveAmostraToDB(item.id, osId, updates);
-                    console.log(`[Snapshot] Item ${idx} — URL da arte copiada diretamente (sem canvas).`);
-                }
-            } catch(e) { console.warn(`[Snapshot] Item ${idx} fast-path erro:`, e); }
-            continue;
-        }
-
-        // ════════════════════════════════════════════════════════════════
-        // CAMINHO COMPOSTO: tem cor e/ou numeração — compor as camadas via canvas
-        // ════════════════════════════════════════════════════════════════
-        const cor = corId ? (state.cores || []).find(c => c.id === corId) : null;
-        const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
-
-        // Preload SVG/PDF e aguardar carregamento real dos elementos
-        if (num && num.elements && num.elements.length > 0 && typeof preloadAmostraItemPdfElements === 'function') {
-            preloadAmostraItemPdfElements(num, idx, osId, item);
-            const svgEls = num.elements.filter(e => e && (e.type === 'SVG' || e.type === 'PDF'));
-            if (svgEls.length > 0) {
-                await new Promise(resolve => {
-                    let waited = 0;
-                    const check = setInterval(() => {
-                        waited += 100;
-                        const allReady = svgEls.every(e => e._svgImage || e._pdfCanvas || waited >= 3000);
-                        if (allReady) { clearInterval(check); resolve(); }
-                    }, 100);
-                });
-            } else {
-                await new Promise(r => setTimeout(r, 300));
-            }
-        }
-
-        // Resolver formato: cor > num > primeiro do state > fallback
-        let fmt = null;
-        if (cor && cor.formato_id)  fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
-        if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
-        if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
-        if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
-
         try {
-            // ── FRENTE ──
-            const canvasFront = document.createElement('canvas');
-            await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
-            if (canvasFront.width > 0 && canvasFront.height > 0) {
-                await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
-                console.log(`[Snapshot] Item ${idx} FRENTE composto e salvo.`);
-            }
-            // ── VERSO ──
-            if (item.verso || hasVersoUrl) {
-                const canvasBack = document.createElement('canvas');
-                await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
-                if (canvasBack.width > 0 && canvasBack.height > 0) {
-                    await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
-                    console.log(`[Snapshot] Item ${idx} VERSO composto e salvo.`);
-                }
-            }
-        } catch (e) { console.warn(`[Snapshot] Item ${idx} composite erro:`, e); }
+            await regenerarAmostraDoModelo(osId, itens[idx], idx, ESCALA_DA_AMOSTRA);
+        } catch (e) {
+            console.warn(`[Snapshot] Item ${idx}:`, e && e.message || e);
+        }
     }
     console.log(`[Snapshot] Regeneração concluída para OS ${osId}`);
 }
@@ -28476,12 +28517,44 @@ async function decisionAmostraItem(itemId, osId, status) {
     // também passa por aqui, e travar o cliente seria travar justamente quem
     // não tem como consertar a numeração.
     if (status === 'PRONTO' && state.amostrasContainerId !== 'cliente-amostras-itens-container') {
-        const itemAlvo = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+        const itens = state.osItens[osId] || [];
+        const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
+        const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
+
         const divergencia = divergenciaDeCelulasDoModelo(itemAlvo);
         if (divergencia) {
             toast('Este modelo não pode ser marcado PRONTO: ' + textoDaDivergenciaDeCelulas(divergencia)
                 + '. Corrija as linhas do banco — a quantidade do pedido não se altera aqui.', 'warning');
             return;
+        }
+
+        // A arte de aprovação é regerada AQUI, e esperada até o fim (regra do
+        // usuário, 19/08/2026: "deve ser gerada e salva novamente sempre que
+        // clicar em Arte Pronta").
+        //
+        // Antes ela dependia de dois gatilhos frouxos: o `_needsSnapshot`, que
+        // só é ligado por certas edições e dispara 2 s DEPOIS do desenho, e a
+        // regeneração em segundo plano do "Gerar Link", disparada sem espera
+        // logo após o link já ter sido copiado. Nos dois casos o atendente podia
+        // mandar o link antes de a imagem nova subir, e o cliente aprovava a
+        // arte ANTERIOR à correção — sem nada na tela dizendo isso.
+        //
+        // Marcar PRONTO é o momento em que o designer declara que a arte está
+        // pronta. É o lugar certo para congelá-la, e o único que o fluxo
+        // garante que sempre acontece antes de o cliente ver.
+        if (itemAlvo) {
+            try {
+                toast('⏳ Gerando a arte de aprovação...', 'info');
+                await garantirTabelasDaAmostra();
+                await regenerarAmostraDoModelo(osId, itemAlvo, idxAlvo, ESCALA_DA_AMOSTRA);
+            } catch (e) {
+                // Falhar aqui e marcar PRONTO assim mesmo seria mandar o cliente
+                // aprovar a arte velha. Melhor não avançar e dizer por quê.
+                console.error('[Arte Pronta] Falha ao gerar a amostra:', e);
+                toast('Não consegui gerar a arte de aprovação: ' + (e && e.message || e)
+                    + ' — o modelo NÃO foi marcado como pronto. Tente de novo.', 'error');
+                return;
+            }
         }
     }
 
