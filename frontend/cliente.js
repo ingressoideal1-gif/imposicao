@@ -186,6 +186,12 @@ function escapeHtml(valor) {
  * `.pdf` ali dentro vira um `<img>` quebrado — que na tela é indistinguível de
  * um espaço vazio, sem nenhuma mensagem.
  */
+function ehArquivoPdf(v) {
+    const s = String(v || '');
+    if (!s) return false;
+    return /\.pdf($|\?)/i.test(s) || s.toLowerCase().startsWith('data:application/pdf');
+}
+
 function temArteVisivel(item) {
     if (!item) return false;
     if (item.arte_url) return true;
@@ -326,6 +332,20 @@ function renderAmostrasOSItens(osId) {
         // fora porque já tem o seletor de páginas dele.
         const temArteParaDesenhar = !!item.arte_url && (!item.verso || !!item.verso_arte_url);
         const paginaCsv = temCsvVariavel(numDoModelo) && !item.modo_pdf && temArteParaDesenhar;
+
+        // A imagem aprovada (o snapshot composto que o painel salva) é o caminho
+        // normal. Quando ela não existe, o carregamento faz `amostra_arte_base64`
+        // cair para `arte_url` — e uma arte em PDF ali dentro vira um `<img>`
+        // quebrado: um ícone minúsculo, sem legenda, que o cliente lê como "o
+        // pedido não tem arte". Foi o que o 20927 mostrou em 19/08/2026.
+        //
+        // Nesses casos desenhamos ao vivo no canvas, que já compõe cor + arte +
+        // numeração e já sabe ler PDF pelo pdfjsLib — é o MESMO desenho que o
+        // painel mostra ao atendente. Assim a tela do cliente deixa de depender
+        // de o snapshot ter sido gerado na hora certa.
+        const previaUtil = !!item.amostra_arte_base64 && !ehArquivoPdf(item.amostra_arte_base64);
+        const desenhoAoVivo = temArteParaDesenhar && !item.modo_pdf
+                           && (temCsvVariavel(numDoModelo) || !previaUtil);
         // Se há de fato o que mostrar. Testar a verdade de `amostra_arte_base64`
         // não bastava: no carregamento do pedido esse campo cai para `arte_url`
         // quando ainda não há snapshot, então um modelo cuja arte é PDF entrava
@@ -473,17 +493,17 @@ function renderAmostrasOSItens(osId) {
                                     </div>
                                 </div>
                                 ` : `
-                                ${paginaCsv ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
                                 `}
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Arte da frente ainda não enviada</p>
                                 </div>
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                ${paginaCsv ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || versoVisivel ? 'none' : 'block'};">
+                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoVisivel ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
                                 </div>
@@ -521,7 +541,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        ${paginaCsv ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                        ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
                         `}
 
                             ${!paginaCsv ? '' : `
@@ -539,7 +559,7 @@ function renderAmostrasOSItens(osId) {
                                 </div>
                                 <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
                             </div>`}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Arte ainda não enviada pela gráfica</p>
                              <p style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">Este modelo faz parte do pedido, mas ainda não há o que visualizar. Fale com o seu atendimento.</p>
