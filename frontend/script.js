@@ -3720,37 +3720,6 @@ function drawImageContain(ctx, img, x, y, w, h) {
 window.drawImageContain = drawImageContain;
 
 /**
- * Opacidade de um elemento PDF/SVG, de 0 a 1. Campo ausente vale 1 (opaco):
- * todo o acervo anterior a este recurso foi gravado sem ele e precisa continuar
- * aparecendo — e saindo no papel — exatamente como sempre saiu.
- */
-function opacidadeDoElemento(el) {
-    const v = el && el.opacity;
-    if (v === undefined || v === null || v === '') return 1;
-    const n = Number(v);
-    if (!isFinite(n)) return 1;
-    return Math.min(1, Math.max(0, n));
-}
-window.opacidadeDoElemento = opacidadeDoElemento;
-
-/**
- * Desenha a arte de um elemento PDF/SVG: sem distorção (como o engine impõe, com
- * `keep_proportion=True`) e com a opacidade do elemento. É por aqui que todo
- * renderizador deve desenhar esses dois tipos — são dez janelas diferentes, e
- * cada uma que desenhe por conta própria é uma que mostra o que o papel não faz.
- */
-function drawArteDoElemento(ctx, img, x, y, w, h, el) {
-    const op = opacidadeDoElemento(el);
-    if (op >= 1) { drawImageContain(ctx, img, x, y, w, h); return; }
-    if (op <= 0) return;
-    const antes = ctx.globalAlpha;
-    ctx.globalAlpha = antes * op;
-    drawImageContain(ctx, img, x, y, w, h);
-    ctx.globalAlpha = antes;
-}
-window.drawArteDoElemento = drawArteDoElemento;
-
-/**
  * Cache de imagens de foto por URL, para todas as janelas do app.
  *
  * O cache é por URL e NÃO por elemento, de propósito: o objeto do elemento é o
@@ -4065,7 +4034,7 @@ function drawElement(ctx, el, S) {
             const imgObj = pdfCanvas;
 
             if (imgObj) {
-                drawArteDoElemento(ctx, imgObj, -hw, -hh, w, h, el);
+                drawImageContain(ctx, imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
@@ -4085,7 +4054,7 @@ function drawElement(ctx, el, S) {
             const imgObj = el._svgImage;
 
             if (imgObj) {
-                drawArteDoElemento(ctx, imgObj, -hw, -hh, w, h, el);
+                drawImageContain(ctx, imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
@@ -5422,9 +5391,9 @@ window.addElement = function (type, extras) {
     // SVG e PDF nascem vazios: quem os cria e a box "Adicionar Pdf e Svg", passando
     // o arquivo e o tamanho natural por `extras`. Nascem tambem em "Impressao",
     // o mesmo comportamento de todo elemento anterior ao seletor Finalidade.
-    if (type === 'SVG') Object.assign(base, { width_mm: 20, height_mm: 20, svg_content: '', render_mode: 'print', opacity: 1 });
+    if (type === 'SVG') Object.assign(base, { width_mm: 20, height_mm: 20, svg_content: '', render_mode: 'print' });
 
-    if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '', render_mode: 'print', opacity: 1 });
+    if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '', render_mode: 'print' });
 
     // A janela de foto nasce 25x32 mm — a 3x4 de credencial — e ja apontando para
     // o banco: uma foto que nao varia por linha nao e foto variavel, e arte de
@@ -5768,7 +5737,6 @@ function renderElementsList() {
                 ? `original: ${arred2(nat.w)} × ${arred2(nat.h)} mm`
                 : 'tamanho original ainda não medido';
             const soLayout = elementoSoLayout(el);
-            const opAtual = opacidadeDoElemento(el);
 
             extraFields = `
 
@@ -5786,15 +5754,6 @@ function renderElementsList() {
                         ${soLayout
                     ? '👁️ Só visualização: aparece nas janelas de arte, mas não é impresso, não entra no PDF gerado e não aparece na prévia de imposição.'
                     : '🖨️ Visualizado e impresso, como qualquer outro elemento.'}
-                    </div>
-                </div>
-
-                <div class="form-group el-full">
-                    <label>Opacidade: <span id="op-val-${el.id}">${Math.round(opAtual * 100)}%</span></label>
-                    <input class="form-control" type="range" min="0" max="1" step="0.05" value="${opAtual}"
-                           oninput="updateElOpacidade('${el.id}', parseFloat(this.value))">
-                    <div id="op-aviso-${el.id}" style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">
-                        ${avisoOpacidade(opAtual)}
                     </div>
                 </div>
 
@@ -6344,42 +6303,6 @@ window.updateEl = function (id, field, value) {
 };
 
 
-
-/**
- * Texto de apoio do controle de Opacidade, no card do elemento PDF/SVG.
- *
- * A 100% o elemento é colado no PDF como vetor, cópia fiel do arquivo. Abaixo
- * disso não há vetor possível: nem `show_pdf_page` nem `insert_image` aceitam
- * alfa no PyMuPDF, então o motor rasteriza a arte a 300 dpi para aplicar a
- * transparência. Quem escolhe a opacidade precisa saber disso na hora, e não
- * ao conferir o papel.
- */
-function avisoOpacidade(op) {
-    if (op >= 1) return '🖨️ Opaco. O arquivo é colado no PDF como vetor, cópia fiel.';
-    if (op <= 0) return '👻 Invisível: com 0% o elemento não aparece na tela nem no papel.';
-    return '🌫️ Transparente. Para aplicar a transparência, a impressão rasteriza esta arte a 300 dpi — ela deixa de ser vetorial.';
-}
-
-/**
- * Muda a opacidade de um elemento PDF/SVG. Atualiza o número e o texto de apoio
- * na mão, sem re-renderizar a lista: o controle é um slider, e re-renderizar a
- * cada passo tiraria o foco dele no meio do arrasto.
- */
-window.updateElOpacidade = function (id, valor) {
-    const el = state.numElements.find(e => e.id === id);
-    if (!el) return;
-
-    const op = Math.min(1, Math.max(0, Number(valor) || 0));
-    el.opacity = op;
-
-    const rotulo = document.getElementById(`op-val-${id}`);
-    if (rotulo) rotulo.textContent = Math.round(op * 100) + '%';
-    const aviso = document.getElementById(`op-aviso-${id}`);
-    if (aviso) aviso.textContent = avisoOpacidade(op);
-
-    saveNumHistory();
-    drawCanvas();
-};
 
 /**
  * Troca a finalidade de um elemento PDF/SVG entre "Impressão" e "Layout".
@@ -8429,7 +8352,7 @@ function drawPreview() {
 
                         if (svgImg) {
 
-                            drawArteDoElemento(ctx, svgImg, -hw, -hh, sz_w, sz_h, el);
+                            drawImageContain(ctx, svgImg, -hw, -hh, sz_w, sz_h);
 
                         } else {
 
@@ -8462,7 +8385,7 @@ function drawPreview() {
 
                         if (el._pdfCanvas) {
 
-                            drawArteDoElemento(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h, el);
+                            drawImageContain(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
 
@@ -26616,7 +26539,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
             if (imgObj) {
                 // Tamanho original, escala 100%, sem distorcao — como o engine.py impoe
-                drawArteDoElemento(ctx, imgObj, -hw, -hh_el, w, h, el);
+                drawImageContain(ctx, imgObj, -hw, -hh_el, w, h);
             } else {
                 // Caixa com o nome do tipo, o mesmo aviso visual dos outros renderizadores
                 ctx.strokeStyle = color;
@@ -27390,7 +27313,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'PDF') {
                     const imgObj = el._pdfCanvas || null;
                     if (imgObj) {
-                        drawArteDoElemento(numCtx, imgObj, -hw, -hh_el, w, h, el);
+                        drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
@@ -27424,7 +27347,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                             }
                         }
                         if (el._svgImage) {
-                            drawArteDoElemento(numCtx, el._svgImage, -hw, -hh_el, w, h, el);
+                            drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
                         } else {
                             numCtx.strokeStyle = color;
                             numCtx.lineWidth = 1;
@@ -32713,11 +32636,11 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             if (el.type === 'PDF') {
                 const imgObj = el._pdfCanvas || null;
                 if (imgObj) {
-                    drawArteDoElemento(numCtx, imgObj, -hw, -hh_el, w, h, el);
+                    drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
                 }
             } else {
                 if (el._svgImage) {
-                    drawArteDoElemento(numCtx, el._svgImage, -hw, -hh_el, w, h, el);
+                    drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
                 }
             }
             numCtx.restore();

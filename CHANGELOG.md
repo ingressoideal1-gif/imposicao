@@ -8,32 +8,6 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v644 — 2026-08-18] *(a publicar)* — Transparência no elemento PDF e SVG da numeração
-
-**O card do elemento ganhou um controle de Opacidade**, de 0 a 100%, ao lado da Largura
-e da Altura. Ele vale para os dois tipos de arquivo, PDF e SVG. O padrão é 100%, e todo
-elemento já gravado continua saindo exatamente como sempre saiu.
-
-**A 100% nada mudou no caminho da impressão**: o arquivo continua sendo colado no PDF
-como vetor, cópia fiel. Abaixo de 100% não havia como manter o vetor — nem
-`show_pdf_page` nem `insert_image` aceitam transparência no PyMuPDF —, então a arte é
-rasterizada a 300 dpi para aplicar a opacidade. O texto embaixo do controle avisa isso
-no momento da escolha, e não depois, no papel.
-
-**A área vazia do arquivo continua vazia.** Era o risco real da mudança: rasterizar a
-arte sobre um fundo branco deixaria um véu por cima do que estivesse embaixo, e uma
-tiragem sairia lavada. O que se rasteriza é a arte com o canal alfa dela, multiplicado
-pela opacidade pedida. Medido nas duas pontas: um desenho vermelho a 50% sobre azul dá
-`(126, 0, 128)` no papel e `(128, 0, 127)` na tela, e o vazio do arquivo continua azul
-puro nos dois.
-
-**As dez janelas mostram a mesma coisa.** Editor, janela de arte, modo PDF, link do
-cliente, Criador de Arte, prévia de imposição (as duas cópias) e PDF Gabarito passaram
-a desenhar por uma função só, `drawArteDoElemento()`, que junta o "sem distorção" que
-já existia com a opacidade nova.
-
----
-
 ## [v639 — 2026-08-18] *(a publicar)* — O menu Ideal Control da gráfica
 
 **A busca é pelo número do cliente.** O atendente atende o telefone sabendo quem está do
