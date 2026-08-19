@@ -22335,8 +22335,17 @@ function renderOrdens() {
                                     // Só o administrador libera para produção. O botão
                                     // continua à vista, travado, dizendo a quem pedir —
                                     // escondê-lo faria o atendente procurar o que sumiu.
+                                    //
+                                    // Este botão é CONTINGÊNCIA: no caminho normal quem
+                                    // põe o pedido em produção é o sistema parceiro,
+                                    // gravando `status_interno` em `propostas`. O título
+                                    // diz isso ao administrador, para ele não usá-lo por
+                                    // hábito e acabar liberando na frente do parceiro.
                                     const podeLiberar = podeLiberarParaProducao();
-                                    btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${podeLiberar ? '' : 'disabled title="Só o administrador libera um pedido para produção"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!podeLiberar ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
+                                    const tituloProducao = podeLiberar
+                                        ? 'Contingência — o normal é o sistema parceiro pôr o pedido em produção'
+                                        : 'Só o administrador libera um pedido para produção';
+                                    btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" title="${tituloProducao}" ${podeLiberar ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!podeLiberar ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
                                 }
 
                                 // O botão do QR do pedido (5, aqui) saiu em 17/08/2026 junto

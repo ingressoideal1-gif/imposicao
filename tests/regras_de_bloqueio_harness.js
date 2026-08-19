@@ -140,8 +140,12 @@ function comoOperadorLocal(papel, st) {
 
     ok(/const podeLiberar = podeLiberarParaProducao\(\);/.test(SCRIPT),
         'e o botao da Lista de Arte tambem pergunta');
-    ok(/disabled title="Só o administrador libera um pedido para produção"/.test(SCRIPT),
+    ok(/Só o administrador libera um pedido para produção/.test(SCRIPT),
         'travado, dizendo a quem pedir');
+    // O caminho normal e o parceiro gravar `status_interno`. O titulo diz isso
+    // ao administrador, para ele nao liberar por habito na frente do parceiro.
+    ok(/Conting[êe]ncia — o normal é o sistema parceiro/.test(SCRIPT),
+        'e para o administrador o botao se anuncia como contingencia');
 })();
 
 // ─── 4. Qual modelo esta aprovado ────────────────────────────────────────────
