@@ -20,8 +20,9 @@ são transparentes. Por isso a logo vai direto sobre o cabeçalho escuro, sem ca
 gradiente da marca (laranja, turquesa e azul) lê bem no escuro, e a caixa branca só recortava um
 retângulo no meio do cabeçalho.
 
-A altura foi para **67px** — a linha miúda dentro da logo, "INGRESSOS • PULSEIRAS • CREDENCIAIS",
-é que manda no tamanho: abaixo disso ela vira um borrão no celular.
+A altura ficou em **47px**, depois de três passadas olhando o celular — 56, 67 e 47. Nos 67 a logo
+passava a competir com o número do pedido, que é o que o cliente veio ler; a linha miúda dentro
+dela, "INGRESSOS • PULSEIRAS • CREDENCIAIS", continua legível nos 47.
 
 Conferido em 320px, 390px e 1280px: sem rolagem horizontal em nenhum, e a logo cabe nos três (na
 tela de 320 ela encolhe pelo `max-width`, sem cortar).

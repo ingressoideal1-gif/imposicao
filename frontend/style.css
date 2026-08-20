@@ -3114,10 +3114,11 @@ input[type=number] {
    `max-width` em porcentagem porque no celular o cabeçalho empilha e a logo
    fica sozinha na linha -- ela pode crescer, mas não até encostar nas bordas. */
 .cliente-logo {
-    /* 67px, 20% acima dos 56 do primeiro ajuste: esta logo traz "INGRESSOS •
-       PULSEIRAS • CREDENCIAIS" em letra miúda dentro dela, e é essa linha que
-       manda no tamanho -- abaixo disso ela vira um borrão no celular. */
-    height: 67px;
+    /* 47px. O tamanho foi ajustado olhando o celular, que é onde esta página
+       vive: 56 no primeiro corte, 67 a pedido, e 47 depois de ver os 67 num
+       aparelho de verdade -- ali a logo passava a competir com o número do
+       pedido, que é o que o cliente veio ler. */
+    height: 47px;
     width: auto;
     max-width: 82%;
     object-fit: contain;
