@@ -201,3 +201,29 @@ def test_a_pagina_nao_baixa_o_catalogo_de_produtos_inteiro():
     fonte = _ler_cliente()
     assert "from('produtos').select('*')" not in fonte
     assert "'id, id_produto, nomeReal, apelidos, id_formato'" in fonte
+
+
+def test_sem_endereco_escolhido_vale_o_principal():
+    """Regra do usuario, 20/08/2026: sem endereco escolhido no pedido, mostrar
+    sempre o PRINCIPAL do cadastro.
+
+    Ela e necessaria -- 2.024 dos 4.001 pedidos dos ultimos 90 dias estao com
+    `id_endereco_ent` vazio -- e resolve quase tudo: dos 1.218 clientes desses
+    pedidos, 1.217 tem exatamente um endereco marcado como principal, nenhum tem
+    dois, e o unico sem principal tem um endereco so.
+
+    O `upper(btrim(...))` importa: a coluna vem do ERP com as duas grafias,
+    "principal" e "Principal".
+    """
+    corpo = _so_o_sql(_corpo_da_funcao())
+    assert "upper(btrim(COALESCE(e.tipo_endereco, ''))) = 'PRINCIPAL'" in corpo
+
+
+def test_o_endereco_da_grafica_vem_do_cadastro_do_erp():
+    """Na RETIRADA o endereco e o da grafica. Ele e LIDO de `empresas` -- se ela
+    mudar de endereco, o ERP atualiza e a pagina acompanha, sem release."""
+    corpo = _so_o_sql(_corpo_da_funcao())
+    assert "FROM empresas" in corpo
+    assert "'grafica'" in corpo
+    # E nao escrito no codigo:
+    assert "FELIZARDO" not in corpo.upper()

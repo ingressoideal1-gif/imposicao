@@ -221,11 +221,12 @@ function desenharSecaoEntrega() {
 
     // O endereço que veio do cadastro, e não da escolha do pedido, se anuncia:
     // metade dos pedidos não traz endereço escolhido, e o cliente precisa saber
-    // que aquilo é o cadastro dele, não uma decisão que alguém tomou.
+    // que aquilo é o principal do cadastro dele, e não uma decisão que alguém
+    // tomou para este pedido.
     if (destino.endereco && destino.endereco.do_cadastro) {
-        aviso = '<div class="portal-aviso calmo">Este é o endereço do seu cadastro. '
-              + 'Se a entrega for em outro lugar, toque em <b>ALTERAR</b> abaixo e informe.'
-              + '</div>' + aviso;
+        aviso = '<div class="portal-aviso calmo">Este é o <b>endereço principal</b> do seu '
+              + 'cadastro. Se a entrega for em outro lugar, toque em <b>ALTERAR</b> abaixo '
+              + 'e informe.</div>' + aviso;
     }
 
     secao.innerHTML =

@@ -38,11 +38,15 @@ Um cliente pode ter vários endereços, e quem diz qual é o da entrega é `prop
 90 dias estão com `id_endereco_ent` vazio, e a página não mostrava endereço nenhum. Desses, 1.970
 clientes têm endereço cadastrado — e **125 têm mais de um**.
 
-A regra agora: sem escolha no pedido, vale o cadastro **só quando ele não deixa dúvida**, isto é,
-quando o cliente tem exatamente um endereço. Com mais de um, escolher seria adivinhar, e adivinhar
-errado é o defeito que se está consertando — o pacote sai para o endereço de outra obra. Quando o
-endereço vem do cadastro, a tela diz isso: *"Este é o endereço do seu cadastro. Se a entrega for em
-outro lugar, toque em ALTERAR."*
+A regra, decidida pelo usuário: **sem escolha no pedido, vale o endereço PRINCIPAL do cadastro.**
+
+Ela resolve praticamente tudo. Medido nos 1.218 clientes desses pedidos: **1.217 têm exatamente um
+endereço marcado como principal**, nenhum tem dois, e o único sem principal tem um endereço só — não
+há empate a desfazer. (A comparação é `upper(btrim(...))`: a coluna vem do ERP com as duas grafias,
+"principal" e "Principal".)
+
+Quando o endereço vem do cadastro, e não da escolha do pedido, a tela diz isso: *"Este é o endereço
+principal do seu cadastro. Se a entrega for em outro lugar, toque em ALTERAR."*
 
 **Testes:** `tests/portal_dados_harness.js` (123 verificações) e
 `tests/portal_confirmacoes_harness.js` (40).

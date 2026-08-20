@@ -131,23 +131,38 @@ BEGIN
         END;
     END IF;
 
-    -- Sem escolha no pedido, vale o cadastro — mas SÓ quando ele não deixa
-    -- dúvida.
+    -- Sem escolha no pedido, vale o endereço PRINCIPAL do cliente.
     --
-    -- Medido em 20/08/2026: 2.024 dos 4.001 pedidos dos últimos 90 dias estão
-    -- com `id_endereco_ent` vazio. Desses, 1.970 clientes têm endereço
-    -- cadastrado e 125 têm MAIS DE UM. Com mais de um, escolher seria adivinhar
-    -- — e adivinhar errado é exatamente o defeito que se está consertando: o
-    -- pacote sai para o endereço de outra obra.
+    -- Regra do usuário, 20/08/2026. Ela é necessária: 2.024 dos 4.001 pedidos
+    -- dos últimos 90 dias estão com `id_endereco_ent` vazio, e sem esta regra a
+    -- aba não mostrava endereço nenhum na metade dos pedidos.
     --
-    -- Com um só, não há o que adivinhar. A tela marca de onde ele veio, e o
-    -- cliente confirma ou corrige.
+    -- E ela resolve quase tudo. Medido nos 1.218 clientes desses pedidos:
+    -- 1.217 têm EXATAMENTE UM endereço marcado como principal, nenhum tem dois,
+    -- e o único sem principal tem um endereço só. Ou seja, não há empate a
+    -- desfazer.
+    --
+    -- `upper(btrim(...))` porque a coluna vem do ERP com as duas grafias,
+    -- "principal" e "Principal".
     IF v_end.id IS NULL AND v_prop.id_cliente IS NOT NULL THEN
         SELECT e.* INTO v_end
           FROM enderecos e
          WHERE e.id_cliente = v_prop.id_cliente
-           AND (SELECT count(*) FROM enderecos x WHERE x.id_cliente = v_prop.id_cliente) = 1
+           AND upper(btrim(COALESCE(e.tipo_endereco, ''))) = 'PRINCIPAL'
+         ORDER BY e.data_criacao NULLS LAST
          LIMIT 1;
+
+        -- Cliente sem nenhum principal: vale o endereço, se ele for o único.
+        -- Havendo vários e nenhum principal, escolher seria adivinhar -- e o
+        -- pacote sairia para o endereço de outra obra.
+        IF v_end.id IS NULL THEN
+            SELECT e.* INTO v_end
+              FROM enderecos e
+             WHERE e.id_cliente = v_prop.id_cliente
+               AND (SELECT count(*) FROM enderecos x WHERE x.id_cliente = v_prop.id_cliente) = 1
+             LIMIT 1;
+        END IF;
+
         v_end_do_cadastro := (v_end.id IS NOT NULL);
     END IF;
 
