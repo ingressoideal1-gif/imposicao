@@ -920,21 +920,17 @@ async function initClientePage(numero, token) {
         clienteState.osId = linkData.os_id;
         clienteState.linkId = linkData.id;
 
-        // Buscar dados da OS (tentar Vibecode primeiro)
-        let osCliente = '';
-        let propData = null;
-        try {
-            const { data } = await supabaseClient
-                .from('propostas')
-                .select('*')
-                .eq('id_int', numero)
-                .maybeSingle();
-            propData = data;
-            if (propData) {
-                osCliente = propData.cliente_nome || '';
-                clienteState.idCliente = propData.id_faturado || propData.id_cliente || null;
-            }
-        } catch (e) { /* silencioso */ }
+        // Os dados do pedido, numa chamada só, pela função que exige o token.
+        //
+        // Isto substitui um `select('*')` em `propostas` feito com a chave
+        // anônima. E conserta um defeito que estava aqui desde o começo: a
+        // linha lia a coluna `cliente_nome`, que NÃO EXISTE em
+        // `propostas` -- a coluna é `cliente`. O nome do cliente nunca apareceu
+        // no cabeçalho desta página; o `<p>` ficava vazio, e ninguém percebeu
+        // porque campo vazio não parece defeito, parece pedido sem nome.
+        const portal = await carregarPortal(numero, token);
+        const osCliente = (portal && portal.pedido && portal.pedido.cliente) || '';
+        clienteState.idCliente = (portal && portal.pedido && portal.pedido.id_cliente) || null;
 
         if (clienteEl) clienteEl.textContent = osCliente;
 
@@ -1144,29 +1140,20 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        // Buscar entrega_dados da tabela pedidos_artes
+        // O selo da entrega vem junto na carga do portal -- era mais uma
+        // consulta direta a `pedidos_artes` com a chave anônima.
         let entregaStatus = '----';
-        try {
-            const numInt = parseInt(linkData.numero_pedido || linkData.id_int || numero);
-            if (!isNaN(numInt)) {
-                const { data: paData } = await supabaseClient
-                    .from('pedidos_artes')
-                    .select('entrega_dados')
-                    .eq('id_int', numInt)
-                    .maybeSingle();
-                if (paData && paData.entrega_dados) {
-                    entregaStatus = paData.entrega_dados.toUpperCase();
-                    if (!state.todasArtes) state.todasArtes = [];
-                    let globalArte = state.todasArtes.find(a => String(a.id_int) === String(numInt));
-                    if (globalArte) {
-                        globalArte.entrega_dados = paData.entrega_dados;
-                    } else {
-                        state.todasArtes.push({ id_int: numInt, entrega_dados: paData.entrega_dados });
-                    }
-                }
+        const numInt = parseInt(linkData.numero_pedido || linkData.id_int || numero);
+        const seloEntrega = portal && portal.entrega && portal.entrega.entrega_dados;
+        if (seloEntrega) {
+            entregaStatus = String(seloEntrega).toUpperCase();
+            if (!state.todasArtes) state.todasArtes = [];
+            const globalArte = state.todasArtes.find(a => String(a.id_int) === String(numInt));
+            if (globalArte) {
+                globalArte.entrega_dados = seloEntrega;
+            } else {
+                state.todasArtes.push({ id_int: numInt, entrega_dados: seloEntrega });
             }
-        } catch (e) {
-            console.warn('[ClienteView] Erro ao carregar entrega_dados:', e);
         }
 
         // REGRA DE ACESSO DO CLIENTE:

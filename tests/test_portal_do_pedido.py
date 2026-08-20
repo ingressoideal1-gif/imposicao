@@ -112,3 +112,21 @@ def test_o_arquivo_e_aditivo():
     sql = _ler(SQL).upper()
     for perigoso in ("REVOKE", "DROP TABLE", "ALTER TABLE", "TRUNCATE", "DELETE FROM"):
         assert perigoso not in sql, f"{perigoso} nao pertence a este arquivo"
+
+
+def test_o_nome_do_cliente_vem_da_coluna_que_existe():
+    """`cliente_nome` nao existe em `propostas` -- a coluna e `cliente`.
+
+    Por isso o `<p id="cliente-pedido-cliente">` do cabecalho ficou vazio desde
+    sempre: um `|| ''` transformava a coluna inexistente em texto vazio, e campo
+    vazio nao parece defeito -- parece pedido sem nome. O painel sempre acertou
+    (`propReal?.cliente || ...`); so a pagina do cliente errava.
+    """
+    fonte = _ler_cliente()
+    assert ".cliente_nome" not in fonte, "a leitura da coluna que nao existe voltou"
+    assert "portal.pedido.cliente" in fonte
+
+
+def test_a_carga_do_portal_passa_pela_funcao():
+    fonte = _ler_cliente()
+    assert "rpc('link_cliente_pedido'" in fonte
