@@ -232,6 +232,7 @@ const linhasDoEnvio = new Function(
     + recortar(DADOS, 'emDiasUteis') + '\n'
     + recortar(DADOS, 'prazoDeProducao') + '\n'
     + recortar(DADOS, 'prazoDoFrete') + '\n'
+    + recortar(DADOS, 'prazoDeEntrega') + '\n'
     + recortar(DADOS, 'linkDeRastreio') + '\n'
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
     // A logo vem do seu proprio arquivo, e tem harness proprio
@@ -241,43 +242,53 @@ const linhasDoEnvio = new Function(
     + extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
     + recortar(ENTREGA, 'linhasDoEnvio') + '\nreturn linhasDoEnvio;')();
 
-(function envioTemFormaEOsDoisPrazos() {
-    // O usuario pediu os dois separados em 20/08/2026: producao e envio sao
-    // coisas diferentes, com origens diferentes.
+(function envioTemFormaEOPrazoDeEntrega() {
+    // Em 20/08/2026 as duas linhas soltas ("Prazo de producao" e "Prazo de
+    // envio") viraram UMA: elas estavam certas e obrigavam o cliente a somar de
+    // cabeca para saber quando o pacote chega.
     const l = linhasDoEnvio({
         pedido: { frete_escolhido: 'SEDEX', valor_frete: '20.12' },
-        frete: { servico: 'SEDEX', prazo: '2 dias úteis' },
+        frete: { servico: 'SEDEX', prazo: '1 dia útil' },
         os: null,
-        itens: [{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }]
+        itens: [{ prazo: '1 dia útil' }, { prazo: '1 dia útil' }]
     });
     const rotulos = l.map(x => x.rotulo);
     ok(rotulos[0] === 'Forma de envio', 'a forma vem primeiro', rotulos);
-    ok(rotulos[1] === 'Prazo de produção', 'depois a producao', rotulos);
-    ok(rotulos[2] === 'Prazo de envio', 'e entao o envio', rotulos);
+    ok(rotulos[1] === 'Prazo de entrega', 'e o prazo de entrega logo depois', rotulos);
+    ok(rotulos.indexOf('Prazo de produção') < 0, 'as duas linhas soltas sairam', rotulos);
     ok(l[0].valor === 'SEDEX — R$ 20,12', 'a forma com o valor junto', l[0]);
-    ok(l[1].valor === '3 dias úteis', 'a producao e a do produto mais demorado', l[1]);
-    ok(l[2].valor === '2 dias úteis', 'e o envio e o da cotacao escolhida', l[2]);
+    ok(l[1].valor === 'Produção: 1 dia útil + Envio: 1 dia útil',
+        'os dois prazos na mesma frase', l[1].valor);
+    ok(/Recebimento a partir de 2 dias úteis/.test(l[1].html),
+        'e a soma, que e a resposta de "quando chega"', l[1].html);
 })();
 
-(function osDoisPrazosNaoSeMisturam() {
-    // O pedido demora 3 dias para ficar pronto e 1 para chegar. Se a tela
-    // somasse, ninguem saberia qual dos dois atrasou quando o pedido atrasa.
+(function aProducaoContinuaSendoADoProdutoMaisDemorado() {
     const l = linhasDoEnvio({
-        pedido: {}, frete: { prazo: '1 dia útil' }, os: null,
-        itens: [{ prazo: '3 dias úteis' }]
+        pedido: {}, frete: { prazo: '2 dias úteis' }, os: null,
+        itens: [{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }]
     });
-    ok(l[1].valor === '3 dias úteis' && l[2].valor === '1 dia útil',
-        'cada prazo na sua linha', [l[1].valor, l[2].valor]);
+    ok(l[1].valor === 'Produção: 3 dias úteis + Envio: 2 dias úteis',
+        'tres dias, e nao um nem quatro', l[1].valor);
+    ok(/5 dias úteis/.test(l[1].html), 'e a soma acompanha', l[1].html);
 })();
 
 (function semPrazoDizOQueFazer() {
     // Nenhuma trava deste projeto fica sem saida: sem prazo, a linha diz onde
     // conseguir a resposta, em vez de ficar vazia ou escrever "undefined".
     const l = linhasDoEnvio({ pedido: { frete_escolhido: 'RETIRADA' }, frete: null, os: null, itens: [] });
-    ['Prazo de produção', 'Prazo de envio'].forEach(r => {
-        const linha = l.find(x => x.rotulo === r);
-        ok(linha && /atendimento/i.test(linha.valor), 'sem ' + r + ', a linha diz o que fazer', linha);
+    const linha = l.find(x => x.rotulo === 'Prazo de entrega');
+    ok(linha && /atendimento/i.test(linha.valor), 'sem prazo nenhum, diz o que fazer', linha);
+})();
+
+(function semNumeroDeUmDosLadosNaoSeInventaSoma() {
+    // "A combinar" nao vira zero: somar o que der inventaria uma data de entrega
+    // que a grafica nao prometeu.
+    const l = linhasDoEnvio({
+        pedido: {}, frete: { prazo: 'A combinar' }, os: null, itens: [{ prazo: '3 dias úteis' }]
     });
+    ok(l[1].valor === 'Produção: 3 dias úteis + Envio: A combinar', 'a frase mostra os dois', l[1].valor);
+    ok(!/Recebimento a partir/.test(l[1].html), 'e nao ha soma', l[1].html);
 })();
 
 (function aFormaDeEnvioCaiNaCotacaoQuandoOPedidoNaoDiz() {

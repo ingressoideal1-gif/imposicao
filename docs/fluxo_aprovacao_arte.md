@@ -178,17 +178,25 @@ O painel (`loadDadosEntregaInterno`) mostra as três, e as duas novas vêm
 rotuladas — antes o atendente recebia um texto onde os dois assuntos se
 misturavam.
 
-### Os dois prazos da aba de Entrega
+### O Prazo de Entrega da aba de Entrega
 
-Por decisão do usuário em 20/08/2026, a aba mostra **prazo de produção** e
-**prazo de envio** separados, e não um só. São duas coisas diferentes, com duas
-origens diferentes — somadas num número só, ninguém saberia qual das duas
-atrasou quando o pedido atrasa.
+A aba mostra **uma** linha, com os dois prazos e a conta feita:
 
-| linha | origem | regra |
+```
+PRAZO DE ENTREGA
+Produção: 1 dia útil + Envio: 1 dia útil
+Recebimento a partir de 2 dias úteis
+```
+
+Foram duas linhas separadas por algumas horas, em 20/08/2026, até o usuário
+apontar que elas obrigavam o cliente a somar de cabeça a resposta que ele foi ali
+buscar.
+
+| parte | origem | regra |
 |---|---|---|
-| Prazo de produção | `produtos.prazo`, pelos itens do pedido | o do produto que demora MAIS: a gráfica só despacha quando o último item fica pronto |
-| Prazo de envio | `cotacao_frete.prazo` da linha `escolhido` | o que a transportadora prometeu, passado como está |
+| Produção | `produtos.prazo`, pelos itens do pedido | o do produto que demora MAIS: a gráfica só despacha quando o último item fica pronto |
+| Envio | `cotacao_frete.prazo` da linha `escolhido` | o que a transportadora prometeu, passado como está |
+| Recebimento | a soma dos dois | só quando **os dois** trazem número |
 
 A comparação da produção é feita pelo **número**, e não pelo texto: o catálogo
 tem cinco redações para a mesma coisa — "3 dias úteis" (50 produtos), "1 dia
@@ -202,10 +210,26 @@ promessa de entrega que a gráfica não fez. A única correção é o número so
 cotações do SEDEX gravam só `1`, e outras 227 gravam `1 dia útil` — é a mesma
 coisa com a unidade perdida.
 
+> [!IMPORTANT]
+> A soma **não sai** quando um dos lados não tem número. "A combinar" não vira
+> zero: somar o que der inventaria uma data de entrega que ninguém prometeu, e é
+> da data prometida que o cliente cobra depois. E é "a partir de", não "em" — é
+> o piso do prazo.
+
 > [!NOTE]
-> `propostas_os.data_termino` **não aparece mais** nesta aba. Ela continua sendo
-> o Prazo de Entrega do Painel de Produção; o que o cliente vê agora são os dois
-> prazos acima, que é o que ele perguntaria ao atendimento.
+> `propostas_os.data_termino` **não aparece** nesta aba. Ela continua sendo o
+> Prazo de Entrega do Painel de Produção; o que o cliente vê é a conta acima.
+
+### O recebedor aparece mesmo quando falta
+
+**Recebedor** e **CPF do recebedor** são as duas primeiras linhas do cartão de
+endereço, e aparecem SEMPRE — com "Não informado" em âmbar quando o cadastro está
+vazio, e um aviso dizendo para usar o ALTERAR.
+
+O motivo está no banco: só **126 dos 1.929** endereços de pedidos dos últimos 90
+dias têm `recebedor`, e 132 têm `cpf_recebedor`. Escondendo a linha vazia — que
+era o comportamento —, 93% dos clientes nunca ficaram sabendo que faltava esse
+dado. Quem descobria era o motoboy, na portaria do prédio.
 
 ---
 

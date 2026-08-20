@@ -183,6 +183,43 @@ function prazoDoFrete(frete) {
 }
 
 /**
+ * O Prazo de Entrega: os dois prazos numa frase só, com a conta feita.
+ *
+ * O usuário pediu isto em 20/08/2026, olhando para as duas linhas soltas que
+ * havia antes — "Prazo de produção: 1 dia útil" e "Prazo de envio: 1 dia útil".
+ * Elas estavam certas e não respondiam a pergunta: **quando chega?** Duas linhas
+ * com o mesmo número obrigam o cliente a somar de cabeça.
+ *
+ * Devolve `{ producao, envio, texto, recebimento }`:
+ *
+ *     texto        "Produção: 1 dia útil + Envio: 1 dia útil"
+ *     recebimento  "2 dias úteis"
+ *
+ * A soma só sai quando OS DOIS lados trazem número. "A combinar" e "Sob
+ * consulta" não viram zero: somar o que der inventaria uma data de entrega que a
+ * gráfica não prometeu, e é da data prometida que o cliente cobra depois.
+ */
+function prazoDeEntrega(itens, frete) {
+    const producao = prazoDeProducao(itens);
+    const envio = prazoDoFrete(frete);
+
+    if (!producao && !envio) {
+        return { producao: null, envio: null, texto: null, recebimento: null };
+    }
+
+    const texto = 'Produção: ' + (producao || 'a combinar')
+                + ' + Envio: ' + (envio || 'a combinar');
+
+    const diasProducao = diasDoPrazo(producao);
+    const diasEnvio = diasDoPrazo(envio);
+    const recebimento = (diasProducao !== null && diasEnvio !== null)
+        ? emDiasUteis(diasProducao + diasEnvio)
+        : null;
+
+    return { producao, envio, texto, recebimento };
+}
+
+/**
  * O endereço como uma lista de linhas prontas, na ordem em que se lê um
  * envelope. Linha sem valor não entra: rótulo com vazio ao lado é ruído.
  */
@@ -194,9 +231,22 @@ function enderecoEmLinhas(endereco) {
     const cidade = (endereco.cidade || '').trim();
     const uf = (endereco.uf || '').trim();
 
+    // Recebedor e CPF aparecem SEMPRE, mesmo vazios.
+    //
+    // Medido no banco em 20/08/2026: só 126 dos 1.929 endereços de pedidos dos
+    // últimos 90 dias têm `recebedor`, e 132 têm `cpf_recebedor`. Escondendo a
+    // linha quando o campo está vazio — que era o comportamento —, 93% dos
+    // clientes nunca ficaram sabendo que faltava esse dado. Quem descobre é o
+    // motoboy, na portaria do prédio, com o pacote na mão.
+    //
+    // Com "Não informado" na tela, logo acima do botão ALTERAR, a falta vira um
+    // convite a preencher.
+    const recebedor = (endereco.recebedor || '').trim();
+    const cpf = (endereco.cpf_recebedor || '').trim();
+
     const linhas = [
-        { rotulo: 'Recebedor', valor: (endereco.recebedor || '').trim() },
-        { rotulo: 'CPF do recebedor', valor: (endereco.cpf_recebedor || '').trim() },
+        { rotulo: 'Recebedor', valor: recebedor || 'Não informado', falta: !recebedor },
+        { rotulo: 'CPF do recebedor', valor: cpf || 'Não informado', falta: !cpf },
         { rotulo: 'Endereço', valor: rua ? rua + ', ' + (numero || 'S/N') : '' },
         { rotulo: 'Complemento', valor: (endereco.complemento || '').trim() },
         { rotulo: 'Bairro', valor: (endereco.bairro || '').trim() },
@@ -222,5 +272,6 @@ window.emReal = emReal;
 window.rotuloDoFrete = rotuloDoFrete;
 window.prazoDeProducao = prazoDeProducao;
 window.prazoDoFrete = prazoDoFrete;
+window.prazoDeEntrega = prazoDeEntrega;
 window.enderecoEmLinhas = enderecoEmLinhas;
 window.linkDeRastreio = linkDeRastreio;

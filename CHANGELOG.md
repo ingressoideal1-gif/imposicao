@@ -4,7 +4,54 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v659** — 2026-08-20 | Agente **1.2.153**
+## Versão atual: **v660** — 2026-08-20 | Agente **1.2.154**
+
+---
+
+## [v660 — 2026-08-20] — O Prazo de Entrega somado, e o recebedor que faltava
+
+### Duas linhas certas que não respondiam a pergunta
+
+A aba de Entrega mostrava **Prazo de produção: 1 dia útil** e **Prazo de envio: 1 dia útil**, em
+linhas separadas. Estavam certas e obrigavam o cliente a somar de cabeça para saber o que ele
+foi ali descobrir: **quando chega?**
+
+Agora é uma linha só, com a conta feita:
+
+```
+PRAZO DE ENTREGA
+Produção: 1 dia útil + Envio: 1 dia útil
+Recebimento a partir de 2 dias úteis
+```
+
+**A soma só sai quando os dois lados trazem número.** "A combinar" e "Sob consulta" não viram
+zero: somar o que der inventaria uma data de entrega que a gráfica não prometeu — e é da data
+prometida que o cliente cobra depois. Nesses casos a frase mostra os dois prazos como estão, sem
+o "recebimento a partir de".
+
+E é **"a partir de"**, não "em": é o piso do prazo, não uma promessa de dia exato.
+
+### O recebedor, que 93% dos clientes nunca viram faltar
+
+O cartão de endereço já tinha as linhas **Recebedor** e **CPF do recebedor** — mas elas só
+apareciam quando o campo estava preenchido. Medido no banco: **só 126 dos 1.929 endereços** de
+pedidos dos últimos 90 dias têm recebedor, e 132 têm CPF.
+
+Ou seja: em 93% dos casos as linhas simplesmente sumiam, e o cliente não tinha como saber que
+faltava esse dado. Quem descobria era o motoboy, na portaria do prédio, com o pacote na mão.
+
+Agora elas aparecem **sempre**, com **Não informado** em âmbar, e o cartão traz um aviso dizendo o
+que fazer: *"Falta o nome e o CPF de quem vai receber o pedido. Toque em ALTERAR abaixo e informe
+— é o que a transportadora pede na entrega."*
+
+### Miudeza do mesmo dia
+
+`.portal-aviso` era `display: flex`, e com isso cada elemento inline do texto virava um item
+próprio: a frase com um `<b>` no meio quebrava em colunas. Passou a `block`, e o texto flui como
+texto.
+
+**Testes:** `tests/portal_dados_harness.js` (73 verificações) e
+`tests/portal_confirmacoes_harness.js` (30).
 
 ---
 

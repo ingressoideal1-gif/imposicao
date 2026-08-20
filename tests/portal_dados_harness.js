@@ -57,6 +57,8 @@ const emReal = carregar('emReal');
 const rotuloDoFrete = carregar('rotuloDoFrete', ['NOME_DO_FRETE', 'emReal']);
 const prazoDeProducao = carregar('prazoDeProducao', ['diasDoPrazo', 'emDiasUteis']);
 const prazoDoFrete = carregar('prazoDoFrete', ['emDiasUteis']);
+const prazoDeEntrega = carregar('prazoDeEntrega',
+    ['diasDoPrazo', 'emDiasUteis', 'prazoDeProducao', 'prazoDoFrete']);
 const enderecoEmLinhas = carregar('enderecoEmLinhas');
 const linkDeRastreio = carregar('linkDeRastreio');
 
@@ -179,6 +181,63 @@ const linkDeRastreio = carregar('linkDeRastreio');
     ok(prazoDoFrete({ prazo: '   ' }) === null, 'so espaco');
 })();
 
+// ─── 3b. Os dois prazos somados: o Prazo de Entrega ─────────────────────────
+//
+// Em 20/08/2026 o usuario pediu para deixar mais claro: em vez de duas linhas
+// soltas ("Prazo de producao 1 dia util" / "Prazo de envio 1 dia util"), uma so
+// que some as duas e diga quando o pacote chega --
+//
+//     Prazo de Entrega
+//     Producao: 1 dia util + Envio: 1 dia util  (recebimento a partir de 2 dias uteis)
+
+(function osDoisAparecemNaMesmaFrase() {
+    const p = prazoDeEntrega([{ prazo: '1 dia útil' }], { prazo: '1 dia útil' });
+    ok(p.texto === 'Produção: 1 dia útil + Envio: 1 dia útil', 'a frase inteira', p.texto);
+    ok(p.recebimento === '2 dias úteis', 'e a soma dos dois', p.recebimento);
+})();
+
+(function aSomaEDeVerdade() {
+    ok(prazoDeEntrega([{ prazo: '3 dias úteis' }], { prazo: '2 dias úteis' }).recebimento
+        === '5 dias úteis', 'tres mais dois', 
+        prazoDeEntrega([{ prazo: '3 dias úteis' }], { prazo: '2 dias úteis' }).recebimento);
+    // A producao segue sendo a do produto mais demorado, e nao a soma deles.
+    ok(prazoDeEntrega([{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }], { prazo: '1 dia útil' }).recebimento
+        === '4 dias úteis', 'o produto mais demorado manda na producao');
+})();
+
+(function semNumeroDosDoisLadosNaoSeSoma() {
+    // "A combinar" e "Sob consulta" nao viram numero. Somar o que der e inventar
+    // uma data de entrega que a grafica nao prometeu.
+    const p = prazoDeEntrega([{ prazo: '1 dia útil' }], { prazo: 'A combinar' });
+    ok(p.recebimento === null, 'sem soma quando um dos lados nao tem numero', p);
+    ok(p.texto === 'Produção: 1 dia útil + Envio: A combinar',
+        'mas a frase mostra os dois assim mesmo', p.texto);
+})();
+
+(function faltandoUmDosLados() {
+    const semEnvio = prazoDeEntrega([{ prazo: '2 dias úteis' }], null);
+    ok(semEnvio.texto === 'Produção: 2 dias úteis + Envio: a combinar',
+        'sem cotacao, o envio fica a combinar', semEnvio.texto);
+    ok(semEnvio.recebimento === null, 'e nao ha o que somar', semEnvio);
+
+    const semProducao = prazoDeEntrega([], { prazo: '1 dia útil' });
+    ok(semProducao.texto === 'Produção: a combinar + Envio: 1 dia útil',
+        'e o contrario tambem', semProducao.texto);
+})();
+
+(function semNadaNaoInventaLinha() {
+    const p = prazoDeEntrega([], null);
+    ok(p.texto === null, 'sem prazo nenhum, nao ha frase', p);
+    ok(p.recebimento === null, 'nem soma');
+    ok(prazoDeEntrega(null, undefined).texto === null, 'nulo nao quebra');
+})();
+
+(function umDiaNaoViraUmDias() {
+    ok(prazoDeEntrega([{ prazo: '1 dia útil' }], { prazo: '0 dias úteis' }).recebimento === '1 dia útil',
+        'a soma de um dia so fica no singular',
+        prazoDeEntrega([{ prazo: '1 dia útil' }], { prazo: '0 dias úteis' }).recebimento);
+})();
+
 // ─── 4. Endereco ─────────────────────────────────────────────────────────────
 
 (function oEnderecoSaiEmLinhasNaOrdemDeLer() {
@@ -194,8 +253,36 @@ const linkDeRastreio = carregar('linkDeRastreio');
         linhas.map(l => l.valor));
 })();
 
-(function linhaVaziaNaoAparece() {
+(function oRecebedorEOCpfAparecemSEMPRE() {
+    // Medido no banco em 20/08/2026: so 126 dos 1.929 enderecos de pedidos dos
+    // ultimos 90 dias tem `recebedor`, e 132 tem `cpf_recebedor`. Escondendo a
+    // linha quando o campo esta vazio, 93% dos clientes nunca souberam que
+    // faltava esse dado -- e quem descobre e o motoboy, na portaria do predio.
+    //
+    // Elas aparecem com "Não informado", que e um convite a usar o ALTERAR
+    // logo abaixo.
     const linhas = enderecoEmLinhas({
+        endereco: 'Rua das Flores', numero: '250', cidade: 'Porto Alegre', uf: 'RS'
+    });
+    const rotulos = linhas.map(l => l.rotulo);
+    ok(rotulos[0] === 'Recebedor', 'quem recebe vem primeiro, mesmo vazio', rotulos);
+    ok(rotulos[1] === 'CPF do recebedor', 'e o CPF logo depois', rotulos);
+    ok(linhas[0].valor === 'Não informado', 'com o aviso no lugar do nome', linhas[0]);
+    ok(linhas[1].valor === 'Não informado', 'e no lugar do CPF', linhas[1]);
+    ok(linhas[0].falta === true && linhas[1].falta === true,
+        'marcadas como faltando, para a tela poder pinta-las', linhas.slice(0, 2));
+})();
+
+(function preenchidosNaoGanhamOAviso() {
+    const linhas = enderecoEmLinhas({
+        recebedor: 'Maria', cpf_recebedor: '111.222.333-44',
+        endereco: 'Rua das Flores', numero: '250'
+    });
+    ok(linhas[0].valor === 'Maria' && !linhas[0].falta, 'o nome como esta', linhas[0]);
+    ok(linhas[1].valor === '111.222.333-44' && !linhas[1].falta, 'e o CPF', linhas[1]);
+})();
+
+(function linhaVaziaNaoAparece() {    const linhas = enderecoEmLinhas({
         endereco: 'Rua das Flores', numero: '', complemento: '',
         bairro: '', cidade: 'Porto Alegre', uf: 'RS', cep: ''
     });

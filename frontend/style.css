@@ -3249,8 +3249,10 @@ input[type=number] {
 }
 
 .portal-aviso {
-    display: flex;
-    gap: 10px;
+    /* `block`, e nao `flex`: com flex, cada elemento inline do texto vira um
+       item proprio, e uma frase com um <b> no meio quebra em colunas -- foi o
+       que aconteceu com o aviso do recebedor. Aqui o texto flui como texto. */
+    display: block;
     padding: 12px 14px;
     border-radius: 10px;
     font-size: 0.92rem;
