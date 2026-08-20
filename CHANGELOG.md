@@ -4,11 +4,11 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v658** — 2026-08-20 | Agente **1.2.153**
+## Versão atual: **v659** — 2026-08-20 | Agente **1.2.153**
 
 ---
 
-## [v658 — 2026-08-20] — O link de pagamento achado, e as logos do frete
+## [v659 — 2026-08-20] — O link de pagamento achado, e as logos do frete
 
 ### 💳 O link de pagamento estava em outra tabela
 
