@@ -1,4 +1,23 @@
 -- ════════════════════════════════════════════════════════════════════════════════
+-- ⚠️  NAO RODE ESTE ARQUIVO.  Ele foi executado uma vez, em 20/08/2026, e teve
+--     efeito colateral: os 12 pedidos que ganharam linha REAPARECERAM na Lista
+--     de Arte. Em producao, TER linha em `pedidos_artes` e justamente o que faz
+--     o pedido aparecer na lista (o filtro `existeArtes` do
+--     `loadOrdensFromVibecode`). Criar linha para pedido antigo e reabrir
+--     trabalho encerrado.
+--
+--     O desfazer esta em `sql/desfazer_reparo_da_linha_de_arte.sql`.
+--
+--     O que resolve o problema original, e sozinho basta:
+--     `garantirLinhaDePedidoArte` cria a linha no painel, no momento em que o
+--     link do cliente e gerado -- quando o pedido ESTA na arte de verdade.
+--
+--     Este arquivo fica no repositorio como registro do que foi feito e do
+--     porque nao se repete.
+-- ════════════════════════════════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════════════════════════════════
 -- SQL: dar linha em `pedidos_artes` aos pedidos que ja foram ao cliente
 -- Execute no SQL Editor do Supabase
 -- ════════════════════════════════════════════════════════════════════════════════
