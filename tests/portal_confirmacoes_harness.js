@@ -285,6 +285,20 @@ const linhasDoEnvio = new Function(
     ok(/disabled/.test(cartao), 'com o botao desligado enquanto falta algo');
 })();
 
+(function oAvisoDoFimSobreviveAoRedesenho() {
+    // `redesenharSecao` reescreve o innerHTML da secao aberta. Chamado DEPOIS do
+    // aviso, ele apagava o aviso no mesmo instante -- e o que sumia era
+    // justamente a mensagem que mais precisa ser lida: a de que a conferencia
+    // NAO foi gravada, com o numero do pedido para o cliente informar.
+    const fn = CONFIRMACOES.slice(CONFIRMACOES.indexOf('window.finalizarNoPortal'));
+    const corpo = fn.slice(0, fn.indexOf('\n};'));
+    const redesenho = corpo.indexOf('redesenharSecao');
+    const aviso = corpo.indexOf('avisoDeFinalizacao');
+    ok(redesenho > 0 && aviso > 0 && redesenho < aviso,
+        'o redesenho vem ANTES do aviso, senao o aviso e apagado',
+        { redesenho, aviso });
+})();
+
 (function aTelaAntigaDeConferenciaSaiu() {
     // Ela vivia entre a aprovacao e o fim, e escondia a pagina inteira.
     ok(CLIENTE.indexOf('mostrarConfirmacaoDadosCliente') < 0, 'a tela sequencial saiu');

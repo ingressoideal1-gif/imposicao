@@ -237,6 +237,16 @@ window.finalizarNoPortal = async function () {
     clienteState.statusArte = 'APROVADO';
     pintarSeloDoStatus('APROVADO');
 
+    // ORDEM IMPORTA: redesenhar PRIMEIRO, avisar depois.
+    //
+    // `redesenharSecao` reescreve o `innerHTML` da seção aberta. Feito depois do
+    // aviso, ele apagava o aviso no mesmo instante — e o que sumia era
+    // justamente a mensagem que mais precisa ser lida: a de que a conferência
+    // NÃO foi gravada, com o número do pedido para o cliente informar ao
+    // atendimento.
+    redesenharSecao('entrega');
+    redesenharSecao('faturamento');
+
     // Dizer "aprovado" quando a solicitação não entrou no banco é o pior dos
     // mundos: o cliente vai embora tranquilo e ninguém nunca leu o que ele
     // escreveu. Aqui ele fica sabendo, e fica sabendo o que fazer.
@@ -257,9 +267,6 @@ window.finalizarNoPortal = async function () {
             'Recebemos sua aprovação e a conferência dos seus dados. '
             + 'Em breve seu pedido entra em produção.');
     }
-
-    redesenharSecao('entrega');
-    redesenharSecao('faturamento');
 };
 
 /** O resultado do fim, escrito na aba aberta — e não numa tela que come a página. */
