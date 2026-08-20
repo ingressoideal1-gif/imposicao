@@ -21,11 +21,11 @@ que e o mesmo estilo do `test_escrita_anonima_na_nuvem.py`, e existem para que a
 Tarefa 4 possa ser feita sem medo -- e para que ninguem reabra a porta depois
 sem perceber.
 """
+import glob
 import os
 import re
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLIENTE_JS = os.path.join(RAIZ, "frontend", "cliente.js")
 SQL = os.path.join(RAIZ, "sql", "link_cliente_funcoes.sql")
 
 
@@ -34,14 +34,27 @@ def _ler(caminho):
         return f.read()
 
 
+def _ler_cliente():
+    """Todo o JavaScript da pagina do cliente, num texto so.
+
+    Em 20/08/2026 a pagina virou o Portal do Pedido e ganhou arquivos
+    `cliente-*.js` ao lado do `cliente.js`. Ler um arquivo so deixaria de
+    enxergar as regras que mudaram de lugar -- e um teste que deixa de olhar nao
+    reprova: ele passa, calado, que e o pior jeito de falhar.
+    """
+    arquivos = sorted(glob.glob(os.path.join(RAIZ, "frontend", "cliente*.js")))
+    assert arquivos, "nao achei os arquivos da pagina do cliente"
+    return "\n".join(_ler(a) for a in arquivos)
+
+
 def test_a_validacao_do_token_passa_pela_funcao():
-    fonte = _ler(CLIENTE_JS)
+    fonte = _ler_cliente()
     assert "rpc('link_cliente_abrir'" in fonte
 
 
 def test_a_pagina_do_cliente_nao_le_mais_a_tabela():
     """`select` na tabela era o vazamento: sem filtro, ele listava tudo."""
-    fonte = _ler(CLIENTE_JS)
+    fonte = _ler_cliente()
     trechos = re.findall(r"from\('pedidos_links_cliente'\)\s*[\s\S]{0,120}", fonte)
     for t in trechos:
         assert ".select(" not in t, f"leitura direta da tabela voltou: {t[:120]}"
@@ -56,12 +69,12 @@ def test_so_sobra_a_copia_interna_do_auto_status():
     O numero exato importa: se alguem acrescentar uma escrita direta nova, este
     teste cai antes de a porta ser fechada na Tarefa 4.
     """
-    fonte = _ler(CLIENTE_JS)
+    fonte = _ler_cliente()
     assert fonte.count("from('pedidos_links_cliente')") == 1
 
 
 def test_aprovar_e_pedir_alteracao_passam_pela_funcao():
-    fonte = _ler(CLIENTE_JS)
+    fonte = _ler_cliente()
     assert "gravarStatusDoLink('APROVADO')" in fonte
     assert "gravarStatusDoLink('Em Alteração')" in fonte
     assert "rpc('link_cliente_status'" in fonte
@@ -71,7 +84,7 @@ def test_todo_status_que_a_tela_escreve_e_aceito_pela_funcao():
     """A lista fechada no SQL e o que impede o token de virar caneta livre sobre
     a coluna. O preco e este: um status novo na tela sem o par no SQL vira uma
     aprovacao que falha em silencio na frente do cliente."""
-    fonte = _ler(CLIENTE_JS)
+    fonte = _ler_cliente()
     sql = _ler(SQL)
     for status in re.findall(r"gravarStatusDoLink\('([^']+)'\)", fonte):
         assert f"'{status}'" in sql, (
