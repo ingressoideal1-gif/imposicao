@@ -943,7 +943,15 @@ async function initClientePage(numero, token) {
         // Carregar formatos, cores e numerações para o state global do front
         try {
             const [coresRes, numeracoesRes, formatosRes, produtosRes] = await Promise.all([
-                supabaseClient.from('producao_cores').select('*').order('name', { ascending: true }),
+                // Colunas explicitas, sem `pdf_base64`/`pdf_verso_base64`/
+                // `preview_base64`. Com `select('*')` o cliente baixava 18 MB
+                // — o PDF de referência de TODAS as cores do sistema — antes de
+                // a página de aprovação aparecer. O da cor do pedido dele vem
+                // por `garantirPdfDaCor`, na hora de desenhar. Mesmo remédio do
+                // `csv_data` logo abaixo.
+                supabaseClient.from('producao_cores')
+                    .select('id, empresa_id, name, hex, pdf_url, pdf_filename, created_at, updated_at, formato_id, width_mm, height_mm, id_modelo_cor_num, name_verso, frente_verso, cor_referencia')
+                    .order('name', { ascending: true }),
                 // Colunas explicitas, sem `csv_data`. Com `select('*')` o
                 // cliente baixava os bancos de TODAS as numeracoes do sistema —
                 // 569 KB, dos quais 84% eram CSV de pedidos alheios que ele
@@ -2388,6 +2396,50 @@ function atualizarNavCsvDaAmostra(idx, item, num, container) {
 }
 
 
+/**
+ * Busca o PDF de referência de UMA cor, sob demanda.
+ *
+ * O catálogo carregado no início da página não traz as colunas base64: elas
+ * somam 18 MB para as 24 cores do sistema, e o cliente costuma ver uma. Aqui
+ * chega só a cor que vai ser desenhada. Gêmeo de `garantirPdfDaCor` do
+ * `script.js` — mexeu num, confira o outro.
+ */
+const _pdfDeCorEmVoo = new Map();
+async function garantirPdfDaCor(cor) {
+    if (!cor || !cor.id) return cor;
+    // `undefined` = veio da lista enxuta. `null` = já buscado, cor sem arquivo.
+    if (cor.pdf_base64 !== undefined) return cor;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return cor;
+
+    const chave = String(cor.id);
+    if (!_pdfDeCorEmVoo.has(chave)) {
+        _pdfDeCorEmVoo.set(chave, supabaseClient
+            .from('producao_cores')
+            .select('pdf_base64,pdf_verso_base64')
+            .eq('id', cor.id)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) throw error;
+                return data || { pdf_base64: null, pdf_verso_base64: null };
+            }));
+    }
+
+    try {
+        const linha = await _pdfDeCorEmVoo.get(chave);
+        cor.pdf_base64 = linha.pdf_base64 || null;
+        cor.pdf_verso_base64 = linha.pdf_verso_base64 || null;
+        const noEstado = (state.cores || []).find(c => String(c.id) === chave);
+        if (noEstado && noEstado !== cor) {
+            noEstado.pdf_base64 = cor.pdf_base64;
+            noEstado.pdf_verso_base64 = cor.pdf_verso_base64;
+        }
+    } catch (e) {
+        _pdfDeCorEmVoo.delete(chave);
+        console.warn('[cores] Nao foi possivel baixar o PDF da cor ' + cor.id, e);
+    }
+    return cor;
+}
+
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
@@ -2504,6 +2556,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     ctx.globalCompositeOperation = 'source-over';
 
     // ====== CAMADA 1: COR (PDF via pdf.js) ======
+    // O PDF da cor não vem no catálogo (ver garantirPdfDaCor). Sem esta
+    // linha a amostra sairia sem a camada da cor, calada.
+    if (cor) await garantirPdfDaCor(cor);
     let corRendered = false;
     if (cor && (cor.pdf_base64 || (face === 'back' && cor.pdf_verso_base64)) && typeof pdfjsLib !== 'undefined') {
         try {

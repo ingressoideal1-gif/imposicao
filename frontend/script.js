@@ -641,6 +641,85 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 // - API Helpers -
 
+// ── O CATÁLOGO DE CORES NÃO CARREGA O PDF DE REFERÊNCIA ───────────────
+//
+// `producao_cores` guarda o PDF inteiro da cor dentro da própria linha, em
+// base64. São 24 linhas e 17,8 MiB de JSON: 16,8 MiB de `pdf_base64` +
+// `pdf_verso_base64`, 1 MiB de `preview_base64` (coluna que este frontend não
+// lê em lugar nenhum) e 11,7 KiB de tudo o que a tela realmente mostra.
+//
+// Enquanto a lista vinha com `select('*')`, abrir o painel baixava esses 18 MB
+// (13,5 MiB comprimidos) antes de qualquer tela aparecer — era isso que fazia o
+// parceiro esperar ao clicar no link direto do pedido, e o cliente esperar na
+// página de aprovação. O mesmo remédio já tinha sido aplicado ao `csv_data` das
+// numerações em `cliente.js`.
+//
+// Quem precisa dos bytes chama `garantirPdfDaCor(cor)` e recebe a MESMA linha
+// com as duas colunas preenchidas — uma cor por vez, só a que vai ser desenhada.
+// Para saber se existe PDF sem baixá-lo, use `pdf_filename` (frente) e
+// `name_verso` (verso): as duas colunas são gravadas junto com o arquivo.
+const COLUNAS_DA_COR_NA_LISTA = 'id,empresa_id,name,hex,pdf_url,pdf_filename,created_at,updated_at,formato_id,width_mm,height_mm,id_modelo_cor_num,name_verso,frente_verso,cor_referencia';
+
+const _pdfDeCorEmVoo = new Map();
+
+async function garantirPdfDaCor(cor) {
+    if (!cor || !cor.id) return cor;
+    // `undefined` = a linha veio da lista enxuta. `null` = já foi buscado e a
+    // cor não tem arquivo. Só o primeiro caso vai ao banco.
+    if (cor.pdf_base64 !== undefined) return cor;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return cor;
+
+    const chave = String(cor.id);
+    if (!_pdfDeCorEmVoo.has(chave)) {
+        _pdfDeCorEmVoo.set(chave, supabaseClient
+            .from('producao_cores')
+            .select('pdf_base64,pdf_verso_base64')
+            .eq('id', cor.id)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) throw error;
+                return data || { pdf_base64: null, pdf_verso_base64: null };
+            }));
+    }
+
+    try {
+        const linha = await _pdfDeCorEmVoo.get(chave);
+        cor.pdf_base64 = linha.pdf_base64 || null;
+        cor.pdf_verso_base64 = linha.pdf_verso_base64 || null;
+        // A mesma cor pode estar em duas referências (a do state e uma cópia).
+        const noEstado = (state.cores || []).find(c => String(c.id) === chave);
+        if (noEstado && noEstado !== cor) {
+            noEstado.pdf_base64 = cor.pdf_base64;
+            noEstado.pdf_verso_base64 = cor.pdf_verso_base64;
+        }
+    } catch (e) {
+        _pdfDeCorEmVoo.delete(chave);
+        console.warn('[cores] Nao foi possivel baixar o PDF da cor ' + cor.id, e);
+    }
+    return cor;
+}
+window.garantirPdfDaCor = garantirPdfDaCor;
+
+/** Baixa o PDF de referência da cor no clique — o catálogo não o traz. */
+window.baixarPdfDaCor = async function (id, face) {
+    const cor = (state.cores || []).find(c => String(c.id) === String(id));
+    if (!cor) return;
+    await garantirPdfDaCor(cor);
+    const dados = (face === 'verso') ? cor.pdf_verso_base64 : cor.pdf_base64;
+    if (!dados) {
+        toast('Esta cor nao tem PDF de referencia gravado.', 'error');
+        return;
+    }
+    const a = document.createElement('a');
+    a.href = dados;
+    a.download = (face === 'verso')
+        ? (cor.name_verso || 'referencia_verso.pdf')
+        : (cor.pdf_filename || 'referencia_frente.pdf');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+};
+
 async function api(method, path, body = null) {
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && (path.startsWith('/formatos') || path.startsWith('/numeracoes') || path.startsWith('/saidas') || path.startsWith('/cores') || path.startsWith('/modelos_imposicao'))) {
@@ -694,7 +773,10 @@ async function api(method, path, body = null) {
 
                 } else {
 
-                    const { data, error } = await supabaseClient.from(col).select('*');
+                    // Cores sem os PDFs — ver COLUNAS_DA_COR_NA_LISTA no topo.
+                    const colunas = (col === 'producao_cores') ? COLUNAS_DA_COR_NA_LISTA : '*';
+
+                    const { data, error } = await supabaseClient.from(col).select(colunas);
 
                     if (error) throw error;
 
@@ -1984,14 +2066,17 @@ function renderCores() {
                     </thead>
                     <tbody>
                         ${coresDoFormato.map(c => {
-                            let pdfLinkFront = c.pdf_base64 
-                                ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia_frente.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Frente</a>`
+                            // O catálogo não traz os bytes do PDF. `pdf_filename` e
+                            // `name_verso` dizem que ele existe; o clique é que vai
+                            // buscá-lo, por `baixarPdfDaCor`.
+                            let pdfLinkFront = c.pdf_filename
+                                ? `<a href="javascript:void(0)" onclick="event.stopPropagation(); baixarPdfDaCor('${c.id}', 'frente');" class="badge badge-teal" style="text-decoration:none;">📥 Frente</a>`
                                 : '<span style="color:var(--text-faint)">Sem arquivo (Frente)</span>';
                             
                             let pdfLinkBack = '';
                             if (c.frente_verso) {
-                                pdfLinkBack = c.pdf_verso_base64
-                                    ? ` <a href="${c.pdf_verso_base64}" download="${c.name_verso || 'referencia_verso.pdf'}" class="badge badge-amber" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Verso</a>`
+                                pdfLinkBack = c.name_verso
+                                    ? ` <a href="javascript:void(0)" onclick="event.stopPropagation(); baixarPdfDaCor('${c.id}', 'verso');" class="badge badge-amber" style="text-decoration:none;">📥 Verso</a>`
                                     : ' <span style="color:var(--text-faint)">(Verso pendente)</span>';
                             }
                             
@@ -2091,6 +2176,9 @@ function saveLocalCorReferencia(id, val) {
 async function duplicateCor(id) {
     const c = state.cores.find(x => x.id === id);
     if (!c) return;
+
+    // A cópia leva o PDF junto, e ele não vem no catálogo.
+    await garantirPdfDaCor(c);
 
     try {
         const clone = {
@@ -2198,7 +2286,7 @@ window.saveCor = saveCor;
 
 
 
-function editCor(id) {
+async function editCor(id) {
 
     const c = state.cores.find(x => x.id === id);
 
@@ -2234,6 +2322,10 @@ function editCor(id) {
     if (chkFrenteVerso) chkFrenteVerso.checked = c.frente_verso || false;
     
     toggleCorVersoFields();
+
+    // O PDF não veio no catálogo; buscar antes de preencher o formulário,
+    // senão salvar em seguida gravaria a cor SEM o arquivo de referência.
+    await garantirPdfDaCor(c);
 
     if (c.pdf_base64) {
         corPdfBase64 = c.pdf_base64;
@@ -4828,6 +4920,8 @@ window.autoLoadCorBg = async function (formatoId) {
     const cor = window.resolveCorDoFormatoBase(formatoId);
 
     if (!cor) return false;
+
+    await garantirPdfDaCor(cor);
 
     // Não cai para a segunda cor: se a mais antiga não tem arte, não há arte.
 
@@ -17525,6 +17619,10 @@ window.onAmostraCorSelect = async function() {
 
 
 
+    await garantirPdfDaCor(cor);
+
+
+
     if (cor.pdf_base64) {
 
         if (empty) {
@@ -23686,7 +23784,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     setTimeout(() => { renderImpOSQueue(); }, 600);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    setTimeout(() => {
+    setTimeout(async () => {
         // Prioridade 1: arte_url do próprio item
         // Prioridade 2: pdf_base64 da cor correspondente
         const arteUrl = item.arte_url || null;
@@ -23695,6 +23793,9 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         const corObj = item.amostra_cor_id
             ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
             : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
+        
+        // Só quando a arte vai sair da cor: o catálogo não traz o PDF.
+        if (!arteUrl && corObj) await garantirPdfDaCor(corObj);
         
         if (arteUrl) {
             state.isColorTemplate = false;
@@ -27967,6 +28068,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     ctx.globalCompositeOperation = 'source-over';
 
     // ====== CAMADA 1: COR (PDF via pdf.js) ======
+    // O PDF da cor não vem no catálogo (ver garantirPdfDaCor). Sem esta
+    // linha a amostra sairia sem a camada da cor, calada.
+    if (cor) await garantirPdfDaCor(cor);
     let corRendered = false;
     if (cor && (cor.pdf_base64 || (face === 'back' && cor.pdf_verso_base64)) && typeof pdfjsLib !== 'undefined') {
         try {
@@ -28651,7 +28755,7 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
  */
 async function garantirTabelasDaAmostra() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-    if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select('*');       if (data) state.cores = data;       } catch(e) {}
+    if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select(COLUNAS_DA_COR_NA_LISTA); if (data) state.cores = data; } catch(e) {}
     if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
     if (!state.formatos || !state.formatos.length)     try { const { data } = await supabaseClient.from('producao_formatos').select('*');   if (data) state.formatos = data;   } catch(e) {}
 }

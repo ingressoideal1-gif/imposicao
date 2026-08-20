@@ -478,6 +478,12 @@ async function renderEditorLayer1Cor(cor, fmt, face) {
 
     let corRendered = false;
 
+    // O catálogo de cores não traz o PDF de referência (18 MB para as 24
+    // cores). `garantirPdfDaCor`, do script.js, busca o desta cor.
+    if (cor && typeof window.garantirPdfDaCor === 'function') {
+        await window.garantirPdfDaCor(cor);
+    }
+
     if (cor) {
         const hasVerso = (face === 'verso');
         const rawData = hasVerso ? 

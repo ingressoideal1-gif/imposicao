@@ -1161,6 +1161,16 @@ function drawPedPreview() {
                     : (state.cores || []).find(c => globalFuzzyMatch(c.name, (sItem ? (sItem.cor || sItem.padrao || '') : '')));
 
                 if (corObj) {
+                    // O catálogo não traz o PDF da cor. Esta função é síncrona
+                    // de propósito (é o desenho), então em vez de esperar: pede o
+                    // arquivo e redesenha quando ele chega. Roda uma vez só —
+                    // depois `pdf_base64` deixa de ser `undefined`.
+                    if (corObj.pdf_base64 === undefined && typeof window.garantirPdfDaCor === 'function') {
+                        window.garantirPdfDaCor(corObj).then(() => {
+                            if (typeof drawPedPreview === 'function') drawPedPreview();
+                        });
+                    }
+
                     // 1. Desenhar cor de fundo / hex de referência se cadastrada
                     const hexColor = corObj.cor_referencia || corObj.hex || corObj.color || '';
                     if (hexColor) {
@@ -3316,11 +3326,16 @@ async function enviarParaPedido(itemId, osId) {
     }, 500);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    setTimeout(() => {
+    setTimeout(async () => {
         const arteUrl = item.arte_url || null;
         const corObj = item.amostra_cor_id
             ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
             : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
+        
+        // Só quando a arte vai sair da cor: o catálogo não traz o PDF.
+        if (!arteUrl && corObj && typeof window.garantirPdfDaCor === 'function') {
+            await window.garantirPdfDaCor(corObj);
+        }
         
         if (arteUrl) {
             state.isColorTemplate = false;

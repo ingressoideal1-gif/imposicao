@@ -4,7 +4,40 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v652** — 2026-08-19 | Agente **1.2.147**
+## Versão atual: **v653** — 2026-08-20 | Agente **1.2.147**
+
+---
+
+## [v653 — 2026-08-20] — Abrir o painel deixou de baixar 18 MB de PDF
+
+**A queixa:** quando o parceiro Vibe clica no link da página dele para a nossa Lista de
+Arte, demora para entrar; o caminho contrário é instantâneo.
+
+**A causa, medida no navegador:** uma consulta só, `producao_cores?select=*`, levando
+**7,6 s** no carregamento. Essa tabela guarda o PDF de referência de cada cor **dentro
+da linha**, em base64. São 24 linhas e **17,8 MiB** de JSON — 16,8 MiB de `pdf_base64` e
+`pdf_verso_base64`, 1 MiB de `preview_base64` (coluna que nenhum arquivo do frontend lê)
+e **11,7 KiB** de tudo o que a tela realmente mostra. Só a cor Mobi são 3,6 MiB. Comprimido
+ainda são 13,5 MiB no fio, porque base64 de PDF não comprime. Nada disso era o script.js,
+a rede do parceiro ou a Vercel: os arquivos do site chegam em 300 ms.
+
+**O conserto:** o catálogo passou a pedir só as colunas da tela — **2 KB**, 6.860 vezes
+menor — e quem vai desenhar a cor chama `garantirPdfDaCor(cor)`, que busca **uma** cor por
+vez e guarda o resultado na própria linha. `pdf_filename` e `name_verso` dizem se existe
+arquivo sem baixá-lo; o botão 📥 da lista de cores agora busca os bytes no clique.
+
+Medido antes e depois com o mesmo navegador, contra o mesmo banco: **5.022 ms → 510 ms**
+na consulta do catálogo. A página do cliente (`cliente.html`) baixava os mesmos 18 MB
+antes de mostrar a arte para aprovação, e recebeu o mesmo remédio.
+
+Pediram o PDF antes de desenhar: `drawAmostraFace` (painel e página do cliente),
+`renderEditorLayer1Cor` (Criador de Arte), `drawPedPreview` e os dois "enviar para"
+(imposição e pedido), o `editCor` e o duplicar cor. A prévia do pedido é síncrona de
+propósito, então ela pede o arquivo e redesenha quando ele chega.
+
+**Fica anotado, para depois:** `produtos_proposta` traz `amostra_arte_base64` na lista
+(1,3 MB; sem essa coluna seriam 59 KB), e o `loadAll` roda duas vezes por carregamento.
+Nenhum dos dois pesa como o catálogo de cores pesava.
 
 ---
 

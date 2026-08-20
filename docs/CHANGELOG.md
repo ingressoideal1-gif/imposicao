@@ -4,6 +4,30 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-20] — O catálogo de cores parou de carregar os PDFs
+
+O parceiro Vibe reclamou que clicar no link da página dele para a nossa Lista de Arte
+demorava. A medição no navegador apontou **uma consulta**: `producao_cores?select=*`,
+**7,6 s**. A tabela guarda o PDF de referência de cada cor dentro da própria linha, em
+base64 — 24 linhas, **17,8 MiB** de JSON, dos quais 11,7 KiB é o que a tela mostra. Só a
+cor Mobi são 3,6 MiB; `preview_base64` são mais 1 MiB de uma coluna que nenhum arquivo do
+frontend lê.
+
+A lista passou a pedir só as colunas da tela (**2 KB**) e quem desenha a cor chama
+`garantirPdfDaCor(cor)`, que busca uma cor por vez e guarda o resultado na linha.
+`pdf_filename` e `name_verso` dizem que o arquivo existe sem baixá-lo. Medido com o mesmo
+navegador contra o mesmo banco: **5.022 ms → 510 ms**.
+
+A página de aprovação do cliente (`cliente.html`) fazia a mesma consulta e recebeu o mesmo
+remédio — ali o cliente costuma abrir o pedido no celular, e via uma cor. É o mesmo
+conserto que o `csv_data` das numerações já tinha recebido naquela página.
+
+Coberto por `tests/test_pdf_da_cor.py`, que recorta `garantirPdfDaCor` do `script.js` e a
+executa contra um banco de mentira: busca uma vez, guarda, não repete para cor sem
+arquivo, e duas chamadas simultâneas viram uma consulta só.
+
+---
+
 ## [2026-08-18] — A janela da amostra mostra 100% da arte, do tamanho que vai imprimir
 
 Três releases seguidos (v641, v642 e v643) sobre a mesma queixa: *"parece visualizar com uma

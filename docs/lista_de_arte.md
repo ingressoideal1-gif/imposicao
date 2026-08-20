@@ -266,6 +266,20 @@ Três detalhes que fazem esse link funcionar:
 
 Quem abre o link sem sessão para no login, como qualquer outra tela do painel.
 
+### Por que esse link já foi lento
+
+Até 20/08/2026 o parceiro reclamava que clicar nele demorava. Não era a rede dele
+nem o tamanho do `script.js`: os arquivos do site chegam em cerca de 300 ms. Era
+**uma consulta só**, `producao_cores?select=*`, medida em **7,6 s** no
+carregamento — a tabela guarda o PDF de referência de cada cor dentro da linha,
+em base64, e as 24 linhas somam 17,8 MiB.
+
+O catálogo passou a pedir só as colunas que a tela mostra (2 KB) e quem vai
+desenhar a cor chama `garantirPdfDaCor(cor)`, que busca uma cor por vez. Se algum
+dia a lista voltar a ficar lenta, o primeiro lugar a olhar é a aba Rede do
+navegador ordenada por duração: neste projeto o gargalo tem sido sempre uma
+coluna `base64` viajando junto com o catálogo, e não a quantidade de arquivos.
+
 ---
 
 ## Onde mexer
