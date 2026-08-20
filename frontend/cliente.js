@@ -351,6 +351,15 @@ function renderAmostrasOSItens(osId) {
         // quando ainda não há snapshot, então um modelo cuja arte é PDF entrava
         // num `<img>`, não desenhava nada — e ainda escondia o aviso de vazio,
         // por o campo estar preenchido. Sobrava um retângulo branco sem legenda.
+        // Só leitura: o pedido já foi decidido, e a aba da arte agora existe
+        // também depois da aprovação (antes ela sumia da tela). Aqui o cliente
+        // volta para VER a arte que aprovou -- com o lightbox e o folheador de
+        // páginas funcionando --, e por isso os botões de decisão e a caixa de
+        // observação saem. Botão que não decide mais nada, numa tela em que
+        // ninguém explica isso, é convite para o cliente achar que dá para
+        // desaprovar.
+        const somenteLeitura = state.arteSomenteLeitura === true;
+
         const arteVisivel = temArteVisivel(item);
         const versoVisivel = !!item.verso_amostra_arte_base64
             && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
@@ -404,12 +413,14 @@ function renderAmostrasOSItens(osId) {
                             ${statusBadge}
                         </div>
                         `}
+                        ${somenteLeitura ? '' : `
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
                             <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
-                        <div class="amostra-decisao-btns">
+                        `}
+                        <div class="amostra-decisao-btns" ${somenteLeitura ? 'hidden' : ''}>
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
                                 <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
@@ -1156,57 +1167,21 @@ async function initClientePage(numero, token) {
             }
         }
 
-        // REGRA DE ACESSO DO CLIENTE:
-        // Se a entrega/faturamento estiver em 'ALTERADO' OU se a OS estiver em 'Enviar Arte' (ou 'Enviar ARTE'),
-        // a página do cliente DEVE ABRIR para que ele faça a conferência e aprovação dos dados!
-        const statusUP = osStatus.trim().toUpperCase();
-        const isAprovado  = (statusUP === 'APROVADO' || statusUP === 'APROVADA_CLIENTE');
-        const isReprovado = (statusUP === 'REPROVADO' || statusUP === 'REPROVADA_CLIENTE');
-        const isAguardandoAprovacao = (
-            statusUP === 'AGUARD. APROVAÇÃO' ||
-            statusUP === 'AGUARD. APROVACAO' ||
-            statusUP === 'AGUARDANDO_APROVACAO' ||
-            statusUP === 'AGUARDANDO' ||
-            statusUP === 'ENVIAR ARTE' ||
-            osStatus.trim() === 'Enviar Arte'
-        );
-        const isEntregaAlterada = (entregaStatus === 'ALTERADO');
+        // ── O Portal ────────────────────────────────────────────────────
+        //
+        // Antes daqui saía a decisão de MOSTRAR OU NÃO a página: só
+        // `Enviar Arte`, `Aguard. Aprovação` ou entrega `ALTERADO` abriam
+        // alguma coisa; o resto via uma frase e acabava. Medido em 20/08/2026:
+        // 36 dos 50 links estavam nesse "resto".
+        //
+        // Agora as cinco seções abrem sempre, e o status decide apenas a CARA
+        // da aba da arte. O selo `ALTERADO` da entrega deixou de precisar
+        // destrancar a página: a aba de entrega já está lá.
+        clienteState.statusArte = osStatus;
+        clienteState.entregaStatus = entregaStatus;
 
-        console.log('[ClienteView] Decisão de exibição:', { osStatus, entregaStatus, isEntregaAlterada, isAguardandoAprovacao, isAprovado, isReprovado });
-
-        if (isEntregaAlterada || isAguardandoAprovacao) {
-
-            // Permite acesso direto à aprovação de entrega/faturamento ou artes
-            const itensArray = state.osItens[osId] || [];
-            const todosAprovados = itensArray.length > 0 && itensArray.every(item => item.amostra_status === 'APROVADA');
-            
-            if (todosAprovados && !isEntregaAlterada) {
-                mostrarConfirmacaoDadosCliente(osId);
-            } else {
-                renderAmostrasOSItens(osId);
-            }
-        } else if (isAprovado) {
-            mostrarResultadoCliente(
-                '✅',
-                'Artes Aprovadas!',
-                'Suas artes já foram APROVADAS. Em breve seu pedido entrará em produção. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
-            );
-        } else if (isReprovado) {
-            mostrarResultadoCliente(
-                '❌',
-                'Artes Reprovadas',
-                'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
-            );
-        } else {
-            // Em Arte, Pendente Informação, ou qualquer outro status intermediário sem alteração de entrega
-            mostrarResultadoCliente(
-                '🕐',
-                'Artes em Preparação',
-                'Sua arte ainda está sendo preparada pela nossa equipe. Assim que estiver pronta para aprovação, você receberá um novo link. Qualquer dúvida, entre em contato com seu ATENDIMENTO.'
-            );
-        }
-
-
+        registrarSecao('arte', () => desenharSecaoArte(osId));
+        montarPortal(osStatus);
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
@@ -1972,6 +1947,15 @@ function atualizarBarraFinalCliente(osId) {
 
     const containerActions = document.querySelector('.cliente-actions');
     if (!containerActions) return;
+
+    // Pedido já decidido: a aba da arte agora continua existindo depois da
+    // aprovação, e sem esta guarda o botão de finalizar reapareceria embaixo
+    // das artes que o cliente só voltou para conferir.
+    if (state.arteSomenteLeitura === true) {
+        containerActions.style.display = 'none';
+        return;
+    }
+    containerActions.style.display = '';
 
     const itens = state.osItens[osId] || [];
     if (itens.length === 0) return;
@@ -3475,3 +3459,129 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
         ctx.restore();
     });
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  A aba da arte — uma cara para cada status do pedido
+// ══════════════════════════════════════════════════════════════════════════
+//
+// Até 20/08/2026 esta página só mostrava a arte enquanto o pedido esperava
+// aprovação. Aprovou, a arte sumia da tela: o link ficava com uma frase, e o
+// cliente não tinha mais como olhar o que aprovou nem conferir a numeração de
+// um ingresso. Medido no banco naquele dia, 36 dos 50 links estavam num status
+// em que esta página não mostrava nada.
+//
+// Agora a aba existe em todos os status. O que muda é o modo: com decisão
+// (`aprovar`) ou só leitura, e sempre com um aviso em cima dizendo em que pé
+// está o pedido.
+
+/**
+ * O aviso no topo da aba da arte.
+ *
+ * `manterArtes` decide o essencial: `false` esconde as artes e deixa só a
+ * mensagem (é o caso de quando ainda não há arte pronta); `true` põe a mensagem
+ * ACIMA das artes, que continuam visíveis e com lightbox.
+ */
+function avisoDaArte(icone, titulo, texto, manterArtes) {
+    const secao = document.getElementById('secao-arte');
+    if (!secao) return;
+
+    let aviso = document.getElementById('portal-aviso-arte');
+    if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'portal-aviso-arte';
+        aviso.className = 'portal-cartao';
+        secao.insertBefore(aviso, secao.firstChild);
+    }
+
+    aviso.innerHTML = '<div style="text-align: center; padding: 6px 0 2px;">'
+        + '<div style="font-size: 2.6rem; line-height: 1.1;">' + icone + '</div>'
+        + '<h2 style="justify-content: center; border: 0; padding: 0; margin: 10px 0 6px;">'
+        + escapeHtml(titulo) + '</h2>'
+        + '<p class="portal-vazio" style="margin: 0;">' + texto + '</p>'
+        + '</div>';
+
+    const container = document.getElementById('cliente-amostras-itens-container');
+    if (container) container.style.display = manterArtes ? 'flex' : 'none';
+    const acoes = document.querySelector('.cliente-actions');
+    if (acoes) acoes.style.display = 'none';
+}
+
+/**
+ * O que o cliente pediu para alterar, modelo a modelo — lido dos itens, que é
+ * onde a observação dele foi gravada.
+ *
+ * Sem isto, quem pede alteração e volta ao link não vê o que escreveu, e acaba
+ * escrevendo de novo pelo WhatsApp. É a mesma informação, devolvida a ele.
+ */
+function pedidosDeAlteracaoDoCliente(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    return itens
+        .filter(i => i.amostra_status === 'REPROVADA' && i.amostra_obs && String(i.amostra_obs).trim())
+        .map(i => ({
+            modelo: i.nome_produto || i.modelo_descri || 'Modelo',
+            texto: String(i.amostra_obs).trim()
+        }));
+}
+
+/**
+ * Desenha a aba da arte conforme o status do pedido.
+ *
+ * A chave vem de `seloDoStatus`, no `cliente-shell.js`, que é o único lugar que
+ * entende as seis grafias de status que convivem na coluna `status_arte`.
+ */
+function desenharSecaoArte(osId) {
+    const chave = seloDoStatus(clienteState.statusArte).chave;
+
+    if (chave === 'aprovar') {
+        state.arteSomenteLeitura = false;
+        const aviso = document.getElementById('portal-aviso-arte');
+        if (aviso) aviso.remove();
+        const container = document.getElementById('cliente-amostras-itens-container');
+        if (container) container.style.display = 'flex';
+        const acoes = document.querySelector('.cliente-actions');
+        if (acoes) acoes.style.display = '';
+        renderAmostrasOSItens(osId);
+        return;
+    }
+
+    state.arteSomenteLeitura = true;
+
+    if (chave === 'aprovado') {
+        renderAmostrasOSItens(osId);
+        avisoDaArte('✅', 'Artes aprovadas',
+            'Você já aprovou estas artes. Elas estão abaixo, como foram aprovadas — '
+            + 'toque em qualquer uma para ampliar. Em breve seu pedido entra em produção.', true);
+        return;
+    }
+
+    if (chave === 'producao') {
+        renderAmostrasOSItens(osId);
+        avisoDaArte('🖨️', 'Pedido em produção',
+            'Suas artes já estão na impressora. Confira o prazo e o endereço na aba '
+            + '<b>Entrega</b>.', true);
+        return;
+    }
+
+    if (chave === 'correcao') {
+        renderAmostrasOSItens(osId);
+        const pedidos = pedidosDeAlteracaoDoCliente(osId);
+        let texto = 'Recebemos seu pedido de alteração e nossa equipe está refazendo a arte. '
+                  + 'Assim que estiver pronta, ela aparece aqui.';
+        if (pedidos.length) {
+            texto += '<br><br><b>O que você pediu:</b>';
+            pedidos.forEach(p => {
+                texto += '<br>• <b>' + escapeHtml(p.modelo) + ':</b> ' + escapeHtml(p.texto);
+            });
+        }
+        avisoDaArte('🔧', 'Alteração solicitada', texto, true);
+        return;
+    }
+
+    // `preparando`, e qualquer status que o ERP invente amanhã.
+    avisoDaArte('🎨', 'Arte em preparação',
+        'Nossa equipe está preparando sua arte. Quando ela estiver pronta, você recebe '
+        + 'um aviso e ela aparece aqui, nesta mesma página. Enquanto isso, confira seus '
+        + 'dados nas outras abas.', false);
+}
+
+window.desenharSecaoArte = desenharSecaoArte;

@@ -3017,3 +3017,278 @@ input[type=number] {
     border: 1px solid rgba(245, 158, 11, 0.65);
 }
 .selo-sobra-btn:hover { background: rgba(245, 158, 11, 0.32); color: var(--amber); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PORTAL DO PEDIDO — a página pública do cliente, desenhada para o celular
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Quem abre esta página é o CLIENTE da gráfica, no meio do dia, pelo navegador
+   embutido do WhatsApp. É a única tela deste projeto cujo público está fora da
+   gráfica, e por isso ela é a única em que o celular manda: o desktop é o caso
+   derivado, e não o contrário.
+
+   As três regras que essa prioridade impõe, e que valem para tudo aqui embaixo:
+   alvo de toque de 44px para cima; nenhuma rolagem horizontal; e folga com
+   `env(safe-area-inset-*)`, para o cabeçalho não encostar no relógio do celular
+   nem a barra cair sob o gesto de voltar do iPhone. */
+
+/* ─── A barra de abas ─────────────────────────────────────────────────────── */
+
+.portal-abas {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 500;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: rgba(10, 15, 30, 0.96);
+    border-top: 1px solid var(--border);
+    /* A folga do gesto de voltar do iPhone. Sem ela, a aba do meio fica
+       embaixo da barrinha do sistema e o toque vai para o sistema, não para
+       a página. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    backdrop-filter: blur(10px);
+}
+
+.portal-aba {
+    /* 56px: o piso de 44px mais a folga que faz o dedo acertar sem mirar. */
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    background: none;
+    border: 0;
+    border-top: 2px solid transparent;
+    color: var(--text-dim);
+    font-family: inherit;
+    /* O rótulo encolhe até caber cinco numa tela de 320px, e nunca quebra
+       linha: "Orçamento" partido ao meio é pior do que "Orçamento" pequeno. */
+    font-size: 0.66rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--transition), border-color var(--transition);
+}
+
+.portal-aba:hover { color: var(--text); }
+
+.portal-aba.ativa {
+    color: var(--blue);
+    border-top-color: var(--blue);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.portal-aba-icone { font-size: 1.3rem; line-height: 1; }
+.portal-aba-rotulo { font-weight: 600; }
+
+/* ─── O que a barra empurra ───────────────────────────────────────────────── */
+
+.cliente-page .cliente-container {
+    /* Espaço para a barra: sem isto, o rodapé e o último cartão de cada seção
+       nascem embaixo dela, e não há rolagem que os alcance. */
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+
+.cliente-page .cliente-header {
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+}
+
+/* O botão de aprovar continua colado no fim da tela, mas ACIMA da barra. */
+.cliente-page .cliente-actions {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    padding: 0;
+}
+
+/* ─── O cabeçalho ─────────────────────────────────────────────────────────── */
+
+.cliente-logo { height: 40px; width: auto; border-radius: 6px; flex-shrink: 0; }
+.cliente-header-texto { min-width: 0; }
+
+/* O selo do status: a primeira coisa que responde "como está meu pedido?" —
+   a pergunta que traz o cliente de volta ao link. */
+.portal-selo {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 12px;
+    border: 1px solid var(--text-dim);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+.portal-selo:empty { display: none; }
+
+#cliente-os-itens-count { margin-top: 6px; display: inline-block; }
+#cliente-os-itens-count:empty { display: none; }
+
+/* ─── As seções ───────────────────────────────────────────────────────────── */
+
+.portal-secao[hidden] { display: none; }
+
+.portal-cartao {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    margin-bottom: 14px;
+}
+
+.portal-cartao h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* Rótulo em cima, valor embaixo: numa tela de 360px, rótulo e valor lado a
+   lado espremem o valor até ele quebrar em três linhas. */
+.portal-linha {
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.portal-linha:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.portal-linha-rotulo {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+}
+
+.portal-linha-valor {
+    display: block;
+    font-size: 1rem;
+    color: var(--text);
+    /* Documento, e-mail e código de rastreio são longos e não têm espaço para
+       quebrar: sem isto eles empurram a página para os lados. */
+    overflow-wrap: anywhere;
+}
+
+.portal-linha-valor.forte { font-weight: 700; }
+
+.portal-vazio {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+/* O destaque de dinheiro: o total é o número que o cliente procura. */
+.portal-total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+}
+.portal-total-rotulo { font-size: 0.82rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.portal-total-valor { font-size: 1.5rem; font-weight: 800; color: var(--green); }
+
+/* Botão de largura cheia, o formato que o polegar acerta. */
+.portal-botao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+    cursor: pointer;
+}
+.portal-botao.principal {
+    background: var(--green);
+    border-color: var(--green);
+    color: #04240f;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.35);
+}
+.portal-botao.atencao { background: #f97316; border-color: #f97316; color: #fff; }
+.portal-botao[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.portal-par-de-botoes { display: flex; gap: 10px; margin-top: 14px; }
+.portal-par-de-botoes .portal-botao { flex: 1; }
+
+.portal-caixa-de-texto {
+    width: 100%;
+    margin: 12px 0 10px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    /* 16px cravados: abaixo disso o iOS dá zoom ao focar o campo, e o cliente
+       fica com a página deslocada e sem saber como voltar. */
+    font-size: 16px;
+    line-height: 1.4;
+    resize: vertical;
+}
+
+.portal-aviso {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    margin-bottom: 14px;
+}
+.portal-aviso.ok      { background: rgba(34, 197, 94, 0.10);  border: 1px solid rgba(34, 197, 94, 0.35); }
+.portal-aviso.atencao { background: rgba(249, 115, 22, 0.10); border: 1px solid rgba(249, 115, 22, 0.40); }
+.portal-aviso.calmo   { background: rgba(148, 163, 184, 0.08); border: 1px solid var(--border); color: var(--text-dim); }
+
+/* O resumo do orçamento vem do ERP com quebras de linha próprias. */
+.portal-resumo {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--text);
+}
+.portal-resumo b { color: #fff; }
+
+/* ─── Desktop: a mesma barra, no topo ─────────────────────────────────────── */
+
+@media (min-width: 900px) {
+    .portal-abas {
+        top: 16px;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: min(900px, calc(100% - 40px));
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding-bottom: 0;
+        overflow: hidden;
+    }
+    .portal-aba { flex-direction: row; gap: 8px; font-size: 0.9rem; border-top: 0; border-bottom: 2px solid transparent; }
+    .portal-aba.ativa { border-bottom-color: var(--blue); }
+    .cliente-page .cliente-container { padding-top: 92px; padding-bottom: 24px; }
+    .cliente-page .cliente-actions { bottom: 20px; }
+    .portal-cartao { padding: 22px 24px; }
+}

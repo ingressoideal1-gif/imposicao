@@ -30,15 +30,19 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- PÁGINA PÚBLICA DO CLIENTE -->
+    <!-- PORTAL DO PEDIDO — a página pública do cliente.
+         Cinco seções sempre abertas, e a aprovação de arte é uma delas. Até
+         20/08/2026 isto era um funil que só abria em dois status; 36 dos 50
+         links do banco estavam num status em que a página não mostrava nada. -->
     <div id="cliente-page" class="cliente-page">
         <div class="cliente-container">
             <header class="cliente-header">
-                <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 40px; border-radius: 6px;">
-                <div>
-                    <h1 class="cliente-title">Aprovação do Pedido <span id="cliente-pedido-numero" style="color: var(--blue);"></span></h1>
+                <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal" class="cliente-logo">
+                <div class="cliente-header-texto">
+                    <h1 class="cliente-title">Pedido <span id="cliente-pedido-numero"></span></h1>
                     <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
-                    <span id="cliente-os-itens-count" class="badge badge-blue" style="margin-top: 6px; display: inline-block;"></span>
+                    <span id="portal-selo" class="portal-selo"></span>
+                    <span id="cliente-os-itens-count" class="badge badge-blue"></span>
                 </div>
             </header>
 
@@ -54,32 +58,75 @@
 
             <!-- Conteúdo do pedido -->
             <div id="cliente-content" style="display: none;">
-                <!-- Container de itens do pedido -->
-                <div id="cliente-amostras-itens-container" style="display: flex; flex-direction: column; gap: 6pt; margin-bottom: 24px;"></div>
+                <main id="portal-secoes">
 
-                <!-- Painel de Conclusão Opcional -->
-                <section class="cliente-section cliente-actions" style="margin-top: 30px; position: sticky; bottom: 20px; z-index: 100;">
-                    <!-- `min-height` e não `height`, e sem `font-size` preso aqui: com
-                         altura fixa mais o `white-space: nowrap` do `.btn`, o rótulo não
-                         quebrava linha, vazava do retângulo verde e — por ser centralizado —
-                         sumia pelos dois lados no celular. O tamanho do texto agora vem do
-                         CSS, que sabe encolher em tela estreita. -->
-                    <button class="btn btn-success btn-lg" onclick="clienteAprovarTudo()" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; min-height: 56px; padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
-                        ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
-                    </button>
-                </section>
+                    <!-- 🎨 APROVAÇÃO DE ARTE -->
+                    <section id="secao-arte" class="portal-secao">
+                        <!-- Container de itens do pedido -->
+                        <div id="cliente-amostras-itens-container" style="display: flex; flex-direction: column; gap: 6pt; margin-bottom: 24px;"></div>
 
-                <div id="cliente-resultado" style="display: none; text-align: center; padding: 40px 20px;">
-                    <div style="font-size: 3rem; margin-bottom: 16px;" id="cliente-resultado-icon"></div>
-                    <h2 id="cliente-resultado-titulo"></h2>
-                    <p id="cliente-resultado-msg" style="color: var(--text-dim); margin-top: 8px;"></p>
-                </div>
+                        <!-- Painel de Conclusão Opcional -->
+                        <div class="cliente-section cliente-actions" style="margin-top: 30px; position: sticky; z-index: 100;">
+                            <!-- `min-height` e não `height`, e sem `font-size` preso aqui: com
+                                 altura fixa mais o `white-space: nowrap` do `.btn`, o rótulo não
+                                 quebrava linha, vazava do retângulo verde e — por ser centralizado —
+                                 sumia pelos dois lados no celular. O tamanho do texto agora vem do
+                                 CSS, que sabe encolher em tela estreita. -->
+                            <button class="btn btn-success btn-lg" onclick="clienteAprovarTudo()" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; min-height: 56px; padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
+                                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+                            </button>
+                        </div>
+
+                        <div id="cliente-resultado" style="display: none; text-align: center; padding: 40px 20px;">
+                            <div style="font-size: 3rem; margin-bottom: 16px;" id="cliente-resultado-icon"></div>
+                            <h2 id="cliente-resultado-titulo"></h2>
+                            <p id="cliente-resultado-msg" style="color: var(--text-dim); margin-top: 8px;"></p>
+                        </div>
+                    </section>
+
+                    <!-- 📦 DADOS DE ENTREGA -->
+                    <section id="secao-entrega" class="portal-secao" hidden></section>
+
+                    <!-- 🧾 DADOS DE FATURAMENTO -->
+                    <section id="secao-faturamento" class="portal-secao" hidden></section>
+
+                    <!-- 💰 ORÇAMENTO -->
+                    <section id="secao-orcamento" class="portal-secao" hidden></section>
+
+                    <!-- 💳 LINK PARA PAGAMENTO -->
+                    <section id="secao-pagamento" class="portal-secao" hidden></section>
+
+                </main>
             </div>
 
             <footer class="cliente-footer">
                 <p>Ideal Imposition — Sistema de Imposição Gráfica &copy; 2026</p>
             </footer>
         </div>
+
+        <!-- A barra de abas.
+             No rodapé porque quem abre este link é o cliente, no celular, pelo
+             navegador embutido do WhatsApp: ali os cinco destinos ficam ao
+             alcance do polegar. No desktop o CSS a transforma numa coluna.
+             Cada aba tem RÓTULO EM TEXTO embaixo do ícone — ícone sozinho não
+             diz para onde leva. -->
+        <nav id="portal-abas" class="portal-abas" aria-label="Seções do pedido" hidden>
+            <button type="button" class="portal-aba ativa" data-abre="arte">
+                <span class="portal-aba-icone" aria-hidden="true">🎨</span><span class="portal-aba-rotulo">Arte</span>
+            </button>
+            <button type="button" class="portal-aba" data-abre="entrega">
+                <span class="portal-aba-icone" aria-hidden="true">📦</span><span class="portal-aba-rotulo">Entrega</span>
+            </button>
+            <button type="button" class="portal-aba" data-abre="faturamento">
+                <span class="portal-aba-icone" aria-hidden="true">🧾</span><span class="portal-aba-rotulo">Nota</span>
+            </button>
+            <button type="button" class="portal-aba" data-abre="orcamento">
+                <span class="portal-aba-icone" aria-hidden="true">💰</span><span class="portal-aba-rotulo">Orçamento</span>
+            </button>
+            <button type="button" class="portal-aba" data-abre="pagamento">
+                <span class="portal-aba-icone" aria-hidden="true">💳</span><span class="portal-aba-rotulo">Pagar</span>
+            </button>
+        </nav>
     </div>
 
     <!-- LIGHTBOX DE AMPLIAÇÃO COM ZOOM (Pinch/Pan) DO MODELO -->
@@ -105,6 +152,7 @@
     <script src="/texto-ajuste.js?v=656"></script>
     <script src="/foto-lib.js?v=656"></script>
     <script src="/cliente-dados.js?v=656"></script>
+    <script src="/cliente-shell.js?v=656"></script>
     <script src="/cliente.js?v=656"></script>
 </body>
 </html>
