@@ -130,3 +130,19 @@ def test_o_nome_do_cliente_vem_da_coluna_que_existe():
 def test_a_carga_do_portal_passa_pela_funcao():
     fonte = _ler_cliente()
     assert "rpc('link_cliente_pedido'" in fonte
+
+
+def test_a_pagina_nao_baixa_o_catalogo_de_produtos_inteiro():
+    """`select('*')` em `produtos` trazia 44 colunas -- descricao, frase de
+    conservacao, informacoes fiscais, CFOP, NCM -- para usar cinco. Medido em
+    20/08/2026: 80 kB para entregar 12 kB, antes do primeiro pixel de uma pagina
+    que o cliente abre no 4G.
+
+    As LINHAS continuam vindo todas, e de proposito: quando o item nao traz
+    `id_produto`, esta pagina acha o produto pelo nome e pelos apelidos, e uma
+    lista filtrada por id deixaria de fora justamente o produto que so o nome
+    encontraria.
+    """
+    fonte = _ler_cliente()
+    assert "from('produtos').select('*')" not in fonte
+    assert "'id, id_produto, nomeReal, apelidos, id_formato'" in fonte

@@ -967,7 +967,24 @@ async function initClientePage(numero, token) {
                     .select('id, name, tipo, formato_id, formato_ids, elements, print_mode, ticket_qtd, ticket_logica, csv_headers, csv_filename, Cli_Num, is_custom, os_item_id')
                     .order('name', { ascending: true }),
                 supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true }),
-                supabaseClient.from('produtos').select('*')
+                // Colunas explicitas, sem os textos fiscais.
+                //
+                // Estas cinco sao TODAS as que esta pagina consulta: `id` e
+                // `id_produto` para achar o produto do item, `nomeReal` e
+                // `apelidos` para o casamento por nome quando o id nao bate, e
+                // `id_formato`, que e o motivo de a busca existir. Com
+                // `select('*')` vinham 44 colunas -- descricao, frase de
+                // conservacao, personalizacao, informacoes fiscais, CFOP,
+                // NCM --, nenhuma delas usada aqui: 80 kB para entregar 12 kB.
+                //
+                // Filtrar as LINHAS seria o passo seguinte, e nao foi dado de
+                // proposito: quando o item nao traz `id_produto`, esta pagina
+                // acha o produto pelo NOME e pelos apelidos, e uma lista
+                // filtrada por id deixaria de fora justamente o produto que so
+                // o nome encontraria. Mesmo motivo pelo qual o catalogo de
+                // cores tambem continua vindo inteiro.
+                supabaseClient.from('produtos')
+                    .select('id, id_produto, nomeReal, apelidos, id_formato')
             ]);
             state.cores = coresRes.data || [];
             const allNums = numeracoesRes.data || [];
