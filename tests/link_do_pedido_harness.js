@@ -170,11 +170,19 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
 
 // ─── Onde o link e oferecido e disparado ────────────────────────────────────
 
-(function aListaDeArteOfereceOLinkParaCopiar() {
-    ok(/copiarLinkDoPedido\('\$\{os\.numero\}'\)/.test(SCRIPT),
-        'a linha do pedido tem o botao de copiar');
-    ok(/event\.stopPropagation\(\); copiarLinkDoPedido/.test(SCRIPT),
-        'e copiar nao abre o pedido junto');
+(function naoHaMaisBotaoDeCopiarOLink() {
+    // Decisao do usuario em 19/08/2026: a linha da Lista de Arte ficou com o
+    // numero do pedido e mais nada. O botao de copiar nao mudou de lugar -- ele
+    // foi excluido, e a funcao que so servia a ele saiu junto.
+    //
+    // A ROTA continua: `/pedido/20928` abre o painel dentro do pedido, e e por
+    // isso que o resto deste arquivo continua valendo. O que sumiu foi o atalho
+    // para copiar o endereco, nao o endereco.
+    ok(SCRIPT.indexOf('copiarLinkDoPedido') < 0,
+        'nao sobrou nem chamada nem funcao de copiar o link');
+    ok(!/&#128279;|🔗/.test(SCRIPT.slice(SCRIPT.indexOf('navigateToAmostrasFromOS(\'${os.id}\')'), SCRIPT.indexOf('navigateToAmostrasFromOS(\'${os.id}\')') + 3000)),
+        'e a linha do pedido nao tem mais o botao de corrente');
+    ok(/function linkDiretoDoPedido/.test(SCRIPT), 'o endereco do pedido continua definido');
 })();
 
 (function oDesenhoDaListaDisparaAAbertura() {
@@ -198,7 +206,7 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
 
 (function oIconeDoVibeAbreSempreNaMesmaAba() {
     const usos = SCRIPT.match(/target="\$\{ABA_DO_VIBE\}"/g) || [];
-    ok(usos.length === 3, 'as tres telas que levam ao Vibe usam a mesma aba', usos.length);
+    ok(usos.length === 2, 'as duas telas que levam ao Vibe usam a mesma aba', usos.length);
     ok(!/vibe\.ai-ideal\.com\.br[^`]*target="_blank"/.test(SCRIPT),
         'e nenhuma delas ficou no _blank');
 })();
@@ -227,7 +235,7 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
         quantas++;
         i = SCRIPT.indexOf('target="${ABA_DO_VIBE}"', i + 1);
     }
-    ok(quantas === 3, 'as tres ancoras foram conferidas', quantas);
+    ok(quantas === 2, 'as duas ancoras foram conferidas', quantas);
 })();
 
 // ─── Em que menu do parceiro o pedido abre ───────────────────────────────────
@@ -244,11 +252,11 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
         'e ele leva ao menu Pedido', link('20928'));
     ok(!/tab=produtos/.test(SCRIPT), 'nenhum link ficou no menu Produto');
 
-    // Tres ancoras, um endereco: sem a funcao, mudar o menu exigiria caçar as
-    // tres, e a que passasse batida abriria noutro lugar.
+    // Duas ancoras, um endereco: sem a funcao, mudar o menu exigiria caçar as
+    // duas, e a que passasse batida abriria noutro lugar.
     // O `(?<!function )` tira a propria declaracao da conta: ela tambem casa.
     const usos = SCRIPT.match(/(?<!function )linkDoPedidoNoVibe\((?:os\.numero|numero)\)/g) || [];
-    ok(usos.length === 3, 'as tres telas montam o endereco pela mesma funcao', usos.length);
+    ok(usos.length === 2, 'as duas telas montam o endereco pela mesma funcao', usos.length);
 })();
 
 // ─── O mesmo link repetido DENTRO do pedido ──────────────────────────────────

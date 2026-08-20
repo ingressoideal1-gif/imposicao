@@ -21025,7 +21025,14 @@ function renderDesignersBoxHTML(osId, osNum) {
     }
 
     const currentAssignedDesigner = getOSDesigner(osId, osNum);
-    const allOrdens = state.ordens || [];
+
+    // Só os pedidos do card "Em Arte", e não `state.ordens` inteiro.
+    //
+    // Contando tudo, a caixa somava pedido já aprovado, pedido esperando o
+    // cliente responder e pedido que foi para a produção meses atrás — o número
+    // ao lado do nome só crescia e não dizia quanto trabalho a pessoa tem hoje.
+    // A conta agora é a mesma do card, pela mesma função.
+    const ordensEmArte = (state.ordens || []).filter(pedidoEstaEmArte);
     // Quem define o designer é o atendimento. Para os outros a caixa vira o que
     // ela realmente é: uma consulta de quem está com o quê.
     const podeTrocarDesigner = podeDefinirDesigner();
@@ -21034,7 +21041,7 @@ function renderDesignersBoxHTML(osId, osNum) {
         const pedidosSet = new Set();
         let modelosCount = 0;
 
-        allOrdens.forEach(o => {
+        ordensEmArte.forEach(o => {
             const desOS = getOSDesigner(o.id, o.numero);
             if (desOS && desOS.toLowerCase() === d.nome.toLowerCase()) {
                 pedidosSet.add(o.numero || o.id);
@@ -21641,7 +21648,12 @@ const ABA_DO_CLIENTE = 'cliente-ideal';
 // perde no caminho de ida. O caminho sobrevive, então o link continua valendo
 // para quem precisa entrar antes.
 
-/** O endereço que se copia e manda. */
+// Não há botão de copiar este endereço, e isso é decisão do usuário, tomada em
+// 19/08/2026: o botão 🔗 que existia na linha da Lista de Arte foi excluído
+// junto com o ícone do Vibe, para a lista ficar limpa. O endereço continua
+// valendo — quem precisa dele o monta pelo número do pedido.
+
+/** O endereço de um pedido: `https://.../pedido/20928`. */
 function linkDiretoDoPedido(numero) {
     return window.location.origin + '/pedido/' + String(numero);
 }
@@ -21695,25 +21707,6 @@ function abrirPedidoDoLinkDireto() {
     }
 }
 
-/** Copia o link direto do pedido para a área de transferência. */
-async function copiarLinkDoPedido(numero) {
-    const url = linkDiretoDoPedido(numero);
-    try {
-        await navigator.clipboard.writeText(url);
-    } catch (e) {
-        // Área de transferência bloqueada (acontece fora de HTTPS e em alguns
-        // navegadores da gráfica). O caminho velho ainda funciona.
-        const ta = document.createElement('textarea');
-        ta.value = url;
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); } catch (e2) {}
-        document.body.removeChild(ta);
-    }
-    toast('🔗 Link do pedido copiado: ' + url, 'success');
-}
-window.copiarLinkDoPedido = copiarLinkDoPedido;
-
 window.abrirPedidoDoLinkDireto = abrirPedidoDoLinkDireto;
 
 function pedidoSaiuDaArte(os) {
@@ -21722,6 +21715,161 @@ function pedidoSaiuDaArte(os) {
     const si = (os.status_interno || '').trim().toUpperCase();
     return SINAIS_SAIU_DA_ARTE.includes(st) || SINAIS_SAIU_DA_ARTE.includes(si);
 }
+
+// ──── Em que card da Lista de Arte um pedido cai ──────────────────────────
+//
+// Esta classificação era um trecho solto dentro do `renderOrdens`, e por isso
+// só existia enquanto a tabela era desenhada. A caixa "Designers Ideal", que
+// aparece dentro do pedido, contava os pedidos por conta própria — e contava
+// TODOS, inclusive os já aprovados e os que foram para produção. Com uma
+// função só, quem pergunta "este pedido está em arte?" recebe sempre a mesma
+// resposta que o card da tela dá.
+
+const ARTE_REPROVADOS = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
+const ARTE_APROVADOS = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
+const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO', 'AGUARD. APROVAÇAO'];
+
+/**
+ * Devolve `{ statusCalculado, fila }` para um pedido.
+ *
+ * `fila` é o card da Lista de Arte em que ele aparece:
+ *   'fila'       → Em Arte            (o trabalho do designer ainda está aberto)
+ *   'aprovacao'  → Fila de Aprovação  (foi para o cliente e aguarda resposta)
+ *   'aprovados'  → Fila de Aprovados  (arte E dados de entrega aprovados)
+ *   'concluidos' → Pedidos Concluídos (já saiu da arte para a produção)
+ *
+ * A função não escreve nada no pedido — quem quiser o `status_calculado`
+ * gravado que o grave, como o `renderOrdens` faz para o badge da Lista de
+ * Impressão.
+ */
+function classificarPedidoNaArte(os) {
+    if (!os) return { statusCalculado: '', fila: 'fila' };
+
+    const osNumeroInt = parseInt(os.numero);
+    const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+    const modelosGlobaisOS = (state.modelosGlobais && state.modelosGlobais[osNumeroInt]) ? state.modelosGlobais[osNumeroInt] : (state.osItens[os.id] || []);
+
+    // Status da OS / Registro Global de Artes
+    const osStatus = (os.status || '').trim().toUpperCase();
+    const arteGlobal = artesDaOS[0] || {};
+    const globalStatus = (arteGlobal.status || '').trim().toUpperCase();
+
+    // Checar se a OS, a tabela global de artes ou QUALQUER modelo/item tem alteração/reprovação
+    const temItemReprovado = modelosGlobaisOS.some(m => {
+        const sAm = (m.amostra_status || '').trim().toUpperCase();
+        const sArt = (m.status_arte || '').trim().toUpperCase();
+        return ARTE_REPROVADOS.includes(sAm) || ARTE_REPROVADOS.includes(sArt);
+    });
+
+    const todosModelosAprovados = modelosGlobaisOS.length > 0 && modelosGlobaisOS.every(m => {
+        const sAm = (m.amostra_status || '').trim().toUpperCase();
+        const sArt = (m.status_arte || '').trim().toUpperCase();
+        return ARTE_APROVADOS.includes(sAm) || ARTE_APROVADOS.includes(sArt);
+    });
+
+    const isApprovedCalculado = ARTE_APROVADOS.includes(osStatus) || ARTE_APROVADOS.includes(globalStatus) || todosModelosAprovados;
+    const isEmAlteracaoCalculado = (ARTE_REPROVADOS.includes(osStatus) || ARTE_REPROVADOS.includes(globalStatus) || temItemReprovado) && !todosModelosAprovados;
+    const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
+    const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
+
+    let statusCalculado;
+    if (isApprovedCalculado) {
+        statusCalculado = 'Aprovada';
+    } else if (isEnviarArteCalculado) {
+        statusCalculado = 'Enviar Arte';
+    } else if (isEmAlteracaoCalculado) {
+        statusCalculado = 'Em Alteração';
+    } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
+        statusCalculado = 'Aguard. Aprovação';
+    } else {
+        statusCalculado = os.status || 'Em Arte';
+    }
+
+    // Status dos Dados de Entrega / Faturamento
+    const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
+    const isEntregaAprovada = (entregaStatus === 'APROVADO');
+    const isArteAprovada = (statusCalculado === 'Aprovada');
+
+    const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
+    const isEmAprovacaoFila = (statusCalculado === 'Enviar Arte' || statusCalculado === 'Aguard. Aprovação' || statusCalculado === 'Arte Pronta' || statusCalculado === 'Aprovada');
+
+    let fila;
+    if (pedidoSaiuDaArte(os)) fila = 'concluidos';
+    else if (isTotalmenteAprovado) fila = 'aprovados';
+    else if (isEmAprovacaoFila) fila = 'aprovacao';
+    else fila = 'fila';
+
+    return { statusCalculado, fila };
+}
+window.classificarPedidoNaArte = classificarPedidoNaArte;
+
+/** O pedido está no card "Em Arte"? */
+function pedidoEstaEmArte(os) {
+    return classificarPedidoNaArte(os).fila === 'fila';
+}
+window.pedidoEstaEmArte = pedidoEstaEmArte;
+
+// ---- O preview da arte de um pedido -------------------------------------
+//
+// A miniatura da arte do modelo de numero mais baixo. Nasceu no Painel de
+// Producao e, em 19/08/2026, o usuario pediu a MESMA coisa na Lista de Arte.
+// Por isso virou funcao: "igual ao do Painel de Producao" so continua verdade
+// enquanto for o mesmo codigo desenhando os dois.
+//
+// Arte em PDF nao vira imagem aqui: sai um icone que abre o arquivo.
+// Rasterizar a arte do cliente esta fora de cogitacao neste projeto.
+function previewDaArteDoPedidoHtml(os) {
+    const osItensList = (state.osItens && state.osItens[os.id]) || [];
+    // Preview da arte do modelo de número mais baixo
+    const numOsPreview = parseInt(os.numero);
+    const modelosGlobaisPreview = (state.modelosGlobais && state.modelosGlobais[numOsPreview]) ? state.modelosGlobais[numOsPreview] : [];
+    const todosCandidatos = [...modelosGlobaisPreview, ...osItensList];
+    
+    const getModeloNumSort = (item) => {
+        if (item && typeof item.ordem === 'number' && !isNaN(item.ordem)) return item.ordem;
+        if (item && typeof item.modelo === 'number' && !isNaN(item.modelo)) return item.modelo;
+        const str = String(item ? (item.modelo || item.modelo_nome || item.modelo_descri || item.nome || item.id || '') : '');
+        const m = str.match(/\d+/);
+        return m ? parseInt(m[0], 10) : 999999;
+    };
+
+    const candidatosComImagem = todosCandidatos.filter(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url));
+    candidatosComImagem.sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
+
+    const modeloPreviewItem = candidatosComImagem[0];
+    let previewSrc = modeloPreviewItem ? (modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
+    if (!previewSrc && state.todasArtes) {
+        const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
+        if (arteGlobal && (arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64)) {
+            previewSrc = arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64;
+        }
+    }
+
+    let previewHtml = `
+        <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
+            🖼️
+        </div>
+    `;
+    if (previewSrc) {
+        const isPdf = previewSrc.startsWith('data:application/pdf') || previewSrc.includes('JVBERi') || previewSrc.toLowerCase().endsWith('.pdf');
+        if (isPdf) {
+            previewHtml = `
+                <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${previewSrc}', '_blank')">
+                    📄
+                </div>
+            `;
+        } else {
+            previewHtml = `
+                <img src="${previewSrc}" 
+                     style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
+                     onclick="event.stopPropagation(); openClienteLightbox('${previewSrc}')" 
+                     title="Clique para ampliar a arte" />
+            `;
+        }
+    }
+    return previewHtml;
+}
+window.previewDaArteDoPedidoHtml = previewDaArteDoPedidoHtml;
 
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
@@ -21858,75 +22006,18 @@ function renderOrdens() {
     let ordensAprovados = [];
     let ordensConcluidosArte = [];
 
-    const validReprovadoList = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
-    const validApprovedList = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
-    const validAprovacaoList = ['ENVIAR ARTE', 'ARTE PRONTA', 'ENVIAR ARTE', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO', 'AGUARD. APROVAÇAO'];
-
-
     state.ordens.forEach(os => {
-        const osNumeroInt = parseInt(os.numero);
-        const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
-        const modelosGlobaisOS = (state.modelosGlobais && state.modelosGlobais[osNumeroInt]) ? state.modelosGlobais[osNumeroInt] : (state.osItens[os.id] || []);
-        
-        // Status da OS / Registro Global de Artes
-        const osStatus = (os.status || '').trim().toUpperCase();
-        const arteGlobal = artesDaOS[0] || {};
-        const globalStatus = (arteGlobal.status || '').trim().toUpperCase();
+        const c = classificarPedidoNaArte(os);
 
-        // Checar se a OS, a tabela global de artes ou QUALQUER modelo/item tem alteração/reprovação
-        let temItemReprovado = modelosGlobaisOS.some(m => {
-            const sAm = (m.amostra_status || '').trim().toUpperCase();
-            const sArt = (m.status_arte || '').trim().toUpperCase();
-            return validReprovadoList.includes(sAm) || validReprovadoList.includes(sArt);
-        });
+        // O status_calculado é gravado no pedido porque a tabela da Lista de
+        // Impressão usa esse campo para o badge — inclusive nos que já saíram
+        // da arte.
+        os.status_calculado = c.statusCalculado;
 
-        let todosModelosAprovados = modelosGlobaisOS.length > 0 && modelosGlobaisOS.every(m => {
-            const sAm = (m.amostra_status || '').trim().toUpperCase();
-            const sArt = (m.status_arte || '').trim().toUpperCase();
-            return validApprovedList.includes(sAm) || validApprovedList.includes(sArt);
-        });
-
-        const isApprovedCalculado = validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus) || todosModelosAprovados;
-        const isEmAlteracaoCalculado = (validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado) && !todosModelosAprovados;
-        const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
-        const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
-
-        if (isApprovedCalculado) {
-            os.status_calculado = 'Aprovada';
-        } else if (isEnviarArteCalculado) {
-            os.status_calculado = 'Enviar Arte';
-        } else if (isEmAlteracaoCalculado) {
-            os.status_calculado = 'Em Alteração';
-        } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
-            os.status_calculado = 'Aguard. Aprovação';
-        } else {
-            os.status_calculado = os.status || 'Em Arte';
-        }
-
-
-
-
-
-        // Status dos Dados de Entrega / Faturamento
-        const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
-        const isEntregaAprovada = (entregaStatus === 'APROVADO');
-        const isArteAprovada = (os.status_calculado === 'Aprovada');
-
-        const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
-        const isEmAprovacaoFila = (os.status_calculado === 'Enviar Arte' || os.status_calculado === 'Aguard. Aprovação' || os.status_calculado === 'Arte Pronta' || os.status_calculado === 'Aprovada');
-
-        if (pedidoSaiuDaArte(os)) {
-            // status_calculado continua sendo calculado acima porque a tabela da
-            // Lista de Impressão usa esse campo para o badge do pedido.
-            ordensConcluidosArte.push(os);
-        } else if (isTotalmenteAprovado) {
-            ordensAprovados.push(os);
-        } else if (isEmAprovacaoFila) {
-            ordensAprovacao.push(os);
-        } else {
-            ordensFilaArte.push(os);
-        }
-
+        if (c.fila === 'concluidos') ordensConcluidosArte.push(os);
+        else if (c.fila === 'aprovados') ordensAprovados.push(os);
+        else if (c.fila === 'aprovacao') ordensAprovacao.push(os);
+        else ordensFilaArte.push(os);
     });
 
     // --- Calcular Estatísticas dos Cards KPI ---
@@ -22162,53 +22253,7 @@ function renderOrdens() {
                     </div>
                 `;
 
-                // Preview da arte do modelo de número mais baixo
-                const numOsPreview = parseInt(os.numero);
-                const modelosGlobaisPreview = (state.modelosGlobais && state.modelosGlobais[numOsPreview]) ? state.modelosGlobais[numOsPreview] : [];
-                const todosCandidatos = [...modelosGlobaisPreview, ...osItensList];
-                
-                const getModeloNumSort = (item) => {
-                    if (item && typeof item.ordem === 'number' && !isNaN(item.ordem)) return item.ordem;
-                    if (item && typeof item.modelo === 'number' && !isNaN(item.modelo)) return item.modelo;
-                    const str = String(item ? (item.modelo || item.modelo_nome || item.modelo_descri || item.nome || item.id || '') : '');
-                    const m = str.match(/\d+/);
-                    return m ? parseInt(m[0], 10) : 999999;
-                };
-
-                const candidatosComImagem = todosCandidatos.filter(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url));
-                candidatosComImagem.sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
-
-                const modeloPreviewItem = candidatosComImagem[0];
-                let previewSrc = modeloPreviewItem ? (modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
-                if (!previewSrc && state.todasArtes) {
-                    const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
-                    if (arteGlobal && (arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64)) {
-                        previewSrc = arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64;
-                    }
-                }
-
-                let previewHtml = `
-                    <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
-                        🖼️
-                    </div>
-                `;
-                if (previewSrc) {
-                    const isPdf = previewSrc.startsWith('data:application/pdf') || previewSrc.includes('JVBERi') || previewSrc.toLowerCase().endsWith('.pdf');
-                    if (isPdf) {
-                        previewHtml = `
-                            <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${previewSrc}', '_blank')">
-                                📄
-                            </div>
-                        `;
-                    } else {
-                        previewHtml = `
-                            <img src="${previewSrc}" 
-                                 style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
-                                 onclick="event.stopPropagation(); openClienteLightbox('${previewSrc}')" 
-                                 title="Clique para ampliar a arte" />
-                        `;
-                    }
-                }
+                const previewHtml = previewDaArteDoPedidoHtml(os);
 
                 // Soma das quantidades de todos os modelos
                 const totalQtd = modelosGlobais.length > 0 
@@ -22393,13 +22438,7 @@ function renderOrdens() {
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
                         <td>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
-                                <a href="${linkDoPedidoNoVibe(os.numero)}" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
-                                    <img src="icon-vibe.png" alt="Vibe" style="height: 22px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));" />
-                                </a>
-                                <button class="btn btn-sm" onclick="event.stopPropagation(); copiarLinkDoPedido('${os.numero}')" title="Copiar o link direto deste pedido — quem abrir cai dentro dele" style="padding: 3px 6px; font-size: 0.85rem; line-height: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer;">🔗</button>
-                            </div>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
                         </td>
 
                         <td>
@@ -22408,6 +22447,7 @@ function renderOrdens() {
                         <td>
                             <strong style="color: white;">${escapeHtml(os.vendedor) || '--'}</strong>${nomeDesignerHtml}
                         </td>
+                        <td style="text-align: center; vertical-align: middle;">${previewDaArteDoPedidoHtml(os)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
                             ${dataPedFormatada}
@@ -26654,7 +26694,8 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 // 'APROVADA' é o ✅ APROVADO do painel, apertado pelo atendente.
                 //
                 // Os dois valores já eram lidos como aprovado em todo o código
-                // (as `validApprovedList`, o mapa de selos, o remapeamento da
+                // (as listas de aprovado — `ARTE_APROVADOS` e `validApproved` —,
+                // o mapa de selos, o remapeamento da
                 // carga em `statusFrontend`), e 'APROVADA' já é gravado NESTA
                 // MESMA coluna pelo modal de artes — então não é vocabulário
                 // novo para o sistema parceiro, é o que ele já recebe hoje.

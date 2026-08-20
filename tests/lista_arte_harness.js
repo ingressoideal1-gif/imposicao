@@ -71,13 +71,32 @@ const { pedidoSaiuDaArte } = new Function(
     ok(!pedidoSaiuDaArte(null), 'e pedido nulo nao quebra a lista');
 })();
 
-// ─── Onde a regra e aplicada dentro do renderOrdens ──────────────────────────
+// ─── Onde a regra e aplicada ─────────────────────────────────────────────────
+//
+// A classificacao saiu de dentro do `renderOrdens` e virou a funcao
+// `classificarPedidoNaArte`, para a caixa "Designers Ideal" poder contar os
+// pedidos com o MESMO criterio dos cards. O que este bloco guarda continua
+// sendo o mesmo: a ordem das perguntas.
 
 (function saiuDaArteEAPrimeiraPergunta() {
     // Se esta pergunta nao vier antes das outras tres, o pedido liberado volta a
     // ser contado em "Em Arte"/"Em Aprovacao"/"Aprovados" e reaparece na tabela.
-    ok(/if \(pedidoSaiuDaArte\(os\)\) \{[\s\S]{0,400}?ordensConcluidosArte\.push\(os\);[\s\S]{0,200}?\} else if \(isTotalmenteAprovado\) \{/.test(SCRIPT),
+    ok(/if \(pedidoSaiuDaArte\(os\)\) fila = 'concluidos';[\s\S]{0,120}?else if \(isTotalmenteAprovado\) fila = 'aprovados';/.test(SCRIPT),
         'o pedido que saiu da arte e separado antes de entrar em qualquer fila');
+})();
+
+(function oRenderUsaAFuncaoEmVezDeUmaCopia() {
+    // Duas classificacoes parecidas divergem no primeiro ajuste que alguem fizer
+    // numa delas -- e a divergencia aparece como pedido que soma num lugar e
+    // some noutro.
+    ok(/const c = classificarPedidoNaArte\(os\);/.test(SCRIPT),
+        'o renderOrdens classifica pela funcao');
+    ok(/if \(c\.fila === 'concluidos'\) ordensConcluidosArte\.push\(os\);/.test(SCRIPT),
+        'e enche os baldes com o que ela responde');
+
+    // O badge da Lista de Impressao depende deste campo gravado no pedido.
+    ok(/os\.status_calculado = c\.statusCalculado;/.test(SCRIPT),
+        'o status_calculado continua sendo gravado no pedido');
 })();
 
 (function oCardContaOMesmoBalde() {
