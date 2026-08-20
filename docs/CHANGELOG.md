@@ -4,6 +4,28 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-20] — Pedido já embalado sai da Lista de Arte
+
+A lista reconhecia só produção, impressão e finalizada como "saiu da arte". Pedido em
+acabamento, em trânsito, na expedição ou já impresso continuava ocupando a tela do designer.
+
+A revisão foi feita contando o que existe nas 8.268 propostas do ERP. Entraram `IMPRESSO`,
+`EM ACABAMENTO`, `EXPEDICAO`, `EM TRANSITO`, `ENTREGUE` e `REVISAO PRODUCAO`, com e sem
+acento. Ficaram de fora `APROVADO` (3.363 pedidos) e `LIBERADO` (3.224) — soam como fim de
+linha, mas são dois terços do banco e o pedido mais novo do dia está em `LIBERADO`; qualquer
+um dos dois esvaziaria a lista. `REVISAO ATENDENTE` também fica: o atendente revisa antes de
+mandar ao cliente. E `CANCELADO` fica de fora porque pedido cancelado não saiu da arte — ele
+deixou de existir.
+
+Coberto por `tests/test_lista_arte.py`, que trava as duas palavras proibidas com o número de
+pedidos ao lado.
+
+**A revisão nasceu de um erro meu na v654:** o reparo que criou linha em `pedidos_artes` para
+12 pedidos antigos os trouxe de volta para a Lista de Arte — em produção, ter linha nessa
+tabela é o que faz o pedido aparecer. Desfazer: `sql/desfazer_reparo_da_linha_de_arte.sql`.
+
+---
+
 ## [2026-08-20] — A alteração de nota fiscal e entrega que o cliente escreve sumia
 
 O que o cliente registra no link do cliente sobre os dados de nota fiscal e entrega não

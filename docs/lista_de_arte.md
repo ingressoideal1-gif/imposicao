@@ -34,6 +34,37 @@ que devolve `{ statusCalculado, fila }`. Ela lê quatro fontes — `propostas`,
 3. **Está com o cliente?** → `aprovacao`
 4. Senão → `fila`
 
+### Quais palavras tiram um pedido da arte
+
+`pedidoSaiuDaArte` compara `status` e `status_interno` com `SINAIS_SAIU_DA_ARTE`.
+As palavras vêm do ERP do parceiro, então a lista foi escolhida em 20/08/2026
+contando o que existe de verdade nas 8.268 propostas:
+
+| Sai da arte | Fica na arte |
+|-------------|--------------|
+| `EM PRODUCAO` · `PRODUCAO` | `NOVO` (941) |
+| `EM IMPRESSAO` · `IMPRESSO` | `AGUARDANDO` (358) |
+| `EM ACABAMENTO` | `NOVO_ARTE_APROVADA` |
+| `REVISAO PRODUCAO` | `REVISAO ATENDENTE` |
+| `EXPEDICAO` · `EM TRANSITO` · `ENTREGUE` | **`APROVADO` (3.363)** |
+| `FINALIZADA` · `FINALIZADO` | **`LIBERADO` (3.224)** |
+
+> [!CAUTION]
+> **`APROVADO` e `LIBERADO` são a armadilha.** Soam como fim de linha e são dois
+> terços do ERP inteiro — o pedido mais recente do dia costuma estar em
+> `LIBERADO`. Pôr qualquer um dos dois na lista esvaziaria a Lista de Arte.
+>
+> `CANCELADO` (32) também fica de fora, mas por outro motivo: pedido cancelado
+> não *saiu* da arte, ele deixou de existir, e "Pedidos Concluídos" é card de
+> trabalho feito.
+>
+> `IMPRESSO` e `ENTREGUE` entram sem existir ainda em `status_interno`: são
+> inequívocas, e são as palavras que o operador espera que funcionem.
+
+Antes dessa revisão a lista tinha só produção, impressão e finalizada — e por
+isso pedido já em trânsito ou no acabamento continuava ocupando a tela do
+designer.
+
 > [!IMPORTANT]
 > Essa função é a **única** dona da regra. Ela nasceu como um trecho solto dentro
 > do `renderOrdens`, e por isso só existia enquanto a tabela era desenhada — a

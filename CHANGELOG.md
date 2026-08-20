@@ -4,7 +4,42 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v654** — 2026-08-20 | Agente **1.2.149**
+## Versão atual: **v655** — 2026-08-20 | Agente **1.2.150**
+
+---
+
+## [v655 — 2026-08-20] — Pedido já embalado sai da Lista de Arte
+
+A Lista de Arte reconhecia só três estados como "saiu da arte": produção, impressão e
+finalizada. Pedido em **acabamento**, em **trânsito**, na **expedição** ou já **impresso**
+continuava ocupando a tela do designer.
+
+A lista de sinais foi revista contando o que existe de verdade nas **8.268 propostas** do
+ERP — as palavras são do parceiro, não nossas:
+
+| Passou a sair da arte | Continua na arte |
+|---|---|
+| `IMPRESSO` · `EM ACABAMENTO` · `EXPEDICAO` | `NOVO` (941) · `AGUARDANDO` (358) |
+| `EM TRANSITO` · `ENTREGUE` · `REVISAO PRODUCAO` | `REVISAO ATENDENTE` · `NOVO_ARTE_APROVADA` |
+| (com e sem acento, em todas) | **`APROVADO` (3.363)** · **`LIBERADO` (3.224)** |
+
+**`APROVADO` e `LIBERADO` eram a armadilha.** Soam como fim de linha e são dois terços do
+ERP inteiro — o pedido mais recente do dia estava em `LIBERADO`. Qualquer um dos dois na
+lista esvaziaria a Lista de Arte. `CANCELADO` (32) ficou de fora por outro motivo: pedido
+cancelado não *saiu* da arte, ele deixou de existir, e "Pedidos Concluídos" é card de
+trabalho feito.
+
+`IMPRESSO` e `ENTREGUE` entraram sem existir ainda em `status_interno` — são inequívocas, e
+são as palavras que o operador espera que funcionem.
+
+**O que provocou a revisão foi um erro meu.** O reparo `correcao_do_cliente_precisa_de_linha.sql`,
+rodado na v654, criou linha em `pedidos_artes` para 12 pedidos antigos que tinham link de
+cliente. Escapou que, em produção, **ter linha nessa tabela é o que faz o pedido aparecer na
+Lista de Arte** (o filtro `existeArtes` do `loadOrdensFromVibecode`): os 12 voltaram para a
+tela. O desfazer está em `sql/desfazer_reparo_da_linha_de_arte.sql`, e o arquivo original
+ganhou um aviso no topo. O que resolve o problema do cliente continua de pé sem ele —
+`garantirLinhaDePedidoArte` cria a linha no painel, na hora de gerar o link, com o pedido de
+fato na arte.
 
 ---
 

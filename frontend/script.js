@@ -21668,8 +21668,46 @@ window.atualizarPainelProducao = atualizarPainelProducao;
  * A lista de sinais é a mesma que o card "Pedidos Concluídos" sempre usou, de
  * propósito: usar um recorte mais estreito aqui deixaria pedido fora de todos
  * os cards ao mesmo tempo. 'EM PRODUCAO' é o que liberarParaProducao() grava.
+ *
+ * ## Por que estas palavras, e não outras (20/08/2026)
+ *
+ * A lista tinha só produção, impressão e finalizada, e pedido já embalado
+ * continuava ocupando a tela do designer. As palavras vêm do parceiro, então a
+ * escolha foi feita contando o que existe de verdade nas 8.268 propostas:
+ *
+ *     APROVADO            3.363   ← NÃO entra: é estado comercial
+ *     LIBERADO            3.224   ← NÃO entra: é estado comercial
+ *     NOVO                  941   ← é arte
+ *     AGUARDANDO            358   ← é arte
+ *     EM PRODUCAO            33
+ *     CANCELADO              32   ← NÃO entra: ver abaixo
+ *     EM TRANSITO             4
+ *     EXPEDICAO               3
+ *     EM ACABAMENTO           2
+ *     REVISAO PRODUCAO        2
+ *     REVISAO ATENDENTE       1   ← NÃO entra: o atendente revisa ANTES do cliente
+ *
+ * **`APROVADO` e `LIBERADO` são a armadilha**: soam como fim de linha e são
+ * dois terços do ERP inteiro — o pedido mais novo do dia está em `LIBERADO`.
+ * Pôr qualquer um dos dois aqui esvaziaria a Lista de Arte.
+ *
+ * `IMPRESSO` e `ENTREGUE` entram sem existir hoje em `status_interno`: são
+ * inequívocas, e é a palavra que o operador espera que funcione.
+ *
+ * `CANCELADO` fica de fora de propósito: pedido cancelado não *saiu* da arte,
+ * ele deixou de existir — e o card "Pedidos Concluídos" é de trabalho feito.
+ * Se ele incomodar na lista, é outro assunto, com outro tratamento.
  */
-const SINAIS_SAIU_DA_ARTE = ['EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM IMPRESSÃO', 'PRODUCAO', 'PRODUÇÃO', 'FINALIZADA'];
+const SINAIS_SAIU_DA_ARTE = [
+    'EM PRODUCAO', 'EM PRODUÇÃO', 'PRODUCAO', 'PRODUÇÃO',
+    'EM IMPRESSAO', 'EM IMPRESSÃO', 'IMPRESSO',
+    'EM ACABAMENTO',
+    'REVISAO PRODUCAO', 'REVISÃO PRODUÇÃO',
+    'EXPEDICAO', 'EXPEDIÇÃO',
+    'EM TRANSITO', 'EM TRÂNSITO',
+    'ENTREGUE',
+    'FINALIZADA', 'FINALIZADO',
+];
 
 /**
  * O nome do cliente com o número dele ao lado: "Patrick Soares Furtado - 28449".

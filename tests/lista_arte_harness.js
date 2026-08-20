@@ -63,6 +63,40 @@ const { pedidoSaiuDaArte } = new Function(
     ok(pedidoSaiuDaArte({ status: 'EM PRODUCAO' }), 'o sinal tambem vale no campo status');
 })();
 
+(function asPalavrasDoParceiroQueTambemSaemDaArte() {
+    // 20/08/2026: pedido ja embalado continuava ocupando a tela do designer.
+    // As palavras foram escolhidas contando o que existe nas 8.268 propostas.
+    ok(pedidoSaiuDaArte({ status_interno: 'IMPRESSO' }), 'IMPRESSO sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'EM ACABAMENTO' }), 'EM ACABAMENTO sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'EXPEDICAO' }), 'EXPEDICAO sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'EXPEDIÇÃO' }), 'EXPEDICAO com cedilha tambem');
+    ok(pedidoSaiuDaArte({ status_interno: 'EM TRANSITO' }), 'EM TRANSITO sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'EM TRÂNSITO' }), 'EM TRANSITO com acento tambem');
+    ok(pedidoSaiuDaArte({ status_interno: 'ENTREGUE' }), 'ENTREGUE sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'REVISAO PRODUCAO' }), 'REVISAO PRODUCAO sai da arte');
+    ok(pedidoSaiuDaArte({ status_interno: 'REVISÃO PRODUÇÃO' }), 'REVISAO PRODUCAO com acento tambem');
+})();
+
+(function asDuasPalavrasQueNAOPodemEntrar() {
+    // Sao 3.363 e 3.224 dos 8.268 pedidos do ERP -- dois tercos do banco, e o
+    // pedido mais novo do dia esta em LIBERADO. Qualquer uma das duas aqui
+    // esvaziaria a Lista de Arte inteira.
+    ok(!pedidoSaiuDaArte({ status_interno: 'APROVADO' }),
+        'APROVADO (3.363 pedidos) NAO tira da arte -- e estado comercial');
+    ok(!pedidoSaiuDaArte({ status_interno: 'LIBERADO' }),
+        'LIBERADO (3.224 pedidos) NAO tira da arte -- e estado comercial');
+    // O atendente revisa ANTES de mandar ao cliente: ainda e trabalho de arte.
+    ok(!pedidoSaiuDaArte({ status_interno: 'REVISAO ATENDENTE' }),
+        'REVISAO ATENDENTE NAO tira da arte');
+    // Cancelado nao "saiu" da arte, deixou de existir. Card de concluidos e de
+    // trabalho feito.
+    ok(!pedidoSaiuDaArte({ status_interno: 'CANCELADO' }),
+        'CANCELADO NAO vai para o card de concluidos');
+    ok(!pedidoSaiuDaArte({ status_interno: 'NOVO' }), 'NOVO e arte');
+    ok(!pedidoSaiuDaArte({ status_interno: 'AGUARDANDO' }), 'AGUARDANDO e arte');
+    ok(!pedidoSaiuDaArte({ status_interno: 'NOVO_ARTE_APROVADA' }), 'NOVO_ARTE_APROVADA e arte');
+})();
+
 (function quemContinuaNaArte() {
     ok(!pedidoSaiuDaArte({ status: 'EM ARTE' }), 'pedido em arte fica');
     ok(!pedidoSaiuDaArte({ status: 'APROVADA', status_interno: '' }), 'pedido aprovado fica');
