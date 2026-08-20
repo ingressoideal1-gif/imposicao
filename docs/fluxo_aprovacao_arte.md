@@ -207,6 +207,48 @@ O status da arte controla **exatamente** o que o cliente vê ao acessar o link:
     - Log no chat com observações de cada modelo reprovado
     - Tela: "Alteração Solicitada!"
 
+### 4b. A alteração dos dados de nota fiscal e entrega
+
+Depois das artes, o cliente confere **os dados de faturamento e o endereço de
+entrega**. São dois botões — CONFIRMAR e ALTERAR — e, no ALTERAR, um único campo
+de texto: *"Informe aqui quais dados de faturamento e/ou endereço de entrega
+precisam ser corrigidos"*.
+
+Esse texto mora em **`pedidos_artes.observacoes.correcao_entrega_faturamento`**,
+tabela nossa, e é o que o painel mostra dentro do pedido, na caixa "Dados de
+Entrega / Faturamento Alterados" (`loadDadosEntregaInterno`). Não havendo texto,
+o painel cai numa frase genérica — e é assim que se percebe que a gravação
+falhou.
+
+> [!CAUTION]
+> **A linha do pedido em `pedidos_artes` precisa existir ANTES de o link ir ao
+> cliente.** A tela do cliente roda como `anon` (o link não tem sessão do
+> Supabase) e a RLS recusa INSERT ali — `42501, new row violates row-level
+> security policy`. Ler e atualizar, ela pode; criar, não.
+>
+> Até 20/08/2026 ninguém criava essa linha no caminho do cliente: havia 38 linhas
+> para 8.263 propostas, porque ela só nascia no briefing do painel. E como a
+> gravação era um `.update()` solto, o texto ia embora **calado** — um UPDATE que
+> não acha linha nenhuma responde `200` com `[]`, sem erro, e o `supabase-js` não
+> lança.
+>
+> Hoje quem cria a linha é `garantirLinhaDePedidoArte`, chamada por
+> `getOrCreateLinkCliente` — no painel, com usuário logado, no momento em que o
+> pedido vai para o cliente. Quem grava do lado do cliente é
+> `gravarCorrecaoDoCliente`, que pede as linhas afetadas de volta e **devolve o
+> resultado**; se não gravou, o cliente vê um aviso com o número do pedido em vez
+> de "Pedido Aprovado com Sucesso".
+
+O botão **💾 Salvar Correção** grava na hora. Quem decide o `entrega_dados`
+(`CORRIGIR` ou `APROVADO`) continua sendo o botão final da página — por isso
+`gravarCorrecaoDoCliente` aceita status nulo, que grava o texto sem mexer no
+estado do pedido.
+
+O `entrega_dados` tem um quarto valor, `ALTERADO`, que **não vem do cliente**:
+ele só nasce do atendente girando o selo na Lista de Arte
+(`alterarEntregaDadosStatus`, que cicla APROVADO → ALTERADO → CORRIGIR → ----).
+Um pedido em `ALTERADO` sem texto do cliente é isso, e não uma gravação perdida.
+
 ### 5. Retorno ao Operador
 
 14. Operador vê a mudança de status no painel (badge atualizado)

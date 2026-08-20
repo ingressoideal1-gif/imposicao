@@ -24954,6 +24954,11 @@ async function clienteAprovarEntregaDados(osId, osNum) {
     try {
         toast('Confirmando aprovação dos dados de entrega e faturamento...', 'info');
 
+        // A linha pode nao existir: `pedidos_artes` so ganhava uma quando
+        // alguem preenchia o briefing. UPDATE sem linha e 200 com `[]`, sem
+        // erro -- o clique nao faria nada, calado.
+        await garantirLinhaDePedidoArte(numInt);
+
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             await supabaseClient
                 .from('pedidos_artes')
@@ -24995,6 +25000,11 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
     try {
         toast('Enviando solicitação de correção de entrega e faturamento...', 'info');
 
+        // A linha pode nao existir: `pedidos_artes` so ganhava uma quando
+        // alguem preenchia o briefing. UPDATE sem linha e 200 com `[]`, sem
+        // erro -- o clique nao faria nada, calado.
+        await garantirLinhaDePedidoArte(numInt);
+
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             // Se houver observações, append no campo de observações de pedidos_artes
             const { data: existing } = await supabaseClient
@@ -25020,7 +25030,7 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
                         setor: 'Cliente',
                         visivel_externo: true,
                         mensagem: `⚠️ SOLICITAÇÃO DE ALTERAÇÃO PELO CLIENTE:\n${obsText}`,
-                        remetente_nome: 'Cliente (aprovação online)'
+                        autor_nome: 'Cliente (aprovação online)'
                     });
                 } catch (cErr) {}
             }
@@ -25056,6 +25066,11 @@ async function marcarEntregaDadosCorrigido(osId, osNum) {
 
     try {
         toast('Atualizando status de entrega e faturamento para APROVADO...', 'info');
+
+        // A linha pode nao existir: `pedidos_artes` so ganhava uma quando
+        // alguem preenchia o briefing. UPDATE sem linha e 200 com `[]`, sem
+        // erro -- o clique nao faria nada, calado.
+        await garantirLinhaDePedidoArte(numInt);
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             await supabaseClient
@@ -25144,11 +25159,17 @@ async function loadDadosEntregaInterno(osId, osNum) {
         // como pedido de alteração do cliente (pedido 20928, 19/08/2026).
         //
         // O caminho não foi consertado, foi REMOVIDO: nenhuma mensagem nossa
-        // jamais chegou àquele chat, porque todas as nossas gravações mandam a
+        // jamais chegou àquele chat, porque todas as nossas gravações mandavam a
         // coluna `remetente_nome`, que não existe lá (a coluna é `autor_nome`),
         // e o PostgREST recusa a linha inteira — com o erro engolido por um
         // catch vazio. Ou seja: o que este trecho lia era, sempre e só, dado do
         // parceiro apresentado como se fosse fala do cliente.
+        //
+        // Em 20/08/2026 o nome da coluna foi corrigido nas gravações, e as
+        // nossas mensagens passam a aparecer no chat do parceiro. Isso **não**
+        // reabre o caminho de leitura daqui: o que o painel mostra como fala do
+        // cliente continua saindo só de `pedidos_artes.observacoes`, tabela
+        // nossa, onde não há mensagem de mais ninguém.
 
 
 
@@ -29201,7 +29222,7 @@ async function decisionAmostraItem(itemId, osId, status) {
                     mensagem: status === 'APROVADA' 
                         ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
                         : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
-                    remetente_nome: 'Cliente (via link)',
+                    autor_nome: 'Cliente (via link)',
                 });
             } catch (chatErr) {
                 console.warn('Erro ao inserir mensagem no chat:', chatErr);
@@ -30505,7 +30526,7 @@ async function logToChatIdeal(mensagem) {
             setor: 'Pre-impressao',
             visivel_externo: false,
             mensagem: mensagem,
-            remetente_nome: 'Ideal Imposition',
+            autor_nome: 'Ideal Imposition',
         });
     } catch (e) {
         console.error('Erro ao logar no chat:', e);
@@ -30589,6 +30610,50 @@ function generateClientToken(length = 6) {
  * Retorna a URL completa, ou null em caso de erro.
  * Uso interno — não copia nem exibe toast.
  */
+/**
+ * Garante que o pedido tenha linha em `pedidos_artes` ANTES de ir ao cliente.
+ *
+ * A tela do cliente roda como `anon` -- o link não tem sessão do Supabase -- e a
+ * RLS de `pedidos_artes` recusa INSERT vindo dali ("new row violates row-level
+ * security policy", conferido em 20/08/2026). Ela consegue LER e ATUALIZAR, mas
+ * não CRIAR. E a linha quase nunca existia: 38 para 8.263 propostas, porque só
+ * nascia quando alguém preenchia o briefing no painel.
+ *
+ * O resultado era a solicitação de alteração do cliente sumindo: um UPDATE que
+ * não acha linha nenhuma responde 200 com `[]`, sem erro nenhum.
+ *
+ * Aqui, no painel, quem chama está logado -- e este é o momento certo: o pedido
+ * está indo para o cliente. Falhar aqui não pode impedir o link de sair, então
+ * o erro só avisa no console.
+ */
+async function garantirLinhaDePedidoArte(numInt) {
+    const n = parseInt(numInt);
+    if (!n || isNaN(n) || typeof supabaseClient === 'undefined' || !supabaseClient) return false;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id')
+            .eq('id_int', n)
+            .limit(1);
+
+        if (error) throw error;
+        if (data && data.length > 0) return true;
+
+        const { error: erroInsert } = await supabaseClient
+            .from('pedidos_artes')
+            .insert({ id_int: n, observacoes: {} });
+
+        if (erroInsert) throw erroInsert;
+        console.log('[pedidos_artes] Linha criada para o pedido ' + n + ' (o cliente vai poder escrever nela).');
+        return true;
+    } catch (e) {
+        console.warn('[pedidos_artes] Nao consegui garantir a linha do pedido ' + numInt + ':', e.message || e);
+        return false;
+    }
+}
+window.garantirLinhaDePedidoArte = garantirLinhaDePedidoArte;
+
 async function getOrCreateLinkCliente(osId, numero) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return null;
     try {
@@ -30630,6 +30695,11 @@ async function getOrCreateLinkCliente(osId, numero) {
                 });
             if (insertError) throw insertError;
         }
+
+        // O pedido está indo ao cliente: a linha em `pedidos_artes` precisa
+        // existir agora, enquanto quem está aqui é um usuário logado. Depois,
+        // na tela do cliente, a RLS não deixa criar -- só atualizar.
+        await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
 
         return `${window.location.origin}/cliente/${numero}-${token}`;
     } catch (e) {

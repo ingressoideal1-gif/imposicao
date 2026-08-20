@@ -4,6 +4,39 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-20] — A alteração de nota fiscal e entrega que o cliente escreve sumia
+
+O que o cliente registra no link do cliente sobre os dados de nota fiscal e entrega não
+estava sendo salvo. O painel mostrava sempre a frase de reserva — *"O cliente solicitou
+revisão nos dados de entrega e faturamento"* — no lugar do texto dele.
+
+Três causas somadas, todas silenciosas:
+
+1. A tela do cliente gravava com `.update()`. Um UPDATE que não acha linha nenhuma **não é
+   erro** no PostgREST: responde `200` com `[]`. O `supabase-js` também não lança — o
+   `try/catch` em volta era enfeite.
+2. A linha do pedido quase nunca existia: **38 linhas em `pedidos_artes` para 8.263
+   propostas**; dos 12 pedidos mais recentes, um só tinha linha. Ela nascia apenas quando
+   alguém preenchia o briefing no painel.
+3. E a tela do cliente não pode criá-la: roda como `anon` e a RLS recusa o INSERT
+   (`42501`). Ler e atualizar, pode — e isso está certo, não mudou.
+
+O conserto tem os dois lados. O painel cria a linha ao gerar o link do cliente
+(`garantirLinhaDePedidoArte`), com usuário logado; a tela do cliente grava por
+`gravarCorrecaoDoCliente`, que pede as linhas afetadas de volta e devolve o resultado. Se
+não gravou, o cliente vê um aviso com o número do pedido em vez de "Pedido Aprovado com
+Sucesso". O botão "Salvar Correção", que só pintava a tela, passou a gravar.
+
+Junto, o nome da coluna do chat do parceiro: as sete gravações mandavam `remetente_nome`,
+que não existe em `propostas_chat` (é `autor_nome`), e o PostgREST recusava a linha
+inteira. Nenhuma mensagem nossa jamais chegou àquele chat — nos três pedidos que têm a
+correção gravada (18570, 19370, 20925) não há uma linha com `setor='Cliente'`.
+
+Pedidos que já estavam com o cliente: `sql/correcao_do_cliente_precisa_de_linha.sql`.
+Coberto por `tests/test_correcao_do_cliente.py`.
+
+---
+
 ## [2026-08-20] — O catálogo de cores parou de carregar os PDFs
 
 O parceiro Vibe reclamou que clicar no link da página dele para a nossa Lista de Arte

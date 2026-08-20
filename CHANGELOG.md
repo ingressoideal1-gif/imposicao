@@ -4,7 +4,64 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v653** — 2026-08-20 | Agente **1.2.147**
+## Versão atual: **v654** — 2026-08-20 | Agente **1.2.149**
+
+---
+
+## [v654 — 2026-08-20] — A alteração de nota fiscal e entrega que o cliente escreve sumia
+
+**A queixa:** o que o cliente registra no link do cliente sobre os dados de nota fiscal e
+entrega não estava sendo salvo. No painel, a caixa "Dados de Entrega / Faturamento
+Alterados" mostrava sempre a frase genérica *"O cliente solicitou revisão nos dados de
+entrega e faturamento"* — que é o texto de reserva, e não o que ele escreveu.
+
+**Três causas somadas, todas caladas:**
+
+1. **A tela do cliente gravava com `.update()`.** Um UPDATE que não acha linha nenhuma
+   **não é erro** no PostgREST: responde `200` com `[]`. Conferido no banco de produção.
+   O `supabase-js` também não lança — então o `try/catch` em volta era enfeite.
+2. **A linha do pedido quase nunca existia.** `pedidos_artes` tinha **38 linhas para 8.263
+   propostas**; dos 12 pedidos mais recentes, **um** tinha linha. Ela só nascia quando
+   alguém preenchia o briefing no painel.
+3. **E a tela do cliente não pode criá-la:** ela roda como `anon` (o link não tem sessão) e
+   a RLS recusa o INSERT — `42501, new row violates row-level security policy`. Ler e
+   atualizar, pode. Isso está certo e não mudou: abrir INSERT para `anon` daria a qualquer
+   um com a chave pública o direito de criar linhas de arte.
+
+**O conserto tem os dois lados.** O painel passou a criar a linha no momento em que gera o
+link do cliente (`garantirLinhaDePedidoArte`, chamada por `getOrCreateLinkCliente`) — ali
+quem está na tela é um usuário logado. E a tela do cliente grava por
+`gravarCorrecaoDoCliente`, que pede as linhas afetadas de volta (`.select('id')` depois do
+update) e **devolve o resultado** para quem chamou olhar.
+
+**Se não gravar, o cliente fica sabendo.** Antes ele via "Pedido Aprovado com Sucesso"
+mesmo quando o texto tinha sido descartado. Agora vê o aviso de que a solicitação não foi
+registrada, com o número do pedido e o que fazer — falar com o atendente.
+
+**O botão "💾 Salvar Correção" passou a salvar.** Ele só escrevia numa variável da tela e
+pintava "✅ Correção Registrada". Quem fechasse a aba ali perdia o que escreveu. Agora
+grava na hora; quem decide o status do pedido continua sendo o botão final.
+
+**O chat do parceiro volta a receber as nossas mensagens.** As sete gravações em
+`propostas_chat` mandavam a coluna `remetente_nome`, que não existe lá (a coluna é
+`autor_nome`), e o PostgREST recusava a linha inteira. Nenhuma mensagem nossa jamais chegou
+àquele chat — nos três pedidos que têm a correção gravada (18570, 19370, 20925) não há uma
+única linha com `setor='Cliente'`. O diagnóstico estava escrito no `script.js` desde 19/08;
+só o lado que lê tinha sido consertado.
+
+**As três ações do painel que escrevem em `entrega_dados` tinham o mesmo defeito** —
+aprovar os dados, marcar a correção como concluída (o botão verde da caixa laranja) e
+registrar a correção pelo atendente. Todas eram UPDATE cego: num pedido sem linha, o
+clique não fazia nada e a caixa continuava laranja. As três garantem a linha antes.
+
+**Para os pedidos que já estão com o cliente:**
+`sql/correcao_do_cliente_precisa_de_linha.sql` cria a linha que falta. Pode repetir sem
+medo — só insere o que não existe.
+
+**Um detalhe que não é do cliente:** o quarto valor de `entrega_dados`, `ALTERADO`, não vem
+do link do cliente — ele só nasce do atendente girando o selo na Lista de Arte. Pedido em
+`ALTERADO` sem texto do cliente é isso, e não gravação perdida. Era o caso do 20935 na
+tela que abriu esta investigação.
 
 ---
 

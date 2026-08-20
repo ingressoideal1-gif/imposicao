@@ -1268,7 +1268,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                     setor: 'Cliente',
                     visivel_externo: true,
                     mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
-                    remetente_nome: 'Cliente (aprovação online)',
+                    autor_nome: 'Cliente (aprovação online)',
                 });
             } catch (e) { console.error('Erro log chat:', e); }
 
@@ -1310,7 +1310,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                     setor: 'Cliente',
                     visivel_externo: true,
                     mensagem: `❌ O CLIENTE SOLICITOU ALTERAÇÃO DE ARTES via link online.${observacoesTexto}`,
-                    remetente_nome: 'Cliente (alteração online)',
+                    autor_nome: 'Cliente (alteração online)',
                 });
             } catch (e) { console.error('Erro log chat:', e); }
 
@@ -1441,7 +1441,7 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
     checarConclusaoConfirmacoes();
 };
 
-window.salvarCorrecaoTexto = function(tipo = 'geral') {
+window.salvarCorrecaoTexto = async function(tipo = 'geral') {
     const textarea = document.getElementById(`input-correcao-${tipo}`);
     const texto = textarea ? textarea.value.trim() : '';
     if (!texto) {
@@ -1449,6 +1449,29 @@ window.salvarCorrecaoTexto = function(tipo = 'geral') {
         return;
     }
     
+    // O botão diz "Salvar", então ele salva. Até 20/08/2026 este texto só ia
+    // para uma variável da tela e a etiqueta dizia "Correção Registrada": quem
+    // fechasse a aba aqui perdia o que escreveu, e ninguém no painel ficava
+    // sabendo. Quem decide o status do pedido continua sendo o botão final --
+    // por isso o terceiro argumento é nulo: grava o texto, não mexe no
+    // `entrega_dados`.
+    const btn = document.getElementById(`btn-salvar-correcao-${tipo}`);
+    const rotuloOriginal = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Salvando...'; }
+
+    const gravacao = await gravarCorrecaoDoCliente(parseInt(clienteState.numero), texto, null);
+
+    if (btn) { btn.disabled = false; btn.innerHTML = rotuloOriginal; }
+
+    // Falhar aqui NÃO pode prender o cliente na tela: sem `geralCorrecao` o
+    // botão de finalizar fica desligado e ele não teria como sair. O texto segue
+    // na memória, o botão final tenta gravar de novo, e a etiqueta abaixo diz a
+    // verdade — com o que fazer, que é avisar o atendente.
+    if (!gravacao.ok) {
+        console.error('[cliente] Nao consegui gravar a correcao:', gravacao.erro);
+        toast('Não conseguimos salvar agora — continue mesmo assim e avise o seu atendente.', 'error');
+    }
+
     window.clienteConfirmacoes.geralCorrecao = texto;
     const boxCorrecao = document.getElementById(`correcao-${tipo}`);
     if (boxCorrecao) boxCorrecao.style.display = 'none';
@@ -1458,7 +1481,7 @@ window.salvarCorrecaoTexto = function(tipo = 'geral') {
         badgeStatus.innerHTML = `
             <div style="background: rgba(249, 115, 22, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #f97316; margin-bottom: 10px;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
-                    <span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span>
+                    <span style="color: #f97316; font-weight: bold;">${gravacao.ok ? '✅ Correção Registrada' : '⚠️ Não salvou — avise o seu atendente'}</span>
                     <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Editar</button>
                 </div>
                 <small style="color: var(--text-dim); margin-top: 5px; display: inline-block; word-break: break-word;">${texto.substring(0, 150)}${texto.length > 150 ? '...' : ''}</small>
@@ -1611,7 +1634,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
 
                     <div id="correcao-geral" style="display: none; margin-top: 14px;">
                         <textarea id="input-correcao-geral" class="form-control" rows="4" placeholder="Informe aqui quais dados de faturamento e/ou endereço de entrega precisam ser corrigidos..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 12px; border-radius: 6px; font-size: 0.95rem;"></textarea>
-                        <button class="btn" onclick="salvarCorrecaoTexto('geral')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 44px; font-weight: bold; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">💾 Salvar Correção</button>
+                        <button class="btn" id="btn-salvar-correcao-geral" onclick="salvarCorrecaoTexto('geral')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 44px; font-weight: bold; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">💾 Salvar Correção</button>
                     </div>
                 </div>
 
@@ -1630,6 +1653,77 @@ async function mostrarConfirmacaoDadosCliente(osId) {
     }
 }
 
+/**
+ * Grava a solicitação de alteração do cliente em `pedidos_artes`.
+ *
+ * Antes isto era um `.update()` solto, e a solicitação ia embora calada. A
+ * linha do pedido nesta tabela quase nunca existe: ela nasce quando o painel
+ * salva o briefing, e em 20/08/2026 havia 38 linhas para 8.263 propostas. Um
+ * UPDATE que não acha linha nenhuma **não é erro** no PostgREST -- responde 200
+ * com `[]`. O supabase-js também não lança, então o `try/catch` em volta era
+ * enfeite: o cliente via "tudo certo" e o texto dele nunca tinha existido.
+ *
+ * Aqui as linhas afetadas voltam do banco (`.select('id')` depois do update) e o
+ * resultado é DEVOLVIDO para quem chamou olhar. Ninguém mais pode dizer ao
+ * cliente que gravou sem ter gravado.
+ *
+ * O `insert` do fim é tentativa de última hora, e normalmente NÃO passa: esta
+ * página roda como `anon` e a RLS de `pedidos_artes` recusa criação vindo daqui
+ * (`42501`). Quem cria a linha é o painel, no momento em que gera o link
+ * (`garantirLinhaDePedidoArte`, no `script.js`), com usuário logado. O `insert`
+ * fica porque é o certo a tentar, e porque o erro dele agora chega à tela.
+ *
+ * `texto` vazio apaga a correcao anterior -- é o cliente que voltou atrás e
+ * confirmou os dados. `statusEntrega` nulo deixa `entrega_dados` como está.
+ *
+ * @returns {Promise<{ok: boolean, erro?: string}>}
+ */
+async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        return { ok: false, erro: 'sem conexao com o banco' };
+    }
+    if (!numPedInt || isNaN(numPedInt)) {
+        return { ok: false, erro: 'numero do pedido invalido' };
+    }
+
+    const { data: existente, error: erroLeitura } = await supabaseClient
+        .from('pedidos_artes')
+        .select('id, observacoes')
+        .eq('id_int', numPedInt)
+        .maybeSingle();
+
+    if (erroLeitura) return { ok: false, erro: erroLeitura.message || String(erroLeitura) };
+
+    let obs = (existente && existente.observacoes) ? existente.observacoes : {};
+    if (typeof obs === 'string') {
+        try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
+    }
+    if (typeof obs !== 'object' || !obs) obs = {};
+
+    if (texto) obs['correcao_entrega_faturamento'] = texto;
+    else delete obs['correcao_entrega_faturamento'];
+
+    const campos = { observacoes: obs };
+    if (statusEntrega) campos.entrega_dados = statusEntrega;
+
+    if (existente) {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .update(campos)
+            .eq('id_int', numPedInt)
+            .select('id');
+        if (error) return { ok: false, erro: error.message || String(error) };
+        if (!data || data.length === 0) return { ok: false, erro: 'nenhuma linha foi gravada' };
+        return { ok: true };
+    }
+
+    const { error } = await supabaseClient
+        .from('pedidos_artes')
+        .insert(Object.assign({ id_int: numPedInt }, campos));
+    if (error) return { ok: false, erro: error.message || String(error) };
+    return { ok: true };
+}
+
 window.finalizarConfirmacaoCliente = async function() {
     const confirmContainer = document.getElementById('cliente-confirmacao-container');
     if (confirmContainer) confirmContainer.style.display = 'none';
@@ -1646,45 +1740,28 @@ window.finalizarConfirmacaoCliente = async function() {
         mensagemLog = `⚠️ O CLIENTE REPORTOU DADOS INCORRETOS:\n\n${geralCorr}`;
     }
 
+    // O supabase-js NAO lanca em erro do PostgREST: sem olhar o `.error`, este
+    // try/catch nao pega nada. Foi assim que a coluna errada (`remetente_nome`)
+    // passou meses derrubando toda mensagem nossa, calada.
     try {
-        await supabaseClient.from('propostas_chat').insert({
+        const { error: erroChat } = await supabaseClient.from('propostas_chat').insert({
             id_int: parseInt(clienteState.numero),
             tipo: 'PRODUCAO',
             setor: 'Cliente',
             visivel_externo: true,
             mensagem: mensagemLog,
-            remetente_nome: 'Cliente (aprovação online)'
+            autor_nome: 'Cliente (aprovação online)'
         });
-    } catch(e) {}
+        if (erroChat) console.warn('[cliente] Chat do parceiro recusou a mensagem:', erroChat.message || erroChat);
+    } catch(e) { console.warn('[cliente] Falha ao registrar no chat do parceiro:', e); }
 
-    try {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const numPedInt = parseInt(clienteState.numero);
-            const { data: existing } = await supabaseClient
-                .from('pedidos_artes')
-                .select('observacoes')
-                .eq('id_int', numPedInt)
-                .maybeSingle();
-
-            let obsObj = (existing && existing.observacoes) ? existing.observacoes : {};
-            if (typeof obsObj === 'string') {
-                try { obsObj = JSON.parse(obsObj); } catch(e) {}
-            }
-            if (typeof obsObj !== 'object' || !obsObj) obsObj = {};
-
-            if (precisaAtencao) {
-                obsObj['correcao_entrega_faturamento'] = mensagemLog;
-            }
-
-            await supabaseClient.from('pedidos_artes')
-                .update({
-                    entrega_dados: precisaAtencao ? 'CORRIGIR' : 'APROVADO',
-                    observacoes: obsObj
-                })
-                .eq('id_int', numPedInt);
-        }
-    } catch(e) {
-        console.warn('Erro ao atualizar entrega_dados em pedidos_artes:', e);
+    const gravacao = await gravarCorrecaoDoCliente(
+        parseInt(clienteState.numero),
+        precisaAtencao ? mensagemLog : '',
+        precisaAtencao ? 'CORRIGIR' : 'APROVADO'
+    );
+    if (!gravacao.ok) {
+        console.error('[cliente] A solicitacao NAO foi gravada:', gravacao.erro);
     }
 
 
@@ -1699,6 +1776,18 @@ window.finalizarConfirmacaoCliente = async function() {
         }
     } catch (osErr) {
         console.warn('Erro ao atualizar status global da OS para APROVADO:', osErr);
+    }
+
+    // Dizer "aprovado" quando a solicitação não entrou no banco é o pior dos
+    // mundos: o cliente vai embora tranquilo e ninguém nunca leu o que ele
+    // escreveu. Aqui ele fica sabendo, e fica sabendo o que fazer.
+    if (!gravacao.ok) {
+        mostrarResultadoCliente('⚠️', 'Não conseguimos registrar sua solicitação',
+            'Suas aprovações de arte foram salvas, mas <b>o pedido de alteração nos dados de '
+            + 'faturamento/entrega não pôde ser gravado agora</b>.<br><br>'
+            + 'Por favor, <b>entre em contato com o seu atendente</b> e informe o pedido nº '
+            + (clienteState.numero || '') + ' e a alteração que você precisa.');
+        return;
     }
 
     if (precisaAtencao) {
@@ -1963,7 +2052,7 @@ async function decisionAmostraItem(itemId, osId, status) {
                     mensagem: status === 'APROVADA' 
                         ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
                         : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
-                    remetente_nome: 'Cliente (via link)',
+                    autor_nome: 'Cliente (via link)',
                 });
             } catch (chatErr) {
                 console.warn('Erro ao inserir mensagem no chat:', chatErr);
