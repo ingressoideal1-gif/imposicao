@@ -22226,6 +22226,11 @@ function renderOrdens() {
                     'RETIRADA LOCAL':             'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
                     'RETIRAR':                   'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
                     'RETIRADA':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                    // Uma chave só cobre as quatro grafias que o parceiro já
+                    // escreveu neste campo — VEPPO, veppo, Veppo e VEPPO-RS:
+                    // a comparação é em maiúsculas, e o "-RS" entra pela busca
+                    // parcial logo abaixo.
+                    'VEPPO':                     'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678294009_Veppo.png',
                 };
                 // Busca por correspondência parcial também (ex: "SAO MIGUEL" ↔ "TRANSPORTADORA SÃO MIGUEL")
                 let freteImgUrl = FRETE_IMGS[freteNorm];
