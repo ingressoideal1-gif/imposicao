@@ -29,53 +29,64 @@
 -- O que continua valendo, e e suficiente: `garantirLinhaDePedidoArte`, no
 -- painel, cria a linha no momento em que o link do cliente e gerado. Ali o
 -- pedido ESTA na arte -- e por isso a linha nao muda nada na lista.
+--
+-- ── CUIDADO COM O `IS NULL` (a primeira versao deste arquivo errou aqui) ──────
+--
+-- `arquivos` tem DEFAULT `'[]'` e `observacoes` tem DEFAULT `'{}'`. Linha recem
+-- criada NAO tem NULL nessas duas colunas -- tem a lista e o objeto vazios. A
+-- primeira versao filtrava por `arquivos IS NULL`, nao casou com nada, e o
+-- DELETE apagou zero linhas **sem erro nenhum**. E a mesma armadilha do dia:
+-- comando que nao pega linha nenhuma nao reclama. Por isso o DELETE abaixo tem
+-- `RETURNING`: ele mostra na tela o que apagou, e lista vazia quer dizer que
+-- nada foi feito.
 -- ════════════════════════════════════════════════════════════════════════════════
 
 
--- ─── 1. CONFERIR: o que o reparo criou e continua vazio ────────────────────────
+-- ─── 1. CONFERIR: o que o reparo criou e continua sem uso ──────────────────────
 --
--- So linhas que nasceram naquele instante E continuam sem nada escrito. Se
--- alguem ja usou a linha (briefing, designer, arquivo, correcao do cliente),
--- ela NAO entra aqui -- o dado de agora vale mais que a limpeza.
+-- A janela e o segundo exato da gravacao em lote (13:23:18). O pedido 20975,
+-- criado pelo painel as 13:23:41, fica fora dela de propriedade -- e tambem
+-- seria barrado pelas condicoes de conteudo, que existem para o caso de alguem
+-- ja ter usado alguma dessas linhas.
 
-SELECT id_int, created_at, observacoes, status
+SELECT id_int, created_at, status, observacoes, arquivos
 FROM pedidos_artes
-WHERE created_at >= '2026-08-20T13:23:00Z'
-  AND created_at <  '2026-08-20T13:24:00Z'
-  AND observacoes = '{}'::jsonb
-  AND nome_evento IS NULL
-  AND data_evento IS NULL
-  AND local_evento IS NULL
-  AND designer_uid IS NULL
-  AND designer_nome IS NULL
-  AND arquivos IS NULL
-  AND entrega_dados IS NULL
-  AND nome_arquivo IS NULL
-  AND storage_path IS NULL
+WHERE created_at >= '2026-08-20T13:23:18Z'
+  AND created_at <  '2026-08-20T13:23:19Z'
+  AND COALESCE(observacoes::text, '{}') = '{}'
+  AND COALESCE(arquivos::text, '[]')    = '[]'
+  AND nome_evento    IS NULL
+  AND data_evento    IS NULL
+  AND local_evento   IS NULL
+  AND designer_uid   IS NULL
+  AND designer_nome  IS NULL
+  AND entrega_dados  IS NULL
+  AND nome_arquivo   IS NULL
+  AND storage_path   IS NULL
 ORDER BY id_int;
 
 
--- ─── 2. APAGAR ─────────────────────────────────────────────────────────────────
+-- ─── 2. APAGAR (o RETURNING mostra exatamente o que saiu) ──────────────────────
 
 DELETE FROM pedidos_artes
-WHERE created_at >= '2026-08-20T13:23:00Z'
-  AND created_at <  '2026-08-20T13:24:00Z'
-  AND observacoes = '{}'::jsonb
-  AND nome_evento IS NULL
-  AND data_evento IS NULL
-  AND local_evento IS NULL
-  AND designer_uid IS NULL
-  AND designer_nome IS NULL
-  AND arquivos IS NULL
-  AND entrega_dados IS NULL
-  AND nome_arquivo IS NULL
-  AND storage_path IS NULL;
+WHERE created_at >= '2026-08-20T13:23:18Z'
+  AND created_at <  '2026-08-20T13:23:19Z'
+  AND COALESCE(observacoes::text, '{}') = '{}'
+  AND COALESCE(arquivos::text, '[]')    = '[]'
+  AND nome_evento    IS NULL
+  AND data_evento    IS NULL
+  AND local_evento   IS NULL
+  AND designer_uid   IS NULL
+  AND designer_nome  IS NULL
+  AND entrega_dados  IS NULL
+  AND nome_arquivo   IS NULL
+  AND storage_path   IS NULL
+RETURNING id_int;
 
 
 -- ─── 3. CONFERIR DEPOIS: tem de dar zero ───────────────────────────────────────
 
 SELECT COUNT(*) AS sobraram_do_reparo
 FROM pedidos_artes
-WHERE created_at >= '2026-08-20T13:23:00Z'
-  AND created_at <  '2026-08-20T13:24:00Z'
-  AND observacoes = '{}'::jsonb;
+WHERE created_at >= '2026-08-20T13:23:18Z'
+  AND created_at <  '2026-08-20T13:23:19Z';
