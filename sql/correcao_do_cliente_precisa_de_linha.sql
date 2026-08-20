@@ -46,15 +46,28 @@
 -- ════════════════════════════════════════════════════════════════════════════════
 
 
+-- ─── ATENCAO AO TIPO ────────────────────────────────────────────────────────────
+--
+-- `pedidos_artes.id_int` e INTEGER; `pedidos_links_cliente.id_int` e **TEXT**.
+-- Sem o cast o Postgres recusa a comparacao:
+--
+--     42883 -- operator does not exist: integer = text
+--
+-- O frontend nao tropeca nisso porque o PostgREST converte sozinho, mas em SQL
+-- puro o cast e obrigatorio. O filtro `~ '^[0-9]+$'` existe pelo mesmo motivo:
+-- a coluna e texto, entao pode em tese guardar algo que nao vira numero, e o
+-- cast quebraria a consulta inteira.
+
+
 -- ─── 1. CONFERIR ANTES: quantos pedidos estao nessa situacao ────────────────────
 
 SELECT COUNT(*) AS pedidos_com_link_e_sem_linha_de_arte
 FROM (
     SELECT DISTINCT l.id_int
     FROM pedidos_links_cliente l
-    WHERE l.id_int IS NOT NULL
+    WHERE l.id_int ~ '^[0-9]+$'
       AND NOT EXISTS (
-          SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int
+          SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int::integer
       )
 ) AS faltando;
 
@@ -63,8 +76,8 @@ FROM (
 
 SELECT DISTINCT l.id_int AS pedido, l.status_arte, l.ativo, l.created_at
 FROM pedidos_links_cliente l
-WHERE l.id_int IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int)
+WHERE l.id_int ~ '^[0-9]+$'
+  AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int::integer)
 ORDER BY l.id_int DESC;
 
 
@@ -75,10 +88,10 @@ ORDER BY l.id_int DESC;
 -- continua sendo o painel (briefing, designer, arquivos).
 
 INSERT INTO pedidos_artes (id_int, observacoes)
-SELECT DISTINCT l.id_int, '{}'::jsonb
+SELECT DISTINCT l.id_int::integer, '{}'::jsonb
 FROM pedidos_links_cliente l
-WHERE l.id_int IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int);
+WHERE l.id_int ~ '^[0-9]+$'
+  AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int::integer);
 
 
 -- ─── 4. CONFERIR DEPOIS: tem de dar zero ───────────────────────────────────────
@@ -87,6 +100,6 @@ SELECT COUNT(*) AS ainda_faltando
 FROM (
     SELECT DISTINCT l.id_int
     FROM pedidos_links_cliente l
-    WHERE l.id_int IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int)
+    WHERE l.id_int ~ '^[0-9]+$'
+      AND NOT EXISTS (SELECT 1 FROM pedidos_artes a WHERE a.id_int = l.id_int::integer)
 ) AS faltando;
