@@ -55,15 +55,13 @@ navegação é uma barra de abas no rodapé, e a troca de aba não refaz consult
 |---|---|
 | `sql/link_cliente_pedido.sql` | **novo** — a função que entrega o JSON do pedido pelo par número+token |
 | `frontend/cliente.html` | **muda** — cabeçalho, as cinco `<section>`, a barra de abas, a ordem dos scripts |
-| `frontend/cliente.js` | **encolhe** — fica só com a rota, o `clienteState` e o arranque |
+| `frontend/cliente.js` | **encolhe** — fica com o motor de desenho da arte, a rota, o `clienteState` e a gravação |
 | `frontend/cliente-dados.js` | **novo** — a chamada da RPC e o mapeamento para o formato da tela |
 | `frontend/cliente-shell.js` | **novo** — cabeçalho, selo de status, barra de abas, troca de seção |
-| `frontend/cliente-arte.js` | **novo** — a aprovação inteira, movida sem alteração |
 | `frontend/cliente-entrega.js` | **novo** — endereço, envio, prazo, rastreio, confirmar/alterar |
 | `frontend/cliente-faturamento.js` | **novo** — dados de nota fiscal, confirmar/alterar |
 | `frontend/cliente-orcamento.js` | **novo** — o resumo do orçamento, só leitura |
 | `frontend/cliente-pagamento.js` | **novo** — o link do parceiro e os dois estados |
-| `frontend/cliente-gravacao.js` | **novo** — `gravarStatusDoLink`, `gravarCorrecaoDoCliente`, `saveAmostraToDB` |
 | `frontend/style.css` | **muda** — bloco novo do portal, celular primeiro |
 | `frontend/script.js` | **muda** — a caixa do painel passa a mostrar as três chaves de correção |
 
@@ -280,80 +278,44 @@ git commit -m "sql: uma funcao entrega o pedido inteiro ao cliente pelo token"
 
 ---
 
-### Task 2: A divisão dos arquivos, sem mudar comportamento
+### Task 2: Os testes passam a ler a página inteira
+
+**Decisão tomada ao executar:** o motor de desenho da arte **não sai** do
+`cliente.js`. Onze arquivos de teste apontam para ele pelo nome e cinco recortam
+funções de lá para executar; mover custaria religar os onze, e o que se
+arriscaria é a composição da peça, que está aprovada e rodando na gráfica. O
+`cliente.js` encolhe pelo caminho natural: a conferência de dados (≈500 linhas)
+vira as abas, e as consultas diretas somem na Task 3.
 
 **Arquivos:**
-- Criar: `frontend/cliente-arte.js`, `frontend/cliente-gravacao.js`
-- Modificar: `frontend/cliente.js`, `frontend/cliente.html`
-- Modificar: `tests/test_link_do_cliente_pelo_token.py`, `tests/link_do_cliente_harness.js`,
-  `tests/arte_de_aprovacao_harness.js`, `tests/correcao_do_cliente_harness.js`
-  (passam a ler o conjunto dos arquivos `cliente*.js`)
+- Modificar: `tests/test_link_do_cliente_pelo_token.py`
 
 **Interfaces:**
-- Produz: `cliente-arte.js` com `renderAmostrasOSItens`, `renderItemAmostraCombinada`,
-  `drawAmostraFace`, `openClienteLightbox`, `closeClienteLightbox`, `initPdfViewer`,
-  `decisionAmostraItem`, `atualizarBarraFinalCliente` e as auxiliares de CSV/QR/foto,
-  todas em `window`.
-- Produz: `cliente-gravacao.js` com `gravarStatusDoLink(status)`,
-  `gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega)` e
-  `saveAmostraToDB(itemId, osId, dataToUpdate)`.
+- Produz: `_ler_cliente()` — o texto de todos os `frontend/cliente*.js` juntos.
 
-- [ ] **Passo 1: separar os testes do caminho**
-
-Nos três harnesses e no `test_link_do_cliente_pelo_token.py`, trocar a leitura de
-um arquivo pela leitura de todos:
+- [ ] **Passo 1: os testes que leem "o código da página" passam a ler todos os
+      arquivos `cliente*.js`**, para que uma regra que mude de arquivo continue
+      sendo vista:
 
 ```python
 import glob
-CLIENTE_JS = sorted(glob.glob(os.path.join(RAIZ, "frontend", "cliente*.js")))
-
 def _ler_cliente():
-    return "\n".join(_ler(c) for c in CLIENTE_JS)
+    arquivos = sorted(glob.glob(os.path.join(RAIZ, "frontend", "cliente*.js")))
+    return "
+".join(_ler(a) for a in arquivos)
 ```
 
-E no node:
-
-```js
-const CLIENTE = fs.readdirSync(path.join(RAIZ, 'frontend'))
-    .filter(f => /^cliente.*\.js$/.test(f)).sort()
-    .map(f => fs.readFileSync(path.join(RAIZ, 'frontend', f), 'utf8'))
-    .join('\n');
-```
-
-- [ ] **Passo 2: rodar os testes e ver que continuam passando**
+- [ ] **Passo 2: rodar e ver passar**
 
 ```
 pytest tests/test_link_do_cliente_pelo_token.py tests/test_link_do_cliente.py tests/test_correcao_do_cliente.py tests/test_arte_de_aprovacao.py -q
 ```
-Esperado: PASS (nada foi movido ainda; o teste só passou a ler mais arquivos).
 
-- [ ] **Passo 3: mover, sem alterar**
-
-Recortar de `cliente.js` para `cliente-arte.js`: as linhas 15–60 (auxiliares de
-desenho), 169–804 (`escapeHtml`…`renderAmostrasOSItens`), 1830–3489 (lightbox,
-viewer, canvas, CSV, QR). Recortar para `cliente-gravacao.js`: `saveAmostraToDB`,
-`gravarStatusDoLink`, `gravarCorrecaoDoCliente`. **Nenhuma linha alterada** — só
-mudou de arquivo. Onde uma função era chamada por `onclick=""` no HTML gerado,
-ela precisa continuar em `window`.
-
-- [ ] **Passo 4: declarar os arquivos no HTML, na ordem certa**
-
-Em `cliente.html`, antes de `cliente.js`:
-
-```html
-<script src="/cliente-gravacao.js?v=656"></script>
-<script src="/cliente-arte.js?v=656"></script>
-```
-
-- [ ] **Passo 5: rodar os testes e ver que continuam passando**
-
-Mesma linha do Passo 2. Esperado: PASS.
-
-- [ ] **Passo 6: commit**
+- [ ] **Passo 3: commit**
 
 ```bash
-git add frontend/cliente*.js frontend/cliente.html tests/
-git commit -m "cliente: a aprovacao de arte sai do arquivo de 3.489 linhas"
+git add tests/
+git commit -m "testes: a pagina do cliente passa a ser lida por inteiro"
 ```
 
 ---
@@ -556,7 +518,7 @@ git commit -m "cliente: barra de abas no rodape, no jeito de aplicativo"
 ### Task 5: A aba da Arte, com estado por status
 
 **Arquivos:**
-- Modificar: `frontend/cliente-arte.js`, `frontend/cliente.js`
+- Modificar: `frontend/cliente.js`
 - Modificar: `tests/portal_abas_harness.js`
 
 **Interfaces:**
@@ -590,7 +552,7 @@ substitui a tela sequencial `mostrarConfirmacaoDadosCliente`, que sai.
 - [ ] **Passo 6: commit**
 
 ```bash
-git add frontend/cliente-arte.js frontend/cliente.js tests/portal_abas_harness.js
+git add frontend/cliente.js tests/portal_abas_harness.js
 git commit -m "cliente: a aba da arte tem cara para cada status do pedido"
 ```
 
@@ -600,7 +562,7 @@ git commit -m "cliente: a aba da arte tem cara para cada status do pedido"
 
 **Arquivos:**
 - Criar: `frontend/cliente-entrega.js`, `tests/portal_confirmacoes_harness.js`
-- Modificar: `frontend/cliente-gravacao.js`, `frontend/cliente.html`,
+- Modificar: `frontend/cliente.js`, `frontend/cliente.html`,
   `tests/portal_dados_harness.js`
 
 **Interfaces:**

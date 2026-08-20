@@ -319,25 +319,33 @@ cliente é pior do que 200 KB a mais**.
 
 ## 6. Divisão dos arquivos
 
-`cliente.js` tem 3.489 linhas e faz sete coisas. Passa a ser:
+`cliente.js` tem 3.489 linhas e faz sete coisas. A vontade era dividir tudo —
+inclusive o motor de desenho da arte, num `cliente-arte.js`.
+
+**Ao executar, isso foi medido e reduzido.** Onze arquivos de teste apontam para
+`frontend/cliente.js` pelo nome, e cinco deles recortam funções de lá para
+executá-las (`drawAmostraFace`, `saveAmostraToDB`, `gravarCorrecaoDoCliente`,
+`ehArquivoPdf`, o cálculo de `previaUtil`). Mover o motor obrigaria a religar
+todos os onze, e o que se ganharia era arrumação — nada que o cliente veja. O
+que se arriscaria é a composição da peça, que está aprovada e rodando na
+gráfica.
+
+Então o corte é este:
 
 | arquivo | o que contém |
 |---|---|
-| `cliente-dados.js` | a chamada da RPC, o `clienteState`, o carregamento dos itens e dos catálogos |
-| `cliente-shell.js` | rota, cabeçalho, selo de status, barra de abas, troca de seção |
-| `cliente-arte.js` | a aprovação inteira: `renderAmostrasOSItens`, `drawAmostraFace`, lightbox, viewer de PDF, CSV |
+| `cliente.js` | **fica com o motor de desenho da arte inteiro**, a rota, o `clienteState` e a gravação. Encolhe porque a conferência de dados (≈500 linhas) sai para as abas e a carga direta some. |
+| `cliente-dados.js` | a chamada da RPC, o `portalDados` e as funções puras de formatação (frete, prazo, endereço, real) |
+| `cliente-shell.js` | cabeçalho, selo de status, barra de abas, troca de seção |
 | `cliente-entrega.js` | endereço, envio, prazo, rastreio, confirmar/alterar |
 | `cliente-faturamento.js` | dados de nota fiscal, confirmar/alterar |
-| `cliente-orcamento.js` | o resumo, com o tradutor de negrito do WhatsApp |
+| `cliente-orcamento.js` | o resumo do orçamento, só leitura |
 | `cliente-pagamento.js` | o link do parceiro e os dois estados |
-| `cliente-gravacao.js` | `gravarStatusDoLink`, `gravarCorrecaoDoCliente`, `saveAmostraToDB` |
 
-**Regra da mudança:** o conteúdo de `cliente-arte.js` é movido **sem alteração de
-comportamento**. Nenhuma refatoração de oportunidade ali dentro. O que muda é
-onde ele desenha (dentro da seção da aba) e quando (na primeira vez que a aba
-abre).
-
----
+Os testes que leem "o código da página do cliente" passam a ler todos os
+`cliente*.js` juntos, para que uma regra que mude de arquivo continue sendo
+vista. Os que recortam função de dentro do motor continuam apontando para
+`cliente.js`, que é onde o motor está.
 
 ## 7. Testes
 
