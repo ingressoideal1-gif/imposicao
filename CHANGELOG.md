@@ -4,11 +4,16 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v662** — 2026-08-20 | Agente **1.2.155**
+## Versão atual: **v661** — 2026-08-20 | Agente **1.2.155**
 
 ---
 
-## [v662 — 2026-08-20] — Retirada mostra a gráfica, com mapa; e o endereço do pedido, não o do cliente
+## [v661 — 2026-08-20] — Retirada mostra a gráfica, com mapa; e o endereço do pedido, não o do cliente
+
+> As três mudanças da tarde — o recebedor herdado da nota fiscal, a retirada na gráfica e o
+> endereço principal — **saíram juntas na v661**. A numeração é do `publicar.ps1`, que lê a maior
+> versão nos HTMLs e soma um; as duas entradas abaixo foram escritas antes de publicar, e a de
+> baixo nunca existiu como release próprio.
 
 ### 📍 Retirada: o endereço é o da gráfica
 
@@ -53,7 +58,7 @@ principal do seu cadastro. Se a entrega for em outro lugar, toque em ALTERAR."*
 
 ---
 
-## [v661 — 2026-08-20] — O recebedor sai da nota fiscal, quando ela é de pessoa física
+## [v661 — 2026-08-20] — O recebedor sai da nota fiscal, quando ela é de pessoa física (saiu junto)
 
 **Regra do usuário:** faltando o nome e o CPF de quem recebe, valem os dados da nota fiscal —
 **mas só quando ela é de pessoa física**. Sendo de empresa, informar o recebedor passa a ser
