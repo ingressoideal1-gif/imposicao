@@ -61,6 +61,16 @@ def _corpo_da_funcao():
     return sql[sql.index("CREATE OR REPLACE FUNCTION public.link_cliente_pedido"):]
 
 
+def _so_o_sql(texto):
+    """Sem as linhas de comentario.
+
+    Sem isto, a prosa que EXPLICA por que um campo ficou de fora contaria como o
+    campo estando la -- e um arquivo bem comentado reprovaria por dizer a
+    verdade.
+    """
+    return "\n".join(l for l in texto.splitlines() if not l.lstrip().startswith("--"))
+
+
 def test_a_funcao_nasce_com_os_cuidados_de_security_definer():
     """Sem `search_path` fixo, quem controlasse o da sessao faria a funcao
     enxergar uma tabela sua com o mesmo nome."""
@@ -91,10 +101,40 @@ def test_a_funcao_nao_devolve_dado_financeiro_do_cadastro():
         assert proibido not in corpo, f"{proibido} nao pode sair para o cliente"
 
 
-def test_a_funcao_devolve_as_sete_chaves_que_a_tela_usa():
+def test_a_funcao_devolve_as_oito_chaves_que_a_tela_usa():
     corpo = _corpo_da_funcao()
-    for chave in ("'pedido'", "'cliente'", "'endereco'", "'itens'", "'os'", "'frete'", "'entrega'"):
+    for chave in ("'pedido'", "'cliente'", "'endereco'", "'itens'", "'os'", "'frete'",
+                  "'pagamentos'", "'entrega'"):
         assert chave in corpo, f"a chave {chave} sumiu do retorno"
+
+
+def test_o_link_de_pagamento_vem_das_cobrancas_do_pedido():
+    """O link mora em `pagamentos_v2.url_cobranca` -- por exemplo
+    `https://pay.ai-ideal.com.br/i/a21f550f`, do pedido 20927 -- e a forma em
+    `tipo_cobranca` (PIX, BOLETO, CARD_PARCELADO, E-FATURADO, E-CREDITO).
+
+    O campo `propostas_os.link_pagamento`, que a v656 lia, esta vazio nas 23
+    linhas daquela tabela: nunca foi por ali.
+    """
+    corpo = _corpo_da_funcao()
+    assert "FROM pagamentos_v2" in corpo
+    assert "p2.url_cobranca" in corpo
+    assert "p2.tipo_cobranca" in corpo
+
+
+def test_a_cobranca_cancelada_nao_vai_para_o_cliente():
+    """O link de uma cobranca cancelada ainda abre. Mandar o cliente pagar uma
+    cobranca que a grafica cancelou e pior do que nao mostrar nada."""
+    corpo = _corpo_da_funcao()
+    assert "<> 'CANCELADO'" in corpo
+
+
+def test_a_funcao_nao_devolve_o_codigo_do_pix_nem_o_do_boleto():
+    """Esta funcao e a porta de uma pagina publica: ela entrega o ENDERECO da
+    cobranca, e o gateway mostra o resto depois de o cliente chegar la."""
+    corpo = _so_o_sql(_corpo_da_funcao())
+    for proibido in ("pix_copia_cola", "linha_digitavel", "cartao_checkout_id"):
+        assert proibido not in corpo, f"{proibido} nao pode sair para o cliente"
 
 
 def test_o_prazo_de_envio_vem_da_cotacao_escolhida():

@@ -22700,33 +22700,13 @@ function renderOrdens() {
                     ? modelosGlobais.reduce((acc, m) => acc + (m.quantidade || 0), 0)
                     : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
 
-                // Frete (forma de envio) — lido direto do campo frete_escolhido da proposta
+                // Frete (forma de envio) — lido direto do campo frete_escolhido
+                // da proposta. O mapa de logos e a busca por trecho saíram daqui
+                // em 20/08/2026 para `frontend/logo-do-frete.js`: a aba de
+                // Entrega do Portal do Pedido passou a mostrar as mesmas, e a
+                // mesma logo em dois lugares tem de vir de um arquivo só.
                 const freteRaw = (os.frete_escolhido || '').trim() || 'Retirada Local';
-                // Normalizar: comparação case-insensitive
-                const freteNorm = freteRaw.toUpperCase();
-                const FRETE_IMGS = {
-                    'SEDEX':                     'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
-                    'TRANSPORTADORA S\u00c3O MIGUEL': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293565_Sao-Miguel.png',
-                    'MOTOBOY':                   'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293109_Motoboy.png',
-                    'RETIRADA LOCAL':             'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
-                    'RETIRAR':                   'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
-                    'RETIRADA':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
-                    // Uma chave só cobre as quatro grafias que o parceiro já
-                    // escreveu neste campo — VEPPO, veppo, Veppo e VEPPO-RS:
-                    // a comparação é em maiúsculas, e o "-RS" entra pela busca
-                    // parcial logo abaixo.
-                    'VEPPO':                     'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678294009_Veppo.png',
-                };
-                // Busca por correspondência parcial também (ex: "SAO MIGUEL" ↔ "TRANSPORTADORA SÃO MIGUEL")
-                let freteImgUrl = FRETE_IMGS[freteNorm];
-                if (!freteImgUrl) {
-                    const key = Object.keys(FRETE_IMGS).find(k => freteNorm.includes(k) || k.includes(freteNorm));
-                    if (key) freteImgUrl = FRETE_IMGS[key];
-                }
-                const freteHtml = freteImgUrl
-                    ? `<img src="${escapeHtml(freteImgUrl)}" alt="${escapeHtml(freteRaw)}" title="${escapeHtml(freteRaw)}" style="height:28px; max-width:80px; object-fit:contain; display:block; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
-                       <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${escapeHtml(freteRaw)}</span>`
-                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">${escapeHtml(freteRaw)}</span>`;
+                const freteHtml = `<div style="display: flex; justify-content: center;">${logoDoFreteHtml(freteRaw)}</div>`;
 
                 const prazoBadgeHtml = formatPrazoBadge(os);
                 let nomeEventoHtml = '';

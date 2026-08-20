@@ -41,7 +41,31 @@ function linhasDoEnvio(dados) {
     const os = (dados && dados.os) || null;
     const itens = (dados && dados.itens) || [];
 
-    const linhas = [{ rotulo: 'Forma de envio', valor: rotuloDoFrete(pedido, frete), forte: true }];
+    // A logo da transportadora, a mesma que o Painel de Produção mostra na
+    // coluna de frete — pedida pelo usuário em 20/08/2026. Ela vem ACIMA do
+    // texto, e não no lugar dele: a logo é reconhecida num relance, mas só o
+    // texto diz o valor do frete e a modalidade.
+    const nomeDoFrete = (pedido && pedido.frete_escolhido)
+        || (frete && frete.servico) || '';
+    const rotulo = rotuloDoFrete(pedido, frete);
+    const logo = logoDoFrete(nomeDoFrete);
+
+    // Aqui a logo vem SEM o texto de reserva que o painel usa: a linha de baixo
+    // já traz o nome, e com o valor do frete junto. Repetir "SEDEX" duas vezes
+    // quando a imagem não carrega é pior do que não ter a logo. Por isso o
+    // `onerror` remove a imagem em vez de trocá-la por texto.
+    const imagem = logo
+        ? '<img src="' + escapeHtml(logo) + '" alt="' + escapeHtml(nomeDoFrete) + '" '
+          + 'style="height: 34px; max-width: 110px; object-fit: contain; display: block; '
+          + 'margin-bottom: 6px;" onerror="this.remove();">'
+        : '';
+
+    const linhas = [{
+        rotulo: 'Forma de envio',
+        valor: rotulo,
+        forte: true,
+        html: imagem + escapeHtml(rotulo)
+    }];
 
     const producao = prazoDeProducao(itens);
     linhas.push({

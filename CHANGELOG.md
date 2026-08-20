@@ -4,7 +4,56 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v657** — 2026-08-20 | Agente **1.2.152**
+## Versão atual: **v658** — 2026-08-20 | Agente **1.2.153**
+
+---
+
+## [v658 — 2026-08-20] — O link de pagamento achado, e as logos do frete
+
+### 💳 O link de pagamento estava em outra tabela
+
+A v656 lia `propostas_os.link_pagamento`, que **está vazio nas 23 linhas daquela tabela** — nunca
+foi por ali. O usuário deu o exemplo do pedido 20927 (`pay.ai-ideal.com.br/i/a21f550f`) e a busca
+no banco achou a origem: **`pagamentos_v2.url_cobranca`**, com a forma em `tipo_cobranca`. São
+3.552 pedidos com cobrança nos últimos 90 dias.
+
+**A aba mostra uma LISTA de cobranças, e não uma.** 190 desses pedidos têm duas ou mais — entrada
+mais parcelas, com a referência indo `20927-A`, `20927-B`. Mostrar só a primeira esconderia do
+cliente metade do que ele tem a pagar.
+
+**O status do pagamento vai em destaque**, no topo da aba, a pedido do usuário. Ele não é o status
+de uma cobrança: é o das cobranças todas juntas. Com duas cobranças e uma paga, dizer "Pago"
+mandaria o cliente embora devendo, e dizer "Aguardando" apagaria o que ele já pagou — por isso
+existe o **Parcialmente pago (1 de 2)**.
+
+Cada cobrança mostra forma de pagamento, situação, valor e vencimento. Duas guardas no botão:
+
+- **Cobrança cancelada não chega à tela.** A função do banco a deixa de fora; o link dela ainda
+  abre, e mandar o cliente pagar uma cobrança que a gráfica cancelou é pior do que não mostrar nada.
+- **Cobrança paga não ganha botão.** "Pagar agora" embaixo do que já foi pago é convite para pagar
+  duas vezes.
+
+`pix_copia_cola`, `linha_digitavel` e os dados de cartão **não saem** da função: ela entrega o
+endereço da cobrança, e o gateway mostra o resto depois que o cliente chega lá.
+
+### 🚚 As logos das formas de envio
+
+A aba de Entrega passou a mostrar a logo da transportadora — as mesmas que o Painel de Produção já
+usa na coluna de frete. Elas saíram de dentro de uma função de desenho do `script.js` para
+`frontend/logo-do-frete.js`, e agora as duas telas leem do mesmo lugar: é o mesmo desenho mostrando
+o mesmo fato, e o dia em que uma transportadora trocar de logo é uma linha a mudar, não duas a caçar.
+
+A busca continua sendo em maiúsculas e, não achando exato, por trecho — é assim que `VEPPO-RS` cai
+na logo da Veppo e `SAO MIGUEL` na da São Miguel. Transportadora sem logo cadastrada aparece pelo
+nome, e não como imagem quebrada.
+
+Na aba do cliente a logo vem **acima** do texto, e não no lugar dele: a logo se reconhece num
+relance, mas só o texto diz o valor do frete e a modalidade. E ali ela vem sem o texto de reserva
+que o painel usa — a linha de baixo já traz o nome, e repeti-lo quando a imagem não carrega seria
+pior do que não ter logo.
+
+**Testes:** `tests/logo_do_frete_harness.js` (31 conferências) e a parte de pagamento do
+`tests/portal_orcamento_harness.js` (60).
 
 ---
 

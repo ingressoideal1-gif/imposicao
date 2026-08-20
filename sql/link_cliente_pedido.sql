@@ -75,6 +75,7 @@ DECLARE
     v_arte     pedidos_artes%ROWTYPE;
     v_frete    cotacao_frete%ROWTYPE;
     v_itens    jsonb;
+    v_pgtos    jsonb;
 BEGIN
     -- O par inteiro, e `ativo`: um link revogado tem de parar de abrir.
     SELECT l.* INTO v_link
@@ -171,6 +172,36 @@ BEGIN
          WHERE pp.id_int = v_num
       ) AS itens;
 
+    -- As cobranças do pedido, que são o link de pagamento e a forma.
+    --
+    -- Um pedido pode ter MAIS DE UMA: medido em 20/08/2026, 3.367 pedidos dos
+    -- últimos 90 dias têm uma cobrança, mas 190 têm duas ou mais -- entrada mais
+    -- parcelas, com o `id_pagamento` indo `20927-A`, `20927-B`. Mandar só a
+    -- primeira esconderia do cliente metade do que ele tem a pagar.
+    --
+    -- Cobrança CANCELADA fica de fora: o link dela ainda abre, e mandar o
+    -- cliente pagar uma cobrança cancelada é pior do que não mostrar nada.
+    --
+    -- `pix_copia_cola`, `linha_digitavel` e os dados de cartão NÃO saem daqui.
+    -- Esta função é a porta de uma página pública; o que ela precisa entregar é
+    -- o endereço da cobrança, e o resto o próprio gateway mostra depois.
+    SELECT jsonb_agg(pg ORDER BY (pg->>'criado_em'))
+      INTO v_pgtos
+      FROM (
+        SELECT jsonb_build_object(
+                   'referencia', p2.id_pagamento,
+                   'forma',      p2.tipo_cobranca,
+                   'status',     p2.status,
+                   'valor',      p2.valor,
+                   'vencimento', p2.vencimento,
+                   'link',       p2.url_cobranca,
+                   'criado_em',  p2.created_at
+               ) AS pg
+          FROM pagamentos_v2 p2
+         WHERE p2.id_int = v_num
+           AND COALESCE(upper(p2.status), '') <> 'CANCELADO'
+      ) AS pagamentos;
+
     RETURN jsonb_build_object(
         'pedido', jsonb_build_object(
             'numero',           v_link.numero_pedido,
@@ -216,6 +247,7 @@ BEGIN
             'forma_pagamento',     v_os.forma_pagamento,
             'status_pagamento',    v_os.status_pagamento
         ) END,
+        'pagamentos', COALESCE(v_pgtos, '[]'::jsonb),
         'frete', CASE WHEN v_frete.id IS NULL THEN NULL ELSE jsonb_build_object(
             'servico', v_frete.servico,
             'prazo',   v_frete.prazo,

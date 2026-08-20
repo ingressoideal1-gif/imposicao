@@ -73,12 +73,17 @@ const linhasDoOrcamento = new Function(
     + recortar(DADOS, 'rotuloDoFrete') + '\n'
     + recortar(ORCAMENTO, 'linhasDoOrcamento') + '\nreturn linhasDoOrcamento;')();
 
-const estadoDoPagamento = new Function(
-    recortar(PAGAMENTO, 'estadoDoPagamento') + '\nreturn estadoDoPagamento;')();
+function doPagamento(nome, dependencias) {
+    const corpo = (dependencias || []).map(d => (d === d.toUpperCase()
+        ? extrairTabela(PAGAMENTO, d)
+        : recortar(PAGAMENTO, d))).join('\n');
+    return new Function(corpo + '\n' + recortar(PAGAMENTO, nome) + '\nreturn ' + nome + ';')();
+}
 
-const mostraStatusDePagamento = new Function(
-    recortar(PAGAMENTO, 'estadoDoPagamento') + '\n'
-    + recortar(PAGAMENTO, 'mostraStatusDePagamento') + '\nreturn mostraStatusDePagamento;')();
+const rotuloDaForma = doPagamento('rotuloDaForma', ['NOME_DA_FORMA']);
+const rotuloDoStatus = doPagamento('rotuloDoStatus', ['NOME_DO_STATUS']);
+const statusDoPagamento = doPagamento('statusDoPagamento');
+const podePagar = doPagamento('podePagar');
 
 // ─── 1. O negrito do WhatsApp ────────────────────────────────────────────────
 
@@ -157,36 +162,84 @@ const mostraStatusDePagamento = new Function(
     ok(r.total === '--', 'sem valor, "--" e nao "R$ 0,00"', r.total);
 })();
 
-// ─── 4. O link de pagamento ──────────────────────────────────────────────────
+// ─── 4. O pagamento ──────────────────────────────────────────────────────────
+//
+// O link mora em `pagamentos_v2.url_cobranca` e a forma em `tipo_cobranca` --
+// achados no banco em 20/08/2026, a partir do pedido 20927, cujo link e
+// `https://pay.ai-ideal.com.br/i/a21f550f`. O `propostas_os.link_pagamento` que
+// a v656 lia esta vazio nas 23 linhas daquela tabela: nunca foi por ali.
+//
+// Um pedido pode ter MAIS DE UMA cobranca: 3.367 pedidos dos ultimos 90 dias
+// tem uma, mas 190 tem duas ou mais (entrada mais parcelas).
 
-(function comLinkALiberacaoAcontece() {
-    ok(estadoDoPagamento({ link_pagamento: 'https://pag.com/x' }) === 'liberado', 'com link');
+(function aFormaDeCobrancaViraPalavraDeGente() {
+    ok(rotuloDaForma('PIX') === 'PIX', 'PIX ja e como se fala');
+    ok(rotuloDaForma('BOLETO') === 'Boleto', 'boleto nao grita');
+    ok(rotuloDaForma('CARD_PARCELADO') === 'Cartão parcelado', 'o nome de banco de dados vira portugues');
+    ok(rotuloDaForma('E-FATURADO') === 'Faturado', 'e-faturado');
+    ok(rotuloDaForma('E-Faturado') === 'Faturado', 'a mesma coisa com outra caixa');
+    ok(rotuloDaForma('E-CREDITO') === 'Crédito', 'e-credito');
+    ok(rotuloDaForma('QUALQUER_COISA_NOVA') === 'QUALQUER_COISA_NOVA',
+        'forma nova passa como esta, em vez de sumir');
+    ok(rotuloDaForma(null) === 'A combinar', 'sem forma');
 })();
 
-(function semLinkNaoNasceBotaoMorto() {
-    // Medido em 20/08/2026: `link_pagamento` esta vazio nas 23 linhas de
-    // `propostas_os`. O parceiro vai preencher; ate la, a aba diz o que fazer.
-    ok(estadoDoPagamento({ link_pagamento: '' }) === 'aguardando', 'link vazio');
-    ok(estadoDoPagamento({ link_pagamento: null }) === 'aguardando', 'link nulo');
-    ok(estadoDoPagamento({ link_pagamento: '   ' }) === 'aguardando', 'so espaco');
-    ok(estadoDoPagamento(null) === 'aguardando', 'pedido sem linha de OS');
+(function oStatusDaCobrancaEmPortugues() {
+    ok(rotuloDoStatus('PAID').texto === 'Pago', 'pago');
+    ok(rotuloDoStatus('A_RECEBER').texto === 'Aguardando pagamento', 'a receber');
+    ok(rotuloDoStatus('A_VENCER').texto === 'A vencer', 'a vencer');
+    ok(rotuloDoStatus('paid').texto === 'Pago', 'a caixa nao importa');
+    ok(rotuloDoStatus('ESTORNADO').texto === 'ESTORNADO', 'status novo passa como esta');
+    ok(typeof rotuloDoStatus('PAID').cor === 'string', 'e todo status tem cor');
 })();
+
+// ─── 4b. O status do PEDIDO, que e o que vai em destaque ────────────────────
+
+(function tudoPagoEPago() {
+    const s = statusDoPagamento([{ status: 'PAID' }, { status: 'PAID' }]);
+    ok(s.chave === 'pago', 'as duas cobrancas pagas', s);
+    ok(/pago/i.test(s.texto), 'e o texto diz isso', s);
+})();
+
+(function umaSoPagaEParcial() {
+    // 190 pedidos tem duas cobrancas ou mais. Dizer "pago" com uma delas em
+    // aberto mandaria o cliente embora devendo.
+    const s = statusDoPagamento([{ status: 'PAID' }, { status: 'A_RECEBER' }]);
+    ok(s.chave === 'parcial', 'uma paga e outra nao', s);
+})();
+
+(function nenhumaPagaEAguardando() {
+    ok(statusDoPagamento([{ status: 'A_RECEBER' }]).chave === 'aberto', 'a receber');
+    ok(statusDoPagamento([{ status: 'A_VENCER' }]).chave === 'aberto', 'a vencer');
+})();
+
+(function semCobrancaNaoDizNadaSobrePagamento() {
+    // O pedido 20974 esta assim: existe, tem valor, e ainda nao tem cobranca.
+    ok(statusDoPagamento([]).chave === 'sem_cobranca', 'lista vazia', statusDoPagamento([]));
+    ok(statusDoPagamento(null).chave === 'sem_cobranca', 'nulo nao quebra');
+    ok(!/pago/i.test(statusDoPagamento([]).texto),
+        'e nao diz "pago" para quem nao pagou', statusDoPagamento([]));
+})();
+
+// ─── 4c. Que cobranca vira botao ────────────────────────────────────────────
 
 (function soLinkDeVerdadeAbre() {
-    // O campo e texto livre no ERP do parceiro: um "combinar com o vendedor"
-    // digitado ali nao pode virar um botao que leva a lugar nenhum.
-    ok(estadoDoPagamento({ link_pagamento: 'combinar com o vendedor' }) === 'aguardando',
-        'texto que nao e endereco nao vira botao');
-    ok(estadoDoPagamento({ link_pagamento: 'http://pag.com/x' }) === 'liberado', 'http tambem serve');
+    // O campo e texto livre no ERP: um "combinar com o vendedor" digitado ali
+    // nao pode virar um botao que leva a lugar nenhum.
+    ok(podePagar({ status: 'A_RECEBER', link: 'https://pay.ai-ideal.com.br/i/a21f550f' }) === true,
+        'cobranca aberta com link');
+    ok(podePagar({ status: 'A_RECEBER', link: 'combinar com o vendedor' }) === false,
+        'texto que nao e endereco');
+    ok(podePagar({ status: 'A_RECEBER', link: null }) === false, 'sem link');
+    ok(podePagar({ status: 'A_RECEBER', link: '' }) === false, 'link vazio');
 })();
 
-(function statusPadraoDoParceiroNaoViraAnuncio() {
-    // `status_pagamento` vale APROVADO nas 23 linhas -- e valor padrao, e nao
-    // estado real. Anunciar "pagamento aprovado" para todo mundo seria mentira
-    // na tela do cliente.
-    ok(mostraStatusDePagamento({ status_pagamento: 'APROVADO', link_pagamento: '' }) === false,
-        'sem link, o status nao aparece');
-    ok(mostraStatusDePagamento(null) === false, 'sem linha de OS, nada');
+(function cobrancaPagaNaoGanhaBotao() {
+    // Botao "Pagar agora" embaixo de uma cobranca ja paga e o convite para o
+    // cliente pagar duas vezes.
+    ok(podePagar({ status: 'PAID', link: 'https://pay.ai-ideal.com.br/i/x' }) === false,
+        'cobranca paga');
+    ok(podePagar(null) === false, 'nada nao quebra');
 })();
 
 // ─── 5. Na fonte: o orcamento nao decide nada ───────────────────────────────
@@ -203,7 +256,15 @@ const mostraStatusDePagamento = new Function(
     ok(/rel="noopener noreferrer"/.test(PAGAMENTO),
         'o link do parceiro abre com noopener: o destino e site de terceiro');
     ok(/atendimento/i.test(PAGAMENTO),
-        'e sem link a aba diz o que fazer -- nenhuma trava fica sem saida');
+        'e sem cobranca a aba diz o que fazer -- nenhuma trava fica sem saida');
+})();
+
+(function oStatusVaiEmDestaque() {
+    // Pedido do usuario em 20/08/2026: o status do pagamento em destaque.
+    const desenha = recortar(PAGAMENTO, 'desenharSecaoPagamento');
+    ok(/portal-total/.test(desenha) || /portal-destaque/.test(desenha),
+        'o status usa a caixa de destaque, e nao uma linha qualquer');
+    ok(desenha.indexOf('statusDoPagamento') > 0, 'e vem do status calculado das cobrancas');
 })();
 
 if (falhas) {

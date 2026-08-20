@@ -124,6 +124,9 @@ PAINEL_ARQUIVOS = [
     "cliente-faturamento.js",
     "cliente-orcamento.js",
     "cliente-pagamento.js",
+    # A logo da forma de envio, compartilhada entre o painel (coluna de frete da
+    # lista de pedidos) e a aba de Entrega do Portal do Pedido, desde 20/08/2026.
+    "logo-do-frete.js",
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
     "arte-de-impressao.js",

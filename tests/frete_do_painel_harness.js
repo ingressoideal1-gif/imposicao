@@ -21,38 +21,69 @@ function ok(cond, oque, detalhe) {
     console.error('FALHOU: ' + oque + (detalhe !== undefined ? '\n         ' + detalhe : ''));
 }
 
-// ─── O trecho real, recortado do script.js ───────────────────────────────────
+// ─── O codigo real, recortado de onde ele mora ──────────────────────────────
+//
+// Em 20/08/2026 o mapa saiu de dentro da funcao de desenho do `script.js` para
+// `frontend/logo-do-frete.js`, porque a aba de Entrega do Portal do Pedido
+// passou a mostrar as mesmas logos. Este harness continua rodando o codigo de
+// producao -- so mudou o arquivo de onde ele e recortado.
 
-const INICIO = "const freteRaw = (os.frete_escolhido || '').trim() || 'Retirada Local';";
-const FIM = 'font-size:0.75rem;">${escapeHtml(freteRaw)}</span>`;';
+const LOGO = fs.readFileSync(path.join(RAIZ, 'frontend', 'logo-do-frete.js'), 'utf8');
 
-const i = SCRIPT.indexOf(INICIO);
-if (i < 0) throw new Error('o trecho do frete mudou de forma -- o harness precisa ser reapontado');
-const j = SCRIPT.indexOf(FIM, i);
-if (j < 0) throw new Error('nao achei o fim do trecho do frete no script.js');
+function recortar(fonte, nome) {
+    const k = fonte.indexOf('\nfunction ' + nome + '(');
+    if (k < 0) throw new Error('nao achei a funcao ' + nome + ' -- o harness precisa ser reapontado');
+    return fonte.slice(k, fonte.indexOf('\n}', k) + 2);
+}
 
-const TRECHO = SCRIPT.slice(i, j + FIM.length);
+function extrairTabela(fonte, nome) {
+    const k = fonte.indexOf('\nconst ' + nome + ' = ');
+    if (k < 0) throw new Error('nao achei a tabela ' + nome);
+    let p = 0;
+    for (let m = fonte.indexOf('=', k); m < fonte.length; m++) {
+        const c = fonte[m];
+        if (c === '[' || c === '{') p++;
+        else if (c === ']' || c === '}') p--;
+        else if (c === ';' && p === 0) return fonte.slice(k, m + 1);
+    }
+    throw new Error('nao achei o fim da tabela ' + nome);
+}
 
 // `escapeHtml` de mentira: aqui interessa QUAL imagem foi escolhida, nao como o
 // painel escapa aspas -- essa parte tem teste proprio.
-const decidirFrete = new Function('os', 'escapeHtml',
-    TRECHO + '\nreturn { freteRaw, freteImgUrl, freteHtml };');
 const passar = s => String(s === undefined || s === null ? '' : s);
 
+const MOTOR = extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
+    + recortar(LOGO, 'logoDoFrete') + '\n'
+    + recortar(LOGO, 'logoDoFreteHtml');
+
+const decidirFrete = new Function('valor', 'escapeHtml',
+    MOTOR + "\nconst freteRaw = (valor || '').trim() || 'Retirada Local';"
+    + '\nreturn { freteRaw, freteImgUrl: logoDoFrete(freteRaw), freteHtml: logoDoFreteHtml(freteRaw) };');
+
 function frete(valor) {
-    return decidirFrete({ frete_escolhido: valor }, passar);
+    return decidirFrete(valor, passar);
 }
+
+// O painel continua chamando a funcao compartilhada, com o mesmo padrao de
+// "sem frete escrito vale Retirada Local".
+(function oPainelContinuaLigadoNestaFuncao() {
+    ok(/const freteRaw = \(os\.frete_escolhido \|\| ''\)\.trim\(\) \|\| 'Retirada Local';/.test(SCRIPT),
+        'o painel ainda decide o nome do frete do mesmo jeito');
+    ok(/logoDoFreteHtml\(freteRaw\)/.test(SCRIPT), 'e pede a logo a funcao compartilhada');
+    ok(SCRIPT.indexOf('FRETE_IMGS') < 0, 'sem copia do mapa sobrando no painel');
+})();
 
 // ─── O endereco que o usuario mandou usar ────────────────────────────────────
 
 const VEPPO = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678294009_Veppo.png';
 
 (function oVeppoUsaExatamenteOEnderecoPedido() {
-    ok(SCRIPT.indexOf(VEPPO) > 0, 'o endereco da marca do Veppo esta no script.js');
+    ok(LOGO.indexOf(VEPPO) > 0, 'o endereco da marca do Veppo esta no logo-do-frete.js');
 
     // Um caractere trocado devolve 400 do Storage e a coluna cai no texto: o
     // `onerror` da <img> esconde a figura e mostra o nome. Passaria despercebido.
-    const quantas = (SCRIPT.match(/1785678294009_Veppo\.png/g) || []).length;
+    const quantas = ((LOGO + SCRIPT).match(/1785678294009_Veppo\.png/g) || []).length;
     ok(quantas === 1, 'e aparece uma vez so, sem copia para divergir', quantas);
 })();
 

@@ -129,9 +129,10 @@ próximo salvamento do modelo.
 |---|---|---|
 | 🎨 Arte | `cliente.js` (`desenharSecaoArte`) | `pedidos_modelos` + catálogos |
 | 📦 Entrega | `cliente-entrega.js` | `enderecos`, `propostas`, `propostas_os`, `produtos.prazo`, `cotacao_frete` |
+| (logo do frete) | `logo-do-frete.js` | compartilhado com o painel |
 | 🧾 Nota | `cliente-faturamento.js` | `clientes` (cinco campos) |
 | 💰 Orçamento | `cliente-orcamento.js` | `propostas.texto_whatsapp`, com `produtos_proposta` de reserva |
-| 💳 Pagar | `cliente-pagamento.js` | `propostas_os.link_pagamento` |
+| 💳 Pagar | `cliente-pagamento.js` | `pagamentos_v2` (uma linha por cobrança) |
 
 O casco — cabeçalho, selo de status, barra de abas e troca de seção — está em
 `cliente-shell.js`. As duas decisões do cliente (entrega e faturamento) estão em
@@ -205,6 +206,39 @@ coisa com a unidade perdida.
 > `propostas_os.data_termino` **não aparece mais** nesta aba. Ela continua sendo
 > o Prazo de Entrega do Painel de Produção; o que o cliente vê agora são os dois
 > prazos acima, que é o que ele perguntaria ao atendimento.
+
+---
+
+### O pagamento: onde o link mora
+
+Em **`pagamentos_v2.url_cobranca`**, e a forma em `tipo_cobranca`. Achado no
+banco em 20/08/2026 a partir do pedido 20927, cujo link é
+`https://pay.ai-ideal.com.br/i/a21f550f`.
+
+> [!WARNING]
+> `propostas_os.link_pagamento`, que a v656 lia, **está vazio nas 23 linhas**
+> daquela tabela. Nunca foi por ali. Em `pagamentos_v2` são 3.552 pedidos com
+> cobrança nos últimos 90 dias.
+
+A aba mostra uma **lista** de cobranças, porque 190 desses pedidos têm duas ou
+mais — entrada mais parcelas, com a referência indo `20927-A`, `20927-B`.
+
+O **status em destaque** é o das cobranças todas juntas, e não o de uma:
+
+| situação | o que aparece |
+|---|---|
+| todas pagas | Pago |
+| algumas pagas | Parcialmente pago (N de M) |
+| nenhuma paga | Aguardando pagamento |
+| sem cobrança | Aguardando cobrança |
+
+Duas guardas no botão "Pagar agora": cobrança **cancelada** não sai da função do
+banco (o link dela ainda abre, e mandar pagar o que a gráfica cancelou é pior do
+que não mostrar nada), e cobrança **paga** não ganha botão (é convite para pagar
+duas vezes).
+
+`pix_copia_cola`, `linha_digitavel` e os dados de cartão não saem da função: ela
+entrega o endereço da cobrança, e o gateway mostra o resto.
 
 ---
 

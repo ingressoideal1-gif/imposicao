@@ -20,6 +20,7 @@ const DADOS = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-dados.js'), '
 const ENTREGA = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-entrega.js'), 'utf8');
 const FATURAMENTO = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-faturamento.js'), 'utf8');
 const CONFIRMACOES = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-confirmacoes.js'), 'utf8');
+const LOGO = fs.readFileSync(path.join(RAIZ, 'frontend', 'logo-do-frete.js'), 'utf8');
 
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
@@ -233,6 +234,11 @@ const linhasDoEnvio = new Function(
     + recortar(DADOS, 'prazoDoFrete') + '\n'
     + recortar(DADOS, 'linkDeRastreio') + '\n'
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
+    // A logo vem do seu proprio arquivo, e tem harness proprio
+    // (`logo_do_frete_harness.js`). Aqui ela e so uma dependencia.
+    + recortar(LOGO, 'logoDoFrete') + '\n'
+    + recortar(LOGO, 'logoDoFreteHtml') + '\n'
+    + extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
     + recortar(ENTREGA, 'linhasDoEnvio') + '\nreturn linhasDoEnvio;')();
 
 (function envioTemFormaEOsDoisPrazos() {
