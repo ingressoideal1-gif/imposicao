@@ -128,15 +128,14 @@ function cartaoDeFinalizacao() {
     const dados = window.portalDados || {};
     const faltam = [];
     if (!artesJaAprovadas()) faltam.push('aprovar suas artes na aba <b>Arte</b>');
-    // A exigência do recebedor entra aqui também: sem ela, o botão de finalizar
-    // ficaria desligado sem dizer que é por causa disso.
     // A exigência do recebedor só prende enquanto o cliente não usou o ALTERAR.
     //
     // Ela existe para ele não CONFIRMAR um endereço incompleto — e não para
     // trancá-lo na página. Quem escolheu ALTERAR já está mandando o nome e o CPF
     // pela caixa de texto, e o pedido vai para o atendimento com essa
     // solicitação: é a saída da trava, e toda trava desta casa tem uma.
-    if (entregaExigeRecebedor(dados.endereco, dados.cliente) && c.entrega !== false) {
+    if (entregaExigeRecebedor(dados.endereco, dados.cliente, dados.pedido, dados.frete)
+        && c.entrega !== false) {
         faltam.push('informar quem vai receber, na aba <b>Entrega</b>');
     } else if (c.entrega === null) {
         faltam.push('conferir os dados na aba <b>Entrega</b>');

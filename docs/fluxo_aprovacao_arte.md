@@ -220,6 +220,30 @@ coisa com a unidade perdida.
 > `propostas_os.data_termino` **não aparece** nesta aba. Ela continua sendo o
 > Prazo de Entrega do Painel de Produção; o que o cliente vê é a conta acima.
 
+### Qual endereço a aba de Entrega mostra
+
+| caso | endereço mostrado |
+|---|---|
+| **RETIRADA** (`frete_escolhido` ou `cotacao_frete.servico` começando por RETIR) | o da **gráfica**, lido de `empresas` (empresa 1), com botão de rota no mapa |
+| pedido com `propostas.id_endereco_ent` | o endereço **escolhido no pedido** — um cliente pode ter vários |
+| sem escolha, e o cliente tem **um** endereço | o do cadastro, marcado como tal na tela |
+| sem escolha, e o cliente tem **mais de um** | nenhum: escolher seria adivinhar |
+
+Medido em 20/08/2026: **2.024 dos 4.001** pedidos dos últimos 90 dias estão com
+`id_endereco_ent` vazio; desses, 1.970 clientes têm endereço cadastrado e **125
+têm mais de um**. Adivinhar entre eles manda o pacote para o endereço de outra
+obra — por isso a regra pára onde a dúvida começa, e a tela pede o endereço ao
+cliente.
+
+Na retirada, duas coisas mudam junto: a linha de prazo mostra **só a produção**
+("Pronto para retirada a partir de X"), porque não há perna de envio a somar; e o
+recebedor deixa de ser exigido, porque quem busca é o próprio cliente, no balcão.
+
+O endereço da gráfica é lido do cadastro do ERP, e não escrito no código: se ela
+mudar de endereço, a página acompanha.
+
+---
+
 ### O recebedor: quando ele é herdado e quando é obrigatório
 
 **Recebedor** e **CPF do recebedor** são as duas primeiras linhas do cartão de

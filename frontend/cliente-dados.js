@@ -301,6 +301,69 @@ function enderecoEmLinhas(endereco, cliente) {
 }
 
 /**
+ * Se o pedido é de RETIRADA na gráfica.
+ *
+ * O ERP escreve isso de várias formas, em dois campos: `frete_escolhido` traz
+ * `RETIRADA` e `RETIRAR`; `cotacao_frete.servico` traz "Retirada Local" e
+ * "RETIRA BALCÃO". Todas começam por RETIR, e é por aí que se pergunta — em vez
+ * de manter uma lista que a próxima grafia do parceiro deixaria desatualizada.
+ */
+function ehRetirada(pedido, frete) {
+    const nome = ((pedido && pedido.frete_escolhido) || (frete && frete.servico) || '')
+        .toString().trim().toUpperCase();
+    return nome.indexOf('RETIR') === 0;
+}
+
+/**
+ * O endereço que a aba de Entrega deve mostrar.
+ *
+ * Na RETIRADA é o da GRÁFICA, e não o do cliente — regra do usuário em
+ * 20/08/2026. Até então a aba mostrava o endereço do cliente num pedido de
+ * retirada, que é o contrário do que acontece: é o cliente que vai até lá.
+ *
+ * Nos demais, é o endereço escolhido NO PEDIDO (`propostas.id_endereco_ent`,
+ * resolvido pela função do banco) — um cliente pode ter vários, e o do pedido é
+ * o que vale.
+ */
+function enderecoDeEntrega(dados) {
+    const pedido = (dados && dados.pedido) || null;
+    const frete = (dados && dados.frete) || null;
+
+    if (ehRetirada(pedido, frete)) {
+        const g = (dados && dados.grafica) || null;
+        return { naGrafica: true, endereco: g, nome: g ? g.nome : null };
+    }
+    return { naGrafica: false, endereco: (dados && dados.endereco) || null, nome: null };
+}
+
+/**
+ * A rota até um endereço, no mapa — saindo de onde o cliente estiver.
+ *
+ * `maps/dir/` e não `maps/search/`: o usuário pediu "um mapa para localização
+ * atual", e é a rota que usa o GPS do aparelho. O endereço universal do Google
+ * Maps funciona no iPhone, no Android e no computador sem app instalado.
+ *
+ * O CEP entra no destino de propósito: é ele que desempata rua de mesmo nome em
+ * cidades diferentes.
+ */
+function linkDoMapa(endereco) {
+    if (!endereco) return null;
+    const rua = (endereco.endereco || '').trim();
+    if (!rua) return null;
+
+    const partes = [
+        rua + (endereco.numero ? ', ' + String(endereco.numero).trim() : ''),
+        (endereco.bairro || '').trim(),
+        (endereco.cidade || '').trim(),
+        (endereco.uf || '').trim(),
+        (endereco.cep || '').trim()
+    ].filter(Boolean);
+
+    return 'https://www.google.com/maps/dir/?api=1&destination='
+         + encodeURIComponent(partes.join(', '));
+}
+
+/**
  * Se a aba de Entrega precisa EXIGIR o nome e o CPF de quem vai receber.
  *
  * É a outra metade da regra do usuário: nota de pessoa jurídica não empresta
@@ -313,7 +376,10 @@ function enderecoEmLinhas(endereco, cliente) {
  * Pedido sem endereço nenhum NÃO exige: ali o que falta é o endereço, e cobrar o
  * CPF antes disso seria cobrar a segunda coisa primeiro.
  */
-function entregaExigeRecebedor(endereco, cliente) {
+function entregaExigeRecebedor(endereco, cliente, pedido, frete) {
+    // Retirada não tem recebedor a informar: quem busca é o próprio cliente, no
+    // balcão, e ali ele se identifica em pessoa.
+    if (ehRetirada(pedido, frete)) return false;
     if (!endereco) return false;
     if (tipoDaPessoa(cliente && cliente.documento) === 'fisica') return false;
 
@@ -341,4 +407,7 @@ window.prazoDeEntrega = prazoDeEntrega;
 window.enderecoEmLinhas = enderecoEmLinhas;
 window.tipoDaPessoa = tipoDaPessoa;
 window.entregaExigeRecebedor = entregaExigeRecebedor;
+window.ehRetirada = ehRetirada;
+window.enderecoDeEntrega = enderecoDeEntrega;
+window.linkDoMapa = linkDoMapa;
 window.linkDeRastreio = linkDeRastreio;

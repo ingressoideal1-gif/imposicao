@@ -84,6 +84,25 @@ function linhasDoEnvio(dados) {
     // de envio: 1 dia útil". Estavam certas e não respondiam a pergunta que traz
     // o cliente aqui: QUANDO CHEGA? Duas linhas com o mesmo número obrigavam ele
     // a somar de cabeça. O usuário pediu a soma na tela em 20/08/2026.
+    // Na retirada não há perna de envio: somar um dia de transporte que não vai
+    // acontecer daria ao cliente uma data pior do que a real, e ele viria buscar
+    // um dia depois do que podia.
+    if (ehRetirada(pedido, frete)) {
+        const producao = prazoDeProducao(itens);
+        linhas.push({
+            rotulo: 'Prazo',
+            valor: producao ? 'Produção: ' + producao : 'Combinado com seu atendimento',
+            forte: !!producao,
+            html: producao
+                ? '<span style="font-weight: 700;">Produção: ' + escapeHtml(producao) + '</span>'
+                  + '<span style="display: block; margin-top: 4px; color: var(--green); font-weight: 700;">'
+                  + 'Pronto para retirada a partir de ' + escapeHtml(producao) + '</span>'
+                : ''
+        });
+        if (pedido && pedido.volume) linhas.push({ rotulo: 'Volumes', valor: String(pedido.volume) });
+        return linhas;
+    }
+
     const prazo = prazoDeEntrega(itens, frete);
     if (!prazo.texto) {
         linhas.push({ rotulo: 'Prazo de entrega', valor: 'Combinado com seu atendimento' });
@@ -120,19 +139,70 @@ function linhasDoEnvio(dados) {
     return linhas;
 }
 
+/**
+ * As linhas do endereço da gráfica, para os pedidos de retirada.
+ *
+ * Sem recebedor e sem CPF: quem busca é o próprio cliente, no balcão, e ali ele
+ * se identifica em pessoa.
+ */
+function linhasDaGrafica(g) {
+    if (!g) return [];
+    const rua = (g.endereco || '').trim();
+    const cidade = (g.cidade || '').trim();
+    const uf = (g.uf || '').trim();
+
+    return [
+        { rotulo: 'Local', valor: (g.nome || 'Nossa gráfica').trim(), forte: true },
+        { rotulo: 'Endereço', valor: rua ? rua + ', ' + (g.numero || 'S/N') : '' },
+        { rotulo: 'Complemento', valor: (g.complemento || '').trim() },
+        { rotulo: 'Bairro', valor: (g.bairro || '').trim() },
+        { rotulo: 'Cidade/UF', valor: cidade && uf ? cidade + ' - ' + uf : (cidade || uf) },
+        { rotulo: 'CEP', valor: (g.cep || '').trim() }
+    ].filter(l => l.valor);
+}
+
 function desenharSecaoEntrega() {
     const secao = document.getElementById('secao-entrega');
     if (!secao) return;
 
-    const dados = window.portalDados;
-    const cliente = (dados && dados.cliente) || null;
-    const endereco = enderecoEmLinhas(dados && dados.endereco, cliente);
+    const dados = window.portalDados || {};
+    const cliente = dados.cliente || null;
+    const destino = enderecoDeEntrega(dados);
+
+    // ── Retirada: o endereço é o da gráfica, com o mapa ─────────────────────
+    //
+    // Regra do usuário, 20/08/2026. Antes a aba mostrava o endereço do CLIENTE
+    // num pedido de retirada, que é o contrário do que acontece: é ele que vem
+    // até aqui. O mapa abre a rota a partir de onde ele estiver.
+    if (destino.naGrafica) {
+        const mapa = linkDoMapa(destino.endereco);
+        const botao = mapa
+            ? '<a class="portal-botao" style="margin-top: 14px;" href="' + escapeHtml(mapa) + '" '
+              + 'target="_blank" rel="noopener noreferrer">📍 Ver rota no mapa</a>'
+            : '';
+        const corpo = destino.endereco
+            ? '<div class="portal-aviso ok">Este pedido é para <b>retirada na gráfica</b>. '
+              + 'Quando ele estiver pronto, é só vir buscar no endereço abaixo.</div>'
+            : '<div class="portal-aviso calmo">Este pedido é para <b>retirada na gráfica</b>. '
+              + 'Fale com seu atendimento para combinar o horário.</div>';
+
+        secao.innerHTML =
+            cartaoDeLinhas('📍 Retirada na gráfica', linhasDaGrafica(destino.endereco),
+                'Fale com seu atendimento para combinar a retirada.', corpo + botao)
+            + cartaoDeLinhas('🚚 Envio', linhasDoEnvio(dados), '')
+            + cartaoDeDecisao('entrega')
+            + cartaoDeFinalizacao();
+        return;
+    }
+
+    // ── Entrega no endereço do pedido ───────────────────────────────────────
+    const endereco = enderecoEmLinhas(destino.endereco, cliente);
 
     // Nota de pessoa jurídica não empresta recebedor: aí o nome e o CPF de quem
     // recebe passam a ser obrigatórios, e a confirmação fica travada até o
     // cliente informar. A trava vem com a saída escrita ao lado — é a regra
     // desta casa: nada trava sem dizer o que fazer.
-    const exige = entregaExigeRecebedor(dados && dados.endereco, cliente);
+    const exige = entregaExigeRecebedor(destino.endereco, cliente, dados.pedido, dados.frete);
     const faltando = endereco.filter(l => l.falta).length;
 
     let aviso = '';
@@ -149,9 +219,18 @@ function desenharSecaoEntrega() {
               + 'é o que a transportadora pede na entrega.</div>';
     }
 
+    // O endereço que veio do cadastro, e não da escolha do pedido, se anuncia:
+    // metade dos pedidos não traz endereço escolhido, e o cliente precisa saber
+    // que aquilo é o cadastro dele, não uma decisão que alguém tomou.
+    if (destino.endereco && destino.endereco.do_cadastro) {
+        aviso = '<div class="portal-aviso calmo">Este é o endereço do seu cadastro. '
+              + 'Se a entrega for em outro lugar, toque em <b>ALTERAR</b> abaixo e informe.'
+              + '</div>' + aviso;
+    }
+
     secao.innerHTML =
         cartaoDeLinhas('📦 Endereço de entrega', endereco,
-            'O endereço de entrega ainda não foi cadastrado neste pedido. '
+            'O endereço de entrega ainda não foi definido neste pedido. '
             + 'Toque em ALTERAR abaixo e escreva o endereço, ou fale com seu atendimento.',
             aviso)
         + cartaoDeLinhas('🚚 Envio', linhasDoEnvio(dados), '')
@@ -165,4 +244,5 @@ registrarSecao('entrega', desenharSecaoEntrega);
 
 window.desenharSecaoEntrega = desenharSecaoEntrega;
 window.linhasDoEnvio = linhasDoEnvio;
+window.linhasDaGrafica = linhasDaGrafica;
 window.cartaoDeLinhas = cartaoDeLinhas;

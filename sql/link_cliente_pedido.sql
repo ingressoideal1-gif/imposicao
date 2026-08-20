@@ -76,6 +76,8 @@ DECLARE
     v_frete    cotacao_frete%ROWTYPE;
     v_itens    jsonb;
     v_pgtos    jsonb;
+    v_grafica  empresas%ROWTYPE;
+    v_end_do_cadastro boolean := false;
 BEGIN
     -- O par inteiro, e `ativo`: um link revogado tem de parar de abrir.
     SELECT l.* INTO v_link
@@ -113,7 +115,11 @@ BEGIN
          LIMIT 1;
     END IF;
 
-    -- `propostas.id_endereco_ent` é texto e `enderecos.id` é uuid.
+    -- O endereço de entrega DESTE pedido.
+    --
+    -- Um cliente pode ter vários endereços, e quem diz qual é o da entrega é
+    -- `propostas.id_endereco_ent` — a escolha feita no pedido. `enderecos.id` é
+    -- uuid e a coluna é texto, daí o cast protegido.
     IF v_prop.id_endereco_ent IS NOT NULL AND v_prop.id_endereco_ent <> '' THEN
         BEGIN
             SELECT e.* INTO v_end
@@ -124,6 +130,34 @@ BEGIN
             NULL;   -- endereço mal referenciado não derruba o pedido inteiro
         END;
     END IF;
+
+    -- Sem escolha no pedido, vale o cadastro — mas SÓ quando ele não deixa
+    -- dúvida.
+    --
+    -- Medido em 20/08/2026: 2.024 dos 4.001 pedidos dos últimos 90 dias estão
+    -- com `id_endereco_ent` vazio. Desses, 1.970 clientes têm endereço
+    -- cadastrado e 125 têm MAIS DE UM. Com mais de um, escolher seria adivinhar
+    -- — e adivinhar errado é exatamente o defeito que se está consertando: o
+    -- pacote sai para o endereço de outra obra.
+    --
+    -- Com um só, não há o que adivinhar. A tela marca de onde ele veio, e o
+    -- cliente confirma ou corrige.
+    IF v_end.id IS NULL AND v_prop.id_cliente IS NOT NULL THEN
+        SELECT e.* INTO v_end
+          FROM enderecos e
+         WHERE e.id_cliente = v_prop.id_cliente
+           AND (SELECT count(*) FROM enderecos x WHERE x.id_cliente = v_prop.id_cliente) = 1
+         LIMIT 1;
+        v_end_do_cadastro := (v_end.id IS NOT NULL);
+    END IF;
+
+    -- O endereço da própria gráfica, para os pedidos de RETIRADA.
+    --
+    -- Lido de `empresas`, e não escrito aqui: se a gráfica mudar de endereço,
+    -- quem atualiza é o cadastro do ERP, e esta página acompanha. A empresa 1 é
+    -- a IDEAL GRÁFICA, dona deste sistema; as outras duas do mesmo grupo dividem
+    -- o mesmo endereço.
+    SELECT * INTO v_grafica FROM empresas WHERE id = 1 LIMIT 1;
 
     -- `propostas_os` é tabela nova do parceiro e ainda não cobre todo pedido:
     -- 23 linhas em 20/08/2026. Pedido sem linha fica sem prazo, sem rastreio e
@@ -237,7 +271,21 @@ BEGIN
             'bairro',        v_end.bairro,
             'cidade',        v_end.cidade,
             'uf',            v_end.uf,
-            'cep',           v_end.cep
+            'cep',           v_end.cep,
+            -- `true` quando o pedido nao escolheu endereco e este veio do
+            -- cadastro do cliente. A tela diz isso ao cliente, em vez de
+            -- apresentar como escolha dele.
+            'do_cadastro',   v_end_do_cadastro
+        ) END,
+        'grafica', CASE WHEN v_grafica.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'nome',        COALESCE(NULLIF(v_grafica.nome_fantasia, ''), v_grafica.empresa),
+            'endereco',    v_grafica.logradouro,
+            'numero',      v_grafica.numero,
+            'complemento', v_grafica.complemento,
+            'bairro',      v_grafica.bairro,
+            'cidade',      v_grafica.municipio,
+            'uf',          v_grafica.uf,
+            'cep',         v_grafica.cep
         ) END,
         'itens', COALESCE(v_itens, '[]'::jsonb),
         'os', CASE WHEN v_os.id IS NULL THEN NULL ELSE jsonb_build_object(

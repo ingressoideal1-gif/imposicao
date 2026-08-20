@@ -233,6 +233,7 @@ const linhasDoEnvio = new Function(
     + recortar(DADOS, 'prazoDeProducao') + '\n'
     + recortar(DADOS, 'prazoDoFrete') + '\n'
     + recortar(DADOS, 'prazoDeEntrega') + '\n'
+    + recortar(DADOS, 'ehRetirada') + '\n'
     + recortar(DADOS, 'linkDeRastreio') + '\n'
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
     // A logo vem do seu proprio arquivo, e tem harness proprio
@@ -273,10 +274,29 @@ const linhasDoEnvio = new Function(
     ok(/5 dias úteis/.test(l[1].html), 'e a soma acompanha', l[1].html);
 })();
 
+(function naRetiradaNaoSeSomaUmEnvioQueNaoExiste() {
+    // Somar um dia de transporte que nao vai acontecer daria ao cliente uma
+    // data pior do que a real -- ele viria buscar um dia depois do que podia.
+    const l = linhasDoEnvio({
+        pedido: { frete_escolhido: 'RETIRADA', valor_frete: '0.00' },
+        frete: { servico: 'Retirada Local', prazo: '1 dia útil' },
+        os: null,
+        itens: [{ prazo: '2 dias úteis' }]
+    });
+    const prazo = l.find(x => x.rotulo === 'Prazo');
+    ok(!!prazo, 'a linha se chama Prazo, e nao Prazo de entrega', l.map(x => x.rotulo));
+    ok(prazo.valor === 'Produção: 2 dias úteis', 'so a producao', prazo.valor);
+    ok(/Pronto para retirada a partir de 2 dias úteis/.test(prazo.html),
+        'e a frase fala em retirar, nao em receber', prazo.html);
+    ok(!/Envio:/.test(prazo.html), 'sem perna de envio', prazo.html);
+})();
+
 (function semPrazoDizOQueFazer() {
     // Nenhuma trava deste projeto fica sem saida: sem prazo, a linha diz onde
     // conseguir a resposta, em vez de ficar vazia ou escrever "undefined".
-    const l = linhasDoEnvio({ pedido: { frete_escolhido: 'RETIRADA' }, frete: null, os: null, itens: [] });
+    // Frete de transportadora, e nao retirada: a retirada tem linha propria,
+    // testada logo acima.
+    const l = linhasDoEnvio({ pedido: { frete_escolhido: 'SEDEX' }, frete: null, os: null, itens: [] });
     const linha = l.find(x => x.rotulo === 'Prazo de entrega');
     ok(linha && /atendimento/i.test(linha.valor), 'sem prazo nenhum, diz o que fazer', linha);
 })();
@@ -366,8 +386,8 @@ const linhasDoEnvio = new Function(
         'e a caixa de texto pede exatamente o que falta');
 
     const fim = recortar(CONFIRMACOES, 'cartaoDeFinalizacao');
-    ok(/entregaExigeRecebedor\(dados\.endereco, dados\.cliente\) && c\.entrega !== false/.test(fim),
-        'quem usou o ALTERAR deixa de ser cobrado -- e a saida da trava', fim);
+    ok(/entregaExigeRecebedor\([\s\S]{0,80}\)\s*&& c\.entrega !== false/.test(fim),
+        'quem usou o ALTERAR deixa de ser cobrado -- e a saida da trava', fim.slice(0, 200));
 })();
 
 (function aTelaAntigaDeConferenciaSaiu() {

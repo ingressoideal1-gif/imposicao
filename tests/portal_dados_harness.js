@@ -62,7 +62,10 @@ const prazoDeEntrega = carregar('prazoDeEntrega',
 const enderecoEmLinhas = carregar('enderecoEmLinhas', ['tipoDaPessoa']);
 const linkDeRastreio = carregar('linkDeRastreio');
 const tipoDaPessoa = carregar('tipoDaPessoa');
-const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa']);
+const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa', 'ehRetirada']);
+const ehRetirada = carregar('ehRetirada');
+const enderecoDeEntrega = carregar('enderecoDeEntrega', ['ehRetirada']);
+const linkDoMapa = carregar('linkDoMapa');
 
 // ─── 1. Dinheiro ─────────────────────────────────────────────────────────────
 //
@@ -393,6 +396,78 @@ const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa']
     // Sem endereco cadastrado, o que falta e o endereco: cobrar o CPF do
     // recebedor antes disso seria cobrar a segunda coisa primeiro.
     ok(entregaExigeRecebedor(null, { documento: '12.345.678/0001-90' }) === false, 'sem endereco');
+})();
+
+// ─── 4d. Retirada: o endereco e o da grafica ────────────────────────────────
+//
+// Regra do usuario, 20/08/2026: sendo RETIRA, o endereco de entrega e o da
+// GRAFICA, e nao o do cliente -- e a pagina oferece um mapa para ele chegar la.
+//
+// Ate entao a aba mostrava o endereco do cliente num pedido de retirada, que e
+// o contrario do que acontece: e o cliente que vai ate a grafica.
+
+(function asGrafiasDeRetiradaQueOErpEscreve() {
+    // `frete_escolhido`: RETIRADA, RETIRAR. `cotacao_frete.servico`: "Retirada
+    // Local", "RETIRA BALCAO". Todas comecam por RETIR.
+    ok(ehRetirada({ frete_escolhido: 'RETIRADA' }) === true, 'RETIRADA');
+    ok(ehRetirada({ frete_escolhido: 'RETIRAR' }) === true, 'RETIRAR');
+    ok(ehRetirada({ frete_escolhido: 'Retirada Local' }) === true, 'Retirada Local');
+    ok(ehRetirada({ frete_escolhido: 'retirada' }) === true, 'minuscula');
+    ok(ehRetirada(null, { servico: 'RETIRA BALCÃO' }) === true, 'pela cotacao tambem');
+})();
+
+(function oQueNaoEhRetiradaNaoVira() {
+    ok(ehRetirada({ frete_escolhido: 'SEDEX' }) === false, 'sedex');
+    ok(ehRetirada({ frete_escolhido: 'MOTOBOY' }) === false, 'motoboy');
+    ok(ehRetirada({ frete_escolhido: '' }) === false, 'vazio');
+    ok(ehRetirada(null, null) === false, 'nada');
+})();
+
+(function naRetiradaOEnderecoEDaGrafica() {
+    const r = enderecoDeEntrega({
+        pedido: { frete_escolhido: 'RETIRADA' },
+        endereco: { endereco: 'Avenida Protásio Alves', numero: '6441', cidade: 'Porto Alegre' },
+        grafica: { nome: 'IDEAL GRAFICA', endereco: 'RUA FELIZARDO DE FARIAS', numero: '81',
+                   bairro: 'MEDIANEIRA', cidade: 'Porto Alegre', uf: 'RS', cep: '90660130' }
+    });
+    ok(r.naGrafica === true, 'e retirada', r);
+    ok(r.endereco.endereco === 'RUA FELIZARDO DE FARIAS', 'o endereco e o da grafica', r.endereco);
+    ok(r.endereco.numero === '81', 'com o numero da grafica', r.endereco);
+    ok(r.nome === 'IDEAL GRAFICA', 'e o nome dela', r);
+})();
+
+(function fretePagoUsaOEnderecoDoPedido() {
+    const r = enderecoDeEntrega({
+        pedido: { frete_escolhido: 'SEDEX' },
+        endereco: { endereco: 'Avenida Protásio Alves', numero: '6441' },
+        grafica: { endereco: 'RUA FELIZARDO DE FARIAS', numero: '81' }
+    });
+    ok(r.naGrafica === false, 'nao e retirada', r);
+    ok(r.endereco.endereco === 'Avenida Protásio Alves', 'o endereco do pedido', r.endereco);
+})();
+
+(function retiradaSemCadastroDaGraficaNaoQuebra() {
+    const r = enderecoDeEntrega({ pedido: { frete_escolhido: 'RETIRADA' }, endereco: null, grafica: null });
+    ok(r.naGrafica === true, 'continua sendo retirada');
+    ok(r.endereco === null, 'mas sem endereco para mostrar', r);
+})();
+
+// ─── 4e. O mapa ─────────────────────────────────────────────────────────────
+
+(function oMapaLevaDeOndeOClienteEsta() {
+    const l = linkDoMapa({ endereco: 'RUA FELIZARDO DE FARIAS', numero: '81',
+                           bairro: 'MEDIANEIRA', cidade: 'Porto Alegre', uf: 'RS', cep: '90660130' });
+    ok(/^https:\/\/www\.google\.com\/maps\/dir\//.test(l), 'e uma rota, e nao so um ponto no mapa', l);
+    ok(/destination=/.test(l), 'com destino', l);
+    ok(l.indexOf('FELIZARDO') > 0, 'o endereco vai na URL', l);
+    ok(l.indexOf('90660130') > 0, 'e o CEP tambem, que e o que desempata rua repetida', l);
+    ok(l.indexOf(' ') < 0, 'sem espaco solto na URL', l);
+})();
+
+(function semEnderecoNaoNasceMapa() {
+    ok(linkDoMapa(null) === null, 'nulo');
+    ok(linkDoMapa({}) === null, 'objeto vazio');
+    ok(linkDoMapa({ endereco: '' }) === null, 'rua vazia');
 })();
 
 // ─── 5. Rastreio ─────────────────────────────────────────────────────────────

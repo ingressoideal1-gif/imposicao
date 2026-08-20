@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v661** — 2026-08-20 | Agente **1.2.155**
+## Versão atual: **v662** — 2026-08-20 | Agente **1.2.155**
+
+---
+
+## [v662 — 2026-08-20] — Retirada mostra a gráfica, com mapa; e o endereço do pedido, não o do cliente
+
+### 📍 Retirada: o endereço é o da gráfica
+
+Num pedido de **RETIRADA**, a aba mostrava o endereço do **cliente** — o contrário do que
+acontece, porque é ele que vem até aqui. Agora ela mostra o endereço da gráfica, com um botão
+**Ver rota no mapa** que abre a navegação a partir de onde o cliente estiver.
+
+O endereço vem de `empresas` (a empresa 1, IDEAL GRÁFICA): Rua Felizardo de Farias, 81 —
+Medianeira, Porto Alegre, CEP 90660130. Ele é **lido do cadastro**, e não escrito no código: o dia
+em que a gráfica mudar de endereço, quem atualiza é o ERP e esta página acompanha.
+
+O ERP escreve a retirada de quatro formas — `RETIRADA` e `RETIRAR` em `frete_escolhido`, "Retirada
+Local" e "RETIRA BALCÃO" em `cotacao_frete.servico`. Todas começam por RETIR, e é assim que se
+pergunta, em vez de manter uma lista que a próxima grafia deixaria desatualizada.
+
+**Na retirada não há perna de envio.** A linha de prazo passa a mostrar só a produção, com
+*"Pronto para retirada a partir de X"* — somar um dia de transporte que não vai acontecer daria ao
+cliente uma data pior do que a real, e ele viria buscar um dia depois do que podia. E o recebedor
+deixa de ser exigido: quem busca é o próprio cliente, no balcão, e ali ele se identifica em pessoa.
+
+### 📦 O endereço é o escolhido no pedido
+
+Um cliente pode ter vários endereços, e quem diz qual é o da entrega é `propostas.id_endereco_ent`
+— a escolha feita no pedido. Era o que a função já lia, e continua sendo.
+
+**O que faltava era o caso sem escolha.** Medido no banco: **2.024 dos 4.001** pedidos dos últimos
+90 dias estão com `id_endereco_ent` vazio, e a página não mostrava endereço nenhum. Desses, 1.970
+clientes têm endereço cadastrado — e **125 têm mais de um**.
+
+A regra agora: sem escolha no pedido, vale o cadastro **só quando ele não deixa dúvida**, isto é,
+quando o cliente tem exatamente um endereço. Com mais de um, escolher seria adivinhar, e adivinhar
+errado é o defeito que se está consertando — o pacote sai para o endereço de outra obra. Quando o
+endereço vem do cadastro, a tela diz isso: *"Este é o endereço do seu cadastro. Se a entrega for em
+outro lugar, toque em ALTERAR."*
+
+**Testes:** `tests/portal_dados_harness.js` (123 verificações) e
+`tests/portal_confirmacoes_harness.js` (40).
 
 ---
 
