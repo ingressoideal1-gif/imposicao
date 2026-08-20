@@ -19739,7 +19739,8 @@ async function loadOrdens() {
                     // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
                     numero_cliente: propReal?.id_cliente ?? null,
                     data_liberacao: os.data_liberacao || os.created_at,
-                    prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
+                    // Sem prazo real, a coluna mostra "--". Ver propostas_os acima.
+                    prazo_entrega: os.prazo_entrega || null,
                     _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
                 };
             });
@@ -19975,6 +19976,36 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
 
+        // O PRAZO DE ENTREGA mora em `propostas_os.data_termino`.
+        //
+        // É o campo real, apontado pelo usuário em 20/08/2026. Até então a
+        // coluna mostrava um prazo INVENTADO (`getFallbackPrazo`: data de
+        // criação + 3 a 7 dias, pelo resto da divisão do número do pedido) —
+        // ele existia só para o filtro "Para Hoje / Atrasados" ter em que se
+        // apoiar enquanto o campo verdadeiro não fosse definido.
+        //
+        // `propostas_os` é tabela nova do parceiro e ainda está sendo
+        // preenchida: pedido sem linha ali fica sem prazo, e a coluna mostra
+        // "--". É de propósito — data de entrega chutada numa gráfica é pior
+        // do que campo vazio, pela mesma razão que derrubou os nomes de cliente
+        // de mentira.
+        let prazosPorPedido = {};
+        try {
+            const idsParaPrazo = [...new Set(produtos.map(p => p.id_int).filter(Boolean))];
+            if (idsParaPrazo.length > 0) {
+                const { data: osData, error: osError } = await vibeClient
+                    .from('propostas_os')
+                    .select('id_int, data_termino')
+                    .in('id_int', idsParaPrazo);
+                if (osError) throw osError;
+                (osData || []).forEach(linha => {
+                    if (linha && linha.data_termino) prazosPorPedido[String(linha.id_int)] = linha.data_termino;
+                });
+            }
+        } catch (oe) {
+            console.warn('[Vibecode] Não foi possível ler propostas_os (prazo de entrega):', oe.message || oe);
+        }
+
         // pedidosComerciais ignorado/tabela 'pedidos' inexistente
 
         const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
@@ -20009,7 +20040,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || '';
                 const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
                 const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
-                const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
+                const prazoEntrega = prazosPorPedido[String(key)] || null;
 
                 // Dados comerciais reais
                 const dataPedido = pedidoReal?.data_pedido || null;
@@ -21373,17 +21404,39 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 // Sempre há um selecionado; o padrão é 'geral'.
 // -------------------------------------------------------------------------------
 
-/** Prazo do pedido como Date, ou null se ausente/inválido. */
+/**
+ * Prazo do pedido como Date, ou null se ausente/inválido.
+ *
+ * A origem é `propostas_os.data_termino`, que chega como `2026-08-21T00:00:00`
+ * — sem fuso, e por isso lida como meia-noite LOCAL, que é o que se quer. Uma
+ * data pura (`2026-08-21`, sem hora) o JavaScript leria como meia-noite UTC, e
+ * no Brasil isso vira 21h do dia anterior: o pedido apareceria vencendo um dia
+ * antes. A hora é acrescentada aqui para esse caso não morder.
+ */
 function _prazoDoPedido(os) {
     if (!os || !os.prazo_entrega) return null;
-    const prazo = new Date(os.prazo_entrega);
+    let texto = os.prazo_entrega;
+    if (typeof texto === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(texto)) texto += 'T00:00:00';
+    const prazo = new Date(texto);
     return isNaN(prazo.getTime()) ? null : prazo;
 }
 
-/** Atrasado = data E hora anteriores ao momento atual. */
+/**
+ * Atrasado = o DIA do prazo já passou.
+ *
+ * Era "data E hora anteriores ao momento atual", e fazia sentido enquanto o
+ * prazo era inventado com hora do dia junto. `data_termino` é data pura: chega
+ * sempre à meia-noite, então comparar por instante pintaria de vermelho, o dia
+ * inteiro, todo pedido que vence HOJE — que é justamente o que o operador
+ * precisa distinguir do que ele já perdeu.
+ */
 function pedidoEstaAtrasado(os) {
     const prazo = _prazoDoPedido(os);
-    return !!prazo && prazo.getTime() < Date.now();
+    if (!prazo) return false;
+    const agora = new Date();
+    const diaDoPrazo = new Date(prazo.getFullYear(), prazo.getMonth(), prazo.getDate());
+    const diaDeHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    return diaDoPrazo.getTime() < diaDeHoje.getTime();
 }
 
 /** Para hoje = mesmo dia do calendário, independente da hora. */
@@ -23120,26 +23173,20 @@ function changeOSStatus(osId, newStatus) {
  * Numa gráfica isso é pior do que campo vazio: alguém pode ligar para o
  * "cliente" errado. Sem dado real, agora a coluna mostra "--".
  *
- * O getFallbackPrazo abaixo continua: o prazo de entrega ainda não tem campo
- * real definido, e o filtro "Para Hoje / Atrasados" do Painel de Produção
- * depende dele para funcionar. Quando o campo verdadeiro existir, ele sai.
+ * O getFallbackPrazo saiu junto, em 20/08/2026. Ele devolvia a data de criação
+ * mais 3 a 7 dias — o resto da divisão do número do pedido — e existia só para
+ * o filtro "Para Hoje / Atrasados" ter em que se apoiar enquanto o prazo de
+ * entrega não tivesse campo real. O campo agora existe:
+ * `propostas_os.data_termino`. Pedido sem essa linha fica sem prazo, e a
+ * coluna mostra "--".
  */
-function getFallbackPrazo(createdAtStr, numero) {
-    try {
-        const date = new Date(createdAtStr);
-        const diasExtras = 3 + (numero % 5);
-        date.setDate(date.getDate() + diasExtras);
-        return date.toISOString();
-    } catch (e) {
-        return new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
-    }
-}
 
 /**
  * Badge colorido da coluna Prazo Entrega no Painel de Produção.
  * Usa exatamente as mesmas regras dos botões Atrasados / Para Hoje, para a cor
- * da linha nunca discordar do filtro: vermelho = data e hora já passaram,
- * laranja = entrega hoje ainda por vir, azul = data futura.
+ * da linha nunca discordar do filtro: vermelho = o dia do prazo já passou,
+ * laranja = entrega hoje, azul = data futura. Pedido sem prazo mostra "--" —
+ * `propostas_os` é tabela nova do parceiro e ainda não cobre todo pedido.
  */
 function formatPrazoBadge(os) {
     const prazo = _prazoDoPedido(os);

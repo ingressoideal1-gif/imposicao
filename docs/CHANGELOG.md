@@ -4,6 +4,27 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-20] — O Prazo de Entrega deixa de ser inventado
+
+A coluna PRAZO ENTREGA do Painel de Produção nunca mostrou prazo real: `getFallbackPrazo`
+devolvia a data de criação mais 3 a 7 dias, escolhidos pelo resto da divisão do número do
+pedido. Existia só para o filtro "Para Hoje / Atrasados" ter em que se apoiar enquanto o
+campo verdadeiro não fosse definido.
+
+O usuário apontou o campo — **`propostas_os.data_termino`**, casado por `id_int` — e o prazo
+de mentira saiu. Pedido sem linha nessa tabela fica sem prazo e a coluna mostra `--`: ela é
+nova do parceiro e ainda não cobre todo pedido, e data de entrega chutada numa gráfica é pior
+do que campo vazio.
+
+Como `data_termino` é data pura (sempre meia-noite), "atrasado" passou a ser **o dia do prazo
+já passou**, e não mais o instante — senão todo pedido que vence hoje apareceria vermelho o
+dia inteiro. `_prazoDoPedido` também protege o caso de a data vir sem hora, que o JavaScript
+leria em UTC e faria o pedido vencer um dia antes no Brasil.
+
+Coberto por `tests/test_prazo_de_entrega.py`.
+
+---
+
 ## [2026-08-20] — Pedido já embalado sai da Lista de Arte
 
 A lista reconhecia só produção, impressão e finalizada como "saiu da arte". Pedido em

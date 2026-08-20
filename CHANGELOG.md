@@ -4,7 +4,35 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v655** — 2026-08-20 | Agente **1.2.150**
+## Versão atual: **v656** — 2026-08-20 | Agente **1.2.150**
+
+---
+
+## [v656 — 2026-08-20] — O Prazo de Entrega deixa de ser inventado
+
+**A coluna PRAZO ENTREGA do Painel de Produção nunca mostrou um prazo real.**
+`getFallbackPrazo` devolvia a data de criação do pedido mais 3 a 7 dias — os dias escolhidos
+pelo resto da divisão do número do pedido. Ele existia só para o filtro **Para Hoje /
+Atrasados** ter em que se apoiar enquanto o campo verdadeiro não fosse definido, e o
+comentário no código dizia, desde 07/08, que sairia quando o campo aparecesse.
+
+O usuário apontou o campo: **`propostas_os.data_termino`**, casado por `id_int`. É de lá que
+o prazo vem agora.
+
+**Pedido sem linha em `propostas_os` fica sem prazo, e a coluna mostra `--`.** A tabela é
+nova do parceiro (23 linhas em 20/08, todas de pedidos dos últimos três dias) e ainda não
+cobre todo pedido. É de propósito, e segue a decisão que já tinha derrubado os nomes de
+cliente de mentira do painel: numa gráfica, data de entrega chutada é pior do que campo
+vazio, porque alguém programa produção em cima dela.
+
+**"Atrasado" passou a ser "o dia do prazo já passou"**, e não mais "data e hora anteriores ao
+momento atual". `data_termino` é data pura — chega sempre à meia-noite —, e comparar por
+instante pintaria de vermelho, o dia inteiro, todo pedido que vence **hoje**. Que é
+justamente o que o operador precisa distinguir do que já perdeu.
+
+Um cuidado a mais em `_prazoDoPedido`: se o campo vier como data sem hora (`2026-08-21`), o
+JavaScript a leria como meia-noite **UTC** — no Brasil, 21h do dia anterior —, e o pedido
+apareceria vencendo um dia antes. A hora é acrescentada antes de converter.
 
 ---
 
