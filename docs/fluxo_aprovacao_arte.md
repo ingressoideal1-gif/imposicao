@@ -220,16 +220,42 @@ coisa com a unidade perdida.
 > `propostas_os.data_termino` **não aparece** nesta aba. Ela continua sendo o
 > Prazo de Entrega do Painel de Produção; o que o cliente vê é a conta acima.
 
-### O recebedor aparece mesmo quando falta
+### O recebedor: quando ele é herdado e quando é obrigatório
 
 **Recebedor** e **CPF do recebedor** são as duas primeiras linhas do cartão de
-endereço, e aparecem SEMPRE — com "Não informado" em âmbar quando o cadastro está
-vazio, e um aviso dizendo para usar o ALTERAR.
+endereço, e aparecem SEMPRE. O motivo está no banco: só **126 dos 1.929**
+endereços de pedidos dos últimos 90 dias têm `recebedor`, e 132 têm
+`cpf_recebedor`. Escondendo a linha vazia — que era o comportamento até
+20/08/2026 —, 93% dos clientes nunca ficaram sabendo que faltava esse dado, e
+quem descobria era o motoboy, na portaria do prédio.
 
-O motivo está no banco: só **126 dos 1.929** endereços de pedidos dos últimos 90
-dias têm `recebedor`, e 132 têm `cpf_recebedor`. Escondendo a linha vazia — que
-era o comportamento —, 93% dos clientes nunca ficaram sabendo que faltava esse
-dado. Quem descobria era o motoboy, na portaria do prédio.
+Faltando o dado, a regra do usuário (20/08/2026) decide o que acontece:
+
+| nota fiscal | recebedor vazio no endereço |
+|---|---|
+| **CPF** (pessoa física) | herda o nome e o CPF da nota, com a etiqueta "mesmo da nota fiscal" |
+| **CNPJ** (pessoa jurídica) | fica "Não informado", e o CONFIRMAR é **desligado** |
+| documento desconhecido | trata como CNPJ — não dá para herdar o que não se sabe |
+
+O porquê está na entrega: a transportadora põe o pacote na mão de uma pessoa e
+pede o CPF dela. Numa nota de pessoa física essa pessoa é o próprio cliente, e o
+dado já está no cadastro; numa nota de empresa não há a quem herdar.
+
+**O tipo sai da contagem de dígitos** (`tipoDaPessoa`), e não da coluna
+`tipo_pessoa`. Medido nos 3.946 clientes com pedido nos últimos 90 dias:
+`tipo_pessoa` usa dois vocabulários — "CPF"/"CNPJ" em 3.153 e "FISICA"/"JURIDICA"
+em 793 —, enquanto os dígitos nunca discordaram: 11 para CPF, 14 para CNPJ.
+
+**O que está escrito no endereço vence sempre**: quem cadastrou "Maria, da
+portaria" sabe mais do que esta regra.
+
+> [!IMPORTANT]
+> **A trava tem saída, e é o ALTERAR.** Com CNPJ e sem recebedor, o CONFIRMAR
+> fica desligado — o cliente não pode dizer "está correto" sobre um endereço que
+> a transportadora não consegue entregar. Mas a caixa de texto do ALTERAR passa a
+> pedir o nome e o CPF, e quem a usa deixa de ser cobrado no cartão de
+> finalização: o pedido segue ao atendimento com a solicitação. Sem isso, o
+> cliente ficaria preso na página sem caminho para terminar.
 
 ---
 

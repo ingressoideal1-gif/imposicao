@@ -59,8 +59,10 @@ const prazoDeProducao = carregar('prazoDeProducao', ['diasDoPrazo', 'emDiasUteis
 const prazoDoFrete = carregar('prazoDoFrete', ['emDiasUteis']);
 const prazoDeEntrega = carregar('prazoDeEntrega',
     ['diasDoPrazo', 'emDiasUteis', 'prazoDeProducao', 'prazoDoFrete']);
-const enderecoEmLinhas = carregar('enderecoEmLinhas');
+const enderecoEmLinhas = carregar('enderecoEmLinhas', ['tipoDaPessoa']);
 const linkDeRastreio = carregar('linkDeRastreio');
+const tipoDaPessoa = carregar('tipoDaPessoa');
+const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa']);
 
 // ─── 1. Dinheiro ─────────────────────────────────────────────────────────────
 //
@@ -297,6 +299,100 @@ const linkDeRastreio = carregar('linkDeRastreio');
 (function semEnderecoNaoQuebra() {
     ok(Array.isArray(enderecoEmLinhas(null)) && enderecoEmLinhas(null).length === 0,
         'pedido sem endereco cadastrado devolve lista vazia');
+})();
+
+// ─── 4b. O recebedor herdado da nota fiscal ─────────────────────────────────
+//
+// Regra do usuario, 20/08/2026: sem recebedor no endereco, valem os dados da
+// nota fiscal -- MAS so quando ela e de pessoa fisica. Sendo pessoa juridica, o
+// nome e o CPF de quem recebe passam a ser obrigatorios, porque o CNPJ da
+// empresa nao serve para a transportadora entregar na mao de alguem.
+//
+// O tipo sai da contagem de digitos do documento, e nao da coluna
+// `tipo_pessoa`: medido no banco em 20/08/2026, `tipo_pessoa` usa dois
+// vocabularios ("CPF"/"CNPJ" em 3.153 clientes e "FISICA"/"JURIDICA" em 793),
+// enquanto os digitos nunca discordaram -- 11 para CPF, 14 para CNPJ, nos 3.946.
+
+(function oDocumentoDizQuemE() {
+    ok(tipoDaPessoa('123.456.789-00') === 'fisica', 'onze digitos e CPF');
+    ok(tipoDaPessoa('12.345.678/0001-90') === 'juridica', 'quatorze e CNPJ');
+    ok(tipoDaPessoa('12345678900') === 'fisica', 'sem pontuacao tambem');
+    ok(tipoDaPessoa('') === null, 'sem documento nao da para saber');
+    ok(tipoDaPessoa(null) === null, 'nulo tambem');
+    ok(tipoDaPessoa('123') === null, 'numero que nao e nem um nem outro');
+})();
+
+(function pessoaFisicaEmprestaONomeEOCpf() {
+    const linhas = enderecoEmLinhas(
+        { endereco: 'Rua das Flores', numero: '250' },
+        { nome: 'Ricardo Emerson', documento: '123.456.789-00' }
+    );
+    ok(linhas[0].valor === 'Ricardo Emerson', 'o nome vem da nota', linhas[0]);
+    ok(linhas[1].valor === '123.456.789-00', 'e o CPF tambem', linhas[1]);
+    ok(linhas[0].daNota === true && linhas[1].daNota === true,
+        'marcados como herdados, para a tela poder dizer de onde vieram', linhas.slice(0, 2));
+    ok(!linhas[0].falta && !linhas[1].falta, 'e nao contam como faltando');
+})();
+
+(function oQueEstaNoEnderecoVenceANota() {
+    const linhas = enderecoEmLinhas(
+        { recebedor: 'Maria Portaria', cpf_recebedor: '999.888.777-66', endereco: 'Rua X', numero: '1' },
+        { nome: 'Ricardo Emerson', documento: '123.456.789-00' }
+    );
+    ok(linhas[0].valor === 'Maria Portaria', 'quem foi cadastrado no endereco manda', linhas[0]);
+    ok(linhas[1].valor === '999.888.777-66', 'inclusive no CPF', linhas[1]);
+    ok(!linhas[0].daNota, 'e nao e marcado como herdado');
+})();
+
+(function pessoaJuridicaNaoEmprestaNada() {
+    // O CNPJ da empresa nao serve: a transportadora entrega na mao de uma
+    // pessoa, e e o CPF dela que ela pede.
+    const linhas = enderecoEmLinhas(
+        { endereco: 'Rua das Flores', numero: '250' },
+        { nome: 'Ingresso Ideal LTDA', documento: '12.345.678/0001-90' }
+    );
+    ok(linhas[0].valor === 'Não informado', 'o nome da empresa nao vira recebedor', linhas[0]);
+    ok(linhas[1].valor === 'Não informado', 'nem o CNPJ vira CPF', linhas[1]);
+    ok(linhas[0].falta === true && linhas[1].falta === true, 'e os dois contam como faltando');
+})();
+
+(function semSaberOTipoNaoSeHerdaNada() {
+    const linhas = enderecoEmLinhas({ endereco: 'Rua X', numero: '1' }, { nome: 'Fulano', documento: '' });
+    ok(linhas[0].falta === true, 'documento vazio nao autoriza herdar', linhas[0]);
+    ok(enderecoEmLinhas({ endereco: 'Rua X', numero: '1' }, null)[0].falta === true,
+        'sem cadastro nenhum tambem nao');
+})();
+
+// ─── 4c. Quando o recebedor vira obrigatorio ────────────────────────────────
+
+(function juridicaComRecebedorVazioExige() {
+    ok(entregaExigeRecebedor({ endereco: 'Rua X' }, { documento: '12.345.678/0001-90' }) === true,
+        'CNPJ sem recebedor exige');
+    ok(entregaExigeRecebedor({ endereco: 'Rua X', recebedor: 'Maria', cpf_recebedor: '111' },
+                             { documento: '12.345.678/0001-90' }) === false,
+        'CNPJ com recebedor cadastrado nao exige mais nada');
+    ok(entregaExigeRecebedor({ endereco: 'Rua X', recebedor: 'Maria' },
+                             { documento: '12.345.678/0001-90' }) === true,
+        'so o nome, sem o CPF, ainda exige');
+})();
+
+(function fisicaNaoExigeNada() {
+    ok(entregaExigeRecebedor({ endereco: 'Rua X' }, { nome: 'Fulano', documento: '123.456.789-00' }) === false,
+        'CPF na nota resolve sozinho');
+})();
+
+(function semDocumentoConhecidoExigeTambem() {
+    // Nao dando para saber se e pessoa fisica, nao se herda -- e o que falta,
+    // falta. Errar para o lado de perguntar e o certo aqui: um pacote sem
+    // recebedor volta.
+    ok(entregaExigeRecebedor({ endereco: 'Rua X' }, { documento: '' }) === true, 'documento vazio');
+    ok(entregaExigeRecebedor({ endereco: 'Rua X' }, null) === true, 'sem cadastro');
+})();
+
+(function semEnderecoNaoSeExigeRecebedor() {
+    // Sem endereco cadastrado, o que falta e o endereco: cobrar o CPF do
+    // recebedor antes disso seria cobrar a segunda coisa primeiro.
+    ok(entregaExigeRecebedor(null, { documento: '12.345.678/0001-90' }) === false, 'sem endereco');
 })();
 
 // ─── 5. Rastreio ─────────────────────────────────────────────────────────────

@@ -19,10 +19,18 @@ function cartaoDeLinhas(titulo, linhas, vazio, aviso) {
             // Dado que falta sai em âmbar, e não em branco: assim ele se lê como
             // pendência, e não como resposta.
             const cor = l.falta ? ' style="color: #f59e0b;"' : '';
+            // De onde o dado veio, quando ele nao veio do proprio endereco: sem
+            // isso, o cliente ve o nome dele na linha do recebedor e nao sabe se
+            // alguem digitou aquilo ou se o sistema deduziu.
+            const origem = l.daNota
+                ? '<span class="portal-linha-rotulo" style="margin-top: 2px; text-transform: none;">'
+                  + 'mesmo da nota fiscal</span>'
+                : '';
             return '<div class="portal-linha">'
                 + '<span class="portal-linha-rotulo">' + escapeHtml(l.rotulo) + '</span>'
                 + '<span class="portal-linha-valor' + (l.forte ? ' forte' : '') + '"' + cor + '>'
                 + (l.html || escapeHtml(l.valor)) + '</span>'
+                + origem
                 + '</div>';
         }).join('');
     }
@@ -117,16 +125,29 @@ function desenharSecaoEntrega() {
     if (!secao) return;
 
     const dados = window.portalDados;
-    const endereco = enderecoEmLinhas(dados && dados.endereco);
+    const cliente = (dados && dados.cliente) || null;
+    const endereco = enderecoEmLinhas(dados && dados.endereco, cliente);
 
-    // Faltando recebedor ou CPF, o cartão diz o que fazer — em vez de deixar o
-    // "Não informado" solto e o cliente sem saber que aquilo é com ele.
+    // Nota de pessoa jurídica não empresta recebedor: aí o nome e o CPF de quem
+    // recebe passam a ser obrigatórios, e a confirmação fica travada até o
+    // cliente informar. A trava vem com a saída escrita ao lado — é a regra
+    // desta casa: nada trava sem dizer o que fazer.
+    const exige = entregaExigeRecebedor(dados && dados.endereco, cliente);
     const faltando = endereco.filter(l => l.falta).length;
-    const aviso = faltando
-        ? '<div class="portal-aviso atencao">Falta ' + (faltando > 1 ? 'o nome e o CPF' : 'um dado')
-          + ' de quem vai receber o pedido. Toque em <b>ALTERAR</b> abaixo e informe — '
-          + 'é o que a transportadora pede na entrega.</div>'
-        : '';
+
+    let aviso = '';
+    if (exige) {
+        aviso = '<div class="portal-aviso atencao">'
+              + '<b>Informe quem vai receber o pedido.</b><br>'
+              + 'A nota fiscal deste pedido é de empresa (CNPJ), e a transportadora entrega '
+              + 'na mão de uma pessoa — ela pede o nome e o CPF de quem recebe. '
+              + 'Toque em <b>ALTERAR</b> abaixo e escreva os dois.'
+              + '</div>';
+    } else if (faltando) {
+        aviso = '<div class="portal-aviso atencao">Falta ' + (faltando > 1 ? 'o nome e o CPF' : 'um dado')
+              + ' de quem vai receber o pedido. Toque em <b>ALTERAR</b> abaixo e informe — '
+              + 'é o que a transportadora pede na entrega.</div>';
+    }
 
     secao.innerHTML =
         cartaoDeLinhas('📦 Endereço de entrega', endereco,
@@ -134,7 +155,9 @@ function desenharSecaoEntrega() {
             + 'Toque em ALTERAR abaixo e escreva o endereço, ou fale com seu atendimento.',
             aviso)
         + cartaoDeLinhas('🚚 Envio', linhasDoEnvio(dados), '')
-        + cartaoDeDecisao('entrega')
+        + cartaoDeDecisao('entrega', exige
+            ? 'Informe o nome e o CPF de quem vai receber antes de confirmar.'
+            : null)
         + cartaoDeFinalizacao();
 }
 

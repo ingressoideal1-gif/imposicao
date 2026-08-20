@@ -220,10 +220,33 @@ function prazoDeEntrega(itens, frete) {
 }
 
 /**
+ * Se o documento é de pessoa física ou jurídica: `'fisica'`, `'juridica'` ou
+ * `null` quando não dá para saber.
+ *
+ * A conta é feita pelos DÍGITOS do documento, e não pela coluna `tipo_pessoa`.
+ * Medido no banco em 20/08/2026, nos 3.946 clientes com pedido nos últimos 90
+ * dias: `tipo_pessoa` usa dois vocabulários — "CPF"/"CNPJ" em 3.153 e
+ * "FISICA"/"JURIDICA" em 793 —, enquanto a contagem de dígitos nunca discordou
+ * dela: 11 para CPF, 14 para CNPJ, sem uma exceção.
+ *
+ * Documento que não é nem um nem outro devolve `null`, e `null` nunca autoriza
+ * herdar nada: não sabendo quem é, pergunta-se.
+ */
+function tipoDaPessoa(documento) {
+    const digitos = String(documento || '').replace(/\D/g, '');
+    if (digitos.length === 11) return 'fisica';
+    if (digitos.length === 14) return 'juridica';
+    return null;
+}
+
+/**
  * O endereço como uma lista de linhas prontas, na ordem em que se lê um
  * envelope. Linha sem valor não entra: rótulo com vazio ao lado é ruído.
+ *
+ * `cliente` são os dados da nota fiscal, e servem à regra do recebedor — ver o
+ * bloco dentro da função.
  */
-function enderecoEmLinhas(endereco) {
+function enderecoEmLinhas(endereco, cliente) {
     if (!endereco) return [];
 
     const rua = (endereco.endereco || endereco.rua || endereco.logradouro || '').trim();
@@ -241,12 +264,32 @@ function enderecoEmLinhas(endereco) {
     //
     // Com "Não informado" na tela, logo acima do botão ALTERAR, a falta vira um
     // convite a preencher.
-    const recebedor = (endereco.recebedor || '').trim();
-    const cpf = (endereco.cpf_recebedor || '').trim();
+    let recebedor = (endereco.recebedor || '').trim();
+    let cpf = (endereco.cpf_recebedor || '').trim();
+    let herdado = false;
+
+    // Faltando o recebedor, valem os dados da NOTA FISCAL — mas só quando ela é
+    // de pessoa física. Regra do usuário, 20/08/2026.
+    //
+    // O porquê está na entrega: a transportadora põe o pacote na mão de uma
+    // pessoa e pede o CPF dela. Numa nota de pessoa física, essa pessoa é o
+    // próprio cliente, e o dado já está no cadastro. Numa nota de empresa não
+    // há a quem herdar: o CNPJ não é o CPF de ninguém, e o nome da razão social
+    // não recebe pacote. Aí o dado passa a ser obrigatório — ver
+    // `entregaExigeRecebedor`.
+    //
+    // O que está escrito no endereço vence sempre: quem cadastrou "Maria, da
+    // portaria" sabe mais do que esta regra.
+    if ((!recebedor || !cpf) && cliente && tipoDaPessoa(cliente.documento) === 'fisica') {
+        if (!recebedor) { recebedor = (cliente.nome || '').trim(); herdado = !!recebedor; }
+        if (!cpf) { cpf = (cliente.documento || '').trim(); herdado = herdado || !!cpf; }
+    }
 
     const linhas = [
-        { rotulo: 'Recebedor', valor: recebedor || 'Não informado', falta: !recebedor },
-        { rotulo: 'CPF do recebedor', valor: cpf || 'Não informado', falta: !cpf },
+        { rotulo: 'Recebedor', valor: recebedor || 'Não informado',
+          falta: !recebedor, daNota: herdado && !(endereco.recebedor || '').trim() },
+        { rotulo: 'CPF do recebedor', valor: cpf || 'Não informado',
+          falta: !cpf, daNota: herdado && !(endereco.cpf_recebedor || '').trim() },
         { rotulo: 'Endereço', valor: rua ? rua + ', ' + (numero || 'S/N') : '' },
         { rotulo: 'Complemento', valor: (endereco.complemento || '').trim() },
         { rotulo: 'Bairro', valor: (endereco.bairro || '').trim() },
@@ -255,6 +298,28 @@ function enderecoEmLinhas(endereco) {
     ];
 
     return linhas.filter(l => l.valor);
+}
+
+/**
+ * Se a aba de Entrega precisa EXIGIR o nome e o CPF de quem vai receber.
+ *
+ * É a outra metade da regra do usuário: nota de pessoa jurídica não empresta
+ * recebedor, então sem esse dado a entrega não fecha. Nota de pessoa física
+ * resolve sozinha (ver `enderecoEmLinhas`), e não exige nada.
+ *
+ * Documento desconhecido também exige. Errar para o lado de perguntar é o certo
+ * aqui: um pacote que chega sem recebedor volta, e volta com frete.
+ *
+ * Pedido sem endereço nenhum NÃO exige: ali o que falta é o endereço, e cobrar o
+ * CPF antes disso seria cobrar a segunda coisa primeiro.
+ */
+function entregaExigeRecebedor(endereco, cliente) {
+    if (!endereco) return false;
+    if (tipoDaPessoa(cliente && cliente.documento) === 'fisica') return false;
+
+    const temNome = !!(endereco.recebedor || '').trim();
+    const temCpf = !!(endereco.cpf_recebedor || '').trim();
+    return !(temNome && temCpf);
 }
 
 /**
@@ -274,4 +339,6 @@ window.prazoDeProducao = prazoDeProducao;
 window.prazoDoFrete = prazoDoFrete;
 window.prazoDeEntrega = prazoDeEntrega;
 window.enderecoEmLinhas = enderecoEmLinhas;
+window.tipoDaPessoa = tipoDaPessoa;
+window.entregaExigeRecebedor = entregaExigeRecebedor;
 window.linkDeRastreio = linkDeRastreio;

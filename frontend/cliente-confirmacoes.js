@@ -55,8 +55,10 @@ function artesJaAprovadas() {
  * Os dois botões têm o mesmo peso visual de propósito. Pintar CONFIRMAR de
  * verde e ALTERAR de cinza empurra o cliente a confirmar sem ler — e é
  * exatamente aqui que ele deveria ler.
+ *
+ * `bloqueio` é o texto do motivo pelo qual o CONFIRMAR não pode ser usado.
  */
-function cartaoDeDecisao(qual) {
+function cartaoDeDecisao(qual, bloqueio) {
     const decidido = window.portalConfirmacoes[qual];
     const texto = window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'];
 
@@ -74,20 +76,36 @@ function cartaoDeDecisao(qual) {
     const caixa = decidido === false
         ? '<div>'
             + '<textarea id="portal-correcao-' + qual + '" class="portal-caixa-de-texto" rows="4" '
-            + 'placeholder="Escreva aqui o que precisa ser corrigido...">' + escapeHtml(texto) + '</textarea>'
+            + 'placeholder="' + escapeHtml(bloqueio
+                ? 'Escreva o nome completo e o CPF de quem vai receber o pedido...'
+                : 'Escreva aqui o que precisa ser corrigido...') + '">' + escapeHtml(texto) + '</textarea>'
             + '<button type="button" class="portal-botao atencao" onclick="salvarCorrecaoDeDados(\'' + qual + '\')">'
             + '💾 Salvar correção</button>'
             + '<div id="portal-recibo-' + qual + '" class="portal-vazio" style="margin-top: 8px;"></div>'
           + '</div>'
         : '';
 
+    // `bloqueio` desliga o CONFIRMAR e diz por quê. Quem usa hoje é a aba de
+    // Entrega, quando a nota é de empresa e ninguém informou quem recebe: sem
+    // isso o cliente confirmaria um endereço que a transportadora não consegue
+    // entregar, e o pacote voltaria — com frete.
+    //
+    // O ALTERAR continua vivo, porque é por ele que se sai da trava.
+    const confirmar = bloqueio
+        ? '<button type="button" class="portal-botao" disabled>CONFIRMAR</button>'
+        : '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', true)">CONFIRMAR</button>';
+    const motivo = bloqueio
+        ? '<div class="portal-vazio" style="margin-top: 10px;">' + escapeHtml(bloqueio) + '</div>'
+        : '';
+
     return '<div class="portal-cartao">'
         + '<h2>' + escapeHtml(ROTULO_DA_ABA[qual].titulo) + '</h2>'
         + estado
         + '<div class="portal-par-de-botoes">'
-        + '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', true)">CONFIRMAR</button>'
+        + confirmar
         + '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', false)">ALTERAR</button>'
         + '</div>'
+        + motivo
         + caixa
         + '</div>';
 }
@@ -107,9 +125,22 @@ function cartaoDeFinalizacao() {
     }
 
     const c = window.portalConfirmacoes;
+    const dados = window.portalDados || {};
     const faltam = [];
     if (!artesJaAprovadas()) faltam.push('aprovar suas artes na aba <b>Arte</b>');
-    if (c.entrega === null) faltam.push('conferir os dados na aba <b>Entrega</b>');
+    // A exigência do recebedor entra aqui também: sem ela, o botão de finalizar
+    // ficaria desligado sem dizer que é por causa disso.
+    // A exigência do recebedor só prende enquanto o cliente não usou o ALTERAR.
+    //
+    // Ela existe para ele não CONFIRMAR um endereço incompleto — e não para
+    // trancá-lo na página. Quem escolheu ALTERAR já está mandando o nome e o CPF
+    // pela caixa de texto, e o pedido vai para o atendimento com essa
+    // solicitação: é a saída da trava, e toda trava desta casa tem uma.
+    if (entregaExigeRecebedor(dados.endereco, dados.cliente) && c.entrega !== false) {
+        faltam.push('informar quem vai receber, na aba <b>Entrega</b>');
+    } else if (c.entrega === null) {
+        faltam.push('conferir os dados na aba <b>Entrega</b>');
+    }
     if (c.faturamento === null) faltam.push('conferir os dados na aba <b>Nota</b>');
 
     if (faltam.length) {

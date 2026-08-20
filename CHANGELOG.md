@@ -4,7 +4,47 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v660** — 2026-08-20 | Agente **1.2.154**
+## Versão atual: **v661** — 2026-08-20 | Agente **1.2.155**
+
+---
+
+## [v661 — 2026-08-20] — O recebedor sai da nota fiscal, quando ela é de pessoa física
+
+**Regra do usuário:** faltando o nome e o CPF de quem recebe, valem os dados da nota fiscal —
+**mas só quando ela é de pessoa física**. Sendo de empresa, informar o recebedor passa a ser
+obrigatório.
+
+O porquê está na entrega: a transportadora põe o pacote na mão de uma pessoa e pede o CPF dela.
+Numa nota de pessoa física essa pessoa é o próprio cliente, e o dado já está no cadastro. Numa
+nota de empresa não há a quem herdar — o CNPJ não é o CPF de ninguém, e a razão social não recebe
+pacote.
+
+| nota fiscal | recebedor vazio no endereço |
+|---|---|
+| **CPF** | herda o nome e o CPF da nota, com a etiqueta *"mesmo da nota fiscal"* embaixo |
+| **CNPJ** | fica "Não informado", e o **CONFIRMAR é desligado** até o cliente informar |
+| documento desconhecido | trata como CNPJ — não dá para herdar o que não se sabe |
+
+**O tipo sai da contagem de dígitos do documento**, e não da coluna `tipo_pessoa`. Medido no banco
+nos 3.946 clientes com pedido nos últimos 90 dias: `tipo_pessoa` usa dois vocabulários — "CPF"/"CNPJ"
+em 3.153 e "FISICA"/"JURIDICA" em 793 —, enquanto os dígitos nunca discordaram: 11 para CPF, 14 para
+CNPJ, sem uma exceção.
+
+**O que está escrito no endereço vence sempre.** Quem cadastrou "Maria, da portaria" sabe mais do
+que esta regra.
+
+### A trava tem saída
+
+Com CNPJ e sem recebedor, o **CONFIRMAR** fica desligado, com o motivo escrito ao lado — o cliente
+não pode dizer "está correto" sobre um endereço que a transportadora não consegue entregar.
+
+Mas o **ALTERAR continua vivo**, e é por ele que se sai: a caixa de texto passa a pedir *"Escreva o
+nome completo e o CPF de quem vai receber o pedido..."*, e quem a usa deixa de ser cobrado no cartão
+de finalização — o pedido segue para o atendimento com a solicitação. Sem isso, o cliente ficaria
+preso na página sem nenhum caminho para terminar.
+
+**Testes:** `tests/portal_dados_harness.js` (98 verificações) e
+`tests/portal_confirmacoes_harness.js` (36).
 
 ---
 

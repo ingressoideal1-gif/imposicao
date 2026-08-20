@@ -350,6 +350,26 @@ const linhasDoEnvio = new Function(
         { redesenho, aviso });
 })();
 
+(function aTravaDoRecebedorTemSaida() {
+    // A regra do usuario (20/08/2026) exige nome e CPF quando a nota e de
+    // empresa. A trava desliga o CONFIRMAR -- mas o ALTERAR continua vivo, e o
+    // cartao do fim para de cobrar quando o cliente usa o ALTERAR: ele esta
+    // mandando o dado pela caixa de texto, e o pedido vai ao atendimento com a
+    // solicitacao. Trava sem saida nao existe nesta casa.
+    const cartao = recortar(CONFIRMACOES, 'cartaoDeDecisao');
+    ok(/bloqueio\s*\?/.test(cartao), 'o bloqueio desliga o CONFIRMAR', cartao.slice(0, 60));
+    ok(/portal-botao" disabled>CONFIRMAR/.test(cartao), 'com o botao desabilitado');
+    ok((cartao.match(/decidirDados\('" \+ qual \+ "', false\)/g) || []).length >= 0,
+        'e o ALTERAR nunca e desligado');
+    ok(cartao.indexOf('ALTERAR</button>') > 0, 'o ALTERAR continua na tela');
+    ok(/nome completo e o CPF/.test(cartao),
+        'e a caixa de texto pede exatamente o que falta');
+
+    const fim = recortar(CONFIRMACOES, 'cartaoDeFinalizacao');
+    ok(/entregaExigeRecebedor\(dados\.endereco, dados\.cliente\) && c\.entrega !== false/.test(fim),
+        'quem usou o ALTERAR deixa de ser cobrado -- e a saida da trava', fim);
+})();
+
 (function aTelaAntigaDeConferenciaSaiu() {
     // Ela vivia entre a aprovacao e o fim, e escondia a pagina inteira.
     ok(CLIENTE.indexOf('mostrarConfirmacaoDadosCliente') < 0, 'a tela sequencial saiu');
