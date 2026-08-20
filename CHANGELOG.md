@@ -4,7 +4,109 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v655** — 2026-08-20 | Agente **1.2.150**
+## Versão atual: **v656** — 2026-08-20 | Agente **1.2.151**
+
+---
+
+## [v656 — 2026-08-20] — O link do cliente vira o Portal do Pedido
+
+**A página que o cliente abre pelo WhatsApp era um funil de aprovação de arte, e nada mais.**
+Ela só mostrava alguma coisa quando o `status_arte` valia `Enviar Arte` ou `Aguard. Aprovação`
+— ou quando o atendente girava o selo de entrega para `ALTERADO`. Em qualquer outro status ela
+exibia uma frase e terminava. Medido no banco em 20/08: **36 dos 50 links estavam num status em
+que a página não mostrava nada.** O endereço que o cliente guardou deixava de servir no dia
+seguinte à aprovação — justamente quando ele quer saber do prazo, do endereço e de como pagar.
+
+Agora são **cinco seções sempre abertas**, com barra de abas no rodapé, e a aprovação de arte é
+uma delas.
+
+### 🎨 Aprovação de Arte — o que já existia, mais uma cara para cada status
+
+O motor de desenho não mudou: canvas combinado, lightbox com pinça e zoom, viewer de PDF
+multipágina com a fila anti-corrupção, seletor de página do CSV, decisão por modelo. O que
+mudou é que a aba **não some mais depois de aprovada**:
+
+| status | o que a aba mostra |
+|---|---|
+| `Enviar Arte`, `Aguard. Aprovação` | a aprovação, como sempre foi |
+| `APROVADO` | as artes aprovadas, só leitura, com lightbox |
+| `Em Alteração`, `REPROVADO` | as artes, mais **o que o próprio cliente pediu** |
+| `EM PRODUCAO` | as artes, com o aviso de que já estão na impressora |
+| `Em Arte`, nulo, qualquer outro | "nossa equipe está preparando sua arte" |
+
+Em modo de leitura, os botões APROVAR/ALTERAR e o botão de finalizar somem: botão que não
+decide mais nada é convite para o cliente achar que dá para desaprovar.
+
+### 📦 Dados de Entrega — com forma e prazo de envio
+
+Além do endereço, a aba passa a mostrar a **forma de envio** (`frete_escolhido` com a
+modalidade e o valor do frete; grátis vira "sem custo", e não "R$ 0,00"), o **prazo de envio**
+(`propostas_os.data_termino`, o mesmo campo do Painel de Produção, com o `produtos.prazo` de
+reserva) e o **código de rastreio** com link dos Correios quando existe.
+
+### 🧾 Dados de Faturamento — decisão própria
+
+Entrega e faturamento eram um cartão só, com um par de botões e um campo de texto. O atendente
+recebia um texto onde os dois assuntos se misturavam. Agora cada aba tem a sua decisão, e cada
+uma grava a sua chave em `pedidos_artes.observacoes` — `correcao_entrega` e
+`correcao_faturamento`, **sem coluna nova**, porque a coluna é `jsonb`. O painel mostra as duas
+rotuladas, e continua lendo `correcao_entrega_faturamento`, que é a chave dos pedidos já
+gravados.
+
+O selo continua sendo um só: as duas confirmadas → `APROVADO`; qualquer uma com correção →
+`CORRIGIR`.
+
+### 💰 Orçamento — o mesmo resumo que ele já recebeu
+
+Vem de `propostas.texto_whatsapp`, o resumo que o vendedor manda ao fechar o pedido —
+preenchido em **1.436 dos 1.489** pedidos dos últimos 30 dias. Remontá-lo a partir dos itens
+daria uma segunda versão do mesmo número, e duas versões do mesmo preço na frente do cliente é
+o que uma página de gráfica não pode fazer. Nos 4% sem resumo, a aba monta a lista pelos itens.
+A saudação e o "me confirma por aqui" saem: mandam o cliente responder num lugar que não existe
+ali. **Só consulta** — o orçamento foi fechado no ERP antes de a arte existir.
+
+### 💳 Link para pagamento
+
+Lê `propostas_os.link_pagamento`, que o parceiro vai fornecer. Hoje o campo está vazio nas 23
+linhas da tabela, então a aba diz que o link ainda não foi liberado — **e diz o que fazer**.
+`status_pagamento` vale `APROVADO` nas 23: é valor padrão, não estado real, e por isso não vira
+anúncio na tela do cliente.
+
+### A porta mudou antes de o dinheiro entrar na tela
+
+A página montava a tela com **seis consultas diretas**, todas com a chave anônima — a que está
+no código-fonte e qualquer um lê com Ctrl+U. A de `clientes` era `select('*')`: para mostrar
+nome, CNPJ, e-mail e telefone, ela baixava também `limite_credito`, `risco_credito` e
+`total_compras`.
+
+Agora é **uma chamada só**, `link_cliente_pedido` (`sql/link_cliente_pedido.sql`), no mesmo
+desenho da `link_cliente_abrir`: `SECURITY DEFINER`, `search_path` fixo, o par número+token
+exigido no corpo, e só os cinco campos do cadastro que a aba de faturamento mostra. Uma ida à
+rede em vez de seis, no 4G do cliente.
+
+O arquivo é **aditivo**: não revoga privilégio de tabela nenhuma. `propostas`, `clientes` e
+`enderecos` são do ERP parceiro, e fechá-las não é decisão deste projeto — o que mudou é que a
+página pública parou de usar aquela porta.
+
+### O nome do cliente, que nunca apareceu
+
+O cabeçalho lia a coluna `cliente_nome`, que **não existe** em `propostas` — a coluna é
+`cliente`. Um `|| ''` transformava isso em texto vazio, e campo vazio não parece defeito:
+parece pedido sem nome. Estava assim desde o começo.
+
+### Miudezas do mesmo tamanho
+
+- **Celular primeiro**: alvo de toque de 56px, folga de `safe-area` no topo e no rodapé, campos
+  com `font-size: 16px` (abaixo disso o iOS dá zoom ao focar), nenhuma rolagem horizontal.
+  Conferido num viewport de 390×844.
+- **`produtos` para de vir inteiro**: eram 44 colunas para usar cinco — 80 kB entregando 12 kB.
+  As linhas continuam todas, porque a busca por nome e apelidos precisa delas.
+- **A tela sequencial de conferência saiu** (406 linhas): ela vivia entre a aprovação e o fim e
+  escondia a página inteira.
+
+**Testes:** `tests/portal_dados_harness.js`, `tests/portal_abas_harness.js`,
+`tests/portal_confirmacoes_harness.js`, `tests/portal_orcamento_harness.js` e
+`tests/test_portal_do_pedido.py`.
 
 ---
 

@@ -110,22 +110,114 @@ próximo salvamento do modelo.
 
 ---
 
-## Status da Arte e Mensagens ao Cliente
+## O Portal do Pedido (20/08/2026)
 
-O status da arte controla **exatamente** o que o cliente vê ao acessar o link:
+> [!IMPORTANT]
+> **A página do cliente deixou de ser um funil.** Até 20/08/2026 ela só mostrava
+> alguma coisa quando o `status_arte` valia `Enviar Arte` ou `Aguard. Aprovação`
+> — ou quando o atendente girava o selo de entrega para `ALTERADO`. Medido no
+> banco naquele dia: **36 dos 50 links estavam num status em que a página não
+> mostrava nada.**
+>
+> Hoje ela é o **Portal do Pedido**: cinco seções sempre abertas, com barra de
+> abas no rodapé, e a aprovação de arte é uma delas. O que o status decide agora
+> é só a **cara da aba da arte**.
 
-| Status | Quem Define | O que o Cliente Vê |
-|--------|-------------|---------------------|
-| `Enviar ARTE` | Operador (via "Voltar Atendimento") | ✅ **Janelas de aprovação** com artes renderizadas, botões Aprovar/Alterar |
-| `ARTE_APROVADA` / `Arte APROVADA` | Cliente (ao aprovar) | ✅ "Artes Aprovadas! Em breve seu pedido entrará em produção." |
-| `ARTE_EM_CORRECAO` | Cliente (ao solicitar alteração) | 🔧 "Artes em Correção. Em breve você receberá um novo link." |
-| `ARTE_EM_ANDAMENTO` | Default / Operador | 🎨 "Arte em Produção. Nossa equipe está trabalhando nas artes." |
-| `Pendente Informação` | Operador (itens não prontos) | 📋 "Aguardando Informações. Entre em contato com seu atendimento." |
-| `EM IMPRESSÃO` | Operador | 🖨️ "Pedido em Produção. Artes aprovadas e em impressão." |
-| Qualquer outro | — | ℹ️ "Pedido em Processamento." |
+### As cinco seções
 
-> [!CAUTION]
-> **Apenas** o status `Enviar ARTE` libera as janelas de aprovação. Todos os outros exibem apenas uma mensagem informativa, sem interação.
+| aba | arquivo | fonte dos dados |
+|---|---|---|
+| 🎨 Arte | `cliente.js` (`desenharSecaoArte`) | `pedidos_modelos` + catálogos |
+| 📦 Entrega | `cliente-entrega.js` | `enderecos`, `propostas`, `propostas_os`, `produtos.prazo` |
+| 🧾 Nota | `cliente-faturamento.js` | `clientes` (cinco campos) |
+| 💰 Orçamento | `cliente-orcamento.js` | `propostas.texto_whatsapp`, com `produtos_proposta` de reserva |
+| 💳 Pagar | `cliente-pagamento.js` | `propostas_os.link_pagamento` |
+
+O casco — cabeçalho, selo de status, barra de abas e troca de seção — está em
+`cliente-shell.js`. As duas decisões do cliente (entrega e faturamento) estão em
+`cliente-confirmacoes.js`. A carga dos dados e as contas de formatação estão em
+`cliente-dados.js`. **O motor de desenho da arte não saiu do `cliente.js`**: onze
+arquivos de teste apontam para ele pelo nome, e cinco recortam funções de lá para
+executar.
+
+### Uma consulta só, pela função do banco
+
+`link_cliente_pedido(p_numero, p_token)` (`sql/link_cliente_pedido.sql`) devolve
+num `jsonb` só tudo o que as cinco abas mostram, exigindo o par número+token de um
+link ativo. É o mesmo desenho da `link_cliente_abrir`.
+
+Ela substituiu **seis consultas diretas** feitas com a chave anônima — a que está
+no código-fonte da página. Uma delas era `select('*')` em `clientes`, que trazia
+`limite_credito`, `risco_credito` e `total_compras` junto do nome e do CNPJ que a
+tela mostra. Com valores entrando na página (orçamento, frete, total, link de
+pagamento), a porta precisava mudar antes do dinheiro.
+
+O arquivo SQL é **aditivo**: ele não revoga privilégio de tabela nenhuma. As
+tabelas do parceiro continuam abertas à chave anônima — fechá-las não é decisão
+deste projeto e quebraria telas do ERP. O que mudou é que a página pública parou
+de usar aquela porta.
+
+### As duas confirmações, e as três chaves
+
+Entrega e faturamento eram um cartão só, com um par de botões e um campo de texto
+gravado em `pedidos_artes.observacoes.correcao_entrega_faturamento`. Agora cada
+aba tem a sua decisão e a sua chave:
+
+| chave | quem escreve |
+|---|---|
+| `correcao_entrega` | a aba 📦 Entrega |
+| `correcao_faturamento` | a aba 🧾 Nota |
+| `correcao_entrega_faturamento` | **ninguém mais** — é a chave dos pedidos já gravados, e continua sendo LIDA |
+
+Não precisou coluna nova: `observacoes` é `jsonb`. O selo continua sendo um só,
+`entrega_dados`: as duas confirmadas → `APROVADO`; qualquer uma com correção →
+`CORRIGIR`. `ALTERADO` continua nascendo só do atendente, na Lista de Arte.
+
+O painel (`loadDadosEntregaInterno`) mostra as três, e as duas novas vêm
+rotuladas — antes o atendente recebia um texto onde os dois assuntos se
+misturavam.
+
+### O que o Orçamento mostra, e por quê
+
+`propostas.texto_whatsapp` — o resumo que o ERP monta e o vendedor manda ao fechar
+o pedido. Preenchido em 1.436 dos 1.489 pedidos dos últimos 30 dias.
+
+Remontar o orçamento a partir de `produtos_proposta` daria uma **segunda versão do
+mesmo número**, e duas versões do mesmo preço na frente do cliente é o que uma
+página de gráfica não pode fazer. Só nos 4% sem resumo é que a lista é montada
+pelos itens.
+
+O `*negrito*` do WhatsApp vira `<b>` **depois** de o texto ser escapado: ele vem do
+banco do parceiro e vai para dentro de `innerHTML`.
+
+---
+
+## Status da Arte e o que o cliente vê
+
+O status vive em `pedidos_links_cliente.status_arte`, que é **texto livre** e foi
+escrito por três telas ao longo de um ano. As grafias que existem de verdade no
+banco, lidas em 20/08/2026 nos 50 links:
+
+| status_arte | links | selo no cabeçalho | a aba da arte mostra |
+|---|---|---|---|
+| `EM PRODUCAO` | 29 | Pedido em produção | as artes aprovadas, só leitura |
+| `APROVADO` | 7 | Artes aprovadas | as artes aprovadas, só leitura |
+| `Em Arte` | 5 | Arte em preparação | a mensagem de preparação |
+| (nulo) | 5 | Arte em preparação | a mensagem de preparação |
+| `Enviar Arte` | 2 | Aguardando sua aprovação | a aprovação, com os botões |
+| `Aguard. Aprovação` | 2 | Aguardando sua aprovação | a aprovação, com os botões |
+
+A documentação antiga citava `ARTE_APROVADA`, `ARTE_EM_CORRECAO`,
+`ARTE_EM_ANDAMENTO` e `Enviar ARTE` — grafias que o código antigo escrevia e que
+**não existem mais no banco**. Elas continuam sendo entendidas: quem traduz é
+`seloDoStatus`, no `cliente-shell.js`, que compara sem acento e por trecho, e tem
+teste para as seis grafias. Um status novo que o ERP invente cai em "Arte em
+preparação" — nunca numa tela em branco.
+
+> [!NOTE]
+> As **outras quatro abas abrem em qualquer status**. O status decide só a aba da
+> arte. Era o contrário até 20/08/2026: o status decidia se a página inteira
+> mostrava alguma coisa.
 
 ---
 
@@ -296,20 +388,32 @@ flowchart LR
 
 ### Página do Cliente
 
-> ⚠️ **Esta tabela está desatualizada.** A página do cliente saiu do `script.js` e hoje
-> vive inteira em **`frontend/cliente.js`**, que é o único script que a `cliente.html`
-> carrega (além do pdf.js e do Supabase). Os links e números de linha abaixo apontam
-> para um arquivo onde essas funções **não existem mais** — `checkClienteRoute` e
-> `initClientePage` têm zero ocorrências no `script.js`. Use `cliente.js` como fonte.
+Ela saiu do `script.js` faz tempo, e desde 20/08/2026 mora em sete arquivos, que a
+`cliente.html` carrega nesta ordem (a ordem importa: `cliente-shell.js` precisa
+existir antes das abas, que se registram ao serem lidas).
 
-| Função | Linha | Descrição |
-|--------|-------|-----------|
-| [checkClienteRoute](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14016) | ~14016 | Detecta URL `/cliente/{numero}-{token}` e inicia fluxo |
-| [initClientePage](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14049) | ~14049 | Valida token, carrega dados, decide o que mostrar pelo status |
-| [clienteFinalizarFluxo](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14323) | ~14323 | Processa aprovação ou solicitação de alteração |
-| [clienteAprovarTudo](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14451) | ~14451 | Atalho para `clienteFinalizarFluxo('APROVAR_TUDO')` |
-| [mostrarResultadoCliente](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14455) | ~14455 | Exibe tela de resultado (ícone + título + mensagem) |
-| [mapVibecodeProdutoToOSItem](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L11276) | ~11276 | Converte item de `produtos_proposta` para o formato interno `osItem` |
+| arquivo | o que contém |
+|---|---|
+| `cliente-dados.js` | `carregarPortal` (a RPC), `emReal`, `rotuloDoFrete`, `prazoDeEnvio`, `enderecoEmLinhas`, `linkDeRastreio` |
+| `cliente-shell.js` | `seloDoStatus`, `abrirSecao`, `registrarSecao`, `redesenharSecao`, `montarPortal` |
+| `cliente-confirmacoes.js` | `cartaoDeDecisao`, `cartaoDeFinalizacao`, `decidirDados`, `salvarCorrecaoDeDados`, `finalizarNoPortal` |
+| `cliente-entrega.js` | `desenharSecaoEntrega`, `linhasDoEnvio`, `cartaoDeLinhas` |
+| `cliente-faturamento.js` | `desenharSecaoFaturamento`, `linhasDoFaturamento` |
+| `cliente-orcamento.js` | `desenharSecaoOrcamento`, `negritoDoWhatsapp`, `resumoLimpo`, `linhasDoOrcamento` |
+| `cliente-pagamento.js` | `desenharSecaoPagamento`, `estadoDoPagamento`, `mostraStatusDePagamento` |
+| `cliente.js` | a rota (`checkClienteRoute`), a carga (`initClientePage`), a gravação (`gravarStatusDoLink`, `gravarCorrecaoDoCliente`, `saveAmostraToDB`), o fluxo de aprovação (`clienteFinalizarFluxo`) e **o motor de desenho da arte inteiro** |
+
+> [!NOTE]
+> O motor de desenho ficou onde estava de propósito. Onze arquivos de teste
+> apontam para `frontend/cliente.js` pelo nome, e cinco recortam funções de lá
+> para executar (`drawAmostraFace`, `saveAmostraToDB`, `gravarCorrecaoDoCliente`,
+> `ehArquivoPdf`, o cálculo de `previaUtil`). Mover obrigaria a religar os onze e
+> arriscaria a composição da peça, que está aprovada e rodando na gráfica — em
+> troca de arrumação que o cliente não vê.
+>
+> Os testes que leem "o código da página do cliente" leem **todos** os
+> `frontend/cliente*.js` juntos, para que uma regra que mude de arquivo continue
+> sendo vista.
 
 ---
 
