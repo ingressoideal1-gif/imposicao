@@ -75,12 +75,21 @@ AS $$
 DECLARE
     v_id     uuid;
     v_status text;
+    -- "Em Alteração", montada por código de caractere de propósito.
+    --
+    -- Escrever o acento literalmente aqui já se perdeu uma vez no caminho até o
+    -- banco, e foi essa perda que criou o problema: a função passou meses
+    -- recusando o valor que a página do cliente manda. `chr(231)` é o ç e
+    -- `chr(227)` é o ã -- este arquivo inteiro é ASCII nesta linha, então não há
+    -- o que estropiar.
+    c_alteracao constant text := 'Em Altera' || chr(231) || chr(227) || 'o';
 BEGIN
     -- Aceita com e sem acento, mas GRAVA sempre a forma canônica.
     v_status := CASE
-        WHEN p_status = 'APROVADO'                        THEN 'APROVADO'
-        WHEN p_status IN ('Em Alteração', 'Em Alteracao') THEN 'Em Alteração'
-        WHEN p_status = 'Enviar Arte'                     THEN 'Enviar Arte'
+        WHEN p_status = 'APROVADO'      THEN 'APROVADO'
+        WHEN p_status = 'Enviar Arte'   THEN 'Enviar Arte'
+        WHEN p_status = c_alteracao
+          OR p_status = 'Em Alteracao'  THEN c_alteracao
         ELSE NULL
     END;
 
@@ -121,7 +130,7 @@ GRANT EXECUTE ON FUNCTION public.link_cliente_status(text, text, text) TO anon, 
 
 SELECT 'APROVADO'      AS status, public.link_cliente_status('0', 'token-que-nao-existe', 'APROVADO')     AS escreveu
 UNION ALL
-SELECT 'Em Alteração',          public.link_cliente_status('0', 'token-que-nao-existe', 'Em Alteração')
+SELECT 'Em Alteracao (com acento)', public.link_cliente_status('0', 'token-que-nao-existe', 'Em Altera' || chr(231) || chr(227) || 'o')
 UNION ALL
 SELECT 'Em Alteracao (sem acento)', public.link_cliente_status('0', 'token-que-nao-existe', 'Em Alteracao')
 UNION ALL

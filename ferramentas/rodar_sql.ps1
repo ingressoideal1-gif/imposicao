@@ -112,9 +112,25 @@ if (-not $token) {
 $url = "https://api.supabase.com/v1/projects/$Projeto/database/query"
 $corpo = @{ query = $sql } | ConvertTo-Json -Depth 3 -Compress
 
+# O CORPO VAI EM BYTES UTF-8, E NAO COMO STRING.
+#
+# No Windows PowerShell 5.1, `Invoke-RestMethod -Body <string>` com
+# `application/json` sem charset codifica o texto em Latin-1: todo acento chega
+# ao servidor estropiado. E chega EM SILENCIO -- a API aceita, o SQL roda, e o
+# estrago so aparece depois, dentro do banco.
+#
+# Foi assim que a funcao `link_cliente_status` nasceu recusando 'Em Alteração':
+# o literal com cedilha e til virou outra coisa no caminho, e por meses o
+# cliente pedia alteracao da arte sem o status do link mudar. Descoberto em
+# 20/08/2026, ao rodar o conserto e ver que a versao SEM acento passava e a
+# COM acento continuava recusada.
+#
+# Convertendo aqui, o que a API recebe e exatamente o que esta no arquivo.
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($corpo)
+
 try {
-    $r = Invoke-RestMethod -Method Post -Uri $url -Body $corpo `
-        -ContentType 'application/json' `
+    $r = Invoke-RestMethod -Method Post -Uri $url -Body $bytes `
+        -ContentType 'application/json; charset=utf-8' `
         -Headers @{ Authorization = "Bearer $token" }
 }
 catch {

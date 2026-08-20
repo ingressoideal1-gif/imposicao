@@ -420,3 +420,27 @@ Describe "Select-ArquivosDaLeva devolve lista plana" {
         ($r[0] -is [string]) | Should Be $true
     }
 }
+
+Describe "rodar_sql.ps1 manda o SQL em UTF-8" {
+    # No Windows PowerShell 5.1, `Invoke-RestMethod -Body <string>` com
+    # `application/json` sem charset codifica o texto em Latin-1: todo acento
+    # chega ao servidor estropiado, EM SILENCIO -- a API aceita e o SQL roda.
+    #
+    # Foi assim que a funcao `link_cliente_status` nasceu recusando
+    # 'Em Alteração': o literal com cedilha e til virou outra coisa no caminho,
+    # e por meses o cliente pedia alteracao da arte sem o status do link mudar.
+    $script = Get-Content "$PSScriptRoot\..\ferramentas\rodar_sql.ps1" -Raw
+
+    It "converte o corpo para bytes UTF-8 antes de enviar" {
+        ($script -match '\[System\.Text\.Encoding\]::UTF8\.GetBytes\(\$corpo\)') | Should Be $true
+    }
+    It "envia esses bytes, e nao a string" {
+        ($script -match '-Body \$bytes') | Should Be $true
+    }
+    It "declara o charset no content-type" {
+        ($script -match "application/json; charset=utf-8") | Should Be $true
+    }
+    It "nao manda mais o corpo como string" {
+        ($script -match '-Body \$corpo') | Should Be $false
+    }
+}

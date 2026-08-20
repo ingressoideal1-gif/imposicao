@@ -4,6 +4,41 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-20] — O acento se perdia no caminho até o banco *(banco e ferramenta, sem versão nova do site)*
+
+Quando o cliente pedia alteração da arte, o status do link não mudava. A função
+`link_cliente_status` recusava o valor que a página manda:
+
+```
+P0001 -- status nao permitido pela pagina do cliente: Em Alteração
+```
+
+A causa não era a lista de valores — era **codificação**. No Windows PowerShell 5.1,
+`Invoke-RestMethod -Body <string>` com `application/json` sem charset codifica o texto em
+**Latin-1**: todo acento chega estropiado ao servidor, e chega em silêncio, porque a API
+aceita e o SQL roda. Foi assim que a função nasceu, meses atrás, com um literal que nunca
+casou com o que o navegador envia.
+
+Descoberto ao rodar o conserto e ver o resultado: a versão **sem** acento passou a ser
+aceita, e a **com** acento continuou recusada — no mesmo arquivo, na mesma linha.
+
+Dois consertos:
+
+1. **`ferramentas/rodar_sql.ps1` manda o corpo em bytes UTF-8**, com o charset declarado. O
+   que a API recebe passa a ser exatamente o que está no arquivo. Coberto por quatro
+   verificações novas em `tests/Publicacao.Tests.ps1`.
+2. **A função monta o acento por código de caractere** (`'Em Altera' || chr(231) || chr(227)
+   || 'o'`), então a linha é ASCII pura e não há o que estropiar em nenhum transporte
+   futuro. Ela aceita as duas grafias e **grava sempre a canônica** — o painel compara o
+   texto, e duas grafias no banco virariam dois comportamentos.
+
+A lista continua fechada: `qualquer coisa` segue recusado. Aprovar arte é autorizar
+impressão, e sem a lista quem tivesse um token escreveria qualquer texto naquele status.
+
+`sql/link_cliente_status_aceita_em_alteracao.sql`
+
+---
+
 ## [2026-08-20] — O Prazo de Entrega deixa de ser inventado
 
 A coluna PRAZO ENTREGA do Painel de Produção nunca mostrou prazo real: `getFallbackPrazo`
