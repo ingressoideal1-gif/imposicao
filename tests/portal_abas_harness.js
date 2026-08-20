@@ -151,6 +151,19 @@ const secaoValida = carregar(['SECOES', 'secaoValida'], 'secaoValida');
     ok(rotulos.length === 5, 'cinco rotulos em texto', rotulos.length);
 })();
 
+(function oCabecalhoTrazALogoDaEmpresa() {
+    // Trocada em 20/08/2026: a antiga era o simbolo sozinho, num arquivo local.
+    // Esta e a logo da empresa, com o nome e o "INGRESSOS - PULSEIRAS -
+    // CREDENCIAIS" -- e quem abre este link e um cliente que precisa reconhecer
+    // de quem e a pagina antes de aprovar arte e conferir dados.
+    ok(/logo_ideal_2026\.jpg/.test(HTML), 'a logo da empresa esta no cabecalho');
+    ok(HTML.indexOf('Logo Ideal Dark.png') < 0, 'e a antiga saiu');
+    ok(/class="cliente-logo"/.test(HTML), 'com a classe que o CSS dimensiona');
+    // `alt` nao e enfeite: e o que aparece quando a imagem nao carrega, que num
+    // 4G ruim acontece.
+    ok(/alt="Ingresso Ideal[^"]*"/.test(HTML), 'e com texto alternativo');
+})();
+
 // ─── 4. A aba da arte existe em todos os status ─────────────────────────────
 //
 // Ate 20/08/2026 a arte sumia da tela depois de aprovada: o cliente nao tinha

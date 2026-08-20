@@ -3105,7 +3105,25 @@ input[type=number] {
 
 /* ─── O cabeçalho ─────────────────────────────────────────────────────────── */
 
-.cliente-logo { height: 40px; width: auto; border-radius: 6px; flex-shrink: 0; }
+/* A logo da empresa, no cabeçalho do link do cliente.
+   Ela é um JPG de fundo BRANCO e formato largo (945x280), então ganha um cartão
+   branco com folga em volta: sem isso, ela seria um retângulo branco cortado
+   contra o cabeçalho escuro. `max-width` em porcentagem porque no celular o
+   cabeçalho empilha e a logo fica sozinha na linha -- ela pode crescer, mas não
+   até encostar nas bordas. */
+.cliente-logo {
+    /* 56px, e não os 40 do logotipo antigo: esta logo traz "INGRESSOS •
+       PULSEIRAS • CREDENCIAIS" em letra miúda dentro dela, e abaixo disso a
+       linha vira um borrão no celular. */
+    height: 56px;
+    width: auto;
+    max-width: 82%;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 8px;
+    padding: 5px 9px;
+    flex-shrink: 0;
+}
 .cliente-header-texto { min-width: 0; }
 
 /* O selo do status: a primeira coisa que responde "como está meu pedido?" —
