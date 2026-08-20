@@ -15,11 +15,16 @@ O link do cliente abria com o **símbolo** da marca, sozinho, num arquivo local
 "INGRESSOS • PULSEIRAS • CREDENCIAIS" —, servida do mesmo bucket de imagens que já entrega as
 logos das transportadoras.
 
-Ela é um JPG de fundo branco e formato largo (945×280), então ganhou um cartão branco com folga
-em volta: sem isso seria um retângulo branco cortado contra o cabeçalho escuro. E subiu de 40 para
-**56px de altura** — abaixo disso a linha miúda dentro da logo vira um borrão no celular.
+O arquivo se chama `.jpg`, mas o **formato real é PNG com fundo transparente** — 35% dos pixels
+são transparentes. Por isso a logo vai direto sobre o cabeçalho escuro, sem cartão branco atrás: o
+gradiente da marca (laranja, turquesa e azul) lê bem no escuro, e a caixa branca só recortava um
+retângulo no meio do cabeçalho.
 
-Conferido em 320px, 390px e 1280px: sem rolagem horizontal em nenhum, e a logo cabe nos três.
+A altura foi para **67px** — a linha miúda dentro da logo, "INGRESSOS • PULSEIRAS • CREDENCIAIS",
+é que manda no tamanho: abaixo disso ela vira um borrão no celular.
+
+Conferido em 320px, 390px e 1280px: sem rolagem horizontal em nenhum, e a logo cabe nos três (na
+tela de 320 ela encolhe pelo `max-width`, sem cortar).
 
 ---
 
