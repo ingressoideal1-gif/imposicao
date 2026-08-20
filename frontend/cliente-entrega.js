@@ -26,19 +26,35 @@ function cartaoDeLinhas(titulo, linhas, vazio) {
     return '<div class="portal-cartao"><h2>' + titulo + '</h2>' + corpo + '</div>';
 }
 
-/** As linhas do cartão de envio: forma, prazo e rastreio. */
+/**
+ * As linhas do cartão de envio: forma, os DOIS prazos, volumes e rastreio.
+ *
+ * Prazo de produção e prazo de envio são coisas diferentes, e aparecem
+ * separados por decisão do usuário em 20/08/2026. O de produção é o do produto
+ * que demora mais (a gráfica só despacha quando o último item fica pronto); o de
+ * envio é o que a transportadora prometeu na cotação escolhida. Somados num
+ * número só, ninguém saberia qual dos dois atrasou quando o pedido atrasa.
+ */
 function linhasDoEnvio(dados) {
     const pedido = (dados && dados.pedido) || null;
+    const frete = (dados && dados.frete) || null;
     const os = (dados && dados.os) || null;
     const itens = (dados && dados.itens) || [];
 
-    const linhas = [{ rotulo: 'Forma de envio', valor: rotuloDoFrete(pedido), forte: true }];
+    const linhas = [{ rotulo: 'Forma de envio', valor: rotuloDoFrete(pedido, frete), forte: true }];
 
-    const prazo = prazoDeEnvio(os, itens);
+    const producao = prazoDeProducao(itens);
+    linhas.push({
+        rotulo: 'Prazo de produção',
+        valor: producao || 'Combinado com seu atendimento',
+        forte: !!producao
+    });
+
+    const envio = prazoDoFrete(frete);
     linhas.push({
         rotulo: 'Prazo de envio',
-        valor: prazo || 'Combinado com seu atendimento',
-        forte: !!prazo
+        valor: envio || 'Combinado com seu atendimento',
+        forte: !!envio
     });
 
     if (pedido && pedido.volume) {

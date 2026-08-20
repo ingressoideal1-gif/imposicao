@@ -91,10 +91,25 @@ def test_a_funcao_nao_devolve_dado_financeiro_do_cadastro():
         assert proibido not in corpo, f"{proibido} nao pode sair para o cliente"
 
 
-def test_a_funcao_devolve_as_seis_chaves_que_a_tela_usa():
+def test_a_funcao_devolve_as_sete_chaves_que_a_tela_usa():
     corpo = _corpo_da_funcao()
-    for chave in ("'pedido'", "'cliente'", "'endereco'", "'itens'", "'os'", "'entrega'"):
+    for chave in ("'pedido'", "'cliente'", "'endereco'", "'itens'", "'os'", "'frete'", "'entrega'"):
         assert chave in corpo, f"a chave {chave} sumiu do retorno"
+
+
+def test_o_prazo_de_envio_vem_da_cotacao_escolhida():
+    """`propostas` guarda o nome e o valor do frete, mas NAO o prazo. Ele mora
+    em `cotacao_frete`, na linha que o cliente escolheu -- 2.164 pedidos ja tem
+    uma, medido em 20/08/2026.
+
+    A ordem por `created_at DESC` importa: um pedido pode ter mais de uma linha
+    marcada como escolhida, porque a expedicao recota quando o peso ou o
+    endereco mudam. Vale a ultima.
+    """
+    corpo = _corpo_da_funcao()
+    assert "FROM cotacao_frete" in corpo
+    assert "c.escolhido IS TRUE" in corpo
+    assert "ORDER BY c.created_at DESC" in corpo
 
 
 def test_a_funcao_e_chamavel_pela_chave_anonima():

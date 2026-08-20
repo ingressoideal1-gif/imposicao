@@ -97,8 +97,15 @@ const NOME_DO_FRETE = {
  * Frete grátis vira "sem custo", e não "R$ 0,00" — um zero ao lado do nome da
  * transportadora se lê como erro de sistema.
  */
-function rotuloDoFrete(pedido) {
-    const escolhido = pedido && pedido.frete_escolhido ? String(pedido.frete_escolhido).trim() : '';
+function rotuloDoFrete(pedido, frete) {
+    // O nome vem do pedido; a cotação escolhida é a reserva. Os dois quase
+    // sempre coincidem, mas `cotacao_frete.servico` tem nomes que
+    // `frete_escolhido` não tem -- "Frete Incluso", "Sem custo",
+    // "Transportadora Parceira" --, e dizer "A combinar" com uma cotação
+    // escolhida na mão seria esconder do cliente o que já está decidido.
+    const doPedido = pedido && pedido.frete_escolhido ? String(pedido.frete_escolhido).trim() : '';
+    const daCotacao = frete && frete.servico ? String(frete.servico).trim() : '';
+    const escolhido = doPedido || daCotacao;
     if (!escolhido) return 'A combinar';
 
     const nome = NOME_DO_FRETE[escolhido.toUpperCase()] || escolhido;
@@ -110,34 +117,69 @@ function rotuloDoFrete(pedido) {
     return comModalidade + ' — ' + emReal(valor);
 }
 
-/**
- * O prazo, com a data do parceiro na frente do texto do produto.
- *
- * `propostas_os.data_termino` é o campo real do Prazo de Entrega — o mesmo que o
- * Painel de Produção usa. Ela vence porque é a data daquele pedido; o
- * `produtos.prazo` ("Produção: 1 dia útil + Frete") é a regra geral do produto,
- * e serve de reserva enquanto a tabela nova do parceiro não cobre todo pedido:
- * eram 23 linhas para 8.263 propostas em 20/08/2026.
- *
- * Devolve `null` quando não há nem um nem outro, para a tela poder dizer
- * "combinado com seu atendimento" em vez de imprimir `undefined`.
- */
-function prazoDeEnvio(os, itens) {
-    const bruto = os && os.data_termino ? String(os.data_termino) : '';
-    if (bruto) {
-        // Data pura (`2026-08-21`) o JavaScript lê como meia-noite UTC, e no
-        // Brasil isso vira 21h do dia anterior: o prazo apareceria um dia antes.
-        const texto = /^\d{4}-\d{2}-\d{2}$/.test(bruto) ? bruto + 'T00:00:00' : bruto;
-        const data = new Date(texto);
-        if (!isNaN(data.getTime())) {
-            const dd = String(data.getDate()).padStart(2, '0');
-            const mm = String(data.getMonth() + 1).padStart(2, '0');
-            return dd + '/' + mm + '/' + data.getFullYear();
-        }
-    }
+// ── Os dois prazos ────────────────────────────────────────────────────────
+//
+// O usuário definiu em 20/08/2026: a aba de entrega mostra **prazo de produção**
+// e **prazo de envio**, e não um só. São duas coisas diferentes, com duas
+// origens diferentes, e somá-las num número só esconderia qual das duas está
+// atrasando quando o pedido atrasa.
 
-    const comPrazo = (itens || []).find(i => i && i.prazo && String(i.prazo).trim());
-    return comPrazo ? String(comPrazo.prazo).trim() : null;
+/** O número de dias escrito num prazo, ou `null` quando não há número. */
+function diasDoPrazo(texto) {
+    const achado = String(texto || '').match(/\d+/);
+    return achado ? parseInt(achado[0], 10) : null;
+}
+
+function emDiasUteis(dias) {
+    return dias === 1 ? '1 dia útil' : dias + ' dias úteis';
+}
+
+/**
+ * O prazo de PRODUÇÃO do pedido: o do produto que demora mais.
+ *
+ * Cada produto tem o seu prazo, independente dos outros (`produtos.prazo`), mas
+ * o pedido só sai da gráfica quando o ÚLTIMO item fica pronto — por isso o do
+ * pedido é o maior deles, e não a soma nem a média.
+ *
+ * A comparação é feita pelo NÚMERO, e não pelo texto, porque o catálogo tem
+ * cinco redações para a mesma coisa (medidas em 20/08/2026): "3 dias úteis" em
+ * 50 produtos, "1 dia útil" em 7, "2 dias úteis" em 3, "Prazo de produção 2 dias
+ * úteis" e "Produção: 1 dia útil + Frete" em um cada.
+ *
+ * Prazo sem número nenhum passa como está: a frase do catálogo é melhor do que
+ * um número que ninguém escreveu.
+ */
+function prazoDeProducao(itens) {
+    const comTexto = (itens || []).filter(i => i && i.prazo && String(i.prazo).trim());
+    if (!comTexto.length) return null;
+
+    let maior = null;
+    comTexto.forEach(i => {
+        const dias = diasDoPrazo(i.prazo);
+        if (dias !== null && (maior === null || dias > maior)) maior = dias;
+    });
+
+    return maior !== null ? emDiasUteis(maior) : String(comTexto[0].prazo).trim();
+}
+
+/**
+ * O prazo de ENVIO: o que a transportadora prometeu na cotação escolhida.
+ *
+ * Ele vem de `cotacao_frete.prazo` — `propostas` guarda o nome e o valor do
+ * frete, mas não o prazo. O texto é livre, escrito pelo ERP, e passa inteiro:
+ * "1 dia útil", "A combinar", "Sob consulta", "De 12 até 48hs ( consultar )",
+ * "dia seguinte a conclusão". Reescrever qualquer uma dessas seria inventar uma
+ * promessa de entrega que a gráfica não fez.
+ *
+ * A única correção é o número solto: 30 cotações do SEDEX gravam só "1", e
+ * outras 227 gravam "1 dia útil" — é a mesma coisa com a unidade perdida, e um
+ * "1" sozinho na tela do cliente não diz nada.
+ */
+function prazoDoFrete(frete) {
+    const texto = frete && frete.prazo ? String(frete.prazo).trim() : '';
+    if (!texto) return null;
+    if (/^\d+$/.test(texto)) return emDiasUteis(parseInt(texto, 10));
+    return texto;
 }
 
 /**
@@ -178,6 +220,7 @@ function linkDeRastreio(codigo) {
 window.carregarPortal = carregarPortal;
 window.emReal = emReal;
 window.rotuloDoFrete = rotuloDoFrete;
-window.prazoDeEnvio = prazoDeEnvio;
+window.prazoDeProducao = prazoDeProducao;
+window.prazoDoFrete = prazoDoFrete;
 window.enderecoEmLinhas = enderecoEmLinhas;
 window.linkDeRastreio = linkDeRastreio;

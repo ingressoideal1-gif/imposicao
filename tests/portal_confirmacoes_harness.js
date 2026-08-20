@@ -227,30 +227,64 @@ const linhasDoEnvio = new Function(
     extrairTabela(DADOS, 'NOME_DO_FRETE') + '\n'
     + recortar(DADOS, 'emReal') + '\n'
     + recortar(DADOS, 'rotuloDoFrete') + '\n'
-    + recortar(DADOS, 'prazoDeEnvio') + '\n'
+    + recortar(DADOS, 'diasDoPrazo') + '\n'
+    + recortar(DADOS, 'emDiasUteis') + '\n'
+    + recortar(DADOS, 'prazoDeProducao') + '\n'
+    + recortar(DADOS, 'prazoDoFrete') + '\n'
     + recortar(DADOS, 'linkDeRastreio') + '\n'
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
     + recortar(ENTREGA, 'linhasDoEnvio') + '\nreturn linhasDoEnvio;')();
 
-(function envioTemFormaEPrazo() {
+(function envioTemFormaEOsDoisPrazos() {
+    // O usuario pediu os dois separados em 20/08/2026: producao e envio sao
+    // coisas diferentes, com origens diferentes.
     const l = linhasDoEnvio({
         pedido: { frete_escolhido: 'SEDEX', valor_frete: '20.12' },
-        os: { data_termino: '2026-08-21T00:00:00' },
-        itens: []
+        frete: { servico: 'SEDEX', prazo: '2 dias úteis' },
+        os: null,
+        itens: [{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }]
     });
     const rotulos = l.map(x => x.rotulo);
     ok(rotulos[0] === 'Forma de envio', 'a forma vem primeiro', rotulos);
-    ok(rotulos.indexOf('Prazo de envio') > 0, 'e o prazo logo depois', rotulos);
-    ok(l[0].valor === 'SEDEX — R$ 20,12', 'com o valor junto', l[0]);
-    ok(l[1].valor === '21/08/2026', 'e a data do parceiro', l[1]);
+    ok(rotulos[1] === 'Prazo de produção', 'depois a producao', rotulos);
+    ok(rotulos[2] === 'Prazo de envio', 'e entao o envio', rotulos);
+    ok(l[0].valor === 'SEDEX — R$ 20,12', 'a forma com o valor junto', l[0]);
+    ok(l[1].valor === '3 dias úteis', 'a producao e a do produto mais demorado', l[1]);
+    ok(l[2].valor === '2 dias úteis', 'e o envio e o da cotacao escolhida', l[2]);
+})();
+
+(function osDoisPrazosNaoSeMisturam() {
+    // O pedido demora 3 dias para ficar pronto e 1 para chegar. Se a tela
+    // somasse, ninguem saberia qual dos dois atrasou quando o pedido atrasa.
+    const l = linhasDoEnvio({
+        pedido: {}, frete: { prazo: '1 dia útil' }, os: null,
+        itens: [{ prazo: '3 dias úteis' }]
+    });
+    ok(l[1].valor === '3 dias úteis' && l[2].valor === '1 dia útil',
+        'cada prazo na sua linha', [l[1].valor, l[2].valor]);
 })();
 
 (function semPrazoDizOQueFazer() {
     // Nenhuma trava deste projeto fica sem saida: sem prazo, a linha diz onde
     // conseguir a resposta, em vez de ficar vazia ou escrever "undefined".
-    const l = linhasDoEnvio({ pedido: { frete_escolhido: 'RETIRADA' }, os: null, itens: [] });
-    const prazo = l.find(x => x.rotulo === 'Prazo de envio');
-    ok(prazo && /atendimento/i.test(prazo.valor), 'sem prazo, a linha diz o que fazer', prazo);
+    const l = linhasDoEnvio({ pedido: { frete_escolhido: 'RETIRADA' }, frete: null, os: null, itens: [] });
+    ['Prazo de produção', 'Prazo de envio'].forEach(r => {
+        const linha = l.find(x => x.rotulo === r);
+        ok(linha && /atendimento/i.test(linha.valor), 'sem ' + r + ', a linha diz o que fazer', linha);
+    });
+})();
+
+(function aFormaDeEnvioCaiNaCotacaoQuandoOPedidoNaoDiz() {
+    // `cotacao_frete.servico` tem nomes que `frete_escolhido` nao tem --
+    // "Frete Incluso", "Sem custo", "Transportadora Parceira". Dizer
+    // "A combinar" com uma cotacao escolhida na mao esconderia do cliente o que
+    // ja esta decidido.
+    const l = linhasDoEnvio({
+        pedido: { frete_escolhido: null, valor_frete: '0.00' },
+        frete: { servico: 'Frete Incluso', prazo: 'A combinar' },
+        os: null, itens: []
+    });
+    ok(l[0].valor.indexOf('Frete Incluso') === 0, 'o nome vem da cotacao', l[0].valor);
 })();
 
 (function oRastreioSoApareceQuandoExiste() {

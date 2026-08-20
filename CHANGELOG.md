@@ -4,7 +4,51 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v656** — 2026-08-20 | Agente **1.2.151**
+## Versão atual: **v657** — 2026-08-20 | Agente **1.2.152**
+
+---
+
+## [v657 — 2026-08-20] — A aba de Entrega mostra os dois prazos
+
+**Prazo de produção e prazo de envio são coisas diferentes, e agora aparecem separados.**
+Até a v656 a aba mostrava uma linha só, "Prazo de envio", com a data de
+`propostas_os.data_termino`. O usuário definiu o que o cliente precisa ver:
+
+| linha | origem | regra |
+|---|---|---|
+| **Prazo de produção** | `produtos.prazo`, pelos itens do pedido | o do produto que **demora mais** — a gráfica só despacha quando o último item fica pronto |
+| **Prazo de envio** | `cotacao_frete.prazo` da cotação escolhida | o que a transportadora prometeu |
+
+Somados num número só, ninguém saberia qual dos dois atrasou quando o pedido atrasar.
+
+**O prazo de envio nunca existiu em `propostas`.** Ela guarda o nome e o valor do frete, e
+não o prazo — ele mora em `cotacao_frete`, na linha marcada como `escolhido`. São 2.164
+pedidos com uma. A função `link_cliente_pedido` passou a devolvê-la, ordenando por
+`created_at DESC`: um pedido pode ter mais de uma linha escolhida ao longo do tempo, porque
+a expedição recota quando o peso ou o endereço mudam.
+
+**A produção se compara pelo número, e não pelo texto.** O catálogo tem cinco redações para
+a mesma coisa: "3 dias úteis" em 50 produtos, "1 dia útil" em 7, "2 dias úteis" em 3, mais
+"Prazo de produção 2 dias úteis" e "Produção: 1 dia útil + Frete". Um pedido com uma pulseira
+de 1 dia e uma credencial de 3 mostra **3 dias úteis**.
+
+**O prazo de envio passa inteiro, sem reescrita.** "A combinar" (1.274 cotações), "1 dia
+útil" (227), "Imediato", "Sob consulta", "De 12 até 48hs ( consultar )", "dia seguinte a
+conclusão" — reescrever qualquer uma dessas seria inventar uma promessa de entrega que a
+gráfica não fez. A única correção é o número solto: 30 cotações do SEDEX gravam só `1`, e
+outras 227 gravam `1 dia útil`; é a mesma coisa com a unidade perdida, e um "1" sozinho na
+tela do cliente não diz nada.
+
+**A forma de envio ganhou a cotação como reserva.** `cotacao_frete.servico` tem nomes que
+`propostas.frete_escolhido` não tem — "Frete Incluso", "Sem custo", "Transportadora
+Parceira". Dizer "A combinar" com uma cotação escolhida na mão esconderia do cliente o que
+já está decidido.
+
+`propostas_os.data_termino` **saiu desta aba**. Ela continua sendo o Prazo de Entrega do
+Painel de Produção; o que o cliente vê agora são os dois prazos acima.
+
+**Testes:** `tests/portal_dados_harness.js` (53 verificações) e
+`tests/portal_confirmacoes_harness.js` (28).
 
 ---
 

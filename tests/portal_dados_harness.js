@@ -55,7 +55,8 @@ function carregar(nome, dependencias) {
 
 const emReal = carregar('emReal');
 const rotuloDoFrete = carregar('rotuloDoFrete', ['NOME_DO_FRETE', 'emReal']);
-const prazoDeEnvio = carregar('prazoDeEnvio');
+const prazoDeProducao = carregar('prazoDeProducao', ['diasDoPrazo', 'emDiasUteis']);
+const prazoDoFrete = carregar('prazoDoFrete', ['emDiasUteis']);
 const enderecoEmLinhas = carregar('enderecoEmLinhas');
 const linkDeRastreio = carregar('linkDeRastreio');
 
@@ -116,39 +117,66 @@ const linkDeRastreio = carregar('linkDeRastreio');
     ok(rotuloDoFrete(null) === 'A combinar', 'sem pedido nenhum nao quebra');
 })();
 
-// ─── 3. Prazo de envio ───────────────────────────────────────────────────────
+// ─── 3. Os dois prazos ───────────────────────────────────────────────────────
 //
-// A data do parceiro vence o prazo do produto: `propostas_os.data_termino` e o
-// campo real do Prazo de Entrega, o mesmo que o Painel de Producao usa.
+// O usuario definiu em 20/08/2026: a aba de entrega mostra PRAZO DE PRODUCAO e
+// PRAZO DE ENVIO, e nao um so.
+//
+// O de producao e independente para cada produto, e o do pedido e o do produto
+// de MAIOR prazo -- a grafica so despacha quando o ultimo item fica pronto.
+// O de envio e o que a transportadora prometeu na cotacao escolhida.
 
-(function aDataDoParceiroVence() {
-    ok(prazoDeEnvio({ data_termino: '2026-08-21T00:00:00' }, [{ prazo: '1 dia util' }]) === '21/08/2026',
-        'a data ganha do texto do produto',
-        prazoDeEnvio({ data_termino: '2026-08-21T00:00:00' }, [{ prazo: '1 dia util' }]));
+(function aProducaoSegueOProdutoMaisDemorado() {
+    ok(prazoDeProducao([{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }, { prazo: '2 dias úteis' }])
+        === '3 dias úteis', 'o maior manda',
+        prazoDeProducao([{ prazo: '1 dia útil' }, { prazo: '3 dias úteis' }]));
+    ok(prazoDeProducao([{ prazo: '1 dia útil' }]) === '1 dia útil', 'um produto so');
+    ok(prazoDeProducao([{ prazo: '1 dia útil' }, { prazo: '1 dia útil' }]) === '1 dia útil',
+        'dois iguais nao viram dois dias');
 })();
 
-(function dataPuraNaoAndaUmDiaParaTras() {
-    // `2026-08-21` sem hora o JavaScript le como meia-noite UTC -- que no Brasil
-    // e 21h do dia 20. O pedido apareceria vencendo um dia antes.
-    ok(prazoDeEnvio({ data_termino: '2026-08-21' }, []) === '21/08/2026',
-        'data sem hora', prazoDeEnvio({ data_termino: '2026-08-21' }, []));
+(function oNumeroEExtraidoDeQualquerRedacao() {
+    // As cinco redacoes que existem no catalogo, medidas em 20/08/2026:
+    // "3 dias uteis" (50 produtos), "1 dia util" (7), "2 dias uteis" (3),
+    // "Prazo de producao 2 dias uteis" (1), "Producao: 1 dia util + Frete" (1).
+    ok(prazoDeProducao([{ prazo: 'Produção: 1 dia útil + Frete' }]) === '1 dia útil',
+        'a redacao com prefixo e sufixo', prazoDeProducao([{ prazo: 'Produção: 1 dia útil + Frete' }]));
+    ok(prazoDeProducao([{ prazo: 'Prazo de produção 2 dias úteis' }]) === '2 dias úteis',
+        'a redacao com prefixo');
+    ok(prazoDeProducao([{ prazo: 'Produção: 1 dia útil + Frete' }, { prazo: '3 dias úteis' }])
+        === '3 dias úteis', 'redacoes diferentes se comparam pelo numero');
 })();
 
-(function semDataCaiNoPrazoDoProduto() {
-    // `propostas_os` e tabela nova do parceiro: 23 linhas em 20/08/2026, para
-    // 8.263 propostas. A maioria dos pedidos nao tem data.
-    ok(prazoDeEnvio(null, [{ prazo: 'Produção: 1 dia útil + Frete' }]) === 'Produção: 1 dia útil + Frete',
-        'sem linha de OS');
-    ok(prazoDeEnvio({ data_termino: null }, [{ prazo: '2 dias úteis' }]) === '2 dias úteis',
-        'linha de OS sem data');
+(function prazoSemNumeroNaoSeInventa() {
+    // Texto que nao traz numero passa inteiro: melhor a frase do catalogo do que
+    // um numero que ninguem escreveu.
+    ok(prazoDeProducao([{ prazo: 'Sob consulta' }]) === 'Sob consulta', 'texto puro');
+    ok(prazoDeProducao([]) === null, 'sem itens');
+    ok(prazoDeProducao([{ prazo: '' }]) === null, 'prazo vazio nao e prazo');
+    ok(prazoDeProducao(null) === null, 'nulo nao quebra');
 })();
 
-(function semPrazoNenhumDevolveNulo() {
-    // Nulo e o que deixa a tela dizer "combinado com seu atendimento", em vez
-    // de imprimir "undefined" na frente do cliente.
-    ok(prazoDeEnvio(null, []) === null, 'nada de nada');
-    ok(prazoDeEnvio(null, [{ prazo: '' }]) === null, 'prazo vazio nao e prazo');
-    ok(prazoDeEnvio({ data_termino: 'nao-e-data' }, []) === null, 'data invalida nao vira NaN/NaN/NaN');
+(function oEnvioVemDaCotacaoEscolhida() {
+    ok(prazoDoFrete({ prazo: '1 dia útil' }) === '1 dia útil', 'o texto da cotacao');
+    ok(prazoDoFrete({ prazo: 'Sob consulta' }) === 'Sob consulta', 'e quando nao ha promessa, diz isso');
+    ok(prazoDoFrete({ prazo: 'A combinar' }) === 'A combinar', 'o caso mais comum do banco');
+    ok(prazoDoFrete({ prazo: 'De 12 até 48hs ( consultar )' }) === 'De 12 até 48hs ( consultar )',
+        'a redacao livre da transportadora passa inteira');
+})();
+
+(function numeroSoltoGanhaAUnidade() {
+    // 30 cotacoes do SEDEX gravam so "1", e outras 227 gravam "1 dia util" --
+    // e a mesma coisa com a unidade perdida. Um "1" sozinho na tela do cliente
+    // nao diz nada.
+    ok(prazoDoFrete({ prazo: '1' }) === '1 dia útil', 'um', prazoDoFrete({ prazo: '1' }));
+    ok(prazoDoFrete({ prazo: '4' }) === '4 dias úteis', 'quatro');
+    ok(prazoDoFrete({ prazo: ' 2 ' }) === '2 dias úteis', 'com espaco em volta');
+})();
+
+(function semCotacaoNaoInventaPrazo() {
+    ok(prazoDoFrete(null) === null, 'pedido sem cotacao escolhida');
+    ok(prazoDoFrete({ prazo: null }) === null, 'cotacao sem prazo');
+    ok(prazoDoFrete({ prazo: '   ' }) === null, 'so espaco');
 })();
 
 // ─── 4. Endereco ─────────────────────────────────────────────────────────────

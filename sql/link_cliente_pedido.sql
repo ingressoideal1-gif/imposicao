@@ -73,6 +73,7 @@ DECLARE
     v_end      enderecos%ROWTYPE;
     v_os       propostas_os%ROWTYPE;
     v_arte     pedidos_artes%ROWTYPE;
+    v_frete    cotacao_frete%ROWTYPE;
     v_itens    jsonb;
 BEGIN
     -- O par inteiro, e `ativo`: um link revogado tem de parar de abrir.
@@ -134,6 +135,19 @@ BEGIN
     SELECT a.* INTO v_arte
       FROM pedidos_artes a
      WHERE a.id_int = v_num
+     LIMIT 1;
+
+    -- A cotação de frete que o cliente ESCOLHEU. É dela que sai o prazo de
+    -- envio: `propostas` guarda o nome e o valor do frete, mas não o prazo.
+    --
+    -- `created_at DESC` porque um pedido pode ter mais de uma linha marcada
+    -- como escolhida ao longo do tempo -- a expedição recota quando o peso ou o
+    -- endereço mudam (ver `expedicao_recotacoes`). Vale a última.
+    SELECT c.* INTO v_frete
+      FROM cotacao_frete c
+     WHERE c.id_int = v_num
+       AND c.escolhido IS TRUE
+     ORDER BY c.created_at DESC
      LIMIT 1;
 
     -- O prazo por produto ("1 dia útil") mora no catálogo, e não no item do
@@ -201,6 +215,11 @@ BEGIN
             'link_pagamento',      v_os.link_pagamento,
             'forma_pagamento',     v_os.forma_pagamento,
             'status_pagamento',    v_os.status_pagamento
+        ) END,
+        'frete', CASE WHEN v_frete.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'servico', v_frete.servico,
+            'prazo',   v_frete.prazo,
+            'valor',   v_frete.valor
         ) END,
         'entrega', jsonb_build_object(
             'entrega_dados', v_arte.entrega_dados,

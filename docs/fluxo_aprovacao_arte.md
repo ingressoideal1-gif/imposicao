@@ -128,7 +128,7 @@ próximo salvamento do modelo.
 | aba | arquivo | fonte dos dados |
 |---|---|---|
 | 🎨 Arte | `cliente.js` (`desenharSecaoArte`) | `pedidos_modelos` + catálogos |
-| 📦 Entrega | `cliente-entrega.js` | `enderecos`, `propostas`, `propostas_os`, `produtos.prazo` |
+| 📦 Entrega | `cliente-entrega.js` | `enderecos`, `propostas`, `propostas_os`, `produtos.prazo`, `cotacao_frete` |
 | 🧾 Nota | `cliente-faturamento.js` | `clientes` (cinco campos) |
 | 💰 Orçamento | `cliente-orcamento.js` | `propostas.texto_whatsapp`, com `produtos_proposta` de reserva |
 | 💳 Pagar | `cliente-pagamento.js` | `propostas_os.link_pagamento` |
@@ -176,6 +176,37 @@ Não precisou coluna nova: `observacoes` é `jsonb`. O selo continua sendo um s�
 O painel (`loadDadosEntregaInterno`) mostra as três, e as duas novas vêm
 rotuladas — antes o atendente recebia um texto onde os dois assuntos se
 misturavam.
+
+### Os dois prazos da aba de Entrega
+
+Por decisão do usuário em 20/08/2026, a aba mostra **prazo de produção** e
+**prazo de envio** separados, e não um só. São duas coisas diferentes, com duas
+origens diferentes — somadas num número só, ninguém saberia qual das duas
+atrasou quando o pedido atrasa.
+
+| linha | origem | regra |
+|---|---|---|
+| Prazo de produção | `produtos.prazo`, pelos itens do pedido | o do produto que demora MAIS: a gráfica só despacha quando o último item fica pronto |
+| Prazo de envio | `cotacao_frete.prazo` da linha `escolhido` | o que a transportadora prometeu, passado como está |
+
+A comparação da produção é feita pelo **número**, e não pelo texto: o catálogo
+tem cinco redações para a mesma coisa — "3 dias úteis" (50 produtos), "1 dia
+útil" (7), "2 dias úteis" (3), "Prazo de produção 2 dias úteis" e "Produção: 1
+dia útil + Frete" (um cada).
+
+O prazo de envio passa **inteiro**, sem reescrita: "A combinar" (1.274 cotações),
+"1 dia útil" (227), "Imediato", "Sob consulta", "De 12 até 48hs ( consultar )",
+"dia seguinte a conclusão". Reescrever qualquer uma dessas seria inventar uma
+promessa de entrega que a gráfica não fez. A única correção é o número solto: 30
+cotações do SEDEX gravam só `1`, e outras 227 gravam `1 dia útil` — é a mesma
+coisa com a unidade perdida.
+
+> [!NOTE]
+> `propostas_os.data_termino` **não aparece mais** nesta aba. Ela continua sendo
+> o Prazo de Entrega do Painel de Produção; o que o cliente vê agora são os dois
+> prazos acima, que é o que ele perguntaria ao atendimento.
+
+---
 
 ### O que o Orçamento mostra, e por quê
 
@@ -394,7 +425,7 @@ existir antes das abas, que se registram ao serem lidas).
 
 | arquivo | o que contém |
 |---|---|
-| `cliente-dados.js` | `carregarPortal` (a RPC), `emReal`, `rotuloDoFrete`, `prazoDeEnvio`, `enderecoEmLinhas`, `linkDeRastreio` |
+| `cliente-dados.js` | `carregarPortal` (a RPC), `emReal`, `rotuloDoFrete`, `prazoDeProducao`, `prazoDoFrete`, `enderecoEmLinhas`, `linkDeRastreio` |
 | `cliente-shell.js` | `seloDoStatus`, `abrirSecao`, `registrarSecao`, `redesenharSecao`, `montarPortal` |
 | `cliente-confirmacoes.js` | `cartaoDeDecisao`, `cartaoDeFinalizacao`, `decidirDados`, `salvarCorrecaoDeDados`, `finalizarNoPortal` |
 | `cliente-entrega.js` | `desenharSecaoEntrega`, `linhasDoEnvio`, `cartaoDeLinhas` |
