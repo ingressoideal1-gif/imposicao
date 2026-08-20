@@ -25226,7 +25226,25 @@ async function loadDadosEntregaInterno(osId, osNum) {
                 try { obs = JSON.parse(obs); } catch(e) {}
             }
             if (typeof obs === 'object' && obs) {
-                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao_cliente || '';
+                // TRÊS chaves, e não uma.
+                //
+                // Desde 20/08/2026 a página do cliente tem uma decisão para a
+                // ENTREGA e outra para o FATURAMENTO — antes era um cartão só,
+                // e o atendente recebia um texto onde os dois assuntos se
+                // misturavam. Cada uma grava a sua chave, e elas aparecem aqui
+                // ROTULADAS, para ele saber do que o cliente está falando.
+                //
+                // `correcao_entrega_faturamento` continua sendo lida porque é a
+                // chave dos pedidos que já estavam gravados: tirá-la daqui
+                // apagaria da tela solicitações que já existem no banco.
+                const partes = [];
+                if (obs.correcao_entrega) partes.push('📦 ENTREGA: ' + obs.correcao_entrega);
+                if (obs.correcao_faturamento) partes.push('🧾 FATURAMENTO: ' + obs.correcao_faturamento);
+                if (partes.length) {
+                    correcaoTexto = partes.join('\n\n');
+                } else {
+                    correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao_cliente || '';
+                }
                 if (correcaoTexto && typeof correcaoTexto === 'string' && (correcaoTexto.includes('Engine') || correcaoTexto.includes('Motivo Técnico'))) {
                     correcaoTexto = '';
                 }

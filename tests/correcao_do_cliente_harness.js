@@ -16,6 +16,7 @@ const path = require('path');
 const RAIZ = path.dirname(__dirname);
 const CLIENTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+const CONFIRMACOES = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-confirmacoes.js'), 'utf8');
 
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
@@ -204,31 +205,34 @@ function montar(linhas, erros) {
     ok(/\.insert\(/.test(fn), 'gravarCorrecaoDoCliente sabe inserir a linha que falta');
     ok(/\.select\(/.test(fn), 'e pede as linhas afetadas de volta');
 
-    // O botao "Salvar Correcao" tem de gravar de verdade, e nao so pintar a tela.
-    const i = CLIENTE.indexOf('window.salvarCorrecaoTexto');
-    const salvar = CLIENTE.slice(i, CLIENTE.indexOf('\n};', i));
+    // O botao "Salvar Correcao" tem de gravar de verdade, e nao so pintar a
+    // tela. Ele mora no `cliente-confirmacoes.js` desde 20/08/2026, quando
+    // entrega e faturamento viraram duas abas do Portal do Pedido com uma
+    // decisao cada.
+    const i = CONFIRMACOES.indexOf('window.salvarCorrecaoDeDados');
+    const salvar = CONFIRMACOES.slice(i, CONFIRMACOES.indexOf('\n};', i));
     ok(/gravarCorrecaoDoCliente/.test(salvar),
         'o botao "Salvar Correcao" grava no banco, nao so numa variavel da tela');
 
-    // Falhar ao gravar nao pode prender o cliente na tela: sem `geralCorrecao`
-    // o botao de finalizar fica desligado e ele nao tem saida.
-    const trechoDaFalha = salvar.slice(salvar.indexOf('if (!gravacao.ok)'));
-    const fimDoIf = trechoDaFalha.indexOf('\n    }');
-    ok(fimDoIf > 0 && trechoDaFalha.slice(0, fimDoIf).indexOf('return') < 0,
-        'falha ao gravar NAO prende o cliente (nada de return no meio do fluxo)');
-    ok(/gravacao\.ok \?/.test(salvar),
-        'e a etiqueta na tela diz a verdade sobre ter salvo ou nao');
+    // Falhar ao gravar nao pode prender o cliente na tela: ele precisa poder
+    // finalizar assim mesmo, sabendo que aquele texto nao entrou.
+    ok(salvar.indexOf('return') === salvar.lastIndexOf('return'),
+        'falha ao gravar NAO prende o cliente (o unico return e o do campo vazio)');
+    ok(/gravacao\.ok\s*$|gravacao\.ok\s*\?/m.test(salvar),
+        'e o recibo na tela diz a verdade sobre ter salvo ou nao');
 
     // O botao final tem de avisar quem nao conseguiu gravar, com a saida.
-    const finalizar = CLIENTE.slice(CLIENTE.indexOf('window.finalizarConfirmacaoCliente'));
-    ok(/if \(!gravacao\.ok\)[\s\S]{0,400}mostrarResultadoCliente/.test(finalizar),
-        'o botao final avisa o cliente quando a solicitacao nao foi gravada');
+    const finalizar = CONFIRMACOES.slice(CONFIRMACOES.indexOf('window.finalizarNoPortal'));
+    ok(/if \(!gravacao\.ok\)[\s\S]{0,400}avisoDeFinalizacao/.test(finalizar),
+        'o botao final avisa o cliente quando a conferencia nao foi gravada');
+    ok(/entre em contato[\s\S]{0,200}atendente/i.test(finalizar),
+        'e diz o que fazer -- nenhuma trava deste projeto fica sem saida');
 
     // O chat do parceiro so aceita `autor_nome`; `remetente_nome` nao existe la
     // e derruba a linha inteira.
-    ok(!/remetente_nome:/.test(CLIENTE),
-        'cliente.js nao manda mais `remetente_nome` para propostas_chat');
-    ok(/error: erroChat/.test(CLIENTE),
+    ok(!/remetente_nome:/.test(CLIENTE + CONFIRMACOES),
+        'a pagina do cliente nao manda mais `remetente_nome` para propostas_chat');
+    ok(/error: erroChat/.test(CONFIRMACOES),
         'e olha o erro do chat em vez de engolir (o supabase-js nao lanca)');
 })();
 

@@ -47,6 +47,20 @@ const FUNCAO = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
         'e o texto e a chave que a tela do cliente grava');
 })();
 
+(function asTresChavesDeCorrecaoSaoLidas() {
+    // Desde 20/08/2026 o cliente decide a ENTREGA e o FATURAMENTO em abas
+    // separadas, e cada uma grava a sua chave. A chave antiga continua sendo
+    // lida porque e a que existe nos pedidos ja gravados -- tira-la daqui
+    // apagaria da tela solicitacoes que estao no banco.
+    ok(/obs\.correcao_entrega\)/.test(FUNCAO), 'le a correcao da entrega');
+    ok(/obs\.correcao_faturamento/.test(FUNCAO), 'le a do faturamento');
+    ok(/obs\.correcao_entrega_faturamento/.test(FUNCAO), 'e a da forma antiga');
+    // Rotuladas: um texto solto obrigaria o atendente a adivinhar se o cliente
+    // falava do endereco ou do CNPJ.
+    ok(/ENTREGA: /.test(FUNCAO) && /FATURAMENTO: /.test(FUNCAO),
+        'e as duas aparecem rotuladas');
+})();
+
 (function aCaixaNaoLeMaisOChatDoParceiro() {
     // A regressao que este teste guarda tem cara de melhoria: alguem sem o
     // contexto le "se nao achou o texto, procura no chat" e acha razoavel.
