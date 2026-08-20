@@ -19530,6 +19530,7 @@ async function loadOrdens() {
         const promises = [
             carregarArtesGlobais(),
             carregarLinksExistentes(),
+            carregarTemposNoCard(),
             loadUsuarios()
         ];
         
@@ -21809,6 +21810,235 @@ function pedidoEstaEmArte(os) {
 }
 window.pedidoEstaEmArte = pedidoEstaEmArte;
 
+// ──── Há quanto tempo o pedido está no card ───────────────────────────────
+//
+// A coluna "Data Liberação" da Lista de Arte virou "Tempo": ela mostra há
+// quanto tempo o pedido está no card em que está, e pinta o número conforme
+// esse tempo cresce. O de maior tempo assume o topo da lista.
+//
+// O card é calculado, mas o RELÓGIO precisa de memória — quando ele entrou ali.
+// Essa memória é a tabela `imposition_tempo_no_card`, uma linha por pedido, que
+// o próprio painel escreve quando percebe a troca. Foi a opção escolhida pelo
+// usuário contra um robô no servidor: o robô seria fiel ao relógio real mesmo
+// com todos os painéis fechados, mas exigiria uma segunda cópia da regra de
+// classificação, em SQL, que divergiria desta no primeiro ajuste.
+//
+// A consequência, conhecida e aceita: troca que acontece de madrugada só é
+// registrada quando alguém abre o painel de manhã, e o tempo conta dali.
+
+const TEMPO_AZUL_SEG = 1 * 3600;
+const TEMPO_LARANJA_SEG = 2 * 3600;
+const TEMPO_VERMELHO_SEG = 3 * 3600;
+
+// A ida rápida a outro card não apaga o tempo de arte: até este limite, a volta
+// devolve o cronômetro de onde parou.
+const TEMPO_VOLTA_SEM_PERDER_SEG = 60 * 60;
+
+/** Lê a memória dos relógios. Sem a tabela, a coluna degrada para "--". */
+async function carregarTemposNoCard() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (!state.temposNoCard) state.temposNoCard = {};
+    try {
+        const { data, error } = await supabaseClient
+            .from('imposition_tempo_no_card')
+            .select('id_int, card, desde, credito_segundos, saiu_da_fila_em');
+        if (error) {
+            if (error.code === '42P01') { state.temposNoCardAtivo = false; return; }
+            throw error;
+        }
+        (data || []).forEach(row => { state.temposNoCard[row.id_int] = row; });
+        state.temposNoCardAtivo = true;
+        console.log(`[Tempo] ${(data || []).length} relogio(s) de card carregado(s).`);
+    } catch (e) {
+        state.temposNoCardAtivo = false;
+        console.warn('[Tempo] Erro ao carregar os tempos de card:', e.message);
+    }
+}
+
+/**
+ * Confere o card de cada pedido contra o que está gravado e registra as trocas.
+ *
+ * A memória local é atualizada na hora, antes de o banco responder: quem está
+ * olhando a tela vê o relógio zerar no mesmo desenho em que o pedido mudou de
+ * card. A escrita vai atrás, em lote e sem travar o desenho.
+ */
+function anotarTempoNoCard(ordens) {
+    if (!state.temposNoCardAtivo) return;
+    if (!state.temposNoCard) state.temposNoCard = {};
+
+    const agora = Date.now();
+    const paraGravar = [];
+
+    (ordens || []).forEach(os => {
+        const num = parseInt(os.numero);
+        if (!num || !os._fila_arte) return;
+
+        const reg = state.temposNoCard[num];
+
+        // Pedido nunca visto: o relógio começa agora. Vale para todos os que já
+        // existem hoje — não há histórico de onde tirar um começo melhor.
+        if (!reg) {
+            const novo = {
+                id_int: num,
+                card: os._fila_arte,
+                desde: new Date(agora).toISOString(),
+                credito_segundos: 0,
+                saiu_da_fila_em: null,
+            };
+            state.temposNoCard[num] = novo;
+            paraGravar.push(novo);
+            return;
+        }
+
+        if (reg.card === os._fila_arte) return;
+
+        const novo = {
+            id_int: num,
+            card: os._fila_arte,
+            desde: new Date(agora).toISOString(),
+            // Entre dois cards fora da arte o crédito não se gasta: ele segue
+            // pendurado, esperando a volta. O que conta para a regra dos 60
+            // minutos é há quanto tempo o pedido saiu DA ARTE, e não do card
+            // anterior — ele pode passear por dois antes de voltar.
+            credito_segundos: reg.credito_segundos || 0,
+            saiu_da_fila_em: reg.saiu_da_fila_em || null,
+        };
+
+        if (reg.card === 'fila') {
+            // Saindo da arte: o cronômetro pausa, e o que ele marcava fica
+            // guardado à espera de uma volta rápida.
+            const corridos = Math.max(0, Math.floor((agora - new Date(reg.desde).getTime()) / 1000));
+            novo.credito_segundos = (reg.credito_segundos || 0) + corridos;
+            novo.saiu_da_fila_em = new Date(agora).toISOString();
+        } else if (os._fila_arte === 'fila') {
+            // Voltando para a arte: devolve o crédito só se a ida foi curta.
+            const fora = reg.saiu_da_fila_em
+                ? (agora - new Date(reg.saiu_da_fila_em).getTime()) / 1000
+                : Infinity;
+            novo.credito_segundos = fora <= TEMPO_VOLTA_SEM_PERDER_SEG ? (reg.credito_segundos || 0) : 0;
+        }
+
+        state.temposNoCard[num] = novo;
+        paraGravar.push(novo);
+    });
+
+    if (paraGravar.length) gravarTemposNoCard(paraGravar);
+}
+
+let _gravandoTempos = false;
+
+/** Manda as trocas para o banco. Falha aqui não pode derrubar a lista. */
+async function gravarTemposNoCard(linhas) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (_gravandoTempos) return;   // a próxima renderização tenta de novo
+    _gravandoTempos = true;
+    try {
+        const { error } = await supabaseClient
+            .from('imposition_tempo_no_card')
+            .upsert(linhas.map(l => Object.assign({}, l, { atualizado_em: new Date().toISOString() })),
+                    { onConflict: 'id_int' });
+        if (error) {
+            if (error.code === '42P01') state.temposNoCardAtivo = false;
+            throw error;
+        }
+    } catch (e) {
+        console.warn('[Tempo] Erro ao gravar troca de card:', e.message);
+    } finally {
+        _gravandoTempos = false;
+    }
+}
+
+/**
+ * O instante a partir do qual o tempo é contado, em milissegundos.
+ *
+ * O crédito guardado é descontado do começo em vez de somado ao total: assim um
+ * número só — este — serve para desenhar, para o relógio andar sozinho e para
+ * ordenar a lista.
+ */
+function inicioDoTempoNoCard(os) {
+    const reg = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
+    if (!reg || !reg.desde) return null;
+    const desde = new Date(reg.desde).getTime();
+    if (!isFinite(desde)) return null;
+    const credito = (reg.card === 'fila' ? (reg.credito_segundos || 0) : 0) * 1000;
+    return desde - credito;
+}
+window.inicioDoTempoNoCard = inicioDoTempoNoCard;
+
+/** "01:05". Passando de um dia continua em horas ("26:30"), sem virar "2d 2h". */
+function formatarTempoNoCard(segundos) {
+    const s = Math.max(0, Math.floor(segundos || 0));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+window.formatarTempoNoCard = formatarTempoNoCard;
+
+/** Verde até 1h, azul até 2h, laranja até 3h, vermelho depois. */
+function corDoTempoNoCard(segundos) {
+    const s = Math.max(0, Math.floor(segundos || 0));
+    if (s >= TEMPO_VERMELHO_SEG) return '#ef4444';
+    if (s >= TEMPO_LARANJA_SEG) return '#f97316';
+    if (s >= TEMPO_AZUL_SEG) return '#3b82f6';
+    return '#22c55e';
+}
+window.corDoTempoNoCard = corDoTempoNoCard;
+
+const NOME_DO_CARD = {
+    fila: 'Em Arte',
+    aprovacao: 'Fila de Aprovação',
+    aprovados: 'Fila de Aprovados',
+    concluidos: 'Pedidos Concluídos',
+};
+
+/** A célula da coluna Tempo, com as duas datas guardadas no título. */
+function celulaDeTempoHtml(os) {
+    const datas = [];
+    if (os.data_liberacao) datas.push('Liberação: ' + formatDateTime(os.data_liberacao));
+    if (os.data_pedido) datas.push('Pedido: ' + formatDateTime(os.data_pedido));
+
+    const inicio = inicioDoTempoNoCard(os);
+    if (inicio === null) {
+        const semRelogio = datas.concat(['(o tempo começa a contar no próximo desenho da lista)']).join('  •  ');
+        return `<td style="text-align: center; vertical-align: middle; font-size: 0.82rem; color: var(--text-dim);" title="${escapeHtml(semRelogio)}">--</td>`;
+    }
+
+    const reg = state.temposNoCard[parseInt(os.numero)];
+    const segundos = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
+    const titulo = datas.concat([
+        'Em "' + (NOME_DO_CARD[reg.card] || reg.card) + '" desde ' + formatDateTime(reg.desde),
+    ]).join('  •  ');
+
+    return `<td class="celula-tempo" data-tempo-inicio="${inicio}"
+                style="text-align: center; vertical-align: middle; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; color: ${corDoTempoNoCard(segundos)};"
+                title="${escapeHtml(titulo)}">${formatarTempoNoCard(segundos)}</td>`;
+}
+
+/**
+ * Faz os relógios da lista andarem sem redesenhar a tabela.
+ *
+ * Redesenhar por causa do relógio fecharia menu aberto e perderia rolagem a cada
+ * meio minuto. A ordem das linhas não muda entre desenhos: todos os relógios
+ * andam no mesmo passo, e só uma troca de card reordena a lista.
+ */
+function atualizarRelogiosDaLista() {
+    document.querySelectorAll('td.celula-tempo[data-tempo-inicio]').forEach(el => {
+        const inicio = parseInt(el.getAttribute('data-tempo-inicio'), 10);
+        if (!isFinite(inicio)) return;
+        const segundos = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
+        el.textContent = formatarTempoNoCard(segundos);
+        el.style.color = corDoTempoNoCard(segundos);
+    });
+}
+window.atualizarRelogiosDaLista = atualizarRelogiosDaLista;
+
+let _relogioDaListaLigado = false;
+function ligarRelogioDaLista() {
+    if (_relogioDaListaLigado) return;
+    _relogioDaListaLigado = true;
+    setInterval(atualizarRelogiosDaLista, 30000);
+}
+
 // ---- O preview da arte de um pedido -------------------------------------
 //
 // A miniatura da arte do modelo de numero mais baixo. Nasceu no Painel de
@@ -22013,12 +22243,18 @@ function renderOrdens() {
         // Impressão usa esse campo para o badge — inclusive nos que já saíram
         // da arte.
         os.status_calculado = c.statusCalculado;
+        os._fila_arte = c.fila;
 
         if (c.fila === 'concluidos') ordensConcluidosArte.push(os);
         else if (c.fila === 'aprovados') ordensAprovados.push(os);
         else if (c.fila === 'aprovacao') ordensAprovacao.push(os);
         else ordensFilaArte.push(os);
     });
+
+    // Antes de qualquer desenho: quem trocou de card tem o relógio reiniciado
+    // aqui, e a ordenação logo abaixo já usa o valor novo.
+    anotarTempoNoCard(state.ordens);
+    ligarRelogioDaLista();
 
     // --- Calcular Estatísticas dos Cards KPI ---
     const ordensTodos = [...ordensFilaArte, ...ordensAprovacao];
@@ -22185,6 +22421,21 @@ function renderOrdens() {
 
 
         return true;
+    });
+
+    // O pedido de MAIOR tempo no card assume o topo — pedido do usuário em
+    // 19/08/2026. Ordena pelo instante de início: quanto mais antigo, mais
+    // tempo. Pedido ainda sem relógio (a tabela não existe, ou é a primeira vez
+    // que ele aparece) vai para o fim, e o desempate continua sendo o número
+    // maior primeiro, que era a ordem da lista até aqui.
+    filteredArte = filteredArte.slice().sort((a, b) => {
+        const ia = inicioDoTempoNoCard(a);
+        const ib = inicioDoTempoNoCard(b);
+        if (ia === null && ib === null) return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+        if (ia === null) return 1;
+        if (ib === null) return -1;
+        if (ia !== ib) return ia - ib;
+        return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
     });
 
     // Atualizar badges da navegação lateral
@@ -22365,7 +22616,6 @@ function renderOrdens() {
                 }
 
 
-                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 
                 // Progresso das artes
                 const osNumeroInt = parseInt(os.numero);
@@ -22448,10 +22698,7 @@ function renderOrdens() {
                             <strong style="color: white;">${escapeHtml(os.vendedor) || '--'}</strong>${nomeDesignerHtml}
                         </td>
                         <td style="text-align: center; vertical-align: middle;">${previewDaArteDoPedidoHtml(os)}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">
-                            ${formatDateTime(os.data_liberacao)}
-                            ${dataPedFormatada}
-                        </td>
+                        ${celulaDeTempoHtml(os)}
                         <td style="text-align: center; vertical-align: middle;">${entregaHtml}</td>
                         <td style="text-align: center;">
                             ${getStatusBadge(os.status_calculado || os.status)}

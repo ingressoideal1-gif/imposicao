@@ -137,7 +137,7 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
 
 // ─── 4. A coluna Preview, igual a do Painel de Producao ──────────────────────
 
-(function aColunaPreviewEntrouEntreVendedorEData() {
+(function aColunaPreviewEntrouEntreVendedorETempo() {
     ['index.html', 'producao.html'].forEach(arq => {
         const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', arq), 'utf8');
         const iTabela = HTML.indexOf('id="table-arte"');
@@ -146,11 +146,12 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
         const cabecalho = HTML.slice(iTabela, HTML.indexOf('</thead>', iTabela));
         const iVendedor = cabecalho.indexOf('Vendedor / Designer');
         const iPreview = cabecalho.indexOf('Preview');
-        const iData = cabecalho.indexOf('Data Libera');
+        const iTempo = cabecalho.indexOf('>Tempo<');
 
         ok(iPreview > 0, arq + ': a coluna Preview existe');
         ok(iVendedor > 0 && iPreview > iVendedor, arq + ': ela vem depois de Vendedor');
-        ok(iData > 0 && iPreview < iData, arq + ': e antes de Data Liberacao');
+        ok(iTempo > 0 && iPreview < iTempo, arq + ': e antes da coluna Tempo');
+        ok(cabecalho.indexOf('Data Libera') < 0, arq + ': a coluna Data Liberacao deu lugar a Tempo');
     });
 })();
 
@@ -161,9 +162,16 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
     const iTabela = HTML.indexOf('id="table-arte"');
     const cabecalho = HTML.slice(iTabela, HTML.indexOf('</thead>', iTabela));
     const ths = (cabecalho.match(/<th[ >]/g) || []).length;
-    const tds = (LINHA.match(/<td[ >]/g) || []).length;
+
+    // A celula do Tempo nao esta escrita na linha: ela vem pronta da
+    // `celulaDeTempoHtml`, que devolve o <td> inteiro (com a cor e o titulo).
+    const literais = (LINHA.match(/<td[ >]/g) || []).length;
+    const daFuncao = LINHA.indexOf('celulaDeTempoHtml(os)') > 0 ? 1 : 0;
+    ok(daFuncao === 1, 'a linha pede a celula de tempo pela funcao');
+
+    const tds = literais + daFuncao;
     ok(ths === tds, 'a linha tem uma celula para cada titulo', 'th=' + ths + ' td=' + tds);
-    ok(ths === 9, 'que sao nove com a Preview no meio', ths);
+    ok(ths === 9, 'que sao nove: Preview e Tempo entre as antigas', ths);
 })();
 
 (function oPreviewDaListaEOMesmoDoPainelDeProducao() {
@@ -177,11 +185,11 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
     const iArte = LINHA.indexOf('previewDaArteDoPedidoHtml(os)');
     ok(iArte > 0, 'a linha da Lista de Arte pede o preview');
 
-    // A celula fica entre a do vendedor e a da data.
+    // A celula fica entre a do vendedor e a do tempo.
     const iVend = LINHA.indexOf('os.vendedor');
-    const iData = LINHA.indexOf('formatDateTime(os.data_liberacao)');
+    const iTempo = LINHA.indexOf('celulaDeTempoHtml(os)');
     ok(iVend > 0 && iArte > iVend, 'depois do vendedor');
-    ok(iData > 0 && iArte < iData, 'e antes da data de liberacao');
+    ok(iTempo > 0 && iArte < iTempo, 'e antes da coluna Tempo');
 })();
 
 (function oQueOPreviewDesenhaEmCadaCaso() {
