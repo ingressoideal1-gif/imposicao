@@ -4,11 +4,11 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v656** — 2026-08-20 | Agente **1.2.150**
+## Versão atual: **v655** — 2026-08-20 | Agente **1.2.150**
 
 ---
 
-## [v656 — 2026-08-20] — O Prazo de Entrega deixa de ser inventado
+## [v655 — 2026-08-20] — O Prazo de Entrega deixa de ser inventado
 
 **A coluna PRAZO ENTREGA do Painel de Produção nunca mostrou um prazo real.**
 `getFallbackPrazo` devolvia a data de criação do pedido mais 3 a 7 dias — os dias escolhidos
@@ -36,7 +36,7 @@ apareceria vencendo um dia antes. A hora é acrescentada antes de converter.
 
 ---
 
-## [v655 — 2026-08-20] — Pedido já embalado sai da Lista de Arte
+## [v655 — 2026-08-20] — Pedido já embalado sai da Lista de Arte *(mesma publicação)*
 
 A Lista de Arte reconhecia só três estados como "saiu da arte": produção, impressão e
 finalizada. Pedido em **acabamento**, em **trânsito**, na **expedição** ou já **impresso**
