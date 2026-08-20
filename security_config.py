@@ -113,6 +113,17 @@ PAINEL_ARQUIVOS = [
     "script.js",
     "pedido.js",
     "cliente.js",
+    # Os sete arquivos do Portal do Pedido (20/08/2026). A pagina do cliente
+    # deixou de ser um funil de aprovacao e virou cinco secoes; cada uma mora no
+    # seu arquivo, e a `cliente.html` carrega todos. Sem eles aqui, a estacao
+    # serviria a pagina antiga -- ou daria 404 em sete scripts de uma vez.
+    "cliente-dados.js",
+    "cliente-shell.js",
+    "cliente-confirmacoes.js",
+    "cliente-entrega.js",
+    "cliente-faturamento.js",
+    "cliente-orcamento.js",
+    "cliente-pagamento.js",
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
     "arte-de-impressao.js",
