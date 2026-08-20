@@ -62,6 +62,33 @@ O banco antigo do Imposition (`atsxtuibeitloosckmlc.supabase.co`) será **descon
 | `producao_modelos_imposicao` | Modelos salvos de imposição | ✅ Criado |
 | `producao_produtos_formatos` | Relacionamento de produtos do ERP aos formatos | ✅ Criado |
 
+## 🖥️ Tabelas do Painel (prefixo `imposition_`)
+
+| Tabela | Descrição | Status |
+|--------|-----------|--------|
+| `imposition_user_permissions` | Permissões por pessoa (uma coluna por permissão) | ✅ Criado |
+| `imposition_acessos_locais` | Códigos de acesso local das estações da gráfica | ✅ Criado |
+| `imposition_segredos` | Segredos do painel | ✅ Criado |
+| `imposition_tempo_no_card` | Há quanto tempo cada pedido está no card da Lista de Arte | ✅ Criado 19/08/2026 |
+
+> [!IMPORTANT]
+> `imposition_user_permissions` tem **uma coluna por permissão**. Enviar uma coluna
+> que não existe faz o PostgREST recusar a escrita inteira com 400 — e o painel
+> perde a gravação toda, não só a permissão desconhecida.
+
+`imposition_tempo_no_card` guarda só o **carimbo de hora** da última troca de card;
+o card em si é calculado no painel por `classificarPedidoNaArte`. O SQL está em
+[`sql/tempo_no_card.sql`](../sql/tempo_no_card.sql) e a tela que a usa está
+documentada em [`lista_de_arte.md`](lista_de_arte.md).
+
+## 📎 Tabelas presas a um pedido (prefixo `pedidos_`)
+
+| Tabela | Descrição | Status |
+|--------|-----------|--------|
+| `pedidos_artes` | Arquivos e estado da arte de cada pedido | ✅ Criado |
+| `pedidos_links_cliente` | Links públicos de aprovação do cliente | ✅ Criado |
+| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão) | ✅ Criado |
+
 ## ⏳ Tabelas Operacionais/Runtime (Postergadas para Próxima Fase)
 
 | Tabela | Descrição | Status |
@@ -77,15 +104,66 @@ O banco antigo do Imposition (`atsxtuibeitloosckmlc.supabase.co`) será **descon
 
 ## 📋 Convenções (alinhadas com Vibecode)
 
-- **Prefixo `producao_`**: Todas as tabelas do Imposition
-- **Sem prefixo**: Tabelas do Vibecode (não tocar)
 - **FKs para propostas**: usar `id_int`
 - **FKs para clientes**: usar `id_cliente`
 - **FKs para produtos**: usar `id_produto`
-- **Campos obrigatórios**: `created_at` e `updated_at` em toda tabela nova
-- **Status**: `TEXT` controlado por whitelist no código (não por CHECK constraint)
 - **Soft delete**: usar campo de status, nunca DELETE físico
 - **Fluxo**: Diagnóstico → Plano → Aprovação → Implementação → Validação
+
+### Os três prefixos que existem hoje
+
+A regra original dizia "prefixo `producao_` para tudo do Imposition". Na prática o
+projeto passou a usar três, e este documento registra o que **é**, não o que se
+planejou em junho:
+
+| Prefixo | Para quê | Exemplos |
+|---------|----------|----------|
+| `producao_` | Catálogo e operação da gráfica | `producao_formatos`, `producao_cores`, `producao_acesso_*` |
+| `imposition_` | Coisas do painel em si | `imposition_user_permissions`, `imposition_acessos_locais`, `imposition_segredos`, `imposition_tempo_no_card` |
+| `pedidos_` | O que se prende a um pedido do parceiro | `pedidos_artes`, `pedidos_links_cliente`, `pedidos_modelos` |
+
+**Continua valendo o essencial**: nenhuma delas é do Vibecode, e tabela nossa
+nunca nasce sem prefixo. O que caiu foi a exigência de `producao_` para tudo.
+
+Os requisitos de **UUID como PK** e de `created_at`/`updated_at` obrigatórios
+também deixaram de ser universais. `imposition_tempo_no_card`, por exemplo, tem o
+número do pedido (`id_int`) como chave primária, porque é uma linha por pedido e
+qualquer outra chave exigiria uma busca a mais para achar a linha certa.
+
+### Permissões: sempre REVOKE antes de GRANT
+
+> [!CAUTION]
+> O Supabase concede **`GRANT ALL` ao papel `authenticated`** em toda tabela nova,
+> por privilégio padrão do esquema. Um `GRANT SELECT, INSERT, UPDATE` depois disso
+> **não restringe nada** — os privilégios se somam.
+
+Isso foi descoberto em 19/08/2026, na conferência que roda no fim do
+`sql/tempo_no_card.sql`: a tabela recém-criada aparecia com `DELETE` e `TRUNCATE`
+liberados para qualquer usuário logado. O conserto é uma linha:
+
+```sql
+ALTER TABLE public.minha_tabela ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.minha_tabela FROM anon;
+REVOKE ALL ON public.minha_tabela FROM authenticated;   -- <-- sem isto, o GRANT abaixo é decorativo
+GRANT SELECT, INSERT, UPDATE ON public.minha_tabela TO authenticated;
+GRANT ALL ON public.minha_tabela TO service_role;
+```
+
+**Todo SQL de tabela nova deve terminar com a conferência**, que devolve o que
+cada papel realmente ficou tendo — é ela que denuncia a folga:
+
+```sql
+SELECT grantee, string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privilegios
+FROM information_schema.role_table_grants
+WHERE table_schema = 'public' AND table_name = 'minha_tabela'
+  AND grantee IN ('anon', 'authenticated', 'service_role')
+GROUP BY grantee ORDER BY grantee;
+```
+
+> [!NOTE]
+> As tabelas criadas antes dessa descoberta provavelmente têm a mesma folga. Vale
+> uma auditoria das 39 tabelas nossas — pendente.
 
 ---
 

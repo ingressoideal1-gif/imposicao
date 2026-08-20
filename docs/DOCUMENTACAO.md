@@ -3,6 +3,34 @@
 > Sistema profissional de imposição gráfica com dados variáveis (VDP) para gráficas.  
 > Versão da documentação: **Junho 2026**
 
+> [!CAUTION]
+> **Partes deste documento estão desatualizadas.** Ele descreve a arquitetura de
+> junho de 2026 e ainda não foi revisto por inteiro. Conferido em 19/08/2026:
+>
+> - **A autenticação não é mais Firebase.** O `frontend/firebase-config.js` nem
+>   existe mais, e nenhuma página do painel carrega o SDK. Quem autentica é o
+>   Supabase. Sobrou uma referência defensiva em `frontend/pedido.js`, protegida
+>   por `typeof firebase !== 'undefined'` — código morto. Ignore a seção 12 e as
+>   menções a `firebase-admin`, a tokens do Firebase e ao Firebase Storage.
+> - **O backend não é mais o servidor Python na nuvem.** São Edge Functions no
+>   Supabase; o Render foi desligado. O `app.py` continua no repositório porque é
+>   o motor que roda **localmente**, dentro do agente NewProd — a imposição e a
+>   geração de PDF nunca acontecem na nuvem, por tempo e por segurança.
+> - As rotas listadas na seção 6 valem para esse motor local, não para uma API
+>   pública.
+>
+> **Enquanto a revisão não vem**, use como fonte de verdade:
+> [`STATUS_PROJETO.md`](STATUS_PROJETO.md) (onde o projeto está),
+> [`REGRAS_BANCO.md`](REGRAS_BANCO.md) (o banco),
+> [`lista_de_arte.md`](lista_de_arte.md) e
+> [`fluxo_aprovacao_arte.md`](fluxo_aprovacao_arte.md) (as telas de arte),
+> [`PUBLICAR.md`](PUBLICAR.md) e [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md)
+> (publicação e agente).
+>
+> O que continua verdadeiro aqui: a descrição do **motor de imposição**
+> (`engine.py`), dos **elementos VDP**, dos **esquemas de imposição**, do **modo
+> duplex** e da **regra de centralização** — que é a maior parte do documento.
+
 ---
 
 ## Índice

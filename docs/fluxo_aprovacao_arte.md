@@ -70,6 +70,17 @@ Itens/modelos do pedido vindos do Vibecode.
 ### `propostas_chat`
 Log de mensagens do pedido (visível no chat do ERP Vibecode).
 
+> [!WARNING]
+> **As sete inserções que o painel faz nesta tabela nunca gravaram nada.** Elas
+> mandam a coluna `remetente_nome`, que não existe — a coluna é `autor_nome`, e o
+> PostgREST recusa a escrita inteira. Verificado no banco em 19/08/2026: zero
+> linhas nossas.
+>
+> Ficou assim de propósito, à espera de decisão: consertar o nome da coluna, ou
+> remover as inserções. Enquanto isso, **não confie neste log** para saber o que o
+> cliente disse. A caixa de entrega chegou a exibir uma nota de PIX do Financeiro
+> como "solicitação do cliente" por ler daqui — esse plano B foi removido em v647.
+
 ---
 
 ## Quem manda na Cor e na Numeração do modelo
@@ -131,6 +142,17 @@ O status da arte controla **exatamente** o que o cliente vê ao acessar o link:
    - A visualização combinada é renderizada em tempo real no canvas
 4. Marca cada modelo como **🎨 PRONTO** (botão na decisão de qualidade)
 
+> [!IMPORTANT]
+> Desde 19/08/2026, marcar PRONTO **gera e salva a arte de amostra de novo**. Antes
+> ela ficava com a versão anterior depois de uma correção, e era essa versão velha
+> que o cliente via. Se a geração falhar, o modelo **não** é marcado como pronto e
+> o operador é avisado — mandar link com arte velha é pior do que não mandar.
+>
+> Marcar PRONTO também exige que a **Qtd do modelo bata com as células geradas**
+> (igual à Qtd na frente, o dobro em Frente × Verso). Divergiu, o pedido não anda
+> até alguém corrigir as linhas da numeração. A `Qtd` nunca é escrita de volta no
+> banco: ela é a quantidade contratada.
+
 ### 2. Envio ao Cliente
 
 5. Clica em **"Voltar para Atendimento"**
@@ -163,9 +185,22 @@ O status da arte controla **exatamente** o que o cliente vê ao acessar o link:
 
 12. **Se Aprovar** (`clienteFinalizarFluxo('APROVAR_TUDO')`):
     - Status global → `ARTE_APROVADA`
-    - Cada item → `amostra_status: 'APROVADA'`
+    - Cada item → `amostra_status: 'APROVADA_CLIENTE'`
     - Log no chat: "PEDIDO COMPLETO APROVADO PELO CLIENTE"
     - Tela de sucesso: "Pedido Aprovado com Sucesso!"
+
+> [!NOTE]
+> **Quem aprovou fica registrado no próprio valor**, e não numa coluna nova:
+> `APROVADA_CLIENTE` é o botão APROVAR do link do cliente; `APROVADA` é o ✅
+> APROVADO do painel, apertado pelo atendente. O aviso do modelo travado diz qual
+> dos dois foi.
+>
+> Os dois valores já eram lidos como aprovado em todo o código — nas listas de
+> aprovado, no mapa de selos e no remapeamento da carga —, então não é vocabulário
+> novo para o sistema parceiro.
+>
+> O link do cliente **não** passa pelo `script.js`: `cliente.js` tem o próprio
+> `saveAmostraToDB`, e `cliente.html` não carrega o arquivo do painel.
 
 13. **Se Solicitar Alteração** (`clienteFinalizarFluxo('SOLICITAR_ALTERACAO')`):
     - Status global → `ARTE_EM_CORRECAO`

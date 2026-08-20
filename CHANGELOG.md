@@ -4,9 +4,200 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v644** — 2026-08-18 | Agente **1.2.139**
+## Versão atual: **v652** — 2026-08-19 | Agente **1.2.147**
 
 ---
+
+## [v652 — 2026-08-19] — A coluna "Data Liberação" vira "Tempo"
+
+**A Lista de Arte passou a mostrar há quanto tempo cada pedido está no card em que
+está** — `01:05` —, pintado conforme esse tempo cresce: verde até 1h, azul até 2h,
+laranja até 3h, vermelho depois. A escala vale nos quatro cards. **O pedido de maior
+tempo assume o topo da lista**, em cada card. As duas datas que ficavam na coluna não
+se perderam: foram para o título da célula, junto com "em tal card desde tal hora".
+
+**O card é calculado; o relógio precisou de memória.** Não existia em lugar nenhum o
+registro de quando um pedido entrou no card atual. Ele passou a viver na tabela nova
+`imposition_tempo_no_card`, uma linha por pedido, escrita pelo próprio painel quando
+ele desenha a lista e percebe a troca. Foi decisão do usuário, contra a alternativa de
+um robô no servidor: o robô seria fiel ao relógio real mesmo com todos os painéis
+fechados, mas exigiria reescrever a classificação em SQL, criando uma segunda cópia da
+regra que divergiria da do painel no primeiro ajuste. A consequência aceita é que troca
+acontecida de madrugada só é registrada quando alguém abre o painel de manhã.
+
+**A regra dos 60 minutos.** Em "Em Arte" o tempo não se perde numa ida rápida a outro
+card: saiu e voltou em até 60 minutos, a contagem segue de onde parou; passou disso,
+volta ao zero. Nos demais cards zera a cada troca. O crédito é descontado do *início*
+em vez de somado ao total, e por isso um número só serve para desenhar a célula, para o
+relógio andar sozinho e para ordenar a lista.
+
+O teste pegou um erro real da primeira implementação: o pedido que passava por **dois**
+cards fora da arte antes de voltar perdia o crédito no segundo salto, mesmo dentro dos
+60 minutos. O que conta é há quanto tempo ele saiu *da arte*, e não do card anterior.
+
+**A conferência do SQL pegou uma folga de segurança.** O Supabase dá `GRANT ALL` ao
+papel `authenticated` em toda tabela nova, por privilégio padrão do esquema — então o
+`GRANT SELECT, INSERT, UPDATE` não restringia nada e o painel logado ficava podendo
+`TRUNCATE` a tabela. Entrou um `REVOKE` antes do `GRANT`. Vale conferir as demais
+tabelas do projeto pelo mesmo motivo.
+
+O relógio anda sozinho a cada 30 segundos mexendo só no texto e na cor das células —
+redesenhar a lista fecharia menu aberto e perderia a rolagem de quem estivesse lendo.
+
+---
+
+## [v651 — 2026-08-19] — Lista de Arte enxuta, com Preview, e o frete Veppo com a marca
+
+**A caixa "Designers Ideal" passou a contar só o card "Em Arte".** Ela mostra, ao lado
+de cada pessoa, quantos pedidos e quantos modelos ela tem — e contava todos os pedidos,
+somando os já aprovados, os que esperam resposta do cliente e os que foram para a
+produção meses atrás. O número só crescia e não dizia quanto trabalho a pessoa tem hoje.
+
+Para isso, a classificação dos pedidos saiu de dentro do `renderOrdens` e virou a função
+`classificarPedidoNaArte`. Era um trecho solto que só existia enquanto a tabela era
+desenhada, e a caixa aparece dentro do pedido, noutro momento — por isso ela contava por
+conta própria. Agora card e caixa respondem pela mesma função e não têm como divergir.
+
+**A linha do pedido ficou só com o número.** Saíram o ícone do Vibe e o botão de copiar
+o link direto. O do Vibe continua vivo dentro do pedido aberto; o de copiar foi
+excluído, e a função que só servia a ele saiu junto. A rota `/pedido/20928` continua
+funcionando — o que sumiu foi o atalho para copiar o endereço, não o endereço.
+
+**Entrou a coluna Preview**, entre Vendedor e Tempo, igual à do Painel de Produção — e
+literalmente igual: o desenho virou a função `previewDaArteDoPedidoHtml`, chamada pelas
+duas tabelas. Arte em PDF continua saindo como atalho para abrir o arquivo, e não como
+miniatura rasterizada.
+
+**O frete Veppo passou a aparecer com a logomarca dele** no Painel de Produção, como já
+acontecia com Sedex, São Miguel, Motoboy e Retirada. São 27 pedidos no banco. O nome é
+digitado à mão pelo parceiro e chega em quatro grafias — `VEPPO`, `veppo`, `Veppo` e
+`VEPPO-RS` —, todas cobertas por uma chave só.
+
+A tabela do parceiro tem uma coluna `tem_veppo`, e ela **não** serve: são 5 linhas no
+total, todas antigas, e uma delas marca `true` num pedido cujo frete escrito é
+"SÃO MIGUEL". Quem manda é o texto de `frete_escolhido`.
+
+---
+
+## [v650 — 2026-08-19] — O link do Vibe repetido dentro do pedido
+
+**O ícone que leva ao sistema parceiro passou a aparecer também no cabeçalho do pedido
+aberto**, entre o número e o nome do cliente. Ele só existia na linha da Lista de Arte,
+e depois de abrir o pedido era preciso fechar, achar a linha de novo e clicar lá.
+
+O botão passou a nascer de uma função única, `botaoDoVibeHtml`. Era a terceira cópia do
+mesmo HTML, e no dia em que o endereço ou o menu do parceiro mudar, a cópia que passasse
+batida abriria noutro lugar sem avisar ninguém.
+
+O encaixe no `index.html` nasce vazio de propósito: uma âncora escrita ali duplicaria o
+endereço e o nome da aba, que moram no `script.js` — e um `href="#"` no documento seria
+resolvido pelo `<base href="/">` para a raiz.
+
+---
+
+## [v649 — 2026-08-19] — Link direto para o pedido, abas nomeadas e o Vibe no menu Pedido
+
+**`https://ideal-imposition.vercel.app/pedido/20928` abre o painel já dentro do pedido
+20928.** É o endereço que se manda ao parceiro. Quem não estiver logado para no login,
+como em qualquer outra tela.
+
+É **caminho**, e não `?pedido=20928`, por um motivo prático: quando a pessoa não está
+logada, o login do Supabase volta para `origin + pathname` e a query string se perderia
+no caminho de ida.
+
+Duas armadilhas que só apareceram abrindo o endereço num Chrome de verdade:
+
+- A Vercel precisava da reescrita `/pedido/:match*` → `/frontend/index.html`, declarada
+  **antes** da regra genérica, senão o endereço dava 404.
+- O `index.html` carrega 23 scripts por caminho **relativo**. Em `/pedido/20928` eles
+  resolveriam para `/pedido/script.js`, e a reescrita devolvia o próprio HTML no lugar
+  de cada um — "Unexpected token '<'" oito vezes, página morta. Um `<base href="/">` no
+  topo do documento resolve todos de uma vez.
+
+**As abas passaram a ter nome.** `_blank` quer dizer "sempre outra aba": abrir cinco
+pedidos no Vibe deixava cinco abas do Vibe. Um nome faz o primeiro clique abrir a aba e
+os seguintes trocarem o conteúdo dela. O `rel="noopener"` teve de sair junto — foi
+medido num Chrome que, com ele, o navegador ignora o nome e cria uma aba por clique.
+
+**O ícone do Vibe passou a abrir no menu "Pedido"**, e não no "Produto".
+
+---
+
+## [v648 — 2026-08-19] — O número do cliente ao lado do nome, e a produção só do ADM
+
+**O número do cliente passou a aparecer ao lado do nome**, nas listas e dentro do
+pedido: `20928 Patrick Soares Furtado - 28449`. A relação certa no banco é
+`propostas.id_cliente` → `clientes.id_cliente`.
+
+Não confundir com `id_faturado`: os dois divergem — no pedido 20940 são 43520 e 66163.
+O `id_faturado` continua sendo usado internamente para casar numerações de cliente
+(`Cli_Num`); quem vai para a tela é o `id_cliente`.
+
+**O botão PRODUÇÃO passou a ser só do administrador.** Ele é de contingência: o caminho
+normal é o parceiro atualizar `propostas.status_interno` para `EM PRODUCAO`, o que leva
+o pedido para o card "Pedidos Concluídos" e para o Painel de Produção. O botão passou a
+dizer isso na própria tela, em vez de só aparecer ou sumir.
+
+---
+
+## [v647 — 2026-08-19] — A caixa de entrega para de mostrar o chat do parceiro
+
+**A "Solicitação de Alteração enviada pelo Cliente" mostrava recado que não era do
+cliente** — chegou a exibir uma nota de PIX do Financeiro. A caixa caía num plano B que
+lia `propostas_chat`, do parceiro, com um filtro que terminava em `|| m.length > 5`:
+qualquer mensagem com mais de cinco caracteres virava "fala do cliente".
+
+O plano B foi removido. E ficou registrado um achado do banco: as sete inserções que o
+painel faz em `propostas_chat` usam a coluna `remetente_nome`, que **não existe** — a
+coluna é `autor_nome`. Nenhuma delas jamais gravou nada.
+
+---
+
+## [v646 — 2026-08-19] — A arte de aprovação é refeita ao marcar PRONTO
+
+**A arte de amostra passou a ser gerada e salva de novo sempre que o modelo é marcado
+como PRONTO.** Antes ela ficava com a versão antiga depois de uma correção, e era essa
+versão velha que o cliente via.
+
+**O "Gerar Link" passou a esperar a regeneração antes de copiar o link**, em vez de
+disparar depois. Se a geração falhar, o modelo **não** é marcado como pronto e o
+operador é avisado — mandar link com arte velha é pior do que não mandar.
+
+**O link do cliente passou a mostrar arte em PDF.** O pedido 20927 aparecia sem arte
+nenhuma: o `arte_url` é um `.pdf`, o `amostra_arte_base64` estava nulo, e o plano B da
+página do cliente colocava o PDF dentro de uma `<img>` — que não sabe abrir PDF.
+
+**A aprovação passou a registrar QUEM aprovou.** Pelo link do cliente grava
+`APROVADA_CLIENTE`; pelo botão do pedido, `APROVADA` — e o aviso na tela diz "aprovado
+pelo cliente" ou "aprovado pelo ATENDENTE". Os dois valores já eram lidos como aprovado
+em todo o código, então não é vocabulário novo para o sistema parceiro.
+
+---
+
+## [v645 — 2026-08-19] — Regras de bloqueio do negócio na arte
+
+Quatro travas que não precisam de painel de permissões, porque são regras do negócio:
+
+**1. O designer não muda o designer de um pedido.** Quem define é o atendimento.
+
+**2. Modelo aprovado não se altera** — nem cor, nem numeração, nem tabelas, nem nada.
+Libera apenas o botão "Em Alteração" e a descrição, e só para atendimento, gerente e
+administrador. A trava fica no único ponto por onde a escrita passa, o `saveAmostraToDB`,
+e é silenciosa quando o que está sendo gravado é só a prévia — que o desenho do card
+reescreve a cada renderização, e que faria o operador levar um aviso a cada segundo.
+
+**3. A Qtd do modelo tem de bater com as células geradas**: igual à Qtd quando a
+numeração imprime só a frente, o dobro quando é Frente × Verso. Divergiu, o designer não
+consegue marcar PRONTO, e o pedido não anda até alguém corrigir. A correção é sempre nas
+linhas da numeração: **a Qtd nunca é escrita de volta no banco**, porque é a quantidade
+contratada e mexer nela mexe no valor do pedido.
+
+**4. Pedido com status interno "EM PRODUCAO" aparece só no card "Pedidos Concluídos"**,
+e some das outras filas da Lista de Arte.
+
+**Os cinco cards passaram a abrir a lista deles.** Quatro filtravam a tabela ao clique e
+o de Pedidos Concluídos era mudo — e desde que os pedidos liberados passaram a contar só
+nele, ele era o único caminho para vê-los.
 
 ## [v644 — 2026-08-18] — Transparência no elemento PDF e SVG, sem rasterizar
 

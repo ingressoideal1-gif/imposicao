@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 16 de agosto de 2026, madrugada**
+**Última atualização: 19 de agosto de 2026, noite**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,11 +11,19 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v589** | 16/08/2026 |
-| Agente NewProd | **1.2.86** | 16/08/2026 |
+| Site + Edge Functions | **v652** | 19/08/2026 |
+| Agente NewProd | **1.2.147** | 19/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
+
+> [!NOTE]
+> **O dia 19/08/2026 foi inteiro na Lista de Arte** — oito versões, da v645 à v652.
+> As quatro travas do negócio, o número do cliente ao lado do nome, o link direto
+> para o pedido, a coluna Preview, a coluna Tempo com relógio por card, e a caixa
+> de designers contando só o trabalho aberto. A tela está descrita de ponta a ponta
+> em [`lista_de_arte.md`](lista_de_arte.md); o que mudou em cada versão está no
+> [`CHANGELOG.md`](../CHANGELOG.md) da raiz.
 
 > ✅ **A partida a frio acabou em 17/08/2026.** O backend na nuvem ficava num serviço de
 > instância `free`, que dormia depois de ~15 minutos parado — **32,8 s medidos em 16/08**
@@ -613,9 +621,14 @@ vermelha por elemento desenhado.
 
 ## Saúde do repositório
 
-- **714 testes pytest + 171 Pester**, todos passando. `pytest tests/` roda inteiro, sem
-  exclusão, em cerca de **3 minutos** — a maior parte em testes de navegador, que sobem um
-  Chrome por teste, mais o que publica 1.200 credenciais de verdade pelo KDF lento.
+- **1.589 testes pytest + 166 Pester**, todos passando (medido em 19/08/2026).
+  `pytest tests/` roda inteiro, sem exclusão, em cerca de **3 minutos** — a maior parte
+  em testes de navegador, que sobem um Chrome por teste, mais o que publica 1.200
+  credenciais de verdade pelo KDF lento.
+- **Um teste é instável na execução em paralelo**:
+  `test_controle_tela.py::test_tocar_no_setor_do_aparelho_grava_na_hora` falha de vez em
+  quando sob o `pytest-xdist` e passa sozinho. Não é regressão; ainda não foi
+  investigado a fundo.
 - **Os testes de navegador precisam parecer com a página, não com o que é conveniente.**
   Duas vezes em 15–16/08 um dublê mais generoso que a realidade escondeu um defeito real: o
   dublê de banco que devolvia lista vazia onde o PostgREST levanta erro, e o arnês de tela
@@ -626,6 +639,44 @@ vermelha por elemento desenhado.
   `tests/test_a_suite_esta_sa.py` impede a reincidência.
 - Rode `.\ferramentas\conferir.ps1` antes de qualquer trabalho substantivo. Ele só consulta,
   e responde as seis perguntas que importam.
+
+---
+
+## Em aberto desde 19/08/2026
+
+Nada disto bloqueia o que está no ar. Estão aqui para não se perderem.
+
+**1. Auditar as permissões das 39 tabelas nossas.** O Supabase dá `GRANT ALL` ao
+papel `authenticated` em toda tabela nova, por privilégio padrão do esquema — então
+um `GRANT SELECT, INSERT, UPDATE` posterior não restringe nada. Descoberto na
+criação da `imposition_tempo_no_card`, onde o painel logado ficava podendo
+`TRUNCATE` a tabela. Corrigido lá; as demais provavelmente têm a mesma folga. O
+procedimento está em [`REGRAS_BANCO.md`](REGRAS_BANCO.md).
+
+**2. Decidir o que fazer com as inserções em `propostas_chat`.** As sete que o
+painel faz mandam a coluna `remetente_nome`, que não existe — a coluna é
+`autor_nome` —, e o PostgREST recusa a escrita inteira. Verificado no banco: zero
+linhas nossas, nunca gravou. Consertar o nome ou remover as inserções.
+
+**3. Confirmar o `?tab=pedido` do sistema parceiro.** O menu em que a tela do Vibe
+abre foi inferido, não verificado — a tela deles exige login. Se o nome for outro,
+o Vibe abre no menu padrão (não quebra nada) e o conserto é uma palavra na
+constante `ABA_DO_PEDIDO_NO_VIBE`.
+
+**4. Confirmar que texto o parceiro escreve em `propostas.status_interno`** ao
+liberar um pedido para produção. O painel reconhece `EM PRODUCAO`, `EM PRODUÇÃO`,
+`EM IMPRESSAO`, `EM IMPRESSÃO`, `PRODUCAO`, `PRODUÇÃO` e `FINALIZADA`. Hoje a
+coluna traz sobretudo `APROVADO` e `LIBERADO`, que o painel **não** reconhece.
+
+**5. Rever a [`DOCUMENTACAO.md`](DOCUMENTACAO.md) por inteiro.** Ela descreve a
+arquitetura de junho — Firebase e servidor Python na nuvem —, e as duas coisas
+mudaram. Ganhou um aviso no topo dizendo o que ainda vale e o que não vale, mas a
+revisão de verdade está pendente.
+
+**6. Estações atrás do agente**: `DESKTOP-5N8AF7D` (1.2.137) e `DESKTOP-PM6TG1B`
+(1.2.129), ambas com sinal recente. Elas se atualizam sozinhas quando abrirem;
+vale conferir se abriram. `PRD-ACABAMENTO` e `CESAR-CPD` são instalações de teste,
+não estações da gráfica.
 
 ---
 
