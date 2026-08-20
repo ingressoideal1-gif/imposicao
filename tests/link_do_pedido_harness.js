@@ -198,7 +198,7 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
 
 (function oIconeDoVibeAbreSempreNaMesmaAba() {
     const usos = SCRIPT.match(/target="\$\{ABA_DO_VIBE\}"/g) || [];
-    ok(usos.length === 2, 'as duas telas que levam ao Vibe usam a mesma aba', usos.length);
+    ok(usos.length === 3, 'as tres telas que levam ao Vibe usam a mesma aba', usos.length);
     ok(!/vibe\.ai-ideal\.com\.br[^`]*target="_blank"/.test(SCRIPT),
         'e nenhuma delas ficou no _blank');
 })();
@@ -227,7 +227,7 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
         quantas++;
         i = SCRIPT.indexOf('target="${ABA_DO_VIBE}"', i + 1);
     }
-    ok(quantas === 2, 'as duas ancoras foram conferidas', quantas);
+    ok(quantas === 3, 'as tres ancoras foram conferidas', quantas);
 })();
 
 // ─── Em que menu do parceiro o pedido abre ───────────────────────────────────
@@ -244,10 +244,87 @@ const PEDIDO = { id: 'vibe_20928', numero: '20928' };
         'e ele leva ao menu Pedido', link('20928'));
     ok(!/tab=produtos/.test(SCRIPT), 'nenhum link ficou no menu Produto');
 
-    // Duas ancoras, um endereco: sem a funcao, mudar o menu exigiria caçar as
-    // duas, e a que passasse batida abriria noutro lugar.
-    const usos = SCRIPT.match(/linkDoPedidoNoVibe\(os\.numero\)/g) || [];
-    ok(usos.length === 2, 'as duas telas montam o endereco pela mesma funcao', usos.length);
+    // Tres ancoras, um endereco: sem a funcao, mudar o menu exigiria caçar as
+    // tres, e a que passasse batida abriria noutro lugar.
+    // O `(?<!function )` tira a propria declaracao da conta: ela tambem casa.
+    const usos = SCRIPT.match(/(?<!function )linkDoPedidoNoVibe\((?:os\.numero|numero)\)/g) || [];
+    ok(usos.length === 3, 'as tres telas montam o endereco pela mesma funcao', usos.length);
+})();
+
+// ─── O mesmo link repetido DENTRO do pedido ──────────────────────────────────
+//
+// Pedido do usuario em 19/08/2026: repetir o link do Vibe dentro do pedido.
+// Ele ja existia na linha da Lista de Arte, mas quem abriu o pedido tinha de
+// voltar para a lista so para chegar ao sistema parceiro.
+//
+// O botao nasce de uma funcao unica em vez de um terceiro HTML copiado: e o
+// mesmo destino, e copia numero tres e onde a divergencia costuma comecar.
+
+(function oBotaoDoVibeVemDeUmaFuncaoSo() {
+    const i = SCRIPT.indexOf('function botaoDoVibeHtml');
+    ok(i > 0, 'o botao do Vibe mora numa funcao');
+    ok(/window\.botaoDoVibeHtml = botaoDoVibeHtml;/.test(SCRIPT), 'e esta publicada na janela');
+
+    const html = new Function('linkDoPedidoNoVibe', 'ABA_DO_VIBE',
+        SCRIPT.slice(i, SCRIPT.indexOf('\n}', i) + 2) + '\nreturn botaoDoVibeHtml;')(
+        n => 'https://vibe.ai-ideal.com.br/orcamentos/' + n + '/editar?tab=pedido',
+        'vibe-ideal',
+    )('20928');
+
+    ok(html.indexOf('href="https://vibe.ai-ideal.com.br/orcamentos/20928/editar?tab=pedido"') > 0,
+        'o botao aponta para o pedido no menu Pedido', html.slice(0, 120));
+    ok(html.indexOf('target="vibe-ideal"') > 0, 'e reaproveita a aba nomeada do Vibe');
+    ok(html.indexOf('noopener') < 0 && html.indexOf('noreferrer') < 0,
+        'sem noopener/noreferrer, que anulariam o nome da aba');
+
+    // Fora da linha da lista o icone perde o contexto: o rotulo em texto diz
+    // para onde leva.
+    ok(html.indexOf('>Vibe</span>') > 0, 'o botao traz o rotulo Vibe em texto');
+    ok(html.indexOf('icon-vibe.png') > 0, 'e o icone do parceiro');
+    ok(html.indexOf('event.stopPropagation()') > 0,
+        'e o clique nele nao dispara o clique de quem o abriga');
+})();
+
+(function oCabecalhoDoPedidoTemOndeEncaixar() {
+    const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+    const iBanner = HTML.indexOf('id="amostras-os-banner"');
+    ok(iBanner > 0, 'o cabecalho do pedido aberto existe');
+
+    const iNumero = HTML.indexOf('id="amostras-os-numero"', iBanner);
+    const iVibe = HTML.indexOf('id="amostras-os-vibe"', iBanner);
+    ok(iVibe > 0, 'e tem o encaixe do botao do Vibe');
+    ok(iNumero > 0 && iVibe > iNumero, 'o botao fica ao lado do numero do pedido');
+
+    // O encaixe nasce vazio de proposito: o endereco e o nome da aba moram no
+    // script.js, e uma ancora escrita no HTML os duplicaria.
+    ok(HTML.indexOf('id="amostras-os-vibe"></span>') > 0, 'e nasce vazio, para o JS preencher');
+})();
+
+(function oCabecalhoDoPedidoPreencheOBotao() {
+    const i = SCRIPT.indexOf("const vibeEl = document.getElementById('amostras-os-vibe');");
+    ok(i > 0, 'o render do pedido procura o encaixe');
+    const trecho = SCRIPT.slice(i, i + 200);
+    ok(/vibeEl\.innerHTML = os\.numero \? botaoDoVibeHtml\(os\.numero\) : ''/.test(trecho),
+        'e escreve o botao pela funcao unica', trecho.slice(0, 140));
+
+    // Pedido avulso nao tem numero: sem a guarda, o botao apontaria para
+    // `/orcamentos/undefined/editar` e levaria a um erro do parceiro.
+    ok(/: ''/.test(trecho), 'deixando o encaixe vazio quando nao ha numero');
+
+    // Ele so faz sentido depois que o pedido carregou -- por isso mora junto do
+    // resto do cabecalho, dentro do `if (banner)`.
+    const iBanner = SCRIPT.lastIndexOf('if (banner) {', i);
+    ok(iBanner > 0 && i - iBanner < 1200, 'dentro do bloco que monta o cabecalho');
+})();
+
+(function oClienteNaoVeOSistemaParceiro() {
+    // A pagina do cliente e publica: quem recebe o link de aprovacao nao pode
+    // ganhar de brinde um atalho para o ERP da grafica.
+    const CLIENTE_HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.html'), 'utf8');
+    const CLIENTE_JS = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+    ok(CLIENTE_HTML.indexOf('vibe.ai-ideal.com.br') < 0, 'a pagina do cliente nao leva ao Vibe');
+    ok(CLIENTE_JS.indexOf('vibe.ai-ideal.com.br') < 0, 'nem o script dela');
+    ok(CLIENTE_HTML.indexOf('id="amostras-os-vibe"') < 0, 'e ela nao tem o encaixe do botao');
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

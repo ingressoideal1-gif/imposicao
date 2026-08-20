@@ -21611,6 +21611,23 @@ function linkDoPedidoNoVibe(numero) {
          + '/editar?tab=' + ABA_DO_PEDIDO_NO_VIBE;
 }
 window.linkDoPedidoNoVibe = linkDoPedidoNoVibe;
+
+/**
+ * O botao do Vibe em HTML, para o MESMO link aparecer em mais de um lugar.
+ *
+ * Ele ja estava na linha da Lista de Arte; em 19/08/2026 o usuario pediu para
+ * repeti-lo dentro do pedido aberto, no cabecalho, ao lado do numero. Como e o
+ * mesmo destino, ele nasce de uma funcao so: mudou o endereco ou o nome da aba,
+ * muda nos dois lugares de uma vez.
+ *
+ * O rotulo "Vibe" em texto acompanha o icone porque aqui, fora da linha da
+ * lista, o icone sozinho nao diz para onde leva.
+ */
+function botaoDoVibeHtml(numero, altura) {
+    const alt = altura || 18;
+    return `<a href="${linkDoPedidoNoVibe(numero)}" target="${ABA_DO_VIBE}" style="display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.78rem; color: #38bdf8;" title="Abrir Pedido #${numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();"><img src="icon-vibe.png" alt="Vibe" style="height: ${alt}px; width: auto; display: block; object-fit: contain;" /><span style="font-weight: 700;">Vibe</span></a>`;
+}
+window.botaoDoVibeHtml = botaoDoVibeHtml;
 const ABA_DO_CLIENTE = 'cliente-ideal';
 
 // ──── Link direto para um pedido ──────────────────────────────────────────
@@ -24885,6 +24902,12 @@ function renderAmostrasOSItens(osId) {
         if (numEl) numEl.textContent = `#${os.numero}`;
         if (cliEl) cliEl.textContent = rotuloDoCliente(os);
         if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
+
+        // O link do Vibe repetido aqui dentro: quem ja abriu o pedido nao precisa
+        // voltar a lista para chegar ao sistema parceiro. Fica vazio no pedido
+        // avulso, que nao tem numero para apontar.
+        const vibeEl = document.getElementById('amostras-os-vibe');
+        if (vibeEl) vibeEl.innerHTML = os.numero ? botaoDoVibeHtml(os.numero) : '';
     }
     if (containerId === 'amostras-itens-container' && avulsa) {
         avulsa.style.display = 'none';

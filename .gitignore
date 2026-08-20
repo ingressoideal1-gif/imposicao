@@ -121,3 +121,6 @@ midia/
 # agent_tray.spec varre a pasta frontend/ inteira para dentro do NewProd.exe, e
 # .gitignore nao impede isso. O lugar certo e fora do repositorio.
 frontend/user_senha_correios
+
+# Provas visuais que os harness de teste geram ao rodar (nascem de novo a cada vez)
+tests/_*.png
