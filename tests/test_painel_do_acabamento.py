@@ -297,7 +297,7 @@ def test_a_paleta_do_acabamento_nao_repinta_o_painel_de_producao():
     # Sem o comentario: ele cita os tons da Producao justamente para dizer que
     # eles nao entram, e a busca crua acharia a citacao.
     tokens = re.sub(r"/\*.*?\*/", "", tokens, flags=re.S)
-    for tom in ("#0a2472", "#123a99", "#2b32af", "#4589d7", "#4cc8f0"):
+    for tom in ("#001249", "#123a99", "#2b32af", "#4589d7", "#4cc8f0"):
         assert tom in tokens, "o tom " + tom + " da paleta sumiu dos tokens"
 
     # E nenhum tom da Producao entrou nos tokens: agora que as duas telas sao

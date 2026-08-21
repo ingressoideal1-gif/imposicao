@@ -78,7 +78,7 @@
     // por decoração.
     const FUNDO_DO_ESTAGIO = {
         'Aguardando':    '#3a2a1c',   // marrom — o que ainda não chegou
-        'Impresso':      '#162037',   // azul escuro — saiu da impressora
+        'Impresso':      '#001f3e',   // azul escuro — saiu da impressora
         'Em acabamento': '#32352e',   // oliva — em cima da mesa
         'Pronto':        '#14301f',   // verde escuro — conferido
         '':              '#3a2a1c',
@@ -97,7 +97,7 @@
     // junto. Aqui ficam só os tons que este arquivo escreve inline.
     //
     // Em 21/08/2026 o marrom saiu e entrou a paleta azul que o usuário mandou:
-    // #0a2472 · #123a99 · #2b32af · #4589d7 · #4cc8f0, do mais escuro ao mais
+    // #001249 · #123a99 · #2b32af · #4589d7 · #4cc8f0, do mais escuro ao mais
     // claro. O que a paleta não cobre é derivado dela — #0d0e20 é o P1 mais
     // fundo, para campo e cabeçalho de caixa; #cfe6fb é o texto claro puxado do
     // P5. Nenhum tom fora dessa família entra aqui.
@@ -106,7 +106,7 @@
     // #334155, #1e293b e #0f172a têm teste travando. Agora que as duas são
     // azuis, é esse teste que impede as duas de virarem a mesma tela.
     const AZUL = {
-        superficie: '#0a2472',   // a caixa do produto
+        superficie: '#001249',   // a caixa do produto
         fundo:      '#0d0e20',   // o cabeçalho dela, e o fundo dos campos
         fio:        '#2b32af',   // o contorno, no lugar do cinza #918f8c
     };
@@ -417,7 +417,7 @@
     const TH_OFF = 'background:#123a99; border:1px solid rgba(76,200,240,0.24); color:#cfe6fb;'
         + ' box-shadow:0 2px 4px rgba(0,0,0,0.35);';
     const TH_ON = 'background:linear-gradient(135deg,#2b32af,#123a99); border:1px solid #4cc8f0;'
-        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(69,137,215,0.35), 0 4px 12px rgba(10,36,114,0.5);';
+        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(69,137,215,0.35), 0 4px 12px rgba(0,18,73,0.5);';
 
     function pintarCabecalhos() {
         document.querySelectorAll('#table-acabamento th[data-sort]').forEach(th => {
@@ -631,7 +631,7 @@
             return `
                 <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer; background: ${fundoPedido};" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
-                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #2b32af, #0a2472); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
+                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #2b32af, #001249); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>

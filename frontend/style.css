@@ -3370,7 +3370,7 @@ input[type=number] {
     /* A PALETA AZUL, entregue pelo usuário em 21/08/2026, com os dez tons dela.
 
        Família ESCURA, das superfícies:
-         #06070d · #0d0e20 · #0a2472 · #123a99 · #1a438f
+         #06070d · #0d0e20 · #001249 · #123a99 · #1a438f
        Família CLARA, dos realces:
          #120a8f · #2b32af · #4a61e8 · #4589d7 · #4cc8f0
 
@@ -3385,7 +3385,7 @@ input[type=number] {
        Produção é ardósia dessaturada (#1e293b, #334155, #3b82f6) e esta é índigo
        saturado. O teste `nadaDeMotorNemDeAgente` proíbe os tons da Produção
        dentro do acabamento.js — é ele que impede as duas de convergirem. */
-    --acab-fundo:        #0a2472;                  /* a superfície dos cards */
+    --acab-fundo:        #001249;                  /* a superfície dos cards */
     --acab-elevado:      #123a99;                  /* cabeçalhos e botões escuros */
     --acab-hover:        #2b32af;
     --acab-borda:        rgba(76, 200, 240, 0.24);

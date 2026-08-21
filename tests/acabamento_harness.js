@@ -1238,11 +1238,11 @@ async function desmarcarUmModeloTiraOCarimbo() {
     // forcados para Aguardando e Pronto.
     const amb2 = ambienteComPedidoAberto();   // sem forcar: os dois derivam de "Impresso"
     amb2.painel.abrirPedido('os-200');
-    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #162037') !== -1,
+    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #001f3e') !== -1,
        'o Impresso continua azul escuro');
 
     // A PAGINA, essa sim, seguiu a paleta azul de 21/08/2026.
-    ok(html.indexOf('#0a2472') !== -1, 'a caixa do produto e o navy da paleta');
+    ok(html.indexOf('#001249') !== -1, 'a caixa do produto e o navy da paleta');
     ok(html.indexOf('#0d0e20') !== -1, 'o cabecalho dela e o navy mais fundo');
     ok(html.indexOf('#2b32af') !== -1, 'e o contorno e o azul royal da paleta');
     ok(html.indexOf('#918f8c') === -1, 'e o cinza da fila do Pedido nao sobrou');
