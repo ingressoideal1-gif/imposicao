@@ -95,10 +95,20 @@
     // O grosso da pintura mora no `style.css`, em regras presas a
     // `#view-acabamento` — trocar as classes `prod-*` repintaria a Produção
     // junto. Aqui ficam só os tons que este arquivo escreve inline.
-    const MARROM = {
-        superficie: '#1d1917',   // a caixa do produto
-        fundo:      '#151211',   // o cabeçalho dela
-        fio:        '#574e49',   // o contorno, no lugar do cinza #918f8c
+    //
+    // Em 21/08/2026 o marrom saiu e entrou a paleta azul que o usuário mandou:
+    // #0a2472 · #123a99 · #2b32af · #4589d7 · #4cc8f0, do mais escuro ao mais
+    // claro. O que a paleta não cobre é derivado dela — #0d0e20 é o P1 mais
+    // fundo, para campo e cabeçalho de caixa; #cfe6fb é o texto claro puxado do
+    // P5. Nenhum tom fora dessa família entra aqui.
+    //
+    // O azul da PRODUÇÃO continua proibido nesta tela: #3b82f6, #2563eb,
+    // #334155, #1e293b e #0f172a têm teste travando. Agora que as duas são
+    // azuis, é esse teste que impede as duas de virarem a mesma tela.
+    const AZUL = {
+        superficie: '#0a2472',   // a caixa do produto
+        fundo:      '#0d0e20',   // o cabeçalho dela, e o fundo dos campos
+        fio:        '#2b32af',   // o contorno, no lugar do cinza #918f8c
     };
 
     // ─── Estado da tela ─────────────────────────────────────────────────────
@@ -385,10 +395,10 @@
     const TH_BASE = 'display:inline-flex; align-items:center; justify-content:center; gap:6px;'
         + ' padding:7px 14px; border-radius:8px; font-size:0.75rem; font-weight:800;'
         + ' text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; cursor:pointer;';
-    const TH_OFF = 'background:#292421; border:1px solid rgba(200,180,168,0.24); color:#ded3cc;'
+    const TH_OFF = 'background:#123a99; border:1px solid rgba(76,200,240,0.24); color:#cfe6fb;'
         + ' box-shadow:0 2px 4px rgba(0,0,0,0.35);';
-    const TH_ON = 'background:linear-gradient(135deg,#b45309,#78350f); border:1px solid #fcd34d;'
-        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(245,158,11,0.35), 0 4px 12px rgba(180,83,9,0.5);';
+    const TH_ON = 'background:linear-gradient(135deg,#2b32af,#123a99); border:1px solid #4cc8f0;'
+        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(69,137,215,0.35), 0 4px 12px rgba(10,36,114,0.5);';
 
     function pintarCabecalhos() {
         document.querySelectorAll('#table-acabamento th[data-sort]').forEach(th => {
@@ -508,7 +518,7 @@
                     <strong>${pct}%</strong>
                 </div>
                 <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
-                    <div style="width: ${pct}%; height: 100%; background: #f59e0b; border-radius: 3px; transition: width 0.3s ease;"></div>
+                    <div style="width: ${pct}%; height: 100%; background: #4589d7; border-radius: 3px; transition: width 0.3s ease;"></div>
                 </div>
             </div>`;
     }
@@ -586,13 +596,13 @@
             const numInt = parseInt(os.numero);
             const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
             const eventoHtml = arte
-                ? `<br><span style="font-size: 0.82rem; color: #f97316;">${esc(arte.nome_evento)}</span>`
+                ? `<br><span style="font-size: 0.82rem; color: #4cc8f0;">${esc(arte.nome_evento)}</span>`
                 : '';
 
             return `
                 <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer;" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
-                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #b45309, #78350f); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(180, 83, 9, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
+                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #2b32af, #0a2472); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
@@ -770,7 +780,7 @@
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
         const moldura = 'width: 100%; min-height: 150px;'
-            + ' border: 1px dashed rgba(200,180,168,0.26); background: rgba(200,180,168,0.05);'
+            + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
             + ' display: flex; align-items: center; justify-content: center;';
 
         if (!src) {
@@ -781,7 +791,7 @@
         }
 
         if (ehPdf(src)) {
-            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: #fcd34d; cursor: pointer; text-align: center; padding: 12px;"
+            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: #4cc8f0; cursor: pointer; text-align: center; padding: 12px;"
                          onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
                         <span style="font-size: 2rem;">📄</span>
                         <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
@@ -864,14 +874,14 @@
     }
 
     const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
-        + ' background: #131110; border: 1px solid rgba(200,180,168,0.26); border-radius: 6px;'
+        + ' background: #0d0e20; border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;'
         + ' color: #ffffff; padding: 8px 12px; font-size: 1.05rem; width: 100%;'
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
 
     const ESTILO_BOTAO_CAMERA = 'display: inline-flex; align-items: center; gap: 8px;'
-        + ' background: linear-gradient(135deg,#b45309,#78350f); border: 1px solid #fcd34d; color: #ffffff;'
+        + ' background: linear-gradient(135deg,#2b32af,#123a99); border: 1px solid #4cc8f0; color: #ffffff;'
         + ' border-radius: 8px; padding: 9px 18px; font-size: 0.95rem; font-weight: 800; cursor: pointer;';
     const ESTILO_BOTAO_CAMERA_OK = 'display: inline-flex; align-items: center; gap: 8px;'
         + ' background: linear-gradient(135deg,#16a34a,#15803d); border: 1px solid #86efac; color: #ffffff;'
@@ -911,9 +921,9 @@
 
         const numeros = ehCamarote
             ? [
-                dado('Q_CAM', esc(item.q_cam || item.Q_CAM || '—'), '#f59e0b'),
-                dado('L_CAM', esc(item.l_cam || item.L_CAM || '—'), '#f59e0b'),
-                dado('C_INI', esc(item.c_ini || item.C_INI || 1), '#f59e0b'),
+                dado('Q_CAM', esc(item.q_cam || item.Q_CAM || '—'), '#4cc8f0'),
+                dado('L_CAM', esc(item.l_cam || item.L_CAM || '—'), '#4cc8f0'),
+                dado('C_INI', esc(item.c_ini || item.C_INI || 1), '#4cc8f0'),
             ].join('')
             : [
                 dado('Qtd', (parseInt(qtd) || 0).toLocaleString('pt-BR')),
@@ -929,7 +939,7 @@
         const idAmostra = `acab-amostra-${esc(osId)}-${esc(item.id)}-${idx}`;
 
         return `
-            <div style="background: ${fundo}; outline: 1px solid ${MARROM.fio}; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch;">
+            <div style="background: ${fundo}; outline: 1px solid ${AZUL.fio}; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch;">
 
                 <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
                     ${amostraHtml(item, idAmostra)}
@@ -1026,9 +1036,9 @@
                 : '';
 
             return `
-                <div style="background:${MARROM.superficie}; border: 1px solid ${MARROM.fio}; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
-                    <div style="background:${MARROM.fundo}; padding: 10px 15px; border-bottom: 1px solid ${MARROM.fio};">
-                        <h5 style="margin: 0; color: #facc15; font-size: 1.25rem; font-weight: bold;">
+                <div style="background:${AZUL.superficie}; border: 1px solid ${AZUL.fio}; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
+                    <div style="background:${AZUL.fundo}; padding: 10px 15px; border-bottom: 1px solid ${AZUL.fio};">
+                        <h5 style="margin: 0; color: #4cc8f0; font-size: 1.25rem; font-weight: bold;">
                             📦 ${esc(nome)} ${selo}
                             <span style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-left: 8px;">${doGrupo.length} ${doGrupo.length === 1 ? 'modelo' : 'modelos'}</span>
                         </h5>
@@ -1391,7 +1401,7 @@
 
         const cabecalho = `
             <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-                        background: ${MARROM.fundo}; border-bottom: 1px solid rgba(200,180,168,0.24);">
+                        background: ${AZUL.fundo}; border-bottom: 1px solid rgba(76,200,240,0.24);">
                 <span style="font-size: 1.1rem;">⚖️</span>
                 <strong style="font-size: 0.92rem; letter-spacing: 0.02em;">Peso por setor</strong>
                 <span style="font-size: 0.74rem; color: var(--text-dim);">
@@ -1407,7 +1417,7 @@
                      </div>`;
         } else if (semCaminho) {
             miolo = `<div style="padding: 14px; color: var(--text-dim); font-size: 0.84rem; line-height: 1.5;">
-                        <strong style="color: #fcd34d;">Para registrar o peso, entre com a sua conta.</strong><br>
+                        <strong style="color: #4cc8f0;">Para registrar o peso, entre com a sua conta.</strong><br>
                         Esta tela está aberta com o acesso local da estação, e o peso é gravado na
                         ficha de expedição do ERP — que só aceita quem entrou com a conta do Vibe.
                         Abra o painel pelo site e faça login para preencher.
@@ -1423,7 +1433,7 @@
                     const valor = pesoParaTexto(atual ? atual.peso : null);
                     return `
                     <div style="display: flex; align-items: center; gap: 10px; flex: 1 1 240px;
-                                background: rgba(200,180,168,0.06); border: 1px solid rgba(200,180,168,0.20);
+                                background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
                                 border-radius: 8px; padding: 10px 12px;">
                         <span style="font-size: 1.05rem;">${r.icone}</span>
                         <strong style="min-width: 62px; font-size: 0.86rem;">${esc(r.nome)}</strong>
@@ -1431,9 +1441,9 @@
                                value="${esc(valor)}" placeholder="0,00" ${pode ? '' : 'disabled'}
                                onchange="AcabamentoPainel.mudarPeso('${escJs(numeroDoPedido)}', '${setor}', this.value)"
                                title="${pode ? 'Peso real deste setor, em quilos' : 'Você tem apenas permissão de ver'}"
-                               style="width: 92px; text-align: right; background: #131110;
-                                      border: 1px solid rgba(200,180,168,0.26); border-radius: 6px;
-                                      color: #ded3cc; padding: 6px 8px; font-size: 0.92rem;
+                               style="width: 92px; text-align: right; background: #0d0e20;
+                                      border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
+                                      color: #cfe6fb; padding: 6px 8px; font-size: 0.92rem;
                                       font-family: monospace; opacity: ${pode ? '1' : '0.5'};" />
                         <span style="font-size: 0.8rem; color: var(--text-dim);">kg</span>
                         <span id="acab-peso-sinal-${setor}" style="font-size: 0.74rem; min-width: 62px;
@@ -1444,7 +1454,7 @@
         }
 
         return `
-            <div style="background: ${MARROM.superficie}; border: 1px solid ${MARROM.fio};
+            <div style="background: ${AZUL.superficie}; border: 1px solid ${AZUL.fio};
                         border-radius: 10px; overflow: hidden; margin-bottom: 14px;">
                 ${cabecalho}${miolo}
             </div>`;
@@ -1543,8 +1553,8 @@
             <button type="button" ${pode ? '' : 'disabled'}
                     onclick="AcabamentoPainel.abrirCamera('${escJs(item.id)}', '${escJs(osId)}')"
                     title="${pode ? 'Abrir a câmera e fotografar o material' : 'Você tem apenas permissão de ver'}"
-                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(245,158,11,0.14);
-                           border: 1px solid rgba(245,158,11,0.45); color: #fcd34d; border-radius: 8px;
+                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(69,137,215,0.16);
+                           border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 8px;
                            padding: 8px 14px; font-size: 0.9rem; font-weight: 700;
                            cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
                 <span style="font-size: 1.15rem;">📷</span> ${foto ? 'Refazer foto' : 'Fotografar'}
@@ -1594,7 +1604,7 @@
         caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100001; display: none;'
             + ' align-items: center; justify-content: center; background: rgba(2,6,23,0.94); padding: 18px;';
         caixa.innerHTML = `
-            <div style="width: min(920px, 96vw); background: ${MARROM.fundo}; border: 1px solid rgba(200,180,168,0.24);
+            <div style="width: min(920px, 96vw); background: ${AZUL.fundo}; border: 1px solid rgba(76,200,240,0.24);
                         border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <strong style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>

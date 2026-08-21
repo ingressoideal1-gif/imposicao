@@ -2012,7 +2012,27 @@ body.not-logged-in .app-shell {
    descobre olhando. Miuda e apagada de proposito -- ela informa quem ainda
    nao sabe, sem competir com os cards. */
 .prod-sectors-hint { font-size: 0.68rem; color: #94a3b8; margin-top: 0.375rem; text-align: center; letter-spacing: 0.01em; }
-#view-acabamento .prod-sectors-hint { color: #a8998f; }
+/* As METRICAS da coluna lateral, na paleta desta tela.
+   
+   Estas cores nao dizem estado: sao a identidade de cada metrica, iguais em
+   todo desenho. Por isso elas acompanham a paleta -- ao contrario do fundo da
+   caixa do modelo, que muda conforme o estagio e por isso fica onde esta.
+   
+   A UNICA que nao muda e "Pedidos em Atraso": ali o vermelho e alerta, e alerta
+   nao se repinta para combinar com a tela. */
+#view-acabamento .prod-metric-value.text-cyan   { color: #4589d7; }
+#view-acabamento .prod-metric-value.text-purple { color: #4a61e8; }
+#view-acabamento .prod-metric-value.text-teal   { color: #4cc8f0; }
+#view-acabamento .prod-metric-value.text-amber  { color: #9fd8f2; }
+#view-acabamento .prod-metric-value.text-green  { color: #7fa9d4; }
+
+/* Os seloes de contagem -- "3 Pedidos", "1/2 prontos". */
+#view-acabamento .badge-teal {
+    background: rgba(76, 200, 240, 0.14);
+    color: #4cc8f0;
+}
+
+#view-acabamento .prod-sectors-hint { color: #7fa9d4; }
 .prod-search-row { display: flex; gap: 0.5rem; }
 .prod-search-wrapper { position: relative; flex: 1; }
 .prod-search-icon { position: absolute; left: 0.875rem; top: 50%; transform: translateY(-50%); color: #6b7280; font-size: 0.75rem; }
@@ -3347,16 +3367,31 @@ input[type=number] {
    ══════════════════════════════════════════════════════════════════════════ */
 
 #view-acabamento {
-    /* Marrom ESCURO e NEUTRO: o primeiro tom era saturado demais e puxava para o
-       laranja. Estes ficam perto do preto, com um calor que só se percebe ao lado
-       do azul-ardósia da Produção — que é justamente o que se quer distinguir. */
-    --acab-fundo:        #1d1917;                  /* a superfície dos cards */
-    --acab-elevado:      #292421;                  /* cabeçalhos e botões escuros */
-    --acab-hover:        #37302c;
-    --acab-borda:        rgba(200, 180, 168, 0.18);
-    --acab-realce:       #f59e0b;                  /* o que está ligado */
-    --acab-realce-fraco: rgba(245, 158, 11, 0.18);
-    --acab-realce-texto: #fcd34d;
+    /* A PALETA AZUL, entregue pelo usuário em 21/08/2026, com os dez tons dela.
+
+       Família ESCURA, das superfícies:
+         #06070d · #0d0e20 · #0a2472 · #123a99 · #1a438f
+       Família CLARA, dos realces:
+         #120a8f · #2b32af · #4a61e8 · #4589d7 · #4cc8f0
+
+       O único tom que não veio da imagem é #cfe6fb, o texto claro — puxado do
+       último ciano, porque a paleta não traz um tom de leitura. Nenhum outro
+       tom de fora da família entra neste bloco.
+
+       ── O CUIDADO QUE ESTA PALETA EXIGE ──
+
+       O marrom existia para o olho separar esta tela da Produção de relance, na
+       estação. Agora as duas são azuis, e o que as separa é o TIPO de azul: a
+       Produção é ardósia dessaturada (#1e293b, #334155, #3b82f6) e esta é índigo
+       saturado. O teste `nadaDeMotorNemDeAgente` proíbe os tons da Produção
+       dentro do acabamento.js — é ele que impede as duas de convergirem. */
+    --acab-fundo:        #0a2472;                  /* a superfície dos cards */
+    --acab-elevado:      #123a99;                  /* cabeçalhos e botões escuros */
+    --acab-hover:        #2b32af;
+    --acab-borda:        rgba(76, 200, 240, 0.24);
+    --acab-realce:       #4589d7;                  /* o que está ligado */
+    --acab-realce-fraco: rgba(69, 137, 215, 0.22);
+    --acab-realce-texto: #4cc8f0;
 }
 
 #view-acabamento .prod-top-bar,
@@ -3376,13 +3411,13 @@ input[type=number] {
     border-bottom-color: var(--acab-borda);
 }
 #view-acabamento .prod-table td { border-bottom-color: var(--acab-borda); }
-#view-acabamento .prod-table tr:hover td { background-color: rgba(245, 158, 11, 0.07); }
+#view-acabamento .prod-table tr:hover td { background-color: rgba(69, 137, 215, 0.12); }
 
 #view-acabamento .prod-btn-dark { background-color: var(--acab-elevado); }
 #view-acabamento .prod-btn-dark:hover { background-color: var(--acab-hover); }
 
 #view-acabamento .prod-btn-outline {
-    background-color: rgba(41, 36, 33, 0.6);
+    background-color: rgba(18, 58, 153, 0.55);
     border-color: var(--acab-borda);
 }
 #view-acabamento .prod-btn-outline:hover { background-color: var(--acab-hover); }
@@ -3393,9 +3428,9 @@ input[type=number] {
 }
 #view-acabamento .prod-search-input:focus { border-color: var(--acab-realce); }
 
-/* Os recortes de prazo e de setor: o azul da Produção vira o âmbar daqui. */
+/* Os recortes de prazo e de setor, na paleta desta tela. */
 #view-acabamento .filter-btn-pill {
-    background: rgba(41, 36, 33, 0.55);
+    background: rgba(18, 58, 153, 0.45);
     border-color: var(--acab-borda);
 }
 #view-acabamento .filter-btn-pill.active,
@@ -3404,7 +3439,7 @@ input[type=number] {
     background: var(--acab-realce-fraco);
     border-color: var(--acab-realce);
     color: var(--acab-realce-texto);
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.28);
+    box-shadow: 0 0 8px rgba(69, 137, 215, 0.35);
 }
 #view-acabamento .prod-sectors-grid .filter-btn-pill { background-color: var(--acab-elevado); }
 

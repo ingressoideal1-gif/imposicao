@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v669** — 2026-08-21 | Agente **1.2.163**
+## Versão atual: **v671** — 2026-08-21 | Agente **1.2.165**
+
+---
+
+## [v671 — 2026-08-21] — Painel do Acabamento na paleta azul
+
+O usuário entregou uma paleta de dez tons e pediu a tela derivada dela, mantendo a coerência
+onde a paleta não cobrisse. O marrom, que estava ali desde 20/08, saiu.
+
+**Família escura**, das superfícies: `#06070d` · `#0d0e20` · `#0a2472` · `#123a99` · `#1a438f`.
+**Família clara**, dos realces: `#120a8f` · `#2b32af` · `#4a61e8` · `#4589d7` · `#4cc8f0`.
+
+O único tom de fora é `#cfe6fb`, o texto de leitura — a paleta não traz um claro o bastante
+para corpo de texto, e ele é puxado do ciano. `#9fd8f2` e `#7fa9d4` são derivações do mesmo
+ciano, para as métricas se distinguirem entre si.
+
+Mudou tudo o que é moldura: cards, cabeçalhos, botões, filtros, o número do pedido, a barra de
+progresso, o box de peso, os seletores, o botão de câmera, o título da caixa do produto e os
+números das métricas.
+
+**O que NÃO mudou, e por quê.** As quatro cores de fundo da caixa do modelo — *Aguardando*,
+*Impresso*, *Em acabamento*, *Pronto* — ficaram onde estavam. Elas dizem em que ponto o modelo
+está, e é a primeira coisa que se lê; foi o usuário quem mandou devolvê-las quando eu as
+uniformizei na repaginação anterior. Também ficou o vermelho de *Pedidos em Atraso*: alerta não
+se repinta para combinar com a tela. E o selo de prazo e a miniatura da coluna Preview saem de
+funções compartilhadas com a Produção e a Lista de Arte — recolori-las mudaria as três telas.
+
+**O cuidado novo.** O marrom existia para o olho separar esta tela da Produção de relance na
+estação. Agora as duas são azuis, e o que as separa é o tipo de azul: a Produção é ardósia
+dessaturada, esta é índigo saturado. O teste `nadaDeMotorNemDeAgente` proíbe os cinco tons da
+Produção dentro do `acabamento.js` — é ele que impede as duas de convergirem.
+
+---
+
+## [v670 — 2026-08-21] — producao.html: a dica dos setores somados
+
+A página `producao.html` usa a mesma função de filtro do painel, mas tinha ficado sem a linha
+*"Clique em mais de um setor para somar os pedidos"* — então lá não havia como saber que os
+cards somam, nem marcador visível de que a tela é a nova.
+
+De quebra, dois detalhes daquela tela: o **"Todos os Setores" não tinha id**, então nunca
+acendia; e o card **PVC nascia aceso** na marcação, dizendo "PVC escolhido" com o filtro vazio.
 
 ---
 

@@ -505,9 +505,17 @@ function ambienteComPedidoAberto() {
     // E nao escreve no que e da Producao.
     ok(codigo.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
 
-    // Nenhum azul da Producao sobrou na pintura desta tela.
+    // Nenhum azul da PRODUCAO na pintura desta tela.
+    //
+    // Isto ficou mais importante em 21/08/2026, nao menos: ate ali o Acabamento
+    // era marrom e o olho separava as duas telas sozinho. Agora as duas sao
+    // azuis, e o que as distingue e o TIPO -- a Producao e ardosia dessaturada,
+    // esta e indigo saturado. E este teste que impede as duas de convergirem.
+    //
+    // Medido sobre o codigo SEM comentario, porque o comentario da paleta cita
+    // os cinco tons justamente para dizer que eles nao entram.
     ['#3b82f6', '#2563eb', '#334155', '#1e293b', '#0f172a'].forEach(cor => {
-        ok(FONTE.indexOf(cor) === -1, 'o tom ' + cor + ' e da Producao e nao pode estar aqui');
+        ok(codigo.indexOf(cor) === -1, 'o tom ' + cor + ' e da Producao e nao pode estar aqui');
     });
     const gravacoes = codigo.match(/from\('pedidos_modelos'\)\s*\.update\(/g) || [];
     ok(gravacoes.length === 1, 'ha um unico ponto de gravacao', 'achei ' + gravacoes.length);
@@ -866,6 +874,11 @@ async function oErroDoAgenteChegaAoOperador() {
 
 (function oQueAguardaTemFundoMarrom() {
     // Pedido do usuario: "modelos Aguardando ... fundo do box do modelo marrom".
+    //
+    // Estas quatro cores atravessaram DUAS repaginacoes sem mudar: a de
+    // 20/08/2026 (marrom) e a de 21/08 (azul). O marrom do "Aguardando" agora
+    // contrasta forte com a pagina azul, e e assim que fica ate o usuario dizer
+    // o contrario -- cor de estado nao acompanha a paleta.
     const amb = ambienteComPedidoAberto();
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Aguardando';
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Pronto';
@@ -886,10 +899,10 @@ async function oErroDoAgenteChegaAoOperador() {
     ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #162037') !== -1,
        'o Impresso continua azul escuro');
 
-    // A PAGINA, essa sim, e marrom escuro e neutro.
-    ok(html.indexOf('#1d1917') !== -1, 'a caixa do produto e marrom escuro');
-    ok(html.indexOf('#151211') !== -1, 'e o cabecalho dela, mais escuro ainda');
-    ok(html.indexOf('#574e49') !== -1, 'o contorno e neutro, no lugar do cinza azulado');
+    // A PAGINA, essa sim, seguiu a paleta azul de 21/08/2026.
+    ok(html.indexOf('#0a2472') !== -1, 'a caixa do produto e o navy da paleta');
+    ok(html.indexOf('#0d0e20') !== -1, 'o cabecalho dela e o navy mais fundo');
+    ok(html.indexOf('#2b32af') !== -1, 'e o contorno e o azul royal da paleta');
     ok(html.indexOf('#918f8c') === -1, 'e o cinza da fila do Pedido nao sobrou');
     ok(html.indexOf('var(--blue)') === -1, 'nem o azul do numero do pedido');
 })();

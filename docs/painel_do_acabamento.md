@@ -265,7 +265,8 @@ acesa depois que a tela sumiu é defeito, não detalhe.
 
 Quando ninguém escolheu nada, o estágio é **derivado** do setor anterior: modelo
 com a impressão concluída entra como *Impresso*; qualquer outra coisa entra como
-*Aguardando*, e a caixa dele fica **marrom**. Foi o pedido do usuário em
+*Aguardando*, e a caixa dele fica **marrom** — a cor do estágio, que não
+acompanha a paleta da tela. Foi o pedido do usuário em
 20/08/2026, ao ver a tela pronta: um modelo que ainda não saiu da impressora não
 pode aparecer como impresso, e a opção vazia *"— Status —"* não dizia nada a
 quem estava olhando.
@@ -348,16 +349,12 @@ Se as colunas não existirem, a tela **continua listando os pedidos** e avisa um
 administrador para rodar a atualização do banco."* A tela de Usuários, essa sim,
 para de gravar — por isso a ordem de publicação abaixo não é sugestão.
 
-## A paleta: a mesma forma, em marrom escuro
+## A paleta
 
 A tela usa, de propósito, a **mesma marcação** da tela de Produção — as mesmas
 classes `prod-*`, os mesmos cards, a mesma tabela. É isso que faz as duas se
 parecerem e envelhecerem juntas: mexer no layout de uma mexe na outra sem
 ninguém precisar lembrar.
-
-O preço apareceu com a tela rodando: de relance, na estação, as duas eram a
-mesma tela. Em 20/08/2026 o usuário pediu o Acabamento derivado de **marrom
-escuro**, para o olho separar uma da outra.
 
 A pintura mora em dois lugares, e nenhum deles alcança a Produção:
 
@@ -367,32 +364,64 @@ A pintura mora em dois lugares, e nenhum deles alcança a Produção:
   bloco `prod-*` aparece **duas vezes** neste CSS (resto de colagem antiga), e
   regra escrita depois vence as duas. Há teste varrendo o bloco atrás de
   qualquer seletor sem o id.
-- **`frontend/acabamento.js`**, na constante `MARROM`, para os tons que o
-  arquivo escreve inline (a caixa do produto, o contorno, o número do pedido).
+- **`frontend/acabamento.js`**, na constante `AZUL`, para os tons que o arquivo
+  escreve inline (a caixa do produto, o contorno, o número do pedido).
+
+### Os dez tons, entregues pelo usuário em 21/08/2026
+
+| Escura (superfícies) | | Clara (realces) | |
+|---|---|---|---|
+| `#06070d` | fundo de campo | `#120a8f` | navy profundo |
+| `#0d0e20` | cabeçalho de caixa | `#2b32af` | índigo — contorno e hover |
+| `#0a2472` | superfície dos cards | `#4a61e8` | azul royal |
+| `#123a99` | cabeçalhos e botões | `#4589d7` | o que está ligado |
+| `#1a438f` | | `#4cc8f0` | ciano — texto de realce |
+
+O único tom que não veio da imagem é **`#cfe6fb`**, o texto de leitura: a paleta
+não traz um tom claro o bastante para corpo de texto, e ele é puxado do ciano.
+`#9fd8f2` e `#7fa9d4` são derivações do mesmo ciano, para as métricas que
+precisavam se distinguir entre si.
+
+### O cuidado que esta paleta exige
+
+Antes de 21/08/2026 esta tela era **marrom escuro** — pedido de 20/08, para o
+olho separar uma tela da outra de relance na estação, já que as duas usam a
+mesma marcação.
+
+Agora as duas são azuis, e o que as separa é o **tipo** de azul: a Produção é
+ardósia dessaturada (`#1e293b`, `#334155`, `#3b82f6`) e esta é índigo saturado.
+Isso é mais frágil do que a distinção anterior, e por isso o teste
+`nadaDeMotorNemDeAgente` proíbe os cinco tons da Produção dentro do
+`acabamento.js`. É ele que impede as duas de convergirem com o tempo.
 
 | | Produção | Acabamento |
 |---|---|---|
-| Superfície dos cards | `#1e293b` ardósia | `#1d1917` marrom escuro |
-| Cabeçalhos | `#334155` | `#292421` |
-| O que está ligado | azul `#3b82f6` | âmbar `#f59e0b` |
-| Nº do pedido | gradiente azul | gradiente âmbar/marrom |
-| Progresso | verde | âmbar |
-
-O marrom é **escuro e quase sem saturação**, de propósito: o primeiro tom que
-tentei (`#2a1d13`) puxava para o laranja, e o usuário pediu mais escuro e mais
-neutro em 20/08/2026. O calor só se percebe ao lado do azul-ardósia da Produção
-— que é exatamente o que se quer distinguir.
+| Superfície dos cards | `#1e293b` ardósia | `#0a2472` azul profundo |
+| Cabeçalhos | `#334155` | `#123a99` |
+| O que está ligado | azul `#3b82f6` | `#4589d7` |
+| Nº do pedido | gradiente azul-ardósia | gradiente `#2b32af` → `#120a8f` |
+| Progresso | verde | `#4589d7` |
 
 ### O que a paleta NÃO alcança: a cor por status
 
 As quatro cores de fundo da caixa do modelo — *Aguardando* `#3a2a1c`,
 *Impresso* `#162037`, *Em acabamento* `#32352e`, *Pronto* `#14301f` — **não
-acompanham a paleta da tela**.
+acompanham a paleta da tela**, e já atravessaram duas repaginações sem mudar.
 
-Eu as tinha trazido para a família terra junto com o resto, e o usuário mandou
+Eu as tinha trazido para a família terra em 20/08/2026, e o usuário mandou
 devolver: elas dizem em que ponto o modelo está, e é a primeira coisa que se lê
 na tela. Mexer nelas para combinar com o fundo é trocar informação por
 decoração. Há teste travando as quatro.
+
+Com a tela azul isso ficou mais visível: o marrom do *Aguardando* contrasta
+forte com a página, e o azul escuro do *Impresso* quase se confunde com ela.
+Isso é para o usuário decidir, não para eu ajustar sozinho — a regra é que cor
+de estado não acompanha paleta.
+
+**O que MUDA junto com a paleta, e por quê:** os números das métricas da coluna
+lateral. Eles não dizem estado — são a identidade de cada métrica, iguais em
+todo desenho. A única exceção ali é *Pedidos em Atraso*, que fica vermelho:
+alerta não se repinta para combinar com a tela.
 
 **O que continua igual ao da Produção, de propósito:** o selo de prazo de
 entrega (`formatPrazoBadge`) e a miniatura da coluna Preview

@@ -256,12 +256,15 @@ def test_a_camera_tem_saida_que_nao_depende_do_navegador():
     assert "t.stop()" in js, "as trilhas da camera precisam ser paradas"
 
 
-def test_o_marrom_do_acabamento_nao_repinta_o_painel_de_producao():
+def test_a_paleta_do_acabamento_nao_repinta_o_painel_de_producao():
     """As duas telas usam as MESMAS classes `prod-*`, de proposito.
 
-    Por isso a paleta marrom do Acabamento (pedida em 20/08/2026, para o olho
-    separar uma tela da outra na estacao) mora em regras presas ao id da secao.
-    Uma regra `prod-*` solta aqui repintaria a tela que a grafica usa todo dia.
+    Por isso a paleta do Acabamento mora em regras presas ao id da secao. Uma
+    regra `prod-*` solta aqui repintaria a tela que a grafica usa todo dia.
+
+    A paleta ja mudou duas vezes -- marrom em 20/08/2026, azul em 21/08 -- e o
+    que este teste protege nao e a cor: e o ESCOPO. Ele continua valendo qualquer
+    que seja a proxima.
     """
     css = _ler("frontend/style.css")
 
@@ -286,6 +289,21 @@ def test_o_marrom_do_acabamento_nao_repinta_o_painel_de_producao():
     # E a Producao continua com a superficie que sempre teve.
     antes = css[:css.index(marca)]
     assert "#1e293b" in antes, "a superficie da Producao mudou"
+
+    # A paleta azul de 21/08/2026, nos tokens -- os cinco tons que o usuario
+    # entregou, do mais escuro ao mais claro.
+    tokens = css[css.index("#view-acabamento {"):]
+    tokens = tokens[:tokens.index("}")]
+    # Sem o comentario: ele cita os tons da Producao justamente para dizer que
+    # eles nao entram, e a busca crua acharia a citacao.
+    tokens = re.sub(r"/\*.*?\*/", "", tokens, flags=re.S)
+    for tom in ("#0a2472", "#123a99", "#2b32af", "#4589d7", "#4cc8f0"):
+        assert tom in tokens, "o tom " + tom + " da paleta sumiu dos tokens"
+
+    # E nenhum tom da Producao entrou nos tokens: agora que as duas telas sao
+    # azuis, e a familia do azul que as separa.
+    for tom in ("#3b82f6", "#2563eb", "#334155", "#1e293b", "#0f172a"):
+        assert tom not in tokens, "tom da Producao dentro dos tokens: " + tom
 
     # As chaves seguem equilibradas: um `{` sem par faz o navegador descartar o
     # resto do arquivo em silencio.
