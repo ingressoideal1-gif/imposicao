@@ -33,6 +33,7 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
+import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { recusaDeRotaDesconhecida, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
 import {
@@ -325,6 +326,31 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       exigirModuloUsuarios(quem.permissoes, true);
       await banco("DELETE", `${TABELA_ACESSOS}?id=eq.${encodeURIComponent(p[1])}`);
       return ok({ ok: true });
+    }
+
+    recusaDeRotaDesconhecida(req.method);
+  }
+
+  // ── /senha-liberacao ──
+  //
+  // A senha semanal que libera, no Painel do Acabamento, um peso real fora dos
+  // 5 % do estimado. Ver `_compartilhado/senha_liberacao.ts`.
+  //
+  // MOSTRAR a senha exige o modulo Usuarios, pela mesma razao da lista de
+  // codigos locais: e um segredo da semana, e quem o conhece libera qualquer
+  // divergencia. CONFERIR exige so sessao -- quem digita e o operador do
+  // acabamento, e a resposta e sim ou nao. A senha nunca desce para a tela dele.
+  if (p[0] === "senha-liberacao") {
+    const quem = await quemChama(req);
+
+    if (p.length === 1 && req.method === "GET") {
+      exigirModuloUsuarios(quem.permissoes, false);
+      return ok({ ok: true, ...(await senhaAtual()) });
+    }
+
+    if (p.length === 2 && p[1] === "conferir" && req.method === "POST") {
+      const corpo = await corpoJson();
+      return ok({ ok: true, confere: await conferirSenha(corpo?.senha) });
     }
 
     recusaDeRotaDesconhecida(req.method);

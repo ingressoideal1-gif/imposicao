@@ -120,6 +120,8 @@
         setores: [],        // vazio = todos; os cards SOMAM (ver setFiltroSetor)
         pesos: {},          // 'SETOR' -> { peso, existe } do pedido aberto
         pesosDoPedido: null,// de qual pedido é o mapa acima
+        estimados: {},      // 'SETOR' -> kg estimado (só os que têm; ausente = null)
+        liberacaoPendente: null, // o peso fora dos 5 % que espera a senha (ver gravarPeso)
         temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
@@ -1186,16 +1188,45 @@
     }
 
     /**
+     * O endereço de uma rota nossa: `<base>/api/<rota>/<x>`.
+     *
+     * É o ÚNICO lugar do arquivo que escreve a raiz `api` — há teste contando.
+     * Quem muda é só a base: vazia na estação (o agente serviu a página e
+     * responde no caminho relativo) ou a Edge Function do painel, no site.
+     */
+    function urlDeApi(base, rota, x) {
+        return `${base}/api/${rota}/${encodeURIComponent(x)}`;
+    }
+
+    /**
      * O endereço de uma rota do agente.
      *
-     * Um lugar só monta o `API_BASE_URL`, e há teste contando: esta tela fala
-     * com o agente por estas três rotas e por mais nenhuma.
+     * Um lugar só lê o `API_BASE_URL`, e há teste contando: esta tela fala
+     * com o agente por quatro rotas e por mais nenhuma — três da ficha de
+     * expedição (peso, carimbo do setor, envio) e a conferência da senha de
+     * liberação do peso (21/08/2026).
      */
-    function urlDaEstacao(rota, numeroDoPedido) {
+    function urlDaEstacao(rota, x) {
         let base = '';
         if (typeof API_BASE_URL !== 'undefined') base = API_BASE_URL;
         else if (typeof window !== 'undefined' && window.API_BASE_URL) base = window.API_BASE_URL;
-        return `${base}/api/${rota}/${encodeURIComponent(numeroDoPedido)}`;
+        return urlDeApi(base, rota, x);
+    }
+
+    /**
+     * O endereço de uma rota da Edge Function `painel`, para quando a página
+     * veio do site e há sessão do Vibe.
+     *
+     * `API_PAINEL` sai do `supabase-config.js`, e o `window.fetch` embrulhado de
+     * lá acrescenta a sessão a toda URL que começa por ele — é assim que a
+     * função sabe quem está digitando. Identificador nu primeiro e `window`
+     * depois, pela mesma razão do `urlDaEstacao`.
+     */
+    function urlDoPainel(rota, x) {
+        let base = '';
+        if (typeof API_PAINEL !== 'undefined') base = API_PAINEL;
+        else if (typeof window !== 'undefined' && window.API_PAINEL) base = window.API_PAINEL;
+        return urlDeApi(base, rota, x);
     }
 
     function urlDoPeso(numeroDoPedido) {
@@ -1278,6 +1309,144 @@
         return String(n).replace('.', ',');
     }
 
+    // ─── O peso estimado, e a regra dos 5 % ─────────────────────────────────
+    //
+    // Pedido do usuário em 21/08/2026: ao lado do peso real de cada setor, o
+    // peso ESTIMADO — e o real não pode fugir mais de 5 % dele sem a senha de
+    // liberação da semana (a que aparece no menu Usuários).
+    //
+    // O ERP não guarda "estimado por setor". Ele guarda o estimado por LINHA da
+    // proposta, em gramas: `produtos_proposta.peso_total` é coluna gerada,
+    // `peso_uni * qtd`. O setor da linha é o `setor_pcp` do produto — a mesma
+    // origem dos cards da fila. Então o estimado do setor é a soma das linhas
+    // daquele setor, ÷ 1000. Conferido contra os pedidos que já tinham peso real
+    // (21000/FLEXO est. 4,160 × real 4,16; 21074/FLEXO 270,400 × 270,4).
+    //
+    // A leitura de `produtos_proposta` é pública, então a soma é feita AQUI, nos
+    // dois caminhos — estação sem sessão e site com sessão —, sem rota nova e
+    // sem tocar em tabela do parceiro. Quem confere a senha é o servidor; a
+    // regra dos 5 % mora nesta tela, como a conferência da expedição.
+
+    const TABELA_DO_ESTIMADO = 'produtos_proposta';
+    const TOLERANCIA_DO_PESO = 0.05;
+
+    /** O estimado na tela sempre com três casas: "4,160 kg", como o ERP soma. */
+    function kgParaTexto(valor) {
+        const n = Number(valor);
+        if (valor === null || valor === undefined || !isFinite(n)) return '';
+        return n.toFixed(3).replace('.', ',');
+    }
+
+    /**
+     * Soma o `peso_total` (GRAMAS) das linhas por setor e devolve kg com três
+     * casas: `{ FLEXO: 4.16 }`. Pura, para o teste.
+     *
+     * `setorPorProduto` é `id_produto -> setor_pcp`. Linha cujo produto não tem
+     * setor aceito pelo banco não entra em conta nenhuma — ninguém tem campo de
+     * peso para ela. Setor cuja soma não passa de zero fica de FORA do mapa: é
+     * "sem estimado", e sem estimado não há com o que comparar.
+     */
+    function estimadoPorSetor(linhas, setorPorProduto) {
+        const gramas = {};
+        (linhas || []).forEach(l => {
+            if (!l) return;
+            const setor = normalizar((setorPorProduto || {})[String(l.id_produto)]);
+            if (SETORES_DO_BANCO.indexOf(setor) === -1) return;
+            const g = Number(l.peso_total);
+            if (!isFinite(g) || g <= 0) return;
+            gramas[setor] = (gramas[setor] || 0) + g;
+        });
+        const kg = {};
+        Object.keys(gramas).forEach(setor => {
+            const total = Math.round(gramas[setor]) / 1000;
+            if (total > 0) kg[setor] = total;
+        });
+        return kg;
+    }
+
+    /** O estimado do setor no pedido aberto, ou null quando não há. */
+    function estimadoDoSetor(setor) {
+        const v = tela.estimados[setor];
+        return (v === undefined || v === null || !(Number(v) > 0)) ? null : Number(v);
+    }
+
+    /**
+     * |real − estimado| / estimado. Null quando não dá para comparar: sem
+     * estimado, estimado zero, ou sem peso digitado (apagar o campo não confere).
+     */
+    function divergencia(real, estimado) {
+        const est = Number(estimado);
+        if (estimado === null || estimado === undefined || !(est > 0)) return null;
+        if (real === null || real === undefined || !isFinite(Number(real))) return null;
+        return Math.abs(Number(real) - est) / est;
+    }
+
+    /**
+     * Acima de 5 % — EXATAMENTE 5 % ainda passa — pede a senha de liberação.
+     *
+     * A folga de um bilionésimo é só contra o ponto flutuante: 2,1 contra 2,0 dá
+     * 0,050000000000000044 em JavaScript, e sem ela a borda "exata" abriria o
+     * popup. Peso tem três casas; nada real cabe nessa folga.
+     */
+    function precisaDeLiberacao(real, estimado) {
+        const d = divergencia(real, estimado);
+        return d !== null && d > TOLERANCIA_DO_PESO + 1e-9;
+    }
+
+    /**
+     * Lê `produtos_proposta` daquele pedido e guarda o estimado por setor.
+     *
+     * Falha aqui não derruba o box: sem estimado a tela mostra "est. —" e grava
+     * como gravava antes — é o mesmo espírito do `carregarPesos`. O pedido pode
+     * ter sido trocado enquanto a leitura voava; nesse caso o resultado é
+     * descartado, para o estimado de um pedido não aparecer no outro.
+     */
+    async function carregarEstimados(numeroDoPedido) {
+        tela.estimados = {};
+        const idInt = parseInt(numeroDoPedido);
+        if (isNaN(idInt)) return;
+        const aberto = tela.pedidoAberto;
+
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+            const { data, error } = await supabaseClient
+                .from(TABELA_DO_ESTIMADO)
+                .select('id, id_produto, qtd, peso_total')
+                .eq('id_int', idInt);
+            if (error) throw error;
+            if (tela.pedidoAberto !== aberto) return;
+
+            const setorPorProduto = {};
+            (estado().produtosGlobais || []).forEach(p => {
+                if (p && p.id_produto !== undefined && p.id_produto !== null) {
+                    setorPorProduto[String(p.id_produto)] = p.setor_pcp || '';
+                }
+            });
+            tela.estimados = estimadoPorSetor(data, setorPorProduto);
+        } catch (e) {
+            console.warn('[acabamento] não deu para ler o peso estimado por setor:', e);
+            tela.estimados = {};
+        }
+    }
+
+    /**
+     * O texto ao lado do `kg` de um setor: "est. 4,160 kg", e, com peso
+     * digitado, a divergência ("· +8,2%"). Âmbar acima dos 5 %; sem estimado,
+     * "est. —".
+     */
+    function textoDoEstimado(setor) {
+        const est = estimadoDoSetor(setor);
+        if (est === null) return { texto: 'est. —', cor: 'var(--text-dim)' };
+        const linha = tela.pesos[setor];
+        const real = linha && linha.peso !== null && linha.peso !== undefined ? linha.peso : null;
+        const d = divergencia(real, est);
+        if (d === null) return { texto: `est. ${kgParaTexto(est)} kg`, cor: 'var(--text-dim)' };
+        const pct = (real - est) / est * 100;
+        const sinal = pct < 0 ? '-' : '+';
+        const texto = `est. ${kgParaTexto(est)} kg · ${sinal}${Math.abs(pct).toFixed(1).replace('.', ',')}%`;
+        return { texto, cor: precisaDeLiberacao(real, est) ? '#fbbf24' : 'var(--text-dim)' };
+    }
+
     /**
      * Lê as linhas de `propostas_os_setores` daquele pedido.
      *
@@ -1329,8 +1498,13 @@
      *
      * `UNIQUE (id_int, setor)` protege a corrida entre duas pessoas no mesmo
      * pedido: o segundo INSERT volta 23505 e vira atualização.
+     *
+     * Antes de qualquer escrita, a regra dos 5 %: peso que foge do estimado
+     * além disso NÃO é gravado — fica em `tela.liberacaoPendente` e o popup da
+     * senha abre. Quem volta aqui com `opcoes.liberado` é o `liberarDivergencia`,
+     * depois de o servidor dizer que a senha confere.
      */
-    async function gravarPeso(numeroDoPedido, setor, texto) {
+    async function gravarPeso(numeroDoPedido, setor, texto, opcoes) {
         const idInt = parseInt(numeroDoPedido);
         const alvo = normalizar(setor);
         if (isNaN(idInt) || SETORES_DO_BANCO.indexOf(alvo) === -1) return;
@@ -1339,6 +1513,13 @@
         if (peso === undefined) {
             avisar(`"${texto}" não é um peso. Use só números, como 4,16.`, 'error');
             pintarPesos();
+            return;
+        }
+
+        const estimado = estimadoDoSetor(alvo);
+        if (precisaDeLiberacao(peso, estimado) && !(opcoes && opcoes.liberado)) {
+            tela.liberacaoPendente = { numeroDoPedido, setor: alvo, texto, peso, estimado };
+            abrirPopupDaLiberacao();
             return;
         }
 
@@ -1366,6 +1547,7 @@
                 }
                 tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
                 marcarPeso(alvo, 'gravado');
+                pintarEstimado(alvo);
                 return;
             }
 
@@ -1415,6 +1597,7 @@
 
             tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
             marcarPeso(alvo, 'gravado');
+            pintarEstimado(alvo);
         } catch (e) {
             console.error('[acabamento] erro ao gravar o peso:', e);
             tela.pesos[alvo] = antes;
@@ -1444,13 +1627,32 @@
         el.style.color = desenho.cor;
     }
 
-    /** Devolve aos campos o que está no estado, sem tocar no resto da tela. */
+    /**
+     * O "est. …" ao lado do campo de UM setor, a partir do estado.
+     *
+     * Separado do `pintarPesos` de propósito: depois de gravar, só ele é
+     * chamado — repintar o CAMPO ali apagaria o que o operador já estivesse
+     * digitando no setor vizinho enquanto a gravação voava.
+     */
+    function pintarEstimado(setor) {
+        const est = document.getElementById('acab-peso-est-' + setor);
+        if (!est) return;
+        const desenho = textoDoEstimado(setor);
+        est.textContent = desenho.texto;
+        est.style.color = desenho.cor;
+    }
+
+    /**
+     * Devolve aos campos o que está no estado, sem tocar no resto da tela — e
+     * atualiza o estimado ao lado, que depende do peso que está no campo.
+     */
     function pintarPesos() {
         Object.keys(ROTULO_DO_SETOR).forEach(setor => {
             const campo = document.getElementById('acab-peso-' + setor);
             if (!campo) return;
             const atual = tela.pesos[setor];
             campo.value = pesoParaTexto(atual ? atual.peso : null);
+            pintarEstimado(setor);
         });
     }
 
@@ -1498,6 +1700,7 @@
                     const r = ROTULO_DO_SETOR[setor] || { nome: setor, icone: '📦' };
                     const atual = tela.pesos[setor];
                     const valor = pesoParaTexto(atual ? atual.peso : null);
+                    const estimado = textoDoEstimado(setor);
                     return `
                     <div style="display: flex; align-items: center; gap: 10px; flex: 1 1 240px;
                                 background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
@@ -1513,6 +1716,9 @@
                                       color: #cfe6fb; padding: 6px 8px; font-size: 0.92rem;
                                       font-family: monospace; opacity: ${pode ? '1' : '0.5'};" />
                         <span style="font-size: 0.8rem; color: var(--text-dim);">kg</span>
+                        <span id="acab-peso-est-${setor}"
+                              title="Peso estimado: a soma dos pesos dos produtos deste setor no pedido, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
+                              style="font-size: 0.74rem; color: ${estimado.cor}; white-space: nowrap;">${esc(estimado.texto)}</span>
                         <span id="acab-peso-sinal-${setor}" style="font-size: 0.74rem; min-width: 62px;
                               color: var(--text-dim);"></span>
                     </div>`;
@@ -1996,6 +2202,210 @@
         }).join(', ');
         return `Ainda não dá para expedir: falta terminar ${lista}. `
              + 'Um pedido só vai para a expedição com todos os modelos em "Pronto".';
+    }
+
+    // ─── O popup da senha de liberação ──────────────────────────────────────
+    //
+    // Pedido do usuário em 21/08/2026: peso real que foge mais de 5 % do
+    // estimado "deve abrir um popup exigindo a senha de liberação". A senha é
+    // semanal, de três caracteres, e aparece no menu Usuários — quem a tem é
+    // quem pode liberar. Ela NUNCA desce para esta tela: o que sai daqui é o
+    // que o operador digitou, e o que volta é sim ou não.
+    //
+    // Enquanto o popup está aberto nada foi gravado: `tela.pesos` continua com
+    // o valor de antes, e Cancelar só redesenha o campo a partir dele.
+
+    function montarPopupDaLiberacao() {
+        let caixa = document.getElementById('acab-liberacao');
+        if (caixa) return caixa;
+
+        caixa = document.createElement('div');
+        caixa.id = 'acab-liberacao';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100003; display: none;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(520px, 96vw); background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: ${'#120a8f'}; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">⚖️</span>
+                    <strong id="acab-liberacao-titulo" style="font-size: 1.05rem; color: #ffffff;">Peso fora do esperado</strong>
+                    <button type="button" id="acab-liberacao-fechar"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px;
+                                   font-weight: 700; cursor: pointer;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; color: #cfe6fb; font-size: 0.9rem; line-height: 1.55;">
+                    <div id="acab-liberacao-corpo"></div>
+                    <div style="margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+                                background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.35);
+                                color: #fbbf24; font-size: 0.86rem;">
+                        Acima de 5 %. Para gravar assim, informe a senha de liberação
+                        (está no menu Usuários).
+                    </div>
+                    <label for="acab-liberacao-senha" style="display: block; margin-top: 14px;
+                           font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase;
+                           letter-spacing: 0.06em;">Senha de liberação</label>
+                    <input type="text" id="acab-liberacao-senha" maxlength="3" autocomplete="off"
+                           autocapitalize="characters" spellcheck="false" placeholder="A00"
+                           style="margin-top: 6px; width: 120px; text-align: center; background: #0d0e20;
+                                  border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
+                                  color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
+                                  font-family: monospace; letter-spacing: 0.25em;
+                                  text-transform: uppercase;" />
+                    <div id="acab-liberacao-erro" style="margin-top: 8px; min-height: 1.2em;
+                         font-size: 0.82rem; color: #f87171;"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18); flex-wrap: wrap;">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">Cancelar devolve o peso de antes ao campo.</span>
+                    <div style="margin-left: auto; display: flex; gap: 10px;">
+                        <button type="button" id="acab-liberacao-cancelar"
+                                style="background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                       color: #cfe6fb; border-radius: 8px; padding: 10px 18px;
+                                       font-weight: 700; cursor: pointer;">Cancelar</button>
+                        <button type="button" id="acab-liberacao-ok"
+                                style="background: linear-gradient(135deg, ${'#4a61e8'}, ${'#120a8f'});
+                                       border: 1px solid ${'#4cc8f0'}; color: #ffffff; border-radius: 8px;
+                                       padding: 10px 22px; font-weight: 800; letter-spacing: 0.05em;
+                                       cursor: pointer;">Liberar</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        const cancelar = () => cancelarLiberacao();
+        const btnX = document.getElementById('acab-liberacao-fechar');
+        const btnCancelar = document.getElementById('acab-liberacao-cancelar');
+        const btnOk = document.getElementById('acab-liberacao-ok');
+        const campo = document.getElementById('acab-liberacao-senha');
+        if (btnX) btnX.addEventListener('click', cancelar);
+        if (btnCancelar) btnCancelar.addEventListener('click', cancelar);
+        if (btnOk) btnOk.addEventListener('click', () => liberarDivergencia());
+        if (campo) {
+            // Maiúsculas enquanto digita: a senha é "K47", nunca "k47", e o
+            // operador não deve ter de pensar nisso.
+            campo.addEventListener('input', () => { campo.value = String(campo.value || '').toUpperCase(); });
+            campo.addEventListener('keydown', e => {
+                if (e && e.key === 'Enter') { e.preventDefault(); liberarDivergencia(); }
+            });
+        }
+        return caixa;
+    }
+
+    function fecharPopupDaLiberacao() {
+        const caixa = document.getElementById('acab-liberacao');
+        if (caixa) caixa.style.display = 'none';
+        tela.liberacaoPendente = null;
+    }
+
+    /** Cancelar: nada foi gravado, e o campo volta ao valor de antes. */
+    function cancelarLiberacao() {
+        fecharPopupDaLiberacao();
+        pintarPesos();
+    }
+
+    /** Abre o popup com o que está em `tela.liberacaoPendente`. */
+    function abrirPopupDaLiberacao() {
+        const p = tela.liberacaoPendente;
+        if (!p) return;
+        montarPopupDaLiberacao();
+
+        const d = divergencia(p.peso, p.estimado);
+        const pct = d === null ? 0 : (p.peso - p.estimado) / p.estimado * 100;
+        const sinal = pct < 0 ? '-' : '+';
+        const corpo = document.getElementById('acab-liberacao-corpo');
+        if (corpo) {
+            corpo.innerHTML = `
+                <div style="font-size: 0.95rem; margin-bottom: 8px;">
+                    <strong style="color: #ffffff;">Pedido ${esc(p.numeroDoPedido)}</strong>
+                    <span style="color: ${'#4cc8f0'};"> — setor ${esc(nomeDoSetor(p.setor))}</span>
+                </div>
+                <table style="border-collapse: collapse; font-size: 0.9rem;">
+                    <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso digitado</td>
+                        <td style="padding: 3px 0; font-family: monospace; color: #ffffff;">${esc(pesoParaTexto(p.peso))} kg</td></tr>
+                    <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso estimado</td>
+                        <td style="padding: 3px 0; font-family: monospace;">${esc(kgParaTexto(p.estimado))} kg</td></tr>
+                    <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Divergência</td>
+                        <td style="padding: 3px 0; font-family: monospace; color: #fbbf24;">${sinal}${esc(Math.abs(pct).toFixed(1).replace('.', ','))}%</td></tr>
+                </table>`;
+        }
+        const erro = document.getElementById('acab-liberacao-erro');
+        if (erro) erro.textContent = '';
+        const campo = document.getElementById('acab-liberacao-senha');
+        if (campo) campo.value = '';
+        const botao = document.getElementById('acab-liberacao-ok');
+        if (botao) { botao.disabled = false; botao.textContent = 'Liberar'; }
+
+        const caixa = document.getElementById('acab-liberacao');
+        if (caixa) caixa.style.display = 'flex';
+        if (campo && typeof campo.focus === 'function') {
+            try { campo.focus(); } catch (ignorado) { /* sem foco não há problema */ }
+        }
+    }
+
+    /**
+     * Pergunta ao servidor se a senha confere. Só sim ou não volta.
+     *
+     * Dois caminhos, pelos mesmos motivos do peso: na estação o agente repassa
+     * à `acesso-estacao` com o segredo dele; no site a `painel` confere com a
+     * sessão do Vibe (o `window.fetch` do `supabase-config.js` a acrescenta).
+     */
+    async function conferirSenhaDeLiberacao(senha) {
+        const url = pelaEstacao()
+            ? urlDaEstacao('senha-liberacao', 'conferir')
+            : urlDoPainel('senha-liberacao', 'conferir');
+        const res = await buscar(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senha }),
+        });
+        if (!res.ok) throw new Error(await motivoDaResposta(res));
+        const corpo = await res.json();
+        return !!(corpo && corpo.confere === true);
+    }
+
+    /**
+     * O botão Liberar (e o Enter no campo).
+     *
+     * Senha certa → a gravação pendente segue pelo caminho de sempre, com
+     * `liberado`. Senha errada ou rede fora → o popup FICA aberto com o motivo,
+     * e o operador tenta de novo ou cancela. Nada é gravado antes do sim.
+     */
+    async function liberarDivergencia() {
+        const pendente = tela.liberacaoPendente;
+        if (!pendente) { fecharPopupDaLiberacao(); return; }
+
+        const campo = document.getElementById('acab-liberacao-senha');
+        const erro = document.getElementById('acab-liberacao-erro');
+        const senha = String(campo && campo.value ? campo.value : '').trim().toUpperCase();
+        if (!senha) {
+            if (erro) erro.textContent = 'Digite a senha de liberação.';
+            return;
+        }
+
+        const botao = document.getElementById('acab-liberacao-ok');
+        if (botao) { botao.disabled = true; botao.textContent = 'Conferindo…'; }
+        try {
+            const confere = await conferirSenhaDeLiberacao(senha);
+            if (!confere) {
+                if (erro) erro.textContent = 'Senha incorreta.';
+                if (campo) campo.value = '';
+                return;
+            }
+            fecharPopupDaLiberacao();
+            await gravarPeso(pendente.numeroDoPedido, pendente.setor, pendente.texto, { liberado: true });
+        } catch (e) {
+            console.error('[acabamento] erro ao conferir a senha de liberação:', e);
+            if (erro) {
+                erro.textContent = `Não deu para conferir a senha (${e && e.message ? e.message : e}).`;
+            }
+        } finally {
+            if (botao) { botao.disabled = false; botao.textContent = 'Liberar'; }
+        }
     }
 
     // ─── Gravação ───────────────────────────────────────────────────────────
@@ -2512,6 +2922,8 @@
             tela.carregandoPedido = true;
             tela.pesos = {};
             tela.pesosDoPedido = null;
+            tela.estimados = {};
+            fecharPopupDaLiberacao();
             mostrarLista();
             renderDetalhe();
             try {
@@ -2525,10 +2937,11 @@
             render();
 
             // O peso vem DEPOIS do desenho, de propósito: ele é do parceiro e
-            // pode demorar ou nem responder, e o pedido não espera por ele.
+            // pode demorar ou nem responder, e o pedido não espera por ele. O
+            // estimado vem junto, em paralelo: são duas leituras independentes.
             const os = (estado().ordens || []).find(o => String(o.id) === String(osId));
             if (os) {
-                await carregarPesos(os.numero);
+                await Promise.all([carregarPesos(os.numero), carregarEstimados(os.numero)]);
                 renderDetalhe();
             }
         },
@@ -2536,6 +2949,7 @@
         fecharPedido() {
             fecharCamera();
             fecharPopupDaExpedicao();
+            fecharPopupDaLiberacao();
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -2560,6 +2974,13 @@
 
         fecharPopupDaExpedicao,
 
+        /** O "Liberar" do popup da senha: confere no servidor e, só então, grava. */
+        liberarDivergencia,
+        /** Fecha o popup da senha sem gravar; o campo volta ao valor de antes. */
+        fecharPopupDaLiberacao() {
+            cancelarLiberacao();
+        },
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -2577,6 +2998,7 @@
             // achar o VOLTAR para chegar onde o menu prometia levá-lo.
             fecharCamera();
             fecharPopupDaExpedicao();
+            fecharPopupDaLiberacao();
             tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
@@ -2596,6 +3018,11 @@
             pelaEstacao,
             urlDoPeso,
             urlDaEstacao,
+            urlDoPainel,
+            urlDeApi,
+            estimadoPorSetor,
+            precisaDeLiberacao,
+            divergencia,
             modelosPorSetor,
             setoresPendentes,
             pedidoProntoParaExpedicao,

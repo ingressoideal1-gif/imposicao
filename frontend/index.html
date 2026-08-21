@@ -2999,6 +2999,30 @@
                     </div>
                 </div>
 
+                <!-- ── Senha de liberação de peso ──────────────────────────── -->
+                <!-- A senha que o Painel do Acabamento pede quando o peso real de um
+                     setor foge mais de 5 % do estimado. Ela vem pronta do servidor e
+                     só chega a esta tela: a tela do operador manda o que foi digitado
+                     e recebe sim ou não. -->
+                <div class="card" id="card-senha-liberacao" style="margin-bottom:24px;">
+                    <div class="card-header">
+                        <span class="card-title"><span class="icon">🔐</span> Senha de liberação de peso</span>
+                        <button class="btn btn-secondary btn-sm" onclick="loadSenhaLiberacao()">🔄 Atualizar</button>
+                    </div>
+                    <div style="padding:12px 16px 16px 16px;">
+                        <p style="color:var(--text-dim);font-size:0.84rem;margin:0 0 12px 0;">
+                            No Painel do Acabamento, o peso real de um setor que difere <strong>mais de 5 %</strong> do peso
+                            estimado só é gravado com esta senha — o operador digita no popup que abre ali.
+                            A senha é <strong>gerada sozinha</strong> e <strong>muda toda segunda-feira</strong>:
+                            1 letra e 2 números. Só quem vê este menu a enxerga.
+                        </p>
+                        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;">
+                            <strong id="senha-liberacao-valor" style="font-family:monospace;font-size:2rem;letter-spacing:0.18em;">—</strong>
+                            <span id="senha-liberacao-semana" style="color:var(--text-dim);font-size:0.84rem;"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ── Acesso local ao NewProd ─────────────────────────────── -->
                 <div class="card" style="margin-bottom:24px;">
                     <div class="card-header">

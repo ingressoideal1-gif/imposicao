@@ -12,7 +12,7 @@
  * Alem dessas tres, a funcao carrega duas rotas que nao tem nada a ver com
  * publicar faixa e moram aqui porque o CONSUMIDOR e o mesmo -- a estacao, com o
  * mesmo segredo: `acessos-locais`, `fontes` e, desde 21/08/2026, `peso-setores`,
- * `setor-concluido` e `expedicao`.
+ * `setor-concluido`, `expedicao` e `senha-liberacao`.
  *
  * ## Por que `verify_jwt = false`, e o que protege no lugar
  *
@@ -47,6 +47,7 @@ import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
+import { conferirSenha } from "../_compartilhado/senha_liberacao.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
 import {
   concluirSetor,
@@ -284,6 +285,29 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     if (p.length !== 2 || req.method !== "POST") recusaDeRotaDesconhecida(req.method);
     const pedido = inteiro(p[1], "path", "pedido");
     return ok({ status: "success", ...(await enviarParaExpedicao(pedido)) });
+  }
+
+  // A senha semanal de liberacao de peso (21/08/2026).
+  //
+  // O operador do acabamento digita a senha no popup da estacao, e a estacao
+  // nao tem sessao do Supabase -- entao a conferencia sai por aqui, com o
+  // segredo do agente, como o peso. So volta sim ou nao: a senha em si nunca
+  // viaja para a estacao. Ver `_compartilhado/senha_liberacao.ts`.
+  //
+  // O segredo do agente vem ANTES do corpo, como nas vizinhas: interpretar
+  // corpo de quem nao se identificou seria trabalho feito para um estranho.
+  if (p[0] === "senha-liberacao") {
+    await conferirAgente(req);
+    if (p.length !== 2 || p[1] !== "conferir" || req.method !== "POST") {
+      recusaDeRotaDesconhecida(req.method);
+    }
+    let corpo: any;
+    try {
+      corpo = await req.json();
+    } catch {
+      throw new Recusa(422, "corpo invalido: esperava JSON");
+    }
+    return ok({ status: "success", confere: await conferirSenha(corpo?.senha) });
   }
 
   // Rota que nao e uma das tres -- por caminho ou por metodo -- cai na regra do

@@ -17270,6 +17270,7 @@ window.toggleUserPerm = async function(userId, permKey, value) {
 document.getElementById('nav-admin')?.addEventListener('click', () => {
     loadAdminUsers();
     loadAcessosLocais();
+    loadSenhaLiberacao();
 });
 
 
@@ -17290,6 +17291,43 @@ let _acessosLocais = [];
 
 const CODIGO_ACESSO_TAMANHO = 6;
 const CODIGO_ACESSO_REGEX = /^[A-Z0-9]{6}$/;
+
+// ── Senha de liberação de peso ──────────────────────────────────────────────
+// A senha que o Painel do Acabamento pede quando o peso real de um setor foge
+// mais de 5 % do estimado. O valor NÃO é calculado aqui: a tela do operador
+// nunca recebe a senha — manda o que foi digitado e recebe sim ou não — e a
+// única rota que a devolve é esta, a quem pode ver o Menu Usuários. O servidor
+// a gera sozinho e a troca toda segunda-feira.
+window.loadSenhaLiberacao = async function() {
+    const valor = document.getElementById('senha-liberacao-valor');
+    const semana = document.getElementById('senha-liberacao-semana');
+    if (!valor || !semana) return;
+
+    // "AAAA-MM-DD" → "DD/MM"
+    const diaMes = (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+        return m ? `${m[3]}/${m[2]}` : '';
+    };
+
+    valor.textContent = '…';
+    semana.textContent = 'Buscando…';
+    try {
+        const resp = await fetch(`${API_PAINEL}/api/senha-liberacao`);
+        if (resp.status === 403) {
+            valor.textContent = '—';
+            semana.textContent = 'Só quem pode ver o Menu Usuários vê a senha.';
+            return;
+        }
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || !data || !data.ok || !data.senha) throw new Error(`HTTP ${resp.status}`);
+        valor.textContent = data.senha;
+        const ini = diaMes(data.inicio), fim = diaMes(data.fim);
+        semana.textContent = (ini && fim) ? `semana de ${ini} a ${fim}` : '';
+    } catch (e) {
+        valor.textContent = '—';
+        semana.textContent = 'Não deu para buscar a senha agora. Tente Atualizar.';
+    }
+};
 
 window.loadAcessosLocais = async function() {
     const tbody = document.getElementById('tbody-acessos-locais');

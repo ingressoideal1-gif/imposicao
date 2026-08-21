@@ -104,6 +104,9 @@ function montarAmbiente() {
         _erroAoGravarPeso: null,
         _propostasGravadas: [],    // as escritas em `propostas` (a expedicao)
         _erroAoExpedir: null,
+        // As linhas da proposta, de onde sai o peso ESTIMADO por setor
+        // (21/08/2026): `produtos_proposta`, so leitura, `peso_total` em GRAMAS.
+        _produtosDaProposta: [],   // [{ id, id_int, id_produto, qtd, peso_total }]
         _sessao: { user: { id: 'u1' } },   // null = estacao, sem sessao
 
         auth: {
@@ -114,6 +117,21 @@ function montarAmbiente() {
 
         from(tabela) {
             const self = this;
+
+            if (tabela === 'produtos_proposta') {
+                // Leitura publica, e so leitura: `select(...).eq('id_int', n)`
+                // e thenable no fim, como o construtor do Supabase.
+                const filtros = {};
+                const leitura = {
+                    eq: (c, v) => { filtros[c] = v; return leitura; },
+                    then: (res, rej) => Promise.resolve({
+                        data: self._produtosDaProposta.filter(l =>
+                            filtros.id_int === undefined || String(l.id_int) === String(filtros.id_int)),
+                        error: null,
+                    }).then(res, rej),
+                };
+                return { select: () => leitura };
+            }
 
             if (tabela === 'propostas_os') {
                 const filtros = {};
@@ -543,21 +561,24 @@ function ambienteComPedidoAberto() {
     // estacao e `anon` -- sem uma porta propria, o campo aceitaria o valor e
     // nada seria gravado.
     //
-    // Entao ha TRES rotas -- peso, carimbo do setor e o envio para a expedicao
-    // --, todas da FICHA DE EXPEDICAO e nenhuma do motor. Este teste existe para
-    // que continuem sendo tres.
-    const ESPERADAS = ['expedicao', 'peso-setores', 'setor-concluido'];
+    // Entao ha QUATRO rotas: tres da FICHA DE EXPEDICAO -- peso, carimbo do
+    // setor e o envio para a expedicao -- e, desde 21/08/2026, a conferencia da
+    // SENHA DE LIBERACAO do peso, que nao e da ficha: o agente so repassa o que
+    // o operador digitou e devolve sim ou nao. Nenhuma e do motor. Este teste
+    // existe para que continuem sendo quatro.
+    const ESPERADAS = ['expedicao', 'peso-setores', 'senha-liberacao', 'setor-concluido'];
     const rotas = [...new Set(
         (codigo.match(/urlDaEstacao\('([a-z0-9-]+)'/g) || [])
             .map(m => m.replace(/^urlDaEstacao\('/, '').replace(/'$/, ''))
     )].sort();
     ok(rotas.join(',') === ESPERADAS.join(','),
-       'as rotas de agente no acabamento.js sao as tres da ficha', rotas.join(','));
+       'as rotas de agente no acabamento.js sao as tres da ficha e a da senha', rotas.join(','));
 
-    // E o endereco se monta num lugar so: ha UM `/api/` no arquivo inteiro. As
-    // duas mencoes de API_BASE_URL sao a leitura do identificador nu e a do
-    // `window` -- o mesmo par do `estado()`, porque `const` no topo de script
-    // classico nao vira propriedade de window.
+    // E o endereco se monta num lugar so: ha UM `/api/` no arquivo inteiro (o
+    // `urlDeApi`, que serve ao agente e a Edge Function do painel). As duas
+    // mencoes de API_BASE_URL sao a leitura do identificador nu e a do `window`
+    // -- o mesmo par do `estado()`, porque `const` no topo de script classico
+    // nao vira propriedade de window --, e as duas ficam dentro do urlDaEstacao.
     const iUrl = codigo.indexOf('function urlDaEstacao(');
     const corpoUrl = codigo.slice(iUrl, codigo.indexOf('\n    }', iUrl));
     ok((codigo.match(/API_BASE_URL/g) || []).length ===
@@ -566,6 +587,12 @@ function ambienteComPedidoAberto() {
     ok((codigo.match(/\/api\//g) || []).length === 1,
        'e ha um unico `/api/` no arquivo inteiro',
        String((codigo.match(/\/api\//g) || []).length));
+    // O mesmo vale para o painel: `API_PAINEL` so e lido dentro do urlDoPainel.
+    const iPainel = codigo.indexOf('function urlDoPainel(');
+    const corpoPainel = codigo.slice(iPainel, codigo.indexOf('\n    }', iPainel));
+    ok(iPainel !== -1 && (codigo.match(/API_PAINEL/g) || []).length ===
+       (corpoPainel.match(/API_PAINEL/g) || []).length,
+       'o endereco do painel so e montado dentro do urlDoPainel');
 
     // E nao escreve no que e da Producao.
     ok(codigo.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
@@ -1239,6 +1266,340 @@ async function desmarcarUmModeloTiraOCarimbo() {
        'e o filtro protege o que o ERP escreveu', JSON.stringify(carimbo.filtros));
 }
 
+// ─── 10. O peso estimado e a senha de liberacao ─────────────────────────────
+//
+// Pedido do usuario em 21/08/2026: ao lado do peso real, o peso ESTIMADO do
+// setor (a soma de `produtos_proposta.peso_total`, em gramas, dos produtos
+// daquele setor). O real nao pode fugir mais de 5 % do estimado; acima disso
+// a gravacao fica PENDENTE e um popup pede a senha semanal de liberacao, que o
+// servidor confere. Nada e gravado antes do sim.
+
+(function oEstimadoSomaAsLinhasDoSetorEmGramas() {
+    const { painel } = montarAmbiente();
+    const { estimadoPorSetor } = painel._regras;
+    const setores = { 55: 'PVC', 56: 'LASER', 57: '' };
+
+    // Gramas no banco, quilos na tela: 4160 g = 4,160 kg. E o caso conferido
+    // contra o pedido 21000 (est. 4,160 x real 4,16).
+    let r = estimadoPorSetor([{ id_produto: 55, qtd: 500, peso_total: 4160 }], setores);
+    ok(r.PVC === 4.16, 'o estimado do setor e a soma em kg', JSON.stringify(r));
+
+    // Duas linhas do mesmo setor somam; setores diferentes nao se misturam.
+    r = estimadoPorSetor([
+        { id_produto: 55, peso_total: 4160 },
+        { id_produto: 55, peso_total: 840 },
+        { id_produto: 56, peso_total: 450 },
+    ], setores);
+    ok(r.PVC === 5 && r.LASER === 0.45, 'soma por setor, sem misturar', JSON.stringify(r));
+
+    // Produto sem setor nao entra em conta nenhuma; produto que a lista nao
+    // conhece tambem nao.
+    r = estimadoPorSetor([
+        { id_produto: 57, peso_total: 9999 },
+        { id_produto: 99, peso_total: 9999 },
+        { id_produto: 55, peso_total: 100 },
+    ], setores);
+    ok(Object.keys(r).join(',') === 'PVC' && r.PVC === 0.1,
+       'produto sem setor (ou desconhecido) fica de fora', JSON.stringify(r));
+
+    // Linha sem peso (ou zero) nao cria estimado: sem estimado nao ha com o que
+    // comparar, e o box mostra "est. —".
+    r = estimadoPorSetor([{ id_produto: 55, peso_total: 0 }, { id_produto: 56, peso_total: null }], setores);
+    ok(Object.keys(r).length === 0, 'peso zero ou nulo nao vira estimado', JSON.stringify(r));
+    ok(Object.keys(estimadoPorSetor([], setores)).length === 0, 'pedido sem linha: sem estimado');
+
+    // O setor do produto passa pela mesma normalizacao dos cards.
+    r = estimadoPorSetor([{ id_produto: 55, peso_total: 1000 }], { 55: 'Têxtil' });
+    ok(r.TEXTIL === 1, 'o setor e normalizado como nos cards', JSON.stringify(r));
+
+    // Tres casas, sempre: 1 g e 0,001 kg; meia grama e arredondada.
+    r = estimadoPorSetor([{ id_produto: 55, peso_total: 1 }], setores);
+    ok(r.PVC === 0.001, 'um grama e 0,001 kg', JSON.stringify(r));
+    r = estimadoPorSetor([{ id_produto: 55, peso_total: 4160.4 }], setores);
+    ok(r.PVC === 4.16, 'a fracao de grama e arredondada', JSON.stringify(r));
+})();
+
+(function aRegraDosCincoPorCentoTemBordaInclusiva() {
+    const { painel } = montarAmbiente();
+    const { divergencia, precisaDeLiberacao } = painel._regras;
+
+    ok(divergencia(4.16, 4.16) === 0, 'peso igual ao estimado nao diverge');
+    ok(divergencia(null, 4.16) === null, 'sem peso digitado nao ha divergencia');
+    ok(divergencia(4, null) === null, 'sem estimado tambem nao');
+    ok(divergencia(4, 0) === null, 'estimado zero nao divide');
+    ok(Math.abs(divergencia(4.5, 4.16) - 0.0817) < 0.0001, '4,5 contra 4,16 e 8,2 %');
+
+    // EXATAMENTE 5 % passa; um centesimo acima nao.
+    ok(precisaDeLiberacao(105, 100) === false, '5,0 % para cima ainda grava direto');
+    ok(precisaDeLiberacao(95, 100) === false, '5,0 % para baixo tambem');
+    // ...inclusive onde o ponto flutuante erra por um bilionesimo: 2,1 contra
+    // 2,0 e 4,368 contra 4,160 dao 0,050000000000000044 em JavaScript.
+    ok(precisaDeLiberacao(2.1, 2) === false, '2,1 contra 2,0 e 5 % exatos, e passa');
+    ok(precisaDeLiberacao(4.368, 4.16) === false, '4,368 contra 4,160 tambem');
+    ok(precisaDeLiberacao(0.315, 0.3) === false, 'e 0,315 contra 0,300');
+    ok(precisaDeLiberacao(105.01, 100) === true, '5,01 % para cima pede a senha');
+    ok(precisaDeLiberacao(94.99, 100) === true, '5,01 % para baixo tambem');
+    ok(precisaDeLiberacao(null, 100) === false, 'apagar o campo nao pede senha');
+    ok(precisaDeLiberacao(999, null) === false, 'sem estimado, qualquer peso grava direto');
+    ok(precisaDeLiberacao(999, 0) === false, 'estimado zero e o mesmo que nenhum');
+})();
+
+(function oEnderecoDoPainelSeMontaComoODoAgente() {
+    const amb = montarAmbiente();
+    const { urlDeApi, urlDoPainel, urlDaEstacao } = amb.painel._regras;
+    ok(urlDeApi('https://p', 'senha-liberacao', 'conferir') === 'https://p/api/senha-liberacao/conferir',
+       'urlDeApi monta base + api + rota + x', urlDeApi('https://p', 'senha-liberacao', 'conferir'));
+    ok(urlDeApi('', 'peso-setores', 200) === '/api/peso-setores/200', 'base vazia e o caminho relativo');
+    ok(urlDaEstacao('senha-liberacao', 'conferir') === '/api/senha-liberacao/conferir',
+       'sem API_BASE_URL a estacao e o caminho relativo', urlDaEstacao('senha-liberacao', 'conferir'));
+
+    amb.janela.API_PAINEL = 'https://x.supabase.co/functions/v1/painel';
+    ok(urlDoPainel('senha-liberacao', 'conferir') === 'https://x.supabase.co/functions/v1/painel/api/senha-liberacao/conferir',
+       'urlDoPainel le API_PAINEL pelo window quando o identificador nao existe',
+       urlDoPainel('senha-liberacao', 'conferir'));
+})();
+
+/** Um pedido aberto com PVC (produto 55) e Laser (produto 56), e o estimado so do PVC. */
+function ambienteComEstimado() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.produtosGlobais = [
+        { id_produto: 55, nomeReal: 'Credencial', setor_pcp: 'PVC' },
+        { id_produto: 56, nomeReal: 'Triband', setor_pcp: 'LASER' },
+    ];
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.janela.state.osItens['os-200'][1]._vibe_id_produto = 56;
+    amb.banco._produtosDaProposta = [
+        { id: 1, id_int: 200, id_produto: 55, qtd: 500, peso_total: 4160 },
+        { id: 2, id_int: 201, id_produto: 55, qtd: 500, peso_total: 99999 },   // de OUTRO pedido
+    ];
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4.16 },
+    ];
+    return amb;
+}
+
+async function oBoxMostraOEstimadoAoLadoDoPeso() {
+    const amb = ambienteComEstimado();
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('id="acab-peso-est-PVC"') !== -1, 'ha o estimado ao lado do PVC');
+    ok(html.indexOf('est. 4,160 kg') !== -1, 'com tres casas e virgula, como o ERP soma', html.indexOf('est.'));
+    ok(html.indexOf('est. —') !== -1, 'e o Laser, sem linha com peso, mostra "est. —"');
+    ok(html.indexOf('99999') === -1 && html.indexOf('99,999') === -1 && html.indexOf('104,159') === -1,
+       'a linha de OUTRO pedido nao entra na soma');
+
+    // Com peso digitado igual ao estimado, a divergencia aparece e e zero.
+    const est = amb.elementos['acab-peso-est-PVC'];
+    ok(est.textContent.indexOf('+0,0%') !== -1, 'peso igual ao estimado: +0,0%', est.textContent);
+    ok(est.style.color !== '#fbbf24', 'e sem o ambar');
+
+    // Gravar dentro dos 5 % atualiza o texto: 4,3 contra 4,16 e +3,4 %.
+    await amb.painel.mudarPeso(200, 'PVC', '4,3');
+    ok(est.textContent.indexOf('+3,4%') !== -1, 'a divergencia acompanha o peso gravado', est.textContent);
+    ok(est.style.color !== '#fbbf24', 'dentro dos 5 % nao e ambar');
+}
+
+async function dentroDosCincoPorCentoGravaDireto() {
+    const amb = ambienteComEstimado();
+    // Estimado redondo para a borda ficar exata: 100 kg.
+    amb.banco._produtosDaProposta = [{ id: 1, id_int: 200, id_produto: 55, qtd: 1, peso_total: 100000 }];
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarPeso(200, 'PVC', '105');
+    ok(amb.banco._pesosGravados.length === 1, '5,0 % exatos: grava como sempre',
+       String(amb.banco._pesosGravados.length));
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'sem popup');
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 105, 'e o banco ficou com o peso');
+
+    // 5,01 %: a gravacao para, e o popup abre.
+    amb.banco._pesosGravados.length = 0;
+    await amb.painel.mudarPeso(200, 'PVC', '105,01');
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', '5,01 %: o popup da senha abre');
+    ok(amb.banco._pesosGravados.length === 0, 'e NADA foi gravado', String(amb.banco._pesosGravados.length));
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 105, 'o banco continua com o peso de antes');
+}
+
+async function acimaDosCincoPorCentoNadaEGravadoECancelarDevolveOValor() {
+    const amb = ambienteComEstimado();
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+    ok(amb.elementos['acab-peso-PVC'].value === '4,16', 'o campo comeca com o peso do banco');
+
+    // O operador digita 4,5 (8,2 % acima de 4,160): o campo ja mostra 4,5 e o
+    // onchange dispara.
+    amb.elementos['acab-peso-PVC'].value = '4,5';
+    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
+    const corpo = amb.elementos['acab-liberacao-corpo'].innerHTML;
+    ok(corpo.indexOf('PVC') !== -1, 'o popup diz o setor');
+    ok(corpo.indexOf('4,5 kg') !== -1, 'o peso digitado', corpo);
+    ok(corpo.indexOf('4,160 kg') !== -1, 'o estimado');
+    ok(corpo.indexOf('+8,2%') !== -1, 'e a divergencia em %', corpo);
+    ok(amb.banco._pesosGravados.length === 0, 'NADA foi gravado', String(amb.banco._pesosGravados.length));
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.16, 'o banco continua com 4,16');
+
+    // Cancelar: fecha, e o campo volta ao valor de antes.
+    amb.painel.fecharPopupDaLiberacao();
+    ok(amb.elementos['acab-liberacao'].style.display === 'none', 'Cancelar fecha o popup');
+    ok(amb.elementos['acab-peso-PVC'].value === '4,16',
+       'e o campo volta ao valor de antes', amb.elementos['acab-peso-PVC'].value);
+    ok(amb.banco._pesosGravados.length === 0, 'sem gravar nada');
+
+    // Liberar sem nada pendente nao grava nem explode.
+    await amb.painel.liberarDivergencia();
+    ok(amb.banco._pesosGravados.length === 0, 'liberar sem pendencia nao grava');
+}
+
+async function senhaErradaNaoGravaEAvisa() {
+    const chamadas = [];
+    const amb = ambienteComEstimado();
+    amb.janela.API_PAINEL = 'https://x.supabase.co/functions/v1/painel';
+    amb.janela.fetch = (url, opcoes) => {
+        chamadas.push({ url, metodo: (opcoes && opcoes.method) || 'GET',
+                        corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, confere: false }) });
+    };
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
+
+    // Senha vazia nem vai ao servidor.
+    amb.documento.getElementById('acab-liberacao-senha').value = '';
+    await amb.painel.liberarDivergencia();
+    ok(chamadas.length === 0, 'senha vazia nao vai ao servidor', String(chamadas.length));
+    ok(/senha/i.test(amb.elementos['acab-liberacao-erro'].textContent), 'e a tela pede a senha');
+
+    amb.documento.getElementById('acab-liberacao-senha').value = 'k48';
+    await amb.painel.liberarDivergencia();
+
+    ok(chamadas.length === 1, 'a senha foi conferida no servidor', String(chamadas.length));
+    ok(chamadas[0].url === 'https://x.supabase.co/functions/v1/painel/api/senha-liberacao/conferir',
+       'no site, pela Edge Function do painel', chamadas[0].url);
+    ok(chamadas[0].metodo === 'POST' && chamadas[0].corpo && chamadas[0].corpo.senha === 'K48',
+       'POST com a senha digitada, em maiusculas', JSON.stringify(chamadas[0]));
+    ok(amb.elementos['acab-liberacao-erro'].textContent.indexOf('Senha incorreta') !== -1,
+       'senha errada: "Senha incorreta"', amb.elementos['acab-liberacao-erro'].textContent);
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'e o popup continua aberto');
+    ok(amb.banco._pesosGravados.length === 0, 'e nada foi gravado');
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.16, 'o banco continua com 4,16');
+
+    // Rede fora: o motivo aparece, e o popup fica.
+    amb.janela.fetch = () => Promise.reject(new Error('Failed to fetch'));
+    amb.documento.getElementById('acab-liberacao-senha').value = 'K47';
+    await amb.painel.liberarDivergencia();
+    ok(amb.elementos['acab-liberacao-erro'].textContent.indexOf('Failed to fetch') !== -1,
+       'erro de rede mostra o motivo', amb.elementos['acab-liberacao-erro'].textContent);
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'e o popup continua aberto');
+    ok(amb.banco._pesosGravados.length === 0, 'sem gravar');
+}
+
+async function senhaCertaNoSiteGravaPeloCaminhoDeSempre() {
+    const chamadas = [];
+    const amb = ambienteComEstimado();
+    amb.janela.API_PAINEL = 'https://x.supabase.co/functions/v1/painel';
+    amb.janela.fetch = (url, opcoes) => {
+        chamadas.push({ url, metodo: (opcoes && opcoes.method) || 'GET',
+                        corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, confere: true }) });
+    };
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
+    ok(amb.banco._pesosGravados.length === 0, 'abrir nao gravou');
+
+    amb.documento.getElementById('acab-liberacao-senha').value = 'K47';
+    await amb.painel.liberarDivergencia();
+
+    ok(chamadas.length === 1 && chamadas[0].corpo.senha === 'K47', 'a senha foi ao painel', JSON.stringify(chamadas));
+    ok(amb.elementos['acab-liberacao'].style.display === 'none', 'senha certa: o popup fecha');
+    ok(amb.banco._pesosGravados.length === 1, 'e o peso e gravado, pelo PostgREST como sempre',
+       String(amb.banco._pesosGravados.length));
+    const g = amb.banco._pesosGravados[0];
+    ok(g.tipo === 'update' && g.payload.peso_real_kg === 4.5, 'com o peso digitado', JSON.stringify(g));
+    ok(Object.keys(g.payload).sort().join(',') === 'peso_real_kg,updated_at',
+       'e a escrita continua estreita: so peso e data');
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.5, 'o banco ficou com 4,5');
+    ok(amb.elementos['acab-peso-est-PVC'].textContent.indexOf('+8,2%') !== -1,
+       'e o estimado ao lado mostra a divergencia', amb.elementos['acab-peso-est-PVC'].textContent);
+    ok(amb.elementos['acab-peso-est-PVC'].style.color === '#fbbf24', 'em ambar, porque passou dos 5 %');
+}
+
+async function senhaCertaNaEstacaoGravaPeloAgente() {
+    // Na estacao as duas coisas saem pelo agente: a senha vai para a rota
+    // `senha-liberacao/conferir` e, com o sim, o peso vai para `peso-setores`.
+    const chamadas = [];
+    const amb = ambienteComEstimado();
+    amb.janela.SERVIDA_PELA_NUVEM = false;
+    amb.janela.API_BASE_URL = '';
+    amb.banco._sessao = null;
+    amb.janela.fetch = (url, opcoes) => {
+        const metodo = (opcoes && opcoes.method) || 'GET';
+        chamadas.push({ url, metodo, corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        if (url === '/api/senha-liberacao/conferir') {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'success', confere: true }) });
+        }
+        if (metodo === 'GET') {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ setores: [{ setor: 'PVC', peso_real_kg: 4.16 }] }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'success' }) });
+    };
+
+    await amb.painel.abrirPedido('os-200');
+    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('est. 4,160 kg') !== -1,
+       'o estimado aparece na estacao tambem: a leitura e publica, sem sessao');
+    chamadas.length = 0;
+
+    // O operador digitou 4,5 no campo; o onchange traz o texto.
+    amb.documento.getElementById('acab-peso-PVC').value = '4,5';
+    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
+    ok(chamadas.length === 0, 'e nenhum POST de peso saiu para o agente', JSON.stringify(chamadas));
+
+    amb.documento.getElementById('acab-liberacao-senha').value = 'K47';
+    await amb.painel.liberarDivergencia();
+
+    ok(chamadas.length === 2, 'senha e depois peso: duas chamadas ao agente', JSON.stringify(chamadas));
+    ok(chamadas[0].url === '/api/senha-liberacao/conferir' && chamadas[0].metodo === 'POST'
+       && chamadas[0].corpo && chamadas[0].corpo.senha === 'K47',
+       'a primeira confere a senha pelo agente', JSON.stringify(chamadas[0]));
+    ok(chamadas[1].url === '/api/peso-setores/200' && chamadas[1].metodo === 'POST'
+       && chamadas[1].corpo.setor === 'PVC' && chamadas[1].corpo.peso_real_kg === 4.5,
+       'a segunda grava o peso pela rota de sempre', JSON.stringify(chamadas[1]));
+    ok(amb.elementos['acab-liberacao'].style.display === 'none', 'e o popup fechou');
+    ok(amb.banco._pesosGravados.length === 0, 'NADA foi direto a tabela do parceiro pela estacao');
+    ok(amb.elementos['acab-peso-PVC'].value === '4,5', 'o campo ficou com o peso liberado',
+       amb.elementos['acab-peso-PVC'].value);
+}
+
+async function semEstimadoGravaDireto() {
+    const amb = ambienteComEstimado();
+    amb.banco._produtosDaProposta = [];   // pedido sem linha com peso
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('est. —') !== -1, 'o box mostra "est. —"');
+    await amb.painel.mudarPeso(200, 'PVC', '999');
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'sem estimado nao ha popup');
+    ok(amb.banco._pesosGravados.length === 1, 'e o peso grava direto', String(amb.banco._pesosGravados.length));
+
+    // Apagar o campo tambem nao confere, mesmo com estimado.
+    amb.banco._produtosDaProposta = [{ id: 1, id_int: 200, id_produto: 55, qtd: 1, peso_total: 4160 }];
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+    await amb.painel.mudarPeso(200, 'PVC', '');
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'apagar o peso nao pede senha');
+    ok(amb.banco._pesosGravados.length === 1 && amb.banco._pesosGravados[0].payload.peso_real_kg === null,
+       'e grava o nulo como sempre', JSON.stringify(amb.banco._pesosGravados));
+}
+
 // ─── Resultado ──────────────────────────────────────────────────────────────
 
 (function oQueAguardaTemFundoMarrom() {
@@ -1506,6 +1867,14 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
     await setorIncompletoNaoGanhaCarimbo();
     await desmarcarUmModeloTiraOCarimbo();
+
+    await oBoxMostraOEstimadoAoLadoDoPeso();
+    await dentroDosCincoPorCentoGravaDireto();
+    await acimaDosCincoPorCentoNadaEGravadoECancelarDevolveOValor();
+    await senhaErradaNaoGravaEAvisa();
+    await senhaCertaNoSiteGravaPeloCaminhoDeSempre();
+    await senhaCertaNaEstacaoGravaPeloAgente();
+    await semEstimadoGravaDireto();
 
     if (falhas) {
         console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

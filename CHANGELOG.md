@@ -4,7 +4,47 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v675** — 2026-08-21 | Agente **1.2.169**
+## Versão atual: **v681** — 2026-08-21 | Agente **1.2.175**
+
+---
+
+## [v681 — 2026-08-21] — O peso estimado por setor, e a senha semanal que libera a divergência
+
+### O estimado ao lado do peso real
+
+Pedido do usuário. No box *Peso por setor* do pedido, cada setor passa a mostrar, ao lado do
+campo, o **peso estimado** — `est. 4,160 kg` — e, quando há peso digitado, a divergência em
+porcentagem (`· +8,2%`, em âmbar acima de 5 %).
+
+O estimado **não existe como coluna por setor** no ERP: ele é a soma de
+`produtos_proposta.peso_total` (coluna gerada `peso_uni × qtd`, em **gramas**) das linhas do
+pedido cujo produto tem aquele `setor_pcp`, convertida para quilos. É leitura, nos dois
+caminhos (estação e site), e confere com o que a balança vem dando: 21000/FLEXO est. 4,160 ×
+real 4,16; 20974/LASER 0,450 × 0,45. Setor sem peso cadastrado no produto mostra `est. —`.
+
+### Até 5 % grava; acima, só com a senha de liberação
+
+`|real − estimado| / estimado` até **5 % inclusive** grava como sempre. Acima disso a gravação
+fica **pendente** e abre um popup com o digitado, o estimado e a divergência, pedindo a **senha
+de liberação**. *Cancelar* devolve o valor anterior ao campo; senha errada avisa e não grava;
+senha certa grava pelo caminho de sempre. Sem estimado não há com o que comparar, e o peso
+grava direto.
+
+Quem confere a senha é o **servidor**, nunca a tela: na estação o agente repassa à Edge
+Function `acesso-estacao` (`POST /api/senha-liberacao/conferir`); no site é a função
+`painel`. A senha nunca desce para a tela do operador — ela recebe sim ou não.
+
+### A senha: automática, semanal, 3 caracteres
+
+**1 letra + 2 números** (ex.: `K47`), derivada de um segredo novo (`PESO_LIBERACAO_SEGREDO`, em
+`imposition_segredos`, sorteado dentro do próprio banco) e da **semana** no fuso de São Paulo.
+Muda sozinha toda segunda-feira 00:00; ninguém gera nada e não há tabela de senhas. Ela
+aparece no **menu Usuários**, num card próprio com a semana de validade, para quem pode ver
+aquele menu (Administrador e Gerente) — a mesma regra da lista de códigos locais.
+
+O que **não** mudou: a gravação do peso, as tabelas do parceiro (nada novo é escrito) e o
+banco (nenhuma tabela ou coluna nova — só a linha do segredo). As rotas da estação no
+`acabamento.js` passam de três para quatro; o endereço continua montado num lugar só.
 
 ---
 

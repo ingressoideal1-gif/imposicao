@@ -755,6 +755,23 @@ def mandar_para_expedicao(pedido_id_int: int, user: dict = Depends(get_current_u
         raise _repassar_recusa(e, "mandar o pedido para expedicao")
     return {"status": "success", **r}
 
+
+@app.post("/api/senha-liberacao/conferir")
+async def conferir_senha_de_liberacao(request: Request,
+                                      user: dict = Depends(get_current_user)):
+    """A senha semanal que libera um peso real fora dos 5 % do estimado.
+
+    A estação não conhece a senha: manda o que o operador digitou e recebe
+    sim ou não. A regra (semana, derivação, comparação em tempo constante)
+    mora na Edge Function, com um segredo que nunca vem para cá.
+    """
+    dados = await request.json()
+    try:
+        r = db.conferir_senha_de_liberacao(dados.get("senha"))
+    except Exception as e:
+        raise _repassar_recusa(e, "conferir a senha de liberacao")
+    return {"status": "success", **r}
+
 # ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
 #
 # ## A ponte entre dois jeitos de chamar a mesma fonte

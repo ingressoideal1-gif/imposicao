@@ -118,7 +118,7 @@ e a coluna sendo claramente da gráfica.
 |--------|-----------|--------|
 | `imposition_user_permissions` | Permissões por pessoa (uma coluna por permissão) | ✅ Criado |
 | `imposition_acessos_locais` | Códigos de acesso local das estações da gráfica | ✅ Criado |
-| `imposition_segredos` | Segredos do painel | ✅ Criado |
+| `imposition_segredos` | Segredos do painel (plano B dos *Edge Secrets*). Desde 21/08/2026 guarda também `PESO_LIBERACAO_SEGREDO`, de onde sai a senha semanal de liberação de peso do Acabamento — sorteado dentro do banco, nunca passou por arquivo | ✅ Criado |
 | `imposition_tempo_no_card` | Há quanto tempo cada pedido está no card da Lista de Arte | ✅ Criado 19/08/2026 |
 | `imposition_operadores` | **View** — só os nomes dos acessos locais, para o seletor de responsável do Painel do Acabamento | ✅ Criado 20/08/2026 |
 

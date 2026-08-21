@@ -1369,6 +1369,19 @@ def enviar_para_expedicao(pedido_id_int: int) -> dict:
     return _catalogo_pela_funcao("POST", f"expedicao/{int(pedido_id_int)}") or {}
 
 
+def conferir_senha_de_liberacao(senha) -> dict:
+    """Confere a senha semanal que libera um peso fora dos 5 % do estimado.
+
+    Repassa o texto CRU — sem aparar, sem maiúsculas, sem olhar o tamanho. A
+    normalização e a comparação em tempo constante moram na Edge Function, uma
+    vez só; e a senha em si nunca chega a esta máquina: o que volta é
+    `confere`, sim ou não.
+    """
+    return _catalogo_pela_funcao(
+        "POST", "senha-liberacao/conferir", {"senha": senha},
+    ) or {}
+
+
 def _fonte_por_nome(nome: str) -> dict | None:
     """A fonte já cadastrada com este nome, olhando a tabela quando dá.
 

@@ -7,7 +7,7 @@
 |---|---|
 | Onde fica | `frontend/index.html`, seção `view-acabamento`, menu **Produção → Painel do Acabamento** |
 | Quem desenha | [`frontend/acabamento.js`](../frontend/acabamento.js) |
-| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO) |
+| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
 | SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) |
 | Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) |
 | Testes | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js) + [`tests/test_painel_do_acabamento.py`](../tests/test_painel_do_acabamento.py) |
@@ -189,7 +189,7 @@ agente**. Então há dois caminhos, e quem escolhe é **quem serviu a página**:
 
 | Onde | Caminho |
 |---|---|
-| **Estação** (agente na 9000 ou localhost) | `/api/peso-setores/<pedido>`, `/api/setor-concluido/<pedido>` e `/api/expedicao/<pedido>` do agente → Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` → `service_role` |
+| **Estação** (agente na 9000 ou localhost) | `/api/peso-setores/<pedido>`, `/api/setor-concluido/<pedido>`, `/api/expedicao/<pedido>` e `/api/senha-liberacao/conferir` do agente → Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` → `service_role` |
 | **Site, com login do Vibe** | direto no PostgREST, que é o que a sessão autoriza |
 | **Site, sem login** | o box mostra os setores e a frase que resolve: entrar com a conta |
 
@@ -202,8 +202,9 @@ O agente não valida nada por conta própria: converter a vírgula e conferir a
 lista de setores nos dois lugares criaria duas verdades, e a que vale é a do
 servidor, que conhece o `CHECK` da tabela.
 
-São **três** as chamadas ao agente em toda a tela — o peso, o carimbo do setor e
-o envio para a expedição —, e todas são da ficha de expedição. Impor, gerar PDF,
+São **quatro** as chamadas ao agente em toda a tela — o peso, o carimbo do setor,
+o envio para a expedição e a conferência da senha de liberação (a única que não é
+da ficha: ver a seção seguinte). Impor, gerar PDF,
 imprimir e perguntar a versão do NewProd continuam fora; há teste contando as
 rotas e exigindo que exista **um único** `/api/` no arquivo.
 
@@ -212,6 +213,47 @@ rotas e exigindo que exista **um único** `/api/` no arquivo.
 anônima escreve nela. A rota existe assim mesmo para que o caminho da estação
 seja **um só** — no dia em que aquela política for fechada, a expedição não cai
 junto.
+
+### O peso estimado, e a senha que libera a divergência
+
+Pedido do usuário em 21/08/2026, depois do peso real: cada setor mostra, ao lado do
+campo, o **peso estimado** — `est. 4,160 kg` — e, com peso digitado, a divergência
+em porcentagem (`· +8,2%`, em âmbar acima de 5 %). Desenho completo em
+[`docs/superpowers/specs/2026-08-21-peso-estimado-e-senha-de-liberacao-design.md`](superpowers/specs/2026-08-21-peso-estimado-e-senha-de-liberacao-design.md).
+
+**De onde vem o estimado.** O ERP não guarda peso por setor; guarda por linha da
+proposta: `produtos_proposta.peso_total` é coluna gerada (`peso_uni × qtd`), em
+**gramas**, e `peso_uni = peso_base + peso_extra` (o `peso_base` vem de
+`produtos.peso`). O setor é o `setor_pcp` do produto — a mesma origem dos cards.
+Então o estimado do setor é a **soma de `peso_total` das linhas do pedido daquele
+setor, ÷ 1000**. É leitura pública, feita na tela nos dois caminhos, sem rota nova.
+Setor sem linha com peso mostra `est. —`. `propostas.peso` existe, mas está vazia em
+todas as propostas — não é fonte.
+
+**A regra dos 5 %.** `|real − estimado| / estimado` até 5 % **inclusive** grava
+como sempre. Acima disso a gravação fica **pendente** e abre o popup *Peso fora do
+esperado*, com o digitado, o estimado e a divergência, e o campo da **senha de
+liberação**. *Cancelar* devolve o valor anterior ao campo (nada foi gravado);
+senha errada avisa e continua no popup; senha certa grava pelo caminho de sempre
+(estação → agente; site → PostgREST). Sem estimado não há com o que comparar, e o
+peso grava direto. A regra mora na tela, como a conferência da expedição; o
+servidor confere **só a senha**. Não se registra quem liberou — não foi pedido.
+
+**A senha.** 1 letra + 2 números (ex.: `K47`), **derivada** — HMAC do segredo
+`PESO_LIBERACAO_SEGREDO` (em `imposition_segredos`, sorteado dentro do banco em
+21/08/2026) com a **semana** no fuso de São Paulo. Muda sozinha toda segunda-feira
+00:00; ninguém gera nada e não existe tabela de senhas. Módulo único:
+[`supabase/functions/_compartilhado/senha_liberacao.ts`](../supabase/functions/_compartilhado/senha_liberacao.ts).
+
+| | |
+|---|---|
+| **Aparece** | menu **Usuários** (Administração), card *Senha de liberação de peso*, com a semana de validade. Quem vê: quem pode ver aquele menu (`perm_admin_view`/`perm_admin_edit`). `GET painel/api/senha-liberacao` |
+| **Confere (site)** | `POST painel/api/senha-liberacao/conferir` `{senha}` → `{confere}`; exige sessão |
+| **Confere (estação)** | agente `POST /api/senha-liberacao/conferir` → `acesso-estacao` com o segredo do agente → `{confere}` |
+
+A senha **nunca desce para a tela do operador**: a tela manda o que foi digitado e
+recebe sim ou não. O endereço das rotas continua montado num lugar só (`urlDeApi`),
+com um único `/api/` no arquivo — a rota nova entra na lista que o harness confere.
 
 ### O botão EXPEDIÇÃO, à direita do peso
 
