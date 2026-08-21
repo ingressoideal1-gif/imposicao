@@ -40,7 +40,7 @@ Describe 'catalogo de fontes -- upload em lote, sem digitacao' {
     }
     It 'a pagina carrega o fonte-nome.js antes do script.js' {
         $iNome   = $html.IndexOf('fonte-nome.js')
-        $iScript = $html.IndexOf('script.js')
+        $iScript = $html.IndexOf('src="script.js')
         ($iNome -ge 0 -and $iNome -lt $iScript) | Should Be $true
     }
     It 'ha lugar para o resultado do lote aparecer na tela' {
