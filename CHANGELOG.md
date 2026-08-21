@@ -48,6 +48,73 @@ banco (nenhuma tabela ou coluna nova — só a linha do segredo). As rotas da es
 
 ---
 
+## [v680 — 2026-08-21] — O card do modelo, refeito em três andares
+
+Pedido do usuário, com a tela na mão: as informações do modelo no pedido aberto estavam "muito
+mal distribuídas" — dados, seletores e a faixa da foto empilhados numa coluna só, o botão de
+fotografar pesando mais que os seletores. Ele pediu o botão menor e no canto superior direito,
+status e responsável na base, e "melhorar geral".
+
+O card agora conta a história do trabalho de cima para baixo:
+
+- **Topo — quem.** Bolinha da cor, nome, código e selo do estágio à esquerda; a **foto do
+  material** à direita, num botão compacto. Quando há foto, a miniatura (46 px, sem canto
+  arredondado) fica ao lado dele e o texto vira *Refazer foto*; sem foto, um "Nenhuma foto do
+  material ainda" em texto miúdo, porque o card continua dizendo o que tem e o que não tem.
+- **Meio — o quê.** A amostra de um lado e os dados do outro, **ainda metade a metade** (pedido
+  de 20/08); os oito dados (Qtd, Nº inicial, Nº final, Bloco, Cor, Numeração, Verso, Impressão)
+  saíram de duas fileiras tortas para uma grade alinhada em colunas, centrada na altura.
+- **Base — a decisão.** *Status do acabamento* e *Responsável*, os dois únicos campos que esta
+  tela escreve, numa faixa própria mais escura, separada por fio. É onde o olho cai.
+
+Nada mudou no que é gravado, nem na cor do card (ela continua dizendo o estágio). Os testes que
+travam a meia caixa e a imagem sem moldura continuam valendo — os dois pegaram a primeira versão
+do desenho e foram respeitados.
+
+---
+
+## [v679 — 2026-08-21] — A lista do Acabamento lê os modelos do banco, não o cache da proposta
+
+Relato do usuário, com print: pedidos já impressos apareciam na lista como **Aguardando**, e o
+progresso dizia *0/1 mod.* num pedido de oito modelos. A cor da linha estava certa; o selo, não.
+
+A causa não era o estágio nem o dado — o banco estava certo (`IMPRESSO` nas duas grafias, e a
+tela normaliza as duas). Antes de o pedido ser aberto, `state.osItens` **não guarda modelo
+nenhum**: guarda o cache da **proposta** do parceiro (`_source: 'vibecode'`), montado a partir
+de `produtos_proposta`. Ali existe uma linha por *produto contratado*, sem `status_impressao` e
+sem `acabamento_status`. O pedido 20975 é o retrato: um item de 320 no cache, contra oito modelos
+de 40 que a gráfica criou no banco, todos impressos. Sem status de impressão, a derivação só
+podia responder "Aguardando".
+
+Agora `osItens` só vence quando todas as linhas trazem `_dbLoaded` — a marca que o `script.js`
+põe quando busca os modelos de verdade; sem ela, vale `modelosGlobais`, que são os modelos do
+banco. É a mesma decisão que o `renderOrdens` da Produção toma no `needsFullLoad`. Quando o
+pedido é aberto, as linhas completas voltam a mandar, e o detalhe não perde nada.
+
+Há teste com o cenário do 20975, conferido contra o código antigo: ele reprova sem a correção.
+
+---
+
+## [v676 a v678 — 2026-08-21] — A linha do pedido ganha a cor do estágio, e os azuis que o usuário escolheu
+
+**v676.** Relato do usuário: na lista de pedidos do Acabamento, o selo dizia *Aguardando* ou
+*Impresso* certinho, mas a cor da linha era a da lista do Painel de Produção — a linha do pedido
+só tinha a classe `os-row`, comum às duas telas, e apenas a linha do *modelo* (dentro do pedido
+aberto) levava o fundo do estágio. Agora a linha do pedido leva o mesmo `FUNDO_DO_ESTAGIO`, e o
+estágio se lê de relance na lista inteira, antes de abrir o pedido.
+
+**v677.** Pedido do usuário: o azul mais escuro da paleta, `#0a2472`, passa a **`#001249`** — em
+tudo o que ele pintava (a superfície dos cards, a caixa do produto, o degradê do número do pedido,
+a sombra do cabeçalho de coluna). E a cor do *Impresso* passa de `#162037` para `#001f3e`.
+
+**v678.** Errata do usuário, e as duas trocaram de lugar: **Aguardando** fica em `#001f3e` e
+**Impresso** no azul da tela, `#001249`. *Em acabamento* (`#32352e`) e *Pronto* (`#14301f`)
+continuam como estavam. Cor de estado segue sendo decisão dele — o que mudou aqui foi a decisão,
+não a regra. A fila do Pedido e a Produção, que usam o `#162037` para o mesmo "Impresso", ficaram
+como estavam: o pedido foi sobre o Painel de Acabamento.
+
+---
+
 ## [v675 — 2026-08-21] — O popup da expedição, e o IMPRESSO que vem da Produção
 
 ### Clicar em EXPEDIÇÃO abre um popup e espera o OK

@@ -94,9 +94,21 @@ listagem de modelos separada por produtos que o Portal do Pedido desenha — uma
 caixa por produto, com nome real e selo do setor PCP, e dentro dela uma linha
 por modelo. O botão **VOLTAR** devolve a lista.
 
-A caixa de cada modelo é dividida **ao meio**: amostra de um lado, informações
-do outro (pedido do usuário em 20/08/2026). Em tela estreita as duas metades
-empilham.
+A caixa de cada modelo tem **três andares**, refeitos em 21/08/2026 a pedido do
+usuário (a versão anterior empilhava tudo numa coluna só, "muito mal
+distribuída" nas palavras dele):
+
+1. **Topo — quem.** Bolinha da cor, nome, código e selo do estágio à esquerda;
+   a foto do material à direita, num botão compacto (ver *A foto do material*).
+2. **Meio — o quê.** A amostra de um lado e os dados do outro, **metade a
+   metade** (pedido de 20/08/2026; em tela estreita as metades empilham). Os
+   dados vão numa grade alinhada em colunas, centrada na altura da amostra.
+3. **Base — a decisão.** *Status do acabamento* e *Responsável*, numa faixa
+   própria mais escura, separada por fio. São os dois únicos campos que esta
+   tela escreve, e é onde o olho cai.
+
+A ordem conta a história do trabalho; o fundo do card inteiro continua dizendo o
+estágio (ver *A cor por status*).
 
 Tudo em somente leitura. O que na Produção é `<input>` ou `<select>` aqui é
 texto: código do modelo, nome, bolinha da cor com o nome dela, Qtd, Nº Inicial,
@@ -297,7 +309,8 @@ mas não deu para marcar o setor Laser como concluído"*.
 
 ### Os dois únicos controles
 
-Por modelo, dois seletores, e nada mais é editável:
+Por modelo, dois seletores — na **faixa da base** do card, desde 21/08/2026 —
+e nada mais é editável:
 
 1. **Status do acabamento** — Aguardando · Impresso · Em acabamento ·
    Pronto. Grava em `pedidos_modelos.acabamento_status`.
@@ -314,13 +327,19 @@ o **EDITAR**.
 
 ### A foto do material
 
-Cada modelo tem um botão **📷 Fotografar**. Ele abre a webcam da estação numa
-janela, com *Fotografar*, e depois *Repetir* ou *Salvar foto*. A foto vai para o
-Storage e o endereço dela fica em `pedidos_modelos.acabamento_foto_url`; a
-miniatura aparece na própria caixa do modelo, e amplia no mesmo lightbox da
-amostra. Refazer grava um arquivo novo e troca a URL — o anterior fica no
-bucket, porque apagar arriscaria remover a foto que outra estação acabou de
-tirar.
+Cada modelo tem um botão **📷 Fotografar**, compacto, no **canto superior
+direito** do card (pedido do usuário em 21/08/2026 — até então era uma faixa
+inteira na base, com rótulo próprio e botão grande, pesando mais que os
+seletores, que são o trabalho de verdade desta tela). Ele abre a webcam da
+estação numa janela, com *Fotografar*, e depois *Repetir* ou *Salvar foto*. A
+foto vai para o Storage e o endereço dela fica em
+`pedidos_modelos.acabamento_foto_url`; a miniatura (46 px) aparece **ao lado do
+botão**, o texto dele vira *Refazer foto*, e ela amplia no mesmo lightbox da
+amostra. Sem foto, o card diz "Nenhuma foto do material ainda" em texto miúdo
+abaixo do botão — o rótulo "Foto do material" segue existindo, no `title` do
+botão e da miniatura, e o harness confere os três textos. Refazer grava um
+arquivo novo e troca a URL — o anterior fica no bucket, porque apagar
+arriscaria remover a foto que outra estação acabou de tirar.
 
 A imagem é reduzida para 1600 px no lado maior e salva em JPEG a 85%: chega para
 ler tipografia miúda numa credencial e mantém o arquivo em algumas centenas de
@@ -487,7 +506,7 @@ A pintura mora em dois lugares, e nenhum deles alcança a Produção:
 |---|---|---|---|
 | `#06070d` | fundo de campo | `#120a8f` | navy profundo |
 | `#0d0e20` | cabeçalho de caixa | `#2b32af` | índigo — contorno e hover |
-| `#0a2472` | superfície dos cards | `#4a61e8` | azul royal |
+| `#0a2472` → **`#001249`** | superfície dos cards — escurecido pelo usuário em 21/08 (v677) | `#4a61e8` | azul royal |
 | `#123a99` | cabeçalhos e botões | `#4589d7` | o que está ligado |
 | `#1a438f` | | `#4cc8f0` | ciano — texto de realce |
 
@@ -510,7 +529,7 @@ Isso é mais frágil do que a distinção anterior, e por isso o teste
 
 | | Produção | Acabamento |
 |---|---|---|
-| Superfície dos cards | `#1e293b` ardósia | `#0a2472` azul profundo |
+| Superfície dos cards | `#1e293b` ardósia | `#001249` azul profundo |
 | Cabeçalhos | `#334155` | `#123a99` |
 | O que está ligado | azul `#3b82f6` | `#4589d7` |
 | Nº do pedido | gradiente azul-ardósia | gradiente `#2b32af` → `#120a8f` |
@@ -518,19 +537,25 @@ Isso é mais frágil do que a distinção anterior, e por isso o teste
 
 ### O que a paleta NÃO alcança: a cor por status
 
-As quatro cores de fundo da caixa do modelo — *Aguardando* `#3a2a1c`,
-*Impresso* `#162037`, *Em acabamento* `#32352e`, *Pronto* `#14301f` — **não
-acompanham a paleta da tela**, e já atravessaram duas repaginações sem mudar.
+As quatro cores de fundo da caixa do modelo — *Aguardando* `#001f3e`,
+*Impresso* `#001249`, *Em acabamento* `#32352e`, *Pronto* `#14301f` — **não
+acompanham a paleta da tela**: quem as muda é o usuário, e só ele. Desde 21/08
+(v676) a **linha do pedido na lista** leva a mesma cor que a caixa do modelo —
+antes só tinha a classe `os-row`, comum às duas telas, e um pedido ainda não
+impresso saía na mesma cor da lista da Produção.
 
 Eu as tinha trazido para a família terra em 20/08/2026, e o usuário mandou
 devolver: elas dizem em que ponto o modelo está, e é a primeira coisa que se lê
 na tela. Mexer nelas para combinar com o fundo é trocar informação por
 decoração. Há teste travando as quatro.
 
-Com a tela azul isso ficou mais visível: o marrom do *Aguardando* contrasta
-forte com a página, e o azul escuro do *Impresso* quase se confunde com ela.
-Isso é para o usuário decidir, não para eu ajustar sozinho — a regra é que cor
-de estado não acompanha paleta.
+Com a tela azul, o marrom do *Aguardando* (`#3a2a1c`) destoava e o azul do
+*Impresso* (`#162037`) se confundia com a página. Era para o usuário decidir, e
+ele decidiu em 21/08 (v677 e v678): *Aguardando* passou a `#001f3e` e
+*Impresso* ao azul da própria tela, `#001249`. A regra não mudou — cor de
+estado não acompanha paleta por conta própria; o que mudou foi a decisão dele.
+A fila do Pedido e a Produção continuam com o `#162037` para o mesmo
+"Impresso": o pedido foi sobre esta tela.
 
 **O que MUDA junto com a paleta, e por quê:** os números das métricas da coluna
 lateral. Eles não dizem estado — são a identidade de cada métrica, iguais em
@@ -557,7 +582,7 @@ de `try/catch`.
 
 Um defeito aqui não pode derrubar a tela que a gráfica usa todo dia.
 
-## Duas armadilhas de quem for mexer
+## Três armadilhas de quem for mexer
 
 1. **Id repetido.** As duas telas vivem no MESMO documento. Todo id do
    acabamento termina em `-acab`; `getElementById` devolve o primeiro que
@@ -568,6 +593,16 @@ Um defeito aqui não pode derrubar a tela que a gráfica usa todo dia.
    varre `button[data-prazo]` no documento inteiro. Os botões de prazo do
    acabamento usam **`data-prazo-acab`** justamente para não serem repintados
    pelo painel vizinho — e vice-versa.
+
+3. **`state.osItens` nem sempre tem modelos.** Antes de o pedido ser aberto, o
+   que mora ali é o cache da **proposta** do parceiro (`_source: 'vibecode'`),
+   montado de `produtos_proposta`: uma linha por *produto contratado*, sem
+   `status_impressao` nem `acabamento_status`. Em 21/08/2026 (v679) isso fazia a
+   lista mostrar *Aguardando* e "0/1 mod." no pedido 20975, que tinha oito
+   modelos impressos no banco. `modelosDoPedido` só deixa `osItens` vencer
+   quando todas as linhas trazem `_dbLoaded` — a marca que o `script.js` põe ao
+   buscar os modelos de verdade; sem ela, valem os `modelosGlobais`. Há teste
+   com o cenário do 20975.
 
 ## Ordem de publicação
 
