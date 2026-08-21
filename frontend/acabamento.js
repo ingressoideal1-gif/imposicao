@@ -988,46 +988,52 @@
 
         const idAmostra = `acab-amostra-${esc(osId)}-${esc(item.id)}-${idx}`;
 
+        // ## O desenho do card, refeito em 21/08/2026 a pedido do usuário
+        //
+        // A versão anterior espalhava tudo numa coluna só: dados, seletores e
+        // a faixa da foto empilhados, "muito mal distribuídos" nas palavras
+        // dele. A ordem agora conta a história do trabalho:
+        //
+        //   topo  — QUEM: nome, código e selo à esquerda; a foto do material
+        //           à direita, pequena, porque é registro e não tarefa.
+        //   meio  — O QUÊ: amostra e os dados do modelo, em grade alinhada.
+        //   base  — A DECISÃO: status e responsável, os dois únicos campos
+        //           que esta tela escreve, numa faixa própria mais escura.
         return `
-            <div style="background: ${fundo}; outline: 1px solid ${AZUL.fio}; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch;">
+            <div style="background: ${fundo}; outline: 1px solid ${AZUL.fio}; border-radius: 10px; margin-bottom: 12px; overflow: hidden;">
 
-                <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
-                    ${amostraHtml(item, idAmostra)}
-                </div>
-
-                <div style="flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 14px;">
-
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed #918f8c'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
+                <div style="display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1 1 auto; min-width: 220px;">
+                        <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed rgba(207,230,251,0.45)'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
                         <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
                         <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
                         ${seloDoEstagio(estagio)}
                     </div>
+                    ${blocoDaFoto(item, osId, idx)}
+                </div>
 
-                    <div style="display: flex; gap: 18px; flex-wrap: wrap;">
-                        ${numeros}
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; padding: 14px 16px;">
+                    <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
+                        ${amostraHtml(item, idAmostra)}
                     </div>
-
-                    <div style="display: flex; gap: 18px; flex-wrap: wrap;">
+                    <div style="flex: 1 1 320px; min-width: 280px; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 14px 20px; align-content: center;">
+                        ${numeros}
                         ${dado('Cor', esc(corNome || '—'))}
                         ${dado('Numeração', esc(numNome || '—'))}
                         ${dado('Verso', esc(item.verso_tipo || (item.verso ? 'FxVerso' : 'Frente')))}
                         ${dado('Impressão', esc(impressao || '—'), '#94a3b8')}
                     </div>
+                </div>
 
-                    <div style="display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 12px;">
-                        <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
-                            ${selectEstagio(item, osId, podeEditar())}
-                        </div>
-                        <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
-                            ${selectResponsavel(item, osId, podeEditar())}
-                        </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px 14px; background: rgba(0,0,0,0.28); border-top: 1px solid ${AZUL.fio};">
+                    <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 5px;">
+                        <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
+                        ${selectEstagio(item, osId, podeEditar())}
                     </div>
-
-                    ${faixaDaFoto(item, osId, idx)}
-
+                    <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 5px;">
+                        <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
+                        ${selectResponsavel(item, osId, podeEditar())}
+                    </div>
                 </div>
             </div>`;
     }
@@ -2083,7 +2089,16 @@
     // isso pela internet da gráfica sem o operador esperar na frente da tela.
     const LADO_MAXIMO = 1600;
 
-    function faixaDaFoto(item, osId, idx) {
+    /**
+     * A foto do material, no canto superior direito do card.
+     *
+     * Até 21/08/2026 ela era uma faixa inteira na base do card, com rótulo
+     * próprio e botão grande — pesava mais que os seletores, que são o
+     * trabalho de verdade desta tela. O usuário mandou encolher e subir:
+     * botão pequeno no canto, e a miniatura ao lado dele quando existe.
+     * O rótulo "Foto do material" continua existindo, no title dos dois.
+     */
+    function blocoDaFoto(item, osId, idx) {
         const foto = fotoDoModelo(item);
         const idFoto = `acab-foto-${escJs(osId)}-${escJs(item.id)}-${idx}`;
         const pode = podeEditar();
@@ -2091,27 +2106,30 @@
         const botao = `
             <button type="button" ${pode ? '' : 'disabled'}
                     onclick="AcabamentoPainel.abrirCamera('${escJs(item.id)}', '${escJs(osId)}')"
-                    title="${pode ? 'Abrir a câmera e fotografar o material' : 'Você tem apenas permissão de ver'}"
-                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(69,137,215,0.16);
-                           border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 8px;
-                           padding: 8px 14px; font-size: 0.9rem; font-weight: 700;
+                    title="${pode ? 'Foto do material — abrir a câmera e fotografar' : 'Você tem apenas permissão de ver'}"
+                    style="display: inline-flex; align-items: center; gap: 6px; background: rgba(69,137,215,0.16);
+                           border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 7px;
+                           padding: 5px 11px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
                            cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
-                <span style="font-size: 1.15rem;">📷</span> ${foto ? 'Refazer foto' : 'Fotografar'}
+                📷 ${foto ? 'Refazer foto' : 'Fotografar'}
             </button>`;
 
         const miniatura = foto
-            ? `<img id="${idFoto}" src="${esc(foto)}" alt="Foto do acabamento"
+            ? `<img id="${idFoto}" src="${esc(foto)}" alt="Foto do material"
                     onclick="AcabamentoPainel.ampliar('${idFoto}')"
                     title="Foto do material — clique para ampliar"
-                    style="height: 74px; object-fit: contain; cursor: zoom-in; display: block;" />`
-            : `<span style="font-size: 0.76rem; color: var(--text-dim);">Nenhuma foto do material ainda.</span>`;
+                    style="height: 46px; object-fit: contain; cursor: zoom-in; display: block;" />`
+            : '';
+
+        // Sem foto, o card diz isso em texto — minúsculo, mas dito.
+        const recado = foto
+            ? ''
+            : `<span style="font-size: 0.66rem; color: var(--text-dim);">Nenhuma foto do material ainda.</span>`;
 
         return `
-            <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
-                        border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 12px;">
-                <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; width: 100%;">Foto do material</span>
-                ${botao}
-                ${miniatura}
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto;">
+                <div style="display: flex; align-items: center; gap: 8px;">${miniatura}${botao}</div>
+                ${recado}
             </div>`;
     }
 
