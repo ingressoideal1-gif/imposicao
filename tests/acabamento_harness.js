@@ -338,6 +338,38 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     ok(amb.elementos['badge-acabamento'].textContent === 2, 'o badge do menu conta a fila inteira');
 })();
 
+// ─── 3b. O cache da proposta nao responde pelo modelo ───────────────────
+//
+// Antes de o pedido ser aberto, `state.osItens` guarda o que veio da PROPOSTA do
+// parceiro: uma linha por produto contratado, sem `status_impressao`. O pedido
+// 20975 chegava assim — um item de 320 — enquanto o banco tinha oito modelos de
+// 40, todos impressos. A lista mostrava "Aguardando" e "0/1 mod.".
+
+(function oCacheDaPropostaNaoRespondePeloModelo() {
+    const pedidos = [pedido(20975)];
+    const modelos = {
+        20975: [
+            { id: 1000440, status_impressao: 'IMPRESSO', quantidade: 40 },
+            { id: 1000441, status_impressao: 'IMPRESSO', quantidade: 40 },
+        ],
+    };
+    const amb = ambienteComPedidos(pedidos, modelos);
+    amb.janela.state.osItens['os-20975'] = [{ id: 'vibe-1', _source: 'vibecode', quantidade: 80 }];
+
+    amb.painel.render();
+    let html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.indexOf('Impresso') !== -1, 'pedido impresso nao aparece como Aguardando');
+    ok(html.indexOf('2 modelos') !== -1, 'conta os modelos do banco, e nao a linha da proposta');
+
+    // Com os itens de verdade carregados, eles voltam a mandar.
+    amb.janela.state.osItens['os-20975'] = [
+        { id: 1000440, status_impressao: 'IMPRESSO', quantidade: 40, _dbLoaded: true },
+    ];
+    amb.painel.render();
+    html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.indexOf('1 modelo<') !== -1, 'a lista completa vence quando veio mesmo do banco');
+})();
+
 // ─── 4 e 5. A amostra ───────────────────────────────────────────────────────
 
 (function aAmostraEaQueOClienteAprovou() {

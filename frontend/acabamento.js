@@ -218,14 +218,35 @@
      * pedidos de uma vez (é o que alimenta a tabela); `osItens` é a lista
      * completa, buscada quando o pedido é aberto. A completa vence quando
      * existe, porque só ela tem a amostra e o responsável.
+     *
+     * ## Mas só quando ela veio mesmo do banco
+     *
+     * Corrigido em 21/08/2026, com a tela na mão do usuário: pedidos já
+     * impressos apareciam na lista como "Aguardando", e o progresso dizia
+     * "0/1 mod." num pedido de oito modelos.
+     *
+     * A causa não é o estágio nem o dado. Antes de o pedido ser aberto,
+     * `osItens` não guarda modelo nenhum: guarda o cache da PROPOSTA do
+     * parceiro (`_source: 'vibecode'`), montado a partir de
+     * `produtos_proposta`. Ali existe uma linha por PRODUTO CONTRATADO, e nela
+     * não há `status_impressao` nem `acabamento_status`. O pedido 20975 é o
+     * retrato disso: um item de 320 no cache, contra os oito modelos de 40 que
+     * a gráfica criou no banco. Sem status de impressão, a derivação só
+     * podia responder "Aguardando".
+     *
+     * Então `osItens` só vence quando todas as linhas trazem `_dbLoaded`, a
+     * marca que o `script.js` põe quando busca os modelos de verdade. É a mesma
+     * decisão que o `renderOrdens` da Produção toma no `needsFullLoad`.
      */
     function modelosDoPedido(os) {
         if (!os) return [];
         const s = estado();
         const completos = (s.osItens && s.osItens[os.id]) || [];
-        if (completos.length) return completos;
+        if (completos.length && completos.every(i => i && i._dbLoaded === true)) return completos;
         const num = parseInt(os.numero);
-        return (s.modelosGlobais && s.modelosGlobais[num]) || [];
+        const globais = (s.modelosGlobais && s.modelosGlobais[num]) || [];
+        if (globais.length) return globais;
+        return completos;
     }
 
     /**
