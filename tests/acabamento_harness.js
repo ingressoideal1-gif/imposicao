@@ -94,11 +94,21 @@ function montarAmbiente() {
         ],
         _gravacoes: [],
         _modelosDoBanco: [],
+        _encerradosTeste: [],
         _erroDoBanco: null,
         from(tabela) {
             const self = this;
             if (tabela === 'imposition_operadores') {
                 return { select: () => ({ order: () => Promise.resolve({ data: self._operadores, error: null }) }) };
+            }
+            if (tabela === 'propostas') {
+                return {
+                    select: () => ({
+                        // `.not('encerrado_teste_em', 'is', null)` -- o filtro e
+                        // do lado do banco, entao aqui basta devolver a lista.
+                        not: () => Promise.resolve({ data: self._encerradosTeste, error: null }),
+                    }),
+                };
             }
             return {
                 select: () => ({
@@ -401,14 +411,23 @@ function ambienteComPedidoAberto() {
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
 
     ok(html.indexOf('background: #3a2a1c') !== -1, 'o modelo Aguardando tem fundo marrom');
-    ok(html.indexOf('background: #1e3320') !== -1, 'e o revisado e verde amarronzado');
-    ok(html.indexOf('#162037') === -1, 'o azul do Impresso saiu de vez');
 
-    // sem fio e sem canto: o resto da caixa tambem virou marrom, para a tela nao
-    // ser confundida com a de Producao de relance.
-    ok(html.indexOf('#2a1d13') !== -1, 'a caixa do produto e marrom');
-    ok(html.indexOf('#1c130c') !== -1, 'e o cabecalho dela, mais escuro ainda');
-    ok(html.indexOf('#7a5c3f') !== -1, 'o contorno e quente, no lugar do cinza');
+    // As cores por STATUS nao acompanham a paleta da tela, e e de proposito:
+    // elas dizem em que ponto o modelo esta. Em 20/08/2026 eu as tinha trazido
+    // para a familia terra junto com o resto, e o usuario mandou devolver.
+    ok(html.indexOf('background: #14301f') !== -1, 'e o Revisado, verde escuro');
+
+    // O Impresso, num cenario onde ele exista: neste os dois modelos foram
+    // forcados para Aguardando e Revisado.
+    const amb2 = ambienteComPedidoAberto();   // sem forcar: os dois derivam de "Impresso"
+    amb2.painel.abrirPedido('os-200');
+    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #162037') !== -1,
+       'o Impresso continua azul escuro');
+
+    // A PAGINA, essa sim, e marrom escuro e neutro.
+    ok(html.indexOf('#1d1917') !== -1, 'a caixa do produto e marrom escuro');
+    ok(html.indexOf('#151211') !== -1, 'e o cabecalho dela, mais escuro ainda');
+    ok(html.indexOf('#574e49') !== -1, 'o contorno e neutro, no lugar do cinza azulado');
     ok(html.indexOf('#918f8c') === -1, 'e o cinza da fila do Pedido nao sobrou');
     ok(html.indexOf('var(--blue)') === -1, 'nem o azul do numero do pedido');
 })();
@@ -459,6 +478,54 @@ function ambienteComPedidoAberto() {
     ok(foto({ acabamento_foto_url: null }) === '', 'nulo tambem');
     ok(foto({ acabamento_foto_url: ' https://x/y.jpg ' }) === 'https://x/y.jpg', 'e a URL vem limpa');
 })();
+
+async function pedidoEncerradoComoTesteSomeDaFila() {
+    // Pedido do usuario em 20/08/2026: ignorar na lista as propostas cuja
+    // coluna `encerrado_teste_em` esta preenchida. E o carimbo de "isto foi um
+    // teste, pode sumir" -- e some da lista E das metricas, nao so da tabela.
+    const pedidos = [pedido(501), pedido(502), pedido(503)];
+    const amb = ambienteComPedidos(pedidos, {
+        501: [{ id: 1, quantidade: 10, status_impressao: 'Impresso' }],
+        502: [{ id: 2, quantidade: 20, status_impressao: 'Impresso' }],
+        503: [{ id: 3, quantidade: 30, status_impressao: 'Impresso' }],
+    });
+    amb.banco._encerradosTeste = [{ id_int: 502 }];
+
+    amb.painel.aoAbrir();
+    await new Promise(r => setTimeout(r, 0));
+    amb.painel.render();
+
+    const html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.indexOf('>501<') !== -1, 'o pedido de verdade continua na lista');
+    ok(html.indexOf('>503<') !== -1, 'e o outro tambem');
+    ok(html.indexOf('>502<') === -1, 'o pedido encerrado como teste some da lista');
+
+    ok(amb.elementos['stat-acab-pedidos-fila'].textContent === 2,
+       'e some tambem da contagem da fila', amb.elementos['stat-acab-pedidos-fila'].textContent);
+    ok(amb.elementos['badge-acabamento'].textContent === 2, 'e do badge do menu');
+    ok(amb.elementos['os-acabamento-count-badge'].textContent === '2 Pedidos',
+       'e do contador da tabela', amb.elementos['os-acabamento-count-badge'].textContent);
+}
+
+async function bancoSemAColunaDoTesteNaoEscondeNinguem() {
+    // Falhar a leitura NAO pode esconder pedido: sem resposta, a fila aparece
+    // inteira, que e o comportamento de antes deste recurso. Esconder por
+    // engano e o erro caro -- o pedido some da tela de quem trabalha nele.
+    const pedidos = [pedido(601), pedido(602)];
+    const amb = ambienteComPedidos(pedidos, {
+        601: [{ id: 1, quantidade: 10 }],
+        602: [{ id: 2, quantidade: 20 }],
+    });
+    amb.banco.from = () => { throw new Error('coluna encerrado_teste_em nao existe'); };
+
+    amb.painel.aoAbrir();
+    await new Promise(r => setTimeout(r, 0));
+    amb.painel.render();
+
+    const html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.indexOf('>601<') !== -1 && html.indexOf('>602<') !== -1,
+       'sem resposta do banco, a fila aparece inteira');
+}
 
 async function aListaDeResponsaveisVemDaViewDeOperadores() {
     const amb = ambienteComPedidoAberto();
@@ -568,6 +635,8 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await gravarEscreveSoNasDuasColunasNovas();
     await oEstagioDaListaVemDeConsultaPropria();
     await bancoSemAsColunasNaoDerrubaATela();
+    await pedidoEncerradoComoTesteSomeDaFila();
+    await bancoSemAColunaDoTesteNaoEscondeNinguem();
 
     if (falhas) {
         console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

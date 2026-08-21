@@ -3342,10 +3342,13 @@ input[type=number] {
    ══════════════════════════════════════════════════════════════════════════ */
 
 #view-acabamento {
-    --acab-fundo:        #2a1d13;                  /* a superfície dos cards */
-    --acab-elevado:      #3d2b1c;                  /* cabeçalhos e botões escuros */
-    --acab-hover:        #523a26;
-    --acab-borda:        rgba(214, 168, 122, 0.22);
+    /* Marrom ESCURO e NEUTRO: o primeiro tom era saturado demais e puxava para o
+       laranja. Estes ficam perto do preto, com um calor que só se percebe ao lado
+       do azul-ardósia da Produção — que é justamente o que se quer distinguir. */
+    --acab-fundo:        #1d1917;                  /* a superfície dos cards */
+    --acab-elevado:      #292421;                  /* cabeçalhos e botões escuros */
+    --acab-hover:        #37302c;
+    --acab-borda:        rgba(200, 180, 168, 0.18);
     --acab-realce:       #f59e0b;                  /* o que está ligado */
     --acab-realce-fraco: rgba(245, 158, 11, 0.18);
     --acab-realce-texto: #fcd34d;
@@ -3374,7 +3377,7 @@ input[type=number] {
 #view-acabamento .prod-btn-dark:hover { background-color: var(--acab-hover); }
 
 #view-acabamento .prod-btn-outline {
-    background-color: rgba(61, 43, 28, 0.6);
+    background-color: rgba(41, 36, 33, 0.6);
     border-color: var(--acab-borda);
 }
 #view-acabamento .prod-btn-outline:hover { background-color: var(--acab-hover); }
@@ -3387,7 +3390,7 @@ input[type=number] {
 
 /* Os recortes de prazo e de setor: o azul da Produção vira o âmbar daqui. */
 #view-acabamento .filter-btn-pill {
-    background: rgba(61, 43, 28, 0.5);
+    background: rgba(41, 36, 33, 0.55);
     border-color: var(--acab-borda);
 }
 #view-acabamento .filter-btn-pill.active,

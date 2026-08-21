@@ -45,6 +45,27 @@ atrás de `/api/impose`, `API_BASE_URL`, `127.0.0.1:9000`, `runImposition` e
 companhia, e a suíte de Python varre a marcação da seção atrás de botão de
 imprimir e de campo digitável.
 
+### O que fica de fora: pedido encerrado como teste
+
+Proposta com `propostas.encerrado_teste_em` preenchido **não aparece** — nem na
+tabela, nem nas métricas, nem no badge do menu. É o carimbo de "isto foi um
+teste, pode sumir", e o usuário pediu esse recorte em 20/08/2026.
+
+A leitura é uma consulta **própria** desta tela (`carregarEncerradosComoTeste`),
+pelo mesmo motivo da leitura do estágio: o `loadOrdensFromVibecode` do
+`script.js` pede colunas nomeadas de `propostas` e alimenta o Painel de Produção
+e a Lista de Arte. Uma coluna que sumisse ali derrubaria as três telas; aqui,
+não derruba nenhuma. O filtro é do lado do banco (`.not('encerrado_teste_em',
+'is', null)`) e só volta o número do pedido — eram doze linhas quando isto foi
+escrito.
+
+**Falhar a leitura não esconde ninguém.** Sem resposta do banco, o conjunto fica
+vazio e a fila aparece inteira — o comportamento de antes deste recurso.
+Esconder por engano é o erro caro: o pedido some da tela de quem trabalha nele.
+
+Nas outras telas — Painel de Produção e Lista de Arte — esses pedidos continuam
+aparecendo. O recorte é só daqui.
+
 ## O pedido aberto
 
 Clicar numa linha **não** abre a Imposição: abre, no lugar da lista, a mesma
@@ -237,16 +258,27 @@ A pintura mora em dois lugares, e nenhum deles alcança a Produção:
 
 | | Produção | Acabamento |
 |---|---|---|
-| Superfície dos cards | `#1e293b` ardósia | `#2a1d13` marrom |
-| Cabeçalhos | `#334155` | `#3d2b1c` |
+| Superfície dos cards | `#1e293b` ardósia | `#1d1917` marrom escuro |
+| Cabeçalhos | `#334155` | `#292421` |
 | O que está ligado | azul `#3b82f6` | âmbar `#f59e0b` |
 | Nº do pedido | gradiente azul | gradiente âmbar/marrom |
 | Progresso | verde | âmbar |
 
-Os quatro estágios também são da família terra, separados pela luz e por um
-passo pequeno de matiz — *Aguardando* `#3a2a1c`, *Impresso* `#2f2216`,
-*Em acabamento* `#3a3324`, *Revisado* `#1e3320`. O azul escuro que o *Impresso*
-tinha era o que sobrava da Produção dentro desta tela.
+O marrom é **escuro e quase sem saturação**, de propósito: o primeiro tom que
+tentei (`#2a1d13`) puxava para o laranja, e o usuário pediu mais escuro e mais
+neutro em 20/08/2026. O calor só se percebe ao lado do azul-ardósia da Produção
+— que é exatamente o que se quer distinguir.
+
+### O que a paleta NÃO alcança: a cor por status
+
+As quatro cores de fundo da caixa do modelo — *Aguardando* `#3a2a1c`,
+*Impresso* `#162037`, *Em acabamento* `#32352e`, *Revisado* `#14301f` — **não
+acompanham a paleta da tela**.
+
+Eu as tinha trazido para a família terra junto com o resto, e o usuário mandou
+devolver: elas dizem em que ponto o modelo está, e é a primeira coisa que se lê
+na tela. Mexer nelas para combinar com o fundo é trocar informação por
+decoração. Há teste travando as quatro.
 
 **O que continua igual ao da Produção, de propósito:** o selo de prazo de
 entrega (`formatPrazoBadge`) e a miniatura da coluna Preview

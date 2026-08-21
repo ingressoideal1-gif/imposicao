@@ -59,14 +59,18 @@
 
     // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
     // o estágio se lê de relance, sem procurar o selo.
-    // Os quatro são da MESMA família — terra —, e se separam pela luz e por um
-    // passo pequeno de matiz. O azul escuro do "Impresso" era o que sobrava da
-    // Produção dentro desta tela, e saiu em 20/08/2026 junto com o resto.
+    // O ESTADO do modelo, e não a pintura da página.
+    //
+    // Estas quatro cores NÃO acompanham a paleta da tela. Em 20/08/2026 eu as
+    // tinha trazido para a família terra junto com o resto, e o usuário mandou
+    // devolver: elas dizem em que ponto o modelo está, e quem lê a tela lê
+    // primeiro isto. Mexer nelas para combinar com o fundo é trocar informação
+    // por decoração.
     const FUNDO_DO_ESTAGIO = {
         'Aguardando':    '#3a2a1c',   // marrom — o que ainda não chegou
-        'Impresso':      '#2f2216',   // marrom mais escuro — saiu da impressora
-        'Em acabamento': '#3a3324',   // marrom âmbar — em cima da mesa
-        'Revisado':      '#1e3320',   // verde amarronzado — conferido
+        'Impresso':      '#162037',   // azul escuro — saiu da impressora
+        'Em acabamento': '#32352e',   // oliva — em cima da mesa
+        'Revisado':      '#14301f',   // verde escuro — conferido
         '':              '#3a2a1c',
     };
 
@@ -82,9 +86,9 @@
     // `#view-acabamento` — trocar as classes `prod-*` repintaria a Produção
     // junto. Aqui ficam só os tons que este arquivo escreve inline.
     const MARROM = {
-        superficie: '#2a1d13',   // a caixa do produto
-        fundo:      '#1c130c',   // o cabeçalho dela
-        fio:        '#7a5c3f',   // o contorno, no lugar do cinza #918f8c
+        superficie: '#1d1917',   // a caixa do produto
+        fundo:      '#151211',   // o cabeçalho dela
+        fio:        '#574e49',   // o contorno, no lugar do cinza #918f8c
     };
 
     // ─── Estado da tela ─────────────────────────────────────────────────────
@@ -113,6 +117,13 @@
         erroAcabamento: '',
         avisouDoBanco: false,
         carregandoPedido: false,
+
+        // Os pedidos que o usuário encerrou como TESTE, por número.
+        //
+        // `propostas.encerrado_teste_em` é o carimbo de hora de quando isso foi
+        // feito. Nulo = pedido de verdade. Set, e não array: a lista é
+        // consultada uma vez por pedido a cada desenho.
+        encerradosTeste: new Set(),
     };
 
     // ─── Pequenos socorros ──────────────────────────────────────────────────
@@ -172,7 +183,9 @@
     }
 
     function pedidosEmProducao() {
-        return (estado().ordens || []).filter(ehDeProducao);
+        return (estado().ordens || [])
+            .filter(ehDeProducao)
+            .filter(os => !tela.encerradosTeste.has(String(os.numero)));
     }
 
     /**
@@ -357,7 +370,7 @@
     const TH_BASE = 'display:inline-flex; align-items:center; justify-content:center; gap:6px;'
         + ' padding:7px 14px; border-radius:8px; font-size:0.75rem; font-weight:800;'
         + ' text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; cursor:pointer;';
-    const TH_OFF = 'background:#3d2b1c; border:1px solid rgba(214,168,122,0.28); color:#e7d6c2;'
+    const TH_OFF = 'background:#292421; border:1px solid rgba(200,180,168,0.24); color:#ded3cc;'
         + ' box-shadow:0 2px 4px rgba(0,0,0,0.35);';
     const TH_ON = 'background:linear-gradient(135deg,#b45309,#78350f); border:1px solid #fcd34d;'
         + ' color:#ffffff; box-shadow:0 0 0 2px rgba(245,158,11,0.35), 0 4px 12px rgba(180,83,9,0.5);';
@@ -614,6 +627,37 @@
     }
 
     /**
+     * Os pedidos que foram encerrados como teste.
+     *
+     * Consulta própria, pelo mesmo motivo da leitura do estágio: o
+     * `loadOrdensFromVibecode` do `script.js` pede colunas NOMEADAS de
+     * `propostas`, e acrescentar `encerrado_teste_em` lá deixaria o Painel de
+     * Produção refém desta tela — uma coluna que sumisse derrubaria a lista da
+     * gráfica inteira, não só esta.
+     *
+     * São poucas linhas (doze, quando isto foi escrito): o filtro é do lado do
+     * banco, e só volta o número do pedido.
+     *
+     * Falhar aqui NÃO esconde nada nem quebra a tela: o conjunto fica vazio e a
+     * fila aparece inteira, que é o comportamento de antes deste recurso.
+     */
+    async function carregarEncerradosComoTeste() {
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+            const { data, error } = await supabaseClient
+                .from('propostas')
+                .select('id_int')
+                .not('encerrado_teste_em', 'is', null);
+            if (error) throw error;
+            tela.encerradosTeste = new Set((data || [])
+                .map(p => String(p.id_int))
+                .filter(n => n && n !== 'null'));
+        } catch (e) {
+            console.warn('[acabamento] não deu para ler os pedidos encerrados como teste:', e);
+        }
+    }
+
+    /**
      * Lê o estágio e o responsável de todos os modelos da fila.
      *
      * Consulta própria, e de propósito: as duas colunas são novas, e enquanto
@@ -702,7 +746,7 @@
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
         const moldura = 'width: 100%; min-height: 150px;'
-            + ' border: 1px dashed rgba(214,168,122,0.30); background: rgba(214,168,122,0.05);'
+            + ' border: 1px dashed rgba(200,180,168,0.26); background: rgba(200,180,168,0.05);'
             + ' display: flex; align-items: center; justify-content: center;';
 
         if (!src) {
@@ -796,7 +840,7 @@
     }
 
     const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
-        + ' background: #150e08; border: 1px solid rgba(214,168,122,0.30); border-radius: 6px;'
+        + ' background: #131110; border: 1px solid rgba(200,180,168,0.26); border-radius: 6px;'
         + ' color: #ffffff; padding: 8px 12px; font-size: 1.05rem; width: 100%;'
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
@@ -1129,7 +1173,7 @@
         caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100001; display: none;'
             + ' align-items: center; justify-content: center; background: rgba(2,6,23,0.94); padding: 18px;';
         caixa.innerHTML = `
-            <div style="width: min(920px, 96vw); background: ${MARROM.fundo}; border: 1px solid rgba(214,168,122,0.28);
+            <div style="width: min(920px, 96vw); background: ${MARROM.fundo}; border: 1px solid rgba(200,180,168,0.24);
                         border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <strong style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>
@@ -1456,7 +1500,9 @@
             tela.estagio = '';
             tela.operadores = null;
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
-            carregarAcabamentoDosModelos().then(() => render());
+            tela.encerradosTeste = new Set();
+            Promise.all([carregarEncerradosComoTeste(), carregarAcabamentoDosModelos()])
+                .then(() => render());
             const carregar = fn('loadOrdens');
             return carregar ? carregar() : Promise.resolve(render());
         },
@@ -1501,7 +1547,8 @@
         aoAbrir() {
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
-            carregarAcabamentoDosModelos().then(() => render());
+            Promise.all([carregarEncerradosComoTeste(), carregarAcabamentoDosModelos()])
+                .then(() => render());
             const carregar = fn('loadOrdens');
             if (carregar) carregar();
             render();
@@ -1510,6 +1557,7 @@
         // Para os testes: dá acesso às regras puras sem precisar de uma tela.
         _regras: {
             ehDeProducao,
+            encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
             estagioDerivadoDaImpressao,
             responsavelDoModelo,

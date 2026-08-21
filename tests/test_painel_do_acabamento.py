@@ -302,3 +302,31 @@ def test_as_imagens_do_acabamento_nao_tem_moldura():
         assert not re.search(r"border:\s*1px", tag), "imagem com fio: " + tag[:90]
 
     assert "align-items: stretch" in js, "a linha do modelo precisa esticar"
+
+
+def test_o_encerrado_como_teste_e_lido_por_fora_do_carregamento_da_producao():
+    """Pedido do usuario em 20/08/2026: ignorar na lista as propostas cuja
+    coluna `encerrado_teste_em` esta preenchida.
+
+    A leitura e uma consulta PROPRIA desta tela, e nao uma coluna a mais no
+    `loadOrdensFromVibecode`. O motivo e o mesmo do estagio do acabamento: aquele
+    carregamento pede colunas nomeadas de `propostas` e alimenta o Painel de
+    Producao e a Lista de Arte. Uma coluna que sumisse ali derrubaria as tres
+    telas; aqui, derruba nada.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    assert "carregarEncerradosComoTeste" in js
+    assert "'encerrado_teste_em', 'is', null" in js, (
+        "o filtro tem de ser do lado do banco, e nao trazer 8 mil propostas"
+    )
+    assert "encerradosTeste.has(String(os.numero))" in js, (
+        "o recorte da fila precisa descartar o que foi encerrado como teste"
+    )
+
+    # O carregamento compartilhado continua sem a coluna nova.
+    script = _ler("frontend/script.js")
+    for trecho in re.findall(r"\.from\('propostas'\)\s*\.select\([^)]*\)", script):
+        assert "encerrado_teste_em" not in trecho, (
+            "a coluna nova entrou no carregamento compartilhado: " + trecho
+        )

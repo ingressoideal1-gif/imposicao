@@ -4,7 +4,44 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v666** — 2026-08-20 | Agente **1.2.160**
+## Versão atual: **v667** — 2026-08-20 | Agente **1.2.161**
+
+---
+
+## [v667 — 2026-08-20] — Acabamento: sem pedido de teste, marrom neutro, cor por status de volta
+
+> As tres mudancas abaixo foram escritas antes de publicar e **saem juntas na v667**. A
+> numeracao e do `publicar.ps1`, que le a maior versao nos HTMLs e soma um.
+
+### Marrom mais escuro e neutro, e a cor por status de volta
+
+Duas correções minhas, na mesma leva.
+
+**O marrom ficou escuro e quase sem saturação.** O primeiro tom (`#2a1d13`) puxava para o laranja;
+agora a superfície é `#1d1917` e os cabeçalhos `#292421`. O calor só se percebe ao lado do
+azul-ardósia da Produção — que é exatamente o que se quer distinguir.
+
+**As cores por status voltaram ao que eram**: *Aguardando* `#3a2a1c`, *Impresso* `#162037`,
+*Em acabamento* `#32352e`, *Revisado* `#14301f`. Eu as tinha trazido para a família terra junto com
+o resto da tela, achando que o azul do *Impresso* era sobra da Produção. Não era: aquelas quatro
+cores dizem em que ponto o modelo está, e é a primeira coisa que se lê na caixa. Mexer nelas para
+combinar com o fundo troca informação por decoração. Há teste travando as quatro.
+
+### Pedido encerrado como teste sai da fila
+
+Proposta com `propostas.encerrado_teste_em` preenchido sai da fila do Acabamento — da tabela, das
+métricas e do badge do menu. É o carimbo de "isto foi um teste, pode sumir". Medido no banco na
+hora: das 28 propostas em produção, 2 estavam marcadas, e a tela passou a mostrar 26.
+
+A leitura é uma consulta própria da tela, e não uma coluna a mais no `loadOrdensFromVibecode` —
+aquele carregamento alimenta também o Painel de Produção e a Lista de Arte, e uma coluna que
+sumisse ali derrubaria as três. O filtro roda do lado do banco e só traz o número do pedido.
+
+> **Falhar a leitura não esconde ninguém.** Sem resposta do banco, a fila aparece inteira, como
+> antes deste recurso. Esconder por engano é o erro caro: o pedido some da tela de quem trabalha
+> nele. Há teste travando exatamente isso.
+
+Nas outras telas esses pedidos continuam aparecendo — o recorte é só do Acabamento.
 
 ---
 
