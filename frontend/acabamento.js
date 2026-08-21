@@ -59,12 +59,32 @@
 
     // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
     // o estágio se lê de relance, sem procurar o selo.
+    // Os quatro são da MESMA família — terra —, e se separam pela luz e por um
+    // passo pequeno de matiz. O azul escuro do "Impresso" era o que sobrava da
+    // Produção dentro desta tela, e saiu em 20/08/2026 junto com o resto.
     const FUNDO_DO_ESTAGIO = {
-        'Aguardando':    '#3a2a1c',   // marrom — pedido do usuário: o que ainda não chegou
-        'Impresso':      '#162037',   // azul escuro — saiu da impressora
-        'Em acabamento': '#32352e',   // oliva — em cima da mesa
-        'Revisado':      '#14301f',   // verde escuro — conferido
+        'Aguardando':    '#3a2a1c',   // marrom — o que ainda não chegou
+        'Impresso':      '#2f2216',   // marrom mais escuro — saiu da impressora
+        'Em acabamento': '#3a3324',   // marrom âmbar — em cima da mesa
+        'Revisado':      '#1e3320',   // verde amarronzado — conferido
         '':              '#3a2a1c',
+    };
+
+    // ─── A paleta ───────────────────────────────────────────────────────────
+    //
+    // O Acabamento é, de propósito, a mesma marcação da tela de Produção — as
+    // mesmas classes `prod-*`. Isso faz as duas se parecerem e envelhecerem
+    // juntas, e foi também o que fez uma ser confundida com a outra de relance
+    // na estação. Em 20/08/2026 o usuário pediu que esta fosse derivada de
+    // marrom escuro.
+    //
+    // O grosso da pintura mora no `style.css`, em regras presas a
+    // `#view-acabamento` — trocar as classes `prod-*` repintaria a Produção
+    // junto. Aqui ficam só os tons que este arquivo escreve inline.
+    const MARROM = {
+        superficie: '#2a1d13',   // a caixa do produto
+        fundo:      '#1c130c',   // o cabeçalho dela
+        fio:        '#7a5c3f',   // o contorno, no lugar do cinza #918f8c
     };
 
     // ─── Estado da tela ─────────────────────────────────────────────────────
@@ -337,10 +357,10 @@
     const TH_BASE = 'display:inline-flex; align-items:center; justify-content:center; gap:6px;'
         + ' padding:7px 14px; border-radius:8px; font-size:0.75rem; font-weight:800;'
         + ' text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; cursor:pointer;';
-    const TH_OFF = 'background:#334155; border:1px solid rgba(255,255,255,0.22); color:#cbd5e1;'
+    const TH_OFF = 'background:#3d2b1c; border:1px solid rgba(214,168,122,0.28); color:#e7d6c2;'
         + ' box-shadow:0 2px 4px rgba(0,0,0,0.35);';
-    const TH_ON = 'background:linear-gradient(135deg,#3b82f6,#2563eb); border:1px solid #93c5fd;'
-        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(59,130,246,0.35), 0 4px 12px rgba(59,130,246,0.5);';
+    const TH_ON = 'background:linear-gradient(135deg,#b45309,#78350f); border:1px solid #fcd34d;'
+        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(245,158,11,0.35), 0 4px 12px rgba(180,83,9,0.5);';
 
     function pintarCabecalhos() {
         document.querySelectorAll('#table-acabamento th[data-sort]').forEach(th => {
@@ -451,7 +471,7 @@
                     <strong>${pct}%</strong>
                 </div>
                 <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
-                    <div style="width: ${pct}%; height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s ease;"></div>
+                    <div style="width: ${pct}%; height: 100%; background: #f59e0b; border-radius: 3px; transition: width 0.3s ease;"></div>
                 </div>
             </div>`;
     }
@@ -535,7 +555,7 @@
             return `
                 <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer;" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
-                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${esc(os.numero)}</span>
+                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #b45309, #78350f); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(180, 83, 9, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
@@ -681,8 +701,8 @@
         const { src, aprovada } = amostraDoModelo(item);
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
-        const moldura = 'width: 100%; min-height: 150px; border-radius: 10px;'
-            + ' border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);'
+        const moldura = 'width: 100%; min-height: 150px;'
+            + ' border: 1px dashed rgba(214,168,122,0.30); background: rgba(214,168,122,0.05);'
             + ' display: flex; align-items: center; justify-content: center;';
 
         if (!src) {
@@ -693,7 +713,7 @@
         }
 
         if (ehPdf(src)) {
-            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: var(--blue); cursor: pointer; text-align: center; padding: 12px;"
+            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: #fcd34d; cursor: pointer; text-align: center; padding: 12px;"
                          onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
                         <span style="font-size: 2rem;">📄</span>
                         <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
@@ -710,7 +730,7 @@
         return `
             <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
                 <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
-                     style="width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; cursor: zoom-in; display: block;"
+                     style="width: 100%; max-height: 360px; object-fit: contain; cursor: zoom-in; display: block; margin: 0 auto;"
                      onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
                 <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
             </div>`;
@@ -776,14 +796,14 @@
     }
 
     const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
-        + ' background: #030a00; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;'
+        + ' background: #150e08; border: 1px solid rgba(214,168,122,0.30); border-radius: 6px;'
         + ' color: #ffffff; padding: 8px 12px; font-size: 1.05rem; width: 100%;'
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
 
     const ESTILO_BOTAO_CAMERA = 'display: inline-flex; align-items: center; gap: 8px;'
-        + ' background: linear-gradient(135deg,#3b82f6,#2563eb); border: 1px solid #93c5fd; color: #ffffff;'
+        + ' background: linear-gradient(135deg,#b45309,#78350f); border: 1px solid #fcd34d; color: #ffffff;'
         + ' border-radius: 8px; padding: 9px 18px; font-size: 0.95rem; font-weight: 800; cursor: pointer;';
     const ESTILO_BOTAO_CAMERA_OK = 'display: inline-flex; align-items: center; gap: 8px;'
         + ' background: linear-gradient(135deg,#16a34a,#15803d); border: 1px solid #86efac; color: #ffffff;'
@@ -841,9 +861,9 @@
         const idAmostra = `acab-amostra-${esc(osId)}-${esc(item.id)}-${idx}`;
 
         return `
-            <div style="background: ${fundo}; outline: 1px solid #918f8c; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start;">
+            <div style="background: ${fundo}; outline: 1px solid ${MARROM.fio}; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch;">
 
-                <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%;">
+                <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
                     ${amostraHtml(item, idAmostra)}
                 </div>
 
@@ -938,8 +958,8 @@
                 : '';
 
             return `
-                <div style="background:#1e293b; border: 1px solid #918f8c; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
-                    <div style="background:#0f172a; padding: 10px 15px; border-bottom: 1px solid #918f8c;">
+                <div style="background:${MARROM.superficie}; border: 1px solid ${MARROM.fio}; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
+                    <div style="background:${MARROM.fundo}; padding: 10px 15px; border-bottom: 1px solid ${MARROM.fio};">
                         <h5 style="margin: 0; color: #facc15; font-size: 1.25rem; font-weight: bold;">
                             📦 ${esc(nome)} ${selo}
                             <span style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-left: 8px;">${doGrupo.length} ${doGrupo.length === 1 ? 'modelo' : 'modelos'}</span>
@@ -1058,8 +1078,8 @@
             <button type="button" ${pode ? '' : 'disabled'}
                     onclick="AcabamentoPainel.abrirCamera('${escJs(item.id)}', '${escJs(osId)}')"
                     title="${pode ? 'Abrir a câmera e fotografar o material' : 'Você tem apenas permissão de ver'}"
-                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(59,130,246,0.14);
-                           border: 1px solid rgba(59,130,246,0.45); color: #93c5fd; border-radius: 8px;
+                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(245,158,11,0.14);
+                           border: 1px solid rgba(245,158,11,0.45); color: #fcd34d; border-radius: 8px;
                            padding: 8px 14px; font-size: 0.9rem; font-weight: 700;
                            cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
                 <span style="font-size: 1.15rem;">📷</span> ${foto ? 'Refazer foto' : 'Fotografar'}
@@ -1069,7 +1089,7 @@
             ? `<img id="${idFoto}" src="${esc(foto)}" alt="Foto do acabamento"
                     onclick="AcabamentoPainel.ampliar('${idFoto}')"
                     title="Foto do material — clique para ampliar"
-                    style="height: 74px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); cursor: zoom-in; display: block;" />`
+                    style="height: 74px; object-fit: contain; cursor: zoom-in; display: block;" />`
             : `<span style="font-size: 0.76rem; color: var(--text-dim);">Nenhuma foto do material ainda.</span>`;
 
         return `
@@ -1109,7 +1129,7 @@
         caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100001; display: none;'
             + ' align-items: center; justify-content: center; background: rgba(2,6,23,0.94); padding: 18px;';
         caixa.innerHTML = `
-            <div style="width: min(920px, 96vw); background: #0f172a; border: 1px solid rgba(255,255,255,0.2);
+            <div style="width: min(920px, 96vw); background: ${MARROM.fundo}; border: 1px solid rgba(214,168,122,0.28);
                         border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <strong style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>
@@ -1380,7 +1400,7 @@
                 + ' padding: 24px; cursor: zoom-out;';
             overlay.innerHTML = `
                 <img id="acab-lightbox-img" alt="Amostra ampliada"
-                     style="width: 90vw; height: 84vh; object-fit: contain; border-radius: 10px;" />
+                     style="width: 90vw; height: 84vh; object-fit: contain;" />
                 <button type="button" title="Fechar (Esc)"
                         style="position: absolute; top: 14px; right: 18px; z-index: 1; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35); color: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 1rem; font-weight: 700; cursor: pointer;">✕ Fechar</button>`;
             overlay.addEventListener('click', fecharLightbox);

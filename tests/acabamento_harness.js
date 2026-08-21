@@ -301,6 +301,20 @@ function ambienteComPedidoAberto() {
 
     // Pedidos de 20/08/2026, depois de ver a tela.
     ok(html.indexOf('background: #ffffff') === -1, 'nao ha chapa branca atras da amostra');
+
+    // As imagens: sem fio e sem canto arredondado, como nas outras janelas de
+    // imagem do projeto, e centradas na altura da caixa.
+    const imagens = html.match(/<img[^>]*>/g) || [];
+    // O segundo modelo do cenario e um PDF: vira atalho, nao <img>. Por isso um.
+    ok(imagens.length >= 1, 'ha imagem de amostra no modelo que tem imagem');
+    imagens.forEach(tag => {
+        ok(tag.indexOf('border-radius') === -1, 'imagem sem canto arredondado', tag.slice(0, 90));
+        ok(!/border:\s*1px/.test(tag), 'imagem sem fio de contorno', tag.slice(0, 90));
+    });
+    ok((html.match(/align-items: center; justify-content: center;/g) || []).length >= 2,
+       'a metade da amostra centra na altura');
+    ok(html.indexOf('align-items: stretch') !== -1,
+       'a linha estica, para "no meio" ser o meio da caixa');
     const metades = html.match(/flex: 1 1 320px/g) || [];
     ok(metades.length === 4, 'amostra e informacoes dividem a caixa ao meio (2 por modelo, 2 modelos)',
        'achei ' + metades.length);
@@ -367,6 +381,11 @@ function ambienteComPedidoAberto() {
 
     // E nao escreve no que e da Producao.
     ok(codigo.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
+
+    // Nenhum azul da Producao sobrou na pintura desta tela.
+    ['#3b82f6', '#2563eb', '#334155', '#1e293b', '#0f172a'].forEach(cor => {
+        ok(FONTE.indexOf(cor) === -1, 'o tom ' + cor + ' e da Producao e nao pode estar aqui');
+    });
     const gravacoes = codigo.match(/from\('pedidos_modelos'\)\s*\.update\(/g) || [];
     ok(gravacoes.length === 1, 'ha um unico ponto de gravacao', 'achei ' + gravacoes.length);
 })();
@@ -382,7 +401,16 @@ function ambienteComPedidoAberto() {
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
 
     ok(html.indexOf('background: #3a2a1c') !== -1, 'o modelo Aguardando tem fundo marrom');
-    ok(html.indexOf('background: #14301f') !== -1, 'e o revisado segue verde escuro');
+    ok(html.indexOf('background: #1e3320') !== -1, 'e o revisado e verde amarronzado');
+    ok(html.indexOf('#162037') === -1, 'o azul do Impresso saiu de vez');
+
+    // sem fio e sem canto: o resto da caixa tambem virou marrom, para a tela nao
+    // ser confundida com a de Producao de relance.
+    ok(html.indexOf('#2a1d13') !== -1, 'a caixa do produto e marrom');
+    ok(html.indexOf('#1c130c') !== -1, 'e o cabecalho dela, mais escuro ainda');
+    ok(html.indexOf('#7a5c3f') !== -1, 'o contorno e quente, no lugar do cinza');
+    ok(html.indexOf('#918f8c') === -1, 'e o cinza da fila do Pedido nao sobrou');
+    ok(html.indexOf('var(--blue)') === -1, 'nem o azul do numero do pedido');
 })();
 
 (function aCameraApareceEmCadaModelo() {

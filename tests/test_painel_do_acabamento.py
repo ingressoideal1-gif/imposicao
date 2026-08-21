@@ -254,3 +254,51 @@ def test_a_camera_tem_saida_que_nao_depende_do_navegador():
     # A camera e desligada: webcam acesa depois de fechar a janela e defeito.
     assert "desligarCamera" in js
     assert "t.stop()" in js, "as trilhas da camera precisam ser paradas"
+
+
+def test_o_marrom_do_acabamento_nao_repinta_o_painel_de_producao():
+    """As duas telas usam as MESMAS classes `prod-*`, de proposito.
+
+    Por isso a paleta marrom do Acabamento (pedida em 20/08/2026, para o olho
+    separar uma tela da outra na estacao) mora em regras presas ao id da secao.
+    Uma regra `prod-*` solta aqui repintaria a tela que a grafica usa todo dia.
+    """
+    css = _ler("frontend/style.css")
+
+    marca = "PAINEL DO ACABAMENTO"
+    assert marca in css, "o bloco da paleta do acabamento sumiu do style.css"
+    # Sem os comentarios: eles explicam a regra e citam `prod-*` no meio da
+    # prosa, e uma linha de texto que termina em virgula parece um seletor.
+    bloco = re.sub(r"/\*.*?\*/", "", css[css.index(marca) - 200:], flags=re.S)
+
+    # Toda regra do bloco tem de comecar presa a secao.
+    seletores = [
+        linha.strip()
+        for linha in bloco.splitlines()
+        if linha.strip().endswith("{") or linha.strip().endswith(",")
+    ]
+    assert seletores, "nao achei seletor nenhum no bloco"
+    for sel in seletores:
+        assert sel.startswith("#view-acabamento"), (
+            "regra do acabamento sem o id da secao, e ela repinta a Producao: " + sel
+        )
+
+    # E a Producao continua com a superficie que sempre teve.
+    antes = css[:css.index(marca)]
+    assert "#1e293b" in antes, "a superficie da Producao mudou"
+
+    # As chaves seguem equilibradas: um `{` sem par faz o navegador descartar o
+    # resto do arquivo em silencio.
+    assert css.count("{") == css.count("}"), "chaves desequilibradas no style.css"
+
+
+def test_as_imagens_do_acabamento_nao_tem_moldura():
+    """Pedido do usuario: imagens centradas na altura, sem canto arredondado e
+    sem fio de contorno, como nas outras janelas de imagem do projeto."""
+    js = _ler("frontend/acabamento.js")
+
+    for tag in re.findall(r"<img[^>]*/>", js):
+        assert "border-radius" not in tag, "imagem com canto arredondado: " + tag[:90]
+        assert not re.search(r"border:\s*1px", tag), "imagem com fio: " + tag[:90]
+
+    assert "align-items: stretch" in js, "a linha do modelo precisa esticar"

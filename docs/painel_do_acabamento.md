@@ -74,9 +74,12 @@ quando existe snapshot, a URL da prévia composta). Sem snapshot, vale
 `arte_url`, e a legenda muda de "Amostra aprovada pelo cliente no link" para
 "Arte do modelo" — a tela não chama de aprovado o que não foi.
 
-Não há chapa branca atrás da imagem — a arte traz o próprio fundo, e o retângulo
-claro em volta dela recortava um buraco no meio da caixa escura (retirado a
-pedido do usuário em 20/08/2026, aqui e no lightbox).
+As imagens desta tela seguem o padrão das outras janelas de imagem do projeto:
+**sem chapa branca atrás, sem canto arredondado e sem fio de contorno**, e
+**centradas na altura** da caixa. A arte traz o próprio fundo, e a moldura em
+volta recortava um retângulo no meio da caixa escura. Vale para a amostra, para
+a miniatura da foto do material e para a imagem ampliada. Há teste varrendo cada
+`<img>` do arquivo atrás de `border-radius` e de fio.
 
 Amostra que só existir em PDF sai como atalho 📄 que abre o arquivo.
 **Rasterizar a arte do cliente está fora de cogitação neste projeto**, aqui como
@@ -209,6 +212,46 @@ Se as colunas não existirem, a tela **continua listando os pedidos** e avisa um
 única vez: *"O Painel do Acabamento ainda não foi ligado ao banco. Peça ao
 administrador para rodar a atualização do banco."* A tela de Usuários, essa sim,
 para de gravar — por isso a ordem de publicação abaixo não é sugestão.
+
+## A paleta: a mesma forma, em marrom escuro
+
+A tela usa, de propósito, a **mesma marcação** da tela de Produção — as mesmas
+classes `prod-*`, os mesmos cards, a mesma tabela. É isso que faz as duas se
+parecerem e envelhecerem juntas: mexer no layout de uma mexe na outra sem
+ninguém precisar lembrar.
+
+O preço apareceu com a tela rodando: de relance, na estação, as duas eram a
+mesma tela. Em 20/08/2026 o usuário pediu o Acabamento derivado de **marrom
+escuro**, para o olho separar uma da outra.
+
+A pintura mora em dois lugares, e nenhum deles alcança a Produção:
+
+- **`frontend/style.css`**, no fim do arquivo, num bloco em que **toda regra
+  começa por `#view-acabamento`**. Trocar a cor das classes `prod-*` resolveria
+  aqui e repintaria a tela que a gráfica usa todo dia. Está no fim porque o
+  bloco `prod-*` aparece **duas vezes** neste CSS (resto de colagem antiga), e
+  regra escrita depois vence as duas. Há teste varrendo o bloco atrás de
+  qualquer seletor sem o id.
+- **`frontend/acabamento.js`**, na constante `MARROM`, para os tons que o
+  arquivo escreve inline (a caixa do produto, o contorno, o número do pedido).
+
+| | Produção | Acabamento |
+|---|---|---|
+| Superfície dos cards | `#1e293b` ardósia | `#2a1d13` marrom |
+| Cabeçalhos | `#334155` | `#3d2b1c` |
+| O que está ligado | azul `#3b82f6` | âmbar `#f59e0b` |
+| Nº do pedido | gradiente azul | gradiente âmbar/marrom |
+| Progresso | verde | âmbar |
+
+Os quatro estágios também são da família terra, separados pela luz e por um
+passo pequeno de matiz — *Aguardando* `#3a2a1c`, *Impresso* `#2f2216`,
+*Em acabamento* `#3a3324`, *Revisado* `#1e3320`. O azul escuro que o *Impresso*
+tinha era o que sobrava da Produção dentro desta tela.
+
+**O que continua igual ao da Produção, de propósito:** o selo de prazo de
+entrega (`formatPrazoBadge`) e a miniatura da coluna Preview
+(`previewDaArteDoPedidoHtml`). As duas funções são compartilhadas com a Produção
+e com a Lista de Arte; recolori-las aqui mudaria as três telas.
 
 ## Como a tela se pendura no que já existe
 

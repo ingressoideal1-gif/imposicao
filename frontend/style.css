@@ -3312,3 +3312,97 @@ input[type=number] {
     .cliente-page .cliente-actions { bottom: 20px; }
     .portal-cartao { padding: 22px 24px; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAINEL DO ACABAMENTO — a mesma forma, em marrom escuro
+   ══════════════════════════════════════════════════════════════════════════
+
+   A tela do Acabamento é, de propósito, a MESMA marcação da tela de Produção:
+   as mesmas classes `prod-*`, os mesmos cards, a mesma tabela. Foi assim que
+   ela foi pedida, e é o que faz as duas envelhecerem juntas — mexer no layout
+   de uma mexe na outra sem ninguém precisar lembrar.
+
+   O preço apareceu com a tela rodando na estação: de relance, as duas são a
+   mesma tela. Em 20/08/2026 o usuário pediu o Acabamento derivado de marrom
+   escuro, para separar um do outro pelo olho.
+
+   ── POR QUE CADA REGRA COMEÇA COM `#view-acabamento` ──
+
+   Porque a alternativa é repintar a Produção junto. As classes `prod-*` são
+   compartilhadas; trocar a cor delas resolveria aqui e mudaria a tela que a
+   gráfica usa todo dia, que ninguém pediu para mudar. Preso ao id da seção,
+   este bloco não alcança nada fora dela.
+
+   ── POR QUE NO FIM DO ARQUIVO ──
+
+   O bloco `prod-*` aparece DUAS VEZES neste style.css (por volta das linhas
+   2000 e 2200, um resto de colagem antiga). Regra escrita no fim vence as duas
+   sem depender de qual delas o navegador aplicou por último.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+#view-acabamento {
+    --acab-fundo:        #2a1d13;                  /* a superfície dos cards */
+    --acab-elevado:      #3d2b1c;                  /* cabeçalhos e botões escuros */
+    --acab-hover:        #523a26;
+    --acab-borda:        rgba(214, 168, 122, 0.22);
+    --acab-realce:       #f59e0b;                  /* o que está ligado */
+    --acab-realce-fraco: rgba(245, 158, 11, 0.18);
+    --acab-realce-texto: #fcd34d;
+}
+
+#view-acabamento .prod-top-bar,
+#view-acabamento .prod-table-card,
+#view-acabamento .prod-metric-card {
+    background-color: var(--acab-fundo);
+    border-color: var(--acab-borda);
+}
+
+#view-acabamento .prod-table-header {
+    background-color: var(--acab-elevado);
+    border-bottom-color: var(--acab-borda);
+}
+
+#view-acabamento .prod-table th {
+    background-color: var(--acab-fundo);
+    border-bottom-color: var(--acab-borda);
+}
+#view-acabamento .prod-table td { border-bottom-color: var(--acab-borda); }
+#view-acabamento .prod-table tr:hover td { background-color: rgba(245, 158, 11, 0.07); }
+
+#view-acabamento .prod-btn-dark { background-color: var(--acab-elevado); }
+#view-acabamento .prod-btn-dark:hover { background-color: var(--acab-hover); }
+
+#view-acabamento .prod-btn-outline {
+    background-color: rgba(61, 43, 28, 0.6);
+    border-color: var(--acab-borda);
+}
+#view-acabamento .prod-btn-outline:hover { background-color: var(--acab-hover); }
+
+#view-acabamento .prod-search-input {
+    background-color: var(--acab-elevado);
+    border-color: var(--acab-borda);
+}
+#view-acabamento .prod-search-input:focus { border-color: var(--acab-realce); }
+
+/* Os recortes de prazo e de setor: o azul da Produção vira o âmbar daqui. */
+#view-acabamento .filter-btn-pill {
+    background: rgba(61, 43, 28, 0.5);
+    border-color: var(--acab-borda);
+}
+#view-acabamento .filter-btn-pill.active,
+#view-acabamento .filter-btn-pill.active.teal,
+#view-acabamento .prod-sectors-grid .filter-btn-pill.active {
+    background: var(--acab-realce-fraco);
+    border-color: var(--acab-realce);
+    color: var(--acab-realce-texto);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.28);
+}
+#view-acabamento .prod-sectors-grid .filter-btn-pill { background-color: var(--acab-elevado); }
+
+#view-acabamento .prod-filter-status { border-color: var(--acab-borda); }
+#view-acabamento .prod-filter-status.active {
+    background: var(--acab-realce-fraco);
+    border-color: var(--acab-realce);
+    color: var(--acab-realce-texto);
+}

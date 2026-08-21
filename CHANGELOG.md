@@ -4,7 +4,40 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v665** — 2026-08-20 | Agente **1.2.159**
+## Versão atual: **v666** — 2026-08-20 | Agente **1.2.160**
+
+---
+
+## [v666 — 2026-08-20] — Acabamento em marrom escuro, e imagens sem moldura
+
+Dois ajustes pedidos com a tela do Acabamento na frente.
+
+**As imagens perderam a moldura.** Sem canto arredondado, sem fio de contorno, e
+**centradas na altura** da caixa — o mesmo tratamento que as outras janelas de imagem do
+projeto já tinham. Vale para a amostra do cliente, para a miniatura da foto do material e para a
+imagem ampliada.
+
+**O painel inteiro virou marrom escuro.** A tela do Acabamento é, de propósito, a mesma marcação
+da tela de Produção: as mesmas classes `prod-*`, os mesmos cards, a mesma tabela. É o que faz as
+duas envelhecerem juntas — e era também o que fazia uma ser confundida com a outra de relance, na
+estação.
+
+Agora a superfície é `#2a1d13`, os cabeçalhos `#3d2b1c`, e o que está ligado é âmbar em vez de
+azul: recortes de prazo, filtros de setor, estágio, cabeçalhos de coluna, número do pedido, barra
+de progresso, botão da câmera e a janela da câmera. Os quatro estágios do modelo passaram para a
+mesma família terra — o azul escuro do *Impresso* era o último pedaço de Produção dentro desta
+tela.
+
+> **Nenhuma regra alcança a Produção.** A paleta mora no fim do `style.css`, num bloco em que
+> **toda regra começa por `#view-acabamento`** — trocar a cor das classes `prod-*` repintaria a
+> tela que a gráfica usa todo dia. Está no fim do arquivo porque o bloco `prod-*` aparece **duas
+> vezes** nele, resto de colagem antiga, e regra escrita depois vence as duas. Há teste varrendo o
+> bloco atrás de qualquer seletor sem o id, e conferindo que a superfície da Produção continua
+> `#1e293b`.
+
+O selo de prazo e a miniatura da coluna Preview continuam iguais aos da Produção, de propósito: as
+duas funções são compartilhadas com a Produção e com a Lista de Arte, e recolori-las aqui mudaria
+as três telas.
 
 ---
 
