@@ -3607,6 +3607,32 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
     window.desenharLogoNoQrIdeal = function () { };
 }
 
+// Rede de seguranca do `numero-da-pagina.js`, no mesmo espirito do guarda acima
+// e pelo mesmo motivo: entre o site subir e a estacao atualizar o agente, uma
+// maquina com agente antigo baixa a pagina nova e NAO baixa este arquivo — ele
+// so entra na lista de sincronismo do agente a partir desta versao. Sem esta
+// rede, a numeracao inteira pararia de desenhar naquela estacao. Com ela, a
+// visualizacao volta ao que era antes de paginar: a primeira peca.
+if (!window.NumeroDaPagina) {
+    console.error('[Amostra] numero-da-pagina.js nao carregou. A visualizacao nao vai paginar o numero.');
+    window.NumeroDaPagina = {
+        sequencial: function (o) {
+            var start = parseInt((o || {}).start, 10) || 1;
+            if (String((o || {}).tipo || '').toUpperCase() === 'TICKET') {
+                return start + (Math.max(1, parseInt(o.ticketPos, 10) || 1) - 1);
+            }
+            return start;
+        },
+        camarote: function (o) {
+            return {
+                local: parseInt((o || {}).cIni, 10) || 1,
+                pessoa: 1,
+                lotacao: Math.max(1, parseInt((o || {}).lotacao, 10) || 1)
+            };
+        }
+    };
+}
+
 // `renderQRCodeOnCtx` vive agora em frontend/qr-canvas.js, junto com o desenho
 // do QR Ideal. Sao as MESMAS janelas desenhando o mesmo ingresso — editor,
 // card do pedido, link do cliente e previa de imposicao —, espalhadas por
@@ -28360,6 +28386,20 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // numeracao do zero e nunca pinta esta moldura. Quem mostra ate onde vai
         // o ingresso e a propria borda do canvas, com a sombra do CSS.
 
+        // A linha do banco e a PAGINA que esta face vai mostrar. Resolvidas
+        // uma vez, antes do laco: todos os elementos variaveis leem a mesma
+        // pagina, senao a tela mostraria a linha 3 do banco no ingresso 1 --
+        // uma peca que o motor nunca vai imprimir.
+        const _linhaCsv = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, num, osId) : null;
+        const _pagAmostra = (typeof paginaDaAmostra === 'function' && typeof linhasDaAmostra === 'function')
+            ? paginaDaAmostra(item, linhasDaAmostra(item, num).length, osId)
+            : 0;
+        // O numero inicial do modelo (NI), base de tudo o que anda com a pagina.
+        const _niAmostra = parseInt(
+            item?.numeracao_inicio || item?.num_inicial ||
+            item?.NUMERACAO_INICIO || 1
+        ) || 1;
+        const _ticketQtdAmostra = parseInt(num?.ticket_qtd || item?.ticket_qtd || 1) || 1;
         // Desenhar cada elemento da numeração
         num.elements.forEach(el => {
             const elFace = el.face || 'both';
@@ -28385,9 +28425,6 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.translate(x, y);
             numCtx.rotate(rot);
 
-            // A visualizacao e paginada: todos os elementos variaveis desta face
-            // leem a MESMA linha, a da pagina em que o operador esta.
-            const _linhaCsv = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, num, osId) : null;
 
             if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
@@ -28409,21 +28446,24 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
-                } else if (el.type === 'CAMAROTE_LOCAL') {
+                } else if (el.type.startsWith('CAMAROTE_')) {
                     // C_INI = Início do local (mesa/camarote) — NÃO confundir com NI (num_inicial)
-                    const _cIni = parseInt(
-                        item?.c_ini || item?.C_INI || 1
-                    );
-                    label = `${el.prefix || ''}${_cIni}`;
-                } else if (el.type === 'CAMAROTE_PESSOA') {
-                    label = `${el.prefix || ''}1`;
-                } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                    const _lCamB = parseInt(
-                        item?.l_cam || item?.L_CAM ||
-                        item?.lotacao_cam || item?.LOTACAO_CAM ||
-                        item?.lotacao || 5
-                    );
-                    label = `${el.prefix || ''}1/${_lCamB}`;
+                    // A pagina anda pessoa a pessoa e vira o local quando a
+                    // lotacao fecha, como o _resolve_camarote_val do engine.py.
+                    const _cam = window.NumeroDaPagina.camarote({
+                        pagina: _pagAmostra,
+                        lotacao: item?.l_cam || item?.L_CAM ||
+                                 item?.lotacao_cam || item?.LOTACAO_CAM ||
+                                 item?.lotacao || 5,
+                        cIni: item?.c_ini || item?.C_INI || 1
+                    });
+                    if (el.type === 'CAMAROTE_LOCAL') {
+                        label = `${el.prefix || ''}${_cam.local}`;
+                    } else if (el.type === 'CAMAROTE_PESSOA') {
+                        label = `${el.prefix || ''}${_cam.pessoa}`;
+                    } else {
+                        label = `${el.prefix || ''}${_cam.pessoa}/${_cam.lotacao}`;
+                    }
 
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
@@ -28435,20 +28475,13 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
-                    let current_val = 1;
-                    if (num && num.tipo === "TICKET") {
-                        const pos = parseInt(el.ticket_pos) || 1;
-                        const start = parseInt(
-                            item?.numeracao_inicio || item?.num_inicial ||
-                            item?.NUMERACAO_INICIO || 1
-                        ) || 1;
-                        current_val = start + (pos - 1);
-                    } else {
-                        current_val = parseInt(
-                            item?.numeracao_inicio || item?.num_inicial ||
-                            item?.NUMERACAO_INICIO || 1
-                        ) || 1;
-                    }
+                    // Folhear o banco folheia a PECA: a linha N sai no ingresso
+                    // `NI + N`, do mesmo jeito que o motor imprime.
+                    const current_val = window.NumeroDaPagina.sequencial({
+                        start: _niAmostra, pagina: _pagAmostra,
+                        tipo: num && num.tipo, ticketPos: el.ticket_pos,
+                        ticketQtd: _ticketQtdAmostra
+                    });
                     label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
                 window.desenharTextoAjustado(
@@ -28457,15 +28490,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 );
             } else if (el.type === 'QR_IDEAL') {
                 // O card do pedido conhece o pedido e o modelo. O número do
-                // ingresso segue a mesma conta do elemento de numeração acima.
-                const _qiStart = parseInt(
-                    item?.numeracao_inicio || item?.num_inicial ||
-                    item?.NUMERACAO_INICIO || 1
-                ) || 1;
-                let _qiVal = _qiStart;
-                if (num && num.tipo === "TICKET") {
-                    _qiVal = _qiStart + ((parseInt(el.ticket_pos) || 1) - 1);
-                }
+                // ingresso segue a mesma conta do elemento de numeração acima —
+                // se divergissem, a tela mostraria um código e o papel sairia
+                // outro. Por isso o QR também anda com a página.
+                const _qiVal = window.NumeroDaPagina.sequencial({
+                    start: _niAmostra, pagina: _pagAmostra,
+                    tipo: num && num.tipo, ticketPos: el.ticket_pos,
+                    ticketQtd: _ticketQtdAmostra
+                });
                 window.desenharQRIdeal(
                     numCtx, el, (el.size_mm || 15) * S, el.color || '#000000',
                     item?.id_int, item?.id, _qiVal
@@ -28486,11 +28518,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
-                    const start = parseInt(
-                        item?.numeracao_inicio || item?.num_inicial ||
-                        item?.NUMERACAO_INICIO || 1
-                    ) || 1;
-                    const raw = padVal > 0 ? String(start).padStart(padVal, '0') : String(start);
+                    // Mesma conta do texto sequencial: o QR da pagina N carrega
+                    // o numero do ingresso N.
+                    const val = window.NumeroDaPagina.sequencial({
+                        start: _niAmostra, pagina: _pagAmostra
+                    });
+                    const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
                 renderQRCodeOnCtx(numCtx, qrText, 0, 0, sz, color);
@@ -28616,6 +28649,33 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // docs/editor_de_arte.md).
 }
 
+/**
+ * Redesenha os cards de amostra que estao na tela.
+ *
+ * O conteudo do QR Ideal nao se calcula no navegador: vem da estacao, por uma
+ * consulta que responde DEPOIS de o canvas ja ter sido pintado. Quem avisa que
+ * a resposta chegou e o `repintar()` do qr-canvas.js, e ele so conhecia o
+ * editor e a previa do pedido — o card do modelo ficava com o QR de exemplo.
+ */
+window.repintarAmostrasCombinadas = function () {
+    const abertos = state._amostrasNaTela;
+    if (!abertos) return;
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    Object.keys(abertos).forEach(chave => {
+        const alvo = abertos[chave];
+        // Card que saiu da tela sai da lista: sem isto ela cresceria a cada
+        // pedido aberto e o repinte percorreria fantasmas.
+        if (!container.querySelector(`#amostra-item-canvas-${alvo.idx}`) &&
+            !container.querySelector(`#amostra-pdf-canvas-${alvo.idx}`)) {
+            delete abertos[chave];
+            return;
+        }
+        try { renderItemAmostraCombinada(alvo.idx, alvo.osId); } catch (_) { }
+    });
+};
+
 async function renderItemAmostraCombinada(idx, osId) {
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
@@ -28623,6 +28683,10 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
     if (!item) return;
+
+    // Quem esta desenhado agora, para o repinte do QR Ideal saber a quem voltar.
+    if (!state._amostrasNaTela) state._amostrasNaTela = {};
+    state._amostrasNaTela[`${osId}:${idx}`] = { idx, osId };
 
     const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
     const numSelect = container.querySelector(`#amostra-item-num-${idx}`);

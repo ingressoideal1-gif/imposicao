@@ -136,6 +136,12 @@ PAINEL_ARQUIVOS = [
     "cor-numeracao-do-modelo.js",
     "arte-de-impressao.js",
     "qr-canvas.js",
+    # A conta do numero que cada pagina da visualizacao combinada mostra
+    # (21/08/2026). O `index.html` e o `cliente.html` ja tem a tag <script>
+    # apontando para ela: sem este nome aqui, a estacao serviria as duas
+    # paginas pedindo um script que da 404, e o card do modelo pararia de
+    # desenhar a numeracao.
+    "numero-da-pagina.js",
     "qr-ideal-colunas.js",
     "qr-ideal-hash.js",
     "fonte-canvas.js",

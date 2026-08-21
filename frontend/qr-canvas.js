@@ -121,7 +121,12 @@
      * Sem repintar, o QR fica no exemplo até o operador mexer em alguma coisa.
      */
     function repintar() {
-        ['drawCanvas', 'drawPedPreview'].forEach(function (nome) {
+        // `repintarAmostrasCombinadas` entrou em 21/08/2026: o card do modelo
+        // desenha QR Ideal como as outras janelas, mas nao estava nesta lista,
+        // entao ficava com o QR de exemplo ate alguem mexer em outro controle.
+        // Passou a doer quando folhear o banco virou folhear o ingresso: cada
+        // pagina pede um codigo novo a estacao.
+        ['drawCanvas', 'drawPedPreview', 'repintarAmostrasCombinadas'].forEach(function (nome) {
             if (typeof raiz[nome] === 'function') {
                 try { raiz[nome](); } catch (e) { /* janela fechada */ }
             }

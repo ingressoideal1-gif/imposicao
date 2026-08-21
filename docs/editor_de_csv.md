@@ -282,6 +282,25 @@ Detalhes que importam:
   linha; seria confuso de qualquer outro jeito.
 - **Todos os elementos variáveis da face leem a mesma linha.** O
   `drawAmostraFace` resolve `_linhaCsv` uma vez e a usa em TEXT, TEATRO_* e QR.
+- **Folhear o banco folheia a PEÇA inteira, e não só os campos do banco**
+  (21/08/2026). Até essa data o seletor trocava só o que vinha do CSV: o número
+  sequencial, o QR Ideal, o QR sequencial e o camarote ficavam parados na
+  primeira peça. A tela mostrava a linha 3 do banco casada com o ingresso 1 —
+  uma peça que o motor nunca imprime. A conta é a do `engine.py`: a página da
+  tela é o `local_idx` do motor, o item `i` do modelo nasce com `val1 = n1 + i` e
+  recebe `csv_row[i]`. Ela mora em `frontend/numero-da-pagina.js`
+  (`NumeroDaPagina.sequencial` e `.camarote`), um arquivo só, porque quem a
+  repete são o card do painel (`script.js`) e o card do link do cliente
+  (`cliente.js`), que já divergiram antes. Página 0 devolve exatamente o valor
+  de antes — nenhuma visualização parada na primeira linha mudou.
+- **O QR Ideal repinta quando a estação responde.** O código não se calcula no
+  navegador: cada página pede um à estação, e a resposta chega depois do
+  desenho. O `repintar()` do `qr-canvas.js` passou a chamar também
+  `repintarAmostrasCombinadas`, senão o card ficaria com o QR de exemplo a cada
+  página virada.
+- **O código de barras é o único que não acompanha.** Ele é um padrão de barras
+  decorativo em todas as janelas do navegador — não codifica valor nenhum, nem
+  antes nem depois desta mudança. Quem imprime barra de verdade é o `engine.py`.
 - **O seletor só aparece quando há o que navegar**: a numeração precisa ter ao
   menos um elemento com `source: "database"` e a fatia precisa ter mais de uma
   linha.

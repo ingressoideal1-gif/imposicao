@@ -1960,6 +1960,32 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
     };
 }
 
+// Rede de seguranca do `numero-da-pagina.js`, no mesmo espirito do guarda acima
+// e pelo mesmo motivo: entre o site subir e a estacao atualizar o agente, uma
+// maquina com agente antigo baixa a pagina nova e NAO baixa este arquivo — ele
+// so entra na lista de sincronismo do agente a partir desta versao. Sem esta
+// rede, a numeracao inteira pararia de desenhar naquela estacao. Com ela, a
+// visualizacao volta ao que era antes de paginar: a primeira peca.
+if (!window.NumeroDaPagina) {
+    console.error('[Amostra] numero-da-pagina.js nao carregou. A visualizacao nao vai paginar o numero.');
+    window.NumeroDaPagina = {
+        sequencial: function (o) {
+            var start = parseInt((o || {}).start, 10) || 1;
+            if (String((o || {}).tipo || '').toUpperCase() === 'TICKET') {
+                return start + (Math.max(1, parseInt(o.ticketPos, 10) || 1) - 1);
+            }
+            return start;
+        },
+        camarote: function (o) {
+            return {
+                local: parseInt((o || {}).cIni, 10) || 1,
+                pessoa: 1,
+                lotacao: Math.max(1, parseInt((o || {}).lotacao, 10) || 1)
+            };
+        }
+    };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BANCO DE DADOS (CSV) NO LINK DO CLIENTE
 //
@@ -2442,6 +2468,15 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // os elementos variaveis da face leem a mesma linha, senao o ingresso
         // sairia com a fila de uma linha e o assento de outra.
         const _linhaCsv = linhaDaAmostra(item, num);
+        // E a PAGINA, pelo mesmo motivo: folhear os ingressos folheia a peca
+        // inteira, e nao so os campos que vem do banco. O ingresso 3 do cliente
+        // tem a linha 3 do banco E o numero 3 -- e assim que sai no papel.
+        const _pagAmostra = paginaDaAmostra(item, linhasDaAmostra(item, num).length);
+        const _niAmostra = parseInt(
+            item?.numeracao_inicio || item?.num_inicial ||
+            item?.NUMERACAO_INICIO || 1
+        ) || 1;
+        const _ticketQtdAmostra = parseInt(num?.ticket_qtd || item?.ticket_qtd || 1) || 1;
 
         // Canvas não reflui: uma fonte que chegue depois do traço não aparece
         // mais. Esperar aqui é o que faz a numeração sair certa de primeira no
@@ -2505,21 +2540,25 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
-                } else if (el.type === 'CAMAROTE_LOCAL') {
-                    const _inicio = parseInt(
-                        item?.numeracao_inicio || item?.num_inicial ||
-                        item?.NUMERACAO_INICIO || 1
-                    );
-                    label = `${el.prefix || ''}${_inicio}`;
-                } else if (el.type === 'CAMAROTE_PESSOA') {
-                    label = `${el.prefix || ''}1`;
-                } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                    const _lCamB = parseInt(
-                        item?.L_CAM || item?.l_cam ||
-                        item?.lotacao_cam || item?.LOTACAO_CAM ||
-                        item?.lotacao || 5
-                    );
-                    label = `${el.prefix || ''}1/${_lCamB}`;
+                } else if (el.type.startsWith('CAMAROTE_')) {
+                    // A pagina anda pessoa a pessoa e vira o local quando a
+                    // lotacao fecha, como o _resolve_camarote_val do engine.py.
+                    const _cam = window.NumeroDaPagina.camarote({
+                        pagina: _pagAmostra,
+                        lotacao: item?.L_CAM || item?.l_cam ||
+                                 item?.lotacao_cam || item?.LOTACAO_CAM ||
+                                 item?.lotacao || 5,
+                        // O local inicial e o C_INI. O painel usa o mesmo campo;
+                        // aqui a tela lia o NI, que e outra coisa.
+                        cIni: item?.c_ini || item?.C_INI || 1
+                    });
+                    if (el.type === 'CAMAROTE_LOCAL') {
+                        label = `${el.prefix || ''}${_cam.local}`;
+                    } else if (el.type === 'CAMAROTE_PESSOA') {
+                        label = `${el.prefix || ''}${_cam.pessoa}`;
+                    } else {
+                        label = `${el.prefix || ''}${_cam.pessoa}/${_cam.lotacao}`;
+                    }
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
                     const csvRow = _linhaCsv;
@@ -2530,20 +2569,13 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
-                    let current_val = 1;
-                    if (num && num.tipo === "TICKET") {
-                        const pos = parseInt(el.ticket_pos) || 1;
-                        const start = parseInt(
-                            item?.numeracao_inicio || item?.num_inicial ||
-                            item?.NUMERACAO_INICIO || 1
-                        ) || 1;
-                        current_val = start + (pos - 1);
-                    } else {
-                        current_val = parseInt(
-                            item?.numeracao_inicio || item?.num_inicial ||
-                            item?.NUMERACAO_INICIO || 1
-                        ) || 1;
-                    }
+                    // Folhear os ingressos folheia o NUMERO tambem: o ingresso
+                    // N do cliente e o `NI + N` que o motor imprime.
+                    const current_val = window.NumeroDaPagina.sequencial({
+                        start: _niAmostra, pagina: _pagAmostra,
+                        tipo: num && num.tipo, ticketPos: el.ticket_pos,
+                        ticketQtd: _ticketQtdAmostra
+                    });
                     label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
                 window.desenharTextoAjustado(
@@ -2558,7 +2590,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 // O codigo sai do pool, que so existe na estacao — aqui o
                 // desenho e um exemplo, e a logo por cima ja impede extrair
                 // um codigo legivel da imagem de aprovacao.
-                window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * S,
+                window.desenharQRIdeal(numCtx, el, (el.size_mm || 15) * S,
                                        el.color || '#000000', null, null, 1);
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
@@ -2575,11 +2607,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
-                    const start = parseInt(
-                        item?.numeracao_inicio || item?.num_inicial ||
-                        item?.NUMERACAO_INICIO || 1
-                    ) || 1;
-                    const raw = padVal > 0 ? String(start).padStart(padVal, '0') : String(start);
+                    // Mesma conta do texto sequencial: o QR do ingresso N
+                    // carrega o numero do ingresso N.
+                    const val = window.NumeroDaPagina.sequencial({
+                        start: _niAmostra, pagina: _pagAmostra
+                    });
+                    const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
                 renderQRCodeOnCtx(numCtx, qrText, 0, 0, sz, color);
