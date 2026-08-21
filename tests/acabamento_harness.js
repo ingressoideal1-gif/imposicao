@@ -261,8 +261,16 @@ function montarAmbiente() {
     // O que alguem escolheu VENCE o derivado, sempre.
     ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Pronto' }) === 'Pronto',
        'a escolha do operador vence o derivado');
-    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Aguardando' }) === 'Aguardando',
-       'inclusive quando ele volta para Aguardando de proposito');
+    // ...mas "Aguardando" NAO e uma escolha: e a ausencia de trabalho nesta
+    // mesa. Corrigido em 21/08/2026 com o pedido 19775 na mao, onde AVRA e
+    // WHISPER estavam IMPRESSO na Producao e Aguardando aqui -- e a tela
+    // mostrava Aguardando para sempre, mentindo sobre o mundo fisico.
+    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Aguardando' }) === 'Impresso',
+       'Aguardando gravado nao trava o que a impressora ja terminou');
+    ok(estagioDoModelo({ status_impressao: 'Aguardando', acabamento_status: 'Aguardando' }) === 'Aguardando',
+       'e o que ainda nao saiu da impressora continua Aguardando');
+    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Em acabamento' }) === 'Em acabamento',
+       'as OUTRAS tres escolhas continuam vencendo o derivado');
     ok(estagioDoModelo({ acabamento_status: 'em acabamento' }) === 'Em acabamento',
        'a caixa das letras nao muda o estagio');
 
@@ -979,28 +987,115 @@ async function oBotaoDeExpedicaoSoAcendeComTudoPronto() {
     ok(html.indexOf('todos os modelos prontos') !== -1, 'com tudo pronto ele muda de cara');
 }
 
-async function clicarCedoDemaisNaoExpedeENemMente() {
-    const avisos = [];
+async function clicarCedoDemaisAbreOPopupComOQueFalta() {
+    // Ate 21/08/2026 isto era um aviso que sumia sozinho. Virou popup no mesmo
+    // dia, a pedido do usuario: a lista do que falta e a informacao que o
+    // operador vai USAR, e ela nao pode desaparecer enquanto ele le.
     const amb = ambienteComPedidoAberto();
-    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
     amb.janela.state.osItens['os-200'][0].setor = 'PVC';
     amb.janela.state.osItens['os-200'][1].setor = 'LASER';
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Aguardando';
 
     await amb.painel.abrirPedido('os-200');
-    avisos.length = 0;
     amb.banco._propostasGravadas.length = 0;
 
     await amb.painel.expedir('os-200');
 
-    ok(avisos.length === 1, 'houve aviso', String(avisos.length));
-    ok(avisos[0].texto.indexOf('Laser') !== -1, 'dizendo qual setor falta', avisos[0].texto);
-    ok(avisos[0].tipo === 'warning', 'como aviso, e nao como erro');
+    ok(amb.elementos['acab-expedicao'].style.display === 'flex', 'o popup abriu');
+    ok(amb.elementos['acab-expedicao-titulo'].textContent.indexOf('nao da') !== -1 ||
+       amb.elementos['acab-expedicao-titulo'].textContent.indexOf('não dá') !== -1,
+       'com o titulo do que nao da para fazer',
+       amb.elementos['acab-expedicao-titulo'].textContent);
+
+    const corpo = amb.elementos['acab-expedicao-corpo'].innerHTML;
+    ok(corpo.indexOf('Laser') !== -1, 'o corpo diz qual setor falta');
+    ok(corpo.indexOf('faltam 1') !== -1, 'e quantos modelos', corpo.indexOf('faltam 1'));
+    ok(corpo.indexOf('>200<') !== -1 || corpo.indexOf('Pedido 200') !== -1,
+       'e de qual pedido se trata');
+
+    // O botao de enviar SOME: nao ha o que confirmar.
+    ok(amb.elementos['acab-expedicao-ok'].style.display === 'none', 'sem botao de enviar');
+    ok(amb.elementos['acab-expedicao-cancelar'].textContent === 'Entendi',
+       'e o de fechar diz "Entendi"', amb.elementos['acab-expedicao-cancelar'].textContent);
+
     ok(amb.banco._propostasGravadas.length === 0,
-       'e NADA foi gravado no pedido', String(amb.banco._propostasGravadas.length));
+       'NADA foi gravado no pedido', String(amb.banco._propostasGravadas.length));
     ok(amb.janela.state.ordens[0].status_interno === 'EM PRODUCAO',
        'o pedido continua onde estava');
+}
+
+async function oPopupMostraOResumoEEsperaOOk() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.janela.state.osItens['os-200'].forEach(i => { i.acabamento_status = 'Pronto'; });
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4.16, status_producao: 'CONCLUIDO' },
+    ];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._propostasGravadas.length = 0;
+
+    await amb.painel.expedir('os-200');
+
+    ok(amb.elementos['acab-expedicao'].style.display === 'flex', 'o popup abriu');
+    const corpo = amb.elementos['acab-expedicao-corpo'].innerHTML;
+    ok(corpo.indexOf('PVC') !== -1 && corpo.indexOf('Laser') !== -1,
+       'o resumo lista os dois setores');
+    ok(corpo.indexOf('4,16 kg') !== -1, 'com o peso digitado', corpo.indexOf('4,16'));
+    ok(corpo.indexOf('Sem peso digitado em Laser') !== -1,
+       'e avisa qual setor foi sem peso');
+    ok(corpo.indexOf('EXPEDIÇÃO') !== -1, 'e diz o que vai acontecer ao confirmar');
+    ok(amb.elementos['acab-expedicao-ok'].style.display !== 'none', 'o botao de enviar aparece');
+
+    // ABRIR NAO GRAVA. So o OK grava.
+    ok(amb.banco._propostasGravadas.length === 0,
+       'abrir o popup nao gravou nada', String(amb.banco._propostasGravadas.length));
+    ok(amb.janela.state.ordens[0].status_interno === 'EM PRODUCAO',
+       'e o pedido continua na fila enquanto ninguem confirma');
+}
+
+async function cancelarFechaOPopupSemGravar() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => {
+        i.setor = 'PVC';
+        i.acabamento_status = 'Pronto';
+    });
+
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.expedir('os-200');
+    amb.banco._propostasGravadas.length = 0;
+
+    amb.painel.fecharPopupDaExpedicao();
+
+    ok(amb.elementos['acab-expedicao'].style.display === 'none', 'o popup fechou');
+    ok(amb.banco._propostasGravadas.length === 0, 'sem gravar nada');
+    ok(amb.janela.state.ordens[0].status_interno === 'EM PRODUCAO',
+       'o pedido continua na fila');
+}
+
+async function semPermissaoOPopupExplicaEnaoOferece() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: false };
+    amb.janela.state.osItens['os-200'].forEach(i => {
+        i.setor = 'PVC';
+        i.acabamento_status = 'Pronto';
+    });
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._propostasGravadas.length = 0;
+    await amb.painel.expedir('os-200');
+
+    ok(amb.elementos['acab-expedicao-ok'].style.display === 'none',
+       'quem so ve nao encontra o botao de enviar');
+    ok(amb.elementos['acab-expedicao-corpo'].innerHTML.indexOf('permissão de ver') !== -1,
+       'e o popup explica por que');
+
+    // E mesmo chamando o confirmar direto, nada e gravado.
+    await amb.painel.confirmarExpedicao('os-200');
+    ok(amb.banco._propostasGravadas.length === 0,
+       'a conferencia e refeita no confirmar, e nao so no botao');
 }
 
 async function comTudoProntoOPedidoVaiParaExpedicao() {
@@ -1016,7 +1111,12 @@ async function comTudoProntoOPedidoVaiParaExpedicao() {
     avisos.length = 0;
     amb.banco._propostasGravadas.length = 0;
 
+    // Abrir o popup NAO grava...
     await amb.painel.expedir('os-200');
+    ok(amb.banco._propostasGravadas.length === 0, 'abrir o popup nao grava');
+
+    // ...so o OK grava.
+    await amb.painel.confirmarExpedicao('os-200');
 
     ok(amb.banco._propostasGravadas.length === 1, 'uma gravacao no pedido',
        String(amb.banco._propostasGravadas.length));
@@ -1029,8 +1129,9 @@ async function comTudoProntoOPedidoVaiParaExpedicao() {
     ok(amb.janela.state.ordens[0].status_interno === 'EXPEDICAO',
        'a tela anda junto: o pedido sai da fila do acabamento');
     ok(avisos.some(a => a.tipo === 'success'), 'e o operador e avisado');
+    ok(amb.elementos['acab-expedicao'].style.display === 'none', 'o popup fecha');
     ok(amb.elementos['acab-detalhe-card'].style.display === 'none',
-       'o detalhe fecha e volta para a lista');
+       'e o detalhe volta para a lista');
 }
 
 async function oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto() {
@@ -1116,6 +1217,11 @@ async function desmarcarUmModeloTiraOCarimbo() {
     // contrasta forte com a pagina azul, e e assim que fica ate o usuario dizer
     // o contrario -- cor de estado nao acompanha a paleta.
     const amb = ambienteComPedidoAberto();
+    // O primeiro NAO saiu da impressora: e assim que se chega ao Aguardando de
+    // verdade. Desde 21/08/2026, `acabamento_status = 'Aguardando'` sozinho nao
+    // basta -- ele cai para a derivacao, e o derivado de um modelo impresso e
+    // "Impresso".
+    amb.janela.state.osItens['os-200'][0].status_impressao = 'Aguardando';
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Aguardando';
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Pronto';
     amb.painel.abrirPedido('os-200');
@@ -1360,7 +1466,10 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await oErroDoAgenteChegaAoOperador();
 
     await oBotaoDeExpedicaoSoAcendeComTudoPronto();
-    await clicarCedoDemaisNaoExpedeENemMente();
+    await clicarCedoDemaisAbreOPopupComOQueFalta();
+    await oPopupMostraOResumoEEsperaOOk();
+    await cancelarFechaOPopupSemGravar();
+    await semPermissaoOPopupExplicaEnaoOferece();
     await comTudoProntoOPedidoVaiParaExpedicao();
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
     await setorIncompletoNaoGanhaCarimbo();

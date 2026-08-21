@@ -242,12 +242,31 @@
      * A camada 2 é DERIVAÇÃO, nunca gravação. Desenhar a tela não escreve no
      * banco — a regra que o `renderOrdens` do `script.js` aprendeu do jeito
      * difícil. Só o seletor grava, e a partir daí a camada 1 manda.
+     *
+     * ## "Aguardando" gravado NÃO é uma escolha, e por isso não trava
+     *
+     * Corrigido em 21/08/2026, com o pedido 19775 na mão: os modelos AVRA e
+     * WHISPER estavam `IMPRESSO` na Produção e **`Aguardando`** no acabamento, e
+     * o acabamento mostrava Aguardando — a camada 1 vencendo a 2 para sempre.
+     * O usuário reportou exatamente isso: *"modelos marcados como IMPRESSO no
+     * painel de Produção aparecem no Painel de Acabamento com status IMPRESSO"*.
+     *
+     * A causa não é o dado, é o vocabulário. "Aguardando" aqui quer dizer *o
+     * material ainda não chegou nesta mesa* — é a ausência de trabalho, não uma
+     * decisão sobre ele. Quando a impressora termina, o material chegou, e
+     * insistir em "Aguardando" é a tela mentindo sobre o mundo físico.
+     *
+     * Então "Aguardando" cai para a derivação, e as outras três escolhas —
+     * Impresso, Em acabamento, Pronto — continuam vencendo tudo. A consequência
+     * de que é preciso saber: marcar "Aguardando" num modelo já impresso não
+     * gruda; para devolver material à fila, o caminho é o status de impressão.
      */
     function estagioDoModelo(m) {
         if (!m) return '';
 
         const doMapa = tela.acabamento[String(m.id)];
-        const escolhido = (m.acabamento_status || (doMapa ? doMapa.status : '') || '').toString().trim();
+        let escolhido = (m.acabamento_status || (doMapa ? doMapa.status : '') || '').toString().trim();
+        if (escolhido.toLowerCase() === 'aguardando') escolhido = '';
         if (escolhido) {
             const antigo = NOME_ANTIGO[escolhido.toLowerCase()];
             if (antigo) return antigo;
@@ -1660,13 +1679,29 @@
     }
 
     /**
-     * Manda o pedido para a expedição.
+     * O clique no botão: abre o popup e PARA por aí.
      *
-     * O botão só chama isto quando está ativo, mas a conferência é refeita aqui:
-     * quem digitar a função no console passaria direto pelo `disabled`, e o
+     * Pedido do usuário em 21/08/2026 — "deve abrir um popup em tela com as
+     * informações e aguardar ok". Nada é gravado antes do OK, e é essa a razão
+     * de o popup existir: expedir é irreversível pela tela do acabamento (o
+     * pedido sai da fila e quem o traz de volta é o ERP).
+     *
+     * O popup atende os DOIS estados do botão. Pronto, ele mostra o resumo do
+     * que vai embora — setor por setor, com peso — e espera o OK. Pendente, ele
+     * mostra o que falta, e o único botão é o de fechar.
+     */
+    function mandarParaExpedicao(osId) {
+        abrirPopupDaExpedicao(osId);
+    }
+
+    /**
+     * O envio de verdade, depois do OK.
+     *
+     * A conferência é refeita AQUI, e não só no `disabled` do botão nem no
+     * popup: quem digitar a função no console passaria direto pelos dois, e o
      * preço seria um pedido saindo da gráfica com modelo pendente.
      */
-    async function mandarParaExpedicao(osId) {
+    async function confirmarExpedicao(osId) {
         const s = estado();
         const os = (s.ordens || []).find(o => String(o.id) === String(osId));
         if (!os) return;
@@ -1676,14 +1711,16 @@
         const pendentes = setoresPendentes(itens);
         if (pendentes.length || !itens.length) {
             avisar(textoDoQueFalta(pendentes, itens), 'warning');
+            fecharPopupDaExpedicao();
             return;
         }
         if (!podeEditar()) {
             avisar('Você tem apenas permissão de ver. Peça a quem edita o acabamento.', 'warning');
+            fecharPopupDaExpedicao();
             return;
         }
 
-        const botao = document.getElementById('acab-btn-expedicao');
+        const botao = document.getElementById('acab-expedicao-ok');
         if (botao) { botao.disabled = true; botao.textContent = 'Enviando…'; }
 
         try {
@@ -1704,14 +1741,211 @@
             // recorte de quem está EM PRODUÇÃO.
             os.status_interno = 'EXPEDICAO';
             os.status = 'EXPEDICAO';
+            fecharPopupDaExpedicao();
             avisar(`Pedido ${esc(os.numero)} enviado para EXPEDIÇÃO. 📦`, 'success');
             AcabamentoPainel.fecharPedido();
         } catch (e) {
             console.error('[acabamento] erro ao mandar para expedição:', e);
+            // O popup FICA aberto: o operador precisa ver o motivo e poder
+            // tentar de novo sem reabrir tudo.
+            const recado = document.getElementById('acab-expedicao-recado');
+            if (recado) {
+                recado.innerHTML = `<span style="color: #f87171;">Não deu para enviar: `
+                    + `${esc(e && e.message ? e.message : e)}</span>`;
+            }
+            if (botao) { botao.disabled = false; botao.textContent = 'OK — ENVIAR'; }
             avisar(`Não deu para mandar o pedido para a expedição `
                  + `(${e && e.message ? e.message : e}).`, 'error');
-            renderDetalhe();
         }
+    }
+
+
+    // ─── O popup da expedição ───────────────────────────────────────────────
+    //
+    // "Ao clicar em EXPEDIÇÃO deve abrir um popup em tela com as informações e
+    // aguardar ok" — pedido do usuário em 21/08/2026.
+    //
+    // Ele existe porque expedir não tem volta por esta tela: o pedido sai da
+    // fila do Acabamento e quem o traz de volta é o ERP. Um clique sem
+    // confirmação, num botão grande ao lado de campos que o operador está
+    // digitando, é o tipo de acidente que só se descobre depois.
+
+    function montarPopupDaExpedicao() {
+        let caixa = document.getElementById('acab-expedicao');
+        if (caixa) return caixa;
+
+        caixa = document.createElement('div');
+        caixa.id = 'acab-expedicao';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100002; display: none;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(680px, 96vw); background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: ${'#120a8f'}; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">📦</span>
+                    <strong id="acab-expedicao-titulo" style="font-size: 1.05rem; color: #ffffff;"></strong>
+                    <button type="button" id="acab-expedicao-fechar"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px;
+                                   font-weight: 700; cursor: pointer;">✕</button>
+                </div>
+
+                <div id="acab-expedicao-corpo" style="padding: 16px 18px; color: #cfe6fb;
+                                                      font-size: 0.9rem; line-height: 1.55;
+                                                      max-height: 62vh; overflow-y: auto;"></div>
+
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18); flex-wrap: wrap;">
+                    <span id="acab-expedicao-recado" style="font-size: 0.8rem; color: #7fa9d4;"></span>
+                    <div style="margin-left: auto; display: flex; gap: 10px;">
+                        <button type="button" id="acab-expedicao-cancelar"
+                                style="background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                       color: #cfe6fb; border-radius: 8px; padding: 10px 18px;
+                                       font-weight: 700; cursor: pointer;">Cancelar</button>
+                        <button type="button" id="acab-expedicao-ok"
+                                style="background: linear-gradient(135deg, ${'#4a61e8'}, ${'#120a8f'});
+                                       border: 1px solid ${'#4cc8f0'}; color: #ffffff; border-radius: 8px;
+                                       padding: 10px 22px; font-weight: 800; letter-spacing: 0.05em;
+                                       cursor: pointer;">OK — ENVIAR</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        const fechar = () => fecharPopupDaExpedicao();
+        const btnX = document.getElementById('acab-expedicao-fechar');
+        const btnCancelar = document.getElementById('acab-expedicao-cancelar');
+        const btnOk = document.getElementById('acab-expedicao-ok');
+        if (btnX) btnX.addEventListener('click', fechar);
+        if (btnCancelar) btnCancelar.addEventListener('click', fechar);
+        if (btnOk) btnOk.addEventListener('click', () => confirmarExpedicao(tela.pedidoAberto));
+        return caixa;
+    }
+
+    function fecharPopupDaExpedicao() {
+        const caixa = document.getElementById('acab-expedicao');
+        if (caixa) caixa.style.display = 'none';
+    }
+
+    /** O peso digitado de um setor, para o resumo. */
+    function pesoDoSetor(setor) {
+        const linha = tela.pesos[setor];
+        return linha && linha.peso !== null && linha.peso !== undefined ? linha.peso : null;
+    }
+
+    /**
+     * Abre o popup com o resumo do pedido.
+     *
+     * Dois conteúdos, um para cada estado do botão — e é de propósito que o
+     * estado PENDENTE também abra o popup, em vez de um aviso que some sozinho:
+     * a lista do que falta é a informação que o operador vai usar, e ela não
+     * pode desaparecer enquanto ele lê.
+     */
+    function abrirPopupDaExpedicao(osId) {
+        const s = estado();
+        const os = (s.ordens || []).find(o => String(o.id) === String(osId));
+        if (!os) return;
+
+        const itens = modelosDoPedido(os);
+        const grupos = modelosPorSetor(itens);
+        const pendentes = setoresPendentes(itens);
+        const pronto = pedidoProntoParaExpedicao(itens);
+        const pode = podeEditar();
+
+        montarPopupDaExpedicao();
+
+        const titulo = document.getElementById('acab-expedicao-titulo');
+        const corpo = document.getElementById('acab-expedicao-corpo');
+        const recado = document.getElementById('acab-expedicao-recado');
+        const btnOk = document.getElementById('acab-expedicao-ok');
+        const btnCancelar = document.getElementById('acab-expedicao-cancelar');
+
+        const cliente = (fn('rotuloDoCliente') ? fn('rotuloDoCliente')(os) : os.cliente) || '';
+        const cabeca = `<div style="margin-bottom: 12px; font-size: 0.95rem;">
+                <strong style="color: #ffffff;">Pedido ${esc(os.numero)}</strong>
+                ${cliente ? `<span style="color: ${'#4cc8f0'};"> — ${esc(cliente)}</span>` : ''}
+            </div>`;
+
+        const linhas = grupos.map(g => {
+            const peso = pesoDoSetor(g.setor);
+            const faltando = g.faltam > 0;
+            return `
+                <tr>
+                    <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14);">
+                        ${esc(nomeDoSetor(g.setor))}
+                    </td>
+                    <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14); text-align: right;">
+                        ${g.modelos.length}
+                    </td>
+                    <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14); text-align: right;
+                               font-family: monospace;">
+                        ${peso === null ? '<span style="color:#7fa9d4;">—</span>' : esc(pesoParaTexto(peso)) + ' kg'}
+                    </td>
+                    <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14); text-align: right;">
+                        ${faltando
+                            ? `<span style="color: #fbbf24;">faltam ${g.faltam}</span>`
+                            : `<span style="color: #4ade80;">pronto</span>`}
+                    </td>
+                </tr>`;
+        }).join('');
+
+        const tabela = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+                <thead>
+                    <tr style="color: ${'#4cc8f0'}; text-align: left; font-size: 0.72rem;
+                               text-transform: uppercase; letter-spacing: 0.06em;">
+                        <th style="padding: 0 10px 6px;">Setor</th>
+                        <th style="padding: 0 10px 6px; text-align: right;">Modelos</th>
+                        <th style="padding: 0 10px 6px; text-align: right;">Peso</th>
+                        <th style="padding: 0 10px 6px; text-align: right;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>`;
+
+        if (pronto && pode) {
+            const semPeso = grupos.filter(g => pesoDoSetor(g.setor) === null);
+            const aviso = semPeso.length
+                ? `<div style="margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+                               background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.35);
+                               color: #fbbf24; font-size: 0.84rem;">
+                       Sem peso digitado em ${semPeso.map(g => esc(nomeDoSetor(g.setor))).join(', ')}.
+                       Dá para enviar assim, mas a ficha de expedição vai sem esse número.
+                   </div>`
+                : '';
+            if (titulo) titulo.textContent = 'Enviar para a expedição';
+            if (corpo) {
+                corpo.innerHTML = cabeca + tabela + aviso
+                    + `<div style="margin-top: 14px; font-size: 0.86rem;">
+                           Ao confirmar, o pedido passa para <strong>EXPEDIÇÃO</strong> no ERP e
+                           sai da fila do Acabamento. Trazer de volta é pelo ERP.
+                       </div>`;
+            }
+            if (btnOk) { btnOk.style.display = ''; btnOk.disabled = false; btnOk.textContent = 'OK — ENVIAR'; }
+            if (btnCancelar) btnCancelar.textContent = 'Cancelar';
+            if (recado) recado.textContent = '';
+        } else {
+            if (titulo) {
+                titulo.textContent = pode ? 'Ainda não dá para expedir' : 'Somente leitura';
+            }
+            const motivo = !pode
+                ? `<div style="margin-top: 12px;">Você tem apenas permissão de ver.
+                       Quem edita o acabamento é quem envia.</div>`
+                : `<div style="margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+                               background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.35);
+                               color: #fbbf24; font-size: 0.86rem;">
+                       ${esc(textoDoQueFalta(pendentes, itens))}
+                   </div>`;
+            if (corpo) corpo.innerHTML = cabeca + tabela + motivo;
+            if (btnOk) btnOk.style.display = 'none';
+            if (btnCancelar) btnCancelar.textContent = 'Entendi';
+            if (recado) recado.textContent = '';
+        }
+
+        const caixa = document.getElementById('acab-expedicao');
+        if (caixa) caixa.style.display = 'flex';
     }
 
     /** O que dizer a quem clicou cedo demais. */
@@ -2252,6 +2486,7 @@
 
         fecharPedido() {
             fecharCamera();
+            fecharPopupDaExpedicao();
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -2269,6 +2504,13 @@
             return mandarParaExpedicao(osId);
         },
 
+        /** O OK do popup. Só ele grava. */
+        confirmarExpedicao(osId) {
+            return confirmarExpedicao(osId || tela.pedidoAberto);
+        },
+
+        fecharPopupDaExpedicao,
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -2285,6 +2527,7 @@
             // a tela do pedido 123 sem topo, sem filtros e sem lista, e tinha de
             // achar o VOLTAR para chegar onde o menu prometia levá-lo.
             fecharCamera();
+            fecharPopupDaExpedicao();
             tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });

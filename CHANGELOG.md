@@ -4,7 +4,47 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v674** — 2026-08-21 | Agente **1.2.168**
+## Versão atual: **v675** — 2026-08-21 | Agente **1.2.169**
+
+---
+
+## [v675 — 2026-08-21] — O popup da expedição, e o IMPRESSO que vem da Produção
+
+### Clicar em EXPEDIÇÃO abre um popup e espera o OK
+
+Pedido do usuário. Antes o clique agia na hora; agora ele abre um popup com **o resumo do que
+vai embora** — setor por setor, com a contagem de modelos, o peso digitado e o estado de cada um
+— e espera a confirmação. Nada é gravado antes do OK.
+
+Ele existe porque expedir **não tem volta por esta tela**: o pedido sai da fila do Acabamento e
+quem o traz de volta é o ERP. Um clique sem confirmação, num botão grande ao lado de campos que
+o operador está digitando, é o tipo de acidente que só se descobre depois.
+
+O popup atende os dois estados. **Pronto**, mostra o resumo, avisa se algum setor foi sem peso
+digitado, e oferece *OK — ENVIAR*. **Pendente**, mostra o que falta e o único botão é
+*Entendi* — a lista do que falta é a informação que o operador vai usar, e ela não pode sumir
+sozinha como sumia o aviso anterior. Sem permissão de editar, o popup explica e não oferece o
+envio.
+
+Falha no envio **mantém o popup aberto**, com o motivo escrito: o operador precisa ver o que
+houve e poder tentar de novo sem refazer o caminho.
+
+### Modelo impresso na Produção aparece impresso no Acabamento
+
+Relato do usuário, e era defeito meu. Com o pedido **19775** na mão: *AVRA* e *WHISPER* estavam
+`IMPRESSO` na Produção e `Aguardando` no acabamento — e a tela mostrava Aguardando, para sempre.
+
+A causa não era o dado, era o vocabulário. **"Aguardando" no acabamento quer dizer *o material
+ainda não chegou nesta mesa*** — é a ausência de trabalho, não uma decisão sobre ele. Quando a
+impressora termina, o material chegou.
+
+Agora `acabamento_status = 'Aguardando'` cai para a derivação, como se estivesse vazio; as
+outras três escolhas continuam vencendo tudo. **Nada foi reescrito no banco** — as linhas
+continuam como estavam, e foi a leitura que ficou honesta.
+
+A consequência que é preciso saber: marcar "Aguardando" num modelo já impresso não gruda. Para
+devolver material à fila, o caminho é o status de impressão, na Produção — que é de quem
+imprimiu.
 
 ---
 

@@ -339,6 +339,30 @@ intervalo entre publicar e migrar, e a estação que ainda tem a versão anterio
 em cache e pode gravar o nome velho por alguns minutos. Toda gravação nova já
 sai como "Pronto".
 
+### "Aguardando" gravado não trava o que a impressora já terminou
+
+Corrigido em **21/08/2026**, com o pedido **19775** na mão: os modelos *AVRA* e
+*WHISPER* estavam `IMPRESSO` na Produção e `Aguardando` no acabamento, e a tela
+mostrava **Aguardando** — a camada 1 vencendo a 2 para sempre. O usuário
+reportou exatamente isso: *"modelos marcados como IMPRESSO no painel de Produção
+aparecem no Painel de Acabamento com status IMPRESSO"*.
+
+A causa não era o dado, era o vocabulário. **"Aguardando" aqui quer dizer *o
+material ainda não chegou nesta mesa*** — é a ausência de trabalho, não uma
+decisão sobre ele. Quando a impressora termina, o material chegou; insistir em
+"Aguardando" é a tela mentindo sobre o mundo físico.
+
+Então `acabamento_status = 'Aguardando'` **cai para a derivação**, como se
+estivesse vazio. As outras três escolhas — *Impresso*, *Em acabamento*, *Pronto*
+— continuam vencendo tudo.
+
+A consequência que é preciso saber: **marcar "Aguardando" num modelo já impresso
+não gruda**. Para devolver material à fila, o caminho é o status de impressão, na
+Produção — que é de quem imprimiu, e é o registro que manda.
+
+Nada foi reescrito no banco para isso: as linhas continuam com "Aguardando", e é
+a leitura que ficou honesta.
+
 Derivar **não é gravar**. Desenhar a tela não escreve no banco — é a regra que o
 `renderOrdens` do `script.js` aprendeu do jeito difícil, e ela vale aqui também.
 A coluna continua nula até alguém escolher; a partir daí, a escolha vence o
