@@ -46,15 +46,25 @@
     // e a caixa vazia "— Status —" não dizia nada a quem estava olhando. Agora o
     // seletor nunca nasce vazio — ele nasce dizendo a verdade que o banco já
     // sabe, lida do status de impressão (ver `estagioDoModelo`).
-    const ESTAGIOS = ['Aguardando', 'Impresso', 'Em acabamento', 'Revisado'];
+    const ESTAGIOS = ['Aguardando', 'Impresso', 'Em acabamento', 'Pronto'];
 
-    const ORDEM_ESTAGIO = { 'Aguardando': 1, 'Impresso': 2, 'Em acabamento': 3, 'Revisado': 4 };
+    const ORDEM_ESTAGIO = { 'Aguardando': 1, 'Impresso': 2, 'Em acabamento': 3, 'Pronto': 4 };
+
+    // O que o banco pode ter guardado com o nome antigo.
+    //
+    // Até 21/08/2026 o último estágio se chamava "Revisado"; o usuário trocou
+    // por "Pronto". A migração `sql/acabamento_status_pronto.sql` reescreve as
+    // linhas, mas a tela não pode depender disso: uma estação com a versão
+    // anterior em cache ainda grava o nome velho por alguns minutos depois da
+    // publicação, e ler "Revisado" como estágio desconhecido tiraria o pedido
+    // da conta de concluídos sem ninguém entender por quê.
+    const NOME_ANTIGO = { 'revisado': 'Pronto' };
 
     const SELO = {
         'Aguardando':    { icone: '⏳', cls: 'badge-blue',  texto: 'Aguardando' },
         'Impresso':      { icone: '🖨️', cls: 'badge-teal',  texto: 'Impresso' },
         'Em acabamento': { icone: '✂️', cls: 'badge-amber', texto: 'Em acabamento' },
-        'Revisado':      { icone: '✅', cls: 'badge-green', texto: 'Revisado' },
+        'Pronto':        { icone: '✅', cls: 'badge-green', texto: 'Pronto' },
     };
 
     // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
@@ -70,7 +80,7 @@
         'Aguardando':    '#3a2a1c',   // marrom — o que ainda não chegou
         'Impresso':      '#162037',   // azul escuro — saiu da impressora
         'Em acabamento': '#32352e',   // oliva — em cima da mesa
-        'Revisado':      '#14301f',   // verde escuro — conferido
+        'Pronto':        '#14301f',   // verde escuro — conferido
         '':              '#3a2a1c',
     };
 
@@ -96,8 +106,11 @@
     // Próprio, e não dentro de `state`: os filtros do acabamento não são os da
     // produção, e compartilhar as chaves faria um painel mexer no outro.
     const tela = {
-        prazo: 'geral',       // geral | hoje | atrasados | revisados
-        setor: '',
+        prazo: 'geral',       // geral | hoje | atrasados | prontos
+        setores: [],        // vazio = todos; os cards SOMAM (ver setFiltroSetor)
+        pesos: {},          // 'SETOR' -> { peso, existe } do pedido aberto
+        pesosDoPedido: null,// de qual pedido é o mapa acima
+        temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
         pedidoAberto: null,   // osId do pedido em detalhe
@@ -226,6 +239,8 @@
         const doMapa = tela.acabamento[String(m.id)];
         const escolhido = (m.acabamento_status || (doMapa ? doMapa.status : '') || '').toString().trim();
         if (escolhido) {
+            const antigo = NOME_ANTIGO[escolhido.toLowerCase()];
+            if (antigo) return antigo;
             const achado = ESTAGIOS.find(e => e.toLowerCase() === escolhido.toLowerCase());
             return achado || escolhido;
         }
@@ -271,15 +286,15 @@
     /**
      * O estágio do PEDIDO, a partir dos modelos dele.
      *
-     * Revisado só quando TODOS estão revisados — é o que faz o pedido sair da
-     * fila de trabalho. Qualquer movimento parcial conta como "Em acabamento",
-     * inclusive um revisado sozinho no meio de outros: o trabalho está em curso.
+     * Pronto só quando TODOS estão prontos — é o que faz o pedido sair da fila
+     * de trabalho. Qualquer movimento parcial conta como "Em acabamento",
+     * inclusive um pronto sozinho no meio de outros: o trabalho está em curso.
      */
     function estagioDoPedido(modelos) {
         if (!modelos || !modelos.length) return 'Aguardando';
         const estagios = modelos.map(estagioDoModelo);
-        if (estagios.every(e => e === 'Revisado')) return 'Revisado';
-        if (estagios.some(e => e === 'Em acabamento' || e === 'Revisado')) return 'Em acabamento';
+        if (estagios.every(e => e === 'Pronto')) return 'Pronto';
+        if (estagios.some(e => e === 'Em acabamento' || e === 'Pronto')) return 'Em acabamento';
         if (estagios.some(e => e === 'Impresso')) return 'Impresso';
         return 'Aguardando';
     }
@@ -289,9 +304,9 @@
         return `<span class="badge ${s.cls}">${s.icone} ${s.texto}</span>`;
     }
 
-    function pedidoTotalmenteRevisado(os) {
+    function pedidoTotalmentePronto(os) {
         const modelos = modelosDoPedido(os);
-        return modelos.length > 0 && estagioDoPedido(modelos) === 'Revisado';
+        return modelos.length > 0 && estagioDoPedido(modelos) === 'Pronto';
     }
 
     // ─── Prazo de entrega ───────────────────────────────────────────────────
@@ -311,10 +326,10 @@
     }
 
     function passaNoPrazo(os) {
-        // Pedido revisado sai da fila de trabalho: só reaparece com o botão
-        // "Revisado" ligado. É o mesmo desenho do botão "Impresso" da Produção.
-        if (tela.prazo === 'revisados') return pedidoTotalmenteRevisado(os);
-        if (pedidoTotalmenteRevisado(os)) return false;
+        // Pedido pronto sai da fila de trabalho: só reaparece com o botão
+        // "Pronto" ligado. É o mesmo desenho do botão "Impresso" da Produção.
+        if (tela.prazo === 'prontos') return pedidoTotalmentePronto(os);
+        if (pedidoTotalmentePronto(os)) return false;
         if (tela.prazo === 'geral') return true;
         if (tela.prazo === 'atrasados') return estaAtrasado(os);
         return ehParaHoje(os);
@@ -337,7 +352,7 @@
         switch (campo) {
             case 'numero':     return parseInt(os.numero) || 0;
             case 'itens':      return modelos.length;
-            case 'progresso':  return modelos.filter(m => estagioDoModelo(m) === 'Revisado').length / total;
+            case 'progresso':  return modelos.filter(m => estagioDoModelo(m) === 'Pronto').length / total;
             case 'quantidade': return modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
             case 'frete':      return ((os.frete_escolhido || '').trim() || 'Retirada Local').toUpperCase();
             case 'status': {
@@ -411,13 +426,20 @@
         });
     }
 
+    /**
+     * Acende os cards escolhidos, e o "Todos os Setores" quando não há nenhum.
+     *
+     * O setor de cada card vem do `data-setor`, e não do texto dele: o rótulo
+     * na tela é "Têxtil" e o valor é "TEXTIL", e comparar os dois só funcionava
+     * porque o `normalizar` tira o acento. Com vários acesos ao mesmo tempo,
+     * ler o atributo é o jeito honesto.
+     */
     function pintarBotoesSetor() {
         const todos = document.getElementById('btn-filtro-todos-setores-acab');
-        if (todos) todos.classList.toggle('active', !tela.setor);
+        if (todos) todos.classList.toggle('active', tela.setores.length === 0);
         document.querySelectorAll('#filter-container-setor-acab .filter-btn-pill').forEach(btn => {
-            const texto = (btn.textContent || '').trim().toUpperCase();
-            const alvo = normalizar(tela.setor);
-            btn.classList.toggle('active', !!alvo && normalizar(texto) === alvo);
+            const meu = normalizar(btn.getAttribute('data-setor') || '');
+            btn.classList.toggle('active', !!meu && tela.setores.some(s => normalizar(s) === meu));
         });
     }
 
@@ -460,10 +482,12 @@
                 if (!num.includes(busca) && !cli.includes(busca) && !evento.includes(busca)) return false;
             }
 
-            if (tela.setor) {
-                const alvo = normalizar(tela.setor);
-                const bate = modelos.some(m => normalizar(m.setor) === alvo)
-                    || (s.osItens[os.id] || []).some(i => normalizar(i.setor) === alvo);
+            if (tela.setores.length) {
+                // SOMA: o pedido entra se tiver item em QUALQUER um dos setores
+                // escolhidos. Ver a mesma regra no `setFiltroSetor` do script.js.
+                const alvos = new Set(tela.setores.map(normalizar));
+                const bate = modelos.some(m => alvos.has(normalizar(m.setor)))
+                    || (s.osItens[os.id] || []).some(i => alvos.has(normalizar(i.setor)));
                 if (!bate) return false;
             }
 
@@ -475,12 +499,12 @@
         });
     }
 
-    function barraDeProgresso(revisados, total) {
-        const pct = total > 0 ? Math.round((revisados / total) * 100) : 0;
+    function barraDeProgresso(prontos, total) {
+        const pct = total > 0 ? Math.round((prontos / total) * 100) : 0;
         return `
             <div style="width: 100%; min-width: 110px;">
                 <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
-                    <span>${revisados}/${total} mod.</span>
+                    <span>${prontos}/${total} mod.</span>
                     <strong>${pct}%</strong>
                 </div>
                 <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
@@ -497,27 +521,27 @@
         const emProducao = pedidosEmProducao();
 
         // ── Métricas ────────────────────────────────────────────────────────
-        let emAcabamento = 0, revisados = 0, concluidos = 0;
+        let emAcabamento = 0, prontos = 0, concluidos = 0;
         emProducao.forEach(os => {
             const modelos = modelosDoPedido(os);
             modelos.forEach(m => {
                 const e = estagioDoModelo(m);
                 if (e === 'Em acabamento') emAcabamento++;
-                if (e === 'Revisado') revisados++;
+                if (e === 'Pronto') prontos++;
             });
-            if (modelos.length && estagioDoPedido(modelos) === 'Revisado') concluidos++;
+            if (modelos.length && estagioDoPedido(modelos) === 'Pronto') concluidos++;
         });
 
         escrever('stat-acab-pedidos-fila', emProducao.length);
         escrever('stat-acab-modelos-acabamento', emAcabamento);
-        escrever('stat-acab-modelos-revisados', revisados);
+        escrever('stat-acab-modelos-prontos', prontos);
         escrever('stat-acab-pedidos-concluidos', concluidos);
         escrever('badge-acabamento', emProducao.length);
 
         // O alerta de atraso é global, sobre a fila inteira: não muda conforme
-        // setor, estágio ou busca. Pedido já revisado não conta — ele saiu da
+        // setor, estágio ou busca. Pedido já pronto não conta — ele saiu da
         // fila de trabalho.
-        tela.temAtrasados = emProducao.some(os => estaAtrasado(os) && !pedidoTotalmenteRevisado(os));
+        tela.temAtrasados = emProducao.some(os => estaAtrasado(os) && !pedidoTotalmentePronto(os));
 
         // ── A tabela ────────────────────────────────────────────────────────
         let lista = filtrar(emProducao).filter(passaNoPrazo);
@@ -551,7 +575,7 @@
         tbody.innerHTML = lista.map(os => {
             const modelos = modelosDoPedido(os);
             const total = modelos.length || 1;
-            const revisadosDoPedido = modelos.filter(m => estagioDoModelo(m) === 'Revisado').length;
+            const prontosDoPedido = modelos.filter(m => estagioDoModelo(m) === 'Pronto').length;
             const qtdTotal = modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
 
             const freteBruto = (os.frete_escolhido || '').trim() || 'Retirada Local';
@@ -574,7 +598,7 @@
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
                         ${eventoHtml}
                     </td>
-                    <td>${barraDeProgresso(revisadosDoPedido, total)}</td>
+                    <td>${barraDeProgresso(prontosDoPedido, total)}</td>
                     <td style="text-align: center; vertical-align: middle;">${previewArte ? previewArte(os) : ''}</td>
                     <td><span class="badge">${modelos.length} ${modelos.length === 1 ? 'modelo' : 'modelos'}</span></td>
                     <td><strong>${qtdTotal.toLocaleString('pt-BR')}</strong></td>
@@ -973,12 +997,12 @@
                        Este pedido não tem modelo cadastrado.<br>
                        <span style="font-size: 0.82rem;">Se isso não está certo, use VOLTAR e depois ATUALIZAR.</span>
                    </div>`;
-            escrever('acab-detalhe-progresso', '0/0 revisados');
+            escrever('acab-detalhe-progresso', '0/0 prontos');
             return;
         }
 
-        const revisados = itens.filter(i => estagioDoModelo(i) === 'Revisado').length;
-        escrever('acab-detalhe-progresso', `${revisados}/${itens.length} revisados`);
+        const prontos = itens.filter(i => estagioDoModelo(i) === 'Pronto').length;
+        escrever('acab-detalhe-progresso', `${prontos}/${itens.length} prontos`);
 
         // Agrupado por produto, na mesma ordem em que a fila do Pedido desenha.
         const grupos = {};
@@ -988,7 +1012,7 @@
             grupos[prodId].push(item);
         });
 
-        corpo.innerHTML = Object.keys(grupos).map(prodId => {
+        const html = Object.keys(grupos).map(prodId => {
             const doGrupo = grupos[prodId];
             let nome = 'Produto Desconhecido';
             let setorPcp = '';
@@ -1014,6 +1038,12 @@
                     </div>
                 </div>`;
         }).join('');
+
+        corpo.innerHTML = boxDePesos(itens, os ? os.numero : '') + html;
+
+        // Os campos de peso são desenhados junto com o pedido, então o valor
+        // gravado tem de voltar a eles a cada desenho.
+        pintarPesos();
     }
 
     function mostrarLista() {
@@ -1027,6 +1057,397 @@
         if (lista) lista.style.display = emDetalhe ? 'none' : '';
         if (detalhe) detalhe.style.display = emDetalhe ? 'flex' : 'none';
         if (vazio && emDetalhe) vazio.style.display = 'none';
+    }
+
+    // ─── O peso por setor ───────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 21/08/2026: um box acima dos modelos, com os setores
+    // dos produtos daquele pedido e um campo de peso para cada um. "Triband +
+    // Credencial + Mobi" são dois setores — Laser e PVC —, e cada um tem a sua
+    // linha.
+    //
+    // ## Onde isso é gravado, e por que ali
+    //
+    // Em `propostas_os_setores.peso_real_kg`, que é tabela do PARCEIRO. A regra
+    // da casa (`docs/REGRAS_BANCO.md`) diz que não se escreve em tabela sem
+    // prefixo nosso, e esta é a exceção que o usuário abriu — com razão: a
+    // tabela tem `peso_real_kg`, `qtd_volumes`, `tipo_volume` e
+    // `responsavel_conferencia`, ou seja, é a ficha de conferência de expedição
+    // que o ERP mantém para a gráfica preencher. O ERP já preenche parte dela.
+    //
+    // A escrita é a mais estreita possível: só a coluna do peso e o
+    // `updated_at`. Nada mais da linha é tocado.
+    //
+    // ## Dois caminhos, porque a estação não tem sessão
+    //
+    // A tabela tem RLS, e as quatro políticas são de `authenticated`. Na estação
+    // da gráfica o operador entra pelo código local, sem sessão do Supabase — e
+    // ali a chave anônima lê a tabela e recebe `[]` com HTTP 200: vazio, sem
+    // erro nenhum. Medido em 21/08/2026.
+    //
+    // Em 21/08/2026 o usuário decidiu que a digitação do peso e a escolha dos
+    // drops seriam feitas justamente pelo acesso local do agente. Então há dois
+    // caminhos, e quem escolhe é QUEM SERVIU a página — o mesmo desenho do
+    // catálogo de fontes:
+    //
+    //   - **estação** → `/api/peso-setores/<pedido>` do agente, que repassa à
+    //     Edge Function `acesso-estacao` com o segredo dele e grava com a chave
+    //     de serviço. A regra inteira mora em `_compartilhado/pesos.ts`.
+    //   - **site, com sessão** → direto no PostgREST, que é o que a sessão do
+    //     Vibe já autoriza.
+    //
+    // Sem nenhum dos dois — página no site sem login —, o box diz o que fazer em
+    // vez de mostrar campos que não gravariam nada.
+
+    const TABELA_DE_SETORES = 'propostas_os_setores';
+
+    /**
+     * Há um agente servindo esta página?
+     *
+     * `SERVIDA_PELA_NUVEM` vem do `supabase-config.js`, que toda página carrega
+     * antes desta. Ele sai de `window.location` na hora: porta 9000 ou
+     * localhost é estação. Ausente conta como nuvem — o caminho que não inventa
+     * um agente que não está ali.
+     *
+     * O identificador NU vem primeiro, e o `window` depois, pela mesma razão do
+     * `estado()`: um `const` no topo de um script clássico vive no escopo léxico
+     * global e é visto assim pelos outros scripts, mas NÃO vira propriedade de
+     * `window`. Ler só pelo `window` daria `undefined` no navegador.
+     */
+    function pelaEstacao() {
+        if (typeof SERVIDA_PELA_NUVEM !== 'undefined') return SERVIDA_PELA_NUVEM === false;
+        return (typeof window !== 'undefined') && window.SERVIDA_PELA_NUVEM === false;
+    }
+
+    function urlDoPeso(numeroDoPedido) {
+        let base = '';
+        if (typeof API_BASE_URL !== 'undefined') base = API_BASE_URL;
+        else if (typeof window !== 'undefined' && window.API_BASE_URL) base = window.API_BASE_URL;
+        return `${base}/api/peso-setores/${encodeURIComponent(numeroDoPedido)}`;
+    }
+
+    /** O `fetch` da janela, e não o global: é o que o teste consegue trocar. */
+    function buscar(url, opcoes) {
+        const f = (typeof window !== 'undefined' && window.fetch) ? window.fetch : fetch;
+        return f(url, opcoes);
+    }
+
+    // Os quatro que o banco aceita: `propostas_os_setores_setor_check`. Escrever
+    // qualquer outro devolve 23514, e a ordem aqui é a mesma dos cards da fila.
+    const SETORES_DO_BANCO = ['FLEXO', 'PVC', 'TEXTIL', 'LASER'];
+
+    const ROTULO_DO_SETOR = {
+        FLEXO:  { nome: 'Flexo',  icone: '🗂️' },
+        PVC:    { nome: 'PVC',    icone: '🪪' },
+        TEXTIL: { nome: 'Têxtil', icone: '👕' },
+        LASER:  { nome: 'Laser',  icone: '☀️' },
+    };
+
+    /**
+     * Os setores dos produtos deste pedido, na ordem dos cards.
+     *
+     * Vem do `setor` de cada item, que o `script.js` já resolveu a partir de
+     * `produtos.setor_pcp` — a mesma origem dos cards da fila. Setor que o banco
+     * não aceita fica de fora: melhor não oferecer o campo do que oferecer um
+     * que devolve erro na hora de gravar.
+     */
+    function setoresDoPedido(itens) {
+        const achados = new Set();
+        (itens || []).forEach(i => {
+            const s = normalizar(i && i.setor);
+            if (SETORES_DO_BANCO.indexOf(s) !== -1) achados.add(s);
+        });
+        return SETORES_DO_BANCO.filter(s => achados.has(s));
+    }
+
+    /**
+     * Há sessão do Supabase? Sem ela a tabela do parceiro é invisível.
+     *
+     * Só o SIM fica guardado. O não se re-pergunta a cada vez, de propósito: o
+     * painel tem tela de login, e quem entrar no meio do caminho não pode ficar
+     * preso a uma resposta de antes — seria um box travado até recarregar a
+     * página, sem nada na tela explicando por quê.
+     */
+    async function temSessaoDoSupabase() {
+        if (pelaEstacao()) return false;   // lá o caminho é outro; nem se pergunta
+        if (tela.temSessao === true) return true;
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.auth) {
+                tela.temSessao = false;
+                return false;
+            }
+            const { data } = await supabaseClient.auth.getSession();
+            tela.temSessao = !!(data && data.session);
+        } catch (e) {
+            tela.temSessao = false;
+        }
+        return tela.temSessao;
+    }
+
+    /** "4,16" e "4.16" são o mesmo peso; vazio é apagar. */
+    function pesoDoTexto(texto) {
+        const limpo = String(texto === undefined || texto === null ? '' : texto)
+            .trim().replace(',', '.');
+        if (!limpo) return null;
+        const n = Number(limpo);
+        if (!isFinite(n) || n < 0) return undefined;   // undefined = não é peso
+        return Math.round(n * 1000) / 1000;
+    }
+
+    /** O peso na tela sai com vírgula, que é como a balança da gráfica mostra. */
+    function pesoParaTexto(valor) {
+        if (valor === null || valor === undefined || valor === '') return '';
+        const n = Number(valor);
+        if (!isFinite(n)) return '';
+        return String(n).replace('.', ',');
+    }
+
+    /**
+     * Lê as linhas de `propostas_os_setores` daquele pedido.
+     *
+     * Falha e lista vazia são coisas DIFERENTES aqui, e é por isso que o
+     * resultado guarda `existe` por setor: sem linha no banco, gravar precisa
+     * inserir; com linha, precisa atualizar sem encostar no resto dela.
+     */
+    async function carregarPesos(numeroDoPedido) {
+        tela.pesos = {};
+        tela.pesosDoPedido = numeroDoPedido;
+
+        const idInt = parseInt(numeroDoPedido);
+        if (isNaN(idInt)) return;
+
+        const guardar = linhas => (linhas || []).forEach(l => {
+            tela.pesos[normalizar(l.setor)] = {
+                peso: l.peso_real_kg === null || l.peso_real_kg === undefined
+                    ? null : Number(l.peso_real_kg),
+                existe: true,
+            };
+        });
+
+        try {
+            if (pelaEstacao()) {
+                const res = await buscar(urlDoPeso(idInt));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                guardar((await res.json()).setores);
+                return;
+            }
+            if (!(await temSessaoDoSupabase())) return;
+            const { data, error } = await supabaseClient
+                .from(TABELA_DE_SETORES)
+                .select('id, setor, peso_real_kg')
+                .eq('id_int', idInt);
+            if (error) throw error;
+            guardar(data);
+        } catch (e) {
+            console.warn('[acabamento] não deu para ler o peso por setor:', e);
+        }
+    }
+
+    /**
+     * Grava o peso de UM setor.
+     *
+     * Atualiza primeiro; só insere se a atualização não encontrou linha. É o
+     * caminho que menos mexe na tabela do parceiro: hoje 729 dos 758 pares
+     * (pedido, setor) ainda não têm linha, porque o ERP as cria na expedição.
+     *
+     * `UNIQUE (id_int, setor)` protege a corrida entre duas pessoas no mesmo
+     * pedido: o segundo INSERT volta 23505 e vira atualização.
+     */
+    async function gravarPeso(numeroDoPedido, setor, texto) {
+        const idInt = parseInt(numeroDoPedido);
+        const alvo = normalizar(setor);
+        if (isNaN(idInt) || SETORES_DO_BANCO.indexOf(alvo) === -1) return;
+
+        const peso = pesoDoTexto(texto);
+        if (peso === undefined) {
+            avisar(`"${texto}" não é um peso. Use só números, como 4,16.`, 'error');
+            pintarPesos();
+            return;
+        }
+
+        const antes = tela.pesos[alvo] || { peso: null, existe: false };
+        tela.pesos[alvo] = { peso, existe: antes.existe };
+        marcarPeso(alvo, 'gravando');
+
+        try {
+            if (pelaEstacao()) {
+                // A estação não fala com a tabela do parceiro: quem grava é o
+                // agente, pela Edge Function. A regra (atualiza, e só insere se
+                // não houver linha) mora lá, uma vez só.
+                const res = await buscar(urlDoPeso(idInt), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ setor: alvo, peso_real_kg: peso }),
+                });
+                if (!res.ok) {
+                    let detalhe = `HTTP ${res.status}`;
+                    try {
+                        const corpo = await res.json();
+                        if (corpo && corpo.detail) detalhe = corpo.detail;
+                    } catch (ignorado) { /* resposta sem JSON: fica o código */ }
+                    throw new Error(detalhe);
+                }
+                tela.pesos[alvo] = { peso, existe: true };
+                marcarPeso(alvo, 'gravado');
+                return;
+            }
+
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('sem conexão com o banco');
+            }
+            if (!(await temSessaoDoSupabase())) {
+                throw new Error('esta tela está sem sessão do Vibe');
+            }
+
+            const agora = new Date().toISOString();
+            const { data: mexidas, error: erroUpdate } = await supabaseClient
+                .from(TABELA_DE_SETORES)
+                .update({ peso_real_kg: peso, updated_at: agora })
+                .eq('id_int', idInt).eq('setor', alvo)
+                .select('id');
+            if (erroUpdate) throw erroUpdate;
+
+            if (!mexidas || !mexidas.length) {
+                // Linha nova. `id_os` sai preenchido quando o ERP já abriu a OS
+                // daquele pedido; sem OS ele fica nulo, como as duas linhas que
+                // o próprio ERP já tem assim.
+                const { data: os } = await supabaseClient
+                    .from('propostas_os').select('id').eq('id_int', idInt).limit(1);
+                const linha = {
+                    id_int: idInt,
+                    setor: alvo,
+                    peso_real_kg: peso,
+                    updated_at: agora,
+                };
+                if (os && os.length && os[0].id) linha.id_os = os[0].id;
+
+                const { error: erroInsert } = await supabaseClient
+                    .from(TABELA_DE_SETORES).insert(linha);
+                if (erroInsert) {
+                    // 23505 = outra pessoa criou a linha entre o update e o
+                    // insert. A escolha dela e a minha são a mesma coluna.
+                    const dup = String(erroInsert.code || '') === '23505';
+                    if (!dup) throw erroInsert;
+                    const { error: erroRetry } = await supabaseClient
+                        .from(TABELA_DE_SETORES)
+                        .update({ peso_real_kg: peso, updated_at: agora })
+                        .eq('id_int', idInt).eq('setor', alvo);
+                    if (erroRetry) throw erroRetry;
+                }
+            }
+
+            tela.pesos[alvo] = { peso, existe: true };
+            marcarPeso(alvo, 'gravado');
+        } catch (e) {
+            console.error('[acabamento] erro ao gravar o peso:', e);
+            tela.pesos[alvo] = antes;
+            marcarPeso(alvo, 'erro');
+            avisar(`Não deu para gravar o peso do setor ${(ROTULO_DO_SETOR[alvo] || {}).nome || alvo}`
+                 + ` (${e && e.message ? e.message : e}).`, 'error');
+            pintarPesos();
+        }
+    }
+
+    function avisar(mensagem, tipo) {
+        const toast = fn('toast');
+        if (toast) toast(mensagem, tipo || 'info');
+    }
+
+    /** O sinalzinho ao lado do campo, sem redesenhar o pedido inteiro. */
+    function marcarPeso(setor, estado) {
+        const el = document.getElementById('acab-peso-sinal-' + setor);
+        if (!el) return;
+        const desenho = {
+            gravando: { texto: '…',          cor: 'var(--text-dim)' },
+            gravado:  { texto: '✓ gravado',  cor: '#4ade80' },
+            erro:     { texto: '✕ não foi',  cor: '#f87171' },
+            '':       { texto: '',           cor: 'var(--text-dim)' },
+        }[estado] || { texto: '', cor: 'var(--text-dim)' };
+        el.textContent = desenho.texto;
+        el.style.color = desenho.cor;
+    }
+
+    /** Devolve aos campos o que está no estado, sem tocar no resto da tela. */
+    function pintarPesos() {
+        Object.keys(ROTULO_DO_SETOR).forEach(setor => {
+            const campo = document.getElementById('acab-peso-' + setor);
+            if (!campo) return;
+            const atual = tela.pesos[setor];
+            campo.value = pesoParaTexto(atual ? atual.peso : null);
+        });
+    }
+
+    /**
+     * O box, acima dos modelos.
+     *
+     * Sem setor nenhum e sem sessão são dois "vazios" diferentes, e cada um diz
+     * a sua razão: um box mudo faria o operador procurar defeito onde não há.
+     */
+    function boxDePesos(itens, numeroDoPedido) {
+        const setores = setoresDoPedido(itens);
+        const pode = podeEditar();
+        // Sem caminho nenhum: nem agente servindo a página, nem sessão do Vibe.
+        const semCaminho = !pelaEstacao() && tela.temSessao === false;
+
+        const cabecalho = `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+                        background: ${MARROM.fundo}; border-bottom: 1px solid rgba(200,180,168,0.24);">
+                <span style="font-size: 1.1rem;">⚖️</span>
+                <strong style="font-size: 0.92rem; letter-spacing: 0.02em;">Peso por setor</strong>
+                <span style="font-size: 0.74rem; color: var(--text-dim);">
+                    Pedido ${esc(numeroDoPedido)} — um peso para cada setor dos produtos
+                </span>
+            </div>`;
+
+        let miolo;
+        if (!setores.length) {
+            miolo = `<div style="padding: 14px; color: var(--text-dim); font-size: 0.84rem;">
+                        Os produtos deste pedido não têm setor definido, então não há peso a
+                        registrar. O setor vem do cadastro do produto no ERP.
+                     </div>`;
+        } else if (semCaminho) {
+            miolo = `<div style="padding: 14px; color: var(--text-dim); font-size: 0.84rem; line-height: 1.5;">
+                        <strong style="color: #fcd34d;">Para registrar o peso, entre com a sua conta.</strong><br>
+                        Esta tela está aberta com o acesso local da estação, e o peso é gravado na
+                        ficha de expedição do ERP — que só aceita quem entrou com a conta do Vibe.
+                        Abra o painel pelo site e faça login para preencher.
+                        <div style="margin-top: 8px;">Setores deste pedido:
+                            ${setores.map(s => esc((ROTULO_DO_SETOR[s] || {}).nome || s)).join(' · ')}
+                        </div>
+                     </div>`;
+        } else {
+            miolo = `<div style="padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 12px;">
+                ${setores.map(setor => {
+                    const r = ROTULO_DO_SETOR[setor] || { nome: setor, icone: '📦' };
+                    const atual = tela.pesos[setor];
+                    const valor = pesoParaTexto(atual ? atual.peso : null);
+                    return `
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1 1 240px;
+                                background: rgba(200,180,168,0.06); border: 1px solid rgba(200,180,168,0.20);
+                                border-radius: 8px; padding: 10px 12px;">
+                        <span style="font-size: 1.05rem;">${r.icone}</span>
+                        <strong style="min-width: 62px; font-size: 0.86rem;">${esc(r.nome)}</strong>
+                        <input type="text" inputmode="decimal" id="acab-peso-${setor}"
+                               value="${esc(valor)}" placeholder="0,00" ${pode ? '' : 'disabled'}
+                               onchange="AcabamentoPainel.mudarPeso('${escJs(numeroDoPedido)}', '${setor}', this.value)"
+                               title="${pode ? 'Peso real deste setor, em quilos' : 'Você tem apenas permissão de ver'}"
+                               style="width: 92px; text-align: right; background: #131110;
+                                      border: 1px solid rgba(200,180,168,0.26); border-radius: 6px;
+                                      color: #ded3cc; padding: 6px 8px; font-size: 0.92rem;
+                                      font-family: monospace; opacity: ${pode ? '1' : '0.5'};" />
+                        <span style="font-size: 0.8rem; color: var(--text-dim);">kg</span>
+                        <span id="acab-peso-sinal-${setor}" style="font-size: 0.74rem; min-width: 62px;
+                              color: var(--text-dim);"></span>
+                    </div>`;
+                }).join('')}
+            </div>`;
+        }
+
+        return `
+            <div style="background: ${MARROM.superficie}; border: 1px solid ${MARROM.fio};
+                        border-radius: 10px; overflow: hidden; margin-bottom: 14px;">
+                ${cabecalho}${miolo}
+            </div>`;
     }
 
     // ─── Gravação ───────────────────────────────────────────────────────────
@@ -1469,12 +1890,24 @@
         render,
 
         setFiltroPrazo(valor) {
-            tela.prazo = ['hoje', 'atrasados', 'revisados'].includes(valor) ? valor : 'geral';
+            tela.prazo = ['hoje', 'atrasados', 'prontos'].includes(valor) ? valor : 'geral';
             render();
         },
 
+        /**
+         * Liga ou desliga um setor. Desde 21/08/2026 os cards SOMAM: clicar num
+         * segundo setor não troca o primeiro, acrescenta — pedido do usuário,
+         * na mesma leva do Painel de Produção. Clicar de novo num card aceso
+         * tira aquele setor; `setFiltroSetor('')` limpa tudo.
+         */
         setFiltroSetor(valor) {
-            tela.setor = valor || '';
+            if (!valor) {
+                tela.setores = [];
+            } else {
+                const i = tela.setores.indexOf(valor);
+                if (i === -1) tela.setores.push(valor);
+                else tela.setores.splice(i, 1);
+            }
             render();
         },
 
@@ -1496,7 +1929,7 @@
         atualizar() {
             tela.sort = null;
             tela.prazo = 'geral';
-            tela.setor = '';
+            tela.setores = [];
             tela.estagio = '';
             tela.operadores = null;
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
@@ -1510,6 +1943,8 @@
         async abrirPedido(osId) {
             tela.pedidoAberto = osId;
             tela.carregandoPedido = true;
+            tela.pesos = {};
+            tela.pesosDoPedido = null;
             mostrarLista();
             renderDetalhe();
             try {
@@ -1521,6 +1956,14 @@
             }
             renderDetalhe();
             render();
+
+            // O peso vem DEPOIS do desenho, de propósito: ele é do parceiro e
+            // pode demorar ou nem responder, e o pedido não espera por ele.
+            const os = (estado().ordens || []).find(o => String(o.id) === String(osId));
+            if (os) {
+                await carregarPesos(os.numero);
+                renderDetalhe();
+            }
         },
 
         fecharPedido() {
@@ -1534,6 +1977,10 @@
             return gravar(itemId, osId, 'acabamento_status', valor);
         },
 
+        mudarPeso(numeroDoPedido, setor, valor) {
+            return gravarPeso(numeroDoPedido, setor, valor);
+        },
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -1545,6 +1992,12 @@
 
         /** Chamado quando a tela é aberta pelo menu. */
         aoAbrir() {
+            // Clicar no menu volta para o começo: a lista, nunca o detalhe de um
+            // pedido aberto numa visita anterior. Sem isto o operador reencontrava
+            // a tela do pedido 123 sem topo, sem filtros e sem lista, e tinha de
+            // achar o VOLTAR para chegar onde o menu prometia levá-lo.
+            fecharCamera();
+            tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
             Promise.all([carregarEncerradosComoTeste(), carregarAcabamentoDosModelos()])
@@ -1557,6 +2010,11 @@
         // Para os testes: dá acesso às regras puras sem precisar de uma tela.
         _regras: {
             ehDeProducao,
+            setoresDoPedido,
+            pesoDoTexto,
+            pesoParaTexto,
+            pelaEstacao,
+            urlDoPeso,
             encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
             estagioDerivadoDaImpressao,

@@ -131,7 +131,9 @@ const state = {
     loadedOSName: "",
 
     expectedArteName: "",
-    filtroSetor: "",
+    // Os setores escolhidos nos cards. Desde 21/08/2026 e uma LISTA: os cards
+    // somam em vez de trocar. Vazia = todos os setores.
+    filtroSetores: [],
     filtroStatus: "",
     filtroSetorArte: "",
     filtroStatusArte: "",
@@ -22400,15 +22402,8 @@ function renderOrdens() {
             if (!matchSearch) return false;
         }
 
-        // 2. Filtro de Setor
-        if (state.filtroSetor) {
-            const matchSetor = itens.some(item => {
-                const itemS = item.setor || '';
-                const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-                return norm(itemS) === norm(state.filtroSetor);
-            });
-            if (!matchSetor) return false;
-        }
+        // 2. Filtro de Setor -- os cards SOMAM (ver pedidoBateNosSetores)
+        if (!pedidoBateNosSetores(itens, state.filtroSetores)) return false;
 
         // 3. Filtro de Estágio de Impressão
         if (state.filtroStatus) {
@@ -31462,33 +31457,72 @@ window.dispararEmailDiretoCliente = dispararEmailDiretoCliente;
 
 
 
+/**
+ * O pedido entra no recorte de setores escolhido nos cards?
+ *
+ * SOMA: basta ter um item em QUALQUER um dos setores acesos. Lista vazia é
+ * "Todos os Setores", e então todo pedido entra.
+ *
+ * Está aqui, com nome, e não solta dentro do filtro, porque é a regra que o
+ * usuário pediu em 21/08/2026 e é o que precisa ficar travado por teste.
+ */
+function pedidoBateNosSetores(itens, escolhidos) {
+    const setores = escolhidos || [];
+    if (!setores.length) return true;
+    const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const alvos = new Set(setores.map(norm));
+    return (itens || []).some(item => alvos.has(norm(item.setor || '')));
+}
+
+/**
+ * Liga ou desliga um setor no recorte da lista.
+ *
+ * Desde 21/08/2026 os cards SOMAM, a pedido do usuário: clicar num segundo
+ * setor não troca o primeiro, acrescenta. A lista passa a mostrar os pedidos
+ * que tenham item em QUALQUER um dos setores escolhidos.
+ *
+ * Soma, e não interseção, porque é assim que o operador pensa — "me mostre
+ * Flexo e PVC juntos". Interseção pediria um pedido com item nos dois setores
+ * ao mesmo tempo, que é raro e não é o que ele quer ver.
+ *
+ * Clicar de novo num card já aceso tira aquele setor. `setFiltroSetor('')` é o
+ * "Todos os Setores": limpa a escolha inteira.
+ */
 function setFiltroSetor(setor) {
-    state.filtroSetor = setor;
-    
-    // Atualizar botão "Todos os Setores"
-    const btnTodos = document.getElementById('btn-filtro-todos-setores');
-    if (btnTodos) {
-        if (setor === '') {
-            btnTodos.classList.add('active');
-        } else {
-            btnTodos.classList.remove('active');
-        }
+    if (!Array.isArray(state.filtroSetores)) state.filtroSetores = [];
+
+    if (!setor) {
+        state.filtroSetores = [];
+    } else {
+        const i = state.filtroSetores.indexOf(setor);
+        if (i === -1) state.filtroSetores.push(setor);
+        else state.filtroSetores.splice(i, 1);
     }
-    
-    // Atualizar botões de setor no HTML
-    const container = document.getElementById('filter-container-setor');
-    if (container) {
-        const btns = container.querySelectorAll('.filter-btn-pill');
-        btns.forEach(btn => {
-            const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${setor}'`) && setor !== '') {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-    }
+
+    pintarCardsDeSetor();
     renderOrdens();
+}
+
+/**
+ * Acende os cards escolhidos, e o "Todos os Setores" quando não há nenhum.
+ *
+ * O setor de cada card vem do `data-setor`, e não mais de procurar o nome
+ * dentro do `onclick`: com vários acesos ao mesmo tempo, ler o atributo passou
+ * a ser o único jeito honesto de saber de quem é cada botão. O `producao.html`
+ * usa esta mesma função e não tem o "Todos os Setores" com id — daí a guarda.
+ */
+function pintarCardsDeSetor() {
+    const escolhidos = state.filtroSetores || [];
+
+    const btnTodos = document.getElementById('btn-filtro-todos-setores');
+    if (btnTodos) btnTodos.classList.toggle('active', escolhidos.length === 0);
+
+    const container = document.getElementById('filter-container-setor');
+    if (!container) return;
+    container.querySelectorAll('.filter-btn-pill').forEach(btn => {
+        const meu = btn.getAttribute('data-setor') || '';
+        btn.classList.toggle('active', !!meu && escolhidos.indexOf(meu) !== -1);
+    });
 }
 
 
@@ -33381,6 +33415,8 @@ window.gerarLinkCliente = gerarLinkCliente;
 
 
 window.setFiltroSetor = setFiltroSetor;
+window.pintarCardsDeSetor = pintarCardsDeSetor;
+window.pedidoBateNosSetores = pedidoBateNosSetores;
 window.setFiltroStatus = setFiltroStatus;
 window.setFiltroSetorArte = setFiltroSetorArte;
 window.setFiltroStatusArte = setFiltroStatusArte;

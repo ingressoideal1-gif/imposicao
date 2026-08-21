@@ -7,7 +7,7 @@
 //
 //  1. a tela lista os MESMOS pedidos da Fila de Producao;
 //  2. o estagio do acabamento e um campo separado do status de impressao;
-//  3. o pedido so sai da fila quando TODOS os modelos estao revisados;
+//  3. o pedido so sai da fila quando TODOS os modelos estao prontos;
 //  4. a amostra mostrada e a que o cliente aprovou pelo link;
 //  5. amostra em PDF nao vira imagem -- vira atalho para o arquivo;
 //  6. o pedido aberto e SOMENTE LEITURA: dois seletores, e nada mais;
@@ -96,8 +96,81 @@ function montarAmbiente() {
         _modelosDoBanco: [],
         _encerradosTeste: [],
         _erroDoBanco: null,
+
+        // A ficha de expedicao do parceiro: `propostas_os_setores`.
+        _setoresDoBanco: [],       // [{ id, id_int, setor, peso_real_kg }]
+        _osDoBanco: [],            // [{ id, id_int }] -- `propostas_os`
+        _pesosGravados: [],        // o que a tela mandou, na ordem
+        _erroAoGravarPeso: null,
+        _sessao: { user: { id: 'u1' } },   // null = estacao, sem sessao
+
+        auth: {
+            getSession() {
+                return Promise.resolve({ data: { session: banco._sessao }, error: null });
+            },
+        },
+
         from(tabela) {
             const self = this;
+
+            if (tabela === 'propostas_os') {
+                const filtros = {};
+                const cadeia = {
+                    select: () => cadeia,
+                    eq: (c, v) => { filtros[c] = v; return cadeia; },
+                    limit: () => Promise.resolve({
+                        data: self._osDoBanco.filter(o => String(o.id_int) === String(filtros.id_int)),
+                        error: null,
+                    }),
+                };
+                return cadeia;
+            }
+
+            if (tabela === 'propostas_os_setores') {
+                const filtros = {};
+                const achar = () => self._setoresDoBanco.filter(l =>
+                    (filtros.id_int === undefined || String(l.id_int) === String(filtros.id_int)) &&
+                    (filtros.setor === undefined || String(l.setor) === String(filtros.setor)));
+
+                const leitura = {
+                    eq: (c, v) => { filtros[c] = v; return leitura; },
+                    then: (res, rej) => Promise.resolve({ data: achar(), error: null }).then(res, rej),
+                };
+
+                let payload = null;
+                const escrita = {
+                    eq: (c, v) => { filtros[c] = v; return escrita; },
+                    select: () => {
+                        const alvo = achar();
+                        alvo.forEach(l => Object.assign(l, payload));
+                        self._pesosGravados.push({ tipo: 'update', filtros: { ...filtros }, payload });
+                        return Promise.resolve({
+                            data: alvo.map(l => ({ id: l.id })),
+                            error: self._erroAoGravarPeso,
+                        });
+                    },
+                    then: (res, rej) => {
+                        const alvo = achar();
+                        alvo.forEach(l => Object.assign(l, payload));
+                        self._pesosGravados.push({ tipo: 'update', filtros: { ...filtros }, payload });
+                        return Promise.resolve({ error: self._erroAoGravarPeso }).then(res, rej);
+                    },
+                };
+
+                return {
+                    select: () => leitura,
+                    update: (p) => { payload = p; return escrita; },
+                    insert: (linha) => {
+                        self._pesosGravados.push({ tipo: 'insert', linha });
+                        const jaTem = self._setoresDoBanco.some(l =>
+                            String(l.id_int) === String(linha.id_int) && l.setor === linha.setor);
+                        if (jaTem) return Promise.resolve({ error: { code: '23505' } });
+                        self._setoresDoBanco.push({ id: 'novo-' + linha.setor, ...linha });
+                        return Promise.resolve({ error: self._erroAoGravarPeso });
+                    },
+                };
+            }
+
             if (tabela === 'imposition_operadores') {
                 return { select: () => ({ order: () => Promise.resolve({ data: self._operadores, error: null }) }) };
             }
@@ -171,7 +244,7 @@ function montarAmbiente() {
        'problema na impressao tambem nao chegou');
 
     // O que alguem escolheu VENCE o derivado, sempre.
-    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Revisado' }) === 'Revisado',
+    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Pronto' }) === 'Pronto',
        'a escolha do operador vence o derivado');
     ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Aguardando' }) === 'Aguardando',
        'inclusive quando ele volta para Aguardando de proposito');
@@ -182,16 +255,24 @@ function montarAmbiente() {
     ok(estagioDoPedido([{}, {}]) === 'Aguardando', 'nenhum modelo impresso: Aguardando');
     ok(estagioDoPedido([{ status_impressao: 'Impresso' }, {}]) === 'Impresso',
        'um impresso ja tira o pedido do Aguardando');
-    ok(estagioDoPedido([{ acabamento_status: 'Revisado' }, { acabamento_status: 'Impresso' }]) === 'Em acabamento',
-       'um revisado no meio de outros ainda e trabalho em curso');
-    ok(estagioDoPedido([{ acabamento_status: 'Revisado' }, { acabamento_status: 'Revisado' }]) === 'Revisado',
-       'so e Revisado quando TODOS estao revisados');
+    ok(estagioDoPedido([{ acabamento_status: 'Pronto' }, { acabamento_status: 'Impresso' }]) === 'Em acabamento',
+       'um pronto no meio de outros ainda e trabalho em curso');
+    ok(estagioDoPedido([{ acabamento_status: 'Pronto' }, { acabamento_status: 'Pronto' }]) === 'Pronto',
+       'so e Pronto quando TODOS estao prontos');
+
+    // O nome ANTIGO, que ficou no banco ate a migracao rodar. Em 21/08/2026 o
+    // ultimo estagio deixou de se chamar "Revisado"; a tela le o nome velho como
+    // "Pronto" para nao tirar da conta de concluidos o que ja estava concluido.
+    ok(estagioDoModelo({ acabamento_status: 'Revisado' }) === 'Pronto',
+       'o "Revisado" gravado antes de 21/08/2026 e lido como Pronto');
+    ok(estagioDoPedido([{ acabamento_status: 'Revisado' }, { acabamento_status: 'Pronto' }]) === 'Pronto',
+       'o nome antigo e o novo contam como o mesmo estagio');
 
     // E o acabamento continua sem NUNCA escrever no campo do outro setor.
     ok(FONTE.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
 })();
 
-// ─── 3. O pedido revisado sai da fila de trabalho ───────────────────────────
+// ─── 3. O pedido pronto sai da fila de trabalho ─────────────────────────────
 
 function pedido(n, modelos, extra) {
     return Object.assign({ id: 'os-' + n, numero: n, cliente: 'Cliente ' + n, status_interno: 'EM PRODUCAO' },
@@ -207,10 +288,10 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     return amb;
 }
 
-(function oRevisadoSaiDaFila() {
+(function oProntoSaiDaFila() {
     const pedidos = [pedido(101), pedido(102)];
     const modelos = {
-        101: [{ id: 1, acabamento_status: 'Revisado', quantidade: 10 }],
+        101: [{ id: 1, acabamento_status: 'Pronto', quantidade: 10 }],
         102: [{ id: 2, acabamento_status: 'Em acabamento', quantidade: 20 }],
     };
     const amb = ambienteComPedidos(pedidos, modelos);
@@ -218,17 +299,17 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     amb.painel.render();
     let html = amb.elementos['tbody-acabamento'].innerHTML;
     ok(html.indexOf('>102<') !== -1, 'o pedido em acabamento aparece na fila');
-    ok(html.indexOf('>101<') === -1, 'o pedido todo revisado NAO aparece na fila geral');
+    ok(html.indexOf('>101<') === -1, 'o pedido todo pronto NAO aparece na fila geral');
 
-    amb.painel.setFiltroPrazo('revisados');
+    amb.painel.setFiltroPrazo('prontos');
     html = amb.elementos['tbody-acabamento'].innerHTML;
-    ok(html.indexOf('>101<') !== -1, 'com o recorte "Revisado" ligado ele reaparece');
+    ok(html.indexOf('>101<') !== -1, 'com o recorte "Pronto" ligado ele reaparece');
     ok(html.indexOf('>102<') === -1, 'e o que ainda esta em acabamento sai');
 
     // As metricas contam a fila inteira, e nao o recorte visivel.
     ok(amb.elementos['stat-acab-pedidos-fila'].textContent === 2,
        'a metrica de pedidos conta a fila inteira', amb.elementos['stat-acab-pedidos-fila'].textContent);
-    ok(amb.elementos['stat-acab-modelos-revisados'].textContent === 1, 'um modelo revisado');
+    ok(amb.elementos['stat-acab-modelos-prontos'].textContent === 1, 'um modelo pronto');
     ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1, 'um modelo em acabamento');
     ok(amb.elementos['stat-acab-pedidos-concluidos'].textContent === 1, 'um pedido concluido');
     ok(amb.elementos['badge-acabamento'].textContent === 2, 'o badge do menu conta a fila inteira');
@@ -339,15 +420,21 @@ function ambienteComPedidoAberto() {
     const selects = html.match(/<select/g) || [];
     ok(selects.length === 4, 'dois seletores por modelo, dois modelos = quatro', 'achei ' + selects.length);
     ok(html.indexOf('— Status —') === -1, 'o seletor de estagio nao tem mais a opcao vazia');
-    ['Aguardando', 'Impresso', 'Em acabamento', 'Revisado'].forEach(e => {
+    ['Aguardando', 'Impresso', 'Em acabamento', 'Pronto'].forEach(e => {
         ok(html.indexOf('>' + e + '<') !== -1, 'o estagio "' + e + '" esta no seletor');
     });
     ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o seletor de estagio grava o acabamento');
     ok(/AcabamentoPainel\.mudarResponsavel\(/.test(html), 'o seletor de responsavel grava o acabamento');
     ok(html.indexOf('Bernardo Farias') !== -1, 'o responsavel ja gravado aparece escolhido');
 
-    // Nada de editar o que e da Producao.
-    ok((html.match(/<input/g) || []).length === 0, 'nao ha NENHUM campo digitavel');
+    // Nada de editar o que e da Producao. O UNICO campo digitavel da tela e o
+    // peso por setor, que mora no box acima dos modelos (21/08/2026) -- e por
+    // isso a conta e feita sobre o pedaco DOS MODELOS, e nao sobre o corpo todo.
+    const soOsModelos = html.slice(html.indexOf('Ingresso Cartao'));
+    ok((soOsModelos.match(/<input/g) || []).length === 0,
+       'nenhum campo digitavel na linha dos modelos');
+    ok((html.match(/<input/g) || []).length === (html.indexOf('acab-peso-') !== -1 ? 1 : 0),
+       'os unicos inputs da tela sao os do peso por setor');
     ok((html.match(/type="checkbox"/g) || []).length === 0, 'nao ha caixa de selecao de modelo');
     [
         'pedQueueUpdateField', 'pedQueueUpdateCor', 'pedQueueUpdateNum',
@@ -357,8 +444,8 @@ function ambienteComPedidoAberto() {
         ok(html.indexOf(proibido) === -1, 'o pedido aberto nao traz "' + proibido + '"');
     });
 
-    ok(amb.elementos['acab-detalhe-progresso'].textContent === '0/2 revisados',
-       'o cabecalho conta os revisados', amb.elementos['acab-detalhe-progresso'].textContent);
+    ok(amb.elementos['acab-detalhe-progresso'].textContent === '0/2 prontos',
+       'o cabecalho conta os prontos', amb.elementos['acab-detalhe-progresso'].textContent);
 })();
 
 (function semPermissaoDeEditarOsSeletoresTravam() {
@@ -374,20 +461,46 @@ function ambienteComPedidoAberto() {
        'e a camera travada explica por que esta travada');
 })();
 
-// ─── 7. O arquivo inteiro nao fala com o motor nem com o agente ─────────────
+// ─── 7. O arquivo nao fala com o MOTOR, e com o agente so pelo peso ─────────
 
 (function nadaDeMotorNemDeAgente() {
     // Medido sobre o CODIGO, e nao sobre uma tela: um caminho que so aparece em
     // certa condicao nao seria pego por nenhum render de teste.
     const codigo = FONTE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     [
-        '/api/impose', 'API_BASE_URL', '127.0.0.1:9000', 'MOTOR_NUVEM',
+        '/api/impose', '127.0.0.1:9000', 'MOTOR_NUVEM',
         'runImposition', 'imprimirNoAgente', '/api/print', '/api/status',
         'atualizarPainelProducao', 'setProdSort', 'renderPedOSQueue',
     ].forEach(proibido => {
         ok(codigo.indexOf(proibido) === -1,
            'o acabamento.js nao chama "' + proibido + '"');
     });
+
+    // ── A UNICA chamada ao agente, e por que ela existe ──────────────────────
+    //
+    // O menu nasceu em 20/08/2026 sem ligacao NENHUMA com o agente local, e a
+    // regra continua valendo para tudo o que e do motor: impor, gerar PDF,
+    // imprimir, perguntar a versao do NewProd.
+    //
+    // O que mudou em 21/08/2026 foi outra coisa: o usuario decidiu que a
+    // digitacao do peso e a escolha dos drops seriam feitas pelo acesso local do
+    // agente. O peso mora em tabela do parceiro com RLS de `authenticated`, e a
+    // estacao e `anon` -- sem uma porta propria, o campo aceitaria o valor e
+    // nada seria gravado.
+    //
+    // Entao ha UMA rota, e este teste existe para que continue sendo uma.
+    const rotas = codigo.match(/\/api\/[a-z0-9-]+/g) || [];
+    const distintas = [...new Set(rotas)];
+    ok(distintas.length === 1 && distintas[0] === '/api/peso-setores',
+       'a unica rota de agente no acabamento.js e a do peso', distintas.join(', '));
+    // E o endereco do agente se monta num lugar so. As duas mencoes sao a
+    // leitura do identificador nu e a do `window` -- o mesmo par do `estado()`,
+    // porque `const` no topo de script classico nao vira propriedade de window.
+    const iUrl = codigo.indexOf('function urlDoPeso(');
+    const corpoUrl = codigo.slice(iUrl, codigo.indexOf('\n    }', iUrl));
+    ok((codigo.match(/API_BASE_URL/g) || []).length ===
+       (corpoUrl.match(/API_BASE_URL/g) || []).length,
+       'o endereco do agente so e montado dentro do urlDoPeso');
 
     // E nao escreve no que e da Producao.
     ok(codigo.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
@@ -400,13 +513,362 @@ function ambienteComPedidoAberto() {
     ok(gravacoes.length === 1, 'ha um unico ponto de gravacao', 'achei ' + gravacoes.length);
 })();
 
+(function oMenuVoltaParaAPaginaInicial() {
+    // Pedido do usuario em 21/08/2026: clicar no menu "Painel do Acabamento"
+    // tem de trazer a pagina inicial -- a lista --, e nao o detalhe do pedido
+    // que ficou aberto na visita anterior. Sem isto o operador reencontrava a
+    // tela de um pedido, sem topo, sem filtros e sem lista, e precisava achar o
+    // botao VOLTAR para chegar onde o menu prometia levar.
+    const amb = ambienteComPedidoAberto();
+    amb.painel.abrirPedido('os-200');
+    ok(amb.elementos['acab-detalhe-card'].style.display === 'flex', 'o detalhe abriu');
+    ok(amb.elementos['acab-lista-card'].style.display === 'none', 'e a lista saiu de cena');
+
+    amb.painel.aoAbrir();
+
+    ok(amb.elementos['acab-lista-card'].style.display === '', 'o menu devolve a lista');
+    ok(amb.elementos['acab-top-bar'].style.display === '', 'com o topo e os filtros de volta');
+    ok(amb.elementos['acab-detalhe-card'].style.display === 'none', 'e o detalhe fechado');
+})();
+
+(function osCardsDeSetorSomam() {
+    // Pedido do usuario em 21/08/2026, nos dois paineis: clicar num segundo
+    // card nao troca o primeiro, SOMA. A lista mostra os pedidos dos dois.
+    const pedidos = [pedido(501), pedido(502), pedido(503)];
+    const amb = ambienteComPedidos(pedidos, {
+        501: [{ id: 11, setor: 'FLEXO', quantidade: 10 }],
+        502: [{ id: 12, setor: 'PVC', quantidade: 20 }],
+        503: [{ id: 13, setor: 'TEXTIL', quantidade: 30 }],
+    });
+
+    const naTela = () => {
+        amb.painel.render();
+        const html = amb.elementos['tbody-acabamento'].innerHTML;
+        return [501, 502, 503].filter(n => html.indexOf('>' + n + '<') !== -1);
+    };
+
+    ok(naTela().join(',') === '501,502,503', 'sem setor escolhido, os tres aparecem');
+
+    amb.painel.setFiltroSetor('FLEXO');
+    ok(naTela().join(',') === '501', 'um card aceso deixa so o setor dele');
+
+    amb.painel.setFiltroSetor('PVC');
+    ok(naTela().join(',') === '501,502',
+       'o segundo card SOMA: os dois setores na mesma lista', naTela().join(','));
+
+    amb.painel.setFiltroSetor('TEXTIL');
+    ok(naTela().join(',') === '501,502,503', 'e o terceiro tambem soma');
+
+    // Clicar de novo num card aceso tira aquele setor.
+    amb.painel.setFiltroSetor('PVC');
+    ok(naTela().join(',') === '501,503', 'clicar de novo tira so aquele setor');
+
+    // "Todos os Setores" limpa a escolha inteira.
+    amb.painel.setFiltroSetor('');
+    ok(naTela().join(',') === '501,502,503', 'o "Todos os Setores" devolve a lista inteira');
+
+    // O ATUALIZAR volta ao padrao, e isso inclui esvaziar a escolha de setores.
+    amb.painel.setFiltroSetor('FLEXO');
+    amb.painel.setFiltroSetor('PVC');
+    amb.painel.atualizar();
+    ok(naTela().join(',') === '501,502,503', 'o ATUALIZAR limpa os setores escolhidos');
+})();
+
+(function oSetorSaiDoItemQuandoOPedidoEstaAberto() {
+    // Com o pedido carregado, o setor vem de `osItens`; com a lista enxuta, de
+    // `modelosGlobais`. Os dois caminhos precisam somar igual.
+    const amb = ambienteComPedidos([pedido(601)], { 601: [{ id: 21, quantidade: 5 }] });
+    amb.janela.state.osItens['os-601'] = [{ id: 21, setor: 'LASER', quantidade: 5 }];
+
+    amb.painel.setFiltroSetor('FLEXO');
+    amb.painel.render();
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>601<') === -1,
+       'o pedido de Laser fica fora do recorte de Flexo');
+
+    amb.painel.setFiltroSetor('LASER');
+    amb.painel.render();
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>601<') !== -1,
+       'e entra quando o Laser soma, lido do item do pedido aberto');
+})();
+
+// ─── 8. O peso por setor ────────────────────────────────────────────────────
+//
+// Pedido do usuario em 21/08/2026: um box acima dos modelos, com os setores dos
+// produtos daquele pedido e um campo de peso para cada um, gravado em
+// `propostas_os_setores.peso_real_kg` -- uma linha por setor.
+
+(function osSetoresSaemDosProdutosDoPedido() {
+    const { painel } = montarAmbiente();
+    const setores = painel._regras.setoresDoPedido;
+
+    ok(setores([]).length === 0, 'pedido sem item nao tem setor');
+    ok(setores([{ setor: 'LASER' }]).join(',') === 'LASER', 'um setor, uma linha');
+
+    // O exemplo do usuario: Triband + Credencial + Mobi = Laser e PVC.
+    ok(setores([{ setor: 'LASER' }, { setor: 'PVC' }, { setor: 'LASER' }]).join(',') === 'PVC,LASER',
+       'setor repetido conta uma vez so',
+       setores([{ setor: 'LASER' }, { setor: 'PVC' }, { setor: 'LASER' }]).join(','));
+
+    // A ordem e a mesma dos cards da fila, e nao a de chegada dos itens.
+    ok(setores([{ setor: 'LASER' }, { setor: 'FLEXO' }]).join(',') === 'FLEXO,LASER',
+       'a ordem e a dos cards');
+
+    ok(setores([{ setor: 'textil' }]).join(',') === 'TEXTIL', 'a caixa das letras nao decide');
+    ok(setores([{ setor: 'Têxtil' }]).join(',') === 'TEXTIL', 'o acento tambem nao');
+
+    // O banco so aceita quatro (`propostas_os_setores_setor_check`). Oferecer um
+    // campo para setor que o banco recusa seria prometer o que nao se cumpre.
+    ok(setores([{ setor: 'SERIGRAFIA' }]).length === 0, 'setor que o banco nao aceita fica de fora');
+    ok(setores([{ setor: '' }, {}]).length === 0, 'item sem setor nao inventa linha');
+})();
+
+(function oPesoAceitaVirgulaEnaoAceitaLetra() {
+    const { painel } = montarAmbiente();
+    const { pesoDoTexto, pesoParaTexto } = painel._regras;
+
+    ok(pesoDoTexto('4,16') === 4.16, 'a virgula da balanca vira ponto');
+    ok(pesoDoTexto('4.16') === 4.16, 'o ponto tambem vale');
+    ok(pesoDoTexto(' 5 ') === 5, 'espaco em volta nao atrapalha');
+    ok(pesoDoTexto('') === null, 'campo vazio apaga o peso');
+    ok(pesoDoTexto('   ') === null, 'so espaco tambem apaga');
+    ok(pesoDoTexto('abc') === undefined, 'letra nao e peso');
+    ok(pesoDoTexto('-2') === undefined, 'peso negativo nao existe');
+    ok(pesoDoTexto('0') === 0, 'zero e um peso valido');
+
+    ok(pesoParaTexto(4.16) === '4,16', 'na tela ele volta com virgula');
+    ok(pesoParaTexto(null) === '', 'sem peso, campo vazio');
+})();
+
+async function oBoxDePesoAbreComOsSetoresDoPedido() {
+    const amb = ambienteComPedidoAberto();
+    // Dois produtos, dois setores.
+    amb.janela.state.produtosGlobais = [
+        { id_produto: 55, nomeReal: 'Credencial', setor_pcp: 'PVC' },
+        { id_produto: 56, nomeReal: 'Triband', setor_pcp: 'LASER' },
+    ];
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4.16 },
+    ];
+
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('Peso por setor') !== -1, 'o box tem titulo');
+    ok(html.indexOf('acab-peso-PVC') !== -1, 'ha campo para o PVC');
+    ok(html.indexOf('acab-peso-LASER') !== -1, 'e para o Laser');
+    ok(html.indexOf('acab-peso-FLEXO') === -1, 'e nenhum para setor que nao esta no pedido');
+
+    // O box vem ANTES dos modelos, que e onde o usuario pediu.
+    ok(html.indexOf('Peso por setor') < html.indexOf('Credencial'),
+       'o box fica acima dos modelos');
+
+    // O peso que ja estava no banco volta ao campo, com virgula.
+    ok(amb.elementos['acab-peso-PVC'].value === '4,16',
+       'o peso ja gravado aparece no campo', amb.elementos['acab-peso-PVC'].value);
+    ok(amb.elementos['acab-peso-LASER'].value === '', 'setor sem peso vem vazio');
+}
+
+async function gravarOPesoAtualizaAlinhaQueExiste() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'PVC';
+    amb.banco._setoresDoBanco = [{ id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: null }];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+
+    ok(amb.banco._pesosGravados.length === 1, 'linha que existe: uma escrita so',
+       String(amb.banco._pesosGravados.length));
+    const g = amb.banco._pesosGravados[0];
+    ok(g.tipo === 'update', 'e ela e um update, nao um insert');
+    ok(g.filtros.id_int === 200 && g.filtros.setor === 'PVC', 'pelo pedido e pelo setor');
+    ok(Object.keys(g.payload).sort().join(',') === 'peso_real_kg,updated_at',
+       'so o peso e a data sao tocados na tabela do parceiro',
+       Object.keys(g.payload).join(','));
+    ok(g.payload.peso_real_kg === 4.16, 'com o peso convertido');
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.16, 'e a linha ficou com o peso');
+}
+
+async function semLinhaNoBancoOPesoCriaUma() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'LASER';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.banco._setoresDoBanco = [];
+    amb.banco._osDoBanco = [{ id: 'uuid-da-os', id_int: 200 }];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarPeso(200, 'LASER', '0,32');
+
+    const tipos = amb.banco._pesosGravados.map(g => g.tipo).join(',');
+    ok(tipos === 'update,insert', 'tenta atualizar e, sem linha, insere', tipos);
+
+    const inserida = amb.banco._pesosGravados.find(g => g.tipo === 'insert').linha;
+    ok(inserida.id_int === 200 && inserida.setor === 'LASER', 'a linha nova e do pedido e do setor');
+    ok(inserida.peso_real_kg === 0.32, 'com o peso');
+    ok(inserida.id_os === 'uuid-da-os', 'e amarrada a OS do parceiro quando ela existe');
+    ok(inserida.status_producao === undefined, 'sem encostar no status do parceiro');
+    ok(inserida.prazo === undefined && inserida.hora === undefined, 'nem no prazo dele');
+}
+
+async function semOsNoParceiroAlinhaNasceSemAmarra() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'FLEXO';
+    amb.janela.state.osItens['os-200'][1].setor = 'FLEXO';
+    amb.banco._setoresDoBanco = [];
+    amb.banco._osDoBanco = [];        // o ERP ainda nao abriu OS para este pedido
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+    await amb.painel.mudarPeso(200, 'FLEXO', '1');
+
+    const inserida = amb.banco._pesosGravados.find(g => g.tipo === 'insert').linha;
+    ok(!('id_os' in inserida), 'sem OS, o campo nem e enviado -- nulo por omissao');
+}
+
+async function semSessaoOBoxDizOQueFazer() {
+    // Na estacao o operador entra pelo codigo local, sem sessao do Supabase, e a
+    // tabela do parceiro tem RLS de `authenticated`: a leitura volta VAZIA, sem
+    // erro. Mostrar campos que nao gravariam nada seria mentir para ele.
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'PVC';
+    amb.banco._sessao = null;
+
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('Peso por setor') !== -1, 'o box continua na tela');
+    ok(html.indexOf('entre com a sua conta') !== -1, 'e diz o que fazer para poder gravar');
+    ok(html.indexOf('acab-peso-PVC') === -1, 'sem campo que nao gravaria nada');
+    ok(html.indexOf('PVC') !== -1, 'mas o setor do pedido continua visivel');
+}
+
+async function pedidoSemSetorExplicaOPorque() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = ''; });
+
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('Peso por setor') !== -1, 'o box aparece mesmo assim');
+    ok(html.indexOf('nao ha peso a') !== -1 || html.indexOf('não há peso a') !== -1,
+       'e explica por que nao ha campo nenhum');
+}
+
+async function oPesoNaoTocaEmOutraTabela() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'PVC';
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._gravacoes.length = 0;
+
+    await amb.painel.mudarPeso(200, 'PVC', '2,5');
+    ok(amb.banco._gravacoes.length === 0,
+       'gravar peso nao escreve em pedidos_modelos', String(amb.banco._gravacoes.length));
+
+    // Setor que o banco recusa nao vira escrita nenhuma.
+    amb.banco._pesosGravados.length = 0;
+    await amb.painel.mudarPeso(200, 'SERIGRAFIA', '3');
+    ok(amb.banco._pesosGravados.length === 0, 'setor fora da lista do banco nem tenta gravar');
+
+    // Texto que nao e peso tambem nao chega ao banco.
+    await amb.painel.mudarPeso(200, 'PVC', 'dois quilos');
+    ok(amb.banco._pesosGravados.length === 0, 'texto que nao e numero nao vira escrita');
+}
+
+(function oCaminhoDoPesoDependeDeQuemServiuAPagina() {
+    // `SERVIDA_PELA_NUVEM` sai do `supabase-config.js`, que toda pagina carrega
+    // antes desta. No harness ele nao existe -- e AUSENTE tem de contar como
+    // nuvem, nunca como estacao: inventar um agente que nao esta ali deixaria a
+    // tela chamando um endereco que nao responde.
+    const amb = montarAmbiente();
+    ok(amb.painel._regras.pelaEstacao() === false,
+       'sem a constante, o caminho e o da nuvem');
+    ok(amb.painel._regras.urlDoPeso(123).indexOf('/api/peso-setores/123') !== -1,
+       'a rota do agente leva o numero do pedido',
+       amb.painel._regras.urlDoPeso(123));
+})();
+
+async function naEstacaoOPesoSaiPeloAgente() {
+    // Com o agente servindo a pagina, nem a leitura nem a gravacao encostam na
+    // tabela do parceiro: as duas saem pelo `fetch` da rota local.
+    const chamadas = [];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.SERVIDA_PELA_NUVEM = false;
+    amb.janela.API_BASE_URL = '';
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
+    amb.banco._sessao = null;              // a estacao nao tem sessao, e nao precisa
+    amb.janela.fetch = (url, opcoes) => {
+        chamadas.push({ url, metodo: (opcoes && opcoes.method) || 'GET',
+                        corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ setores: [{ setor: 'PVC', peso_real_kg: 3 }] }),
+        });
+    };
+
+    await amb.painel.abrirPedido('os-200');
+
+    ok(chamadas.length === 1, 'abrir o pedido le o peso pelo agente', String(chamadas.length));
+    ok(chamadas[0].url === '/api/peso-setores/200', 'na rota certa', chamadas[0].url);
+    ok(chamadas[0].metodo === 'GET', 'com GET');
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('acab-peso-PVC') !== -1, 'e o campo aparece, mesmo sem sessao');
+    ok(html.indexOf('entre com a sua conta') === -1,
+       'sem o aviso de login: na estacao ha caminho');
+    ok(amb.elementos['acab-peso-PVC'].value === '3', 'com o peso que veio do agente',
+       amb.elementos['acab-peso-PVC'].value);
+
+    amb.banco._pesosGravados.length = 0;
+    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+
+    ok(chamadas.length === 2, 'gravar tambem sai pelo agente', String(chamadas.length));
+    ok(chamadas[1].metodo === 'POST', 'com POST');
+    ok(chamadas[1].url === '/api/peso-setores/200', 'na mesma rota');
+    ok(chamadas[1].corpo.setor === 'PVC' && chamadas[1].corpo.peso_real_kg === 4.16,
+       'levando o setor e o peso ja convertido', JSON.stringify(chamadas[1].corpo));
+    ok(amb.banco._pesosGravados.length === 0,
+       'e NADA vai direto a tabela do parceiro pela estacao');
+}
+
+async function oErroDoAgenteChegaAoOperador() {
+    // A recusa do servidor vem com o motivo escrito. Trocar isso por "erro
+    // interno" deixaria o operador sem saber o que corrigir.
+    const avisos = [];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.SERVIDA_PELA_NUVEM = false;
+    amb.janela.API_BASE_URL = '';
+    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
+    amb.janela.fetch = () => Promise.resolve({
+        ok: false, status: 422,
+        json: () => Promise.resolve({ detail: 'setor invalido: XPTO' }),
+    });
+
+    await amb.painel.abrirPedido('os-200');
+    avisos.length = 0;
+    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+
+    ok(avisos.length === 1, 'houve aviso', String(avisos.length));
+    ok(avisos[0].texto.indexOf('setor invalido: XPTO') !== -1,
+       'e ele repete o motivo que o servidor deu', avisos[0].texto);
+    ok(avisos[0].tipo === 'error', 'como erro');
+}
+
 // ─── Resultado ──────────────────────────────────────────────────────────────
 
 (function oQueAguardaTemFundoMarrom() {
     // Pedido do usuario: "modelos Aguardando ... fundo do box do modelo marrom".
     const amb = ambienteComPedidoAberto();
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Aguardando';
-    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Revisado';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Pronto';
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
 
@@ -415,10 +877,10 @@ function ambienteComPedidoAberto() {
     // As cores por STATUS nao acompanham a paleta da tela, e e de proposito:
     // elas dizem em que ponto o modelo esta. Em 20/08/2026 eu as tinha trazido
     // para a familia terra junto com o resto, e o usuario mandou devolver.
-    ok(html.indexOf('background: #14301f') !== -1, 'e o Revisado, verde escuro');
+    ok(html.indexOf('background: #14301f') !== -1, 'e o Pronto, verde escuro');
 
     // O Impresso, num cenario onde ele exista: neste os dois modelos foram
-    // forcados para Aguardando e Revisado.
+    // forcados para Aguardando e Pronto.
     const amb2 = ambienteComPedidoAberto();   // sem forcar: os dois derivam de "Impresso"
     amb2.painel.abrirPedido('os-200');
     ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #162037') !== -1,
@@ -549,7 +1011,7 @@ async function gravarEscreveSoNasDuasColunasNovas() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._gravacoes.length = 0;
 
-    await amb.painel.mudarEstagio('3001', 'os-200', 'Revisado');
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Pronto');
     await amb.painel.mudarResponsavel('3001', 'os-200', 'Cesar Almeida');
 
     ok(amb.banco._gravacoes.length === 2, 'duas escolhas, duas gravacoes',
@@ -566,7 +1028,7 @@ async function gravarEscreveSoNasDuasColunasNovas() {
 
     // A tela ja mostra a escolha antes de a rede responder.
     const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
-    ok(item.acabamento_status === 'Revisado', 'a escolha aparece na hora, sem esperar o banco');
+    ok(item.acabamento_status === 'Pronto', 'a escolha aparece na hora, sem esperar o banco');
     ok(item.acabamento_responsavel === 'Cesar Almeida', 'o responsavel tambem');
 
     // Limpar o responsavel grava NULO, e nao texto vazio.
@@ -586,7 +1048,7 @@ async function oEstagioDaListaVemDeConsultaPropria() {
         302: [{ id: 901, quantidade: 20 }],
     });
     amb.banco._modelosDoBanco = [
-        { id: 900, id_int: 301, acabamento_status: 'Revisado', acabamento_responsavel: 'Bernardo Farias' },
+        { id: 900, id_int: 301, acabamento_status: 'Pronto', acabamento_responsavel: 'Bernardo Farias' },
         { id: 901, id_int: 302, acabamento_status: 'Em acabamento', acabamento_responsavel: null },
     ];
 
@@ -594,12 +1056,12 @@ async function oEstagioDaListaVemDeConsultaPropria() {
     await new Promise(r => setTimeout(r, 0));
     amb.painel.render();
 
-    ok(amb.elementos['stat-acab-modelos-revisados'].textContent === 1,
-       'o revisado veio da consulta propria', amb.elementos['stat-acab-modelos-revisados'].textContent);
+    ok(amb.elementos['stat-acab-modelos-prontos'].textContent === 1,
+       'o pronto veio da consulta propria', amb.elementos['stat-acab-modelos-prontos'].textContent);
     ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1,
        'e o em acabamento tambem');
     ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>301<') === -1,
-       'o pedido revisado sai da fila de trabalho');
+       'o pedido pronto sai da fila de trabalho');
 }
 
 async function bancoSemAsColunasNaoDerrubaATela() {
@@ -637,6 +1099,16 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await bancoSemAsColunasNaoDerrubaATela();
     await pedidoEncerradoComoTesteSomeDaFila();
     await bancoSemAColunaDoTesteNaoEscondeNinguem();
+
+    await oBoxDePesoAbreComOsSetoresDoPedido();
+    await gravarOPesoAtualizaAlinhaQueExiste();
+    await semLinhaNoBancoOPesoCriaUma();
+    await semOsNoParceiroAlinhaNasceSemAmarra();
+    await semSessaoOBoxDizOQueFazer();
+    await pedidoSemSetorExplicaOPorque();
+    await oPesoNaoTocaEmOutraTabela();
+    await naEstacaoOPesoSaiPeloAgente();
+    await oErroDoAgenteChegaAoOperador();
 
     if (falhas) {
         console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

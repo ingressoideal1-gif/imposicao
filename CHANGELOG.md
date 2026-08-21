@@ -4,7 +4,117 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v667** — 2026-08-20 | Agente **1.2.161**
+## Versão atual: **v669** — 2026-08-21 | Agente **1.2.163**
+
+---
+
+## [v669 — 2026-08-21] — Peso por setor, setores somados e "Revisado" virou "Pronto"
+
+### O peso por setor, dentro do pedido do Acabamento
+
+Um box acima dos modelos, com **um campo de peso para cada setor dos produtos daquele
+pedido**. No exemplo do usuário: *Triband + Credencial + Mobi* são dois setores, Laser e PVC,
+então duas linhas. Vírgula e ponto valem o mesmo; campo vazio apaga; letra não chega ao banco.
+Ao lado do campo aparece **✓ gravado**, sem redesenhar o pedido.
+
+O peso vai para **`propostas_os_setores.peso_real_kg`**, uma linha por setor. Essa tabela é do
+parceiro, e é a **primeira exceção** à regra de ouro do `docs/REGRAS_BANCO.md` — documentada lá,
+com a lista exata do que pode ser tocado. Só o peso e o `updated_at`; `prazo`, `hora`,
+`status_producao` e as colunas de volume nunca são encostados. A tabela é a ficha de conferência
+de expedição que o ERP mantém para a gráfica preencher, e o ERP já preenche parte dela.
+
+Grava com `UPDATE` primeiro e `INSERT` só quando não há linha — hoje 729 dos 758 pares
+(pedido, setor) ainda não existem, porque o ERP as cria na expedição. Duas pessoas no mesmo
+setor esbarram no `UNIQUE (id_int, setor)`, e o segundo vira atualização.
+
+**A estação ganhou porta própria.** O usuário decidiu, no mesmo dia, que a digitação do peso e a
+escolha dos drops seriam feitas **pelo acesso local no agente** — e é justamente ali que o
+caminho direto não funciona: a tabela tem RLS de `authenticated`, o operador da estação entra
+pelo código local sem sessão do Supabase, e a leitura volta vazia **com HTTP 200**. Sem erro para
+mostrar: o campo aceitaria o número e nada seria gravado.
+
+Então quem serve a página decide o caminho, no mesmo desenho do catálogo de fontes:
+
+- **estação** → `/api/peso-setores/<pedido>` no agente → Edge Function `acesso-estacao` com o
+  `ACESSO_AGENTE_SEGREDO` → `service_role`, que nunca vai para as estações;
+- **site com login** → direto no PostgREST, que é o que a sessão autoriza;
+- **site sem login** → o box mostra os setores e a frase que resolve.
+
+A regra de gravação mora uma vez só, em `supabase/functions/_compartilhado/pesos.ts`. O agente
+não valida nada por conta própria — duas cópias da conversão de vírgula e da lista de setores
+criariam duas verdades, e a que vale é a do servidor, que conhece o `CHECK` da tabela.
+
+Esta é a **única** chamada ao agente em toda a tela; impor, gerar PDF, imprimir e perguntar a
+versão do NewProd continuam fora, e há teste contando as rotas.
+
+### Os cards de setor somam, nos dois painéis
+
+Pedido do usuário, para o **Painel de Produção** e o **Painel do Acabamento** ao mesmo tempo.
+Antes, clicar num card **trocava** o setor escolhido: ver Flexo e PVC juntos era impossível.
+Agora os cards ligam e desligam, e a lista mostra a **soma** — entra o pedido que tenha item em
+qualquer um dos setores acesos.
+
+Soma, e não interseção: exigir item nos dois setores ao mesmo tempo é raro e não é o que o
+operador quer ver. Clicar de novo num card aceso tira aquele setor; **Todos os Setores** limpa
+tudo.
+
+Cada tela guarda o próprio recorte — `state.filtroSetores` na Produção, `tela.setores` no
+Acabamento —, e um não mexe no outro. Cada card passou a dizer de quem ele é pelo `data-setor`:
+o código antigo procurava o nome dentro do `onclick`, o que não sobrevive a vários acesos ao
+mesmo tempo.
+
+Embaixo das duas grades entrou a linha *"Clique em mais de um setor para somar os pedidos"* — a
+soma não se descobre olhando, porque um card aceso e outro apagado parecem a tela de antes.
+
+O `producao.html`, que usa a mesma função do `script.js`, recebeu os mesmos `data-setor`.
+
+### O último estágio agora se chama **Pronto**
+
+Pedido do usuário. "Revisado" descreve o que o conferente fez; **Pronto** descreve o que
+interessa a quem olha a fila de longe — o material pode ser embalado e entregue. É a palavra
+que o setor usa em voz alta.
+
+Mudou o seletor de cada modelo, o botão de recorte no topo da fila, o filtro da coluna
+lateral, a métrica **Modelos Prontos** e o contador do pedido aberto (*"3/5 prontos"*).
+
+**A cor não mudou.** O último estágio continua verde escuro `#14301f`, como os outros três
+continuam nos seus tons: cor de status diz estado, e estado não se repinta junto com o nome.
+
+**O banco precisou de migração**, e ela já rodou: `sql/acabamento_status_pronto.sql`. A coluna
+`acabamento_status` guarda o próprio rótulo em texto — decisão de quando a tela nasceu, para não
+criar uma tabela de domínio de quatro valores —, e o preço dessa escolha é exatamente este: as
+duas linhas que estavam em "Revisado" foram reescritas para "Pronto".
+
+O código não depende da migração para estar certo. A constante `NOME_ANTIGO`, no
+`acabamento.js`, lê "Revisado" como "Pronto" — protege o intervalo entre publicar e migrar, e a
+estação que ainda tem a versão anterior em cache e grava o nome velho por alguns minutos.
+
+### Clicar no menu volta para a página inicial
+
+Quem abria o pedido 123, saía para outra tela e voltava pelo menu **Painel do Acabamento**
+reencontrava o detalhe do 123 — sem topo, sem filtros e sem lista —, e precisava achar o botão
+VOLTAR para chegar onde o menu prometia levá-lo. Agora abrir a tela pelo menu sempre traz a
+lista.
+
+O fechamento desliga a câmera junto: ela pertence ao detalhe, e deixá-la ligada manteria a
+webcam acesa atrás de uma tela que sumiu.
+
+---
+
+## [v668 — 2026-08-20] — GUIA_AGENTE: como recuperar um envio de agente interrompido no meio
+
+Documentação, sem mudança de código. A publicação da 1.2.161 caiu no meio do upload de 68 MB
+(`A conexão subjacente estava fechada`), e os três arquivos de versão ficaram gravados com o
+número novo sem MSI nenhum publicado — a próxima tentativa com o mesmo número é recusada por
+*"não é maior que a atual"*.
+
+A causa: o `publicar_agente.ps1` descarta o backup dos arquivos ao passar do ponto de simulação,
+**antes** do upload, então o `Restore-Versao` não tem o que devolver quando a rede cai.
+
+O guia ganhou o procedimento de recuperação — como conferir pelo `curl` se o objeto chegou ao
+bucket (HTTP 400 = nome livre) e se o manifesto mudou, quando dá para repetir com o mesmo número
+e quando é obrigatório subir para o seguinte — e uma nota sobre o cache da Cloudflare, que faz o
+`latest.json` parecer velho sem afetar estação nenhuma.
 
 ---
 

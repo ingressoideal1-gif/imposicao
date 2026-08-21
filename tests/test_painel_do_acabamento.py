@@ -70,7 +70,7 @@ def test_o_menu_e_a_tela_existem_no_painel():
         assert classe in secao, "a tela do acabamento nao usa " + classe
 
     # Os quatro estagios, nos filtros da coluna lateral.
-    for estagio in ("Aguardando", "Impresso", "Em acabamento", "Revisado"):
+    for estagio in ("Aguardando", "Impresso", "Em acabamento", "Pronto"):
         assert "setFiltroStatus('" + estagio + "')" in secao, (
             "o estagio " + estagio + " nao da para filtrar na coluna lateral"
         )
@@ -329,4 +329,169 @@ def test_o_encerrado_como_teste_e_lido_por_fora_do_carregamento_da_producao():
     for trecho in re.findall(r"\.from\('propostas'\)\s*\.select\([^)]*\)", script):
         assert "encerrado_teste_em" not in trecho, (
             "a coluna nova entrou no carregamento compartilhado: " + trecho
+        )
+
+
+def test_o_ultimo_estagio_se_chama_pronto():
+    """Pedido do usuario em 21/08/2026: "Revisado" passou a se chamar "Pronto".
+
+    A coluna `pedidos_modelos.acabamento_status` guarda o proprio rotulo em
+    texto -- foi assim que a tela nasceu, para nao criar uma tabela de dominio
+    de quatro valores. O preco e que renomear o rotulo exige reescrever as
+    linhas ja gravadas, e e por isso que ha uma migracao.
+    """
+    js = _ler("frontend/acabamento.js")
+    html = _ler("frontend/index.html")
+    secao = html[html.index('id="view-acabamento"'):]
+    secao = secao[:secao.index("</section>")]
+
+    assert "'Em acabamento', 'Pronto'" in js, "o estagio novo nao entrou na lista"
+    assert "setFiltroStatus('Pronto')" in secao, "o filtro lateral nao virou Pronto"
+    assert "data-prazo-acab=\"prontos\"" in secao, "o recorte da fila nao virou prontos"
+
+    # Nenhum rotulo antigo sobrou na tela.
+    assert "Revisado" not in secao, "sobrou 'Revisado' na tela do acabamento"
+    assert "Revisados" not in secao, "sobrou 'Revisados' na metrica"
+
+    # A COR do estagio nao muda junto com o nome: ela diz estado, e o usuario
+    # ja mandou devolve-la uma vez quando eu a unifiquei com a paleta.
+    assert "'Pronto':        '#14301f'" in js, "a cor do ultimo estagio mudou"
+
+    # O nome antigo continua LEGIVEL, para o intervalo entre publicar e migrar,
+    # e para a estacao que ainda tem a versao anterior em cache.
+    assert "NOME_ANTIGO" in js and "'revisado': 'Pronto'" in js, (
+        "sem traducao do nome antigo, o que ja estava concluido sai da conta"
+    )
+
+    # E a migracao existe, e reescreve as linhas.
+    sql = _ler("sql/acabamento_status_pronto.sql")
+    assert "UPDATE pedidos_modelos" in sql
+    assert "SET acabamento_status = 'Pronto'" in sql
+    assert "ILIKE 'Revisado'" in sql
+
+
+def test_o_menu_do_acabamento_volta_para_a_pagina_inicial():
+    """Pedido do usuario em 21/08/2026: clicar no menu traz a lista de volta.
+
+    Sem isto, quem abrisse um pedido, saisse para outra tela e voltasse pelo
+    menu caia direto no detalhe daquele pedido -- sem topo, sem filtros e sem
+    lista --, e precisava achar o botao VOLTAR para chegar onde o menu prometia.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    corpo = js[js.index("aoAbrir() {"):]
+    corpo = corpo[:corpo.index("mostrarLista();")]
+    assert "tela.pedidoAberto = null" in corpo, (
+        "abrir a tela pelo menu tem de fechar o pedido que ficou aberto"
+    )
+    assert "fecharCamera()" in corpo, (
+        "a camera pertence ao detalhe: deixa-la ligada mantem a webcam acesa"
+    )
+
+
+def test_a_escrita_na_tabela_do_parceiro_e_estreita():
+    """O peso por setor (21/08/2026) e a UNICA escrita numa tabela do parceiro.
+
+    `propostas_os_setores` e a ficha de conferencia de expedicao que o ERP mantem
+    para a grafica preencher -- `peso_real_kg`, `qtd_volumes`, `tipo_volume`,
+    `responsavel_conferencia`. O usuario abriu a excecao a regra de ouro do
+    REGRAS_BANCO em 21/08/2026, e ela so continua legitima enquanto for ESTREITA:
+    o peso e a data, e nada mais da linha.
+
+    Este teste existe para que um recurso futuro nao alargue a excecao sem que
+    alguem repare.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    assert "propostas_os_setores" in js, "a tela perdeu a gravacao do peso"
+
+    # O trecho que grava, do comeco da funcao ate o fim dela.
+    i = js.index("async function gravarPeso(")
+    corpo = js[i:js.index("\n    }\n", i)]
+
+    # As colunas que o UPDATE toca.
+    assert "update({ peso_real_kg: peso, updated_at: agora })" in corpo, (
+        "o update tem de tocar SO o peso e a data"
+    )
+
+    # Nenhuma coluna do parceiro entra na conversa.
+    for coluna in ("status_producao", "prazo", "hora", "qtd_volumes",
+                   "tipo_volume", "responsavel_conferencia"):
+        assert coluna not in corpo, (
+            "a gravacao do peso encostou em " + coluna + ", que e do parceiro"
+        )
+
+    # E nenhuma outra tabela e escrita em lugar nenhum do arquivo. O alvo do
+    # `.from()` pode vir como texto ou como constante, entao as duas formas sao
+    # colhidas e a constante e resolvida pelo valor dela.
+    import re
+    assert "const TABELA_DE_SETORES = 'propostas_os_setores';" in js
+
+    alvos = re.findall(r"\.from\(([^)]+)\)\s*\.(?:update|insert|delete|upsert)\(", js)
+    tabelas = sorted({
+        a.strip().strip("'").replace("TABELA_DE_SETORES", "propostas_os_setores")
+        for a in alvos
+    })
+    assert tabelas == ["pedidos_modelos", "propostas_os_setores"], (
+        "o acabamento escreve em tabela inesperada: " + ", ".join(tabelas)
+    )
+
+
+def test_o_peso_nao_aparece_sem_sessao():
+    """Na estacao o operador e anonimo, e a tabela tem RLS de `authenticated`.
+
+    Conferido com a chave publica em 21/08/2026: a leitura volta `[]` com HTTP
+    200 -- vazia e sem erro. Campo que nao gravaria nada e pior do que campo
+    nenhum, entao o box pergunta pela sessao antes e, sem ela, diz o que fazer.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    assert "temSessaoDoSupabase" in js
+    assert "auth.getSession()" in js, "a tela precisa perguntar se ha sessao"
+    assert "entre com a sua conta" in js, "o box precisa dizer o que fazer"
+
+    # So o SIM fica guardado: quem entrar no meio do caminho nao pode ficar preso
+    # a uma resposta de antes.
+    i = js.index("async function temSessaoDoSupabase()")
+    corpo = js[i:js.index("\n    }\n", i)]
+    assert "tela.temSessao === true" in corpo, (
+        "o 'nao' nao pode ficar em cache: o painel tem tela de login"
+    )
+
+
+def test_o_setor_do_peso_e_um_dos_quatro_que_o_banco_aceita():
+    """`propostas_os_setores_setor_check` so aceita PVC, LASER, FLEXO e TEXTIL.
+
+    Oferecer campo para um quinto setor seria prometer o que o banco recusa com
+    23514 na hora de gravar.
+    """
+    js = _ler("frontend/acabamento.js")
+    assert "SETORES_DO_BANCO = ['FLEXO', 'PVC', 'TEXTIL', 'LASER']" in js
+
+    # E a lista e a MESMA dos cards da fila, nos dois paineis.
+    html = _ler("frontend/index.html")
+    for setor in ("FLEXO", "PVC", "TEXTIL", "LASER"):
+        assert html.count('data-setor="' + setor + '"') == 2, (
+            "o setor " + setor + " precisa estar nos cards dos dois paineis"
+        )
+
+
+def test_a_excecao_esta_escrita_na_regra_de_banco():
+    """Regra que passou a ter excecao e regra que precisa dizer isso.
+
+    Sou responsavel por manter a documentacao verdadeira: quem ler o REGRAS_BANCO
+    e vir "NUNCA escrever em tabela do parceiro" sem ver esta excecao vai achar
+    que o codigo esta errado -- ou, pior, vai abrir a segunda excecao sem
+    perceber que esta abrindo uma.
+    """
+    regras = _ler("docs/REGRAS_BANCO.md")
+
+    assert "peso_real_kg" in regras, "a excecao nao esta documentada onde a regra mora"
+    assert "propostas_os_setores" in regras
+    assert "21/08/2026" in regras, "a excecao precisa dizer quando e por quem foi aberta"
+
+    # A lista do que NAO pode ser tocado precisa continuar la.
+    for coluna in ("status_producao", "qtd_volumes", "responsavel_conferencia"):
+        assert coluna in regras, (
+            "o limite da excecao precisa nomear " + coluna
         )

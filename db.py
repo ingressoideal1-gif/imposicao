@@ -1306,6 +1306,44 @@ def save_catalogo_fonte(fonte_data: dict) -> dict:
     return fonte_data
 
 
+# ─── O peso por setor da conferencia de acabamento ───────────────────────────
+#
+# Por que passa pela Edge Function, e nao direto pelo PostgREST como o resto:
+#
+# O peso mora em `propostas_os_setores`, tabela do PARCEIRO, com RLS de
+# `authenticated`. A estacao fala com o banco como `anon` — o operador entra pelo
+# codigo local, sem sessao do Supabase. Medido em 21/08/2026 com a chave publica:
+# a leitura volta `[]` com HTTP 200. Vazio e sem erro, que e o pior jeito de
+# falhar — o operador digitaria o peso, veria o campo aceitar, e nada teria sido
+# gravado.
+#
+# O caminho e o mesmo do catalogo de fontes: `acesso-estacao` com o
+# `ACESSO_AGENTE_SEGREDO`, e `service_role` do lado de la.
+
+
+def ler_peso_dos_setores(pedido_id_int: int) -> list:
+    """As linhas de peso daquele pedido. Lista vazia quando nao da para ler."""
+    try:
+        r = _catalogo_pela_funcao("GET", f"peso-setores/{int(pedido_id_int)}")
+        return (r or {}).get("setores") or []
+    except Exception as e:
+        print(f"[db] Nao consegui ler o peso por setor do pedido {pedido_id_int}: {e}")
+        raise
+
+
+def gravar_peso_do_setor(pedido_id_int: int, setor: str, peso) -> dict:
+    """Grava o peso de UM setor. A regra inteira mora na Edge Function.
+
+    Aqui nao ha validacao de proposito: duplicar a lista de setores validos e a
+    conversao de virgula criaria duas verdades, e a que vale e a do servidor —
+    ele e quem fala com o banco e conhece o `CHECK` da tabela.
+    """
+    return _catalogo_pela_funcao(
+        "POST", f"peso-setores/{int(pedido_id_int)}",
+        {"setor": setor, "peso_real_kg": peso},
+    ) or {}
+
+
 def _fonte_por_nome(nome: str) -> dict | None:
     """A fonte já cadastrada com este nome, olhando a tabela quando dá.
 

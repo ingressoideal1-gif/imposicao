@@ -7,8 +7,8 @@
 |---|---|
 | Onde fica | `frontend/index.html`, seção `view-acabamento`, menu **Produção → Painel do Acabamento** |
 | Quem desenha | [`frontend/acabamento.js`](../frontend/acabamento.js) |
-| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores` |
-| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) |
+| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO) |
+| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) |
 | Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) |
 | Testes | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js) + [`tests/test_painel_do_acabamento.py`](../tests/test_painel_do_acabamento.py) |
 
@@ -26,11 +26,11 @@ tela:
 
 | Coluna | Na Produção | No Acabamento |
 |--------|-------------|---------------|
-| Progresso | modelos impressos / total | modelos **revisados** / total |
-| Status | Aguardando / Parcial / Impresso | Aguardando / Impresso / Em acabamento / Revisado |
+| Progresso | modelos impressos / total | modelos **prontos** / total |
+| Status | Aguardando / Parcial / Impresso | Aguardando / Impresso / Em acabamento / Pronto |
 
-O botão de recorte no topo, que na Produção é "Impresso", aqui é **"Revisado"**:
-pedido com todos os modelos revisados sai da fila de trabalho e só reaparece com
+O botão de recorte no topo, que na Produção é "Impresso", aqui é **"Pronto"**:
+pedido com todos os modelos prontos sai da fila de trabalho e só reaparece com
 esse botão ligado. É a mesma regra, aplicada ao estágio seguinte.
 
 ## O que a tela não é
@@ -65,6 +65,27 @@ Esconder por engano é o erro caro: o pedido some da tela de quem trabalha nele.
 
 Nas outras telas — Painel de Produção e Lista de Arte — esses pedidos continuam
 aparecendo. O recorte é só daqui.
+
+## Os cards de setor somam
+
+Clicar num card de setor **liga ou desliga** aquele setor, e a lista mostra a
+**soma**: entra o pedido que tenha item em qualquer um dos setores acesos. Dois
+cards acesos listam os dois conjuntos juntos; clicar de novo num card aceso tira
+só aquele; **Todos os Setores** limpa a escolha inteira.
+
+Soma, e não interseção. Interseção pediria um pedido com item nos dois setores
+ao mesmo tempo — raro, e não é o que o operador quer ver quando pede "Flexo e
+PVC juntos". Pedido do usuário em 21/08/2026, para as duas telas ao mesmo tempo:
+a mesma mudança está no Painel de Produção.
+
+O recorte é **de cada tela**: o Acabamento guarda em `tela.setores` e a Produção
+em `state.filtroSetores`, e um não mexe no outro. Cada card diz de quem ele é
+pelo `data-setor` — antes o código procurava o nome dentro do `onclick`, o que
+deixou de funcionar com vários acesos ao mesmo tempo.
+
+A linha *"Clique em mais de um setor para somar os pedidos"*, embaixo da grade,
+existe porque a soma não se descobre olhando: um card aceso e outro apagado
+parecem exatamente a tela de antes.
 
 ## O pedido aberto
 
@@ -111,12 +132,85 @@ mora no `cliente.js`, que o painel da gráfica não carrega. Chamá-lo daqui ser
 um clique que não faz nada — e ampliar é justamente o que faz a amostra servir
 para conferir a impressão.
 
+### Clicar no menu volta para o começo
+
+Abrir a tela pelo menu **sempre** traz a lista, mesmo que um pedido tenha ficado
+aberto na visita anterior. Antes disso, quem abria o pedido 123, saía para outra
+tela e voltava pelo menu reencontrava o detalhe do 123 — sem topo, sem filtros e
+sem lista —, e precisava achar o botão VOLTAR para chegar onde o menu prometia
+levá-lo. Pedido do usuário em 21/08/2026.
+
+O `aoAbrir()` fecha o pedido e **desliga a câmera** junto: ela pertence ao
+detalhe, e deixá-la ligada manteria a webcam acesa atrás de uma tela que sumiu.
+
+### O peso por setor, acima dos modelos
+
+Um box antes da lista de modelos, com **um campo de peso para cada setor dos
+produtos daquele pedido**. Pedido do usuário em 21/08/2026, no exemplo dele:
+*Triband + Credencial + Mobi* são dois setores, **Laser** e **PVC**, então duas
+linhas.
+
+Os setores saem do `setor` de cada item — o mesmo que o `script.js` resolve a
+partir de `produtos.setor_pcp` e que alimenta os cards da fila. Setor que o banco
+não aceita fica de fora: melhor não oferecer o campo do que oferecer um que
+devolveria erro na hora de gravar.
+
+O peso vai para **`propostas_os_setores.peso_real_kg`**, uma linha por setor. Essa
+tabela é do parceiro, e escrever nela é a **única exceção** à regra de ouro do
+[REGRAS_BANCO.md](REGRAS_BANCO.md) — está documentada lá, com a lista exata do que
+pode ser tocado. Em resumo: só o peso e o `updated_at`; `prazo`, `hora`,
+`status_producao` e as colunas de volume nunca são encostados.
+
+Grava-se com **`UPDATE` primeiro, `INSERT` só quando não há linha**. É o caminho
+que menos mexe na tabela do parceiro, e o comum: o ERP cria essas linhas na
+expedição, então na maioria dos pedidos elas ainda não existem quando o
+acabamento pesa o material. Se duas pessoas pesarem o mesmo setor ao mesmo tempo,
+o `UNIQUE (id_int, setor)` derruba o segundo `INSERT` com 23505 e ele vira
+atualização.
+
+Vírgula e ponto valem o mesmo (`4,16` = `4.16`); campo vazio apaga o peso; letra
+ou número negativo não chegam ao banco. Ao lado de cada campo aparece **✓ gravado**
+ou **✕ não foi**, sem redesenhar o pedido — o operador não perde o que está
+digitando.
+
+#### Dois caminhos, porque a estação não tem sessão
+
+A tabela tem RLS e as quatro políticas são de `authenticated`. O operador da
+estação entra pelo código de acesso local, **sem sessão do Supabase** — para o
+banco ele é `anon`, e para `anon` aquela tabela devolve `[]` com HTTP 200: vazia,
+sem erro nenhum. Foi medido com a chave pública em 21/08/2026.
+
+Esse é o pior jeito de falhar que existe: não há erro para mostrar. O operador
+digitaria o peso, veria o campo aceitar o número, e nada teria sido gravado.
+
+E é justamente ali que o peso é digitado — o usuário decidiu no mesmo dia que a
+digitação do peso e a escolha dos drops seriam feitas **pelo acesso local no
+agente**. Então há dois caminhos, e quem escolhe é **quem serviu a página**:
+
+| Onde | Caminho |
+|---|---|
+| **Estação** (agente na 9000 ou localhost) | `/api/peso-setores/<pedido>` do agente → Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` → `service_role` |
+| **Site, com login do Vibe** | direto no PostgREST, que é o que a sessão autoriza |
+| **Site, sem login** | o box mostra os setores e a frase que resolve: entrar com a conta |
+
+É o mesmo desenho do catálogo de fontes, e pela mesma razão: a `service_role`
+nunca vai para as estações — ela abre cliente, proposta e financeiro do parceiro.
+
+A regra de gravação mora **uma vez só**, em
+[`supabase/functions/_compartilhado/pesos.ts`](../supabase/functions/_compartilhado/pesos.ts).
+O agente não valida nada por conta própria: converter a vírgula e conferir a
+lista de setores nos dois lugares criaria duas verdades, e a que vale é a do
+servidor, que conhece o `CHECK` da tabela.
+
+A única chamada ao agente em toda a tela é essa. Impor, gerar PDF, imprimir e
+perguntar a versão do NewProd continuam fora — há teste contando as rotas.
+
 ### Os dois únicos controles
 
 Por modelo, dois seletores, e nada mais é editável:
 
-1. **Status do acabamento** — *— Status —* · Impresso · Em acabamento ·
-   Revisado. Grava em `pedidos_modelos.acabamento_status`.
+1. **Status do acabamento** — Aguardando · Impresso · Em acabamento ·
+   Pronto. Grava em `pedidos_modelos.acabamento_status`.
 2. **Responsável** — os operadores de acesso local da gráfica, por nome. Grava
    em `pedidos_modelos.acabamento_responsavel`.
 
@@ -167,7 +261,7 @@ acesa depois que a tela sumiu é defeito, não detalhe.
 
 ## O estágio: quatro, e nenhum deles nasce vazio
 
-**Aguardando · Impresso · Em acabamento · Revisado.**
+**Aguardando · Impresso · Em acabamento · Pronto.**
 
 Quando ninguém escolheu nada, o estágio é **derivado** do setor anterior: modelo
 com a impressão concluída entra como *Impresso*; qualquer outra coisa entra como
@@ -175,6 +269,26 @@ com a impressão concluída entra como *Impresso*; qualquer outra coisa entra co
 20/08/2026, ao ver a tela pronta: um modelo que ainda não saiu da impressora não
 pode aparecer como impresso, e a opção vazia *"— Status —"* não dizia nada a
 quem estava olhando.
+
+### O nome mudou em 21/08/2026: "Revisado" virou "Pronto"
+
+O último estágio se chamava **Revisado** quando a tela nasceu. O usuário trocou
+por **Pronto** no dia seguinte: "Revisado" descreve o que o conferente fez;
+"Pronto" descreve o que interessa a quem olha a fila de longe — o material pode
+ser embalado e entregue.
+
+A coluna `acabamento_status` guarda o **próprio rótulo, em texto**, e não um
+código. Isso foi decidido de propósito — o conjunto é pequeno, só esta tela lê,
+e um texto legível dispensa uma tabela de domínio para quatro valores. O preço
+dessa escolha é que renomear o rótulo exige reescrever as linhas já gravadas:
+é o que faz [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql),
+rodado no mesmo dia.
+
+O código não depende dessa migração para estar certo. A constante `NOME_ANTIGO`
+traduz "Revisado" para "Pronto" **na leitura**, e existe por dois motivos: o
+intervalo entre publicar e migrar, e a estação que ainda tem a versão anterior
+em cache e pode gravar o nome velho por alguns minutos. Toda gravação nova já
+sai como "Pronto".
 
 Derivar **não é gravar**. Desenhar a tela não escreve no banco — é a regra que o
 `renderOrdens` do `script.js` aprendeu do jeito difícil, e ela vale aqui também.
@@ -272,7 +386,7 @@ neutro em 20/08/2026. O calor só se percebe ao lado do azul-ardósia da Produç
 ### O que a paleta NÃO alcança: a cor por status
 
 As quatro cores de fundo da caixa do modelo — *Aguardando* `#3a2a1c`,
-*Impresso* `#162037`, *Em acabamento* `#32352e`, *Revisado* `#14301f` — **não
+*Impresso* `#162037`, *Em acabamento* `#32352e`, *Pronto* `#14301f` — **não
 acompanham a paleta da tela**.
 
 Eu as tinha trazido para a família terra junto com o resto, e o usuário mandou

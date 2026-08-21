@@ -49,6 +49,44 @@ O banco antigo do Imposition (`atsxtuibeitloosckmlc.supabase.co`) será **descon
 9. ✅ **SIM** criar NOVAS tabelas com prefixo `producao_`
 10. ✅ **SIM** referenciar tabelas do parceiro via FK (usar `id_int`, `id_cliente`, `id_produto`)
 
+### A única exceção aberta até hoje: `propostas_os_setores.peso_real_kg`
+
+> [!IMPORTANT]
+> Em **21/08/2026** o usuário mandou o Painel do Acabamento gravar o peso de cada
+> setor em `propostas_os_setores.peso_real_kg`. É a primeira e única escrita
+> autorizada numa tabela do parceiro, e ela é **estreita de propósito**.
+
+**Por que ela não fere o espírito da regra.** Essa tabela é a ficha de conferência
+de expedição que o ERP mantém *para a gráfica preencher* — as colunas dizem isso
+sozinhas: `peso_real_kg`, `qtd_volumes`, `tipo_volume`, `responsavel_conferencia`.
+O ERP já preenche parte dela pela tela dele. O que mudou é de onde o dado entra.
+
+**O que exatamente é permitido**, e nada além:
+
+| | |
+|---|---|
+| Colunas escritas | `peso_real_kg` e `updated_at` — e, só ao criar a linha, `id_int`, `setor` e `id_os` |
+| Nunca tocado | `prazo`, `hora`, `status_producao`, `status_producao_em`, `qtd_volumes`, `tipo_volume`, `responsavel_conferencia` |
+| Quem escreve | [`supabase/functions/_compartilhado/pesos.ts`](../supabase/functions/_compartilhado/pesos.ts) (estação, via `acesso-estacao`) e [`frontend/acabamento.js`](../frontend/acabamento.js), função `gravarPeso` (site com sessão) |
+| Como | `UPDATE` primeiro; só insere quando não há linha. Hoje 729 dos 758 pares (pedido, setor) ainda não existem, porque o ERP as cria na expedição |
+| Travas do banco | `UNIQUE (id_int, setor)`, `CHECK` de setor (PVC/LASER/FLEXO/TEXTIL), FK `id_os → propostas_os(id)` |
+| Teste | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seção "O peso por setor" |
+
+**A trava que vem junto, e a porta que ela exigiu.** A tabela tem RLS e as quatro
+políticas são de `authenticated`. Na estação da gráfica o operador entra pelo
+código local, sem sessão do Supabase, e ali a leitura volta **vazia, sem erro
+nenhum** — conferido com a chave anônima em 21/08/2026.
+
+Como a digitação do peso acontece justamente na estação (decisão do usuário no
+mesmo dia), ela ganhou porta própria: `/api/peso-setores/<pedido>` no agente, que
+repassa à Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` e grava com
+a `service_role` — o mesmo desenho do catálogo de fontes. No site com login, a
+sessão já basta e a escrita sai direta. Sem nenhum dos dois, o box diz o que fazer
+em vez de mostrar campos que não gravariam nada.
+
+Abrir uma segunda exceção exige a mesma coisa que esta exigiu: o usuário pedindo,
+e a coluna sendo claramente da gráfica.
+
 ---
 
 ## 🆕 Tabelas de Catálogo do Imposition (Aprovadas & Criadas)
@@ -96,7 +134,7 @@ documentada em [`lista_de_arte.md`](lista_de_arte.md).
 |--------|-----------|--------|
 | `pedidos_artes` | Arquivos e estado da arte de cada pedido | ✅ Criado |
 | `pedidos_links_cliente` | Links públicos de aprovação do cliente | ✅ Criado |
-| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel` / `acabamento_foto_url`) | ✅ Criado |
+| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel` / `acabamento_foto_url`; o estágio final do `acabamento_status` passou de `Revisado` a `Pronto` em 21/08/2026) | ✅ Criado |
 
 ## ⏳ Tabelas Operacionais/Runtime (Postergadas para Próxima Fase)
 

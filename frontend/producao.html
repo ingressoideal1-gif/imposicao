@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=668">
+    <link rel="stylesheet" href="/style.css?v=669">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -1579,16 +1579,16 @@
                             </div>
 
                             <div class="prod-sectors-grid" id="filter-container-setor">
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('FLEXO')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="FLEXO" onclick="setFiltroSetor('FLEXO')" title="Somar ou tirar o setor Flexo da lista">
                                     <i class="fa-solid fa-layer-group"></i> Flexo
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill active" onclick="setFiltroSetor('PVC')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="PVC" onclick="setFiltroSetor('PVC')" title="Somar ou tirar o setor PVC da lista">
                                     <i class="fa-solid fa-id-card"></i> PVC
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('TEXTIL')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="TEXTIL" onclick="setFiltroSetor('TEXTIL')" title="Somar ou tirar o setor Têxtil da lista">
                                     <i class="fa-solid fa-shirt"></i> Têxtil
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('LASER')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="LASER" onclick="setFiltroSetor('LASER')" title="Somar ou tirar o setor Laser da lista">
                                     <i class="fa-solid fa-sun"></i> Laser
                                 </button>
                             </div>
@@ -2054,30 +2054,30 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=668"></script>
-    <script src="/cor-numeracao-do-modelo.js?v=668"></script>
-    <script src="/logo-do-frete.js?v=668"></script>
-    <script src="/arte-de-impressao.js?v=668"></script>
+    <script src="mapas.js?v=669"></script>
+    <script src="/cor-numeracao-do-modelo.js?v=669"></script>
+    <script src="/logo-do-frete.js?v=669"></script>
+    <script src="/arte-de-impressao.js?v=669"></script>
     <!-- qrcode-generator: a mesma biblioteca do index.html e do cliente.html.
          A `qrcodejs` do topo desta pagina expoe `QRCode` (maiusculo) e serve a
          outra coisa; o desenho no canvas usa `qrcode(0, 'L')`, que so existe
          aqui. Sem esta linha o QR do Painel sairia como o quadrado vermelho de
          erro -- conferido no navegador em 14/08/2026. -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-    <script src="/qr-canvas.js?v=668"></script>
-    <script src="/fonte-canvas.js?v=668"></script>
+    <script src="/qr-canvas.js?v=669"></script>
+    <script src="/fonte-canvas.js?v=669"></script>
     <!-- Estes três o script.js e o pedido.js chamam SEM guarda
          (desenharTextoAjustado, desenharElementoFoto, repintor): faltando um
          deles, o primeiro elemento de texto ou de foto derruba o desenho
          inteiro do canvas, não só o próprio elemento. A index.html já os carrega
          desde sempre; esta cópia da tela ficou para trás duas vezes. -->
-    <script src="/texto-ajuste.js?v=668"></script>
-    <script src="/foto-lib.js?v=668"></script>
-    <script src="/gerenciador-fotos.js?v=668"></script>
-    <script src="/editor-foto.js?v=668"></script>
-    <script src="/script.js?v=668"></script>
-    <script src="/criador-arte.js?v=668"></script>
-    <script src="/pedido.js?v=668"></script>
+    <script src="/texto-ajuste.js?v=669"></script>
+    <script src="/foto-lib.js?v=669"></script>
+    <script src="/gerenciador-fotos.js?v=669"></script>
+    <script src="/editor-foto.js?v=669"></script>
+    <script src="/script.js?v=669"></script>
+    <script src="/criador-arte.js?v=669"></script>
+    <script src="/pedido.js?v=669"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

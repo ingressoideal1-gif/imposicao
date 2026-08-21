@@ -668,6 +668,52 @@ def remove_fonte(fonte_id: str, user: dict = Depends(get_current_user)):
     db.delete_catalogo_fonte(fonte_id)
     return {"status": "success"}
 
+
+# ─── O peso por setor, para o painel servido pela estacao ────────────────────
+#
+# O Painel do Acabamento grava o peso em `propostas_os_setores`, tabela do
+# parceiro com RLS de `authenticated`. A pagina servida pela estacao fala com o
+# Supabase como `anon` e nao enxerga essa tabela — medido em 21/08/2026: a
+# leitura volta `[]` com HTTP 200, vazia e sem erro.
+#
+# Estas duas rotas sao a porta da estacao. Elas nao tocam no banco: repassam a
+# `acesso-estacao` com o segredo do agente, exatamente como o catalogo de fontes
+# faz. O `get_current_user` continua valendo — quem chama e o painel, atras da
+# trava do codigo de acesso local.
+
+
+@app.get("/api/peso-setores/{pedido_id_int}")
+def listar_peso_setores(pedido_id_int: int, user: dict = Depends(get_current_user)):
+    try:
+        return {"setores": db.ler_peso_dos_setores(pedido_id_int)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Nao deu para ler o peso: {e}")
+
+
+@app.post("/api/peso-setores/{pedido_id_int}")
+async def gravar_peso_setor(pedido_id_int: int, request: Request,
+                            user: dict = Depends(get_current_user)):
+    import urllib.error
+
+    dados = await request.json()
+    try:
+        r = db.gravar_peso_do_setor(pedido_id_int, dados.get("setor"),
+                                    dados.get("peso_real_kg"))
+    except urllib.error.HTTPError as e:
+        # A recusa do servidor (setor invalido, peso que nao e numero) chega com
+        # o motivo escrito. Repassar o 502 generico esconderia dele o que dizer
+        # ao operador.
+        corpo = ""
+        try:
+            corpo = e.read().decode("utf-8")
+        except Exception:
+            pass
+        raise HTTPException(status_code=e.code if e.code in (400, 401, 422) else 502,
+                            detail=corpo or f"o servidor recusou o peso ({e.code})")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Nao deu para gravar o peso: {e}")
+    return {"status": "success", **r}
+
 # ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
 #
 # ## A ponte entre dois jeitos de chamar a mesma fonte

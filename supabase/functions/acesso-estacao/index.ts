@@ -9,6 +9,10 @@
  *   2. credenciais -> envia {modelo_id, numero, hash} em lotes de 500
  *   3. fechar      -> carimba publicado_em e o total
  *
+ * Alem dessas tres, a funcao carrega duas rotas que nao tem nada a ver com
+ * publicar faixa e moram aqui porque o CONSUMIDOR e o mesmo -- a estacao, com o
+ * mesmo segredo: `acessos-locais`, `fontes` e, desde 21/08/2026, `peso-setores`.
+ *
  * ## Por que `verify_jwt = false`, e o que protege no lugar
  *
  * A estacao nao tem sessao do Supabase: ela apresenta o `ACESSO_AGENTE_SEGREDO`,
@@ -43,6 +47,7 @@ import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
+import { gravarPeso, lerPesos } from "../_compartilhado/pesos.ts";
 import { iguaisEmTempoConstante } from "../_compartilhado/assinatura.ts";
 import {
   inteiro,
@@ -210,6 +215,36 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     if (p.length === 2 && req.method === "DELETE") {
       await excluirFonte(p[1]);
       return ok({ status: "success" });
+    }
+    recusaDeRotaDesconhecida(req.method);
+  }
+
+  // O peso por setor da conferencia de acabamento.
+  //
+  // Mora aqui pelo MESMO motivo das fontes: quem escreve e a estacao, que nao
+  // tem sessao do Supabase, e a tabela do parceiro so aceita `authenticated`.
+  // Medido em 21/08/2026: a chave anonima le `propostas_os_setores` e recebe
+  // `[]` com HTTP 200 -- vazio e sem erro, que e o pior jeito de falhar.
+  //
+  // O usuario decidiu no mesmo dia que a digitacao do peso seria feita pelo
+  // acesso local do agente. Sem esta rota, o operador digitaria, o campo
+  // aceitaria, e nada seria gravado.
+  if (p[0] === "peso-setores") {
+    await conferirAgente(req);
+    if (p.length !== 2) recusaDeRotaDesconhecida(req.method);
+    const pedido = inteiro(p[1], "path", "pedido");
+
+    if (req.method === "GET") return ok({ setores: await lerPesos(pedido) });
+
+    if (req.method === "POST") {
+      let corpo: any;
+      try {
+        corpo = await req.json();
+      } catch {
+        throw new Recusa(422, "corpo invalido: esperava JSON");
+      }
+      const r = await gravarPeso(pedido, corpo?.setor, corpo?.peso_real_kg);
+      return ok({ status: "success", ...r });
     }
     recusaDeRotaDesconhecida(req.method);
   }

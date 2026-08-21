@@ -14,7 +14,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=668">
+    <link rel="stylesheet" href="/style.css?v=669">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -2081,25 +2081,26 @@
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="atrasados" onclick="setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill active" data-prazo="geral" onclick="setFiltroPrazo('geral')" title="Todos os pedidos, sem filtrar por prazo">Geral</button>
                                 </div>
-                                <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores" onclick="setFiltroSetor('')" style="width: auto;">
+                                <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores" onclick="setFiltroSetor('')" style="width: auto;" title="Limpar a escolha e mostrar todos os setores">
                                     Todos os Setores
                                 </button>
                             </div>
 
                             <div class="prod-sectors-grid" id="filter-container-setor">
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('FLEXO')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="FLEXO" onclick="setFiltroSetor('FLEXO')" title="Somar ou tirar o setor Flexo da lista">
                                     <i class="fa-solid fa-layer-group"></i> Flexo
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('PVC')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="PVC" onclick="setFiltroSetor('PVC')" title="Somar ou tirar o setor PVC da lista">
                                     <i class="fa-solid fa-id-card"></i> PVC
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('TEXTIL')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="TEXTIL" onclick="setFiltroSetor('TEXTIL')" title="Somar ou tirar o setor Têxtil da lista">
                                     <i class="fa-solid fa-shirt"></i> Têxtil
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('LASER')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="LASER" onclick="setFiltroSetor('LASER')" title="Somar ou tirar o setor Laser da lista">
                                     <i class="fa-solid fa-sun"></i> Laser
                                 </button>
                             </div>
+                            <div class="prod-sectors-hint">Clique em mais de um setor para somar os pedidos.</div>
 
                             <div class="prod-search-row">
                                 <div class="prod-search-wrapper">
@@ -2313,33 +2314,34 @@
                                     Fila do Acabamento:
                                 </h2>
                                 <!-- Fora do grupo centralizado, igual ao "Impresso" da
-                                     Produção: o pedido revisado não é um recorte da fila de
+                                     Produção: o pedido pronto não é um recorte da fila de
                                      trabalho, é o que já saiu dela. -->
-                                <button type="button" id="filtro-revisado-acab" class="prod-btn-dark filter-btn-pill" data-prazo-acab="revisados" onclick="AcabamentoPainel.setFiltroPrazo('revisados')" title="Somente os pedidos com todos os modelos revisados (ficam fora das outras listas)">Revisado</button>
+                                <button type="button" id="filtro-pronto-acab" class="prod-btn-dark filter-btn-pill" data-prazo-acab="prontos" onclick="AcabamentoPainel.setFiltroPrazo('prontos')" title="Somente os pedidos com todos os modelos prontos (ficam fora das outras listas)">Pronto</button>
                                 <div id="filtro-prazo-grupo-acab" style="display: flex; gap: 8px; margin: 0 auto;">
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo-acab="hoje" onclick="AcabamentoPainel.setFiltroPrazo('hoje')" title="Pedidos com prazo de entrega no dia de hoje">Para Hoje</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo-acab="atrasados" onclick="AcabamentoPainel.setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill active" data-prazo-acab="geral" onclick="AcabamentoPainel.setFiltroPrazo('geral')" title="Todos os pedidos, sem filtrar por prazo">Geral</button>
                                 </div>
-                                <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores-acab" onclick="AcabamentoPainel.setFiltroSetor('')" style="width: auto;">
+                                <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores-acab" onclick="AcabamentoPainel.setFiltroSetor('')" style="width: auto;" title="Limpar a escolha e mostrar todos os setores">
                                     Todos os Setores
                                 </button>
                             </div>
 
                             <div class="prod-sectors-grid" id="filter-container-setor-acab">
-                                <button class="prod-btn-dark filter-btn-pill" onclick="AcabamentoPainel.setFiltroSetor('FLEXO')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="FLEXO" onclick="AcabamentoPainel.setFiltroSetor('FLEXO')" title="Somar ou tirar o setor Flexo da lista">
                                     <i class="fa-solid fa-layer-group"></i> Flexo
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="AcabamentoPainel.setFiltroSetor('PVC')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="PVC" onclick="AcabamentoPainel.setFiltroSetor('PVC')" title="Somar ou tirar o setor PVC da lista">
                                     <i class="fa-solid fa-id-card"></i> PVC
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="AcabamentoPainel.setFiltroSetor('TEXTIL')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="TEXTIL" onclick="AcabamentoPainel.setFiltroSetor('TEXTIL')" title="Somar ou tirar o setor Têxtil da lista">
                                     <i class="fa-solid fa-shirt"></i> Têxtil
                                 </button>
-                                <button class="prod-btn-dark filter-btn-pill" onclick="AcabamentoPainel.setFiltroSetor('LASER')">
+                                <button class="prod-btn-dark filter-btn-pill" data-setor="LASER" onclick="AcabamentoPainel.setFiltroSetor('LASER')" title="Somar ou tirar o setor Laser da lista">
                                     <i class="fa-solid fa-sun"></i> Laser
                                 </button>
                             </div>
+                            <div class="prod-sectors-hint">Clique em mais de um setor para somar os pedidos.</div>
 
                             <div class="prod-search-row">
                                 <div class="prod-search-wrapper">
@@ -2399,7 +2401,7 @@
                                 <span class="prod-table-title" style="margin-left: 8px;">Modelos do Pedido <span id="acab-detalhe-numero" style="color: #60a5fa;"></span></span>
                                 <span id="acab-detalhe-cliente" style="font-size: 0.9rem; color: #94a3b8;"></span>
                                 <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
-                                    <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 revisados</span>
+                                    <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 prontos</span>
                                 </div>
                             </div>
                             <div class="prod-table-body custom-scroll" id="acab-detalhe-corpo" style="padding: 10px 12px;">
@@ -2431,9 +2433,9 @@
                         </div>
 
                         <div class="prod-metric-card">
-                            <span class="prod-metric-value text-teal" id="stat-acab-modelos-revisados">0</span>
+                            <span class="prod-metric-value text-teal" id="stat-acab-modelos-prontos">0</span>
                             <div class="prod-metric-label">
-                                Modelos<br><span>Revisados</span>
+                                Modelos<br><span>Prontos</span>
                             </div>
                         </div>
 
@@ -2468,7 +2470,7 @@
                             <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Aguardando')">⏳ Aguardando</button>
                             <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Impresso')">🖨️ Impresso</button>
                             <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Em acabamento')">✂️ Em acabamento</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Revisado')">✅ Revisado</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Pronto')">✅ Pronto</button>
                         </div>
                     </div>
                 </div>
@@ -3288,25 +3290,25 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=668"></script>
-    <script src="cor-numeracao-do-modelo.js?v=668"></script>
-    <script src="logo-do-frete.js?v=668"></script>
-    <script src="arte-de-impressao.js?v=668"></script>
-    <script src="qr-canvas.js?v=668"></script>
-    <script src="fonte-canvas.js?v=668"></script>
-    <script src="fonte-nome.js?v=668"></script>
-    <script src="qr-ideal-colunas.js?v=668"></script>
-    <script src="csv-editor.js?v=668"></script>
-    <script src="amostra-modal.js?v=668"></script>
-    <script src="texto-ajuste.js?v=668"></script>
-    <script src="foto-lib.js?v=668"></script>
-    <script src="gerenciador-fotos.js?v=668"></script>
-    <script src="editor-foto.js?v=668"></script>
-    <script src="script.js?v=668"></script>
-    <script src="ideal-control.js?v=668"></script>
-    <script src="criador-arte.js?v=668"></script>
-    <script src="/pedido.js?v=668"></script>
-    <script src="acabamento.js?v=668"></script>
+    <script src="mapas.js?v=669"></script>
+    <script src="cor-numeracao-do-modelo.js?v=669"></script>
+    <script src="logo-do-frete.js?v=669"></script>
+    <script src="arte-de-impressao.js?v=669"></script>
+    <script src="qr-canvas.js?v=669"></script>
+    <script src="fonte-canvas.js?v=669"></script>
+    <script src="fonte-nome.js?v=669"></script>
+    <script src="qr-ideal-colunas.js?v=669"></script>
+    <script src="csv-editor.js?v=669"></script>
+    <script src="amostra-modal.js?v=669"></script>
+    <script src="texto-ajuste.js?v=669"></script>
+    <script src="foto-lib.js?v=669"></script>
+    <script src="gerenciador-fotos.js?v=669"></script>
+    <script src="editor-foto.js?v=669"></script>
+    <script src="script.js?v=669"></script>
+    <script src="ideal-control.js?v=669"></script>
+    <script src="criador-arte.js?v=669"></script>
+    <script src="/pedido.js?v=669"></script>
+    <script src="acabamento.js?v=669"></script>
 
 
 
