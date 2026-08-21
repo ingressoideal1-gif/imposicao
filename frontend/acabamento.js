@@ -618,8 +618,18 @@
                 ? `<br><span style="font-size: 0.82rem; color: #4cc8f0;">${esc(arte.nome_evento)}</span>`
                 : '';
 
+            // A linha do PEDIDO leva o fundo do estagio, do mesmo jeito que a
+            // linha do modelo (ver `linhaDoModelo`). Sem isto ela ficava com o
+            // `.os-row` comum as duas telas, e um pedido ainda nao impresso
+            // saia com a mesma cor da lista do Painel de Producao — que e
+            // exatamente a confusao que a paleta propria desta tela existe
+            // para evitar. Com o fundo aplicado, o estagio se le de relance na
+            // lista inteira, antes de abrir o pedido.
+            const estagioPedido = estagioDoPedido(modelos);
+            const fundoPedido = FUNDO_DO_ESTAGIO[estagioPedido] || FUNDO_DO_ESTAGIO[''];
+
             return `
-                <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer;" title="Abrir os modelos do pedido ${esc(os.numero)}">
+                <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer; background: ${fundoPedido};" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
                         <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #2b32af, #0a2472); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
                     </td>
@@ -632,7 +642,7 @@
                     <td><span class="badge">${modelos.length} ${modelos.length === 1 ? 'modelo' : 'modelos'}</span></td>
                     <td><strong>${qtdTotal.toLocaleString('pt-BR')}</strong></td>
                     <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
-                    <td>${seloDoEstagio(estagioDoPedido(modelos))}</td>
+                    <td>${seloDoEstagio(estagioPedido)}</td>
                     <td style="text-align:center; vertical-align:middle;">${badgePrazo ? badgePrazo(os) : ''}</td>
                 </tr>`;
         }).join('');
