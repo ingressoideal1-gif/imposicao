@@ -142,29 +142,43 @@ function montarAmbiente() {
 
 // ─── 2. O estagio do acabamento ─────────────────────────────────────────────
 
-(function oEstagioNaoSeConfundeComAImpressao() {
+(function oEstagioNasceDoQueOBancoJaSabe() {
+    // Regra de 20/08/2026, depois de o usuario ver a tela: o seletor nunca nasce
+    // vazio. Modelo ja impresso entra como "Impresso"; o resto, como
+    // "Aguardando". E DERIVACAO, nao gravacao -- desenhar a tela nao escreve.
     const { painel } = montarAmbiente();
-    const { estagioDoModelo, estagioDoPedido } = painel._regras;
+    const { estagioDoModelo, estagioDoPedido, estagioDerivadoDaImpressao } = painel._regras;
 
-    ok(estagioDoModelo({}) === '', 'modelo sem acabamento_status nao tem estagio');
-    ok(estagioDoModelo({ acabamento_status: null }) === '', 'nulo tambem e sem estagio');
-    ok(estagioDoModelo({ acabamento_status: 'Revisado' }) === 'Revisado', 'Revisado e lido');
+    ok(estagioDoModelo({}) === 'Aguardando', 'modelo sem nada entra como Aguardando');
+    ok(estagioDoModelo({ acabamento_status: null }) === 'Aguardando', 'nulo tambem');
+    ok(estagioDoModelo({ status_impressao: 'Impresso' }) === 'Impresso',
+       'modelo ja impresso entra como Impresso');
+    ok(estagioDoModelo({ status_impressao: 'Aguardando' }) === 'Aguardando',
+       'modelo que ainda nao saiu da impressora entra como Aguardando');
+    ok(estagioDerivadoDaImpressao({ status_impressao: 'Parcial' }) === 'Aguardando',
+       'meia impressao nao chegou ao acabamento');
+    ok(estagioDerivadoDaImpressao({ status_impressao: 'Revisão' }) === 'Aguardando',
+       'problema na impressao tambem nao chegou');
+
+    // O que alguem escolheu VENCE o derivado, sempre.
+    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Revisado' }) === 'Revisado',
+       'a escolha do operador vence o derivado');
+    ok(estagioDoModelo({ status_impressao: 'Impresso', acabamento_status: 'Aguardando' }) === 'Aguardando',
+       'inclusive quando ele volta para Aguardando de proposito');
     ok(estagioDoModelo({ acabamento_status: 'em acabamento' }) === 'Em acabamento',
        'a caixa das letras nao muda o estagio');
 
-    // O status de IMPRESSAO nao pode virar estagio de acabamento: sao dois
-    // setores, dois vocabularios, duas colunas.
-    ok(estagioDoModelo({ status_impressao: 'Impresso' }) === '',
-       'status_impressao NAO vira estagio de acabamento');
-
     ok(estagioDoPedido([]) === 'Aguardando', 'pedido sem modelo fica Aguardando');
-    ok(estagioDoPedido([{}, {}]) === 'Aguardando', 'nenhum modelo marcado: Aguardando');
-    ok(estagioDoPedido([{ acabamento_status: 'Impresso' }, {}]) === 'Impresso',
-       'so impressos marcados: Impresso');
+    ok(estagioDoPedido([{}, {}]) === 'Aguardando', 'nenhum modelo impresso: Aguardando');
+    ok(estagioDoPedido([{ status_impressao: 'Impresso' }, {}]) === 'Impresso',
+       'um impresso ja tira o pedido do Aguardando');
     ok(estagioDoPedido([{ acabamento_status: 'Revisado' }, { acabamento_status: 'Impresso' }]) === 'Em acabamento',
        'um revisado no meio de outros ainda e trabalho em curso');
     ok(estagioDoPedido([{ acabamento_status: 'Revisado' }, { acabamento_status: 'Revisado' }]) === 'Revisado',
        'so e Revisado quando TODOS estao revisados');
+
+    // E o acabamento continua sem NUNCA escrever no campo do outro setor.
+    ok(FONTE.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
 })();
 
 // ─── 3. O pedido revisado sai da fila de trabalho ───────────────────────────
@@ -283,7 +297,13 @@ function ambienteComPedidoAberto() {
     // A amostra, em tamanho grande e clicavel para ampliar.
     ok(html.indexOf('amostras_renderizadas/3001.jpg') !== -1, 'a amostra aprovada e exibida');
     ok(/AcabamentoPainel\.ampliar\(/.test(html), 'e da para ampliar a amostra');
-    ok(html.indexOf('max-height: 320px') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
+    ok(html.indexOf('max-height: 360px') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
+
+    // Pedidos de 20/08/2026, depois de ver a tela.
+    ok(html.indexOf('background: #ffffff') === -1, 'nao ha chapa branca atras da amostra');
+    const metades = html.match(/flex: 1 1 320px/g) || [];
+    ok(metades.length === 4, 'amostra e informacoes dividem a caixa ao meio (2 por modelo, 2 modelos)',
+       'achei ' + metades.length);
 
     // Amostra em PDF vira atalho, e nunca imagem: rasterizar a arte do cliente
     // esta fora de cogitacao neste projeto.
@@ -294,6 +314,10 @@ function ambienteComPedidoAberto() {
     // Os dois -- e somente os dois -- seletores.
     const selects = html.match(/<select/g) || [];
     ok(selects.length === 4, 'dois seletores por modelo, dois modelos = quatro', 'achei ' + selects.length);
+    ok(html.indexOf('— Status —') === -1, 'o seletor de estagio nao tem mais a opcao vazia');
+    ['Aguardando', 'Impresso', 'Em acabamento', 'Revisado'].forEach(e => {
+        ok(html.indexOf('>' + e + '<') !== -1, 'o estagio "' + e + '" esta no seletor');
+    });
     ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o seletor de estagio grava o acabamento');
     ok(/AcabamentoPainel\.mudarResponsavel\(/.test(html), 'o seletor de responsavel grava o acabamento');
     ok(html.indexOf('Bernardo Farias') !== -1, 'o responsavel ja gravado aparece escolhido');
@@ -318,8 +342,12 @@ function ambienteComPedidoAberto() {
     amb.janela._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: false };
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    ok((html.match(/disabled/g) || []).length === 4,
-       'quem so tem VER encontra os quatro seletores travados');
+    // Dois seletores e um botao de camera por modelo, dois modelos = seis.
+    ok((html.match(/disabled/g) || []).length === 6,
+       'quem so tem VER encontra os seletores e a camera travados',
+       'achei ' + (html.match(/disabled/g) || []).length);
+    ok(html.indexOf('apenas permiss\u00e3o de ver') !== -1,
+       'e a camera travada explica por que esta travada');
 })();
 
 // ─── 7. O arquivo inteiro nao fala com o motor nem com o agente ─────────────
@@ -344,6 +372,65 @@ function ambienteComPedidoAberto() {
 })();
 
 // ─── Resultado ──────────────────────────────────────────────────────────────
+
+(function oQueAguardaTemFundoMarrom() {
+    // Pedido do usuario: "modelos Aguardando ... fundo do box do modelo marrom".
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Aguardando';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Revisado';
+    amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('background: #3a2a1c') !== -1, 'o modelo Aguardando tem fundo marrom');
+    ok(html.indexOf('background: #14301f') !== -1, 'e o revisado segue verde escuro');
+})();
+
+(function aCameraApareceEmCadaModelo() {
+    const amb = ambienteComPedidoAberto();
+    amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    const botoes = html.match(/AcabamentoPainel\.abrirCamera\(/g) || [];
+    ok(botoes.length === 2, 'um botao de camera por modelo', 'achei ' + botoes.length);
+    ok(html.indexOf('Fotografar') !== -1, 'o botao diz o que faz');
+    ok(html.indexOf('Foto do material') !== -1, 'e a faixa tem rotulo em texto');
+    ok(html.indexOf('Nenhuma foto do material ainda') !== -1,
+       'modelo sem foto diz que nao tem foto, em vez de mostrar caixa vazia');
+
+    // Com foto gravada, aparece a miniatura e o botao vira "Refazer".
+    const amb2 = ambienteComPedidoAberto();
+    amb2.janela.state.osItens['os-200'][0].acabamento_foto_url =
+        'https://x.supabase.co/storage/v1/object/public/artes/acabamento-fotos/200_3001_1.jpg';
+    amb2.painel.abrirPedido('os-200');
+    const html2 = amb2.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html2.indexOf('acabamento-fotos/200_3001_1.jpg') !== -1, 'a foto gravada vira miniatura');
+    ok(html2.indexOf('Refazer foto') !== -1, 'e o botao passa a oferecer refazer');
+})();
+
+(function aFotoVaiParaOBucketQueJaAceitaEscrita() {
+    // Bucket novo com escrita anonima JA FOI TENTADO neste projeto e nao
+    // funcionou -- ver sql/criar_bucket_previews.sql, que comeca com "NAO
+    // EXECUTE ESTE ARQUIVO". A saida foi usar o `artes` com um prefixo, e e o
+    // que este teste trava.
+    const { painel } = montarAmbiente();
+    ok(painel._regras.BUCKET_DA_FOTO === 'artes', 'a foto vai para o bucket artes');
+    ok(painel._regras.PASTA_DA_FOTO === 'acabamento-fotos', 'num prefixo proprio');
+
+    const codigo = FONTE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    ok(codigo.indexOf("createBucket") === -1, 'a tela nao tenta criar bucket');
+    const uploads = codigo.match(/\.storage\s*\n?\s*\.from\(|storage\.from\(/g) || [];
+    ok(uploads.length >= 1, 'ha upload para o storage');
+    ok(codigo.indexOf("from('previews-numeracoes')") === -1,
+       'e nao para o bucket que nao aceita escrita');
+})();
+
+(function aFotoELidaComoOsOutrosCampos() {
+    const { painel } = montarAmbiente();
+    const foto = painel._regras.fotoDoModelo;
+    ok(foto({}) === '', 'modelo sem foto devolve vazio');
+    ok(foto({ acabamento_foto_url: null }) === '', 'nulo tambem');
+    ok(foto({ acabamento_foto_url: ' https://x/y.jpg ' }) === 'https://x/y.jpg', 'e a URL vem limpa');
+})();
 
 async function aListaDeResponsaveisVemDaViewDeOperadores() {
     const amb = ambienteComPedidoAberto();
@@ -378,8 +465,8 @@ async function gravarEscreveSoNasDuasColunasNovas() {
         ok(g.valor === 3001, 'id numerico vai como numero, e nao como texto', String(g.valor));
         const colunas = Object.keys(g.payload);
         ok(colunas.length === 1, 'uma coluna por gravacao');
-        ok(colunas[0] === 'acabamento_status' || colunas[0] === 'acabamento_responsavel',
-           'so as duas colunas do acabamento sao escritas', colunas[0]);
+        ok(['acabamento_status', 'acabamento_responsavel', 'acabamento_foto_url'].indexOf(colunas[0]) !== -1,
+           'so as colunas do acabamento sao escritas', colunas[0]);
     });
 
     // A tela ja mostra a escolha antes de a rede responder.

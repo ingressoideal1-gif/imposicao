@@ -39,10 +39,14 @@
 
     // ─── Vocabulário do acabamento ──────────────────────────────────────────
     //
-    // Os três estágios pedidos pelo usuário, nesta ordem de fluxo. NULO no banco
-    // = o acabamento deste modelo ainda não começou, e a tela mostra
-    // "— Status —" em vez de inventar um estágio que ninguém marcou.
-    const ESTAGIOS = ['Impresso', 'Em acabamento', 'Revisado'];
+    // Os quatro estágios, nesta ordem de fluxo.
+    //
+    // "Aguardando" entrou em 20/08/2026, quando o usuário viu a tela pronta: o
+    // modelo que ainda NÃO saiu da impressora não pode aparecer como "Impresso",
+    // e a caixa vazia "— Status —" não dizia nada a quem estava olhando. Agora o
+    // seletor nunca nasce vazio — ele nasce dizendo a verdade que o banco já
+    // sabe, lida do status de impressão (ver `estagioDoModelo`).
+    const ESTAGIOS = ['Aguardando', 'Impresso', 'Em acabamento', 'Revisado'];
 
     const ORDEM_ESTAGIO = { 'Aguardando': 1, 'Impresso': 2, 'Em acabamento': 3, 'Revisado': 4 };
 
@@ -56,10 +60,11 @@
     // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
     // o estágio se lê de relance, sem procurar o selo.
     const FUNDO_DO_ESTAGIO = {
-        '':              '#65625e',
-        'Impresso':      '#162037',
-        'Em acabamento': '#32352e',
-        'Revisado':      '#14301f',
+        'Aguardando':    '#3a2a1c',   // marrom — pedido do usuário: o que ainda não chegou
+        'Impresso':      '#162037',   // azul escuro — saiu da impressora
+        'Em acabamento': '#32352e',   // oliva — em cima da mesa
+        'Revisado':      '#14301f',   // verde escuro — conferido
+        '':              '#3a2a1c',
     };
 
     // ─── Estado da tela ─────────────────────────────────────────────────────
@@ -168,26 +173,46 @@
     }
 
     /**
-     * O estágio gravado num modelo, ou '' quando o acabamento não começou.
+     * O estágio de acabamento de um modelo.
      *
-     * A linha completa vence o mapa: quando o pedido é aberto, o `loadOSItens`
-     * traz `acabamento_status` de verdade — inclusive nulo, que quer dizer "não
-     * começou" e não pode ser confundido com "não perguntei ainda". Por isso o
-     * teste é `!== undefined`, e não a verdade do valor.
+     * Duas camadas, nesta ordem:
+     *
+     *  1. **O que alguém escolheu**, se houver — da linha completa (quando o
+     *     pedido está aberto) ou do mapa da lista.
+     *  2. **O que o banco já sabe**, quando ninguém escolheu nada: modelo com a
+     *     impressão concluída entra como "Impresso"; qualquer outra coisa entra
+     *     como "Aguardando".
+     *
+     * A camada 2 é DERIVAÇÃO, nunca gravação. Desenhar a tela não escreve no
+     * banco — a regra que o `renderOrdens` do `script.js` aprendeu do jeito
+     * difícil. Só o seletor grava, e a partir daí a camada 1 manda.
      */
     function estagioDoModelo(m) {
         if (!m) return '';
-        let cru;
-        if (m.acabamento_status !== undefined) {
-            cru = m.acabamento_status;
-        } else {
-            const doMapa = tela.acabamento[String(m.id)];
-            cru = doMapa ? doMapa.status : '';
+
+        const doMapa = tela.acabamento[String(m.id)];
+        const escolhido = (m.acabamento_status || (doMapa ? doMapa.status : '') || '').toString().trim();
+        if (escolhido) {
+            const achado = ESTAGIOS.find(e => e.toLowerCase() === escolhido.toLowerCase());
+            return achado || escolhido;
         }
-        const bruto = cru ? String(cru).trim() : '';
-        if (!bruto) return '';
-        const achado = ESTAGIOS.find(e => e.toLowerCase() === bruto.toLowerCase());
-        return achado || bruto;
+
+        return estagioDerivadoDaImpressao(m);
+    }
+
+    /**
+     * O estágio de partida, lido do setor anterior.
+     *
+     * Só 'Impresso' conta como impresso. 'Parcial' é meia impressão, e meia
+     * impressão não chegou ao acabamento; 'Revisão' é problema na impressão, e
+     * também não chegou. As duas entram como "Aguardando", que é a verdade do
+     * ponto de vista desta tela.
+     */
+    function estagioDerivadoDaImpressao(m) {
+        const normalizar = fn('normalizarStatusImpressao');
+        const bruto = m.status_impressao || m.impressao || m.status_producao || '';
+        const st = normalizar ? normalizar(bruto) : String(bruto).trim();
+        return String(st).toLowerCase() === 'impresso' ? 'Impresso' : 'Aguardando';
     }
 
     /** O responsável gravado num modelo, pela mesma regra do estágio. */
@@ -198,6 +223,16 @@
         }
         const doMapa = tela.acabamento[String(m.id)];
         return doMapa ? (doMapa.responsavel || '').trim() : '';
+    }
+
+    /** A foto do material tirada na revisão, ou '' se ainda não tiraram. */
+    function fotoDoModelo(m) {
+        if (!m) return '';
+        if (m.acabamento_foto_url !== undefined) {
+            return (m.acabamento_foto_url || '').trim();
+        }
+        const doMapa = tela.acabamento[String(m.id)];
+        return doMapa ? (doMapa.foto || '').trim() : '';
     }
 
     /**
@@ -583,13 +618,14 @@
                 const fatia = numeros.slice(i, i + 200);
                 const { data, error } = await supabaseClient
                     .from('pedidos_modelos')
-                    .select('id, id_int, acabamento_status, acabamento_responsavel')
+                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url')
                     .in('id_int', fatia);
                 if (error) throw error;
                 (data || []).forEach(m => {
                     mapa[String(m.id)] = {
                         status: m.acabamento_status || '',
                         responsavel: m.acabamento_responsavel || '',
+                        foto: m.acabamento_foto_url || '',
                     };
                 });
             }
@@ -643,7 +679,9 @@
 
     function amostraHtml(item, idAmostra) {
         const { src, aprovada } = amostraDoModelo(item);
-        const moldura = 'width: 100%; max-width: 460px; min-height: 150px; border-radius: 10px;'
+        // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
+        // tamanho é a coluna. Pedido do usuário em 20/08/2026.
+        const moldura = 'width: 100%; min-height: 150px; border-radius: 10px;'
             + ' border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);'
             + ' display: flex; align-items: center; justify-content: center;';
 
@@ -666,10 +704,13 @@
             ? 'Amostra aprovada pelo cliente no link — clique para ampliar'
             : 'Arte do modelo — clique para ampliar';
 
+        // SEM fundo branco atras da imagem, por pedido do usuario em
+        // 20/08/2026: a arte ja traz o proprio fundo, e a chapa branca em volta
+        // dela recortava um retangulo claro no meio da caixa escura.
         return `
-            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 460px;">
+            <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
                 <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
-                     style="width: 100%; max-height: 320px; object-fit: contain; background: #ffffff; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); cursor: zoom-in; display: block;"
+                     style="width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; cursor: zoom-in; display: block;"
                      onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
                 <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
             </div>`;
@@ -689,10 +730,13 @@
     }
 
     function selectEstagio(item, osId, podeEditar) {
+        // Sem opção vazia: o estágio sempre tem um valor, nem que seja o
+        // derivado da impressão. Uma linha "— Status —" aqui só serviria para
+        // alguém escolher o nada.
         const atual = estagioDoModelo(item);
-        const opcoes = ['<option value="">— Status —</option>'].concat(
-            ESTAGIOS.map(e => `<option value="${esc(e)}" ${atual === e ? 'selected' : ''}>${esc(e)}</option>`)
-        ).join('');
+        const opcoes = ESTAGIOS
+            .map(e => `<option value="${esc(e)}" ${atual === e ? 'selected' : ''}>${esc(e)}</option>`)
+            .join('');
         return `
             <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
                     onchange="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', this.value)"
@@ -737,6 +781,16 @@
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
+
+    const ESTILO_BOTAO_CAMERA = 'display: inline-flex; align-items: center; gap: 8px;'
+        + ' background: linear-gradient(135deg,#3b82f6,#2563eb); border: 1px solid #93c5fd; color: #ffffff;'
+        + ' border-radius: 8px; padding: 9px 18px; font-size: 0.95rem; font-weight: 800; cursor: pointer;';
+    const ESTILO_BOTAO_CAMERA_OK = 'display: inline-flex; align-items: center; gap: 8px;'
+        + ' background: linear-gradient(135deg,#16a34a,#15803d); border: 1px solid #86efac; color: #ffffff;'
+        + ' border-radius: 8px; padding: 9px 18px; font-size: 0.95rem; font-weight: 800; cursor: pointer;';
+    const ESTILO_BOTAO_CAMERA_FRACO = 'display: inline-flex; align-items: center; gap: 8px;'
+        + ' background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #cbd5e1;'
+        + ' border-radius: 8px; padding: 9px 18px; font-size: 0.95rem; font-weight: 700; cursor: pointer;';
 
     /** Só quem tem EDITAR do módulo Acabamento mexe nos dois seletores. */
     function podeEditar() {
@@ -789,17 +843,17 @@
         return `
             <div style="background: ${fundo}; outline: 1px solid #918f8c; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start;">
 
-                <div style="flex: 0 1 460px; min-width: 260px;">
+                <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%;">
                     ${amostraHtml(item, idAmostra)}
                 </div>
 
-                <div style="flex: 1 1 380px; min-width: 300px; display: flex; flex-direction: column; gap: 14px;">
+                <div style="flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 14px;">
 
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed #918f8c'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
                         <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
                         <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
-                        ${seloDoEstagio(estagio || 'Aguardando')}
+                        ${seloDoEstagio(estagio)}
                     </div>
 
                     <div style="display: flex; gap: 18px; flex-wrap: wrap;">
@@ -823,6 +877,8 @@
                             ${selectResponsavel(item, osId, podeEditar())}
                         </div>
                     </div>
+
+                    ${faixaDaFoto(item, osId, idx)}
 
                 </div>
             </div>`;
@@ -919,6 +975,18 @@
      * texto conforme a origem da linha, e a comparação errada devolve zero
      * linhas em silêncio — por isso a distinção abaixo.
      */
+    // Que chave do mapa da lista corresponde a cada coluna do banco.
+    const CAMPO_NO_MAPA = {
+        acabamento_status: 'status',
+        acabamento_responsavel: 'responsavel',
+        acabamento_foto_url: 'foto',
+    };
+    const NOME_DO_CAMPO = {
+        acabamento_status: 'o status',
+        acabamento_responsavel: 'o responsável',
+        acabamento_foto_url: 'a foto',
+    };
+
     async function gravar(itemId, osId, campo, valor) {
         const s = estado();
         const limpo = (valor || '').trim() || null;
@@ -933,9 +1001,8 @@
 
         // O mapa da lista anda junto: sem isto, voltar para a lista mostraria o
         // estágio anterior até a próxima leitura do banco.
-        const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '' };
-        if (campo === 'acabamento_status') noMapa.status = limpo || '';
-        else noMapa.responsavel = limpo || '';
+        const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '', foto: '' };
+        noMapa[CAMPO_NO_MAPA[campo] || campo] = limpo || '';
         tela.acabamento[String(itemId)] = noMapa;
 
         const num = parseInt(String(osId).replace('vibe_', ''));
@@ -962,9 +1029,334 @@
             console.error(`[acabamento] erro ao gravar ${campo}:`, e);
             const aviso = fn('toast');
             if (aviso) {
-                aviso(`Não deu para gravar ${campo === 'acabamento_status' ? 'o status' : 'o responsável'} `
+                aviso(`Não deu para gravar ${NOME_DO_CAMPO[campo] || campo} `
                     + `deste modelo (${e && e.message ? e.message : e}). Tente de novo.`, 'error');
             }
+        }
+    }
+
+    // ─── A foto do material ─────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 20/08/2026: uma câmera em cada modelo, que abre a
+    // webcam da estação, tira a foto e guarda no bucket. É o registro do que o
+    // revisor viu — a amostra aprovada de um lado, o papel que saiu do outro.
+
+    const BUCKET_DA_FOTO = 'artes';
+    const PASTA_DA_FOTO = 'acabamento-fotos';
+
+    // Lado maior da foto guardada. 1600 px chega para ler tipografia miúda numa
+    // credencial e mantém o arquivo em algumas centenas de KB — a estação sobe
+    // isso pela internet da gráfica sem o operador esperar na frente da tela.
+    const LADO_MAXIMO = 1600;
+
+    function faixaDaFoto(item, osId, idx) {
+        const foto = fotoDoModelo(item);
+        const idFoto = `acab-foto-${escJs(osId)}-${escJs(item.id)}-${idx}`;
+        const pode = podeEditar();
+
+        const botao = `
+            <button type="button" ${pode ? '' : 'disabled'}
+                    onclick="AcabamentoPainel.abrirCamera('${escJs(item.id)}', '${escJs(osId)}')"
+                    title="${pode ? 'Abrir a câmera e fotografar o material' : 'Você tem apenas permissão de ver'}"
+                    style="display: inline-flex; align-items: center; gap: 8px; background: rgba(59,130,246,0.14);
+                           border: 1px solid rgba(59,130,246,0.45); color: #93c5fd; border-radius: 8px;
+                           padding: 8px 14px; font-size: 0.9rem; font-weight: 700;
+                           cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
+                <span style="font-size: 1.15rem;">📷</span> ${foto ? 'Refazer foto' : 'Fotografar'}
+            </button>`;
+
+        const miniatura = foto
+            ? `<img id="${idFoto}" src="${esc(foto)}" alt="Foto do acabamento"
+                    onclick="AcabamentoPainel.ampliar('${idFoto}')"
+                    title="Foto do material — clique para ampliar"
+                    style="height: 74px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); cursor: zoom-in; display: block;" />`
+            : `<span style="font-size: 0.76rem; color: var(--text-dim);">Nenhuma foto do material ainda.</span>`;
+
+        return `
+            <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+                        border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 12px;">
+                <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; width: 100%;">Foto do material</span>
+                ${botao}
+                ${miniatura}
+            </div>`;
+    }
+
+    // ─── A câmera ───────────────────────────────────────────────────────────
+    //
+    // ## Duas coisas que mordem, e o que fazemos com elas
+    //
+    // 1. **A webcam só abre em contexto seguro.** `https://…` e `127.0.0.1`
+    //    valem; o painel servido por IP da LAN em `http://` NÃO vale, e o
+    //    navegador nem pergunta — `navigator.mediaDevices` simplesmente não
+    //    existe. Sem tratar isso, o botão viraria um botão que não faz nada.
+    //
+    // 2. **A câmera pede permissão**, uma vez por navegador e endereço. Se
+    //    alguém negar, não há como pedir de novo por código.
+    //
+    // Para os dois casos existe a mesma saída, e ela NÃO depende de configurar
+    // navegador nenhum: escolher um arquivo. No celular isso abre a câmera do
+    // aparelho; no computador, o seletor de arquivos. A foto entra pelo mesmo
+    // caminho e vai para o mesmo lugar.
+
+    const camera = { fluxo: null, itemId: null, osId: null, blob: null, urlPrevia: '' };
+
+    function montarCamera() {
+        let caixa = document.getElementById('acab-camera');
+        if (caixa) return caixa;
+
+        caixa = document.createElement('div');
+        caixa.id = 'acab-camera';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100001; display: none;'
+            + ' align-items: center; justify-content: center; background: rgba(2,6,23,0.94); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(920px, 96vw); background: #0f172a; border: 1px solid rgba(255,255,255,0.2);
+                        border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <strong style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>
+                    <span id="acab-camera-modelo" style="color: #94a3b8; font-size: 0.88rem;"></span>
+                    <button type="button" id="acab-camera-fechar"
+                            style="margin-left: auto; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px; font-weight: 700; cursor: pointer;">✕ Fechar</button>
+                </div>
+
+                <div style="background: #000000; border-radius: 8px; overflow: hidden; min-height: 240px;
+                            display: flex; align-items: center; justify-content: center;">
+                    <video id="acab-camera-video" autoplay playsinline muted
+                           style="width: 100%; max-height: 58vh; object-fit: contain; display: none;"></video>
+                    <img id="acab-camera-previa" alt="Prévia da foto"
+                         style="width: 100%; max-height: 58vh; object-fit: contain; display: none;" />
+                    <div id="acab-camera-recado" style="color: #cbd5e1; font-size: 0.9rem; text-align: center; padding: 24px; line-height: 1.5;"></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <button type="button" id="acab-camera-tirar" style="${ESTILO_BOTAO_CAMERA}; display: none;">📸 Fotografar</button>
+                    <button type="button" id="acab-camera-repetir" style="${ESTILO_BOTAO_CAMERA_FRACO}; display: none;">↺ Repetir</button>
+                    <button type="button" id="acab-camera-salvar" style="${ESTILO_BOTAO_CAMERA_OK}; display: none;">💾 Salvar foto</button>
+
+                    <label id="acab-camera-arquivo-rotulo" style="${ESTILO_BOTAO_CAMERA_FRACO}; margin: 0;">
+                        🗂️ Escolher arquivo
+                        <input type="file" id="acab-camera-arquivo" accept="image/*" capture="environment" style="display: none;" />
+                    </label>
+                    <span id="acab-camera-estado" style="color: #94a3b8; font-size: 0.85rem; margin-left: auto;"></span>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        document.getElementById('acab-camera-fechar').onclick = fecharCamera;
+        document.getElementById('acab-camera-tirar').onclick = fotografar;
+        document.getElementById('acab-camera-repetir').onclick = repetirFoto;
+        document.getElementById('acab-camera-salvar').onclick = salvarFoto;
+        document.getElementById('acab-camera-arquivo').onchange = escolherArquivo;
+        // Clique NO FUNDO fecha; clique dentro da caixa não. Sem esta distinção,
+        // apertar "Fotografar" fecharia a janela junto.
+        caixa.onclick = ev => { if (ev.target === caixa) fecharCamera(); };
+        document.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape' && caixa.style.display === 'flex') fecharCamera();
+        });
+        return caixa;
+    }
+
+    function mostrarBotoesDaCamera(quais) {
+        [['acab-camera-tirar', 'tirar'], ['acab-camera-repetir', 'repetir'],
+         ['acab-camera-salvar', 'salvar']].forEach(([id, chave]) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = quais.indexOf(chave) !== -1 ? 'inline-flex' : 'none';
+        });
+    }
+
+    function recadoDaCamera(texto) {
+        const el = document.getElementById('acab-camera-recado');
+        if (el) {
+            el.innerHTML = texto || '';
+            el.style.display = texto ? 'block' : 'none';
+        }
+    }
+
+    function estadoDaCamera(texto) {
+        const el = document.getElementById('acab-camera-estado');
+        if (el) el.textContent = texto || '';
+    }
+
+    async function abrirCamera(itemId, osId) {
+        if (!podeEditar()) return;
+
+        camera.itemId = itemId;
+        camera.osId = osId;
+        camera.blob = null;
+
+        const caixa = montarCamera();
+        caixa.style.display = 'flex';
+        estadoDaCamera('');
+
+        const s = estado();
+        const item = ((s.osItens && s.osItens[osId]) || []).find(i => String(i.id) === String(itemId));
+        const rotulo = document.getElementById('acab-camera-modelo');
+        if (rotulo) rotulo.textContent = item ? (item.produto || item.nome_modelo || '') : '';
+
+        const video = document.getElementById('acab-camera-video');
+        const previa = document.getElementById('acab-camera-previa');
+        previa.style.display = 'none';
+        video.style.display = 'none';
+        mostrarBotoesDaCamera([]);
+        recadoDaCamera('Abrindo a câmera…');
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            // Quase sempre isto: painel aberto por um endereço `http://` que não
+            // é `localhost`. A saída está escrita na tela, e não numa
+            // configuração do navegador.
+            recadoDaCamera('Este navegador não abre a câmera neste endereço.<br>'
+                + 'A câmera exige um endereço <strong>https</strong> ou a própria estação '
+                + '(<strong>127.0.0.1</strong>).<br><br>'
+                + 'Use <strong>Escolher arquivo</strong> aqui embaixo — no celular ele abre a câmera do aparelho.');
+            return;
+        }
+
+        try {
+            camera.fluxo = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                audio: false,
+            });
+            video.srcObject = camera.fluxo;
+            await video.play();
+            recadoDaCamera('');
+            video.style.display = 'block';
+            mostrarBotoesDaCamera(['tirar']);
+        } catch (e) {
+            console.warn('[acabamento] câmera não abriu:', e);
+            const nome = e && e.name ? e.name : '';
+            const motivo = nome === 'NotAllowedError'
+                ? 'A câmera está bloqueada para este endereço.'
+                : (nome === 'NotFoundError' || nome === 'OverconstrainedError'
+                    ? 'Nenhuma câmera foi encontrada nesta máquina.'
+                    : 'Não deu para abrir a câmera.');
+            recadoDaCamera(motivo + '<br><br>Use <strong>Escolher arquivo</strong> aqui embaixo — '
+                + 'a foto entra pelo mesmo caminho.');
+        }
+    }
+
+    function desligarCamera() {
+        const video = document.getElementById('acab-camera-video');
+        if (video) { video.srcObject = null; video.style.display = 'none'; }
+        if (camera.fluxo) {
+            camera.fluxo.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+            camera.fluxo = null;
+        }
+    }
+
+    function fecharCamera() {
+        desligarCamera();
+        if (camera.urlPrevia) {
+            try { URL.revokeObjectURL(camera.urlPrevia); } catch (e) {}
+            camera.urlPrevia = '';
+        }
+        camera.blob = null;
+        camera.itemId = null;
+        camera.osId = null;
+        const caixa = document.getElementById('acab-camera');
+        if (caixa) caixa.style.display = 'none';
+    }
+
+    /** Encolhe para o lado máximo e devolve um JPEG. */
+    function paraJpeg(fonte, larguraNatural, alturaNatural) {
+        const maior = Math.max(larguraNatural, alturaNatural) || 1;
+        const escala = maior > LADO_MAXIMO ? LADO_MAXIMO / maior : 1;
+        const tela2d = document.createElement('canvas');
+        tela2d.width = Math.round(larguraNatural * escala);
+        tela2d.height = Math.round(alturaNatural * escala);
+        tela2d.getContext('2d').drawImage(fonte, 0, 0, tela2d.width, tela2d.height);
+        return new Promise(resolve => tela2d.toBlob(resolve, 'image/jpeg', 0.85));
+    }
+
+    function mostrarPrevia(blob) {
+        camera.blob = blob;
+        if (camera.urlPrevia) { try { URL.revokeObjectURL(camera.urlPrevia); } catch (e) {} }
+        camera.urlPrevia = URL.createObjectURL(blob);
+        const previa = document.getElementById('acab-camera-previa');
+        previa.src = camera.urlPrevia;
+        previa.style.display = 'block';
+        const video = document.getElementById('acab-camera-video');
+        if (video) video.style.display = 'none';
+        recadoDaCamera('');
+        mostrarBotoesDaCamera(['repetir', 'salvar']);
+        estadoDaCamera(`${Math.round(blob.size / 1024)} KB`);
+    }
+
+    async function fotografar() {
+        const video = document.getElementById('acab-camera-video');
+        if (!video || !video.videoWidth) return;
+        const blob = await paraJpeg(video, video.videoWidth, video.videoHeight);
+        if (!blob) return;
+        // A câmera é desligada assim que a foto existe: deixar a luz da webcam
+        // acesa enquanto o operador decide se salva é desconfortável, e não
+        // serve para nada — repetir religa.
+        desligarCamera();
+        mostrarPrevia(blob);
+    }
+
+    function repetirFoto() {
+        const previa = document.getElementById('acab-camera-previa');
+        if (previa) previa.style.display = 'none';
+        camera.blob = null;
+        estadoDaCamera('');
+        abrirCamera(camera.itemId, camera.osId);
+    }
+
+    function escolherArquivo(ev) {
+        const arquivo = ev.target && ev.target.files && ev.target.files[0];
+        ev.target.value = '';   // escolher o MESMO arquivo de novo tem de disparar
+        if (!arquivo) return;
+        const img = new Image();
+        img.onload = async () => {
+            const blob = await paraJpeg(img, img.naturalWidth, img.naturalHeight);
+            URL.revokeObjectURL(img.src);
+            if (blob) { desligarCamera(); mostrarPrevia(blob); }
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(img.src);
+            recadoDaCamera('Este arquivo não é uma imagem que o navegador consiga abrir.');
+        };
+        img.src = URL.createObjectURL(arquivo);
+    }
+
+    async function salvarFoto() {
+        if (!camera.blob || !camera.itemId) return;
+        const itemId = camera.itemId;
+        const osId = camera.osId;
+
+        estadoDaCamera('Enviando…');
+        mostrarBotoesDaCamera([]);
+
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('sem conexão com o banco');
+            }
+            const buscar = fn('findOSInState');
+            const os = buscar ? buscar(osId) : null;
+            const pedido = os ? os.numero : 'sem-pedido';
+            // Nome novo a cada foto: o anterior fica no bucket. Sobrescrever
+            // seria mais limpo e mais arriscado — duas estações revisando o
+            // mesmo pedido apagariam a foto uma da outra.
+            const caminho = `${PASTA_DA_FOTO}/${pedido}_${itemId}_${Date.now()}.jpg`;
+
+            const { error: erroUpload } = await supabaseClient.storage
+                .from(BUCKET_DA_FOTO)
+                .upload(caminho, camera.blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+            if (erroUpload) throw erroUpload;
+
+            const { data } = supabaseClient.storage.from(BUCKET_DA_FOTO).getPublicUrl(caminho);
+            const url = data && data.publicUrl;
+            if (!url) throw new Error('o Storage não devolveu o endereço da foto');
+
+            await gravar(itemId, osId, 'acabamento_foto_url', url);
+            fecharCamera();
+            const aviso = fn('toast');
+            if (aviso) aviso('Foto do material guardada.', 'success');
+        } catch (e) {
+            console.error('[acabamento] falha ao guardar a foto:', e);
+            estadoDaCamera('');
+            mostrarBotoesDaCamera(['repetir', 'salvar']);
+            recadoDaCamera('Não deu para guardar a foto: ' + esc(e && e.message ? e.message : String(e))
+                + '<br>A foto continua aqui — tente Salvar de novo.');
         }
     }
 
@@ -988,7 +1380,7 @@
                 + ' padding: 24px; cursor: zoom-out;';
             overlay.innerHTML = `
                 <img id="acab-lightbox-img" alt="Amostra ampliada"
-                     style="width: 90vw; height: 84vh; object-fit: contain; background: #ffffff; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);" />
+                     style="width: 90vw; height: 84vh; object-fit: contain; border-radius: 10px;" />
                 <button type="button" title="Fechar (Esc)"
                         style="position: absolute; top: 14px; right: 18px; z-index: 1; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35); color: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 1rem; font-weight: 700; cursor: pointer;">✕ Fechar</button>`;
             overlay.addEventListener('click', fecharLightbox);
@@ -1066,6 +1458,7 @@
         },
 
         fecharPedido() {
+            fecharCamera();
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -1081,6 +1474,9 @@
 
         ampliar,
 
+        abrirCamera,
+        fecharCamera,
+
         /** Chamado quando a tela é aberta pelo menu. */
         aoAbrir() {
             mostrarLista();
@@ -1095,7 +1491,11 @@
         _regras: {
             ehDeProducao,
             estagioDoModelo,
+            estagioDerivadoDaImpressao,
             responsavelDoModelo,
+            fotoDoModelo,
+            BUCKET_DA_FOTO,
+            PASTA_DA_FOTO,
             estagioDoPedido,
             amostraDoModelo,
             ehPdf,

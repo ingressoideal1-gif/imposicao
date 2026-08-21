@@ -96,7 +96,7 @@ documentada em [`lista_de_arte.md`](lista_de_arte.md).
 |--------|-----------|--------|
 | `pedidos_artes` | Arquivos e estado da arte de cada pedido | ✅ Criado |
 | `pedidos_links_cliente` | Links públicos de aprovação do cliente | ✅ Criado |
-| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel`) | ✅ Criado |
+| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel` / `acabamento_foto_url`) | ✅ Criado |
 
 ## ⏳ Tabelas Operacionais/Runtime (Postergadas para Próxima Fase)
 

@@ -13,9 +13,15 @@ mesmos filtros, mesma lista — com tres diferencas que estes testes protegem:
    contra o que foi aprovado. Amostra em PDF continua saindo como atalho para o
    arquivo: rasterizar a arte do cliente esta fora de cogitacao neste projeto.
 
-3. **Campos proprios no banco.** `acabamento_status` e `acabamento_responsavel`
-   sao colunas novas de `pedidos_modelos`. O `status_impressao`, que e do setor
-   de impressao, nao e tocado — sao dois setores com dois vocabularios.
+3. **Campos proprios no banco.** `acabamento_status`, `acabamento_responsavel` e
+   `acabamento_foto_url` sao colunas novas de `pedidos_modelos`. O
+   `status_impressao`, que e do setor de impressao, e LIDO para derivar o
+   estagio de partida e nunca escrito — sao dois setores com dois vocabularios.
+
+4. **A foto do material** (20/08/2026, segunda rodada). Um botao de camera por
+   modelo abre a webcam da estacao; a foto vai para o bucket `artes`, prefixo
+   `acabamento-fotos/`. Bucket novo com escrita anonima ja falhou neste projeto
+   antes, e ha teste travando essa escolha.
 
 O grosso das regras e medido pelo harness em Node, que executa o
 `frontend/acabamento.js` de verdade. O que fica aqui e a LIGACAO: a tela existe
@@ -63,9 +69,11 @@ def test_o_menu_e_a_tela_existem_no_painel():
                    "prod-side-metrics", "prod-metric-card", "prod-sectors-grid"):
         assert classe in secao, "a tela do acabamento nao usa " + classe
 
-    # Os tres estagios pedidos, nos filtros da coluna lateral.
-    for estagio in ("Impresso", "Em acabamento", "Revisado"):
-        assert estagio in secao, "o estagio " + estagio + " nao aparece na tela"
+    # Os quatro estagios, nos filtros da coluna lateral.
+    for estagio in ("Aguardando", "Impresso", "Em acabamento", "Revisado"):
+        assert "setFiltroStatus('" + estagio + "')" in secao, (
+            "o estagio " + estagio + " nao da para filtrar na coluna lateral"
+        )
 
 
 def test_a_tela_do_acabamento_nao_fala_com_o_agente_nem_com_a_impressora():
@@ -201,3 +209,48 @@ def test_a_tela_nova_nao_mexeu_no_painel_de_producao():
     assert "id=\"tbody-impressao\"" in _ler("frontend/index.html"), (
         "a tabela do Painel de Producao mudou de id"
     )
+
+
+def test_o_sql_da_foto_cria_a_coluna_e_nao_cria_bucket():
+    """A foto do material, pedida em 20/08/2026 depois de o usuario ver a tela.
+
+    Bucket novo com escrita anonima ja foi tentado neste projeto e nao
+    funcionou -- `sql/criar_bucket_previews.sql` comeca com "NAO EXECUTE ESTE
+    ARQUIVO". A saida de la, e a daqui, e usar o `artes` com um prefixo.
+    """
+    sql = _ler("sql/acabamento_foto_do_modelo.sql")
+
+    assert "ALTER TABLE pedidos_modelos" in sql
+    assert "acabamento_foto_url" in sql
+    for proibido in ("create bucket", "insert into storage.buckets", "create policy"):
+        assert proibido not in sql.lower(), (
+            "o SQL da foto nao deve criar bucket nem politica: achei " + proibido
+        )
+
+    js = _ler("frontend/acabamento.js")
+    assert "const BUCKET_DA_FOTO = 'artes';" in js, "a foto tem de ir para o bucket artes"
+    assert "const PASTA_DA_FOTO = 'acabamento-fotos';" in js, "num prefixo proprio"
+
+
+def test_a_camera_tem_saida_que_nao_depende_do_navegador():
+    """Regra do usuario: nenhuma solucao pode depender de configuracao de
+    navegador -- cada estacao da grafica usa um.
+
+    A camera pede permissao, e isso e inerente a qualquer webcam. O que NAO pode
+    faltar e a outra porta: escolher um arquivo, que no celular abre a camera do
+    aparelho e no computador o seletor de arquivos, sem permissao nenhuma.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    assert 'type="file"' in js, "falta a saida por arquivo"
+    assert 'accept="image/*"' in js
+    assert "Escolher arquivo" in js, "a saida precisa estar escrita na tela"
+
+    # E a tela explica o caso do endereco sem https, em vez de virar um botao
+    # que nao faz nada.
+    assert "navigator.mediaDevices" in js
+    assert "127.0.0.1" in js, "a tela diz em que endereco a camera funciona"
+
+    # A camera e desligada: webcam acesa depois de fechar a janela e defeito.
+    assert "desligarCamera" in js
+    assert "t.stop()" in js, "as trilhas da camera precisam ser paradas"

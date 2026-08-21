@@ -4,7 +4,38 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v664** — 2026-08-20 | Agente **1.2.158**
+## Versão atual: **v665** — 2026-08-20 | Agente **1.2.159**
+
+---
+
+## [v665 — 2026-08-20] — Acabamento: a foto do material, e o estágio que nasce certo
+
+Cinco ajustes pedidos depois de o usuário ver a tela do Painel do Acabamento rodando.
+
+**A foto do material.** Cada modelo ganhou um botão de câmera. Ele abre a webcam da estação,
+fotografa, e a imagem vai para o Storage — bucket `artes`, prefixo `acabamento-fotos/` —, com o
+endereço em `pedidos_modelos.acabamento_foto_url`. A miniatura fica na caixa do modelo e amplia no
+mesmo lightbox da amostra. É o registro do que o revisor viu: a amostra aprovada de um lado, o
+papel que saiu do outro.
+
+> Bucket novo com escrita anônima **já foi tentado neste projeto e não funcionou** —
+> `sql/criar_bucket_previews.sql` começa com "NÃO EXECUTE ESTE ARQUIVO". Por isso a foto vai no
+> `artes`, com prefixo, exatamente como os previews de numeração. Conferido política por política
+> no banco antes de escrever o código.
+
+A câmera exige contexto seguro (`https` ou `127.0.0.1`) e permissão do navegador — as duas coisas
+são inerentes a qualquer webcam. Para as duas há a mesma saída, escrita na tela e **sem depender de
+configurar navegador nenhum**: *Escolher arquivo*, que no celular abre a câmera do aparelho. A foto
+entra pelo mesmo caminho.
+
+**O estágio nasce certo.** Entrou "Aguardando" como quarto estágio, e a opção vazia *"— Status —"*
+saiu. Modelo já impresso aparece como **Impresso**; o que ainda não saiu da impressora aparece como
+**Aguardando**, com a caixa em **marrom**. É derivação do `status_impressao`, nunca gravação — a
+coluna segue nula até alguém escolher, e a escolha vence o derivado a partir daí.
+
+**A caixa dividida ao meio**: amostra de um lado, informações do outro. E **saiu a chapa branca**
+atrás das imagens, na caixa e no lightbox — a arte traz o próprio fundo, e o retângulo claro
+recortava um buraco no meio da caixa escura.
 
 ---
 
