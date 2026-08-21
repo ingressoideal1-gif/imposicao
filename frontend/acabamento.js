@@ -1129,11 +1129,21 @@
         return (typeof window !== 'undefined') && window.SERVIDA_PELA_NUVEM === false;
     }
 
-    function urlDoPeso(numeroDoPedido) {
+    /**
+     * O endereço de uma rota do agente.
+     *
+     * Um lugar só monta o `API_BASE_URL`, e há teste contando: esta tela fala
+     * com o agente por estas três rotas e por mais nenhuma.
+     */
+    function urlDaEstacao(rota, numeroDoPedido) {
         let base = '';
         if (typeof API_BASE_URL !== 'undefined') base = API_BASE_URL;
         else if (typeof window !== 'undefined' && window.API_BASE_URL) base = window.API_BASE_URL;
-        return `${base}/api/peso-setores/${encodeURIComponent(numeroDoPedido)}`;
+        return `${base}/api/${rota}/${encodeURIComponent(numeroDoPedido)}`;
+    }
+
+    function urlDoPeso(numeroDoPedido) {
+        return urlDaEstacao('peso-setores', numeroDoPedido);
     }
 
     /** O `fetch` da janela, e não o global: é o que o teste consegue trocar. */
@@ -1231,6 +1241,7 @@
                 peso: l.peso_real_kg === null || l.peso_real_kg === undefined
                     ? null : Number(l.peso_real_kg),
                 existe: true,
+                producao: (l.status_producao || '').trim(),
             };
         });
 
@@ -1244,7 +1255,7 @@
             if (!(await temSessaoDoSupabase())) return;
             const { data, error } = await supabaseClient
                 .from(TABELA_DE_SETORES)
-                .select('id, setor, peso_real_kg')
+                .select('id, setor, peso_real_kg, status_producao')
                 .eq('id_int', idInt);
             if (error) throw error;
             guardar(data);
@@ -1275,8 +1286,8 @@
             return;
         }
 
-        const antes = tela.pesos[alvo] || { peso: null, existe: false };
-        tela.pesos[alvo] = { peso, existe: antes.existe };
+        const antes = tela.pesos[alvo] || { peso: null, existe: false, producao: '' };
+        tela.pesos[alvo] = { peso, existe: antes.existe, producao: antes.producao };
         marcarPeso(alvo, 'gravando');
 
         try {
@@ -1297,7 +1308,7 @@
                     } catch (ignorado) { /* resposta sem JSON: fica o código */ }
                     throw new Error(detalhe);
                 }
-                tela.pesos[alvo] = { peso, existe: true };
+                tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
                 marcarPeso(alvo, 'gravado');
                 return;
             }
@@ -1346,7 +1357,7 @@
                 }
             }
 
-            tela.pesos[alvo] = { peso, existe: true };
+            tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
             marcarPeso(alvo, 'gravado');
         } catch (e) {
             console.error('[acabamento] erro ao gravar o peso:', e);
@@ -1456,8 +1467,264 @@
         return `
             <div style="background: ${AZUL.superficie}; border: 1px solid ${AZUL.fio};
                         border-radius: 10px; overflow: hidden; margin-bottom: 14px;">
-                ${cabecalho}${miolo}
+                ${cabecalho}
+                <div style="display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap;">
+                    <div style="flex: 1 1 420px; min-width: 0;">${miolo}</div>
+                    ${botaoDeExpedicao(itens, numeroDoPedido)}
+                </div>
             </div>`;
+    }
+
+    /**
+     * O botão EXPEDIÇÃO, à direita do peso.
+     *
+     * Ele NÃO fica escondido quando o pedido não está pronto, e isso é de
+     * propósito: apagado e clicável, ele responde o que falta. Escondido, o
+     * operador ficaria procurando um botão que a tela não mostra.
+     */
+    function botaoDeExpedicao(itens, numeroDoPedido) {
+        const pronto = pedidoProntoParaExpedicao(itens);
+        const pendentes = setoresPendentes(itens);
+        const pode = podeEditar();
+
+        const cor = pronto && pode
+            ? `background: linear-gradient(135deg, ${'#4a61e8'}, ${'#120a8f'}); border-color: ${'#4cc8f0'}; color: #ffffff;`
+            : `background: rgba(43,50,175,0.35); border-color: rgba(76,205,246,0.20); color: #7fa9d4;`;
+
+        const explicacao = !pode
+            ? 'Você tem apenas permissão de ver'
+            : (pronto
+                ? 'Mandar este pedido para a expedição'
+                : 'Clique para ver o que ainda falta');
+
+        const rodape = pronto
+            ? `<span style="font-size: 0.72rem; color: ${'#4cc8f0'};">todos os modelos prontos</span>`
+            : `<span style="font-size: 0.72rem; color: #7fa9d4;">${
+                  pendentes.length === 1 ? '1 setor pendente' : `${pendentes.length} setores pendentes`
+               }</span>`;
+
+        return `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        gap: 6px; padding: 12px 16px; border-left: 1px solid rgba(76,205,246,0.16);">
+                <button type="button" id="acab-btn-expedicao"
+                        onclick="AcabamentoPainel.expedir('${escJs(tela.pedidoAberto)}')"
+                        title="${esc(explicacao)}"
+                        style="${cor} border-width: 1px; border-style: solid; border-radius: 8px;
+                               padding: 12px 22px; font-size: 0.95rem; font-weight: 800;
+                               letter-spacing: 0.06em; cursor: pointer; white-space: nowrap;">
+                    📦 EXPEDIÇÃO
+                </button>
+                ${rodape}
+            </div>`;
+    }
+
+    // ─── A expedição ────────────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 21/08/2026, no mesmo box do peso:
+    //
+    //  - um botão **EXPEDIÇÃO**, à direita, que só fica ativo quando TODOS os
+    //    modelos de TODOS os setores do pedido estão em "Pronto";
+    //  - clicado antes disso, ele diz QUAIS setores ainda têm modelo pendente;
+    //  - e, à parte do botão, cada setor recebe **CONCLUIDO** em
+    //    `propostas_os_setores.status_producao` assim que o último modelo dele
+    //    fica pronto — mesmo com os outros setores ainda trabalhando.
+    //
+    // Quem decide se terminou é esta tela, que conhece os modelos. O servidor só
+    // grava: é ele que conhece o `CHECK` da coluna e que não pisa no que o ERP
+    // escreveu (ver `_compartilhado/pesos.ts`).
+
+    const SETOR_SEM_NOME = '(sem setor)';
+
+    /** Os modelos do pedido agrupados por setor, na ordem dos cards. */
+    function modelosPorSetor(itens) {
+        const grupos = {};
+        (itens || []).forEach(i => {
+            const s = normalizar(i && i.setor);
+            const chave = SETORES_DO_BANCO.indexOf(s) !== -1 ? s : SETOR_SEM_NOME;
+            (grupos[chave] = grupos[chave] || []).push(i);
+        });
+        const ordem = SETORES_DO_BANCO.filter(s => grupos[s]);
+        if (grupos[SETOR_SEM_NOME]) ordem.push(SETOR_SEM_NOME);
+        return ordem.map(setor => ({
+            setor,
+            modelos: grupos[setor],
+            faltam: grupos[setor].filter(m => estagioDoModelo(m) !== 'Pronto').length,
+        }));
+    }
+
+    /**
+     * Os setores que ainda têm modelo fora do "Pronto".
+     *
+     * Modelo sem setor entra como "(sem setor)" em vez de ser ignorado: ele é
+     * material do pedido do mesmo jeito, e um pedido que sai para a expedição
+     * com um modelo pendente é o erro caro desta tela.
+     */
+    function setoresPendentes(itens) {
+        return modelosPorSetor(itens).filter(g => g.faltam > 0);
+    }
+
+    function pedidoProntoParaExpedicao(itens) {
+        return (itens || []).length > 0 && setoresPendentes(itens).length === 0;
+    }
+
+    /** O rótulo do setor como o operador o vê nos cards. */
+    function nomeDoSetor(setor) {
+        const r = ROTULO_DO_SETOR[setor];
+        return r ? r.nome : setor;
+    }
+
+    /**
+     * Põe (ou tira) o CONCLUIDO do setor daquele modelo, depois de uma gravação.
+     *
+     * Chamado do `gravar`, e só quando o campo mexido foi o estágio. Falha aqui
+     * não desfaz a escolha do operador: o estágio já está gravado, e o carimbo é
+     * consequência — por isso o erro vira aviso, e não desfaz nada.
+     */
+    async function sincronizarConclusaoDoSetor(osId, setorDoModelo) {
+        const setor = normalizar(setorDoModelo);
+        if (SETORES_DO_BANCO.indexOf(setor) === -1) return;
+
+        const s = estado();
+        const os = (s.ordens || []).find(o => String(o.id) === String(osId));
+        if (!os) return;
+        const idInt = parseInt(os.numero);
+        if (isNaN(idInt)) return;
+
+        const grupo = modelosPorSetor(modelosDoPedido(os)).find(g => g.setor === setor);
+        if (!grupo) return;
+        const concluido = grupo.faltam === 0;
+
+        const jaEstava = ((tela.pesos[setor] || {}).producao || '') === 'CONCLUIDO';
+        if (concluido === jaEstava) return;   // nada mudou: não incomoda o banco
+
+        try {
+            if (pelaEstacao()) {
+                const res = await buscar(urlDoSetorConcluido(idInt), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ setor, concluido }),
+                });
+                if (!res.ok) throw new Error(await motivoDaResposta(res));
+            } else {
+                await concluirSetorDireto(idInt, setor, concluido);
+            }
+            const atual = tela.pesos[setor] || { peso: null, existe: false };
+            atual.producao = concluido ? 'CONCLUIDO' : 'EM ACABAMENTO';
+            tela.pesos[setor] = atual;
+        } catch (e) {
+            console.error('[acabamento] erro ao carimbar o setor:', e);
+            avisar(`O estágio foi gravado, mas não deu para marcar o setor `
+                 + `${nomeDoSetor(setor)} como concluído (${e && e.message ? e.message : e}).`,
+                   'warning');
+        }
+    }
+
+    /**
+     * O carimbo do setor pelo caminho da nuvem.
+     *
+     * A regra de quando desfazer mora na Edge Function, e aqui ela é repetida
+     * porque este caminho não passa por lá: só descarimba o que está EXATAMENTE
+     * em CONCLUIDO, para não apagar o que o ERP escreveu.
+     */
+    async function concluirSetorDireto(idInt, setor, concluido) {
+        if (!(await temSessaoDoSupabase())) {
+            throw new Error('esta tela está sem sessão do Vibe');
+        }
+        const agora = new Date().toISOString();
+        const consulta = supabaseClient.from(TABELA_DE_SETORES)
+            .update({
+                status_producao: concluido ? 'CONCLUIDO' : 'EM ACABAMENTO',
+                status_producao_em: agora,
+                updated_at: agora,
+            })
+            .eq('id_int', idInt).eq('setor', setor);
+        const { error } = concluido ? await consulta : await consulta.eq('status_producao', 'CONCLUIDO');
+        if (error) throw error;
+    }
+
+    /** O motivo que o servidor deu, ou o código HTTP quando não há corpo. */
+    async function motivoDaResposta(res) {
+        try {
+            const corpo = await res.json();
+            if (corpo && corpo.detail) return corpo.detail;
+        } catch (ignorado) { /* resposta sem JSON */ }
+        return `HTTP ${res.status}`;
+    }
+
+    function urlDoSetorConcluido(numeroDoPedido) {
+        return urlDaEstacao('setor-concluido', numeroDoPedido);
+    }
+
+    function urlDaExpedicao(numeroDoPedido) {
+        return urlDaEstacao('expedicao', numeroDoPedido);
+    }
+
+    /**
+     * Manda o pedido para a expedição.
+     *
+     * O botão só chama isto quando está ativo, mas a conferência é refeita aqui:
+     * quem digitar a função no console passaria direto pelo `disabled`, e o
+     * preço seria um pedido saindo da gráfica com modelo pendente.
+     */
+    async function mandarParaExpedicao(osId) {
+        const s = estado();
+        const os = (s.ordens || []).find(o => String(o.id) === String(osId));
+        if (!os) return;
+        const itens = modelosDoPedido(os);
+        const idInt = parseInt(os.numero);
+
+        const pendentes = setoresPendentes(itens);
+        if (pendentes.length || !itens.length) {
+            avisar(textoDoQueFalta(pendentes, itens), 'warning');
+            return;
+        }
+        if (!podeEditar()) {
+            avisar('Você tem apenas permissão de ver. Peça a quem edita o acabamento.', 'warning');
+            return;
+        }
+
+        const botao = document.getElementById('acab-btn-expedicao');
+        if (botao) { botao.disabled = true; botao.textContent = 'Enviando…'; }
+
+        try {
+            if (pelaEstacao()) {
+                const res = await buscar(urlDaExpedicao(idInt), { method: 'POST' });
+                if (!res.ok) throw new Error(await motivoDaResposta(res));
+            } else {
+                if (!(await temSessaoDoSupabase())) {
+                    throw new Error('esta tela está sem sessão do Vibe');
+                }
+                const { error } = await supabaseClient.from('propostas')
+                    .update({ status_interno: 'EXPEDICAO' })
+                    .eq('id_int', idInt);
+                if (error) throw error;
+            }
+
+            // A tela anda junto: o pedido some da fila do acabamento, que é o
+            // recorte de quem está EM PRODUÇÃO.
+            os.status_interno = 'EXPEDICAO';
+            os.status = 'EXPEDICAO';
+            avisar(`Pedido ${esc(os.numero)} enviado para EXPEDIÇÃO. 📦`, 'success');
+            AcabamentoPainel.fecharPedido();
+        } catch (e) {
+            console.error('[acabamento] erro ao mandar para expedição:', e);
+            avisar(`Não deu para mandar o pedido para a expedição `
+                 + `(${e && e.message ? e.message : e}).`, 'error');
+            renderDetalhe();
+        }
+    }
+
+    /** O que dizer a quem clicou cedo demais. */
+    function textoDoQueFalta(pendentes, itens) {
+        if (!itens || !itens.length) {
+            return 'Este pedido não tem modelo nenhum para conferir.';
+        }
+        const lista = pendentes.map(g => {
+            const quantos = g.faltam === 1 ? '1 modelo' : `${g.faltam} modelos`;
+            return `${nomeDoSetor(g.setor)} (${quantos})`;
+        }).join(', ');
+        return `Ainda não dá para expedir: falta terminar ${lista}. `
+             + 'Um pedido só vai para a expedição com todos os modelos em "Pronto".';
     }
 
     // ─── Gravação ───────────────────────────────────────────────────────────
@@ -1520,6 +1787,13 @@
                 : consulta.eq('id', itemId);
             const { error } = await consulta;
             if (error) throw error;
+
+            // O estágio mudou: o setor daquele modelo pode ter acabado de
+            // terminar (ou de deixar de estar terminado).
+            if (campo === 'acabamento_status') {
+                await sincronizarConclusaoDoSetor(osId, item ? item.setor : '');
+                renderDetalhe();
+            }
         } catch (e) {
             console.error(`[acabamento] erro ao gravar ${campo}:`, e);
             const aviso = fn('toast');
@@ -1991,6 +2265,10 @@
             return gravarPeso(numeroDoPedido, setor, valor);
         },
 
+        expedir(osId) {
+            return mandarParaExpedicao(osId);
+        },
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -2025,6 +2303,11 @@
             pesoParaTexto,
             pelaEstacao,
             urlDoPeso,
+            urlDaEstacao,
+            modelosPorSetor,
+            setoresPendentes,
+            pedidoProntoParaExpedicao,
+            textoDoQueFalta,
             encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
             estagioDerivadoDaImpressao,

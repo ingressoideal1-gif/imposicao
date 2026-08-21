@@ -102,6 +102,8 @@ function montarAmbiente() {
         _osDoBanco: [],            // [{ id, id_int }] -- `propostas_os`
         _pesosGravados: [],        // o que a tela mandou, na ordem
         _erroAoGravarPeso: null,
+        _propostasGravadas: [],    // as escritas em `propostas` (a expedicao)
+        _erroAoExpedir: null,
         _sessao: { user: { id: 'u1' } },   // null = estacao, sem sessao
 
         auth: {
@@ -181,6 +183,19 @@ function montarAmbiente() {
                         // do lado do banco, entao aqui basta devolver a lista.
                         not: () => Promise.resolve({ data: self._encerradosTeste, error: null }),
                     }),
+                    // O envio para a expedicao (21/08/2026): a UNICA escrita
+                    // desta tela na tabela principal do parceiro.
+                    update(payload) {
+                        const filtros = {};
+                        const cadeia = {
+                            eq: (c, v) => { filtros[c] = v; return cadeia; },
+                            then: (res, rej) => {
+                                self._propostasGravadas.push({ payload, filtros: { ...filtros } });
+                                return Promise.resolve({ error: self._erroAoExpedir }).then(res, rej);
+                            },
+                        };
+                        return cadeia;
+                    },
                 };
             }
             return {
@@ -488,19 +503,29 @@ function ambienteComPedidoAberto() {
     // estacao e `anon` -- sem uma porta propria, o campo aceitaria o valor e
     // nada seria gravado.
     //
-    // Entao ha UMA rota, e este teste existe para que continue sendo uma.
-    const rotas = codigo.match(/\/api\/[a-z0-9-]+/g) || [];
-    const distintas = [...new Set(rotas)];
-    ok(distintas.length === 1 && distintas[0] === '/api/peso-setores',
-       'a unica rota de agente no acabamento.js e a do peso', distintas.join(', '));
-    // E o endereco do agente se monta num lugar so. As duas mencoes sao a
-    // leitura do identificador nu e a do `window` -- o mesmo par do `estado()`,
-    // porque `const` no topo de script classico nao vira propriedade de window.
-    const iUrl = codigo.indexOf('function urlDoPeso(');
+    // Entao ha TRES rotas -- peso, carimbo do setor e o envio para a expedicao
+    // --, todas da FICHA DE EXPEDICAO e nenhuma do motor. Este teste existe para
+    // que continuem sendo tres.
+    const ESPERADAS = ['expedicao', 'peso-setores', 'setor-concluido'];
+    const rotas = [...new Set(
+        (codigo.match(/urlDaEstacao\('([a-z0-9-]+)'/g) || [])
+            .map(m => m.replace(/^urlDaEstacao\('/, '').replace(/'$/, ''))
+    )].sort();
+    ok(rotas.join(',') === ESPERADAS.join(','),
+       'as rotas de agente no acabamento.js sao as tres da ficha', rotas.join(','));
+
+    // E o endereco se monta num lugar so: ha UM `/api/` no arquivo inteiro. As
+    // duas mencoes de API_BASE_URL sao a leitura do identificador nu e a do
+    // `window` -- o mesmo par do `estado()`, porque `const` no topo de script
+    // classico nao vira propriedade de window.
+    const iUrl = codigo.indexOf('function urlDaEstacao(');
     const corpoUrl = codigo.slice(iUrl, codigo.indexOf('\n    }', iUrl));
     ok((codigo.match(/API_BASE_URL/g) || []).length ===
        (corpoUrl.match(/API_BASE_URL/g) || []).length,
-       'o endereco do agente so e montado dentro do urlDoPeso');
+       'o endereco do agente so e montado dentro do urlDaEstacao');
+    ok((codigo.match(/\/api\//g) || []).length === 1,
+       'e ha um unico `/api/` no arquivo inteiro',
+       String((codigo.match(/\/api\//g) || []).length));
 
     // E nao escreve no que e da Producao.
     ok(codigo.indexOf('status_impressao:') === -1, 'nunca grava status_impressao');
@@ -870,6 +895,217 @@ async function oErroDoAgenteChegaAoOperador() {
     ok(avisos[0].tipo === 'error', 'como erro');
 }
 
+// ─── 9. A expedicao ─────────────────────────────────────────────────────────
+//
+// Pedido do usuario em 21/08/2026: no mesmo box do peso, a direita, um botao
+// EXPEDICAO que so fica ativo com TODOS os modelos de TODOS os setores em
+// "Pronto"; clicado antes disso, diz quais setores faltam. E, a parte do botao,
+// o setor recebe CONCLUIDO assim que o ULTIMO modelo dele fica pronto.
+
+(function oQueFaltaParaExpedirSaiPorSetor() {
+    const { painel } = montarAmbiente();
+    const { setoresPendentes, pedidoProntoParaExpedicao, modelosPorSetor } = painel._regras;
+
+    const pronto = s => ({ setor: s, acabamento_status: 'Pronto' });
+    const fazendo = s => ({ setor: s, acabamento_status: 'Em acabamento' });
+
+    ok(pedidoProntoParaExpedicao([]) === false, 'pedido sem modelo NAO esta pronto');
+    ok(pedidoProntoParaExpedicao([pronto('PVC')]) === true, 'um setor, tudo pronto');
+    ok(pedidoProntoParaExpedicao([pronto('PVC'), fazendo('LASER')]) === false,
+       'um setor pendente segura o pedido inteiro');
+
+    // O exemplo do usuario: dois setores, um deles atrasado.
+    const mistura = [pronto('PVC'), pronto('PVC'), fazendo('LASER'), pronto('LASER')];
+    const faltando = setoresPendentes(mistura);
+    ok(faltando.length === 1, 'so o setor pendente e listado', String(faltando.length));
+    ok(faltando[0].setor === 'LASER', 'e ele e o Laser', faltando[0].setor);
+    ok(faltando[0].faltam === 1, 'com a conta de quantos modelos faltam', String(faltando[0].faltam));
+
+    // Modelo sem setor NAO some da conta: material do pedido e material do
+    // pedido, e expedir com ele pendente e o erro caro desta tela.
+    const semSetor = [pronto('PVC'), { acabamento_status: 'Aguardando' }];
+    ok(pedidoProntoParaExpedicao(semSetor) === false, 'modelo sem setor tambem segura');
+    ok(setoresPendentes(semSetor)[0].setor === '(sem setor)',
+       'e ele aparece nomeado como "(sem setor)"');
+
+    // A ordem dos grupos e a dos cards, e nao a de chegada.
+    const ordem = modelosPorSetor([fazendo('LASER'), fazendo('FLEXO')]).map(g => g.setor);
+    ok(ordem.join(',') === 'FLEXO,LASER', 'os setores saem na ordem dos cards', ordem.join(','));
+})();
+
+(function oAvisoDizOQueFalta() {
+    const { painel } = montarAmbiente();
+    const { setoresPendentes, textoDoQueFalta } = painel._regras;
+
+    const itens = [
+        { setor: 'PVC', acabamento_status: 'Pronto' },
+        { setor: 'LASER', acabamento_status: 'Aguardando' },
+        { setor: 'LASER', acabamento_status: 'Em acabamento' },
+        { setor: 'FLEXO', acabamento_status: 'Aguardando' },
+    ];
+    const texto = textoDoQueFalta(setoresPendentes(itens), itens);
+
+    ok(texto.indexOf('Flexo') !== -1, 'o aviso nomeia o Flexo', texto);
+    ok(texto.indexOf('Laser') !== -1, 'e o Laser');
+    ok(texto.indexOf('PVC') === -1, 'e NAO nomeia o setor que ja terminou');
+    ok(texto.indexOf('2 modelos') !== -1, 'diz quantos faltam em cada um', texto);
+    ok(texto.indexOf('1 modelo,') !== -1 || texto.indexOf('(1 modelo)') !== -1,
+       'no singular quando e um so', texto);
+
+    ok(textoDoQueFalta([], []).indexOf('nao tem modelo') !== -1 ||
+       textoDoQueFalta([], []).indexOf('não tem modelo') !== -1,
+       'pedido sem modelo tem aviso proprio', textoDoQueFalta([], []));
+})();
+
+async function oBotaoDeExpedicaoSoAcendeComTudoPronto() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
+
+    await amb.painel.abrirPedido('os-200');
+    let html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('EXPEDIÇÃO') !== -1, 'o botao existe mesmo com o pedido pendente');
+    ok(html.indexOf('1 setor pendente') !== -1, 'e ele diz quantos setores faltam', html.slice(0, 0));
+    ok(html.indexOf('AcabamentoPainel.expedir(') !== -1, 'e continua clicavel: e assim que ele explica');
+
+    // Com tudo pronto, ele acende.
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Pronto';
+    amb.painel.render();
+    await amb.painel.abrirPedido('os-200');
+    html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('todos os modelos prontos') !== -1, 'com tudo pronto ele muda de cara');
+}
+
+async function clicarCedoDemaisNaoExpedeENemMente() {
+    const avisos = [];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'LASER';
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Aguardando';
+
+    await amb.painel.abrirPedido('os-200');
+    avisos.length = 0;
+    amb.banco._propostasGravadas.length = 0;
+
+    await amb.painel.expedir('os-200');
+
+    ok(avisos.length === 1, 'houve aviso', String(avisos.length));
+    ok(avisos[0].texto.indexOf('Laser') !== -1, 'dizendo qual setor falta', avisos[0].texto);
+    ok(avisos[0].tipo === 'warning', 'como aviso, e nao como erro');
+    ok(amb.banco._propostasGravadas.length === 0,
+       'e NADA foi gravado no pedido', String(amb.banco._propostasGravadas.length));
+    ok(amb.janela.state.ordens[0].status_interno === 'EM PRODUCAO',
+       'o pedido continua onde estava');
+}
+
+async function comTudoProntoOPedidoVaiParaExpedicao() {
+    const avisos = [];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
+    amb.janela.state.osItens['os-200'].forEach(i => {
+        i.setor = 'PVC';
+        i.acabamento_status = 'Pronto';
+    });
+
+    await amb.painel.abrirPedido('os-200');
+    avisos.length = 0;
+    amb.banco._propostasGravadas.length = 0;
+
+    await amb.painel.expedir('os-200');
+
+    ok(amb.banco._propostasGravadas.length === 1, 'uma gravacao no pedido',
+       String(amb.banco._propostasGravadas.length));
+    const g = amb.banco._propostasGravadas[0];
+    ok(Object.keys(g.payload).join(',') === 'status_interno',
+       'e ela toca SO o status_interno da tabela do parceiro', Object.keys(g.payload).join(','));
+    ok(g.payload.status_interno === 'EXPEDICAO', 'com o valor EXPEDICAO');
+    ok(g.filtros.id_int === 200, 'no pedido certo');
+
+    ok(amb.janela.state.ordens[0].status_interno === 'EXPEDICAO',
+       'a tela anda junto: o pedido sai da fila do acabamento');
+    ok(avisos.some(a => a.tipo === 'success'), 'e o operador e avisado');
+    ok(amb.elementos['acab-detalhe-card'].style.display === 'none',
+       'o detalhe fecha e volta para a lista');
+}
+
+async function oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4, status_producao: null },
+    ];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    // O ULTIMO modelo do setor vira Pronto.
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    const carimbo = amb.banco._pesosGravados.find(
+        g => g.payload && g.payload.status_producao);
+    ok(!!carimbo, 'o setor foi carimbado', JSON.stringify(amb.banco._pesosGravados));
+    ok(carimbo.payload.status_producao === 'CONCLUIDO', 'com CONCLUIDO');
+    ok(carimbo.filtros.setor === 'PVC', 'na linha do setor certo');
+    ok(Object.keys(carimbo.payload).sort().join(',') === 'status_producao,status_producao_em,updated_at',
+       'e so nas tres colunas do carimbo', Object.keys(carimbo.payload).join(','));
+}
+
+async function setorIncompletoNaoGanhaCarimbo() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][1].setor = 'PVC';
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Aguardando';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Aguardando';
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: null, status_producao: null },
+    ];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    // Um dos dois fica pronto: o setor ainda nao terminou.
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Pronto');
+
+    const carimbo = amb.banco._pesosGravados.find(
+        g => g.payload && g.payload.status_producao);
+    ok(!carimbo, 'setor com modelo pendente NAO recebe CONCLUIDO',
+       JSON.stringify(amb.banco._pesosGravados));
+}
+
+async function desmarcarUmModeloTiraOCarimbo() {
+    // Marcar Pronto por engano e corrigir tem de devolver a ficha a verdade.
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => {
+        i.setor = 'PVC';
+        i.acabamento_status = 'Pronto';
+    });
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4, status_producao: 'CONCLUIDO' },
+    ];
+
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Em acabamento');
+
+    const carimbo = amb.banco._pesosGravados.find(
+        g => g.payload && g.payload.status_producao);
+    ok(!!carimbo, 'houve escrita', JSON.stringify(amb.banco._pesosGravados));
+    ok(carimbo.payload.status_producao === 'EM ACABAMENTO',
+       'o setor volta para EM ACABAMENTO, e nao para nulo',
+       carimbo.payload.status_producao);
+    // E o descarimbo so alcanca linha que esta EXATAMENTE em CONCLUIDO.
+    ok(carimbo.filtros.status_producao === 'CONCLUIDO',
+       'e o filtro protege o que o ERP escreveu', JSON.stringify(carimbo.filtros));
+}
+
 // ─── Resultado ──────────────────────────────────────────────────────────────
 
 (function oQueAguardaTemFundoMarrom() {
@@ -1122,6 +1358,13 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await oPesoNaoTocaEmOutraTabela();
     await naEstacaoOPesoSaiPeloAgente();
     await oErroDoAgenteChegaAoOperador();
+
+    await oBotaoDeExpedicaoSoAcendeComTudoPronto();
+    await clicarCedoDemaisNaoExpedeENemMente();
+    await comTudoProntoOPedidoVaiParaExpedicao();
+    await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
+    await setorIncompletoNaoGanhaCarimbo();
+    await desmarcarUmModeloTiraOCarimbo();
 
     if (falhas) {
         console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

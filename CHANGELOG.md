@@ -4,7 +4,51 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v671** — 2026-08-21 | Agente **1.2.165**
+## Versão atual: **v674** — 2026-08-21 | Agente **1.2.168**
+
+---
+
+## [v674 — 2026-08-21] — O botão EXPEDIÇÃO, e o setor que se fecha sozinho
+
+### EXPEDIÇÃO, à direita do peso
+
+No mesmo box, à direita dos campos. **Só fica ativo com todos os modelos de todos os setores
+em "Pronto"** — mas não fica escondido nem travado: apagado, continua clicável, e clicá-lo cedo
+responde *o que falta*, por setor e com a conta de quantos modelos. Um botão escondido faria o
+operador procurar o que a tela não mostra; um travado não explicaria por quê.
+
+Modelo **sem setor** não some dessa conta: aparece como *(sem setor)*. É material do pedido do
+mesmo jeito, e um pedido saindo da gráfica com modelo pendente é o erro caro desta tela.
+
+Com tudo pronto, o botão grava `propostas.status_interno = 'EXPEDICAO'` — estado que o ERP já
+usa, e que o painel já escrevia no botão de liberar para produção. O pedido sai da fila do
+Acabamento na hora.
+
+A conferência é refeita **dentro** da função, e não só no `disabled`: quem digitasse
+`AcabamentoPainel.expedir(...)` no console passaria direto pelo atributo.
+
+### O CONCLUIDO de cada setor, que não depende do botão
+
+Assim que o **último modelo de um setor** fica "Pronto", a linha dele recebe `CONCLUIDO` em
+`propostas_os_setores.status_producao` — mesmo com os outros setores ainda trabalhando. É o que
+deixa o ERP ver o Laser fechado enquanto o PVC continua.
+
+E o contrário: marcou "Pronto" por engano e corrigiu, o setor volta para `EM ACABAMENTO`. Esse
+desfazer é estreito de propósito — só acontece quando o valor atual é **exatamente** `CONCLUIDO`;
+qualquer outra coisa ali foi o ERP quem pôs.
+
+Falha no carimbo não desfaz a escolha do operador: o estágio já está gravado, e o aviso diz as
+duas coisas.
+
+### O que isso custou em exceção ao banco
+
+A exceção de ontem cobria uma coluna; agora cobre a ficha de expedição inteira — `peso_real_kg`,
+`status_producao`, `status_producao_em`, e `propostas.status_interno` **só** para `EXPEDICAO`.
+`prazo`, `hora`, `qtd_volumes`, `tipo_volume` e `responsavel_conferencia` continuam intocados, e
+há teste cobrando cada escrita pelo que ela toca. Está tudo em `docs/REGRAS_BANCO.md`.
+
+As duas rotas novas entram pela mesma porta da estação — `acesso-estacao` com o
+`ACESSO_AGENTE_SEGREDO` —, então esta versão **exige o agente novo**.
 
 ---
 

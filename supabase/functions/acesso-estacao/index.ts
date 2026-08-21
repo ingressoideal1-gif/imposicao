@@ -11,7 +11,8 @@
  *
  * Alem dessas tres, a funcao carrega duas rotas que nao tem nada a ver com
  * publicar faixa e moram aqui porque o CONSUMIDOR e o mesmo -- a estacao, com o
- * mesmo segredo: `acessos-locais`, `fontes` e, desde 21/08/2026, `peso-setores`.
+ * mesmo segredo: `acessos-locais`, `fontes` e, desde 21/08/2026, `peso-setores`,
+ * `setor-concluido` e `expedicao`.
  *
  * ## Por que `verify_jwt = false`, e o que protege no lugar
  *
@@ -47,7 +48,12 @@ import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
-import { gravarPeso, lerPesos } from "../_compartilhado/pesos.ts";
+import {
+  concluirSetor,
+  enviarParaExpedicao,
+  gravarPeso,
+  lerPesos,
+} from "../_compartilhado/pesos.ts";
 import { iguaisEmTempoConstante } from "../_compartilhado/assinatura.ts";
 import {
   inteiro,
@@ -247,6 +253,37 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       return ok({ status: "success", ...r });
     }
     recusaDeRotaDesconhecida(req.method);
+  }
+
+  // O carimbo do setor e o envio para a expedicao (21/08/2026).
+  //
+  // Moram aqui pelo mesmo motivo do peso: quem clica e a estacao, que fala com o
+  // banco como `anon`. `propostas_os_setores` tem RLS de `authenticated`, entao
+  // sem esta porta o carimbo simplesmente nao aconteceria -- e sem erro.
+  //
+  // `propostas` e outra historia: la a politica `Enable read access for all`
+  // e ALL/public/true, e o `anon` ESCREVE. A rota existe assim mesmo, para que
+  // o caminho da estacao seja UM so e o dia em que aquela politica for fechada
+  // nao leve a expedicao junto.
+  if (p[0] === "setor-concluido") {
+    await conferirAgente(req);
+    if (p.length !== 2 || req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const pedido = inteiro(p[1], "path", "pedido");
+    let corpo: any;
+    try {
+      corpo = await req.json();
+    } catch {
+      throw new Recusa(422, "corpo invalido: esperava JSON");
+    }
+    const r = await concluirSetor(pedido, corpo?.setor, corpo?.concluido !== false);
+    return ok({ status: "success", ...r });
+  }
+
+  if (p[0] === "expedicao") {
+    await conferirAgente(req);
+    if (p.length !== 2 || req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const pedido = inteiro(p[1], "path", "pedido");
+    return ok({ status: "success", ...(await enviarParaExpedicao(pedido)) });
   }
 
   // Rota que nao e uma das tres -- por caminho ou por metodo -- cai na regra do

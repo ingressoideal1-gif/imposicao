@@ -49,12 +49,13 @@ O banco antigo do Imposition (`atsxtuibeitloosckmlc.supabase.co`) será **descon
 9. ✅ **SIM** criar NOVAS tabelas com prefixo `producao_`
 10. ✅ **SIM** referenciar tabelas do parceiro via FK (usar `id_int`, `id_cliente`, `id_produto`)
 
-### A única exceção aberta até hoje: `propostas_os_setores.peso_real_kg`
+### As exceções abertas até hoje: a ficha de expedição
 
 > [!IMPORTANT]
-> Em **21/08/2026** o usuário mandou o Painel do Acabamento gravar o peso de cada
-> setor em `propostas_os_setores.peso_real_kg`. É a primeira e única escrita
-> autorizada numa tabela do parceiro, e ela é **estreita de propósito**.
+> Em **21/08/2026** o usuário mandou o Painel do Acabamento escrever na ficha de
+> expedição do ERP: o **peso** de cada setor, o **CONCLUIDO** do setor quando ele
+> termina, e o **envio do pedido para EXPEDICAO**. São as únicas escritas
+> autorizadas em tabela do parceiro, e são **estreitas de propósito**.
 
 **Por que ela não fere o espírito da regra.** Essa tabela é a ficha de conferência
 de expedição que o ERP mantém *para a gráfica preencher* — as colunas dizem isso
@@ -65,8 +66,9 @@ O ERP já preenche parte dela pela tela dele. O que mudou é de onde o dado entr
 
 | | |
 |---|---|
-| Colunas escritas | `peso_real_kg` e `updated_at` — e, só ao criar a linha, `id_int`, `setor` e `id_os` |
-| Nunca tocado | `prazo`, `hora`, `status_producao`, `status_producao_em`, `qtd_volumes`, `tipo_volume`, `responsavel_conferencia` |
+| Colunas escritas em `propostas_os_setores` | `peso_real_kg`, `status_producao`, `status_producao_em` e `updated_at` — e, só ao criar a linha, `id_int`, `setor` e `id_os` |
+| Colunas escritas em `propostas` | **só** `status_interno`, e **só** para o valor `EXPEDICAO` |
+| Nunca tocado | `prazo`, `hora`, `qtd_volumes`, `tipo_volume`, `responsavel_conferencia` — e todo o resto de `propostas` |
 | Quem escreve | [`supabase/functions/_compartilhado/pesos.ts`](../supabase/functions/_compartilhado/pesos.ts) (estação, via `acesso-estacao`) e [`frontend/acabamento.js`](../frontend/acabamento.js), função `gravarPeso` (site com sessão) |
 | Como | `UPDATE` primeiro; só insere quando não há linha. Hoje 729 dos 758 pares (pedido, setor) ainda não existem, porque o ERP as cria na expedição |
 | Travas do banco | `UNIQUE (id_int, setor)`, `CHECK` de setor (PVC/LASER/FLEXO/TEXTIL), FK `id_os → propostas_os(id)` |
@@ -84,7 +86,17 @@ a `service_role` — o mesmo desenho do catálogo de fontes. No site com login, 
 sessão já basta e a escrita sai direta. Sem nenhum dos dois, o box diz o que fazer
 em vez de mostrar campos que não gravariam nada.
 
-Abrir uma segunda exceção exige a mesma coisa que esta exigiu: o usuário pedindo,
+**O desfazer é mais estreito que o fazer.** O `CONCLUIDO` só é retirado quando o
+valor atual é exatamente `CONCLUIDO` — qualquer outra coisa naquela coluna foi o
+ERP quem pôs, e não se toca. E o valor de volta é `EM ACABAMENTO`, que descreve a
+verdade, em vez de apagar o campo.
+
+**Sobre `propostas`:** hoje a política `Enable read access for all` daquela tabela
+é ALL/public/true — a chave **anônima escreve nela**. Isso não é decisão nossa e
+não é o que autoriza a escrita; o que autoriza é o pedido do usuário. Registrado
+aqui porque é uma exposição do banco que vale a pena o parceiro saber.
+
+Abrir uma exceção nova exige a mesma coisa que estas exigiram: o usuário pedindo,
 e a coluna sendo claramente da gráfica.
 
 ---

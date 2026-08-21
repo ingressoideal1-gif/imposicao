@@ -20,14 +20,22 @@
  *
  * ## O que este modulo NAO pode fazer
  *
- * Escrever em `propostas_os_setores` e a UNICA excecao a regra de ouro do
- * `docs/REGRAS_BANCO.md` -- nao alterar tabela do parceiro --, e ela so continua
- * legitima enquanto for ESTREITA. Este modulo toca `peso_real_kg` e
- * `updated_at`, mais `id_int`, `setor` e `id_os` ao criar a linha. E nada mais.
+ * Escrever em tabela do parceiro e excecao a regra de ouro do
+ * `docs/REGRAS_BANCO.md`, e ela so continua legitima enquanto for ESTREITA.
+ * O que este modulo toca, e nada alem disso:
  *
- * `prazo`, `hora`, `status_producao`, `status_producao_em`, `qtd_volumes`,
- * `tipo_volume` e `responsavel_conferencia` sao do ERP e ficam onde estao. A
- * lista esta repetida no teste de proposito: e la que ela e cobrada.
+ *   `propostas_os_setores` -- `peso_real_kg`, `status_producao`,
+ *   `status_producao_em` e `updated_at`, mais `id_int`, `setor` e `id_os` ao
+ *   criar a linha;
+ *   `propostas` -- `status_interno`, e so para o valor `EXPEDICAO`.
+ *
+ * `prazo`, `hora`, `qtd_volumes`, `tipo_volume` e `responsavel_conferencia` sao
+ * do ERP e ficam onde estao. A lista esta repetida no teste de proposito: e la
+ * que ela e cobrada.
+ *
+ * O `status_producao` entrou em 21/08/2026, junto com o botao EXPEDICAO, e o
+ * usuario abriu a excecao no mesmo dia. Antes dele a lista de intocaveis
+ * incluia essa coluna -- se alguem estranhar o historico, e por isso.
  */
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
@@ -73,7 +81,7 @@ function pesoValido(bruto: unknown): number | null {
 export async function lerPesos(pedidoIdInt: number): Promise<unknown[]> {
   const linhas = (await banco(
     "GET",
-    `${TABELA}?id_int=eq.${pedidoIdInt}&select=setor,peso_real_kg`,
+    `${TABELA}?id_int=eq.${pedidoIdInt}&select=setor,peso_real_kg,status_producao`,
   )) ?? [];
   return linhas;
 }
@@ -132,4 +140,101 @@ export async function gravarPeso(
     await banco("PATCH", filtro, { peso_real_kg: peso, updated_at: agora });
     return { setor, peso_real_kg: peso, criou: false };
   }
+}
+
+/**
+ * O estagio de producao que o setor ganha quando termina, e o que ele volta a
+ * ser quando alguem desmarca um modelo.
+ *
+ * Os dois estao na lista do `propostas_os_setores_status_producao_check`:
+ * EM PRODUCAO, EM IMPRESSAO, EM IMPRESSAO / PENDENTE, EM ACABAMENTO,
+ * EM ACABAMENTO / PENDENTE, CONCLUIDO.
+ */
+const CONCLUIDO = "CONCLUIDO";
+const DE_VOLTA_A_MESA = "EM ACABAMENTO";
+
+/**
+ * Carimba (ou descarimba) o setor de um pedido.
+ *
+ * Pedido do usuario em 21/08/2026: quando o ULTIMO modelo de um setor vira
+ * "Pronto", a linha daquele setor recebe CONCLUIDO -- mesmo que os outros
+ * setores ainda estejam trabalhando. Quem decide se o setor terminou e a tela,
+ * que conhece os modelos; aqui so se grava.
+ *
+ * ## Por que o `false` existe, e por que ele e estreito
+ *
+ * Se o operador marcar "Pronto" por engano e corrigir, deixar o CONCLUIDO de pe
+ * faria a ficha do ERP mentir sobre material que voltou para a mesa. Mas
+ * `status_producao` e coluna do PARCEIRO, e ele escreve nela pela tela dele.
+ *
+ * Por isso o descarimbo so acontece quando o valor atual e EXATAMENTE
+ * "CONCLUIDO": qualquer outra coisa ali foi o ERP quem pos, e nao se toca. E o
+ * valor de volta e "EM ACABAMENTO", que descreve a verdade -- o material esta
+ * na mesa de novo -- em vez de apagar o campo.
+ */
+export async function concluirSetor(
+  pedidoIdInt: number,
+  setorBruto: unknown,
+  concluido: boolean,
+): Promise<{ setor: string; status_producao: string | null; mudou: boolean }> {
+  const setor = setorValido(setorBruto);
+  const filtro = `${TABELA}?id_int=eq.${pedidoIdInt}&setor=eq.${setor}`;
+
+  const atual = ((await banco("GET", `${filtro}&select=status_producao`)) ?? [])[0];
+  if (!atual) {
+    // Sem linha nao ha o que carimbar. Nao e erro: o peso pode nunca ter sido
+    // digitado, e o ERP so cria a linha na expedicao.
+    if (!concluido) return { setor, status_producao: null, mudou: false };
+    await gravarPeso(pedidoIdInt, setor, null);
+    await banco("PATCH", filtro, {
+      status_producao: CONCLUIDO,
+      status_producao_em: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    return { setor, status_producao: CONCLUIDO, mudou: true };
+  }
+
+  const antes = atual.status_producao ?? null;
+  if (concluido) {
+    if (antes === CONCLUIDO) return { setor, status_producao: antes, mudou: false };
+  } else {
+    // So desfaz o que foi carimbado aqui.
+    if (antes !== CONCLUIDO) return { setor, status_producao: antes, mudou: false };
+  }
+
+  const novo = concluido ? CONCLUIDO : DE_VOLTA_A_MESA;
+  const agora = new Date().toISOString();
+  await banco("PATCH", filtro, {
+    status_producao: novo,
+    status_producao_em: agora,
+    updated_at: agora,
+  });
+  return { setor, status_producao: novo, mudou: true };
+}
+
+/**
+ * Manda o pedido para a expedicao.
+ *
+ * Pedido do usuario em 21/08/2026, com todos os modelos de todos os setores
+ * marcados como "Pronto". `EXPEDICAO` e um estado que o ERP ja usa -- havia sete
+ * pedidos nele no dia -- e o painel ja escrevia `status_interno` no botao de
+ * liberar para producao, entao o caminho nao e novo.
+ *
+ * Quem confere se o pedido esta pronto e a TELA, que conhece os modelos. Aqui
+ * fica a garantia de que o pedido existe: mandar para expedicao um numero que
+ * nao e pedido criaria linha nenhuma, mas tambem nao diria nada a quem clicou.
+ */
+export async function enviarParaExpedicao(
+  pedidoIdInt: number,
+): Promise<{ id_int: number; status_interno: string }> {
+  const linhas = (await banco(
+    "PATCH",
+    `propostas?id_int=eq.${pedidoIdInt}`,
+    { status_interno: "EXPEDICAO" },
+    "return=representation",
+  )) ?? [];
+  if (!linhas.length) {
+    throw new Recusa(404, `pedido ${pedidoIdInt} nao encontrado`);
+  }
+  return { id_int: pedidoIdInt, status_interno: "EXPEDICAO" };
 }

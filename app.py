@@ -714,6 +714,47 @@ async def gravar_peso_setor(pedido_id_int: int, request: Request,
         raise HTTPException(status_code=502, detail=f"Nao deu para gravar o peso: {e}")
     return {"status": "success", **r}
 
+
+def _repassar_recusa(e, oque: str):
+    """A recusa do servidor chega ao operador com o motivo, e nao como 502.
+
+    Sem isto, "setor invalido" e "pedido nao encontrado" viram a mesma frase
+    generica na tela — e o operador nao tem o que corrigir.
+    """
+    import urllib.error
+
+    if isinstance(e, urllib.error.HTTPError):
+        corpo = ""
+        try:
+            corpo = e.read().decode("utf-8")
+        except Exception:
+            pass
+        return HTTPException(
+            status_code=e.code if e.code in (400, 401, 404, 422) else 502,
+            detail=corpo or f"o servidor recusou ({e.code})")
+    return HTTPException(status_code=502, detail=f"Nao deu para {oque}: {e}")
+
+
+@app.post("/api/setor-concluido/{pedido_id_int}")
+async def marcar_setor_concluido(pedido_id_int: int, request: Request,
+                                 user: dict = Depends(get_current_user)):
+    dados = await request.json()
+    try:
+        r = db.concluir_setor(pedido_id_int, dados.get("setor"),
+                              dados.get("concluido", True))
+    except Exception as e:
+        raise _repassar_recusa(e, "carimbar o setor")
+    return {"status": "success", **r}
+
+
+@app.post("/api/expedicao/{pedido_id_int}")
+def mandar_para_expedicao(pedido_id_int: int, user: dict = Depends(get_current_user)):
+    try:
+        r = db.enviar_para_expedicao(pedido_id_int)
+    except Exception as e:
+        raise _repassar_recusa(e, "mandar o pedido para expedicao")
+    return {"status": "success", **r}
+
 # ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
 #
 # ## A ponte entre dois jeitos de chamar a mesma fonte

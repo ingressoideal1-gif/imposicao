@@ -1344,6 +1344,31 @@ def gravar_peso_do_setor(pedido_id_int: int, setor: str, peso) -> dict:
     ) or {}
 
 
+def concluir_setor(pedido_id_int: int, setor: str, concluido: bool = True) -> dict:
+    """Carimba (ou descarimba) o setor como CONCLUIDO na ficha de expedicao.
+
+    Quem decide se o setor terminou e a TELA, que conhece os modelos. Aqui so se
+    repassa — a regra de quando desfazer o carimbo, e o cuidado de nao pisar no
+    que o ERP escreveu, moram na Edge Function.
+    """
+    return _catalogo_pela_funcao(
+        "POST", f"setor-concluido/{int(pedido_id_int)}",
+        {"setor": setor, "concluido": bool(concluido)},
+    ) or {}
+
+
+def enviar_para_expedicao(pedido_id_int: int) -> dict:
+    """Manda o pedido para EXPEDICAO no ERP.
+
+    Passa pela Edge Function junto com o resto, e nao direto pelo PostgREST, por
+    uma razao que nao e a do peso: hoje a politica `Enable read access for all`
+    de `propostas` e ALL/public/true, entao a chave anonima ESCREVE ali. Um dia
+    isso vai ser fechado, e quando for, a expedicao da estacao nao pode cair
+    junto — o caminho da estacao ja e este.
+    """
+    return _catalogo_pela_funcao("POST", f"expedicao/{int(pedido_id_int)}") or {}
+
+
 def _fonte_por_nome(nome: str) -> dict | None:
     """A fonte já cadastrada com este nome, olhando a tabela quando dá.
 

@@ -86,6 +86,22 @@ def funcao(monkeypatch):
     return vistas_e_resposta
 
 
+def _so_o_codigo(ts, funcao):
+    """O corpo de uma funcao do `pesos.ts`, sem a prosa em volta.
+
+    Entre uma funcao e a seguinte mora a documentacao dela, e a documentacao
+    CITA as colunas do parceiro justamente para dizer o que cada escrita pode
+    tocar. Medir sobre o texto cru faria o comentario reprovar o codigo.
+    """
+    import re
+
+    corpo = ts[ts.index("export async function " + funcao + "("):]
+    fim = corpo.find("\nexport ", 1)
+    if fim > 0:
+        corpo = corpo[:fim]
+    return re.sub(r"/\*.*?\*/", "", corpo, flags=re.S)
+
+
 def _nunca_pelo_postgrest(monkeypatch):
     monkeypatch.setattr(db, "_supabase_call", lambda *a, **k: pytest.fail(
         "a estacao falou com o PostgREST: para `anon` a tabela do parceiro "
@@ -174,10 +190,14 @@ def test_a_regra_do_peso_mora_num_lugar_so_na_edge_function():
         "o PATCH tem de vir antes do POST"
     )
 
-    # E nenhuma coluna do parceiro entra na conversa.
+    # E nenhuma coluna do parceiro entra na conversa DO PESO.
+    #
+    # `status_producao` saiu desta lista em 21/08/2026: ele passou a ser escrito,
+    # mas pelo `concluirSetor`, e nao aqui. O recorte da funcao existe justamente
+    # para o teste continuar cobrando cada escrita pelo que ELA toca.
+    corpo = _so_o_codigo(ts, "gravarPeso")
     for coluna in ("status_producao", "prazo", "hora", "qtd_volumes",
                    "tipo_volume", "responsavel_conferencia"):
-        corpo = ts[ts.index("export async function gravarPeso("):]
         assert coluna not in corpo, (
             "a gravacao do peso encostou em " + coluna + ", que e do parceiro"
         )
@@ -232,4 +252,109 @@ def test_as_duas_rotas_locais_existem_no_agente():
     # E o motivo da recusa e repassado, em vez de virar 502 generico.
     assert "e.code if e.code in (400, 401, 422) else 502" in ap, (
         "a recusa do servidor tem de chegar ao operador com o motivo"
+    )
+
+
+def test_o_carimbo_e_a_expedicao_saem_pela_funcao(funcao, monkeypatch):
+    """As duas escritas novas de 21/08/2026 tambem passam pela porta da estacao.
+
+    `status_producao` mora na mesma tabela do peso, com a mesma RLS de
+    `authenticated` -- sem a porta, o carimbo nao aconteceria e sem erro.
+
+    Ja `propostas` e outra historia: hoje a politica `Enable read access for all`
+    e ALL/public/true, entao a chave anonima ESCREVE ali. A rota existe assim
+    mesmo, para que o caminho da estacao seja UM so e o dia em que aquela
+    politica for fechada nao leve a expedicao junto.
+    """
+    vistas, resposta = funcao
+    _nunca_pelo_postgrest(monkeypatch)
+
+    resposta["corpo"] = {"status": "success", "setor": "PVC", "status_producao": "CONCLUIDO"}
+    db.concluir_setor(20975, "PVC", True)
+
+    resposta["corpo"] = {"status": "success", "id_int": 20975, "status_interno": "EXPEDICAO"}
+    db.enviar_para_expedicao(20975)
+
+    assert len(vistas) == 2
+    assert vistas[0]["url"].endswith("/api/acesso/setor-concluido/20975")
+    assert vistas[0]["corpo"] == {"setor": "PVC", "concluido": True}
+    assert vistas[1]["url"].endswith("/api/acesso/expedicao/20975")
+    assert all(v["metodo"] == "POST" for v in vistas)
+    assert all(v["segredo"] == "segredo-do-agente" for v in vistas)
+
+
+def test_o_descarimbo_nao_pisa_no_que_o_erp_escreveu():
+    """`status_producao` e coluna do parceiro, e ele escreve nela pela tela dele.
+
+    Por isso o descarimbo so acontece quando o valor atual e EXATAMENTE
+    CONCLUIDO -- qualquer outra coisa ali foi o ERP quem pos. E o valor de volta
+    e EM ACABAMENTO, que descreve a verdade (o material voltou para a mesa) em
+    vez de apagar o campo.
+    """
+    caminho = os.path.join(RAIZ, "supabase", "functions", "_compartilhado", "pesos.ts")
+    with open(caminho, encoding="utf-8") as f:
+        ts = f.read()
+
+    corpo = _so_o_codigo(ts, "concluirSetor")
+
+    assert 'const CONCLUIDO = "CONCLUIDO";' in ts
+    assert 'const DE_VOLTA_A_MESA = "EM ACABAMENTO";' in ts
+    assert "if (antes !== CONCLUIDO) return" in corpo, (
+        "sem esta guarda, o descarimbo apagaria o que o ERP escreveu"
+    )
+
+    # E o carimbo toca so as tres colunas dele.
+    for coluna in ("prazo", "hora", "qtd_volumes", "tipo_volume",
+                   "responsavel_conferencia"):
+        assert coluna not in corpo, (
+            "o carimbo encostou em " + coluna + ", que e do parceiro"
+        )
+
+
+def test_a_expedicao_escreve_so_o_status_interno():
+    """`propostas` e a tabela PRINCIPAL do parceiro.
+
+    A escrita tem de ser de uma coluna so, com um valor so: `EXPEDICAO`, que o
+    ERP ja usa. Qualquer coisa alem disso e alargar a excecao sem pedir.
+    """
+    caminho = os.path.join(RAIZ, "supabase", "functions", "_compartilhado", "pesos.ts")
+    with open(caminho, encoding="utf-8") as f:
+        ts = f.read()
+
+    corpo = ts[ts.index("export async function enviarParaExpedicao("):]
+    assert '{ status_interno: "EXPEDICAO" }' in corpo, (
+        "a expedicao tem de gravar so o status_interno"
+    )
+    assert "404" in corpo, "pedido inexistente precisa dizer que nao existe"
+
+    # E o frontend faz igual no caminho da nuvem.
+    with open(os.path.join(RAIZ, "frontend", "acabamento.js"), encoding="utf-8") as f:
+        js = f.read()
+    assert "update({ status_interno: 'EXPEDICAO' })" in js
+
+
+def test_as_rotas_do_carimbo_e_da_expedicao_exigem_o_segredo():
+    caminho = os.path.join(RAIZ, "supabase", "functions", "acesso-estacao", "index.ts")
+    with open(caminho, encoding="utf-8") as f:
+        ts = f.read()
+
+    for rota in ("setor-concluido", "expedicao"):
+        i = ts.index('if (p[0] === "' + rota + '")')
+        bloco = ts[i:ts.index("\n  }", i)]
+        assert "await conferirAgente(req);" in bloco, (
+            "a rota " + rota + " ficou sem segredo"
+        )
+
+
+def test_as_rotas_locais_do_agente_existem():
+    with open(os.path.join(RAIZ, "app.py"), encoding="utf-8") as f:
+        ap = f.read()
+
+    assert '@app.post("/api/setor-concluido/{pedido_id_int}")' in ap
+    assert '@app.post("/api/expedicao/{pedido_id_int}")' in ap
+
+    i = ap.index('@app.post("/api/setor-concluido')
+    bloco = ap[i:]
+    assert bloco.count("Depends(get_current_user)") >= 2, (
+        "as rotas novas ficaram sem a tranca do acesso local"
     )

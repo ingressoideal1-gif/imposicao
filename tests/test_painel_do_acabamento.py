@@ -450,8 +450,16 @@ def test_a_escrita_na_tabela_do_parceiro_e_estreita():
         a.strip().strip("'").replace("TABELA_DE_SETORES", "propostas_os_setores")
         for a in alvos
     })
-    assert tabelas == ["pedidos_modelos", "propostas_os_setores"], (
+    assert tabelas == ["pedidos_modelos", "propostas", "propostas_os_setores"], (
         "o acabamento escreve em tabela inesperada: " + ", ".join(tabelas)
+    )
+
+    # `propostas` entrou em 21/08/2026 com o botao EXPEDICAO, e a escrita ali e a
+    # mais estreita que existe: uma coluna, um valor. E a tabela PRINCIPAL do
+    # parceiro -- qualquer outra coluna aqui e alargar a excecao sem pedir.
+    escritas = re.findall(r"\.from\('propostas'\)\s*\.update\(([^)]*)\)", js)
+    assert escritas == ["{ status_interno: 'EXPEDICAO' }"], (
+        "a escrita em propostas deixou de ser so o status_interno: " + ", ".join(escritas)
     )
 
 

@@ -189,7 +189,7 @@ agente**. Então há dois caminhos, e quem escolhe é **quem serviu a página**:
 
 | Onde | Caminho |
 |---|---|
-| **Estação** (agente na 9000 ou localhost) | `/api/peso-setores/<pedido>` do agente → Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` → `service_role` |
+| **Estação** (agente na 9000 ou localhost) | `/api/peso-setores/<pedido>`, `/api/setor-concluido/<pedido>` e `/api/expedicao/<pedido>` do agente → Edge Function `acesso-estacao` com o `ACESSO_AGENTE_SEGREDO` → `service_role` |
 | **Site, com login do Vibe** | direto no PostgREST, que é o que a sessão autoriza |
 | **Site, sem login** | o box mostra os setores e a frase que resolve: entrar com a conta |
 
@@ -202,8 +202,56 @@ O agente não valida nada por conta própria: converter a vírgula e conferir a
 lista de setores nos dois lugares criaria duas verdades, e a que vale é a do
 servidor, que conhece o `CHECK` da tabela.
 
-A única chamada ao agente em toda a tela é essa. Impor, gerar PDF, imprimir e
-perguntar a versão do NewProd continuam fora — há teste contando as rotas.
+São **três** as chamadas ao agente em toda a tela — o peso, o carimbo do setor e
+o envio para a expedição —, e todas são da ficha de expedição. Impor, gerar PDF,
+imprimir e perguntar a versão do NewProd continuam fora; há teste contando as
+rotas e exigindo que exista **um único** `/api/` no arquivo.
+
+`propostas` passa pela mesma porta, e não porque precise: hoje a política
+`Enable read access for all` daquela tabela é ALL/public/true, então a chave
+anônima escreve nela. A rota existe assim mesmo para que o caminho da estação
+seja **um só** — no dia em que aquela política for fechada, a expedição não cai
+junto.
+
+### O botão EXPEDIÇÃO, à direita do peso
+
+No mesmo box, à direita dos campos de peso. Pedido do usuário em 21/08/2026.
+
+**Ele só fica ativo com TODOS os modelos de TODOS os setores em "Pronto".** Mas
+não fica escondido nem travado: apagado, ele continua clicável, e clicá-lo cedo
+responde exatamente **o que falta** — *"Ainda não dá para expedir: falta
+terminar Laser (1 modelo)"*. Um botão escondido faria o operador procurar o que
+a tela não mostra; um botão travado não explicaria por quê.
+
+Modelo **sem setor** não some dessa conta: ele aparece como *(sem setor)*. É
+material do pedido do mesmo jeito, e um pedido saindo da gráfica com modelo
+pendente é o erro caro desta tela.
+
+Clicado com tudo pronto, ele grava **`propostas.status_interno = 'EXPEDICAO'`** —
+estado que o ERP já usa, e que o painel já escrevia no botão de liberar para
+produção. O pedido sai da fila do Acabamento na hora, e a tela volta para a
+lista.
+
+A conferência é refeita **dentro** da função, e não só no `disabled`: quem
+digitar `AcabamentoPainel.expedir(...)` no console passaria direto pelo atributo,
+e o preço seria um pedido expedido com material na mesa.
+
+### O CONCLUIDO de cada setor, que não depende do botão
+
+Assim que o **último modelo de um setor** fica "Pronto", a linha daquele setor
+recebe **`CONCLUIDO`** em `propostas_os_setores.status_producao` — mesmo com os
+outros setores ainda trabalhando. É o que permite ao ERP ver o Laser fechado
+enquanto o PVC continua.
+
+E o contrário também: se alguém marcar "Pronto" por engano e corrigir, o setor
+volta para **`EM ACABAMENTO`**, que descreve a verdade — o material está na mesa
+de novo. Esse desfazer é **estreito de propósito**: só acontece quando o valor
+atual é exatamente `CONCLUIDO`. Qualquer outra coisa ali foi o ERP quem pôs, e
+não se toca.
+
+Falha no carimbo **não desfaz a escolha do operador**: o estágio já está gravado,
+e o carimbo é consequência. O aviso diz as duas coisas — *"O estágio foi gravado,
+mas não deu para marcar o setor Laser como concluído"*.
 
 ### Os dois únicos controles
 
