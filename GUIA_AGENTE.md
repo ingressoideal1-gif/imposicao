@@ -467,6 +467,62 @@ Use `-Simular` para executar tudo menos os envios, o commit e a tag. As seções
 continuam descrevendo o processo manual, para quando for preciso entender ou depurar o
 que o script faz.
 
+### Quando o envio falha no meio (e os arquivos ficam na versão nova)
+
+Aconteceu em 20/08/2026, publicando a 1.2.161: o passo 5 caiu com
+`A conexão subjacente estava fechada` — erro de rede, no meio do upload de 68 MB.
+
+**O que fica para trás**, e por que a rede de segurança não pega este caso:
+
+O script guarda os bytes originais dos três arquivos de versão para desfazer o passo 2
+se algo falhar (`Restore-Versao`). Mas ele **descarta esse backup ao passar do ponto de
+simulação**, antes do passo 5, com o argumento de que "daqui para frente o release é
+real". Quando o envio falha, o release **não** é real — e os três arquivos ficam
+gravados com o número novo sem MSI nenhum publicado. A próxima tentativa com o mesmo
+número é então recusada por *"não é maior que a atual"*, que é uma mensagem que não
+explica nada a quem só quer tentar de novo.
+
+**Antes de repetir, confira o estrago.** O script avisa para nunca reaproveitar nome de
+arquivo, e a razão é o CDN: se o objeto já existir, a borda continuaria servindo o
+binário anterior, o sha256 não bateria e todas as estações recusariam a instalação.
+
+```powershell
+# 1. O objeto chegou ao bucket? HTTP 400 = não chegou (o nome está livre).
+curl.exe -s -o NUL -w "%{http_code}`n" `
+  "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.161.msi"
+
+# 2. O manifesto mudou? Se ainda mostra a versão anterior, nenhuma estação foi afetada.
+#    Use o cache-buster: pelo endereço simples a Cloudflare devolve a cópia velha.
+curl.exe -s "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/latest.json?t=1"
+```
+
+**Se o objeto NÃO chegou** (o caso comum numa queda de rede), devolva os três arquivos e
+repita com o mesmo número:
+
+```powershell
+git checkout -- agent_version.py agent_installer.wxs compilar_msi.ps1
+.\publicar_agente.ps1 1.2.161
+```
+
+Confira o `git diff` antes de descartar: as três mudanças devem ser **só** o número da
+versão. Se houver qualquer outra coisa, é trabalho seu no meio — não descarte.
+
+**Se o objeto CHEGOU** mas o manifesto não foi publicado, não repita com o mesmo número:
+suba para o seguinte. O nome no bucket já está queimado.
+
+> [!NOTE]
+> O conserto de verdade é mover o `$script:Backup = @{}` para depois da publicação do
+> manifesto — o ponto sem volta é o passo 7, não o 4. Enquanto isso não for feito, o
+> procedimento acima é a saída.
+
+### O manifesto "não mudou" — é a borda, não o script
+
+Depois de publicar, `latest.json` pelo endereço simples pode continuar mostrando a versão
+anterior por um tempo: a Cloudflare serve uma cópia em cache (`CF-Cache-Status: HIT`).
+**Isso não afeta as estações** — o agente pede o manifesto com cache-buster e
+`Cache-Control: no-cache` (`agent_worker.py`, em `verificar_atualizacao` e na checagem
+periódica). Para conferir a olho, acrescente `?t=1` ao endereço.
+
 ## ⏮️ Voltar a versão do agente
 
 **Republicar o MSI antigo com o número antigo não faz nada.** O agente só instala versão
