@@ -1227,7 +1227,7 @@ async function desmarcarUmModeloTiraOCarimbo() {
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
 
-    ok(html.indexOf('background: #3a2a1c') !== -1, 'o modelo Aguardando tem fundo marrom');
+    ok(html.indexOf('background: #001f3e') !== -1, 'o modelo Aguardando tem o fundo proprio');
 
     // As cores por STATUS nao acompanham a paleta da tela, e e de proposito:
     // elas dizem em que ponto o modelo esta. Em 20/08/2026 eu as tinha trazido
@@ -1238,8 +1238,8 @@ async function desmarcarUmModeloTiraOCarimbo() {
     // forcados para Aguardando e Pronto.
     const amb2 = ambienteComPedidoAberto();   // sem forcar: os dois derivam de "Impresso"
     amb2.painel.abrirPedido('os-200');
-    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #001f3e') !== -1,
-       'o Impresso continua azul escuro');
+    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('background: #001249') !== -1,
+       'o Impresso fica no azul da tela');
 
     // A PAGINA, essa sim, seguiu a paleta azul de 21/08/2026.
     ok(html.indexOf('#001249') !== -1, 'a caixa do produto e o navy da paleta');

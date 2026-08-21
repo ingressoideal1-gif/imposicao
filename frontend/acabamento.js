@@ -77,11 +77,11 @@
     // primeiro isto. Mexer nelas para combinar com o fundo é trocar informação
     // por decoração.
     const FUNDO_DO_ESTAGIO = {
-        'Aguardando':    '#3a2a1c',   // marrom — o que ainda não chegou
-        'Impresso':      '#001f3e',   // azul escuro — saiu da impressora
+        'Aguardando':    '#001f3e',   // o que ainda não chegou
+        'Impresso':      '#001249',   // o azul da tela — saiu da impressora
         'Em acabamento': '#32352e',   // oliva — em cima da mesa
         'Pronto':        '#14301f',   // verde escuro — conferido
-        '':              '#3a2a1c',
+        '':              '#001f3e',
     };
 
     // ─── A paleta ───────────────────────────────────────────────────────────
