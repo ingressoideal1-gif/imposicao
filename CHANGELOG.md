@@ -4,7 +4,75 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v662** — 2026-08-20 | Agente **1.2.156**
+## Versão atual: **v664** — 2026-08-20 | Agente **1.2.158**
+
+---
+
+## [v664 — 2026-08-20] — Painel do Acabamento
+
+Menu novo, para o setor que recebe o material **depois** da imposição e da impressão. Até aqui o
+acabamento acompanhava o trabalho pelo Painel de Produção — a tela de quem imprime, cheia de
+seletor de numeração, campo de quantidade e botão de imprimir que o acabamento não pode tocar.
+
+### A tela
+
+Um espelho do Painel de Produção: mesmo layout, mesmos cards, mesmos filtros, mesmas métricas ao
+lado, mesma tabela, mesma formatação. Lista os pedidos com `status_interno` de produção — a mesma
+população da Fila de Produção, porque é esse o material que chega ao acabamento.
+
+Duas colunas passam a falar de acabamento: **Progresso** conta modelos revisados em vez de
+impressos, e **Status** anda em Aguardando → Impresso → Em acabamento → Revisado. O botão de
+recorte no topo, que na Produção é "Impresso", aqui é **"Revisado"**: pedido com todos os modelos
+revisados sai da fila de trabalho e só reaparece com esse botão ligado.
+
+**Sem nenhuma ligação com o motor de imposição nem com o agente local**, por pedido do usuário.
+Não impõe, não gera PDF, não imprime, e a coluna de métricas não traz o bloco de versão do NewProd
+que a da Produção tem no rodapé. Isso é medido: o harness varre o arquivo inteiro atrás de
+`/api/impose`, `API_BASE_URL`, `127.0.0.1:9000` e companhia.
+
+### O pedido aberto
+
+Clicar numa linha abre, no lugar da lista, a mesma listagem de modelos separada por produtos do
+Portal do Pedido — uma caixa por produto, com nome real e selo do setor PCP. Tudo em **somente
+leitura**: o que na Produção é campo ou seletor, aqui é texto.
+
+Cada modelo mostra **a amostra que foi enviada ao cliente pelo link** — a imagem composta de cor +
+arte + numeração que ele aprovou —, em bom tamanho e clicável para ampliar. É o que o revisor
+compara com o papel que saiu da impressora. Amostra que só existe em PDF continua saindo como
+atalho para o arquivo: rasterizar a arte do cliente está fora de cogitação.
+
+E dois seletores, os únicos controles da tela: **Status do acabamento** (Impresso / Em acabamento /
+Revisado) e **Responsável**, escolhido entre os operadores de acesso local da gráfica.
+
+### No banco
+
+Duas colunas novas em `pedidos_modelos` — `acabamento_status` e `acabamento_responsavel` — e a view
+`imposition_operadores`, que entrega **só o nome** dos acessos locais. A tabela por trás dela guarda
+os códigos de seis caracteres em texto claro e continua fechada para as chaves públicas; a view
+existe justamente para o seletor de responsável funcionar no site e na estação sem abri-la.
+
+Mais o módulo de permissão **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`),
+que nasce espelhando o que cada pessoa já tem de Produção: quem vê a Produção vê o Acabamento, quem
+a edita, edita.
+
+### 🔎 De quebra: a Edge Function `painel` estava fora do controle de versão
+
+Achado ao commitar esta mudança. O `.gitignore` tinha `painel/` — a regra que
+ignora a cópia local do painel que o agente sincroniza — e, **sem a barra da
+frente**, o padrão casa com qualquer pasta chamada `painel` em qualquer nível.
+Casava com `supabase/functions/painel/`, a Edge Function que guarda as permissões
+e os códigos de acesso das estações: a única das nove funções que nunca esteve no
+git, sem que nada na tela dissesse isso.
+
+O deploy sempre funcionou — o `publicar.ps1` lê as pastas do disco, não do git —,
+e é isso que tornava o buraco invisível: só apareceria no dia em que esta máquina
+fosse trocada. Corrigido para `/painel/`, ancorado na raiz. O espelho da raiz
+continua ignorado; as três fontes da função entram no repositório.
+
+> **A ordem importa**: o SQL (`sql/painel_do_acabamento.sql`) roda **antes** de publicar.
+> `imposition_user_permissions` tem uma coluna por permissão, e mandar uma coluna que não existe faz
+> o PostgREST recusar a gravação inteira com 400. A tela sabe se defender enquanto isso — lista os
+> pedidos e avisa, uma vez, que o banco ainda não foi atualizado —, mas a tela de Usuários não.
 
 ---
 

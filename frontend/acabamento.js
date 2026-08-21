@@ -1,0 +1,1149 @@
+/**
+ * PAINEL DO ACABAMENTO — a tela do setor que recebe o material depois da
+ * imposição e da impressão.
+ *
+ * ## O que ela é
+ *
+ * Um espelho do Painel de Produção: mesma lista de pedidos, mesmos filtros,
+ * mesmas colunas, mesmas métricas ao lado. A população é a mesma — os pedidos
+ * com `status_interno` de produção — porque é exatamente esse material que
+ * chega ao acabamento.
+ *
+ * ## O que ela NÃO é
+ *
+ * Não fala com o motor de imposição nem com o agente local. Não impõe, não gera
+ * PDF, não imprime, não escolhe formato, saída, cor, numeração nem verso. Tudo
+ * o que a Produção deixa editável aqui vira TEXTO.
+ *
+ * As duas únicas escritas desta tela são campos que nasceram com ela:
+ * `pedidos_modelos.acabamento_status` e `pedidos_modelos.acabamento_responsavel`.
+ * O `status_impressao`, que é do setor de impressão, não é lido para decidir
+ * nada nem escrito em lugar nenhum daqui — os dois setores têm vocabulários
+ * diferentes, e misturá-los faria uma tela mentir sobre a outra.
+ *
+ * ## Por que arquivo próprio
+ *
+ * O `script.js` já tem 1,4 MB. É a mesma direção que o Portal do Pedido tomou
+ * em 20/08/2026, quando virou sete arquivos.
+ *
+ * ## Como ele se pendura no que já existe
+ *
+ * Sem tocar em `renderOrdens` nem em `showView`: os dois são EMBRULHADOS no fim
+ * deste arquivo. O original roda primeiro, inteiro, e só depois esta tela se
+ * redesenha. Assim a lista do acabamento nunca fica atrás da da produção — elas
+ * leem o mesmo `state` no mesmo instante — e um defeito aqui não pode derrubar
+ * a tela que a gráfica usa todo dia (a chamada vai dentro de try/catch).
+ */
+(function () {
+    'use strict';
+
+    // ─── Vocabulário do acabamento ──────────────────────────────────────────
+    //
+    // Os três estágios pedidos pelo usuário, nesta ordem de fluxo. NULO no banco
+    // = o acabamento deste modelo ainda não começou, e a tela mostra
+    // "— Status —" em vez de inventar um estágio que ninguém marcou.
+    const ESTAGIOS = ['Impresso', 'Em acabamento', 'Revisado'];
+
+    const ORDEM_ESTAGIO = { 'Aguardando': 1, 'Impresso': 2, 'Em acabamento': 3, 'Revisado': 4 };
+
+    const SELO = {
+        'Aguardando':    { icone: '⏳', cls: 'badge-blue',  texto: 'Aguardando' },
+        'Impresso':      { icone: '🖨️', cls: 'badge-teal',  texto: 'Impresso' },
+        'Em acabamento': { icone: '✂️', cls: 'badge-amber', texto: 'Em acabamento' },
+        'Revisado':      { icone: '✅', cls: 'badge-green', texto: 'Revisado' },
+    };
+
+    // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
+    // o estágio se lê de relance, sem procurar o selo.
+    const FUNDO_DO_ESTAGIO = {
+        '':              '#65625e',
+        'Impresso':      '#162037',
+        'Em acabamento': '#32352e',
+        'Revisado':      '#14301f',
+    };
+
+    // ─── Estado da tela ─────────────────────────────────────────────────────
+    //
+    // Próprio, e não dentro de `state`: os filtros do acabamento não são os da
+    // produção, e compartilhar as chaves faria um painel mexer no outro.
+    const tela = {
+        prazo: 'geral',       // geral | hoje | atrasados | revisados
+        setor: '',
+        estagio: '',
+        sort: null,           // { campo, dir }
+        pedidoAberto: null,   // osId do pedido em detalhe
+        temAtrasados: false,
+        operadores: null,     // null = ainda não buscado
+        erroOperadores: '',
+
+        // O estágio e o responsável de cada modelo da fila, por id.
+        //
+        // Existe porque o `carregarModelosGlobais` do `script.js` pede colunas
+        // NOMEADAS, e acrescentar as duas do acabamento lá deixaria o Painel de
+        // Produção refém desta tela: enquanto o SQL não tivesse rodado, o
+        // PostgREST recusaria a consulta INTEIRA e a lista da gráfica perderia
+        // progresso, itens e quantidade. A leitura é daqui, e uma falha nela
+        // não sai desta tela.
+        acabamento: {},
+        erroAcabamento: '',
+        avisouDoBanco: false,
+        carregandoPedido: false,
+    };
+
+    // ─── Pequenos socorros ──────────────────────────────────────────────────
+    //
+    // Tudo o que vem do `script.js` é chamado por aqui, com guarda: este arquivo
+    // carrega depois dele, mas uma estação com cópia antiga do painel pode não
+    // ter alguma função nova — e um `ReferenceError` apagaria a tela inteira.
+
+    function fn(nome) {
+        return (typeof window[nome] === 'function') ? window[nome] : null;
+    }
+
+    function esc(v) {
+        const f = fn('escapeHtml');
+        if (f) return f(v);
+        return String(v === undefined || v === null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    /**
+     * Para `onclick="fn('${escJs(v)}')"`.
+     *
+     * O `esc` sozinho nao serve ali: o navegador desfaz a camada HTML ao ler o
+     * atributo, e uma apostrofe no valor voltaria a fechar a string JS. Espelha
+     * o `escapeJsAttr` do `script.js`, e cai nele quando existe.
+     */
+    function escJs(v) {
+        const f = fn('escapeJsAttr');
+        if (f) return f(v);
+        return esc(String(v === undefined || v === null ? '' : v)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'"));
+    }
+
+    /**
+     * O `state` do painel.
+     *
+     * ATENCAO: no `script.js` ele e `const state = {...}` no topo do arquivo —
+     * e `const` NAO cria propriedade em `window`. Ler `window.state` devolvia
+     * `undefined` sempre, e esta tela nascia com a lista vazia e as metricas
+     * zeradas, sem erro nenhum no console. O nome nu resolve pelo escopo global
+     * lexical, que e onde ele de fato mora; o `typeof` protege contra a ordem
+     * de carregamento e contra um `script.js` que um dia mude o nome.
+     */
+    function estado() {
+        if (typeof state === 'object' && state) return state;
+        if (typeof window.state === 'object' && window.state) return window.state;
+        return {};
+    }
+
+    /** O pedido está em produção? Mesmo recorte da Fila de Produção. */
+    function ehDeProducao(os) {
+        const st = (os.status_interno || '').toUpperCase();
+        return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO'
+            || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
+    }
+
+    function pedidosEmProducao() {
+        return (estado().ordens || []).filter(ehDeProducao);
+    }
+
+    /**
+     * Os modelos de um pedido.
+     *
+     * `modelosGlobais` é a lista enxuta que o painel carrega para TODOS os
+     * pedidos de uma vez (é o que alimenta a tabela); `osItens` é a lista
+     * completa, buscada quando o pedido é aberto. A completa vence quando
+     * existe, porque só ela tem a amostra e o responsável.
+     */
+    function modelosDoPedido(os) {
+        if (!os) return [];
+        const s = estado();
+        const completos = (s.osItens && s.osItens[os.id]) || [];
+        if (completos.length) return completos;
+        const num = parseInt(os.numero);
+        return (s.modelosGlobais && s.modelosGlobais[num]) || [];
+    }
+
+    /**
+     * O estágio gravado num modelo, ou '' quando o acabamento não começou.
+     *
+     * A linha completa vence o mapa: quando o pedido é aberto, o `loadOSItens`
+     * traz `acabamento_status` de verdade — inclusive nulo, que quer dizer "não
+     * começou" e não pode ser confundido com "não perguntei ainda". Por isso o
+     * teste é `!== undefined`, e não a verdade do valor.
+     */
+    function estagioDoModelo(m) {
+        if (!m) return '';
+        let cru;
+        if (m.acabamento_status !== undefined) {
+            cru = m.acabamento_status;
+        } else {
+            const doMapa = tela.acabamento[String(m.id)];
+            cru = doMapa ? doMapa.status : '';
+        }
+        const bruto = cru ? String(cru).trim() : '';
+        if (!bruto) return '';
+        const achado = ESTAGIOS.find(e => e.toLowerCase() === bruto.toLowerCase());
+        return achado || bruto;
+    }
+
+    /** O responsável gravado num modelo, pela mesma regra do estágio. */
+    function responsavelDoModelo(m) {
+        if (!m) return '';
+        if (m.acabamento_responsavel !== undefined) {
+            return (m.acabamento_responsavel || '').trim();
+        }
+        const doMapa = tela.acabamento[String(m.id)];
+        return doMapa ? (doMapa.responsavel || '').trim() : '';
+    }
+
+    /**
+     * O estágio do PEDIDO, a partir dos modelos dele.
+     *
+     * Revisado só quando TODOS estão revisados — é o que faz o pedido sair da
+     * fila de trabalho. Qualquer movimento parcial conta como "Em acabamento",
+     * inclusive um revisado sozinho no meio de outros: o trabalho está em curso.
+     */
+    function estagioDoPedido(modelos) {
+        if (!modelos || !modelos.length) return 'Aguardando';
+        const estagios = modelos.map(estagioDoModelo);
+        if (estagios.every(e => e === 'Revisado')) return 'Revisado';
+        if (estagios.some(e => e === 'Em acabamento' || e === 'Revisado')) return 'Em acabamento';
+        if (estagios.some(e => e === 'Impresso')) return 'Impresso';
+        return 'Aguardando';
+    }
+
+    function seloDoEstagio(estagioTexto) {
+        const s = SELO[estagioTexto] || { icone: '❓', cls: '', texto: estagioTexto || '—' };
+        return `<span class="badge ${s.cls}">${s.icone} ${s.texto}</span>`;
+    }
+
+    function pedidoTotalmenteRevisado(os) {
+        const modelos = modelosDoPedido(os);
+        return modelos.length > 0 && estagioDoPedido(modelos) === 'Revisado';
+    }
+
+    // ─── Prazo de entrega ───────────────────────────────────────────────────
+    //
+    // As regras de data são as do Painel de Produção, chamadas de lá: prazo é
+    // `propostas_os.data_termino`, e uma segunda cópia da conta aqui divergiria
+    // da de lá no primeiro ajuste.
+
+    function estaAtrasado(os) {
+        const f = fn('pedidoEstaAtrasado');
+        return f ? !!f(os) : false;
+    }
+
+    function ehParaHoje(os) {
+        const f = fn('pedidoEhParaHoje');
+        return f ? !!f(os) : false;
+    }
+
+    function passaNoPrazo(os) {
+        // Pedido revisado sai da fila de trabalho: só reaparece com o botão
+        // "Revisado" ligado. É o mesmo desenho do botão "Impresso" da Produção.
+        if (tela.prazo === 'revisados') return pedidoTotalmenteRevisado(os);
+        if (pedidoTotalmenteRevisado(os)) return false;
+        if (tela.prazo === 'geral') return true;
+        if (tela.prazo === 'atrasados') return estaAtrasado(os);
+        return ehParaHoje(os);
+    }
+
+    // ─── Ordenação da tabela ────────────────────────────────────────────────
+
+    const COLUNAS = {
+        numero:     { tipo: 'num',   dirInicial: 'desc' },
+        progresso:  { tipo: 'num',   dirInicial: 'desc' },
+        itens:      { tipo: 'num',   dirInicial: 'desc' },
+        quantidade: { tipo: 'num',   dirInicial: 'desc' },
+        frete:      { tipo: 'texto', dirInicial: 'asc'  },
+        status:     { tipo: 'texto', dirInicial: 'asc'  },
+    };
+
+    function valorDeOrdenacao(os, campo) {
+        const modelos = modelosDoPedido(os);
+        const total = modelos.length || 1;
+        switch (campo) {
+            case 'numero':     return parseInt(os.numero) || 0;
+            case 'itens':      return modelos.length;
+            case 'progresso':  return modelos.filter(m => estagioDoModelo(m) === 'Revisado').length / total;
+            case 'quantidade': return modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
+            case 'frete':      return ((os.frete_escolhido || '').trim() || 'Retirada Local').toUpperCase();
+            case 'status': {
+                const e = estagioDoPedido(modelos);
+                return `${ORDEM_ESTAGIO[e] || 9}_${e}`;
+            }
+        }
+        return '';
+    }
+
+    function aplicarSort(lista) {
+        const sort = tela.sort;
+        if (!sort || !COLUNAS[sort.campo]) return lista;
+        const tipo = COLUNAS[sort.campo].tipo;
+        const fator = sort.dir === 'asc' ? 1 : -1;
+        return lista.slice().sort((a, b) => {
+            const va = valorDeOrdenacao(a, sort.campo);
+            const vb = valorDeOrdenacao(b, sort.campo);
+            let cmp = tipo === 'num'
+                ? (va || 0) - (vb || 0)
+                : String(va).localeCompare(String(vb), 'pt-BR');
+            if (cmp === 0) cmp = (parseInt(a.numero) || 0) - (parseInt(b.numero) || 0);
+            return cmp * fator;
+        });
+    }
+
+    // Estilo inline pelo mesmo motivo do painel vizinho: dentro do <th> sticky
+    // a folha externa não vence a cascata. As constantes são daqui, e não
+    // emprestadas do `script.js`, para esta tela não quebrar se lá mudarem.
+    const TH_BASE = 'display:inline-flex; align-items:center; justify-content:center; gap:6px;'
+        + ' padding:7px 14px; border-radius:8px; font-size:0.75rem; font-weight:800;'
+        + ' text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; cursor:pointer;';
+    const TH_OFF = 'background:#334155; border:1px solid rgba(255,255,255,0.22); color:#cbd5e1;'
+        + ' box-shadow:0 2px 4px rgba(0,0,0,0.35);';
+    const TH_ON = 'background:linear-gradient(135deg,#3b82f6,#2563eb); border:1px solid #93c5fd;'
+        + ' color:#ffffff; box-shadow:0 0 0 2px rgba(59,130,246,0.35), 0 4px 12px rgba(59,130,246,0.5);';
+
+    function pintarCabecalhos() {
+        document.querySelectorAll('#table-acabamento th[data-sort]').forEach(th => {
+            const ativo = !!(tela.sort && tela.sort.campo === th.dataset.sort);
+            th.classList.toggle('active', ativo);
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+            const btn = th.querySelector('.prod-th-btn');
+            if (btn) btn.style.cssText = TH_BASE + (ativo ? TH_ON : TH_OFF);
+            const seta = th.querySelector('.prod-sort-arrow');
+            if (seta) seta.textContent = ativo ? (tela.sort.dir === 'asc' ? '▲' : '▼') : '';
+        });
+    }
+
+    /**
+     * Marca o botão de prazo escolhido.
+     *
+     * O atributo é `data-prazo-acab`, e não `data-prazo`: o
+     * `updateFiltroPrazoBotoes` da Produção varre `button[data-prazo]` no
+     * documento INTEIRO, e as duas telas moram no mesmo documento. Com o nome
+     * repetido, um painel repintaria os botões do outro.
+     */
+    function pintarBotoesPrazo() {
+        const alertar = (tela.prazo === 'hoje') && tela.temAtrasados;
+        document.querySelectorAll('button[data-prazo-acab]').forEach(btn => {
+            const alvo = btn.getAttribute('data-prazo-acab');
+            const ativo = alvo === tela.prazo;
+            btn.classList.toggle('active', ativo);
+            // O vermelho existe para uma situação só: olhando "Para Hoje" e
+            // havendo pedido atrasado escondido fora da lista.
+            btn.style.boxShadow = (!ativo && alvo === 'atrasados' && alertar)
+                ? '0 0 10px rgba(239,68,68,0.55)' : '';
+            btn.style.borderColor = (!ativo && alvo === 'atrasados' && alertar) ? '#ef4444' : '';
+            btn.style.color = (!ativo && alvo === 'atrasados' && alertar) ? '#f87171' : '';
+        });
+    }
+
+    function pintarBotoesSetor() {
+        const todos = document.getElementById('btn-filtro-todos-setores-acab');
+        if (todos) todos.classList.toggle('active', !tela.setor);
+        document.querySelectorAll('#filter-container-setor-acab .filter-btn-pill').forEach(btn => {
+            const texto = (btn.textContent || '').trim().toUpperCase();
+            const alvo = normalizar(tela.setor);
+            btn.classList.toggle('active', !!alvo && normalizar(texto) === alvo);
+        });
+    }
+
+    function pintarBotoesEstagio() {
+        document.querySelectorAll('#filter-container-status-acab .prod-filter-status').forEach(btn => {
+            const rotulo = (btn.textContent || '').replace(/^[^\wÀ-ÿ]+/, '').trim();
+            const ativo = tela.estagio
+                ? rotulo.toLowerCase() === tela.estagio.toLowerCase()
+                : rotulo.toLowerCase() === 'todos';
+            btn.classList.toggle('active', ativo);
+            btn.classList.toggle('teal', ativo);
+        });
+    }
+
+    function normalizar(s) {
+        return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+    }
+
+    // ─── A lista de pedidos ─────────────────────────────────────────────────
+
+    function filtrar(ordens) {
+        const campoBusca = document.getElementById('os-search-acabamento');
+        // Mesma guarda da Produção: o Chrome ignora autocomplete=off e enfia o
+        // e-mail salvo no campo de busca, e a lista some sem explicação.
+        if (campoBusca && campoBusca.value.includes('@')) campoBusca.value = '';
+        const busca = (campoBusca ? campoBusca.value : '').trim().toLowerCase();
+
+        const s = estado();
+        const rotulo = fn('rotuloDoCliente');
+
+        return ordens.filter(os => {
+            const modelos = modelosDoPedido(os);
+
+            if (busca) {
+                const num = String(os.numero || '');
+                const cli = (rotulo ? rotulo(os) : (os.cliente || '')).toLowerCase();
+                const numInt = parseInt(os.numero);
+                const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
+                const evento = arte ? String(arte.nome_evento).toLowerCase() : '';
+                if (!num.includes(busca) && !cli.includes(busca) && !evento.includes(busca)) return false;
+            }
+
+            if (tela.setor) {
+                const alvo = normalizar(tela.setor);
+                const bate = modelos.some(m => normalizar(m.setor) === alvo)
+                    || (s.osItens[os.id] || []).some(i => normalizar(i.setor) === alvo);
+                if (!bate) return false;
+            }
+
+            if (tela.estagio) {
+                if (!modelos.some(m => (estagioDoModelo(m) || 'Aguardando') === tela.estagio)) return false;
+            }
+
+            return true;
+        });
+    }
+
+    function barraDeProgresso(revisados, total) {
+        const pct = total > 0 ? Math.round((revisados / total) * 100) : 0;
+        return `
+            <div style="width: 100%; min-width: 110px;">
+                <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
+                    <span>${revisados}/${total} mod.</span>
+                    <strong>${pct}%</strong>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="width: ${pct}%; height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s ease;"></div>
+                </div>
+            </div>`;
+    }
+
+    function render() {
+        const tbody = document.getElementById('tbody-acabamento');
+        if (!tbody) return;
+
+        const s = estado();
+        const emProducao = pedidosEmProducao();
+
+        // ── Métricas ────────────────────────────────────────────────────────
+        let emAcabamento = 0, revisados = 0, concluidos = 0;
+        emProducao.forEach(os => {
+            const modelos = modelosDoPedido(os);
+            modelos.forEach(m => {
+                const e = estagioDoModelo(m);
+                if (e === 'Em acabamento') emAcabamento++;
+                if (e === 'Revisado') revisados++;
+            });
+            if (modelos.length && estagioDoPedido(modelos) === 'Revisado') concluidos++;
+        });
+
+        escrever('stat-acab-pedidos-fila', emProducao.length);
+        escrever('stat-acab-modelos-acabamento', emAcabamento);
+        escrever('stat-acab-modelos-revisados', revisados);
+        escrever('stat-acab-pedidos-concluidos', concluidos);
+        escrever('badge-acabamento', emProducao.length);
+
+        // O alerta de atraso é global, sobre a fila inteira: não muda conforme
+        // setor, estágio ou busca. Pedido já revisado não conta — ele saiu da
+        // fila de trabalho.
+        tela.temAtrasados = emProducao.some(os => estaAtrasado(os) && !pedidoTotalmenteRevisado(os));
+
+        // ── A tabela ────────────────────────────────────────────────────────
+        let lista = filtrar(emProducao).filter(passaNoPrazo);
+        lista = aplicarSort(lista);
+
+        pintarCabecalhos();
+        pintarBotoesPrazo();
+        pintarBotoesSetor();
+        pintarBotoesEstagio();
+
+        const contador = document.getElementById('os-acabamento-count-badge');
+        if (contador) contador.textContent = `${lista.length} ${lista.length === 1 ? 'Pedido' : 'Pedidos'}`;
+
+        const vazio = document.getElementById('empty-acabamento');
+        const tabela = document.getElementById('table-acabamento');
+
+        if (!lista.length) {
+            tbody.innerHTML = '';
+            if (vazio) vazio.style.display = 'block';
+            if (tabela) tabela.style.display = 'none';
+            return;
+        }
+        if (vazio) vazio.style.display = 'none';
+        if (tabela) tabela.style.display = '';
+
+        const rotulo = fn('rotuloDoCliente');
+        const logoFrete = fn('logoDoFreteHtml');
+        const badgePrazo = fn('formatPrazoBadge');
+        const previewArte = fn('previewDaArteDoPedidoHtml');
+
+        tbody.innerHTML = lista.map(os => {
+            const modelos = modelosDoPedido(os);
+            const total = modelos.length || 1;
+            const revisadosDoPedido = modelos.filter(m => estagioDoModelo(m) === 'Revisado').length;
+            const qtdTotal = modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
+
+            const freteBruto = (os.frete_escolhido || '').trim() || 'Retirada Local';
+            const freteHtml = logoFrete
+                ? `<div style="display:flex; justify-content:center;">${logoFrete(freteBruto)}</div>`
+                : esc(freteBruto);
+
+            const numInt = parseInt(os.numero);
+            const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
+            const eventoHtml = arte
+                ? `<br><span style="font-size: 0.82rem; color: #f97316;">${esc(arte.nome_evento)}</span>`
+                : '';
+
+            return `
+                <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer;" title="Abrir os modelos do pedido ${esc(os.numero)}">
+                    <td>
+                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${esc(os.numero)}</span>
+                    </td>
+                    <td>
+                        <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
+                        ${eventoHtml}
+                    </td>
+                    <td>${barraDeProgresso(revisadosDoPedido, total)}</td>
+                    <td style="text-align: center; vertical-align: middle;">${previewArte ? previewArte(os) : ''}</td>
+                    <td><span class="badge">${modelos.length} ${modelos.length === 1 ? 'modelo' : 'modelos'}</span></td>
+                    <td><strong>${qtdTotal.toLocaleString('pt-BR')}</strong></td>
+                    <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
+                    <td>${seloDoEstagio(estagioDoPedido(modelos))}</td>
+                    <td style="text-align:center; vertical-align:middle;">${badgePrazo ? badgePrazo(os) : ''}</td>
+                </tr>`;
+        }).join('');
+    }
+
+    function escrever(id, valor) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = valor;
+    }
+
+    // ─── A lista de responsáveis ────────────────────────────────────────────
+
+    /**
+     * Os operadores de acesso local da gráfica, só pelo nome.
+     *
+     * Vem da view `imposition_operadores`, criada em
+     * `sql/painel_do_acabamento.sql`. A TABELA por trás dela guarda os códigos
+     * de seis caracteres em texto claro e está fechada para as chaves públicas
+     * — por isso a leitura passa por uma view que expõe nome, papel e nada
+     * mais. A rota `/api/acessos-locais`, que devolve os códigos, exige o
+     * módulo Usuários e não serviria aqui: o operador do acabamento não o tem,
+     * e na estação da gráfica ele nem sessão do Supabase tem.
+     */
+    async function carregarOperadores() {
+        if (tela.operadores) return tela.operadores;
+        tela.erroOperadores = '';
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('sem conexão com o banco');
+            }
+            const { data, error } = await supabaseClient
+                .from('imposition_operadores')
+                .select('id, nome, role, ativo')
+                .order('nome', { ascending: true });
+            if (error) throw error;
+            tela.operadores = (data || [])
+                .filter(o => o.ativo !== false && (o.nome || '').trim())
+                .map(o => String(o.nome).trim());
+        } catch (e) {
+            tela.operadores = [];
+            tela.erroOperadores = e && e.message ? e.message : String(e);
+            console.warn('[acabamento] não deu para ler a lista de operadores:', e);
+        }
+        return tela.operadores;
+    }
+
+    /**
+     * Lê o estágio e o responsável de todos os modelos da fila.
+     *
+     * Consulta própria, e de propósito: as duas colunas são novas, e enquanto
+     * `sql/painel_do_acabamento.sql` não tiver rodado o banco responde que a
+     * coluna não existe. Aqui isso vira um recado nesta tela; se estivesse
+     * junto da consulta do Painel de Produção, derrubaria a lista da gráfica.
+     */
+    async function carregarAcabamentoDosModelos() {
+        const numeros = pedidosEmProducao()
+            .map(os => parseInt(os.numero))
+            .filter(n => !isNaN(n));
+        if (!numeros.length) { tela.acabamento = {}; return; }
+
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('sem conexão com o banco');
+            }
+            const mapa = {};
+            // Em fatias, pelo mesmo motivo do `carregarModelosGlobais`: um `in`
+            // com mil números estoura o tamanho da URL.
+            for (let i = 0; i < numeros.length; i += 200) {
+                const fatia = numeros.slice(i, i + 200);
+                const { data, error } = await supabaseClient
+                    .from('pedidos_modelos')
+                    .select('id, id_int, acabamento_status, acabamento_responsavel')
+                    .in('id_int', fatia);
+                if (error) throw error;
+                (data || []).forEach(m => {
+                    mapa[String(m.id)] = {
+                        status: m.acabamento_status || '',
+                        responsavel: m.acabamento_responsavel || '',
+                    };
+                });
+            }
+            tela.acabamento = mapa;
+            tela.erroAcabamento = '';
+        } catch (e) {
+            tela.erroAcabamento = (e && e.message) ? e.message : String(e);
+            console.warn('[acabamento] não deu para ler o estágio dos modelos:', e);
+            // Uma vez por sessão: repetir o aviso a cada desenho da tela viraria
+            // ruído, e o recado é sempre o mesmo.
+            if (!tela.avisouDoBanco) {
+                tela.avisouDoBanco = true;
+                const aviso = fn('toast');
+                if (aviso) {
+                    aviso('O Painel do Acabamento ainda não foi ligado ao banco. '
+                        + 'Peça ao administrador para rodar a atualização do banco. '
+                        + 'Até lá a tela lista os pedidos, mas não guarda estágio nem responsável.',
+                        'warning');
+                }
+            }
+        }
+    }
+
+    // ─── O pedido aberto ────────────────────────────────────────────────────
+
+    /**
+     * A amostra que foi enviada ao cliente pelo link.
+     *
+     * É a imagem COMPOSTA — cor + arte + numeração — que ele viu e aprovou, e é
+     * por isso que ela serve de referência para conferir o papel. Mora em
+     * `amostra_arte_base64` quando é um render do bucket `amostras_renderizadas`;
+     * na falta dele vale a arte do modelo.
+     *
+     * Amostra em PDF NÃO vira imagem aqui: sai um atalho que abre o arquivo.
+     * Rasterizar a arte do cliente está fora de cogitação neste projeto.
+     */
+    function amostraDoModelo(item) {
+        const composta = item.amostra_arte_base64 || '';
+        const ehRender = typeof composta === 'string' && composta.indexOf('/amostras_renderizadas/') !== -1;
+        if (ehRender) return { src: composta, aprovada: true };
+        if (composta) return { src: composta, aprovada: false };
+        if (item.arte_url) return { src: item.arte_url, aprovada: false };
+        return { src: '', aprovada: false };
+    }
+
+    function ehPdf(src) {
+        const s = String(src || '');
+        return s.startsWith('data:application/pdf') || s.indexOf('JVBERi') !== -1
+            || /\.pdf($|\?)/i.test(s);
+    }
+
+    function amostraHtml(item, idAmostra) {
+        const { src, aprovada } = amostraDoModelo(item);
+        const moldura = 'width: 100%; max-width: 460px; min-height: 150px; border-radius: 10px;'
+            + ' border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);'
+            + ' display: flex; align-items: center; justify-content: center;';
+
+        if (!src) {
+            return `<div style="${moldura} height: 180px; color: var(--text-dim); flex-direction: column; gap: 6px; text-align: center; padding: 12px;">
+                        <span style="font-size: 1.8rem;">🖼️</span>
+                        <span style="font-size: 0.78rem;">Sem amostra enviada ao cliente</span>
+                    </div>`;
+        }
+
+        if (ehPdf(src)) {
+            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: var(--blue); cursor: pointer; text-align: center; padding: 12px;"
+                         onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
+                        <span style="font-size: 2rem;">📄</span>
+                        <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
+                    </div>`;
+        }
+
+        const legenda = aprovada
+            ? 'Amostra aprovada pelo cliente no link — clique para ampliar'
+            : 'Arte do modelo — clique para ampliar';
+
+        return `
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 460px;">
+                <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
+                     style="width: 100%; max-height: 320px; object-fit: contain; background: #ffffff; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); cursor: zoom-in; display: block;"
+                     onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
+                <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
+            </div>`;
+    }
+
+    function dado(rotuloTexto, valor, cor) {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 92px;">
+                <span style="font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8;">${esc(rotuloTexto)}</span>
+                <span style="font-size: 1.02rem; font-weight: 700; color: ${cor || '#ffffff'};">${valor}</span>
+            </div>`;
+    }
+
+    function nomeNoCatalogo(catalogo, id) {
+        const linha = id ? (catalogo || []).find(x => String(x.id) === String(id)) : null;
+        return linha ? (linha.name || linha.tipo || '') : '';
+    }
+
+    function selectEstagio(item, osId, podeEditar) {
+        const atual = estagioDoModelo(item);
+        const opcoes = ['<option value="">— Status —</option>'].concat(
+            ESTAGIOS.map(e => `<option value="${esc(e)}" ${atual === e ? 'selected' : ''}>${esc(e)}</option>`)
+        ).join('');
+        return `
+            <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
+                    onchange="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', this.value)"
+                    title="Em que ponto do acabamento este modelo está">
+                ${opcoes}
+            </select>`;
+    }
+
+    function selectResponsavel(item, osId, podeEditar) {
+        const atual = responsavelDoModelo(item);
+        const lista = tela.operadores || [];
+        // Um responsável que saiu da lista de acessos continua aparecendo: o
+        // nome está gravado no modelo, e apagá-lo da tela faria o trabalho
+        // parecer sem dono.
+        const nomes = lista.slice();
+        if (atual && !nomes.some(n => n.toLowerCase() === atual.toLowerCase())) nomes.unshift(atual);
+
+        const opcoes = ['<option value="">— Responsável —</option>'].concat(
+            nomes.map(n => `<option value="${esc(n)}" ${n.toLowerCase() === atual.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
+        ).join('');
+
+        // A saída da trava vai escrita na própria tela: sem isso o operador vê
+        // um seletor vazio e não tem como saber o que fazer.
+        const recado = (!lista.length && tela.erroOperadores)
+            ? `<span style="font-size:0.7rem; color:#f87171;">Lista de operadores indisponível. Cadastre em Usuários → Acesso Local, ou tente ATUALIZAR.</span>`
+            : (!lista.length
+                ? `<span style="font-size:0.7rem; color:var(--text-dim);">Nenhum acesso local cadastrado. Cadastre em Usuários → Acesso Local.</span>`
+                : '');
+
+        return `
+            <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
+                    onchange="AcabamentoPainel.mudarResponsavel('${escJs(item.id)}', '${escJs(osId)}', this.value)"
+                    title="Quem é o responsável pelo acabamento deste modelo">
+                ${opcoes}
+            </select>
+            ${recado}`;
+    }
+
+    const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
+        + ' background: #030a00; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;'
+        + ' color: #ffffff; padding: 8px 12px; font-size: 1.05rem; width: 100%;'
+        + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
+        + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
+    const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
+
+    /** Só quem tem EDITAR do módulo Acabamento mexe nos dois seletores. */
+    function podeEditar() {
+        const perms = window._currentPerms;
+        if (!perms) return true;   // permissões ainda não chegaram: não trancar
+        return perms.perm_acabamento_edit === true;
+    }
+
+    function linhaDoModelo(item, osId, idx) {
+        const s = estado();
+        const estagio = estagioDoModelo(item);
+        const fundo = FUNDO_DO_ESTAGIO[estagio] || FUNDO_DO_ESTAGIO[''];
+
+        const corId = item.amostra_cor_id;
+        const corNome = nomeNoCatalogo(s.cores, corId) || item.cor || item.padrao || '';
+        const corObj = corId ? (s.cores || []).find(c => String(c.id) === String(corId)) : null;
+        const corHex = corObj ? (corObj.cor_referencia || corObj.hex || '') : '';
+
+        const numNome = nomeNoCatalogo(s.numeracoes, item.amostra_num_id || item.numeracao_id)
+            || item.gabarito_operacional || item.numeracao || '';
+
+        const numSel = (item.amostra_num_id || item.numeracao_id)
+            ? (s.numeracoes || []).find(n => String(n.id) === String(item.amostra_num_id || item.numeracao_id))
+            : null;
+        const ehCamarote = !!(numSel && (numSel.tipo === 'CAMAROTE' || numSel.type === 'CAMAROTE'));
+
+        const qtd = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0);
+        const ni = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
+        const nf = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
+
+        const numeros = ehCamarote
+            ? [
+                dado('Q_CAM', esc(item.q_cam || item.Q_CAM || '—'), '#f59e0b'),
+                dado('L_CAM', esc(item.l_cam || item.L_CAM || '—'), '#f59e0b'),
+                dado('C_INI', esc(item.c_ini || item.C_INI || 1), '#f59e0b'),
+            ].join('')
+            : [
+                dado('Qtd', (parseInt(qtd) || 0).toLocaleString('pt-BR')),
+                dado('Nº Inicial', esc(ni || '—')),
+                dado('Nº Final', esc(nf || '—')),
+                dado('Bloco', esc(item.bloco !== undefined && item.bloco !== null && item.bloco !== '' ? item.bloco : '—')),
+            ].join('');
+
+        const impressao = fn('normalizarStatusImpressao')
+            ? window.normalizarStatusImpressao(item.status_impressao || item.impressao)
+            : (item.status_impressao || item.impressao || '—');
+
+        const idAmostra = `acab-amostra-${esc(osId)}-${esc(item.id)}-${idx}`;
+
+        return `
+            <div style="background: ${fundo}; outline: 1px solid #918f8c; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start;">
+
+                <div style="flex: 0 1 460px; min-width: 260px;">
+                    ${amostraHtml(item, idAmostra)}
+                </div>
+
+                <div style="flex: 1 1 380px; min-width: 300px; display: flex; flex-direction: column; gap: 14px;">
+
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed #918f8c'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
+                        <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
+                        <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
+                        ${seloDoEstagio(estagio || 'Aguardando')}
+                    </div>
+
+                    <div style="display: flex; gap: 18px; flex-wrap: wrap;">
+                        ${numeros}
+                    </div>
+
+                    <div style="display: flex; gap: 18px; flex-wrap: wrap;">
+                        ${dado('Cor', esc(corNome || '—'))}
+                        ${dado('Numeração', esc(numNome || '—'))}
+                        ${dado('Verso', esc(item.verso_tipo || (item.verso ? 'FxVerso' : 'Frente')))}
+                        ${dado('Impressão', esc(impressao || '—'), '#94a3b8')}
+                    </div>
+
+                    <div style="display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px dashed rgba(255,255,255,0.18); padding-top: 12px;">
+                        <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
+                            ${selectEstagio(item, osId, podeEditar())}
+                        </div>
+                        <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
+                            ${selectResponsavel(item, osId, podeEditar())}
+                        </div>
+                    </div>
+
+                </div>
+            </div>`;
+    }
+
+    function renderDetalhe() {
+        const corpo = document.getElementById('acab-detalhe-corpo');
+        if (!corpo || !tela.pedidoAberto) return;
+
+        const s = estado();
+        const buscar = fn('findOSInState');
+        const os = buscar ? buscar(tela.pedidoAberto) : (s.ordens || []).find(o => o.id === tela.pedidoAberto);
+        const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
+
+        const rotulo = fn('rotuloDoCliente');
+        escrever('acab-detalhe-numero', os ? `#${os.numero}` : '');
+        const cliEl = document.getElementById('acab-detalhe-cliente');
+        if (cliEl) cliEl.textContent = os && rotulo ? rotulo(os) : '';
+
+        if (!itens.length) {
+            // "Carregando" so enquanto realmente esta carregando. Pedido sem
+            // modelo nenhum existe, e deixa-lo com a frase de espera para sempre
+            // faria o operador achar que a tela travou.
+            corpo.innerHTML = tela.carregandoPedido
+                ? `<div style="padding: 28px; text-align: center; color: var(--text-dim);">Carregando os modelos deste pedido…</div>`
+                : `<div style="padding: 28px; text-align: center; color: var(--text-dim);">
+                       <div style="font-size: 1.8rem; margin-bottom: 8px;">📦</div>
+                       Este pedido não tem modelo cadastrado.<br>
+                       <span style="font-size: 0.82rem;">Se isso não está certo, use VOLTAR e depois ATUALIZAR.</span>
+                   </div>`;
+            escrever('acab-detalhe-progresso', '0/0 revisados');
+            return;
+        }
+
+        const revisados = itens.filter(i => estagioDoModelo(i) === 'Revisado').length;
+        escrever('acab-detalhe-progresso', `${revisados}/${itens.length} revisados`);
+
+        // Agrupado por produto, na mesma ordem em que a fila do Pedido desenha.
+        const grupos = {};
+        itens.forEach(item => {
+            const prodId = item._vibe_id_produto || 'sem_produto';
+            if (!grupos[prodId]) grupos[prodId] = [];
+            grupos[prodId].push(item);
+        });
+
+        corpo.innerHTML = Object.keys(grupos).map(prodId => {
+            const doGrupo = grupos[prodId];
+            let nome = 'Produto Desconhecido';
+            let setorPcp = '';
+            if (prodId !== 'sem_produto') {
+                const prod = (s.produtosGlobais || []).find(p => String(p.id_produto) === String(prodId));
+                nome = prod ? (prod.nomeReal || `Produto #${prodId}`) : `Produto #${prodId}`;
+                setorPcp = prod ? (prod.setor_pcp || '') : '';
+            }
+            const selo = setorPcp
+                ? `<span class="badge" style="font-size:0.72rem; margin-left:8px; color:#ffffff;">${esc(setorPcp)}</span>`
+                : '';
+
+            return `
+                <div style="background:#1e293b; border: 1px solid #918f8c; border-radius: 8px; overflow: hidden; margin-bottom: 14px;">
+                    <div style="background:#0f172a; padding: 10px 15px; border-bottom: 1px solid #918f8c;">
+                        <h5 style="margin: 0; color: #facc15; font-size: 1.25rem; font-weight: bold;">
+                            📦 ${esc(nome)} ${selo}
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-left: 8px;">${doGrupo.length} ${doGrupo.length === 1 ? 'modelo' : 'modelos'}</span>
+                        </h5>
+                    </div>
+                    <div style="padding: 12px;">
+                        ${doGrupo.map((item, idx) => linhaDoModelo(item, tela.pedidoAberto, idx)).join('')}
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    function mostrarLista() {
+        const topo = document.getElementById('acab-top-bar');
+        const lista = document.getElementById('acab-lista-card');
+        const detalhe = document.getElementById('acab-detalhe-card');
+        const vazio = document.getElementById('empty-acabamento');
+        const emDetalhe = !!tela.pedidoAberto;
+
+        if (topo) topo.style.display = emDetalhe ? 'none' : '';
+        if (lista) lista.style.display = emDetalhe ? 'none' : '';
+        if (detalhe) detalhe.style.display = emDetalhe ? 'flex' : 'none';
+        if (vazio && emDetalhe) vazio.style.display = 'none';
+    }
+
+    // ─── Gravação ───────────────────────────────────────────────────────────
+
+    /**
+     * Grava um dos dois campos do acabamento no modelo.
+     *
+     * Mesmo caminho que o painel já usa para o `status_impressao`: `update`
+     * direto na tabela `pedidos_modelos`, pelo id. O id pode ser numérico ou
+     * texto conforme a origem da linha, e a comparação errada devolve zero
+     * linhas em silêncio — por isso a distinção abaixo.
+     */
+    async function gravar(itemId, osId, campo, valor) {
+        const s = estado();
+        const limpo = (valor || '').trim() || null;
+
+        // A tela anda na frente do banco de propósito: o operador não pode
+        // esperar a rede para ver a própria escolha. Se a gravação falhar, o
+        // aviso aparece e a lista é redesenhada a partir do banco na próxima
+        // atualização.
+        const itens = (s.osItens && s.osItens[osId]) || [];
+        const item = itens.find(i => String(i.id) === String(itemId));
+        if (item) item[campo] = limpo;
+
+        // O mapa da lista anda junto: sem isto, voltar para a lista mostraria o
+        // estágio anterior até a próxima leitura do banco.
+        const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '' };
+        if (campo === 'acabamento_status') noMapa.status = limpo || '';
+        else noMapa.responsavel = limpo || '';
+        tela.acabamento[String(itemId)] = noMapa;
+
+        const num = parseInt(String(osId).replace('vibe_', ''));
+        if (s.modelosGlobais && s.modelosGlobais[num]) {
+            const global = s.modelosGlobais[num].find(m => String(m.id) === String(itemId));
+            if (global) global[campo] = limpo;
+        }
+
+        renderDetalhe();
+        render();
+
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('sem conexão com o banco');
+            }
+            const ehNumero = /^\d+$/.test(String(itemId).trim());
+            let consulta = supabaseClient.from('pedidos_modelos').update({ [campo]: limpo });
+            consulta = ehNumero
+                ? consulta.eq('id', parseInt(itemId, 10))
+                : consulta.eq('id', itemId);
+            const { error } = await consulta;
+            if (error) throw error;
+        } catch (e) {
+            console.error(`[acabamento] erro ao gravar ${campo}:`, e);
+            const aviso = fn('toast');
+            if (aviso) {
+                aviso(`Não deu para gravar ${campo === 'acabamento_status' ? 'o status' : 'o responsável'} `
+                    + `deste modelo (${e && e.message ? e.message : e}). Tente de novo.`, 'error');
+            }
+        }
+    }
+
+    // ─── Lightbox próprio ───────────────────────────────────────────────────
+    //
+    // O `openClienteLightbox` mora no `cliente.js`, que o painel da gráfica não
+    // carrega — chamá-lo daqui seria um clique que não faz nada. São vinte
+    // linhas, e a ampliação é justamente o que faz a amostra servir para
+    // conferir a impressão.
+
+    function ampliar(idImagem) {
+        const img = document.getElementById(idImagem);
+        if (!img || !img.src) return;
+
+        let overlay = document.getElementById('acab-lightbox');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'acab-lightbox';
+            overlay.style.cssText = 'position: fixed; inset: 0; z-index: 100000; display: none;'
+                + ' align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.92);'
+                + ' padding: 24px; cursor: zoom-out;';
+            overlay.innerHTML = `
+                <img id="acab-lightbox-img" alt="Amostra ampliada"
+                     style="width: 90vw; height: 84vh; object-fit: contain; background: #ffffff; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);" />
+                <button type="button" title="Fechar (Esc)"
+                        style="position: absolute; top: 14px; right: 18px; z-index: 1; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35); color: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 1rem; font-weight: 700; cursor: pointer;">✕ Fechar</button>`;
+            overlay.addEventListener('click', fecharLightbox);
+            document.body.appendChild(overlay);
+            document.addEventListener('keydown', ev => {
+                if (ev.key === 'Escape') fecharLightbox();
+            });
+        }
+        const alvo = document.getElementById('acab-lightbox-img');
+        if (alvo) alvo.src = img.src;
+        overlay.style.display = 'flex';
+    }
+
+    function fecharLightbox() {
+        const overlay = document.getElementById('acab-lightbox');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    // ─── O que a tela oferece ao HTML ───────────────────────────────────────
+
+    const AcabamentoPainel = {
+        render,
+
+        setFiltroPrazo(valor) {
+            tela.prazo = ['hoje', 'atrasados', 'revisados'].includes(valor) ? valor : 'geral';
+            render();
+        },
+
+        setFiltroSetor(valor) {
+            tela.setor = valor || '';
+            render();
+        },
+
+        setFiltroStatus(valor) {
+            tela.estagio = valor || '';
+            render();
+        },
+
+        setSort(campo) {
+            if (!COLUNAS[campo]) return;
+            const atual = tela.sort;
+            tela.sort = (atual && atual.campo === campo)
+                ? { campo, dir: atual.dir === 'asc' ? 'desc' : 'asc' }
+                : { campo, dir: COLUNAS[campo].dirInicial };
+            render();
+        },
+
+        /** Volta ao padrão e recarrega a lista. Não fala com o agente local. */
+        atualizar() {
+            tela.sort = null;
+            tela.prazo = 'geral';
+            tela.setor = '';
+            tela.estagio = '';
+            tela.operadores = null;
+            carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
+            carregarAcabamentoDosModelos().then(() => render());
+            const carregar = fn('loadOrdens');
+            return carregar ? carregar() : Promise.resolve(render());
+        },
+
+        async abrirPedido(osId) {
+            tela.pedidoAberto = osId;
+            tela.carregandoPedido = true;
+            mostrarLista();
+            renderDetalhe();
+            try {
+                await carregarOperadores();
+                const carregar = fn('loadOSItens');
+                if (carregar) await carregar(osId);
+            } finally {
+                tela.carregandoPedido = false;
+            }
+            renderDetalhe();
+            render();
+        },
+
+        fecharPedido() {
+            tela.pedidoAberto = null;
+            mostrarLista();
+            render();
+        },
+
+        mudarEstagio(itemId, osId, valor) {
+            return gravar(itemId, osId, 'acabamento_status', valor);
+        },
+
+        mudarResponsavel(itemId, osId, valor) {
+            return gravar(itemId, osId, 'acabamento_responsavel', valor);
+        },
+
+        ampliar,
+
+        /** Chamado quando a tela é aberta pelo menu. */
+        aoAbrir() {
+            mostrarLista();
+            carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
+            carregarAcabamentoDosModelos().then(() => render());
+            const carregar = fn('loadOrdens');
+            if (carregar) carregar();
+            render();
+        },
+
+        // Para os testes: dá acesso às regras puras sem precisar de uma tela.
+        _regras: {
+            ehDeProducao,
+            estagioDoModelo,
+            responsavelDoModelo,
+            estagioDoPedido,
+            amostraDoModelo,
+            ehPdf,
+            valorDeOrdenacao,
+            ESTAGIOS,
+        },
+    };
+
+    window.AcabamentoPainel = AcabamentoPainel;
+
+    // ─── Embrulhos: nada do que já existe é reescrito ────────────────────────
+
+    (function embrulharRenderOrdens() {
+        const original = window.renderOrdens;
+        if (typeof original !== 'function') return;
+        window.renderOrdens = function () {
+            const r = original.apply(this, arguments);
+            try {
+                render();
+                if (tela.pedidoAberto) renderDetalhe();
+            } catch (e) {
+                console.warn('[acabamento] falha ao desenhar a tela:', e);
+            }
+            return r;
+        };
+    })();
+
+    (function embrulharShowView() {
+        const original = window.showView;
+        if (typeof original !== 'function') return;
+        window.showView = function (viewId) {
+            const r = original.apply(this, arguments);
+            if (viewId === 'view-acabamento') {
+                const secao = document.getElementById('view-acabamento');
+                // Só depois de confirmar que a seção abriu MESMO: o porteiro de
+                // permissão do `showView` original pode ter recusado, e carregar
+                // pedidos para uma tela que não abriu seria trabalho jogado fora.
+                if (secao && secao.classList.contains('active')) {
+                    try { AcabamentoPainel.aoAbrir(); } catch (e) {
+                        console.warn('[acabamento] falha ao abrir a tela:', e);
+                    }
+                }
+            }
+            return r;
+        };
+    })();
+
+    document.addEventListener('DOMContentLoaded', () => {
+        try { pintarBotoesPrazo(); pintarCabecalhos(); } catch (e) {}
+    });
+})();

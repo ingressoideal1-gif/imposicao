@@ -112,6 +112,11 @@ PAINEL_ARQUIVOS = [
     "ideal-control.js",
     "script.js",
     "pedido.js",
+    # A tela do Painel do Acabamento (20/08/2026). Ela mora em arquivo
+    # proprio, e o `index.html` que a estacao baixa ja tem a tag <script>
+    # apontando para ela: sem este nome aqui, a estacao serviria a pagina
+    # nova pedindo um script que da 404, e o menu novo abriria em branco.
+    "acabamento.js",
     "cliente.js",
     # Os sete arquivos do Portal do Pedido (20/08/2026). A pagina do cliente
     # deixou de ser um funil de aprovacao e virou cinco secoes; cada uma mora no

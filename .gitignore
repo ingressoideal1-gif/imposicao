@@ -55,7 +55,13 @@ hot_folders.json
 
 # Copia do painel que o agente sincroniza para servir offline. Sai do Storage em
 # tempo de execucao, nao e fonte.
-painel/
+#
+# ANCORADO NA RAIZ, e a barra da frente nao e enfeite: sem ela o padrao casa com
+# QUALQUER pasta chamada `painel` em qualquer nivel -- e casava com
+# `supabase/functions/painel/`, a Edge Function que guarda as permissoes e os
+# codigos de acesso das estacoes. Ela era a UNICA das nove funcoes fora do
+# controle de versao, sem que nada na tela dissesse isso. Achado em 20/08/2026.
+/painel/
 
 # A area de montagem da mesma sincronizacao. Ficava de fora desta lista, e o
 # resultado era a arvore sujar sozinha: o NewProd.exe roda em segundo plano,

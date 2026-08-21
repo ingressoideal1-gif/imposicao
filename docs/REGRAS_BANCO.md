@@ -70,11 +70,20 @@ O banco antigo do Imposition (`atsxtuibeitloosckmlc.supabase.co`) será **descon
 | `imposition_acessos_locais` | Códigos de acesso local das estações da gráfica | ✅ Criado |
 | `imposition_segredos` | Segredos do painel | ✅ Criado |
 | `imposition_tempo_no_card` | Há quanto tempo cada pedido está no card da Lista de Arte | ✅ Criado 19/08/2026 |
+| `imposition_operadores` | **View** — só os nomes dos acessos locais, para o seletor de responsável do Painel do Acabamento | ✅ Criado 20/08/2026 |
 
 > [!IMPORTANT]
 > `imposition_user_permissions` tem **uma coluna por permissão**. Enviar uma coluna
 > que não existe faz o PostgREST recusar a escrita inteira com 400 — e o painel
 > perde a gravação toda, não só a permissão desconhecida.
+
+> [!CAUTION]
+> `imposition_operadores` é uma **view**, e existe justamente para que a tabela
+> `imposition_acessos_locais` continue fechada. Ela expõe `id`, `nome`, `role` e
+> `ativo` — **nunca `codigo`, nunca `permissoes`**. O código de seis caracteres
+> destranca uma estação da gráfica; quem precisa dele continua passando pela rota
+> `/api/acessos-locais`, que exige o módulo Usuários. Ver
+> [`painel_do_acabamento.md`](painel_do_acabamento.md).
 
 `imposition_tempo_no_card` guarda só o **carimbo de hora** da última troca de card;
 o card em si é calculado no painel por `classificarPedidoNaArte`. O SQL está em
@@ -87,7 +96,7 @@ documentada em [`lista_de_arte.md`](lista_de_arte.md).
 |--------|-----------|--------|
 | `pedidos_artes` | Arquivos e estado da arte de cada pedido | ✅ Criado |
 | `pedidos_links_cliente` | Links públicos de aprovação do cliente | ✅ Criado |
-| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão) | ✅ Criado |
+| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel`) | ✅ Criado |
 
 ## ⏳ Tabelas Operacionais/Runtime (Postergadas para Próxima Fase)
 
