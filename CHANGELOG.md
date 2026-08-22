@@ -4,7 +4,26 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v684** — 2026-08-22 | Agente **1.2.178**
+## Versão atual: **v685** — 2026-08-22 | Agente **1.2.179**
+
+---
+
+## [v685 — 2026-08-22] — Elemento de banco de dados sem CSV ou sem coluna trava o PRONTO
+
+Regra do usuário: *"sempre que um elemento do tipo Banco de Dados estiver presente na numeração,
+necessariamente precisa ter um banco de dados e uma coluna associados a ele; quando não houver,
+mostrar uma mensagem no modelo e impedir marcar PRONTO"*.
+
+No card do modelo, ao lado da regra de células: se a numeração tem elemento `source: 'database'`
+e **não tem CSV**, ou algum desses elementos está **sem coluna** ou aponta para **coluna que não
+existe** no CSV, aparece a faixa vermelha com o que falta e o que fazer (abrir a numeração no ✏️,
+carregar o CSV, apontar a coluna), e o **MARCAR PRONTO** fica trancado — no botão e no clique.
+Como o pedido só vira "Enviar Arte" com todos os modelos PRONTO, isso segura o pedido até a
+numeração ficar completa.
+
+Nasceu do pedido 21085: onze modelos apontavam para a "Expointer 2026", que tinha o QR de banco de
+dados e nenhum CSV — impresso, o QR sairia vazio. No link do cliente a trava não aparece. A regra é
+pura (`bancoDeDadosIncompletoDoModelo`) e o harness da Lista de Arte a lê do `script.js`.
 
 ---
 

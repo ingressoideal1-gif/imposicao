@@ -247,7 +247,23 @@ alguém corrigir.
 > volta** no banco: ela é a quantidade contratada, e mexer nela mexe no valor do
 > pedido.
 
-### 4. Só o administrador libera para produção
+### 4. Elemento de banco de dados sem banco ou sem coluna
+
+Regra do usuário, 22/08/2026. Se a numeração do modelo tem um elemento do tipo
+**Banco de Dados** (`source: 'database'`), ela precisa ter um **CSV carregado**
+e cada um desses elementos precisa apontar para uma **coluna que exista** nesse
+CSV. Faltando qualquer um dos dois, o card mostra uma faixa vermelha dizendo o
+que falta (sem CSV; QR sem coluna; coluna "X" não existe) e o **MARCAR PRONTO**
+fica trancado — no botão e no clique (`decisionAmostraItem`), porque botão
+cinza não impede ninguém de chamar a função pelo console.
+
+Nasceu do pedido 21085: onze modelos apontavam para uma numeração com QR de
+banco de dados e nenhum CSV, e nada na tela dizia isso. Impresso, o QR sairia
+vazio. A regra é `bancoDeDadosIncompletoDoModelo(item)`, ao lado da de células;
+no link do cliente ela não aparece, porque o cliente não tem como consertar a
+numeração. O harness da Lista de Arte exercita os seis casos.
+
+### 5. Só o administrador libera para produção
 
 O botão **PRODUÇÃO** (`podeLiberarParaProducao`) é de contingência. O caminho
 normal é o parceiro atualizar `propostas.status_interno` para `EM PRODUCAO`, o

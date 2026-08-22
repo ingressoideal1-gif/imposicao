@@ -22,7 +22,7 @@
     <!-- A fonte da identidade visual, pre-carregada para a tela nao trocar de
          letra depois de aberta. Local, e no pre-cache do service worker. -->
     <link rel="preload" href="ideal-control.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="controle.css?v=684">
+    <link rel="stylesheet" href="controle.css?v=685">
 </head>
 <body>
 <div class="folha">
@@ -542,9 +542,9 @@
      terceiro significa que quem controlar aquele endereco controla o portao.
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
-<script src="supabase-js.min.js?v=684"></script>
-<script src="supabase-config.js?v=684"></script>
-<script src="acesso-conta.js?v=684"></script>
+<script src="supabase-js.min.js?v=685"></script>
+<script src="supabase-config.js?v=685"></script>
+<script src="acesso-conta.js?v=685"></script>
 
 <!-- NAO ha mais camera nesta tela. Ela lia o QR do Pedido, e desde 17/08/2026
      um evento nasce de um pedido que a conta do cliente ja traz -- entao o
@@ -554,24 +554,24 @@
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
-<script src="aparelho.js?v=684"></script>
+<script src="aparelho.js?v=685"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=684"></script>
+<script src="sw-registro.js?v=685"></script>
 
 <!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
-<script src="chaveiro.js?v=684"></script>
+<script src="chaveiro.js?v=685"></script>
 <!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
      de trocar de evento, o "virar portão" precisa saber quantas leituras ainda
      não subiram. Sem este arquivo, aquela conta lança e o toque na barra do
      evento não faz absolutamente nada — sem erro na tela, sem uma palavra. Foi
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
-<script src="portaria-deposito.js?v=684"></script>
-<script src="lista-eventos.js?v=684"></script>
+<script src="portaria-deposito.js?v=685"></script>
+<script src="lista-eventos.js?v=685"></script>
 <!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
@@ -580,25 +580,25 @@
      enquanto uma chamada de rede corre. ANTES do `conta.js` de proposito: e
      ele quem usa `window.botaoEspera` primeiro, no "Entrar" e no "Salvar a
      senha". -->
-<script src="botao-espera.js?v=684"></script>
-<script src="conta.js?v=684"></script>
+<script src="botao-espera.js?v=685"></script>
+<script src="conta.js?v=685"></script>
 <!-- O olho de mostrar/ocultar senha, ao lado de cada campo de senha da casa.
      Depois do `conta.js` por estilo -- ele nao depende de nenhum dos scripts
      acima, so do DOM que o proprio `controle.html` ja declarou. -->
-<script src="mostrar-senha.js?v=684"></script>
+<script src="mostrar-senha.js?v=685"></script>
 <!-- "Meus Pedidos": a lista dos pedidos já impressos e o Carregar. Depois do
      `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
      tem evento nenhum. -->
-<script src="meus-pedidos.js?v=684"></script>
+<script src="meus-pedidos.js?v=685"></script>
 <!-- A caixa do Carregar: a ficha da arte, a senha, e a pergunta do aparelho.
      Depois do `meus-pedidos.js` porque é de lá que ela é aberta, e ela devolve
      a lista de pedidos ao fechar. -->
-<script src="carregar-pedido.js?v=684"></script>
-<script src="caixa-confirmar.js?v=684"></script>
-<script src="menu-geral.js?v=684"></script>
-<script src="fila-presa.js?v=684"></script>
-<script src="virar-portao.js?v=684"></script>
-<script src="controle.js?v=684"></script>
-<script src="parede-pwa.js?v=684"></script>
+<script src="carregar-pedido.js?v=685"></script>
+<script src="caixa-confirmar.js?v=685"></script>
+<script src="menu-geral.js?v=685"></script>
+<script src="fila-presa.js?v=685"></script>
+<script src="virar-portao.js?v=685"></script>
+<script src="controle.js?v=685"></script>
+<script src="parede-pwa.js?v=685"></script>
 </body>
 </html>

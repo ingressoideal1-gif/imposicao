@@ -13847,6 +13847,54 @@ function divergenciaDeCelulasDoModelo(item) {
 window.divergenciaDeCelulasDoModelo = divergenciaDeCelulasDoModelo;
 
 /**
+ * Elemento de banco de dados sem banco, ou sem coluna.
+ *
+ * Regra do usuário, 22/08/2026: sempre que a numeração do modelo tiver um
+ * elemento do tipo Banco de Dados (`source: 'database'`), ela PRECISA ter um
+ * CSV carregado e cada um desses elementos precisa apontar para uma coluna que
+ * exista nesse CSV. Faltando qualquer um dos dois, o card avisa e o modelo não
+ * pode ser marcado PRONTO — é a mesma engrenagem da regra de células: o pedido
+ * só vira "Enviar Arte" com todos os modelos PRONTO, então isso segura o pedido
+ * até alguém consertar a numeração.
+ *
+ * Nasceu do pedido 21085: onze modelos apontavam para a "Expointer 2026", que
+ * tinha o QR de banco de dados e nenhum CSV — e nada na tela dizia isso; o
+ * operador descobria quando o seletor de linhas não aparecia, ou quando o
+ * Ver/editar avisava que a numeração não usa banco. Num pedido impresso, esse
+ * QR sairia vazio.
+ *
+ * Devolve `null` quando não há o que apontar (numeração sem elemento de banco,
+ * ou tudo certo) e `{ motivo, texto }` quando há. Só lê; não escreve nada.
+ */
+function bancoDeDadosIncompletoDoModelo(item) {
+    const num = numeracaoDoModelo(item);
+    if (!num) return null;
+    const deBanco = (num.elements || []).filter(el => el && el.source === 'database');
+    if (!deBanco.length) return null;
+    const rows = Array.isArray(num.csv_data) ? num.csv_data : [];
+    if (!rows.length) {
+        return {
+            motivo: 'sem_banco',
+            texto: 'A numeração tem ' + (deBanco.length === 1 ? 'um elemento' : deBanco.length + ' elementos')
+                + ' de banco de dados, mas nenhum CSV carregado.'
+        };
+    }
+    const colunas = (num.csv_headers && num.csv_headers.length)
+        ? num.csv_headers.map(String)
+        : Object.keys(rows[0] || {}).filter(k => k !== '__ativo' && k !== '__id' && k !== '__fotos');
+    const partes = [];
+    deBanco.forEach(el => {
+        const col = String(el.csv_column || '').trim();
+        const tipo = el.type || 'elemento';
+        if (!col) partes.push(tipo + ' sem coluna do banco');
+        else if (!colunas.some(c => String(c) === col)) partes.push(tipo + ': a coluna "' + col + '" não existe no CSV');
+    });
+    if (!partes.length) return null;
+    return { motivo: 'coluna', texto: partes.join('; ') + '.' };
+}
+window.bancoDeDadosIncompletoDoModelo = bancoDeDadosIncompletoDoModelo;
+
+/**
  * A frase do bloqueio. Diz a conta inteira porque quem lê é quem vai corrigi-la:
  * "faltam 250" sozinho não conta de onde saiu o número esperado.
  */
@@ -25716,6 +25764,12 @@ function renderAmostrasOSItens(osId) {
         // inteiro para até alguém corrigir a NUMERAÇÃO. A Qtd nunca é tocada.
         const divergenciaCelulas = ehTelaDoCliente ? null : divergenciaDeCelulasDoModelo(item);
         const travaDeCelulas = !!divergenciaCelulas;
+        // ── Elemento de banco de dados sem banco ou sem coluna ──
+        // Regra do usuário, 22/08/2026: numeração com elemento de banco de
+        // dados precisa de CSV carregado e de coluna em cada elemento. Faltando,
+        // o card avisa e o PRONTO fica trancado, como na regra de células.
+        const bancoIncompleto = ehTelaDoCliente ? null : bancoDeDadosIncompletoDoModelo(item);
+        const travaDeBanco = !!bancoIncompleto;
 
         const tituloAprovado = tituloDoModeloAprovado(item);
 
@@ -25734,6 +25788,14 @@ function renderAmostrasOSItens(osId) {
                     <span>O banco não fecha com a quantidade do pedido, então este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}</span><br>
                     Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.</span>
+                </div>` : '';
+
+        const faixaBancoIncompleto = travaDeBanco ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">⚠️</span>
+                    <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
+                    <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
+                    Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.</span>
                 </div>` : '';
 
         return `
@@ -25755,6 +25817,7 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         ${faixaModeloTravado}
                         ${faixaDivergenciaCelulas}
+                        ${faixaBancoIncompleto}
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `
@@ -25769,7 +25832,7 @@ function renderAmostrasOSItens(osId) {
                                 <button class="btn" data-libera-aprovado="1" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
                                     ❌ EM ALTERAÇÃO
                                 </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : ''}>
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : '')}>
                                     🎨 MARCAR PRONTO
                                 </button>
                                 ${podeAprovarPeloPainel ? `
@@ -29456,6 +29519,14 @@ async function decisionAmostraItem(itemId, osId, status) {
         if (divergencia) {
             toast('Este modelo não pode ser marcado PRONTO: ' + textoDaDivergenciaDeCelulas(divergencia)
                 + '. Corrija as linhas do banco — a quantidade do pedido não se altera aqui.', 'warning');
+            return;
+        }
+        // Elemento de banco de dados sem CSV ou sem coluna (regra do usuário,
+        // 22/08/2026): mesma trava, mesmo lugar — aqui e não só no botão.
+        const bancoIncompleto = bancoDeDadosIncompletoDoModelo(itemAlvo);
+        if (bancoIncompleto) {
+            toast('Este modelo não pode ser marcado PRONTO: ' + bancoIncompleto.texto
+                + ' Abra a numeração no lápis, carregue o CSV e aponte a coluna do elemento.', 'warning');
             return;
         }
 

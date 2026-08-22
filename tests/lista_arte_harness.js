@@ -251,6 +251,52 @@ const { pedidoSaiuDaArte } = new Function(
         'o api() tambem usa a mesma funcao, na lista e por id');
 })();
 
+// ─── Elemento de banco de dados sem banco ou sem coluna trava o PRONTO ──────
+//
+// Regra do usuario, 22/08/2026, nascida do pedido 21085: onze modelos apontavam
+// para uma numeracao com QR de banco de dados e nenhum CSV, e nada na tela
+// dizia isso. As funcoes sao LIDAS do script.js, com um `state` de mentira.
+
+(function bancoIncompletoTravaOPronto() {
+    const fonte = ['numeracaoIdDoItem', 'numeracaoDoModelo', 'bancoDeDadosIncompletoDoModelo']
+        .map(extrair).join('\n');
+    const state = { numeracoes: [] };
+    const api = new Function('state', fonte + '\nreturn { bancoDeDadosIncompletoDoModelo };')(state);
+    const regra = api.bancoDeDadosIncompletoDoModelo;
+
+    const qr = (col) => ({ id: 'el_1', type: 'QR', source: 'database', csv_column: col });
+    const texto = { id: 'el_2', type: 'TEXT' };
+    state.numeracoes.push(
+        { id: 'ok',        elements: [qr('CODIGO'), texto], csv_headers: ['CODIGO', 'NOME'], csv_data: [{ CODIGO: '1', NOME: 'A' }] },
+        { id: 'sem-csv',   elements: [qr('CODIGO'), texto], csv_headers: [], csv_data: null },
+        { id: 'sem-col',   elements: [qr(''), texto],       csv_headers: ['CODIGO'], csv_data: [{ CODIGO: '1' }] },
+        { id: 'col-errada',elements: [qr('CPF'), texto],    csv_headers: ['CODIGO'], csv_data: [{ CODIGO: '1' }] },
+        { id: 'sem-banco', elements: [texto],               csv_data: null },
+        { id: 'sem-cabec', elements: [qr('CODIGO')],        csv_headers: [], csv_data: [{ CODIGO: '1', __id: 1 }] },
+    );
+    const modelo = (numId) => ({ id: 'm-' + numId, amostra_num_id: numId });
+
+    ok(regra(modelo('ok')) === null, 'CSV carregado e coluna existente: nada a apontar');
+    ok(regra(modelo('sem-banco')) === null, 'numeracao sem elemento de banco nao e cobrada por CSV');
+    ok(regra(modelo('sem-cabec')) === null, 'sem csv_headers, as chaves da linha valem como colunas');
+    const a = regra(modelo('sem-csv'));
+    ok(a && a.motivo === 'sem_banco' && /nenhum CSV/.test(a.texto), 'elemento de banco sem CSV e apontado', a);
+    const b = regra(modelo('sem-col'));
+    ok(b && b.motivo === 'coluna' && /QR sem coluna/.test(b.texto), 'elemento de banco sem coluna e apontado', b);
+    const c = regra(modelo('col-errada'));
+    ok(c && c.motivo === 'coluna' && /"CPF" não existe/.test(c.texto), 'coluna que nao existe no CSV e apontada', c);
+    ok(regra({ id: 'x', amostra_num_id: 'nao-existe' }) === null, 'modelo cuja numeracao nao esta no catalogo nao trava');
+    ok(regra(null) === null, 'sem modelo, nada');
+
+    // E a regra esta ligada nos dois lugares: no botao do card e no clique.
+    ok(/travaDeCelulas \|\| travaDeBanco \? 'disabled'/.test(SCRIPT), 'o botao MARCAR PRONTO fica trancado pela trava de banco');
+    ok(/\$\{faixaBancoIncompleto\}/.test(SCRIPT), 'o card mostra a faixa do banco incompleto');
+    ok(/const bancoIncompleto = bancoDeDadosIncompletoDoModelo\(itemAlvo\);\s*if \(bancoIncompleto\) \{[\s\S]{0,400}return;/.test(SCRIPT),
+        'o clique em PRONTO confere a regra e para, com aviso');
+    ok(/ehTelaDoCliente \? null : bancoDeDadosIncompletoDoModelo\(item\)/.test(SCRIPT),
+        'no link do cliente a trava nao aparece: ele nao tem como consertar a numeracao');
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
     process.exit(1);
