@@ -4,7 +4,36 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v682** — 2026-08-22 | Agente **1.2.176**
+## Versão atual: **v683** — 2026-08-22 | Agente **1.2.177**
+
+---
+
+## [v683 — 2026-08-22] — O catálogo de numerações é relido ao abrir o pedido
+
+Relato do usuário, com print: no pedido **21085**, o card do modelo 1000496 dizia *"esperado 4000 ·
+gerado 19500 · sobram 15500"* e o seletor mostrava **"Expointer 2026"** — enquanto o banco tinha o
+modelo apontando para a numeração **1000496**, com 4.000 linhas.
+
+O banco estava certo; a **aba** estava velha. Os modelos de um pedido já eram relidos do banco a
+cada abertura na Lista de Arte, mas o **catálogo de numerações** (`state.numeracoes`) só era
+recarregado inteiro quando *aquela* aba salvava alguma coisa. Numa aba aberta de manhã: a
+"Expointer 2026" ainda constava **com** o CSV de 19.500 linhas que ela teve das 09:54 às 10:19 (e
+que outra aba tirou), e a 1000496, criada às 10:43 em outra aba, nem constava — então o seletor caía
+na primeira opção, e a conta de células usava um CSV que não existia mais. Foi o que o usuário leu
+como "excluir o CSV não apaga os registros".
+
+**O que mudou.** `recarregarNumeracoesDoPedido(osId)` relê do banco **só as numerações que os
+modelos do pedido usam** (uma consulta pequena, pelos ids) e as mescla no catálogo em memória —
+linha nova substitui a velha pelo id, a que não existia entra. Ela roda em três lugares: ao abrir o
+pedido na **Lista de Arte** (logo depois de reler os modelos), ao **mandar um modelo para a
+Imposição** e ao **abrir o pedido inteiro na Imposição** — assim o que vai para a folha é a
+numeração do banco, nunca a da aba. Sem rede, ela não lança: a tela segue com o que tem, como antes.
+
+A mescla é pura e o harness da Lista de Arte a lê do `script.js`; os três pontos de chamada também
+são conferidos lá.
+
+**Para quem estava com a tela aberta:** um F5 já trazia o estado certo; de agora em diante, abrir o
+pedido basta.
 
 ---
 

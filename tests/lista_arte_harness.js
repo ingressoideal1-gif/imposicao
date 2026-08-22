@@ -196,6 +196,46 @@ const { pedidoSaiuDaArte } = new Function(
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────
 
+// ─── O catalogo de numeracoes e relido ao abrir o pedido ─────────────────────
+//
+// 22/08/2026: a "Expointer 2026" ja estava sem CSV no banco, e o card do modelo
+// 1000496 (pedido 21085) ainda dizia "gerado 19500": a aba tinha o catalogo de
+// horas antes. A mescla e pura e e LIDA do script.js.
+
+(function oCatalogoERelidoAoAbrirOPedido() {
+    const { mesclarNumeracoesNoCatalogo } = new Function(
+        extrair('mesclarNumeracoesNoCatalogo') + '\nreturn { mesclarNumeracoesNoCatalogo };')();
+
+    const catalogo = [
+        { id: 'a', name: 'Expointer 2026', csv_data: new Array(19500).fill({}) },
+        { id: 'b', name: '1000475' },
+    ];
+    const n = mesclarNumeracoesNoCatalogo(catalogo, [
+        { id: 'a', name: 'Expointer 2026', csv_data: null },                    // o CSV foi tirado em outra aba
+        { id: 'c', name: '1000496', csv_data: new Array(4000).fill({}) },       // criada em outra aba
+    ]);
+    ok(n === 2, 'duas numeracoes mescladas', n);
+    ok(catalogo.length === 3, 'a que nao existia entrou no catalogo');
+    ok(catalogo.find(x => x.id === 'a').csv_data === null, 'a linha nova substitui a velha pelo id');
+    ok(catalogo.find(x => x.id === 'c').csv_data.length === 4000, 'a nova traz o CSV de verdade');
+    ok(catalogo.find(x => x.id === 'b').name === '1000475', 'quem nao veio no lote fica como estava');
+    ok(mesclarNumeracoesNoCatalogo(catalogo, null) === 0 && mesclarNumeracoesNoCatalogo(null, []) === 0,
+        'sem lista, nada muda');
+
+    // E os tres caminhos que desenham a partir do catalogo releem antes.
+    const nav = SCRIPT.indexOf("console.log('[Nav] Carregando itens da OS...')");
+    ok(nav > 0, 'achei a abertura do pedido na Lista de Arte');
+    const trecho = SCRIPT.slice(nav, nav + 1500);
+    ok(/await loadOSItens\(realOSId\)[\s\S]{0,900}await recarregarNumeracoesDoPedido\(realOSId\)/.test(trecho),
+        'abrir o pedido na Lista de Arte rele as numeracoes dele depois dos itens');
+    ok(/async function enviarParaImposicao\([\s\S]{0,900}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
+        'mandar o modelo para a Imposicao rele as numeracoes do pedido');
+    ok(/async function abrirImposicaoDoPedido\([\s\S]{0,400}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
+        'abrir o pedido inteiro na Imposicao rele as numeracoes');
+    ok(/async function recarregarNumeracoesDoPedido\([\s\S]{0,1500}catch \(e\)/.test(SCRIPT),
+        'a releitura nunca lanca: sem rede a tela segue com o que tem');
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
     process.exit(1);

@@ -13711,6 +13711,63 @@ function numeracaoDoModelo(item) {
 window.numeracaoDoModelo = numeracaoDoModelo;
 
 /**
+ * Mescla numeracoes recem-lidas do banco no catalogo em memoria: a linha nova
+ * substitui a antiga pelo id, e a que nao existia entra. Devolve quantas
+ * entraram. Pura, sem rede — e a parte que o harness testa.
+ */
+function mesclarNumeracoesNoCatalogo(catalogo, frescas) {
+    if (!Array.isArray(catalogo) || !Array.isArray(frescas)) return 0;
+    let mescladas = 0;
+    frescas.forEach(nova => {
+        if (!nova || !nova.id) return;
+        const i = catalogo.findIndex(n => String(n.id) === String(nova.id));
+        if (i >= 0) catalogo[i] = nova; else catalogo.push(nova);
+        mescladas++;
+    });
+    return mescladas;
+}
+window.mesclarNumeracoesNoCatalogo = mesclarNumeracoesNoCatalogo;
+
+/**
+ * Rele do banco as numeracoes que os modelos de um pedido usam e atualiza o
+ * catalogo em memoria (`state.numeracoes`).
+ *
+ * ## Por que existe (22/08/2026)
+ *
+ * O catalogo de numeracoes so era recarregado inteiro (`loadAll`) quando ESTA
+ * aba salvava algo. Os modelos do pedido, por outro lado, ja eram relidos do
+ * banco a cada abertura na Lista de Arte. O resultado era uma tela meio
+ * fresca, meio velha: o pedido 21085 mostrava no modelo 1000496 o aviso
+ * "gerado 19.500" para a numeracao "Expointer 2026" — um CSV que ela teve das
+ * 09:54 as 10:19 e que outra aba ja tinha tirado; e a 1000496, criada em
+ * outra aba, nem constava no catalogo daqui, entao o seletor caia na primeira
+ * opcao. O usuario leu isso como "excluir o CSV nao apaga os registros".
+ *
+ * Le so as numeracoes que o pedido usa, pelo id: e uma consulta pequena, e e
+ * o que o catalogo inteiro custaria para o pedido aberto. Nunca lanca — sem
+ * rede, a tela segue com o que tem, exatamente como antes.
+ */
+async function recarregarNumeracoesDoPedido(osId) {
+    try {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) return 0;
+        const itens = (state.osItens && state.osItens[osId]) || [];
+        const ids = Array.from(new Set(itens.map(it => numeracaoIdDoItem(it)).filter(Boolean).map(String)));
+        if (!ids.length) return 0;
+        const { data, error } = await supabaseClient
+            .from('producao_numeracoes')
+            .select('*')
+            .in('id', ids);
+        if (error) throw error;
+        if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
+        return mesclarNumeracoesNoCatalogo(state.numeracoes, data || []);
+    } catch (e) {
+        console.warn('[numeracoes] nao consegui reler as numeracoes do pedido:', (e && e.message) || e);
+        return 0;
+    }
+}
+window.recarregarNumeracoesDoPedido = recarregarNumeracoesDoPedido;
+
+/**
  * Quantas linhas o banco deste modelo PRECISA ter para atender ao pedido.
  *
  * Regra do usuário, 19/08/2026: com Qtd X, a numeração tem de gerar X linhas
@@ -23774,6 +23831,10 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
+    // A numeracao que vai para a folha e a do banco, nao a do catalogo velho
+    // desta aba: um CSV tirado ou trocado em outra aba nao pode ir para o papel
+    // daqui. Ver recarregarNumeracoesDoPedido().
+    await recarregarNumeracoesDoPedido(osId);
 
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
     // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
@@ -24079,6 +24140,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 async function abrirImposicaoDoPedido(osId, numeroOS) {
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     await loadOSItens(osId);
+    await recarregarNumeracoesDoPedido(osId);   // e as numeracoes deles, do banco
 
     const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     const realOsId = osObj ? osObj.id : osId;
@@ -25068,6 +25130,12 @@ async function navigateToAmostrasFromOS(osId) {
         } catch (e) {
             console.warn('[Nav] Erro ao carregar itens:', e);
         }
+        // As numeracoes desses modelos tambem vem do banco agora, e nao do
+        // catalogo que esta aba carregou horas atras: outra aba ou estacao pode
+        // ter tirado o CSV de uma, criado outra, ou trocado a do modelo. E a
+        // mesma razao pela qual os itens acima sao sempre relidos. Ver
+        // recarregarNumeracoesDoPedido().
+        await recarregarNumeracoesDoPedido(realOSId);
         console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
 
         // Salvar o ID do pedido ativo na tela de Amostras

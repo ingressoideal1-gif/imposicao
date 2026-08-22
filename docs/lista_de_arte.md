@@ -313,6 +313,24 @@ coluna `base64` viajando junto com o catálogo, e não a quantidade de arquivos.
 
 ---
 
+## O catálogo de numerações é relido ao abrir o pedido
+
+Abrir um pedido nesta tela **sempre** relê do banco os modelos dele (é o
+`_dbLoaded: false` antes do `loadOSItens`) — e, desde 22/08/2026, relê também
+**as numerações que esses modelos usam**, por `recarregarNumeracoesDoPedido`.
+Até então o catálogo (`state.numeracoes`) só era recarregado inteiro quando a
+própria aba salvava alguma coisa, e uma aba aberta de manhã mostrava, no
+pedido 21085, a "Expointer 2026" com um CSV de 19.500 linhas que outra aba já
+tinha tirado, e não conhecia a 1000496, criada em outra aba — o seletor caía na
+primeira opção e a conta de células (seção 3 acima) usava um banco que não
+existia mais.
+
+A releitura é pequena (só os ids que o pedido usa), mescla por id no catálogo
+em memória (`mesclarNumeracoesNoCatalogo`, pura e testada no harness) e nunca
+lança: sem rede, a tela segue com o que tem. Ela roda também ao **mandar um
+modelo para a Imposição** e ao **abrir o pedido inteiro na Imposição**, porque
+o que vai para a folha tem de ser a numeração do banco, nunca a da aba.
+
 ## Onde mexer
 
 | O quê | Onde |
