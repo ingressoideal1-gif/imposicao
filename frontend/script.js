@@ -728,6 +728,35 @@ window.baixarPdfDaCor = async function (id, face) {
     a.remove();
 };
 
+/**
+ * Deixa uma linha de `producao_numeracoes` lida do banco com a forma que o
+ * resto do painel espera: SEM o elemento METADATA dentro de `elements`, e com
+ * `print_mode` preenchido (da coluna ou, na falta dela, do proprio METADATA).
+ *
+ * Existe como funcao porque a mesma leitura acontece em tres lugares — a lista
+ * do catalogo, uma numeracao por id, e a releitura das numeracoes de um pedido
+ * (`recarregarNumeracoesDoPedido`) — e em 22/08/2026 a terceira entrou sem
+ * isto: a linha crua, com o METADATA ainda dentro, ia para `state.numeracoes`,
+ * e o editor de numeracao a recebia no lapis do card com um elemento a mais.
+ * Altera e devolve a mesma linha.
+ */
+function normalizarNumeracaoLida(n) {
+    if (!n) return n;
+    if (n.elements && Array.isArray(n.elements)) {
+        const metadataEl = n.elements.find(el => el && el.type === 'METADATA');
+        if (metadataEl) {
+            // Se a coluna nao tem print_mode, extrair do METADATA
+            if (!n.print_mode || n.print_mode === 'front') {
+                if (metadataEl.print_mode) n.print_mode = metadataEl.print_mode;
+            }
+            n.elements = n.elements.filter(el => !el || el.type !== 'METADATA');
+        }
+    }
+    if (!n.print_mode) n.print_mode = 'front';
+    return n;
+}
+window.normalizarNumeracaoLida = normalizarNumeracaoLida;
+
 async function api(method, path, body = null) {
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && (path.startsWith('/formatos') || path.startsWith('/numeracoes') || path.startsWith('/saidas') || path.startsWith('/cores') || path.startsWith('/modelos_imposicao'))) {
@@ -763,18 +792,7 @@ async function api(method, path, body = null) {
                     }
 
                     if (col === 'producao_numeracoes' && data) {
-                        // Sempre filtrar METADATA dos elements
-                        if (data.elements && Array.isArray(data.elements)) {
-                            const metadataEl = data.elements.find(el => el.type === 'METADATA');
-                            if (metadataEl) {
-                                // Se a coluna não tem print_mode, extrair do METADATA
-                                if (!data.print_mode || data.print_mode === 'front') {
-                                    if (metadataEl.print_mode) data.print_mode = metadataEl.print_mode;
-                                }
-                                data.elements = data.elements.filter(el => el.type !== 'METADATA');
-                            }
-                        }
-                        if (!data.print_mode) data.print_mode = 'front';
+                        normalizarNumeracaoLida(data);   // sem METADATA, com print_mode
                     }
 
                     return data;
@@ -795,20 +813,7 @@ async function api(method, path, body = null) {
                     }
 
                     if (col === 'producao_numeracoes' && data) {
-                        data.forEach(n => {
-                            // Sempre filtrar METADATA dos elements
-                            if (n.elements && Array.isArray(n.elements)) {
-                                const metadataEl = n.elements.find(el => el.type === 'METADATA');
-                                if (metadataEl) {
-                                    // Se a coluna não tem print_mode, extrair do METADATA
-                                    if (!n.print_mode || n.print_mode === 'front') {
-                                        if (metadataEl.print_mode) n.print_mode = metadataEl.print_mode;
-                                    }
-                                    n.elements = n.elements.filter(el => el.type !== 'METADATA');
-                                }
-                            }
-                            if (!n.print_mode) n.print_mode = 'front';
-                        });
+                        data.forEach(normalizarNumeracaoLida);   // sem METADATA, com print_mode
                     }
 
                     return data;
@@ -13759,7 +13764,9 @@ async function recarregarNumeracoesDoPedido(osId) {
             .in('id', ids);
         if (error) throw error;
         if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
-        return mesclarNumeracoesNoCatalogo(state.numeracoes, data || []);
+        // A mesma forma que o api() entrega: sem METADATA, com print_mode. Sem
+        // isto o lapis do card abria o editor com um elemento fantasma (v683).
+        return mesclarNumeracoesNoCatalogo(state.numeracoes, (data || []).map(normalizarNumeracaoLida));
     } catch (e) {
         console.warn('[numeracoes] nao consegui reler as numeracoes do pedido:', (e && e.message) || e);
         return 0;

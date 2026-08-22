@@ -234,6 +234,21 @@ const { pedidoSaiuDaArte } = new Function(
         'abrir o pedido inteiro na Imposicao rele as numeracoes');
     ok(/async function recarregarNumeracoesDoPedido\([\s\S]{0,1500}catch \(e\)/.test(SCRIPT),
         'a releitura nunca lanca: sem rede a tela segue com o que tem');
+
+    // A linha relida entra com a MESMA forma que o api() entrega: sem o elemento
+    // METADATA e com print_mode. Na v683 ela entrava crua, e o lapis do card abria
+    // o editor com um elemento a mais.
+    const { normalizarNumeracaoLida } = new Function(
+        extrair('normalizarNumeracaoLida') + '\nreturn { normalizarNumeracaoLida };')();
+    const crua = { id: 'x', elements: [{ id: 'el_1', type: 'QR' }, { id: 'metadata', type: 'METADATA', print_mode: 'duplex' }] };
+    normalizarNumeracaoLida(crua);
+    ok(crua.elements.length === 1 && crua.elements[0].type === 'QR', 'o METADATA sai dos elements');
+    ok(crua.print_mode === 'duplex', 'e o print_mode vem dele quando a coluna nao tem');
+    ok(normalizarNumeracaoLida({ id: 'y', elements: [] }).print_mode === 'front', 'sem nada, print_mode e front');
+    ok(/\(data \|\| \[\]\)\.map\(normalizarNumeracaoLida\)/.test(SCRIPT),
+        'a releitura do pedido normaliza antes de mesclar');
+    ok(/data\.forEach\(normalizarNumeracaoLida\)/.test(SCRIPT) && /normalizarNumeracaoLida\(data\);/.test(SCRIPT),
+        'o api() tambem usa a mesma funcao, na lista e por id');
 })();
 
 if (falhas) {

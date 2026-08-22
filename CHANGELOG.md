@@ -4,7 +4,20 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v683** — 2026-08-22 | Agente **1.2.177**
+## Versão atual: **v684** — 2026-08-22 | Agente **1.2.178**
+
+---
+
+## [v684 — 2026-08-22] — O lápis do card volta a abrir a numeração inteira
+
+Relato do usuário logo depois da v683: o ✏️ do card do modelo abria o editor sem trazer a
+numeração. Defeito meu, da v683: a releitura das numerações do pedido punha no catálogo em memória
+a linha **crua** do banco — com o elemento `METADATA` ainda dentro de `elements`, que o `api()`
+sempre removeu ao ler — e o editor recebia um elemento a mais.
+
+A normalização virou uma função só, `normalizarNumeracaoLida` (tira o METADATA, preenche o
+`print_mode`), usada nos três lugares que leem numeração do banco: a lista do catálogo, a leitura
+por id e a releitura do pedido. O harness confere a função e os três usos.
 
 ---
 
