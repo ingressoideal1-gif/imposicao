@@ -38,6 +38,28 @@ manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
 
 ---
 
+## O cabeçalho do pedido aberto
+
+Pedido do usuário em 22/08/2026: *"ao abrir o pedido, no Painel de Acabamento,
+destacar Número do pedido e Evento, como já aparece no pedido do Painel de
+Produção"*.
+
+O cabeçalho traz, nesta ordem: **VOLTAR**, a palavra *Pedido*, o **número no
+mesmo crachá da fila** (número grande, fundo em degradê, sombra — o desenho que
+o Painel de Produção usa), o **nome do evento** em ciano forte e, abaixo dele e
+menor, o cliente. À direita continua o contador de prontos.
+
+A ordem não é casual: quem trabalha no acabamento tem na mão o material de um
+**evento**, não de um cliente — é por ele e pelo número que se confere, de
+relance, que o que está na mesa é o deste pedido. O nome do evento vem de
+`pedidos_artes.nome_evento` (`eventoDoPedido`), a mesma origem que a fila usa;
+quando o briefing ainda não o tem, o campo **some** em vez de deixar um buraco.
+
+O crachá do número é o mesmo objeto nos dois lugares (`ESTILO_CRACHA_NUMERO`),
+para a lista e o cabeçalho envelhecerem juntos.
+
+---
+
 ## O status: quatro botões, e não um seletor
 
 Pedido do usuário em 22/08/2026: *"alterar o drop dos Status para 4 botões, do

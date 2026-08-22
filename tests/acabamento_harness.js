@@ -1221,6 +1221,39 @@ async function comTudoProntoOPedidoVaiParaExpedicao() {
        'e o detalhe volta para a lista');
 }
 
+async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
+    // Pedido do usuario, 22/08/2026: "ao abrir o pedido, no Painel de
+    // Acabamento, destacar Numero do pedido e Evento, como ja aparece no pedido
+    // do Painel de Producao". Quem abre o pedido na estacao confere de relance
+    // que o material na mesa e o deste pedido -- e o que a pessoa do acabamento
+    // tem na mao e o nome do EVENTO, nao o do cliente.
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.todasArtes = [
+        { id_int: 199, nome_evento: 'Outro Evento' },
+        { id_int: 200, nome_evento: 'Rock in Rio 2026' },
+    ];
+    await amb.painel.abrirPedido('os-200');
+
+    const cracha = amb.elementos['acab-detalhe-numero'].innerHTML;
+    ok(cracha.indexOf('200') !== -1, 'o numero do pedido esta no cabecalho', cracha);
+    ok(cracha.indexOf('font-size: 1.35rem') !== -1,
+       'no mesmo cracha grande da fila do Painel de Producao', cracha);
+    ok(amb.elementos['acab-detalhe-evento'].textContent === 'Rock in Rio 2026',
+       'e o evento aparece', amb.elementos['acab-detalhe-evento'].textContent);
+    ok(amb.elementos['acab-detalhe-evento'].style.display !== 'none', 'a vista');
+    ok(amb.elementos['acab-detalhe-cliente'].textContent === 'Cliente 200',
+       'o cliente continua, ao lado');
+
+    // Briefing sem evento: o campo some, em vez de deixar um buraco na linha.
+    const amb2 = ambienteComPedidoAberto();
+    await amb2.painel.abrirPedido('os-200');
+    ok(amb2.elementos['acab-detalhe-evento'].textContent === '', 'sem evento, nada e escrito');
+    ok(amb2.elementos['acab-detalhe-evento'].style.display === 'none',
+       'e o espaco dele nao fica sobrando');
+    ok(amb2.elementos['acab-detalhe-numero'].innerHTML.indexOf('200') !== -1,
+       'o numero aparece de qualquer jeito');
+}
+
 async function semResponsavelOStatusNaoSeMexe() {
     // Regra do usuario, 22/08/2026: "so permitir alterar o status apos
     // selecionar o responsavel". Marcar um estagio e dizer que ALGUEM fez
@@ -1985,6 +2018,7 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await cancelarFechaOPopupSemGravar();
     await semPermissaoOPopupExplicaEnaoOferece();
     await comTudoProntoOPedidoVaiParaExpedicao();
+    await oCabecalhoDoPedidoAbertoDestacaNumeroEEvento();
     await semResponsavelOStatusNaoSeMexe();
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
     await setorIncompletoNaoGanhaCarimbo();

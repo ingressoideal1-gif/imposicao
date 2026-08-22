@@ -2403,8 +2403,16 @@
                                 <button class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem;" onclick="AcabamentoPainel.fecharPedido()" title="Voltar para a lista de pedidos">
                                     <i class="fa-solid fa-arrow-left"></i> VOLTAR
                                 </button>
-                                <span class="prod-table-title" style="margin-left: 8px;">Modelos do Pedido <span id="acab-detalhe-numero" style="color: #60a5fa;"></span></span>
-                                <span id="acab-detalhe-cliente" style="font-size: 0.9rem; color: #94a3b8;"></span>
+                                <span class="prod-table-title" style="margin-left: 8px;">Pedido</span>
+                                <!-- O numero no mesmo cracha da fila, e o evento em destaque ao
+                                     lado: e por eles que o operador confere, de relance, que o
+                                     material na mesa e o deste pedido. Preenchidos por
+                                     renderDetalhe(). -->
+                                <span id="acab-detalhe-numero"></span>
+                                <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                                    <span id="acab-detalhe-evento" style="font-size: 1.05rem; font-weight: 800; color: #4cc8f0; line-height: 1.2;"></span>
+                                    <span id="acab-detalhe-cliente" style="font-size: 0.85rem; color: #94a3b8; line-height: 1.2;"></span>
+                                </span>
                                 <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
                                     <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 prontos</span>
                                 </div>

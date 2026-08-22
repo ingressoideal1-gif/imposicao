@@ -667,10 +667,9 @@
                 ? `<div style="display:flex; justify-content:center;">${logoFrete(freteBruto)}</div>`
                 : esc(freteBruto);
 
-            const numInt = parseInt(os.numero);
-            const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
-            const eventoHtml = arte
-                ? `<br><span style="font-size: 0.82rem; color: #4cc8f0;">${esc(arte.nome_evento)}</span>`
+            const evento = eventoDoPedido(os);
+            const eventoHtml = evento
+                ? `<br><span style="font-size: 0.82rem; color: #4cc8f0;">${esc(evento)}</span>`
                 : '';
 
             // A linha do PEDIDO leva o fundo do estagio, do mesmo jeito que a
@@ -686,7 +685,7 @@
             return `
                 <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer; background: ${fundoPedido};" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
-                        <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, #2b32af, #001249); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${esc(os.numero)}</span>
+                        <span style="${ESTILO_CRACHA_NUMERO}">${esc(os.numero)}</span>
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
@@ -707,6 +706,41 @@
         const el = document.getElementById(id);
         if (el) el.textContent = valor;
     }
+
+    function escreverHtml(id, html) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+    }
+
+    /**
+     * O nome do evento de um pedido, ou '' quando o briefing ainda não o tem.
+     *
+     * Mora em `pedidos_artes.nome_evento`, uma linha por arte do pedido — daí a
+     * busca pela primeira que tenha o nome preenchido. É a mesma consulta que a
+     * fila do Painel de Produção faz; aqui ela serve a três lugares (a busca, a
+     * lista e o cabeçalho do pedido aberto), e por isso está escrita uma vez só.
+     */
+    function eventoDoPedido(os) {
+        if (!os) return '';
+        const s = estado();
+        const numInt = parseInt(os.numero);
+        const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
+        return arte ? String(arte.nome_evento).trim() : '';
+    }
+
+    /**
+     * O número do pedido no crachá que a gráfica já conhece.
+     *
+     * Mesmo desenho da fila do Painel de Produção — número grande, fundo em
+     * degradê, sombra —, porque é assim que o operador acha o pedido de longe,
+     * de pé na frente da máquina. Aqui ele serve à lista E ao cabeçalho do
+     * pedido aberto, para os dois envelhecerem juntos.
+     */
+    const ESTILO_CRACHA_NUMERO = 'font-size: 1.35rem; font-weight: 900; color: #ffffff;'
+        + ' background: linear-gradient(135deg, #2b32af, #001249); padding: 4px 12px;'
+        + ' border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(43, 50, 175, 0.45);'
+        + ' border: 1px solid rgba(255,255,255,0.22);'
+        + ' text-shadow: 0 1px 2px rgba(0,0,0,0.3);';
 
     // ─── A lista de responsáveis ────────────────────────────────────────────
 
@@ -1170,8 +1204,18 @@
         const os = buscar ? buscar(tela.pedidoAberto) : (s.ordens || []).find(o => o.id === tela.pedidoAberto);
         const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
 
+        // Número e evento em destaque, do mesmo jeito que na fila (pedido do
+        // usuário, 22/08/2026). Quem abre o pedido na estação precisa conferir
+        // de relance que é ESTE o material que está na mesa — e o que a pessoa
+        // do acabamento tem na mão é o nome do evento, não o do cliente, que
+        // fica ao lado, menor.
         const rotulo = fn('rotuloDoCliente');
-        escrever('acab-detalhe-numero', os ? `#${os.numero}` : '');
+        escreverHtml('acab-detalhe-numero',
+            os ? `<span style="${ESTILO_CRACHA_NUMERO}">${esc(os.numero)}</span>` : '');
+        const evento = eventoDoPedido(os);
+        escrever('acab-detalhe-evento', evento);
+        const evEl = document.getElementById('acab-detalhe-evento');
+        if (evEl) evEl.style.display = evento ? '' : 'none';
         const cliEl = document.getElementById('acab-detalhe-cliente');
         if (cliEl) cliEl.textContent = os && rotulo ? rotulo(os) : '';
 

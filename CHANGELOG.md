@@ -4,7 +4,29 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v691** — 2026-08-22 | Agente **1.2.185**
+## Versão atual: **v692** — 2026-08-22 | Agente **1.2.186**
+
+---
+
+## [v692 — 2026-08-22] — Número do pedido e Evento em destaque ao abrir o pedido no Acabamento
+
+Pedido do usuário: *"Ao abrir o pedido, no Painel de Acabamento, destacar Número do pedido e Evento,
+como já aparece no pedido do Painel de Produção"*.
+
+O cabeçalho do pedido aberto passa a mostrar o **número no mesmo crachá da fila** — número grande,
+fundo em degradê, sombra, o desenho que o Painel de Produção usa — e o **nome do evento** em ciano
+forte ao lado, com o cliente abaixo, menor. Antes havia só "Modelos do Pedido #200" em texto azul e
+o cliente em cinza; o evento não aparecia em lugar nenhum depois de abrir o pedido.
+
+A ordem segue o trabalho: quem está no acabamento tem na mão o material de um **evento**, e é por
+ele e pelo número que se confere, de relance, que o que está na mesa é o deste pedido. O nome vem de
+`pedidos_artes.nome_evento` (`eventoDoPedido`, agora escrito uma vez só e usado pela busca, pela
+lista e pelo cabeçalho); sem evento no briefing, o campo some em vez de deixar um buraco. O crachá
+do número virou `ESTILO_CRACHA_NUMERO`, compartilhado pela lista e pelo cabeçalho.
+
+Testes: `tests/acabamento_harness.js` — o número aparece no crachá grande, o evento do pedido certo
+(e não o de outro), o cliente ao lado, e o campo do evento some quando não há briefing (428
+verificações no total).
 
 ---
 
