@@ -16095,6 +16095,11 @@ const PARTNER_LOGIN_URL = 'https://vibe.ai-ideal.com.br/login';
 // ──── Permissões padrão por perfil ──────────────────────────────────────────
 // Cada módulo tem _view (visualizar) e _edit (editar/criar/excluir)
 // Ações especiais: perm_gerar_pdf, perm_imprimir
+//
+// O Painel do Acabamento é VER e EDITAR em TODO perfil, por decisão do usuário
+// em 22/08/2026 ("deve aparecer e ser editável a todos os usuários"). Até ali
+// ele espelhava a Produção, e o atendimento e o designer não conseguiam marcar
+// o estágio do material. Há teste travando os sete perfis.
 const ROLE_DEFAULTS = {
     admin: {
         perm_imposicao_view:true, perm_imposicao_edit:true,
@@ -16123,7 +16128,7 @@ const ROLE_DEFAULTS = {
         perm_amostras_view:true, perm_amostras_edit:false,
         perm_impressoras_view:false, perm_impressoras_edit:false,
         perm_producao_view:true, perm_producao_edit:false,
-        perm_acabamento_view:true, perm_acabamento_edit:false,
+        perm_acabamento_view:true, perm_acabamento_edit:true,
         perm_lista_arte_view:true, perm_lista_arte_edit:false,
         perm_fontes_view:true, perm_fontes_edit:true,
         perm_gerar_pdf:false, perm_imprimir:false,
@@ -16140,7 +16145,7 @@ const ROLE_DEFAULTS = {
         perm_amostras_view:true, perm_amostras_edit:true,
         perm_impressoras_view:false, perm_impressoras_edit:false,
         perm_producao_view:true, perm_producao_edit:false,
-        perm_acabamento_view:true, perm_acabamento_edit:false,
+        perm_acabamento_view:true, perm_acabamento_edit:true,
         perm_lista_arte_view:true, perm_lista_arte_edit:true,
         perm_fontes_view:true, perm_fontes_edit:true,
         perm_gerar_pdf:false, perm_imprimir:false,
@@ -16174,7 +16179,7 @@ const ROLE_DEFAULTS = {
         perm_amostras_view:false, perm_amostras_edit:false,
         perm_impressoras_view:false, perm_impressoras_edit:false,
         perm_producao_view:true, perm_producao_edit:false,
-        perm_acabamento_view:true, perm_acabamento_edit:false,
+        perm_acabamento_view:true, perm_acabamento_edit:true,
         perm_lista_arte_view:false, perm_lista_arte_edit:false,
         perm_fontes_view:false, perm_fontes_edit:false,
         perm_gerar_pdf:false, perm_imprimir:false,
@@ -16208,7 +16213,7 @@ const ROLE_DEFAULTS = {
         perm_amostras_view:true, perm_amostras_edit:false,
         perm_impressoras_view:false, perm_impressoras_edit:false,
         perm_producao_view:true, perm_producao_edit:false,
-        perm_acabamento_view:true, perm_acabamento_edit:false,
+        perm_acabamento_view:true, perm_acabamento_edit:true,
         perm_lista_arte_view:true, perm_lista_arte_edit:false,
         perm_fontes_view:true, perm_fontes_edit:false,
         perm_gerar_pdf:false, perm_imprimir:false,
@@ -16451,6 +16456,14 @@ const PERM_ACTIONS = [
     { key: 'gerar_pdf', icon: '📥', label: 'Gerar PDF',  tela: 'baixar o PDF imposto' },
     { key: 'imprimir',  icon: '🖨️', label: 'Imprimir',   tela: 'mandar para a impressora' },
 ];
+
+/** Todas as caixas da grade de permissões: VER e EDITAR de cada módulo, e as ações. */
+function chavesDaGrade() {
+    return [
+        ...PERM_MODULES.flatMap(m => [`perm_${m.key}_view`, `perm_${m.key}_edit`]),
+        ...PERM_ACTIONS.map(a => `perm_${a.key}`),
+    ];
+}
 
 // ──── Regras de bloqueio por papel (regras do negócio, não da grade) ───────
 //
@@ -17129,8 +17142,18 @@ function sessaoDoLogin(data, codigo) {
  * Permissões de um operador local.
  *
  * São as mesmas permissões por módulo dos usuários do sistema, cadastradas no
- * Menu Usuários e sincronizadas com a estação. O `role` só decide o rótulo na
- * barra lateral; quem manda é a grade.
+ * Menu Usuários e sincronizadas com a estação. Quem manda é a grade; o `role`
+ * decide o rótulo na barra lateral e o que vale para uma chave que a grade
+ * NÃO TEM.
+ *
+ * Chave ausente segue o padrão do perfil (`ROLE_DEFAULTS`), e não um "não"
+ * silencioso. A grade de um acesso é um JSON gravado no dia em que o acesso foi
+ * criado ou teve o perfil trocado; um módulo que nasce depois — foi o caso do
+ * Painel do Acabamento, em 22/08/2026 — não aparece nela, e aplicá-la como
+ * estava escondia o menu novo de três operadores por mais que o administrador
+ * marcasse caixas na grade dos usuários do SITE, que é outra grade. Chave
+ * presente continua mandando, letra por letra, inclusive quando diz "não": a
+ * grade é editável caixa a caixa, e é ela a decisão do administrador.
  *
  * Sem grade nenhuma — acesso criado antes das permissões existirem, ou estação
  * com cópia antiga — vale tudo menos a área de administração. Trancar o operador
@@ -17138,8 +17161,15 @@ function sessaoDoLogin(data, codigo) {
  * Menu Usuários é obrigatório de todo jeito, porque é lá que estão os códigos de
  * todos os colegas.
  */
-function permsDoOperadorLocal(permissoes) {
-    if (permissoes && Object.keys(permissoes).length) return { ...permissoes };
+function permsDoOperadorLocal(permissoes, role) {
+    if (permissoes && Object.keys(permissoes).length) {
+        const perms = { ...permissoes };
+        const padrao = ROLE_DEFAULTS[String(role || '').trim().toLowerCase()] || {};
+        for (const key of chavesDaGrade()) {
+            if (!(key in perms)) perms[key] = padrao[key] === true;
+        }
+        return perms;
+    }
 
     const perms = {};
     for (const key of Object.keys(PERM_VIEW_MAP)) perms[key] = true;
@@ -17155,7 +17185,7 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
     window._acessoLocal = sessao;
     liberarUICompleta();
 
-    const perms = permsDoOperadorLocal(sessao.permissoes);
+    const perms = permsDoOperadorLocal(sessao.permissoes, sessao.role);
     window._currentPerms = perms;
     applyPermissions(perms);
 
@@ -17457,11 +17487,7 @@ function resumoDaGrade(perms, role) {
     const padrao = ROLE_DEFAULTS[role];
     let personalizada = false;
     if (padrao) {
-        const chaves = [
-            ...PERM_MODULES.flatMap(m => [`perm_${m.key}_view`, `perm_${m.key}_edit`]),
-            ...PERM_ACTIONS.map(a => `perm_${a.key}`),
-        ];
-        personalizada = chaves.some(k => (p[k] === true) !== (padrao[k] === true));
+        personalizada = chavesDaGrade().some(k => (p[k] === true) !== (padrao[k] === true));
     }
     return { vendo, total, personalizada };
 }

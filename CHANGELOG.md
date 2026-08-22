@@ -4,7 +4,32 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v687** — 2026-08-22 | Agente **1.2.181**
+## Versão atual: **v688** — 2026-08-22 | Agente **1.2.181**
+
+---
+
+## [v688 — 2026-08-22] — Painel do Acabamento para todos: ver e editar, no site e na estação
+
+Pedido do usuário: *"o Menu Painel do Acabamento deve aparecer e ser editável a todos os usuários,
+ajustar permissões, mesmo marcando não está visualizando"*.
+
+**O que estava acontecendo.** São duas grades de permissão, e marcar numa não muda a outra. A dos
+usuários do **site** (`imposition_user_permissions`) já tinha VER para quase todos, mas EDITAR só para
+quem editava a Produção — atendimento e designer não marcavam o estágio do material. A da **estação**
+(`imposition_acessos_locais.permissoes`, o JSON que o código local aplica) foi gravada antes de o
+módulo existir em três acessos (Bernardo, Eduardo, Gustavo): sem a chave, a estação tratava como
+"não" e o menu sumia — por mais que o administrador marcasse caixas na grade do site.
+
+**O que muda.** `ROLE_DEFAULTS` e os padrões da Edge Function ligam VER e EDITAR do Acabamento em
+todo perfil. Na estação, `permsDoOperadorLocal` passa a completar chave **ausente** com o padrão do
+perfil, em vez de "não" (chave presente continua mandando, inclusive quando diz não). E
+`sql/acabamento_para_todos.sql` ligou as duas chaves em todas as grades existentes — só essas duas;
+o resto da grade fica como o usuário deixou. Rodado no banco em 22/08/2026: todos os usuários do
+site e os 7 acessos locais vendo e editando.
+
+**Quando vale.** No site, no próximo F5. Na estação, o agente baixa a lista em até 5 minutos e o
+F5 seguinte traz a grade nova. Testes: `tests/grade_do_acesso_local_harness.js` (35 casos) e
+`tests/test_painel_do_acabamento.py`.
 
 ---
 

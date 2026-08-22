@@ -130,23 +130,73 @@ def test_a_permissao_do_modulo_existe_dos_dois_lados():
     assert "perm_acabamento_view:  ['view-acabamento']," in js, "falta o mapa da tela"
     assert "key: 'acabamento'" in js, "o modulo nao aparece na tela de Usuarios"
 
-    # Um perfil que ve a Producao ve o Acabamento; um que a edita, edita.
+    # TODO perfil ve E edita o Acabamento. Ate 22/08/2026 o acabamento espelhava
+    # a producao (quem via uma via a outra; quem editava uma editava a outra), e
+    # o resultado foi o atendimento e o designer sem poder marcar o estagio do
+    # material. Decisao do usuario naquele dia: "o Menu Painel do Acabamento deve
+    # aparecer e ser editavel a todos os usuarios".
     perfis = re.findall(
-        r"perm_producao_view:(true|false), perm_producao_edit:(true|false),\s*\n"
-        r"\s*perm_acabamento_view:(true|false), perm_acabamento_edit:(true|false),",
-        js)
-    assert len(perfis) == 7, "esperava os 7 perfis espelhados, achei %d" % len(perfis)
-    for pv, pe, av, ae in perfis:
-        assert pv == av and pe == ae, (
-            "o acabamento nao espelha a producao neste perfil: %s/%s vs %s/%s" % (pv, pe, av, ae)
+        r"perm_acabamento_view:(true|false), perm_acabamento_edit:(true|false),", js)
+    assert len(perfis) == 7, "esperava os 7 perfis com a chave do acabamento, achei %d" % len(perfis)
+    for av, ae in perfis:
+        assert av == "true" and ae == "true", (
+            "todo perfil ve e edita o Acabamento; achei view=%s edit=%s" % (av, ae)
         )
 
     # O servidor decide o que o BANCO recebe no primeiro acesso: sem as duas
-    # chaves aqui, quem entra pela primeira vez nasce sem o menu novo.
+    # chaves aqui, quem entra pela primeira vez nasce sem o menu novo -- e, desde
+    # 22/08/2026, nasce com as duas LIGADAS, nos dois perfis que o primeiro
+    # acesso produz.
     ts = _ler("supabase/functions/painel/index.ts")
-    assert ts.count("perm_acabamento_view:") == 2, (
-        "as duas grades padrao da Edge Function precisam da permissao nova"
+    assert ts.count("perm_acabamento_view: true, perm_acabamento_edit: true,") == 2, (
+        "as duas grades padrao da Edge Function precisam do acabamento ligado (ver e editar)"
     )
+
+
+def test_o_harness_da_grade_do_acesso_local_passa():
+    """Quem entra pela estacao tem a grade do ACESSO LOCAL, nao a do site.
+
+    Tres acessos locais tinham a grade gravada antes de o modulo Acabamento
+    existir, e chave ausente valia "nao" -- o menu sumia na estacao por mais que
+    o administrador marcasse caixas na grade dos usuarios do site. O harness
+    prova que chave ausente agora segue o padrao do perfil, e que chave presente
+    continua mandando.
+    """
+    harness = os.path.join(RAIZ, "tests", "grade_do_acesso_local_harness.js")
+    assert os.path.exists(harness), "o harness da grade do acesso local sumiu"
+
+    r = subprocess.run(
+        ["node", harness], cwd=RAIZ, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_o_sql_liga_o_acabamento_para_todos_sem_tocar_no_resto_da_grade():
+    """O ajuste pedido em 22/08/2026 e um SQL completo, pronto para colar.
+
+    Ele liga VER e EDITAR do Acabamento em todo mundo -- na grade dos usuarios
+    do site E no JSON dos acessos locais, que e a grade que a estacao aplica --
+    e nao encosta em nenhuma outra caixa: o usuario edita a grade ao vivo, e
+    reescrever o resto a partir do ROLE_DEFAULTS apagaria ajustes feitos a mao.
+    """
+    sql = _ler("sql/acabamento_para_todos.sql")
+
+    assert "UPDATE public.imposition_user_permissions" in sql, "falta a grade dos usuarios do site"
+    assert "UPDATE public.imposition_acessos_locais" in sql, "falta a grade dos acessos locais"
+
+    comandos = []
+    for c in re.split(r";\s*\n", sql):
+        sem_comentario = "\n".join(l for l in c.splitlines() if not l.strip().startswith("--"))
+        if re.search(r"^\s*UPDATE\b", sem_comentario, re.M):
+            comandos.append(sem_comentario)
+    assert len(comandos) == 2, "esperava exatamente dois UPDATE (site e estacao)"
+    for sem_comentario in comandos:
+        chaves = set(re.findall(r"\bperm_[a-z_]+", sem_comentario))
+        assert chaves == {"perm_acabamento_view", "perm_acabamento_edit"}, (
+            "o UPDATE so pode tocar nas duas chaves do acabamento; achei %s" % sorted(chaves)
+        )
 
 
 def test_a_estacao_sincroniza_o_arquivo_da_tela_nova():

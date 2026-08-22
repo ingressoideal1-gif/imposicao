@@ -73,7 +73,7 @@ const PADRAO_VISUALIZADOR = {
   perm_amostras_view: true, perm_amostras_edit: false,
   perm_impressoras_view: false, perm_impressoras_edit: false,
   perm_producao_view: true, perm_producao_edit: false,
-  perm_acabamento_view: true, perm_acabamento_edit: false,
+  perm_acabamento_view: true, perm_acabamento_edit: true,
   perm_lista_arte_view: true, perm_lista_arte_edit: false,
   perm_fontes_view: true, perm_fontes_edit: false,
   perm_gerar_pdf: false, perm_imprimir: false,

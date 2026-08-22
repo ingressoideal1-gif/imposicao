@@ -9,8 +9,32 @@
 | Quem desenha | [`frontend/acabamento.js`](../frontend/acabamento.js) |
 | Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
 | SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) |
-| Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) |
+| Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) — **ver e editar ligados em todo perfil** desde 22/08/2026 (decisão do usuário); [`sql/acabamento_para_todos.sql`](../sql/acabamento_para_todos.sql) ligou nas grades que já existiam |
 | Testes | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js) + [`tests/test_painel_do_acabamento.py`](../tests/test_painel_do_acabamento.py) |
+
+---
+
+## Quem vê e quem edita
+
+Todo perfil — e todo acesso local da estação — **vê e edita** o Painel do
+Acabamento. Foi decisão do usuário em 22/08/2026 (*"deve aparecer e ser
+editável a todos os usuários"*), depois de o menu não aparecer na estação por
+mais que se marcasse a caixa na grade dos usuários do site.
+
+São **duas grades**, e marcar numa não muda a outra:
+
+- **Site** (sessão do Supabase): `imposition_user_permissions`, uma coluna por
+  permissão. É a grade do card *Usuários → Permissões*.
+- **Estação** (código local, sem sessão): `imposition_acessos_locais.permissoes`,
+  um JSON gravado quando o acesso é criado ou troca de perfil. É a grade do card
+  *Usuários → Acesso Local — NewProd*. O agente baixa a lista a cada 5 minutos;
+  o painel reconfere o código no F5.
+
+Chave que a grade local **não tem** — acesso gravado antes de um módulo existir,
+que foi o caso de três operadores — segue o padrão do perfil em `ROLE_DEFAULTS`
+(`permsDoOperadorLocal`, em `script.js`), em vez de valer "não". Chave presente
+manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
+[`tests/grade_do_acesso_local_harness.js`](../tests/grade_do_acesso_local_harness.js).
 
 ---
 
