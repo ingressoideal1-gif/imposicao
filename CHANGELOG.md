@@ -4,7 +4,44 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v688** — 2026-08-22 | Agente **1.2.181**
+## Versão atual: **v689** — 2026-08-22 | Agente **1.2.183**
+
+---
+
+## [v689 — 2026-08-22] — Ações em lote no pedido: Marcar PRONTO, Em Alteração e Aprovar todos os modelos
+
+Pedido do usuário: *"Cria um botão (ação) dentro do pedido para Marcar Pronto, Reprovar e Aprovar
+simultaneamente todos os modelos do mesmo pedido, respeitando que aprovação e reprovação somente
+usuário ADM e Atendimento"*.
+
+**O que muda.** No banner do pedido aberto (tela Amostras), uma linha nova **"Todos os modelos:"**
+com três botões: **🎨 Marcar todos PRONTO**, **❌ Todos em ALTERAÇÃO** e **✅ Aprovar todos**. Cada um
+faz, modelo a modelo, exatamente o que o botão do card faz — a mesma `decisionAmostraItem`, com as
+mesmas travas (Qtd × linhas do banco, elemento de banco sem CSV ou coluna, modelo aprovado pelo
+cliente), a arte de aprovação regerada no PRONTO e o "Enviar Arte" automático quando todos ficam
+PRONTO. Nada novo é escrito no banco. No link do cliente a linha não existe.
+
+**Quem pode o quê.** Marcar PRONTO: todo mundo que abre o pedido. Em ALTERAÇÃO e Aprovar: **só ADM e
+Atendimento** (`podeAgirEmLoteNoPedido`, pela sessão do site ou pelo acesso local da estação) — os
+outros papéis leem *"só ADM e Atendimento"* no lugar dos dois botões, e a função recusa mesmo se
+chamada pelo console.
+
+**Plano e confirmação.** Antes de agir, `planoDaAcaoEmLote` separa quem entra de quem fica de fora,
+com o motivo: já está pronto / aprovado pelo cliente — não se altera / divergência de células / banco
+incompleto (PRONTO); já está aprovado (Aprovar); já está em alteração / aprovado e quem clicou não
+destrava (Alteração). Uma janela mostra o texto (`textoDoPlanoEmLote`: *"Marcar PRONTO em 3 de 5
+modelos do pedido. Ficam de fora: …"*) e pede confirmação. **Todos em ALTERAÇÃO** pede uma anotação
+única, obrigatória, que vai para os modelos sem anotação e é acrescentada nos que já têm. Os modelos
+são processados em sequência, com aviso de progresso, e no fim um único recarregamento e um único
+aviso com o resumo (feitos, de fora, falhas).
+
+**Por baixo.** `decisionAmostraItem(itemId, osId, status, opts = {})` ganhou `opts.obs` (substitui o
+textarea) e `opts.emLote` (sem aviso nem recarga por modelo) e passa a devolver `true`/`false`; sem
+`opts` nada muda. O bloco "todos PRONTO → Enviar Arte" virou `promoverPedidoSeTodosProntos(osId)`,
+chamada pelo caminho por modelo e pelo executor `acaoEmLoteNoPedido`. Testes:
+`tests/acao_em_lote_harness.js` (84 casos: papéis × ações, cada motivo de pular, texto do plano,
+nome do modelo) e `tests/test_acao_em_lote.py` (ligação: container no HTML, assinatura nova,
+promoção nos dois caminhos, botões atrás de `podeAgirEmLoteNoPedido`).
 
 ---
 

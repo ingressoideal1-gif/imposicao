@@ -195,7 +195,9 @@ const ESTADO = {
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
     const catchIdx = trecho.indexOf("catch (e) {", trecho.indexOf('await regenerarAmostraDoModelo'));
     const bloco = trecho.slice(catchIdx, catchIdx + 600);
-    ok(/return;/.test(bloco), 'a falha interrompe o PRONTO', bloco.slice(0, 200));
+    // `return false;` desde as acoes em lote (22/08/2026): a funcao passou a
+    // devolver se gravou; a falha continua interrompendo o PRONTO.
+    ok(/return( false)?;/.test(bloco), 'a falha interrompe o PRONTO', bloco.slice(0, 200));
     ok(/N[ÃA]O foi marcado/.test(bloco), 'e o aviso diz que o modelo nao foi marcado');
 })();
 

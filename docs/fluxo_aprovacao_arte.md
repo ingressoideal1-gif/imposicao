@@ -490,6 +490,54 @@ Um pedido em `ALTERADO` sem texto do cliente é isso, e não uma gravação perd
 
 ---
 
+## Ações em lote no pedido (22/08/2026)
+
+> Pedido do usuário: *"Cria um botão (ação) dentro do pedido para Marcar Pronto, Reprovar e
+> Aprovar simultaneamente todos os modelos do mesmo pedido, respeitando que aprovação e
+> reprovação somente usuário ADM e Atendimento"*.
+
+**Onde.** No banner do pedido aberto (tela Amostras, `#amostras-os-banner`), a linha
+**"Todos os modelos:"** (container `#amostras-acoes-em-lote`) com até três botões:
+
+| Botão | O que faz em cada modelo | Quem vê |
+|---|---|---|
+| 🎨 Marcar todos PRONTO | o mesmo que "Arte Pronta" do card | todo mundo que abre o pedido |
+| ❌ Todos em ALTERAÇÃO | o mesmo que "Em Alteração" do card | **só ADM e Atendimento** |
+| ✅ Aprovar todos | o mesmo que "✅ APROVADO" do card | **só ADM e Atendimento** |
+
+Quem não é ADM/Atendimento vê, no lugar dos dois botões, o texto *"Aprovar e colocar em alteração
+em lote: só ADM e Atendimento"*. No link do cliente a linha não existe.
+
+**Como funciona.** O botão em lote faz **exatamente** o que o botão do card faz, modelo a modelo:
+a mesma `decisionAmostraItem(itemId, osId, status, { emLote: true, obs })`, com as mesmas travas
+(Qtd × linhas do banco, elemento de banco sem CSV ou coluna, modelo aprovado pelo cliente), a
+mesma arte de aprovação regerada no PRONTO e o mesmo "Enviar Arte" automático quando todos os
+modelos ficam PRONTO (`promoverPedidoSeTodosProntos`, chamada uma vez no fim). Nada novo é
+escrito no banco.
+
+Antes de agir aparece um **plano**: quantos modelos entram e quem fica de fora, com o motivo —
+"já está pronto", "aprovado pelo cliente — não se altera", a divergência de células ou o banco
+incompleto (PRONTO); "já está aprovado" (Aprovar); "já está em alteração" ou "aprovado — só o
+atendimento, o gerente ou o administrador devolvem para alteração" (Em Alteração). O operador
+confirma ou desiste. **Todos em ALTERAÇÃO** pede antes uma anotação única, obrigatória, que vai
+para os modelos sem anotação e é **acrescentada** nos que já têm. Os modelos são processados em
+sequência, e no fim há um único recarregamento e um único aviso com o resumo (feitos, de fora,
+falhas).
+
+**Funções** (`frontend/script.js`, ao lado das regras de bloqueio): `podeAgirEmLoteNoPedido(acao)`
+(quem pode: PRONTO qualquer papel; APROVADA e REPROVADA só `admin` e `atendimento`, pela sessão do
+site ou pelo acesso local da estação), `planoDaAcaoEmLote(itens, acao, ctx)` e
+`textoDoPlanoEmLote(plano, total)` (puras), `nomeDoModeloParaLista(item)`, o executor
+`window.acaoEmLoteNoPedido(osId, acao)` e o desenho `renderAcoesEmLoteDoPedido(osId)`, chamado por
+`renderAmostrasOSItens`.
+
+**Testes.** `tests/acao_em_lote_harness.js` lê as funções do `script.js` e exercita papéis ×
+ações, cada motivo de pular, o texto do plano e o nome do modelo; `tests/test_acao_em_lote.py` roda
+o harness e confere a ligação (container no HTML, assinatura nova, promoção nos dois caminhos,
+botões atrás de `podeAgirEmLoteNoPedido`).
+
+---
+
 ## Arquitetura de Dados — Pedidos Vibecode vs. OS Local
 
 ```mermaid

@@ -16534,6 +16534,102 @@ function podeLiberarParaProducao() {
 }
 window.podeLiberarParaProducao = podeLiberarParaProducao;
 
+// ──── Ações em lote no pedido (regra do usuário, 22/08/2026) ────────────────
+//
+// "Criar um botão dentro do pedido para Marcar Pronto, Reprovar e Aprovar
+// simultaneamente todos os modelos do mesmo pedido, respeitando que aprovação
+// e reprovação somente usuário ADM e Atendimento."
+//
+// O botão em lote faz o que o botão do card faz, modelo a modelo — a MESMA
+// `decisionAmostraItem`, com as mesmas travas e gravações. O que ele acrescenta
+// é um PLANO antes de agir: quem entra, quem fica de fora e por quê, numa
+// única confirmação, e um único aviso no fim. As três funções abaixo são puras
+// e o harness `tests/acao_em_lote_harness.js` as lê daqui. Ver
+// docs/superpowers/specs/2026-08-22-acoes-em-lote-no-pedido-design.md.
+
+const ROTULO_DA_ACAO_EM_LOTE = {
+    PRONTO:    'Marcar PRONTO',
+    REPROVADA: 'Colocar em Alteração',
+    APROVADA:  'Aprovar',
+};
+
+/**
+ * Quem pode acionar cada ação em lote.
+ *
+ * PRONTO é de quem abre o pedido, como o botão do card. APROVADA e REPROVADA
+ * são privilégio de ADM e Atendimento — regra do usuário, a mesma do ✅
+ * APROVADO por modelo. Papel desconhecido responde NÃO, como nas outras regras
+ * de negócio: o custo é um botão a menos por um instante na partida.
+ */
+function podeAgirEmLoteNoPedido(acao) {
+    if (acao === 'PRONTO') return true;
+    const papel = papelAtual();
+    return papel === 'admin' || papel === 'atendimento';
+}
+window.podeAgirEmLoteNoPedido = podeAgirEmLoteNoPedido;
+
+/** O nome do modelo nas mensagens do lote. */
+function nomeDoModeloParaLista(item) {
+    if (!item) return 'Modelo';
+    return item.nome_produto_real || item.produto || ('Modelo ' + item.id);
+}
+window.nomeDoModeloParaLista = nomeDoModeloParaLista;
+
+/**
+ * O plano de uma ação em lote: quem entra, quem fica de fora e por quê. Puro.
+ *
+ * Os motivos são os mesmos que travam o botão do card — já está assim,
+ * aprovado pelo cliente, Qtd × linhas, banco incompleto — só que ditos ANTES,
+ * todos juntos, para o operador saber o que vai e o que não vai acontecer. As
+ * duas conferências de numeração chegam por `ctx` (`divergencia` e
+ * `bancoIncompleto`, cada uma devolvendo o texto do problema ou null) para a
+ * função continuar pura e testável sem CSV nenhum.
+ */
+function planoDaAcaoEmLote(itens, acao, ctx) {
+    const c = ctx || {};
+    const divergencia = typeof c.divergencia === 'function' ? c.divergencia : () => null;
+    const bancoIncompleto = typeof c.bancoIncompleto === 'function' ? c.bancoIncompleto : () => null;
+    const aplicar = [];
+    const pulados = [];
+    for (const item of (itens || [])) {
+        const st = String(item.amostra_status || '').trim().toUpperCase();
+        let motivo = null;
+        if (acao === 'PRONTO') {
+            if (st === 'PRONTO') motivo = 'já está pronto';
+            else if (modeloEstaAprovado(item)) motivo = 'aprovado pelo cliente — não se altera';
+            else motivo = divergencia(item) || bancoIncompleto(item) || null;
+        } else if (acao === 'APROVADA') {
+            if (modeloEstaAprovado(item)) motivo = 'já está aprovado';
+        } else if (acao === 'REPROVADA') {
+            if (st === 'REPROVADA') motivo = 'já está em alteração';
+            else if (modeloEstaAprovado(item) && !c.podeDestravar) {
+                motivo = 'aprovado — só o atendimento, o gerente ou o administrador devolvem para alteração';
+            }
+        }
+        if (motivo) pulados.push({ item, motivo });
+        else aplicar.push(item);
+    }
+    return { acao, aplicar, pulados };
+}
+window.planoDaAcaoEmLote = planoDaAcaoEmLote;
+
+/** O texto único de confirmação e de resumo de um plano. */
+function textoDoPlanoEmLote(plano, totalDeModelos) {
+    const rotulo = ROTULO_DA_ACAO_EM_LOTE[plano.acao] || plano.acao;
+    const total = typeof totalDeModelos === 'number'
+        ? totalDeModelos : (plano.aplicar.length + plano.pulados.length);
+    const n = plano.aplicar.length;
+    let texto = n
+        ? rotulo + ' em ' + n + ' de ' + total + (total === 1 ? ' modelo' : ' modelos') + ' do pedido.'
+        : 'Nenhum modelo para ' + rotulo + '.';
+    if (plano.pulados.length) {
+        texto += '\n\nFicam de fora:\n' + plano.pulados
+            .map(p => '• ' + nomeDoModeloParaLista(p.item) + ' — ' + p.motivo).join('\n');
+    }
+    return texto;
+}
+window.textoDoPlanoEmLote = textoDoPlanoEmLote;
+
 /**
  * Modelo aprovado pelo cliente. O selo na tela escreve "✅ APROVADO".
  *
@@ -25933,6 +26029,8 @@ function renderAmostrasOSItens(osId) {
         const vibeEl = document.getElementById('amostras-os-vibe');
         if (vibeEl) vibeEl.innerHTML = os.numero ? botaoDoVibeHtml(os.numero) : '';
     }
+    // Os botões em lote ("Todos os modelos:"), só no painel interno.
+    if (containerId === 'amostras-itens-container') renderAcoesEmLoteDoPedido(osId);
     if (containerId === 'amostras-itens-container' && avulsa) {
         avulsa.style.display = 'none';
     }
@@ -29824,9 +29922,15 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
  */
-async function decisionAmostraItem(itemId, osId, status) {
+async function decisionAmostraItem(itemId, osId, status, opts = {}) {
+    // `opts.emLote`: chamada pelo botão em lote do pedido (`acaoEmLoteNoPedido`).
+    // Grava e valida igual; só não avisa nem redesenha por modelo — o lote faz
+    // isso uma vez no fim. `opts.obs` substitui a leitura do textarea. Devolve
+    // true quando gravou e false em qualquer saída antecipada; o botão do card
+    // ignora o retorno.
+    const emLote = !!(opts && opts.emLote);
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
-    const obs = obsEl ? obsEl.value : '';
+    const obs = (opts && opts.obs !== undefined) ? String(opts.obs) : (obsEl ? obsEl.value : '');
 
     // Qtd × linhas do banco (regra do usuário, 19/08/2026). O modelo não pode
     // ser marcado PRONTO enquanto o banco não fechar com a quantidade que o
@@ -29845,7 +29949,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         if (divergencia) {
             toast('Este modelo não pode ser marcado PRONTO: ' + textoDaDivergenciaDeCelulas(divergencia)
                 + '. Corrija as linhas do banco — a quantidade do pedido não se altera aqui.', 'warning');
-            return;
+            return false;
         }
         // Elemento de banco de dados sem CSV ou sem coluna (regra do usuário,
         // 22/08/2026): mesma trava, mesmo lugar — aqui e não só no botão.
@@ -29853,7 +29957,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         if (bancoIncompleto) {
             toast('Este modelo não pode ser marcado PRONTO: ' + bancoIncompleto.texto
                 + ' Abra a numeração no lápis, carregue o CSV e aponte a coluna do elemento.', 'warning');
-            return;
+            return false;
         }
 
         // A arte de aprovação é regerada AQUI, e esperada até o fim (regra do
@@ -29872,7 +29976,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         // garante que sempre acontece antes de o cliente ver.
         if (itemAlvo) {
             try {
-                toast('⏳ Gerando a arte de aprovação...', 'info');
+                if (!emLote) toast('⏳ Gerando a arte de aprovação...', 'info');
                 await garantirTabelasDaAmostra();
                 await regenerarAmostraDoModelo(osId, itemAlvo, idxAlvo, ESCALA_DA_AMOSTRA);
             } catch (e) {
@@ -29881,7 +29985,7 @@ async function decisionAmostraItem(itemId, osId, status) {
                 console.error('[Arte Pronta] Falha ao gerar a amostra:', e);
                 toast('Não consegui gerar a arte de aprovação: ' + (e && e.message || e)
                     + ' — o modelo NÃO foi marcado como pronto. Tente de novo.', 'error');
-                return;
+                return false;
             }
         }
     }
@@ -29889,7 +29993,7 @@ async function decisionAmostraItem(itemId, osId, status) {
     if (status === 'REPROVADA' && (!obs || obs.trim() === '')) {
         toast('Anotar alteração no campo ANOTAÇÕES', 'warning');
         if (obsEl) obsEl.focus();
-        return;
+        return false;
     }
     
     try {
@@ -29944,56 +30048,206 @@ async function decisionAmostraItem(itemId, osId, status) {
         } else {
             msg = `Status atualizado para ${status}`;
         }
-        toast(msg, toastType);
+        if (!emLote) toast(msg, toastType);
 
-        // Recarregar itens do banco antes de re-renderizar para garantir que arte_url
-        // e modo_pdf estejam atualizados no state (evita sumiço do PDF no modo PDF)
-        if (state.osItens && state.osItens[osId]) {
-            state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
-        }
-        try { await loadOSItens(osId); } catch (e) { console.warn('[decisionAmostraItem] loadOSItens err:', e); }
-        renderAmostrasOSItens(osId);
-
-        // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
-        // verificar se TODOS os modelos da OS estão PRONTO. Se sim → mudar status para 'Enviar Arte'
-        // automaticamente, sem precisar clicar em "Voltar para Atendimento".
-        const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
-        if (status === 'PRONTO' && isInternal) {
-            const todosItens = state.osItens[osId] || [];
-            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
-            if (todosProntos) {
-                const novoStatusOS = 'Enviar Arte';
-                const os = state.ordens.find(o => o.id === osId);
-                if (os && os.status !== novoStatusOS) {
-                    // Adiantar nesta máquina
-                    gravarStatusOverride(osId, novoStatusOS);
-                    // Atualizar memória
-                    os.status = novoStatusOS;
-                    // Atualizar banco
-                    try {
-                        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                            if (osId.startsWith('vibe_')) {
-                                await supabaseClient.from('pedidos_links_cliente')
-                                    .update({ status_arte: novoStatusOS })
-                                    .eq('os_id', osId);
-                            } else {
-                                await supabaseClient.from('producao_ordens_servico')
-                                    .update({ status: novoStatusOS })
-                                    .eq('id', osId);
-                            }
-                        }
-                    } catch (autoErr) {
-                        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
-                    }
-                    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
-                }
+        // Em lote, quem recarrega e redesenha — uma vez, no fim — é
+        // `acaoEmLoteNoPedido`. Aqui só o caminho do botão do card.
+        if (!emLote) {
+            // Recarregar itens do banco antes de re-renderizar para garantir que arte_url
+            // e modo_pdf estejam atualizados no state (evita sumiço do PDF no modo PDF)
+            if (state.osItens && state.osItens[osId]) {
+                state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
             }
+            try { await loadOSItens(osId); } catch (e) { console.warn('[decisionAmostraItem] loadOSItens err:', e); }
+            renderAmostrasOSItens(osId);
+
+            // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
+            // verificar se TODOS os modelos da OS estão PRONTO. Se sim → 'Enviar Arte'.
+            const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
+            if (status === 'PRONTO' && isInternal) await promoverPedidoSeTodosProntos(osId);
         }
+        return true;
     } catch (err) {
         console.error('Erro na decisão do item:', err);
         toast('Erro ao registrar decisão: ' + err.message, 'error');
+        return false;
     }
 }
+
+/**
+ * Todos os modelos do pedido PRONTO (ou aprovados) → o pedido vira "Enviar
+ * Arte" sozinho, sem precisar clicar em "Voltar para Atendimento".
+ *
+ * Era um bloco dentro de `decisionAmostraItem`; virou função para o botão em
+ * lote chamar UMA vez no fim, depois de reler os modelos, em vez de uma vez
+ * por modelo com a lista ainda velha. Lê `state.osItens[osId]` como está —
+ * quem chama garante que ele foi recarregado.
+ */
+async function promoverPedidoSeTodosProntos(osId) {
+    const todosItens = state.osItens[osId] || [];
+    const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
+    if (!todosProntos) return false;
+
+    const novoStatusOS = 'Enviar Arte';
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os || os.status === novoStatusOS) return false;
+
+    // Adiantar nesta máquina
+    gravarStatusOverride(osId, novoStatusOS);
+    // Atualizar memória
+    os.status = novoStatusOS;
+    // Atualizar banco
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente')
+                    .update({ status_arte: novoStatusOS })
+                    .eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico')
+                    .update({ status: novoStatusOS })
+                    .eq('id', osId);
+            }
+        }
+    } catch (autoErr) {
+        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
+    }
+    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
+    return true;
+}
+window.promoverPedidoSeTodosProntos = promoverPedidoSeTodosProntos;
+
+/**
+ * O botão em lote do pedido: Marcar PRONTO, Colocar em Alteração ou Aprovar
+ * TODOS os modelos de uma vez (regra do usuário, 22/08/2026).
+ *
+ * Passo a passo: (1) o porteiro de papel — Aprovar e Alterar em lote são de
+ * ADM e Atendimento; (2) o plano, que separa quem entra de quem fica de fora
+ * e diz o motivo; (3) para Alteração, UMA anotação, obrigatória como no card,
+ * escrita nos modelos sem anotação e acrescentada nos que já têm; (4) uma
+ * confirmação com o plano inteiro; (5) `decisionAmostraItem` modelo a modelo,
+ * em sequência — são as mesmas travas e gravações do botão do card, inclusive
+ * a arte de aprovação regerada no PRONTO; (6) uma releitura, um redesenho, a
+ * promoção para "Enviar Arte" se couber, e um único aviso com o resultado.
+ */
+window.acaoEmLoteNoPedido = async function(osId, acao) {
+    const rotulo = ROTULO_DA_ACAO_EM_LOTE[acao] || acao;
+    if (!podeAgirEmLoteNoPedido(acao)) {
+        toast(rotulo + ' em lote: só ADM e Atendimento.', 'warning');
+        return;
+    }
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) {
+        toast('Este pedido não tem modelos carregados.', 'warning');
+        return;
+    }
+
+    const ctx = {
+        podeDestravar: podeDestravarModeloAprovado(),
+        divergencia: item => {
+            const d = divergenciaDeCelulasDoModelo(item);
+            return d ? textoDaDivergenciaDeCelulas(d) : null;
+        },
+        bancoIncompleto: item => {
+            const b = bancoDeDadosIncompletoDoModelo(item);
+            return b ? b.texto : null;
+        },
+    };
+    const plano = planoDaAcaoEmLote(itens, acao, ctx);
+    if (!plano.aplicar.length) {
+        toast(textoDoPlanoEmLote(plano, itens.length), 'warning');
+        return;
+    }
+
+    let textoDaAlteracao = null;
+    if (acao === 'REPROVADA') {
+        textoDaAlteracao = prompt('Anotação da alteração — vale para todos os modelos do pedido (obrigatória):', '');
+        if (textoDaAlteracao === null) return;
+        textoDaAlteracao = textoDaAlteracao.trim();
+        if (!textoDaAlteracao) {
+            toast('Anotar alteração: a anotação é obrigatória para colocar em alteração.', 'warning');
+            return;
+        }
+    }
+
+    if (!confirm(textoDoPlanoEmLote(plano, itens.length) + '\n\nConfirmar?')) return;
+
+    let feitos = 0;
+    let falhas = 0;
+    const n = plano.aplicar.length;
+    for (let i = 0; i < n; i++) {
+        const item = plano.aplicar[i];
+        toast('⏳ ' + (i + 1) + '/' + n + ' — ' + nomeDoModeloParaLista(item), 'info');
+        const opts = { emLote: true };
+        if (acao === 'REPROVADA') {
+            const atual = String(item.amostra_obs || '').trim();
+            opts.obs = atual ? atual + '\n' + textoDaAlteracao : textoDaAlteracao;
+        }
+        let ok = false;
+        try {
+            ok = await decisionAmostraItem(item.id, osId, acao, opts);
+        } catch (e) {
+            console.error('[lote] Falha no modelo', item.id, e);
+            ok = false;
+        }
+        if (ok) feitos++; else falhas++;
+    }
+
+    if (state.osItens && state.osItens[osId]) {
+        state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
+    }
+    try { await loadOSItens(osId); } catch (e) { console.warn('[lote] loadOSItens err:', e); }
+    renderAmostrasOSItens(osId);
+    if (acao === 'PRONTO') await promoverPedidoSeTodosProntos(osId);
+
+    const deFora = plano.pulados.length
+        ? ' ' + plano.pulados.length + (plano.pulados.length === 1 ? ' ficou' : ' ficaram') + ' de fora (veja a confirmação).'
+        : '';
+    if (falhas) {
+        toast(rotulo + ': ' + feitos + (feitos === 1 ? ' feito' : ' feitos') + ', ' + falhas
+            + (falhas === 1 ? ' falhou' : ' falharam') + ' — veja os avisos.' + deFora, 'warning');
+    } else {
+        toast(rotulo + ': ' + feitos + (feitos === 1 ? ' modelo' : ' modelos') + '.' + deFora, 'success');
+    }
+};
+
+/**
+ * A linha "Todos os modelos:" do banner do pedido, com os botões em lote.
+ *
+ * Desenhada a cada `renderAmostrasOSItens`, e não escrita fixa no HTML, porque
+ * o papel de quem está logado pode chegar depois do primeiro desenho — e são
+ * ele e só ele que decidem se ❌ e ✅ nascem. Quem não é ADM nem Atendimento
+ * lê por que só vê um botão. No link do cliente a linha não existe.
+ */
+function renderAcoesEmLoteDoPedido(osId) {
+    const el = document.getElementById('amostras-acoes-em-lote');
+    if (!el) return;
+    const ehTelaDoCliente = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+    const itens = state.osItens[osId] || [];
+    if (ehTelaDoCliente || !osId || !itens.length) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+    const podeDecidir = podeAgirEmLoteNoPedido('APROVADA');
+    const id = escapeJsAttr(String(osId));
+    const base = 'font-weight: 700; height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 6px; cursor: pointer; font-size: 0.78rem;';
+    el.innerHTML = `
+        <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;">Todos os modelos:</span>
+        <button class="btn btn-sm" id="btn-lote-pronto" style="${base} background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;"
+                onclick="acaoEmLoteNoPedido('${id}', 'PRONTO')"
+                title="Marca PRONTO todos os modelos do pedido que podem ser marcados — pula os já prontos, os aprovados e os com banco ou células em divergência, e diz quais antes de fazer.">🎨 Marcar todos PRONTO</button>
+        ${podeDecidir ? `
+        <button class="btn btn-sm" id="btn-lote-alteracao" style="${base} background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;"
+                onclick="acaoEmLoteNoPedido('${id}', 'REPROVADA')"
+                title="Coloca em ALTERAÇÃO todos os modelos do pedido, com uma anotação única — pula os que já estão em alteração.">❌ Todos em ALTERAÇÃO</button>
+        <button class="btn btn-sm" id="btn-lote-aprovar" style="${base} background: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;"
+                onclick="acaoEmLoteNoPedido('${id}', 'APROVADA')"
+                title="Aprova pelo painel todos os modelos ainda não aprovados — mesmo efeito do ✅ APROVADO de cada card.">✅ Aprovar todos</button>`
+        : `<span style="font-size: 0.74rem; color: var(--text-dim);">Aprovar e colocar em alteração em lote: só ADM e Atendimento.</span>`}`;
+    el.style.display = 'flex';
+}
+window.renderAcoesEmLoteDoPedido = renderAcoesEmLoteDoPedido;
 
 /**
  * Salva a observação de um item de amostra

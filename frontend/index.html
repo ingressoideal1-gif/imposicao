@@ -1944,6 +1944,10 @@
                                 <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">✕ Fechar Pedido</button>
 
                             </div>
+                            <!-- "Todos os modelos:" — Marcar PRONTO / Em ALTERAÇÃO / Aprovar em lote.
+                                 Preenchido por renderAcoesEmLoteDoPedido() a cada desenho do pedido;
+                                 ❌ e ✅ só nascem para ADM e Atendimento (regra do usuário, 22/08/2026). -->
+                            <div id="amostras-acoes-em-lote" style="display: none; gap: 8px; align-items: center; flex-wrap: wrap;"></div>
                 </div>
 
                 <!-- Container dinâmico dos cards de itens do pedido -->
