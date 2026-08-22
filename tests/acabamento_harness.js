@@ -1221,11 +1221,66 @@ async function comTudoProntoOPedidoVaiParaExpedicao() {
        'e o detalhe volta para a lista');
 }
 
+async function semResponsavelOStatusNaoSeMexe() {
+    // Regra do usuario, 22/08/2026: "so permitir alterar o status apos
+    // selecionar o responsavel". Marcar um estagio e dizer que ALGUEM fez
+    // aquele trabalho; sem nome, o registro nao responde a pergunta que o setor
+    // faz depois -- quem acabou este material.
+    const avisos = [];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
+    await amb.painel.abrirPedido('os-200');
+
+    // O 3002 nao tem responsavel. Os quatro botoes dele estao travados...
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const do3002 = html.slice(html.indexOf('Camarote'));
+    const botoes3002 = do3002.match(/<button[^>]*data-estagio="[^"]*"[^>]*>/g) || [];
+    ok(botoes3002.length === 4, 'os quatro botoes do modelo sem responsavel aparecem', botoes3002.length);
+    ok(botoes3002.every(b => b.indexOf('disabled') !== -1),
+       'e todos travados enquanto nao ha responsavel');
+    ok(do3002.indexOf('para liberar o status') !== -1, 'a tela diz o que falta');
+    // ...mas o estagio continua LEGIVEL: travar nao e esconder.
+    ok(/data-estagio="Impresso" aria-pressed="true"/.test(do3002),
+       'o estagio derivado continua marcado');
+
+    // O 3001 TEM responsavel: os botoes dele estao livres.
+    const do3001 = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+    const botoes3001 = do3001.match(/<button[^>]*data-estagio="[^"]*"[^>]*>/g) || [];
+    ok(botoes3001.every(b => b.indexOf('disabled') === -1),
+       'o modelo com responsavel tem os botoes livres');
+    ok(do3001.indexOf('para liberar o status') === -1, 'e nao recebe o recado');
+
+    // A trava vale tambem na FUNCAO: botao cinza nao impede o console.
+    amb.banco._gravacoes.length = 0;
+    avisos.length = 0;
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+    ok(amb.banco._gravacoes.length === 0, 'chamar a funcao direto tambem nao grava',
+       JSON.stringify(amb.banco._gravacoes));
+    ok(avisos.some(a => /respons/i.test(a.texto || '')),
+       'e o operador ouve o porque', JSON.stringify(avisos));
+
+    // Escolhido o responsavel, o mesmo clique grava.
+    await amb.painel.mudarResponsavel('3002', 'os-200', 'Cesar Almeida');
+    amb.banco._gravacoes.length = 0;
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+    ok(amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status === 'Pronto'),
+       'com responsavel escolhido, o status grava',
+       JSON.stringify(amb.banco._gravacoes));
+
+    const depois = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const do3002Depois = depois.slice(depois.indexOf('Camarote'));
+    ok((do3002Depois.match(/<button[^>]*data-estagio="[^"]*"[^>]*disabled/g) || []).length === 0,
+       'e os botoes daquele modelo ficam livres na hora, sem ATUALIZAR');
+}
+
 async function oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto() {
     const amb = ambienteComPedidoAberto();
     amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
+    // Sem responsavel o status nao se mexe (22/08/2026): o operador escolhe o
+    // nome antes de marcar o estagio, e e isso que este teste reproduz.
+    amb.janela.state.osItens['os-200'][1].acabamento_responsavel = 'Cesar Almeida';
     amb.banco._setoresDoBanco = [
         { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: 4, status_producao: null },
     ];
@@ -1930,6 +1985,7 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await cancelarFechaOPopupSemGravar();
     await semPermissaoOPopupExplicaEnaoOferece();
     await comTudoProntoOPedidoVaiParaExpedicao();
+    await semResponsavelOStatusNaoSeMexe();
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
     await setorIncompletoNaoGanhaCarimbo();
     await desmarcarUmModeloTiraOCarimbo();

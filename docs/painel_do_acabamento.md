@@ -59,6 +59,15 @@ como já fazia (`FUNDO_DO_ESTAGIO`).
 Sem permissão de editar, os quatro aparecem apagados e travados — mas o marcado
 continua marcado: quem só vê precisa ler em que ponto o modelo está.
 
+**O status só se mexe depois do responsável** (regra do usuário, 22/08/2026).
+Modelo sem responsável escolhido tem os quatro botões travados e um recado ao pé
+deles: *"⬅️ Escolha o Responsável ao lado para liberar o status"*. Marcar um
+estágio é dizer que **alguém** fez aquele trabalho; sem nome, o registro não
+responde à pergunta que o setor faz depois — quem acabou este material. Escolhido
+o responsável, os botões liberam na hora, sem ATUALIZAR. A trava vale também na
+função (`mudarEstagio` confere antes de gravar): botão cinza não impede ninguém
+de chamar pelo console, e essa é a única porta por onde o status é gravado.
+
 Desenha `botoesDeEstagio` (`frontend/acabamento.js`); o harness confere que há um
 botão por estágio em cada modelo, que só um está marcado, e que todos travam
 para quem não edita.

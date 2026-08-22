@@ -340,6 +340,23 @@
         return doMapa ? (doMapa.responsavel || '').trim() : '';
     }
 
+    /**
+     * O responsável de um modelo pelo ID, venha ele da linha completa do pedido
+     * aberto ou do mapa da lista.
+     *
+     * Existe porque a trava do status (regra do usuário, 22/08/2026) precisa
+     * responder "há responsável?" tendo em mãos só o id — que é o que o clique
+     * do botão entrega.
+     */
+    function responsavelPorId(itemId, osId) {
+        const s = estado();
+        const itens = (s.osItens && s.osItens[osId]) || [];
+        const item = itens.find(i => String(i.id) === String(itemId));
+        if (item) return responsavelDoModelo(item);
+        const noMapa = tela.acabamento[String(itemId)];
+        return noMapa ? (noMapa.responsavel || '').trim() : '';
+    }
+
     /** A foto do material tirada na revisão, ou '' se ainda não tiraram. */
     function fotoDoModelo(m) {
         if (!m) return '';
@@ -938,6 +955,14 @@
         // por isso não há botão "nenhum": não existe modelo sem estágio.
         const atual = estagioDoModelo(item);
 
+        // Sem responsável, o status não se mexe (regra do usuário, 22/08/2026).
+        // Quem marca um estágio está dizendo que ALGUÉM fez aquele trabalho; sem
+        // nome, o registro não responde à pergunta que o setor faz depois — quem
+        // acabou este material. Ler continua livre: os quatro botões aparecem, o
+        // atual continua marcado, e só o clique é que espera o nome.
+        const temResponsavel = !!responsavelDoModelo(item);
+        const liberado = podeEditar && temResponsavel;
+
         const botoes = ESTAGIOS.map(e => {
             const rgb = COR_DO_ESTAGIO[e] || '148,163,184';
             const icone = (SELO[e] || {}).icone || '';
@@ -950,17 +975,27 @@
                   + ` box-shadow: 0 0 0 3px rgba(${rgb},0.28), 0 6px 16px rgba(${rgb},0.45);`
                 : `background: rgba(${rgb},0.10); border-color: rgba(${rgb},0.34); color: rgb(${rgb});`
                   + ` font-weight: 700;`;
+            const titulo = !temResponsavel
+                ? 'Escolha o responsável deste modelo para liberar o status'
+                : (ativo ? 'Este modelo está em ' + esc(e) : 'Marcar como ' + esc(e));
             return `
                 <button type="button" data-estagio="${esc(e)}" aria-pressed="${ativo ? 'true' : 'false'}"
-                        ${podeEditar ? '' : 'disabled'}
-                        style="${ESTILO_BOTAO_ESTAGIO}${cor}${podeEditar ? '' : ESTILO_BOTAO_TRAVADO}"
+                        ${liberado ? '' : 'disabled'}
+                        style="${ESTILO_BOTAO_ESTAGIO}${cor}${liberado ? '' : ESTILO_BOTAO_TRAVADO}"
                         onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${escJs(e)}')"
-                        title="${ativo ? 'Este modelo está em ' + esc(e) : 'Marcar como ' + esc(e)}">
+                        title="${titulo}">
                     ${ativo ? '✓ ' : ''}${icone} ${esc(e)}
                 </button>`;
         }).join('');
 
-        return `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%;">${botoes}</div>`;
+        // A saída da trava, escrita na própria tela: sem ela o operador vê
+        // quatro botões cinzas e não tem como adivinhar o que falta. Só para
+        // quem PODE editar — a quem não pode, o recado não serviria de nada.
+        const recado = (podeEditar && !temResponsavel)
+            ? `<span style="font-size:0.7rem; color:#fcd34d;">⬅️ Escolha o <b>Responsável</b> ao lado para liberar o status.</span>`
+            : '';
+
+        return `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%;">${botoes}</div>${recado}`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
@@ -3042,6 +3077,16 @@
         },
 
         mudarEstagio(itemId, osId, valor) {
+            // Aqui, e não só nos botões: botão cinza não impede ninguém de
+            // chamar a função pelo console, e esta é a única porta por onde o
+            // status do acabamento é gravado.
+            if (!responsavelPorId(itemId, osId)) {
+                const aviso = fn('toast');
+                if (aviso) {
+                    aviso('Escolha primeiro o responsável deste modelo — o status só muda com um nome.', 'warning');
+                }
+                return Promise.resolve(false);
+            }
             return gravar(itemId, osId, 'acabamento_status', valor);
         },
 

@@ -4,7 +4,28 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v690** — 2026-08-22 | Agente **1.2.184**
+## Versão atual: **v691** — 2026-08-22 | Agente **1.2.185**
+
+---
+
+## [v691 — 2026-08-22] — O status do acabamento só muda depois de escolher o responsável
+
+Pedido do usuário: *"Só permitir alterar o status após selecionar o responsável"*.
+
+No Painel do Acabamento, o modelo que ainda não tem responsável escolhido fica com os **quatro
+botões de status travados**, e um recado ao pé deles diz o que falta: *"⬅️ Escolha o Responsável ao
+lado para liberar o status"*. Marcar um estágio é dizer que **alguém** fez aquele trabalho — sem
+nome, o registro não responde à pergunta que o setor faz depois: quem acabou este material.
+
+Travar não é esconder: os quatro botões continuam à vista e o estágio atual continua marcado, porque
+ler em que ponto o modelo está é o que todo mundo precisa. Escolhido o responsável, os botões
+liberam **na hora**, sem precisar de ATUALIZAR. E a trava vale também na função que grava
+(`mudarEstagio`), não só nos botões: botão cinza não impede ninguém de chamar pelo console, e essa é
+a única porta por onde o status do acabamento é escrito.
+
+Testes: `tests/acabamento_harness.js` — modelo sem responsável tem os quatro botões travados e o
+recado, o com responsável fica livre, chamar a função direto não grava e avisa o porquê, e depois de
+escolher o responsável o mesmo clique grava (420 verificações no total).
 
 ---
 
