@@ -84,6 +84,21 @@
         '':              '#001f3e',
     };
 
+    // A cor de destaque dos quatro botões de estágio, em componentes RGB para
+    // compor `rgb()` e `rgba()` na mesma linha.
+    //
+    // São as MESMAS cores dos selos (`SELO`, e as classes `badge-*` do
+    // style.css), de propósito: o botão e o selo do mesmo modelo têm de dizer a
+    // mesma coisa. Como o fundo acima, elas NÃO acompanham a paleta da tela —
+    // codificam estado, e estado não se repinta para combinar (regra do
+    // usuário, 20/08/2026).
+    const COR_DO_ESTAGIO = {
+        'Aguardando':    '59,130,246',   // azul  — badge-blue
+        'Impresso':      '76,200,240',   // ciano — badge-teal desta tela
+        'Em acabamento': '245,158,11',   // âmbar — badge-amber
+        'Pronto':        '34,197,94',    // verde — badge-green
+    };
+
     // ─── A paleta ───────────────────────────────────────────────────────────
     //
     // O Acabamento é, de propósito, a mesma marcação da tela de Produção — as
@@ -679,7 +694,21 @@
     // ─── A lista de responsáveis ────────────────────────────────────────────
 
     /**
-     * Os operadores de acesso local da gráfica, só pelo nome.
+     * O perfil que responde pelo acabamento de um modelo.
+     *
+     * Regra do usuário, 22/08/2026: "apenas os perfil Acabamento aparecem como
+     * opção no drop responsável". O seletor listava TODO acesso local ativo —
+     * designers, impressores, o administrador —, e escolher o responsável virava
+     * procurar três nomes no meio de quinze. Quem responde pelo setor é quem
+     * trabalha nele.
+     *
+     * O nome já GRAVADO num modelo continua aparecendo mesmo fora do perfil (ver
+     * `selectResponsavel`): apagá-lo da tela faria o trabalho parecer sem dono.
+     */
+    const PERFIL_DO_RESPONSAVEL = 'acabamento';
+
+    /**
+     * Os operadores de acesso local da gráfica: nome e perfil.
      *
      * Vem da view `imposition_operadores`, criada em
      * `sql/painel_do_acabamento.sql`. A TABELA por trás dela guarda os códigos
@@ -703,7 +732,10 @@
             if (error) throw error;
             tela.operadores = (data || [])
                 .filter(o => o.ativo !== false && (o.nome || '').trim())
-                .map(o => String(o.nome).trim());
+                .map(o => ({
+                    nome: String(o.nome).trim(),
+                    role: String(o.role || '').trim().toLowerCase(),
+                }));
         } catch (e) {
             tela.operadores = [];
             tela.erroOperadores = e && e.message ? e.message : String(e);
@@ -879,29 +911,67 @@
         return linha ? (linha.name || linha.tipo || '') : '';
     }
 
-    function selectEstagio(item, osId, podeEditar) {
-        // Sem opção vazia: o estágio sempre tem um valor, nem que seja o
-        // derivado da impressão. Uma linha "— Status —" aqui só serviria para
-        // alguém escolher o nada.
+    /**
+     * Os quatro estágios como BOTÕES, no lugar do seletor.
+     *
+     * Pedido do usuário, 22/08/2026: *"alterar o drop dos Status para 4 botões,
+     * do mesmo tamanho; o botão do status atual estará selecionado; ao
+     * selecionar, o status deve ficar muito bem destacado"*.
+     *
+     * Um seletor fechado mostra um estágio e esconde os outros três: para ver
+     * onde o modelo está era preciso abrir a lista, e para mudá-lo, duas ações
+     * — abrir e escolher. Os quatro botões mostram o caminho inteiro de
+     * relance, e mudar é um clique só, com o alvo do tamanho de um dedo na
+     * estação.
+     *
+     * Quatro colunas de `1fr`: os botões têm o MESMO tamanho em qualquer
+     * largura. O atual vem pintado por dentro, com anel e sombra da cor do
+     * estágio e um ✓ à frente; os outros ficam só contornados. Sem permissão de
+     * editar, os quatro aparecem apagados e travados — a tela continua dizendo
+     * onde o modelo está, que é o que o operador sem edição precisa ler.
+     *
+     * O fundo do bloco do modelo continua mudando com o estágio, como já fazia
+     * (`FUNDO_DO_ESTAGIO`).
+     */
+    function botoesDeEstagio(item, osId, podeEditar) {
+        // O estágio sempre tem um valor, nem que seja o derivado da impressão —
+        // por isso não há botão "nenhum": não existe modelo sem estágio.
         const atual = estagioDoModelo(item);
-        const opcoes = ESTAGIOS
-            .map(e => `<option value="${esc(e)}" ${atual === e ? 'selected' : ''}>${esc(e)}</option>`)
-            .join('');
-        return `
-            <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
-                    onchange="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', this.value)"
-                    title="Em que ponto do acabamento este modelo está">
-                ${opcoes}
-            </select>`;
+
+        const botoes = ESTAGIOS.map(e => {
+            const rgb = COR_DO_ESTAGIO[e] || '148,163,184';
+            const icone = (SELO[e] || {}).icone || '';
+            const ativo = (atual === e);
+            // Texto ESCURO no botão pintado, e não branco: as quatro cores são
+            // claras (o âmbar e o ciano principalmente), e branco sobre elas
+            // fica com menos de 2,5:1 de contraste — some sob a luz da gráfica.
+            const cor = ativo
+                ? `background: rgb(${rgb}); border-color: rgb(${rgb}); color: #0b1220; font-weight: 900;`
+                  + ` box-shadow: 0 0 0 3px rgba(${rgb},0.28), 0 6px 16px rgba(${rgb},0.45);`
+                : `background: rgba(${rgb},0.10); border-color: rgba(${rgb},0.34); color: rgb(${rgb});`
+                  + ` font-weight: 700;`;
+            return `
+                <button type="button" data-estagio="${esc(e)}" aria-pressed="${ativo ? 'true' : 'false'}"
+                        ${podeEditar ? '' : 'disabled'}
+                        style="${ESTILO_BOTAO_ESTAGIO}${cor}${podeEditar ? '' : ESTILO_BOTAO_TRAVADO}"
+                        onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${escJs(e)}')"
+                        title="${ativo ? 'Este modelo está em ' + esc(e) : 'Marcar como ' + esc(e)}">
+                    ${ativo ? '✓ ' : ''}${icone} ${esc(e)}
+                </button>`;
+        }).join('');
+
+        return `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%;">${botoes}</div>`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
         const atual = responsavelDoModelo(item);
-        const lista = tela.operadores || [];
-        // Um responsável que saiu da lista de acessos continua aparecendo: o
-        // nome está gravado no modelo, e apagá-lo da tela faria o trabalho
-        // parecer sem dono.
-        const nomes = lista.slice();
+        const todos = tela.operadores || [];
+        // Só o perfil do setor (regra do usuário, 22/08/2026).
+        const doSetor = todos.filter(o => o.role === PERFIL_DO_RESPONSAVEL);
+        // Um responsável que saiu da lista de acessos — ou que nunca teve o
+        // perfil — continua aparecendo: o nome está gravado no modelo, e
+        // apagá-lo da tela faria o trabalho parecer sem dono.
+        const nomes = doSetor.map(o => o.nome);
         if (atual && !nomes.some(n => n.toLowerCase() === atual.toLowerCase())) nomes.unshift(atual);
 
         const opcoes = ['<option value="">— Responsável —</option>'].concat(
@@ -909,12 +979,15 @@
         ).join('');
 
         // A saída da trava vai escrita na própria tela: sem isso o operador vê
-        // um seletor vazio e não tem como saber o que fazer.
-        const recado = (!lista.length && tela.erroOperadores)
+        // um seletor vazio e não tem como saber o que fazer. São três situações
+        // diferentes, e cada uma pede uma providência diferente.
+        const recado = (!todos.length && tela.erroOperadores)
             ? `<span style="font-size:0.7rem; color:#f87171;">Lista de operadores indisponível. Cadastre em Usuários → Acesso Local, ou tente ATUALIZAR.</span>`
-            : (!lista.length
+            : (!todos.length
                 ? `<span style="font-size:0.7rem; color:var(--text-dim);">Nenhum acesso local cadastrado. Cadastre em Usuários → Acesso Local.</span>`
-                : '');
+                : (!doSetor.length
+                    ? `<span style="font-size:0.7rem; color:var(--text-dim);">Nenhum operador com o perfil <b>✂️ Acabamento</b>. Em <b>Usuários → Acesso Local — NewProd</b>, escolha esse perfil para quem trabalha no setor, e volte aqui em <b>ATUALIZAR</b>.</span>`
+                    : ''));
 
         return `
             <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
@@ -931,6 +1004,19 @@
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
+
+    // Os botões de estágio. `min-height` generoso porque na estação se clica de
+    // pé, às vezes com a mão suja de tinta; `min-width: 0` porque sem ele uma
+    // coluna de grade não encolhe abaixo do conteúdo e as quatro deixam de ter
+    // o mesmo tamanho na tela estreita.
+    const ESTILO_BOTAO_ESTAGIO = 'display: inline-flex; align-items: center; justify-content: center;'
+        + ' gap: 5px; width: 100%; min-width: 0; min-height: 44px; padding: 8px 6px;'
+        + ' border-style: solid; border-width: 2px; border-radius: 8px; cursor: pointer;'
+        + ' font-size: 0.84rem; line-height: 1.15; text-align: center;'
+        + ' transition: box-shadow .12s ease, background-color .12s ease;';
+    // Travado apaga o botão, mas não troca a cor: o operador sem permissão de
+    // editar continua LENDO em que ponto o modelo está.
+    const ESTILO_BOTAO_TRAVADO = ' opacity: 0.5; cursor: not-allowed; box-shadow: none;';
 
     const ESTILO_BOTAO_CAMERA = 'display: inline-flex; align-items: center; gap: 8px;'
         + ' background: linear-gradient(135deg,#2b32af,#123a99); border: 1px solid #4cc8f0; color: #ffffff;'
@@ -1028,9 +1114,9 @@
                 </div>
 
                 <div style="display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px 14px; background: rgba(0,0,0,0.28); border-top: 1px solid ${AZUL.fio};">
-                    <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 5px;">
+                    <div style="flex: 2 1 420px; min-width: 260px; display: flex; flex-direction: column; gap: 5px;">
                         <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
-                        ${selectEstagio(item, osId, podeEditar())}
+                        ${botoesDeEstagio(item, osId, podeEditar())}
                     </div>
                     <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 5px;">
                         <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>

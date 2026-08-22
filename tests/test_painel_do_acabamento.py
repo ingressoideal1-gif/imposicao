@@ -137,7 +137,7 @@ def test_a_permissao_do_modulo_existe_dos_dois_lados():
     # aparecer e ser editavel a todos os usuarios".
     perfis = re.findall(
         r"perm_acabamento_view:(true|false), perm_acabamento_edit:(true|false),", js)
-    assert len(perfis) == 7, "esperava os 7 perfis com a chave do acabamento, achei %d" % len(perfis)
+    assert len(perfis) == 8, "esperava os 8 perfis com a chave do acabamento, achei %d" % len(perfis)
     for av, ae in perfis:
         assert av == "true" and ae == "true", (
             "todo perfil ve e edita o Acabamento; achei view=%s edit=%s" % (av, ae)
@@ -151,6 +151,28 @@ def test_a_permissao_do_modulo_existe_dos_dois_lados():
     assert ts.count("perm_acabamento_view: true, perm_acabamento_edit: true,") == 2, (
         "as duas grades padrao da Edge Function precisam do acabamento ligado (ver e editar)"
     )
+
+
+def test_o_perfil_acabamento_existe_e_abre_no_painel_do_acabamento():
+    """O perfil do setor, pedido pelo usuario em 22/08/2026 para o Acesso Local.
+
+    Ele so ve o Painel do Acabamento -- o harness da grade prova que nenhuma
+    outra permissao vem ligada. Aqui ficam as tres ligacoes que fazem o perfil
+    aparecer e funcionar: o rotulo (sem ele o seletor de perfil nao o oferece, e
+    a barra lateral mostra "perfil quebrado"), a tela em que ele abre o dia (sem
+    ela cai no Painel de Producao, que ele nao pode ver) e o filtro do seletor de
+    responsavel.
+    """
+    js = _ler("frontend/script.js")
+
+    assert "acabamento: { label: 'Acabamento'" in js, "o perfil nao tem rotulo em ROLE_LABELS"
+    assert "acabamento:   'view-acabamento'," in js, "o perfil nao abre no Painel do Acabamento"
+
+    acab = _ler("frontend/acabamento.js")
+    assert "const PERFIL_DO_RESPONSAVEL = 'acabamento';" in acab, (
+        "o seletor de responsavel precisa filtrar pelo perfil"
+    )
+    assert "o.role === PERFIL_DO_RESPONSAVEL" in acab, "o filtro nao esta sendo aplicado"
 
 
 def test_o_harness_da_grade_do_acesso_local_passa():

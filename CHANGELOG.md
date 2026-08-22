@@ -4,7 +4,41 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v689** — 2026-08-22 | Agente **1.2.183**
+## Versão atual: **v690** — 2026-08-22 | Agente **1.2.184**
+
+---
+
+## [v690 — 2026-08-22] — Perfil "Acabamento" no Acesso Local, e o seletor de responsável só com ele
+
+Pedido do usuário: *"No gerenciamento de usuários criar o Perfil 'Acabamento' para o Acesso Local —
+NewProd; as permissões serão apenas para visualização e edição no Painel do Acabamento; apenas os
+perfil 'Acabamento' aparecem como opção no drop 'responsável'"*.
+
+**O perfil.** ✂️ **Acabamento** entra no seletor de perfil (card *Acesso Local — NewProd*, e também
+o dos usuários do site) com **uma tela só**: ver e editar o Painel do Acabamento, e nada mais — nem
+fila da impressora, nem pedido, nem cadastros, nem gerar PDF ou imprimir. Quem tem esse perfil abre
+o dia direto no Painel do Acabamento (`ROLE_HOME`).
+
+**O seletor "Responsável".** Passa a listar **só os acessos locais ativos com o perfil Acabamento**.
+Antes vinham todos — designers, impressores, o administrador — e escolher o responsável virava
+procurar três nomes no meio de quinze. O nome **já gravado** num modelo continua aparecendo mesmo
+fora do perfil: apagá-lo faria o trabalho parecer sem dono. Sem ninguém no perfil, o seletor diz o
+que fazer — escolher ✂️ Acabamento em *Usuários → Acesso Local — NewProd* e voltar em **ATUALIZAR**.
+
+**Sem SQL de migração.** O perfil vive no código; quem é do setor é decisão de quem administra, um
+acesso de cada vez na tela — que pergunta antes de reescrever a grade de alguém.
+
+**E o status virou botão.** No mesmo dia, a pedido do usuário, o seletor de estágio de cada modelo
+deu lugar a **quatro botões do mesmo tamanho** (⏳ Aguardando, 🖨️ Impresso, ✂️ Em acabamento, ✅
+Pronto). O do estágio atual vem pintado por dentro na cor daquele estágio, com anel, sombra e um ✓
+— os outros ficam contornados. Ver onde o modelo está deixou de exigir abrir uma lista, e mudá-lo
+passou a ser um clique. As cores continuam sendo as dos selos, e o fundo do bloco segue mudando com
+o estágio como já fazia. Sem permissão de editar, os quatro travam — e o marcado continua marcado.
+
+Testes: `tests/grade_do_acesso_local_harness.js` (o perfil liga só as duas caixas do acabamento, e
+declara todas as outras), `tests/acabamento_harness.js` (operador de outro perfil não aparece; o
+responsável gravado fora do perfil continua aparecendo; sem ninguém no perfil a tela diz o caminho)
+e `tests/test_painel_do_acabamento.py` (rótulo, tela inicial e o filtro).
 
 ---
 

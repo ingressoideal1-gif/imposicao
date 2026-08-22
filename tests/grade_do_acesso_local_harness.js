@@ -77,12 +77,31 @@ const { ROLE_DEFAULTS, permsDoOperadorLocal } = api;
 // ─── 3. Todo perfil ve e edita o Acabamento ─────────────────────────────────
 
 const perfis = Object.keys(ROLE_DEFAULTS);
-ok(perfis.length === 7, 'ROLE_DEFAULTS tem os 7 perfis', perfis);
+ok(perfis.length === 8, 'ROLE_DEFAULTS tem os 8 perfis', perfis);
 for (const perfil of perfis) {
     ok(ROLE_DEFAULTS[perfil].perm_acabamento_view === true,
        'perfil ' + perfil + ' VE o Acabamento por padrao');
     ok(ROLE_DEFAULTS[perfil].perm_acabamento_edit === true,
        'perfil ' + perfil + ' EDITA o Acabamento por padrao');
+}
+
+// ─── 3b. O perfil 'acabamento': uma tela so ────────────────────────────────
+//
+// Pedido do usuario em 22/08/2026: perfil novo para o Acesso Local, "apenas para
+// visualizacao e edicao no Painel do Acabamento". Se uma permissao a mais entrar
+// aqui, o operador do setor ganha uma tela que ninguem lhe deu.
+
+ok(!!ROLE_DEFAULTS.acabamento, "existe o perfil 'acabamento'");
+{
+    const p = ROLE_DEFAULTS.acabamento || {};
+    const ligadas = Object.keys(p).filter(k => p[k] === true).sort();
+    ok(ligadas.length === 2 && ligadas[0] === 'perm_acabamento_edit' && ligadas[1] === 'perm_acabamento_view',
+       'o perfil acabamento liga SO o painel do acabamento', ligadas);
+    // Toda chave da grade precisa estar escrita, e nao apenas as duas ligadas:
+    // chave ausente vira o padrao do perfil, e o padrao do perfil e ele mesmo.
+    for (const key of api.chavesDaGrade()) {
+        ok(key in p, 'o perfil acabamento declara ' + key);
+    }
 }
 
 // ─── 1. Grade antiga: chave ausente segue o padrao do perfil ────────────────

@@ -38,6 +38,62 @@ manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
 
 ---
 
+## O status: quatro botões, e não um seletor
+
+Pedido do usuário em 22/08/2026: *"alterar o drop dos Status para 4 botões, do
+mesmo tamanho; o botão do status atual estará selecionado; ao selecionar, o
+status deve ficar muito bem destacado"*.
+
+Cada modelo mostra os quatro estágios lado a lado — **⏳ Aguardando**, **🖨️
+Impresso**, **✂️ Em acabamento**, **✅ Pronto** — numa grade de quatro colunas de
+`1fr`, então têm o mesmo tamanho em qualquer largura de tela. O do estágio atual
+vem **pintado por dentro** na cor daquele estágio, com anel, sombra e um ✓ à
+frente; os outros ficam só contornados. Um clique muda o estágio: não há mais
+abrir a lista e escolher.
+
+As cores são as mesmas dos selos (`COR_DO_ESTAGIO` espelha `SELO`), e o texto do
+botão pintado é escuro de propósito — branco sobre âmbar ou ciano fica abaixo de
+2,5:1 de contraste. O fundo do bloco do modelo continua mudando com o estágio,
+como já fazia (`FUNDO_DO_ESTAGIO`).
+
+Sem permissão de editar, os quatro aparecem apagados e travados — mas o marcado
+continua marcado: quem só vê precisa ler em que ponto o modelo está.
+
+Desenha `botoesDeEstagio` (`frontend/acabamento.js`); o harness confere que há um
+botão por estágio em cada modelo, que só um está marcado, e que todos travam
+para quem não edita.
+
+---
+
+## O perfil "Acabamento", e quem pode ser responsável
+
+Criado a pedido do usuário em 22/08/2026, para o **Acesso Local — NewProd**: é
+pela estação que este setor entra na aplicação.
+
+- **O que o perfil dá.** Ver e editar o **Painel do Acabamento**, e nada mais —
+  nem a fila da impressora, nem o pedido, nem os cadastros. Está em
+  `ROLE_DEFAULTS` (`frontend/script.js`); há teste travando as duas únicas caixas
+  ligadas.
+- **Onde ele abre o dia.** `ROLE_HOME.acabamento = 'view-acabamento'`. Sem essa
+  linha o operador cairia no Painel de Produção, que ele não pode ver.
+- **Quem aparece no seletor "Responsável".** Só os acessos locais **ativos** com
+  esse perfil (`PERFIL_DO_RESPONSAVEL`, em `frontend/acabamento.js`). Antes o
+  seletor listava todo acesso ativo — designers, impressores, o administrador —,
+  e escolher o responsável virava procurar três nomes no meio de quinze.
+- **O nome já gravado num modelo continua aparecendo**, mesmo que a pessoa não
+  tenha (ou não tenha mais) o perfil: apagá-lo da tela faria o trabalho parecer
+  sem dono, e o próximo operador regravaria por cima sem saber que houve alguém.
+- **Quando ninguém tem o perfil**, o seletor diz o que fazer, na própria tela:
+  escolher ✂️ Acabamento em *Usuários → Acesso Local — NewProd* e voltar em
+  **ATUALIZAR** (que relê a lista de operadores).
+
+O perfil é atribuído **na tela**, um acesso de cada vez, no seletor de perfil do
+card *Acesso Local — NewProd*. Não há SQL de migração: quem é do setor é decisão
+de quem administra, e trocar o perfil pela tela pergunta antes de reescrever a
+grade daquele acesso.
+
+---
+
 ## O que a tela é
 
 Um **espelho do Painel de Produção**: mesmo layout, mesmos cards, mesmos

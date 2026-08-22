@@ -87,10 +87,14 @@ function montarAmbiente() {
     // Um `supabaseClient` de mentira: o construtor do Supabase e "thenable" no
     // fim da cadeia, entao basta o `.order()` devolver a promessa.
     const banco = {
+        // O perfil importa: desde 22/08/2026 so o 'acabamento' entra no seletor
+        // de responsavel. Gustavo esta aqui para provar que os outros ficam de
+        // fora.
         _operadores: [
-            { id: 1, nome: 'Bernardo Farias', role: 'impressor', ativo: true },
-            { id: 2, nome: 'Cesar Almeida', role: 'impressor', ativo: true },
-            { id: 3, nome: 'Quem Saiu', role: 'impressor', ativo: false },
+            { id: 1, nome: 'Bernardo Farias', role: 'acabamento', ativo: true },
+            { id: 2, nome: 'Cesar Almeida', role: 'acabamento', ativo: true },
+            { id: 3, nome: 'Quem Saiu', role: 'acabamento', ativo: false },
+            { id: 4, nome: 'Gustavo Impressor', role: 'impressor', ativo: true },
         ],
         _gravacoes: [],
         _modelosDoBanco: [],
@@ -489,14 +493,30 @@ function ambienteComPedidoAberto() {
     ok(html.indexOf('<img id="acab-amostra-os-200-3002') === -1,
        'a amostra em PDF NAO e rasterizada em imagem');
 
-    // Os dois -- e somente os dois -- seletores.
+    // UM seletor por modelo -- o do responsavel. O estagio virou botoes em
+    // 22/08/2026, a pedido do usuario.
     const selects = html.match(/<select/g) || [];
-    ok(selects.length === 4, 'dois seletores por modelo, dois modelos = quatro', 'achei ' + selects.length);
-    ok(html.indexOf('— Status —') === -1, 'o seletor de estagio nao tem mais a opcao vazia');
+    ok(selects.length === 2, 'um seletor por modelo (o responsavel), dois modelos = dois', 'achei ' + selects.length);
+    ok(html.indexOf('— Status —') === -1, 'nao ha opcao vazia de estagio');
+
+    // Os quatro estagios, como botoes do mesmo tamanho, um por estagio e por
+    // modelo. Se um sumir, o operador perde o caminho para aquele ponto.
     ['Aguardando', 'Impresso', 'Em acabamento', 'Pronto'].forEach(e => {
-        ok(html.indexOf('>' + e + '<') !== -1, 'o estagio "' + e + '" esta no seletor');
+        const quantos = (html.match(new RegExp('data-estagio="' + e + '"', 'g')) || []).length;
+        ok(quantos === 2, 'o estagio "' + e + '" tem um botao em cada um dos dois modelos', quantos);
     });
-    ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o seletor de estagio grava o acabamento');
+    ok(/grid-template-columns: repeat\(4, 1fr\)/.test(html), 'os quatro botoes tem o mesmo tamanho');
+    ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o botao de estagio grava o acabamento');
+
+    // O botao do estagio ATUAL e o unico marcado, em cada modelo. O 3001 esta
+    // em "Em acabamento"; o 3002 nao tem estagio gravado e deriva "Impresso"
+    // do status de impressao.
+    const marcados = (html.match(/aria-pressed="true"/g) || []).length;
+    ok(marcados === 2, 'um unico botao marcado por modelo', marcados);
+    const doModelo3001 = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+    ok(/data-estagio="Em acabamento" aria-pressed="true"/.test(doModelo3001),
+       'o botao marcado e o do estagio em que o modelo esta');
+    ok(doModelo3001.indexOf('✓') !== -1, 'e o marcado se ve de relance');
     ok(/AcabamentoPainel\.mudarResponsavel\(/.test(html), 'o seletor de responsavel grava o acabamento');
     ok(html.indexOf('Bernardo Farias') !== -1, 'o responsavel ja gravado aparece escolhido');
 
@@ -526,10 +546,18 @@ function ambienteComPedidoAberto() {
     amb.janela._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: false };
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    // Dois seletores e um botao de camera por modelo, dois modelos = seis.
-    ok((html.match(/disabled/g) || []).length === 6,
-       'quem so tem VER encontra os seletores e a camera travados',
+    // Por modelo: o seletor do responsavel, os QUATRO botoes de estagio e o
+    // botao da camera = seis. Dois modelos = doze.
+    ok((html.match(/disabled/g) || []).length === 12,
+       'quem so tem VER encontra os seletores, os botoes e a camera travados',
        'achei ' + (html.match(/disabled/g) || []).length);
+    // Nenhum botao de estagio escapa: um solto grava o acabamento de quem so ve.
+    const botoes = html.match(/<button[^>]*data-estagio="[^"]*"[^>]*>/g) || [];
+    ok(botoes.length === 8, 'oito botoes de estagio na tela', botoes.length);
+    ok(botoes.every(b => b.indexOf('disabled') !== -1), 'e todos travados');
+    // Travado apaga, mas nao apaga a INFORMACAO: o marcado continua marcado.
+    ok((html.match(/aria-pressed="true"/g) || []).length === 2,
+       'quem so ve continua enxergando em que ponto cada modelo esta');
     ok(html.indexOf('apenas permiss\u00e3o de ver') !== -1,
        'e a camera travada explica por que esta travada');
 })();
@@ -1747,11 +1775,47 @@ async function aListaDeResponsaveisVemDaViewDeOperadores() {
     ok(html.indexOf('Quem Saiu') === -1, 'acesso desativado NAO aparece como responsavel');
     ok(html.indexOf('Responsável —</option>') !== -1, 'ha a opcao de deixar sem responsavel');
 
+    // Regra do usuario, 22/08/2026: so o perfil Acabamento e opcao.
+    ok(html.indexOf('Gustavo Impressor') === -1,
+       'operador de outro perfil NAO aparece como responsavel');
+    ok(FONTE.indexOf("PERFIL_DO_RESPONSAVEL = 'acabamento'") !== -1,
+       'o filtro esta escrito no acabamento.js');
+
     // O codigo de acesso e segredo de estacao: nem pedido ao banco, nem exibido.
     ok(FONTE.indexOf("'codigo'") === -1, 'o acabamento.js nunca pede o codigo de acesso');
     ok(FONTE.indexOf('imposition_acessos_locais') === -1,
        'a leitura passa pela view, nunca pela tabela dos codigos');
     ok(FONTE.indexOf('imposition_operadores') !== -1, 'a lista vem da view de operadores');
+}
+
+async function oResponsavelGravadoForaDoPerfilContinuaAparecendo() {
+    // O perfil de alguem muda, ou a pessoa sai da grafica -- e o modelo que ela
+    // acabou continua sendo dela. Sumir com o nome faria o trabalho parecer sem
+    // dono, e o proximo operador regravaria por cima sem saber que houve alguem.
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][1].acabamento_responsavel = 'Gustavo Impressor';
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('>Gustavo Impressor<') !== -1,
+       'o responsavel ja gravado aparece mesmo fora do perfil');
+    ok(/Gustavo Impressor<\/option>/.test(html.replace(/\s+selected/g, '')),
+       'e como opcao do seletor, nao como texto solto');
+}
+
+async function semNinguemNoPerfilOSeletorDizOQueFazer() {
+    // Trava sem saida e trava que para a producao: o operador abriria um seletor
+    // vazio sem ter como saber que falta escolher o perfil de alguem.
+    const amb = ambienteComPedidoAberto();
+    amb.banco._operadores = [
+        { id: 4, nome: 'Gustavo Impressor', role: 'impressor', ativo: true },
+    ];
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+
+    ok(html.indexOf('perfil <b>✂️ Acabamento</b>') !== -1, 'a tela diz que falta perfil');
+    ok(html.indexOf('Acesso Local') !== -1, 'e diz onde resolver');
+    ok(html.indexOf('ATUALIZAR') !== -1, 'e diz como recarregar depois de resolver');
 }
 
 async function gravarEscreveSoNasDuasColunasNovas() {
@@ -1842,6 +1906,8 @@ async function bancoSemAsColunasNaoDerrubaATela() {
 
 (async function () {
     await aListaDeResponsaveisVemDaViewDeOperadores();
+    await oResponsavelGravadoForaDoPerfilContinuaAparecendo();
+    await semNinguemNoPerfilOSeletorDizOQueFazer();
     await gravarEscreveSoNasDuasColunasNovas();
     await oEstagioDaListaVemDeConsultaPropria();
     await bancoSemAsColunasNaoDerrubaATela();

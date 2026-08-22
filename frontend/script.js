@@ -16168,6 +16168,32 @@ const ROLE_DEFAULTS = {
         perm_gerar_pdf:true, perm_imprimir:true,
         perm_admin_view:false, perm_admin_edit:false,
     },
+    acabamento: {
+        // O perfil do setor que recebe o material depois da impressão. Uma tela
+        // só, e nada mais — quem trabalha no acabamento não precisa da fila da
+        // impressora, do pedido nem dos cadastros para marcar o estágio e o
+        // responsável de um modelo. Criado a pedido do usuário em 22/08/2026,
+        // para o Acesso Local — NewProd: é pela estação que este setor entra.
+        //
+        // É também o perfil que alimenta o seletor "Responsável" do Painel do
+        // Acabamento — só quem tem ESTE perfil aparece lá (ver
+        // `PERFIL_DO_RESPONSAVEL`, em acabamento.js).
+        perm_imposicao_view:false, perm_imposicao_edit:false,
+        perm_pedidos_view:false, perm_pedidos_edit:false,
+        perm_formatos_view:false, perm_formatos_edit:false,
+        perm_numeracao_view:false, perm_numeracao_edit:false,
+        perm_saidas_view:false, perm_saidas_edit:false,
+        perm_cores_view:false, perm_cores_edit:false,
+        perm_mapas_view:false, perm_mapas_edit:false,
+        perm_amostras_view:false, perm_amostras_edit:false,
+        perm_impressoras_view:false, perm_impressoras_edit:false,
+        perm_producao_view:false, perm_producao_edit:false,
+        perm_acabamento_view:true, perm_acabamento_edit:true,
+        perm_lista_arte_view:false, perm_lista_arte_edit:false,
+        perm_fontes_view:false, perm_fontes_edit:false,
+        perm_gerar_pdf:false, perm_imprimir:false,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
     financeiro: {
         perm_imposicao_view:false, perm_imposicao_edit:false,
         perm_pedidos_view:true, perm_pedidos_edit:false,
@@ -16227,6 +16253,7 @@ const ROLE_LABELS = {
     atendimento: { label: 'Atendimento', icon: '🎧', color: '#3b82f6' },
     designer: { label: 'Designer', icon: '🎨', color: '#a855f7' },
     impressor: { label: 'Impressor', icon: '🖨️', color: '#10b981' },
+    acabamento: { label: 'Acabamento', icon: '✂️', color: '#4cc8f0' },
     financeiro: { label: 'Financeiro', icon: '💰', color: '#f59e0b' },
     gerente: { label: 'Gerente', icon: '📊', color: '#06b6d4' },
     visualizador: { label: 'Visualizador', icon: '👁️', color: '#6b7280' },
@@ -16249,6 +16276,7 @@ const ROLE_HOME = {
     admin:        'view-lista-impressao',
     gerente:      'view-lista-impressao',
     impressor:    'view-lista-impressao',
+    acabamento:   'view-acabamento',
     financeiro:   'view-lista-impressao',
     atendimento:  'view-lista-arte',
     designer:     'view-lista-arte',
