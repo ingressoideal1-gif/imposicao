@@ -4,7 +4,27 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v685** — 2026-08-22 | Agente **1.2.179**
+## Versão atual: **v686** — 2026-08-22 | Agente **1.2.180**
+
+---
+
+## [v686 — 2026-08-22] — Aviso de células do banco repetidas entre modelos
+
+Regra do usuário: *"informar nos modelos quando alguma célula de banco de dados utilizada na
+numeração de um modelo corresponder a uma célula de outro modelo"*.
+
+No card do modelo, uma faixa âmbar (aviso, não trava) quando um valor que **este** modelo imprime —
+a coluna apontada por cada elemento de banco de dados, nas linhas da fatia dele — também está no
+banco de **outro** modelo do mesmo pedido: quantas células, com quais modelos e até três exemplos,
+mais a saída (repartir em 🧩 Linhas quando é o mesmo CSV; conferir os arquivos quando são bancos
+diferentes). Valores vazios não contam; a comparação é pelo texto exato.
+
+Nasceu do pedido 21085: os três modelos "Veículo" herdaram a numeração do Expositor SIMERS pelo
+"aplicar a todos" e imprimiriam os mesmos 4.000 códigos — credencial repetida, porta que abre duas
+vezes. A conta é feita uma vez por pedido (`celulasRepetidasDoPedido`); no link do cliente não. O
+harness da fatia exercita: mesma numeração sem fatia (tudo repete), fatias disjuntas (nada),
+bancos diferentes com um código em comum (os dois lados avisados), numeração sem elemento de banco
+(fora da conta).
 
 ---
 

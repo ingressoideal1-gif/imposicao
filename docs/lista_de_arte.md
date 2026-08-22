@@ -263,6 +263,19 @@ vazio. A regra é `bancoDeDadosIncompletoDoModelo(item)`, ao lado da de células
 no link do cliente ela não aparece, porque o cliente não tem como consertar a
 numeração. O harness da Lista de Arte exercita os seis casos.
 
+### Aviso: células do banco repetidas entre modelos
+
+Não é trava — é aviso. Regra do usuário, 22/08/2026: o card avisa, em âmbar,
+quando uma célula de banco de dados que **este** modelo imprime (o valor da
+coluna apontada por cada elemento de banco, nas linhas da fatia dele) também
+está no banco de **outro** modelo do mesmo pedido — quantas, com quem e três
+exemplos. Vale para dois modelos que dividem o mesmo CSV sem repartir as linhas
+(os três "Veículo" do pedido 21085 herdaram a numeração do Expositor SIMERS e
+imprimiriam os mesmos 4.000 códigos) e para dois CSVs diferentes com um código em
+comum. A conta é feita uma vez por pedido (`celulasRepetidasDoPedido`), cada
+card consulta o seu id, e no link do cliente ela não é feita. O harness da
+fatia exercita os quatro cenários.
+
 ### 5. Só o administrador libera para produção
 
 O botão **PRODUÇÃO** (`podeLiberarParaProducao`) é de contingência. O caminho

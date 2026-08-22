@@ -13895,6 +13895,88 @@ function bancoDeDadosIncompletoDoModelo(item) {
 window.bancoDeDadosIncompletoDoModelo = bancoDeDadosIncompletoDoModelo;
 
 /**
+ * Células do banco que um modelo partilha com OUTRO modelo do mesmo pedido.
+ *
+ * Regra do usuário, 22/08/2026: "informar nos modelos quando alguma célula de
+ * banco de dados utilizada na numeração de um modelo corresponder a uma célula
+ * de outro modelo". A célula que importa é a que vai para o papel: o valor da
+ * coluna apontada por cada elemento de banco de dados, nas linhas que ESTE
+ * modelo imprime (a fatia dele, ou o banco inteiro quando não há fatia).
+ *
+ * O caso que a motivou é o pedido 21085: três modelos "Veículo" herdaram a
+ * numeração do Expositor SIMERS pelo "aplicar a todos", e imprimiriam os
+ * mesmos 4.000 códigos dele — credencial repetida, porta que abre duas vezes.
+ * O mesmo vale para dois CSVs diferentes com um código em comum.
+ *
+ * É AVISO, não trava: nada impede o PRONTO. Devolve um mapa por id do modelo:
+ *   { total, exemplos: [...até 3 valores], outros: [{ id, nome, n }] }
+ * só para os modelos que têm alguma célula repetida. Valores vazios não contam;
+ * a comparação é pelo texto exato, sem espaços nas pontas. Só lê.
+ */
+function celulasRepetidasDoPedido(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    const porValor = new Map();     // valor -> Set(id do modelo)
+    const usoPorItem = {};          // id do modelo -> { nome, valores: Set }
+    itens.forEach((it, i) => {
+        if (!it) return;
+        const num = numeracaoDoModelo(it);
+        if (!num || !Array.isArray(num.csv_data) || !num.csv_data.length) return;
+        const colunas = Array.from(new Set((num.elements || [])
+            .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim())
+            .map(el => String(el.csv_column).trim())));
+        if (!colunas.length) return;
+        const valores = new Set();
+        fatiaCsvDoItem(it, num).forEach(linha => {
+            if (!linha) return;
+            colunas.forEach(c => {
+                const v = linha[c];
+                const texto = (v === null || v === undefined) ? '' : String(v).trim();
+                if (texto) valores.add(texto);
+            });
+        });
+        const id = String(it.id);
+        usoPorItem[id] = { nome: rotuloDoModelo(it, i), valores };
+        valores.forEach(v => {
+            if (!porValor.has(v)) porValor.set(v, new Set());
+            porValor.get(v).add(id);
+        });
+    });
+    const saida = {};
+    Object.keys(usoPorItem).forEach(id => {
+        const porModelo = {};
+        const exemplos = [];
+        let total = 0;
+        usoPorItem[id].valores.forEach(v => {
+            const donos = porValor.get(v);
+            if (!donos || donos.size < 2) return;
+            total++;
+            if (exemplos.length < 3) exemplos.push(v);
+            donos.forEach(outro => {
+                if (outro !== id) porModelo[outro] = (porModelo[outro] || 0) + 1;
+            });
+        });
+        if (!total) return;
+        saida[id] = {
+            total,
+            exemplos,
+            outros: Object.keys(porModelo).map(o => ({ id: o, nome: usoPorItem[o].nome, n: porModelo[o] }))
+        };
+    });
+    return saida;
+}
+window.celulasRepetidasDoPedido = celulasRepetidasDoPedido;
+
+/** A frase do aviso: quantas, com quem, e um gosto de quais. */
+function textoDasCelulasRepetidas(d) {
+    if (!d || !d.total) return '';
+    const com = d.outros.map(o => o.nome + ' (' + o.n + ')').join(', ');
+    const ex = d.exemplos.length ? ' Ex.: ' + d.exemplos.join(', ') + (d.total > d.exemplos.length ? '…' : '') : '';
+    return d.total + (d.total === 1 ? ' célula do banco deste modelo também está' : ' células do banco deste modelo também estão')
+        + ' no banco de: ' + com + '.' + ex;
+}
+window.textoDasCelulasRepetidas = textoDasCelulasRepetidas;
+
+/**
  * A frase do bloqueio. Diz a conta inteira porque quem lê é quem vai corrigi-la:
  * "faltam 250" sozinho não conta de onde saiu o número esperado.
  */
@@ -25640,6 +25722,13 @@ function renderAmostrasOSItens(osId) {
         return;
     }
 
+    // Células do banco repetidas entre modelos do pedido (regra do usuário,
+    // 22/08/2026): a conta é do pedido inteiro, então sai daqui uma vez e cada
+    // card só consulta o seu id. No link do cliente o aviso não aparece.
+    const celulasRepetidas = (state.amostrasContainerId === 'cliente-amostras-itens-container')
+        ? {}
+        : celulasRepetidasDoPedido(osId);
+
     const itemsHtml = itens.map((item, idx) => {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
@@ -25770,6 +25859,8 @@ function renderAmostrasOSItens(osId) {
         // o card avisa e o PRONTO fica trancado, como na regra de células.
         const bancoIncompleto = ehTelaDoCliente ? null : bancoDeDadosIncompletoDoModelo(item);
         const travaDeBanco = !!bancoIncompleto;
+        // ── Células do banco repetidas entre modelos ── (aviso, não trava)
+        const repetidas = celulasRepetidas[String(item.id)] || null;
 
         const tituloAprovado = tituloDoModeloAprovado(item);
 
@@ -25798,6 +25889,14 @@ function renderAmostrasOSItens(osId) {
                     Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.</span>
                 </div>` : '';
 
+        const faixaCelulasRepetidas = repetidas ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.40); color: #fbbf24; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">⚠️</span>
+                    <span>Células do banco repetidas entre modelos — o mesmo código sairia em mais de um modelo deste pedido.<br>
+                    <span style="font-weight:700;color:#fcd34d;">${escapeHtml(textoDasCelulasRepetidas(repetidas))}</span><br>
+                    Se os modelos dividem o mesmo CSV, reparta as linhas em <b>🧩 Linhas</b>; se são bancos diferentes, confira os arquivos antes de imprimir.</span>
+                </div>` : '';
+
         return `
         <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ` data-modelo-aprovado="1" data-titulo-aprovado="${escapeHtml(tituloAprovado)}"` : ''}>
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -25818,6 +25917,7 @@ function renderAmostrasOSItens(osId) {
                         ${faixaModeloTravado}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${faixaCelulasRepetidas}
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `

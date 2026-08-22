@@ -275,6 +275,63 @@ function extrairFuncao(src, nome) {
         'linhasDaAmostra nao le mais o estado do editor');
 })();
 
+// ─── Celulas do banco repetidas entre modelos do pedido ─────────────────────
+//
+// Regra do usuario, 22/08/2026: avisar no card quando uma celula de banco de
+// dados que este modelo imprime tambem esta no banco de outro modelo do pedido.
+// Nasceu do 21085: tres modelos "Veiculo" herdaram a numeracao do SIMERS e
+// imprimiriam os mesmos 4.000 codigos. As funcoes sao LIDAS do script.js.
+
+(function celulasRepetidasEntreModelos() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'fatiaCsvDoItem',
+                   'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+    const state = { numeracoes: [], osItens: {} };
+    const api = new Function('state', 'window', fonte + '\nreturn { celulasRepetidasDoPedido, textoDasCelulasRepetidas };')(state, global.window);
+
+    const qr = { id: 'el_1', type: 'QR', source: 'database', csv_column: 'CODIGO' };
+    const linhas = (codigos) => codigos.map((c, i) => ({ __id: i + 1, CODIGO: c }));
+    state.numeracoes.push(
+        { id: 'num-a', elements: [qr], csv_headers: ['CODIGO'], csv_data: linhas(['1001', '1002', '1003', '1004']) },
+        { id: 'num-b', elements: [qr], csv_headers: ['CODIGO'], csv_data: linhas(['1004', '9009']) },
+        { id: 'num-c', elements: [{ id: 'el_2', type: 'TEXT' }], csv_headers: ['CODIGO'], csv_data: linhas(['1001']) },
+    );
+    const modelo = (id, nome, numId, sel) => ({ id, nome_modelo: nome, amostra_num_id: numId, csv_selecao: sel || null });
+
+    // 1. Dois modelos com a MESMA numeracao e sem distribuicao: tudo repete.
+    state.osItens['os-1'] = [modelo('m1', 'SIMERS', 'num-a'), modelo('m2', 'Veiculo P16', 'num-a')];
+    let r = api.celulasRepetidasDoPedido('os-1');
+    ok(r.m1 && r.m1.total === 4 && r.m2 && r.m2.total === 4, 'mesma numeracao sem fatia: as 4 celulas repetem nos dois', r);
+    ok(r.m1.outros.length === 1 && r.m1.outros[0].nome === 'Veiculo P16' && r.m1.outros[0].n === 4,
+        'o aviso diz com quem e quantas', r.m1.outros);
+    ok(/4 células do banco deste modelo também estão no banco de: Veiculo P16 \(4\)/.test(api.textoDasCelulasRepetidas(r.m1)),
+        'a frase do aviso', api.textoDasCelulasRepetidas(r.m1));
+
+    // 2. Com a distribuicao feita (fatias disjuntas), nada repete.
+    state.osItens['os-2'] = [modelo('m1', 'SIMERS', 'num-a', { tipo: 'linhas', ids: ['1-2'] }),
+                             modelo('m2', 'Veiculo P16', 'num-a', { tipo: 'linhas', ids: ['3-4'] })];
+    r = api.celulasRepetidasDoPedido('os-2');
+    ok(Object.keys(r).length === 0, 'fatias disjuntas da mesma numeracao: sem aviso', r);
+
+    // 3. Bancos DIFERENTES com um codigo em comum: os dois modelos sao avisados, de 1.
+    state.osItens['os-3'] = [modelo('m1', 'SIMERS', 'num-a', { tipo: 'linhas', ids: ['3-4'] }),
+                             modelo('m3', 'Jurados', 'num-b')];
+    r = api.celulasRepetidasDoPedido('os-3');
+    ok(r.m1 && r.m1.total === 1 && r.m1.exemplos[0] === '1004', 'um codigo em comum entre bancos diferentes e apontado', r);
+    ok(r.m3 && r.m3.total === 1 && r.m3.outros[0].nome === 'SIMERS', 'e o outro lado tambem', r.m3);
+
+    // 4. Numeracao sem elemento de banco nao entra na conta, mesmo com o mesmo valor.
+    state.osItens['os-4'] = [modelo('m1', 'SIMERS', 'num-a'), modelo('m4', 'Texto fixo', 'num-c')];
+    r = api.celulasRepetidasDoPedido('os-4');
+    ok(Object.keys(r).length === 0, 'sem elemento de banco, a celula nao vai para o papel: sem aviso', r);
+
+    // 5. O card desenha a faixa, e o link do cliente nao.
+    ok(/\$\{faixaCelulasRepetidas\}/.test(script), 'o card tem a faixa das celulas repetidas');
+    ok(/cliente-amostras-itens-container'\)\s*\?\s*\{\}\s*:\s*celulasRepetidasDoPedido\(osId\)/.test(script),
+        'no link do cliente o aviso nao e calculado');
+})();
+
 // ─── Fim ──────────────────────────────────────────────────────────────────────
 
 if (falhas) {
