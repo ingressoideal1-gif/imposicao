@@ -949,12 +949,54 @@
             </div>`;
     }
 
-    function dado(rotuloTexto, valor, cor) {
+    // ─── A tabela de especificação do modelo ────────────────────────────────
+    //
+    // Desenho pedido pelo usuário em 22/08/2026, com a imagem da tabela em mãos:
+    // cabeçalho azul escrito ESPECIFICAÇÃO, uma linha por informação, o rótulo à
+    // direita da primeira coluna e o valor na segunda. As informações variáveis
+    // — as que mudam de modelo para modelo — vêm em negrito, também a pedido
+    // dele: são elas que o operador confere contra o material na mesa.
+    //
+    // Antes eram oito quadradinhos numa grade que se reorganizava conforme a
+    // largura da tela, e ler "qual é o bloco deste modelo" exigia procurar o
+    // rótulo no meio dos outros sete. Em tabela, cada informação está sempre na
+    // mesma linha, e duas telas lado a lado se comparam.
+
+    const ESPEC_CABECALHO = 'background: #0b63ce; color: #ffffff; font-weight: 900;'
+        + ' text-transform: uppercase; letter-spacing: 0.06em; padding: 9px 12px;'
+        + ' text-align: center; font-size: 0.92rem;';
+    const ESPEC_ROTULO = 'background: #152442; color: #8fb6e0; font-weight: 800;'
+        + ' font-size: 0.82rem; text-align: right; padding: 9px 14px; width: 46%;'
+        + ' border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle;';
+    const ESPEC_VALOR = 'background: #1b2c4e; color: #ffffff; font-weight: 800;'
+        + ' font-size: 0.95rem; padding: 9px 14px;'
+        + ' border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle;';
+
+    /** Uma linha: o rótulo fixo à esquerda, a informação variável à direita. */
+    function linhaEspec(rotuloTexto, valor, cor) {
         return `
-            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 92px;">
-                <span style="font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8;">${esc(rotuloTexto)}</span>
-                <span style="font-size: 1.02rem; font-weight: 700; color: ${cor || '#ffffff'};">${valor}</span>
-            </div>`;
+            <tr>
+                <td style="${ESPEC_ROTULO}">${esc(rotuloTexto)}</td>
+                <td style="${ESPEC_VALOR}${cor ? ' color: ' + cor + ';' : ''}">${valor}</td>
+            </tr>`;
+    }
+
+    /**
+     * A tabela inteira.
+     *
+     * As linhas chegam prontas de `linhaDoModelo`, porque o que entra nelas
+     * depende do tipo da numeração: um mapa de teatro (CAMAROTE) fala em
+     * quadrantes e lugares, não em numeração inicial e final.
+     */
+    function tabelaDeEspecificacao(linhas) {
+        return `
+            <table style="width: 100%; border-collapse: collapse; border-radius: 10px;
+                          overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.35);">
+                <thead>
+                    <tr><th colspan="2" style="${ESPEC_CABECALHO}">Especificação</th></tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>`;
     }
 
     function nomeNoCatalogo(catalogo, id) {
@@ -1126,17 +1168,25 @@
         const ni = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
         const nf = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
 
+        const temBloco = item.bloco !== undefined && item.bloco !== null && item.bloco !== '';
+        const qtdTexto = `${(parseInt(qtd) || 0).toLocaleString('pt-BR')} un`;
+        // "0001 a 4000" numa linha só, como o usuário desenhou. Faltando um dos
+        // dois não há intervalo a mostrar, e a linha diz isso em vez de exibir
+        // meia informação.
+        const temIntervalo = ni !== '' && ni !== undefined && ni !== null
+                          && nf !== '' && nf !== undefined && nf !== null;
+        const intervalo = temIntervalo ? `${esc(ni)} a ${esc(nf)}` : '—';
+
         const numeros = ehCamarote
             ? [
-                dado('Q_CAM', esc(item.q_cam || item.Q_CAM || '—'), '#4cc8f0'),
-                dado('L_CAM', esc(item.l_cam || item.L_CAM || '—'), '#4cc8f0'),
-                dado('C_INI', esc(item.c_ini || item.C_INI || 1), '#4cc8f0'),
+                linhaEspec('Quadrantes (Q_CAM)', esc(item.q_cam || item.Q_CAM || '—'), '#4cc8f0'),
+                linhaEspec('Lugares (L_CAM)', esc(item.l_cam || item.L_CAM || '—'), '#4cc8f0'),
+                linhaEspec('Cadeira inicial (C_INI)', esc(item.c_ini || item.C_INI || 1), '#4cc8f0'),
             ].join('')
             : [
-                dado('Qtd', (parseInt(qtd) || 0).toLocaleString('pt-BR')),
-                dado('Nº Inicial', esc(ni || '—')),
-                dado('Nº Final', esc(nf || '—')),
-                dado('Bloco', esc(item.bloco !== undefined && item.bloco !== null && item.bloco !== '' ? item.bloco : '—')),
+                linhaEspec('Quantidade Total', esc(qtdTexto)),
+                linhaEspec('Numeração de', intervalo),
+                linhaEspec('Bloco', temBloco ? `${esc(item.bloco)} unidades` : '—'),
             ].join('');
 
         const impressao = fn('normalizarStatusImpressao')
@@ -1173,12 +1223,21 @@
                     <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
                         ${amostraHtml(item, idAmostra)}
                     </div>
-                    <div style="flex: 1 1 320px; min-width: 280px; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 14px 20px; align-content: center;">
-                        ${numeros}
-                        ${dado('Cor', esc(corNome || '—'))}
-                        ${dado('Numeração', esc(numNome || '—'))}
-                        ${dado('Verso', esc(item.verso_tipo || (item.verso ? 'FxVerso' : 'Frente')))}
-                        ${dado('Impressão', esc(impressao || '—'), '#94a3b8')}
+                    <div style="flex: 1 1 320px; min-width: 280px; display: flex; align-items: center;">
+                        ${tabelaDeEspecificacao([
+                            numeros,
+                            // A numeração pelo NOME. Faltava no desenho que o
+                            // usuário mandou, e ele pediu que entrasse: é ela que
+                            // diz se o modelo leva QR, código de barras ou número
+                            // simples.
+                            linhaEspec('Numeração', esc(numNome || '—')),
+                            linhaEspec('Cor', esc(corNome || '—')),
+                            linhaEspec('Impressão', esc(item.verso_tipo || (item.verso ? 'FxVerso' : 'Frente'))),
+                            // O que a Produção diz deste modelo. Fica na tabela
+                            // porque é dela que o acabamento sabe se o material já
+                            // saiu da impressora.
+                            linhaEspec('Situação', esc(impressao || '—'), '#9fd8f2'),
+                        ].join(''))}
                     </div>
                 </div>
 

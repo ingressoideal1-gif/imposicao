@@ -38,6 +38,39 @@ manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
 
 ---
 
+## A tabela de especificação do modelo
+
+Desenho pedido pelo usuário em 22/08/2026, com a imagem da tabela em mãos. Cada
+modelo mostra, ao lado da amostra, uma tabela **ESPECIFICAÇÃO** — cabeçalho azul,
+uma linha por informação, o rótulo à direita da primeira coluna e o valor na
+segunda, **em negrito**:
+
+| Linha | O que traz |
+|---|---|
+| Quantidade Total | a quantidade do modelo, com `un` |
+| Numeração de | o intervalo `inicial a final`, numa linha só |
+| Bloco | o tamanho do bloco, com `unidades` |
+| **Numeração** | o nome da numeração — faltava no desenho, e o usuário pediu que entrasse |
+| Cor | o nome da cor |
+| Impressão | Frente ou FxVerso |
+| Situação | o que a Produção diz: Impresso, Aguardando… |
+
+O negrito nos valores é pedido dele: são as informações **variáveis**, as que o
+operador confere contra o material na mesa. Falta de dado vira `—`, nunca meia
+informação: sem o número final, a linha "Numeração de" não mostra intervalo
+nenhum.
+
+Numeração de mapa de teatro (`CAMAROTE`) troca as três primeiras linhas por
+**Quadrantes**, **Lugares** e **Cadeira inicial**, porque ali não há numeração
+inicial e final.
+
+Antes eram oito quadradinhos numa grade que se reorganizava conforme a largura da
+tela — ler "qual é o bloco deste modelo" exigia procurar o rótulo no meio dos
+outros sete. Desenha `tabelaDeEspecificacao` e `linhaEspec`
+(`frontend/acabamento.js`).
+
+---
+
 ## O cabeçalho do pedido aberto
 
 Pedido do usuário em 22/08/2026: *"ao abrir o pedido, no Painel de Acabamento,

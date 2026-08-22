@@ -8,7 +8,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v692 — 2026-08-22] — Número do pedido e Evento em destaque ao abrir o pedido no Acabamento
+## [v692 — 2026-08-22] — Pedido aberto no Acabamento: número e evento em destaque, e o modelo em tabela
 
 Pedido do usuário: *"Ao abrir o pedido, no Painel de Acabamento, destacar Número do pedido e Evento,
 como já aparece no pedido do Painel de Produção"*.
@@ -24,9 +24,18 @@ ele e pelo número que se confere, de relance, que o que está na mesa é o dest
 lista e pelo cabeçalho); sem evento no briefing, o campo some em vez de deixar um buraco. O crachá
 do número virou `ESTILO_CRACHA_NUMERO`, compartilhado pela lista e pelo cabeçalho.
 
+**E as informações de cada modelo viraram tabela.** No mesmo dia, com a imagem do desenho em mãos, os
+oito quadradinhos ao lado da amostra deram lugar a uma tabela **ESPECIFICAÇÃO**: rótulo à direita da
+primeira coluna, valor na segunda, **em negrito** — são as informações variáveis, as que o operador
+confere contra o material na mesa. As linhas são Quantidade Total (`500 un`), Numeração de (`1 a
+500`), Bloco (`50 unidades`), **Numeração** (o nome — faltava no desenho e o usuário pediu que
+entrasse), Cor, Impressão (Frente/FxVerso) e Situação (o que a Produção diz). Falta de dado vira
+`—`, nunca meia informação. Mapa de teatro (CAMAROTE) troca as três primeiras por Quadrantes,
+Lugares e Cadeira inicial.
+
 Testes: `tests/acabamento_harness.js` — o número aparece no crachá grande, o evento do pedido certo
-(e não o de outro), o cliente ao lado, e o campo do evento some quando não há briefing (428
-verificações no total).
+(e não o de outro), o cliente ao lado, o campo do evento some quando não há briefing, e a tabela traz
+as sete linhas com os valores em negrito (448 verificações no total).
 
 ---
 

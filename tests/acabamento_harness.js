@@ -1221,6 +1221,51 @@ async function comTudoProntoOPedidoVaiParaExpedicao() {
        'e o detalhe volta para a lista');
 }
 
+async function asInformacoesDoModeloSaemEmTabela() {
+    // Desenho pedido pelo usuario em 22/08/2026, com a imagem em maos: uma
+    // tabela ESPECIFICACAO por modelo, rotulo a esquerda e informacao variavel
+    // a direita, em negrito. Antes eram oito quadradinhos numa grade que se
+    // reorganizava com a largura da tela.
+    const amb = ambienteComPedidoAberto();
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const do3001 = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+
+    ok(do3001.indexOf('Especifica\u00e7\u00e3o') !== -1, 'a tabela tem o cabecalho ESPECIFICACAO');
+    ok(do3001.indexOf('<table') !== -1, 'e e uma tabela de verdade');
+
+    // Uma linha por informacao, com o rotulo do desenho do usuario.
+    [['Quantidade Total', '500 un'],
+     ['Numera\u00e7\u00e3o de', '1 a 500'],
+     ['Bloco', '100 unidades'],
+     ['Numera\u00e7\u00e3o', 'QR Ideal'],
+     ['Cor', 'Azul Ideal'],
+     ['Impress\u00e3o', 'Frente'],
+     ['Situa\u00e7\u00e3o', 'Impresso']].forEach(([rotulo, valor]) => {
+        ok(do3001.indexOf('>' + rotulo + '</td>') !== -1, 'a linha "' + rotulo + '" existe');
+        ok(do3001.indexOf('>' + valor + '</td>') !== -1,
+           'e o valor "' + valor + '" aparece nela');
+     });
+
+    // A informacao variavel em negrito -- foi o que ele pediu, e e o que o
+    // operador confere contra o material na mesa.
+    const celulasDeValor = do3001.match(/background: #1b2c4e;[^"]*/g) || [];
+    ok(celulasDeValor.length >= 7, 'as celulas de valor existem', celulasDeValor.length);
+    ok(celulasDeValor.every(c => c.indexOf('font-weight: 800') !== -1),
+       'e todas em negrito');
+
+    // A "Numeracao de" nao inventa meia informacao quando falta um dos numeros.
+    const amb2 = ambienteComPedidoAberto();
+    delete amb2.janela.state.osItens['os-200'][0].num_final;
+    amb2.janela.state.osItens['os-200'][0].bloco = '';
+    await amb2.painel.abrirPedido('os-200');
+    const outro = amb2.elementos['acab-detalhe-corpo'].innerHTML;
+    const so3001 = outro.slice(outro.indexOf('Pista Inteira'), outro.indexOf('Camarote'));
+    ok(so3001.indexOf('1 a 500') === -1, 'sem o numero final nao ha intervalo');
+    ok((so3001.match(/>\u2014<\/td>/g) || []).length >= 2,
+       'as duas linhas dizem que falta, em vez de mostrar meia informacao');
+}
+
 async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
     // Pedido do usuario, 22/08/2026: "ao abrir o pedido, no Painel de
     // Acabamento, destacar Numero do pedido e Evento, como ja aparece no pedido
@@ -2018,6 +2063,7 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await cancelarFechaOPopupSemGravar();
     await semPermissaoOPopupExplicaEnaoOferece();
     await comTudoProntoOPedidoVaiParaExpedicao();
+    await asInformacoesDoModeloSaemEmTabela();
     await oCabecalhoDoPedidoAbertoDestacaNumeroEEvento();
     await semResponsavelOStatusNaoSeMexe();
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
