@@ -4,7 +4,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v694** — 2026-08-22 | Agente **1.2.188**
+## Versão atual: **v695** — 2026-08-22 | Agente **1.2.189**
+
+---
+
+## [v695 — 2026-08-22] — A lista do botão IMPRESSO sai do mais recente ao mais antigo
+
+Pedido do usuário: *"No Painel de Produção, ao selecionar os pedidos 'Impressos' deve mostrar a lista
+do mais recente ao mais antigo, pela data de status 'Impresso'. Apenas ao selecionar botão
+'IMPRESSO'"*.
+
+**O banco não guardava essa data.** Guardava o status, e nada sobre quando ele foi marcado.
+`updated_at` não servia: ela muda em qualquer gravação do modelo — cor, gabarito, observação — e
+estava **nula em 57 dos 129 modelos impressos**. Ordenar por ela poria no topo o pedido que alguém
+abriu por último, e não o que saiu por último da impressora.
+
+Então nasceu `pedidos_modelos.status_impressao_em`, carimbada por um **gatilho no banco**
+(`sql/data_do_status_impresso.sql`), e não pela tela: quem marca "Impresso" pode ser o site, o
+agente local pela estação ou o ERP do parceiro pela tela dele, e um carimbo escrito no frontend
+deixaria a lista com buracos exatamente nos pedidos que a gráfica tocou pela estação. O gatilho
+também **apaga** a data quando o modelo sai de Impresso, e **não renova** o carimbo quando alguém
+regrava o mesmo status — senão reabrir o seletor e escolher o que já estava lá empurraria o pedido
+de volta ao topo.
+
+A data do **pedido** é a maior entre as dos modelos dele: o pedido só fica impresso quando o último
+modelo é marcado. **Apenas o botão IMPRESSO** usa essa ordem — Geral, Para Hoje e Atrasados são
+fila de trabalho, e ali quem vem na frente é quem precisa sair primeiro. E **clicar num cabeçalho
+continua vencendo**: escolher uma coluna é decisão explícita do operador.
+
+O histórico anterior a hoje foi preenchido por aproximação (`updated_at`, ou `created_at` onde ela
+era nula), para os 42 pedidos já impressos não saírem todos empilhados no fim da lista. Conferido
+com os dados de verdade: os 42 têm data, e a ordem cai do início ao fim.
+
+Também corrigido um teste que mentia desde a v689: o `tests/lista_arte_harness.js` procurava
+`return;` no trecho da trava de banco do MARCAR PRONTO, e a função passou a devolver `return false;`
+quando ganhou as ações em lote. O produto estava certo; o teste é que envelheceu.
+
+Testes: `tests/ordem_dos_impressos_harness.js` (17 verificações) e `tests/test_ordem_dos_impressos.py`
+(7 testes) — a data do pedido como a do último modelo, a ordem decrescente, quem não tem data no
+fim, o desempate pelo número maior, o gatilho só agindo quando o status muda, e a migração sem
+tocar em tabela do parceiro.
 
 ---
 

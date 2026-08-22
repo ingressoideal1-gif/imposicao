@@ -84,3 +84,42 @@ Os status controlam o andamento do item na fábrica:
 - **Fase 2**: Integração dos Lotes de Impressão e UI SPA de Configurações (Concluído/Ajustes finos).
 - **Fase 3**: Integração do webhook de encerramento do Lote de Impressão com os itens de Pedido (ERP).
 - **Fase 4**: Workflow consolidado com expedição final no módulo financeiro/estoque.
+
+---
+
+## A ordem da lista no botão IMPRESSO
+
+O Painel de Produção tem quatro filtros: **Geral**, **Para Hoje**, **Atrasados** e
+**IMPRESSO**. Os três primeiros são fila de **trabalho a fazer** — quem vem na
+frente é quem precisa sair primeiro. O quarto é um **histórico**, e por isso tem
+ordem própria: **do mais recente ao mais antigo**, pela data em que o pedido
+ficou impresso (pedido do usuário, 22/08/2026).
+
+**De onde vem a data.** O banco carimba `pedidos_modelos.status_impressao_em`
+quando `status_impressao` passa a "Impresso" — pelo gatilho
+`trg_carimba_status_impressao_em`, criado em `sql/data_do_status_impresso.sql`.
+A data do **pedido** é a MAIOR entre as dos modelos dele
+(`quandoOPedidoFicouImpresso`): o pedido só fica impresso quando o último modelo
+é marcado.
+
+**Por que um gatilho, e não o código da tela.** Quem marca "Impresso" pode ser o
+site, o agente local pela estacão ou o ERP do parceiro pela tela dele. Carimbar
+no frontend deixaria de fora dois desses três, e a lista sairia com buracos
+exatamente nos pedidos que a gráfica tocou pela estação.
+
+**Por que não `updated_at`.** Ela muda em qualquer gravação do modelo — troca de
+cor, de gabarito, de observação — e em 22/08/2026 estava nula em 57 dos 129
+modelos impressos. Ordenar por ela poria no topo o pedido que alguém abriu por
+último, e não o que saiu por último da impressora.
+
+**Duas regras que vêm junto:**
+
+- **Clicar num cabeçalho continua vencendo.** A ordem por data é aplicada antes
+  do `aplicarProdSort`; escolher uma coluna é uma decisão explícita do operador,
+  e ela manda mais que a ordem que a tela traz sozinha.
+- **Pedido sem data vai para o fim**, e não para o topo — que é onde um `null`
+  tratado como zero o poria numa ordem decrescente. O histórico anterior a
+  22/08/2026 foi preenchido por aproximação (`updated_at`, ou `created_at` onde
+  ela era nula), justamente para essa fila não existir.
+
+Testes: `tests/ordem_dos_impressos_harness.js` e `tests/test_ordem_dos_impressos.py`.

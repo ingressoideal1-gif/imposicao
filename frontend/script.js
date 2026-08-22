@@ -20520,7 +20520,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade, ordem, nome_modelo, amostra_arte_base64, arte_url')
+                .select('id, id_int, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_arte_base64, arte_url')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -22107,6 +22107,56 @@ function pedidoTotalmenteImpresso(os) {
     return calcularStatusImpressaoPedido(modelos) === 'Impresso';
 }
 
+/**
+ * Quando o pedido FICOU impresso, em milissegundos. `null` se não dá para saber.
+ *
+ * O banco carimba a data em cada MODELO (`status_impressao_em`, gravada pelo
+ * gatilho `trg_carimba_status_impressao_em` — ver `sql/data_do_status_impresso.sql`).
+ * O pedido só fica impresso quando o último modelo dele é marcado, então a data
+ * do pedido é a MAIOR entre as dos modelos: o instante em que ele saiu da fila.
+ *
+ * Modelo sem data não conta em vez de zerar a conta — o histórico anterior a
+ * 22/08/2026 foi preenchido por aproximação, e pode haver linha sem nada.
+ */
+function quandoOPedidoFicouImpresso(os) {
+    if (!os) return null;
+    const numOs = parseInt(os.numero);
+    const modelosGlobais = (state.modelosGlobais && state.modelosGlobais[numOs]) ? state.modelosGlobais[numOs] : [];
+    const osItensList = state.osItens[os.id] || [];
+    const modelos = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
+    let ultima = null;
+    for (const m of modelos) {
+        if (!m || !m.status_impressao_em) continue;
+        const t = new Date(m.status_impressao_em).getTime();
+        if (isNaN(t)) continue;
+        if (ultima === null || t > ultima) ultima = t;
+    }
+    return ultima;
+}
+
+/**
+ * A lista do botão IMPRESSO: do mais RECENTE ao mais ANTIGO.
+ *
+ * Pedido do usuário em 22/08/2026, e só para esse botão. Os outros filtros são
+ * fila de trabalho — quem está na frente é quem precisa sair primeiro; este é
+ * um histórico, e o que interessa nele é o que acabou de sair da impressora.
+ *
+ * Pedido sem data vai para o FIM (e não para o topo, que é onde um `null` tratado
+ * como zero o poria numa ordem decrescente), e o desempate continua sendo o
+ * número maior primeiro, que era a ordem da lista até aqui.
+ */
+function ordenarImpressosPorData(lista) {
+    return lista.slice().sort((a, b) => {
+        const ta = quandoOPedidoFicouImpresso(a);
+        const tb = quandoOPedidoFicouImpresso(b);
+        if (ta === null && tb === null) return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        if (ta !== tb) return tb - ta;
+        return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+    });
+}
+
 /** Decide se o pedido entra na lista conforme o filtro de prazo escolhido. */
 function pedidoPassaFiltroPrazo(os) {
     const filtro = state.filtroPrazo || 'geral';
@@ -23289,7 +23339,17 @@ function renderOrdens() {
         const emptyImpressao = document.getElementById('empty-impressao');
         const tableImpressao = document.getElementById('table-impressao');
 
-        // Ordenação escolhida nos cabeçalhos (não altera filtros nem contadores)
+        // Com o botão IMPRESSO ligado, a lista sai do mais RECENTE ao mais
+        // antigo pela data do status Impresso — pedido do usuário em
+        // 22/08/2026. Só nesse botão: os outros filtros são fila de trabalho,
+        // e ali quem vem na frente é quem precisa sair primeiro.
+        if ((state.filtroPrazo || 'geral') === 'impressos') {
+            filteredImpressao = ordenarImpressosPorData(filteredImpressao);
+        }
+
+        // Ordenação escolhida nos cabeçalhos (não altera filtros nem contadores).
+        // Vem DEPOIS de propósito: clicar numa coluna é uma escolha explícita do
+        // operador, e ela vence a ordem que a tela traz sozinha.
         filteredImpressao = aplicarProdSort(filteredImpressao);
         updateProdSortHeaders();
         updateFiltroPrazoBotoes();

@@ -291,7 +291,9 @@ const { pedidoSaiuDaArte } = new Function(
     // E a regra esta ligada nos dois lugares: no botao do card e no clique.
     ok(/travaDeCelulas \|\| travaDeBanco \? 'disabled'/.test(SCRIPT), 'o botao MARCAR PRONTO fica trancado pela trava de banco');
     ok(/\$\{faixaBancoIncompleto\}/.test(SCRIPT), 'o card mostra a faixa do banco incompleto');
-    ok(/const bancoIncompleto = bancoDeDadosIncompletoDoModelo\(itemAlvo\);\s*if \(bancoIncompleto\) \{[\s\S]{0,400}return;/.test(SCRIPT),
+    // `return false;` desde as acoes em lote (22/08/2026): a funcao passou a
+    // devolver se gravou; a trava continua interrompendo o PRONTO do mesmo jeito.
+    ok(/const bancoIncompleto = bancoDeDadosIncompletoDoModelo\(itemAlvo\);\s*if \(bancoIncompleto\) \{[\s\S]{0,400}return( false)?;/.test(SCRIPT),
         'o clique em PRONTO confere a regra e para, com aviso');
     ok(/ehTelaDoCliente \? null : bancoDeDadosIncompletoDoModelo\(item\)/.test(SCRIPT),
         'no link do cliente a trava nao aparece: ele nao tem como consertar a numeracao');
