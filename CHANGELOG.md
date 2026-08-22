@@ -4,7 +4,34 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v692** — 2026-08-22 | Agente **1.2.186**
+## Versão atual: **v693** — 2026-08-22 | Agente **1.2.187**
+
+---
+
+## [v693 — 2026-08-22] — Card do modelo em três colunas, e o título igual ao do Painel de Produção
+
+Pedido do usuário: *"box das especificações ficou muito bom, mas pode reduzir a metade do tamanho na
+horizontal, sem reduzir o conteúdo; à direita do box vamos mover os botões de Status para lateral
+direita, um abaixo do outro, e o drop do responsável abaixo dos botões"* e, logo depois, *"Título do
+pedido no painel de acabamento deve seguir mesma formatação do pedido do painel de produção"*.
+
+**O card em três colunas.** Amostra (elástica), **Especificação** com metade da largura de antes
+(280px, mesmo conteúdo — o que encolheu foi o respiro lateral das células, e o rótulo ganhou
+`nowrap` para não quebrar em duas linhas) e, à direita dela, a coluna das **decisões**: os quatro
+botões de status **um abaixo do outro** e o **responsável abaixo deles**. A faixa de decisões no
+rodapé do card deixou de existir — de pé na estação, o operador percorria a linha inteira do card
+para chegar até ela. O recado da trava passou a apontar para baixo ("⬇️ Escolha o Responsável abaixo
+para liberar o status"), que é onde ele ficou.
+
+**O título do pedido aberto** virou `📋 Itens do Pedido #200` — mesmo ícone, mesmo texto e mesmo azul
+claro do pedido aberto no Painel de Produção. As duas telas são irmãs, e títulos diferentes faziam
+parecer que eram dois programas. O **evento** continua ao lado, em destaque, com o cliente abaixo. Na
+**lista** o número segue no crachá grande, igual ao da fila da Produção: lista com lista, cabeçalho
+com cabeçalho.
+
+Testes: `tests/acabamento_harness.js` — as três colunas na ordem certa, os botões empilhados numa
+coluna só, o título com o número como na Produção, e o recado apontando para o responsável abaixo
+(451 verificações no total).
 
 ---
 

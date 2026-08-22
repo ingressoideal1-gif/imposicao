@@ -2403,12 +2403,14 @@
                                 <button class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem;" onclick="AcabamentoPainel.fecharPedido()" title="Voltar para a lista de pedidos">
                                     <i class="fa-solid fa-arrow-left"></i> VOLTAR
                                 </button>
-                                <span class="prod-table-title" style="margin-left: 8px;">Pedido</span>
-                                <!-- O numero no mesmo cracha da fila, e o evento em destaque ao
-                                     lado: e por eles que o operador confere, de relance, que o
-                                     material na mesa e o deste pedido. Preenchidos por
+                                <!-- MESMA formatacao do pedido aberto no Painel de Producao
+                                     (`os-detail-numero-impressao`, na Fila de Producao), por
+                                     pedido do usuario em 22/08/2026: mesmo icone, mesmo texto,
+                                     mesmo azul no numero. As duas telas sao irmas, e um titulo
+                                     diferente em cada uma fazia parecer que eram dois programas.
+                                     O evento fica ao lado, em destaque. Preenchidos por
                                      renderDetalhe(). -->
-                                <span id="acab-detalhe-numero"></span>
+                                <span class="prod-table-title" style="margin-left: 8px;"><i class="fa-solid fa-list"></i> Itens do Pedido <span id="acab-detalhe-numero" style="color: #60a5fa;"></span></span>
                                 <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
                                     <span id="acab-detalhe-evento" style="font-size: 1.05rem; font-weight: 800; color: #4cc8f0; line-height: 1.2;"></span>
                                     <span id="acab-detalhe-cliente" style="font-size: 0.85rem; color: #94a3b8; line-height: 1.2;"></span>

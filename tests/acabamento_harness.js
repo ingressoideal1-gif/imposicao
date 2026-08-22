@@ -483,9 +483,23 @@ function ambienteComPedidoAberto() {
        'a metade da amostra centra na altura');
     ok(html.indexOf('align-items: stretch') !== -1,
        'a linha estica, para "no meio" ser o meio da caixa');
-    const metades = html.match(/flex: 1 1 320px/g) || [];
-    ok(metades.length === 4, 'amostra e informacoes dividem a caixa ao meio (2 por modelo, 2 modelos)',
-       'achei ' + metades.length);
+    // Tres colunas por modelo desde 22/08/2026, a pedido do usuario: a amostra
+    // (elastica), a especificacao (metade da largura que tinha) e, a direita
+    // dela, as decisoes -- os quatro botoes de status empilhados e o responsavel
+    // abaixo deles. Antes eram duas colunas e uma faixa de decisoes no rodape.
+    const amostras = html.match(/flex: 1 1 200px/g) || [];
+    ok(amostras.length === 2, 'a amostra e a coluna elastica, uma por modelo', amostras.length);
+    const espec = html.match(/flex: 0 1 280px/g) || [];
+    ok(espec.length === 2, 'a especificacao ficou estreita, uma por modelo', espec.length);
+    const decisoes = html.match(/flex: 0 1 210px/g) || [];
+    ok(decisoes.length === 2, 'e a coluna das decisoes fica a direita dela', decisoes.length);
+    // A ordem na tela: especificacao, depois status, depois responsavel.
+    const umModelo = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+    const posEspec = umModelo.indexOf('Especificação');
+    const posStatus = umModelo.indexOf('Status do acabamento');
+    const posResp = umModelo.indexOf('Responsável');
+    ok(posEspec < posStatus && posStatus < posResp,
+       'a ordem e especificacao, status e responsavel', { posEspec, posStatus, posResp });
 
     // Amostra em PDF vira atalho, e nunca imagem: rasterizar a arte do cliente
     // esta fora de cogitacao neste projeto.
@@ -505,7 +519,8 @@ function ambienteComPedidoAberto() {
         const quantos = (html.match(new RegExp('data-estagio="' + e + '"', 'g')) || []).length;
         ok(quantos === 2, 'o estagio "' + e + '" tem um botao em cada um dos dois modelos', quantos);
     });
-    ok(/grid-template-columns: repeat\(4, 1fr\)/.test(html), 'os quatro botoes tem o mesmo tamanho');
+    // Empilhados numa coluna so (22/08/2026): mesma coluna da grade, mesmo tamanho.
+    ok(/grid-template-columns: 1fr/.test(html), 'os quatro botoes ficam um abaixo do outro');
     ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o botao de estagio grava o acabamento');
 
     // O botao do estagio ATUAL e o unico marcado, em cada modelo. O 3001 esta
@@ -1279,10 +1294,9 @@ async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
     ];
     await amb.painel.abrirPedido('os-200');
 
-    const cracha = amb.elementos['acab-detalhe-numero'].innerHTML;
-    ok(cracha.indexOf('200') !== -1, 'o numero do pedido esta no cabecalho', cracha);
-    ok(cracha.indexOf('font-size: 1.35rem') !== -1,
-       'no mesmo cracha grande da fila do Painel de Producao', cracha);
+    ok(amb.elementos['acab-detalhe-numero'].textContent === '#200',
+       'o numero do pedido esta no cabecalho, como no Painel de Producao',
+       amb.elementos['acab-detalhe-numero'].textContent);
     ok(amb.elementos['acab-detalhe-evento'].textContent === 'Rock in Rio 2026',
        'e o evento aparece', amb.elementos['acab-detalhe-evento'].textContent);
     ok(amb.elementos['acab-detalhe-evento'].style.display !== 'none', 'a vista');
@@ -1295,7 +1309,7 @@ async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
     ok(amb2.elementos['acab-detalhe-evento'].textContent === '', 'sem evento, nada e escrito');
     ok(amb2.elementos['acab-detalhe-evento'].style.display === 'none',
        'e o espaco dele nao fica sobrando');
-    ok(amb2.elementos['acab-detalhe-numero'].innerHTML.indexOf('200') !== -1,
+    ok(amb2.elementos['acab-detalhe-numero'].textContent === '#200',
        'o numero aparece de qualquer jeito');
 }
 
@@ -1317,6 +1331,8 @@ async function semResponsavelOStatusNaoSeMexe() {
     ok(botoes3002.every(b => b.indexOf('disabled') !== -1),
        'e todos travados enquanto nao ha responsavel');
     ok(do3002.indexOf('para liberar o status') !== -1, 'a tela diz o que falta');
+    ok(do3002.indexOf('<b>Responsável</b> abaixo') !== -1,
+       'e aponta para onde o responsavel ficou agora');
     // ...mas o estagio continua LEGIVEL: travar nao e esconder.
     ok(/data-estagio="Impresso" aria-pressed="true"/.test(do3002),
        'o estagio derivado continua marcado');

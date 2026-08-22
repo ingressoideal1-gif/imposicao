@@ -38,6 +38,28 @@ manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
 
 ---
 
+## O card do modelo, em três colunas
+
+Desde 22/08/2026, a pedido do usuário, cada modelo se lê da esquerda para a
+direita, numa linha só:
+
+| Coluna | O que traz | Largura |
+|---|---|---|
+| Amostra | a arte aprovada, para conferir contra o papel | elástica — sobrou espaço, é dela |
+| Especificação | a tabela abaixo | estreita (280px) |
+| Decisões | os quatro botões de status **empilhados** e o responsável **abaixo** deles | 210px |
+
+Antes as decisões eram uma faixa no rodapé do card, com os botões deitados: de pé
+na estação, o operador percorria a linha inteira do card para chegar até elas.
+
+**Cuidado ao mexer nas larguras.** As três colunas precisam caber numa linha só
+dentro do corpo do detalhe (~780px úteis). Quem decide a quebra é a soma dos
+`flex-basis` mais os dois vãos — 200 + 280 + 210 + 40 = 730 —, e não os
+`min-width`. Estourar essa conta joga a coluna das decisões de volta para baixo,
+que é exatamente o rodapé que este desenho veio desfazer.
+
+---
+
 ## A tabela de especificação do modelo
 
 Desenho pedido pelo usuário em 22/08/2026, com a imagem da tabela em mãos. Cada
@@ -77,10 +99,14 @@ Pedido do usuário em 22/08/2026: *"ao abrir o pedido, no Painel de Acabamento,
 destacar Número do pedido e Evento, como já aparece no pedido do Painel de
 Produção"*.
 
-O cabeçalho traz, nesta ordem: **VOLTAR**, a palavra *Pedido*, o **número no
-mesmo crachá da fila** (número grande, fundo em degradê, sombra — o desenho que
-o Painel de Produção usa), o **nome do evento** em ciano forte e, abaixo dele e
-menor, o cliente. À direita continua o contador de prontos.
+O cabeçalho traz, nesta ordem: **VOLTAR**, o título `📋 Itens do Pedido #200` —
+**a mesma formatação do pedido aberto no Painel de Produção**
+(`os-detail-numero-impressao`): mesmo ícone, mesmo texto, mesmo azul claro no
+número —, o **nome do evento** em ciano forte e, abaixo dele e menor, o cliente.
+À direita continua o contador de prontos.
+
+As duas telas são irmãs de propósito, e títulos diferentes em cada uma faziam
+parecer que eram dois programas. O que esta acrescenta é o evento.
 
 A ordem não é casual: quem trabalha no acabamento tem na mão o material de um
 **evento**, não de um cliente — é por ele e pelo número que se confere, de
@@ -88,8 +114,9 @@ relance, que o que está na mesa é o deste pedido. O nome do evento vem de
 `pedidos_artes.nome_evento` (`eventoDoPedido`), a mesma origem que a fila usa;
 quando o briefing ainda não o tem, o campo **some** em vez de deixar um buraco.
 
-O crachá do número é o mesmo objeto nos dois lugares (`ESTILO_CRACHA_NUMERO`),
-para a lista e o cabeçalho envelhecerem juntos.
+Na **lista** de pedidos, o número continua no crachá grande
+(`ESTILO_CRACHA_NUMERO`), igual ao da fila do Painel de Produção — lista com
+lista, cabeçalho com cabeçalho.
 
 ---
 

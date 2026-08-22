@@ -966,10 +966,11 @@
         + ' text-transform: uppercase; letter-spacing: 0.06em; padding: 9px 12px;'
         + ' text-align: center; font-size: 0.92rem;';
     const ESPEC_ROTULO = 'background: #152442; color: #8fb6e0; font-weight: 800;'
-        + ' font-size: 0.82rem; text-align: right; padding: 9px 14px; width: 46%;'
-        + ' border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle;';
+        + ' font-size: 0.82rem; text-align: right; padding: 9px 10px; width: 46%;'
+        + ' white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,0.07);'
+        + ' vertical-align: middle;';
     const ESPEC_VALOR = 'background: #1b2c4e; color: #ffffff; font-weight: 800;'
-        + ' font-size: 0.95rem; padding: 9px 14px;'
+        + ' font-size: 0.95rem; padding: 9px 10px;'
         + ' border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle;';
 
     /** Uma linha: o rótulo fixo à esquerda, a informação variável à direita. */
@@ -1017,11 +1018,14 @@
      * relance, e mudar é um clique só, com o alvo do tamanho de um dedo na
      * estação.
      *
-     * Quatro colunas de `1fr`: os botões têm o MESMO tamanho em qualquer
-     * largura. O atual vem pintado por dentro, com anel e sombra da cor do
-     * estágio e um ✓ à frente; os outros ficam só contornados. Sem permissão de
-     * editar, os quatro aparecem apagados e travados — a tela continua dizendo
-     * onde o modelo está, que é o que o operador sem edição precisa ler.
+     * Uma coluna de `1fr`, os quatro empilhados na lateral direita do card —
+     * desenho pedido pelo usuário em 22/08/2026. Empilhados eles têm o mesmo
+     * tamanho por construção (mesma coluna da grade), e o caminho do acabamento
+     * se lê de cima para baixo, na ordem em que o trabalho acontece. O atual vem
+     * pintado por dentro, com anel e sombra da cor do estágio e um ✓ à frente;
+     * os outros ficam só contornados. Sem permissão de editar, os quatro
+     * aparecem apagados e travados — a tela continua dizendo onde o modelo está,
+     * que é o que o operador sem edição precisa ler.
      *
      * O fundo do bloco do modelo continua mudando com o estágio, como já fazia
      * (`FUNDO_DO_ESTAGIO`).
@@ -1068,10 +1072,10 @@
         // quatro botões cinzas e não tem como adivinhar o que falta. Só para
         // quem PODE editar — a quem não pode, o recado não serviria de nada.
         const recado = (podeEditar && !temResponsavel)
-            ? `<span style="font-size:0.7rem; color:#fcd34d;">⬅️ Escolha o <b>Responsável</b> ao lado para liberar o status.</span>`
+            ? `<span style="font-size:0.7rem; color:#fcd34d; display:block; margin-top:2px;">⬇️ Escolha o <b>Responsável</b> abaixo para liberar o status.</span>`
             : '';
 
-        return `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%;">${botoes}</div>${recado}`;
+        return `<div style="display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%;">${botoes}</div>${recado}`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
@@ -1220,10 +1224,10 @@
                 </div>
 
                 <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; padding: 14px 16px;">
-                    <div style="flex: 1 1 320px; min-width: 280px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
                         ${amostraHtml(item, idAmostra)}
                     </div>
-                    <div style="flex: 1 1 320px; min-width: 280px; display: flex; align-items: center;">
+                    <div style="flex: 0 1 280px; min-width: 220px; display: flex; align-items: center;">
                         ${tabelaDeEspecificacao([
                             numeros,
                             // A numeração pelo NOME. Faltava no desenho que o
@@ -1239,16 +1243,23 @@
                             linhaEspec('Situação', esc(impressao || '—'), '#9fd8f2'),
                         ].join(''))}
                     </div>
-                </div>
 
-                <div style="display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px 14px; background: rgba(0,0,0,0.28); border-top: 1px solid ${AZUL.fio};">
-                    <div style="flex: 2 1 420px; min-width: 260px; display: flex; flex-direction: column; gap: 5px;">
-                        <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
-                        ${botoesDeEstagio(item, osId, podeEditar())}
-                    </div>
-                    <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 5px;">
-                        <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
-                        ${selectResponsavel(item, osId, podeEditar())}
+                    <!-- A coluna das DECISÕES, à direita da especificação: os
+                         quatro botões de status um abaixo do outro e, embaixo
+                         deles, o responsável. Desenho pedido pelo usuário em
+                         22/08/2026. Antes isso era uma faixa no rodapé do card,
+                         com os botões deitados; de pé na estação, o operador
+                         percorria a linha inteira do card para chegar até ela. -->
+                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 12px; justify-content: center;
+                                padding: 12px 14px; background: rgba(0,0,0,0.28); border: 1px solid ${AZUL.fio}; border-radius: 10px;">
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
+                            ${botoesDeEstagio(item, osId, podeEditar())}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
+                            ${selectResponsavel(item, osId, podeEditar())}
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -1263,14 +1274,15 @@
         const os = buscar ? buscar(tela.pedidoAberto) : (s.ordens || []).find(o => o.id === tela.pedidoAberto);
         const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
 
-        // Número e evento em destaque, do mesmo jeito que na fila (pedido do
-        // usuário, 22/08/2026). Quem abre o pedido na estação precisa conferir
-        // de relance que é ESTE o material que está na mesa — e o que a pessoa
-        // do acabamento tem na mão é o nome do evento, não o do cliente, que
-        // fica ao lado, menor.
+        // O título é o MESMO do pedido aberto no Painel de Produção — "Itens do
+        // Pedido #200", número em azul claro —, por pedido do usuário em
+        // 22/08/2026: as duas telas são irmãs, e títulos diferentes faziam
+        // parecer que eram dois programas. O que esta tela acrescenta é o EVENTO
+        // ao lado, em destaque: quem abre o pedido na estação confere de relance
+        // que o material na mesa é o deste pedido, e o que a pessoa do
+        // acabamento tem na mão é o nome do evento, não o do cliente.
         const rotulo = fn('rotuloDoCliente');
-        escreverHtml('acab-detalhe-numero',
-            os ? `<span style="${ESTILO_CRACHA_NUMERO}">${esc(os.numero)}</span>` : '');
+        escrever('acab-detalhe-numero', os ? `#${os.numero}` : '');
         const evento = eventoDoPedido(os);
         escrever('acab-detalhe-evento', evento);
         const evEl = document.getElementById('acab-detalhe-evento');
