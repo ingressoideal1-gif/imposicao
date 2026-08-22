@@ -284,6 +284,26 @@ que leva o pedido para o card "Pedidos Concluídos" e para o Painel de Produçã
 
 ---
 
+## Conferência de dados
+
+Botão **🔎 Conferência de dados** no cabeçalho do pedido aberto (regra do
+usuário, 22/08/2026). Ele relê do banco as numerações dos modelos e mostra, numa
+janela, a revisão que foi feita à mão no pedido 21085 naquele dia — para
+qualquer pedido, num clique:
+
+- resumo no topo: **✅ nenhum problema** ou a lista dos pontos de atenção;
+- uma linha por modelo: numeração e arquivo CSV, **linhas da fatia × Qtd**,
+  códigos distintos, **repetidos dentro do próprio CSV**, **células vazias**, e
+  a situação (as três regras do card — banco incompleto, Qtd × células,
+  células repetidas com outro modelo);
+- **📋 Copiar relatório** (texto puro) e Fechar.
+
+"Códigos" são os valores das colunas apontadas pelos elementos de banco de
+dados — o que vai para o papel. Modelo cuja numeração não usa banco aparece como
+"não usa banco" e não é cobrado por CSV. A conta é `conferenciaDeDadosDoPedido`
+(pura; o harness da fatia a lê do `script.js` com um pedido misto e um limpo);
+a janela é `abrirConferenciaDeDados`.
+
 ## O link para o sistema parceiro
 
 O ícone do Vibe aparece **dentro do pedido aberto**, no cabeçalho, ao lado do

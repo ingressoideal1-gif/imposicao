@@ -4,7 +4,25 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v686** — 2026-08-22 | Agente **1.2.180**
+## Versão atual: **v687** — 2026-08-22 | Agente **1.2.181**
+
+---
+
+## [v687 — 2026-08-22] — Botão 🔎 Conferência de dados no pedido
+
+Pedido do usuário: *"criar um botão dentro do pedido que faça essa análise do pedido quando
+clicado"* — a revisão que tinha sido feita à mão no 21085, agora na tela, para qualquer pedido.
+
+No cabeçalho do pedido aberto, **🔎 Conferência de dados** relê do banco as numerações dos modelos e
+abre uma janela com: o resumo (✅ nenhum problema, ou a lista dos pontos de atenção); uma linha por
+modelo com numeração e arquivo CSV, **linhas da fatia × Qtd**, códigos distintos, **repetidos
+dentro do próprio CSV**, **células vazias** e a situação segundo as três regras do card (banco
+incompleto, Qtd × células, células repetidas com outro modelo); e **📋 Copiar relatório** em texto.
+Modelo cuja numeração não usa banco aparece como "não usa banco", sem ser cobrado por CSV.
+
+A conta é pura (`conferenciaDeDadosDoPedido`) e o harness da fatia a lê do `script.js` com um
+pedido misto (limpo, repetido dentro, vazio, sem CSV, sem banco, repetido entre modelos) e um
+pedido limpo.
 
 ---
 

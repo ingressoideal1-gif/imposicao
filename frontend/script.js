@@ -13977,6 +13977,206 @@ function textoDasCelulasRepetidas(d) {
 window.textoDasCelulasRepetidas = textoDasCelulasRepetidas;
 
 /**
+ * A CONFERÊNCIA DE DADOS do pedido — o relatório que o botão 🔎 do pedido
+ * aberto mostra (regra do usuário, 22/08/2026).
+ *
+ * É a mesma revisão que foi feita à mão no pedido 21085 naquele dia, agora
+ * dentro da tela, para qualquer pedido, num clique. Para cada modelo:
+ *
+ *   • a numeração e o arquivo CSV que ele usa;
+ *   • quantas linhas ele imprime (a fatia) contra a Qtd do pedido;
+ *   • quantos códigos distintos, quantos repetidos DENTRO do próprio CSV e
+ *     quantas células vazias na coluna do banco;
+ *   • as três regras do card: banco incompleto (elemento de banco sem CSV ou
+ *     sem coluna), Qtd × células, e células repetidas com OUTRO modelo.
+ *
+ * "Códigos" são os valores das colunas apontadas pelos elementos de banco de
+ * dados — o que vai para o papel. Modelo cuja numeração não usa banco entra no
+ * relatório como "não usa banco", sem ser cobrado por CSV.
+ *
+ * Só lê, e lê o que está em memória: quem chama (abrirConferenciaDeDados)
+ * relê as numerações do pedido no banco antes. Devolve um objeto simples, que
+ * o harness exercita sem DOM: { osId, modelos: [...], problemas: [...], ok }.
+ */
+function conferenciaDeDadosDoPedido(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    const repetidas = celulasRepetidasDoPedido(osId);
+    const modelos = [];
+    const problemas = [];
+    itens.forEach((it, i) => {
+        if (!it) return;
+        const nome = rotuloDoModelo(it, i);
+        const bruto = (it.quantidade !== undefined && it.quantidade !== null) ? it.quantidade : it.qtd;
+        const qtd = parseInt(bruto) || 0;
+        const num = numeracaoDoModelo(it);
+        const linha = {
+            id: String(it.id), nome, qtd,
+            numeracao: num ? (num.name || num.tipo || '') : '',
+            arquivo: num ? (num.csv_filename || '') : '',
+            usaBanco: false, linhas: 0, codigos: 0, repetidosDentro: 0, vazios: 0,
+            avisos: []
+        };
+        const anotar = (texto) => { linha.avisos.push(texto); problemas.push(nome + ': ' + texto); };
+        if (!num) {
+            anotar('sem numeração');
+            modelos.push(linha);
+            return;
+        }
+        const deBanco = (num.elements || []).filter(el => el && el.source === 'database');
+        linha.usaBanco = deBanco.length > 0;
+
+        const incompleto = bancoDeDadosIncompletoDoModelo(it);
+        if (incompleto) anotar(incompleto.texto);
+
+        const divergencia = divergenciaDeCelulasDoModelo(it);
+        if (divergencia) anotar(textoDaDivergenciaDeCelulas(divergencia));
+
+        if (linha.usaBanco && Array.isArray(num.csv_data) && num.csv_data.length) {
+            const colunas = Array.from(new Set(deBanco
+                .map(el => String(el.csv_column || '').trim())
+                .filter(Boolean)));
+            const fatia = fatiaCsvDoItem(it, num);
+            linha.linhas = fatia.length;
+            const contagem = new Map();
+            let vazios = 0;
+            fatia.forEach(l => {
+                colunas.forEach(c => {
+                    const v = l ? l[c] : null;
+                    const texto = (v === null || v === undefined) ? '' : String(v).trim();
+                    if (!texto) vazios++;
+                    else contagem.set(texto, (contagem.get(texto) || 0) + 1);
+                });
+            });
+            linha.codigos = contagem.size;
+            let rep = 0;
+            contagem.forEach(n => { if (n > 1) rep += n - 1; });
+            linha.repetidosDentro = rep;
+            linha.vazios = vazios;
+            if (rep) anotar(rep + ' código(s) repetido(s) dentro do próprio CSV');
+            if (vazios) anotar(vazios + ' célula(s) vazia(s) na coluna do banco');
+        }
+
+        const rep = repetidas[String(it.id)];
+        if (rep) {
+            linha.repetidosComOutros = rep;
+            anotar(textoDasCelulasRepetidas(rep));
+        }
+        modelos.push(linha);
+    });
+    return { osId, modelos, problemas, ok: problemas.length === 0 };
+}
+window.conferenciaDeDadosDoPedido = conferenciaDeDadosDoPedido;
+
+/** O relatório em texto puro — para copiar e mandar para quem precisa ver. */
+function textoDaConferencia(rel, numeroPedido) {
+    if (!rel) return '';
+    const linhas = [];
+    linhas.push('CONFERÊNCIA DE DADOS — Pedido ' + (numeroPedido || rel.osId));
+    linhas.push(rel.ok ? 'Nenhum problema encontrado.' : rel.problemas.length + ' ponto(s) de atenção:');
+    if (!rel.ok) rel.problemas.forEach(pb => linhas.push('  - ' + pb));
+    linhas.push('');
+    rel.modelos.forEach(m => {
+        const cabeca = m.nome + ' | qtd ' + m.qtd + ' | numeração ' + (m.numeracao || '—')
+            + (m.arquivo ? ' | ' + m.arquivo : '');
+        const banco = m.usaBanco
+            ? ' | linhas ' + m.linhas + ' | códigos ' + m.codigos + ' | repetidos ' + m.repetidosDentro + ' | vazios ' + m.vazios
+            : ' | não usa banco';
+        linhas.push(cabeca + banco + (m.avisos.length ? ' | ATENÇÃO: ' + m.avisos.join(' · ') : ''));
+    });
+    return linhas.join('\n');
+}
+window.textoDaConferencia = textoDaConferencia;
+
+/**
+ * O botão 🔎 Conferência de dados do pedido aberto: relê as numerações do
+ * pedido no banco, monta o relatório e mostra numa janela com o resumo no
+ * topo, uma linha por modelo e os botões Copiar e Fechar.
+ */
+async function abrirConferenciaDeDados(osId) {
+    osId = osId || state.amostrasOSAtivo;
+    if (!osId) { toast('Abra um pedido primeiro.', 'warning'); return; }
+    const os = (typeof findOSInState === 'function') ? findOSInState(osId) : null;
+    const numero = os ? os.numero : osId;
+    toast('⏳ Conferindo os dados do pedido ' + numero + '…', 'info');
+    try { await recarregarNumeracoesDoPedido(osId); } catch (e) { /* segue com o que tem */ }
+    const rel = conferenciaDeDadosDoPedido(osId);
+
+    const linhasHtml = rel.modelos.map(m => {
+        const banco = m.usaBanco
+            ? `<td style="text-align:center;">${m.linhas === m.qtd ? '' : '<span style="color:#f87171;font-weight:800;">'}${m.linhas}${m.linhas === m.qtd ? '' : '</span>'} / ${m.qtd}</td>
+               <td style="text-align:center;">${m.codigos}</td>
+               <td style="text-align:center;${m.repetidosDentro ? 'color:#f87171;font-weight:800;' : ''}">${m.repetidosDentro}</td>
+               <td style="text-align:center;${m.vazios ? 'color:#f87171;font-weight:800;' : ''}">${m.vazios}</td>`
+            : `<td colspan="4" style="text-align:center;color:#94a3b8;">não usa banco (qtd ${m.qtd})</td>`;
+        const avisos = m.avisos.length
+            ? `<span style="color:#fca5a5;">${escapeHtml(m.avisos.join(' · '))}</span>`
+            : '<span style="color:#4ade80;">✓</span>';
+        return `<tr style="border-top:1px solid rgba(148,163,184,0.15);">
+                    <td><strong>${escapeHtml(m.nome)}</strong></td>
+                    <td>${escapeHtml(m.numeracao || '—')}<br><span style="color:#94a3b8;font-size:0.72rem;">${escapeHtml(m.arquivo || '')}</span></td>
+                    ${banco}
+                    <td style="font-size:0.78rem;">${avisos}</td>
+                </tr>`;
+    }).join('');
+
+    const resumo = rel.ok
+        ? `<div style="padding:10px 14px; border-radius:8px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.4); color:#4ade80; font-weight:700;">✅ Nenhum problema encontrado — ${rel.modelos.length} modelo(s) conferido(s).</div>`
+        : `<div style="padding:10px 14px; border-radius:8px; background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-weight:600;">
+               <div style="font-weight:800; margin-bottom:6px;">⚠️ ${rel.problemas.length} ponto(s) de atenção</div>
+               <ul style="margin:0; padding-left:18px; font-size:0.82rem; line-height:1.45;">${rel.problemas.map(pb => '<li>' + escapeHtml(pb) + '</li>').join('')}</ul>
+           </div>`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'conferencia-dados-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.78); z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;';
+    overlay.innerHTML = `
+        <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:1100px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:16px 22px; border-bottom:1px solid rgba(148,163,184,0.2); display:flex; align-items:center; gap:12px;">
+                <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#e2e8f0;">🔎 Conferência de dados — Pedido ${escapeHtml(String(numero))}</h3>
+                <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">lido do banco agora</span>
+            </div>
+            <div style="padding:16px 22px; overflow:auto; color:#e2e8f0; font-size:0.88rem; display:flex; flex-direction:column; gap:14px;">
+                ${resumo}
+                <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                    <thead><tr style="color:#94a3b8; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em;">
+                        <th style="padding:6px 4px;">Modelo</th><th>Numeração / arquivo</th>
+                        <th style="text-align:center;">Linhas / Qtd</th><th style="text-align:center;">Códigos</th>
+                        <th style="text-align:center;">Repet. dentro</th><th style="text-align:center;">Vazios</th><th>Situação</th>
+                    </tr></thead>
+                    <tbody>${linhasHtml}</tbody>
+                </table>
+                <div style="color:#94a3b8; font-size:0.74rem; line-height:1.4;">
+                    "Códigos" são os valores das colunas apontadas pelos elementos de banco de dados — o que vai para o papel. Linhas contam a fatia do modelo.
+                    A conferência cobre: banco incompleto, Qtd × células, repetições dentro do CSV, células vazias e células repetidas entre modelos deste pedido.
+                </div>
+            </div>
+            <div style="padding:14px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" data-role="copiar" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-weight:700; cursor:pointer;">📋 Copiar relatório</button>
+                <button type="button" data-role="fechar" style="border:none; background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border-radius:8px; padding:9px 18px; font-weight:800; cursor:pointer;">Fechar</button>
+            </div>
+        </div>`;
+    const fechar = () => { document.removeEventListener('keydown', onKey, true); overlay.remove(); };
+    const onKey = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); fechar(); } };
+    overlay.querySelector('[data-role="fechar"]').addEventListener('click', fechar);
+    overlay.querySelector('[data-role="copiar"]').addEventListener('click', async () => {
+        const texto = textoDaConferencia(rel, numero);
+        try {
+            await navigator.clipboard.writeText(texto);
+            toast('Relatório copiado.', 'success');
+        } catch (e) {
+            // Sem clipboard (http na LAN, por exemplo): abre numa janela para copiar à mão.
+            const w = window.open('', '_blank');
+            if (w) { w.document.write('<pre style="font:13px monospace;white-space:pre-wrap;">' + escapeHtml(texto) + '</pre>'); w.document.close(); }
+            else toast('Não consegui copiar — o navegador bloqueou a área de transferência.', 'warning');
+        }
+    });
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) fechar(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(overlay);
+}
+window.abrirConferenciaDeDados = abrirConferenciaDeDados;
+
+/**
  * A frase do bloqueio. Diz a conta inteira porque quem lê é quem vai corrigi-la:
  * "faltam 250" sozinho não conta de onde saiu o número esperado.
  */

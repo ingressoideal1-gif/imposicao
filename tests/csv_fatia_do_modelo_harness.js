@@ -332,6 +332,75 @@ function extrairFuncao(src, nome) {
         'no link do cliente o aviso nao e calculado');
 })();
 
+// ─── A Conferencia de dados do pedido ───────────────────────────────────────
+//
+// Regra do usuario, 22/08/2026: um botao no pedido que faz, num clique, a
+// revisao que foi feita a mao no 21085. O relatorio e um objeto simples, LIDO
+// do script.js, e e isso que se testa aqui.
+
+(function aConferenciaDeDadosDoPedido() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'fatiaCsvDoItem',
+                   'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
+                   'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
+                   'celulasGeradasDoModelo', 'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas',
+                   'conferenciaDeDadosDoPedido', 'textoDaConferencia'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+    const state = { numeracoes: [], osItens: {} };
+    const api = new Function('state', 'window', fonte + '\nreturn { conferenciaDeDadosDoPedido, textoDaConferencia };')(state, global.window);
+
+    const qr = (col) => ({ id: 'el_1', type: 'QR', source: 'database', csv_column: col });
+    const rows = (cods) => cods.map((c, i) => ({ __id: i + 1, CODIGO: c }));
+    state.numeracoes.push(
+        { id: 'n-ok',   name: 'OK',      csv_filename: 'ok.csv',   elements: [qr('CODIGO')], csv_headers: ['CODIGO'], csv_data: rows(['1001', '1002', '1003', '1004']) },
+        { id: 'n-dup',  name: 'DUP',     csv_filename: 'dup.csv',  elements: [qr('CODIGO')], csv_headers: ['CODIGO'], csv_data: rows(['5', '5', '6']) },
+        { id: 'n-vaz',  name: 'VAZ',     csv_filename: 'vaz.csv',  elements: [qr('CODIGO')], csv_headers: ['CODIGO'], csv_data: rows(['7', '']) },
+        { id: 'n-sem',  name: 'SEMCSV',  csv_filename: '',         elements: [qr('CODIGO')], csv_headers: [], csv_data: null },
+        { id: 'n-txt',  name: 'TEXTO',   csv_filename: '',         elements: [{ id: 'el_2', type: 'TEXT' }], csv_data: null },
+        { id: 'n-jur',  name: 'JUR',     csv_filename: 'jur.csv',  elements: [qr('CODIGO')], csv_headers: ['CODIGO'], csv_data: rows(['1004', '9009']) },
+    );
+    const modelo = (id, nome, numId, qtd) => ({ id, nome_modelo: nome, amostra_num_id: numId, quantidade: qtd });
+
+    // O pedido com de tudo um pouco.
+    state.osItens['os-x'] = [
+        modelo('m1', 'SIMERS', 'n-ok', 4),
+        modelo('m2', 'Dup', 'n-dup', 3),
+        modelo('m3', 'Vazio', 'n-vaz', 2),
+        modelo('m4', 'SemCsv', 'n-sem', 2),
+        modelo('m5', 'Texto', 'n-txt', 1),
+        modelo('m6', 'Jur', 'n-jur', 2),
+    ];
+    const rel = api.conferenciaDeDadosDoPedido('os-x');
+    const por = {}; rel.modelos.forEach(m => por[m.id] = m);
+    ok(rel.ok === false && rel.problemas.length >= 5, 'o pedido misto nao passa, e lista os pontos', rel.problemas);
+    ok(por.m1.usaBanco && por.m1.linhas === 4 && por.m1.codigos === 4 && por.m1.repetidosDentro === 0 && por.m1.vazios === 0,
+        'o modelo limpo conta 4 linhas, 4 codigos, zero repetido, zero vazio', por.m1);
+    ok(por.m1.numeracao === 'OK' && por.m1.arquivo === 'ok.csv', 'o relatorio diz a numeracao e o arquivo');
+    ok(por.m2.repetidosDentro === 1 && por.m2.avisos.some(a => /repetido\(s\) dentro/.test(a)), 'codigo repetido dentro do CSV e apontado', por.m2);
+    ok(por.m3.vazios === 1 && por.m3.avisos.some(a => /vazia/.test(a)), 'celula vazia e apontada', por.m3);
+    ok(por.m4.avisos.some(a => /nenhum CSV/.test(a)), 'elemento de banco sem CSV e apontado', por.m4);
+    ok(por.m5.usaBanco === false && por.m5.avisos.length === 0, 'numeracao sem banco nao e cobrada por CSV', por.m5);
+    ok(por.m1.avisos.some(a => /também está/.test(a)) && por.m6.avisos.some(a => /também está/.test(a)),
+        'o codigo 1004, comum a SIMERS e Jur, aparece nos dois', [por.m1.avisos, por.m6.avisos]);
+    ok(por.m2.avisos.some(a => /Qtd 3/.test(a)) === false, 'qtd 3 com 3 linhas: sem divergencia de celulas', por.m2.avisos);
+
+    const txt = api.textoDaConferencia(rel, 21085);
+    ok(/CONFERÊNCIA DE DADOS — Pedido 21085/.test(txt) && /ponto\(s\) de atenção/.test(txt) && /SIMERS \| qtd 4/.test(txt),
+        'o texto para copiar tem cabecalho, resumo e uma linha por modelo', txt.slice(0, 200));
+
+    // E o pedido limpo passa.
+    state.osItens['os-limpo'] = [modelo('a', 'A', 'n-ok', 4), modelo('b', 'B', 'n-txt', 1)];
+    const limpo = api.conferenciaDeDadosDoPedido('os-limpo');
+    ok(limpo.ok === true && limpo.problemas.length === 0, 'pedido limpo: ok, sem problemas', limpo.problemas);
+    ok(/Nenhum problema encontrado/.test(api.textoDaConferencia(limpo, 1)), 'e o texto diz isso');
+
+    // O botao existe no cabecalho do pedido e chama a janela.
+    const index = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+    ok(/id="btn-conferencia-dados"[^>]*onclick="abrirConferenciaDeDados\(\)"/.test(index), 'o botao Conferencia de dados esta no pedido');
+    ok(/async function abrirConferenciaDeDados\([\s\S]{0,600}await recarregarNumeracoesDoPedido\(osId\)/.test(script),
+        'a janela rele as numeracoes do banco antes de conferir');
+})();
+
 // ─── Fim ──────────────────────────────────────────────────────────────────────
 
 if (falhas) {
