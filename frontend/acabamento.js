@@ -67,21 +67,21 @@
         'Pronto':        { icone: '✅', cls: 'badge-green', texto: 'Pronto' },
     };
 
-    // Fundo da linha do modelo, na mesma ideia do `statusBg` da fila do Pedido:
-    // o estágio se lê de relance, sem procurar o selo.
-    // O ESTADO do modelo, e não a pintura da página.
+    // Fundo do bloco do modelo E da linha do pedido na fila: o estágio se lê de
+    // relance, sem procurar o selo. O ESTADO do modelo, e não a pintura da
+    // página.
     //
-    // Estas quatro cores NÃO acompanham a paleta da tela. Em 20/08/2026 eu as
-    // tinha trazido para a família terra junto com o resto, e o usuário mandou
-    // devolver: elas dizem em que ponto o modelo está, e quem lê a tela lê
-    // primeiro isto. Mexer nelas para combinar com o fundo é trocar informação
-    // por decoração.
+    // Estas quatro cores NÃO acompanham a paleta da tela e não se escolhem aqui:
+    // são ditadas pelo usuário, que é quem lê esta tela de pé na estação. Em
+    // 20/08/2026 eu as tinha unificado com a paleta e ele mandou devolver; os
+    // valores abaixo são os que ele passou em 22/08/2026, um a um. Mexer nelas
+    // para combinar com o fundo é trocar informação por decoração.
     const FUNDO_DO_ESTAGIO = {
-        'Aguardando':    '#001f3e',   // o que ainda não chegou
-        'Impresso':      '#001249',   // o azul da tela — saiu da impressora
-        'Em acabamento': '#32352e',   // oliva — em cima da mesa
-        'Pronto':        '#14301f',   // verde escuro — conferido
-        '':              '#001f3e',
+        'Aguardando':    '#003768',   // o que ainda não chegou
+        'Impresso':      '#001249',   // saiu da impressora
+        'Em acabamento': '#000000',   // em cima da mesa
+        'Pronto':        '#00471c',   // conferido
+        '':              '#003768',   // sem estágio vale o mesmo que Aguardando
     };
 
     // A cor de destaque dos quatro botões de estágio, em componentes RGB para
@@ -1269,9 +1269,11 @@
                          deles, o responsável. Desenho pedido pelo usuário em
                          22/08/2026. Antes isso era uma faixa no rodapé do card,
                          com os botões deitados; de pé na estação, o operador
-                         percorria a linha inteira do card para chegar até ela. -->
-                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 12px; justify-content: center;
-                                padding: 12px 14px; background: rgba(0,0,0,0.28); border: 1px solid ${AZUL.fio}; border-radius: 10px;">
+                         percorria a linha inteira do card para chegar até ela.
+                         SEM caixa em volta, por pedido dele no mesmo dia: os
+                         botões já têm contorno e cor próprios, e a moldura ao
+                         redor deles só competia com a do bloco do modelo. -->
+                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 12px; justify-content: center;">
                         <div style="display: flex; flex-direction: column; gap: 5px;">
                             <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
                             ${botoesDeEstagio(item, osId, podeEditar())}

@@ -8,7 +8,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v694 — 2026-08-22] — Título do pedido no Acabamento igual ao da tela de Pedido, sem caixa
+## [v694 — 2026-08-22] — Acabamento: título do pedido como o da tela de Pedido, cores novas por estágio e decisões sem caixa
 
 Pedido do usuário, com as duas telas lado a lado: *"Mostrar as informações do título acabamento igual
 mostra título produção: número, evento, cliente, número cliente, mesmo tamanho de fonte, sem box"*.
@@ -27,8 +27,18 @@ o `#94a3b8` do CSS, a segunda linha — o nome do cliente — saía apagada), e 
 `background-image` e nunca o atalho `background`, que reescreve o `background-clip` e transforma o
 título numa barra branca.
 
+**E as cores por estágio mudaram**, por escolha do usuário: **Aguardando `#003768`**, **Impresso
+`#001249`**, **Em acabamento `#000000`** e **Pronto `#00471c`**. Elas pintam o bloco de cada modelo e
+a linha do pedido na fila, para o estágio se ler de relance sem procurar o selo. Continuam sem
+acompanhar a paleta da tela, de propósito, e há teste travando cada uma.
+
+**A coluna das decisões perdeu a caixa.** Os quatro botões e o seletor de responsável ficam direto
+sobre o fundo do bloco: os botões já têm contorno e cor próprios, e a moldura em volta deles só
+competia com a do modelo.
+
 Testes: `tests/acabamento_harness.js` — o título com as três partes na ordem, o caso sem evento, o
-tamanho de fonte e o degradê vindos da tela de Pedido, e a ausência da faixa (449 verificações).
+tamanho de fonte e o degradê vindos da tela de Pedido, a ausência da faixa, e as cores novas de
+Aguardando e Pronto (449 verificações); `tests/test_painel_do_acabamento.py` trava as quatro cores.
 
 ---
 

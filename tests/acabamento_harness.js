@@ -1805,12 +1805,12 @@ async function semEstimadoGravaDireto() {
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
 
-    ok(html.indexOf('background: #001f3e') !== -1, 'o modelo Aguardando tem o fundo proprio');
+    ok(html.indexOf('background: #003768') !== -1, 'o modelo Aguardando tem o fundo proprio');
 
     // As cores por STATUS nao acompanham a paleta da tela, e e de proposito:
-    // elas dizem em que ponto o modelo esta. Em 20/08/2026 eu as tinha trazido
-    // para a familia terra junto com o resto, e o usuario mandou devolver.
-    ok(html.indexOf('background: #14301f') !== -1, 'e o Pronto, verde escuro');
+    // elas dizem em que ponto o modelo esta, e sao ditadas pelo usuario -- estas
+    // vieram dele em 22/08/2026, uma a uma.
+    ok(html.indexOf('background: #00471c') !== -1, 'e o Pronto, verde escuro');
 
     // O Impresso, num cenario onde ele exista: neste os dois modelos foram
     // forcados para Aguardando e Pronto.

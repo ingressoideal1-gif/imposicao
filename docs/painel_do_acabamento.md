@@ -47,10 +47,30 @@ direita, numa linha só:
 |---|---|---|
 | Amostra | a arte aprovada, para conferir contra o papel | elástica — sobrou espaço, é dela |
 | Especificação | a tabela abaixo | estreita (280px) |
-| Decisões | os quatro botões de status **empilhados** e o responsável **abaixo** deles | 210px |
+| Decisões | os quatro botões de status **empilhados** e o responsável **abaixo** deles, **sem caixa em volta** | 210px |
 
 Antes as decisões eram uma faixa no rodapé do card, com os botões deitados: de pé
 na estação, o operador percorria a linha inteira do card para chegar até elas.
+A coluna também não tem moldura própria — os botões já têm contorno e cor, e uma
+caixa em volta deles só competia com a do bloco do modelo (pedido do usuário,
+22/08/2026).
+
+### As cores por estágio
+
+O bloco de cada modelo **e** a linha do pedido na fila levam o fundo do estágio,
+para ele se ler de relance sem procurar o selo:
+
+| Estágio | Cor |
+|---|---|
+| Aguardando | `#003768` |
+| Impresso | `#001249` |
+| Em acabamento | `#000000` |
+| Pronto | `#00471c` |
+
+Estas cores **são ditadas pelo usuário** — os valores acima vieram dele em
+22/08/2026, um a um — e não acompanham a paleta da tela: elas dizem estado, e
+quem lê a tela lê primeiro isto. Já houve uma reversão por tê-las unificado com
+a paleta; há teste travando cada uma.
 
 **Cuidado ao mexer nas larguras.** As três colunas precisam caber numa linha só
 dentro do corpo do detalhe (~780px úteis). Quem decide a quebra é a soma dos

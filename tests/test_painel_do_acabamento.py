@@ -443,9 +443,15 @@ def test_o_ultimo_estagio_se_chama_pronto():
     assert "Revisado" not in secao, "sobrou 'Revisado' na tela do acabamento"
     assert "Revisados" not in secao, "sobrou 'Revisados' na metrica"
 
-    # A COR do estagio nao muda junto com o nome: ela diz estado, e o usuario
-    # ja mandou devolve-la uma vez quando eu a unifiquei com a paleta.
-    assert "'Pronto':        '#14301f'" in js, "a cor do ultimo estagio mudou"
+    # A COR do estagio nao muda junto com o nome, e nao se escolhe aqui: ela diz
+    # estado, e quem a define e o usuario. Estas quatro vieram dele em
+    # 22/08/2026; antes disso ele ja tinha mandado devolver as que eu unifiquei
+    # com a paleta.
+    for estagio, cor in [("Aguardando", "#003768"), ("Impresso", "#001249"),
+                         ("Em acabamento", "#000000"), ("Pronto", "#00471c")]:
+        assert ("'%s':" % estagio) in js and cor in js, (
+            "a cor do estagio %s mudou (esperava %s)" % (estagio, cor)
+        )
 
     # O nome antigo continua LEGIVEL, para o intervalo entre publicar e migrar,
     # e para a estacao que ainda tem a versao anterior em cache.
