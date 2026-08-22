@@ -4,7 +4,31 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v693** — 2026-08-22 | Agente **1.2.187**
+## Versão atual: **v694** — 2026-08-22 | Agente **1.2.188**
+
+---
+
+## [v694 — 2026-08-22] — Título do pedido no Acabamento igual ao da tela de Pedido, sem caixa
+
+Pedido do usuário, com as duas telas lado a lado: *"Mostrar as informações do título acabamento igual
+mostra título produção: número, evento, cliente, número cliente, mesmo tamanho de fonte, sem box"*.
+
+O cabeçalho do pedido aberto perdeu a faixa cinza (`prod-table-header` — era ela o "box") e ganhou o
+**mesmo título da tela de Pedido**: `21085 - Expointer 2026 - Parte 2 - ANGELA BEATRIZ DA COSTA
+SALOMAO LTDA - 53193`, tudo numa linha, no mesmo tamanho de fonte (`calc(2.2rem + 5pt)`) e com o
+degradê do título das outras telas. Antes eram três pedaços em tamanhos diferentes — "Itens do
+Pedido #200" miúdo, o evento médio e o cliente pequeno.
+
+O cliente vem do `rotuloDoCliente`, que já traz o número junto do nome. Pedaço que não existe não
+deixa buraco: pedido sem evento vira `21085 - CLIENTE`, e não `21085 -  - CLIENTE`.
+
+Duas miúdezas de CSS ficaram documentadas porque custaram tempo: o degradê termina em `#cbd5e1` (com
+o `#94a3b8` do CSS, a segunda linha — o nome do cliente — saía apagada), e precisa ser
+`background-image` e nunca o atalho `background`, que reescreve o `background-clip` e transforma o
+título numa barra branca.
+
+Testes: `tests/acabamento_harness.js` — o título com as três partes na ordem, o caso sem evento, o
+tamanho de fonte e o degradê vindos da tela de Pedido, e a ausência da faixa (449 verificações).
 
 ---
 

@@ -2399,23 +2399,28 @@
                              amostra tem de sair grande, e dividir a altura com a tabela
                              deixaria as duas ilegíveis. -->
                         <div class="prod-table-card" id="acab-detalhe-card" style="display: none;">
-                            <div class="prod-table-header flex-wrap" style="gap: 8px;">
-                                <button class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem;" onclick="AcabamentoPainel.fecharPedido()" title="Voltar para a lista de pedidos">
+                            <!-- O TITULO DO PEDIDO, igual ao da tela de Pedido do Painel de
+                                 Producao: numero, evento, cliente e numero do cliente numa
+                                 linha so, no mesmo tamanho de fonte e SEM caixa em volta.
+                                 Pedido do usuario em 22/08/2026, com as duas telas lado a
+                                 lado. A faixa cinza do `prod-table-header` saiu junto: era
+                                 ela o "box". O `page-header-text` traz o degrade do titulo
+                                 das outras telas; o tamanho vem inline, como no
+                                 `ped-view-title`. Preenchido por renderDetalhe(). -->
+                            <div class="flex-wrap" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px 6px;">
+                                <button class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem; flex-shrink: 0;" onclick="AcabamentoPainel.fecharPedido()" title="Voltar para a lista de pedidos">
                                     <i class="fa-solid fa-arrow-left"></i> VOLTAR
                                 </button>
-                                <!-- MESMA formatacao do pedido aberto no Painel de Producao
-                                     (`os-detail-numero-impressao`, na Fila de Producao), por
-                                     pedido do usuario em 22/08/2026: mesmo icone, mesmo texto,
-                                     mesmo azul no numero. As duas telas sao irmas, e um titulo
-                                     diferente em cada uma fazia parecer que eram dois programas.
-                                     O evento fica ao lado, em destaque. Preenchidos por
-                                     renderDetalhe(). -->
-                                <span class="prod-table-title" style="margin-left: 8px;"><i class="fa-solid fa-list"></i> Itens do Pedido <span id="acab-detalhe-numero" style="color: #60a5fa;"></span></span>
-                                <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-                                    <span id="acab-detalhe-evento" style="font-size: 1.05rem; font-weight: 800; color: #4cc8f0; line-height: 1.2;"></span>
-                                    <span id="acab-detalhe-cliente" style="font-size: 0.85rem; color: #94a3b8; line-height: 1.2;"></span>
-                                </span>
-                                <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
+                                <div class="page-header-text" style="flex: 1 1 auto; min-width: 0;">
+                                    <!-- O degrade e o mesmo do `.page-header-text h1`, mas ele termina em
+                                         #cbd5e1 e nao em #94a3b8: aqui o titulo e longo (numero,
+                                         evento, cliente e numero do cliente) e quebra em duas
+                                         linhas, e com o degrade original a segunda linha -- o nome
+                                         do cliente -- saia quase apagada. Tamanho e peso sao os
+                                         mesmos do titulo da tela de Pedido. -->
+                                    <h1 id="acab-detalhe-titulo" style="font-size: calc(2.2rem + 5pt); font-weight: bold; margin-bottom: 0; line-height: 1.06; background-image: linear-gradient(to right, #f1f5f9, #cbd5e1);"></h1>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
                                     <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 prontos</span>
                                 </div>
                             </div>

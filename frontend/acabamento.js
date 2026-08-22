@@ -729,6 +729,26 @@
     }
 
     /**
+     * O título do pedido aberto: "21085 - Expointer 2026 - Parte 2 - CLIENTE - 53193".
+     *
+     * Mesmo formato do `ped-view-title` da tela de Pedido (`${numero} - ${evento}`),
+     * com o cliente no fim — o usuário pediu as quatro informações no mesmo
+     * tamanho de fonte, e o `rotuloDoCliente` já traz o número do cliente junto
+     * do nome.
+     *
+     * Cada pedaço entra só se existir: pedido sem evento no briefing não vira
+     * "21085 -  - CLIENTE", com o buraco no meio.
+     */
+    function tituloDoPedido(os) {
+        if (!os) return '';
+        const rotulo = fn('rotuloDoCliente');
+        return [os.numero, eventoDoPedido(os), rotulo ? rotulo(os) : (os.cliente || '')]
+            .map(p => String(p === undefined || p === null ? '' : p).trim())
+            .filter(Boolean)
+            .join(' - ');
+    }
+
+    /**
      * O número do pedido no crachá que a gráfica já conhece.
      *
      * Mesmo desenho da fila do Painel de Produção — número grande, fundo em
@@ -1274,21 +1294,15 @@
         const os = buscar ? buscar(tela.pedidoAberto) : (s.ordens || []).find(o => o.id === tela.pedidoAberto);
         const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
 
-        // O título é o MESMO do pedido aberto no Painel de Produção — "Itens do
-        // Pedido #200", número em azul claro —, por pedido do usuário em
-        // 22/08/2026: as duas telas são irmãs, e títulos diferentes faziam
-        // parecer que eram dois programas. O que esta tela acrescenta é o EVENTO
-        // ao lado, em destaque: quem abre o pedido na estação confere de relance
-        // que o material na mesa é o deste pedido, e o que a pessoa do
-        // acabamento tem na mão é o nome do evento, não o do cliente.
-        const rotulo = fn('rotuloDoCliente');
-        escrever('acab-detalhe-numero', os ? `#${os.numero}` : '');
-        const evento = eventoDoPedido(os);
-        escrever('acab-detalhe-evento', evento);
-        const evEl = document.getElementById('acab-detalhe-evento');
-        if (evEl) evEl.style.display = evento ? '' : 'none';
-        const cliEl = document.getElementById('acab-detalhe-cliente');
-        if (cliEl) cliEl.textContent = os && rotulo ? rotulo(os) : '';
+        // O título inteiro numa linha, igual ao da tela de Pedido do Painel de
+        // Produção (`ped-view-title`): número, evento, cliente e número do
+        // cliente, no mesmo tamanho de fonte e sem caixa em volta. Pedido do
+        // usuário em 22/08/2026, com as duas telas lado a lado.
+        //
+        // O `rotuloDoCliente` já devolve "NOME - NÚMERO", que é como o resto do
+        // painel escreve o cliente; escrever o número à parte aqui faria a mesma
+        // pessoa aparecer de dois jeitos em duas telas.
+        escrever('acab-detalhe-titulo', tituloDoPedido(os));
 
         if (!itens.length) {
             // "Carregando" so enquanto realmente esta carregando. Pedido sem

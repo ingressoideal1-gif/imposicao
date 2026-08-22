@@ -99,14 +99,33 @@ Pedido do usuário em 22/08/2026: *"ao abrir o pedido, no Painel de Acabamento,
 destacar Número do pedido e Evento, como já aparece no pedido do Painel de
 Produção"*.
 
-O cabeçalho traz, nesta ordem: **VOLTAR**, o título `📋 Itens do Pedido #200` —
-**a mesma formatação do pedido aberto no Painel de Produção**
-(`os-detail-numero-impressao`): mesmo ícone, mesmo texto, mesmo azul claro no
-número —, o **nome do evento** em ciano forte e, abaixo dele e menor, o cliente.
-À direita continua o contador de prontos.
+O cabeçalho traz **VOLTAR**, o título do pedido e o contador de prontos — e nada
+de faixa em volta: o `prod-table-header` saiu em 22/08/2026, a pedido do usuário
+("sem box").
 
-As duas telas são irmãs de propósito, e títulos diferentes em cada uma faziam
-parecer que eram dois programas. O que esta acrescenta é o evento.
+O título é o **mesmo da tela de Pedido** (`ped-view-title`, que é para onde o
+Painel de Produção leva ao abrir um pedido): as informações separadas por ` - `,
+no mesmo tamanho de fonte (`calc(2.2rem + 5pt)`), com o degradê do
+`.page-header-text h1`:
+
+```
+21085 - Expointer 2026 - Parte 2 - ANGELA BEATRIZ DA COSTA SALOMAO LTDA - 53193
+ número          evento                      cliente e número do cliente
+```
+
+O cliente vem do `rotuloDoCliente`, que já devolve "NOME - NÚMERO" — escrever o
+número à parte faria a mesma pessoa aparecer de dois jeitos em duas telas. Cada
+pedaço entra só se existir: pedido sem evento no briefing não vira
+`21085 -  - CLIENTE`, com o buraco no meio (`tituloDoPedido`).
+
+Duas miúdezas que custaram tempo e valem para quem for mexer:
+
+- o degradê foi refeito inline terminando em `#cbd5e1`, e não no `#94a3b8` do
+  CSS: com cliente de nome longo o título ocupa duas linhas, e a segunda — o
+  nome do cliente — saía quase apagada;
+- ele precisa ser `background-image`, nunca o atalho `background`: o atalho
+  reescreve também o `background-clip`, e o título vira uma barra branca sólida
+  em vez de texto pintado.
 
 A ordem não é casual: quem trabalha no acabamento tem na mão o material de um
 **evento**, não de um cliente — é por ele e pelo número que se confere, de

@@ -1294,23 +1294,31 @@ async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
     ];
     await amb.painel.abrirPedido('os-200');
 
-    ok(amb.elementos['acab-detalhe-numero'].textContent === '#200',
-       'o numero do pedido esta no cabecalho, como no Painel de Producao',
-       amb.elementos['acab-detalhe-numero'].textContent);
-    ok(amb.elementos['acab-detalhe-evento'].textContent === 'Rock in Rio 2026',
-       'e o evento aparece', amb.elementos['acab-detalhe-evento'].textContent);
-    ok(amb.elementos['acab-detalhe-evento'].style.display !== 'none', 'a vista');
-    ok(amb.elementos['acab-detalhe-cliente'].textContent === 'Cliente 200',
-       'o cliente continua, ao lado');
+    // Uma linha so, na ordem do titulo da tela de Pedido: numero, evento e o
+    // cliente (que ja vem com o numero dele, pelo `rotuloDoCliente`).
+    ok(amb.elementos['acab-detalhe-titulo'].textContent === '200 - Rock in Rio 2026 - Cliente 200',
+       'o titulo traz numero, evento e cliente numa linha',
+       amb.elementos['acab-detalhe-titulo'].textContent);
 
-    // Briefing sem evento: o campo some, em vez de deixar um buraco na linha.
+    // Briefing sem evento: o titulo se fecha, em vez de abrir um buraco entre
+    // dois hifens.
     const amb2 = ambienteComPedidoAberto();
     await amb2.painel.abrirPedido('os-200');
-    ok(amb2.elementos['acab-detalhe-evento'].textContent === '', 'sem evento, nada e escrito');
-    ok(amb2.elementos['acab-detalhe-evento'].style.display === 'none',
-       'e o espaco dele nao fica sobrando');
-    ok(amb2.elementos['acab-detalhe-numero'].textContent === '#200',
-       'o numero aparece de qualquer jeito');
+    ok(amb2.elementos['acab-detalhe-titulo'].textContent === '200 - Cliente 200',
+       'sem evento, o titulo nao fica com buraco',
+       amb2.elementos['acab-detalhe-titulo'].textContent);
+
+    // O tamanho e o degrade vem do titulo das outras telas -- e a faixa cinza
+    // do cabecalho saiu, que era o "box" que o usuario mandou tirar.
+    const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+    const cabecalho = HTML.slice(HTML.indexOf('id="acab-detalhe-card"'),
+                                 HTML.indexOf('id="acab-detalhe-corpo"'));
+    ok(cabecalho.indexOf('calc(2.2rem + 5pt)') !== -1,
+       'o titulo tem o mesmo tamanho do da tela de Pedido');
+    ok(cabecalho.indexOf('page-header-text') !== -1, 'e o mesmo degrade');
+    // Sem a faixa: o comentario do HTML cita a classe para explicar por que ela
+    // saiu, entao o que se procura e o ATRIBUTO.
+    ok(cabecalho.indexOf('class="prod-table-header') === -1, 'sem a faixa em volta');
 }
 
 async function semResponsavelOStatusNaoSeMexe() {
