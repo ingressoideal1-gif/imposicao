@@ -221,6 +221,60 @@ function extrairFuncao(src, nome) {
         'o recado ensina como sair da trava', recado && recado[0].slice(-200));
 })();
 
+// ─── O banco solto nao e emprestado a numeracao sem CSV ──────────────────────
+//
+// 22/08/2026: a numeracao "Expointer 2026", sem CSV, mostrava "1 de 19.500" no
+// card do modelo. Eram as linhas da 1000475, que tinham ficado em
+// `state.csvData` (a fatia montada ao olhar um modelo dela) e em
+// `state.numCsvData` (o editor). A funcao e lida do script.js, nao copiada.
+
+(function oBancoSoltoNaoEEmprestado() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem', 'linhasDaAmostra'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+    const state = { numeracoes: [], csvData: null, csvDataDerivado: false, numCsvData: null };
+    const api = new Function('state', 'window', fonte + '\nreturn { linhasDaAmostra };')(state, global.window);
+
+    const comCsv = { id: 'num-a', csv_data: caderno(19500) };
+    const semCsv = { id: 'num-b', csv_data: null, elements: [{ type: 'QR', source: 'database', csv_column: '' }] };
+    state.numeracoes.push(comCsv, semCsv);
+    const modelo = { id: 'm-1', amostra_num_id: 'num-b', csv_selecao: null };
+
+    // A fatia da numeracao A ficou na memoria, como acontece ao olhar um modelo dela.
+    state.csvData = comCsv.csv_data.slice();
+    state.csvDataDerivado = true;
+    ok(api.linhasDaAmostra(modelo, semCsv).length === 0,
+        'numeracao sem CSV nao pega emprestada a fatia que ficou na memoria',
+        api.linhasDaAmostra(modelo, semCsv).length);
+
+    // O editor aberto com um CSV tambem nao conta.
+    state.csvData = null; state.csvDataDerivado = false;
+    state.numCsvData = caderno(50);
+    ok(api.linhasDaAmostra(modelo, semCsv).length === 0,
+        'o CSV do editor de numeracao nunca vira banco do modelo');
+
+    // O que continua valendo: arquivo subido na caixa da Imposicao (nao derivado).
+    state.numCsvData = null;
+    state.csvData = caderno(12); state.csvDataDerivado = false;
+    ok(api.linhasDaAmostra(modelo, semCsv).length === 12,
+        'CSV subido na Imposicao continua servindo a amostra avulsa');
+
+    // E a numeracao com CSV continua entregando a fatia do modelo.
+    const dono = { id: 'm-2', amostra_num_id: 'num-a', csv_selecao: { tipo: 'linhas', ids: ['1-37'] } };
+    ok(api.linhasDaAmostra(dono, comCsv).length === 37,
+        'numeracao com CSV segue entregando a fatia do modelo',
+        api.linhasDaAmostra(dono, comCsv).length);
+
+    // E as duas telas marcam a fatia como derivada: sem isto a marca nao existe.
+    const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+    ok((script.match(/state\.csvDataDerivado = true/g) || []).length >= 1,
+        'a tela Imposicao marca a fatia como derivada da numeracao');
+    ok((pedido.match(/state\.csvDataDerivado = true/g) || []).length >= 1,
+        'a tela Pedido marca a fatia como derivada da numeracao');
+    ok(!/state\.numCsvData/.test(extrairFuncao(script, 'linhasDaAmostra')),
+        'linhasDaAmostra nao le mais o estado do editor');
+})();
+
 // ─── Fim ──────────────────────────────────────────────────────────────────────
 
 if (falhas) {

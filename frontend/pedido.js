@@ -2955,6 +2955,7 @@ function updatePedSummary() {
         state.csvData = (typeof fatiaCsvDoItem === 'function')
             ? fatiaCsvDoItem(itemAtivoDoPedido(), num)
             : num.csv_data;
+        state.csvDataDerivado = true;   // e da numeracao: nao serve a nenhuma outra
 
         state.csvFile = null; // Banco embutido
 

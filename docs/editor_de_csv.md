@@ -276,6 +276,21 @@ desenho — o mesmo idioma que o modo PDF já usava (`amostra-pdf-nav-N`):
 inteiro quando não tem, e o CSV solto da Imposição em último caso (o que atende à
 amostra avulsa).
 
+**O CSV solto só vale quando veio de fora de uma numeração.** Corrigido em
+22/08/2026: a numeração "Expointer 2026", sem CSV nenhum no banco, mostrava
+"1 de 19.500" no card do modelo — eram as linhas da numeração 1000475, que
+tinham ficado em `state.csvData` (a fatia montada quando o operador olhou um
+modelo dela) e em `state.numCsvData` (o editor). Como a Expointer tinha um
+elemento de banco de dados, a tela pedia linhas, não achava nenhuma dela e
+pegava emprestadas as da vizinha; um F5 fazia sumir. Agora a fatia de uma
+numeração é marcada como derivada (`state.csvDataDerivado = true`, nas duas
+telas de imposição — `script.js` e o clone `pedido.js`) e nunca é emprestada;
+o arquivo subido na caixa da Imposição e o mapa de teatro continuam servindo a
+amostra avulsa (`csvDataDerivado = false`); e o estado do editor
+(`numCsvData`) não entra mais no desenho do modelo. O harness
+`tests/csv_fatia_do_modelo_harness.js` lê a função de verdade do `script.js` e
+exercita o cenário da Expointer.
+
 Detalhes que importam:
 
 - **Um seletor comanda as duas faces.** Frente e verso mostram sempre a mesma

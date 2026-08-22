@@ -109,6 +109,12 @@ const state = {
     csvFile: null,
 
     csvData: null,
+    // `csvData` veio de uma numeracao (a fatia do modelo, em onNumeracaoSelect) ou
+    // de fora dela (arquivo subido na caixa da Imposicao, mapa de teatro)? So o
+    // segundo caso pode servir de banco "solto" para a amostra de um modelo — ver
+    // linhasDaAmostra(). Sem esta marca, a fatia da numeracao X ficava na memoria
+    // e era emprestada a numeracao Y, que nao tinha CSV nenhum (22/08/2026).
+    csvDataDerivado: false,
     // Pagina da visualizacao de cada modelo, por "osId:itemId". Ver
     // paginaDaAmostra(): fica aqui, e nao no item, porque os itens sao
     // substituidos quando o pedido recarrega.
@@ -9181,6 +9187,7 @@ async function loadMapaTeatroData(mapaId) {
                 }
             }
             state.csvData = csvData;
+            state.csvDataDerivado = false;
             console.log(`[Teatro] Mapa carregado: ${csvData.length} assentos`);
         } else {
             state.csvData = null;
@@ -9427,6 +9434,7 @@ function updateImpSummary() {
         // A fatia do modelo, nao o banco inteiro: varios modelos do mesmo pedido
         // costumam dividir o mesmo CSV.
         state.csvData = fatiaCsvDoItem(itemAtivoDoPedido(), num);
+        state.csvDataDerivado = true;   // e da numeracao: nao serve a nenhuma outra
 
         state.csvFile = null; // Banco embutido
 
@@ -11500,6 +11508,7 @@ window.clearCsvFile = function() {
     state.csvFile = null;
 
     state.csvData = null;
+    state.csvDataDerivado = false;
 
     const csvFileEl = document.getElementById('csv-file');
 
@@ -11582,6 +11591,7 @@ async function handleCsvSelected() {
         const file = csvFileEl.files[0];
 
         state.csvFile = file;
+        state.csvDataDerivado = false;
 
         
 
@@ -13317,6 +13327,21 @@ async function salvarCamposDaNumeracao(numId, patch) {
  * As linhas que a visualizacao deste modelo pode mostrar. E a fatia do modelo
  * quando ele tem uma; senao o banco inteiro da numeracao; senao o que estiver
  * carregado na Imposicao (o comportamento antigo, que atende a amostra avulsa).
+ *
+ * ## O banco "solto" so vale quando veio de FORA de uma numeracao
+ *
+ * Corrigido em 22/08/2026. A numeracao "Expointer 2026", sem CSV nenhum no
+ * banco, mostrava "1 de 19.500" no card do modelo: eram as linhas da numeracao
+ * 1000475, que tinham ficado em `state.csvData` (a fatia montada quando o
+ * operador olhou aquele modelo) e em `state.numCsvData` (o editor). Como a
+ * Expointer tinha um elemento de banco de dados, a tela pedia linhas, nao
+ * achava nenhuma dela e pegava emprestadas as da vizinha.
+ *
+ * Agora o terceiro degrau so existe para CSV que NAO pertence a numeracao
+ * nenhuma — o arquivo subido na caixa da Imposicao ou o mapa de teatro
+ * (`state.csvDataDerivado === false`). Fatia de numeracao nao e emprestada, e o
+ * estado do editor (`numCsvData`) nunca entra: ele e de quem esta editando, nao
+ * do modelo que esta sendo desenhado.
  */
 function linhasDaAmostra(item, num) {
 
@@ -13328,7 +13353,9 @@ function linhasDaAmostra(item, num) {
 
     if (item && item.csv_data && item.csv_data.length) return linhasAtivasCsv(item.csv_data);
 
-    const solto = state.csvData || state.numCsvData || null;
+    if (state.csvDataDerivado) return [];
+
+    const solto = state.csvData || null;
 
     return solto && solto.length ? linhasAtivasCsv(solto) : [];
 

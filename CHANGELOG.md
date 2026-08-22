@@ -4,7 +4,31 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v681** — 2026-08-21 | Agente **1.2.175**
+## Versão atual: **v682** — 2026-08-22 | Agente **1.2.176**
+
+---
+
+## [v682 — 2026-08-22] — Numeração sem CSV não empresta as linhas da vizinha
+
+Relato do usuário: a numeração **"Expointer 2026"**, sem CSV nenhum no banco, mostrava no card do
+modelo que ele tinha **19.500 linhas** — e parecia que excluir o CSV não apagava os registros.
+
+O banco estava certo: a Expointer foi salva sem CSV às 10:19, e excluir apagou mesmo. As 19.500
+eram da numeração **1000475** (o `EXPOSITOR.csv`, 2 colunas, 1,1 MB), que tinham ficado na
+**memória do navegador**: em `state.csvData` (a fatia montada quando o operador olhou um modelo
+dela) e em `state.numCsvData` (o editor). `linhasDaAmostra` tenta três fontes — CSV da numeração,
+CSV do modelo, CSV "solto" — e, como a Expointer tem um elemento de banco de dados, a tela pedia
+linhas, não achava nenhuma dela e caía no terceiro degrau, pegando as da vizinha. Um F5 fazia sumir.
+
+**O que mudou.** O terceiro degrau só existe para CSV que não pertence a numeração nenhuma: o
+arquivo subido na caixa da Imposição ou o mapa de teatro. A fatia de uma numeração passa a ser
+marcada (`state.csvDataDerivado`) nas duas telas de imposição — `script.js` e o clone `pedido.js` —
+e nunca é emprestada; o estado do editor (`numCsvData`) deixa de contar para o desenho do modelo.
+Há teste lendo a função de verdade do `script.js` (não uma cópia) com o cenário da Expointer, e
+ele reprova o código antigo.
+
+**O que não mudou.** Numeração com CSV continua entregando a fatia do modelo; CSV subido na caixa
+da Imposição continua servindo a amostra avulsa; nada foi escrito no banco.
 
 ---
 
