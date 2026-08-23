@@ -4,11 +4,13 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v698** — 2026-08-23 | Agente **1.2.192**
+## Versão atual: **v697** — 2026-08-23 | Agente **1.2.191**
 
 ---
 
-## [v698 — 2026-08-23] — Acabamento: o peso antes de fechar o setor, e a hora do Pronto
+## [v697 — 2026-08-23] — Acabamento: peso antes de fechar o setor e hora do Pronto; Concluídos do mais novo ao mais antigo
+
+### Acabamento: o peso antes de fechar o setor, e a hora do Pronto
 
 Pedido do usuário: *"No 'Painel de Acabamento' dentro do pedido, ao marcar o último modelo como pronto
 deve exigir indicar a informação do peso do setor que está pronto, só alterar status após o peso real
@@ -45,9 +47,7 @@ fecha o setor passando direto, a tela sem caminho para o peso não prendendo nad
 o peso e só então o Pronto (470 verificações); `tests/test_painel_do_acabamento.py` trava a migração,
 o gatilho e a trava na única porta do status (28 testes). Conferido no navegador.
 
----
-
-## [v697 — 2026-08-23] — Lista de Arte: Pedidos Concluídos sai do mais novo ao mais antigo
+### Lista de Arte: Pedidos Concluídos sai do mais novo ao mais antigo
 
 Pedido do usuário: *"Na lista de arte, no card Pedidos concluídos, listar os pedidos do mais novo ao
 mais antigo"*.
