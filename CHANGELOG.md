@@ -4,7 +4,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v697** — 2026-08-23 | Agente **1.2.191**
+## Versão atual: **v698** — 2026-08-23 | Agente **1.2.192**
+
+---
+
+## [v698 — 2026-08-23] — Acabamento: o peso antes de fechar o setor, e a hora do Pronto
+
+Pedido do usuário: *"No 'Painel de Acabamento' dentro do pedido, ao marcar o último modelo como pronto
+deve exigir indicar a informação do peso do setor que está pronto, só alterar status após o peso real
+for indicado. Modelos prontos devem indicar a hora em que ficaram prontos"*.
+
+**O peso do setor virou condição para o último Pronto.** Quando o clique em PRONTO é o que fecha um
+setor, o status **não é gravado**: abre um popup pedindo o peso real daquele setor, com o estimado ao
+lado, e só depois de o peso entrar no banco é que o modelo vira Pronto. É o momento certo de cobrar —
+o material está na mesa e a balança está do lado; depois disso o operador já foi para o próximo
+pedido. A cobrança é **por setor**: um pedido com Laser e PVC termina o Laser primeiro, e é o peso do
+Laser que se pesa naquela hora.
+
+Se o peso fugir mais de 5 % do estimado, ele cai no popup da senha de liberação que já existia — e o
+Pronto continua pendurado: senha certa fecha o setor, senha errada não fecha nada, e cancelar a senha
+traz o popup do peso de volta. **A trava não se aplica** quando não há onde gravar o peso: modelo sem
+setor, setor que já tem peso, ou tela sem estação e sem sessão do Vibe (ali o campo de peso nem
+existe). Trava sem saída é a coisa que esta tela não pode ter.
+
+**Modelo Pronto passou a mostrar a hora.** Abaixo dos botões: `🕒 Pronto às 14:32`, e
+`🕒 Pronto em 22/08 às 14:32` quando não foi hoje. Quem escreve a hora é o **banco** — a coluna nova
+`pedidos_modelos.acabamento_pronto_em`, carimbada pelo gatilho `trg_carimba_acabamento_pronto_em`
+(`sql/hora_do_pronto_no_acabamento.sql`) — e não a tela: o estágio é gravado daqui, da estação e
+mexido pelo ERP, e um carimbo feito no frontend deixaria buracos justamente nos modelos que a gráfica
+tocou pelo acesso local. O gatilho apaga a hora quando o modelo sai de Pronto e não a renova quando
+alguém reclica no botão que já estava aceso.
+
+Modelo marcado Pronto **antes de hoje não tem hora**, e a migração não inventou uma: `updated_at`
+muda a cada foto, responsável ou observação, e uma hora aproximada seria lida como a de verdade por
+quem está de pé na estação. Esses cards não mostram carimbo nenhum.
+
+Testes: `tests/acabamento_harness.js` — o texto da hora nos dois formatos, o card com e sem carimbo, o
+último Pronto abrindo o popup em vez de gravar, o setor com peso passando direto, o modelo que não
+fecha o setor passando direto, a tela sem caminho para o peso não prendendo nada, e o popup gravando
+o peso e só então o Pronto (470 verificações); `tests/test_painel_do_acabamento.py` trava a migração,
+o gatilho e a trava na única porta do status (28 testes). Conferido no navegador.
 
 ---
 

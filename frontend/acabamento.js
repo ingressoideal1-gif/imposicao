@@ -137,6 +137,7 @@
         pesosDoPedido: null,// de qual pedido é o mapa acima
         estimados: {},      // 'SETOR' -> kg estimado (só os que têm; ausente = null)
         liberacaoPendente: null, // o peso fora dos 5 % que espera a senha (ver gravarPeso)
+        prontoPendente: null,    // o "Pronto" que espera o peso do setor (23/08/2026)
         temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
@@ -313,6 +314,49 @@
         }
 
         return estagioDerivadoDaImpressao(m);
+    }
+
+    /**
+     * A HORA em que o modelo ficou Pronto, como o banco a guardou (ISO), ou ''.
+     *
+     * Pedido do usuário em 23/08/2026: "Modelos prontos devem indicar a hora em
+     * que ficaram prontos". Quem escreve é o gatilho
+     * `trg_carimba_acabamento_pronto_em` (ver `sql/hora_do_pronto_no_acabamento.sql`),
+     * e não esta tela: o estágio também é gravado pela estação e mexido pelo ERP,
+     * e um carimbo feito no frontend deixaria buracos justamente nos modelos que
+     * a gráfica tocou pelo acesso local.
+     *
+     * Modelo marcado Pronto ANTES de 23/08/2026 não tem hora, e é assim de
+     * propósito: a migração não inventou um histórico aproximado, porque no card
+     * ele seria lido como hora de verdade.
+     */
+    function prontoEmDoModelo(m) {
+        if (!m) return '';
+        const doMapa = tela.acabamento[String(m.id)];
+        const bruto = m.acabamento_pronto_em || (doMapa ? doMapa.prontoEm : '') || '';
+        return String(bruto).trim();
+    }
+
+    /**
+     * "Pronto às 14:32" no mesmo dia; "Pronto em 22/08 às 14:32" nos outros.
+     *
+     * O operador olha isto de pé na estação, quase sempre no dia em que o
+     * trabalho aconteceu — a data ali só atrapalharia a leitura. Nos outros dias
+     * ela aparece, porque aí a hora sozinha mentiria.
+     */
+    function textoDaHoraDoPronto(iso) {
+        if (!iso) return '';
+        const t = new Date(iso);
+        if (isNaN(t.getTime())) return '';
+        const dd = n => String(n).padStart(2, '0');
+        const hora = `${dd(t.getHours())}:${dd(t.getMinutes())}`;
+        const hoje = new Date();
+        const mesmoDia = t.getFullYear() === hoje.getFullYear()
+            && t.getMonth() === hoje.getMonth()
+            && t.getDate() === hoje.getDate();
+        return mesmoDia
+            ? `Pronto às ${hora}`
+            : `Pronto em ${dd(t.getDate())}/${dd(t.getMonth() + 1)} às ${hora}`;
     }
 
     /**
@@ -871,7 +915,7 @@
                 const fatia = numeros.slice(i, i + 200);
                 const { data, error } = await supabaseClient
                     .from('pedidos_modelos')
-                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url')
+                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em')
                     .in('id_int', fatia);
                 if (error) throw error;
                 (data || []).forEach(m => {
@@ -879,6 +923,7 @@
                         status: m.acabamento_status || '',
                         responsavel: m.acabamento_responsavel || '',
                         foto: m.acabamento_foto_url || '',
+                        prontoEm: m.acabamento_pronto_em || '',
                     };
                 });
             }
@@ -1095,7 +1140,16 @@
             ? `<span style="font-size:0.7rem; color:#fcd34d; display:block; margin-top:2px;">⬇️ Escolha o <b>Responsável</b> abaixo para liberar o status.</span>`
             : '';
 
-        return `<div style="display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%;">${botoes}</div>${recado}`;
+        // A hora em que ficou Pronto, logo abaixo dos botões (pedido do usuário,
+        // 23/08/2026). Só no Pronto, e só quando existe: modelo concluído antes
+        // de 23/08/2026 não tem hora registrada, e inventar uma seria pior do
+        // que não mostrar nenhuma.
+        const hora = (atual === 'Pronto') ? textoDaHoraDoPronto(prontoEmDoModelo(item)) : '';
+        const carimbo = hora
+            ? `<span style="font-size:0.7rem; color:#4ade80; display:block; margin-top:4px; text-align:center;">🕒 ${esc(hora)}</span>`
+            : '';
+
+        return `<div style="display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%;">${botoes}</div>${carimbo}${recado}`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
@@ -1800,6 +1854,7 @@
                 tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
                 marcarPeso(alvo, 'gravado');
                 pintarEstimado(alvo);
+                await concluirProntoPendente(alvo);
                 return;
             }
 
@@ -1850,6 +1905,7 @@
             tela.pesos[alvo] = { peso, existe: true, producao: antes.producao };
             marcarPeso(alvo, 'gravado');
             pintarEstimado(alvo);
+            await concluirProntoPendente(alvo);
         } catch (e) {
             console.error('[acabamento] erro ao gravar o peso:', e);
             tela.pesos[alvo] = antes;
@@ -2079,6 +2135,70 @@
 
     function pedidoProntoParaExpedicao(itens) {
         return (itens || []).length > 0 && setoresPendentes(itens).length === 0;
+    }
+
+    // ─── O peso obrigatório ao fechar um setor ──────────────────────────────
+    //
+    // Pedido do usuário em 23/08/2026: "ao marcar o último modelo como pronto
+    // deve exigir indicar a informação do peso do setor que está pronto, só
+    // alterar status após o peso real for indicado".
+    //
+    // O peso é o que a expedição usa para cotar o frete e conferir o volume, e
+    // até aqui ele dependia de alguém lembrar de digitá-lo no box de cima. O
+    // momento certo de cobrar é este: o setor acabou de terminar, o material
+    // está na mesa e a balança está ao lado. Depois disso o operador já foi
+    // embora para o próximo pedido.
+    //
+    // A cobrança é por SETOR, e não pelo pedido: um pedido com Laser e PVC
+    // termina o Laser primeiro, e é o peso do Laser que se pesa naquela hora.
+
+    /**
+     * O setor que ESTE clique em "Pronto" vai fechar — ou `null`.
+     *
+     * Fecha quando o modelo é o último daquele setor fora do Pronto. Setor sem
+     * nome fica de fora: não existe linha de peso para ele na ficha do ERP, e
+     * cobrar um peso que não tem onde ser gravado seria uma trava sem saída.
+     */
+    function setorQueFechaComEstePronto(item, itens) {
+        if (!item) return null;
+        const setor = normalizar(item.setor);
+        if (SETORES_DO_BANCO.indexOf(setor) === -1) return null;
+
+        const grupo = modelosPorSetor(itens).find(g => g.setor === setor);
+        if (!grupo) return null;
+
+        // Os que faltam, tirando este — que está prestes a virar Pronto.
+        const outrosPendentes = grupo.modelos.filter(m =>
+            String(m.id) !== String(item.id) && estagioDoModelo(m) !== 'Pronto').length;
+        return outrosPendentes === 0 ? setor : null;
+    }
+
+    /** O setor já tem peso real registrado? */
+    function setorTemPeso(setor) {
+        const linha = tela.pesos[setor];
+        return !!(linha && linha.peso !== null && linha.peso !== undefined && linha.peso > 0);
+    }
+
+    /**
+     * Há caminho para gravar peso nesta tela?
+     *
+     * Sem estação servindo a página e sem sessão do Vibe, o box de peso já diz
+     * "entre com a sua conta" e o campo nem existe. Cobrar o peso ali seria
+     * trancar o Pronto sem oferecer saída — e o material continuaria pronto na
+     * mesa, com a tela dizendo o contrário.
+     */
+    function haComoGravarPeso() {
+        return pelaEstacao() || tela.temSessao !== false;
+    }
+
+    /**
+     * O setor cujo peso PRECISA ser digitado antes deste "Pronto" — ou `null`.
+     */
+    function pesoExigidoAntesDoPronto(item, itens) {
+        if (!haComoGravarPeso()) return null;
+        const setor = setorQueFechaComEstePronto(item, itens);
+        if (!setor) return null;
+        return setorTemPeso(setor) ? null : setor;
     }
 
     /** O rótulo do setor como o operador o vê nos cards. */
@@ -2554,10 +2674,207 @@
         tela.liberacaoPendente = null;
     }
 
+    // ─── O popup do peso que fecha o setor ──────────────────────────────────
+    //
+    // A trava do "Pronto" precisa ter saída na PRÓPRIA tela (regra da casa: toda
+    // trava diz o que fazer para sair dela). A saída é este popup: ele pergunta
+    // o peso ali mesmo, grava, e só então marca o modelo como Pronto. Mandar o
+    // operador "subir e preencher o box lá em cima" seria a mesma trava, com
+    // mais passos.
+
+    function montarPopupDoPeso() {
+        let caixa = document.getElementById('acab-peso-obrigatorio');
+        if (caixa) return caixa;
+
+        caixa = document.createElement('div');
+        caixa.id = 'acab-peso-obrigatorio';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100004; display: none;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(520px, 96vw); background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">⚖️</span>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Pese o setor antes de fechar</strong>
+                    <button type="button" id="acab-peso-obrig-fechar"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px;
+                                   font-weight: 700; cursor: pointer;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; color: #cfe6fb; font-size: 0.9rem; line-height: 1.55;">
+                    <div id="acab-peso-obrig-corpo"></div>
+                    <label for="acab-peso-obrig-campo" style="display: block; margin-top: 14px;
+                           font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase;
+                           letter-spacing: 0.06em;">Peso real do setor</label>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                        <input type="text" inputmode="decimal" id="acab-peso-obrig-campo"
+                               autocomplete="off" spellcheck="false" placeholder="0,00"
+                               style="width: 140px; text-align: right; background: #0d0e20;
+                                      border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
+                                      color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
+                                      font-family: monospace;" />
+                        <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                        <span id="acab-peso-obrig-est" style="font-size: 0.8rem; color: var(--text-dim);"></span>
+                    </div>
+                    <div id="acab-peso-obrig-erro" style="margin-top: 8px; min-height: 1.2em;
+                         font-size: 0.82rem; color: #f87171;"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18); flex-wrap: wrap;">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">Cancelar deixa o modelo como estava.</span>
+                    <div style="margin-left: auto; display: flex; gap: 10px;">
+                        <button type="button" id="acab-peso-obrig-cancelar"
+                                style="background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                       color: #cfe6fb; border-radius: 8px; padding: 10px 18px;
+                                       font-weight: 700; cursor: pointer;">Cancelar</button>
+                        <button type="button" id="acab-peso-obrig-ok"
+                                style="background: linear-gradient(135deg, #4a61e8, #120a8f);
+                                       border: 1px solid #4cc8f0; color: #ffffff; border-radius: 8px;
+                                       padding: 10px 22px; font-weight: 800; letter-spacing: 0.05em;
+                                       cursor: pointer;">Gravar peso e marcar PRONTO</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        const cancelar = () => fecharPopupDoPeso();
+        ['acab-peso-obrig-fechar', 'acab-peso-obrig-cancelar'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.addEventListener('click', cancelar);
+        });
+        const ok = document.getElementById('acab-peso-obrig-ok');
+        if (ok) ok.addEventListener('click', () => confirmarPesoDoSetor());
+        const campo = document.getElementById('acab-peso-obrig-campo');
+        if (campo) {
+            campo.addEventListener('keydown', e => {
+                if (e && e.key === 'Enter') { e.preventDefault(); confirmarPesoDoSetor(); }
+            });
+        }
+        return caixa;
+    }
+
+    function fecharPopupDoPeso() {
+        const caixa = document.getElementById('acab-peso-obrigatorio');
+        if (caixa) caixa.style.display = 'none';
+        tela.prontoPendente = null;
+    }
+
+    /**
+     * Abre o popup para o "Pronto" que está esperando um peso.
+     *
+     * `tela.prontoPendente` guarda o modelo e o setor; ele é consumido pelo
+     * `confirmarPesoDoSetor`, e some no cancelar.
+     */
+    function abrirPopupDoPeso() {
+        const p = tela.prontoPendente;
+        if (!p) return;
+        montarPopupDoPeso();
+
+        const estimado = estimadoDoSetor(p.setor);
+        const corpo = document.getElementById('acab-peso-obrig-corpo');
+        if (corpo) {
+            corpo.innerHTML = `
+                <div style="font-size: 0.95rem; margin-bottom: 10px;">
+                    <strong style="color: #ffffff;">Pedido ${esc(p.numeroDoPedido)}</strong>
+                    <span style="color: #4cc8f0;"> — setor ${esc(nomeDoSetor(p.setor))}</span>
+                </div>
+                <div style="padding: 10px 12px; border-radius: 8px;
+                            background: rgba(76,200,240,0.10); border: 1px solid rgba(76,200,240,0.32);">
+                    Este é o <strong>último modelo</strong> do setor
+                    ${esc(nomeDoSetor(p.setor))}. Ao marcá-lo como <strong>PRONTO</strong> o setor fecha,
+                    e a expedição precisa do peso real para cotar o frete —
+                    <strong>o status só muda depois que o peso for informado</strong>.
+                </div>`;
+        }
+        const est = document.getElementById('acab-peso-obrig-est');
+        if (est) {
+            est.textContent = (estimado !== null && estimado !== undefined && estimado > 0)
+                ? `est. ${kgParaTexto(estimado)} kg` : '';
+        }
+        const erro = document.getElementById('acab-peso-obrig-erro');
+        if (erro) erro.textContent = '';
+        const campo = document.getElementById('acab-peso-obrig-campo');
+        if (campo) campo.value = '';
+        const ok = document.getElementById('acab-peso-obrig-ok');
+        if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar PRONTO'; }
+
+        const caixa = document.getElementById('acab-peso-obrigatorio');
+        if (caixa) caixa.style.display = 'flex';
+        if (campo && typeof campo.focus === 'function') {
+            try { campo.focus(); } catch (ignorado) { /* sem foco não há problema */ }
+        }
+    }
+
+    /**
+     * O OK do popup: grava o peso e, SÓ SE ele entrar, marca o Pronto.
+     *
+     * O peso pode cair no popup da senha de liberação (acima de 5 % do
+     * estimado). Nesse caso o `gravarPeso` volta sem gravar, o popup da senha
+     * abre por cima, e o `prontoPendente` continua guardado — quem o consome é o
+     * `concluirProntoPendente`, chamado de dentro do `gravarPeso` quando o peso
+     * finalmente entra no banco. Ou seja: senha certa fecha o setor, senha
+     * errada não fecha nada.
+     */
+    async function confirmarPesoDoSetor() {
+        const p = tela.prontoPendente;
+        if (!p) { fecharPopupDoPeso(); return; }
+
+        const campo = document.getElementById('acab-peso-obrig-campo');
+        const erro = document.getElementById('acab-peso-obrig-erro');
+        const texto = String(campo && campo.value ? campo.value : '').trim();
+        if (!texto) {
+            if (erro) erro.textContent = 'Digite o peso do setor para fechar.';
+            return;
+        }
+        if (pesoDoTexto(texto) === undefined) {
+            if (erro) erro.textContent = `"${texto}" não é um peso. Use só números, como 4,16.`;
+            return;
+        }
+
+        const ok = document.getElementById('acab-peso-obrig-ok');
+        if (ok) { ok.disabled = true; ok.textContent = 'Gravando…'; }
+        try {
+            const caixa = document.getElementById('acab-peso-obrigatorio');
+            if (caixa) caixa.style.display = 'none';   // sai da frente do popup da senha
+            await gravarPeso(p.numeroDoPedido, p.setor, texto);
+        } finally {
+            if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar PRONTO'; }
+        }
+
+        // Ainda pendente: o peso não entrou (foi para a senha, ou deu erro). O
+        // popup volta com o motivo já dito pelo aviso do `gravarPeso`.
+        if (tela.prontoPendente && !tela.liberacaoPendente) {
+            const caixa = document.getElementById('acab-peso-obrigatorio');
+            if (caixa) caixa.style.display = 'flex';
+            if (erro) erro.textContent = 'O peso não foi gravado. Veja o aviso e tente de novo.';
+        }
+    }
+
+    /**
+     * Chamado pelo `gravarPeso` depois de o peso ENTRAR no banco: se havia um
+     * "Pronto" esperando por aquele setor, ele acontece agora.
+     */
+    async function concluirProntoPendente(setorGravado) {
+        const p = tela.prontoPendente;
+        if (!p || normalizar(setorGravado) !== p.setor) return;
+        tela.prontoPendente = null;
+        const caixa = document.getElementById('acab-peso-obrigatorio');
+        if (caixa) caixa.style.display = 'none';
+        await gravar(p.itemId, p.osId, 'acabamento_status', 'Pronto');
+    }
+
     /** Cancelar: nada foi gravado, e o campo volta ao valor de antes. */
     function cancelarLiberacao() {
         fecharPopupDaLiberacao();
         pintarPesos();
+        // Se havia um "Pronto" esperando este peso, ele continua esperando: o
+        // popup do peso volta, em vez de o operador ficar olhando um card cujo
+        // botão não obedeceu e sem nada na tela explicando por quê.
+        if (tela.prontoPendente) abrirPopupDoPeso();
     }
 
     /** Abre o popup com o que está em `tela.liberacaoPendente`. */
@@ -2692,13 +3009,38 @@
         // atualização.
         const itens = (s.osItens && s.osItens[osId]) || [];
         const item = itens.find(i => String(i.id) === String(itemId));
+
+        // Lido ANTES de escrever: é o que diz se o Pronto é novo ou é o mesmo
+        // Pronto de antes sendo reclicado.
+        const eraPronto = item ? (estagioDoModelo(item) === 'Pronto') : false;
+
         if (item) item[campo] = limpo;
 
         // O mapa da lista anda junto: sem isto, voltar para a lista mostraria o
         // estágio anterior até a próxima leitura do banco.
-        const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '', foto: '' };
+        const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '', foto: '', prontoEm: '' };
         noMapa[CAMPO_NO_MAPA[campo] || campo] = limpo || '';
         tela.acabamento[String(itemId)] = noMapa;
+
+        // A hora do Pronto é do BANCO (o gatilho a escreve), mas a tela anda na
+        // frente: sem este espelho, o carimbo só apareceria na próxima leitura,
+        // e o operador marcaria Pronto sem ver hora nenhuma. O valor daqui é o
+        // mesmo instante, com a diferença de uma ida de rede.
+        //
+        // Reclicar no Pronto que já estava aceso NÃO renova a hora — é a mesma
+        // regra do gatilho, repetida aqui para a tela não mostrar por um instante
+        // uma hora que o banco não vai gravar.
+        if (campo === 'acabamento_status') {
+            const agoraPronto = String(limpo || '').toLowerCase() === 'pronto';
+            if (!agoraPronto) {
+                noMapa.prontoEm = '';
+                if (item) item.acabamento_pronto_em = null;
+            } else if (!eraPronto) {
+                const carimbo = new Date().toISOString();
+                noMapa.prontoEm = carimbo;
+                if (item) item.acabamento_pronto_em = carimbo;
+            }
+        }
 
         const num = parseInt(String(osId).replace('vibe_', ''));
         if (s.modelosGlobais && s.modelosGlobais[num]) {
@@ -3176,6 +3518,7 @@
             tela.pesosDoPedido = null;
             tela.estimados = {};
             fecharPopupDaLiberacao();
+            fecharPopupDoPeso();
             mostrarLista();
             renderDetalhe();
             try {
@@ -3202,6 +3545,7 @@
             fecharCamera();
             fecharPopupDaExpedicao();
             fecharPopupDaLiberacao();
+            fecharPopupDoPeso();
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -3218,6 +3562,26 @@
                 }
                 return Promise.resolve(false);
             }
+
+            // O PESO antes do último Pronto do setor (regra do usuário,
+            // 23/08/2026). O status não é gravado agora: quem o grava é o
+            // `concluirProntoPendente`, depois de o peso entrar no banco.
+            if (String(valor).toLowerCase() === 'pronto') {
+                const s = estado();
+                const itens = (s.osItens && s.osItens[osId]) || [];
+                const item = itens.find(i => String(i.id) === String(itemId));
+                const setor = pesoExigidoAntesDoPronto(item, itens);
+                if (setor) {
+                    const os = (s.ordens || []).find(o => String(o.id) === String(osId));
+                    tela.prontoPendente = {
+                        itemId, osId, setor,
+                        numeroDoPedido: os ? os.numero : osId,
+                    };
+                    abrirPopupDoPeso();
+                    return Promise.resolve(false);
+                }
+            }
+
             return gravar(itemId, osId, 'acabamento_status', valor);
         },
 
@@ -3243,6 +3607,10 @@
             cancelarLiberacao();
         },
 
+        /** O OK do popup do peso que fecha o setor: grava o peso e, só então, o Pronto. */
+        confirmarPesoDoSetor,
+        fecharPopupDoPeso,
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -3261,6 +3629,7 @@
             fecharCamera();
             fecharPopupDaExpedicao();
             fecharPopupDaLiberacao();
+            fecharPopupDoPeso();
             tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
@@ -3272,6 +3641,9 @@
         },
 
         // Para os testes: dá acesso às regras puras sem precisar de uma tela.
+        /** O estado da tela, para os testes olharem (e só para isso). */
+        _tela: tela,
+
         _regras: {
             ehDeProducao,
             setoresDoPedido,
@@ -3292,6 +3664,12 @@
             encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
             estagioDerivadoDaImpressao,
+            prontoEmDoModelo,
+            textoDaHoraDoPronto,
+            setorQueFechaComEstePronto,
+            setorTemPeso,
+            haComoGravarPeso,
+            pesoExigidoAntesDoPronto,
             responsavelDoModelo,
             fotoDoModelo,
             BUCKET_DA_FOTO,

@@ -599,3 +599,85 @@ def test_a_excecao_esta_escrita_na_regra_de_banco():
         assert coluna in regras, (
             "o limite da excecao precisa nomear " + coluna
         )
+
+
+# ─── A hora do Pronto e o peso que fecha o setor (23/08/2026) ────────────────
+#
+# Pedido do usuario: "ao marcar o ultimo modelo como pronto deve exigir indicar a
+# informacao do peso do setor que esta pronto, so alterar status apos o peso real
+# for indicado. Modelos prontos devem indicar a hora em que ficaram prontos".
+#
+# O comportamento da tela e exercitado pelo harness em Node, que roda o
+# acabamento.js inteiro. O que fica aqui e a MIGRACAO -- a coluna e o gatilho que
+# a alimentam.
+
+MIGRACAO_DA_HORA = "sql/hora_do_pronto_no_acabamento.sql"
+
+
+def test_a_migracao_da_hora_cria_a_coluna_e_o_gatilho():
+    sql = _ler(MIGRACAO_DA_HORA)
+
+    assert "ADD COLUMN IF NOT EXISTS acabamento_pronto_em timestamptz" in sql
+    assert "CREATE OR REPLACE FUNCTION public.carimba_acabamento_pronto_em()" in sql
+    assert "BEFORE INSERT OR UPDATE OF acabamento_status ON public.pedidos_modelos" in sql, (
+        "o gatilho precisa ser BEFORE (para gravar junto) e escutar SO a coluna do estagio -- "
+        "senao trocar a foto do material renovaria a hora da conclusao"
+    )
+
+
+def test_o_gatilho_da_hora_so_age_quando_o_estagio_muda():
+    sql = _ler(MIGRACAO_DA_HORA)
+
+    assert "NEW.acabamento_status IS DISTINCT FROM OLD.acabamento_status" in sql, (
+        "sem essa guarda, reclicar no Pronto que ja estava aceso renova a hora"
+    )
+    assert "NEW.acabamento_pronto_em := NULL" in sql, (
+        "sair do Pronto precisa apagar a hora, senao o card mostra uma conclusao desfeita"
+    )
+
+
+def test_a_migracao_da_hora_nao_inventa_historico():
+    """Modelo marcado Pronto antes de 23/08/2026 fica SEM hora, de proposito.
+
+    A hora aparece no card, ao lado do estagio. Uma hora aproximada, tirada do
+    `updated_at`, seria lida como a de verdade pelo operador que esta de pe na
+    estacao -- e `updated_at` muda a cada foto, responsavel ou observacao.
+    """
+    sql = _ler(MIGRACAO_DA_HORA)
+
+    assert not re.search(r"^\s*UPDATE\s+(public\.)?pedidos_modelos", sql, re.IGNORECASE | re.MULTILINE), (
+        "a migracao da hora nao deve preencher historico com um UPDATE em massa"
+    )
+    assert "NAO preenche historico" in sql, "e a escolha precisa estar escrita no arquivo"
+
+
+def test_a_coluna_da_hora_chega_a_tela():
+    js = _ler("frontend/acabamento.js")
+
+    assert "acabamento_pronto_em" in js, "a tela precisa ler a coluna"
+    i = js.index("'id, id_int, acabamento_status")
+    assert "acabamento_pronto_em" in js[i:i + 200], (
+        "o select do estagio dos modelos nao traz a hora"
+    )
+
+
+def test_a_trava_do_peso_esta_na_unica_porta_do_status():
+    """`mudarEstagio` e a unica porta por onde `acabamento_status` e gravado --
+    botao cinza nao impede ninguem de chamar a funcao pelo console."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("mudarEstagio(itemId, osId, valor) {")
+    corpo = js[i:i + 1800]
+    assert "pesoExigidoAntesDoPronto" in corpo, "a trava precisa estar dentro do mudarEstagio"
+    assert "abrirPopupDoPeso()" in corpo, "e precisa abrir a saida na propria tela"
+
+
+def test_a_trava_do_peso_tem_saida_quando_nao_ha_onde_gravar():
+    """Sem estacao e sem sessao do Vibe o campo de peso nem existe na tela.
+    Cobrar o peso ali seria trancar o Pronto sem saida -- e o material continuaria
+    pronto na mesa, com a tela dizendo o contrario."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function pesoExigidoAntesDoPronto")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "haComoGravarPeso()" in corpo

@@ -193,6 +193,64 @@ Desenha `botoesDeEstagio` (`frontend/acabamento.js`); o harness confere que há 
 botão por estágio em cada modelo, que só um está marcado, e que todos travam
 para quem não edita.
 
+### A hora em que o modelo ficou Pronto
+
+Pedido do usuário em 23/08/2026: *"Modelos prontos devem indicar a hora em que
+ficaram prontos"*. Abaixo dos botões, o modelo em **Pronto** mostra
+`🕒 Pronto às 14:32` — e `🕒 Pronto em 22/08 às 14:32` quando não foi hoje. A
+data só aparece nos outros dias porque o operador lê isto de pé na estação,
+quase sempre no mesmo dia; ali ela só atrapalharia.
+
+**Quem escreve a hora é o banco**, não a tela: a coluna
+`pedidos_modelos.acabamento_pronto_em` é carimbada pelo gatilho
+`trg_carimba_acabamento_pronto_em` (`sql/hora_do_pronto_no_acabamento.sql`). O
+estágio é gravado daqui, da estação e mexido pelo ERP — um carimbo feito no
+frontend deixaria buracos justamente nos modelos que a gráfica tocou pelo acesso
+local. O gatilho **apaga** a hora quando o modelo sai de Pronto, e **não a
+renova** quando alguém reclica no botão que já estava aceso (a tela repete essa
+segunda regra no espelho otimista, para não piscar uma hora que o banco não vai
+gravar).
+
+Modelo marcado Pronto **antes de 23/08/2026 não tem hora**, e a migração não
+inventou uma: `updated_at` muda a cada foto, responsável ou observação, e uma
+hora aproximada seria lida como a de verdade. Esses cards simplesmente não
+mostram carimbo.
+
+### O peso do setor antes do último Pronto
+
+Pedido do usuário em 23/08/2026: *"ao marcar o último modelo como pronto deve
+exigir indicar a informação do peso do setor que está pronto, só alterar status
+após o peso real for indicado"*.
+
+Quando o clique em **Pronto** é o que **fecha um setor** — ou seja, é o último
+modelo daquele setor fora do Pronto —, o status **não é gravado**. Abre um popup
+que pede o peso real daquele setor, com o estimado ao lado; só depois de o peso
+entrar no banco é que o modelo vira Pronto (`concluirProntoPendente`). É o
+momento certo de cobrar: o material está na mesa e a balança está do lado.
+Depois disso o operador já foi para o próximo pedido.
+
+A cobrança é **por setor**, e não pelo pedido: um pedido com Laser e PVC termina
+o Laser primeiro, e é o peso do Laser que se pesa naquela hora.
+
+O peso pode cair no popup da **senha de liberação** (acima de 5 % do estimado).
+Nesse caso o Pronto continua pendurado: senha certa fecha o setor, senha errada
+não fecha nada, e cancelar a senha traz o popup do peso de volta — em vez de
+deixar o operador olhando um botão que não obedeceu, sem nada na tela dizendo
+por quê.
+
+**Três situações em que a trava não se aplica**, todas por não ter onde gravar o
+peso — e trava sem saída é a coisa que esta tela não pode ter:
+
+- o modelo não tem setor (`(sem setor)`): não existe linha de peso para ele na
+  ficha do ERP;
+- o setor **já tem** peso registrado;
+- não há caminho para gravar (nem estação servindo a página, nem sessão do
+  Vibe): ali o box de peso já diz "entre com a sua conta" e o campo nem existe.
+
+A trava mora no `mudarEstagio`, que é a única porta por onde o
+`acabamento_status` é gravado — botão cinza não impede ninguém de chamar a
+função pelo console.
+
 ---
 
 ## O perfil "Acabamento", e quem pode ser responsável

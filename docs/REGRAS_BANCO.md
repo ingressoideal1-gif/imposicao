@@ -146,7 +146,7 @@ documentada em [`lista_de_arte.md`](lista_de_arte.md).
 |--------|-----------|--------|
 | `pedidos_artes` | Arquivos e estado da arte de cada pedido | ✅ Criado |
 | `pedidos_links_cliente` | Links públicos de aprovação do cliente | ✅ Criado |
-| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel` / `acabamento_foto_url`; o estágio final do `acabamento_status` passou de `Revisado` a `Pronto` em 21/08/2026; e desde 22/08/2026 `status_impressao_em`, a data em que o modelo virou Impresso, carimbada pelo gatilho `trg_carimba_status_impressao_em`) | ✅ Criado |
+| `pedidos_modelos` | Modelos de cada pedido (cor, numeração, opções de impressão, e desde 20/08/2026 `acabamento_status` / `acabamento_responsavel` / `acabamento_foto_url`; o estágio final do `acabamento_status` passou de `Revisado` a `Pronto` em 21/08/2026; e desde 22/08/2026 `status_impressao_em`, a data em que o modelo virou Impresso, carimbada pelo gatilho `trg_carimba_status_impressao_em`; e desde 23/08/2026 `acabamento_pronto_em`, a hora em que o modelo ficou Pronto no acabamento, carimbada pelo gatilho `trg_carimba_acabamento_pronto_em`) | ✅ Criado |
 
 ## ⏳ Tabelas Operacionais/Runtime (Postergadas para Próxima Fase)
 

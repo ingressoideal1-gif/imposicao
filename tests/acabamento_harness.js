@@ -1402,6 +1402,165 @@ async function oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto() {
        'e so nas tres colunas do carimbo', Object.keys(carimbo.payload).join(','));
 }
 
+// ─── A hora do Pronto, e o peso que fecha o setor (23/08/2026) ──────────────
+//
+// Pedido do usuario: "ao marcar o ultimo modelo como pronto deve exigir indicar
+// a informacao do peso do setor que esta pronto, so alterar status apos o peso
+// real for indicado. Modelos prontos devem indicar a hora em que ficaram
+// prontos".
+//
+// A hora vem do banco (gatilho `trg_carimba_acabamento_pronto_em`); aqui se mede
+// o que a tela faz com ela. O peso e uma TRAVA no `mudarEstagio` -- a unica
+// porta por onde o status do acabamento e gravado.
+
+async function aHoraDoProntoApareceNoCard() {
+    const amb = ambienteComPedidoAberto();
+    const { textoDaHoraDoPronto, prontoEmDoModelo } = amb.painel._regras;
+
+    // O texto: hoje sai so a hora; noutro dia, a data junto.
+    const hoje = new Date();
+    hoje.setHours(14, 32, 0, 0);
+    ok(textoDaHoraDoPronto(hoje.toISOString()) === 'Pronto às 14:32',
+       'no mesmo dia sai so a hora', textoDaHoraDoPronto(hoje.toISOString()));
+
+    const outroDia = new Date(hoje.getTime() - 3 * 24 * 3600 * 1000);
+    ok(/^Pronto em \d\d\/\d\d às \d\d:\d\d$/.test(textoDaHoraDoPronto(outroDia.toISOString())),
+       'noutro dia a data aparece junto', textoDaHoraDoPronto(outroDia.toISOString()));
+
+    ok(textoDaHoraDoPronto('') === '' && textoDaHoraDoPronto(null) === '',
+       'sem hora, nenhum texto');
+    ok(textoDaHoraDoPronto('nao e uma data') === '', 'texto que nao e data nao vira "Invalid Date"');
+
+    // De onde ela e lida: do modelo ou do mapa da lista.
+    ok(prontoEmDoModelo({ id: 'x', acabamento_pronto_em: '2026-08-23T17:32:00Z' }) === '2026-08-23T17:32:00Z',
+       'a hora vem do proprio modelo quando ele a traz');
+    ok(prontoEmDoModelo({ id: 'y' }) === '', 'modelo sem hora devolve vazio');
+    ok(prontoEmDoModelo(null) === '', 'sem modelo, vazio');
+
+    // E o card: o modelo Pronto COM hora mostra o carimbo.
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    amb.janela.state.osItens['os-200'][0].acabamento_pronto_em = hoje.toISOString();
+    await amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('Pronto às 14:32') !== -1, 'o card do modelo pronto mostra a hora', html.length);
+
+    // Modelo pronto SEM hora (concluido antes de 23/08/2026) nao mostra nada --
+    // a migracao nao inventou historico, e a tela nao inventa tampouco.
+    const amb2 = ambienteComPedidoAberto();
+    amb2.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    await amb2.painel.abrirPedido('os-200');
+    ok(amb2.elementos['acab-detalhe-corpo'].innerHTML.indexOf('🕒') === -1,
+       'modelo pronto sem hora registrada nao mostra carimbo nenhum');
+
+    // E o modelo que NAO esta pronto nao mostra hora, mesmo que a carregue.
+    const amb3 = ambienteComPedidoAberto();
+    amb3.janela.state.osItens['os-200'][0].acabamento_status = 'Em acabamento';
+    amb3.janela.state.osItens['os-200'][0].acabamento_pronto_em = hoje.toISOString();
+    await amb3.painel.abrirPedido('os-200');
+    ok(amb3.elementos['acab-detalhe-corpo'].innerHTML.indexOf('Pronto às') === -1,
+       'so o estagio Pronto mostra a hora');
+}
+
+/** Os dois modelos no mesmo setor, um ja pronto: o outro fecha o setor. */
+function ambienteComSetorQuaseFechado(pesoDoSetor) {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
+    amb.janela.state.osItens['os-200'][1].acabamento_responsavel = 'Cesar Almeida';
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: pesoDoSetor, status_producao: null },
+    ];
+    return amb;
+}
+
+async function oUltimoProntoDoSetorPedeOPeso() {
+    const amb = ambienteComSetorQuaseFechado(null);
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._gravacoes.length = 0;
+
+    const gravou = await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    ok(gravou === false, 'o clique NAO grava enquanto o peso nao vier');
+    ok(!amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status),
+       'nada de acabamento_status foi ao banco', JSON.stringify(amb.banco._gravacoes));
+
+    const popup = amb.documento.getElementById('acab-peso-obrigatorio');
+    ok(popup && popup.style.display === 'flex', 'e o popup do peso abriu -- a saida da trava esta na tela');
+    ok((popup.innerHTML || '').indexOf('último modelo') !== -1
+       || (amb.documento.getElementById('acab-peso-obrig-corpo').innerHTML || '').indexOf('último modelo') !== -1,
+       'o popup diz por que esta cobrando');
+}
+
+async function comPesoJaGravadoOProntoPassaDireto() {
+    const amb = ambienteComSetorQuaseFechado(4.16);
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._gravacoes.length = 0;
+
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    ok(amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status === 'Pronto'),
+       'setor que ja tem peso nao e cobrado de novo', JSON.stringify(amb.banco._gravacoes));
+}
+
+async function naoSendoOUltimoDoSetorOProntoPassaDireto() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'].forEach(i => { i.setor = 'PVC'; });
+    amb.janela.state.osItens['os-200'][0].acabamento_status = 'Em acabamento';
+    amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
+    amb.janela.state.osItens['os-200'][1].acabamento_responsavel = 'Cesar Almeida';
+    amb.banco._setoresDoBanco = [
+        { id: 'a', id_int: 200, setor: 'PVC', peso_real_kg: null, status_producao: null },
+    ];
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._gravacoes.length = 0;
+
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    ok(amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status === 'Pronto'),
+       'com outro modelo pendente o setor nao fecha, e o peso nao e cobrado');
+    const popup = amb.documento.getElementById('acab-peso-obrigatorio');
+    ok(!popup || popup.style.display !== 'flex', 'e o popup nem aparece');
+}
+
+async function semCaminhoParaOPesoAtravaNaoPrende() {
+    // Nem estacao servindo a pagina, nem sessao do Vibe: o box de peso ja diz
+    // "entre com a sua conta", e o campo nem existe. Cobrar o peso aqui seria
+    // trancar o Pronto sem oferecer saida -- e o material continuaria pronto na
+    // mesa, com a tela dizendo o contrario.
+    const amb = ambienteComSetorQuaseFechado(null);
+    await amb.painel.abrirPedido('os-200');
+    amb.painel._tela.temSessao = false;
+    amb.banco._gravacoes.length = 0;
+
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    ok(amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status === 'Pronto'),
+       'sem onde gravar o peso, o Pronto nao fica preso');
+}
+
+async function oPopupDoPesoGravaEEntaoMarcaPronto() {
+    const amb = ambienteComSetorQuaseFechado(null);
+    await amb.painel.abrirPedido('os-200');
+    amb.banco._gravacoes.length = 0;
+    amb.banco._pesosGravados.length = 0;
+
+    await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
+
+    // O operador digita o peso no popup e confirma.
+    amb.documento.getElementById('acab-peso-obrig-campo').value = '4,16';
+    await amb.painel.confirmarPesoDoSetor();
+
+    const peso = amb.banco._pesosGravados.find(g => g.payload && g.payload.peso_real_kg !== undefined);
+    ok(!!peso && peso.payload.peso_real_kg === 4.16, 'o peso foi gravado a partir do popup',
+       JSON.stringify(amb.banco._pesosGravados));
+    ok(amb.banco._gravacoes.some(g => g.payload && g.payload.acabamento_status === 'Pronto'),
+       'e SO ENTAO o modelo virou Pronto', JSON.stringify(amb.banco._gravacoes));
+
+    const popup = amb.documento.getElementById('acab-peso-obrigatorio');
+    ok(popup.style.display === 'none', 'o popup se fecha sozinho depois de cumprir o papel');
+}
+
 async function setorIncompletoNaoGanhaCarimbo() {
     const amb = ambienteComPedidoAberto();
     amb.janela.state.osItens['os-200'][0].setor = 'PVC';
@@ -2093,6 +2252,13 @@ async function bancoSemAsColunasNaoDerrubaATela() {
     await oSetorGanhaConcluidoQuandoOUltimoModeloFicaPronto();
     await setorIncompletoNaoGanhaCarimbo();
     await desmarcarUmModeloTiraOCarimbo();
+
+    await aHoraDoProntoApareceNoCard();
+    await oUltimoProntoDoSetorPedeOPeso();
+    await comPesoJaGravadoOProntoPassaDireto();
+    await naoSendoOUltimoDoSetorOProntoPassaDireto();
+    await semCaminhoParaOPesoAtravaNaoPrende();
+    await oPopupDoPesoGravaEEntaoMarcaPronto();
 
     await oBoxMostraOEstimadoAoLadoDoPeso();
     await dentroDosCincoPorCentoGravaDireto();
