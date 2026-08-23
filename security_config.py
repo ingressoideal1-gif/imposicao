@@ -117,6 +117,11 @@ PAINEL_ARQUIVOS = [
     # apontando para ela: sem este nome aqui, a estacao serviria a pagina
     # nova pedindo um script que da 404, e o menu novo abriria em branco.
     "acabamento.js",
+    # O Quadro de Avisos (23/08/2026): a barra na base dos dois paineis e a aba
+    # do ADM. Mesmo caso do acabamento.js -- o `index.html` que a estacao baixa
+    # ja pede este script, e sem o nome aqui a estacao serviria a pagina nova
+    # com um 404 no lugar da barra.
+    "avisos.js",
     "cliente.js",
     # Os sete arquivos do Portal do Pedido (20/08/2026). A pagina do cliente
     # deixou de ser um funil de aprovacao e virou cinco secoes; cada uma mora no
