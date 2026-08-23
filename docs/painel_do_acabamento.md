@@ -835,6 +835,92 @@ entrega (`formatPrazoBadge`) e a miniatura da coluna Preview
 (`previewDaArteDoPedidoHtml`). As duas funções são compartilhadas com a Produção
 e com a Lista de Arte; recolori-las aqui mudaria as três telas.
 
+## Os volumes
+
+Pedido do usuário em 23/08/2026, logo depois de o peso por setor entrar:
+
+> "existe a situação em que 1 modelo grande é realizado por vários responsáveis
+> e situações onde vários modelos são pesados juntos pelo mesmo usuário,
+> situação onde precisaria selecionar vários modelos e criar um volume e pesar
+> volumes individualmente, e situações onde precisa dividir o mesmo modelo em
+> vários volumes, nada disso invalida o campo já existente onde precisa
+> informar o peso total do setor."
+
+**O volume é a caixa.** Ele tem número (V1, V2, V3…), tipo (Caixa, Pacote,
+Fardo, Rolo, Palete), o peso da balança, quem pesou, e uma lista de modelos com
+**quantidade**. É a quantidade que faz as três primeiras situações caberem num
+desenho só:
+
+| A situação | Como ela cabe |
+|---|---|
+| 1 modelo grande, vários responsáveis | o modelo vira dois ou três volumes, cada um com o nome de quem o pesou |
+| vários modelos pesados juntos | um volume com vários itens dentro |
+| o mesmo modelo repartido em caixas | o mesmo modelo aparece em vários volumes, e as quantidades somam a tiragem |
+
+### Setor sem volume é 1 volume único
+
+Isso é a decisão mais importante do desenho, e ela é para quem **não** usa o
+recurso. A faixa de um setor sem volume nenhum não fica vazia: ela diz *"Sem
+volumes — este setor sai como 1 volume único de 3,240 kg"* e oferece o botão
+**Dividir em volumes**. O pedido simples, que é a maioria, não ganhou cadastro
+nenhum, e o card do modelo nem mostra o bloco de volumes.
+
+### O caminho do operador
+
+1. **`+ Volume`** na faixa do setor põe a lista do pedido em **modo de escolha**.
+   Os modelos daquele setor ganham caixa de marcar; os de outro setor continuam
+   desenhados, apagados, dizendo por quê. A lista já está na tela, com foto, cor
+   e tiragem — pedir que ele reconheça o mesmo material numa segunda lista, mais
+   pobre, dentro de um popup, seria trabalho que a tela já fez por ele.
+2. **`Pesar este volume`** abre a janela. A quantidade de cada modelo **nasce
+   cheia com o que ainda está fora de volume** — um clique para "esta caixa leva
+   o resto". Diminuir esse número é o que reparte o modelo em várias caixas.
+3. **`Ver volumes`** abre a lista do setor: editar, excluir, e a conferência.
+
+### A soma NÃO substitui o peso do setor
+
+O campo do peso por setor continua digitado à mão, continua comparado com o
+estimado e continua pedindo a senha de liberação acima de 5 %. Os volumes só
+põem uma **soma** ao lado dele. Quando os dois divergem, a faixa avisa em âmbar
+(*"o peso do setor está 20 g acima da soma dos volumes"*) e **não trava nada** —
+caixa, fita e plástico pesam, e o setor pode ter sido pesado inteiro na balança
+grande. O botão *"Usar 12,480 kg como peso do setor"* passa pelo `gravarPeso` de
+sempre, e não por um atalho: é ele que conhece os dois caminhos de escrita e a
+senha. Um atalho ali furaria a liberação.
+
+Na janela que **cobra o peso ao fechar o setor**, o campo já nasce com a soma
+dos volumes quando ela existe, e a janela diz de onde o número saiu. Sem volume,
+aquela janela é exatamente a de antes.
+
+### Onde isso mora, e por que ali
+
+Duas tabelas **nossas**: `producao_volumes` e `producao_volume_itens`
+([`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql)).
+
+A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e daria para
+gravar ali. O usuário decidiu que **não** — ver
+[REGRAS_BANCO.md](REGRAS_BANCO.md). Além de manter a exceção do parceiro
+estreita, é o que faz o recurso funcionar na estação: a ficha do parceiro tem
+RLS de `authenticated`, e o operador da gráfica entra pelo código local, sem
+sessão. Em tabela nossa, com política de `public`, a estação grava direto pelo
+PostgREST — os volumes **não têm** o par de caminhos que o `gravarPeso` precisa,
+e não passam pelo agente.
+
+### Detalhes que já custaram caro em outros recursos daqui
+
+- **A soma é feita em gramas inteiras** e dividida no fim. Somar `0.1 + 0.2` em
+  ponto flutuante dá `0.30000000000000004`, e a diferença contra o peso do setor
+  viraria um aviso âmbar em cima de nada.
+- **`faltaEmbalar` nunca é negativo.** Se alguém embalar mais do que a tiragem,
+  o que a tela precisa dizer é "não falta nada", não um número negativo.
+- **`UNIQUE (id_int, setor, numero)`** protege contra dois operadores criando o
+  V3 ao mesmo tempo. A janela traduz o erro do banco em *"Outro operador acabou
+  de criar este volume. Feche e clique em + Volume de novo"* — a trava tem
+  saída, como toda trava deste projeto.
+- **No modo edição**, o que já está *naquele* volume não conta como ocupado.
+  Sem isso, o próprio item apareceria como "0 livres" e o operador não
+  conseguiria corrigir a quantidade que ele mesmo acabou de gravar.
+
 ## Como a tela se pendura no que já existe
 
 Sem reescrever nada. O `acabamento.js` **embrulha** `renderOrdens` e `showView`:

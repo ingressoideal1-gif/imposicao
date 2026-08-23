@@ -525,11 +525,23 @@ def test_a_escrita_na_tabela_do_parceiro_e_estreita():
 
     alvos = re.findall(r"\.from\(([^)]+)\)\s*\.(?:update|insert|delete|upsert)\(", js)
     tabelas = sorted({
-        a.strip().strip("'").replace("TABELA_DE_SETORES", "propostas_os_setores")
+        a.strip().strip("'")
+         .replace("TABELA_DE_ITENS_DO_VOLUME", "producao_volume_itens")
+         .replace("TABELA_DE_SETORES", "propostas_os_setores")
+         .replace("TABELA_DE_VOLUMES", "producao_volumes")
         for a in alvos
     })
-    assert tabelas == ["pedidos_modelos", "propostas", "propostas_os_setores"], (
+    assert tabelas == ["pedidos_modelos", "producao_volume_itens", "producao_volumes",
+                       "propostas", "propostas_os_setores"], (
         "o acabamento escreve em tabela inesperada: " + ", ".join(tabelas)
+    )
+
+    # As duas que entraram em 23/08/2026 sao NOSSAS -- prefixo `producao_`. Foi
+    # a decisao do usuario naquele dia: os volumes ficam do nosso lado, e a
+    # excecao aberta na tabela do parceiro continua sendo so a do peso.
+    do_parceiro = [t for t in tabelas if not t.startswith("producao_")]
+    assert do_parceiro == ["pedidos_modelos", "propostas", "propostas_os_setores"], (
+        "um recurso novo alargou a escrita em tabela do parceiro: " + ", ".join(do_parceiro)
     )
 
     # `propostas` entrou em 21/08/2026 com o botao EXPEDICAO, e a escrita ali e a
@@ -681,3 +693,136 @@ def test_a_trava_do_peso_tem_saida_quando_nao_ha_onde_gravar():
     i = js.index("function pesoExigidoAntesDoPronto")
     corpo = js[i:js.index("\n    }", i)]
     assert "haComoGravarPeso()" in corpo
+
+
+# ─── Os volumes (23/08/2026) ────────────────────────────────────────────────
+#
+# Pedido do usuario, logo depois de o peso por setor entrar: um modelo grande
+# feito por varios responsaveis, varios modelos pesados juntos, e o mesmo modelo
+# repartido em varias caixas -- "nada disso invalida o campo ja existente onde
+# precisa informar o peso total do setor".
+#
+# As regras sao medidas pelo harness em Node, que executa o `acabamento.js` de
+# verdade. O que fica aqui e a LIGACAO: o SQL existe e diz o que precisa dizer,
+# e as duas decisoes que o usuario tomou naquele dia estao travadas no codigo.
+
+SQL_DOS_VOLUMES = "sql/volumes_do_acabamento.sql"
+
+
+def test_o_sql_dos_volumes_cria_as_duas_tabelas():
+    sql = _ler(SQL_DOS_VOLUMES)
+
+    assert "create table if not exists public.producao_volumes" in sql
+    assert "create table if not exists public.producao_volume_itens" in sql
+    # V1, V2, V3 sao por (pedido, setor): dois operadores criando o volume 3 ao
+    # mesmo tempo dariam dois "V3" que ninguem distingue na hora de conferir.
+    assert "unique (id_int, setor, numero)" in sql
+
+
+def test_um_volume_pertence_a_um_setor_so():
+    """O peso e conferido por setor. Uma caixa com Laser e PVC dentro nao teria
+    como ser somada em nenhum dos dois."""
+    sql = _ler(SQL_DOS_VOLUMES)
+
+    assert "check (setor in ('FLEXO', 'PVC', 'TEXTIL', 'LASER'))" in sql, (
+        "o setor do volume precisa aceitar os mesmos quatro nomes do banco"
+    )
+
+
+def test_a_quantidade_e_o_que_reparte_o_modelo():
+    """Sem `qtd` na ligacao, "dividir o modelo em tres caixas" nao teria como ser
+    dito, e a tela nao saberia dizer quanto do modelo ainda esta fora de volume.
+    """
+    sql = _ler(SQL_DOS_VOLUMES)
+
+    i = sql.index("create table if not exists public.producao_volume_itens")
+    corpo = sql[i:sql.index(");", i)]
+    assert "qtd" in corpo, "a ligacao volume/modelo precisa carregar quantidade"
+    assert "primary key (volume_id, modelo_id)" in corpo, (
+        "o mesmo modelo duas vezes no MESMO volume seria contado duas vezes"
+    )
+    assert "on delete cascade" in corpo, "excluir o volume leva os itens junto"
+
+
+def test_os_volumes_nao_tocam_na_ficha_do_erp():
+    """Decisao do usuario em 23/08/2026: os volumes ficam so do nosso lado.
+
+    A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e daria
+    para gravar ali. Ele decidiu que nao -- continuam sendo preenchidas pela
+    tela do Vibe, e a unica escrita nossa em tabela do parceiro continua sendo
+    a do peso (`docs/REGRAS_BANCO.md`).
+    """
+    # O cabecalho do arquivo CITA a ficha, para explicar por que ela nao e
+    # tocada. O que a regra proibe e o comando.
+    sql = _ler(SQL_DOS_VOLUMES)
+    comandos = "\n".join(
+        l for l in sql.split("\n") if not l.lstrip().startswith("--")
+    )
+    assert "propostas_os_setores" not in comandos, (
+        "o SQL dos volumes nao pode encostar na ficha do parceiro"
+    )
+    assert "propostas" not in comandos, "nem em `propostas`"
+
+    # E a tela tambem nao. Os comentarios do arquivo CITAM as duas colunas para
+    # explicar por que nao sao escritas; o que a regra proibe e o codigo.
+    js = _ler("frontend/acabamento.js")
+    codigo = re.sub(r"/\*.*?\*/", " ", js, flags=re.DOTALL)
+    codigo = "\n".join(l for l in codigo.split("\n") if not re.match(r"^\s*(//|\*)", l))
+    assert "qtd_volumes" not in codigo, "o codigo da tela nao escreve qtd_volumes"
+    assert "tipo_volume" not in codigo, "nem tipo_volume"
+
+
+def test_as_tabelas_sao_nossas_para_a_estacao_conseguir_gravar():
+    """O motivo pratico de as tabelas serem nossas.
+
+    A ficha do parceiro tem RLS de `authenticated`, e na estacao da grafica o
+    operador entra pelo codigo local, sem sessao do Supabase -- e por isso que o
+    peso precisa do desvio pelo agente e da Edge Function. Em tabela nossa, com
+    politica de `public`, a estacao grava direto pelo PostgREST.
+    """
+    sql = _ler(SQL_DOS_VOLUMES)
+
+    assert "for all to public" in sql, (
+        "sem politica de `public` a estacao, que e anonima, nao gravaria nada"
+    )
+    assert sql.count("enable row level security") == 2, "as duas tabelas com RLS ligado"
+
+
+def test_o_volume_nao_abre_rota_nova_no_agente():
+    """A tela fala com o agente por quatro rotas e por mais nenhuma. Os volumes
+    nao acrescentaram uma quinta -- eles nem passam por la."""
+    js = _ler("frontend/acabamento.js")
+
+    rotas = set(re.findall(r"urlDaEstacao\('([a-z0-9-]+)'", js))
+    assert rotas == {"peso-setores", "setor-concluido", "expedicao", "senha-liberacao"}, (
+        "as rotas do agente mudaram: " + ", ".join(sorted(rotas))
+    )
+
+
+def test_o_campo_do_peso_do_setor_continua_de_pe():
+    """"nada disso invalida o campo ja existente onde precisa informar o peso
+    total do setor" -- as palavras do usuario, 23/08/2026."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function boxDePesos(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert 'id="acab-peso-${setor}"' in corpo, "o campo do peso por setor continua no box"
+    assert "AcabamentoPainel.mudarPeso(" in corpo, "e continua gravando pelo caminho de sempre"
+    assert "faixaDeVolumes(setor, itens, numeroDoPedido)" in corpo, (
+        "a faixa dos volumes entra ABAIXO dele, sem substitui-lo"
+    )
+
+    # E adotar a soma passa pelo `gravarPeso`, que e quem conhece a regra dos
+    # 5 % e a senha de liberacao. Um atalho aqui furaria a senha.
+    i = js.index("function usarSomaDosVolumes(")
+    assert "gravarPeso(" in js[i:js.index("\n    }", i)]
+
+
+def test_setor_sem_volume_continua_sendo_um_volume_unico():
+    """O pedido simples, que e a maioria, nao pode ganhar cadastro nenhum."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function faixaDeVolumes(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "1 volume único" in corpo, "sem volume, a tela diz o que vai acontecer"
+    assert "Dividir em volumes" in corpo, "e oferece a saida na propria tela"

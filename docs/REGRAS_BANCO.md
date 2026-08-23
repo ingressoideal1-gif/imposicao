@@ -111,6 +111,32 @@ e a coluna sendo claramente da gráfica.
 | `producao_cores` | Cores de fundo com PDF de referência | ✅ Criado |
 | `producao_modelos_imposicao` | Modelos salvos de imposição | ✅ Criado |
 | `producao_produtos_formatos` | Relacionamento de produtos do ERP aos formatos | ✅ Criado |
+| `producao_volumes` | Os volumes (caixas) de cada setor no acabamento | ✅ Criado 23/08/2026 |
+| `producao_volume_itens` | O que vai dentro de cada volume, com **quantidade** | ✅ Criado 23/08/2026 |
+
+### Os volumes, e a exceção que o usuário decidiu NÃO abrir
+
+Em 23/08/2026 o Painel do Acabamento ganhou volumes: a caixa física que sai do
+setor, com número, tipo, peso de balança, quem pesou e uma lista de modelos com
+quantidade. É a quantidade que faz um modelo caber em três caixas e três modelos
+caberem numa só.
+
+A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume` — daria para
+gravar ali, e a exceção do peso já estava aberta. **O usuário decidiu que não**:
+os volumes ficam só do nosso lado, e aquelas duas colunas continuam sendo do ERP.
+A tabela acima de "Nunca tocado" continua valendo inteira.
+
+A decisão tem uma consequência prática que vale registrar, porque ela é o motivo
+de o recurso funcionar na estação: a ficha do parceiro tem RLS de
+`authenticated`, e o operador da gráfica entra pelo código local, **sem sessão**.
+É por isso que o peso precisa do desvio pelo agente. Em tabela nossa, com
+política de `public` (a mesma de `producao_numeracoes`), a estação grava direto
+pelo PostgREST — sem rota nova, sem Edge Function, sem os dois caminhos do
+`gravarPeso`.
+
+SQL: [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql).
+Testes: [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seção
+"Os volumes", e `tests/test_painel_do_acabamento.py`.
 
 ## 🖥️ Tabelas do Painel (prefixo `imposition_`)
 

@@ -138,6 +138,12 @@
         estimados: {},      // 'SETOR' -> kg estimado (só os que têm; ausente = null)
         liberacaoPendente: null, // o peso fora dos 5 % que espera a senha (ver gravarPeso)
         prontoPendente: null,    // o "Pronto" que espera o peso do setor (23/08/2026)
+
+        // Os VOLUMES do pedido aberto (23/08/2026). Ver a seção "Os volumes".
+        volumes: {},             // 'SETOR' -> [volume, volume, …], na ordem do número
+        volumesDoPedido: null,   // de qual pedido é o mapa acima
+        escolhaDeVolume: null,   // { setor, numeroDoPedido, marcados } enquanto se escolhe
+        volumeEmEdicao: null,    // o volume que a janela de pesar está montando
         temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
@@ -1285,10 +1291,11 @@
         //   base  — A DECISÃO: status e responsável, os dois únicos campos
         //           que esta tela escreve, numa faixa própria mais escura.
         return `
-            <div style="background: ${fundo}; outline: 1px solid ${AZUL.fio}; border-radius: 10px; margin-bottom: 12px; overflow: hidden;">
+            <div style="background: ${fundo}; ${estiloDoCardNaEscolha(item)} border-radius: 10px; margin-bottom: 12px; overflow: hidden;">
 
                 <div style="display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1 1 auto; min-width: 220px;">
+                        ${caixaDeEscolha(item)}
                         <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed rgba(207,230,251,0.45)'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
                         <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
                         <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
@@ -1336,6 +1343,7 @@
                             <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
                             ${selectResponsavel(item, osId, podeEditar())}
                         </div>
+                        ${blocoDeVolumesDoModelo(item)}
                     </div>
                 </div>
             </div>`;
@@ -1413,7 +1421,13 @@
                 </div>`;
         }).join('');
 
-        corpo.innerHTML = boxDePesos(itens, os ? os.numero : '') + html;
+        // A faixa do modo de escolha abraça a lista: o anúncio em cima, a conta
+        // do que foi marcado embaixo. As duas somem juntas quando não há
+        // escolha em curso.
+        corpo.innerHTML = boxDePesos(itens, os ? os.numero : '')
+                        + faixaDaEscolha()
+                        + html
+                        + barraDaEscolha(itens);
 
         // Os campos de peso são desenhados junto com o pedido, então o valor
         // gravado tem de voltar a eles a cada desenho.
@@ -2009,10 +2023,15 @@
                     const atual = tela.pesos[setor];
                     const valor = pesoParaTexto(atual ? atual.peso : null);
                     const estimado = textoDoEstimado(setor);
+                    // Duas linhas desde 23/08/2026: em cima o peso do setor,
+                    // como sempre; embaixo a faixa dos volumes. O card ficou
+                    // mais largo (400 em vez de 240) porque a faixa carrega os
+                    // chips — com 240 eles quebravam um por linha.
                     return `
-                    <div style="display: flex; align-items: center; gap: 10px; flex: 1 1 240px;
+                    <div style="display: flex; flex-direction: column; gap: 9px; flex: 1 1 400px;
                                 background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
                                 border-radius: 8px; padding: 10px 12px;">
+                      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span style="font-size: 1.05rem;">${r.icone}</span>
                         <strong style="min-width: 62px; font-size: 0.86rem;">${esc(r.nome)}</strong>
                         <input type="text" inputmode="decimal" id="acab-peso-${setor}"
@@ -2029,6 +2048,8 @@
                               style="font-size: 0.74rem; color: ${estimado.cor}; white-space: nowrap;">${esc(estimado.texto)}</span>
                         <span id="acab-peso-sinal-${setor}" style="font-size: 0.74rem; min-width: 62px;
                               color: var(--text-dim);"></span>
+                      </div>
+                      ${faixaDeVolumes(setor, itens, numeroDoPedido)}
                     </div>`;
                 }).join('')}
             </div>`;
@@ -2674,6 +2695,1013 @@
         tela.liberacaoPendente = null;
     }
 
+    // ─── Os volumes ─────────────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 23/08/2026, logo depois de o peso por setor entrar:
+    //
+    //   "existe a situação em que 1 modelo grande é realizado por vários
+    //    responsáveis e situações onde vários modelos são pesados juntos pelo
+    //    mesmo usuário, situação onde precisaria selecionar vários modelos e
+    //    criar um volume e pesar volumes individualmente, e situações onde
+    //    precisa dividir o mesmo modelo em vários volumes, nada disso invalida
+    //    o campo já existente onde precisa informar o peso total do setor."
+    //
+    // O volume é a CAIXA: número, tipo, o peso da balança, quem pesou, e uma
+    // lista de modelos com QUANTIDADE. É a quantidade que faz as três primeiras
+    // situações caberem num desenho só — um modelo repartido em três volumes,
+    // três modelos num volume, e cada volume com o seu dono.
+    //
+    // ## O que não mudou, de propósito
+    //
+    // O campo do peso do setor continua digitado à mão, continua comparado com
+    // o estimado e continua pedindo a senha acima de 5 %. Os volumes só põem
+    // uma SOMA ao lado dele, para conferir, e um botão para adotá-la. Setor sem
+    // volume nenhum vale como 1 volume único, e a tela diz isso em texto: o
+    // pedido simples, que é a maioria, não ganhou cadastro nenhum.
+    //
+    // ## Por que as duas tabelas são NOSSAS
+    //
+    // `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e daria para
+    // gravar ali. Em 23/08/2026 o usuário decidiu que não — os volumes ficam só
+    // do nosso lado, e aquelas colunas continuam sendo do ERP.
+    //
+    // A decisão tem um efeito prático que vale registrar: a ficha do parceiro
+    // tem RLS de `authenticated`, e na estação o operador entra pelo código
+    // local, sem sessão — é por isso que o peso precisa do desvio pelo agente e
+    // da Edge Function. Em tabela nossa, com política de `public` (a mesma de
+    // `producao_numeracoes`), a estação grava DIRETO pelo PostgREST. Os volumes
+    // não têm o par de caminhos do `gravarPeso`, e não precisam ter.
+    //
+    // Ver `sql/volumes_do_acabamento.sql`.
+
+    const TABELA_DE_VOLUMES = 'producao_volumes';
+    const TABELA_DE_ITENS_DO_VOLUME = 'producao_volume_itens';
+
+    // Os tipos que a gráfica usa. A coluna é texto livre no banco de propósito —
+    // um CHECK ali não protegeria nada e travaria o dia em que aparecer um
+    // formato novo —, mas a tela oferece estes cinco para os nomes não
+    // divergirem de operador para operador.
+    const TIPOS_DE_VOLUME = ['Caixa', 'Pacote', 'Fardo', 'Rolo', 'Palete'];
+
+    const ESTILO_BOTAO_VOLUME = 'background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);'
+        + ' color: #cfe6fb; border-radius: 6px; padding: 5px 10px; font-size: 0.74rem;'
+        + ' font-weight: 700; cursor: pointer; font-family: inherit;';
+
+    /**
+     * As linhas cruas do banco viram `{ SETOR: [volume, …] }`, cada volume com
+     * os seus itens. Pura, para o teste.
+     *
+     * Setor que o banco não aceita fica de fora: não há campo de peso para ele,
+     * e um volume pendurado num setor que a tela não desenha seria peso que
+     * ninguém encontra depois.
+     */
+    function agruparVolumes(linhas) {
+        const porSetor = {};
+        (linhas || []).forEach(l => {
+            if (!l) return;
+            const setor = normalizar(l.setor);
+            if (SETORES_DO_BANCO.indexOf(setor) === -1) return;
+            const itens = (l[TABELA_DE_ITENS_DO_VOLUME] || l.itens || [])
+                .map(i => ({
+                    modeloId: String(i.modelo_id !== undefined ? i.modelo_id : i.modeloId),
+                    qtd: Math.max(0, parseInt(i.qtd, 10) || 0),
+                }))
+                .filter(i => i.qtd > 0);
+            (porSetor[setor] = porSetor[setor] || []).push({
+                id: l.id,
+                setor,
+                numero: parseInt(l.numero, 10) || 0,
+                tipo: (l.tipo || '').trim(),
+                peso: (l.peso_kg === null || l.peso_kg === undefined) ? null : Number(l.peso_kg),
+                responsavel: (l.responsavel || '').trim(),
+                observacao: (l.observacao || '').trim(),
+                criadoEm: l.criado_em || '',
+                itens,
+            });
+        });
+        Object.keys(porSetor).forEach(s => porSetor[s].sort((a, b) => a.numero - b.numero));
+        return porSetor;
+    }
+
+    /** Os volumes de um setor no pedido aberto. Nunca `undefined`. */
+    function volumesDoSetor(setor) {
+        return tela.volumes[normalizar(setor)] || [];
+    }
+
+    function todosOsVolumes() {
+        return Object.keys(tela.volumes)
+            .reduce((tudo, s) => tudo.concat(tela.volumes[s] || []), []);
+    }
+
+    /**
+     * A soma dos pesos, em kg.
+     *
+     * Volume sem peso conta como zero — ele existe, só não foi à balança ainda.
+     * A soma é feita em GRAMAS inteiras e dividida no fim: somar `0.1 + 0.2` em
+     * ponto flutuante dá `0.30000000000000004`, e a diferença contra o peso do
+     * setor viraria um aviso âmbar em cima de nada.
+     */
+    function somaDosVolumes(lista) {
+        const gramas = (lista || []).reduce((s, v) => {
+            const p = Number(v && v.peso);
+            return s + (isFinite(p) && p > 0 ? Math.round(p * 1000) : 0);
+        }, 0);
+        return gramas / 1000;
+    }
+
+    /** Quantas unidades de cada modelo já estão em algum volume: `id -> qtd`. */
+    function embaladoPorModelo(lista) {
+        const mapa = {};
+        (lista || []).forEach(v => (v.itens || []).forEach(i => {
+            const id = String(i.modeloId);
+            mapa[id] = (mapa[id] || 0) + i.qtd;
+        }));
+        return mapa;
+    }
+
+    /** A tiragem do modelo, lida do mesmo jeito que o card a lê. */
+    function qtdDoModelo(item) {
+        const q = (item && item.qtd !== undefined && item.qtd !== null)
+            ? item.qtd : (item ? item.quantidade : 0);
+        return Math.max(0, parseInt(q, 10) || 0);
+    }
+
+    /**
+     * Quanto do modelo ainda está fora de volume.
+     *
+     * Nunca negativo. Se alguém embalou mais do que a tiragem — corrigindo uma
+     * quantidade depois, por exemplo —, o que a tela precisa dizer é "não falta
+     * nada", e não um número negativo que ninguém sabe ler de pé na estação.
+     */
+    function faltaEmbalar(item, embalado) {
+        const dentro = (embalado || {})[String(item && item.id)] || 0;
+        return Math.max(0, qtdDoModelo(item) - dentro);
+    }
+
+    /** V1, V2, V3… O próximo é o maior mais um, e buraco não se reaproveita. */
+    function proximoNumeroDeVolume(lista) {
+        return (lista || []).reduce((m, v) => Math.max(m, v.numero || 0), 0) + 1;
+    }
+
+    /**
+     * Os modelos do setor que ainda têm unidade fora de volume.
+     *
+     * Só faz sentido quando HÁ volume: setor sem nenhum é um volume único, e
+     * dizer ali que "5.000 estão fora de caixa" seria uma cobrança inventada.
+     */
+    function faltandoNoSetor(setor, itens) {
+        const lista = volumesDoSetor(setor);
+        if (!lista.length) return [];
+        const embalado = embaladoPorModelo(lista);
+        const alvo = normalizar(setor);
+        return (itens || [])
+            .filter(i => normalizar(i && i.setor) === alvo)
+            .map(i => ({ item: i, falta: faltaEmbalar(i, embalado) }))
+            .filter(x => x.falta > 0);
+    }
+
+    /**
+     * Peso do setor menos a soma dos volumes, em GRAMAS. `null` quando não há o
+     * que comparar — sem volume, ou sem peso digitado.
+     */
+    function diferencaDosVolumes(setor) {
+        const lista = volumesDoSetor(setor);
+        if (!lista.length) return null;
+        const linha = tela.pesos[normalizar(setor)];
+        const peso = (linha && linha.peso !== null && linha.peso !== undefined)
+            ? Number(linha.peso) : null;
+        if (peso === null || !isFinite(peso) || peso <= 0) return null;
+        const soma = somaDosVolumes(lista);
+        if (soma <= 0) return null;
+        return Math.round(peso * 1000) - Math.round(soma * 1000);
+    }
+
+    /** "20 g", "1,250 kg" — a diferença dita como o operador a lê. */
+    function textoDaDiferenca(gramas) {
+        const g = Math.abs(gramas || 0);
+        return g < 1000 ? `${g} g` : `${kgParaTexto(g / 1000)} kg`;
+    }
+
+    /** O nome do modelo como o card o escreve. */
+    function nomeDoModelo(item) {
+        return (item && (item.produto || item.nome_modelo)) || 'Modelo';
+    }
+
+    function numeroComPonto(n) {
+        return (parseInt(n, 10) || 0).toLocaleString('pt-BR');
+    }
+
+    /**
+     * Lê os volumes do pedido.
+     *
+     * Um caminho só, porque a tabela é nossa: o mesmo código serve à estação
+     * (chave anônima) e ao site com sessão. Falha não derruba nada — sem
+     * volume a tela mostra "1 volume único", que é o que ela mostraria de
+     * qualquer jeito se não houvesse volume nenhum.
+     */
+    async function carregarVolumes(numeroDoPedido) {
+        tela.volumes = {};
+        tela.volumesDoPedido = numeroDoPedido;
+
+        const idInt = parseInt(numeroDoPedido);
+        if (isNaN(idInt)) return;
+        const aberto = tela.pedidoAberto;
+
+        try {
+            if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+            const { data, error } = await supabaseClient
+                .from(TABELA_DE_VOLUMES)
+                .select('id, setor, numero, tipo, peso_kg, responsavel, observacao, criado_em, '
+                      + TABELA_DE_ITENS_DO_VOLUME + '(modelo_id, qtd)')
+                .eq('id_int', idInt);
+            if (error) throw error;
+            // O pedido pode ter sido trocado enquanto a leitura voava; o
+            // resultado de um não pode aparecer no outro.
+            if (tela.pedidoAberto !== aberto) return;
+            tela.volumes = agruparVolumes(data);
+        } catch (e) {
+            console.warn('[acabamento] não deu para ler os volumes:', e);
+            tela.volumes = {};
+        }
+    }
+
+    /**
+     * Grava um volume — novo ou editado — e o que vai dentro dele.
+     *
+     * Os itens são reescritos por inteiro (apaga tudo e insere de novo) em vez
+     * de reconciliados linha a linha. É a operação mais simples que dá o
+     * resultado certo, e um volume tem três ou quatro itens, não trezentos.
+     */
+    async function gravarVolume(v) {
+        const idInt = parseInt(v.numeroDoPedido);
+        if (isNaN(idInt)) throw new Error('este pedido não tem número');
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+            throw new Error('esta tela está sem conexão com o banco');
+        }
+
+        const campos = {
+            setor: normalizar(v.setor),
+            tipo: v.tipo || null,
+            peso_kg: (v.peso === null || v.peso === undefined) ? null : v.peso,
+            responsavel: v.responsavel || null,
+            observacao: v.observacao || null,
+        };
+
+        let id = v.volumeId || null;
+        if (id) {
+            const { error } = await supabaseClient
+                .from(TABELA_DE_VOLUMES).update(campos).eq('id', id);
+            if (error) throw error;
+        } else {
+            campos.id_int = idInt;
+            campos.numero = v.numero;
+            const { data, error } = await supabaseClient
+                .from(TABELA_DE_VOLUMES).insert(campos).select('id').single();
+            if (error) throw error;
+            id = data.id;
+        }
+
+        const { error: erroApagar } = await supabaseClient
+            .from(TABELA_DE_ITENS_DO_VOLUME).delete().eq('volume_id', id);
+        if (erroApagar) throw erroApagar;
+
+        const linhas = (v.itens || [])
+            .filter(i => i && i.qtd > 0)
+            .map(i => ({ volume_id: id, modelo_id: parseInt(i.modeloId, 10), qtd: i.qtd }));
+        if (linhas.length) {
+            const { error: erroInserir } = await supabaseClient
+                .from(TABELA_DE_ITENS_DO_VOLUME).insert(linhas);
+            if (erroInserir) throw erroInserir;
+        }
+        return id;
+    }
+
+    /** Os itens vão junto, pelo `on delete cascade` da tabela. */
+    async function apagarVolume(volumeId) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+            throw new Error('esta tela está sem conexão com o banco');
+        }
+        const { error } = await supabaseClient
+            .from(TABELA_DE_VOLUMES).delete().eq('id', volumeId);
+        if (error) throw error;
+    }
+
+    // ─── A faixa de volumes, dentro do card do setor ────────────────────────
+
+    /**
+     * Um chip por volume. Clicar abre a lista do setor.
+     *
+     * Volume sem peso sai em âmbar em vez de sair escondido: ele conta na
+     * carga e não conta na soma, e essa é exatamente a diferença que o
+     * operador precisa enxergar antes de mandar para a expedição.
+     */
+    function chipDoVolume(v) {
+        const temPeso = v.peso !== null && v.peso !== undefined && v.peso > 0;
+        const peso = temPeso ? `${kgParaTexto(v.peso)} kg` : 'sem peso';
+        return `
+            <button type="button" onclick="AcabamentoPainel.verVolumes('${escJs(v.setor)}')"
+                    title="Volume ${esc(v.numero)}${v.tipo ? ' · ' + esc(v.tipo) : ''} — clique para ver a lista"
+                    style="display: inline-flex; align-items: center; gap: 6px;
+                           background: rgba(76,200,240,0.10); border: 1px solid rgba(76,200,240,0.30);
+                           border-radius: 6px; padding: 4px 9px; font-size: 0.74rem; color: #cfe6fb;
+                           cursor: pointer; font-family: inherit;">
+                <strong style="color: #4cc8f0;">V${esc(v.numero)}</strong>
+                <span style="font-family: monospace; color: ${temPeso ? '#cfe6fb' : '#fbbf24'};">${esc(peso)}</span>
+                ${v.responsavel ? `<span style="color: var(--text-dim);">${esc(v.responsavel)}</span>` : ''}
+            </button>`;
+    }
+
+    /**
+     * A faixa embaixo do campo do peso.
+     *
+     * Sem volume ela NÃO fica vazia: diz que o setor sai como volume único e
+     * oferece o botão de dividir. Espaço em branco ali faria o operador
+     * procurar um recurso que a tela não mostra.
+     */
+    function faixaDeVolumes(setor, itens, numeroDoPedido) {
+        const lista = volumesDoSetor(setor);
+        const pode = podeEditar();
+        const borda = 'border-top: 1px dashed rgba(76,200,240,0.22); padding-top: 9px;';
+        const criar = `<button type="button" style="${ESTILO_BOTAO_VOLUME}"
+                onclick="AcabamentoPainel.novoVolume('${escJs(setor)}', '${escJs(numeroDoPedido)}')"`;
+
+        if (!lista.length) {
+            const linha = tela.pesos[setor];
+            const kg = (linha && linha.peso) ? ` de ${kgParaTexto(linha.peso)} kg` : '';
+            return `
+                <div style="${borda} display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 0.9rem; opacity: 0.6;">📦</span>
+                    <span style="font-size: 0.74rem; color: var(--text-dim);">Sem volumes — este setor sai como
+                        <strong style="color: #cfe6fb;">1 volume único</strong>${esc(kg)}.</span>
+                    ${pode ? `<span style="margin-left: auto;">${criar}
+                        title="Registrar as caixas deste setor, uma a uma">Dividir em volumes</button></span>` : ''}
+                </div>`;
+        }
+
+        const soma = somaDosVolumes(lista);
+        const dif = diferencaDosVolumes(setor);
+        const faltando = faltandoNoSetor(setor, itens);
+
+        let recado = '';
+        if (faltando.length) {
+            const quais = faltando
+                .map(x => `${esc(nomeDoModelo(x.item))} (${numeroComPonto(x.falta)})`)
+                .join(' · ');
+            recado = `<div style="font-size: 0.72rem; color: #fbbf24;">⚠ ainda fora de volume: ${quais}</div>`;
+        } else if (dif !== null && dif !== 0) {
+            recado = `<div style="font-size: 0.72rem; color: #fbbf24;">⚠ o peso do setor está `
+                   + `${esc(textoDaDiferenca(dif))} ${dif > 0 ? 'acima' : 'abaixo'} da soma dos volumes — `
+                   + `confira, ou use a soma.</div>`;
+        }
+
+        return `
+            <div style="${borda} display: flex; flex-direction: column; gap: 7px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 0.9rem;">📦</span>
+                    <strong style="font-size: 0.78rem;">${lista.length} ${lista.length === 1 ? 'volume' : 'volumes'}</strong>
+                    <span style="font-size: 0.74rem; color: var(--text-dim);">somam</span>
+                    <span style="font-size: 0.78rem; font-family: monospace;">${esc(kgParaTexto(soma))} kg</span>
+                    <span style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+                        <button type="button" style="${ESTILO_BOTAO_VOLUME}"
+                                onclick="AcabamentoPainel.verVolumes('${escJs(setor)}')"
+                                title="Ver, editar ou excluir os volumes deste setor">Ver volumes</button>
+                        ${pode ? `${criar} title="Criar mais um volume neste setor">+ Volume</button>` : ''}
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    ${lista.map(chipDoVolume).join('')}
+                </div>
+                ${recado}
+            </div>`;
+    }
+
+    /**
+     * O bloco VOLUMES no card do modelo, embaixo do Responsável.
+     *
+     * Só aparece quando o setor tem volume. Num setor de volume único não há
+     * nada a dizer no card, e um bloco dizendo "nenhum" seria ruído em cima da
+     * coluna mais apertada da tela.
+     */
+    function blocoDeVolumesDoModelo(item) {
+        const setor = normalizar(item && item.setor);
+        if (SETORES_DO_BANCO.indexOf(setor) === -1) return '';
+        const lista = volumesDoSetor(setor);
+        if (!lista.length) return '';
+
+        const meus = lista
+            .map(v => ({ v, i: (v.itens || []).find(x => String(x.modeloId) === String(item.id)) }))
+            .filter(x => x.i);
+        const dentro = meus.reduce((s, x) => s + x.i.qtd, 0);
+        const total = qtdDoModelo(item);
+        const falta = Math.max(0, total - dentro);
+
+        const chips = meus.length
+            ? meus.map(x => `
+                <span style="display: inline-flex; align-items: center; gap: 5px;
+                             background: rgba(76,200,240,0.12); border: 1px solid rgba(76,200,240,0.32);
+                             border-radius: 6px; padding: 3px 8px; font-size: 0.74rem;">
+                    <strong style="color: #4cc8f0;">V${esc(x.v.numero)}</strong>
+                    <span style="font-family: monospace;">${numeroComPonto(x.i.qtd)} un</span>
+                </span>`).join('')
+            : `<span style="font-size: 0.74rem; color: var(--text-dim);">nenhum volume ainda</span>`;
+
+        const conta = falta > 0
+            ? `<span style="font-size: 0.72rem; color: #fbbf24;">${numeroComPonto(dentro)} de `
+              + `${numeroComPonto(total)} embalados · ${numeroComPonto(falta)} fora</span>`
+            : `<span style="font-size: 0.72rem; color: #22c55e;">✓ ${numeroComPonto(total)} de `
+              + `${numeroComPonto(total)} embalados</span>`;
+
+        return `
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Volumes</span>
+                <div style="display: flex; flex-direction: column; gap: 5px;
+                            background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
+                            border-radius: 8px; padding: 8px 10px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">${chips}</div>
+                    ${conta}
+                </div>
+            </div>`;
+    }
+
+    // ─── Escolher os modelos que vão no volume ──────────────────────────────
+    //
+    // O "+ Volume" põe a lista do pedido em modo de escolha, em vez de abrir
+    // uma janela com uma segunda lista de modelos dentro. O motivo é que a
+    // primeira lista já está na tela, com foto, cor, tiragem e estágio: pedir
+    // ao operador que reconheça o mesmo material numa lista mais pobre, dentro
+    // de um popup, é trabalho que a tela já fez por ele.
+    //
+    // Modelo de OUTRO setor continua desenhado, apagado e sem caixa de marcar.
+    // Escondê-lo faria o pedido parecer menor do que é bem na hora de conferir
+    // o que já está embalado.
+
+    function abrirEscolhaDeModelos(setor, numeroDoPedido) {
+        if (!podeEditar()) return;
+        tela.escolhaDeVolume = {
+            setor: normalizar(setor),
+            numeroDoPedido,
+            marcados: {},
+        };
+        renderDetalhe();
+    }
+
+    function alternarModeloNaEscolha(itemId) {
+        const e = tela.escolhaDeVolume;
+        if (!e) return;
+        const id = String(itemId);
+        if (e.marcados[id]) delete e.marcados[id];
+        else e.marcados[id] = true;
+        renderDetalhe();
+    }
+
+    function cancelarEscolhaDeModelos() {
+        tela.escolhaDeVolume = null;
+        renderDetalhe();
+    }
+
+    /** Este modelo pode ser marcado agora? */
+    function marcavelNaEscolha(item) {
+        const e = tela.escolhaDeVolume;
+        return !!(e && normalizar(item && item.setor) === e.setor);
+    }
+
+    function marcadoNaEscolha(item) {
+        const e = tela.escolhaDeVolume;
+        return !!(e && item && e.marcados[String(item.id)]);
+    }
+
+    /** A caixa de marcar no canto do card, só no modo de escolha. */
+    function caixaDeEscolha(item) {
+        const e = tela.escolhaDeVolume;
+        if (!e) return '';
+        if (!marcavelNaEscolha(item)) {
+            return `<span title="Este modelo é de outro setor"
+                          style="width: 22px; height: 22px; min-width: 22px; border-radius: 6px;
+                                 background: #0d0e20; border: 1px dashed rgba(207,230,251,0.30);
+                                 display: inline-block;"></span>`;
+        }
+        const marcado = marcadoNaEscolha(item);
+        return `
+            <button type="button" onclick="AcabamentoPainel.marcarModelo('${escJs(item.id)}')"
+                    aria-pressed="${marcado ? 'true' : 'false'}"
+                    title="${marcado ? 'Tirar deste volume' : 'Pôr neste volume'}"
+                    style="width: 22px; height: 22px; min-width: 22px; border-radius: 6px; padding: 0;
+                           display: inline-flex; align-items: center; justify-content: center;
+                           cursor: pointer; font-weight: 800; font-size: 0.9rem; font-family: inherit;
+                           ${marcado
+                              ? 'background: #4cc8f0; border: 1px solid #4cc8f0; color: #001249;'
+                              : 'background: #0d0e20; border: 1px solid rgba(76,200,240,0.35); color: transparent;'}">✓</button>`;
+    }
+
+    /** O contorno do card durante a escolha: marcado salta, outro setor apaga. */
+    function estiloDoCardNaEscolha(item) {
+        const e = tela.escolhaDeVolume;
+        if (!e) return `outline: 1px solid ${AZUL.fio};`;
+        if (!marcavelNaEscolha(item)) return `outline: 1px solid ${AZUL.fio}; opacity: 0.42;`;
+        return marcadoNaEscolha(item)
+            ? 'outline: 2px solid #4cc8f0;'
+            : `outline: 1px solid ${AZUL.fio};`;
+    }
+
+    /** A faixa que anuncia o modo, acima dos modelos. */
+    function faixaDaEscolha() {
+        const e = tela.escolhaDeVolume;
+        if (!e) return '';
+        return `
+            <div style="display: flex; align-items: center; gap: 10px; background: #120a8f;
+                        border: 1px solid #4cc8f0; border-radius: 8px; padding: 9px 14px; margin-bottom: 12px;">
+                <span style="font-size: 1rem;">📦</span>
+                <strong style="font-size: 0.86rem; color: #ffffff;">Escolha o que vai neste volume</strong>
+                <span style="font-size: 0.74rem; color: #cfe6fb;">setor ${esc(nomeDoSetor(e.setor))}</span>
+                <button type="button" onclick="AcabamentoPainel.cancelarVolume()"
+                        style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                               color: #ffffff; border-radius: 8px; padding: 5px 12px; font-size: 0.78rem;
+                               font-weight: 700; cursor: pointer; font-family: inherit;">Cancelar</button>
+            </div>`;
+    }
+
+    /** A barra do fim da lista, com a conta do que foi marcado. */
+    function barraDaEscolha(itens) {
+        const e = tela.escolhaDeVolume;
+        if (!e) return '';
+        const marcados = (itens || []).filter(i => marcadoNaEscolha(i));
+        const embalado = embaladoPorModelo(volumesDoSetor(e.setor));
+        const unidades = marcados.reduce((s, i) => s + faltaEmbalar(i, embalado), 0);
+        const vazio = !marcados.length;
+
+        return `
+            <div style="display: flex; align-items: center; gap: 12px; background: ${AZUL.fundo};
+                        border: 1px solid #4cc8f0; border-radius: 10px; padding: 12px 16px;
+                        box-shadow: 0 -6px 24px rgba(0,0,0,0.45);">
+                <span style="font-size: 1.05rem;">📦</span>
+                <strong style="font-size: 0.9rem; color: #ffffff;">
+                    ${vazio ? 'Nenhum modelo escolhido' : `${marcados.length} ${marcados.length === 1 ? 'modelo escolhido' : 'modelos escolhidos'}`}
+                </strong>
+                ${vazio ? '' : `<span style="font-size: 0.8rem; color: var(--text-dim); font-family: monospace;">${numeroComPonto(unidades)} un</span>`}
+                <span style="margin-left: auto; display: flex; gap: 10px;">
+                    <button type="button" onclick="AcabamentoPainel.cancelarVolume()"
+                            style="background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                   color: #cfe6fb; border-radius: 8px; padding: 10px 18px; font-weight: 700;
+                                   font-size: 0.86rem; cursor: pointer; font-family: inherit;">Cancelar</button>
+                    <button type="button" onclick="AcabamentoPainel.pesarVolume()" ${vazio ? 'disabled' : ''}
+                            style="border-radius: 8px; padding: 10px 22px; font-weight: 800; letter-spacing: 0.05em;
+                                   font-size: 0.86rem; font-family: inherit;
+                                   ${vazio
+                                      ? 'background: rgba(43,50,175,0.35); border: 1px solid rgba(76,205,246,0.20); color: #7fa9d4; cursor: not-allowed;'
+                                      : 'background: linear-gradient(135deg, #4a61e8, #120a8f); border: 1px solid #4cc8f0; color: #ffffff; cursor: pointer;'}">
+                        Pesar este volume
+                    </button>
+                </span>
+            </div>`;
+    }
+
+    // ─── A janela de pesar o volume ─────────────────────────────────────────
+    //
+    // Diferente das outras janelas deste arquivo, esta é montada INTEIRA a cada
+    // abertura, em vez de montada uma vez e repintada. O conteúdo dela depende
+    // de quais modelos entraram — o número de linhas muda a cada volume —, e
+    // repintar uma lista de tamanho variável dentro de uma casca fixa daria
+    // mais código do que refazê-la.
+
+    function fecharPopupDoVolume() {
+        const caixa = document.getElementById('acab-volume-janela');
+        if (caixa && caixa.parentNode) caixa.parentNode.removeChild(caixa);
+        tela.volumeEmEdicao = null;
+    }
+
+    /** Monta `tela.volumeEmEdicao` a partir da escolha, ou de um volume que já existe. */
+    function prepararVolumeEmEdicao(volumeId) {
+        const s = estado();
+        const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
+        const os = (s.ordens || []).find(o => String(o.id) === String(tela.pedidoAberto));
+        const numeroDoPedido = os ? os.numero : tela.pedidoAberto;
+
+        if (volumeId) {
+            const v = todosOsVolumes().find(x => String(x.id) === String(volumeId));
+            if (!v) return null;
+            return {
+                numeroDoPedido, setor: v.setor, volumeId: v.id, numero: v.numero,
+                tipo: v.tipo || TIPOS_DE_VOLUME[0], peso: v.peso,
+                responsavel: v.responsavel, observacao: v.observacao,
+                itens: v.itens.map(i => ({ modeloId: i.modeloId, qtd: i.qtd })),
+            };
+        }
+
+        const e = tela.escolhaDeVolume;
+        if (!e) return null;
+        const lista = volumesDoSetor(e.setor);
+        const embalado = embaladoPorModelo(lista);
+        return {
+            numeroDoPedido, setor: e.setor, volumeId: null,
+            numero: proximoNumeroDeVolume(lista),
+            tipo: TIPOS_DE_VOLUME[0], peso: null, responsavel: '', observacao: '',
+            // A quantidade nasce com o que AINDA ESTÁ FORA de volume. É o
+            // caminho de um clique para "esta caixa leva o resto", e diminuir
+            // esse número é o que reparte o modelo em várias caixas.
+            itens: Object.keys(e.marcados).map(id => {
+                const item = itens.find(i => String(i.id) === id);
+                return { modeloId: id, qtd: item ? faltaEmbalar(item, embalado) : 0 };
+            }).filter(i => i.qtd > 0),
+        };
+    }
+
+    function linhaDoItemDoVolume(i, item, livre) {
+        return `
+            <div style="display: flex; align-items: center; gap: 12px; background: ${AZUL.superficie};
+                        border: 1px solid rgba(76,200,240,0.20); border-radius: 8px; padding: 10px 12px;">
+                <strong style="font-size: 0.92rem; color: #ffffff; flex: 1 1 auto; min-width: 0;">${esc(nomeDoModelo(item))}</strong>
+                <span style="font-size: 0.74rem; color: var(--text-dim); white-space: nowrap;">
+                    ${numeroComPonto(livre)} livres de ${numeroComPonto(qtdDoModelo(item))}
+                </span>
+                <input type="text" inputmode="numeric" id="acab-vol-qtd-${esc(i.modeloId)}"
+                       value="${esc(numeroComPonto(i.qtd))}"
+                       style="width: 92px; text-align: right; background: ${AZUL.fundo};
+                              border: 1px solid rgba(76,200,240,0.26); border-radius: 6px; color: #ffffff;
+                              padding: 8px 10px; font-size: 0.92rem; font-family: monospace;" />
+                <span style="font-size: 0.78rem; color: var(--text-dim);">un</span>
+            </div>`;
+    }
+
+    function abrirPopupDoVolume(volumeId) {
+        const preparado = prepararVolumeEmEdicao(volumeId);
+        if (!preparado) return;
+        tela.volumeEmEdicao = preparado;
+        fecharPopupDosVolumes();
+
+        const s = estado();
+        const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
+        const lista = volumesDoSetor(preparado.setor);
+        // No modo edição, o que já está NESTE volume não conta como ocupado —
+        // senão o próprio item apareceria como "0 livres" e o operador não
+        // conseguiria corrigir a quantidade que ele mesmo acabou de gravar.
+        const embalado = embaladoPorModelo(
+            lista.filter(v => String(v.id) !== String(preparado.volumeId || '')));
+
+        const caixa = document.createElement('div');
+        caixa.id = 'acab-volume-janela';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100005; display: flex;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(760px, 96vw); max-height: 92vh; overflow: auto; background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">📦</span>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Volume ${esc(preparado.numero)} — setor ${esc(nomeDoSetor(preparado.setor))}</strong>
+                    <span style="font-size: 0.78rem; color: #cfe6fb;">Pedido ${esc(preparado.numeroDoPedido)}</span>
+                    <button type="button" onclick="AcabamentoPainel.fecharVolume()"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px; font-weight: 700;
+                                   cursor: pointer; font-family: inherit;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <span style="font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">O que vai dentro</span>
+                        ${preparado.itens.map(i => {
+                            const item = itens.find(x => String(x.id) === String(i.modeloId));
+                            return linhaDoItemDoVolume(i, item || {}, faltaEmbalar(item || {}, embalado));
+                        }).join('')}
+                        <div style="font-size: 0.74rem; color: var(--text-dim); line-height: 1.5;">
+                            A quantidade vem cheia com o que ainda está fora de volume. Diminuir aqui é o que
+                            <strong style="color: #cfe6fb;">divide um modelo em vários volumes</strong> —
+                            o resto continua livre para o próximo.
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid rgba(76,200,240,0.18);"></div>
+
+                    <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;">
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Tipo</span>
+                            <select id="acab-vol-tipo" style="${ESTILO_SELECT} width: 150px; font-size: 0.95rem;">
+                                ${TIPOS_DE_VOLUME.map(t => `<option value="${esc(t)}" ${t === preparado.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Peso na balança</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="text" inputmode="decimal" id="acab-vol-peso" autocomplete="off"
+                                       value="${esc(pesoParaTexto(preparado.peso))}" placeholder="0,00"
+                                       style="width: 140px; text-align: right; background: ${AZUL.fundo};
+                                              border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
+                                              color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
+                                              font-family: monospace;" />
+                                <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px; flex: 1 1 200px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Quem pesou</span>
+                            ${selectDeQuemPesou(preparado.responsavel)}
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Observação (opcional)</span>
+                        <input type="text" id="acab-vol-obs" value="${esc(preparado.observacao || '')}"
+                               placeholder="caixa dupla, fita reforçada…"
+                               style="background: ${AZUL.fundo}; border: 1px solid rgba(76,200,240,0.26);
+                                      border-radius: 6px; color: #ffffff; padding: 8px 10px; font-size: 0.88rem;" />
+                    </div>
+
+                    <div id="acab-vol-erro" style="min-height: 1.2em; font-size: 0.82rem; color: #f87171;"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18); flex-wrap: wrap;">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">Depois de gravado, o volume aparece na faixa do setor.</span>
+                    <span style="margin-left: auto; display: flex; gap: 10px;">
+                        <button type="button" onclick="AcabamentoPainel.fecharVolume()"
+                                style="background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                       color: #cfe6fb; border-radius: 8px; padding: 10px 18px; font-weight: 700;
+                                       cursor: pointer; font-family: inherit;">Cancelar</button>
+                        <button type="button" id="acab-vol-ok" onclick="AcabamentoPainel.confirmarVolume()"
+                                style="background: linear-gradient(135deg, #4a61e8, #120a8f); border: 1px solid #4cc8f0;
+                                       color: #ffffff; border-radius: 8px; padding: 10px 22px; font-weight: 800;
+                                       letter-spacing: 0.05em; cursor: pointer; font-family: inherit;">Gravar volume</button>
+                    </span>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        const campo = document.getElementById('acab-vol-peso');
+        if (campo) {
+            campo.addEventListener('keydown', ev => {
+                if (ev && ev.key === 'Enter') { ev.preventDefault(); confirmarVolume(); }
+            });
+            try { campo.focus(); campo.select(); } catch (ignorado) { /* sem foco não há problema */ }
+        }
+    }
+
+    /**
+     * Quem pesou sai da MESMA lista do responsável do card.
+     *
+     * Texto livre aqui faria "Ana", "ana" e "Ana Paula" virarem três pessoas na
+     * hora de conferir quem embalou o quê.
+     */
+    function selectDeQuemPesou(atual) {
+        const todos = (tela.operadores || []).filter(o => o.role === PERFIL_DO_RESPONSAVEL);
+        const nomes = todos.map(o => o.nome);
+        const escolhido = (atual || '').trim();
+        if (escolhido && !nomes.some(n => n.toLowerCase() === escolhido.toLowerCase())) {
+            nomes.unshift(escolhido);
+        }
+        const opcoes = ['<option value="">— Quem pesou —</option>'].concat(
+            nomes.map(n => `<option value="${esc(n)}" ${n.toLowerCase() === escolhido.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
+        ).join('');
+        return `<select id="acab-vol-responsavel" style="${ESTILO_SELECT} font-size: 0.95rem;">${opcoes}</select>`;
+    }
+
+    /** O texto de um campo de quantidade: "2.000" e "2000" são o mesmo número. */
+    function qtdDoTexto(texto) {
+        const limpo = String(texto === undefined || texto === null ? '' : texto).replace(/[^\d]/g, '');
+        return Math.max(0, parseInt(limpo, 10) || 0);
+    }
+
+    async function confirmarVolume() {
+        const v = tela.volumeEmEdicao;
+        if (!v) { fecharPopupDoVolume(); return; }
+
+        const erro = document.getElementById('acab-vol-erro');
+        const dizer = t => { if (erro) erro.textContent = t; };
+
+        const campoPeso = document.getElementById('acab-vol-peso');
+        const textoDoPeso = String(campoPeso && campoPeso.value ? campoPeso.value : '').trim();
+        const peso = pesoDoTexto(textoDoPeso);
+        if (peso === undefined) {
+            dizer(`"${textoDoPeso}" não é um peso. Use só números, como 4,16.`);
+            return;
+        }
+
+        const itens = v.itens.map(i => {
+            const campo = document.getElementById('acab-vol-qtd-' + i.modeloId);
+            return { modeloId: i.modeloId, qtd: qtdDoTexto(campo ? campo.value : i.qtd) };
+        }).filter(i => i.qtd > 0);
+
+        if (!itens.length) {
+            dizer('Um volume precisa de pelo menos um modelo com quantidade.');
+            return;
+        }
+
+        const tipo = document.getElementById('acab-vol-tipo');
+        const responsavel = document.getElementById('acab-vol-responsavel');
+        const observacao = document.getElementById('acab-vol-obs');
+
+        const botao = document.getElementById('acab-vol-ok');
+        if (botao) { botao.disabled = true; botao.textContent = 'Gravando…'; }
+        try {
+            await gravarVolume({
+                numeroDoPedido: v.numeroDoPedido,
+                setor: v.setor,
+                volumeId: v.volumeId,
+                numero: v.numero,
+                tipo: tipo ? tipo.value : '',
+                peso,
+                responsavel: responsavel ? responsavel.value : '',
+                observacao: observacao ? observacao.value : '',
+                itens,
+            });
+            await carregarVolumes(v.numeroDoPedido);
+            tela.escolhaDeVolume = null;
+            fecharPopupDoVolume();
+            renderDetalhe();
+            avisar(`Volume ${v.numero} do setor ${nomeDoSetor(v.setor)} gravado.`, 'success');
+        } catch (e) {
+            console.error('[acabamento] erro ao gravar o volume:', e);
+            // A trava do banco: dois operadores criando o mesmo número ao mesmo
+            // tempo. A saída é recalcular o número, não pedir que ele adivinhe.
+            const duplicado = String((e && e.message) || '').indexOf('producao_volumes_unico') !== -1;
+            dizer(duplicado
+                ? 'Outro operador acabou de criar este volume. Feche e clique em "+ Volume" de novo.'
+                : `Não deu para gravar: ${(e && e.message) ? e.message : e}`);
+        } finally {
+            if (botao) { botao.disabled = false; botao.textContent = 'Gravar volume'; }
+        }
+    }
+
+    async function excluirVolume(volumeId) {
+        const v = todosOsVolumes().find(x => String(x.id) === String(volumeId));
+        if (!v) return;
+        const pergunta = `Excluir o volume ${v.numero} do setor ${nomeDoSetor(v.setor)}?`
+            + (v.peso ? ` O peso de ${kgParaTexto(v.peso)} kg sai da soma.` : '')
+            + ' Os modelos voltam a ficar livres para outro volume.';
+        // A caixa da casa, e não o `confirm` do navegador: na estação o diálogo
+        // nativo depende de o navegador querer desenhá-lo, e este é um botão
+        // que apaga peso já conferido.
+        const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
+        const ok = (caixa && typeof caixa.perguntar === 'function')
+            ? await caixa.perguntar(pergunta, { rotulo: 'Excluir', perigo: true })
+            : window.confirm(pergunta);
+        if (!ok) return;
+
+        try {
+            await apagarVolume(volumeId);
+            await carregarVolumes(tela.volumesDoPedido);
+            fecharPopupDosVolumes();
+            renderDetalhe();
+            avisar(`Volume ${v.numero} excluído.`, 'success');
+        } catch (e) {
+            console.error('[acabamento] erro ao excluir o volume:', e);
+            avisar(`Não deu para excluir o volume: ${(e && e.message) ? e.message : e}`, 'error');
+        }
+    }
+
+    // ─── A lista dos volumes do setor ───────────────────────────────────────
+
+    function fecharPopupDosVolumes() {
+        const caixa = document.getElementById('acab-volumes-lista');
+        if (caixa && caixa.parentNode) caixa.parentNode.removeChild(caixa);
+    }
+
+    function abrirVolumesDoSetor(setor) {
+        const alvo = normalizar(setor);
+        const lista = volumesDoSetor(alvo);
+        const s = estado();
+        const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
+        const os = (s.ordens || []).find(o => String(o.id) === String(tela.pedidoAberto));
+        const numeroDoPedido = os ? os.numero : tela.pedidoAberto;
+        const pode = podeEditar();
+
+        const soma = somaDosVolumes(lista);
+        const linhaDoPeso = tela.pesos[alvo];
+        const peso = (linhaDoPeso && linhaDoPeso.peso) ? Number(linhaDoPeso.peso) : null;
+        const dif = diferencaDosVolumes(alvo);
+        const faltando = faltandoNoSetor(alvo, itens);
+
+        fecharPopupDosVolumes();
+        const caixa = document.createElement('div');
+        caixa.id = 'acab-volumes-lista';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100004; display: flex;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+
+        const corpo = lista.length
+            ? lista.map(v => {
+                const dentro = (v.itens || []).map(i => {
+                    const item = itens.find(x => String(x.id) === String(i.modeloId));
+                    return `<span style="font-size: 0.76rem; background: rgba(76,200,240,0.08);
+                                        border: 1px solid rgba(76,200,240,0.20); border-radius: 6px; padding: 3px 9px;">
+                                ${esc(nomeDoModelo(item))} · <span style="font-family: monospace;">${numeroComPonto(i.qtd)} un</span>
+                            </span>`;
+                }).join('');
+                const temPeso = v.peso !== null && v.peso !== undefined && v.peso > 0;
+                return `
+                <div style="background: ${AZUL.superficie}; border: 1px solid rgba(76,200,240,0.20);
+                            border-radius: 8px; padding: 11px 13px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span style="display: inline-flex; align-items: center; justify-content: center;
+                                     min-width: 34px; padding: 4px 8px; border-radius: 6px;
+                                     background: rgba(76,200,240,0.14); border: 1px solid rgba(76,200,240,0.35);
+                                     color: #4cc8f0; font-weight: 800; font-size: 0.82rem;">V${esc(v.numero)}</span>
+                        <span style="font-size: 0.86rem; font-weight: 600; color: #ffffff;">${esc(v.tipo || '—')}</span>
+                        <span style="font-size: 0.8rem; color: var(--text-dim);">${esc(v.responsavel || 'sem responsável')}</span>
+                        ${v.observacao ? `<span style="font-size: 0.74rem; color: #7fa9d4;">${esc(v.observacao)}</span>` : ''}
+                        <span style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1rem; font-family: monospace; color: ${temPeso ? '#ffffff' : '#fbbf24'};">
+                                ${temPeso ? esc(kgParaTexto(v.peso)) + ' kg' : 'sem peso'}
+                            </span>
+                            ${pode ? `
+                            <button type="button" style="${ESTILO_BOTAO_VOLUME}"
+                                    onclick="AcabamentoPainel.editarVolume('${escJs(v.id)}')">Editar</button>
+                            <button type="button" style="${ESTILO_BOTAO_VOLUME}"
+                                    onclick="AcabamentoPainel.excluirVolume('${escJs(v.id)}')">Excluir</button>` : ''}
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">${dentro}</div>
+                </div>`;
+            }).join('')
+            : `<div style="padding: 18px; text-align: center; color: var(--text-dim); font-size: 0.86rem;">
+                   Este setor ainda não tem volume. Ele sai como 1 volume único.
+               </div>`;
+
+        const cobertura = faltando.length
+            ? `<span style="font-size: 0.74rem; color: #fbbf24;">⚠ ainda fora de volume: `
+              + faltando.map(x => `${esc(nomeDoModelo(x.item))} (${numeroComPonto(x.falta)})`).join(' · ') + '</span>'
+            : (lista.length
+                ? `<span style="font-size: 0.74rem; color: #22c55e;">✓ todos os modelos do setor já estão em algum volume</span>`
+                : '');
+
+        const conferencia = lista.length ? `
+            <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+                        background: rgba(251,191,36,0.07); border: 1px solid rgba(251,191,36,0.30);
+                        border-radius: 8px; padding: 11px 13px;">
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Soma dos volumes</span>
+                    <span style="font-size: 1.1rem; color: #ffffff; font-family: monospace;">${esc(kgParaTexto(soma))} kg</span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Peso do setor</span>
+                    <span style="font-size: 1.1rem; color: #ffffff; font-family: monospace;">${peso ? esc(kgParaTexto(peso)) + ' kg' : '—'}</span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Diferença</span>
+                    <span style="font-size: 1.1rem; font-family: monospace; color: ${dif ? '#fbbf24' : '#22c55e'};">
+                        ${dif === null ? '—' : esc(textoDaDiferenca(dif))}
+                    </span>
+                </span>
+                ${(pode && soma > 0) ? `
+                <button type="button" style="${ESTILO_BOTAO_VOLUME} margin-left: auto; padding: 9px 16px; font-size: 0.84rem;"
+                        onclick="AcabamentoPainel.usarSomaDosVolumes('${escJs(alvo)}')">
+                    Usar ${esc(kgParaTexto(soma))} kg como peso do setor
+                </button>` : ''}
+            </div>` : '';
+
+        caixa.innerHTML = `
+            <div style="width: min(820px, 96vw); max-height: 92vh; overflow: auto; background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">📦</span>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Volumes do setor ${esc(nomeDoSetor(alvo))}</strong>
+                    <span style="font-size: 0.78rem; color: #cfe6fb;">Pedido ${esc(numeroDoPedido)} · ${lista.length} ${lista.length === 1 ? 'volume' : 'volumes'}</span>
+                    <button type="button" onclick="AcabamentoPainel.fecharVolumes()"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px; font-weight: 700;
+                                   cursor: pointer; font-family: inherit;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+                    ${corpo}
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px;">
+                        ${pode ? `<button type="button" style="${ESTILO_BOTAO_VOLUME} padding: 9px 16px; font-size: 0.86rem;"
+                                onclick="AcabamentoPainel.novoVolume('${escJs(alvo)}', '${escJs(numeroDoPedido)}')">+ Novo volume</button>` : ''}
+                        ${cobertura}
+                    </div>
+                    ${lista.length ? `<div style="border-top: 1px solid rgba(76,200,240,0.18); margin-top: 4px;"></div>` : ''}
+                    ${conferencia}
+                    ${lista.length ? `<div style="font-size: 0.74rem; color: var(--text-dim); line-height: 1.5;">
+                        A diferença não trava nada — caixa, fita e plástico pesam, e o setor pode ter sido pesado
+                        inteiro na balança grande. Ela aparece para o operador decidir qual dos dois números está certo.
+                    </div>` : ''}
+                </div>
+
+                <div style="display: flex; align-items: center; padding: 12px 18px; border-top: 1px solid rgba(76,200,240,0.18);">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">Fechar não desfaz nada — tudo já está gravado.</span>
+                    <button type="button" onclick="AcabamentoPainel.fecharVolumes()"
+                            style="margin-left: auto; background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                   color: #cfe6fb; border-radius: 8px; padding: 10px 18px; font-weight: 700;
+                                   cursor: pointer; font-family: inherit;">Fechar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+    }
+
+    /**
+     * Adota a soma dos volumes como peso do setor.
+     *
+     * Passa pelo `gravarPeso` de sempre, e não por um atalho: é ele que conhece
+     * os dois caminhos de escrita, a regra dos 5 % e o "Pronto" que pode estar
+     * esperando. Um atalho aqui furaria a senha de liberação.
+     */
+    function usarSomaDosVolumes(setor) {
+        const alvo = normalizar(setor);
+        const soma = somaDosVolumes(volumesDoSetor(alvo));
+        if (!(soma > 0)) return Promise.resolve(false);
+        fecharPopupDosVolumes();
+        return gravarPeso(tela.volumesDoPedido, alvo, pesoParaTexto(soma));
+    }
+
     // ─── O popup do peso que fecha o setor ──────────────────────────────────
     //
     // A trava do "Pronto" precisa ter saída na PRÓPRIA tela (regra da casa: toda
@@ -2764,6 +3792,29 @@
     }
 
     /**
+     * A tira dos volumes dentro da janela que cobra o peso ao fechar o setor.
+     *
+     * Só aparece quando o setor tem volume PESADO. Sem volume — que é a
+     * maioria dos pedidos — a janela é exatamente a de antes, e é isso que se
+     * quer: o recurso novo não pode aparecer para quem não o usa.
+     */
+    function recadoDosVolumesNoFechamento(setor) {
+        const lista = volumesDoSetor(setor);
+        const soma = somaDosVolumes(lista);
+        if (!lista.length || !(soma > 0)) return '';
+        return `
+            <div style="margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+                        background: rgba(76,200,240,0.06); border: 1px dashed rgba(76,200,240,0.34);
+                        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-size: 1rem;">📦</span>
+                <span style="font-size: 0.84rem;">Este setor tem
+                    <strong>${lista.length} ${lista.length === 1 ? 'volume' : 'volumes'}</strong>, que somam
+                    <span style="font-family: monospace; color: #ffffff;">${esc(kgParaTexto(soma))} kg</span>
+                    — já preenchido abaixo. Troque se você pesou o setor inteiro de uma vez.</span>
+            </div>`;
+    }
+
+    /**
      * Abre o popup para o "Pronto" que está esperando um peso.
      *
      * `tela.prontoPendente` guarda o modelo e o setor; ele é consumido pelo
@@ -2788,7 +3839,8 @@
                     ${esc(nomeDoSetor(p.setor))}. Ao marcá-lo como <strong>PRONTO</strong> o setor fecha,
                     e a expedição precisa do peso real para cotar o frete —
                     <strong>o status só muda depois que o peso for informado</strong>.
-                </div>`;
+                </div>
+                ${recadoDosVolumesNoFechamento(p.setor)}`;
         }
         const est = document.getElementById('acab-peso-obrig-est');
         if (est) {
@@ -2797,8 +3849,14 @@
         }
         const erro = document.getElementById('acab-peso-obrig-erro');
         if (erro) erro.textContent = '';
+
+        // O campo nasce com a soma dos volumes quando ela existe. Não é uma
+        // trava: é o número que a própria tela já sabe, posto onde o operador
+        // ia digitá-lo. Ele apaga e digita outro se pesou o setor inteiro na
+        // balança grande — que é o caso em que a soma e o peso divergem.
+        const somaDaqueleSetor = somaDosVolumes(volumesDoSetor(p.setor));
         const campo = document.getElementById('acab-peso-obrig-campo');
-        if (campo) campo.value = '';
+        if (campo) campo.value = somaDaqueleSetor > 0 ? pesoParaTexto(somaDaqueleSetor) : '';
         const ok = document.getElementById('acab-peso-obrig-ok');
         if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar PRONTO'; }
 
@@ -3517,8 +4575,13 @@
             tela.pesos = {};
             tela.pesosDoPedido = null;
             tela.estimados = {};
+            tela.volumes = {};
+            tela.volumesDoPedido = null;
+            tela.escolhaDeVolume = null;
             fecharPopupDaLiberacao();
             fecharPopupDoPeso();
+            fecharPopupDoVolume();
+            fecharPopupDosVolumes();
             mostrarLista();
             renderDetalhe();
             try {
@@ -3533,10 +4596,15 @@
 
             // O peso vem DEPOIS do desenho, de propósito: ele é do parceiro e
             // pode demorar ou nem responder, e o pedido não espera por ele. O
-            // estimado vem junto, em paralelo: são duas leituras independentes.
+            // estimado e os volumes vêm junto, em paralelo: são três leituras
+            // independentes, e nenhuma delas segura as outras.
             const os = (estado().ordens || []).find(o => String(o.id) === String(osId));
             if (os) {
-                await Promise.all([carregarPesos(os.numero), carregarEstimados(os.numero)]);
+                await Promise.all([
+                    carregarPesos(os.numero),
+                    carregarEstimados(os.numero),
+                    carregarVolumes(os.numero),
+                ]);
                 renderDetalhe();
             }
         },
@@ -3546,6 +4614,9 @@
             fecharPopupDaExpedicao();
             fecharPopupDaLiberacao();
             fecharPopupDoPeso();
+            fecharPopupDoVolume();
+            fecharPopupDosVolumes();
+            tela.escolhaDeVolume = null;
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -3611,6 +4682,24 @@
         confirmarPesoDoSetor,
         fecharPopupDoPeso,
 
+        // ── Os volumes (23/08/2026) ──────────────────────────────────────
+        /** "+ Volume": põe a lista do pedido em modo de escolha. */
+        novoVolume(setor, numeroDoPedido) { abrirEscolhaDeModelos(setor, numeroDoPedido); },
+        /** A caixa de marcar no card do modelo. */
+        marcarModelo(itemId) { alternarModeloNaEscolha(itemId); },
+        cancelarVolume() { cancelarEscolhaDeModelos(); },
+        /** "Pesar este volume": abre a janela com os modelos marcados. */
+        pesarVolume() { abrirPopupDoVolume(null); },
+        editarVolume(volumeId) { abrirPopupDoVolume(volumeId); },
+        /** O OK da janela. Só ele grava. */
+        confirmarVolume,
+        fecharVolume: fecharPopupDoVolume,
+        excluirVolume,
+        verVolumes(setor) { abrirVolumesDoSetor(setor); },
+        fecharVolumes: fecharPopupDosVolumes,
+        /** Adota a soma dos volumes como peso do setor, pelo `gravarPeso`. */
+        usarSomaDosVolumes,
+
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
         },
@@ -3630,6 +4719,9 @@
             fecharPopupDaExpedicao();
             fecharPopupDaLiberacao();
             fecharPopupDoPeso();
+            fecharPopupDoVolume();
+            fecharPopupDosVolumes();
+            tela.escolhaDeVolume = null;
             tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
@@ -3670,6 +4762,23 @@
             setorTemPeso,
             haComoGravarPeso,
             pesoExigidoAntesDoPronto,
+            // Os volumes (23/08/2026)
+            agruparVolumes,
+            volumesDoSetor,
+            somaDosVolumes,
+            embaladoPorModelo,
+            qtdDoModelo,
+            faltaEmbalar,
+            proximoNumeroDeVolume,
+            faltandoNoSetor,
+            diferencaDosVolumes,
+            textoDaDiferenca,
+            qtdDoTexto,
+            marcavelNaEscolha,
+            marcadoNaEscolha,
+            TIPOS_DE_VOLUME,
+            TABELA_DE_VOLUMES,
+            TABELA_DE_ITENS_DO_VOLUME,
             responsavelDoModelo,
             fotoDoModelo,
             BUCKET_DA_FOTO,
