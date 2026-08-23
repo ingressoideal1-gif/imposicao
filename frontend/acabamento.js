@@ -779,23 +779,69 @@
     }
 
     /**
-     * O título do pedido aberto: "21085 - Expointer 2026 - Parte 2 - CLIENTE - 53193".
+     * A primeira linha do título do pedido aberto: "21085 - Expointer 2026".
      *
-     * Mesmo formato do `ped-view-title` da tela de Pedido (`${numero} - ${evento}`),
-     * com o cliente no fim — o usuário pediu as quatro informações no mesmo
-     * tamanho de fonte, e o `rotuloDoCliente` já traz o número do cliente junto
-     * do nome.
-     *
+     * Mesmo formato do `ped-view-title` da tela de Pedido (`${numero} - ${evento}`).
      * Cada pedaço entra só se existir: pedido sem evento no briefing não vira
-     * "21085 -  - CLIENTE", com o buraco no meio.
+     * "21085 - ", com o hífen sozinho no fim.
      */
     function tituloDoPedido(os) {
         if (!os) return '';
-        const rotulo = fn('rotuloDoCliente');
-        return [os.numero, eventoDoPedido(os), rotulo ? rotulo(os) : (os.cliente || '')]
+        return [os.numero, eventoDoPedido(os)]
             .map(p => String(p === undefined || p === null ? '' : p).trim())
             .filter(Boolean)
             .join(' - ');
+    }
+
+    /**
+     * A segunda linha: "CLIENTE - 53193".
+     *
+     * O `rotuloDoCliente` já devolve "NOME - NÚMERO", que é como o resto do
+     * painel escreve o cliente; montar o número à parte aqui faria a mesma
+     * pessoa aparecer de dois jeitos em duas telas.
+     */
+    function clienteDoPedido(os) {
+        if (!os) return '';
+        const rotulo = fn('rotuloDoCliente');
+        const texto = rotulo ? rotulo(os) : (os.cliente || '');
+        return String(texto === undefined || texto === null ? '' : texto).trim();
+    }
+
+    /**
+     * O `-webkit-text-fill-color` é obrigatório, não decoração.
+     *
+     * O `<h1>` do cabeçalho herda o degradê de `.page-header-text h1`, que pinta
+     * o texto por `-webkit-background-clip: text` com
+     * `-webkit-text-fill-color: transparent`. Esse "transparente" é herdado
+     * pelos filhos: um `color` sozinho na segunda linha não apareceria — o
+     * amarelo sairia invisível na tela, com o CSS todo certo no código. Daí o
+     * harness que mede a cor num Chrome de verdade.
+     *
+     * `0.8em`, e não um tamanho em rem: a segunda linha fica 20% menor que a
+     * primeira mesmo que um dia o título inteiro mude de tamanho.
+     */
+    const ESTILO_LINHA_DO_CLIENTE = 'font-size: 0.8em; color: #fbbf24;'
+        + ' -webkit-text-fill-color: #fbbf24; background: none;';
+
+    /**
+     * O título do pedido aberto, em duas linhas.
+     *
+     * Pedido do usuário em 23/08/2026: em cima o número e o evento, como já
+     * estava; embaixo, 20% menor e em amarelo, o nome e o número do cliente.
+     * Quem trabalha no acabamento tem o EVENTO na mão — é por ele que confere
+     * que o material na mesa é o deste pedido —, e o cliente é a informação de
+     * apoio, que agora se lê sem competir com a primeira linha.
+     *
+     * Linha que não existe não é desenhada: pedido sem evento no briefing, ou
+     * sem cliente, não deixa uma linha vazia empurrando o resto para baixo.
+     */
+    function tituloDoPedidoHtml(os) {
+        const linhas = [];
+        const primeira = tituloDoPedido(os);
+        const cliente = clienteDoPedido(os);
+        if (primeira) linhas.push(`<div>${esc(primeira)}</div>`);
+        if (cliente) linhas.push(`<div style="${ESTILO_LINHA_DO_CLIENTE}">${esc(cliente)}</div>`);
+        return linhas.join('');
     }
 
     /**
@@ -1358,15 +1404,11 @@
         const os = buscar ? buscar(tela.pedidoAberto) : (s.ordens || []).find(o => o.id === tela.pedidoAberto);
         const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
 
-        // O título inteiro numa linha, igual ao da tela de Pedido do Painel de
-        // Produção (`ped-view-title`): número, evento, cliente e número do
-        // cliente, no mesmo tamanho de fonte e sem caixa em volta. Pedido do
-        // usuário em 22/08/2026, com as duas telas lado a lado.
-        //
-        // O `rotuloDoCliente` já devolve "NOME - NÚMERO", que é como o resto do
-        // painel escreve o cliente; escrever o número à parte aqui faria a mesma
-        // pessoa aparecer de dois jeitos em duas telas.
-        escrever('acab-detalhe-titulo', tituloDoPedido(os));
+        // O título em duas linhas, sem caixa em volta: em cima o número e o
+        // evento, no tamanho do título da tela de Pedido do Painel de Produção
+        // (`ped-view-title`); embaixo o cliente, 20% menor e em amarelo. Pedido
+        // do usuário em 22/08/2026 (a primeira linha) e 23/08/2026 (a segunda).
+        escreverHtml('acab-detalhe-titulo', tituloDoPedidoHtml(os));
 
         if (!itens.length) {
             // "Carregando" so enquanto realmente esta carregando. Pedido sem

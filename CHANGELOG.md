@@ -8,6 +8,52 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v700 — 2026-08-23] — Acabamento: volumes por setor, a caixa com peso, dono e o que vai dentro
+
+Pedido do usuário: *"a informação do peso para pedidos com vários volumes, existe a situação em que
+1 modelo grande é realizado por vários responsáveis e situações onde vários modelos são pesados
+juntos pelo mesmo usuário, situação onde precisaria selecionar vários modelos e criar um volume e
+pesar volumes individualmente, e situações onde precisa dividir o mesmo modelo em vários volumes,
+nada disso invalida o campo já existente onde precisa informar o peso total do setor"*.
+
+**O volume é a caixa.** Ele tem número (V1, V2, V3…), tipo (Caixa, Pacote, Fardo, Rolo, Palete), o
+peso da balança, quem pesou, e uma lista de modelos com **quantidade**. É a quantidade que faz as
+três situações caberem num desenho só: um modelo grande vira dois ou três volumes, cada um com o
+nome de quem o pesou; um volume leva vários modelos de uma vez; e o mesmo modelo aparece em vários
+volumes, somando a tiragem.
+
+**O caminho do operador.** O botão **+ Volume**, na faixa do setor, põe a lista do pedido em modo de
+escolha: os modelos daquele setor ganham caixa de marcar, e os de outro setor continuam desenhados,
+apagados, dizendo por quê. A lista já está na tela, com foto, cor e tiragem — pedir que ele
+reconheça o mesmo material numa segunda lista, mais pobre, dentro de um popup, seria trabalho que a
+tela já fez por ele. Em **Pesar este volume**, a quantidade de cada modelo nasce cheia com o que
+ainda está fora de volume; diminuir esse número é o que reparte o modelo em várias caixas.
+
+**Setor sem volume nenhum continua sendo 1 volume único**, dito em texto na tela. O pedido simples,
+que é a maioria, não ganhou cadastro nenhum, e o card do modelo nem mostra o bloco de volumes.
+
+**O campo do peso do setor não mudou.** Continua digitado à mão, comparado com o estimado e pedindo a
+senha de liberação acima de 5 %. Os volumes só põem uma soma ao lado dele. Quando os dois divergem, a
+faixa avisa em âmbar — *"o peso do setor está 20 g acima da soma dos volumes"* — e **não trava nada**:
+caixa, fita e plástico pesam, e o setor pode ter sido pesado inteiro na balança grande. O botão
+*Usar 12,480 kg como peso do setor* passa pelo `gravarPeso` de sempre, e não por um atalho — é ele que
+conhece os dois caminhos de escrita e a senha; um atalho ali furaria a liberação. Na janela que cobra
+o peso ao fechar o setor, o campo já nasce com a soma dos volumes, e a janela diz de onde o número veio.
+
+**Onde isso mora, e por que ali.** Duas tabelas nossas, `producao_volumes` e `producao_volume_itens`
+(`sql/volumes_do_acabamento.sql`). A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e
+daria para gravar ali — o usuário decidiu no mesmo dia que **não**. Além de manter estreita a exceção
+aberta em tabela do parceiro, é o que faz o recurso funcionar na estação: a ficha do parceiro tem RLS
+de `authenticated`, e o operador da gráfica entra pelo código local, sem sessão. Em tabela nossa, com
+política de `public`, a estação grava direto pelo PostgREST — sem rota nova no agente e sem os dois
+caminhos que a gravação do peso precisa.
+
+77 verificações novas no `tests/acabamento_harness.js` e 8 testes de ligação em
+`tests/test_painel_do_acabamento.py`. Documentado em `docs/painel_do_acabamento.md` e
+`docs/REGRAS_BANCO.md`.
+
+---
+
 ## [v700 — 2026-08-23] — Pedidos Concluídos: a coluna deixa de contar tempo e diz quando o pedido entrou em produção
 
 Pedido do usuário: *"Na Lista de Arte, no Card 'Pedidos Concluidos' retirar a marcação de TEMPO,
