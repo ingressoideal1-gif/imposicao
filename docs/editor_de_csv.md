@@ -486,6 +486,21 @@ era a **subida** de 45 MB pela internet da gráfica.
    ela pelo `#gid=`, de modo que o **🔄 atualizar da planilha** continua valendo
    uma a uma depois de separadas. Maior pacote: **1,04 MB**.
 
+**A primeira linha é cabeçalho, ou já é dado?** A janela pergunta, mostrando a
+primeira linha para o operador conferir. As abas dessa planilha **não têm linha
+de cabeçalho** — a primeira linha já é uma credencial —, e o parser tomava essa
+linha como nome das colunas: sumia **uma credencial por aba** (19 no total) e o
+primeiro código virava o nome da coluna. Marcando "já é dado", as colunas passam
+a se chamar `Coluna 1`, `Coluna 2`… e a linha volta para o corpo, na primeira
+posição. As 46.921 linhas viraram 46.940 — as 19 recuperadas.
+
+A sugestão vem de duas evidências (`pareceCabecalho`), mas quem decide é o
+operador: **cabeçalho não se repete no corpo** (naquela planilha a segunda coluna
+trazia "CONVIDADOS OFICIAIS" em todas as 1.300 linhas, a primeira inclusive) e
+**cabeçalho todo numérico é raro**. A janela só aparece quando há o que decidir —
+planilha de várias páginas, ou primeira linha que não parece cabeçalho; planilha
+simples com cabeçalho claro entra direto, sem pergunta.
+
 **Os elementos são reapontados pela POSIÇÃO da coluna.** Cada aba tem os seus
 nomes — `EXPOSITOR ok` numa, `JURADOS ok` noutra —; o que se mantém entre elas é
 a ordem. Coluna sem correspondente na página fica como está e é **relatada** ao

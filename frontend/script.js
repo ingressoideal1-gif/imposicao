@@ -12487,36 +12487,174 @@ async function comBotaoOcupado(id, rotuloOcupado, tarefa) {
 // "🔄 atualizar da planilha" continuar valendo uma a uma.
 
 /** Guarda o que a busca trouxe enquanto o operador decide. */
-let escolhaDasPaginas = null;
+let escolhaDaPlanilha = null;
 
-function fecharEscolhaDasPaginas() {
+function fecharEscolhaDaPlanilha() {
 
-    const caixa = document.getElementById('escolha-paginas-overlay');
+    const caixa = document.getElementById('escolha-planilha-overlay');
 
     if (caixa) caixa.remove();
 
-    escolhaDasPaginas = null;
+    escolhaDaPlanilha = null;
 
 }
-window.fecharEscolhaDasPaginas = fecharEscolhaDasPaginas;
+window.fecharEscolhaDaPlanilha = fecharEscolhaDaPlanilha;
 
-function abrirEscolhaDasPaginas(res, link) {
+/**
+ * A primeira linha PARECE cabeçalho?
+ *
+ * Só uma sugestão — quem decide é o operador, na janela. Duas evidências, as que
+ * a planilha do Expointer expôs em 23/08/2026:
+ *
+ * - **Cabeçalho não se repete no corpo.** Nome de coluna aparece uma vez; se o
+ *   valor da primeira linha reaparece na mesma coluna mais abaixo, ele é dado.
+ *   Naquela planilha a segunda coluna trazia "CONVIDADOS OFICIAIS" em todas as
+ *   1.300 linhas, a primeira inclusive.
+ * - **Cabeçalho todo numérico é raro.** Uma primeira linha em que toda coluna é
+ *   número é quase sempre a primeira credencial da lista.
+ */
+function pareceCabecalho(headers, rows) {
 
-    escolhaDasPaginas = { res, link };
+    const cols = (headers || []).filter(h => h !== undefined && h !== null && String(h).trim() !== '');
 
-    const total = res.partes.reduce((s, p) => s + p.rows.length, 0);
+    if (!cols.length) return true;
 
-    const linhas = res.partes.map(p =>
+    // 200 linhas bastam para a evidência e não custam nada num banco de 20 mil.
+    const corpo = (rows || []).slice(0, 200);
 
-        `<tr><td style="padding:3px 12px 3px 0;">${escapeHtml(p.nome)}</td>`
+    for (const c of cols) {
 
-        + `<td style="padding:3px 0; text-align:right; font-family:monospace; color:#94a3b8;">${p.rows.length}</td></tr>`
+        const valor = String(c).trim();
 
-    ).join('');
+        const repete = corpo.some(r => {
+
+            const v = r ? r[c] : undefined;
+
+            return String(v === undefined || v === null ? '' : v).trim() === valor;
+
+        });
+
+        if (repete) return false;
+
+    }
+
+    const soNumero = cols.every(c => /\d/.test(String(c)) && /^[\d\s.,\/-]+$/.test(String(c).trim()));
+
+    return !soNumero;
+
+}
+
+/**
+ * A primeira linha era DADO, e não cabeçalho: devolve a tabela corrigida.
+ *
+ * As colunas passam a se chamar "Coluna 1", "Coluna 2"… — nomes que o operador
+ * renomeia no editor se quiser — e a linha que tinha virado cabeçalho volta para
+ * o corpo, na primeira posição, que é onde ela estava na planilha.
+ *
+ * Sem isto, a planilha do Expointer perdia UMA credencial por aba (19 no total,
+ * medido em 23/08/2026) e o primeiro código virava o nome da coluna.
+ */
+function primeiraLinhaComoDado(headers, rows) {
+
+    const antigos = (headers || []).map(h => (h === undefined || h === null) ? '' : h);
+
+    const nomes = antigos.map((_, i) => `Coluna ${i + 1}`);
+
+    const resgatada = {};
+
+    nomes.forEach((n, i) => { resgatada[n] = String(antigos[i]).trim(); });
+
+    const corpo = (rows || []).map(r => {
+
+        const o = {};
+
+        nomes.forEach((n, i) => {
+
+            const v = r ? r[antigos[i]] : undefined;
+
+            o[n] = (v === undefined || v === null) ? '' : String(v);
+
+        });
+
+        return o;
+
+    });
+
+    return { headers: nomes, rows: [resgatada, ...corpo] };
+}
+
+/**
+ * Aplica a escolha "a primeira linha é dado" a um resultado de busca inteiro —
+ * a tabela empilhada E cada página crua, que é de onde saem as numerações
+ * separadas. Uma sem a outra deixaria os dois caminhos discordando.
+ */
+function comAPrimeiraLinhaComoDado(res) {
+
+    const ajustado = primeiraLinhaComoDado(res.headers, res.rows);
+
+    const partes = Array.isArray(res.partes)
+
+        ? res.partes.map(p => {
+
+            const q = primeiraLinhaComoDado(p.headers, p.rows);
+
+            return Object.assign({}, p, { headers: q.headers, rows: q.rows });
+
+        })
+
+        : res.partes;
+
+    return Object.assign({}, res, { headers: ajustado.headers, rows: ajustado.rows, partes });
+}
+
+/**
+ * A janela "Como trazer esta planilha".
+ *
+ * Ela junta as duas decisões que a busca pode ter, e só aparece quando existe
+ * alguma: a planilha tem mais de uma página, ou a primeira linha não parece
+ * cabeçalho. Planilha simples com cabeçalho claro continua entrando direto,
+ * sem pergunta nenhuma.
+ */
+function abrirEscolhaDaPlanilha(res, link) {
+
+    const varias = Array.isArray(res.partes) && res.partes.length > 1;
+
+    const exemplo = (varias ? res.partes[0] : res);
+
+    const sugereCabecalho = pareceCabecalho(exemplo.headers, exemplo.rows);
+
+    escolhaDaPlanilha = { res, link, ehCabecalho: sugereCabecalho };
+
+    const amostra = (exemplo.headers || []).slice(0, 6)
+
+        .map(h => `<code style="background:rgba(148,163,184,0.14); padding:1px 5px; border-radius:4px;">${escapeHtml(String(h))}</code>`)
+
+        .join(' <span style="color:#475569;">·</span> ');
+
+    const blocoPaginas = varias ? `
+        <div style="margin-top:18px; padding-top:16px; border-top:1px solid rgba(148,163,184,0.2);">
+            <div style="font-weight:800; color:#e2e8f0; margin-bottom:8px;">Esta planilha tem ${res.partes.length} páginas</div>
+            <table style="border-collapse:collapse; font-size:0.8rem; margin-bottom:12px;">
+                ${res.partes.map((p, i) => `<tr><td style="padding:2px 12px 2px 0;">${escapeHtml(p.nome)}</td>`
+                    + `<td id="acab-pag-linhas-${i}" data-linhas="${p.rows.length}"`
+                    + ` style="padding:2px 0; text-align:right; font-family:monospace; color:#94a3b8;">${p.rows.length}</td></tr>`).join('')}
+            </table>
+            <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer; margin-bottom:6px;">
+                <input type="radio" name="acab-paginas" value="juntas" checked style="margin-top:3px;">
+                <span><b>Tudo numa numeração só</b> — as linhas empilhadas numa tabela, com a coluna
+                <code>Página</code> dizendo de onde veio cada uma.</span>
+            </label>
+            <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
+                <input type="radio" name="acab-paginas" value="separadas" style="margin-top:3px;">
+                <span><b>Uma numeração por página</b> — cria ${res.partes.length} numerações, cada uma com o
+                banco da sua página e ligada a ela para atualizar depois. Copia o formato e os elementos
+                desta numeração.</span>
+            </label>
+        </div>` : '';
 
     const overlay = document.createElement('div');
 
-    overlay.id = 'escolha-paginas-overlay';
+    overlay.id = 'escolha-planilha-overlay';
 
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.82); z-index:100002;'
 
@@ -12524,46 +12662,102 @@ function abrirEscolhaDasPaginas(res, link) {
 
     overlay.innerHTML = `
         <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px;
-                    box-shadow:0 24px 60px rgba(0,0,0,0.6); width:min(600px,96vw); max-height:90vh;
+                    box-shadow:0 24px 60px rgba(0,0,0,0.6); width:min(640px,96vw); max-height:90vh;
                     display:flex; flex-direction:column; overflow:hidden;">
             <div style="padding:16px 22px; border-bottom:1px solid rgba(148,163,184,0.2);">
-                <h3 style="margin:0; font-size:1.05rem; font-weight:800; color:#e2e8f0;">
-                    📑 Esta planilha tem ${res.partes.length} páginas</h3>
+                <h3 style="margin:0; font-size:1.05rem; font-weight:800; color:#e2e8f0;">📑 Como trazer esta planilha</h3>
             </div>
-            <div style="padding:16px 22px; overflow:auto; color:#e2e8f0; font-size:0.88rem;">
-                <table style="border-collapse:collapse; font-size:0.82rem; margin-bottom:14px;">${linhas}</table>
-                <div style="color:#94a3b8; font-size:0.8rem; line-height:1.55;">
-                    <b style="color:#e2e8f0;">Uma numeração por página</b> cria ${res.partes.length} numerações,
-                    cada uma com o banco da sua página e ligada a ela para atualizar depois. Copia o formato e os
-                    elementos desta numeração.<br>
-                    <b style="color:#e2e8f0;">Tudo numa numeração só</b> empilha as ${total} linhas numa tabela
-                    única, com a coluna <code>Página</code> dizendo de onde veio cada uma.
+            <div style="padding:16px 22px; overflow:auto; color:#e2e8f0; font-size:0.88rem; line-height:1.5;">
+                <div style="font-weight:800; margin-bottom:8px;">A primeira linha${varias ? ' de cada página' : ''} é:</div>
+                <div style="padding:10px 12px; border-radius:8px; background:rgba(76,200,240,0.08);
+                            border:1px solid rgba(76,200,240,0.28); margin-bottom:12px; font-size:0.82rem;">
+                    ${amostra || '<span style="color:#94a3b8;">(vazia)</span>'}
                 </div>
+                <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer; margin-bottom:6px;">
+                    <input type="radio" name="acab-cabecalho" value="cabecalho" ${sugereCabecalho ? 'checked' : ''} style="margin-top:3px;">
+                    <span><b>O nome das colunas</b> — é o cabeçalho, e não sai impressa.</span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
+                    <input type="radio" name="acab-cabecalho" value="dado" ${sugereCabecalho ? '' : 'checked'} style="margin-top:3px;">
+                    <span><b>Já é dado</b> — é a primeira credencial da lista, e precisa ser impressa.
+                    As colunas passam a se chamar <code>Coluna 1</code>, <code>Coluna 2</code>…</span>
+                </label>
+                ${blocoPaginas}
             </div>
-            <div style="padding:14px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+            <div style="padding:14px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; gap:10px; justify-content:flex-end;">
                 <button type="button" data-role="cancelar" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-weight:700; cursor:pointer;">Cancelar</button>
-                <button type="button" data-role="juntas" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-weight:700; cursor:pointer;">Tudo numa numeração só</button>
-                <button type="button" data-role="separadas" style="border:none; background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border-radius:8px; padding:9px 18px; font-weight:800; cursor:pointer;">Uma numeração por página</button>
+                <button type="button" data-role="trazer" style="border:none; background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border-radius:8px; padding:9px 20px; font-weight:800; cursor:pointer;">Trazer</button>
             </div>
         </div>`;
 
-    overlay.querySelector('[data-role="cancelar"]').addEventListener('click', fecharEscolhaDasPaginas);
+    overlay.querySelector('[data-role="cancelar"]').addEventListener('click', fecharEscolhaDaPlanilha);
 
-    overlay.querySelector('[data-role="juntas"]').addEventListener('click', () => {
+    overlay.querySelector('[data-role="trazer"]').addEventListener('click', () => confirmarEscolhaDaPlanilha());
 
-        const guardado = escolhaDasPaginas;
+    // A contagem de cada página acompanha a escolha: com "já é dado" a linha que
+    // tinha virado cabeçalho volta para o corpo, e são 600 e não 599. Mostrar o
+    // número de antes seria a janela discordando do que ela mesma vai fazer.
+    overlay.querySelectorAll('input[name="acab-cabecalho"]').forEach(radio => {
 
-        fecharEscolhaDasPaginas();
+        radio.addEventListener('change', () => {
 
-        if (guardado) aplicarBancoNaNumeracao(guardado.res, guardado.link);
+            const ehDado = radio.value === 'dado' && radio.checked;
+
+            overlay.querySelectorAll('[data-linhas]').forEach(td => {
+
+                const base = parseInt(td.dataset.linhas, 10) || 0;
+
+                td.textContent = base + (ehDado ? 1 : 0);
+
+            });
+
+        });
 
     });
-
-    overlay.querySelector('[data-role="separadas"]').addEventListener('click', () => criarUmaNumeracaoPorPagina());
 
     document.body.appendChild(overlay);
 
 }
+
+/** O botão "Trazer": lê as duas escolhas e segue por um dos dois caminhos. */
+async function confirmarEscolhaDaPlanilha() {
+
+    const guardado = escolhaDaPlanilha;
+
+    if (!guardado) return;
+
+    const marcado = n => {
+
+        const el = document.querySelector(`#escolha-planilha-overlay input[name="${n}"]:checked`);
+
+        return el ? el.value : '';
+
+    };
+
+    const ehDado = marcado('acab-cabecalho') === 'dado';
+
+    const separar = marcado('acab-paginas') === 'separadas';
+
+    const res = ehDado ? comAPrimeiraLinhaComoDado(guardado.res) : guardado.res;
+
+    if (separar) {
+
+        escolhaDaPlanilha = Object.assign({}, guardado, { res });
+
+        await criarUmaNumeracaoPorPagina();
+
+        return;
+
+    }
+
+    const link = guardado.link;
+
+    fecharEscolhaDaPlanilha();
+
+    aplicarBancoNaNumeracao(res, link);
+
+}
+window.confirmarEscolhaDaPlanilha = confirmarEscolhaDaPlanilha;
 
 /**
  * Os elementos desta numeração, reapontados para as colunas de OUTRA página.
@@ -12617,13 +12811,13 @@ function elementosParaAPagina(elementos, colunasDeReferencia, colunasDaPagina) {
  */
 async function criarUmaNumeracaoPorPagina() {
 
-    const guardado = escolhaDasPaginas;
+    const guardado = escolhaDaPlanilha;
 
     if (!guardado) return;
 
     const { res, link } = guardado;
 
-    const botao = document.querySelector('#escolha-paginas-overlay [data-role="separadas"]');
+    const botao = document.querySelector('#escolha-planilha-overlay [data-role="trazer"]');
 
     if (botao) { botao.disabled = true; botao.textContent = 'Criando…'; }
 
@@ -12635,7 +12829,7 @@ async function criarUmaNumeracaoPorPagina() {
 
         toast('Selecione um formato antes de separar a planilha em numerações.', 'error');
 
-        if (botao) { botao.disabled = false; botao.textContent = 'Uma numeração por página'; }
+        if (botao) { botao.disabled = false; botao.textContent = 'Trazer'; }
 
         return;
 
@@ -12709,7 +12903,7 @@ async function criarUmaNumeracaoPorPagina() {
 
     }
 
-    fecharEscolhaDasPaginas();
+    fecharEscolhaDaPlanilha();
 
     // A mesma recarga que o `saveNumeracao` faz depois de gravar: sem ela a
     // lista de numerações continuaria mostrando o que havia antes.
@@ -12778,13 +12972,17 @@ window.buscarCsvDaWeb = async function() {
 
             'btn-buscar-num-csv', '⏳ Buscando…', (p) => baixarCsvDaWeb(link, p));
 
-        // Planilha de várias páginas: a escolha é do operador (23/08/2026).
-        // Empilhar tudo numa numeração só continua sendo o padrão, mas separar
-        // uma numeração por página é o que ele já fazia à mão — e é o que deixa
-        // cada modelo com o seu banco, em vez de todos carregando o caderno.
-        if (Array.isArray(res.partes) && res.partes.length > 1) {
+        // A janela só aparece quando há o que decidir (23/08/2026): a planilha
+        // tem mais de uma página, ou a primeira linha não parece cabeçalho.
+        // Planilha simples com cabeçalho claro entra direto, sem pergunta —
+        // perguntar o que já está respondido é atrito, não cuidado.
+        const varias = Array.isArray(res.partes) && res.partes.length > 1;
 
-            abrirEscolhaDasPaginas(res, link);
+        const exemplo = varias ? res.partes[0] : res;
+
+        if (varias || !pareceCabecalho(exemplo.headers, exemplo.rows)) {
+
+            abrirEscolhaDaPlanilha(res, link);
 
             return;
 

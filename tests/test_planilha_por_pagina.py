@@ -71,13 +71,13 @@ def test_o_cabecalho_continua_completo():
 def test_a_escolha_entre_juntar_e_separar_e_do_operador():
     js = _ler("frontend/script.js")
 
-    assert "function abrirEscolhaDasPaginas(" in js
+    assert "function abrirEscolhaDaPlanilha(" in js
     assert "Uma numeração por página" in js
     assert "Tudo numa numeração só" in js, "o caminho de antes precisa continuar oferecido"
 
     # E so aparece quando ha o que escolher.
-    i = js.index("if (Array.isArray(res.partes) && res.partes.length > 1)")
-    assert "abrirEscolhaDasPaginas" in js[i:i + 200]
+    i = js.index("window.buscarCsvDaWeb = async function()")
+    assert "abrirEscolhaDaPlanilha(res, link)" in js[i:i + 1600]
 
 
 def test_cada_numeracao_criada_fica_ligada_a_sua_aba():
@@ -105,4 +105,45 @@ def test_os_elementos_sao_reapontados_por_posicao():
     assert "JSON.parse(JSON.stringify(" in corpo, (
         "os elementos precisam ser copiados: sem isso, criar 19 numeracoes "
         "reapontaria os da numeracao aberta 19 vezes"
+    )
+
+
+def test_a_tela_pergunta_se_a_primeira_linha_e_cabecalho():
+    """As abas da planilha do Expointer nao tem cabecalho: a primeira linha ja e
+    uma credencial. O parser a tomava como nome das colunas -- sumia UMA
+    credencial por aba (19 no total) e o primeiro codigo virava nome de coluna.
+
+    Quem decide isso e o operador, olhando a primeira linha na janela. O sistema
+    so sugere.
+    """
+    js = _ler("frontend/script.js")
+
+    assert "function pareceCabecalho(" in js, "a sugestao sumiu"
+    assert "function primeiraLinhaComoDado(" in js, "o resgate da linha sumiu"
+    assert "Já é dado" in js and "O nome das colunas" in js, (
+        "a pergunta precisa estar na tela, com as duas respostas"
+    )
+
+
+def test_a_escolha_vale_para_a_tabela_E_para_as_paginas():
+    """Aplicar so num dos dois deixaria os dois caminhos discordando: a tabela
+    empilhada com a linha de volta e as numeracoes separadas sem ela."""
+    js = _ler("frontend/script.js")
+
+    i = js.index("function comAPrimeiraLinhaComoDado(")
+    corpo = js[i:js.index("\n}", i)]
+    assert "res.headers, res.rows" in corpo, "a tabela empilhada precisa ser ajustada"
+    assert "res.partes.map" in corpo, "e cada pagina crua tambem"
+
+
+def test_a_janela_so_aparece_quando_ha_o_que_decidir():
+    """Perguntar o que ja esta respondido e atrito, nao cuidado."""
+    js = _ler("frontend/script.js")
+
+    # A segunda ocorrencia: a primeira e a da propria janela.
+    i = js.index("window.buscarCsvDaWeb = async function()")
+    corpo = js[i:i + 1600]
+    assert "if (varias || !pareceCabecalho(" in corpo
+    assert "aplicarBancoNaNumeracao(res, link)" in corpo, (
+        "planilha simples com cabecalho claro precisa continuar entrando direto"
     )

@@ -39,7 +39,8 @@ function extrairFuncao(src, nome) {
     return src.slice(i, fim + 2);
 }
 
-const NOMES = ['nomeLivreDaColuna', 'juntarPaginas', 'elementosParaAPagina'];
+const NOMES = ['nomeLivreDaColuna', 'juntarPaginas', 'elementosParaAPagina',
+               'pareceCabecalho', 'primeiraLinhaComoDado'];
 
 let api;
 try {
@@ -160,14 +161,75 @@ function paginasDeExemplo() {
     ok(elementos[0].csv_column === 'A ok', 'a numeracao aberta nao e alterada', elementos[0]);
 })();
 
-// --- 3. A ligacao com a tela ------------------------------------------------
+// --- 3. A primeira linha e cabecalho, ou ja e dado? -------------------------
+//
+// Regra do usuario, 23/08/2026: a tela PERGUNTA. As abas da planilha do
+// Expointer nao tem linha de cabecalho -- a primeira linha ja e uma credencial
+// --, e o parser tomava essa linha como nome das colunas: sumia UMA credencial
+// por aba (19 no total) e o primeiro codigo virava o nome da coluna.
+
+(function aSugestaoLeOQueOCorpoDiz() {
+    // O caso real: a segunda coluna repete o nome do setor em todas as linhas,
+    // a primeira inclusive. Cabecalho nao se repete no corpo.
+    const semCabecalho = {
+        headers: ['301013226619', 'CONVIDADOS OFICIAIS'],
+        rows: [
+            { '301013226619': '301013227118', 'CONVIDADOS OFICIAIS': 'CONVIDADOS OFICIAIS' },
+            { '301013226619': '301013227219', 'CONVIDADOS OFICIAIS': 'CONVIDADOS OFICIAIS' },
+        ],
+    };
+    ok(api.pareceCabecalho(semCabecalho.headers, semCabecalho.rows) === false,
+        'valor que se repete no corpo denuncia que a 1a linha e dado');
+
+    const comCabecalho = {
+        headers: ['CODIGO', 'NOME'],
+        rows: [{ CODIGO: '1001', NOME: 'Maria' }, { CODIGO: '1002', NOME: 'Joao' }],
+    };
+    ok(api.pareceCabecalho(comCabecalho.headers, comCabecalho.rows) === true,
+        'cabecalho de verdade nao aparece no corpo');
+
+    ok(api.pareceCabecalho(['1001', '2002'], [{ '1001': '3', '2002': '4' }]) === false,
+        'primeira linha toda numerica e dado, nao nome de coluna');
+
+    ok(api.pareceCabecalho([], []) === true, 'sem colunas, nao ha o que suspeitar');
+})();
+
+(function aLinhaResgatadaVoltaInteiraENaPrimeiraPosicao() {
+    const r = api.primeiraLinhaComoDado(
+        ['301013226619', 'CONVIDADOS OFICIAIS'],
+        [{ '301013226619': '301013227118', 'CONVIDADOS OFICIAIS': 'CONVIDADOS OFICIAIS' }]
+    );
+
+    ok(r.headers.join(',') === 'Coluna 1,Coluna 2', 'as colunas ganham nome generico', r.headers);
+    ok(r.rows.length === 2, 'a linha que tinha virado cabecalho volta para o corpo', r.rows.length);
+    ok(r.rows[0]['Coluna 1'] === '301013226619' && r.rows[0]['Coluna 2'] === 'CONVIDADOS OFICIAIS',
+        'e volta na PRIMEIRA posicao, que e onde ela estava na planilha', r.rows[0]);
+    ok(r.rows[1]['Coluna 1'] === '301013227118', 'o resto do corpo segue na ordem', r.rows[1]);
+})();
+
+(function nenhumDadoSePerdeNaTroca() {
+    const headers = ['A', 'B', 'C'];
+    const rows = [{ A: '1', B: '2', C: '3' }, { A: '4', B: '5', C: '6' }];
+    const r = api.primeiraLinhaComoDado(headers, rows);
+
+    const antes = [headers, ['1', '2', '3'], ['4', '5', '6']];
+    const depois = r.rows.map(l => r.headers.map(h => l[h]));
+    ok(JSON.stringify(antes) === JSON.stringify(depois),
+        'a tabela inteira e a mesma, so que sem cabecalho', depois);
+})();
+
+// --- 4. A ligacao com a tela ------------------------------------------------
 
 (function aEscolhaEDoOperador() {
-    ok(/function abrirEscolhaDasPaginas\(/.test(SCRIPT), 'existe a janela de escolha');
+    ok(/function abrirEscolhaDaPlanilha\(/.test(SCRIPT), 'existe a janela de escolha');
     ok(/Uma numeração por página/.test(SCRIPT), 'com a opcao de separar');
     ok(/Tudo numa numeração só/.test(SCRIPT), 'e a de empilhar, que continua sendo o caminho de antes');
-    const i = SCRIPT.indexOf('if (Array.isArray(res.partes) && res.partes.length > 1)');
-    ok(i > 0, 'a busca so pergunta quando ha mais de uma pagina');
+    ok(/Já é dado/.test(SCRIPT), 'e a pergunta sobre a primeira linha');
+
+    // A janela so aparece quando ha o que decidir: perguntar o que ja esta
+    // respondido e atrito, nao cuidado.
+    const i = SCRIPT.indexOf('if (varias || !pareceCabecalho(exemplo.headers, exemplo.rows))');
+    ok(i > 0, 'a busca so pergunta quando ha varias paginas ou a 1a linha parece dado');
 })();
 
 (function cadaNumeracaoNasceLigadaASuaAba() {

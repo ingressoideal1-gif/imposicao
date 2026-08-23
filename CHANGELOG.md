@@ -24,18 +24,27 @@ que não completava era subir 45 MB pela internet da gráfica.
 outras 18 abas. Chave ausente já é lida como vazia em todo lugar que consome estas linhas (o motor, o
 editor, a Conferência de dados), então a economia não custa nada: **45,4 MB → 4,9 MB**.
 
-**2. A escolha passou a ser do operador.** Ao buscar uma planilha de várias páginas, a tela pergunta:
-*tudo numa numeração só* (o caminho de antes) ou **uma numeração por página**. A segunda cria uma
+**2. A tela pergunta o que ela não pode adivinhar.** Ao buscar, a janela "Como trazer esta planilha"
+mostra a primeira linha e pergunta se ela é **o nome das colunas** ou **já é dado** — e, quando há
+várias páginas, se elas vêm *numa numeração só* (o caminho de antes) ou **uma numeração por página**. A segunda cria uma
 numeração para cada aba, copiando formato, tipo e elementos da numeração aberta, com o banco daquela
 aba — e cada uma fica ligada à SUA aba pelo `#gid=`, de modo que o 🔄 atualizar da planilha continua
 valendo uma a uma. É o que o usuário já fazia à mão no pedido 21085. Maior pacote: **1,04 MB**.
 
+**A pergunta da primeira linha corrigiu um erro que estava passando calado:** as abas dessa planilha
+não têm cabeçalho, e o parser tomava a primeira credencial como nome das colunas — sumia **uma
+credencial por aba**, 19 no total, e o primeiro código virava o nome da coluna. Marcando "já é dado",
+as colunas passam a `Coluna 1`, `Coluna 2`… e a linha volta para o corpo: as 46.921 linhas viraram
+46.940. A janela sugere a resposta (cabeçalho não se repete no corpo; cabeçalho todo numérico é raro)
+mas quem decide é o operador, e ela só aparece quando há o que decidir.
+
 Os elementos são reapontados pela **posição** da coluna (cada aba tem nomes próprios; a ordem é o que
 se mantém). Coluna sem correspondente fica como está e é relatada, em vez de adivinhada.
 
-Testes: `tests/planilha_por_pagina_harness.js` (27 verificações) e `tests/test_planilha_por_pagina.py`
-(6 testes). Conferido com a planilha real: as 19 páginas aparecem na escolha, e as 19 numerações saem
-com o banco e o `gid` de cada uma.
+Testes: `tests/planilha_por_pagina_harness.js` (37 verificações) e `tests/test_planilha_por_pagina.py`.
+Conferido com a planilha real: a janela mostra `309013329788 · ESTRANGEIROS` e já sugere "já é dado";
+as 19 numerações saem com 600, 40, 1300, 200… linhas — cada uma com a sua credencial de volta — e com
+o `gid` da sua aba.
 
 ---
 
