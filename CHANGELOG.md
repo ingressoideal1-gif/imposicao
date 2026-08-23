@@ -4,7 +4,29 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v697** — 2026-08-23 | Agente **1.2.191**
+## Versão atual: **v698** — 2026-08-23 | Agente **1.2.192**
+
+---
+
+## [v698 — 2026-08-23] — Conferência de dados: a 1ª linha ao lado da numeração, e o layout que cabe
+
+Ajuste pedido pelo usuário: *"em 'Conferência de dados' deve mostrar na coluna '1ª linha' apenas a
+informação da linha, a coluna deve vir após a coluna 'Numeração / arquivo'; não está aparecendo as
+últimas colunas, rever layout"*.
+
+**A coluna mudou de lugar e de forma.** Agora vem logo depois de "Numeração / arquivo" e mostra
+**apenas os valores** da primeira linha (`IDL1001 · Maria Aparecida da Silva · Construtora Horizonte
+Ltda`), sem o nome da coluna na frente de cada um. Repetido linha a linha, esse nome era a mesma
+palavra dezenas de vezes na mesma tela — e a largura que ele comia era o que empurrava "Vazios" e
+"Situação" para fora da janela. Ele continua no hover e no relatório copiado, onde o texto precisa se
+explicar sozinho.
+
+**E o layout passou a caber.** A janela vai a `min(1360px, 96vw)`, as quatro colunas de contagem não
+quebram mais em duas linhas, e a tabela rola na horizontal dentro do próprio box se ainda assim
+faltar espaço. Medido em 1280, 1366, 1600 e 1920 px: as oito colunas cabem sem rolagem em todas.
+
+Testes: `tests/csv_fatia_do_modelo_harness.js` — a ordem exata das oito colunas, a célula desenhando
+valor e não par, e as colunas de contagem sem quebra (85 verificações).
 
 ---
 

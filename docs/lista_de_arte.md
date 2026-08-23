@@ -321,7 +321,9 @@ a janela é `abrirConferenciaDeDados`.
 
 ### A coluna "1ª linha"
 
-Pedido do usuário em 23/08/2026. É por onde a fatia daquele modelo **começa** —
+Pedido do usuário em 23/08/2026. Vem **logo depois de "Numeração / arquivo"** e
+mostra **apenas os valores** da primeira linha, separados por ` · `. É por onde a
+fatia daquele modelo **começa** —
 numa numeração dividida entre vários modelos, ler a primeira linha de cada um é o
 jeito mais rápido de ver que a distribuição saiu certa (um começa no 1001, o
 outro no 1051) sem abrir o CSV modelo a modelo.
@@ -330,10 +332,10 @@ Como ela é montada (`primeiraLinhaDoModelo`):
 
 - vem da **fatia** do modelo, nunca do topo do banco inteiro — é essa distinção
   que faz a coluna valer alguma coisa;
-- as **colunas do banco vêm primeiro** e em branco forte, porque são as que vão
-  para o papel; as demais colunas do CSV vêm depois, em cinza, e só quando têm
-  valor (numa credencial é o NOME que faz o operador reconhecer a fatia, mesmo
-  que o QR leia outra coluna);
+- os **valores das colunas do banco vêm primeiro** e em branco forte, porque são
+  os que vão para o papel; os das demais colunas do CSV vêm depois, em cinza, e
+  só quando têm valor (numa credencial é o NOME que faz o operador reconhecer a
+  fatia, mesmo que o QR leia outra coluna);
 - **coluna do banco vazia aparece como `(vazio)`** — uma coluna apontada que está
   em branco na primeira linha é exatamente o que este relatório existe para
   mostrar. Coluna comum vazia é omitida;
@@ -342,8 +344,18 @@ Como ela é montada (`primeiraLinhaDoModelo`):
 - a numeração **sem** elemento de banco também mostra a 1ª linha, se tiver CSV —
   o dado existe, e é dele que o operador quer ver o começo. O que ela continua
   não tendo é contagem de códigos;
-- na tela cabem seis pares e o resto vira `+N`; a linha inteira fica no
-  `title` (passar o mouse) e no relatório copiado.
+- **o nome da coluna não aparece na célula**: repetido em cada linha, era a
+  mesma palavra dezenas de vezes na mesma tela, e a largura que ele comia
+  empurrava "Vazios" e "Situação" para fora da janela. Ele fica no `title`
+  (passar o mouse) e no relatório copiado, onde o texto precisa se explicar
+  sozinho;
+- na tela cabem dez valores e o resto vira `+N`.
+
+Sobre a largura: a janela vai a `min(1360px, 96vw)`, as quatro colunas de
+contagem levam `white-space: nowrap` (número quebrado em duas linhas não se lê, e
+era a quebra delas que empurrava o resto para fora) e a tabela rola na horizontal
+dentro do próprio box quando ainda assim não couber. Conferido em 1280, 1366,
+1600 e 1920 px: as oito colunas cabem sem rolagem.
 
 ## O link para o sistema parceiro
 

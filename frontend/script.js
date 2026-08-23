@@ -14159,35 +14159,42 @@ async function abrirConferenciaDeDados(osId) {
     try { await recarregarNumeracoesDoPedido(osId); } catch (e) { /* segue com o que tem */ }
     const rel = conferenciaDeDadosDoPedido(osId);
 
+    // As quatro colunas de contagem não quebram: número quebrado em duas linhas
+    // não se lê, e é a quebra delas que empurrava Vazios e Situação para fora.
+    const NUM = 'text-align:center; white-space:nowrap;';
+
     const linhasHtml = rel.modelos.map(m => {
         const banco = m.usaBanco
-            ? `<td style="text-align:center;">${m.linhas === m.qtd ? '' : '<span style="color:#f87171;font-weight:800;">'}${m.linhas}${m.linhas === m.qtd ? '' : '</span>'} / ${m.qtd}</td>
-               <td style="text-align:center;">${m.codigos}</td>
-               <td style="text-align:center;${m.repetidosDentro ? 'color:#f87171;font-weight:800;' : ''}">${m.repetidosDentro}</td>
-               <td style="text-align:center;${m.vazios ? 'color:#f87171;font-weight:800;' : ''}">${m.vazios}</td>`
-            : `<td colspan="4" style="text-align:center;color:#94a3b8;">não usa banco (qtd ${m.qtd})</td>`;
+            ? `<td style="${NUM}">${m.linhas === m.qtd ? '' : '<span style="color:#f87171;font-weight:800;">'}${m.linhas}${m.linhas === m.qtd ? '' : '</span>'} / ${m.qtd}</td>
+               <td style="${NUM}">${m.codigos}</td>
+               <td style="${NUM}${m.repetidosDentro ? 'color:#f87171;font-weight:800;' : ''}">${m.repetidosDentro}</td>
+               <td style="${NUM}${m.vazios ? 'color:#f87171;font-weight:800;' : ''}">${m.vazios}</td>`
+            : `<td colspan="4" style="${NUM}color:#94a3b8;">não usa banco (qtd ${m.qtd})</td>`;
         const avisos = m.avisos.length
             ? `<span style="color:#fca5a5;">${escapeHtml(m.avisos.join(' · '))}</span>`
             : '<span style="color:#4ade80;">✓</span>';
-        // A 1ª LINHA da fatia: por onde o banco daquele modelo começa. As colunas
-        // do banco (as que vão para o papel) saem em branco forte; as demais, no
-        // cinza do resto da tabela. Seis pares cabem sem esticar a coluna — o
-        // resto vira "+N" e o texto inteiro fica no title e no relatório copiado.
-        const TETO = 6;
-        const par = p => `<span style="white-space:nowrap;"><span style="color:#94a3b8;">${escapeHtml(p.coluna)}:</span> `
-            + `<span style="${p.doBanco ? 'color:#e2e8f0;font-weight:700;' : 'color:#cbd5e1;'}">`
-            + `${escapeHtml(p.valor || '(vazio)')}</span></span>`;
+        // A 1ª LINHA da fatia: por onde o banco daquele modelo começa. Só os
+        // VALORES, na ordem em que estão na linha (pedido do usuário,
+        // 23/08/2026) — o nome da coluna repetido em cada célula era a mesma
+        // palavra dezenas de vezes na mesma tela, e empurrava o resto para fora.
+        // Os valores das colunas do banco, que são os que vão para o papel, saem
+        // em branco forte; os demais, no cinza do resto da tabela. Quem quiser
+        // saber de que coluna veio cada valor passa o mouse: o title traz a
+        // linha com os nomes, e é assim que ela vai no relatório copiado.
+        const TETO = 10;
+        const valor = p => `<span style="${p.doBanco ? 'color:#e2e8f0;font-weight:700;' : 'color:#cbd5e1;'}">`
+            + `${escapeHtml(p.valor || '(vazio)')}</span>`;
         const pares = m.primeiraPares || [];
         const primeira = pares.length
-            ? pares.slice(0, TETO).map(par).join('<span style="color:#475569;"> · </span>')
+            ? pares.slice(0, TETO).map(valor).join('<span style="color:#475569;"> · </span>')
               + (pares.length > TETO ? `<span style="color:#94a3b8;"> · +${pares.length - TETO}</span>` : '')
             : '<span style="color:#64748b;">—</span>';
         return `<tr style="border-top:1px solid rgba(148,163,184,0.15);">
                     <td><strong>${escapeHtml(m.nome)}</strong></td>
                     <td>${escapeHtml(m.numeracao || '—')}<br><span style="color:#94a3b8;font-size:0.72rem;">${escapeHtml(m.arquivo || '')}</span></td>
+                    <td style="max-width:260px; font-size:0.76rem; line-height:1.4; word-break:break-word;" title="${escapeHtml(m.primeira || '')}">${primeira}</td>
                     ${banco}
-                    <td style="max-width:300px; padding-left:14px; font-size:0.76rem; line-height:1.4; word-break:break-word;" title="${escapeHtml(m.primeira || '')}">${primeira}</td>
-                    <td style="font-size:0.78rem;">${avisos}</td>
+                    <td style="font-size:0.78rem; min-width:140px; padding-left:16px;">${avisos}</td>
                 </tr>`;
     }).join('');
 
@@ -14202,25 +14209,31 @@ async function abrirConferenciaDeDados(osId) {
     overlay.id = 'conferencia-dados-overlay';
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.78); z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;';
     overlay.innerHTML = `
-        <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:1100px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:min(1360px, 96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
             <div style="padding:16px 22px; border-bottom:1px solid rgba(148,163,184,0.2); display:flex; align-items:center; gap:12px;">
                 <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#e2e8f0;">🔎 Conferência de dados — Pedido ${escapeHtml(String(numero))}</h3>
                 <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">lido do banco agora</span>
             </div>
             <div style="padding:16px 22px; overflow:auto; color:#e2e8f0; font-size:0.88rem; display:flex; flex-direction:column; gap:14px;">
                 ${resumo}
-                <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-                    <thead><tr style="color:#94a3b8; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em;">
-                        <th style="padding:6px 4px;">Modelo</th><th>Numeração / arquivo</th>
-                        <th style="text-align:center;">Linhas / Qtd</th><th style="text-align:center;">Códigos</th>
-                        <th style="text-align:center;">Repet. dentro</th><th style="text-align:center;">Vazios</th>
-                        <th style="padding-left:14px;">1ª linha</th><th>Situação</th>
-                    </tr></thead>
-                    <tbody>${linhasHtml}</tbody>
-                </table>
+                <!-- A tabela rola na horizontal DENTRO deste box. Sem isto, num
+                     pedido com CSV largo as últimas colunas (Vazios e Situação)
+                     ficavam fora da janela, sem barra nenhuma para alcançá-las. -->
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                        <thead><tr style="color:#94a3b8; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em;">
+                            <th style="padding:6px 4px;">Modelo</th><th>Numeração / arquivo</th>
+                            <th>1ª linha</th>
+                            <th style="${NUM}">Linhas / Qtd</th><th style="${NUM}">Códigos</th>
+                            <th style="${NUM}">Repet. dentro</th><th style="${NUM}">Vazios</th>
+                            <th style="padding-left:16px;">Situação</th>
+                        </tr></thead>
+                        <tbody>${linhasHtml}</tbody>
+                    </table>
+                </div>
                 <div style="color:#94a3b8; font-size:0.74rem; line-height:1.4;">
                     "Códigos" são os valores das colunas apontadas pelos elementos de banco de dados — o que vai para o papel. Linhas contam a fatia do modelo.
-                    "1ª linha" é por onde a fatia daquele modelo começa, com as colunas do banco em destaque — passe o mouse para ver a linha inteira, que também vai no relatório copiado.
+                    "1ª linha" é por onde a fatia daquele modelo começa: os valores da primeira linha, com os do banco em destaque — passe o mouse para ver de que coluna veio cada um, que é como a linha vai no relatório copiado.
                     A conferência cobre: banco incompleto, Qtd × células, repetições dentro do CSV, células vazias e células repetidas entre modelos deste pedido.
                 </div>
             </div>

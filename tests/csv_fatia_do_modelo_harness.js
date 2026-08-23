@@ -476,9 +476,44 @@ function extrairFuncao(src, nome) {
 
     (function aPrimeiraLinhaVaiNoTextoCopiadoENaTabela() {
         ok(/1ª linha: CODIGO: 1001/.test(api.textoDaConferencia(api.conferenciaDeDadosDoPedido('os-fatia'), 1)),
-            'o relatorio copiado leva a 1a linha inteira');
+            'o relatorio copiado leva a 1a linha COM os nomes das colunas');
         ok(/<th[^>]*>1ª linha<\/th>/.test(script), 'a tabela da janela tem a coluna 1a linha');
         ok(/primeiraPares/.test(script), 'e a celula desenha os pares dessa linha');
+    })();
+
+    // ─── O lugar e a forma da coluna (ajuste do usuario, 23/08/2026) ──────────
+    //
+    // "deve mostrar na coluna 1a linha apenas a informacao da linha, a coluna
+    // deve vir apos a coluna Numeracao / arquivo".
+
+    (function aColunaVemLogoDepoisDaNumeracao() {
+        const i = script.indexOf('<th style="padding:6px 4px;">Modelo</th>');
+        ok(i > 0, 'o cabecalho da tabela continua onde estava');
+        const cabec = script.slice(i, script.indexOf('</tr></thead>', i));
+        const ordem = (cabec.match(/<th[^>]*>([^<]+)<\/th>/g) || [])
+            .map(t => t.replace(/<[^>]+>/g, '').trim());
+        ok(ordem.join(' | ') === 'Modelo | Numeração / arquivo | 1ª linha | Linhas / Qtd | Códigos | Repet. dentro | Vazios | Situação',
+            'a 1a linha vem logo depois da Numeracao / arquivo', ordem);
+    })();
+
+    (function aCelulaMostraSoOsValores() {
+        // O nome da coluna repetido em cada celula era a mesma palavra dezenas de
+        // vezes na mesma tela, e empurrava Vazios e Situacao para fora da janela.
+        const i = script.indexOf('const valor = p =>');
+        ok(i > 0, 'a celula da 1a linha desenha um VALOR, nao um par');
+        const corpo = script.slice(i, script.indexOf(';\n', script.indexOf('escapeHtml(p.valor', i)));
+        ok(corpo.indexOf('p.coluna') === -1,
+            'o nome da coluna NAO aparece na celula -- ele fica no title e no relatorio', corpo);
+        ok(corpo.indexOf('p.doBanco') > 0, 'mas o valor do banco continua em destaque');
+    })();
+
+    (function asColunasDeContagemNaoQuebram() {
+        // Numero quebrado em duas linhas nao se le, e era a quebra delas que
+        // empurrava as ultimas colunas para fora.
+        ok(/const NUM = 'text-align:center; white-space:nowrap;'/.test(script),
+            'as quatro colunas de contagem nao quebram');
+        ok(/overflow-x:auto/.test(script.slice(script.indexOf('const NUM ='))),
+            'e a tabela rola na horizontal quando ainda assim nao couber');
     })();
 })();
 
