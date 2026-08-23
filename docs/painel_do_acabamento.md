@@ -916,6 +916,57 @@ Na janela que **cobra o peso ao fechar o setor**, o campo já nasce com a soma
 dos volumes quando ela existe, e a janela diz de onde o número saiu. Sem volume,
 aquela janela é exatamente a de antes.
 
+### Cada caixa é conferida pela quantidade que leva
+
+Pedido do usuário em 23/08/2026, no dia seguinte ao dos volumes:
+
+> "Ao criar um volume de apenas 1 modelo (dividir um modelo em mais de um
+> volume) deve ser informado a quantidade de itens do volume e calcular o peso
+> da quantidade informada, seguindo a mesma regra dos 5% para cada volume, ao
+> criar um volume de vários modelos, deve somar as quantidades dos modelos
+> selecionados e seguir mesma regra dos 5%."
+
+A janela de pesar mostra, ao lado do campo do peso, **`est. 10,400 kg`** — a
+quantidade digitada vezes o peso da peça. Um modelo só ou cinco, a conta é a
+mesma; o que muda é quantas parcelas ela tem. Acima de 5 % de diferença, gravar
+**pede a senha de liberação**, exatamente como o peso do setor.
+
+**A base vem do ERP.** `produtos_proposta.peso_total` é coluna gerada
+(`peso_uni * qtd`), em gramas; dividida pela quantidade da linha devolve o peso
+unitário que o ERP guardou. Conferido no pedido 21085: 141.128 g ÷ 27.140 un =
+**5,2 g a peça**. O modelo chega na sua linha pelo `id_produto_proposta_origem`.
+
+É por **unidade**, e não por modelo, de propósito: várias credenciais diferentes
+saem da mesma linha da proposta — as oito do 21085 saem da linha 2281 — e o que
+elas têm em comum é o peso de cada peça.
+
+**O que isso fecha.** O peso por setor só é conferido quando o último modelo
+dele fica pronto. Até lá, uma caixa pesada errado — 30 kg digitados numa caixa de
+3 — passava sem ninguém ver, e a soma dos volumes só denunciava o engano no fim,
+quando o material já estava fechado.
+
+Três cuidados que o código carrega:
+
+- **A conta se refaz a cada tecla.** No box do setor a base é fixa (a tiragem
+  inteira), e basta repintar quando o peso é gravado. Aqui a base **muda com o
+  que o operador digita**: baixar de 3.000 para 1.500 muda o peso esperado da
+  caixa. Por isso as quantidades são lidas do DOM (`itensDigitadosDoVolume`), e
+  não do estado de quando a janela abriu.
+- **Sem base no ERP a tela não inventa uma.** O campo mostra `est. —` e o volume
+  grava como gravava. Modelo sem peso no meio de outros que têm entraria como
+  zero e faria a estimativa sair baixa — acusando divergência em cima de um
+  volume certo —, então a tela diz `(1 modelo sem peso no ERP)` em vez de
+  esconder o buraco.
+- **Cancelar a senha não apaga o trabalho.** A janela do volume é **escondida**,
+  não desmontada, enquanto o popup da senha está na frente; ao cancelar ela volta
+  com os modelos escolhidos e as quantidades digitadas, mais um recado dizendo
+  por que não gravou.
+
+A régua é a **mesma função** do setor (`precisaDeLiberacao`), e a tolerância é a
+mesma constante. Duas réguas para a mesma pergunta seriam o começo de uma
+discordar da outra — o setor liberando o que o volume trava. Há teste contando as
+ocorrências de `TOLERANCIA_DO_PESO`.
+
 ### Onde isso mora, e por que ali
 
 Duas tabelas **nossas**: `producao_volumes` e `producao_volume_itens`

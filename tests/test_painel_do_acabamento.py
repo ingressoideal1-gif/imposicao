@@ -851,3 +851,113 @@ def test_setor_sem_volume_continua_sendo_um_volume_unico():
     corpo = js[i:js.index("\n    }", i)]
     assert "1 volume único" in corpo, "sem volume, a tela diz o que vai acontecer"
     assert "Dividir em volumes" in corpo, "e oferece a saida na propria tela"
+
+
+# ─── O peso esperado de cada volume (23/08/2026, segunda rodada) ────────────
+#
+# Pedido do usuario no dia seguinte ao dos volumes: "ao criar um volume de
+# apenas 1 modelo (dividir um modelo em mais de um volume) deve ser informado a
+# quantidade de itens do volume e calcular o peso da quantidade informada,
+# seguindo a mesma regra dos 5% para cada volume, ao criar um volume de varios
+# modelos, deve somar as quantidades dos modelos selecionados e seguir mesma
+# regra dos 5%".
+
+
+def test_a_base_do_peso_vem_da_linha_da_proposta():
+    """`peso_total` e coluna gerada (`peso_uni * qtd`), em GRAMAS.
+
+    Dividir pela quantidade devolve exatamente o peso unitario que o ERP
+    guardou -- conferido no pedido 21085: 141.128 g / 27.140 un = 5,2 g.
+
+    E por UNIDADE, e nao por modelo, porque varias credenciais diferentes saem
+    da mesma linha da proposta (as oito do 21085 saem da linha 2281). O que elas
+    tem em comum e o peso de cada peca.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function gramasPorUnidadeDaLinha(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "total / qtd" in corpo, "a base e o peso da linha dividido pela quantidade dela"
+    assert "qtd <= 0" in corpo, "linha sem quantidade nao pode virar divisao por zero"
+
+    # O modelo chega na linha pelo `id_produto_proposta_origem`, que o
+    # `loadOSItens` traz porque le `*`.
+    i = js.index("function gramasPorUnidadeDoModelo(")
+    assert "id_produto_proposta_origem" in js[i:i + 400]
+
+
+def test_o_volume_usa_a_mesma_regua_dos_cinco_por_cento_do_setor():
+    """A mesma funcao, e nao uma copia com outra tolerancia.
+
+    Duas reguas para a mesma pergunta e o comeco de uma discordar da outra: o
+    setor liberando o que o volume trava, ou o contrario.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function confirmarVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "estimadoDoVolume(itens, modelosDoPedidoAberto())" in corpo, (
+        "o peso esperado tem de sair das quantidades digitadas"
+    )
+    assert "precisaDeLiberacao(peso, est.kg)" in corpo, (
+        "a conferencia precisa passar pela MESMA funcao que o peso do setor usa"
+    )
+    assert "abrirPopupDaLiberacao()" in corpo, "e abrir a mesma janela de senha"
+
+    # Uma tolerancia so no arquivo inteiro.
+    assert js.count("TOLERANCIA_DO_PESO") <= 3, (
+        "apareceu uma segunda tolerancia: as duas reguas vao discordar um dia"
+    )
+
+
+def test_um_modelo_e_varios_modelos_seguem_a_mesma_conta():
+    """"some as quantidades dos modelos selecionados" -- e a mesma soma vale
+    para um modelo so, que e a soma de uma parcela."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function estimadoDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "gramas += porUn * (i.qtd || 0)" in corpo, (
+        "cada modelo entra pela quantidade que vai NAQUELA caixa"
+    )
+    assert "semBase" in corpo, (
+        "modelo sem peso no ERP entraria como zero e faria a estimativa sair "
+        "baixa -- a tela precisa contar quantos sao"
+    )
+    assert "if (!comBase) return { kg: null" in corpo, (
+        "sem base nenhuma o resultado e null, e nao zero: zero acusaria "
+        "divergencia em cima de todo volume"
+    )
+
+
+def test_a_conta_se_refaz_a_cada_tecla():
+    """No box do setor a base e fixa (a tiragem). Aqui ela MUDA com o que o
+    operador digita: baixar de 3.000 para 1.500 muda o peso esperado da caixa.
+    """
+    js = _ler("frontend/acabamento.js")
+
+    assert "oninput=\"AcabamentoPainel.recalcularVolume()\"" in js, (
+        "os campos da janela precisam refazer a conta enquanto se digita"
+    )
+    i = js.index("function itensDigitadosDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "document.getElementById('acab-vol-qtd-'" in corpo, (
+        "as quantidades tem de ser lidas do DOM, e nao do estado de quando a "
+        "janela abriu"
+    )
+
+
+def test_cancelar_a_senha_nao_apaga_o_trabalho_do_operador():
+    """A trava tem de ter saida, e a saida nao pode custar refazer a escolha
+    dos modelos."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function cancelarLiberacao(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "mostrarPopupDoVolume()" in corpo, "a janela do volume precisa voltar"
+
+    i = js.index("function esconderPopupDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "display = 'none'" in corpo and "removeChild" not in corpo, (
+        "esconder nao pode desmontar a janela: o que ele digitou tem de sobreviver"
+    )

@@ -136,6 +136,7 @@
         pesos: {},          // 'SETOR' -> { peso, existe } do pedido aberto
         pesosDoPedido: null,// de qual pedido é o mapa acima
         estimados: {},      // 'SETOR' -> kg estimado (só os que têm; ausente = null)
+        gramasPorUnidade: {},// id da linha da proposta -> gramas de UMA unidade
         liberacaoPendente: null, // o peso fora dos 5 % que espera a senha (ver gravarPeso)
         prontoPendente: null,    // o "Pronto" que espera o peso do setor (23/08/2026)
 
@@ -1766,6 +1767,7 @@
      */
     async function carregarEstimados(numeroDoPedido) {
         tela.estimados = {};
+        tela.gramasPorUnidade = {};
         const idInt = parseInt(numeroDoPedido);
         if (isNaN(idInt)) return;
         const aberto = tela.pedidoAberto;
@@ -1786,10 +1788,36 @@
                 }
             });
             tela.estimados = estimadoPorSetor(data, setorPorProduto);
+            tela.gramasPorUnidade = gramasPorUnidadeDaLinha(data);
         } catch (e) {
             console.warn('[acabamento] não deu para ler o peso estimado por setor:', e);
             tela.estimados = {};
+            tela.gramasPorUnidade = {};
         }
+    }
+
+    /**
+     * Quanto pesa UMA unidade, por linha da proposta: `{ '2281': 5.2 }`.
+     *
+     * `peso_total` é coluna gerada, `peso_uni * qtd`, em gramas — então a
+     * divisão devolve exatamente o `peso_uni` que o ERP guardou. Conferido no
+     * pedido 21085 em 23/08/2026: 141.128 g ÷ 27.140 un = 5,2 g.
+     *
+     * É por unidade, e não por modelo, de propósito: várias credenciais
+     * diferentes saem da MESMA linha da proposta (as oito do 21085 saem da
+     * linha 2281), e o que elas têm em comum é o peso de cada peça.
+     */
+    function gramasPorUnidadeDaLinha(linhas) {
+        const mapa = {};
+        (linhas || []).forEach(l => {
+            if (!l) return;
+            const qtd = Number(l.qtd);
+            const total = Number(l.peso_total);
+            if (!isFinite(qtd) || qtd <= 0) return;
+            if (!isFinite(total) || total <= 0) return;
+            mapa[String(l.id)] = total / qtd;
+        });
+        return mapa;
     }
 
     /**
@@ -2919,6 +2947,66 @@
         return Math.round(peso * 1000) - Math.round(soma * 1000);
     }
 
+    // ─── O peso esperado de UM volume, e a regra dos 5 % nele ───────────────
+    //
+    // Pedido do usuário em 23/08/2026, no dia seguinte ao dos volumes:
+    //
+    //   "Ao criar um volume de apenas 1 modelo (dividir um modelo em mais de um
+    //    volume) deve ser informado a quantidade de itens do volume e calcular o
+    //    peso da quantidade informada, seguindo a mesma regra dos 5% para cada
+    //    volume, ao criar um volume de vários modelos, deve somar as quantidades
+    //    dos modelos selecionados e seguir mesma regra dos 5%."
+    //
+    // É a mesma régua do setor, aplicada à caixa: peso esperado = quantidade ×
+    // peso da peça. Um volume com um modelo só e um com cinco seguem a mesma
+    // conta — o que muda é quantas parcelas ela tem.
+    //
+    // Isso fecha um buraco que o peso por setor não alcançava. O setor só é
+    // conferido quando o último modelo dele fica pronto; até lá, uma caixa
+    // pesada errado — 30 kg digitados numa caixa de 3 — passava sem ninguém
+    // ver, e a soma dos volumes só denunciava o engano no fim.
+
+    /**
+     * Quanto pesa UMA unidade deste modelo, em gramas — ou `null`.
+     *
+     * O modelo aponta para a linha da proposta pelo `id_produto_proposta_origem`
+     * (o `loadOSItens` traz a coluna, porque lê `*`), e é dela que sai o peso
+     * unitário que o ERP guardou.
+     */
+    function gramasPorUnidadeDoModelo(item) {
+        const origem = item && item.id_produto_proposta_origem;
+        if (origem === undefined || origem === null || origem === '') return null;
+        const g = tela.gramasPorUnidade[String(origem)];
+        return (g === undefined || !(Number(g) > 0)) ? null : Number(g);
+    }
+
+    /**
+     * O peso esperado do volume, em kg, a partir das quantidades que vão nele.
+     *
+     * Devolve `{ kg, semBase }`. `kg` é `null` quando NENHUM dos modelos tem
+     * peso unitário no ERP — sem base não há o que comparar, e inventar uma
+     * seria pior do que não conferir.
+     *
+     * `semBase` conta os modelos que ficaram de fora da conta. Modelo sem peso
+     * no meio de outros que têm entra como zero e faz a estimativa sair baixa,
+     * o que acusaria divergência em cima de um volume certo — por isso a tela
+     * diz quantos são, em vez de esconder o buraco.
+     */
+    function estimadoDoVolume(itens, modelos) {
+        let gramas = 0;
+        let comBase = 0;
+        let semBase = 0;
+        (itens || []).forEach(i => {
+            const item = (modelos || []).find(m => String(m.id) === String(i.modeloId));
+            const porUn = gramasPorUnidadeDoModelo(item);
+            if (porUn === null) { semBase++; return; }
+            comBase++;
+            gramas += porUn * (i.qtd || 0);
+        });
+        if (!comBase) return { kg: null, semBase };
+        return { kg: Math.round(gramas) / 1000, semBase };
+    }
+
     /** "20 g", "1,250 kg" — a diferença dita como o operador a lê. */
     function textoDaDiferenca(gramas) {
         const g = Math.abs(gramas || 0);
@@ -3358,6 +3446,8 @@
                 </span>
                 <input type="text" inputmode="numeric" id="acab-vol-qtd-${esc(i.modeloId)}"
                        value="${esc(numeroComPonto(i.qtd))}"
+                       oninput="AcabamentoPainel.recalcularVolume()"
+                       title="Quantas unidades deste modelo vão nesta caixa — é ela que dá o peso esperado"
                        style="width: 92px; text-align: right; background: ${AZUL.fundo};
                               border: 1px solid rgba(76,200,240,0.26); border-radius: 6px; color: #ffffff;
                               padding: 8px 10px; font-size: 0.92rem; font-family: monospace;" />
@@ -3427,11 +3517,14 @@
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <input type="text" inputmode="decimal" id="acab-vol-peso" autocomplete="off"
                                        value="${esc(pesoParaTexto(preparado.peso))}" placeholder="0,00"
+                                       oninput="AcabamentoPainel.recalcularVolume()"
                                        style="width: 140px; text-align: right; background: ${AZUL.fundo};
                                               border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
                                               color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
                                               font-family: monospace;" />
                                 <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                                <span id="acab-vol-est" title="O peso esperado desta caixa: a quantidade de cada modelo vezes o peso da peça, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
+                                      style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap;"></span>
                             </div>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 5px; flex: 1 1 200px;">
@@ -3475,6 +3568,80 @@
             });
             try { campo.focus(); campo.select(); } catch (ignorado) { /* sem foco não há problema */ }
         }
+        pintarEstimadoDoVolume();
+    }
+
+    /** Os modelos do pedido que está aberto. */
+    function modelosDoPedidoAberto() {
+        const s = estado();
+        return (s.osItens && s.osItens[tela.pedidoAberto]) || [];
+    }
+
+    /**
+     * As quantidades como estão AGORA nos campos da janela.
+     *
+     * Lidas do DOM, e não de `tela.volumeEmEdicao`: é o que o operador acabou de
+     * digitar que decide o peso esperado, e ele muda a cada tecla.
+     */
+    function itensDigitadosDoVolume() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return [];
+        return v.itens.map(i => {
+            const campo = document.getElementById('acab-vol-qtd-' + i.modeloId);
+            return { modeloId: i.modeloId, qtd: qtdDoTexto(campo ? campo.value : i.qtd) };
+        }).filter(i => i.qtd > 0);
+    }
+
+    /**
+     * O "est. 12,480 kg · +8,2%" ao lado do peso da caixa.
+     *
+     * Recalculado a cada tecla, porque aqui a BASE muda com o que o operador
+     * digita: baixar a quantidade de 3.000 para 1.500 muda o peso esperado da
+     * caixa. No box do setor a base é fixa (a tiragem inteira), e por isso lá
+     * basta repintar quando o peso é gravado.
+     */
+    function pintarEstimadoDoVolume() {
+        const alvo = document.getElementById('acab-vol-est');
+        if (!alvo || !tela.volumeEmEdicao) return;
+
+        const est = estimadoDoVolume(itensDigitadosDoVolume(), modelosDoPedidoAberto());
+        if (est.kg === null) {
+            alvo.textContent = 'est. —';
+            alvo.style.color = 'var(--text-dim)';
+            return;
+        }
+
+        const campo = document.getElementById('acab-vol-peso');
+        const peso = pesoDoTexto(campo ? campo.value : '');
+        const d = (peso === undefined) ? null : divergencia(peso, est.kg);
+
+        let texto = `est. ${kgParaTexto(est.kg)} kg`;
+        if (d !== null) {
+            const pct = (peso - est.kg) / est.kg * 100;
+            texto += ` · ${pct < 0 ? '-' : '+'}${Math.abs(pct).toFixed(1).replace('.', ',')}%`;
+        }
+        if (est.semBase) {
+            texto += ` (${est.semBase} ${est.semBase === 1 ? 'modelo' : 'modelos'} sem peso no ERP)`;
+        }
+        alvo.textContent = texto;
+        alvo.style.color = (d !== null && precisaDeLiberacao(peso, est.kg))
+            ? '#fbbf24' : 'var(--text-dim)';
+    }
+
+    /**
+     * A janela some da frente sem ser desmontada — e `volumeEmEdicao` fica.
+     *
+     * É o que permite o popup da senha aparecer por cima e, no cancelar, a
+     * janela voltar com tudo o que o operador já tinha digitado.
+     */
+    function esconderPopupDoVolume() {
+        const caixa = document.getElementById('acab-volume-janela');
+        if (caixa) caixa.style.display = 'none';
+    }
+
+    function mostrarPopupDoVolume() {
+        const caixa = document.getElementById('acab-volume-janela');
+        if (caixa) caixa.style.display = 'flex';
     }
 
     /**
@@ -3502,7 +3669,7 @@
         return Math.max(0, parseInt(limpo, 10) || 0);
     }
 
-    async function confirmarVolume() {
+    async function confirmarVolume(opcoes) {
         const v = tela.volumeEmEdicao;
         if (!v) { fecharPopupDoVolume(); return; }
 
@@ -3517,11 +3684,7 @@
             return;
         }
 
-        const itens = v.itens.map(i => {
-            const campo = document.getElementById('acab-vol-qtd-' + i.modeloId);
-            return { modeloId: i.modeloId, qtd: qtdDoTexto(campo ? campo.value : i.qtd) };
-        }).filter(i => i.qtd > 0);
-
+        const itens = itensDigitadosDoVolume();
         if (!itens.length) {
             dizer('Um volume precisa de pelo menos um modelo com quantidade.');
             return;
@@ -3531,30 +3694,65 @@
         const responsavel = document.getElementById('acab-vol-responsavel');
         const observacao = document.getElementById('acab-vol-obs');
 
+        const dados = {
+            numeroDoPedido: v.numeroDoPedido,
+            setor: v.setor,
+            volumeId: v.volumeId,
+            numero: v.numero,
+            tipo: tipo ? tipo.value : '',
+            peso,
+            responsavel: responsavel ? responsavel.value : '',
+            observacao: observacao ? observacao.value : '',
+            itens,
+        };
+
+        // A régua dos 5 % NESTA caixa (pedido do usuário, 23/08/2026). A conta
+        // é a quantidade digitada vezes o peso da peça; sem base no ERP não há
+        // o que conferir, e o volume grava como gravava.
+        const est = estimadoDoVolume(itens, modelosDoPedidoAberto());
+        if (est.kg !== null && precisaDeLiberacao(peso, est.kg) && !(opcoes && opcoes.liberado)) {
+            tela.liberacaoPendente = {
+                tipo: 'volume',
+                numeroDoPedido: v.numeroDoPedido,
+                setor: v.setor,
+                peso,
+                estimado: est.kg,
+                volume: dados,
+            };
+            esconderPopupDoVolume();       // sai da frente do popup da senha
+            abrirPopupDaLiberacao();
+            return;
+        }
+
+        await gravarVolumeConferido(dados);
+    }
+
+    /**
+     * Grava o volume que já passou pela régua dos 5 % — ou pela senha.
+     *
+     * Separado do `confirmarVolume` porque tem dois chamadores: o OK da janela,
+     * quando não há divergência, e o `liberarDivergencia`, depois da senha
+     * certa. Deixar a gravação dentro do OK obrigaria o caminho da senha a
+     * remontar a janela só para clicar nela de novo.
+     */
+    async function gravarVolumeConferido(dados) {
+        const erro = document.getElementById('acab-vol-erro');
+        const dizer = t => { if (erro) erro.textContent = t; };
         const botao = document.getElementById('acab-vol-ok');
         if (botao) { botao.disabled = true; botao.textContent = 'Gravando…'; }
         try {
-            await gravarVolume({
-                numeroDoPedido: v.numeroDoPedido,
-                setor: v.setor,
-                volumeId: v.volumeId,
-                numero: v.numero,
-                tipo: tipo ? tipo.value : '',
-                peso,
-                responsavel: responsavel ? responsavel.value : '',
-                observacao: observacao ? observacao.value : '',
-                itens,
-            });
-            await carregarVolumes(v.numeroDoPedido);
+            await gravarVolume(dados);
+            await carregarVolumes(dados.numeroDoPedido);
             tela.escolhaDeVolume = null;
             fecharPopupDoVolume();
             renderDetalhe();
-            avisar(`Volume ${v.numero} do setor ${nomeDoSetor(v.setor)} gravado.`, 'success');
+            avisar(`Volume ${dados.numero} do setor ${nomeDoSetor(dados.setor)} gravado.`, 'success');
         } catch (e) {
             console.error('[acabamento] erro ao gravar o volume:', e);
             // A trava do banco: dois operadores criando o mesmo número ao mesmo
             // tempo. A saída é recalcular o número, não pedir que ele adivinhe.
             const duplicado = String((e && e.message) || '').indexOf('producao_volumes_unico') !== -1;
+            mostrarPopupDoVolume();   // veio da senha? a janela precisa voltar
             dizer(duplicado
                 ? 'Outro operador acabou de criar este volume. Feche e clique em "+ Volume" de novo.'
                 : `Não deu para gravar: ${(e && e.message) ? e.message : e}`);
@@ -3970,8 +4168,22 @@
 
     /** Cancelar: nada foi gravado, e o campo volta ao valor de antes. */
     function cancelarLiberacao() {
+        const era = tela.liberacaoPendente;
         fecharPopupDaLiberacao();
         pintarPesos();
+
+        // O volume que esperava a senha continua montado: a janela volta com o
+        // que o operador já tinha digitado, em vez de o trabalho sumir e ele ter
+        // de escolher os modelos de novo.
+        if (era && era.tipo === 'volume') {
+            mostrarPopupDoVolume();
+            const erro = document.getElementById('acab-vol-erro');
+            if (erro) {
+                erro.textContent = 'O volume não foi gravado — o peso está fora dos 5 %. '
+                    + 'Confira a quantidade e o peso, ou grave com a senha de liberação.';
+            }
+            return;
+        }
         // Se havia um "Pronto" esperando este peso, ele continua esperando: o
         // popup do peso volta, em vez de o operador ficar olhando um card cujo
         // botão não obedeceu e sem nada na tela explicando por quê.
@@ -3992,8 +4204,16 @@
             corpo.innerHTML = `
                 <div style="font-size: 0.95rem; margin-bottom: 8px;">
                     <strong style="color: #ffffff;">Pedido ${esc(p.numeroDoPedido)}</strong>
-                    <span style="color: ${'#4cc8f0'};"> — setor ${esc(nomeDoSetor(p.setor))}</span>
+                    <span style="color: ${'#4cc8f0'};"> — ${p.tipo === 'volume'
+                        ? `volume ${esc(p.volume.numero)} do setor ${esc(nomeDoSetor(p.setor))}`
+                        : `setor ${esc(nomeDoSetor(p.setor))}`}</span>
                 </div>
+                ${p.tipo === 'volume' ? `
+                <div style="font-size: 0.82rem; color: #7fa9d4; margin-bottom: 8px;">
+                    ${p.volume.itens.length === 1
+                        ? 'A conta é a quantidade desta caixa vezes o peso da peça.'
+                        : `A conta é a soma dos ${p.volume.itens.length} modelos desta caixa, cada um pela quantidade que vai nela.`}
+                </div>` : ''}
                 <table style="border-collapse: collapse; font-size: 0.9rem;">
                     <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso digitado</td>
                         <td style="padding: 3px 0; font-family: monospace; color: #ffffff;">${esc(pesoParaTexto(p.peso))} kg</td></tr>
@@ -4067,6 +4287,12 @@
                 return;
             }
             fecharPopupDaLiberacao();
+            // A mesma senha vale para os dois pesos que esta tela confere: o do
+            // setor e o de uma caixa (23/08/2026).
+            if (pendente.tipo === 'volume') {
+                await gravarVolumeConferido(pendente.volume);
+                return;
+            }
             await gravarPeso(pendente.numeroDoPedido, pendente.setor, pendente.texto, { liberado: true });
         } catch (e) {
             console.error('[acabamento] erro ao conferir a senha de liberação:', e);
@@ -4736,6 +4962,8 @@
         editarVolume(volumeId) { abrirPopupDoVolume(volumeId); },
         /** O OK da janela. Só ele grava. */
         confirmarVolume,
+        /** Cada tecla nos campos da janela: refaz o peso esperado da caixa. */
+        recalcularVolume: pintarEstimadoDoVolume,
         fecharVolume: fecharPopupDoVolume,
         excluirVolume,
         verVolumes(setor) { abrirVolumesDoSetor(setor); },
@@ -4816,6 +5044,9 @@
             faltandoNoSetor,
             diferencaDosVolumes,
             textoDaDiferenca,
+            gramasPorUnidadeDaLinha,
+            gramasPorUnidadeDoModelo,
+            estimadoDoVolume,
             qtdDoTexto,
             marcavelNaEscolha,
             marcadoNaEscolha,

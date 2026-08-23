@@ -2752,6 +2752,242 @@ async function asContasDosVolumesSaoPuras() {
     ok(agrupado.LASER[0].numero === 1, 'e a lista sai na ordem do numero');
 }
 
+// ─── O peso esperado de cada volume, e a regra dos 5 % nele ─────────────────
+//
+// Pedido do usuario em 23/08/2026, no dia seguinte ao dos volumes: a caixa e
+// conferida contra a QUANTIDADE que leva. Um modelo so ou varios, a conta e a
+// mesma -- quantidade vezes o peso da peca, com a regua dos 5 % do setor.
+
+function ambienteDeVolumesComPeso() {
+    const amb = ambienteDeVolumes();
+    const itens = amb.janela.state.osItens['os-200'];
+    // Os dois do Laser saem da MESMA linha da proposta, como acontece de
+    // verdade: as oito credenciais do pedido 21085 saem da linha 2281.
+    itens[0].id_produto_proposta_origem = 2281;
+    itens[1].id_produto_proposta_origem = 2281;
+    // Um terceiro do Laser SEM linha de proposta: e ele que prova que a tela
+    // nao inventa base quando o ERP nao tem peso.
+    itens.push({
+        id: 3004, produto: 'Credencial Sem Peso', modelo: '3004', _vibe_id_produto: 55,
+        setor: 'LASER', qtd: 100, status_impressao: 'Impresso',
+        acabamento_status: 'Em acabamento', acabamento_responsavel: 'Bernardo Farias',
+    });
+    // 28.600 g para 5.500 unidades = 5,2 g a peca.
+    amb.banco._produtosDaProposta = [
+        { id: 2281, id_int: 200, id_produto: 55, qtd: 5500, peso_total: 28600 },
+    ];
+    return amb;
+}
+
+function campoDoVolume(amb, id) {
+    return amb.documento.getElementById(id);
+}
+
+async function oVolumeDeUmModeloSoSaiDaQuantidade() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+
+    // A janela abre sugerindo a tiragem inteira; o operador reparte.
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2.000';
+    amb.painel.recalcularVolume();
+
+    const est = amb.elementos['acab-vol-est'];
+    ok(est.textContent.indexOf('est. 10,400 kg') !== -1,
+       '2.000 pecas de 5,2 g dao 10,400 kg', est.textContent);
+
+    // Mudar a quantidade muda a base -- e isso e o coracao do pedido.
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '1.000';
+    amb.painel.recalcularVolume();
+    ok(est.textContent.indexOf('est. 5,200 kg') !== -1,
+       'metade da quantidade, metade do peso esperado', est.textContent);
+
+    // Dentro dos 5 %: grava direto, sem senha.
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDoVolume(amb, 'acab-vol-peso').value = '10,4';
+    campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+
+    ok(amb.banco._volumesDoBanco.length === 1, 'peso certo grava sem passar pela senha',
+       String(amb.banco._volumesDoBanco.length));
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'e o popup da senha nem aparece');
+}
+
+async function oVolumeDeVariosModelosSomaAsQuantidades() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.marcarModelo(3002);
+    amb.painel.pesarVolume();
+
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2.000';
+    campoDoVolume(amb, 'acab-vol-qtd-3002').value = '500';
+    amb.painel.recalcularVolume();
+
+    ok(amb.elementos['acab-vol-est'].textContent.indexOf('est. 13,000 kg') !== -1,
+       '2.500 pecas somadas dao 13,000 kg', amb.elementos['acab-vol-est'].textContent);
+
+    campoDoVolume(amb, 'acab-vol-peso').value = '13';
+    campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+    ok(amb.banco._volumesDoBanco.length === 1, 'e grava, porque bate com a soma');
+}
+
+async function oVolumeForaDosCincoPorCentoPedeASenha() {
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.API_PAINEL = 'https://x.supabase.co/functions/v1/painel';
+    const chamadas = [];
+    amb.janela.fetch = (url, opcoes) => {
+        chamadas.push({ url, corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, confere: true }) });
+    };
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDoVolume(amb, 'acab-vol-peso').value = '12';       // esperado 10,400
+    campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex',
+       '12 kg contra 10,400: o popup da senha abre');
+    ok(amb.banco._volumesDoBanco.length === 0, 'e NADA foi gravado',
+       String(amb.banco._volumesDoBanco.length));
+    ok(amb.elementos['acab-volume-janela'].style.display === 'none',
+       'a janela do volume sai da frente, em vez de ficar por baixo');
+    const corpo = amb.elementos['acab-liberacao-corpo'].innerHTML;
+    ok(corpo.indexOf('volume 1 do setor Laser') !== -1,
+       'o popup diz que a divergencia e da CAIXA, e nao do setor', corpo.slice(0, 160));
+    ok(corpo.indexOf('10,400 kg') !== -1, 'e mostra o peso esperado da caixa');
+
+    // Senha certa: grava, com o peso que o operador insistiu.
+    campoDoVolume(amb, 'acab-liberacao-senha').value = 'K47';
+    await amb.painel.liberarDivergencia();
+
+    ok(chamadas.length === 1 && chamadas[0].corpo.senha === 'K47',
+       'a senha foi conferida no servidor', JSON.stringify(chamadas));
+    ok(amb.banco._volumesDoBanco.length === 1, 'e o volume entrou',
+       String(amb.banco._volumesDoBanco.length));
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 12, 'com os 12 kg digitados',
+       String(amb.banco._volumesDoBanco[0].peso_kg));
+    ok(amb.banco._itensDeVolume.length === 1 && amb.banco._itensDeVolume[0].qtd === 2000,
+       'e com a quantidade que deu origem a conta');
+}
+
+async function cancelarASenhaDevolveAJanelaDoVolume() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDoVolume(amb, 'acab-vol-peso').value = '12';
+    await amb.painel.confirmarVolume();
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup da senha abriu');
+
+    amb.painel.fecharPopupDaLiberacao();     // o Cancelar
+
+    ok(amb.elementos['acab-volume-janela'].style.display === 'flex',
+       'a janela do volume volta, em vez de o trabalho sumir');
+    ok(amb.painel._tela.volumeEmEdicao !== null, 'com os modelos escolhidos ainda montados');
+    ok(/5 %/.test(amb.elementos['acab-vol-erro'].textContent),
+       'e ela diz por que nao gravou', amb.elementos['acab-vol-erro'].textContent);
+    ok(amb.banco._volumesDoBanco.length === 0, 'nada foi gravado');
+}
+
+async function semPesoNoErpOVolumeGravaSemConferir() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    // So o modelo que nao tem linha de proposta.
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3004);
+    amb.painel.pesarVolume();
+    campoDoVolume(amb, 'acab-vol-qtd-3004').value = '100';
+    amb.painel.recalcularVolume();
+
+    ok(amb.elementos['acab-vol-est'].textContent === 'est. —',
+       'sem base no ERP a tela nao inventa uma', amb.elementos['acab-vol-est'].textContent);
+
+    campoDoVolume(amb, 'acab-vol-peso').value = '99';        // absurdo, e ainda assim grava
+    campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+    ok(amb.banco._volumesDoBanco.length === 1, 'sem o que comparar, o volume grava como gravava');
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'e nao ha senha a pedir');
+}
+
+async function modeloSemPesoNoMeioDosOutrosEDenunciado() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.marcarModelo(3004);
+    amb.painel.pesarVolume();
+    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDoVolume(amb, 'acab-vol-qtd-3004').value = '100';
+    amb.painel.recalcularVolume();
+
+    const texto = amb.elementos['acab-vol-est'].textContent;
+    ok(texto.indexOf('est. 10,400 kg') !== -1, 'a conta sai do que TEM peso', texto);
+    ok(texto.indexOf('1 modelo sem peso no ERP') !== -1,
+       'e a tela diz que a base esta incompleta, em vez de esconder o buraco', texto);
+}
+
+async function asContasDoPesoEsperadoSaoPuras() {
+    const amb = ambienteDeVolumes();
+    const r = amb.painel._regras;
+
+    const mapa = r.gramasPorUnidadeDaLinha([
+        { id: 2281, qtd: 5500, peso_total: 28600 },
+        { id: 9,    qtd: 0,    peso_total: 100 },   // divisao por zero fica de fora
+        { id: 10,   qtd: 10,   peso_total: 0 },     // linha sem peso tambem
+    ]);
+    ok(mapa['2281'] === 5.2, '28.600 g / 5.500 un = 5,2 g a peca', String(mapa['2281']));
+    ok(mapa['9'] === undefined && mapa['10'] === undefined,
+       'linha sem quantidade ou sem peso nao vira base');
+
+    amb.painel._tela.gramasPorUnidade = mapa;
+    const modelos = [
+        { id: 1, id_produto_proposta_origem: 2281 },
+        { id: 2, id_produto_proposta_origem: 2281 },
+        { id: 3 },                                   // sem origem: sem base
+    ];
+
+    ok(r.estimadoDoVolume([{ modeloId: 1, qtd: 2000 }], modelos).kg === 10.4,
+       'um modelo so: quantidade vezes o peso da peca');
+    ok(r.estimadoDoVolume([{ modeloId: 1, qtd: 2000 }, { modeloId: 2, qtd: 500 }], modelos).kg === 13,
+       'varios modelos: as quantidades somam antes da conta');
+
+    const misto = r.estimadoDoVolume([{ modeloId: 1, qtd: 2000 }, { modeloId: 3, qtd: 100 }], modelos);
+    ok(misto.kg === 10.4 && misto.semBase === 1, 'modelo sem base fica de fora, e e contado');
+
+    const nenhum = r.estimadoDoVolume([{ modeloId: 3, qtd: 100 }], modelos);
+    ok(nenhum.kg === null, 'sem base nenhuma o resultado e null, e nao zero');
+
+    // A regua e a MESMA do setor -- e a mesma funcao.
+    ok(r.precisaDeLiberacao(10.92, 10.4) === false, '5 % exatos ainda passam');
+    ok(r.precisaDeLiberacao(10.93, 10.4) === true, 'acima disso pede a senha');
+}
+
+(async function () {
+    await oVolumeDeUmModeloSoSaiDaQuantidade();
+    await oVolumeDeVariosModelosSomaAsQuantidades();
+    await oVolumeForaDosCincoPorCentoPedeASenha();
+    await cancelarASenhaDevolveAJanelaDoVolume();
+    await semPesoNoErpOVolumeGravaSemConferir();
+    await modeloSemPesoNoMeioDosOutrosEDenunciado();
+    await asContasDoPesoEsperadoSaoPuras();
+})();
+
 (async function () {
     await setorSemVolumeSaiComoUmSo();
     await umVolumeLevaVariosModelos();

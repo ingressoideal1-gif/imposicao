@@ -8,6 +8,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v701 — 2026-08-23] — Acabamento: cada caixa é conferida pela quantidade que leva
+
+Pedido do usuário, no dia seguinte ao dos volumes: *"Ao criar um volume de apenas 1 modelo (dividir
+um modelo em mais de um volume) deve ser informado a quantidade de itens do volume e calcular o peso
+da quantidade informada, seguindo a mesma regra dos 5% para cada volume, ao criar um volume de vários
+modelos, deve somar as quantidades dos modelos selecionados e seguir mesma regra dos 5%"*.
+
+A janela de pesar passa a mostrar, ao lado do campo do peso, **`est. 10,400 kg`** — a quantidade
+digitada vezes o peso da peça. Um modelo só ou cinco, a conta é a mesma; o que muda é quantas
+parcelas ela tem. Acima de 5 % de diferença, gravar **pede a senha de liberação**, exatamente como o
+peso do setor — e é a mesma função e a mesma constante de tolerância, para as duas réguas nunca
+discordarem uma da outra.
+
+**A base vem do ERP.** `produtos_proposta.peso_total` é coluna gerada (`peso_uni * qtd`), em gramas;
+dividida pela quantidade da linha devolve o peso unitário que o ERP guardou — conferido no pedido
+21085: 141.128 g ÷ 27.140 un = **5,2 g a peça**. O modelo chega na sua linha pelo
+`id_produto_proposta_origem`. É por unidade, e não por modelo, porque várias credenciais diferentes
+saem da mesma linha da proposta — as oito do 21085 saem da linha 2281.
+
+**O que isso fecha.** O peso por setor só é conferido quando o último modelo dele fica pronto. Até
+lá, uma caixa pesada errado — 30 kg digitados numa caixa de 3 — passava sem ninguém ver, e a soma dos
+volumes só denunciava o engano no fim, com o material já fechado.
+
+Três cuidados que vieram junto:
+
+- **A conta se refaz a cada tecla.** No box do setor a base é fixa (a tiragem inteira); aqui ela muda
+  com o que o operador digita — baixar de 3.000 para 1.500 muda o peso esperado da caixa. Por isso as
+  quantidades são lidas do DOM, e não do estado de quando a janela abriu.
+- **Sem peso no ERP a tela não inventa uma base.** Mostra `est. —` e o volume grava como gravava.
+  Modelo sem peso no meio de outros que têm entraria como zero e acusaria divergência em cima de um
+  volume certo, então a tela diz `(1 modelo sem peso no ERP)` em vez de esconder o buraco.
+- **Cancelar a senha não apaga o trabalho.** A janela do volume é escondida, não desmontada: ao
+  cancelar ela volta com os modelos escolhidos e as quantidades digitadas, mais o recado de por que
+  não gravou.
+
+33 verificações novas no `tests/acabamento_harness.js` e 5 testes de ligação em
+`tests/test_painel_do_acabamento.py`. Documentado em `docs/painel_do_acabamento.md`.
+
+---
+
 ## [v700 — 2026-08-23] — Volumes do acabamento, a hora da produção nos Concluídos, e o título do pedido em duas linhas
 
 ### Acabamento: volumes por setor — a caixa com peso, dono e o que vai dentro
