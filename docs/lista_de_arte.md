@@ -293,9 +293,9 @@ qualquer pedido, num clique:
 
 - resumo no topo: **✅ nenhum problema** ou a lista dos pontos de atenção;
 - uma linha por modelo: numeração e arquivo CSV, **linhas da fatia × Qtd**,
-  códigos distintos, **repetidos dentro do próprio CSV**, **células vazias**, e
-  a situação (as três regras do card — banco incompleto, Qtd × células,
-  células repetidas com outro modelo);
+  códigos distintos, **repetidos dentro do próprio CSV**, **células vazias**,
+  a **1ª linha** daquele modelo e a situação (as três regras do card — banco
+  incompleto, Qtd × células, células repetidas com outro modelo);
 - **📋 Copiar relatório** (texto puro) e Fechar.
 
 "Códigos" são os valores das colunas apontadas pelos elementos de banco de
@@ -303,6 +303,32 @@ dados — o que vai para o papel. Modelo cuja numeração não usa banco aparece
 "não usa banco" e não é cobrado por CSV. A conta é `conferenciaDeDadosDoPedido`
 (pura; o harness da fatia a lê do `script.js` com um pedido misto e um limpo);
 a janela é `abrirConferenciaDeDados`.
+
+### A coluna "1ª linha"
+
+Pedido do usuário em 23/08/2026. É por onde a fatia daquele modelo **começa** —
+numa numeração dividida entre vários modelos, ler a primeira linha de cada um é o
+jeito mais rápido de ver que a distribuição saiu certa (um começa no 1001, o
+outro no 1051) sem abrir o CSV modelo a modelo.
+
+Como ela é montada (`primeiraLinhaDoModelo`):
+
+- vem da **fatia** do modelo, nunca do topo do banco inteiro — é essa distinção
+  que faz a coluna valer alguma coisa;
+- as **colunas do banco vêm primeiro** e em branco forte, porque são as que vão
+  para o papel; as demais colunas do CSV vêm depois, em cinza, e só quando têm
+  valor (numa credencial é o NOME que faz o operador reconhecer a fatia, mesmo
+  que o QR leia outra coluna);
+- **coluna do banco vazia aparece como `(vazio)`** — uma coluna apontada que está
+  em branco na primeira linha é exatamente o que este relatório existe para
+  mostrar. Coluna comum vazia é omitida;
+- `__id`, `__ativo` e `__fotos` ficam de fora: são controle nosso dentro da
+  linha, não dado que o cliente mandou;
+- a numeração **sem** elemento de banco também mostra a 1ª linha, se tiver CSV —
+  o dado existe, e é dele que o operador quer ver o começo. O que ela continua
+  não tendo é contagem de códigos;
+- na tela cabem seis pares e o resto vira `+N`; a linha inteira fica no
+  `title` (passar o mouse) e no relatório copiado.
 
 ## O link para o sistema parceiro
 

@@ -344,10 +344,10 @@ function extrairFuncao(src, nome) {
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
                    'celulasGeradasDoModelo', 'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas',
-                   'conferenciaDeDadosDoPedido', 'textoDaConferencia'];
+                   'primeiraLinhaDoModelo', 'conferenciaDeDadosDoPedido', 'textoDaConferencia'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     const state = { numeracoes: [], osItens: {} };
-    const api = new Function('state', 'window', fonte + '\nreturn { conferenciaDeDadosDoPedido, textoDaConferencia };')(state, global.window);
+    const api = new Function('state', 'window', fonte + '\nreturn { primeiraLinhaDoModelo, conferenciaDeDadosDoPedido, textoDaConferencia };')(state, global.window);
 
     const qr = (col) => ({ id: 'el_1', type: 'QR', source: 'database', csv_column: col });
     const rows = (cods) => cods.map((c, i) => ({ __id: i + 1, CODIGO: c }));
@@ -399,6 +399,87 @@ function extrairFuncao(src, nome) {
     ok(/id="btn-conferencia-dados"[^>]*onclick="abrirConferenciaDeDados\(\)"/.test(index), 'o botao Conferencia de dados esta no pedido');
     ok(/async function abrirConferenciaDeDados\([\s\S]{0,600}await recarregarNumeracoesDoPedido\(osId\)/.test(script),
         'a janela rele as numeracoes do banco antes de conferir');
+
+    // ─── A 1a LINHA de cada modelo (pedido do usuario, 23/08/2026) ────────────
+    //
+    // Numa numeracao dividida entre varios modelos, ler por onde a fatia de cada
+    // um COMECA e o jeito mais rapido de ver que a distribuicao saiu certa --
+    // sem abrir o CSV modelo a modelo. Por isso a 1a linha tem de vir da FATIA
+    // daquele modelo, e nunca do topo do banco inteiro.
+
+    const p1 = api.primeiraLinhaDoModelo;
+
+    (function aPrimeiraLinhaSaiDaFatiaDoModelo() {
+        const rows = [];
+        for (let i = 1; i <= 100; i++) rows.push({ __id: i, CODIGO: String(1000 + i), NOME: 'Pessoa ' + i });
+        state.numeracoes.push({
+            id: 'n-fatia', name: 'FATIA', csv_filename: 'fatia.csv',
+            elements: [qr('CODIGO')], csv_headers: ['CODIGO', 'NOME'], csv_data: rows,
+        });
+        const comFatia = (id, faixa, qtd) => ({
+            id, nome_modelo: id, amostra_num_id: 'n-fatia', quantidade: qtd,
+            csv_selecao: { tipo: 'linhas', ids: [faixa] },
+        });
+        state.osItens['os-fatia'] = [comFatia('a', '1-50', 50), comFatia('b', '51-100', 50)];
+        const r = {}; api.conferenciaDeDadosDoPedido('os-fatia').modelos.forEach(m => r[m.id] = m);
+
+        ok(/CODIGO: 1001/.test(r.a.primeira), 'o 1o modelo comeca na linha 1 da fatia dele', r.a.primeira);
+        ok(/CODIGO: 1051/.test(r.b.primeira), 'o 2o comeca na fatia DELE, e nao no topo do banco', r.b.primeira);
+    })();
+
+    (function aColunaDoBancoVemPrimeiroEMarcada() {
+        // No CSV o NOME vem antes; no relatorio a coluna que vai para o PAPEL e
+        // que abre a linha.
+        const r = p1([{ __id: 1, NOME: 'Maria', CODIGO: 'X9' }], ['CODIGO']);
+        ok(r.pares[0].coluna === 'CODIGO' && r.pares[0].doBanco === true,
+            'a coluna do banco abre a linha e vem marcada', r.pares);
+        ok(r.pares[1].coluna === 'NOME' && r.pares[1].doBanco === false, 'as outras vem depois', r.pares);
+        ok(r.texto === 'CODIGO: X9 · NOME: Maria', 'o texto sai na mesma ordem', r.texto);
+    })();
+
+    (function colunaDoBancoVaziaApareceAsOutrasNao() {
+        // Uma coluna do banco em branco na 1a linha e exatamente o que este
+        // relatorio existe para mostrar; uma coluna comum vazia e so ruido.
+        const r = p1([{ __id: 1, CODIGO: '   ', NOME: '', EMPRESA: 'Acme' }], ['CODIGO']);
+        ok(r.texto === 'CODIGO: (vazio) · EMPRESA: Acme', 'coluna do banco vazia aparece; coluna comum vazia, nao', r.texto);
+    })();
+
+    (function colunaApontadaQueNaoExisteNoCsvAparece() {
+        const r = p1([{ __id: 1, NOME: 'Maria' }], ['CPF']);
+        ok(/^CPF: \(vazio\)/.test(r.texto), 'coluna apontada que nao existe no CSV fica visivel', r.texto);
+    })();
+
+    (function asChavesDeControleFicamDeFora() {
+        const r = p1([{ __id: 7, __ativo: false, __fotos: { a: 1 }, CODIGO: 'Z1' }], ['CODIGO']);
+        ok(r.texto === 'CODIGO: Z1', '__id, __ativo e __fotos nao sao dado do cliente', r.texto);
+    })();
+
+    (function semLinhaNaoDaTexto() {
+        ok(p1([], ['CODIGO']).texto === '' && p1(null, ['CODIGO']).texto === '', 'fatia vazia nao inventa linha');
+        ok(p1([{ __id: 1, CODIGO: 'A' }], null).texto === 'CODIGO: A', 'sem colunas de banco, vale o que a linha tem');
+    })();
+
+    (function numeracaoSemBancoAindaMostraOComeco() {
+        // O CSV existe; so nao ha elemento lendo dele. O operador continua
+        // querendo ver por onde a lista comeca.
+        state.numeracoes.push({
+            id: 'n-txt-csv', name: 'TXTCSV', csv_filename: 't.csv',
+            elements: [{ id: 'el_9', type: 'TEXT' }], csv_headers: ['NOME'],
+            csv_data: [{ __id: 1, NOME: 'Ana' }],
+        });
+        state.osItens['os-txt'] = [modelo('só-texto', 'SóTexto', 'n-txt-csv', 1)];
+        const m = api.conferenciaDeDadosDoPedido('os-txt').modelos[0];
+        ok(m.usaBanco === false && m.primeira === 'NOME: Ana',
+            'numeracao sem banco tambem mostra a 1a linha do CSV', m);
+        ok(m.codigos === 0 && m.linhas === 0, 'e continua sem ser cobrada por codigos', m);
+    })();
+
+    (function aPrimeiraLinhaVaiNoTextoCopiadoENaTabela() {
+        ok(/1ª linha: CODIGO: 1001/.test(api.textoDaConferencia(api.conferenciaDeDadosDoPedido('os-fatia'), 1)),
+            'o relatorio copiado leva a 1a linha inteira');
+        ok(/<th[^>]*>1ª linha<\/th>/.test(script), 'a tabela da janela tem a coluna 1a linha');
+        ok(/primeiraPares/.test(script), 'e a celula desenha os pares dessa linha');
+    })();
 })();
 
 // ─── Fim ──────────────────────────────────────────────────────────────────────

@@ -13977,6 +13977,50 @@ function textoDasCelulasRepetidas(d) {
 window.textoDasCelulasRepetidas = textoDasCelulasRepetidas;
 
 /**
+ * A PRIMEIRA LINHA da fatia de um modelo, escrita como "COLUNA: valor".
+ *
+ * É por onde o banco daquele modelo COMEÇA. Numa numeração dividida entre vários
+ * modelos, ler a primeira linha de cada um é o jeito mais rápido de ver que a
+ * distribuição saiu certa — um começa no 1001, o outro no 1501 — sem abrir o CSV
+ * modelo a modelo (pedido do usuário, 23/08/2026).
+ *
+ * As colunas apontadas pelos elementos de banco vêm PRIMEIRO, porque são as que
+ * vão para o papel, e aparecem mesmo vazias: coluna do banco em branco na
+ * primeira linha é exatamente o que este relatório existe para mostrar. As outras
+ * colunas do CSV vêm depois, e só quando têm valor — numa credencial é o NOME que
+ * faz o operador reconhecer a fatia, mesmo que o QR leia outra coluna.
+ *
+ * As chaves `__id`, `__ativo` e `__fotos` ficam de fora: são controle nosso
+ * dentro da linha, não dado que o cliente mandou.
+ */
+function primeiraLinhaDoModelo(fatia, colunasDoBanco) {
+    const linha = (Array.isArray(fatia) && fatia.length) ? fatia[0] : null;
+    if (!linha || typeof linha !== 'object') return { pares: [], texto: '' };
+
+    const doBanco = (colunasDoBanco || [])
+        .map(c => String(c === null || c === undefined ? '' : c).trim())
+        .filter(Boolean);
+
+    const nomes = [];
+    doBanco.forEach(c => { if (nomes.indexOf(c) === -1) nomes.push(c); });
+    Object.keys(linha).forEach(c => {
+        if (String(c).slice(0, 2) === '__') return;
+        if (nomes.indexOf(c) === -1) nomes.push(c);
+    });
+
+    const pares = [];
+    nomes.forEach(c => {
+        const v = linha[c];
+        const texto = (v === null || v === undefined) ? '' : String(v).trim();
+        if (!texto && doBanco.indexOf(c) === -1) return;
+        pares.push({ coluna: c, valor: texto, doBanco: doBanco.indexOf(c) !== -1 });
+    });
+
+    return { pares, texto: pares.map(p => p.coluna + ': ' + (p.valor || '(vazio)')).join(' · ') };
+}
+window.primeiraLinhaDoModelo = primeiraLinhaDoModelo;
+
+/**
  * A CONFERÊNCIA DE DADOS do pedido — o relatório que o botão 🔎 do pedido
  * aberto mostra (regra do usuário, 22/08/2026).
  *
@@ -14014,6 +14058,7 @@ function conferenciaDeDadosDoPedido(osId) {
             numeracao: num ? (num.name || num.tipo || '') : '',
             arquivo: num ? (num.csv_filename || '') : '',
             usaBanco: false, linhas: 0, codigos: 0, repetidosDentro: 0, vazios: 0,
+            primeira: '', primeiraPares: [],
             avisos: []
         };
         const anotar = (texto) => { linha.avisos.push(texto); problemas.push(nome + ': ' + texto); };
@@ -14031,29 +14076,39 @@ function conferenciaDeDadosDoPedido(osId) {
         const divergencia = divergenciaDeCelulasDoModelo(it);
         if (divergencia) anotar(textoDaDivergenciaDeCelulas(divergencia));
 
-        if (linha.usaBanco && Array.isArray(num.csv_data) && num.csv_data.length) {
+        if (Array.isArray(num.csv_data) && num.csv_data.length) {
             const colunas = Array.from(new Set(deBanco
                 .map(el => String(el.csv_column || '').trim())
                 .filter(Boolean)));
             const fatia = fatiaCsvDoItem(it, num);
-            linha.linhas = fatia.length;
-            const contagem = new Map();
-            let vazios = 0;
-            fatia.forEach(l => {
-                colunas.forEach(c => {
-                    const v = l ? l[c] : null;
-                    const texto = (v === null || v === undefined) ? '' : String(v).trim();
-                    if (!texto) vazios++;
-                    else contagem.set(texto, (contagem.get(texto) || 0) + 1);
+
+            // A 1ª linha sai mesmo quando a numeração NÃO usa banco: o CSV existe,
+            // e é dele que o operador quer ver o começo. A contagem de códigos,
+            // essa sim, continua só para quem imprime do banco.
+            const primeira = primeiraLinhaDoModelo(fatia, colunas);
+            linha.primeira = primeira.texto;
+            linha.primeiraPares = primeira.pares;
+
+            if (linha.usaBanco) {
+                linha.linhas = fatia.length;
+                const contagem = new Map();
+                let vazios = 0;
+                fatia.forEach(l => {
+                    colunas.forEach(c => {
+                        const v = l ? l[c] : null;
+                        const texto = (v === null || v === undefined) ? '' : String(v).trim();
+                        if (!texto) vazios++;
+                        else contagem.set(texto, (contagem.get(texto) || 0) + 1);
+                    });
                 });
-            });
-            linha.codigos = contagem.size;
-            let rep = 0;
-            contagem.forEach(n => { if (n > 1) rep += n - 1; });
-            linha.repetidosDentro = rep;
-            linha.vazios = vazios;
-            if (rep) anotar(rep + ' código(s) repetido(s) dentro do próprio CSV');
-            if (vazios) anotar(vazios + ' célula(s) vazia(s) na coluna do banco');
+                linha.codigos = contagem.size;
+                let rep = 0;
+                contagem.forEach(n => { if (n > 1) rep += n - 1; });
+                linha.repetidosDentro = rep;
+                linha.vazios = vazios;
+                if (rep) anotar(rep + ' código(s) repetido(s) dentro do próprio CSV');
+                if (vazios) anotar(vazios + ' célula(s) vazia(s) na coluna do banco');
+            }
         }
 
         const rep = repetidas[String(it.id)];
@@ -14081,7 +14136,10 @@ function textoDaConferencia(rel, numeroPedido) {
         const banco = m.usaBanco
             ? ' | linhas ' + m.linhas + ' | códigos ' + m.codigos + ' | repetidos ' + m.repetidosDentro + ' | vazios ' + m.vazios
             : ' | não usa banco';
-        linhas.push(cabeca + banco + (m.avisos.length ? ' | ATENÇÃO: ' + m.avisos.join(' · ') : ''));
+        // A 1ª linha vai INTEIRA no texto copiado — na tela ela é encurtada para
+        // caber na coluna, e é este texto que segue para quem vai corrigir.
+        const primeira = m.primeira ? ' | 1ª linha: ' + m.primeira : '';
+        linhas.push(cabeca + banco + primeira + (m.avisos.length ? ' | ATENÇÃO: ' + m.avisos.join(' · ') : ''));
     });
     return linhas.join('\n');
 }
@@ -14111,10 +14169,24 @@ async function abrirConferenciaDeDados(osId) {
         const avisos = m.avisos.length
             ? `<span style="color:#fca5a5;">${escapeHtml(m.avisos.join(' · '))}</span>`
             : '<span style="color:#4ade80;">✓</span>';
+        // A 1ª LINHA da fatia: por onde o banco daquele modelo começa. As colunas
+        // do banco (as que vão para o papel) saem em branco forte; as demais, no
+        // cinza do resto da tabela. Seis pares cabem sem esticar a coluna — o
+        // resto vira "+N" e o texto inteiro fica no title e no relatório copiado.
+        const TETO = 6;
+        const par = p => `<span style="white-space:nowrap;"><span style="color:#94a3b8;">${escapeHtml(p.coluna)}:</span> `
+            + `<span style="${p.doBanco ? 'color:#e2e8f0;font-weight:700;' : 'color:#cbd5e1;'}">`
+            + `${escapeHtml(p.valor || '(vazio)')}</span></span>`;
+        const pares = m.primeiraPares || [];
+        const primeira = pares.length
+            ? pares.slice(0, TETO).map(par).join('<span style="color:#475569;"> · </span>')
+              + (pares.length > TETO ? `<span style="color:#94a3b8;"> · +${pares.length - TETO}</span>` : '')
+            : '<span style="color:#64748b;">—</span>';
         return `<tr style="border-top:1px solid rgba(148,163,184,0.15);">
                     <td><strong>${escapeHtml(m.nome)}</strong></td>
                     <td>${escapeHtml(m.numeracao || '—')}<br><span style="color:#94a3b8;font-size:0.72rem;">${escapeHtml(m.arquivo || '')}</span></td>
                     ${banco}
+                    <td style="max-width:300px; padding-left:14px; font-size:0.76rem; line-height:1.4; word-break:break-word;" title="${escapeHtml(m.primeira || '')}">${primeira}</td>
                     <td style="font-size:0.78rem;">${avisos}</td>
                 </tr>`;
     }).join('');
@@ -14141,12 +14213,14 @@ async function abrirConferenciaDeDados(osId) {
                     <thead><tr style="color:#94a3b8; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em;">
                         <th style="padding:6px 4px;">Modelo</th><th>Numeração / arquivo</th>
                         <th style="text-align:center;">Linhas / Qtd</th><th style="text-align:center;">Códigos</th>
-                        <th style="text-align:center;">Repet. dentro</th><th style="text-align:center;">Vazios</th><th>Situação</th>
+                        <th style="text-align:center;">Repet. dentro</th><th style="text-align:center;">Vazios</th>
+                        <th style="padding-left:14px;">1ª linha</th><th>Situação</th>
                     </tr></thead>
                     <tbody>${linhasHtml}</tbody>
                 </table>
                 <div style="color:#94a3b8; font-size:0.74rem; line-height:1.4;">
                     "Códigos" são os valores das colunas apontadas pelos elementos de banco de dados — o que vai para o papel. Linhas contam a fatia do modelo.
+                    "1ª linha" é por onde a fatia daquele modelo começa, com as colunas do banco em destaque — passe o mouse para ver a linha inteira, que também vai no relatório copiado.
                     A conferência cobre: banco incompleto, Qtd × células, repetições dentro do CSV, células vazias e células repetidas entre modelos deste pedido.
                 </div>
             </div>

@@ -4,7 +4,35 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v695** — 2026-08-22 | Agente **1.2.189**
+## Versão atual: **v696** — 2026-08-23 | Agente **1.2.190**
+
+---
+
+## [v696 — 2026-08-23] — Conferência de dados: a coluna com a 1ª linha de cada modelo
+
+Pedido do usuário: *"No botão 'Conferência de dados', que gera o relatório sobre o banco csv, incluir
+uma coluna trazendo a primeira linha de cada modelo"*.
+
+É por onde a fatia daquele modelo **começa**. Numa numeração dividida entre vários modelos — o caso
+das credenciais —, ler a primeira linha de cada um é o jeito mais rápido de ver que a distribuição
+saiu certa (`CODIGO: 1001` num, `CODIGO: 1051` no outro) sem abrir o CSV modelo a modelo. Por isso a
+linha vem da **fatia**, e nunca do topo do banco inteiro.
+
+As **colunas do banco vêm primeiro**, em branco forte, porque são as que vão para o papel — e
+aparecem mesmo vazias, como `(vazio)`: coluna apontada em branco na primeira linha é exatamente o que
+este relatório existe para mostrar. As outras colunas do CSV vêm depois, em cinza, e só quando têm
+valor: numa credencial é o NOME que faz o operador reconhecer a fatia, mesmo que o QR leia outra
+coluna. `__id`, `__ativo` e `__fotos` ficam de fora — são controle nosso dentro da linha, não dado do
+cliente.
+
+Numeração **sem** elemento de banco também mostra a 1ª linha, se tiver CSV: o dado existe, e é dele
+que o operador quer ver o começo. O que ela continua não tendo é contagem de códigos. Na tela cabem
+seis pares e o resto vira `+N`; a linha inteira fica no title e no **relatório copiado**.
+
+Testes: `tests/csv_fatia_do_modelo_harness.js` — a 1ª linha saindo da fatia de cada modelo (e não do
+topo do banco), a coluna do banco na frente e marcada, a vazia aparecendo e a coluna comum vazia não,
+a coluna apontada que nem existe no CSV ficando visível, as chaves de controle fora, a numeração sem
+banco, e a presença no texto copiado e na tabela (78 verificações no total).
 
 ---
 
