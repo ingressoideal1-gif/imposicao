@@ -87,7 +87,7 @@ nos pedidos que já saíram da arte.
 | Cliente / Evento | `20928 Patrick Soares Furtado - 28449` e o nome do evento |
 | Vendedor / Designer | Atendente e, embaixo, o designer do pedido |
 | **Preview** | Miniatura da arte do modelo de número mais baixo |
-| **Tempo** | Há quanto tempo o pedido está no card atual |
+| **Tempo** | Há quanto tempo o pedido está no card atual — e, nos Concluídos, quando ele entrou em produção |
 | Entrega/Faturam. | Estado dos dados de entrega |
 | Status | Badge do status calculado + progresso das aprovações |
 | Itens | Quantidade de modelos |
@@ -122,7 +122,7 @@ Substituiu a coluna "Data Liberação" em 19/08/2026. Mostra `HH:MM` desde a
 entrada no card atual, e continua em horas depois de um dia (`26:30`), para o
 número poder ser comparado com o do vizinho sem conversão de cabeça.
 
-**As cores, nos quatro cards:**
+**As cores, nos três cards de trabalho:**
 
 | Faixa | Cor |
 |-------|-----|
@@ -137,6 +137,27 @@ célula, junto com "Em *card* desde *quando*".
 O relógio anda sozinho a cada 30 segundos por `atualizarRelogiosDaLista()`, que
 mexe **só** no texto e na cor das células `td.celula-tempo` — redesenhar a lista
 fecharia menu aberto e perderia a rolagem de quem estivesse lendo.
+
+#### Nos Concluídos a coluna não é relógio: é carimbo
+
+Pedido do usuário em 23/08/2026. No card **Pedidos Concluídos** o trabalho de
+arte acabou, e um número que só cresce não mede mais nada — diz apenas há
+quanto tempo aquele pedido saiu da tela. Ali a célula mostra, parada, a **data e
+a hora em que o pedido entrou em produção** (dia em cima, hora embaixo), e o
+título da coluna passa de "Tempo" a **"Entrou em Produção"**.
+
+O instante é o mesmo `desde` da tabela `imposition_tempo_no_card` — o momento em
+que o painel viu o pedido chegar aos concluídos. Não há outro registro dessa
+hora: `liberarParaProducao()` grava o status `EM PRODUCAO` na proposta, sem data.
+Como todo pedido nunca visto nasce com `desde = agora`, o histórico anterior a
+19/08/2026 carrega a hora da primeira vez que o painel o viu, e não a da
+liberação real.
+
+> [!IMPORTANT]
+> A célula do carimbo sai **sem** a classe `celula-tempo` e sem
+> `data-tempo-inicio`. É só isso que a mantém parada: o tique de meio minuto
+> (`atualizarRelogiosDaLista`) procura exatamente esses dois. Quem alargar o
+> seletor do tique faz o carimbo voltar a andar.
 
 **O pedido de maior tempo fica no topo**, nos cards de trabalho. A ordenação é
 feita pelo instante de início: quanto mais antigo, mais tempo. Pedido ainda sem
@@ -443,6 +464,7 @@ o que vai para a folha tem de ser a numeração do banco, nunca a da aba.
 | O pedido está em arte? | `pedidoEstaEmArte` |
 | A miniatura da arte | `previewDaArteDoPedidoHtml` |
 | O relógio e a cor | `anotarTempoNoCard`, `inicioDoTempoNoCard`, `corDoTempoNoCard`, `celulaDeTempoHtml` |
+| O carimbo dos concluídos | `celulaDeEntradaEmProducaoHtml` (e o `th-tempo-arte` em `renderOrdens`) |
 | A caixa de designers | `renderDesignersBoxHTML` |
 | As travas do negócio | `podeDefinirDesigner`, `bloqueioDeModeloAprovado`, `divergenciaDeCelulasDoModelo`, `podeLiberarParaProducao` |
 | O botão do parceiro | `botaoDoVibeHtml`, `linkDoPedidoNoVibe` |

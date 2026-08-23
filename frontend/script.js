@@ -23401,11 +23401,49 @@ const NOME_DO_CARD = {
     concluidos: 'Pedidos Concluídos',
 };
 
+/**
+ * A célula da coluna Tempo no card PEDIDOS CONCLUÍDOS: a data e a hora em que o
+ * pedido entrou em produção, paradas.
+ *
+ * Pedido do usuário em 23/08/2026, e só para esse card. Relógio ali não mede
+ * nada: o trabalho de arte acabou, e um número que só cresce diz apenas há
+ * quanto tempo a lista está aberta. O que serve é o carimbo.
+ *
+ * O instante é o `desde` do relógio do card — o momento em que o painel viu o
+ * pedido chegar aos concluídos, que é quando ele saiu da arte para a produção.
+ * Não existe outro registro dessa hora: `liberarParaProducao()` grava o status
+ * `EM PRODUCAO` na proposta, sem data.
+ *
+ * A célula sai SEM a classe `celula-tempo`, e por isso o tique de meio minuto
+ * (`atualizarRelogiosDaLista`) passa por ela sem tocar: é o que a mantém fixa.
+ */
+function celulaDeEntradaEmProducaoHtml(os, reg, datas) {
+    const titulo = datas.concat([
+        'Entrou em produção em ' + formatDateTime(reg.desde),
+    ]).join('  •  ');
+
+    // "23/08/2026 14:35" — o dia em cima, a hora embaixo, para caber na coluna.
+    const carimbo = formatDateTime(reg.desde);
+    const corte = carimbo.lastIndexOf(' ');
+    const dia = corte > 0 ? carimbo.slice(0, corte) : carimbo;
+    const hora = corte > 0 ? carimbo.slice(corte + 1) : '';
+
+    return `<td class="celula-entrou-producao"
+                style="text-align: center; vertical-align: middle; line-height: 1.25; font-variant-numeric: tabular-nums;"
+                title="${escapeHtml(titulo)}"><div style="font-size: 0.92rem; font-weight: 700; color: var(--text);">${escapeHtml(dia)}</div><div style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(hora)}</div></td>`;
+}
+
 /** A célula da coluna Tempo, com as duas datas guardadas no título. */
 function celulaDeTempoHtml(os) {
     const datas = [];
     if (os.data_liberacao) datas.push('Liberação: ' + formatDateTime(os.data_liberacao));
     if (os.data_pedido) datas.push('Pedido: ' + formatDateTime(os.data_pedido));
+
+    // Concluído não tem relógio: tem hora de entrada na produção.
+    const registro = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
+    if (registro && registro.card === 'concluidos' && registro.desde) {
+        return celulaDeEntradaEmProducaoHtml(os, registro, datas);
+    }
 
     const inicio = inicioDoTempoNoCard(os);
     if (inicio === null) {
@@ -23725,6 +23763,17 @@ function renderOrdens() {
         } else {
             tituloTabelaArteEl.innerHTML = `<span class="icon">🌐</span> Todos os Pedidos Pendentes`;
         }
+    }
+
+    // O título da coluna acompanha: nos concluídos ela deixou de ser relógio e
+    // passou a ser o carimbo de entrada na produção (pedido de 23/08/2026).
+    //
+    // Pelo `listaEhDosConcluidos`, e não pelo card aceso: com um filtro de
+    // estágio ligado o card continua aceso, mas as linhas já são de outra base —
+    // e ali a coluna volta a ser relógio.
+    const thTempoEl = document.getElementById('th-tempo-arte');
+    if (thTempoEl) {
+        thTempoEl.textContent = listaEhDosConcluidos ? 'Entrou em Produção' : 'Tempo';
     }
 
     const cardTodosEl = document.getElementById('card-stat-pedidos-todos');

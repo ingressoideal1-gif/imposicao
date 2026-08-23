@@ -8,6 +8,33 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v700 — 2026-08-23] — Pedidos Concluídos: a coluna deixa de contar tempo e diz quando o pedido entrou em produção
+
+Pedido do usuário: *"Na Lista de Arte, no Card 'Pedidos Concluidos' retirar a marcação de TEMPO,
+deixar fixo a data hora em que pedido entrou em Produção"*.
+
+Nos três cards de trabalho — **Em Arte**, **Fila de Aprovação**, **Fila de Aprovados** — a coluna
+**Tempo** continua igual: `HH:MM` desde a entrada no card, verde até 1h, azul até 2h, laranja até 3h,
+vermelho depois, e o pedido mais parado no topo. Ali o número cobra atenção.
+
+Nos **Pedidos Concluídos** o trabalho de arte acabou, e um relógio que só cresce não mede mais nada:
+diz apenas há quanto tempo aquele pedido saiu da tela. A célula passa a mostrar, **parada**, a data e
+a hora em que o pedido entrou em produção — o dia em cima, a hora embaixo — e o título da coluna
+troca de **Tempo** para **Entrou em Produção** enquanto esse card estiver aceso.
+
+A hora vem do `desde` da tabela `imposition_tempo_no_card`: o momento em que o painel viu o pedido
+chegar aos concluídos. Não há outro registro dela — `liberarParaProducao()` grava o status
+`EM PRODUCAO` na proposta, sem data. Para o histórico anterior a 19/08/2026, quando a tabela nasceu,
+o carimbo é o da primeira vez que o painel viu o pedido, e não o da liberação real.
+
+O que mantém o carimbo parado é a célula sair **sem** a classe `celula-tempo` e sem
+`data-tempo-inicio` — os dois que o tique de meio minuto (`atualizarRelogiosDaLista`) procura. Há
+teste travando isso, junto com a prova, num Chrome de verdade, de que o carimbo não anda depois do
+tique e não alarga a coluna: `tests/tempo_no_card_harness.js` (80 verificações) e
+`tests/tempo_na_tela_harness.js` (29 verificações).
+
+---
+
 ## [v699 — 2026-08-23] — Planilha de várias páginas, colunas só quando escolhidas, e a 1ª linha do que é impresso
 
 ### Planilha de várias páginas: linha enxuta, e uma numeração por aba

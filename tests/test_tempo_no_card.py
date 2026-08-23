@@ -3,9 +3,17 @@
 
 Pedido do usuario em 19/08/2026: a coluna "Data Liberacao" vira "Tempo" e mostra
 ha quanto tempo o pedido esta no card em que esta ("01:05"). Verde ate 1h, azul
-ate 2h, laranja ate 3h, vermelho depois -- nos quatro cards, por escolha dele. O
-pedido de maior tempo assume o topo da lista. As duas datas que estavam na coluna
-passaram para o titulo da celula.
+ate 2h, laranja ate 3h, vermelho depois -- nos tres cards de trabalho, por
+escolha dele. O pedido de maior tempo assume o topo da lista. As duas datas que
+estavam na coluna passaram para o titulo da celula.
+
+MENOS NOS CONCLUIDOS, desde 23/08/2026: "no Card Pedidos Concluidos retirar a
+marcacao de TEMPO, deixar fixo a data hora em que pedido entrou em Producao".
+Ali o trabalho de arte acabou, e um relogio so diz ha quanto tempo o pedido saiu
+da tela. A celula mostra parada a data e a hora da entrada na producao, e o
+titulo da coluna passa de "Tempo" a "Entrou em Producao". O que a mantem parada e
+ela sair SEM a classe `celula-tempo` e sem `data-tempo-inicio` -- os dois que o
+tique de meio minuto procura.
 
 O CARD e calculado no painel; o RELOGIO precisa de memoria. Essa memoria e a
 tabela `imposition_tempo_no_card` (uma linha por pedido), escrita pelo proprio

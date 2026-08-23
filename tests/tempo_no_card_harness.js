@@ -264,12 +264,67 @@ function comPedidoEmArteDesde(state, quando) {
 
 (function aEscalaValeEmTodosOsCards() {
     // Decisao do usuario em 19/08/2026, contra a alternativa de deixar os outros
-    // cards em cinza: a mesma escala pinta os quatro.
+    // cards em cinza: a mesma escala pinta os cards de trabalho.
     const i = SCRIPT.indexOf('function celulaDeTempoHtml');
     ok(i > 0, 'a celula do tempo mora numa funcao');
     const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
-    ok(!/_fila_arte|card === 'fila'/.test(corpo),
-        'e ela nao olha o card para escolher a cor', corpo.slice(0, 200));
+    ok(!/_fila_arte|card === 'fila'|card === 'aprova/.test(corpo),
+        'e ela nao separa uma fila de trabalho da outra', corpo.slice(0, 200));
+    // A cor sai de uma conta so, a dos segundos -- nao de um if por card.
+    const cores = corpo.match(/corDoTempoNoCard\(/g) || [];
+    ok(cores.length === 1, 'a cor vem de uma chamada so, pelos segundos', cores.length + ' chamada(s)');
+})();
+
+// --- Menos o card dos CONCLUIDOS, que nao tem relogio -----------------------
+//
+// Pedido do usuario em 23/08/2026: "no Card Pedidos Concluidos retirar a
+// marcacao de TEMPO, deixar fixo a data hora em que pedido entrou em Producao".
+// Ali o trabalho de arte acabou -- um numero que so cresce nao mede nada.
+
+(function osConcluidosMostramOCarimboEmVezDoRelogio() {
+    const i = SCRIPT.indexOf('function celulaDeTempoHtml');
+    const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+    ok(/card === 'concluidos'/.test(corpo),
+        'a celula reconhece o pedido que ja esta nos concluidos');
+    ok(/celulaDeEntradaEmProducaoHtml\(/.test(corpo),
+        'e entrega a ele a celula do carimbo, em vez do relogio');
+
+    const j = SCRIPT.indexOf('function celulaDeEntradaEmProducaoHtml');
+    ok(j > 0, 'o carimbo mora numa funcao propria');
+    const carimbo = SCRIPT.slice(j, SCRIPT.indexOf('\n}', j));
+    ok(carimbo.indexOf('class="celula-tempo"') < 0,
+        'a celula do carimbo NAO leva a classe do relogio -- e o que a mantem parada');
+    ok(carimbo.indexOf('data-tempo-inicio') < 0,
+        'nem o atributo que o tique procura');
+    ok(carimbo.indexOf('corDoTempoNoCard') < 0 && carimbo.indexOf('formatarTempoNoCard') < 0,
+        'e nao usa nem a cor nem o formato do relogio');
+    ok(/formatDateTime\(reg\.desde\)/.test(carimbo),
+        'o que ela mostra e a data e a hora guardadas no relogio do card');
+})();
+
+(function oTiqueNaoAlcancaOCarimbo() {
+    // O tique de meio minuto so procura td.celula-tempo. Se um dia ele passar a
+    // varrer a coluna inteira, o carimbo comecaria a andar -- e este teste cai.
+    const i = SCRIPT.indexOf('function atualizarRelogiosDaLista');
+    const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+    ok(/querySelectorAll\('td\.celula-tempo\[data-tempo-inicio\]'\)/.test(corpo),
+        'o tique so mexe nas celulas que sao relogio', corpo.slice(0, 200));
+})();
+
+(function oTituloDaColunaAcompanha() {
+    ['index.html', 'producao.html'].forEach(arq => {
+        const html = fs.readFileSync(path.join(RAIZ, 'frontend', arq), 'utf8');
+        ok(html.indexOf('id="th-tempo-arte"') > 0,
+            arq + ': o titulo da coluna tem nome para ser trocado');
+    });
+    ok(/thTempoEl\.textContent = listaEhDosConcluidos \? 'Entrou em Produ/.test(SCRIPT),
+        'e na lista dos concluidos ele deixa de dizer Tempo');
+    // Pelo mesmo sinalizador que escolhe a base da lista: com um filtro de
+    // estagio ligado o card continua aceso, mas as linhas ja sao de outra base.
+    const iTh = SCRIPT.indexOf("getElementById('th-tempo-arte')");
+    const iBase = SCRIPT.indexOf('listaEhDosConcluidos = true;');
+    ok(iBase > 0 && iBase < iTh,
+        'e esse sinalizador e o mesmo que escolheu a base da lista, decidido antes');
 })();
 
 // ─── A lista ─────────────────────────────────────────────────────────────────
