@@ -3474,13 +3474,21 @@
             : `outline: 1px solid ${AZUL.fio};`;
     }
 
-    /** A faixa que anuncia o modo, acima dos modelos. */
+    /**
+     * A faixa que anuncia o modo, acima dos modelos.
+     *
+     * GRUDADA no topo da área que rola. Sem isso ela sobe junto com a lista, e
+     * o operador que rolou três modelos para baixo perde de vista em que setor
+     * está escolhendo — e o Cancelar junto.
+     */
     function faixaDaEscolha() {
         const e = tela.escolhaDeVolume;
         if (!e) return '';
         return `
             <div style="display: flex; align-items: center; gap: 10px; background: #120a8f;
-                        border: 1px solid #4cc8f0; border-radius: 8px; padding: 9px 14px; margin-bottom: 12px;">
+                        border: 1px solid #4cc8f0; border-radius: 8px; padding: 9px 14px; margin-bottom: 12px;
+                        position: sticky; top: 0; z-index: 31;
+                        box-shadow: 0 6px 18px rgba(6,7,13,0.55);">
                 <span style="font-size: 1rem;">📦</span>
                 <strong style="font-size: 0.86rem; color: #ffffff;">Escolha o que vai neste volume</strong>
                 <span style="font-size: 0.74rem; color: #cfe6fb;">setor ${esc(nomeDoSetor(e.setor))}</span>
@@ -3491,7 +3499,20 @@
             </div>`;
     }
 
-    /** A barra do fim da lista, com a conta do que foi marcado. */
+    /**
+     * A barra da escolha, com a conta do que foi marcado e o botão de pesar.
+     *
+     * GRUDADA na base da área que rola (`position: sticky; bottom: 0`), e não
+     * simplesmente no fim da lista. Ela nasceu solta, e isso a punha fora da
+     * tela sempre: com UM modelo no setor o botão já ficava 144 px abaixo da
+     * área visível, e com quatro, 1.416 px. O operador marcava os modelos e não
+     * via acontecer nada — o botão que continua o trabalho estava lá embaixo,
+     * onde ninguém procura.
+     *
+     * As margens negativas fazem a barra encostar nas bordas da área, por baixo
+     * do `padding` do contêiner: uma faixa flutuando com folga dos lados pareceu
+     * um card solto, e não a base da tela.
+     */
     function barraDaEscolha(itens) {
         const e = tela.escolhaDeVolume;
         if (!e) return '';
@@ -3502,8 +3523,10 @@
 
         return `
             <div style="display: flex; align-items: center; gap: 12px; background: ${AZUL.fundo};
-                        border: 1px solid #4cc8f0; border-radius: 10px; padding: 12px 16px;
-                        box-shadow: 0 -6px 24px rgba(0,0,0,0.45);">
+                        border: 1px solid #4cc8f0; border-radius: 10px 10px 0 0; padding: 12px 16px;
+                        position: sticky; bottom: -10px; z-index: 30;
+                        margin: 14px -12px -10px;
+                        box-shadow: 0 -6px 24px rgba(0,0,0,0.65);">
                 <span style="font-size: 1.05rem;">📦</span>
                 <strong style="font-size: 0.9rem; color: #ffffff;">
                     ${vazio ? 'Nenhum modelo escolhido' : `${marcados.length} ${marcados.length === 1 ? 'modelo escolhido' : 'modelos escolhidos'}`}

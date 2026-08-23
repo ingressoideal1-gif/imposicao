@@ -4,7 +4,31 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v702** — 2026-08-23 | Agente **1.2.196**
+## Versão atual: **v703** — 2026-08-23 | Agente **1.2.197**
+
+---
+
+## [v703 — 2026-08-23] — Acabamento: o "Pesar este volume" estava fora da tela
+
+Relato do usuário, logo depois de a v702 subir: *"Não localizei o 4. Pesar este volume, após
+selecionar os modelos"*.
+
+Ele estava certo, e o defeito era pior do que parecia. A barra do modo de escolha — a que traz a
+conta do que foi marcado e o único botão que segue adiante — nascia **solta no fim da lista de
+modelos**, dentro da área que rola. Medido numa tela de 1366×768, a que a gráfica usa: com **um**
+modelo no setor o botão já ficava **144 px abaixo da área visível**; com quatro, **1.416 px**. O
+operador marcava os modelos e não via acontecer nada.
+
+Agora as duas pontas do modo de escolha ficam **grudadas na tela**: a faixa azul no topo, com o setor
+e o Cancelar, e a barra na base, com a conta e o `Pesar este volume`. Rolar a lista inteira não perde
+nenhuma das duas de vista.
+
+**Por que nenhum teste pegou isso.** O harness de regra mede o HTML que a função devolve, e o HTML
+estava certo o tempo todo — quem decidia se o botão existia *para o operador* era o layout. Entrou um
+harness de navegador (`tests/escolha_de_volume_harness.js`, 10 verificações) que desenha a tela
+inteira e pergunta uma coisa só: o botão está dentro da área visível? Ele traz o próprio **controle**
+— tira o `position: sticky` e prova que o botão volta a sumir —, na mesma linha do harness do título.
+Sem rede nenhuma: CDN, banco e agente respondem vazio de dentro do teste.
 
 ---
 

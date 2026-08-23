@@ -78,6 +78,30 @@ def test_o_harness_do_titulo_em_duas_linhas_passa():
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
 
 
+def test_o_harness_da_escolha_de_volume_passa():
+    """A barra "Pesar este volume" tem de estar NA TELA depois de marcar.
+
+    O usuario relatou em 23/08/2026: "Nao localizei o 4. Pesar este volume, apos
+    selecionar os modelos". A barra existia e o HTML estava certo -- ela e que
+    nascia SOLTA no fim da lista, dentro da area que rola. Numa tela de
+    1366x768, com UM modelo no setor o botao ja caia 144 px abaixo da area
+    visivel; com quatro, 1.416 px.
+
+    Layout so se mede desenhando, e por isso este harness abre a tela inteira
+    num Chrome. Ele traz o proprio CONTROLE: tira o `position: sticky` e prova
+    que o botao volta a sumir.
+    """
+    harness = os.path.join(RAIZ, "tests", "escolha_de_volume_harness.js")
+    assert os.path.exists(harness), "o harness da escolha de volume sumiu"
+
+    r = subprocess.run(
+        ["node", harness], cwd=RAIZ, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
 def test_o_menu_e_a_tela_existem_no_painel():
     html = _ler("frontend/index.html")
 

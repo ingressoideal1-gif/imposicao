@@ -904,6 +904,15 @@ nenhum, e o card do modelo nem mostra o bloco de volumes.
    desenhados, apagados, dizendo por quê. A lista já está na tela, com foto, cor
    e tiragem — pedir que ele reconheça o mesmo material numa segunda lista, mais
    pobre, dentro de um popup, seria trabalho que a tela já fez por ele.
+
+   **As duas pontas do modo de escolha ficam grudadas na tela**: a faixa azul no
+   topo (com o setor e o Cancelar) e a barra da base (com a conta do marcado e o
+   `Pesar este volume`). Elas nasceram soltas, e isso as punha fora da vista
+   sempre — numa tela de 1366×768, com **um** modelo no setor o botão já caía
+   144 px abaixo da área visível, e com quatro, 1.416 px. O operador marcava os
+   modelos e não via acontecer nada. Há um harness de navegador travando isso
+   (`tests/escolha_de_volume_harness.js`), com o controle que prova o defeito:
+   tirado o `sticky`, o botão volta a sumir.
 2. **`Pesar este volume`** abre a janela. Cada modelo marcado vira **um
    pacote**, com a quantidade **cheia com o que ainda está fora de volume** — um
    clique para "esta caixa leva o resto" — e com o responsável que o card já
