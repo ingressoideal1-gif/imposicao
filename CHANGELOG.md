@@ -4,7 +4,32 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v698** — 2026-08-23 | Agente **1.2.192**
+## Versão atual: **v699** — 2026-08-23 | Agente **1.2.193**
+
+---
+
+## [v699 — 2026-08-23] — Conferência de dados: a 1ª linha traz só o que a numeração imprime
+
+Correção pedida pelo usuário, olhando o pedido 21085: *"esta coluna de células não foi incluída na
+numeração, não deve aparecer no relatório"*.
+
+A coluna "1ª linha" mostrava **todas** as colunas do CSV. Passa a mostrar **apenas as que algum
+elemento da numeração lê** — as apontadas em `csv_column`. A Conferência de dados responde uma
+pergunta só, *o que vai sair no papel está certo?*, e uma coluna que o cliente deixou no arquivo mas
+que a numeração ignora não é impressa em lugar nenhum.
+
+O 21085 é o caso que mostrou isso: os 17 CSVs têm duas colunas — o código que o QR lê e uma segunda
+que só repete o nome do setor como valor (`"EXPOSITOR SIMERS": "EXPOSITOR SIMERS"`). Nenhum elemento
+lia a segunda. Ela dobrava o comprimento do texto, fazia a célula cair para duas linhas em uns
+modelos e não em outros, e não dizia nada sobre a produção. Agora cada modelo mostra o seu código,
+numa linha só.
+
+Numeração **sem** elemento de banco passa a ficar com a célula vazia, mesmo tendo CSV: nada daquele
+arquivo vai para a peça.
+
+Testes: `tests/csv_fatia_do_modelo_harness.js` — só a coluna apontada entrando, duas colunas lidas
+saindo as duas, a coluna do banco vazia continuando visível, a coluna apontada que nem existe no CSV
+idem, e a numeração sem banco sem linha nenhuma (86 verificações).
 
 ---
 

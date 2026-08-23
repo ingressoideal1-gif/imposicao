@@ -13977,43 +13977,38 @@ function textoDasCelulasRepetidas(d) {
 window.textoDasCelulasRepetidas = textoDasCelulasRepetidas;
 
 /**
- * A PRIMEIRA LINHA da fatia de um modelo, escrita como "COLUNA: valor".
+ * A PRIMEIRA LINHA da fatia de um modelo — SÓ as colunas que a numeração lê.
  *
  * É por onde o banco daquele modelo COMEÇA. Numa numeração dividida entre vários
  * modelos, ler a primeira linha de cada um é o jeito mais rápido de ver que a
  * distribuição saiu certa — um começa no 1001, o outro no 1501 — sem abrir o CSV
  * modelo a modelo (pedido do usuário, 23/08/2026).
  *
- * As colunas apontadas pelos elementos de banco vêm PRIMEIRO, porque são as que
- * vão para o papel, e aparecem mesmo vazias: coluna do banco em branco na
- * primeira linha é exatamente o que este relatório existe para mostrar. As outras
- * colunas do CSV vêm depois, e só quando têm valor — numa credencial é o NOME que
- * faz o operador reconhecer a fatia, mesmo que o QR leia outra coluna.
+ * **Coluna que nenhum elemento da numeração lê não entra** (regra do usuário, no
+ * mesmo dia, olhando o pedido 21085). Este relatório responde uma pergunta só —
+ * o que vai sair no papel está certo? —, e uma coluna que o cliente deixou no
+ * arquivo mas que a numeração ignora não é impressa em lugar nenhum. Na primeira
+ * versão desta coluna eu mostrava o CSV inteiro; no 21085 isso significava
+ * repetir o nome do setor ao lado de cada código, dobrando o texto da célula
+ * para não dizer nada sobre a produção.
  *
- * As chaves `__id`, `__ativo` e `__fotos` ficam de fora: são controle nosso
- * dentro da linha, não dado que o cliente mandou.
+ * As colunas do banco aparecem MESMO VAZIAS: coluna apontada em branco na
+ * primeira linha é exatamente o que este relatório existe para mostrar. Sem
+ * elemento de banco não há primeira linha a mostrar — a célula fica vazia.
  */
 function primeiraLinhaDoModelo(fatia, colunasDoBanco) {
     const linha = (Array.isArray(fatia) && fatia.length) ? fatia[0] : null;
     if (!linha || typeof linha !== 'object') return { pares: [], texto: '' };
 
-    const doBanco = (colunasDoBanco || [])
-        .map(c => String(c === null || c === undefined ? '' : c).trim())
-        .filter(Boolean);
-
     const nomes = [];
-    doBanco.forEach(c => { if (nomes.indexOf(c) === -1) nomes.push(c); });
-    Object.keys(linha).forEach(c => {
-        if (String(c).slice(0, 2) === '__') return;
-        if (nomes.indexOf(c) === -1) nomes.push(c);
-    });
+    (colunasDoBanco || [])
+        .map(c => String(c === null || c === undefined ? '' : c).trim())
+        .filter(Boolean)
+        .forEach(c => { if (nomes.indexOf(c) === -1) nomes.push(c); });
 
-    const pares = [];
-    nomes.forEach(c => {
+    const pares = nomes.map(c => {
         const v = linha[c];
-        const texto = (v === null || v === undefined) ? '' : String(v).trim();
-        if (!texto && doBanco.indexOf(c) === -1) return;
-        pares.push({ coluna: c, valor: texto, doBanco: doBanco.indexOf(c) !== -1 });
+        return { coluna: c, valor: (v === null || v === undefined) ? '' : String(v).trim() };
     });
 
     return { pares, texto: pares.map(p => p.coluna + ': ' + (p.valor || '(vazio)')).join(' · ') };
@@ -14082,9 +14077,9 @@ function conferenciaDeDadosDoPedido(osId) {
                 .filter(Boolean)));
             const fatia = fatiaCsvDoItem(it, num);
 
-            // A 1ª linha sai mesmo quando a numeração NÃO usa banco: o CSV existe,
-            // e é dele que o operador quer ver o começo. A contagem de códigos,
-            // essa sim, continua só para quem imprime do banco.
+            // A 1ª linha traz SÓ as colunas que a numeração lê. Sem elemento de
+            // banco, `colunas` é vazia e a célula fica vazia — é o certo: não há
+            // nada daquele CSV indo para o papel.
             const primeira = primeiraLinhaDoModelo(fatia, colunas);
             linha.primeira = primeira.texto;
             linha.primeiraPares = primeira.pares;
@@ -14174,15 +14169,13 @@ async function abrirConferenciaDeDados(osId) {
             ? `<span style="color:#fca5a5;">${escapeHtml(m.avisos.join(' · '))}</span>`
             : '<span style="color:#4ade80;">✓</span>';
         // A 1ª LINHA da fatia: por onde o banco daquele modelo começa. Só os
-        // VALORES, na ordem em que estão na linha (pedido do usuário,
-        // 23/08/2026) — o nome da coluna repetido em cada célula era a mesma
-        // palavra dezenas de vezes na mesma tela, e empurrava o resto para fora.
-        // Os valores das colunas do banco, que são os que vão para o papel, saem
-        // em branco forte; os demais, no cinza do resto da tabela. Quem quiser
+        // VALORES das colunas que a numeração lê (pedido do usuário, 23/08/2026)
+        // — o nome da coluna repetido em cada célula era a mesma palavra dezenas
+        // de vezes na mesma tela, e empurrava o resto para fora. Quem quiser
         // saber de que coluna veio cada valor passa o mouse: o title traz a
         // linha com os nomes, e é assim que ela vai no relatório copiado.
         const TETO = 10;
-        const valor = p => `<span style="${p.doBanco ? 'color:#e2e8f0;font-weight:700;' : 'color:#cbd5e1;'}">`
+        const valor = p => `<span style="color:#e2e8f0;font-weight:700;">`
             + `${escapeHtml(p.valor || '(vazio)')}</span>`;
         const pares = m.primeiraPares || [];
         const primeira = pares.length
@@ -14233,7 +14226,7 @@ async function abrirConferenciaDeDados(osId) {
                 </div>
                 <div style="color:#94a3b8; font-size:0.74rem; line-height:1.4;">
                     "Códigos" são os valores das colunas apontadas pelos elementos de banco de dados — o que vai para o papel. Linhas contam a fatia do modelo.
-                    "1ª linha" é por onde a fatia daquele modelo começa: os valores da primeira linha, com os do banco em destaque — passe o mouse para ver de que coluna veio cada um, que é como a linha vai no relatório copiado.
+                    "1ª linha" é por onde a fatia daquele modelo começa: os valores da primeira linha, apenas das colunas que a numeração lê — passe o mouse para ver de que coluna veio cada um, que é como a linha vai no relatório copiado.
                     A conferência cobre: banco incompleto, Qtd × células, repetições dentro do CSV, células vazias e células repetidas entre modelos deste pedido.
                 </div>
             </div>

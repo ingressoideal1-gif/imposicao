@@ -427,41 +427,56 @@ function extrairFuncao(src, nome) {
         ok(/CODIGO: 1051/.test(r.b.primeira), 'o 2o comeca na fatia DELE, e nao no topo do banco', r.b.primeira);
     })();
 
-    (function aColunaDoBancoVemPrimeiroEMarcada() {
-        // No CSV o NOME vem antes; no relatorio a coluna que vai para o PAPEL e
-        // que abre a linha.
-        const r = p1([{ __id: 1, NOME: 'Maria', CODIGO: 'X9' }], ['CODIGO']);
-        ok(r.pares[0].coluna === 'CODIGO' && r.pares[0].doBanco === true,
-            'a coluna do banco abre a linha e vem marcada', r.pares);
-        ok(r.pares[1].coluna === 'NOME' && r.pares[1].doBanco === false, 'as outras vem depois', r.pares);
-        ok(r.texto === 'CODIGO: X9 · NOME: Maria', 'o texto sai na mesma ordem', r.texto);
+    // ── SO as colunas que a numeracao le (regra do usuario, 23/08/2026) ──────
+    //
+    // "esta coluna de celulas nao foi incluida na numeracao, nao deve aparecer no
+    // relatorio". A Conferencia responde uma pergunta so -- o que vai sair no
+    // papel esta certo? --, e coluna que nenhum elemento le nao e impressa em
+    // lugar nenhum. Na primeira versao desta coluna eu mostrava o CSV inteiro; no
+    // pedido 21085 isso repetia o nome do setor ao lado de cada codigo, dobrando
+    // o texto da celula para nao dizer nada sobre a producao.
+
+    (function soAsColunasQueANumeracaoLe() {
+        const r = p1([{ __id: 1, NOME: 'Maria', CODIGO: 'X9', EMPRESA: 'Acme' }], ['CODIGO']);
+        ok(r.pares.length === 1 && r.pares[0].coluna === 'CODIGO',
+            'so a coluna apontada pelo elemento entra', r.pares);
+        ok(r.texto === 'CODIGO: X9', 'NOME e EMPRESA ficam de fora -- nao vao para o papel', r.texto);
     })();
 
-    (function colunaDoBancoVaziaApareceAsOutrasNao() {
-        // Uma coluna do banco em branco na 1a linha e exatamente o que este
-        // relatorio existe para mostrar; uma coluna comum vazia e so ruido.
-        const r = p1([{ __id: 1, CODIGO: '   ', NOME: '', EMPRESA: 'Acme' }], ['CODIGO']);
-        ok(r.texto === 'CODIGO: (vazio) · EMPRESA: Acme', 'coluna do banco vazia aparece; coluna comum vazia, nao', r.texto);
+    (function duasColunasApontadasEntramNaOrdemDosElementos() {
+        const r = p1([{ __id: 1, NOME: 'Maria', CODIGO: 'X9', CPF: '111' }], ['CODIGO', 'CPF']);
+        ok(r.texto === 'CODIGO: X9 · CPF: 111', 'duas colunas lidas, duas no relatorio', r.texto);
+    })();
+
+    (function colunaDoBancoVaziaAparece() {
+        // Coluna apontada em branco na 1a linha e exatamente o que este relatorio
+        // existe para mostrar.
+        const r = p1([{ __id: 1, CODIGO: '   ', NOME: 'Maria' }], ['CODIGO']);
+        ok(r.texto === 'CODIGO: (vazio)', 'coluna do banco vazia aparece, e sozinha', r.texto);
     })();
 
     (function colunaApontadaQueNaoExisteNoCsvAparece() {
         const r = p1([{ __id: 1, NOME: 'Maria' }], ['CPF']);
-        ok(/^CPF: \(vazio\)/.test(r.texto), 'coluna apontada que nao existe no CSV fica visivel', r.texto);
+        ok(r.texto === 'CPF: (vazio)', 'coluna apontada que nao existe no CSV fica visivel', r.texto);
     })();
 
-    (function asChavesDeControleFicamDeFora() {
+    (function asChavesDeControleNaoTemComoEntrar() {
+        // Elas nunca sao apontadas por um elemento, entao nao ha caminho por onde
+        // `__id`, `__ativo` ou `__fotos` cheguem ao relatorio.
         const r = p1([{ __id: 7, __ativo: false, __fotos: { a: 1 }, CODIGO: 'Z1' }], ['CODIGO']);
         ok(r.texto === 'CODIGO: Z1', '__id, __ativo e __fotos nao sao dado do cliente', r.texto);
     })();
 
-    (function semLinhaNaoDaTexto() {
+    (function semLinhaOuSemColunaNaoDaTexto() {
         ok(p1([], ['CODIGO']).texto === '' && p1(null, ['CODIGO']).texto === '', 'fatia vazia nao inventa linha');
-        ok(p1([{ __id: 1, CODIGO: 'A' }], null).texto === 'CODIGO: A', 'sem colunas de banco, vale o que a linha tem');
+        ok(p1([{ __id: 1, CODIGO: 'A' }], null).texto === '',
+            'sem coluna apontada nao ha o que mostrar -- nada daquele CSV vai para o papel');
+        ok(p1([{ __id: 1, CODIGO: 'A' }], []).texto === '', 'lista de colunas vazia idem');
     })();
 
-    (function numeracaoSemBancoAindaMostraOComeco() {
-        // O CSV existe; so nao ha elemento lendo dele. O operador continua
-        // querendo ver por onde a lista comeca.
+    (function numeracaoSemBancoNaoMostraLinha() {
+        // O CSV existe; so nao ha elemento lendo dele. Nada dali e impresso, e o
+        // relatorio nao fala do que nao e impresso.
         state.numeracoes.push({
             id: 'n-txt-csv', name: 'TXTCSV', csv_filename: 't.csv',
             elements: [{ id: 'el_9', type: 'TEXT' }], csv_headers: ['NOME'],
@@ -469,8 +484,8 @@ function extrairFuncao(src, nome) {
         });
         state.osItens['os-txt'] = [modelo('só-texto', 'SóTexto', 'n-txt-csv', 1)];
         const m = api.conferenciaDeDadosDoPedido('os-txt').modelos[0];
-        ok(m.usaBanco === false && m.primeira === 'NOME: Ana',
-            'numeracao sem banco tambem mostra a 1a linha do CSV', m);
+        ok(m.usaBanco === false && m.primeira === '',
+            'numeracao sem banco nao mostra 1a linha nenhuma', m);
         ok(m.codigos === 0 && m.linhas === 0, 'e continua sem ser cobrada por codigos', m);
     })();
 
@@ -504,7 +519,8 @@ function extrairFuncao(src, nome) {
         const corpo = script.slice(i, script.indexOf(';\n', script.indexOf('escapeHtml(p.valor', i)));
         ok(corpo.indexOf('p.coluna') === -1,
             'o nome da coluna NAO aparece na celula -- ele fica no title e no relatorio', corpo);
-        ok(corpo.indexOf('p.doBanco') > 0, 'mas o valor do banco continua em destaque');
+        ok(corpo.indexOf('font-weight:700') > 0,
+            'e o valor sai em destaque: tudo o que esta ali vai para o papel', corpo);
     })();
 
     (function asColunasDeContagemNaoQuebram() {

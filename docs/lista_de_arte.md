@@ -332,18 +332,20 @@ Como ela é montada (`primeiraLinhaDoModelo`):
 
 - vem da **fatia** do modelo, nunca do topo do banco inteiro — é essa distinção
   que faz a coluna valer alguma coisa;
-- os **valores das colunas do banco vêm primeiro** e em branco forte, porque são
-  os que vão para o papel; os das demais colunas do CSV vêm depois, em cinza, e
-  só quando têm valor (numa credencial é o NOME que faz o operador reconhecer a
-  fatia, mesmo que o QR leia outra coluna);
+- **só entram as colunas que a numeração lê** — as apontadas em `csv_column` por
+  elementos `source: 'database'`. Coluna que existe no arquivo mas que nenhum
+  elemento usa **não aparece** (regra do usuário, 23/08/2026): este relatório
+  responde uma pergunta só — o que vai sair no papel está certo? —, e um dado que
+  não é impresso em lugar nenhum é ruído aqui. O pedido 21085 mostrou por quê: os
+  CSVs tinham uma segunda coluna que só repetia o nome do setor como valor, e ela
+  dobrava o texto da célula sem dizer nada sobre a produção;
 - **coluna do banco vazia aparece como `(vazio)`** — uma coluna apontada que está
   em branco na primeira linha é exatamente o que este relatório existe para
-  mostrar. Coluna comum vazia é omitida;
-- `__id`, `__ativo` e `__fotos` ficam de fora: são controle nosso dentro da
-  linha, não dado que o cliente mandou;
-- a numeração **sem** elemento de banco também mostra a 1ª linha, se tiver CSV —
-  o dado existe, e é dele que o operador quer ver o começo. O que ela continua
-  não tendo é contagem de códigos;
+  mostrar;
+- `__id`, `__ativo` e `__fotos` não têm por onde entrar: nenhum elemento aponta
+  para elas;
+- a numeração **sem** elemento de banco fica com a célula vazia, mesmo tendo CSV —
+  nada daquele arquivo vai para o papel;
 - **o nome da coluna não aparece na célula**: repetido em cada linha, era a
   mesma palavra dezenas de vezes na mesma tela, e a largura que ele comia
   empurrava "Vazios" e "Situação" para fora da janela. Ele fica no `title`
