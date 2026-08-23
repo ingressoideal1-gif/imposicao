@@ -4,11 +4,13 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v699** — 2026-08-23 | Agente **1.2.193**
+## Versão atual: **v700** — 2026-08-23 | Agente **1.2.194**
 
 ---
 
-## [v700 — 2026-08-23] — Acabamento: volumes por setor, a caixa com peso, dono e o que vai dentro
+## [v700 — 2026-08-23] — Volumes do acabamento, a hora da produção nos Concluídos, e o título do pedido em duas linhas
+
+### Acabamento: volumes por setor — a caixa com peso, dono e o que vai dentro
 
 Pedido do usuário: *"a informação do peso para pedidos com vários volumes, existe a situação em que
 1 modelo grande é realizado por vários responsáveis e situações onde vários modelos são pesados
@@ -52,9 +54,7 @@ caminhos que a gravação do peso precisa.
 `tests/test_painel_do_acabamento.py`. Documentado em `docs/painel_do_acabamento.md` e
 `docs/REGRAS_BANCO.md`.
 
----
-
-## [v700 — 2026-08-23] — Pedidos Concluídos: a coluna deixa de contar tempo e diz quando o pedido entrou em produção
+### Pedidos Concluídos: a coluna deixa de contar tempo e diz quando o pedido entrou em produção
 
 Pedido do usuário: *"Na Lista de Arte, no Card 'Pedidos Concluidos' retirar a marcação de TEMPO,
 deixar fixo a data hora em que pedido entrou em Produção"*.
@@ -78,6 +78,33 @@ O que mantém o carimbo parado é a célula sair **sem** a classe `celula-tempo`
 teste travando isso, junto com a prova, num Chrome de verdade, de que o carimbo não anda depois do
 tique e não alarga a coluna: `tests/tempo_no_card_harness.js` (80 verificações) e
 `tests/tempo_na_tela_harness.js` (29 verificações).
+
+### Painel do Acabamento: o título do pedido aberto em duas linhas
+
+Pedido do usuário: *"ao editar um pedido, vamos mostrar o título em 2 linhas, em cima número e Evento
+(como já está) e na segunda linha com fonte 20% menor e em amarelo o Nome e número do cliente"*.
+
+```
+21085 - Expointer 2026 - Parte 2          ← como já estava
+ANGELA BEATRIZ DA COSTA SALOMAO - 53193   ← 20% menor, em amarelo
+```
+
+Quem trabalha no acabamento tem o **evento** na mão — é por ele e pelo número que confere, de
+relance, que o material na mesa é o deste pedido. O cliente é informação de apoio, e agora se lê sem
+disputar espaço com a primeira linha. Linha que não existe não é desenhada: pedido sem evento no
+briefing fica com a primeira linha só no número, em vez de terminar num hífen solto.
+
+A segunda linha é `0.8em`, e não um tamanho fixo: ela continua 20% menor que a primeira mesmo que um
+dia o título inteiro mude de tamanho.
+
+**Uma armadilha que quase saiu para a gráfica em silêncio:** o `<h1>` do cabeçalho pinta o texto com
+um degradê, por `-webkit-background-clip: text` e `-webkit-text-fill-color: transparent`. Esse
+transparente é **herdado**, e o degradê se recorta também no texto dos filhos — a linha do cliente
+com `color: #fbbf24` e mais nada sairia **cinza clara**, igual à de cima, com o amarelo todo certo no
+código e nenhum teste de texto reclamando. Ela devolve o seu próprio `-webkit-text-fill-color`, e há
+um harness novo (`tests/titulo_do_acabamento_harness.js`, 9 verificações) que mede a cor num Chrome
+de verdade e desenha ao lado o controle sem essa linha, para a armadilha ficar visível na imagem em
+vez de virar folclore.
 
 ---
 

@@ -53,6 +53,31 @@ def test_o_harness_do_acabamento_passa():
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
 
 
+def test_o_harness_do_titulo_em_duas_linhas_passa():
+    """O titulo do pedido aberto, medido num Chrome de verdade.
+
+    Pedido do usuario em 23/08/2026: duas linhas -- em cima o numero e o evento,
+    embaixo o nome e o numero do cliente, 20% menores e em amarelo.
+
+    Este harness existe por causa de uma armadilha que nenhum teste de texto
+    pega: o <h1> do cabecalho pinta o texto com o degrade de `.page-header-text
+    h1`, por `-webkit-background-clip: text` e `-webkit-text-fill-color:
+    transparent`. Esse transparente e herdado, e o degrade se recorta tambem no
+    texto dos filhos -- uma segunda linha so com `color: #fbbf24` sairia CINZA,
+    com o amarelo todo certo no codigo. O harness mede a cor no pixel, e desenha
+    ao lado o controle que prova a armadilha.
+    """
+    harness = os.path.join(RAIZ, "tests", "titulo_do_acabamento_harness.js")
+    assert os.path.exists(harness), "o harness do titulo do acabamento sumiu"
+
+    r = subprocess.run(
+        ["node", harness], cwd=RAIZ, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
 def test_o_menu_e_a_tela_existem_no_painel():
     html = _ler("frontend/index.html")
 

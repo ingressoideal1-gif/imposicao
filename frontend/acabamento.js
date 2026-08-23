@@ -813,9 +813,10 @@
      * O `<h1>` do cabeçalho herda o degradê de `.page-header-text h1`, que pinta
      * o texto por `-webkit-background-clip: text` com
      * `-webkit-text-fill-color: transparent`. Esse "transparente" é herdado
-     * pelos filhos: um `color` sozinho na segunda linha não apareceria — o
-     * amarelo sairia invisível na tela, com o CSS todo certo no código. Daí o
-     * harness que mede a cor num Chrome de verdade.
+     * pelos filhos, e o degradê do `<h1>` é recortado no texto deles também:
+     * uma segunda linha só com `color: #fbbf24` sairia **cinza clara**, pintada
+     * pelo degradê, com o amarelo todo certo no código e ninguém vendo amarelo
+     * na tela. Daí o harness que mede a cor num Chrome de verdade.
      *
      * `0.8em`, e não um tamanho em rem: a segunda linha fica 20% menor que a
      * primeira mesmo que um dia o título inteiro mude de tamanho.

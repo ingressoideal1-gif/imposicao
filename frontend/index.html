@@ -2418,12 +2418,22 @@
                                     <i class="fa-solid fa-arrow-left"></i> VOLTAR
                                 </button>
                                 <div class="page-header-text" style="flex: 1 1 auto; min-width: 0;">
-                                    <!-- O degrade e o mesmo do `.page-header-text h1`, mas ele termina em
-                                         #cbd5e1 e nao em #94a3b8: aqui o titulo e longo (numero,
-                                         evento, cliente e numero do cliente) e quebra em duas
-                                         linhas, e com o degrade original a segunda linha -- o nome
-                                         do cliente -- saia quase apagada. Tamanho e peso sao os
-                                         mesmos do titulo da tela de Pedido. -->
+                                    <!-- Duas linhas, montadas por `tituloDoPedidoHtml`: em cima o
+                                         numero e o evento, embaixo o cliente 20% menor e em
+                                         amarelo. Tamanho e peso da primeira linha sao os mesmos do
+                                         titulo da tela de Pedido.
+
+                                         O degrade e o mesmo do `.page-header-text h1`, mas termina
+                                         em #cbd5e1 e nao em #94a3b8: o titulo e longo e quebra, e
+                                         com o degrade original o fim saia quase apagado.
+
+                                         ATENCAO: o degrade pinta o texto por
+                                         `-webkit-background-clip: text` com
+                                         `-webkit-text-fill-color: transparent`, e esse transparente
+                                         e HERDADO -- o degrade do h1 se recorta tambem no texto dos
+                                         filhos. A segunda linha so sai amarela porque devolve o seu
+                                         proprio `-webkit-text-fill-color`; um `color` sozinho ali
+                                         sairia cinza, junto com a linha de cima. -->
                                     <h1 id="acab-detalhe-titulo" style="font-size: calc(2.2rem + 5pt); font-weight: bold; margin-bottom: 0; line-height: 1.06; background-image: linear-gradient(to right, #f1f5f9, #cbd5e1);"></h1>
                                 </div>
                                 <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">

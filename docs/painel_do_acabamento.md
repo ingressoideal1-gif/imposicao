@@ -123,26 +123,50 @@ O cabeçalho traz **VOLTAR**, o título do pedido e o contador de prontos — e 
 de faixa em volta: o `prod-table-header` saiu em 22/08/2026, a pedido do usuário
 ("sem box").
 
-O título é o **mesmo da tela de Pedido** (`ped-view-title`, que é para onde o
-Painel de Produção leva ao abrir um pedido): as informações separadas por ` - `,
-no mesmo tamanho de fonte (`calc(2.2rem + 5pt)`), com o degradê do
-`.page-header-text h1`:
+### Duas linhas, desde 23/08/2026
+
+Pedido do usuário: *"vamos mostrar o título em 2 linhas, em cima número e Evento
+(como já está) e na segunda linha com fonte 20% menor e em amarelo o Nome e
+número do cliente"*.
 
 ```
-21085 - Expointer 2026 - Parte 2 - ANGELA BEATRIZ DA COSTA SALOMAO LTDA - 53193
- número          evento                      cliente e número do cliente
+21085 - Expointer 2026 - Parte 2          ← calc(2.2rem + 5pt), degradê claro
+ANGELA BEATRIZ DA COSTA SALOMAO - 53193   ← 0.8em, #fbbf24
 ```
+
+A primeira linha é a **mesma da tela de Pedido** (`ped-view-title`, que é para
+onde o Painel de Produção leva ao abrir um pedido): número e evento separados
+por ` - `, no mesmo tamanho de fonte, com o degradê do `.page-header-text h1`.
+A segunda é o cliente, em amarelo e 20% menor. Quem monta as duas é o
+`tituloDoPedidoHtml`, sobre o `tituloDoPedido` (linha de cima) e o
+`clienteDoPedido` (linha de baixo).
+
+O tamanho da segunda linha é `0.8em`, e não um valor em `rem`: assim ela
+continua sendo 20% menor que a primeira mesmo que um dia o título inteiro mude
+de tamanho.
 
 O cliente vem do `rotuloDoCliente`, que já devolve "NOME - NÚMERO" — escrever o
-número à parte faria a mesma pessoa aparecer de dois jeitos em duas telas. Cada
-pedaço entra só se existir: pedido sem evento no briefing não vira
-`21085 -  - CLIENTE`, com o buraco no meio (`tituloDoPedido`).
+número à parte faria a mesma pessoa aparecer de dois jeitos em duas telas. Linha
+que não existe não é desenhada: pedido sem evento no briefing tem a primeira
+linha só com o número, em vez de terminar num hífen solto.
 
-Duas miúdezas que custaram tempo e valem para quem for mexer:
+> [!CAUTION]
+> **A segunda linha precisa devolver o `-webkit-text-fill-color`, e isso não é
+> decoração.** O `.page-header-text h1` pinta o texto com um degradê por
+> `-webkit-background-clip: text` e `-webkit-text-fill-color: transparent`. Esse
+> transparente é **herdado**, e o degradê do `<h1>` se recorta também no texto
+> dos filhos: uma segunda linha só com `color: #fbbf24` sairia **cinza clara**,
+> igual à de cima, com o amarelo todo certo no código e ninguém vendo amarelo na
+> tela. É o que o `ESTILO_LINHA_DO_CLIENTE` resolve, e o que o
+> `tests/titulo_do_acabamento_harness.js` mede num Chrome de verdade — inclusive
+> desenhando ao lado o controle sem o `text-fill`, para a armadilha ficar
+> visível na imagem `tests/_titulo_do_acabamento.png`.
 
-- o degradê foi refeito inline terminando em `#cbd5e1`, e não no `#94a3b8` do
-  CSS: com cliente de nome longo o título ocupa duas linhas, e a segunda — o
-  nome do cliente — saía quase apagada;
+Duas miúdezas do degradê que custaram tempo e valem para quem for mexer:
+
+- ele foi refeito inline terminando em `#cbd5e1`, e não no `#94a3b8` do CSS: com
+  evento de nome longo o título ocupa duas linhas, e a segunda saía quase
+  apagada;
 - ele precisa ser `background-image`, nunca o atalho `background`: o atalho
   reescreve também o `background-clip`, e o título vira uma barra branca sólida
   em vez de texto pintado.

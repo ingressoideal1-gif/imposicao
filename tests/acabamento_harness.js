@@ -1398,19 +1398,36 @@ async function oCabecalhoDoPedidoAbertoDestacaNumeroEEvento() {
     ];
     await amb.painel.abrirPedido('os-200');
 
-    // Uma linha so, na ordem do titulo da tela de Pedido: numero, evento e o
-    // cliente (que ja vem com o numero dele, pelo `rotuloDoCliente`).
-    ok(amb.elementos['acab-detalhe-titulo'].textContent === '200 - Rock in Rio 2026 - Cliente 200',
-       'o titulo traz numero, evento e cliente numa linha',
-       amb.elementos['acab-detalhe-titulo'].textContent);
+    // DUAS linhas, desde 23/08/2026: em cima numero e evento, embaixo o cliente
+    // (que ja vem com o numero dele, pelo `rotuloDoCliente`) 20% menor e em
+    // amarelo.
+    const titulo = amb.elementos['acab-detalhe-titulo'].innerHTML;
+    const linhas = titulo.match(/<div[^>]*>[^<]*<\/div>/g) || [];
+    ok(linhas.length === 2, 'o titulo sai em duas linhas', linhas.length + ': ' + titulo);
+    ok(linhas[0] === '<div>200 - Rock in Rio 2026</div>',
+       'a de cima traz numero e evento, como ja estava', linhas[0]);
+    ok(linhas[1].indexOf('>Cliente 200</div>') !== -1,
+       'a de baixo traz o nome e o numero do cliente', linhas[1]);
+    ok(linhas[1].indexOf('font-size: 0.8em') !== -1,
+       'ela e 20% menor que a de cima -- em `em`, para acompanhar se o titulo mudar',
+       linhas[1]);
+    ok(/#fbbf24/.test(linhas[1]), 'e amarela', linhas[1]);
+    // O degrade do <h1> pinta o texto com `-webkit-text-fill-color: transparent`,
+    // e esse transparente e herdado: sem devolver o seu, a linha sairia CINZA,
+    // pintada pelo degrade, com o amarelo todo certo no codigo. O harness em
+    // Chrome (`titulo_do_acabamento_harness.js`) mede a cor no pixel.
+    ok(linhas[1].indexOf('-webkit-text-fill-color: #fbbf24') !== -1,
+       'e devolve o seu proprio text-fill, senao o amarelo nao apareceria', linhas[1]);
 
-    // Briefing sem evento: o titulo se fecha, em vez de abrir um buraco entre
-    // dois hifens.
+    // Briefing sem evento: a primeira linha se fecha no numero, em vez de
+    // terminar num hifen solto -- e a do cliente continua.
     const amb2 = ambienteComPedidoAberto();
     await amb2.painel.abrirPedido('os-200');
-    ok(amb2.elementos['acab-detalhe-titulo'].textContent === '200 - Cliente 200',
-       'sem evento, o titulo nao fica com buraco',
-       amb2.elementos['acab-detalhe-titulo'].textContent);
+    const linhas2 = (amb2.elementos['acab-detalhe-titulo'].innerHTML
+        .match(/<div[^>]*>[^<]*<\/div>/g) || []);
+    ok(linhas2[0] === '<div>200</div>', 'sem evento, a primeira linha e so o numero', linhas2[0]);
+    ok(linhas2.length === 2 && linhas2[1].indexOf('>Cliente 200</div>') !== -1,
+       'e a do cliente continua embaixo', linhas2.join(' | '));
 
     // O tamanho e o degrade vem do titulo das outras telas -- e a faixa cinza
     // do cabecalho saiu, que era o "box" que o usuario mandou tirar.
