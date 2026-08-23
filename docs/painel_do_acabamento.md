@@ -870,16 +870,24 @@ Pedido do usuário em 23/08/2026, logo depois de o peso por setor entrar:
 > vários volumes, nada disso invalida o campo já existente onde precisa
 > informar o peso total do setor."
 
-**O volume é a caixa.** Ele tem número (V1, V2, V3…), tipo (Caixa, Pacote,
-Fardo, Rolo, Palete), o peso da balança, quem pesou, e uma lista de modelos com
-**quantidade**. É a quantidade que faz as três primeiras situações caberem num
-desenho só:
+**O volume é a caixa.** Ele tem número (V1, V2, V3…), **nome** ("Camarote",
+"Staff dia 2" — opcional), tipo (Caixa, Fardo, Rolo, Palete), o peso da balança,
+quem pesou, e uma lista de **pacotes**.
+
+**O pacote é o maço.** Um modelo, uma quantidade, um responsável. É o nível que
+o usuário pediu horas depois dos volumes, e é ele que faz as três situações
+caberem num desenho só:
 
 | A situação | Como ela cabe |
 |---|---|
-| 1 modelo grande, vários responsáveis | o modelo vira dois ou três volumes, cada um com o nome de quem o pesou |
-| vários modelos pesados juntos | um volume com vários itens dentro |
-| o mesmo modelo repartido em caixas | o mesmo modelo aparece em vários volumes, e as quantidades somam a tiragem |
+| 1 modelo grande, vários responsáveis | dois pacotes do mesmo modelo, um por pessoa, dentro da mesma caixa |
+| vários modelos pesados juntos | uma caixa com um pacote de cada modelo |
+| o mesmo modelo repartido em caixas | o modelo aparece em vários volumes, e as quantidades somam a tiragem |
+
+O tipo **"Pacote"** saiu da lista de tipos de volume quando a palavra passou a
+significar o maço de dentro — uma caixa do tipo "pacote" com três pacotes
+dentro seria confusão garantida na estação. Volume já gravado com aquele tipo
+não o perde: o seletor devolve à lista qualquer valor que já esteja no banco.
 
 ### Setor sem volume é 1 volume único
 
@@ -896,21 +904,88 @@ nenhum, e o card do modelo nem mostra o bloco de volumes.
    desenhados, apagados, dizendo por quê. A lista já está na tela, com foto, cor
    e tiragem — pedir que ele reconheça o mesmo material numa segunda lista, mais
    pobre, dentro de um popup, seria trabalho que a tela já fez por ele.
-2. **`Pesar este volume`** abre a janela. A quantidade de cada modelo **nasce
-   cheia com o que ainda está fora de volume** — um clique para "esta caixa leva
-   o resto". Diminuir esse número é o que reparte o modelo em várias caixas.
-3. **`Ver volumes`** abre a lista do setor: editar, excluir, e a conferência.
+2. **`Pesar este volume`** abre a janela. Cada modelo marcado vira **um
+   pacote**, com a quantidade **cheia com o que ainda está fora de volume** — um
+   clique para "esta caixa leva o resto" — e com o responsável que o card já
+   mostra. Diminuir a quantidade reparte o modelo em várias caixas.
+3. **`+ Pacote`**, dentro da janela, acrescenta outro maço à mesma caixa. Ele
+   nasce do **mesmo modelo do anterior**, com o que sobrou dele — porque o caso
+   que criou o botão é o modelo grande repartido entre duas pessoas. O seletor
+   de modelo em cada linha deixa trocá-lo quando for outra coisa.
+4. **`Ver volumes`** abre a lista do setor, com os pacotes de cada caixa —
+   quantidade e responsável, um por linha — mais editar, excluir e a
+   conferência.
 
-### A soma NÃO substitui o peso do setor
+### O peso do setor acompanha a soma das caixas
 
-O campo do peso por setor continua digitado à mão, continua comparado com o
-estimado e continua pedindo a senha de liberação acima de 5 %. Os volumes só
-põem uma **soma** ao lado dele. Quando os dois divergem, a faixa avisa em âmbar
-(*"o peso do setor está 20 g acima da soma dos volumes"*) e **não trava nada** —
-caixa, fita e plástico pesam, e o setor pode ter sido pesado inteiro na balança
-grande. O botão *"Usar 12,480 kg como peso do setor"* passa pelo `gravarPeso` de
-sempre, e não por um atalho: é ele que conhece os dois caminhos de escrita e a
-senha. Um atalho ali furaria a liberação.
+> "ao adicionar os volumes, volumes criados a soma de seus pesos vai atualizando
+> o peso real do setor" — usuário, 23/08/2026
+
+A cada caixa gravada, e a cada caixa excluída, a soma dos pesos entra no campo
+do setor **sozinha**. A faixa anuncia isso em verde (*"o peso do setor acompanha
+a soma das caixas — cada caixa gravada o atualiza"*), porque o que o sistema faz
+sozinho tem de se anunciar: sem essa linha, o operador veria o campo mudar de
+valor sem ter digitado nada.
+
+Três coisas que essa automação **não** furou:
+
+- **Passa pelo `gravarPeso` de sempre**, e não por um atalho. É ele que conhece
+  os dois caminhos de escrita (agente na estação, PostgREST no site) e a senha de
+  liberação.
+- **A régua compara com o que já está embalado**, e não com a tiragem inteira.
+  Com três das cinco caixas prontas, comparar a soma delas com o setor todo
+  acusaria 40 % de divergência num trabalho perfeitamente certo. Quem calcula a
+  base é `estimadoDoEmbalado`; o `gravarPeso` a aceita por `opcoes.estimado`, e
+  um `null` explícito quer dizer *"não há régua"* — não *"use a do setor"*.
+- **Caixa sem peso não escreve nada.** Gravar zero apagaria um peso que alguém
+  digitou à mão no box.
+
+Digitar outro número no box continua valendo — é o caso do setor pesado inteiro
+na balança grande. Aí a diferença volta a aparecer em âmbar (*"o peso do setor
+está 20 g acima da soma dos volumes — alguém o digitou à mão"*) e **não trava
+nada**: caixa, fita e plástico pesam. Em "Ver volumes", o botão *"Usar 12,480 kg
+como peso do setor"* é a saída para voltar à soma — e ele só aparece quando os
+dois números divergem.
+
+### O modelo embalado por inteiro fecha sozinho
+
+> "modelos com mais de 1 volume ao atingir a quantidade total, quando mais de 1
+> responsável mostra no drop responsável o nome do setor e marca status como
+> pronto, se todos os pacotes do volume são mesmo responsável marca este como
+> responsável." — usuário, 23/08/2026
+
+Embalar **é** terminar. Quando o último pacote de um modelo entra numa caixa,
+o modelo vira **Pronto** sem ninguém clicar, e quem assina sai dos pacotes:
+
+| Os pacotes daquele modelo | Quem assina |
+|---|---|
+| todos da mesma pessoa | o nome dela |
+| duas ou mais pessoas | **o nome do setor** ("Laser") |
+| algum pacote sem responsável, junto com outros que têm | o nome do setor |
+| todos sem responsável | ninguém — o modelo **não** fecha |
+
+O nome do setor no lugar da pessoa é o que resolve o modelo grande que passou
+por três mãos: ele não tem um dono, tem o setor. Quem fez o quê continua
+escrito, pacote a pacote, na janela do volume. O seletor do card mostra "Laser"
+escolhido, porque ele já devolvia à lista qualquer nome gravado que não fosse de
+um operador.
+
+Quatro limites, cada um por um motivo:
+
+- **O peso entra antes do Pronto.** A regra da casa é que o setor não fecha sem
+  peso registrado; invertida a ordem, o último Pronto automático fecharia um
+  setor com o campo vazio.
+- **A trava do peso continua valendo.** Se o modelo for o último pendente do
+  setor e o setor ainda estiver sem peso — nenhuma caixa pesada, por exemplo —,
+  ele fica de fora, e o operador recebe o popup que pede o peso, como sempre.
+- **Pronto já dado não é reescrito.** É decisão de alguém, e a embalagem não
+  desfaz nem sobrescreve decisão de gente.
+- **Excluir a caixa não desfaz o Pronto.** O peso do setor desce junto com a
+  soma, mas desmarcar um modelo concluído é do operador.
+
+E um aviso na tela sempre que isso acontece: *"Credencial VIP (Laser, mais de
+uma pessoa) — todos os pacotes embalados, modelo marcado como PRONTO"*. Sem
+ele, o operador voltaria para a lista e encontraria cards verdes que não marcou.
 
 Na janela que **cobra o peso ao fechar o setor**, o campo já nasce com a soma
 dos volumes quando ela existe, e a janela diz de onde o número saiu. Sem volume,
@@ -950,7 +1025,7 @@ Três cuidados que o código carrega:
 - **A conta se refaz a cada tecla.** No box do setor a base é fixa (a tiragem
   inteira), e basta repintar quando o peso é gravado. Aqui a base **muda com o
   que o operador digita**: baixar de 3.000 para 1.500 muda o peso esperado da
-  caixa. Por isso as quantidades são lidas do DOM (`itensDigitadosDoVolume`), e
+  caixa. Por isso as quantidades são lidas do DOM (`pacotesDigitados`), e
   não do estado de quando a janela abriu.
 - **Sem base no ERP a tela não inventa uma.** O campo mostra `est. —` e o volume
   grava como gravava. Modelo sem peso no meio de outros que têm entraria como
@@ -969,8 +1044,12 @@ ocorrências de `TOLERANCIA_DO_PESO`.
 
 ### Onde isso mora, e por que ali
 
-Duas tabelas **nossas**: `producao_volumes` e `producao_volume_itens`
-([`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql)).
+Duas tabelas **nossas**: `producao_volumes` e `producao_volume_itens` — esta
+última é a tabela dos **pacotes**, e não mudou de nome de propósito (renomear
+quebraria a estação com o painel da versão anterior aberto na tela).
+[`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) cria as
+duas; [`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql)
+acrescenta o nome da caixa, e no pacote a chave própria e o responsável.
 
 A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e daria para
 gravar ali. O usuário decidiu que **não** — ver
@@ -993,8 +1072,20 @@ e não passam pelo agente.
   de criar este volume. Feche e clique em + Volume de novo"* — a trava tem
   saída, como toda trava deste projeto.
 - **No modo edição**, o que já está *naquele* volume não conta como ocupado.
-  Sem isso, o próprio item apareceria como "0 livres" e o operador não
+  Sem isso, o próprio pacote apareceria como "0 livres" e o operador não
   conseguiria corrigir a quantidade que ele mesmo acabou de gravar.
+- **Os campos do pacote são numerados pela POSIÇÃO** (`acab-vol-qtd-0`), e não
+  pelo id do modelo. Dois pacotes do mesmo modelo na mesma caixa dariam dois
+  campos com o mesmo id, e o navegador entregaria sempre o primeiro.
+- **`+ Pacote` e `✕` leem o DOM antes de redesenhar.** Sem isso, as quantidades
+  e os nomes das linhas de cima voltariam ao valor de quando a janela abriu. E o
+  redesenho é **só da lista de pacotes** — remontar a janela inteira apagaria o
+  peso que o operador já digitou.
+- **O "livres" de cada linha desconta as outras linhas da mesma janela.** Sem
+  essa parcela, dois pacotes do mesmo modelo apareceriam os dois com a tiragem
+  inteira disponível, e o operador embalaria o dobro sem a tela dizer nada.
+  Passar da tiragem não trava: a linha diz *"2.000 un a mais do que a tiragem"*
+  em âmbar.
 
 ## Como a tela se pendura no que já existe
 

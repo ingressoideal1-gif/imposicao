@@ -1907,7 +1907,17 @@
             return;
         }
 
-        const estimado = estimadoDoSetor(alvo);
+        // A régua compara o peso digitado com a tiragem inteira do setor —
+        // menos quando quem chama sabe de uma base melhor. É o caso do peso
+        // que vem da soma das caixas: com metade do setor embalado, a base é o
+        // peso esperado do que JÁ ESTÁ em caixa, e não o do setor todo.
+        // `'estimado' in opcoes` e não `!== undefined`: o `null` explícito é uma
+        // resposta, e não a falta de uma. Ele quer dizer "o que está embalado
+        // não tem peso no ERP, não há régua" — e cair no estimado do setor
+        // inteiro nesse caso pediria senha em cima de uma caixa que ninguém tem
+        // como conferir.
+        const estimado = (opcoes && Object.prototype.hasOwnProperty.call(opcoes, 'estimado'))
+            ? opcoes.estimado : estimadoDoSetor(alvo);
         if (precisaDeLiberacao(peso, estimado) && !(opcoes && opcoes.liberado)) {
             tela.liberacaoPendente = { numeroDoPedido, setor: alvo, texto, peso, estimado };
             abrirPopupDaLiberacao();
@@ -2810,9 +2820,15 @@
 
     // Os tipos que a gráfica usa. A coluna é texto livre no banco de propósito —
     // um CHECK ali não protegeria nada e travaria o dia em que aparecer um
-    // formato novo —, mas a tela oferece estes cinco para os nomes não
+    // formato novo —, mas a tela oferece estes quatro para os nomes não
     // divergirem de operador para operador.
-    const TIPOS_DE_VOLUME = ['Caixa', 'Pacote', 'Fardo', 'Rolo', 'Palete'];
+    //
+    // "Pacote" saiu da lista em 23/08/2026: naquele dia o usuário passou a
+    // chamar de PACOTE o maço que vai DENTRO da caixa, e um tipo de volume com
+    // o mesmo nome faria a janela dizer "pacote com 3 pacotes". O tipo antigo
+    // não some do banco: `selectDeTipoDoVolume` põe de volta na lista qualquer
+    // valor que já esteja gravado, para editar um volume não trocá-lo sozinho.
+    const TIPOS_DE_VOLUME = ['Caixa', 'Fardo', 'Rolo', 'Palete'];
 
     const ESTILO_BOTAO_VOLUME = 'background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);'
         + ' color: #cfe6fb; border-radius: 6px; padding: 5px 10px; font-size: 0.74rem;'
@@ -2820,7 +2836,11 @@
 
     /**
      * As linhas cruas do banco viram `{ SETOR: [volume, …] }`, cada volume com
-     * os seus itens. Pura, para o teste.
+     * os seus PACOTES. Pura, para o teste.
+     *
+     * Pacote é o maço que vai dentro da caixa: um modelo, uma quantidade, um
+     * responsável. Podem existir dois do mesmo modelo no mesmo volume — é o
+     * caso do modelo grande repartido entre duas pessoas.
      *
      * Setor que o banco não aceita fica de fora: não há campo de peso para ele,
      * e um volume pendurado num setor que a tela não desenha seria peso que
@@ -2832,26 +2852,34 @@
             if (!l) return;
             const setor = normalizar(l.setor);
             if (SETORES_DO_BANCO.indexOf(setor) === -1) return;
-            const itens = (l[TABELA_DE_ITENS_DO_VOLUME] || l.itens || [])
+            const pacotes = (l[TABELA_DE_ITENS_DO_VOLUME] || l.pacotes || l.itens || [])
                 .map(i => ({
+                    id: i.id || null,
                     modeloId: String(i.modelo_id !== undefined ? i.modelo_id : i.modeloId),
                     qtd: Math.max(0, parseInt(i.qtd, 10) || 0),
+                    responsavel: (i.responsavel || '').trim(),
                 }))
                 .filter(i => i.qtd > 0);
             (porSetor[setor] = porSetor[setor] || []).push({
                 id: l.id,
                 setor,
                 numero: parseInt(l.numero, 10) || 0,
+                nome: (l.nome || '').trim(),
                 tipo: (l.tipo || '').trim(),
                 peso: (l.peso_kg === null || l.peso_kg === undefined) ? null : Number(l.peso_kg),
                 responsavel: (l.responsavel || '').trim(),
                 observacao: (l.observacao || '').trim(),
                 criadoEm: l.criado_em || '',
-                itens,
+                pacotes,
             });
         });
         Object.keys(porSetor).forEach(s => porSetor[s].sort((a, b) => a.numero - b.numero));
         return porSetor;
+    }
+
+    /** "V3", ou "V3 · Camarote" quando o operador deu nome à caixa. */
+    function rotuloDoVolume(v) {
+        return `V${(v && v.numero) || 0}` + (v && v.nome ? ` · ${v.nome}` : '');
     }
 
     /** Os volumes de um setor no pedido aberto. Nunca `undefined`. */
@@ -2883,11 +2911,19 @@
     /** Quantas unidades de cada modelo já estão em algum volume: `id -> qtd`. */
     function embaladoPorModelo(lista) {
         const mapa = {};
-        (lista || []).forEach(v => (v.itens || []).forEach(i => {
+        (lista || []).forEach(v => (v.pacotes || []).forEach(i => {
             const id = String(i.modeloId);
             mapa[id] = (mapa[id] || 0) + i.qtd;
         }));
         return mapa;
+    }
+
+    /** Todos os pacotes de um modelo, de todos os volumes da lista. */
+    function pacotesDoModelo(lista, modeloId) {
+        const alvo = String(modeloId);
+        return (lista || []).reduce((tudo, v) => tudo.concat(
+            (v.pacotes || []).filter(p => String(p.modeloId) === alvo).map(p => ({ volume: v, pacote: p }))
+        ), []);
     }
 
     /** A tiragem do modelo, lida do mesmo jeito que o card a lê. */
@@ -2929,6 +2965,76 @@
             .filter(i => normalizar(i && i.setor) === alvo)
             .map(i => ({ item: i, falta: faltaEmbalar(i, embalado) }))
             .filter(x => x.falta > 0);
+    }
+
+    // ─── O fechamento automático do modelo ─────────────────────────────────
+    //
+    // Pedido do usuário em 23/08/2026, logo depois do dos pacotes:
+    //
+    //   "modelos com mais de 1 volume ao atingir a quantidade total, quando
+    //    mais de 1 responsável mostra no drop responsável o nome do setor e
+    //    marca status como pronto, se todos os pacotes do volume são mesmo
+    //    responsável marca este como responsável."
+    //
+    // O raciocínio é que embalar É terminar. Quando o último pacote de um
+    // modelo entra numa caixa, aquele modelo acabou — não faz sentido pedir ao
+    // operador que vá ao card e clique em PRONTO de novo, nem que escolha um
+    // responsável que os pacotes já dizem quem é.
+    //
+    // O nome do setor no lugar da pessoa, quando são várias, é o que resolve a
+    // primeira situação do pedido de ontem: o modelo grande que passou por
+    // três mãos não tem um dono, tem o setor. Quem fez o quê continua escrito,
+    // pacote a pacote, na janela do volume.
+
+    /**
+     * Quem assina este modelo, pelos pacotes — ou `null` se ainda não é hora.
+     *
+     * Devolve `{ nome, varios }`. `varios` diz se o nome é o do setor (mais de
+     * uma pessoa, ou alguma sem nome) em vez do de uma pessoa.
+     *
+     * `null` em três casos, e cada um por um motivo diferente:
+     *  - o modelo ainda tem unidade fora de volume: não acabou;
+     *  - ele não tem pacote nenhum: não há de quem falar;
+     *  - todos os pacotes estão sem responsável: inventar o nome do setor aqui
+     *    carimbaria como concluído um trabalho que ninguém assinou.
+     */
+    function responsavelPelosPacotes(item, lista) {
+        if (!item) return null;
+        const meus = pacotesDoModelo(lista, item.id).map(x => x.pacote);
+        if (!meus.length) return null;
+        if (faltaEmbalar(item, embaladoPorModelo(lista)) > 0) return null;
+
+        const nomes = [];
+        let anonimo = false;
+        meus.forEach(p => {
+            const nome = (p.responsavel || '').trim();
+            if (!nome) { anonimo = true; return; }
+            if (!nomes.some(n => n.toLowerCase() === nome.toLowerCase())) nomes.push(nome);
+        });
+        if (!nomes.length) return null;
+        // Um pacote sem dono no meio de outros com dono conta como mais uma
+        // origem: assinar tudo em nome do único que se identificou atribuiria a
+        // ele um trabalho que pode não ter sido dele.
+        if (nomes.length === 1 && !anonimo) return { nome: nomes[0], varios: false };
+        return { nome: nomeDoSetor(normalizar(item.setor)), varios: true };
+    }
+
+    /**
+     * Os modelos do setor que os pacotes acabam de fechar.
+     *
+     * Só vai para a lista quem MUDA de estado: modelo já em Pronto fica fora,
+     * mesmo que o nome calculado seja outro. Um Pronto já dado é decisão de
+     * alguém, e a embalagem não desfaz decisão de gente.
+     */
+    function fechamentosPelosPacotes(setor, itens) {
+        const alvo = normalizar(setor);
+        const lista = volumesDoSetor(alvo);
+        if (!lista.length) return [];
+        return (itens || [])
+            .filter(i => normalizar(i && i.setor) === alvo)
+            .filter(i => estagioDoModelo(i) !== 'Pronto')
+            .map(i => ({ item: i, quem: responsavelPelosPacotes(i, lista) }))
+            .filter(x => x.quem);
     }
 
     /**
@@ -2992,11 +3098,11 @@
      * o que acusaria divergência em cima de um volume certo — por isso a tela
      * diz quantos são, em vez de esconder o buraco.
      */
-    function estimadoDoVolume(itens, modelos) {
+    function estimadoDoVolume(pacotes, modelos) {
         let gramas = 0;
         let comBase = 0;
         let semBase = 0;
-        (itens || []).forEach(i => {
+        (pacotes || []).forEach(i => {
             const item = (modelos || []).find(m => String(m.id) === String(i.modeloId));
             const porUn = gramasPorUnidadeDoModelo(item);
             if (porUn === null) { semBase++; return; }
@@ -3005,6 +3111,21 @@
         });
         if (!comBase) return { kg: null, semBase };
         return { kg: Math.round(gramas) / 1000, semBase };
+    }
+
+    /**
+     * O peso esperado do que JÁ ESTÁ EMBALADO no setor, em kg — ou `null`.
+     *
+     * É a régua contra a qual o peso automático do setor (a soma dos volumes) é
+     * conferido. Não serve o `estimadoDoSetor`, que mede a tiragem inteira: com
+     * três das cinco caixas prontas, comparar a soma delas com o setor inteiro
+     * acusaria 40 % de divergência num trabalho perfeitamente certo.
+     */
+    function estimadoDoEmbalado(setor) {
+        const pacotes = volumesDoSetor(setor)
+            .reduce((tudo, v) => tudo.concat(v.pacotes || []), []);
+        if (!pacotes.length) return null;
+        return estimadoDoVolume(pacotes, modelosDoPedidoAberto()).kg;
     }
 
     /** "20 g", "1,250 kg" — a diferença dita como o operador a lê. */
@@ -3042,8 +3163,8 @@
             if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
             const { data, error } = await supabaseClient
                 .from(TABELA_DE_VOLUMES)
-                .select('id, setor, numero, tipo, peso_kg, responsavel, observacao, criado_em, '
-                      + TABELA_DE_ITENS_DO_VOLUME + '(modelo_id, qtd)')
+                .select('id, setor, numero, nome, tipo, peso_kg, responsavel, observacao, criado_em, '
+                      + TABELA_DE_ITENS_DO_VOLUME + '(id, modelo_id, qtd, responsavel)')
                 .eq('id_int', idInt);
             if (error) throw error;
             // O pedido pode ter sido trocado enquanto a leitura voava; o
@@ -3057,11 +3178,11 @@
     }
 
     /**
-     * Grava um volume — novo ou editado — e o que vai dentro dele.
+     * Grava um volume — novo ou editado — e os pacotes que vão dentro dele.
      *
-     * Os itens são reescritos por inteiro (apaga tudo e insere de novo) em vez
-     * de reconciliados linha a linha. É a operação mais simples que dá o
-     * resultado certo, e um volume tem três ou quatro itens, não trezentos.
+     * Os pacotes são reescritos por inteiro (apaga tudo e insere de novo) em
+     * vez de reconciliados linha a linha. É a operação mais simples que dá o
+     * resultado certo, e um volume tem três ou quatro pacotes, não trezentos.
      */
     async function gravarVolume(v) {
         const idInt = parseInt(v.numeroDoPedido);
@@ -3072,6 +3193,7 @@
 
         const campos = {
             setor: normalizar(v.setor),
+            nome: (v.nome || '').trim() || null,
             tipo: v.tipo || null,
             peso_kg: (v.peso === null || v.peso === undefined) ? null : v.peso,
             responsavel: v.responsavel || null,
@@ -3096,9 +3218,14 @@
             .from(TABELA_DE_ITENS_DO_VOLUME).delete().eq('volume_id', id);
         if (erroApagar) throw erroApagar;
 
-        const linhas = (v.itens || [])
+        const linhas = (v.pacotes || [])
             .filter(i => i && i.qtd > 0)
-            .map(i => ({ volume_id: id, modelo_id: parseInt(i.modeloId, 10), qtd: i.qtd }));
+            .map(i => ({
+                volume_id: id,
+                modelo_id: parseInt(i.modeloId, 10),
+                qtd: i.qtd,
+                responsavel: (i.responsavel || '').trim() || null,
+            }));
         if (linhas.length) {
             const { error: erroInserir } = await supabaseClient
                 .from(TABELA_DE_ITENS_DO_VOLUME).insert(linhas);
@@ -3129,15 +3256,20 @@
     function chipDoVolume(v) {
         const temPeso = v.peso !== null && v.peso !== undefined && v.peso > 0;
         const peso = temPeso ? `${kgParaTexto(v.peso)} kg` : 'sem peso';
+        const quantos = (v.pacotes || []).length;
+        const titulo = `Volume ${v.numero}${v.nome ? ' — ' + v.nome : ''}${v.tipo ? ' · ' + v.tipo : ''}`
+            + ` · ${quantos} ${quantos === 1 ? 'pacote' : 'pacotes'} — clique para ver a lista`;
         return `
             <button type="button" onclick="AcabamentoPainel.verVolumes('${escJs(v.setor)}')"
-                    title="Volume ${esc(v.numero)}${v.tipo ? ' · ' + esc(v.tipo) : ''} — clique para ver a lista"
+                    title="${esc(titulo)}"
                     style="display: inline-flex; align-items: center; gap: 6px;
                            background: rgba(76,200,240,0.10); border: 1px solid rgba(76,200,240,0.30);
                            border-radius: 6px; padding: 4px 9px; font-size: 0.74rem; color: #cfe6fb;
                            cursor: pointer; font-family: inherit;">
                 <strong style="color: #4cc8f0;">V${esc(v.numero)}</strong>
+                ${v.nome ? `<span style="color: #ffffff; font-weight: 600;">${esc(v.nome)}</span>` : ''}
                 <span style="font-family: monospace; color: ${temPeso ? '#cfe6fb' : '#fbbf24'};">${esc(peso)}</span>
+                ${quantos > 1 ? `<span style="color: var(--text-dim);">${quantos} pacotes</span>` : ''}
                 ${v.responsavel ? `<span style="color: var(--text-dim);">${esc(v.responsavel)}</span>` : ''}
             </button>`;
     }
@@ -3182,7 +3314,13 @@
         } else if (dif !== null && dif !== 0) {
             recado = `<div style="font-size: 0.72rem; color: #fbbf24;">⚠ o peso do setor está `
                    + `${esc(textoDaDiferenca(dif))} ${dif > 0 ? 'acima' : 'abaixo'} da soma dos volumes — `
-                   + `confira, ou use a soma.</div>`;
+                   + `alguém o digitou à mão. Em "Ver volumes" dá para voltar à soma.</div>`;
+        } else if (soma > 0) {
+            // O que o sistema faz sozinho se anuncia: sem esta linha, o
+            // operador veria o campo do peso mudar de valor sem ter digitado
+            // nada e desconfiaria da tela.
+            recado = `<div style="font-size: 0.72rem; color: #22c55e;">✓ o peso do setor acompanha a soma `
+                   + `das caixas — cada caixa gravada o atualiza.</div>`;
         }
 
         return `
@@ -3219,20 +3357,22 @@
         const lista = volumesDoSetor(setor);
         if (!lista.length) return '';
 
-        const meus = lista
-            .map(v => ({ v, i: (v.itens || []).find(x => String(x.modeloId) === String(item.id)) }))
-            .filter(x => x.i);
-        const dentro = meus.reduce((s, x) => s + x.i.qtd, 0);
+        const meus = pacotesDoModelo(lista, item.id);
+        const dentro = meus.reduce((s, x) => s + x.pacote.qtd, 0);
         const total = qtdDoModelo(item);
         const falta = Math.max(0, total - dentro);
 
+        // Um chip por PACOTE, e não por volume: dois pacotes do mesmo modelo na
+        // mesma caixa são duas pessoas, e é isso que o card precisa mostrar.
         const chips = meus.length
             ? meus.map(x => `
-                <span style="display: inline-flex; align-items: center; gap: 5px;
+                <span title="Volume ${esc(x.volume.numero)}${x.volume.nome ? ' — ' + esc(x.volume.nome) : ''}"
+                      style="display: inline-flex; align-items: center; gap: 5px;
                              background: rgba(76,200,240,0.12); border: 1px solid rgba(76,200,240,0.32);
                              border-radius: 6px; padding: 3px 8px; font-size: 0.74rem;">
-                    <strong style="color: #4cc8f0;">V${esc(x.v.numero)}</strong>
-                    <span style="font-family: monospace;">${numeroComPonto(x.i.qtd)} un</span>
+                    <strong style="color: #4cc8f0;">V${esc(x.volume.numero)}</strong>
+                    <span style="font-family: monospace;">${numeroComPonto(x.pacote.qtd)} un</span>
+                    ${x.pacote.responsavel ? `<span style="color: var(--text-dim);">${esc(x.pacote.responsavel)}</span>` : ''}
                 </span>`).join('')
             : `<span style="font-size: 0.74rem; color: var(--text-dim);">nenhum volume ainda</span>`;
 
@@ -3412,9 +3552,12 @@
             if (!v) return null;
             return {
                 numeroDoPedido, setor: v.setor, volumeId: v.id, numero: v.numero,
+                nome: v.nome || '',
                 tipo: v.tipo || TIPOS_DE_VOLUME[0], peso: v.peso,
                 responsavel: v.responsavel, observacao: v.observacao,
-                itens: v.itens.map(i => ({ modeloId: i.modeloId, qtd: i.qtd })),
+                pacotes: v.pacotes.map(i => ({
+                    modeloId: i.modeloId, qtd: i.qtd, responsavel: i.responsavel || '',
+                })),
             };
         }
 
@@ -3425,34 +3568,211 @@
         return {
             numeroDoPedido, setor: e.setor, volumeId: null,
             numero: proximoNumeroDeVolume(lista),
+            nome: '',
             tipo: TIPOS_DE_VOLUME[0], peso: null, responsavel: '', observacao: '',
-            // A quantidade nasce com o que AINDA ESTÁ FORA de volume. É o
-            // caminho de um clique para "esta caixa leva o resto", e diminuir
-            // esse número é o que reparte o modelo em várias caixas.
-            itens: Object.keys(e.marcados).map(id => {
+            // Cada modelo marcado vira UM pacote, com a quantidade que AINDA
+            // ESTÁ FORA de volume e com o responsável que o card já mostra. É o
+            // caminho de um clique para "esta caixa leva o resto"; diminuir a
+            // quantidade é o que reparte o modelo, e "+ Pacote" é o que reparte
+            // o trabalho entre duas pessoas dentro da mesma caixa.
+            pacotes: Object.keys(e.marcados).map(id => {
                 const item = itens.find(i => String(i.id) === id);
-                return { modeloId: id, qtd: item ? faltaEmbalar(item, embalado) : 0 };
+                return {
+                    modeloId: id,
+                    qtd: item ? faltaEmbalar(item, embalado) : 0,
+                    responsavel: item ? responsavelDoModelo(item) : '',
+                };
             }).filter(i => i.qtd > 0),
         };
     }
 
-    function linhaDoItemDoVolume(i, item, livre) {
+    /**
+     * Quantas unidades deste modelo estão livres para o pacote `menos`.
+     *
+     * Livre = tiragem − o que está em OUTROS volumes − o que os OUTROS pacotes
+     * desta mesma janela já tomaram. Sem a segunda parcela, dois pacotes do
+     * mesmo modelo apareceriam os dois com a tiragem inteira disponível, e o
+     * operador embalaria o dobro sem a tela dizer nada.
+     */
+    function livreParaPacote(modeloId, menos, pacotes) {
+        const v = tela.volumeEmEdicao;
+        if (!v) return 0;
+        const item = modelosDoPedidoAberto().find(m => String(m.id) === String(modeloId));
+        if (!item) return 0;
+        const foraDaJanela = volumesDoSetor(v.setor)
+            .filter(x => String(x.id) !== String(v.volumeId || ''));
+        const livre = faltaEmbalar(item, embaladoPorModelo(foraDaJanela));
+        const aqui = (pacotes || []).reduce((s, p, i) => (
+            i !== menos && String(p.modeloId) === String(modeloId) ? s + (p.qtd || 0) : s
+        ), 0);
+        return livre - aqui;
+    }
+
+    /**
+     * As opções de um seletor de operador do acabamento.
+     *
+     * Texto livre faria "Ana", "ana" e "Ana Paula" virarem três pessoas na hora
+     * de conferir quem embalou o quê — por isso a lista é fechada. Um nome que
+     * já está gravado e saiu da lista de acessos volta para ela: apagá-lo da
+     * tela faria o pacote parecer sem dono.
+     */
+    function opcoesDeOperador(atual, rotuloVazio) {
+        const nomes = (tela.operadores || [])
+            .filter(o => o.role === PERFIL_DO_RESPONSAVEL)
+            .map(o => o.nome);
+        const escolhido = (atual || '').trim();
+        if (escolhido && !nomes.some(n => n.toLowerCase() === escolhido.toLowerCase())) {
+            nomes.unshift(escolhido);
+        }
+        return [`<option value="">${esc(rotuloVazio)}</option>`].concat(
+            nomes.map(n => `<option value="${esc(n)}" `
+                + `${n.toLowerCase() === escolhido.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
+        ).join('');
+    }
+
+    /** O tipo da caixa. Valor já gravado que saiu da lista volta para ela. */
+    function selectDeTipoDoVolume(atual) {
+        const tipos = TIPOS_DE_VOLUME.slice();
+        const escolhido = (atual || '').trim();
+        if (escolhido && tipos.indexOf(escolhido) === -1) tipos.unshift(escolhido);
+        return `<select id="acab-vol-tipo" style="${ESTILO_SELECT} width: 150px; font-size: 0.95rem;">`
+            + tipos.map(t => `<option value="${esc(t)}" ${t === escolhido ? 'selected' : ''}>${esc(t)}</option>`).join('')
+            + '</select>';
+    }
+
+    /**
+     * Uma linha de PACOTE na janela do volume.
+     *
+     * Modelo, quantidade e responsável — os três dados que o usuário pediu que
+     * a edição mostrasse. O modelo é seletor, e não texto fixo, porque "+
+     * Pacote" cria uma linha que ainda não sabe de qual modelo é.
+     *
+     * A linha é identificada pelo ÍNDICE, e não pelo id do modelo: dois pacotes
+     * do mesmo modelo na mesma caixa dariam dois campos com o mesmo id, e o
+     * navegador entregaria sempre o primeiro.
+     */
+    function linhaDoPacote(p, indice, pacotes, doSetor) {
+        const livre = livreParaPacote(p.modeloId, indice, pacotes);
+        const item = doSetor.find(m => String(m.id) === String(p.modeloId));
+        const opcoesDeModelo = doSetor.map(m => `<option value="${esc(m.id)}" `
+            + `${String(m.id) === String(p.modeloId) ? 'selected' : ''}>${esc(nomeDoModelo(m))}</option>`).join('');
+
         return `
-            <div style="display: flex; align-items: center; gap: 12px; background: ${AZUL.superficie};
-                        border: 1px solid rgba(76,200,240,0.20); border-radius: 8px; padding: 10px 12px;">
-                <strong style="font-size: 0.92rem; color: #ffffff; flex: 1 1 auto; min-width: 0;">${esc(nomeDoModelo(item))}</strong>
-                <span style="font-size: 0.74rem; color: var(--text-dim); white-space: nowrap;">
-                    ${numeroComPonto(livre)} livres de ${numeroComPonto(qtdDoModelo(item))}
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                        background: ${AZUL.superficie}; border: 1px solid rgba(76,200,240,0.20);
+                        border-radius: 8px; padding: 10px 12px;">
+                <span style="font-size: 0.72rem; font-weight: 800; color: #4cc8f0; min-width: 26px;">P${indice + 1}</span>
+                <select id="acab-vol-modelo-${indice}" onchange="AcabamentoPainel.trocarModeloDoPacote(${indice})"
+                        title="De qual modelo é este pacote"
+                        style="${ESTILO_SELECT} flex: 2 1 190px; width: auto; text-align: left;
+                               text-align-last: left; font-size: 0.9rem; padding: 7px 10px;">
+                    ${opcoesDeModelo || '<option value="">— sem modelo neste setor —</option>'}
+                </select>
+                <span id="acab-vol-livre-${indice}"
+                      style="font-size: 0.72rem; white-space: nowrap; color: ${livre < 0 ? '#fbbf24' : 'var(--text-dim)'};">
+                    ${numeroComPonto(Math.max(0, livre))} livres de ${numeroComPonto(qtdDoModelo(item || {}))}
                 </span>
-                <input type="text" inputmode="numeric" id="acab-vol-qtd-${esc(i.modeloId)}"
-                       value="${esc(numeroComPonto(i.qtd))}"
+                <input type="text" inputmode="numeric" id="acab-vol-qtd-${indice}"
+                       value="${esc(numeroComPonto(p.qtd))}"
                        oninput="AcabamentoPainel.recalcularVolume()"
-                       title="Quantas unidades deste modelo vão nesta caixa — é ela que dá o peso esperado"
+                       title="Quantas unidades vão neste pacote — é a soma dos pacotes que dá o peso esperado da caixa"
                        style="width: 92px; text-align: right; background: ${AZUL.fundo};
                               border: 1px solid rgba(76,200,240,0.26); border-radius: 6px; color: #ffffff;
                               padding: 8px 10px; font-size: 0.92rem; font-family: monospace;" />
                 <span style="font-size: 0.78rem; color: var(--text-dim);">un</span>
+                <select id="acab-vol-resp-${indice}" title="Quem fez este pacote"
+                        style="${ESTILO_SELECT} flex: 1 1 150px; width: auto; font-size: 0.9rem; padding: 7px 10px;">
+                    ${opcoesDeOperador(p.responsavel, '— Quem fez —')}
+                </select>
+                <button type="button" onclick="AcabamentoPainel.removerPacote(${indice})"
+                        title="Tirar este pacote da caixa"
+                        style="background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35);
+                               color: #f87171; border-radius: 6px; padding: 6px 10px; font-weight: 800;
+                               cursor: pointer; font-family: inherit;">✕</button>
             </div>`;
+    }
+
+    /** A lista inteira de pacotes da janela, do jeito que ela está agora. */
+    function htmlDosPacotes() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return '';
+        const doSetor = modelosDoPedidoAberto().filter(m => normalizar(m.setor) === v.setor);
+        if (!v.pacotes.length) {
+            return `<div style="font-size: 0.8rem; color: #fbbf24; padding: 8px 2px;">
+                        Esta caixa está vazia. Use <strong>+ Pacote</strong> para pôr material dentro dela.
+                    </div>`;
+        }
+        return v.pacotes.map((p, i) => linhaDoPacote(p, i, v.pacotes, doSetor)).join('');
+    }
+
+    /**
+     * Guarda no estado o que está NOS CAMPOS agora.
+     *
+     * Chamado antes de qualquer redesenho da lista de pacotes: sem isto,
+     * clicar em "+ Pacote" apagaria as quantidades e os nomes que o operador
+     * acabou de digitar nas linhas de cima.
+     */
+    function lerPacotesDoDom() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        v.pacotes = v.pacotes.map((p, i) => {
+            const modelo = document.getElementById('acab-vol-modelo-' + i);
+            const qtd = document.getElementById('acab-vol-qtd-' + i);
+            const resp = document.getElementById('acab-vol-resp-' + i);
+            return {
+                modeloId: modelo && modelo.value ? modelo.value : p.modeloId,
+                qtd: qtd ? qtdDoTexto(qtd.value) : p.qtd,
+                responsavel: resp ? resp.value : p.responsavel,
+            };
+        });
+    }
+
+    /** Redesenha só a lista de pacotes — o peso e o nome já digitados ficam. */
+    function repintarPacotes() {
+        const alvo = document.getElementById('acab-vol-pacotes');
+        if (alvo) alvo.innerHTML = htmlDosPacotes();
+        pintarEstimadoDoVolume();
+    }
+
+    /**
+     * "+ Pacote": mais um maço dentro da mesma caixa.
+     *
+     * O modelo do novo pacote nasce igual ao do último — o caso que criou este
+     * botão é o modelo grande repartido entre duas pessoas, e nele os dois
+     * pacotes são do mesmo modelo. A quantidade nasce com o que sobrou dele.
+     */
+    function adicionarPacote() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        lerPacotesDoDom();
+        const doSetor = modelosDoPedidoAberto().filter(m => normalizar(m.setor) === v.setor);
+        if (!doSetor.length) return;
+        const ultimo = v.pacotes[v.pacotes.length - 1];
+        const modeloId = ultimo ? ultimo.modeloId : String(doSetor[0].id);
+        v.pacotes.push({
+            modeloId,
+            qtd: Math.max(0, livreParaPacote(modeloId, -1, v.pacotes)),
+            responsavel: '',
+        });
+        repintarPacotes();
+    }
+
+    function removerPacote(indice) {
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        lerPacotesDoDom();
+        v.pacotes.splice(indice, 1);
+        repintarPacotes();
+    }
+
+    /** Trocar o modelo de um pacote refaz a quantidade livre dele. */
+    function trocarModeloDoPacote(indice) {
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        lerPacotesDoDom();
+        const p = v.pacotes[indice];
+        if (p) p.qtd = Math.max(0, livreParaPacote(p.modeloId, indice, v.pacotes));
+        repintarPacotes();
     }
 
     function abrirPopupDoVolume(volumeId) {
@@ -3461,15 +3781,10 @@
         tela.volumeEmEdicao = preparado;
         fecharPopupDosVolumes();
 
-        const s = estado();
-        const itens = (s.osItens && s.osItens[tela.pedidoAberto]) || [];
-        const lista = volumesDoSetor(preparado.setor);
-        // No modo edição, o que já está NESTE volume não conta como ocupado —
-        // senão o próprio item apareceria como "0 livres" e o operador não
-        // conseguiria corrigir a quantidade que ele mesmo acabou de gravar.
-        const embalado = embaladoPorModelo(
-            lista.filter(v => String(v.id) !== String(preparado.volumeId || '')));
-
+        // O "livres" de cada linha é calculado pelo `livreParaPacote`, que já
+        // desconta o que está NESTE volume — senão, ao editar, o próprio pacote
+        // apareceria como "0 livres" e o operador não conseguiria corrigir a
+        // quantidade que ele mesmo acabou de gravar.
         const caixa = document.createElement('div');
         caixa.id = 'acab-volume-janela';
         caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100005; display: flex;'
@@ -3481,7 +3796,7 @@
                 <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
                             background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
                     <span style="font-size: 1.2rem;">📦</span>
-                    <strong style="font-size: 1.05rem; color: #ffffff;">Volume ${esc(preparado.numero)} — setor ${esc(nomeDoSetor(preparado.setor))}</strong>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Volume ${esc(preparado.numero)}${preparado.nome ? ' — ' + esc(preparado.nome) : ''} — setor ${esc(nomeDoSetor(preparado.setor))}</strong>
                     <span style="font-size: 0.78rem; color: #cfe6fb;">Pedido ${esc(preparado.numeroDoPedido)}</span>
                     <button type="button" onclick="AcabamentoPainel.fecharVolume()"
                             style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
@@ -3491,27 +3806,42 @@
 
                 <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
                     <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <span style="font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">O que vai dentro</span>
-                        ${preparado.itens.map(i => {
-                            const item = itens.find(x => String(x.id) === String(i.modeloId));
-                            return linhaDoItemDoVolume(i, item || {}, faltaEmbalar(item || {}, embalado));
-                        }).join('')}
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Pacotes desta caixa</span>
+                            <button type="button" onclick="AcabamentoPainel.adicionarPacote()"
+                                    title="Mais um maço dentro desta mesma caixa — outra pessoa, ou outro modelo"
+                                    style="${ESTILO_BOTAO_VOLUME} margin-left: auto;">+ Pacote</button>
+                        </div>
+                        <div id="acab-vol-pacotes" style="display: flex; flex-direction: column; gap: 8px;">
+                            ${htmlDosPacotes()}
+                        </div>
                         <div style="font-size: 0.74rem; color: var(--text-dim); line-height: 1.5;">
-                            A quantidade vem cheia com o que ainda está fora de volume. Diminuir aqui é o que
-                            <strong style="color: #cfe6fb;">divide um modelo em vários volumes</strong> —
-                            o resto continua livre para o próximo.
+                            Cada <strong style="color: #cfe6fb;">pacote</strong> é um maço com a sua quantidade e
+                            o nome de quem o fez. Vários pacotes cabem na mesma caixa — é assim que um modelo
+                            grande feito por <strong style="color: #cfe6fb;">duas pessoas</strong> vai numa caixa
+                            só. Diminuir a quantidade é o que divide um modelo em <strong style="color: #cfe6fb;">várias
+                            caixas</strong>; o resto continua livre para a próxima.
                         </div>
                     </div>
 
                     <div style="border-top: 1px solid rgba(76,200,240,0.18);"></div>
 
                     <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;">
+                        <div style="display: flex; flex-direction: column; gap: 5px; flex: 1 1 190px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Nome da caixa (opcional)</span>
+                            <input type="text" id="acab-vol-nome" value="${esc(preparado.nome || '')}"
+                                   placeholder="Camarote, Staff dia 2…"
+                                   title="O nome que a expedição vai procurar na etiqueta"
+                                   style="background: ${AZUL.fundo}; border: 1px solid rgba(76,200,240,0.26);
+                                          border-radius: 6px; color: #ffffff; padding: 8px 10px; font-size: 0.95rem;" />
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 5px;">
                             <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Tipo</span>
-                            <select id="acab-vol-tipo" style="${ESTILO_SELECT} width: 150px; font-size: 0.95rem;">
-                                ${TIPOS_DE_VOLUME.map(t => `<option value="${esc(t)}" ${t === preparado.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}
-                            </select>
+                            ${selectDeTipoDoVolume(preparado.tipo)}
                         </div>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;">
                         <div style="display: flex; flex-direction: column; gap: 5px;">
                             <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Peso na balança</span>
                             <div style="display: flex; align-items: center; gap: 8px;">
@@ -3578,17 +3908,23 @@
     }
 
     /**
-     * As quantidades como estão AGORA nos campos da janela.
+     * Os pacotes como estão AGORA nos campos da janela.
      *
-     * Lidas do DOM, e não de `tela.volumeEmEdicao`: é o que o operador acabou de
+     * Lidos do DOM, e não de `tela.volumeEmEdicao`: é o que o operador acabou de
      * digitar que decide o peso esperado, e ele muda a cada tecla.
      */
-    function itensDigitadosDoVolume() {
+    function pacotesDigitados() {
         const v = tela.volumeEmEdicao;
         if (!v) return [];
-        return v.itens.map(i => {
-            const campo = document.getElementById('acab-vol-qtd-' + i.modeloId);
-            return { modeloId: i.modeloId, qtd: qtdDoTexto(campo ? campo.value : i.qtd) };
+        return v.pacotes.map((p, i) => {
+            const modelo = document.getElementById('acab-vol-modelo-' + i);
+            const qtd = document.getElementById('acab-vol-qtd-' + i);
+            const resp = document.getElementById('acab-vol-resp-' + i);
+            return {
+                modeloId: modelo && modelo.value ? modelo.value : p.modeloId,
+                qtd: qtd ? qtdDoTexto(qtd.value) : p.qtd,
+                responsavel: resp ? resp.value : p.responsavel,
+            };
         }).filter(i => i.qtd > 0);
     }
 
@@ -3600,11 +3936,43 @@
      * caixa. No box do setor a base é fixa (a tiragem inteira), e por isso lá
      * basta repintar quando o peso é gravado.
      */
+    /**
+     * O "2.000 livres de 5.000" de cada linha, refeito a cada tecla.
+     *
+     * Precisa ser vivo porque a conta de uma linha depende das OUTRAS: digitar
+     * 3.000 no pacote P1 tira 3.000 do que o P2 tem disponível, e um número
+     * parado ali levaria o operador a embalar duas vezes o mesmo material.
+     */
+    function pintarLivresDosPacotes() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        const agora = v.pacotes.map((p, i) => {
+            const modelo = document.getElementById('acab-vol-modelo-' + i);
+            const qtd = document.getElementById('acab-vol-qtd-' + i);
+            return {
+                modeloId: modelo && modelo.value ? modelo.value : p.modeloId,
+                qtd: qtd ? qtdDoTexto(qtd.value) : p.qtd,
+            };
+        });
+        agora.forEach((p, i) => {
+            const alvo = document.getElementById('acab-vol-livre-' + i);
+            if (!alvo) return;
+            const item = modelosDoPedidoAberto().find(m => String(m.id) === String(p.modeloId));
+            const livre = livreParaPacote(p.modeloId, i, agora);
+            const sobra = livre - p.qtd;
+            alvo.textContent = sobra < 0
+                ? `${numeroComPonto(-sobra)} un a mais do que a tiragem`
+                : `${numeroComPonto(livre)} livres de ${numeroComPonto(qtdDoModelo(item || {}))}`;
+            alvo.style.color = sobra < 0 ? '#fbbf24' : 'var(--text-dim)';
+        });
+    }
+
     function pintarEstimadoDoVolume() {
+        pintarLivresDosPacotes();
         const alvo = document.getElementById('acab-vol-est');
         if (!alvo || !tela.volumeEmEdicao) return;
 
-        const est = estimadoDoVolume(itensDigitadosDoVolume(), modelosDoPedidoAberto());
+        const est = estimadoDoVolume(pacotesDigitados(), modelosDoPedidoAberto());
         if (est.kg === null) {
             alvo.textContent = 'est. —';
             alvo.style.color = 'var(--text-dim)';
@@ -3651,16 +4019,8 @@
      * hora de conferir quem embalou o quê.
      */
     function selectDeQuemPesou(atual) {
-        const todos = (tela.operadores || []).filter(o => o.role === PERFIL_DO_RESPONSAVEL);
-        const nomes = todos.map(o => o.nome);
-        const escolhido = (atual || '').trim();
-        if (escolhido && !nomes.some(n => n.toLowerCase() === escolhido.toLowerCase())) {
-            nomes.unshift(escolhido);
-        }
-        const opcoes = ['<option value="">— Quem pesou —</option>'].concat(
-            nomes.map(n => `<option value="${esc(n)}" ${n.toLowerCase() === escolhido.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
-        ).join('');
-        return `<select id="acab-vol-responsavel" style="${ESTILO_SELECT} font-size: 0.95rem;">${opcoes}</select>`;
+        return `<select id="acab-vol-responsavel" style="${ESTILO_SELECT} font-size: 0.95rem;">`
+            + opcoesDeOperador(atual, '— Quem pesou —') + '</select>';
     }
 
     /** O texto de um campo de quantidade: "2.000" e "2000" são o mesmo número. */
@@ -3684,12 +4044,13 @@
             return;
         }
 
-        const itens = itensDigitadosDoVolume();
-        if (!itens.length) {
-            dizer('Um volume precisa de pelo menos um modelo com quantidade.');
+        const pacotes = pacotesDigitados();
+        if (!pacotes.length) {
+            dizer('Uma caixa precisa de pelo menos um pacote com quantidade.');
             return;
         }
 
+        const nome = document.getElementById('acab-vol-nome');
         const tipo = document.getElementById('acab-vol-tipo');
         const responsavel = document.getElementById('acab-vol-responsavel');
         const observacao = document.getElementById('acab-vol-obs');
@@ -3699,17 +4060,18 @@
             setor: v.setor,
             volumeId: v.volumeId,
             numero: v.numero,
+            nome: nome ? nome.value : '',
             tipo: tipo ? tipo.value : '',
             peso,
             responsavel: responsavel ? responsavel.value : '',
             observacao: observacao ? observacao.value : '',
-            itens,
+            pacotes,
         };
 
         // A régua dos 5 % NESTA caixa (pedido do usuário, 23/08/2026). A conta
         // é a quantidade digitada vezes o peso da peça; sem base no ERP não há
         // o que conferir, e o volume grava como gravava.
-        const est = estimadoDoVolume(itens, modelosDoPedidoAberto());
+        const est = estimadoDoVolume(pacotes, modelosDoPedidoAberto());
         if (est.kg !== null && precisaDeLiberacao(peso, est.kg) && !(opcoes && opcoes.liberado)) {
             tela.liberacaoPendente = {
                 tipo: 'volume',
@@ -3747,6 +4109,12 @@
             fecharPopupDoVolume();
             renderDetalhe();
             avisar(`Volume ${dados.numero} do setor ${nomeDoSetor(dados.setor)} gravado.`, 'success');
+            // O peso ANTES do Pronto, e não depois: a regra da casa é que o
+            // setor não fecha sem peso registrado, e é a soma das caixas que o
+            // registra agora. Invertido, o último Pronto automático fecharia um
+            // setor com o campo do peso ainda vazio.
+            await atualizarPesoDoSetorPelosVolumes(dados.setor);
+            await fecharModelosEmbalados(dados.setor);
         } catch (e) {
             console.error('[acabamento] erro ao gravar o volume:', e);
             // A trava do banco: dois operadores criando o mesmo número ao mesmo
@@ -3782,10 +4150,96 @@
             fecharPopupDosVolumes();
             renderDetalhe();
             avisar(`Volume ${v.numero} excluído.`, 'success');
+            // O peso do setor acompanha a soma para BAIXO também: a caixa saiu
+            // da pilha, e o número que a expedição lê tem de refletir isso. O
+            // que NÃO se desfaz aqui é o Pronto dos modelos que aquela caixa
+            // fechou — ver `fechamentosPelosPacotes`.
+            await atualizarPesoDoSetorPelosVolumes(v.setor);
         } catch (e) {
             console.error('[acabamento] erro ao excluir o volume:', e);
             avisar(`Não deu para excluir o volume: ${(e && e.message) ? e.message : e}`, 'error');
         }
+    }
+
+    // ─── O que a caixa gravada provoca sozinha ──────────────────────────────
+
+    /**
+     * O peso do setor passa a ser a soma das caixas.
+     *
+     * Pedido do usuário em 23/08/2026: "ao adicionar os volumes, volumes
+     * criados a soma de seus pesos vai atualizando o peso real do setor". Até
+     * aqui a soma era um botão na lista de volumes; agora ela é o próprio peso,
+     * e o botão só aparece quando os dois números divergem.
+     *
+     * Passa pelo `gravarPeso` de sempre — é ele que conhece os dois caminhos de
+     * escrita (estação e site), a régua dos 5 % e o "Pronto" que pode estar
+     * esperando. O que muda é a BASE da régua: `estimadoDoEmbalado`, o peso
+     * esperado do que já está em caixa, e não o do setor inteiro. Com três das
+     * cinco caixas prontas, comparar a soma delas com a tiragem inteira
+     * acusaria divergência em cima de um trabalho perfeitamente certo.
+     */
+    async function atualizarPesoDoSetorPelosVolumes(setor) {
+        const alvo = normalizar(setor);
+        if (!podeEditar() || !haComoGravarPeso()) return;
+
+        const soma = somaDosVolumes(volumesDoSetor(alvo));
+        // Nenhuma caixa foi à balança ainda: não há o que copiar. Gravar zero
+        // aqui apagaria um peso que alguém pode ter digitado à mão no box.
+        if (!(soma > 0)) return;
+
+        const linha = tela.pesos[alvo];
+        const atual = (linha && linha.peso !== null && linha.peso !== undefined)
+            ? Number(linha.peso) : null;
+        if (atual !== null && Math.round(atual * 1000) === Math.round(soma * 1000)) return;
+
+        await gravarPeso(tela.volumesDoPedido, alvo, pesoParaTexto(soma),
+                         { estimado: estimadoDoEmbalado(alvo) });
+        // O `gravarPeso` repinta o campo, mas não a faixa dos volumes logo
+        // abaixo dele — ele evita o redesenho inteiro de propósito, para não
+        // arrancar o foco de quem está digitando. Aqui não há ninguém digitando:
+        // a janela da caixa acabou de fechar, e a faixa precisa mostrar que a
+        // diferença zerou.
+        renderDetalhe();
+    }
+
+    /**
+     * Os modelos que a embalagem acabou de terminar viram PRONTO sozinhos.
+     *
+     * Quem decide o nome é o `responsavelPelosPacotes`: uma pessoa só assina
+     * com o próprio nome, mais de uma assina com o nome do setor.
+     *
+     * A trava do peso continua valendo. Se o modelo for o ÚLTIMO pendente do
+     * setor e o setor ainda estiver sem peso — nenhuma caixa pesada, por
+     * exemplo —, ele fica de fora: o operador clica no PRONTO do card e recebe
+     * o popup que pede o peso, como sempre. Fechar por baixo dessa regra
+     * deixaria a expedição com um setor concluído e sem quilo nenhum.
+     */
+    async function fecharModelosEmbalados(setor) {
+        if (!podeEditar()) return;
+        const s = estado();
+        const osId = tela.pedidoAberto;
+        const itens = (s.osItens && s.osItens[osId]) || [];
+
+        const feitos = [];
+        for (const x of fechamentosPelosPacotes(setor, itens)) {
+            if (pesoExigidoAntesDoPronto(x.item, itens)) continue;
+            if (responsavelDoModelo(x.item) !== x.quem.nome) {
+                await gravar(x.item.id, osId, 'acabamento_responsavel', x.quem.nome);
+            }
+            await gravar(x.item.id, osId, 'acabamento_status', 'Pronto');
+            feitos.push(x);
+        }
+        if (!feitos.length) return;
+
+        // O que o sistema faz sozinho se anuncia (regra da casa). Sem isto o
+        // operador voltaria para a lista e encontraria dois cards verdes que
+        // ele não marcou.
+        const quais = feitos
+            .map(x => `${nomeDoModelo(x.item)} (${x.quem.nome}${x.quem.varios ? ', mais de uma pessoa' : ''})`)
+            .join(' · ');
+        avisar(feitos.length === 1
+            ? `${quais} — todos os pacotes embalados, modelo marcado como PRONTO.`
+            : `${feitos.length} modelos ficaram PRONTO pelos pacotes: ${quais}.`, 'success');
     }
 
     // ─── A lista dos volumes do setor ───────────────────────────────────────
@@ -3818,13 +4272,26 @@
 
         const corpo = lista.length
             ? lista.map(v => {
-                const dentro = (v.itens || []).map(i => {
-                    const item = itens.find(x => String(x.id) === String(i.modeloId));
-                    return `<span style="font-size: 0.76rem; background: rgba(76,200,240,0.08);
-                                        border: 1px solid rgba(76,200,240,0.20); border-radius: 6px; padding: 3px 9px;">
-                                ${esc(nomeDoModelo(item))} · <span style="font-family: monospace;">${numeroComPonto(i.qtd)} un</span>
-                            </span>`;
-                }).join('');
+                // Os pacotes, um por linha, com quantidade e responsável — foi o
+                // que o usuário pediu que a edição mostrasse. Em linha, e não em
+                // chip, porque agora são três dados por pacote e não um.
+                const dentro = (v.pacotes || []).length
+                    ? `<div style="display: flex; flex-direction: column; gap: 4px;">`
+                      + (v.pacotes || []).map((i, n) => {
+                            const item = itens.find(x => String(x.id) === String(i.modeloId));
+                            return `
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                                        font-size: 0.78rem; background: rgba(76,200,240,0.06);
+                                        border: 1px solid rgba(76,200,240,0.18); border-radius: 6px; padding: 5px 10px;">
+                                <span style="font-size: 0.7rem; font-weight: 800; color: #4cc8f0;">P${n + 1}</span>
+                                <span style="color: #ffffff;">${esc(nomeDoModelo(item))}</span>
+                                <span style="font-family: monospace;">${numeroComPonto(i.qtd)} un</span>
+                                <span style="margin-left: auto; color: ${i.responsavel ? 'var(--text-dim)' : '#fbbf24'};">
+                                    ${i.responsavel ? '👤 ' + esc(i.responsavel) : 'sem responsável'}
+                                </span>
+                            </div>`;
+                        }).join('') + '</div>'
+                    : `<span style="font-size: 0.76rem; color: #fbbf24;">caixa vazia</span>`;
                 const temPeso = v.peso !== null && v.peso !== undefined && v.peso > 0;
                 return `
                 <div style="background: ${AZUL.superficie}; border: 1px solid rgba(76,200,240,0.20);
@@ -3834,8 +4301,9 @@
                                      min-width: 34px; padding: 4px 8px; border-radius: 6px;
                                      background: rgba(76,200,240,0.14); border: 1px solid rgba(76,200,240,0.35);
                                      color: #4cc8f0; font-weight: 800; font-size: 0.82rem;">V${esc(v.numero)}</span>
-                        <span style="font-size: 0.86rem; font-weight: 600; color: #ffffff;">${esc(v.tipo || '—')}</span>
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">${esc(v.responsavel || 'sem responsável')}</span>
+                        ${v.nome ? `<strong style="font-size: 0.92rem; color: #ffffff;">${esc(v.nome)}</strong>` : ''}
+                        <span style="font-size: 0.86rem; font-weight: 600; color: ${v.nome ? 'var(--text-dim)' : '#ffffff'};">${esc(v.tipo || '—')}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-dim);">pesada por ${esc(v.responsavel || '—')}</span>
                         ${v.observacao ? `<span style="font-size: 0.74rem; color: #7fa9d4;">${esc(v.observacao)}</span>` : ''}
                         <span style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1rem; font-family: monospace; color: ${temPeso ? '#ffffff' : '#fbbf24'};">
@@ -3880,11 +4348,15 @@
                         ${dif === null ? '—' : esc(textoDaDiferenca(dif))}
                     </span>
                 </span>
-                ${(pode && soma > 0) ? `
+                ${(pode && soma > 0 && dif) ? `
                 <button type="button" style="${ESTILO_BOTAO_VOLUME} margin-left: auto; padding: 9px 16px; font-size: 0.84rem;"
+                        title="O peso do setor deixou de acompanhar a soma — alguém o digitou à mão, ou uma caixa foi pesada por fora"
                         onclick="AcabamentoPainel.usarSomaDosVolumes('${escJs(alvo)}')">
                     Usar ${esc(kgParaTexto(soma))} kg como peso do setor
-                </button>` : ''}
+                </button>` : (soma > 0 && !dif ? `
+                <span style="margin-left: auto; font-size: 0.74rem; color: #22c55e;">
+                    ✓ o peso do setor acompanha a soma das caixas
+                </span>` : '')}
             </div>` : '';
 
         caixa.innerHTML = `
@@ -3912,8 +4384,10 @@
                     ${lista.length ? `<div style="border-top: 1px solid rgba(76,200,240,0.18); margin-top: 4px;"></div>` : ''}
                     ${conferencia}
                     ${lista.length ? `<div style="font-size: 0.74rem; color: var(--text-dim); line-height: 1.5;">
-                        A diferença não trava nada — caixa, fita e plástico pesam, e o setor pode ter sido pesado
-                        inteiro na balança grande. Ela aparece para o operador decidir qual dos dois números está certo.
+                        O peso do setor é atualizado sozinho a cada caixa gravada, com a soma delas. A diferença só
+                        aparece quando alguém digita outro número no box do setor — e não trava nada: caixa, fita e
+                        plástico pesam, e o setor pode ter sido pesado inteiro na balança grande. Ela está aqui para
+                        o operador decidir qual dos dois números está certo.
                     </div>` : ''}
                 </div>
 
@@ -4210,9 +4684,9 @@
                 </div>
                 ${p.tipo === 'volume' ? `
                 <div style="font-size: 0.82rem; color: #7fa9d4; margin-bottom: 8px;">
-                    ${p.volume.itens.length === 1
+                    ${p.volume.pacotes.length === 1
                         ? 'A conta é a quantidade desta caixa vezes o peso da peça.'
-                        : `A conta é a soma dos ${p.volume.itens.length} modelos desta caixa, cada um pela quantidade que vai nela.`}
+                        : `A conta é a soma dos ${p.volume.pacotes.length} pacotes desta caixa, cada um pela quantidade que vai nele.`}
                 </div>` : ''}
                 <table style="border-collapse: collapse; font-size: 0.9rem;">
                     <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso digitado</td>
@@ -4964,6 +5438,11 @@
         confirmarVolume,
         /** Cada tecla nos campos da janela: refaz o peso esperado da caixa. */
         recalcularVolume: pintarEstimadoDoVolume,
+        // ── Os pacotes dentro da caixa (23/08/2026) ──────────────────────
+        /** "+ Pacote": mais um maço dentro da mesma caixa. */
+        adicionarPacote,
+        removerPacote,
+        trocarModeloDoPacote,
         fecharVolume: fecharPopupDoVolume,
         excluirVolume,
         verVolumes(setor) { abrirVolumesDoSetor(setor); },
@@ -5050,6 +5529,13 @@
             qtdDoTexto,
             marcavelNaEscolha,
             marcadoNaEscolha,
+            // Os pacotes dentro do volume (23/08/2026)
+            rotuloDoVolume,
+            pacotesDoModelo,
+            responsavelPelosPacotes,
+            fechamentosPelosPacotes,
+            estimadoDoEmbalado,
+            livreParaPacote,
             TIPOS_DE_VOLUME,
             TABELA_DE_VOLUMES,
             TABELA_DE_ITENS_DO_VOLUME,

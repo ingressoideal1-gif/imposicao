@@ -112,7 +112,7 @@ e a coluna sendo claramente da gráfica.
 | `producao_modelos_imposicao` | Modelos salvos de imposição | ✅ Criado |
 | `producao_produtos_formatos` | Relacionamento de produtos do ERP aos formatos | ✅ Criado |
 | `producao_volumes` | Os volumes (caixas) de cada setor no acabamento | ✅ Criado 23/08/2026 |
-| `producao_volume_itens` | O que vai dentro de cada volume, com **quantidade** | ✅ Criado 23/08/2026 |
+| `producao_volume_itens` | Os **pacotes** de cada volume: modelo, quantidade e responsável | ✅ Criado 23/08/2026, ampliado no mesmo dia |
 
 ### Os volumes, e a exceção que o usuário decidiu NÃO abrir
 
@@ -134,9 +134,37 @@ política de `public` (a mesma de `producao_numeracoes`), a estação grava dire
 pelo PostgREST — sem rota nova, sem Edge Function, sem os dois caminhos do
 `gravarPeso`.
 
-SQL: [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql).
-Testes: [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seção
-"Os volumes", e `tests/test_painel_do_acabamento.py`.
+### O pacote, e por que a tabela não mudou de nome
+
+Ainda em 23/08/2026 o usuário pediu o nível de baixo: *"dentro do mesmo volume,
+podemos adicionar vários pacotes… ao editar os volumes, mostra os pacotes,
+quantidades e responsáveis de cada pacote"*. O **pacote** é o maço que uma
+pessoa fecha: um modelo, uma quantidade, um nome. Vários pacotes vão para dentro
+da mesma caixa, e a caixa é o que vai à balança.
+
+A linha de `producao_volume_itens` **é** o pacote. A tabela não passou a
+`producao_volume_pacotes` de propósito: renomear quebraria a estação que
+estivesse com o painel da versão anterior aberto na tela, que grava e lê por
+este nome, e o ganho seria só de leitura.
+
+O que mudou é aditivo — `producao_volumes.nome`, e no pacote uma chave própria
+(`id`) mais o `responsavel`. A chave era `(volume_id, modelo_id)`, o que proibia
+exatamente o caso pedido: dois pacotes do mesmo modelo na mesma caixa, um de
+cada responsável.
+
+**O peso do setor passou a ser escrito sozinho**, com a soma das caixas, a cada
+volume gravado — *"a soma de seus pesos vai atualizando o peso real do setor"*.
+Isso continua sendo `peso_real_kg` na ficha do parceiro, pelo mesmo caminho de
+sempre (agente na estação, PostgREST no site) e com a mesma senha de liberação
+acima de 5 %. **A exceção do parceiro não se alargou**: `qtd_volumes` e
+`tipo_volume` continuam sem receber escrita nenhuma, e há teste contando as
+colunas que aquela ficha recebe.
+
+SQL: [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) e
+[`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql).
+Testes: [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seções
+"Os volumes" e "Os pacotes dentro da caixa", e
+`tests/test_painel_do_acabamento.py`.
 
 ## 🖥️ Tabelas do Painel (prefixo `imposition_`)
 

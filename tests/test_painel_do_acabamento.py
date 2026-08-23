@@ -896,7 +896,7 @@ def test_o_volume_usa_a_mesma_regua_dos_cinco_por_cento_do_setor():
 
     i = js.index("async function confirmarVolume(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "estimadoDoVolume(itens, modelosDoPedidoAberto())" in corpo, (
+    assert "estimadoDoVolume(pacotes, modelosDoPedidoAberto())" in corpo, (
         "o peso esperado tem de sair das quantidades digitadas"
     )
     assert "precisaDeLiberacao(peso, est.kg)" in corpo, (
@@ -939,7 +939,7 @@ def test_a_conta_se_refaz_a_cada_tecla():
     assert "oninput=\"AcabamentoPainel.recalcularVolume()\"" in js, (
         "os campos da janela precisam refazer a conta enquanto se digita"
     )
-    i = js.index("function itensDigitadosDoVolume(")
+    i = js.index("function pacotesDigitados(")
     corpo = js[i:js.index("\n    }", i)]
     assert "document.getElementById('acab-vol-qtd-'" in corpo, (
         "as quantidades tem de ser lidas do DOM, e nao do estado de quando a "
@@ -960,4 +960,187 @@ def test_cancelar_a_senha_nao_apaga_o_trabalho_do_operador():
     corpo = js[i:js.index("\n    }", i)]
     assert "display = 'none'" in corpo and "removeChild" not in corpo, (
         "esconder nao pode desmontar a janela: o que ele digitou tem de sobreviver"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  OS PACOTES DENTRO DA CAIXA  (pedido do usuario, 23/08/2026)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   "Ao criar o volume, opcao de nomear volume, dentro do mesmo volume, podemos
+#    adicionar varios pacotes, ao adicionar os volumes, volumes criados a soma
+#    de seus pesos vai atualizando o peso real do setor, ao editar os volumes,
+#    mostra os pacotes, quantidades e responsaveis de cada pacote"
+#
+#   "modelos com mais de 1 volume ao atingir a quantidade total, quando mais de
+#    1 responsavel mostra no drop responsavel o nome do setor e marca status
+#    como pronto, se todos os pacotes do volume sao mesmo responsavel marca
+#    este como responsavel."
+
+SQL_DOS_PACOTES = "sql/pacotes_do_acabamento.sql"
+
+
+def test_o_sql_dos_pacotes_e_aditivo():
+    """Nada de `drop table` nem de renomear: a estacao que estiver com o painel
+    anterior aberto continua gravando pelo nome antigo."""
+    sql = _ler(SQL_DOS_PACOTES).lower()
+
+    assert "add column if not exists nome text" in sql, "a caixa ganha nome"
+    assert "add column if not exists responsavel text" in sql, "o pacote ganha dono"
+    assert "add column if not exists id uuid" in sql, "e chave propria"
+
+    assert "drop table" not in sql, "migracao aditiva nao derruba tabela"
+    assert "rename to" not in sql, (
+        "renomear producao_volume_itens quebraria a estacao com o painel anterior"
+    )
+    assert "delete from" not in sql, "nem apaga linha de ninguem"
+
+
+def test_a_chave_do_pacote_deixa_dois_do_mesmo_modelo_na_mesma_caixa():
+    """A chave era (volume_id, modelo_id), o que proibia exatamente o caso que o
+    usuario pediu: um modelo grande repartido entre dois responsaveis."""
+    sql = _ler(SQL_DOS_PACOTES).lower()
+
+    assert "drop constraint producao_volume_itens_pkey" in sql
+    assert "primary key (id)" in sql
+    # Sem a chave composta, `volume_id` perde o indice de graca.
+    assert "create index if not exists producao_volume_itens_por_volume" in sql
+
+    # E o arquivo pode ser rodado duas vezes.
+    assert sql.count("if not exists") >= 4
+    assert "if exists (" in sql
+
+
+def test_o_pacote_e_gravado_com_quantidade_e_responsavel():
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function gravarVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "responsavel: (i.responsavel || '').trim() || null" in corpo, (
+        "cada pacote leva o nome de quem o fez"
+    )
+    assert "nome: (v.nome || '').trim() || null" in corpo, (
+        "e a caixa leva o nome que o operador deu -- vazio vira nulo"
+    )
+
+
+def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
+    """"a soma de seus pesos vai atualizando o peso real do setor"."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function atualizarPesoDoSetorPelosVolumes(")
+    corpo = js[i:js.index("\n    }", i)]
+
+    assert "gravarPeso(" in corpo, (
+        "tem de passar pelo gravarPeso de sempre: e ele que conhece os dois "
+        "caminhos de escrita e a senha de liberacao"
+    )
+    assert "estimadoDoEmbalado(alvo)" in corpo, (
+        "a regua compara com o que JA ESTA embalado, e nao com a tiragem inteira"
+    )
+    assert "if (!(soma > 0)) return" in corpo, (
+        "sem caixa pesada nao ha o que copiar -- gravar zero apagaria um peso "
+        "digitado a mao"
+    )
+    assert "!podeEditar()" in corpo, "quem so le nao dispara escrita nenhuma"
+
+    # E o volume gravado chama isso.
+    i = js.index("async function gravarVolumeConferido(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "atualizarPesoDoSetorPelosVolumes(dados.setor)" in corpo
+
+
+def test_o_peso_entra_antes_do_pronto_automatico():
+    """A regra da casa e que o setor nao fecha sem peso. Invertida a ordem, o
+    ultimo Pronto automatico fecharia um setor com o campo do peso vazio."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function gravarVolumeConferido(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert corpo.index("atualizarPesoDoSetorPelosVolumes") < corpo.index("fecharModelosEmbalados")
+
+    # E a trava do peso continua valendo para o Pronto automatico.
+    i = js.index("async function fecharModelosEmbalados(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "pesoExigidoAntesDoPronto(x.item, itens)" in corpo, (
+        "sem peso no setor, o modelo fica para o operador fechar pelo popup"
+    )
+
+
+def test_quem_assina_o_modelo_fechado_pelos_pacotes():
+    """Um responsavel assina com o nome dele; mais de um, com o nome do setor."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function responsavelPelosPacotes(")
+    corpo = js[i:js.index("\n    }", i)]
+
+    assert "if (nomes.length === 1 && !anonimo) return { nome: nomes[0], varios: false }" in corpo
+    assert "nomeDoSetor(normalizar(item.setor))" in corpo, (
+        "varios responsaveis assinam com o nome do setor"
+    )
+    assert "faltaEmbalar(item, embaladoPorModelo(lista)) > 0" in corpo, (
+        "so fecha ao ATINGIR a quantidade total"
+    )
+    assert "if (!nomes.length) return null" in corpo, (
+        "todos os pacotes sem dono: ninguem assinou, e o modelo nao fecha"
+    )
+
+    # Pronto ja dado nao e reescrito pela embalagem.
+    i = js.index("function fechamentosPelosPacotes(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "estagioDoModelo(i) !== 'Pronto'" in corpo, (
+        "um Pronto ja dado e decisao de alguem: a caixa nao a desfaz nem a reescreve"
+    )
+
+
+def test_o_tipo_pacote_saiu_da_lista_de_tipos_de_volume():
+    """O usuario passou a chamar de PACOTE o maco que vai dentro da caixa. Um
+    tipo de volume com o mesmo nome faria a janela dizer "pacote com 3 pacotes".
+    """
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("const TIPOS_DE_VOLUME = ")
+    linha = js[i:js.index("\n", i)]
+    assert "'Pacote'" not in linha, "o tipo 'Pacote' saiu da lista"
+    assert "'Caixa'" in linha, "e 'Caixa' continua sendo o padrao"
+
+    # Mas o valor ja gravado no banco nao pode se perder ao editar.
+    i = js.index("function selectDeTipoDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "tipos.indexOf(escolhido) === -1) tipos.unshift(escolhido)" in corpo, (
+        "tipo antigo volta para a lista, senao editar um volume o trocaria sozinho"
+    )
+
+
+def test_os_campos_do_pacote_sao_numerados_pela_posicao():
+    """Dois pacotes do mesmo modelo na mesma caixa dariam dois campos com o
+    mesmo id, e o navegador entregaria sempre o primeiro."""
+    js = _ler("frontend/acabamento.js")
+
+    assert 'id="acab-vol-qtd-${indice}"' in js
+    assert 'id="acab-vol-resp-${indice}"' in js
+    assert 'id="acab-vol-modelo-${indice}"' in js
+    assert "acab-vol-qtd-${esc(i.modeloId)}" not in js, (
+        "o id por modelo colidiria com dois pacotes do mesmo modelo"
+    )
+
+
+def test_mexer_na_lista_de_pacotes_nao_apaga_o_que_foi_digitado():
+    """"+ Pacote" e o botao de tirar redesenham a lista. Sem ler o DOM antes, as
+    quantidades e os nomes das linhas de cima virariam o valor de quando a
+    janela abriu."""
+    js = _ler("frontend/acabamento.js")
+
+    for nome in ("adicionarPacote", "removerPacote", "trocarModeloDoPacote"):
+        i = js.index("function " + nome + "(")
+        corpo = js[i:js.index("\n    }", i)]
+        assert "lerPacotesDoDom()" in corpo, nome + " precisa guardar o que esta nos campos"
+        assert "repintarPacotes()" in corpo, nome + " precisa redesenhar a lista"
+
+    # E o redesenho e SO da lista: o peso e o nome ja digitados ficam.
+    i = js.index("function repintarPacotes(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "acab-vol-pacotes" in corpo
+    assert "acab-volume-janela" not in corpo, (
+        "remontar a janela inteira apagaria o peso que o operador ja digitou"
     )

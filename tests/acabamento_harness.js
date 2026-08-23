@@ -218,7 +218,12 @@ function montarAmbiente() {
                         data: achar().map(v => Object.assign({}, v, {
                             producao_volume_itens: self._itensDeVolume
                                 .filter(i => String(i.volume_id) === String(v.id))
-                                .map(i => ({ modelo_id: i.modelo_id, qtd: i.qtd })),
+                                .map((i, n) => ({
+                                    id: i.id || ('pac-' + v.id + '-' + n),
+                                    modelo_id: i.modelo_id,
+                                    qtd: i.qtd,
+                                    responsavel: i.responsavel || null,
+                                })),
                         })),
                         error: null,
                     }).then(res, rej),
@@ -2386,6 +2391,24 @@ function ambienteDeVolumes() {
     return amb;
 }
 
+/**
+ * O indice da linha do pacote daquele modelo na janela aberta.
+ *
+ * Os campos passaram a ser numerados pela POSICAO (`acab-vol-qtd-0`) e nao
+ * mais pelo id do modelo: dois pacotes do mesmo modelo na mesma caixa dariam
+ * dois campos com o mesmo id.
+ */
+function indiceDoPacote(amb, modeloId) {
+    const v = amb.painel._tela.volumeEmEdicao;
+    if (!v) return -1;
+    return v.pacotes.findIndex(p => String(p.modeloId) === String(modeloId));
+}
+
+/** O campo da quantidade do pacote daquele modelo. */
+function campoDaQtd(amb, modeloId) {
+    return amb.documento.getElementById('acab-vol-qtd-' + indiceDoPacote(amb, modeloId));
+}
+
 /** O caminho inteiro do operador: "+ Volume", marcar, pesar, gravar. */
 async function criarVolume(amb, opcoes) {
     amb.painel.novoVolume(opcoes.setor, 200);
@@ -2393,9 +2416,15 @@ async function criarVolume(amb, opcoes) {
     amb.painel.pesarVolume();
     const qtds = opcoes.qtds || {};
     Object.keys(qtds).forEach(id => {
-        amb.documento.getElementById('acab-vol-qtd-' + id).value = String(qtds[id]);
+        campoDaQtd(amb, id).value = String(qtds[id]);
+    });
+    // Quem fez cada pacote: `{ 3001: 'Ana Paula' }`.
+    const quem = opcoes.pacoteDe || {};
+    Object.keys(quem).forEach(id => {
+        amb.documento.getElementById('acab-vol-resp-' + indiceDoPacote(amb, id)).value = quem[id];
     });
     amb.documento.getElementById('acab-vol-peso').value = opcoes.peso;
+    amb.documento.getElementById('acab-vol-nome').value = opcoes.nome || '';
     amb.documento.getElementById('acab-vol-tipo').value = opcoes.tipo || 'Caixa';
     amb.documento.getElementById('acab-vol-responsavel').value = opcoes.responsavel || '';
     amb.documento.getElementById('acab-vol-obs').value = opcoes.observacao || '';
@@ -2450,12 +2479,12 @@ async function umVolumeLevaVariosModelos() {
     amb.painel.pesarVolume();
     const emEdicao = amb.painel._tela.volumeEmEdicao;
     ok(emEdicao.numero === 1, 'o primeiro volume e o V1', String(emEdicao.numero));
-    ok(emEdicao.itens.length === 2, 'com os dois modelos dentro', String(emEdicao.itens.length));
-    ok(emEdicao.itens[0].qtd === 5000 && emEdicao.itens[1].qtd === 500,
+    ok(emEdicao.pacotes.length === 2, 'com os dois modelos dentro', String(emEdicao.pacotes.length));
+    ok(emEdicao.pacotes[0].qtd === 5000 && emEdicao.pacotes[1].qtd === 500,
        'e a quantidade ja vem cheia com o que falta embalar');
 
-    amb.documento.getElementById('acab-vol-qtd-3001').value = '5.000';
-    amb.documento.getElementById('acab-vol-qtd-3002').value = '500';
+    campoDaQtd(amb, 3001).value = '5.000';
+    campoDaQtd(amb, 3002).value = '500';
     amb.documento.getElementById('acab-vol-peso').value = '12,48';
     amb.documento.getElementById('acab-vol-tipo').value = 'Caixa';
     amb.documento.getElementById('acab-vol-responsavel').value = 'Bernardo Farias';
@@ -2500,10 +2529,10 @@ async function oMesmoModeloCabeEmVariosVolumes() {
     amb.painel.pesarVolume();
     const emEdicao = amb.painel._tela.volumeEmEdicao;
     ok(emEdicao.numero === 2, 'o segundo volume e o V2', String(emEdicao.numero));
-    ok(emEdicao.itens[0].qtd === 3000, 'e a sugestao e o RESTO, nao a tiragem',
-       String(emEdicao.itens[0].qtd));
+    ok(emEdicao.pacotes[0].qtd === 3000, 'e a sugestao e o RESTO, nao a tiragem',
+       String(emEdicao.pacotes[0].qtd));
 
-    amb.documento.getElementById('acab-vol-qtd-3001').value = '3000';
+    campoDaQtd(amb, 3001).value = '3000';
     amb.documento.getElementById('acab-vol-peso').value = '6,3';
     amb.documento.getElementById('acab-vol-responsavel').value = 'Cesar Almeida';
     await amb.painel.confirmarVolume();
@@ -2558,16 +2587,30 @@ async function oVolumeNaoAtravessaSetor() {
 
 async function aSomaEConferidaContraOPesoDoSetor() {
     const amb = ambienteDeVolumes();
-    amb.banco._setoresDoBanco[0].peso_real_kg = 12.5;
     await amb.painel.abrirPedido('os-200');
 
     await criarVolume(amb, { setor: 'LASER', marcar: [3001, 3002],
                              qtds: { 3001: '5000', 3002: '500' },
                              peso: '12,48', responsavel: 'Bernardo Farias' });
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    // Sem ninguem mexer no box, os dois numeros sao o mesmo: o peso do setor
+    // passou a ser a soma das caixas (pedido do usuario, 23/08/2026).
+    let html = amb.elementos['acab-detalhe-corpo'].innerHTML;
     ok(html.indexOf('12,480 kg') !== -1, 'a soma dos volumes aparece');
-    ok(html.indexOf('20 g acima') !== -1, 'e a diferenca contra o peso do setor, em gramas', html.indexOf(' g '));
+    ok(html.indexOf('acompanha a soma') !== -1,
+       'e a tela anuncia que o peso do setor segue essa soma sozinho');
+    ok(amb.painel._regras.diferencaDosVolumes('LASER') === 0,
+       'sem diferenca, porque o peso do setor E a soma',
+       String(amb.painel._regras.diferencaDosVolumes('LASER')));
+
+    // Alguem digita OUTRO numero no box: a diferenca volta a existir e e dita.
+    // O `gravarPeso` nao redesenha o pedido de proposito (nao arrancar o foco
+    // de quem digita); a faixa se atualiza na proxima pintura da tela.
+    await amb.painel.mudarPeso(200, 'LASER', '12,50');
+    await amb.painel.abrirPedido('os-200');
+    html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('20 g acima') !== -1, 'a diferenca contra o peso digitado, em gramas');
+    ok(html.indexOf('digitou à mão') !== -1, 'e a tela diz de onde ela veio');
 
     // O campo do peso do setor continua sendo o que sempre foi.
     ok(html.indexOf('id="acab-peso-LASER"') !== -1, 'o campo do peso do setor continua la');
@@ -2616,11 +2659,24 @@ async function osVolumesNaoTocamEmTabelaDoParceiro() {
                              qtds: { 3001: '5000', 3002: '500' },
                              peso: '12,48', responsavel: 'Bernardo Farias' });
 
-    ok(amb.banco._pesosGravados.length === 0,
-       'criar volume NAO escreve na ficha de expedicao do ERP',
-       String(amb.banco._pesosGravados.length));
-    ok(amb.banco._propostasGravadas.length === 0, 'nem em `propostas`');
-    ok(amb.banco._volumesGravados.some(g => g.tipo === 'insert'), 'so nas tabelas nossas');
+    // Desde 23/08/2026 criar volume ATUALIZA o peso do setor -- foi pedido
+    // ("a soma de seus pesos vai atualizando o peso real do setor"). O que a
+    // regra da casa protege continua valendo: na ficha do parceiro entra o
+    // peso, e SO o peso.
+    const naFicha = amb.banco._pesosGravados;
+    ok(naFicha.length >= 1, 'criar volume atualiza o peso do setor na ficha',
+       String(naFicha.length));
+    const colunas = [];
+    naFicha.forEach(g => Object.keys(g.payload || g.linha || {}).forEach(c => {
+        if (colunas.indexOf(c) === -1) colunas.push(c);
+    }));
+    ok(colunas.sort().join(',') === 'peso_real_kg,updated_at',
+       'e escreve NAQUELA ficha apenas peso e carimbo de hora', colunas.join(','));
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 12.48,
+       'o peso do setor virou a soma das caixas',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+    ok(amb.banco._propostasGravadas.length === 0, 'e nada em `propostas`');
+    ok(amb.banco._volumesGravados.some(g => g.tipo === 'insert'), 'o volume em si e tabela nossa');
 
     // A decisao do usuario em 23/08/2026, travada no codigo: nada de
     // `qtd_volumes` nem de `tipo_volume`.
@@ -2686,17 +2742,31 @@ async function aListaDoSetorMostraOQueTemDentro() {
     ok(html.indexOf('5.000 un') !== -1, 'cada um com a sua quantidade');
     ok(html.indexOf('Soma dos volumes') !== -1 && html.indexOf('Peso do setor') !== -1,
        'a conferencia mostra os dois numeros lado a lado');
-    ok(html.indexOf('Usar 12,480 kg como peso do setor') !== -1, 'e oferece adotar a soma');
+    ok(html.indexOf('acompanha a soma das caixas') !== -1,
+       'e diz que o peso do setor ja segue a soma');
     ok(html.indexOf('todos os modelos do setor já estão em algum volume') !== -1,
        'a cobertura do setor e dita');
+
+    // Alguem digita outro peso no box: ai sim aparece a saida para voltar a soma.
+    await amb.painel.mudarPeso(200, 'LASER', '12,50');
+    amb.painel.verVolumes('LASER');
+    const html2 = janelas.achar('acab-volumes-lista').innerHTML;
+    ok(html2.indexOf('Usar 12,480 kg como peso do setor') !== -1,
+       'com divergencia, o botao de voltar a soma aparece');
 }
 
 async function oPesoQueFechaOSetorJaVemComASoma() {
     const amb = ambienteDeVolumes();
     await amb.painel.abrirPedido('os-200');
+
+    // Caixa SEM peso: nao ha soma para o setor herdar, e a trava do Pronto
+    // continua sendo a de sempre.
     await criarVolume(amb, { setor: 'LASER', marcar: [3001, 3002],
                              qtds: { 3001: '5000', 3002: '500' },
-                             peso: '12,48', responsavel: 'Bernardo Farias' });
+                             peso: '', responsavel: 'Bernardo Farias' });
+    ok(amb.banco._setoresDoBanco[0].peso_real_kg === null,
+       'caixa sem peso nao escreve peso nenhum no setor',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
 
     // Os dois modelos do Laser viram Pronto; o segundo fecha o setor.
     await amb.painel.mudarEstagio(3001, 'os-200', 'Pronto');
@@ -2704,19 +2774,35 @@ async function oPesoQueFechaOSetorJaVemComASoma() {
 
     ok(amb.elementos['acab-peso-obrigatorio'].style.display === 'flex',
        'a janela do peso continua cobrando ao fechar o setor');
-    ok(amb.documento.getElementById('acab-peso-obrig-campo').value === '12,48',
-       'mas ja vem com a soma dos volumes preenchida',
-       amb.documento.getElementById('acab-peso-obrig-campo').value);
-    ok(amb.elementos['acab-peso-obrig-corpo'].innerHTML.indexOf('que somam') !== -1,
-       'e a janela diz de onde saiu o numero');
 
     // Confirmar grava o peso e SO ENTAO marca o Pronto -- como antes.
+    amb.documento.getElementById('acab-peso-obrig-campo').value = '12,48';
     await amb.painel.confirmarPesoDoSetor();
     ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 12.48, 'o peso entrou no setor',
        String(amb.banco._setoresDoBanco[0].peso_real_kg));
     const pronto = amb.banco._gravacoes.filter(g => g.payload
         && g.payload.acabamento_status === 'Pronto');
     ok(pronto.length >= 1, 'e o modelo virou Pronto depois disso');
+}
+
+/**
+ * Com caixa PESADA, o setor nao chega a ser cobrado: o peso ja entrou pela
+ * soma, e os modelos ja fecharam sozinhos pelos pacotes.
+ */
+async function comCaixaPesadaOSetorNaoECobrado() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001, 3002],
+                             qtds: { 3001: '5000', 3002: '500' },
+                             peso: '12,48', responsavel: 'Bernardo Farias',
+                             pacoteDe: { 3001: 'Bernardo Farias', 3002: 'Bernardo Farias' } });
+
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 12.48,
+       'o peso do setor entrou pela soma das caixas',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+    const janela = amb.elementos['acab-peso-obrigatorio'];
+    ok(!janela || janela.style.display !== 'flex',
+       'e a janela do peso nem chega a aparecer');
 }
 
 async function asContasDosVolumesSaoPuras() {
@@ -2792,7 +2878,7 @@ async function oVolumeDeUmModeloSoSaiDaQuantidade() {
     amb.painel.pesarVolume();
 
     // A janela abre sugerindo a tiragem inteira; o operador reparte.
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2.000';
+    campoDaQtd(amb, 3001).value = '2.000';
     amb.painel.recalcularVolume();
 
     const est = amb.elementos['acab-vol-est'];
@@ -2800,13 +2886,13 @@ async function oVolumeDeUmModeloSoSaiDaQuantidade() {
        '2.000 pecas de 5,2 g dao 10,400 kg', est.textContent);
 
     // Mudar a quantidade muda a base -- e isso e o coracao do pedido.
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '1.000';
+    campoDaQtd(amb, 3001).value = '1.000';
     amb.painel.recalcularVolume();
     ok(est.textContent.indexOf('est. 5,200 kg') !== -1,
        'metade da quantidade, metade do peso esperado', est.textContent);
 
     // Dentro dos 5 %: grava direto, sem senha.
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDaQtd(amb, 3001).value = '2000';
     campoDoVolume(amb, 'acab-vol-peso').value = '10,4';
     campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
     await amb.painel.confirmarVolume();
@@ -2825,8 +2911,8 @@ async function oVolumeDeVariosModelosSomaAsQuantidades() {
     amb.painel.marcarModelo(3002);
     amb.painel.pesarVolume();
 
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2.000';
-    campoDoVolume(amb, 'acab-vol-qtd-3002').value = '500';
+    campoDaQtd(amb, 3001).value = '2.000';
+    campoDaQtd(amb, 3002).value = '500';
     amb.painel.recalcularVolume();
 
     ok(amb.elementos['acab-vol-est'].textContent.indexOf('est. 13,000 kg') !== -1,
@@ -2851,7 +2937,7 @@ async function oVolumeForaDosCincoPorCentoPedeASenha() {
     amb.painel.novoVolume('LASER', 200);
     amb.painel.marcarModelo(3001);
     amb.painel.pesarVolume();
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDaQtd(amb, 3001).value = '2000';
     campoDoVolume(amb, 'acab-vol-peso').value = '12';       // esperado 10,400
     campoDoVolume(amb, 'acab-vol-responsavel').value = 'Bernardo Farias';
     await amb.painel.confirmarVolume();
@@ -2888,7 +2974,7 @@ async function cancelarASenhaDevolveAJanelaDoVolume() {
     amb.painel.novoVolume('LASER', 200);
     amb.painel.marcarModelo(3001);
     amb.painel.pesarVolume();
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
+    campoDaQtd(amb, 3001).value = '2000';
     campoDoVolume(amb, 'acab-vol-peso').value = '12';
     await amb.painel.confirmarVolume();
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup da senha abriu');
@@ -2911,7 +2997,7 @@ async function semPesoNoErpOVolumeGravaSemConferir() {
     amb.painel.novoVolume('LASER', 200);
     amb.painel.marcarModelo(3004);
     amb.painel.pesarVolume();
-    campoDoVolume(amb, 'acab-vol-qtd-3004').value = '100';
+    campoDaQtd(amb, 3004).value = '100';
     amb.painel.recalcularVolume();
 
     ok(amb.elementos['acab-vol-est'].textContent === 'est. —',
@@ -2932,8 +3018,8 @@ async function modeloSemPesoNoMeioDosOutrosEDenunciado() {
     amb.painel.marcarModelo(3001);
     amb.painel.marcarModelo(3004);
     amb.painel.pesarVolume();
-    campoDoVolume(amb, 'acab-vol-qtd-3001').value = '2000';
-    campoDoVolume(amb, 'acab-vol-qtd-3004').value = '100';
+    campoDaQtd(amb, 3001).value = '2000';
+    campoDaQtd(amb, 3004).value = '100';
     amb.painel.recalcularVolume();
 
     const texto = amb.elementos['acab-vol-est'].textContent;
@@ -2988,6 +3074,341 @@ async function asContasDoPesoEsperadoSaoPuras() {
     await asContasDoPesoEsperadoSaoPuras();
 })();
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  OS PACOTES DENTRO DA CAIXA
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Pedido do usuario em 23/08/2026, em duas mensagens:
+//
+//   "Ao criar o volume, opcao de nomear volume, dentro do mesmo volume,
+//    podemos adicionar varios pacotes, ao adicionar os volumes, volumes
+//    criados a soma de seus pesos vai atualizando o peso real do setor, ao
+//    editar os volumes, mostra os pacotes, quantidades e responsaveis de cada
+//    pacote"
+//
+//   "modelos com mais de 1 volume ao atingir a quantidade total, quando mais
+//    de 1 responsavel mostra no drop responsavel o nome do setor e marca
+//    status como pronto, se todos os pacotes do volume sao mesmo responsavel
+//    marca este como responsavel."
+//
+// O que estes testes travam:
+//   1. a caixa tem nome, e o nome chega ao banco e a tela;
+//   2. dois pacotes do mesmo modelo cabem na mesma caixa, cada um com o seu
+//      responsavel -- e o segundo ja nasce com o que sobrou do primeiro;
+//   3. o peso do setor acompanha a soma das caixas, sozinho, e a regua dos 5 %
+//      compara com o que JA ESTA embalado, e nao com a tiragem inteira;
+//   4. modelo embalado por inteiro fecha sozinho: uma pessoa assina com o
+//      proprio nome, mais de uma assina com o nome do setor;
+//   5. modelo incompleto nao fecha, e Pronto ja dado nao e reescrito.
+
+async function aCaixaGanhaNome() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '5000' },
+                             peso: '9,5', nome: 'Camarote', responsavel: 'Bernardo Farias' });
+
+    ok(amb.banco._volumesDoBanco[0].nome === 'Camarote', 'o nome da caixa vai para o banco',
+       String(amb.banco._volumesDoBanco[0].nome));
+    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('Camarote') !== -1,
+       'e aparece no chip da faixa, ao lado do numero');
+}
+
+async function caixaSemNomeGravaNuloENaoStringVazia() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '5000' },
+                             peso: '9,5', responsavel: 'Bernardo Farias' });
+
+    ok(amb.banco._volumesDoBanco[0].nome === null,
+       'caixa sem nome grava nulo -- string vazia viraria um nome de um espaco',
+       String(amb.banco._volumesDoBanco[0].nome));
+}
+
+async function doisPacotesDoMesmoModeloNaMesmaCaixa() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+
+    // O pacote nasce com a tiragem inteira; parte dela vai para o segundo.
+    campoDaQtd(amb, 3001).value = '3000';
+    amb.painel.adicionarPacote();
+
+    const v = amb.painel._tela.volumeEmEdicao;
+    ok(v.pacotes.length === 2, 'a caixa passou a ter dois pacotes', String(v.pacotes.length));
+    // O DOM falso nao desenha o que o `innerHTML` repintado traria; preencher o
+    // campo a mao e o que o navegador faz sozinho ao redesenhar a linha.
+    amb.documento.getElementById('acab-vol-qtd-1').value = String(v.pacotes[1].qtd);
+    ok(String(v.pacotes[1].modeloId) === '3001',
+       'o segundo e do MESMO modelo -- e o caso do modelo grande repartido');
+    ok(v.pacotes[1].qtd === 2000, 'e ja nasce com o que sobrou do primeiro',
+       String(v.pacotes[1].qtd));
+
+    amb.documento.getElementById('acab-vol-resp-0').value = 'Bernardo Farias';
+    amb.documento.getElementById('acab-vol-resp-1').value = 'Cesar Almeida';
+    amb.documento.getElementById('acab-vol-peso').value = '9,5';
+    amb.documento.getElementById('acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+
+    ok(amb.banco._volumesDoBanco.length === 1, 'uma caixa so',
+       String(amb.banco._volumesDoBanco.length));
+    ok(amb.banco._itensDeVolume.length === 2, 'com dois pacotes dentro dela',
+       String(amb.banco._itensDeVolume.length));
+    const nomes = amb.banco._itensDeVolume.map(i => i.responsavel).sort().join(',');
+    ok(nomes === 'Bernardo Farias,Cesar Almeida', 'cada pacote com o seu responsavel', nomes);
+    const somaDosDois = amb.banco._itensDeVolume.reduce((s, i) => s + i.qtd, 0);
+    ok(somaDosDois === 5000, 'e os dois somam a tiragem', String(somaDosDois));
+}
+
+async function tirarUmPacoteDevolveAQuantidade() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.marcarModelo(3002);
+    amb.painel.pesarVolume();
+    ok(amb.painel._tela.volumeEmEdicao.pacotes.length === 2, 'dois modelos, dois pacotes');
+
+    amb.painel.removerPacote(0);
+    const v = amb.painel._tela.volumeEmEdicao;
+    ok(v.pacotes.length === 1, 'tirar um pacote deixa a caixa com o outro',
+       String(v.pacotes.length));
+    ok(String(v.pacotes[0].modeloId) === '3002', 'e e o que sobrou, nao o que saiu',
+       String(v.pacotes[0].modeloId));
+}
+
+async function caixaSemPacoteNaoGrava() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+    amb.painel.removerPacote(0);
+    amb.documento.getElementById('acab-vol-peso').value = '9,5';
+    await amb.painel.confirmarVolume();
+
+    ok(amb.banco._volumesDoBanco.length === 0, 'caixa vazia nao vira volume no banco');
+    const erro = amb.documento.getElementById('acab-vol-erro').textContent;
+    ok(/pelo menos um pacote/i.test(erro), 'e a janela diz o que falta', erro);
+}
+
+async function oLivreDeCadaPacoteDescontaOsOutros() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+    campoDaQtd(amb, 3001).value = '3000';
+    amb.painel.adicionarPacote();
+    amb.painel.recalcularVolume();
+
+    // P1 leva 3.000 das 5.000; sobram 2.000 para o P2, e nao 5.000.
+    const livreDoSegundo = amb.elementos['acab-vol-livre-1'].textContent;
+    ok(livreDoSegundo.indexOf('2.000 livres') !== -1,
+       'o livre do segundo pacote desconta o que o primeiro tomou', livreDoSegundo);
+
+    // Passar da tiragem e dito, e nao escondido.
+    amb.documento.getElementById('acab-vol-qtd-1').value = '4000';
+    amb.painel.recalcularVolume();
+    ok(amb.elementos['acab-vol-livre-1'].textContent.indexOf('a mais do que a tiragem') !== -1,
+       'e passar da tiragem e denunciado na propria linha',
+       amb.elementos['acab-vol-livre-1'].textContent);
+}
+
+async function editarACaixaMostraPacotesQuantidadesEResponsaveis() {
+    const amb = ambienteDeVolumes();
+    const janelas = capturarJanelas(amb);
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001, 3002],
+                             qtds: { 3001: '5000', 3002: '500' },
+                             pacoteDe: { 3001: 'Bernardo Farias', 3002: 'Cesar Almeida' },
+                             peso: '12,48', nome: 'Camarote', responsavel: 'Bernardo Farias' });
+
+    amb.painel.verVolumes('LASER');
+    const html = janelas.achar('acab-volumes-lista').innerHTML;
+
+    ok(html.indexOf('Camarote') !== -1, 'a lista mostra o nome da caixa');
+    ok(html.indexOf('P1') !== -1 && html.indexOf('P2') !== -1, 'e os pacotes, um a um');
+    ok(html.indexOf('5.000 un') !== -1 && html.indexOf('500 un') !== -1,
+       'cada um com a sua quantidade');
+    ok(html.indexOf('Bernardo Farias') !== -1 && html.indexOf('Cesar Almeida') !== -1,
+       'e com o responsavel de cada pacote');
+
+    // Reabrir para editar traz os pacotes de volta, com nome e responsaveis.
+    const id = amb.banco._volumesDoBanco[0].id;
+    amb.painel.editarVolume(id);
+    const v = amb.painel._tela.volumeEmEdicao;
+    ok(v.nome === 'Camarote', 'editar volta com o nome', v.nome);
+    ok(v.pacotes.length === 2, 'e com os dois pacotes', String(v.pacotes.length));
+    ok(v.pacotes[0].responsavel === 'Bernardo Farias', 'cada um com o seu nome',
+       v.pacotes[0].responsavel);
+}
+
+async function oPesoDoSetorAcompanhaASomaDasCaixas() {
+    const amb = ambienteDeVolumes();
+    amb.janela.caixaConfirmar = { perguntar: () => Promise.resolve(true) };
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '5000' },
+                             peso: '9,5', responsavel: 'Bernardo Farias' });
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 9.5,
+       'a primeira caixa ja escreve o peso do setor',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3002], qtds: { 3002: '500' },
+                             peso: '1,2', responsavel: 'Bernardo Farias' });
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 10.7,
+       'a segunda soma com a primeira, sem ninguem digitar nada',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+
+    // E excluir uma devolve o peso para baixo.
+    const id = amb.banco._volumesDoBanco[0].id;
+    await amb.painel.excluirVolume(id);
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 1.2,
+       'e excluir uma caixa desce o peso do setor junto',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function comMetadeDoSetorEmbaladoNaoHaSenhaAPedir() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+
+    // So 2.000 das 5.000 do 3001. O setor inteiro estima 28,600 kg; esta caixa,
+    // 10,400 kg. Comparar uma coisa com a outra acusaria 64 % de divergencia.
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '2000' },
+                             peso: '10,4', responsavel: 'Bernardo Farias' });
+
+    ok(amb.elementos['acab-liberacao'].style.display !== 'flex',
+       'a regua compara com o que JA ESTA embalado, e nao com a tiragem inteira');
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 10.4,
+       'e o peso parcial entra no setor',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function modeloEmbaladoPorUmSoFechaNoNomeDele() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '5000' },
+                             pacoteDe: { 3001: 'Bernardo Farias' },
+                             peso: '9,5', responsavel: 'Bernardo Farias' });
+
+    const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
+    ok(item.acabamento_responsavel === 'Bernardo Farias',
+       'um responsavel so assina com o proprio nome', String(item.acabamento_responsavel));
+    ok(item.acabamento_status === 'Pronto', 'e o modelo fecha sozinho',
+       String(item.acabamento_status));
+}
+
+async function modeloEmbaladoPorVariosFechaNoNomeDoSetor() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+    campoDaQtd(amb, 3001).value = '3000';
+    amb.painel.adicionarPacote();
+    amb.documento.getElementById('acab-vol-qtd-1').value = '2000';
+    amb.documento.getElementById('acab-vol-resp-0').value = 'Bernardo Farias';
+    amb.documento.getElementById('acab-vol-resp-1').value = 'Cesar Almeida';
+    amb.documento.getElementById('acab-vol-peso').value = '9,5';
+    amb.documento.getElementById('acab-vol-responsavel').value = 'Bernardo Farias';
+    await amb.painel.confirmarVolume();
+
+    const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
+    ok(item.acabamento_responsavel === 'Laser',
+       'duas pessoas no mesmo modelo: quem assina e o SETOR',
+       String(item.acabamento_responsavel));
+    ok(item.acabamento_status === 'Pronto', 'e o modelo fecha do mesmo jeito',
+       String(item.acabamento_status));
+
+    // O seletor do card mostra o nome do setor, mesmo ele nao sendo operador.
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('<option value="Laser" selected>Laser</option>') !== -1,
+       'e o seletor do card mostra "Laser" escolhido');
+}
+
+async function modeloIncompletoNaoFechaSozinho() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    // 3.000 das 5.000: falta material fora de caixa.
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '3000' },
+                             pacoteDe: { 3001: 'Bernardo Farias' },
+                             peso: '6', responsavel: 'Bernardo Farias' });
+
+    const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
+    ok(item.acabamento_status !== 'Pronto',
+       'com material fora de caixa o modelo NAO fecha', String(item.acabamento_status));
+}
+
+async function pacoteSemResponsavelNaoCarimbaNinguem() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+    // O 3001 nao tem responsavel no card, entao o pacote nasce sem nome.
+    const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
+    item.acabamento_responsavel = null;
+
+    await criarVolume(amb, { setor: 'LASER', marcar: [3001], qtds: { 3001: '5000' },
+                             peso: '9,5', responsavel: 'Bernardo Farias' });
+
+    ok(item.acabamento_status !== 'Pronto',
+       'pacote sem dono nao fecha o modelo -- ninguem assinou aquele trabalho',
+       String(item.acabamento_status));
+}
+
+async function asContasDosPacotesSaoPuras() {
+    const r = ambienteDeVolumes().painel._regras;
+    const item = { id: 1, setor: 'LASER', qtd: 100 };
+    const caixa = (...pacotes) => [{ pacotes }];
+
+    const um = r.responsavelPelosPacotes(item, caixa({ modeloId: '1', qtd: 100, responsavel: 'Ana' }));
+    ok(um && um.nome === 'Ana' && um.varios === false, 'um responsavel so assina com o nome dele');
+
+    const dois = r.responsavelPelosPacotes(item, caixa(
+        { modeloId: '1', qtd: 60, responsavel: 'Ana' },
+        { modeloId: '1', qtd: 40, responsavel: 'Bruno' }));
+    ok(dois && dois.nome === 'Laser' && dois.varios === true,
+       'dois responsaveis assinam com o nome do setor', dois && dois.nome);
+
+    const mesmo = r.responsavelPelosPacotes(item, caixa(
+        { modeloId: '1', qtd: 60, responsavel: 'Ana Paula' },
+        { modeloId: '1', qtd: 40, responsavel: 'ana paula' }));
+    ok(mesmo && mesmo.varios === false,
+       'o mesmo nome com caixa diferente continua sendo uma pessoa so');
+
+    ok(r.responsavelPelosPacotes(item, caixa({ modeloId: '1', qtd: 60, responsavel: 'Ana' })) === null,
+       'modelo incompleto nao tem quem assinar');
+    ok(r.responsavelPelosPacotes(item, caixa({ modeloId: '1', qtd: 100, responsavel: '' })) === null,
+       'pacote sem dono tambem nao');
+
+    const meioAnonimo = r.responsavelPelosPacotes(item, caixa(
+        { modeloId: '1', qtd: 60, responsavel: 'Ana' },
+        { modeloId: '1', qtd: 40, responsavel: '' }));
+    ok(meioAnonimo && meioAnonimo.nome === 'Laser',
+       'um pacote sem dono no meio conta como mais uma origem: assina o setor',
+       meioAnonimo && meioAnonimo.nome);
+
+    ok(r.responsavelPelosPacotes(item, []) === null, 'modelo sem pacote nenhum nao fecha');
+    ok(r.responsavelPelosPacotes(null, caixa({ modeloId: '1', qtd: 100, responsavel: 'Ana' })) === null,
+       'e sem modelo nao ha o que decidir');
+
+    // O rotulo do chip.
+    ok(r.rotuloDoVolume({ numero: 3 }) === 'V3', 'caixa sem nome e so o numero');
+    ok(r.rotuloDoVolume({ numero: 3, nome: 'Camarote' }) === 'V3 · Camarote',
+       'com nome, os dois juntos');
+}
+
+
 (async function () {
     await setorSemVolumeSaiComoUmSo();
     await umVolumeLevaVariosModelos();
@@ -3002,7 +3423,24 @@ async function asContasDoPesoEsperadoSaoPuras() {
     await numeroRepetidoDizOQueFazer();
     await aListaDoSetorMostraOQueTemDentro();
     await oPesoQueFechaOSetorJaVemComASoma();
+    await comCaixaPesadaOSetorNaoECobrado();
     await asContasDosVolumesSaoPuras();
+
+    // Os pacotes dentro da caixa (23/08/2026)
+    await aCaixaGanhaNome();
+    await caixaSemNomeGravaNuloENaoStringVazia();
+    await doisPacotesDoMesmoModeloNaMesmaCaixa();
+    await tirarUmPacoteDevolveAQuantidade();
+    await caixaSemPacoteNaoGrava();
+    await oLivreDeCadaPacoteDescontaOsOutros();
+    await editarACaixaMostraPacotesQuantidadesEResponsaveis();
+    await oPesoDoSetorAcompanhaASomaDasCaixas();
+    await comMetadeDoSetorEmbaladoNaoHaSenhaAPedir();
+    await modeloEmbaladoPorUmSoFechaNoNomeDele();
+    await modeloEmbaladoPorVariosFechaNoNomeDoSetor();
+    await modeloIncompletoNaoFechaSozinho();
+    await pacoteSemResponsavelNaoCarimbaNinguem();
+    await asContasDosPacotesSaoPuras();
 })();
 
 (async function () {

@@ -4,7 +4,79 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v700** — 2026-08-23 | Agente **1.2.194**
+## Versão atual: **v702** — 2026-08-23 | Agente **1.2.196**
+
+---
+
+## [v702 — 2026-08-23] — Acabamento: pacotes dentro da caixa, e o modelo que fecha sozinho
+
+Pedido do usuário, em duas mensagens no mesmo dia:
+
+> "Ao criar o volume, opção de nomear volume, dentro do mesmo volume, podemos adicionar vários
+> pacotes, ao adicionar os volumes, volumes criados a soma de seus pesos vai atualizando o peso real
+> do setor, ao editar os volumes, mostra os pacotes, quantidades e responsáveis de cada pacote"
+
+> "modelos com mais de 1 volume ao atingir a quantidade total, quando mais de 1 responsável mostra
+> no drop responsável o nome do setor e marca status como pronto, se todos os pacotes do volume são
+> mesmo responsável marca este como responsável."
+
+### O pacote
+
+O **pacote** é o maço que uma pessoa fecha: um modelo, uma quantidade, um nome. Vários pacotes vão
+para dentro da mesma caixa, e a caixa é o que vai à balança. É esse nível que resolve a primeira
+situação do pedido dos volumes — *"1 modelo grande é realizado por vários responsáveis"*: cada
+pessoa fecha o seu pacote, e a caixa que os reúne é pesada uma vez só.
+
+Na janela de pesar, **`+ Pacote`** acrescenta um maço. Ele nasce do mesmo modelo do anterior, com o
+que sobrou dele. Cada linha tem modelo, quantidade, quem fez, e o "livres" que **desconta as outras
+linhas da mesma janela** — sem isso, dois pacotes do mesmo modelo apareceriam os dois com a tiragem
+inteira disponível e o operador embalaria o dobro. Passar da tiragem não trava: a linha diz
+*"2.000 un a mais do que a tiragem"* em âmbar.
+
+A caixa ganhou **nome** (opcional: "Camarote", "Staff dia 2"), que aparece no chip da faixa e na
+lista do setor. O tipo **"Pacote"** saiu da lista de tipos de volume — uma caixa do tipo "pacote"
+com três pacotes dentro seria confusão garantida na estação. Volume já gravado com aquele tipo não
+o perde.
+
+Em **Ver volumes**, cada caixa mostra agora os seus pacotes um por linha: `P1 · Credencial VIP ·
+3.000 un · 👤 Bernardo Farias`.
+
+### O peso do setor acompanha a soma
+
+A cada caixa gravada — e a cada caixa excluída — a soma dos pesos entra no campo do setor sozinha, e
+a faixa anuncia isso em verde. Continua passando pelo `gravarPeso` de sempre (agente na estação,
+PostgREST no site, senha de liberação acima de 5 %), com uma diferença que importa: **a régua compara
+com o que já está embalado**, e não com a tiragem inteira. Com três das cinco caixas prontas,
+comparar a soma delas com o setor todo acusaria 40 % de divergência num trabalho perfeitamente certo.
+
+Digitar outro número no box continua valendo — é o caso do setor pesado inteiro na balança grande. Aí
+a diferença volta a aparecer em âmbar, dizendo que alguém a digitou à mão, e o botão *"Usar 12,480 kg
+como peso do setor"* é a saída para voltar à soma.
+
+**A exceção do parceiro não se alargou**: `qtd_volumes` e `tipo_volume` continuam sem receber escrita
+nenhuma, e há teste contando quais colunas daquela ficha o painel toca.
+
+### O modelo embalado por inteiro fecha sozinho
+
+Embalar é terminar. Quando o último pacote de um modelo entra numa caixa, o modelo vira **Pronto** sem
+ninguém clicar, e quem assina sai dos pacotes: uma pessoa só assina com o nome dela; duas ou mais
+assinam com **o nome do setor** ("Laser"). Quem fez o quê continua escrito, pacote a pacote, na
+janela do volume.
+
+Quatro limites, cada um por um motivo: o peso entra **antes** do Pronto (o setor não fecha sem peso);
+a trava do peso continua valendo, e o modelo que a esbarra fica para o operador fechar pelo popup de
+sempre; **Pronto já dado não é reescrito**, porque é decisão de alguém; e excluir a caixa desce o peso
+do setor mas **não** desfaz o Pronto. Cada fechamento automático se anuncia num aviso na tela.
+
+### Banco
+
+`sql/pacotes_do_acabamento.sql`, aditivo e idempotente: `producao_volumes.nome`, e no pacote uma
+chave própria (`id`) mais o `responsavel`. A chave era `(volume_id, modelo_id)`, o que proibia
+exatamente o caso pedido. A tabela **não** mudou de nome — renomear quebraria a estação que
+estivesse com o painel da versão anterior aberto na tela.
+
+**Testes:** 639 verificações no harness do acabamento (era 594) e 51 no pytest (era 42), incluindo o
+caminho inteiro num Chrome de verdade.
 
 ---
 
