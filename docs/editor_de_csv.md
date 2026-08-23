@@ -450,34 +450,36 @@ link fica com `#gid=`, e um `gid` explícito é respeitado como escolha delibera
 Em qualquer falha **o banco que já estava carregado permanece**: buscar não
 apaga o que existe antes de ter o substituto em mãos.
 
-### O banco que chega já se apresenta desenhado
+### O banco que chega NÃO desenha nada — a coluna entra quando escolhida
 
-Trazer o banco de dados é só metade do trabalho. Até a v537, depois de buscar ou
-subir um CSV o ticket continuava em branco: apareciam os botões `📊 Pais`,
-`📊 Nome`, `📊 Cargo` e cabia ao operador clicar em cada um. Quem conhece a tela
-sabe; quem não conhece conclui que a busca falhou.
+Regra do usuário, 23/08/2026: *"Ao carregar arquivos .csv ou indicar a url na
+numeração, não deve carregar as colunas na janela de visualização, deve trazer
+para janela apenas quando selecionadas"*.
 
-Hoje `adicionarColunasComoElementos()` cria um campo de texto para cada coluna
-assim que o banco entra — pelo upload, pela busca na web ou pela atualização —, e
-os campos já aparecem no canvas com o dado da primeira linha, prontos para
-arrastar.
+Os três caminhos que trazem um banco — **upload de arquivo**, **busca na web** e
+**🔄 atualizar da planilha** — carregam as linhas e as colunas, e **não põem
+campo nenhum no ticket**. A coluna vai para a janela quando o operador clica no
+botão `📊 Coluna` da barra "Colunas do Banco de Dados (CSV)", que é a única porta
+por onde ela entra (`addCsvColumnElement`).
 
-Duas regras sustentam isso sem atrapalhar quem já trabalhou na numeração:
+**Por que isso precisou de um substituto.** Entre a v537 e a v698 valia o
+contrário: `adicionarColunasComoElementos()` desenhava um campo por coluna assim
+que o banco entrava. A razão era boa — o canvas vazio depois do upload fica igual
+ao de antes dele, e quem não conhece a tela conclui que a busca falhou. Essa
+razão continua de pé, então a criação automática não saiu sozinha: o que responde
+a mesma pergunta agora é a **tela dizendo o passo seguinte**, em dois lugares:
 
-- **Só entra coluna sem elemento.** Reabrir, trocar o arquivo ou atualizar pela
-  planilha nunca duplica um campo que já existe, e **nunca move** um campo que o
-  operador já posicionou. Coluna nova que a planilha ganhou entra abaixo do campo
-  de banco mais baixo.
-- **A distribuição respeita o formato.** Com o ticket ainda sem nenhum campo de
-  banco, o bloco nasce centrado na altura, com passo entre 5 mm e 9 mm conforme
-  couber; os campos ficam presos entre 1 mm e `altura − 1`, então uma planilha de
-  muitas colunas aperta mas não sai do ticket. Sem formato conhecido, passo fixo
-  de 7 mm a partir de x = 5.
+- no aviso do upload e da busca (`CONVITE_DAS_COLUNAS`): *"Clique numa coluna
+  abaixo para pô-la no ticket."*;
+- dentro da barra de colunas (`#num-csv-columns-recado`), que muda conforme o
+  estado: *"Nenhuma coluna está no ticket ainda — clique na que você quer
+  imprimir"* enquanto não houver campo de banco, e *"Clique numa coluna para pôr
+  mais um campo no ticket"* depois do primeiro.
 
-O efeito colateral aceito: uma numeração que tenha sido esvaziada de propósito
-volta a receber os campos ao trocar o banco. Guardar a intenção de "não quero
-nenhum campo" custaria uma coluna no banco de dados, e apagar três elementos é
-mais barato do que descobrir sozinho que eles deveriam existir.
+Tirar a criação automática sem esses dois recados traria de volta exatamente o
+problema que a v537 resolveu. Há teste travando os dois
+(`tests/test_colunas_so_quando_escolhidas.py`).
+
 
 ### O vínculo com a planilha
 

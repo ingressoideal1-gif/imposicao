@@ -556,6 +556,12 @@
                         </div>
                         <div id="num-csv-columns-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">📊</span> Colunas do Banco de Dados (CSV)</span>
+                            <!-- Carregar o banco NAO poe campo nenhum no ticket desde
+                                 23/08/2026 (regra do usuario). Este recado e o que
+                                 responde a pergunta que a criacao automatica respondia
+                                 antes: o CSV chegou, e o passo seguinte e escolher a
+                                 coluna. Preenchido por renderNumCsvInterface(). -->
+                            <div id="num-csv-columns-recado" style="font-size:0.75rem; color:var(--text-dim); margin-bottom:8px;"></div>
                             <div class="add-elements-bar" id="num-csv-columns-bar">
                                 <!-- Botões dinâmicos de colunas do CSV serão inseridos aqui -->
                             </div>

@@ -11802,13 +11802,11 @@ async function handleNumCsvSelected() {
 
             
 
-            const campos = adicionarColunasComoElementos(headers);
-
             renderNumCsvInterface();
 
             toast(`${rows.length} linha(s) e ${headers.length} coluna(s).`
 
-                + fraseDosCampos(campos), 'success');
+                + CONVITE_DAS_COLUNAS, 'success');
 
         } catch (e) {
 
@@ -11893,110 +11891,20 @@ window.clearNumCsvFile = function() {
 
 
 /**
- * Poe no ticket um campo para cada coluna do banco que ainda nao tem elemento.
+ * O convite que substitui a criacao automatica de campos.
  *
- * Trazer um banco de dados e so a metade do trabalho: sem elemento nenhum o
- * canvas continua vazio, e nada indica que o CSV chegou. Quem ja conhece a tela
- * sabe que precisa clicar nos botoes "📊 Coluna"; quem esta comecando conclui
- * que a busca falhou. Entao o banco que chega ja se apresenta desenhado, e o
- * operador arrasta o que quiser para o lugar.
+ * Ate a v699 o banco que chegava ja desenhava um campo por coluna no ticket
+ * (`adicionarColunasComoElementos`). O usuario mandou tirar isso em 23/08/2026:
+ * carregar o banco nao poe nada na janela; a coluna so vai para o ticket quando
+ * ele a escolhe, clicando nela.
  *
- * So entram colunas SEM elemento: reabrir, trocar o arquivo ou atualizar pela
- * planilha nunca duplica um campo que ja esta posicionado, e nunca mexe em onde
- * o operador ja o deixou. Numeracao antiga que tenha sido esvaziada de proposito
- * volta a receber os campos ao trocar o banco — o preco de nao guardar a
- * intencao de "nao quero nenhum", que nao vale uma coluna no banco de dados.
- *
- * Devolve quantos campos foram criados.
+ * A razao que fez a criacao automatica nascer continua valendo, e por isso ela
+ * nao some sem substituto: sem campo nenhum, o canvas fica igual ao de antes do
+ * upload, e quem nao conhece a tela conclui que a busca falhou. O que responde
+ * isso agora e a tela dizendo o passo seguinte — este convite no aviso, e o
+ * mesmo recado dentro da barra "Colunas do Banco de Dados (CSV)".
  */
-function adicionarColunasComoElementos(headers, semCampo) {
-
-    const jaTem = new Set((state.numElements || [])
-
-        .filter(el => el && el.source === 'database' && el.csv_column)
-
-        .map(el => el.csv_column));
-
-    const novas = (headers || []).filter(h => h && h !== semCampo && !jaTem.has(h));
-
-    if (!novas.length) return 0;
-
-    const altura = state.numFormato ? Number(state.numFormato.height_mm) || 0 : 0;
-
-    const largura = state.numFormato ? Number(state.numFormato.width_mm) || 0 : 0;
-
-    // Passo entre as linhas: nunca tao junto que os campos se cubram, nunca tao
-    // largo que estourem o ticket. Sem formato conhecido, um passo fixo.
-    const passo = altura
-
-        ? Math.max(5, Math.min(9, altura / (novas.length + 1)))
-
-        : 7;
-
-    // A base de onde comecar: com o ticket ainda sem campo de banco, o bloco
-    // nasce centrado na altura; com campos ja postos, os novos entram embaixo do
-    // mais baixo deles, para nao cair por cima do trabalho ja feito.
-    let base;
-
-    if (jaTem.size) {
-
-        let maisBaixo = 0;
-
-        for (const el of (state.numElements || [])) {
-
-            const y = Number(el && el.y_mm);
-
-            if (el && el.source === 'database' && Number.isFinite(y) && y > maisBaixo) maisBaixo = y;
-
-        }
-
-        base = maisBaixo + passo;
-
-    } else {
-
-        base = altura ? (altura - passo * (novas.length - 1)) / 2 : passo;
-
-    }
-
-    const centroX = largura ? largura / 2 : 5;
-
-    for (let i = 0; i < novas.length; i++) {
-
-        addCsvColumnElement(novas[i]);
-
-        const el = state.numElements[state.numElements.length - 1];
-
-        if (!el) continue;
-
-        el.x_mm = +centroX.toFixed(1);
-
-        const y = base + passo * i;
-
-        el.y_mm = +(altura ? Math.max(1, Math.min(altura - 1, y)) : y).toFixed(1);
-
-    }
-
-    renderElementsList();
-
-    drawCanvas();
-
-    return novas.length;
-
-}
-
-
-
-/** "3 campos" / "1 campo", para caber na mesma frase sem parecer robo. */
-function fraseDosCampos(n) {
-
-    if (!n) return '';
-
-    return n === 1 ? ' 1 campo já no ticket para posicionar.'
-
-        : ` ${n} campos já no ticket para posicionar.`;
-
-}
-
+const CONVITE_DAS_COLUNAS = ' Clique numa coluna abaixo para pô-la no ticket.';
 
 
 /**
@@ -12072,9 +11980,22 @@ function renderNumCsvInterface() {
 
             + state.numCsvHeaders.map(col => `
 
-            <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Adicionar como texto variável">📊 ${col}</button>
+            <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Pôr esta coluna no ticket, como texto variável">📊 ${col}</button>
 
         `).join('');
+
+        // O passo seguinte dito na própria tela. Desde 23/08/2026 o banco que
+        // chega não desenha campo nenhum (regra do usuário), e sem esta linha o
+        // canvas vazio depois do upload parece uma busca que falhou.
+        const recado = document.getElementById('num-csv-columns-recado');
+
+        if (recado) {
+
+            recado.textContent = state.numElements && state.numElements.some(el => el && el.source === 'database')
+                ? 'Clique numa coluna para pôr mais um campo no ticket.'
+                : 'Nenhuma coluna está no ticket ainda — clique na que você quer imprimir.';
+
+        }
 
     } else if (container) {
 
@@ -12551,17 +12472,13 @@ window.buscarCsvDaWeb = async function() {
         // numeracao meses depois.
         state.numCsvUrl = link;
 
-        // A coluna que diz a pagina de origem e nossa, nao da planilha: ela
-        // serve para filtrar e repartir, e nao para ser impressa no ticket.
-        const campos = adicionarColunasComoElementos(headers, res.colunaPagina);
-
         renderNumCsvInterface();
 
         toast(
 
             `${rows.length} linha(s) e ${headers.length} coluna(s) `
 
-            + `de "${filename}".` + fraseDasPaginas(res) + fraseDosCampos(campos)
+            + `de "${filename}".` + fraseDasPaginas(res) + CONVITE_DAS_COLUNAS
 
             + ' Salve a numeração para gravar.',
 
@@ -12713,17 +12630,13 @@ window.atualizarCsvDaPlanilha = async function() {
 
         state.numCsvUrl = link;
 
-        // Coluna que a planilha ganhou desde a ultima vez entra como campo novo;
-        // as que ja tem elemento ficam onde o operador as deixou.
-        const campos = adicionarColunasComoElementos(headers, res.colunaPagina);
-
         renderNumCsvInterface();
 
         toast(
 
             `Banco atualizado: ${rows.length} linha(s), ${herdadas} mantendo a `
 
-            + 'identidade que já tinham.' + fraseDasPaginas(res) + fraseDosCampos(campos)
+            + 'identidade que já tinham.' + fraseDasPaginas(res)
 
             + ' Salve a numeração para gravar.',
 

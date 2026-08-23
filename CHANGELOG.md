@@ -4,7 +4,32 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v699** — 2026-08-23 | Agente **1.2.193**
+## Versão atual: **v700** — 2026-08-23 | Agente **1.2.194**
+
+---
+
+## [v700 — 2026-08-23] — O banco que chega não desenha nada: a coluna entra quando escolhida
+
+Regra do usuário: *"Ao carregar arquivos .csv ou indicar a url na numeração, não deve carregar as
+colunas na janela de visualização, deve trazer para janela apenas quando selecionadas"*.
+
+Os três caminhos que trazem um banco — **upload de arquivo**, **busca na web** e **🔄 atualizar da
+planilha** — passam a carregar as linhas e as colunas **sem pôr campo nenhum no ticket**. A coluna vai
+para a janela quando o operador clica no botão `📊 Coluna`, que é a única porta por onde ela entra.
+
+Entre a v537 e a v698 valia o contrário: o banco que chegava desenhava um campo por coluna. A razão
+era que o canvas vazio depois do upload fica igual ao de antes dele, e quem não conhece a tela conclui
+que a busca falhou. **Essa razão continua de pé**, então a criação automática não saiu sozinha — a
+tela passou a dizer o passo seguinte, no aviso (*"Clique numa coluna abaixo para pô-la no ticket"*) e
+dentro da barra de colunas, que muda conforme o estado: *"Nenhuma coluna está no ticket ainda —
+clique na que você quer imprimir"* enquanto não houver campo, e *"Clique numa coluna para pôr mais um
+campo no ticket"* depois do primeiro.
+
+Conferido no navegador: com o CSV carregado o ticket fica com **zero** elementos e as quatro colunas
+aparecem como botões; um clique em `CODIGO` põe **um** campo, só o dele.
+
+Testes: `tests/test_colunas_so_quando_escolhidas.py` — a função da criação automática não existe mais,
+nenhum dos três caminhos chama a porta de entrada da coluna, e os dois recados estão na tela (4 testes).
 
 ---
 
