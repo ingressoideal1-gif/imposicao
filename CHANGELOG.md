@@ -8,7 +8,61 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v702 — 2026-08-23] — Acabamento: pacotes dentro da caixa, e o modelo que fecha sozinho
+## [v702 — 2026-08-23] — Quadro de Avisos nos painéis, e os pacotes dentro da caixa do acabamento
+
+### Quadro de Avisos: uma barra na base do painel, por setor
+
+Pedido do usuário: *"um quadro de avisos que vai aparecer no Painel de Produção e Painel de
+Acabamento, uma barra flutuante na base da página, teremos uma barra para cada painel para cada setor
+(atualmente 8 barras), será gerenciada no menu ADM, aba Avisos, será para visualização de um aviso e
+com um drop para os usuários marcarem seus nomes confirmando a leitura"*.
+
+**Os oito quadros não se cadastram.** Um quadro é o par (painel, setor) — os quatro setores da
+gráfica vezes os dois painéis. O que se publica e se tira do ar é o **aviso** que está nele; quadro
+sem aviso não desenha nada, e o painel fica exatamente como era. O estado normal da gráfica é a
+maioria dos setores sem recado nenhum, e esse estado não podia custar cadastro.
+
+**A barra segue o filtro de setor do painel** — nenhum aceso, mostra os do painel inteiro; vários
+acesos, soma os deles. Com mais de um aviso na fila ela mostra um por vez, com setas, e o urgente
+assume o topo mesmo sendo mais antigo. Ela lê o filtro pelas **pílulas da tela**, e não pelo estado
+interno de nenhum dos dois painéis: a Produção guarda em `state.filtroSetores`, o Acabamento num
+`tela` fechado, e as pílulas são o único terreno comum — a mesma fonte que a lista embaixo já usa.
+
+**A confirmação de leitura** é um dropdown com os operadores do acesso local com o perfil daquele
+painel (`impressor` na Produção, `acabamento` no Acabamento) — a mesma lista, e a mesma regra, do
+seletor de Responsável do Acabamento. Tocar no próprio nome grava a leitura com a hora. A marca
+aparece antes de o banco responder, e é desfeita se ele recusar; dois toques não viram duas leituras
+(a chave `(aviso_id, nome)` é a trava, e o conflito que ela devolve não é tratado como erro); quem
+leu e depois perdeu o acesso local continua na lista, porque a leitura é um fato datado.
+
+**No ADM, a aba 📢 Avisos** mostra os oito quadros numa grade e o editor de cada um, com o texto, a
+prioridade, o prazo e quem já leu. Trocar o texto marcando *"pedir a confirmação de novo"* publica um
+aviso **novo** e manda o antigo para o histórico com as leituras dele intactas — sem isso, "quem foi
+avisado" passaria a responder pelo recado errado. Desmarcado, corrige no lugar.
+
+**Duas coisas de tela que custaram atenção.** O `.toast-container` nasce no mesmo canto de baixo, a
+24 px da base, e o operador o procura ali: em vez de movê-lo, a barra publica a própria altura em
+`--avisos-altura` e o toast se apoia nela. E o menu lateral muda de natureza no 1024 px — gaveta
+abaixo dele, encolhido no fluxo acima —, então a barra tem os dois casos.
+
+Urgente pinta a barra de vermelho e **não deixa recolher** antes de alguém confirmar; a seta fica
+apagada, com o motivo no título, em vez de sumir. Aviso com prazo vencido some sozinho da barra e
+continua no ADM.
+
+Nada disso derruba o painel: toda consulta falha para dentro, e sem banco ou sem tabela a barra não
+aparece. A única tela que diz o que houve é o ADM, que manda rodar
+`sql/avisos_dos_paineis.sql` — é lá que está quem pode resolver.
+
+> ⚠️ **Antes de usar**: rode `sql/avisos_dos_paineis.sql` no editor SQL do Supabase. Enquanto as
+> tabelas não existirem, a barra simplesmente não aparece.
+
+Testes: `tests/avisos_harness.js` (61 verificações, o módulo inteiro num DOM de mentira),
+`tests/avisos_na_tela_harness.js` (7, num Chrome de verdade, medindo que o toast sai de cima do
+recado) e `tests/test_avisos_do_painel.py`. Documentação em `docs/avisos_dos_paineis.md`.
+
+---
+
+### Acabamento: pacotes dentro da caixa, e o modelo que fecha sozinho
 
 Pedido do usuário, em duas mensagens no mesmo dia:
 
@@ -20,7 +74,7 @@ Pedido do usuário, em duas mensagens no mesmo dia:
 > no drop responsável o nome do setor e marca status como pronto, se todos os pacotes do volume são
 > mesmo responsável marca este como responsável."
 
-### O pacote
+#### O pacote
 
 O **pacote** é o maço que uma pessoa fecha: um modelo, uma quantidade, um nome. Vários pacotes vão
 para dentro da mesma caixa, e a caixa é o que vai à balança. É esse nível que resolve a primeira
@@ -41,7 +95,7 @@ o perde.
 Em **Ver volumes**, cada caixa mostra agora os seus pacotes um por linha: `P1 · Credencial VIP ·
 3.000 un · 👤 Bernardo Farias`.
 
-### O peso do setor acompanha a soma
+#### O peso do setor acompanha a soma
 
 A cada caixa gravada — e a cada caixa excluída — a soma dos pesos entra no campo do setor sozinha, e
 a faixa anuncia isso em verde. Continua passando pelo `gravarPeso` de sempre (agente na estação,
@@ -56,7 +110,7 @@ como peso do setor"* é a saída para voltar à soma.
 **A exceção do parceiro não se alargou**: `qtd_volumes` e `tipo_volume` continuam sem receber escrita
 nenhuma, e há teste contando quais colunas daquela ficha o painel toca.
 
-### O modelo embalado por inteiro fecha sozinho
+#### O modelo embalado por inteiro fecha sozinho
 
 Embalar é terminar. Quando o último pacote de um modelo entra numa caixa, o modelo vira **Pronto** sem
 ninguém clicar, e quem assina sai dos pacotes: uma pessoa só assina com o nome dela; duas ou mais
@@ -68,7 +122,7 @@ a trava do peso continua valendo, e o modelo que a esbarra fica para o operador 
 sempre; **Pronto já dado não é reescrito**, porque é decisão de alguém; e excluir a caixa desce o peso
 do setor mas **não** desfaz o Pronto. Cada fechamento automático se anuncia num aviso na tela.
 
-### Banco
+#### Banco
 
 `sql/pacotes_do_acabamento.sql`, aditivo e idempotente: `producao_volumes.nome`, e no pacote uma
 chave própria (`id`) mais o `responsavel`. A chave era `(volume_id, modelo_id)`, o que proibia

@@ -174,7 +174,9 @@ Testes: [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seçõe
 | `imposition_acessos_locais` | Códigos de acesso local das estações da gráfica | ✅ Criado |
 | `imposition_segredos` | Segredos do painel (plano B dos *Edge Secrets*). Desde 21/08/2026 guarda também `PESO_LIBERACAO_SEGREDO`, de onde sai a senha semanal de liberação de peso do Acabamento — sorteado dentro do banco, nunca passou por arquivo | ✅ Criado |
 | `imposition_tempo_no_card` | Há quanto tempo cada pedido está no card da Lista de Arte | ✅ Criado 19/08/2026 |
-| `imposition_operadores` | **View** — só os nomes dos acessos locais, para o seletor de responsável do Painel do Acabamento | ✅ Criado 20/08/2026 |
+| `imposition_operadores` | **View** — só os nomes dos acessos locais, para o seletor de responsável do Painel do Acabamento **e para o dropdown de confirmação do Quadro de Avisos** | ✅ Criado 20/08/2026 |
+| `imposition_avisos` | O aviso de cada um dos oito quadros (4 setores × 2 painéis) da barra flutuante dos painéis | ✅ Criado 23/08/2026 |
+| `imposition_avisos_leituras` | Quem confirmou a leitura de cada aviso, com a hora | ✅ Criado 23/08/2026 |
 
 > [!IMPORTANT]
 > `imposition_user_permissions` tem **uma coluna por permissão**. Enviar uma coluna
@@ -188,6 +190,13 @@ Testes: [`tests/acabamento_harness.js`](../tests/acabamento_harness.js), seçõe
 > destranca uma estação da gráfica; quem precisa dele continua passando pela rota
 > `/api/acessos-locais`, que exige o módulo Usuários. Ver
 > [`painel_do_acabamento.md`](painel_do_acabamento.md).
+
+As duas tabelas do **Quadro de Avisos** têm política de `public`, e não de
+`authenticated`: quem lê o aviso e confirma a leitura é a estação da gráfica, que
+entra pelo código de acesso local e não tem sessão do Supabase. É a mesma decisão
+de `producao_volumes`. O SQL está em
+[`sql/avisos_dos_paineis.sql`](../sql/avisos_dos_paineis.sql) e a tela em
+[`avisos_dos_paineis.md`](avisos_dos_paineis.md).
 
 `imposition_tempo_no_card` guarda só o **carimbo de hora** da última troca de card;
 o card em si é calculado no painel por `classificarPedidoNaArte`. O SQL está em

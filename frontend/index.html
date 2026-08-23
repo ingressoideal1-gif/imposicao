@@ -3159,6 +3159,13 @@
                         margin-bottom: -2px; border-radius: 6px 6px 0 0;
                         transition: all .2s;
                     ">🧩 Aproveitamento</button>
+                    <button class="adm-tab-btn" data-adm-tab="avisos" onclick="switchAdmTab('avisos')" style="
+                        background: none; border: none; cursor: pointer;
+                        padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
+                        color: var(--text-dim); border-bottom: 2.5px solid transparent;
+                        margin-bottom: -2px; border-radius: 6px 6px 0 0;
+                        transition: all .2s;
+                    ">📢 Avisos</button>
                     <!-- Futuras abas serão adicionadas aqui -->
                 </div>
 
@@ -3209,6 +3216,11 @@
                     </div>
 
                 </div>
+
+                <!-- ── ABA: AVISOS ─────────────────────────────────────────── -->
+                <!-- Os oito quadros (4 setores x 2 paineis) e o editor de cada
+                     um. Preenchido por AvisosPainel.renderAdm(). -->
+                <div id="adm-tab-avisos" class="adm-tab-content" style="display:none;"></div>
 
                 <!-- ── ABA: IMAGENS ────────────────────────────────────────── -->
                 <div id="adm-tab-imagens" class="adm-tab-content">
@@ -3346,6 +3358,12 @@
         </main>
     </div>
 
+    <!-- QUADRO DE AVISOS: a barra flutuante na base do Painel de Producao e do
+         Painel do Acabamento. Fica FORA das views de proposito — ela e uma so,
+         posicionada contra a janela, e o avisos.js a mostra ou esconde conforme
+         o painel aberto. Vazia ate la. -->
+    <div id="barra-avisos" class="barra-avisos" style="display: none;"></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3372,6 +3390,7 @@
     <script src="criador-arte.js?v=701"></script>
     <script src="/pedido.js?v=701"></script>
     <script src="acabamento.js?v=701"></script>
+    <script src="avisos.js?v=701"></script>
 
 
 

@@ -513,6 +513,35 @@ input[type="color"].form-control {
 .badge-green  { background: rgba(34,197,94,0.12);       color: var(--green); }
 .badge-red    { background: rgba(239,68,68,0.1);        color: var(--red); }
 
+
+/* ─── Quadro de Avisos ───────────────────────────────────────────────────────
+ *
+ * A barra flutuante na base do Painel de Producao e do Painel do Acabamento
+ * (23/08/2026). Ela e UMA so, mora fora das views e e posicionada contra a
+ * janela — o `avisos.js` a mostra ou esconde conforme o painel aberto.
+ *
+ * O `left` acompanha o menu lateral, que muda de natureza no 1024px: abaixo
+ * disso ele e uma gaveta fora da tela, e a barra usa a largura inteira; a
+ * partir dali ele fica no fluxo, encolhido em `--sidebar-w-collapsed`, e so
+ * cresce no hover. O `z-index` fica ABAIXO do 1001 do menu aberto de proposito:
+ * quem passa o mouse no menu esta indo a outra tela, e o menu deve vencer.
+ */
+.barra-avisos {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 900;
+}
+
+@media (min-width: 1024px) {
+    .barra-avisos {
+        left: calc(var(--sidebar-w-collapsed) + 20px);
+        right: 20px;
+        bottom: 18px;
+    }
+}
+
 /* ─── File Drop ─────────────────────────────────────────────────────────────── */
 .file-drop {
     border: 2px dashed var(--border);
@@ -882,7 +911,12 @@ input[type="color"].element-card-fields .form-control,
 /* ─── Toast Notification ────────────────────────────────────────────────────── */
 .toast-container {
     position: fixed;
-    bottom: 24px;
+    /* Sobe quando o Quadro de Avisos esta na tela. A barra de avisos nasce no
+       mesmo canto e cairia por cima do recado; em vez de mover o toast para
+       outro lugar — ele esta ali desde sempre e o operador o procura ali —, o
+       `avisos.js` publica a propria altura em `--avisos-altura` e o toast se
+       apoia nela. Sem barra, a variavel nao existe e o valor volta a ser 24px. */
+    bottom: calc(24px + var(--avisos-altura, 0px));
     right: 24px;
     display: flex;
     flex-direction: column;
