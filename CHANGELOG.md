@@ -4,7 +4,33 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v696** — 2026-08-23 | Agente **1.2.190**
+## Versão atual: **v697** — 2026-08-23 | Agente **1.2.191**
+
+---
+
+## [v697 — 2026-08-23] — Lista de Arte: Pedidos Concluídos sai do mais novo ao mais antigo
+
+Pedido do usuário: *"Na lista de arte, no card Pedidos concluídos, listar os pedidos do mais novo ao
+mais antigo"*.
+
+Os cards da Lista de Arte são fila de trabalho, e neles o topo é do pedido **mais parado** — regra de
+19/08/2026, porque é ele que precisa de atenção. **🏆 Pedidos Concluídos é outra coisa**: é
+histórico. Não há nada a fazer ali, e quem abre quer ver o que acabou de sair. Agora ele sai do mais
+novo ao mais antigo, e os outros quatro cards seguem exatamente como estavam.
+
+"Mais novo" ali é o **número do pedido**, que cresce com o tempo. De propósito não é o relógio dos
+cards: ele só existe desde 19/08/2026 e carimba `desde = agora` na primeira vez que vê um pedido, de
+modo que todo o histórico anterior nasceu com a mesma data e sairia empatado. Pedido sem número vai
+para o fim, em vez de virar zero e encabeçar a lista.
+
+A regra está presa à **base** dos concluídos, e não ao card aceso: com um filtro de estágio ligado o
+card continua aceso mas a lista já é outra, e ali vale a ordem da fila de trabalho.
+
+Testes: `tests/tempo_no_card_harness.js` — a ordem decrescente, a lista de origem intacta, o pedido
+sem número no fim, a lista vazia, a independência do relógio e a marcação na escolha da base; a regra
+antiga dos outros cards continua travada logo acima (68 verificações). Conferido também no navegador:
+com o card aceso a lista sai 21085, 21002, 20951, 20872, 20500, e a fila de aprovação continua na
+ordem de antes.
 
 ---
 

@@ -138,9 +138,24 @@ O relógio anda sozinho a cada 30 segundos por `atualizarRelogiosDaLista()`, que
 mexe **só** no texto e na cor das células `td.celula-tempo` — redesenhar a lista
 fecharia menu aberto e perderia a rolagem de quem estivesse lendo.
 
-**O pedido de maior tempo fica no topo**, em cada card. A ordenação é feita pelo
-instante de início: quanto mais antigo, mais tempo. Pedido ainda sem relógio vai
-para o fim, e o desempate continua sendo o número maior primeiro.
+**O pedido de maior tempo fica no topo**, nos cards de trabalho. A ordenação é
+feita pelo instante de início: quanto mais antigo, mais tempo. Pedido ainda sem
+relógio vai para o fim, e o desempate continua sendo o número maior primeiro.
+
+**Menos em 🏆 Pedidos Concluídos**, que sai **do mais novo ao mais antigo**
+(pedido do usuário, 23/08/2026). Aquele card é histórico, não fila: não há nada
+a fazer nele, e quem o abre quer ver o que acabou de sair — enquanto nas filas o
+topo é do pedido mais parado, porque é ele que precisa de atenção.
+
+"Mais novo" ali é o **número do pedido**, que cresce com o tempo
+(`ordenarConcluidosDoMaisNovo`). De propósito não é o relógio dos cards: ele só
+existe desde 19/08/2026 e carimba `desde = agora` na primeira vez que vê um
+pedido, então todo o histórico anterior nasceu com a mesma data e sairia
+empatado. Pedido sem número vai para o fim, em vez de virar zero e encabeçar.
+
+A regra está presa à **base** dos concluídos (`listaEhDosConcluidos`), e não ao
+card aceso: com um filtro de estágio ligado o card continua aceso mas a lista já
+é outra, e ali vale a ordem da fila de trabalho.
 
 ---
 

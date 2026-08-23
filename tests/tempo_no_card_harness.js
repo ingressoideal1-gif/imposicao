@@ -286,6 +286,44 @@ function comPedidoEmArteDesde(state, quando) {
         'e quem ainda nao tem relogio vai para o fim, em vez de para o topo');
 })();
 
+// ─── Menos o card dos CONCLUIDOS, que e historico ────────────────────────────
+//
+// Pedido do usuario em 23/08/2026: "Na lista de arte, no card Pedidos
+// concluidos, listar os pedidos do mais novo ao mais antigo". Nas filas o topo e
+// do pedido mais parado, porque e ele que precisa de atencao; ali nao ha nada a
+// fazer, e quem abre quer ver o que acabou de sair.
+
+(function osConcluidosSaemDoMaisNovo() {
+    const i = SCRIPT.indexOf('\nfunction ordenarConcluidosDoMaisNovo(');
+    ok(i > 0, 'a ordem dos concluidos mora numa funcao propria');
+    const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i) + 2);
+    const ordenar = new Function(corpo + '\nreturn ordenarConcluidosDoMaisNovo;')();
+
+    const lista = [{ numero: '20951' }, { numero: '21085' }, { numero: '20872' }];
+    ok(ordenar(lista).map(o => o.numero).join(',') === '21085,20951,20872',
+        'o pedido de numero maior -- o mais novo -- abre a lista',
+        ordenar(lista).map(o => o.numero));
+
+    ok(lista.map(o => o.numero).join(',') === '20951,21085,20872',
+        'e a lista de origem nao e reordenada');
+
+    const comBuraco = ordenar([{ numero: '5' }, { numero: '' }, { numero: '9' }, {}]);
+    ok(comBuraco.map(o => o.numero || '-').join(',') === '9,5,-,-',
+        'pedido sem numero vai para o fim, em vez de virar zero e encabecar', comBuraco);
+
+    ok(ordenar(null).length === 0 && ordenar([]).length === 0, 'lista vazia nao quebra');
+
+    // De proposito NAO usa o relogio dos cards: ele so existe desde 19/08/2026 e
+    // carimba `desde = agora` na primeira vez que ve um pedido, entao todo o
+    // historico anterior nasceu com a mesma data e sairia empatado.
+    ok(corpo.indexOf('inicioDoTempoNoCard') < 0, 'a ordem dos concluidos nao depende do relogio');
+
+    // E a regra esta presa a BASE dos concluidos, nao ao card aceso: com um
+    // filtro de estagio ligado o card continua aceso e a base ja e outra.
+    ok(/listaEhDosConcluidos = true;/.test(SCRIPT) && /if \(listaEhDosConcluidos\) \{/.test(SCRIPT),
+        'a lista dos concluidos e marcada onde a base e escolhida');
+})();
+
 (function oRelogioAndaSemRedesenharATabela() {
     // Redesenhar a lista a cada meio minuto fecharia menu aberto e perderia a
     // rolagem de quem estivesse lendo.

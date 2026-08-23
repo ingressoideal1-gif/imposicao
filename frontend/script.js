@@ -22925,6 +22925,35 @@ function inicioDoTempoNoCard(os) {
 }
 window.inicioDoTempoNoCard = inicioDoTempoNoCard;
 
+/**
+ * A lista do card PEDIDOS CONCLUÍDOS, do mais novo ao mais antigo.
+ *
+ * Pedido do usuário em 23/08/2026, e só para esse card. Os outros da Lista de
+ * Arte são fila de trabalho — neles o topo é do pedido mais parado, porque é
+ * ele que precisa de atenção. Concluídos é histórico: não há nada a fazer ali, e
+ * quem abre quer ver o que acabou de sair.
+ *
+ * "Mais novo" é o NÚMERO do pedido, que cresce com o tempo. De propósito não é o
+ * relógio dos cards (`inicioDoTempoNoCard`): ele só existe desde 19/08/2026 e
+ * carimba `desde = agora` na primeira vez que vê um pedido, então todo o
+ * histórico anterior nasceu com a mesma data e sairia empatado.
+ *
+ * Pedido sem número vai para o fim, em vez de virar zero e encabeçar a lista.
+ */
+function ordenarConcluidosDoMaisNovo(lista) {
+    return (lista || []).slice().sort((a, b) => {
+        const na = parseInt(a && a.numero);
+        const nb = parseInt(b && b.numero);
+        const va = isNaN(na) ? null : na;
+        const vb = isNaN(nb) ? null : nb;
+        if (va === null && vb === null) return 0;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return vb - va;
+    });
+}
+window.ordenarConcluidosDoMaisNovo = ordenarConcluidosDoMaisNovo;
+
 /** "01:05". Passando de um dia continua em horas ("26:30"), sem virar "2d 2h". */
 function formatarTempoNoCard(segundos) {
     const s = Math.max(0, Math.floor(segundos || 0));
@@ -23235,6 +23264,7 @@ function renderOrdens() {
     // Seleção da fila ativa ('fila', 'todos', 'aprovacao' ou 'aprovados')
     const activeFilaTipo = state.filtroFilaTipo || 'fila';
     let baseOrdensArte = ordensFilaArte;
+    let listaEhDosConcluidos = false;
 
 
     if (state.filtroStatusArte === 'Aprovada') {
@@ -23244,6 +23274,10 @@ function renderOrdens() {
         baseOrdensArte = [...ordensFilaArte, ...ordensAprovacao, ...ordensAprovados];
     } else if (activeFilaTipo === 'concluidos') {
         baseOrdensArte = ordensConcluidosArte;
+        // A lista dos concluídos tem ordem própria, lá embaixo. Marcado AQUI, e
+        // não pelo card ativo: com um filtro de estágio ligado o card continua
+        // aceso, mas a base já é outra — e ali vale a ordem da fila de trabalho.
+        listaEhDosConcluidos = true;
     } else if (activeFilaTipo === 'aprovados') {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
@@ -23376,20 +23410,34 @@ function renderOrdens() {
         return true;
     });
 
-    // O pedido de MAIOR tempo no card assume o topo — pedido do usuário em
-    // 19/08/2026. Ordena pelo instante de início: quanto mais antigo, mais
-    // tempo. Pedido ainda sem relógio (a tabela não existe, ou é a primeira vez
-    // que ele aparece) vai para o fim, e o desempate continua sendo o número
-    // maior primeiro, que era a ordem da lista até aqui.
-    filteredArte = filteredArte.slice().sort((a, b) => {
-        const ia = inicioDoTempoNoCard(a);
-        const ib = inicioDoTempoNoCard(b);
-        if (ia === null && ib === null) return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
-        if (ia === null) return 1;
-        if (ib === null) return -1;
-        if (ia !== ib) return ia - ib;
-        return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
-    });
+    if (listaEhDosConcluidos) {
+        // PEDIDOS CONCLUÍDOS: do mais novo ao mais antigo (pedido do usuário,
+        // 23/08/2026). Este card é histórico, não fila de trabalho — nele não há
+        // nada a fazer, e quem olha quer ver o que acabou de sair. A regra do
+        // relógio abaixo faz o contrário de propósito, e ali está certa: nas
+        // filas o mais parado é o que precisa de atenção.
+        //
+        // A ordem é o NÚMERO do pedido, que é o que "mais novo" quer dizer aqui
+        // e não depende do relógio dos cards — ele só existe desde 19/08/2026, e
+        // todo pedido concluído antes disso nasceu com a mesma data, o que
+        // deixaria o histórico inteiro empatado.
+        filteredArte = ordenarConcluidosDoMaisNovo(filteredArte);
+    } else {
+        // O pedido de MAIOR tempo no card assume o topo — pedido do usuário em
+        // 19/08/2026. Ordena pelo instante de início: quanto mais antigo, mais
+        // tempo. Pedido ainda sem relógio (a tabela não existe, ou é a primeira vez
+        // que ele aparece) vai para o fim, e o desempate continua sendo o número
+        // maior primeiro, que era a ordem da lista até aqui.
+        filteredArte = filteredArte.slice().sort((a, b) => {
+            const ia = inicioDoTempoNoCard(a);
+            const ib = inicioDoTempoNoCard(b);
+            if (ia === null && ib === null) return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+            if (ia === null) return 1;
+            if (ib === null) return -1;
+            if (ia !== ib) return ia - ib;
+            return (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0);
+        });
+    }
 
     // Atualizar badges da navegação lateral
     const badgeImpressao = document.getElementById('badge-impressao');
