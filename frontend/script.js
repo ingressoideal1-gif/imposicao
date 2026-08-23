@@ -12219,11 +12219,26 @@ async function paginasDaPlanilhaGoogle(id) {
 /**
  * Empilha as paginas numa tabela so.
  *
- * As colunas sao a uniao das colunas de todas elas, na ordem em que aparecem —
- * pagina que nao tem uma coluna fica com o campo vazio, em vez de desalinhar. A
- * primeira coluna e criada por nos e diz de qual pagina veio a linha: sem ela,
- * 300 linhas de 8 paises viram um bloco indistinguivel, e e justamente por ela
- * que o operador filtra no editor e reparte as linhas entre os modelos.
+ * O CABECALHO e a uniao das colunas de todas as paginas, na ordem em que
+ * aparecem — e o que o editor usa para desenhar a grade. A primeira coluna e
+ * criada por nos e diz de qual pagina veio a linha: sem ela, 300 linhas de 8
+ * paises viram um bloco indistinguivel, e e justamente por ela que o operador
+ * filtra no editor e reparte as linhas entre os modelos.
+ *
+ * CADA LINHA, porem, guarda so as colunas da PROPRIA pagina.
+ *
+ * Ate a v700 cada linha era preenchida com a uniao inteira, e as colunas das
+ * outras paginas entravam como texto vazio. Numa planilha de 19 abas com duas
+ * colunas cada — a do Expointer 2026, medida em 23/08/2026 — isso dava 39
+ * campos por linha, 37 deles em branco: 46.921 linhas viravam um pacote de
+ * **45,4 MB** para 3,5 MB de dado real. Salvar essa numeracao nao completava:
+ * a conexao caia no meio e o erro chegava como "TypeError: Failed to fetch",
+ * junto com a falha do preview no Storage.
+ *
+ * Chave ausente e lida como vazia em todo lugar que consome estas linhas — o
+ * `csv_row.get(col, "")` do motor, o `escaparCampo` do editor, a conferencia de
+ * dados —, e quem precisa da lista de colunas usa o `csv_headers`, que continua
+ * completo. Por isso a economia nao custa nada em lugar nenhum.
  */
 function juntarPaginas(partes) {
 
@@ -12241,13 +12256,18 @@ function juntarPaginas(partes) {
 
     for (const p of partes) {
 
+        // As colunas DESTA pagina, e so elas. As da propria pagina entram mesmo
+        // vazias: ali o branco e um dado — a celula que o cliente deixou em
+        // branco —, e nao o preenchimento de uma coluna que nem e dela.
+        const daPagina = (p.headers || []).filter(Boolean);
+
         for (const r of p.rows) {
 
             const nova = {};
 
             nova[colunaPagina] = p.nome;
 
-            for (const c of colunas) nova[c] = (r[c] !== undefined && r[c] !== null) ? r[c] : '';
+            for (const c of daPagina) nova[c] = (r[c] !== undefined && r[c] !== null) ? r[c] : '';
 
             rows.push(nova);
 
@@ -12294,7 +12314,10 @@ async function baixarTodasAsPaginas(id, paginas, progresso) {
 
             const parsed = window.CsvEditor.parseCsv(texto);
 
-            return { nome: pagina.nome, headers: parsed.headers, rows: parsed.rows, filename };
+            // O `gid` vem junto: é ele que permite ligar cada numeração criada
+            // por página à SUA aba, para o "🔄 atualizar da planilha" continuar
+            // funcionando uma a uma depois de separadas.
+            return { nome: pagina.nome, gid: pagina.gid, headers: parsed.headers, rows: parsed.rows, filename };
 
         } catch (_) {
 
@@ -12337,6 +12360,14 @@ async function baixarTodasAsPaginas(id, paginas, progresso) {
         filename: `${caderno} (${comLinhas.length} páginas).csv`,
 
         paginas: comLinhas.map(p => ({ nome: p.nome, linhas: p.rows.length })),
+
+        // As páginas CRUAS, cada uma com o próprio cabeçalho e as próprias
+        // linhas. É delas que sai a opção "uma numeração por página" — sem isso
+        // só restaria a tabela empilhada, da qual não dá para separar de volta
+        // sem adivinhar de que aba veio cada coluna.
+        partes: comLinhas,
+
+        idDaPlanilha: id,
 
         vazias,
 
@@ -12447,6 +12478,294 @@ async function comBotaoOcupado(id, rotuloOcupado, tarefa) {
  * Busca o banco de dados de um endereco da web e carrega no editor da
  * numeracao, do mesmo jeito que o upload de arquivo faz.
  */
+// ─── Planilha de várias páginas: uma numeração só, ou uma por página ────────
+//
+// Pedido do usuário em 23/08/2026, depois de a planilha do Expointer (19 abas)
+// não conseguir salvar. Ele já resolvia isso à mão — no pedido 21085 separou as
+// abas em CSVs e criou uma numeração para cada. Esta escolha faz o mesmo em um
+// clique, e mantém cada numeração ligada à SUA aba pelo `gid`, para o
+// "🔄 atualizar da planilha" continuar valendo uma a uma.
+
+/** Guarda o que a busca trouxe enquanto o operador decide. */
+let escolhaDasPaginas = null;
+
+function fecharEscolhaDasPaginas() {
+
+    const caixa = document.getElementById('escolha-paginas-overlay');
+
+    if (caixa) caixa.remove();
+
+    escolhaDasPaginas = null;
+
+}
+window.fecharEscolhaDasPaginas = fecharEscolhaDasPaginas;
+
+function abrirEscolhaDasPaginas(res, link) {
+
+    escolhaDasPaginas = { res, link };
+
+    const total = res.partes.reduce((s, p) => s + p.rows.length, 0);
+
+    const linhas = res.partes.map(p =>
+
+        `<tr><td style="padding:3px 12px 3px 0;">${escapeHtml(p.nome)}</td>`
+
+        + `<td style="padding:3px 0; text-align:right; font-family:monospace; color:#94a3b8;">${p.rows.length}</td></tr>`
+
+    ).join('');
+
+    const overlay = document.createElement('div');
+
+    overlay.id = 'escolha-paginas-overlay';
+
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.82); z-index:100002;'
+
+        + ' display:flex; align-items:center; justify-content:center; padding:20px;';
+
+    overlay.innerHTML = `
+        <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px;
+                    box-shadow:0 24px 60px rgba(0,0,0,0.6); width:min(600px,96vw); max-height:90vh;
+                    display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:16px 22px; border-bottom:1px solid rgba(148,163,184,0.2);">
+                <h3 style="margin:0; font-size:1.05rem; font-weight:800; color:#e2e8f0;">
+                    📑 Esta planilha tem ${res.partes.length} páginas</h3>
+            </div>
+            <div style="padding:16px 22px; overflow:auto; color:#e2e8f0; font-size:0.88rem;">
+                <table style="border-collapse:collapse; font-size:0.82rem; margin-bottom:14px;">${linhas}</table>
+                <div style="color:#94a3b8; font-size:0.8rem; line-height:1.55;">
+                    <b style="color:#e2e8f0;">Uma numeração por página</b> cria ${res.partes.length} numerações,
+                    cada uma com o banco da sua página e ligada a ela para atualizar depois. Copia o formato e os
+                    elementos desta numeração.<br>
+                    <b style="color:#e2e8f0;">Tudo numa numeração só</b> empilha as ${total} linhas numa tabela
+                    única, com a coluna <code>Página</code> dizendo de onde veio cada uma.
+                </div>
+            </div>
+            <div style="padding:14px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+                <button type="button" data-role="cancelar" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-weight:700; cursor:pointer;">Cancelar</button>
+                <button type="button" data-role="juntas" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-weight:700; cursor:pointer;">Tudo numa numeração só</button>
+                <button type="button" data-role="separadas" style="border:none; background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border-radius:8px; padding:9px 18px; font-weight:800; cursor:pointer;">Uma numeração por página</button>
+            </div>
+        </div>`;
+
+    overlay.querySelector('[data-role="cancelar"]').addEventListener('click', fecharEscolhaDasPaginas);
+
+    overlay.querySelector('[data-role="juntas"]').addEventListener('click', () => {
+
+        const guardado = escolhaDasPaginas;
+
+        fecharEscolhaDasPaginas();
+
+        if (guardado) aplicarBancoNaNumeracao(guardado.res, guardado.link);
+
+    });
+
+    overlay.querySelector('[data-role="separadas"]').addEventListener('click', () => criarUmaNumeracaoPorPagina());
+
+    document.body.appendChild(overlay);
+
+}
+
+/**
+ * Os elementos desta numeração, reapontados para as colunas de OUTRA página.
+ *
+ * O elemento guarda o NOME da coluna (`csv_column`), e cada aba tem os seus —
+ * "EXPOSITOR ok" numa, "JURADOS ok" noutra. O que se mantém entre elas é a
+ * POSIÇÃO: a 1ª coluna de cada aba é o código, a 2ª é o rótulo. Então o
+ * reapontamento é por posição, tomando as colunas da numeração aberta como
+ * referência.
+ *
+ * Coluna que não tiver correspondente na página fica como está, e o elemento é
+ * relatado: melhor um campo apontando para coluna que não existe — que a
+ * Conferência de dados aponta — do que um apontamento adivinhado.
+ */
+function elementosParaAPagina(elementos, colunasDeReferencia, colunasDaPagina) {
+
+    const semCorrespondente = [];
+
+    const copia = JSON.parse(JSON.stringify(elementos || []));
+
+    copia.forEach(el => {
+
+        if (!el || el.source !== 'database') return;
+
+        const col = String(el.csv_column || '').trim();
+
+        if (!col) return;
+
+        const i = colunasDeReferencia.indexOf(col);
+
+        if (i >= 0 && colunasDaPagina[i]) el.csv_column = colunasDaPagina[i];
+
+        else semCorrespondente.push(col);
+
+    });
+
+    return { elementos: copia, semCorrespondente };
+
+}
+
+/**
+ * Cria uma numeração para cada página da planilha buscada.
+ *
+ * Cada uma nasce com o formato, o tipo e os elementos da numeração aberta — é a
+ * mesma peça, mudando só o banco — e com o `csv_url` apontando para a SUA aba
+ * (`&gid=`), de modo que "🔄 atualizar da planilha" depois vale por página.
+ *
+ * O que NÃO vai junto: o preview. Ele é gerado do canvas ao salvar, e gerar 19
+ * previews aqui custaria mais do que vale — a numeração ganha o dela na
+ * primeira vez que for aberta e salva.
+ */
+async function criarUmaNumeracaoPorPagina() {
+
+    const guardado = escolhaDasPaginas;
+
+    if (!guardado) return;
+
+    const { res, link } = guardado;
+
+    const botao = document.querySelector('#escolha-paginas-overlay [data-role="separadas"]');
+
+    if (botao) { botao.disabled = true; botao.textContent = 'Criando…'; }
+
+    const fmtId = document.getElementById('num-formato').value;
+
+    const tipo = document.getElementById('num-tipo').value || 'SEQUENCIAL';
+
+    if (!fmtId) {
+
+        toast('Selecione um formato antes de separar a planilha em numerações.', 'error');
+
+        if (botao) { botao.disabled = false; botao.textContent = 'Uma numeração por página'; }
+
+        return;
+
+    }
+
+    const referencia = (state.numCsvHeaders || []).filter(Boolean);
+
+    const criadas = [];
+
+    const falharam = [];
+
+    const semColuna = new Set();
+
+    for (const p of res.partes) {
+
+        const colunas = (p.headers || []).filter(Boolean);
+
+        const { elementos, semCorrespondente } = elementosParaAPagina(state.numElements, referencia, colunas);
+
+        semCorrespondente.forEach(c => semColuna.add(c));
+
+        const payload = {
+
+            name: p.nome,
+
+            formato_id: fmtId,
+
+            tipo,
+
+            formato_ids: [fmtId],
+
+            ticket_qtd: parseInt(document.getElementById('num-ticket-qtd').value) || 1,
+
+            ticket_logica: document.getElementById('num-ticket-logica').value || 'HORIZONTAL',
+
+            csv_filename: p.nome + '.csv',
+
+            csv_headers: colunas,
+
+            csv_data: p.rows,
+
+            // Ligada à SUA aba: o gid explícito faz o `baixarCsvDaWeb` trazer só
+            // ela quando alguém mandar atualizar.
+            csv_url: res.idDaPlanilha && p.gid
+
+                ? `https://docs.google.com/spreadsheets/d/${res.idDaPlanilha}/edit#gid=${p.gid}`
+
+                : link,
+
+            elements: elementos,
+
+            print_mode: document.getElementById('num-print-mode')?.value || 'front',
+
+        };
+
+        try {
+
+            await api('POST', '/numeracoes', payload);
+
+            criadas.push(p.nome);
+
+        } catch (e) {
+
+            console.error('[planilha] não deu para criar a numeração da página', p.nome, e);
+
+            falharam.push(p.nome);
+
+        }
+
+        if (botao) botao.textContent = `Criando… ${criadas.length + falharam.length}/${res.partes.length}`;
+
+    }
+
+    fecharEscolhaDasPaginas();
+
+    // A mesma recarga que o `saveNumeracao` faz depois de gravar: sem ela a
+    // lista de numerações continuaria mostrando o que havia antes.
+    if (typeof loadAll === 'function') { try { await loadAll(); } catch (_) { /* a lista se atualiza no próximo desenho */ } }
+
+    let recado = `${criadas.length} numeração(ões) criada(s), uma por página.`;
+
+    if (falharam.length) recado += ` ${falharam.length} não deu(ram) certo: ${falharam.join(', ')}.`;
+
+    if (semColuna.size) {
+
+        recado += ` Confira a coluna dos elementos: ${[...semColuna].join(', ')} não tinha correspondente em todas as páginas.`;
+
+    }
+
+    toast(recado, falharam.length ? 'warning' : 'success');
+
+}
+window.criarUmaNumeracaoPorPagina = criarUmaNumeracaoPorPagina;
+
+/**
+ * O banco de UMA página, aplicado à numeração aberta.
+ *
+ * É o caminho de sempre — a tabela empilhada de todas as páginas, ou o CSV de
+ * uma página só — separado numa função porque agora existe um segundo destino
+ * possível para a mesma busca: uma numeração por página.
+ */
+function aplicarBancoNaNumeracao(res, link) {
+
+    state.numCsvHeaders = res.headers;
+
+    state.numCsvData = res.rows;
+
+    state.numCsvFilename = res.filename;
+
+    // Guardar o endereco que o operador colou, e nao o de exportacao que o
+    // urlCsvDaPlanilha deriva: e este que ele reconhece quando reabre a
+    // numeracao meses depois.
+    state.numCsvUrl = link;
+
+    renderNumCsvInterface();
+
+    toast(
+
+        `${res.rows.length} linha(s) e ${res.headers.length} coluna(s) `
+
+        + `de "${res.filename}".` + fraseDasPaginas(res) + CONVITE_DAS_COLUNAS
+
+        + ' Salve a numeração para gravar.',
+
+        'success'
+
+    );
+
+}
+
 window.buscarCsvDaWeb = async function() {
 
     const campo = document.getElementById('num-csv-url');
@@ -12459,32 +12778,19 @@ window.buscarCsvDaWeb = async function() {
 
             'btn-buscar-num-csv', '⏳ Buscando…', (p) => baixarCsvDaWeb(link, p));
 
-        const { headers, rows, filename } = res;
+        // Planilha de várias páginas: a escolha é do operador (23/08/2026).
+        // Empilhar tudo numa numeração só continua sendo o padrão, mas separar
+        // uma numeração por página é o que ele já fazia à mão — e é o que deixa
+        // cada modelo com o seu banco, em vez de todos carregando o caderno.
+        if (Array.isArray(res.partes) && res.partes.length > 1) {
 
-        state.numCsvHeaders = headers;
+            abrirEscolhaDasPaginas(res, link);
 
-        state.numCsvData = rows;
+            return;
 
-        state.numCsvFilename = filename;
+        }
 
-        // Guardar o endereco que o operador colou, e nao o de exportacao que o
-        // urlCsvDaPlanilha deriva: e este que ele reconhece quando reabre a
-        // numeracao meses depois.
-        state.numCsvUrl = link;
-
-        renderNumCsvInterface();
-
-        toast(
-
-            `${rows.length} linha(s) e ${headers.length} coluna(s) `
-
-            + `de "${filename}".` + fraseDasPaginas(res) + CONVITE_DAS_COLUNAS
-
-            + ' Salve a numeração para gravar.',
-
-            'success'
-
-        );
+        aplicarBancoNaNumeracao(res, link);
 
     } catch (e) {
 
@@ -12493,8 +12799,6 @@ window.buscarCsvDaWeb = async function() {
     }
 
 };
-
-
 
 /**
  * Traz de novo o conteudo da planilha ligada, por cima do banco atual.

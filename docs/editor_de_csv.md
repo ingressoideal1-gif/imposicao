@@ -450,6 +450,57 @@ link fica com `#gid=`, e um `gid` explícito é respeitado como escolha delibera
 Em qualquer falha **o banco que já estava carregado permanece**: buscar não
 apaga o que existe antes de ter o substituto em mãos.
 
+### A planilha de várias páginas: linha enxuta, e uma numeração por aba
+
+Em 23/08/2026 a planilha do Expointer — **19 abas**, uma por setor, cada uma com
+as suas duas colunas — não conseguia salvar. O erro chegava como
+`TypeError: Failed to fetch`, junto com a falha do preview no Storage.
+
+**A causa, medida naquele dia:**
+
+| | |
+|---|---|
+| Linhas empilhadas | 46.921 |
+| Colunas na tabela | 39 (as 38 das abas + a coluna `Página`) |
+| Campos por linha | 39, dos quais **37 vazios** |
+| Pacote do save | **45,4 MB** |
+| Dado real ali dentro | 3,5 MB |
+
+Nem o Supabase nem o navegador eram o gargalo — no mesmo dia, o banco aceitou
+16 MB em 4 s e o navegador montou 18 MB de JSON em 51 ms. O que não completava
+era a **subida** de 45 MB pela internet da gráfica.
+
+**As duas correções:**
+
+1. **Cada linha guarda só as colunas da própria página** (`juntarPaginas`). O
+   cabeçalho continua sendo a união de todas — é dele que o editor tira a grade,
+   e é ele que todo consumidor prefere antes de olhar as chaves da linha —, mas a
+   linha do EXPOSITOR não carrega mais as 37 células vazias das outras 18 abas.
+   Chave ausente é lida como vazia em todo lugar que consome estas linhas: o
+   `csv_row.get(col, "")` do motor, o `escaparCampo` do editor, a Conferência de
+   dados. **45,4 MB → 4,9 MB**, sem perder um dado.
+2. **A escolha, ao buscar uma planilha de várias páginas:** *tudo numa numeração
+   só* (o caminho de antes) ou **uma numeração por página**. A segunda cria uma
+   numeração para cada aba, copiando o formato, o tipo e os elementos da
+   numeração aberta, com o banco daquela aba — e com o `csv_url` apontando para
+   ela pelo `#gid=`, de modo que o **🔄 atualizar da planilha** continua valendo
+   uma a uma depois de separadas. Maior pacote: **1,04 MB**.
+
+**Os elementos são reapontados pela POSIÇÃO da coluna.** Cada aba tem os seus
+nomes — `EXPOSITOR ok` numa, `JURADOS ok` noutra —; o que se mantém entre elas é
+a ordem. Coluna sem correspondente na página fica como está e é **relatada** ao
+operador, em vez de adivinhada (`elementosParaAPagina`). E os elementos são
+copiados, não reaproveitados: sem isso, criar 19 numerações reapontaria os da
+numeração aberta 19 vezes e a última aba venceria.
+
+O preview não vai junto: ele nasce do canvas ao salvar, e gerar 19 previews ali
+custaria mais do que vale — cada numeração ganha o dela na primeira vez que for
+aberta e salva.
+
+Testes: `tests/planilha_por_pagina_harness.js` e `tests/test_planilha_por_pagina.py`.
+
+---
+
 ### O banco que chega NÃO desenha nada — a coluna entra quando escolhida
 
 Regra do usuário, 23/08/2026: *"Ao carregar arquivos .csv ou indicar a url na

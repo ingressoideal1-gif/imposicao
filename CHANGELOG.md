@@ -4,7 +4,38 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v700** — 2026-08-23 | Agente **1.2.194**
+## Versão atual: **v701** — 2026-08-23 | Agente **1.2.195**
+
+---
+
+## [v701 — 2026-08-23] — Planilha de várias páginas: linha enxuta, e uma numeração por aba
+
+A planilha do Expointer — **19 abas**, uma por setor — não conseguia salvar. O erro chegava como
+`TypeError: Failed to fetch`, junto com a falha do preview no Storage.
+
+**A causa, medida:** o app empilha as abas numa tabela só, e como cada aba tem as suas duas colunas, a
+tabela ficava com **39 colunas**. Cada uma das 46.921 linhas passava a carregar 39 campos, **37 deles
+vazios** — o pacote do salvamento chegava a **45,4 MB** para 3,5 MB de dado real. Nem o Supabase nem o
+navegador eram o gargalo (o banco aceita 16 MB em 4 s; o navegador monta 18 MB de JSON em 51 ms): o
+que não completava era subir 45 MB pela internet da gráfica.
+
+**1. Cada linha guarda só as colunas da própria página.** O cabeçalho continua sendo a união de todas
+— é dele que o editor tira a grade —, mas a linha do EXPOSITOR não carrega mais as células vazias das
+outras 18 abas. Chave ausente já é lida como vazia em todo lugar que consome estas linhas (o motor, o
+editor, a Conferência de dados), então a economia não custa nada: **45,4 MB → 4,9 MB**.
+
+**2. A escolha passou a ser do operador.** Ao buscar uma planilha de várias páginas, a tela pergunta:
+*tudo numa numeração só* (o caminho de antes) ou **uma numeração por página**. A segunda cria uma
+numeração para cada aba, copiando formato, tipo e elementos da numeração aberta, com o banco daquela
+aba — e cada uma fica ligada à SUA aba pelo `#gid=`, de modo que o 🔄 atualizar da planilha continua
+valendo uma a uma. É o que o usuário já fazia à mão no pedido 21085. Maior pacote: **1,04 MB**.
+
+Os elementos são reapontados pela **posição** da coluna (cada aba tem nomes próprios; a ordem é o que
+se mantém). Coluna sem correspondente fica como está e é relatada, em vez de adivinhada.
+
+Testes: `tests/planilha_por_pagina_harness.js` (27 verificações) e `tests/test_planilha_por_pagina.py`
+(6 testes). Conferido com a planilha real: as 19 páginas aparecem na escolha, e as 19 numerações saem
+com o banco e o `gid` de cada uma.
 
 ---
 
