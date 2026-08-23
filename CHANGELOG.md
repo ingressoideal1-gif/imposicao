@@ -4,11 +4,13 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v701** — 2026-08-23 | Agente **1.2.195**
+## Versão atual: **v699** — 2026-08-23 | Agente **1.2.193**
 
 ---
 
-## [v701 — 2026-08-23] — Planilha de várias páginas: linha enxuta, e uma numeração por aba
+## [v699 — 2026-08-23] — Planilha de várias páginas, colunas só quando escolhidas, e a 1ª linha do que é impresso
+
+### Planilha de várias páginas: linha enxuta, e uma numeração por aba
 
 A planilha do Expointer — **19 abas**, uma por setor — não conseguia salvar. O erro chegava como
 `TypeError: Failed to fetch`, junto com a falha do preview no Storage.
@@ -46,9 +48,7 @@ Conferido com a planilha real: a janela mostra `309013329788 · ESTRANGEIROS` e 
 as 19 numerações saem com 600, 40, 1300, 200… linhas — cada uma com a sua credencial de volta — e com
 o `gid` da sua aba.
 
----
-
-## [v700 — 2026-08-23] — O banco que chega não desenha nada: a coluna entra quando escolhida
+### O banco que chega não desenha nada: a coluna entra quando escolhida
 
 Regra do usuário: *"Ao carregar arquivos .csv ou indicar a url na numeração, não deve carregar as
 colunas na janela de visualização, deve trazer para janela apenas quando selecionadas"*.
@@ -71,9 +71,7 @@ aparecem como botões; um clique em `CODIGO` põe **um** campo, só o dele.
 Testes: `tests/test_colunas_so_quando_escolhidas.py` — a função da criação automática não existe mais,
 nenhum dos três caminhos chama a porta de entrada da coluna, e os dois recados estão na tela (4 testes).
 
----
-
-## [v699 — 2026-08-23] — Conferência de dados: a 1ª linha traz só o que a numeração imprime
+### Conferência de dados: a 1ª linha traz só o que a numeração imprime
 
 Correção pedida pelo usuário, olhando o pedido 21085: *"esta coluna de células não foi incluída na
 numeração, não deve aparecer no relatório"*.
