@@ -131,7 +131,7 @@
     // Próprio, e não dentro de `state`: os filtros do acabamento não são os da
     // produção, e compartilhar as chaves faria um painel mexer no outro.
     const tela = {
-        prazo: 'geral',       // geral | hoje | atrasados | prontos
+        prazo: 'geral',       // geral | hoje | atrasados | expedicao
         setores: [],        // vazio = todos; os cards SOMAM (ver setFiltroSetor)
         pesos: {},          // 'SETOR' -> { peso, existe } do pedido aberto
         pesosDoPedido: null,// de qual pedido é o mapa acima
@@ -245,7 +245,8 @@
      * O pedido já foi entregue à expedição.
      *
      * Pedido do usuário em 23/08/2026: *"ao clicar e enviá-lo para a Expedição,
-     * ele deve ir para a lista de PRONTO"*. Até aqui o pedido sumia da tela no
+     * ele deve ir para a lista de PRONTO"* — o botão que hoje se chama
+     * EXPEDIÇÃO. Até aqui o pedido sumia da tela no
      * instante em que era enviado — o `status_interno` virava `EXPEDICAO`, que
      * o `ehDeProducao` não aceita, e o operador ficava sem o comprovante do
      * próprio trabalho. Agora ele continua na lista, com o selo PRONTO, até a
@@ -464,9 +465,13 @@
     /**
      * O estágio do PEDIDO, a partir dos modelos dele.
      *
-     * Pronto só quando TODOS estão prontos — é o que faz o pedido sair da fila
-     * de trabalho. Qualquer movimento parcial conta como "Em acabamento",
-     * inclusive um pronto sozinho no meio de outros: o trabalho está em curso.
+     * Pronto só quando TODOS estão prontos. Qualquer movimento parcial conta
+     * como "Em acabamento", inclusive um pronto sozinho no meio de outros: o
+     * trabalho está em curso.
+     *
+     * Isto é o SELO da linha, e nada mais. Quem decide se o pedido sai da lista
+     * de trabalho é o `passaNoPrazo`, pelo envio à expedição — até 24/08/2026
+     * era este estágio, e era esse o defeito.
      */
     function estagioDoPedido(modelos) {
         if (!modelos || !modelos.length) return 'Aguardando';
@@ -517,11 +522,15 @@
      * Agora o que tira o pedido da lista é um ato: o clique em ENVIAR PARA A
      * EXPEDIÇÃO. Enquanto ele não acontece, o pedido continua na Geral, na Para
      * Hoje e na Atrasados — com o selo PRONTO, para se ver de relance que só
-     * falta despachar. Depois do clique ele vai para o botão "Pronto", que é a
-     * lista do que esta bancada já entregou.
+     * falta despachar. Depois do clique ele vai para o botão "Expedição", que é
+     * a lista do que esta bancada já entregou.
+     *
+     * O botão se chamava "Pronto" e foi rebatizado no mesmo dia, a pedido do
+     * usuário: com a regra nova, o que ele lista não é o pedido pronto — é o
+     * pedido despachado.
      */
     function passaNoPrazo(os) {
-        if (tela.prazo === 'prontos') return ehExpedido(os);
+        if (tela.prazo === 'expedicao') return ehExpedido(os);
         if (ehExpedido(os)) return false;
         if (tela.prazo === 'geral') return true;
         if (tela.prazo === 'atrasados') return estaAtrasado(os);
@@ -1034,8 +1043,8 @@
      * dele não entravam no mapa; o `estagioDoModelo` não achava escolha
      * nenhuma, caía na derivação da impressão e respondia "Impresso". O pedido
      * voltava para a lista de trabalho como se o acabamento não tivesse
-     * acontecido, e sumia do botão "Pronto" — que é exatamente onde o aviso do
-     * envio manda o operador procurá-lo.
+     * acontecido, e sumia do botão de despachados (hoje "Expedição") — que é
+     * exatamente onde o aviso do envio manda o operador procurá-lo.
      *
      * Quem desenha a lista e quem lê o estágio dela precisam enxergar o mesmo
      * conjunto de pedidos. Por isso os dois chamam `pedidosDoPainel`.
@@ -2888,7 +2897,7 @@
             // Onde ele foi parar, dito na hora: o pedido não some mais da tela,
             // e o operador precisa saber onde reencontrá-lo.
             avisar(`Pedido ${esc(os.numero)} enviado para EXPEDIÇÃO 📦 — `
-                 + `ele continua na lista, em PRONTO.`, 'success');
+                 + `ele continua na tela, no botão EXPEDIÇÃO.`, 'success');
             AcabamentoPainel.fecharPedido();
         } catch (e) {
             console.error('[acabamento] erro ao mandar para expedição:', e);
@@ -5762,7 +5771,7 @@
         render,
 
         setFiltroPrazo(valor) {
-            tela.prazo = ['hoje', 'atrasados', 'prontos'].includes(valor) ? valor : 'geral';
+            tela.prazo = ['hoje', 'atrasados', 'expedicao'].includes(valor) ? valor : 'geral';
             render();
         },
 

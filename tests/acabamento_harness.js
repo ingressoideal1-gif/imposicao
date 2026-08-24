@@ -497,7 +497,7 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
        'e o pedido todo pronto CONTINUA na fila geral: ainda falta despacha-lo');
     ok(html.indexOf('Pronto') !== -1, 'com o selo PRONTO, para se ver de relance');
 
-    amb.painel.setFiltroPrazo('prontos');
+    amb.painel.setFiltroPrazo('expedicao');
     html = amb.elementos['tbody-acabamento'].innerHTML;
     ok(html.indexOf('>101<') === -1,
        'e no botao PRONTO ele NAO esta: essa lista e a do que ja foi entregue');
@@ -509,7 +509,7 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     amb.painel.render();
     ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>101<') === -1,
        'depois de enviado a expedicao ele sai da geral');
-    amb.painel.setFiltroPrazo('prontos');
+    amb.painel.setFiltroPrazo('expedicao');
     ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>101<') !== -1,
        'e so entao aparece no botao PRONTO');
     amb.janela.state.ordens[0].status_interno = 'EM PRODUCAO';
@@ -3758,7 +3758,7 @@ function listaDo(amb, recorte) {
 
 async function oPedidoExpedidoContinuaNaLista() {
     const amb = ambienteDeExpedicao('EXPEDICAO');
-    const html = listaDo(amb, 'prontos');
+    const html = listaDo(amb, 'expedicao');
     ok(html.indexOf('>200<') !== -1, 'o pedido expedido continua na lista');
     ok(html.indexOf('NA EXPEDIÇÃO') !== -1,
        'com a marca que o distingue de um pedido ainda na bancada');
@@ -3770,14 +3770,14 @@ async function oPedidoExpedidoContinuaNaLista() {
 async function oExpedidoAparecerSobOFiltroPronto() {
     const amb = ambienteDeExpedicao('EXPEDICAO');
 
-    ok(listaDo(amb, 'prontos').indexOf('>200<') !== -1,
+    ok(listaDo(amb, 'expedicao').indexOf('>200<') !== -1,
        'no botao PRONTO ele esta la -- foi exatamente isso que o usuario pediu');
     ok(listaDo(amb, 'geral').indexOf('>200<') === -1,
        'e no GERAL nao: pedido pronto sai da lista de trabalho, como sempre saiu');
     ok(listaDo(amb, 'hoje').indexOf('>200<') === -1, 'nem no PARA HOJE');
 
     // E no filtro de ESTAGIO, que e outro eixo, ele esta em Pronto.
-    amb.painel.setFiltroPrazo('prontos');
+    amb.painel.setFiltroPrazo('expedicao');
     amb.painel.setFiltroStatus('Pronto');
     ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>200<') !== -1,
        'e o estagio dele e Pronto');
@@ -3792,7 +3792,7 @@ async function oExpedidoNaoContaComoFila() {
     const antes = naFila.elementos['stat-acab-pedidos-fila'].textContent;
 
     const expedido = ambienteDeExpedicao('EXPEDICAO');
-    const html = listaDo(expedido, 'prontos');
+    const html = listaDo(expedido, 'expedicao');
     const depois = expedido.elementos['stat-acab-pedidos-fila'].textContent;
 
     ok(String(antes) === '1', 'na producao, o pedido conta na fila', String(antes));
@@ -3828,9 +3828,9 @@ async function mandarParaExpedicaoNaoFazOPedidoSumir() {
     await amb.painel.confirmarExpedicao('os-200');
 
     ok(amb.janela.state.ordens[0].status_interno === 'EXPEDICAO', 'o status mudou');
-    ok(listaDo(amb, 'prontos').indexOf('NA EXPEDIÇÃO') !== -1,
-       'e o pedido continua na lista de PRONTO, agora marcado como expedido');
-    ok(avisos.some(a => /em PRONTO/.test(a.texto)),
+    ok(listaDo(amb, 'expedicao').indexOf('NA EXPEDIÇÃO') !== -1,
+       'e o pedido continua na tela, no botao EXPEDICAO, marcado como expedido');
+    ok(avisos.some(a => /botão EXPEDIÇÃO/.test(a.texto)),
        'o aviso diz ONDE reencontra-lo',
        avisos.map(a => a.texto).join(' | '));
 }
@@ -3887,10 +3887,10 @@ async function oEstagioDoExpedidoVemDoBancoComoODosOutros() {
 
     ok(listaDo(amb, 'geral').indexOf('>600<') === -1,
        'ele NAO volta para a lista inicial: o acabamento dele terminou');
-    const prontos = listaDo(amb, 'prontos');
-    ok(prontos.indexOf('>600<') !== -1,
+    const naExpedicao = listaDo(amb, 'expedicao');
+    ok(naExpedicao.indexOf('>600<') !== -1,
        'e aparece no botao PRONTO, que e onde o operador foi mandado procura-lo');
-    ok(prontos.indexOf('NA EXPEDIÇÃO') !== -1, 'com a marca de que ja saiu do setor');
+    ok(naExpedicao.indexOf('NA EXPEDIÇÃO') !== -1, 'com a marca de que ja saiu do setor');
 }
 
 // ── E o pedido que chega DEPOIS do mapa tambem ganha estagio ───────────────

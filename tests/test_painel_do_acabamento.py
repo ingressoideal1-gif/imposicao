@@ -471,6 +471,44 @@ def test_o_encerrado_como_teste_e_lido_por_fora_do_carregamento_da_producao():
         )
 
 
+def test_so_o_envio_a_expedicao_tira_o_pedido_da_lista():
+    """Regra do usuario em 24/08/2026.
+
+    "Pedidos do painel de acabamento so saem das listagens, mesmo marcados como
+    prontos, quando forem clicados para enviar para a expedicao. Apos clicar em
+    enviar para a expedicao, ai sim eles vao para a lista de prontos."
+
+    Ate aqui quem mandava era o ESTAGIO: bastava o ultimo modelo virar "Pronto"
+    e o pedido sumia sozinho -- justamente quando ainda faltava pesar, embalar e
+    entregar. A analogia que eu tinha usado, o botao "Impresso" do Painel de
+    Producao, nao valia: la o "Impresso" encerra mesmo o trabalho da mesa.
+
+    O botao foi rebatizado no mesmo dia, tambem a pedido dele: o que ele lista
+    nao e o pedido pronto, e o pedido despachado.
+
+    O harness `tests/acabamento_harness.js` exercita o comportamento; aqui ficam
+    as duas amarras de fonte que impedem a regra antiga de voltar sem alarde.
+    """
+    js = _ler("frontend/acabamento.js")
+    html = _ler("frontend/index.html")
+    secao = html[html.index('id="view-acabamento"'):]
+    secao = secao[:secao.index("</section>")]
+
+    assert "if (tela.prazo === 'expedicao') return ehExpedido(os);" in js, (
+        "o recorte dos despachados tem de perguntar ao `ehExpedido`"
+    )
+    assert "pedidoTotalmentePronto" not in js, (
+        "o `pedidoTotalmentePronto` decidia quem saia da lista e nao existe "
+        "mais: se ele voltou, a regra antiga voltou junto"
+    )
+    assert 'data-prazo-acab="expedicao"' in secao, (
+        "o botao que lista os despachados sumiu da tela"
+    )
+    assert ">Expedição</button>" in secao, (
+        "o botao tem de se chamar Expedicao -- ele lista o que ja foi despachado"
+    )
+
+
 def test_o_ultimo_estagio_se_chama_pronto():
     """Pedido do usuario em 21/08/2026: "Revisado" passou a se chamar "Pronto".
 
@@ -486,7 +524,6 @@ def test_o_ultimo_estagio_se_chama_pronto():
 
     assert "'Em acabamento', 'Pronto'" in js, "o estagio novo nao entrou na lista"
     assert "setFiltroStatus('Pronto')" in secao, "o filtro lateral nao virou Pronto"
-    assert "data-prazo-acab=\"prontos\"" in secao, "o recorte da fila nao virou prontos"
 
     # Nenhum rotulo antigo sobrou na tela.
     assert "Revisado" not in secao, "sobrou 'Revisado' na tela do acabamento"
