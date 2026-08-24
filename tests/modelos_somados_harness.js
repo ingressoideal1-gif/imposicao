@@ -46,7 +46,8 @@ function extrairFuncao(src, nome) {
     return src.slice(i, fim + 2);
 }
 
-const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
+const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem',
+               'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                'quantidadeDoModelo', 'contaDaSoma', 'porQueNaoCombina',
                'itemAtivoDoPedido', 'itensDaImposicao', 'modoSomaFolha',
                'imprimeNumeroDoModelo', 'modoDeImpressaoDoModelo', 'blocagemDoModelo',

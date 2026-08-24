@@ -125,7 +125,8 @@ function extrairFuncao(src, nome) {
 (function travaDoModeloSemLinhas() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'colunasDoBancoDaNumeracao',
+                   'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
 
@@ -230,7 +231,8 @@ function extrairFuncao(src, nome) {
 
 (function oBancoSoltoNaoEEmprestado() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem', 'linhasDaAmostra'];
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'colunasDoBancoDaNumeracao',
+                   'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'linhasDaAmostra'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     const state = { numeracoes: [], csvData: null, csvDataDerivado: false, numCsvData: null };
     const api = new Function('state', 'window', fonte + '\nreturn { linhasDaAmostra };')(state, global.window);
@@ -284,7 +286,8 @@ function extrairFuncao(src, nome) {
 
 (function celulasRepetidasEntreModelos() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'fatiaCsvDoItem',
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
+                   'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     const state = { numeracoes: [], osItens: {} };
@@ -340,7 +343,8 @@ function extrairFuncao(src, nome) {
 
 (function aConferenciaDeDadosDoPedido() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'fatiaCsvDoItem',
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
+                   'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
                    'celulasGeradasDoModelo', 'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas',
@@ -377,7 +381,16 @@ function extrairFuncao(src, nome) {
         'o modelo limpo conta 4 linhas, 4 codigos, zero repetido, zero vazio', por.m1);
     ok(por.m1.numeracao === 'OK' && por.m1.arquivo === 'ok.csv', 'o relatorio diz a numeracao e o arquivo');
     ok(por.m2.repetidosDentro === 1 && por.m2.avisos.some(a => /repetido\(s\) dentro/.test(a)), 'codigo repetido dentro do CSV e apontado', por.m2);
-    ok(por.m3.vazios === 1 && por.m3.avisos.some(a => /vazia/.test(a)), 'celula vazia e apontada', por.m3);
+    // Ate 24/08/2026 a linha de CODIGO vazio contava como celula e o relatorio a
+    // apontava como "1 celula vazia". Com o corte por coluna ela deixou de ser
+    // celula deste modelo -- e quem denuncia agora e a conta da Qtd, que fica
+    // curta e diz a causa. A informacao nao se perdeu, mudou de lugar.
+    ok(por.m3.linhas === 1 && por.m3.vazios === 0,
+        'linha sem nada na coluna da numeracao nao conta como celula', por.m3);
+    ok(por.m3.avisos.some(a => /faltam 1/.test(a)),
+        'a tiragem curta e apontada no lugar dela', por.m3.avisos);
+    ok(por.m3.avisos.some(a => /sem nada nas colunas desta numera/.test(a)),
+        'e o aviso diz a causa: linha do CSV sem nada nas colunas da numeracao', por.m3.avisos);
     ok(por.m4.avisos.some(a => /nenhum CSV/.test(a)), 'elemento de banco sem CSV e apontado', por.m4);
     ok(por.m5.usaBanco === false && por.m5.avisos.length === 0, 'numeracao sem banco nao e cobrada por CSV', por.m5);
     ok(por.m1.avisos.some(a => /também está/.test(a)) && por.m6.avisos.some(a => /também está/.test(a)),
@@ -531,6 +544,190 @@ function extrairFuncao(src, nome) {
         ok(/overflow-x:auto/.test(script.slice(script.indexOf('const NUM ='))),
             'e a tabela rola na horizontal quando ainda assim nao couber');
     })();
+})();
+
+// ─── A célula se conta pelas colunas que a numeração usa ─────────────────────
+//
+// Pedido 21118, 24/08/2026: um CSV de 450 linhas com três pares de colunas, um
+// por modelo — VIP preenchido em 50 linhas, ACA em 350, CRE em 450. Os três
+// modelos apontavam para o mesmo arquivo, então os três contavam 450 células. O
+// VIP, de Qtd 50, era acusado de 400 células a mais e não podia ser marcado
+// PRONTO; a saída era desmarcar 400 linhas na mão, uma a uma, em cada numeração.
+//
+// A regra (decisão do usuário): a linha é do modelo quando ao menos UMA das
+// colunas que a numeração dele lê tem conteúdo. Vale para a conta E para a
+// impressão, porque as duas saem da mesma `fatiaCsvDoItem`.
+
+const CABECALHO_21118 = [
+    'Credencial - VIP', 'QR VIP', 'Coluna 3',
+    'Credencial - ACA', 'QR ACA', 'Coluna 6',
+    'Credencial - CRE', 'QR CRE'
+];
+
+/** O CSV do 21118: 450 linhas, VIP até a 50, ACA até a 350, CRE até o fim. */
+function cadernoDe21118() {
+    const rows = [];
+    for (let i = 1; i <= 450; i++) {
+        rows.push({
+            __id: i,
+            'Credencial - VIP': i <= 50 ? 'VIP' + i : '',
+            'QR VIP': i <= 50 ? String(260000 + i) : '',
+            'Coluna 3': '',
+            'Credencial - ACA': i <= 350 ? 'ACA' + i : '',
+            'QR ACA': i <= 350 ? String(260050 + i) : '',
+            'Coluna 6': '',
+            'Credencial - CRE': 'CRE' + i,
+            'QR CRE': String(260400 + i)
+        });
+    }
+    return rows;
+}
+
+function numeracaoDe(nomeDoModelo, colTexto, colQr) {
+    return {
+        id: 'num-' + nomeDoModelo,
+        csv_filename: '21118.csv',
+        csv_headers: CABECALHO_21118.slice(),
+        csv_data: cadernoDe21118(),
+        elements: [
+            { type: 'TEXT', source: 'database', csv_column: colTexto },
+            { type: 'QR', source: 'database', csv_column: colQr },
+            { type: 'FIXED', fixed_value: 'CREDENCIAL' }
+        ]
+    };
+}
+
+/** Monta o sandbox com as funções DE VERDADE do script.js. */
+function apiDaFatia(state) {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'colunasDoBancoDaNumeracao',
+                   'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'rotuloDoModelo',
+                   'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+    return new Function('state', 'window', fonte
+        + '\nreturn { colunasDoBancoDaNumeracao, linhasComDadoDaNumeracao, fatiaCsvDoItem,'
+        + ' modeloSemLinhasDoBanco, recadoDeFatiaVazia };')(state, global.window);
+}
+
+(function cadaModeloContaSoAsColunasDele() {
+    const state = { numeracoes: [] };
+    const api = apiDaFatia(state);
+
+    const vip = numeracaoDe('vip', 'Credencial - VIP', 'QR VIP');
+    const aca = numeracaoDe('aca', 'Credencial - ACA', 'QR ACA');
+    const cre = numeracaoDe('cre', 'Credencial - CRE', 'QR CRE');
+    state.numeracoes.push(vip, aca, cre);
+
+    const modelo = (nome, numId) => ({ id: 'm-' + nome, nome_modelo: nome, amostra_num_id: numId, csv_selecao: null });
+
+    ok(api.fatiaCsvDoItem(modelo('VIP', 'num-vip'), vip).length === 50,
+        'o VIP conta 50 células, e não as 450 linhas do arquivo',
+        api.fatiaCsvDoItem(modelo('VIP', 'num-vip'), vip).length);
+    ok(api.fatiaCsvDoItem(modelo('ACA', 'num-aca'), aca).length === 350,
+        'o ACA conta 350', api.fatiaCsvDoItem(modelo('ACA', 'num-aca'), aca).length);
+    ok(api.fatiaCsvDoItem(modelo('CRE', 'num-cre'), cre).length === 450,
+        'o CRE, que ocupa o arquivo inteiro, continua com 450');
+
+    // A ordem do banco é a ordem de impressão: o corte não pode reordenar.
+    const fatiaVip = api.fatiaCsvDoItem(modelo('VIP', 'num-vip'), vip);
+    ok(fatiaVip.every((r, i) => r.__id === i + 1), 'o corte preserva a ordem do banco');
+    ok(fatiaVip[0]['Credencial - VIP'] === 'VIP1', 'e começa na primeira linha do modelo');
+})();
+
+(function umaColunaPreenchidaJaBastaParaImprimir() {
+    // Regra escolhida pelo usuário: credencial com nome e sem QR CONTINUA
+    // imprimindo — some da tiragem só a linha que não tem nada do modelo. É o
+    // que mantém o aviso de "célula vazia" da Conferência com o que denunciar.
+    const state = { numeracoes: [] };
+    const api = apiDaFatia(state);
+    const vip = numeracaoDe('vip', 'Credencial - VIP', 'QR VIP');
+    vip.csv_data[9]['QR VIP'] = '';             // linha 10: nome sim, QR não
+    vip.csv_data[10]['Credencial - VIP'] = '';  // linha 11: QR sim, nome não
+    state.numeracoes.push(vip);
+
+    const fatia = api.fatiaCsvDoItem({ id: 'm', amostra_num_id: 'num-vip', csv_selecao: null }, vip);
+    ok(fatia.length === 50, 'linha com metade das colunas preenchida continua na tiragem', fatia.length);
+    ok(fatia.some(r => r.__id === 10) && fatia.some(r => r.__id === 11),
+        'as duas linhas meio preenchidas seguem no papel');
+})();
+
+(function semColunaParaMedirNadaMuda() {
+    const state = { numeracoes: [] };
+    const api = apiDaFatia(state);
+
+    // Numeração sem elemento de banco: não há coluna para medir. Filtrar aqui
+    // zeraria a tiragem de todo modelo de faixa de/até.
+    const semBanco = { id: 'num-x', csv_headers: CABECALHO_21118.slice(), csv_data: cadernoDe21118(), elements: [] };
+    state.numeracoes.push(semBanco);
+    ok(api.fatiaCsvDoItem({ id: 'm', amostra_num_id: 'num-x', csv_selecao: null }, semBanco).length === 450,
+        'numeração sem elemento de banco leva o CSV inteiro, como antes');
+
+    // Coluna que não existe no CSV: é o caso "banco incompleto", que já avisa e
+    // segura o PRONTO com recado próprio. Cortar aqui zeraria a tiragem por
+    // causa de um nome de coluna errado.
+    const colunaErrada = numeracaoDe('errada', 'Nome que nao existe', 'Outro que nao existe');
+    colunaErrada.id = 'num-err';
+    state.numeracoes.push(colunaErrada);
+    ok(api.fatiaCsvDoItem({ id: 'm2', amostra_num_id: 'num-err', csv_selecao: null }, colunaErrada).length === 450,
+        'coluna inexistente não corta nada -- quem avisa é o banco incompleto');
+})();
+
+(function osDoisCortesSeSomam() {
+    // Desmarcar continua sendo a palavra final do operador sobre uma linha que
+    // TEM dado. O corte por coluna se soma a ele, não o substitui.
+    const state = { numeracoes: [] };
+    const api = apiDaFatia(state);
+    const vip = numeracaoDe('vip', 'Credencial - VIP', 'QR VIP');
+    vip.csv_data[4].__ativo = false;   // linha 5, que tem dado do VIP
+    state.numeracoes.push(vip);
+
+    const fatia = api.fatiaCsvDoItem({ id: 'm', amostra_num_id: 'num-vip', csv_selecao: null }, vip);
+    ok(fatia.length === 49, 'linha desmarcada sai mesmo tendo dado do modelo', fatia.length);
+    ok(!fatia.some(r => r.__id === 5), 'e é a linha 5 que ficou de fora');
+
+    // E a distribuição por Linhas continua valendo por cima do corte.
+    const comSelecao = { id: 'm2', amostra_num_id: 'num-vip', csv_selecao: { tipo: 'linhas', ids: ['1-20'] } };
+    const recorte = api.fatiaCsvDoItem(comSelecao, vip);
+    ok(recorte.length === 19, 'a distribuição corta dentro das células do modelo', recorte.length);
+})();
+
+(function colunaVaziaNoArquivoInteiroTravaAImposicao() {
+    // 'Coluna 3' existe no cabeçalho e está vazia nas 450 linhas. Sem trava, o
+    // motor receberia csv_data vazio, não entraria no ramo do banco e cairia na
+    // numeração SEQUENCIAL: sairia um número no lugar do nome da pessoa.
+    const state = { numeracoes: [] };
+    const api = apiDaFatia(state);
+    const vazia = numeracaoDe('vazia', 'Coluna 3', 'Coluna 6');
+    vazia.id = 'num-vazia';
+    state.numeracoes.push(vazia);
+
+    const modelo = { id: 'm', nome_modelo: 'Sem dado', amostra_num_id: 'num-vazia', csv_selecao: null };
+    ok(api.fatiaCsvDoItem(modelo, vazia).length === 0, 'coluna vazia no arquivo inteiro dá fatia zero');
+    ok(api.modeloSemLinhasDoBanco(modelo) === 'Sem dado',
+        'e o modelo é barrado antes de virar folha impressa', api.modeloSemLinhasDoBanco(modelo));
+
+    const recado = api.recadoDeFatiaVazia([modelo]);
+    ok(typeof recado === 'string' && /colunas que a/.test(recado),
+        'a trava ensina a nova saída: conferir as colunas da numeração', recado);
+    ok(recado && /Linhas no card do modelo/.test(recado),
+        'e mantém a saída antiga, da distribuição', recado);
+})();
+
+(function oLinkDoClienteCortaIgual() {
+    // O cliente folheia as páginas do modelo. Sem o mesmo corte, ele veria as
+    // linhas dos OUTROS modelos como páginas em branco -- 450 ingressos onde a
+    // gráfica vai imprimir 50. O cliente.js é autônomo (não carrega o
+    // csv-editor.js), então a regra está repetida lá de propósito.
+    const cliente = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+    ok(/function linhasComDadoDaNumeracao\(/.test(cliente),
+        'o link do cliente tem a regra do corte por coluna');
+    ok(/function colunasDoBancoDaNumeracao\(/.test(cliente),
+        'e sabe quais colunas a numeração do modelo lê');
+
+    const fatia = cliente.match(/function fatiaCsvDoItem\(item, num\)[\s\S]{0,900}?\n\}/);
+    ok(!!fatia, 'achei o fatiaCsvDoItem do cliente.js');
+    ok(fatia && /linhasComDadoDaNumeracao\(base, num\)/.test(fatia[0]),
+        'e ele passa a fatia pelo corte antes de devolver', fatia && fatia[0].slice(-160));
 })();
 
 // ─── Fim ──────────────────────────────────────────────────────────────────────

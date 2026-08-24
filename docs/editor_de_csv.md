@@ -161,6 +161,81 @@ para um lugar que não é o que ele está vendo. O `title` da alça explica.
 - O painel de colunas usa o id `csv-ed-cols` e os diálogos usam `csv-ed-dlg`, com
   z-index diferentes: um diálogo aberto por cima do painel precisa ganhar o Esc.
 
+## A célula do modelo se conta pelas colunas que a numeração usa
+
+Regra do usuário, 24/08/2026. **Uma linha do CSV só é célula de um modelo quando
+ao menos uma das colunas que a numeração dele lê tem conteúdo.** Vale para a
+conta e para a impressão, porque as duas saem da mesma `fatiaCsvDoItem`.
+
+O caso é o **pedido 21118**: um arquivo de 450 linhas com três pares de colunas,
+um por modelo, e um modelo por par.
+
+| Modelo | Qtd | Colunas da numeração | Linhas com conteúdo |
+|---|---|---|---|
+| VIP | 50 | `Credencial - VIP`, `QR VIP` | 50 |
+| ACA | 350 | `Credencial - ACA`, `QR ACA` | 350 |
+| CRE | 450 | `Credencial - CRE`, `QR CRE` | 450 |
+
+Os três apontavam para o mesmo arquivo, então os três contavam **450** células. O
+VIP, de Qtd 50, era acusado de 400 células a mais e não podia ser marcado PRONTO.
+A saída que sobrava ao operador era desmarcar 400 linhas na mão, uma a uma, em
+cada numeração — foi o que ele fez naquele dia antes de pedir a correção.
+
+Quem implementa a regra é `linhasComDadoDaNumeracao(rows, num)`, e as colunas
+saem de `colunasDoBancoDaNumeracao(num)` — os `csv_column` dos elementos
+`source: 'database'`. O `fatiaCsvDoItem` passa por ela **depois** do corte da
+distribuição, então os três cortes se somam nesta ordem:
+
+1. `csv_selecao` (a distribuição por 🧩 Linhas), quando existe;
+2. `__ativo: false` (o operador desmarcou), sempre;
+3. as colunas da numeração (esta regra), sempre.
+
+Desmarcar continua sendo a palavra final do operador sobre uma linha que **tem**
+dado — a regra nova não a devolve à tiragem.
+
+### Os três cuidados que a regra tem
+
+- **Basta UMA coluna preenchida.** Credencial com nome e sem QR continua
+  imprimindo, e continua aparecendo na Conferência de Dados como célula vazia.
+  Some da tiragem só a linha que não tem nada daquele modelo. Foi decisão
+  explícita do usuário: a regra rígida (todas as colunas) faria uma credencial
+  sem QR desaparecer em vez de ser sinalizada.
+- **Numeração sem elemento de banco não é filtrada.** Não há coluna para medir, e
+  cortar ali zeraria a tiragem de todo modelo de faixa de/até.
+- **Coluna que não existe no CSV não corta nada.** Esse é o caso "banco
+  incompleto", que já avisa e segura o PRONTO com recado próprio
+  (`bancoDeDadosIncompletoDoModelo`). Cortar ali zeraria a tiragem por causa de um
+  nome de coluna errado.
+
+### O que mudou na Conferência de Dados
+
+Uma linha vazia nas colunas do modelo **deixou de contar como "célula vazia"** —
+ela não é mais célula. Quem denuncia agora é a conta da Qtd, que fica curta, e o
+texto da divergência passa a dizer a causa:
+
+> Qtd 2 · Frente · esperado 2 linha(s) · gerado 1 · faltam 1 (1 linha(s) do CSV
+> sem nada nas colunas desta numeração)
+
+A causa só aparece quando a tiragem ficou **curta**. Num modelo que fechou a Qtd,
+as linhas descartadas são dos outros modelos do mesmo arquivo, e dizer o número
+ali seria barulho — o VIP do 21118 acusaria 400 descartes normais.
+
+### Fatia zerada pela coluna também trava a imposição
+
+Se as colunas da numeração estiverem vazias no arquivo inteiro, a fatia zera. Zero
+linhas não pode chegar ao motor (ver *Fatia vazia não pode virar folha impressa*),
+então `modeloSemLinhasDoBanco` passou a olhar também este caso — antes só olhava
+quando havia `csv_selecao`. O recado da trava ganhou a saída nova: conferir se as
+colunas que a numeração usa têm conteúdo no CSV.
+
+### Onde isso é testado
+
+`tests/csv_fatia_do_modelo_harness.js` reconstrói o CSV do 21118 e lê as funções
+de verdade do `script.js`. O `cliente.js` tem a regra repetida (ele é autônomo e
+não carrega o `csv-editor.js`), e o harness exige que os dois lados a tenham: sem
+o corte no link do cliente, o cliente folhearia 450 páginas, 400 em branco, para
+um modelo que a gráfica vai imprimir 50 vezes.
+
 ## O segundo modo: distribuir entre os modelos do pedido
 
 Um mesmo CSV serve a vários modelos do mesmo pedido — o mapa do teatro vira um

@@ -2038,9 +2038,49 @@ function fatiaCsvDoItem(item, num) {
     const rows = (num && num.csv_data) || [];
     const sel = item && item.csv_selecao;
     const mesmaNum = item && num && String(numeracaoIdDoItem(item)) === String(num.id);
-    if (!sel || !mesmaNum || !sel.ids) return linhasAtivasCsv(rows);
-    const querido = new Set(expandirIdsCsv(sel.ids).map(Number));
-    return linhasAtivasCsv(rows).filter(r => querido.has(Number(r.__id)));
+    let base;
+    if (!sel || !mesmaNum || !sel.ids) {
+        base = linhasAtivasCsv(rows);
+    } else {
+        const querido = new Set(expandirIdsCsv(sel.ids).map(Number));
+        base = linhasAtivasCsv(rows).filter(r => querido.has(Number(r.__id)));
+    }
+    return linhasComDadoDaNumeracao(base, num);
+}
+
+/** As colunas do CSV que esta numeracao le. Espelha o script.js. */
+function colunasDoBancoDaNumeracao(num) {
+    if (!num) return [];
+    const vistas = [];
+    (num.elements || []).forEach(el => {
+        if (!el || el.source !== 'database') return;
+        const col = String(el.csv_column || '').trim();
+        if (col && vistas.indexOf(col) === -1) vistas.push(col);
+    });
+    return vistas;
+}
+
+/**
+ * So as linhas em que ESTA numeracao tem alguma coisa a imprimir. Espelha o
+ * script.js; a explicacao inteira mora la.
+ *
+ * Aqui importa por um motivo proprio: o cliente folheia as paginas do modelo, e
+ * sem este corte ele veria as linhas dos OUTROS modelos do pedido como paginas
+ * em branco -- 450 ingressos onde a gráfica vai imprimir 50.
+ */
+function linhasComDadoDaNumeracao(rows, num) {
+    if (!Array.isArray(rows) || !rows.length) return Array.isArray(rows) ? rows : [];
+    const colunas = colunasDoBancoDaNumeracao(num);
+    if (!colunas.length) return rows;
+    const cabecalho = (num && num.csv_headers && num.csv_headers.length)
+        ? num.csv_headers.map(c => String(c))
+        : Object.keys(rows[0] || {}).filter(k => k !== '__ativo' && k !== '__id' && k !== '__fotos');
+    const existentes = colunas.filter(c => cabecalho.indexOf(c) !== -1);
+    if (!existentes.length) return rows;
+    return rows.filter(r => existentes.some(c => {
+        const v = r ? r[c] : null;
+        return String(v === null || v === undefined ? '' : v).trim() !== '';
+    }));
 }
 
 /** A numeracao tem dado variavel vindo de CSV? */

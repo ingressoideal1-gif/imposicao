@@ -47,7 +47,8 @@ const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado
                'podeLiberarParaProducao',
                'modeloEstaAprovado', 'quemAprovouOModelo', 'tituloDoModeloAprovado',
                'bloqueioDeModeloAprovado',
-               'linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
+               'linhasAtivasCsv', 'numeracaoIdDoItem',
+               'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                'numeracaoDoModelo', 'numeracaoEhDuplex',
                'celulasEsperadasDoModelo', 'celulasGeradasDoModelo',
                'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas'];

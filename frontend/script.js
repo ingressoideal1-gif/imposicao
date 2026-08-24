@@ -2797,6 +2797,21 @@ function renderNumeracoes() {
 
         const fmtName = fmt ? `${fmt.name} (${fmt.width_mm}×${fmt.height_mm}mm)` : 'Formato Excluído';
 
+        // A miniatura entra numa caixa de 200×60 SEM esticar e SEM sobrar chapa
+        // branca em volta: a escala é a que faz o formato caber, e as duas medidas
+        // saem dela. Travar só a altura deixava um bracelete de 245×20 mm como uma
+        // tira fina no meio de um retângulo branco alto. Como o agrupamento é por
+        // formato base, todas as linhas de um grupo saem com a mesma forma.
+        const MINI_LARG_MAX = 200;
+        const MINI_ALT_MAX = 60;
+        let miniLarg = MINI_LARG_MAX;
+        let miniAlt = MINI_ALT_MAX;
+        if (fmt && fmt.width_mm > 0 && fmt.height_mm > 0) {
+            const escMini = Math.min(MINI_LARG_MAX / fmt.width_mm, MINI_ALT_MAX / fmt.height_mm);
+            miniLarg = Math.max(24, Math.round(fmt.width_mm * escMini));
+            miniAlt = Math.max(14, Math.round(fmt.height_mm * escMini));
+        }
+
 
 
         html += `
@@ -2814,7 +2829,7 @@ function renderNumeracoes() {
             <table class="data-table">
                 <thead>
 
-                    <tr><th>Nome</th><th>Tipo</th><th>Elementos</th><th width="150" class="actions-cell">Ações</th></tr>
+                    <tr><th>Nome</th><th width="210">Preview</th><th>Tipo</th><th>Elementos</th><th width="150" class="actions-cell">Ações</th></tr>
 
                 </thead>
 
@@ -2834,9 +2849,25 @@ function renderNumeracoes() {
 
             const tipoBadge = `<span class="badge badge-gray">${n.tipo || 'SEQUENCIAL'}</span>`;
 
+            // A coluna preview_jpg é gravada a cada save da numeração desde a
+            // v487. Normalmente é a URL pública de artes/previews-numeracoes/,
+            // mas volta a ser data URL base64 quando o upload ao Storage falha —
+            // as duas formas servem direto num <img>, e é por isso que aqui não
+            // há nenhum teste de `startsWith('http')`.
+            const preview = n.preview_jpg || '';
+            const semPreview = `<div style="width:${miniLarg}px;height:${miniAlt}px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:4px;color:var(--text-faint);font-size:1rem;" title="Sem miniatura ainda — ela é gerada ao salvar a numeração">🖼️</div>`;
+            const previewCell = preview
+                ? `<img src="${escapeHtml(preview)}" alt="Miniatura de ${escapeHtml(n.name)}" loading="lazy"
+                        style="width:${miniLarg}px;height:${miniAlt}px;object-fit:contain;background:#ffffff;border-radius:4px;border:1px solid var(--border);cursor:zoom-in;display:block;"
+                        title="Clique para ampliar"
+                        onclick="ampliarPreviewNumeracao('${escapeJsAttr(n.id)}')"
+                        onerror="previewDaNumeracaoFalhou(this)" />`
+                : semPreview;
+
             html += `
                 <tr>
                     <td><strong>${n.name}</strong></td>
+                    <td>${previewCell}</td>
                     <td>${tipoBadge}</td>
                     <td>${typeBadges || '--'} <small style="color:var(--text-faint)">(${(n.elements || []).length} itens)</small></td>
 
@@ -2872,6 +2903,83 @@ function renderNumeracoes() {
 
 }
 
+
+/**
+ * Abre a miniatura da numeração em tamanho grande. Recebe o id em vez da URL
+ * porque o preview pode ser um data URL base64 de dezenas de KB, e enfiar isso
+ * dentro de um atributo `onclick` de cada linha incharia o HTML da lista.
+ */
+function ampliarPreviewNumeracao(id) {
+    const n = state.numeracoes.find(x => String(x.id) === String(id));
+    if (!n || !n.preview_jpg) {
+        toast('Esta numeração ainda não tem miniatura. Abra e salve para gerá-la.', 'info');
+        return;
+    }
+    abrirLightboxImagem(n.preview_jpg, n.name || 'Numeração');
+}
+window.ampliarPreviewNumeracao = ampliarPreviewNumeracao;
+
+/**
+ * Troca a miniatura quebrada por uma marca discreta, sem deixar o ícone de
+ * imagem partida do navegador na tabela. Acontece quando o .jpg sumiu do bucket:
+ * `deleteNumeracao()` não apaga o arquivo, então uma faxina em
+ * artes/previews-numeracoes/ pode tirar o preview de baixo de um registro vivo.
+ */
+function previewDaNumeracaoFalhou(img) {
+    if (!img || img.dataset.previewFalhou === '1') return;
+    img.dataset.previewFalhou = '1';
+    const marca = document.createElement('div');
+    marca.style.cssText = `width:${img.style.width || '200px'};height:${img.style.height || '60px'};`
+        + 'display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);'
+        + 'border:1px dashed var(--border);border-radius:4px;color:var(--text-faint);font-size:1rem;';
+    marca.textContent = '🖼️';
+    marca.title = 'A miniatura não foi encontrada. Abra e salve a numeração para gerá-la de novo.';
+    img.replaceWith(marca);
+}
+window.previewDaNumeracaoFalhou = previewDaNumeracaoFalhou;
+
+/**
+ * Lightbox de imagem do painel: fundo escuro, a imagem inteira e a legenda.
+ * Fecha no clique em qualquer lugar e no Esc.
+ *
+ * Existe porque `openClienteLightbox` mora no cliente.js, que o index.html não
+ * carrega — chamá-lo daqui é um clique que não faz nada. O overlay é criado uma
+ * vez e reaproveitado.
+ */
+function abrirLightboxImagem(src, legenda) {
+    if (!src) return;
+    let overlay = document.getElementById('lightbox-imagem');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'lightbox-imagem';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:none;'
+            + 'flex-direction:column;align-items:center;justify-content:center;gap:14px;'
+            + 'background:rgba(2,6,23,0.92);padding:24px;cursor:zoom-out;';
+        overlay.innerHTML = `
+            <img id="lightbox-imagem-img" alt="Miniatura ampliada"
+                 style="width:92vw;height:78vh;object-fit:contain;" />
+            <div id="lightbox-imagem-legenda" style="color:#ffffff;font-weight:600;font-size:0.95rem;text-shadow:0 1px 3px rgba(0,0,0,0.8);"></div>
+            <button type="button" title="Fechar (Esc)"
+                    style="position:absolute;top:14px;right:18px;background:rgba(15,23,42,0.85);border:1px solid rgba(255,255,255,0.35);color:#ffffff;border-radius:8px;padding:6px 14px;font-size:1rem;font-weight:700;cursor:pointer;">✕ Fechar</button>`;
+        overlay.addEventListener('click', fecharLightboxImagem);
+        document.body.appendChild(overlay);
+        document.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape') fecharLightboxImagem();
+        });
+    }
+    const alvo = document.getElementById('lightbox-imagem-img');
+    if (alvo) alvo.src = src;
+    const cap = document.getElementById('lightbox-imagem-legenda');
+    if (cap) cap.textContent = legenda || '';
+    overlay.style.display = 'flex';
+}
+window.abrirLightboxImagem = abrirLightboxImagem;
+
+function fecharLightboxImagem() {
+    const overlay = document.getElementById('lightbox-imagem');
+    if (overlay) overlay.style.display = 'none';
+}
+window.fecharLightboxImagem = fecharLightboxImagem;
 
 
 window.novaNumeracao = function () {
@@ -13499,9 +13607,95 @@ function numeracaoIdDoItem(item) {
 
 
 /**
+ * As colunas do CSV que a numeração deste modelo realmente lê — as apontadas
+ * pelos elementos `source: 'database'`. São elas que dizem o que daquele banco
+ * vai para o papel; o resto do arquivo pode ser de outro modelo.
+ */
+function colunasDoBancoDaNumeracao(num) {
+
+    if (!num) return [];
+
+    const vistas = [];
+
+    (num.elements || []).forEach(el => {
+
+        if (!el || el.source !== 'database') return;
+
+        const col = String(el.csv_column || '').trim();
+
+        if (col && vistas.indexOf(col) === -1) vistas.push(col);
+
+    });
+
+    return vistas;
+
+}
+window.colunasDoBancoDaNumeracao = colunasDoBancoDaNumeracao;
+
+
+
+/**
+ * Só as linhas em que ESTA numeração tem alguma coisa a imprimir.
+ *
+ * Regra do usuário, 24/08/2026: a célula de um modelo se conta pelas colunas que
+ * a numeração dele usa, e não pelo tamanho do arquivo. Nasceu do pedido 21118 —
+ * um CSV de 450 linhas com três pares de colunas, um por modelo: VIP preenchido
+ * em 50 linhas, ACA em 350, CRE em 450. Os três modelos apontavam para o mesmo
+ * arquivo, então os três contavam 450 células; o VIP, de Qtd 50, ficava acusado
+ * de 400 células a mais e não podia ser marcado PRONTO. A saída era desmarcar
+ * 400 linhas na mão, uma a uma, em cada numeração.
+ *
+ * Basta UMA das colunas ter conteúdo para a linha ser do modelo: linha com o
+ * nome preenchido e o QR vazio continua imprimindo, e continua aparecendo na
+ * Conferência como célula vazia. Só sai a linha que não tem nada daquele modelo.
+ *
+ * A regra não se aplica — e a lista volta inteira — quando a numeração não tem
+ * elemento de banco (não há coluna para medir) ou quando nenhuma das colunas
+ * dela existe no CSV: esse caso já é o "banco incompleto", que avisa e segura o
+ * PRONTO com um recado próprio. Filtrar ali zeraria a tiragem por causa de um
+ * nome de coluna errado.
+ */
+function linhasComDadoDaNumeracao(rows, num) {
+
+    if (!Array.isArray(rows) || !rows.length) return Array.isArray(rows) ? rows : [];
+
+    const colunas = colunasDoBancoDaNumeracao(num);
+
+    if (!colunas.length) return rows;
+
+    const cabecalho = (num && num.csv_headers && num.csv_headers.length)
+
+        ? num.csv_headers.map(c => String(c))
+
+        : Object.keys(rows[0] || {}).filter(k => k !== '__ativo' && k !== '__id' && k !== '__fotos');
+
+    const existentes = colunas.filter(c => cabecalho.indexOf(c) !== -1);
+
+    if (!existentes.length) return rows;
+
+    return rows.filter(r => existentes.some(c => {
+
+        const v = r ? r[c] : null;
+
+        return String(v === null || v === undefined ? '' : v).trim() !== '';
+
+    }));
+
+}
+window.linhasComDadoDaNumeracao = linhasComDadoDaNumeracao;
+
+
+
+/**
  * As linhas do banco que ESTE modelo imprime, na ordem original — que é a ordem
  * de impressão. Item sem `csv_selecao` recebe o banco inteiro, que é o
  * comportamento de todo pedido anterior a esta versão.
+ *
+ * Sobre o que sobrar, seja a distribuição ou o banco inteiro, ainda passa o
+ * corte por coluna (`linhasComDadoDaNumeracao`): linha sem nada nas colunas que
+ * esta numeração lê não é célula deste modelo, nem para contar nem para imprimir.
+ * Os dois cortes se somam — desmarcar continua sendo a palavra final do
+ * operador sobre uma linha que TEM dado.
  */
 function fatiaCsvDoItem(item, num) {
 
@@ -13511,9 +13705,13 @@ function fatiaCsvDoItem(item, num) {
 
     const mesmaNum = item && num && String(numeracaoIdDoItem(item)) === String(num.id);
 
-    if (!sel || !mesmaNum || !window.CsvEditor) return linhasAtivasCsv(rows);
+    const base = (!sel || !mesmaNum || !window.CsvEditor)
 
-    return window.CsvEditor.fatiaDoModelo(rows, sel);
+        ? linhasAtivasCsv(rows)
+
+        : window.CsvEditor.fatiaDoModelo(rows, sel);
+
+    return linhasComDadoDaNumeracao(base, num);
 
 }
 
@@ -14004,11 +14202,17 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
  */
 function modeloSemLinhasDoBanco(item) {
 
-    if (!item || !item.csv_selecao) return null;
+    if (!item) return null;
 
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
 
     if (!num || !num.csv_data || !num.csv_data.length) return null;
+
+    // Dois jeitos de a fatia zerar: a distribuicao nao deu linha nenhuma a este
+    // modelo, ou as colunas que a numeracao dele le estao vazias no CSV inteiro.
+    // Sem nenhum dos dois nao ha o que conferir, e chamar a fatia a toa custaria
+    // uma varredura do banco em cada redesenho do card.
+    if (!item.csv_selecao && !colunasDoBancoDaNumeracao(num).length) return null;
 
     if (fatiaCsvDoItem(item, num).length) return null;
 
@@ -14031,7 +14235,9 @@ function recadoDeFatiaVazia(itens) {
 
     return `Sem nenhuma linha do banco de dados: ${nomes.join(', ')}. `
 
-        + 'Modelo sem linha não imprime nada. Abra 🧩 Linhas no card do modelo, '
+        + 'Modelo sem linha não imprime nada. Confira se as colunas que a '
+
+        + 'numeração dele usa têm conteúdo no CSV, ou abra 🧩 Linhas no card do modelo, '
 
         + 'escolha as linhas que ele imprime e imponha de novo.';
 
@@ -14251,12 +14457,27 @@ function divergenciaDeCelulasDoModelo(item) {
     if (esperado === null || gerado === null || esperado === gerado) return null;
     const bruto = (item.quantidade !== undefined && item.quantidade !== null)
         ? item.quantidade : item.qtd;
+    const num = numeracaoDoModelo(item);
+    const diferenca = gerado - esperado;
+    // Quantas linhas o corte por coluna tirou. So interessa quando a tiragem
+    // ficou CURTA: ai a explicacao provavel e uma celula em branco na coluna que
+    // esta numeracao le, e o operador precisa saber disso para achar o buraco.
+    // Num modelo que fechou a Qtd, as linhas descartadas sao dos outros modelos
+    // do mesmo arquivo -- dizer o numero ali seria barulho. Por isso a conta so
+    // roda quando falta: esta funcao e chamada a cada redesenho de card, e uma
+    // varredura extra do banco de 19 mil linhas se sente na tela.
+    let descartadas = 0;
+    if (diferenca < 0) {
+        const base = linhasAtivasCsv((num && num.csv_data) || []);
+        descartadas = Math.max(0, base.length - linhasComDadoDaNumeracao(base, num).length);
+    }
     return {
         qtd: parseInt(bruto),
-        modo: numeracaoEhDuplex(numeracaoDoModelo(item)) ? 'FxVerso' : 'Frente',
+        modo: numeracaoEhDuplex(num) ? 'FxVerso' : 'Frente',
         esperado: esperado,
         gerado: gerado,
-        diferenca: gerado - esperado
+        diferenca: diferenca,
+        descartadas: descartadas
     };
 }
 window.divergenciaDeCelulasDoModelo = divergenciaDeCelulasDoModelo;
@@ -14678,8 +14899,14 @@ window.abrirConferenciaDeDados = abrirConferenciaDeDados;
 function textoDaDivergenciaDeCelulas(d) {
     if (!d) return '';
     const falta = d.diferenca < 0 ? ('faltam ' + (-d.diferenca)) : ('sobram ' + d.diferenca);
+    // Faltando linha E havendo linha descartada, a causa quase sempre e a mesma:
+    // celula em branco na coluna do banco. Dizer isso aqui poupa o operador de
+    // abrir o CSV para descobrir por que a conta encolheu.
+    const causa = (d.diferenca < 0 && d.descartadas)
+        ? (' (' + d.descartadas + ' linha(s) do CSV sem nada nas colunas desta numeração)')
+        : '';
     return 'Qtd ' + d.qtd + ' · ' + d.modo + ' · esperado ' + d.esperado
-         + ' linha(s) · gerado ' + d.gerado + ' · ' + falta;
+         + ' linha(s) · gerado ' + d.gerado + ' · ' + falta + causa;
 }
 window.textoDaDivergenciaDeCelulas = textoDaDivergenciaDeCelulas;
 
@@ -23718,7 +23945,7 @@ function previewDaArteDoPedidoHtml(os) {
             previewHtml = `
                 <img src="${previewSrc}" 
                      style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
-                     onclick="event.stopPropagation(); openClienteLightbox('${previewSrc}')" 
+                     onclick="event.stopPropagation(); abrirLightboxImagem('${previewSrc}', 'Arte do pedido')" 
                      title="Clique para ampliar a arte" />
             `;
         }
