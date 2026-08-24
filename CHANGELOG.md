@@ -4,7 +4,34 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v704** — 2026-08-23 | Agente **1.2.198**
+## Versão atual: **v705** — 2026-08-24 | Agente **1.2.199**
+
+---
+
+## [v705 — 2026-08-24] — Acabamento: o pedido enviado à expedição continua na lista de PRONTO
+
+Pedido do usuário, olhando o 21030: *"No Painel de acabamento, na edição do pedido, ao clicar e
+enviá-lo para a Expedição, ele deve ir para a lista de 'PRONTO'"*.
+
+Até aqui o pedido **sumia da tela** no instante do envio. O `status_interno` virava `EXPEDICAO`, que
+não passa no recorte da fila do Acabamento, e o resultado para quem estava na estação era: clicou, a
+tela voltou para a lista, e o trabalho dele não estava em lugar nenhum.
+
+Agora `EXPEDICAO` entra no recorte da **lista** — e só dela. As métricas da coluna lateral continuam
+contando apenas a fila de trabalho: **PEDIDOS EM FILA**, o número no menu e o alerta de atraso não
+contam pedido que já saiu do setor. Quem cresce é a tabela, que é onde o operador procura o que
+acabou de mandar.
+
+Ele aparece na **lista de PRONTO** (o botão de recorte que já existia para pedidos com todos os
+modelos prontos), marcado com **📦 NA EXPEDIÇÃO** embaixo do número — para não se confundir com um
+pedido pronto que ainda está na bancada. Aberto, o botão de expedição vira comprovante em vez de
+oferecer enviar de novo, e o aviso do envio passa a dizer onde reencontrá-lo.
+
+**A lista não incha.** Assim que a expedição embarca, o ERP troca o status para `EM TRANSITO` e o
+pedido sai daqui sozinho — hoje são 11 pedidos em `EXPEDICAO`, todos dos últimos quatro dias.
+
+**Testes:** 665 verificações no harness do acabamento (era 639), incluindo o caminho inteiro
+desenhado num Chrome. Sem a correção, 7 delas caem.
 
 ---
 

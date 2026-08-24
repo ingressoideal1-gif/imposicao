@@ -230,9 +230,41 @@
             || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
     }
 
+    /**
+     * O pedido já foi entregue à expedição.
+     *
+     * Pedido do usuário em 23/08/2026: *"ao clicar e enviá-lo para a Expedição,
+     * ele deve ir para a lista de PRONTO"*. Até aqui o pedido sumia da tela no
+     * instante em que era enviado — o `status_interno` virava `EXPEDICAO`, que
+     * o `ehDeProducao` não aceita, e o operador ficava sem o comprovante do
+     * próprio trabalho. Agora ele continua na lista, com o selo PRONTO, até a
+     * expedição despachá-lo.
+     *
+     * A lista não incha por causa disso: assim que a expedição embarca, o ERP
+     * troca o status para EM TRANSITO e o pedido sai daqui sozinho.
+     */
+    function ehExpedido(os) {
+        return (os.status_interno || '').toUpperCase() === 'EXPEDICAO';
+    }
+
     function pedidosEmProducao() {
         return (estado().ordens || [])
             .filter(ehDeProducao)
+            .filter(os => !tela.encerradosTeste.has(String(os.numero)));
+    }
+
+    /**
+     * O que a LISTA mostra: a fila de trabalho mais o que já foi expedido.
+     *
+     * Separado do `pedidosEmProducao` de propósito. As métricas da coluna
+     * lateral contam trabalho a fazer — "PEDIDOS EM FILA", o número no menu, o
+     * alerta de atraso —, e pedido que já saiu do setor não é trabalho a fazer.
+     * Quem cresce é só a lista, que é onde o operador procura o que ele acabou
+     * de mandar.
+     */
+    function pedidosDoPainel() {
+        return (estado().ordens || [])
+            .filter(os => ehDeProducao(os) || ehExpedido(os))
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
     }
 
@@ -679,7 +711,10 @@
         tela.temAtrasados = emProducao.some(os => estaAtrasado(os) && !pedidoTotalmentePronto(os));
 
         // ── A tabela ────────────────────────────────────────────────────────
-        let lista = filtrar(emProducao).filter(passaNoPrazo);
+        // Aqui entra o que já foi para a expedição, e nas métricas acima não:
+        // o operador precisa reencontrar o pedido que acabou de enviar, mas ele
+        // não é mais trabalho na fila. Ver `pedidosDoPainel`.
+        let lista = filtrar(pedidosDoPainel()).filter(passaNoPrazo);
         lista = aplicarSort(lista);
 
         pintarCabecalhos();
@@ -737,6 +772,10 @@
                 <tr class="os-row" onclick="AcabamentoPainel.abrirPedido('${escJs(os.id)}')" style="cursor: pointer; background: ${fundoPedido};" title="Abrir os modelos do pedido ${esc(os.numero)}">
                     <td>
                         <span style="${ESTILO_CRACHA_NUMERO}">${esc(os.numero)}</span>
+                        ${ehExpedido(os) ? `
+                        <span title="Este pedido já foi entregue à expedição. Ele sai daqui quando a expedição embarcá-lo."
+                              style="display: block; margin-top: 4px; font-size: 0.66rem; font-weight: 800;
+                                     letter-spacing: 0.04em; color: #4cc8f0;">📦 NA EXPEDIÇÃO</span>` : ''}
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
@@ -2160,6 +2199,21 @@
      * operador ficaria procurando um botão que a tela não mostra.
      */
     function botaoDeExpedicao(itens, numeroDoPedido) {
+        // Já entregue: o botão vira comprovante. Oferecer "enviar" de novo num
+        // pedido que já saiu convidaria a uma segunda escrita sem sentido, e
+        // esconder o botão deixaria o operador sem saber se o envio pegou.
+        const aberto = (estado().ordens || []).find(o => String(o.id) === String(tela.pedidoAberto));
+        if (aberto && ehExpedido(aberto)) {
+            return `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        gap: 6px; padding: 12px 16px; border-left: 1px solid rgba(76,205,246,0.16);">
+                <span style="background: rgba(76,200,240,0.12); border: 1px solid #4cc8f0; color: #4cc8f0;
+                             border-radius: 8px; padding: 12px 22px; font-size: 0.95rem; font-weight: 800;
+                             letter-spacing: 0.06em; white-space: nowrap;">📦 NA EXPEDIÇÃO</span>
+                <span style="font-size: 0.72rem; color: #7fa9d4;">já entregue — sai da lista ao embarcar</span>
+            </div>`;
+        }
+
         const pronto = pedidoProntoParaExpedicao(itens);
         const pendentes = setoresPendentes(itens);
         const pode = podeEditar();
@@ -2464,7 +2518,10 @@
             os.status_interno = 'EXPEDICAO';
             os.status = 'EXPEDICAO';
             fecharPopupDaExpedicao();
-            avisar(`Pedido ${esc(os.numero)} enviado para EXPEDIÇÃO. 📦`, 'success');
+            // Onde ele foi parar, dito na hora: o pedido não some mais da tela,
+            // e o operador precisa saber onde reencontrá-lo.
+            avisar(`Pedido ${esc(os.numero)} enviado para EXPEDIÇÃO 📦 — `
+                 + `ele continua na lista, em PRONTO.`, 'success');
             AcabamentoPainel.fecharPedido();
         } catch (e) {
             console.error('[acabamento] erro ao mandar para expedição:', e);
@@ -5562,6 +5619,7 @@
 
         _regras: {
             ehDeProducao,
+            ehExpedido,
             setoresDoPedido,
             pesoDoTexto,
             pesoParaTexto,

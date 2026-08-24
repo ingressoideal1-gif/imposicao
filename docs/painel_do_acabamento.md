@@ -583,12 +583,47 @@ pendente é o erro caro desta tela.
 
 Clicado com tudo pronto, ele grava **`propostas.status_interno = 'EXPEDICAO'`** —
 estado que o ERP já usa, e que o painel já escrevia no botão de liberar para
-produção. O pedido sai da fila do Acabamento na hora, e a tela volta para a
-lista.
+produção. A tela volta para a lista.
 
 A conferência é refeita **dentro** da função, e não só no `disabled`: quem
 digitar `AcabamentoPainel.expedir(...)` no console passaria direto pelo atributo,
 e o preço seria um pedido expedido com material na mesa.
+
+### O pedido expedido continua na lista de PRONTO
+
+> "ao clicar e enviá-lo para a Expedição, ele deve ir para a lista de 'PRONTO'"
+> — usuário, 23/08/2026, olhando o pedido 21030
+
+Até aí o pedido **sumia da tela** no instante do envio: `EXPEDICAO` não passa no
+`ehDeProducao`, o pedido saía do recorte, e o operador clicava, a tela voltava
+para a lista e o trabalho dele não estava em lugar nenhum.
+
+Agora `EXPEDICAO` entra no recorte da **lista** — e só dela. Quem faz isso é o
+`pedidosDoPainel`, separado do `pedidosEmProducao` de propósito:
+
+| | `pedidosEmProducao` | `pedidosDoPainel` |
+|---|---|---|
+| A tabela | | ✅ |
+| PEDIDOS EM FILA, o número do menu, o alerta de atraso | ✅ | |
+
+A razão é simples: as métricas contam **trabalho a fazer**, e pedido que já saiu
+do setor não é mais trabalho. A lista é onde o operador procura o que ele acabou
+de mandar.
+
+**Onde ele aparece.** Na "lista de PRONTO" — o botão de recorte `Pronto`, que
+existe justamente porque pedido com todos os modelos prontos sai das outras
+listas. Isso não mudou; o que mudou é que o expedido agora chega lá em vez de
+desaparecer. Ele vai marcado com **📦 NA EXPEDIÇÃO** embaixo do número, para não
+se confundir com um pedido pronto que ainda está na bancada esperando o envio.
+
+**Aberto**, o botão vira comprovante: **📦 NA EXPEDIÇÃO — já entregue, sai da
+lista ao embarcar**, sem oferecer enviar de novo. E o aviso do envio diz onde
+reencontrá-lo.
+
+**A lista não incha.** Assim que a expedição embarca, o ERP troca o status para
+`EM TRANSITO` e o pedido sai daqui sozinho. Em 23/08/2026 havia 11 pedidos em
+`EXPEDICAO`, todos dos últimos quatro dias, contra 7 em `EM TRANSITO` e 4 em
+`ENTREGUE` — a bandeja se esvazia sozinha.
 
 ### O CONCLUIDO de cada setor, que não depende do botão
 

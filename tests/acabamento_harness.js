@@ -3460,6 +3460,159 @@ async function asContasDosPacotesSaoPuras() {
     await asContasDosPacotesSaoPuras();
 })();
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  O PEDIDO EXPEDIDO CONTINUA NA LISTA, EM "PRONTO"
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Pedido do usuario em 23/08/2026, olhando o 21030:
+//
+//   "No Painel de acabamento, na edicao do pedido, ao clicar e envialo para a
+//    Expedicao, ele deve ir para a lista de 'PRONTO'"
+//
+// Ate aqui o pedido SUMIA no instante em que era enviado: o `status_interno`
+// virava EXPEDICAO, que o `ehDeProducao` nao aceita, e o operador ficava sem o
+// comprovante do proprio trabalho -- clicava, a tela voltava para a lista, e o
+// pedido nao estava em lugar nenhum.
+//
+// O que estes testes travam:
+//   1. o pedido expedido aparece na LISTA, com o selo PRONTO e a marca propria;
+//   2. e aparece sob o filtro "Pronto", nao sob "Em acabamento";
+//   3. as METRICAS nao o contam -- ele nao e mais trabalho na fila;
+//   4. aberto, o botao EXPEDICAO vira comprovante e nao oferece enviar de novo;
+//   5. e mandar para a expedicao nao o faz sumir.
+
+/**
+ * Um pedido com os dois modelos PRONTOS e o `status_interno` a escolher.
+ *
+ * Os modelos entram nos dois lugares de proposito: em `modelosGlobais`, que e
+ * o que a TABELA le, e em `osItens`, que e o que o DETALHE le. Sem o primeiro a
+ * lista mostraria "Aguardando" num pedido que ja acabou.
+ */
+function ambienteDeExpedicao(status) {
+    const prontos = [
+        { id: 3001, quantidade: 500, setor: 'PVC', status_impressao: 'Impresso',
+          acabamento_status: 'Pronto', acabamento_responsavel: 'Ana Paula' },
+        { id: 3002, quantidade: 200, setor: 'PVC', status_impressao: 'Impresso',
+          acabamento_status: 'Pronto', acabamento_responsavel: 'Ana Paula' },
+    ];
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.ordens[0].status_interno = status;
+    amb.janela.state.modelosGlobais[200] = prontos;
+    amb.janela.state.osItens['os-200'].forEach(i => {
+        i.setor = 'PVC';
+        i.acabamento_status = 'Pronto';
+        i.acabamento_responsavel = 'Ana Paula';
+    });
+    return amb;
+}
+
+/**
+ * A tabela desenhada, sem passar pela rede.
+ *
+ * `recorte` e o botao de prazo. A "lista de PRONTO" do pedido do usuario e o
+ * `prontos`: pedido com todos os modelos prontos sai das outras listas de
+ * proposito -- ele nao e mais trabalho do dia -- e so aparece nesse botao.
+ */
+function listaDo(amb, recorte) {
+    if (recorte) amb.painel.setFiltroPrazo(recorte);
+    else amb.painel.render();
+    return amb.elementos['tbody-acabamento'].innerHTML;
+}
+
+async function oPedidoExpedidoContinuaNaLista() {
+    const amb = ambienteDeExpedicao('EXPEDICAO');
+    const html = listaDo(amb, 'prontos');
+    ok(html.indexOf('>200<') !== -1, 'o pedido expedido continua na lista');
+    ok(html.indexOf('NA EXPEDIÇÃO') !== -1,
+       'com a marca que o distingue de um pedido ainda na bancada');
+
+    // O selo do estagio e o de PRONTO, que e o que o usuario pediu.
+    ok(html.indexOf('Pronto') !== -1, 'e com o selo PRONTO');
+}
+
+async function oExpedidoAparecerSobOFiltroPronto() {
+    const amb = ambienteDeExpedicao('EXPEDICAO');
+
+    ok(listaDo(amb, 'prontos').indexOf('>200<') !== -1,
+       'no botao PRONTO ele esta la -- foi exatamente isso que o usuario pediu');
+    ok(listaDo(amb, 'geral').indexOf('>200<') === -1,
+       'e no GERAL nao: pedido pronto sai da lista de trabalho, como sempre saiu');
+    ok(listaDo(amb, 'hoje').indexOf('>200<') === -1, 'nem no PARA HOJE');
+
+    // E no filtro de ESTAGIO, que e outro eixo, ele esta em Pronto.
+    amb.painel.setFiltroPrazo('prontos');
+    amb.painel.setFiltroStatus('Pronto');
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>200<') !== -1,
+       'e o estagio dele e Pronto');
+    amb.painel.setFiltroStatus('Em acabamento');
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>200<') === -1,
+       'nao Em acabamento: o trabalho dele terminou');
+}
+
+async function oExpedidoNaoContaComoFila() {
+    const naFila = ambienteDeExpedicao('EM PRODUCAO');
+    listaDo(naFila);
+    const antes = naFila.elementos['stat-acab-pedidos-fila'].textContent;
+
+    const expedido = ambienteDeExpedicao('EXPEDICAO');
+    const html = listaDo(expedido, 'prontos');
+    const depois = expedido.elementos['stat-acab-pedidos-fila'].textContent;
+
+    ok(String(antes) === '1', 'na producao, o pedido conta na fila', String(antes));
+    ok(String(depois) === '0',
+       'expedido, ele sai da conta da fila -- nao e mais trabalho a fazer', String(depois));
+    ok(String(expedido.elementos['badge-acabamento'].textContent) === '0',
+       'e o numero do menu tambem nao o conta',
+       String(expedido.elementos['badge-acabamento'].textContent));
+
+    // Mas continua na tabela: e essa a diferenca entre a metrica e a lista.
+    ok(html.indexOf('>200<') !== -1, 'ainda assim ele esta na tabela');
+}
+
+async function oPedidoJaExpedidoNaoOferecerEnviarDeNovo() {
+    const amb = ambienteDeExpedicao('EXPEDICAO');
+    await amb.painel.abrirPedido('os-200');
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('NA EXPEDIÇÃO') !== -1, 'o botao vira comprovante');
+    ok(html.indexOf('já entregue') !== -1, 'dizendo que o pedido ja saiu');
+    ok(html.indexOf('AcabamentoPainel.expedir(') === -1,
+       'e nao ha mais o que clicar para enviar de novo');
+}
+
+async function mandarParaExpedicaoNaoFazOPedidoSumir() {
+    const avisos = [];
+    const amb = ambienteDeExpedicao('EM PRODUCAO');
+    amb.janela.toast = (texto, tipo) => avisos.push({ texto, tipo });
+    await amb.painel.abrirPedido('os-200');
+    avisos.length = 0;
+
+    await amb.painel.expedir('os-200');
+    await amb.painel.confirmarExpedicao('os-200');
+
+    ok(amb.janela.state.ordens[0].status_interno === 'EXPEDICAO', 'o status mudou');
+    ok(listaDo(amb, 'prontos').indexOf('NA EXPEDIÇÃO') !== -1,
+       'e o pedido continua na lista de PRONTO, agora marcado como expedido');
+    ok(avisos.some(a => /em PRONTO/.test(a.texto)),
+       'o aviso diz ONDE reencontra-lo',
+       avisos.map(a => a.texto).join(' | '));
+}
+
+async function asContasDoRecorteDaListaSaoPuras() {
+    const r = ambienteDeVolumes().painel._regras;
+
+    ok(r.ehDeProducao({ status_interno: 'EM PRODUCAO' }), 'EM PRODUCAO e fila');
+    ok(r.ehDeProducao({ status_interno: 'EM IMPRESSÃO' }), 'EM IMPRESSAO tambem, com acento');
+    ok(!r.ehDeProducao({ status_interno: 'EXPEDICAO' }), 'EXPEDICAO nao e fila');
+
+    ok(r.ehExpedido({ status_interno: 'EXPEDICAO' }), 'EXPEDICAO e expedido');
+    ok(r.ehExpedido({ status_interno: 'expedicao' }), 'e a caixa da letra nao importa');
+    ok(!r.ehExpedido({ status_interno: 'EM TRANSITO' }),
+       'EM TRANSITO ja nao e: embarcado, o pedido sai desta tela sozinho');
+    ok(!r.ehExpedido({ status_interno: 'ENTREGUE' }), 'ENTREGUE tambem nao');
+    ok(!r.ehExpedido({}), 'pedido sem status nenhum nao e expedido');
+}
+
 (async function () {
     await aListaDeResponsaveisVemDaViewDeOperadores();
     await oResponsavelGravadoForaDoPerfilContinuaAparecendo();
@@ -3486,6 +3639,14 @@ async function asContasDosPacotesSaoPuras() {
     await cancelarFechaOPopupSemGravar();
     await semPermissaoOPopupExplicaEnaoOferece();
     await comTudoProntoOPedidoVaiParaExpedicao();
+
+    // O pedido expedido continua na lista, em PRONTO (23/08/2026)
+    await oPedidoExpedidoContinuaNaLista();
+    await oExpedidoAparecerSobOFiltroPronto();
+    await oExpedidoNaoContaComoFila();
+    await oPedidoJaExpedidoNaoOferecerEnviarDeNovo();
+    await mandarParaExpedicaoNaoFazOPedidoSumir();
+    await asContasDoRecorteDaListaSaoPuras();
     await asInformacoesDoModeloSaemEmTabela();
     await oCabecalhoDoPedidoAbertoDestacaNumeroEEvento();
     await semResponsavelOStatusNaoSeMexe();
