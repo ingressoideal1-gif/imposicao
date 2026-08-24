@@ -187,3 +187,78 @@ def test_o_modulo_sai_da_grade_e_nao_do_papel():
         "a decisão voltou a olhar o papel; quem manda é a grade, que o dono da "
         "gráfica edita ao vivo"
     )
+
+
+# ─── 5. O que a tela de Usuários mostra sobre quem administra ─────────────────
+
+
+def _bloco_do_perfil(nome):
+    """As chaves `perm_*` de um perfil do `ROLE_DEFAULTS`, do script.js."""
+    inicio = SCRIPT.index("const ROLE_DEFAULTS = {")
+    trecho = SCRIPT[inicio:SCRIPT.index("// Nomes dos perfis para UI", inicio)]
+    corpo = trecho[trecho.index(f"    {nome}: {{"):]
+    corpo = corpo[: corpo.index("\n    },")]
+    return {m for m in re.findall(r"\bperm_[a-z_]+", corpo)}
+
+
+def test_o_perfil_administrador_tem_todas_as_caixas_da_grade():
+    """Chave que falta no padrão do perfil vira "grade personalizada" eterna.
+
+    `resumoDaGrade` compara a grade gravada com `ROLE_DEFAULTS[role]` chave por
+    chave. Uma chave presente no banco e ausente no padrão nunca casa, então a
+    linha de TODA conta ADM exibia o selo "✏️ grade personalizada" e, ao lado
+    dele, o botão "↩️ Restaurar padrão" — que reenvia este mesmo objeto
+    incompleto e por isso não conserta nada. Foi o caso de `perm_fontes_view` e
+    `perm_fontes_edit`, que os outros sete perfis sempre tiveram.
+    """
+    modulos = SCRIPT[SCRIPT.index("const PERM_MODULES = ["):]
+    modulos = modulos[: modulos.index("];")]
+    chaves = set()
+    for key in re.findall(r"key:\s*'([a-z_]+)'", modulos):
+        chaves.add(f"perm_{key}_view")
+        chaves.add(f"perm_{key}_edit")
+    acoes = SCRIPT[SCRIPT.index("const PERM_ACTIONS = ["):]
+    acoes = acoes[: acoes.index("];")]
+    for key in re.findall(r"key:\s*'([a-z_]+)'", acoes):
+        chaves.add(f"perm_{key}")
+
+    faltando = chaves - _bloco_do_perfil("admin")
+    assert not faltando, (
+        "o perfil Administrador não define estas caixas da grade, e cada uma "
+        f"delas marca toda conta ADM como 'grade personalizada': {sorted(faltando)}"
+    )
+
+
+def test_o_admin_da_tela_e_o_admin_que_o_servidor_grava():
+    """A cópia do frontend e o `PADRAO_ADMIN` da função não podem divergir.
+
+    O comentário do `PADRAO_ADMIN` diz que ele é cópia deliberada do
+    `ROLE_DEFAULTS`: um manda na TELA, o outro no BANCO. Quando divergem, a
+    pessoa vê uma grade e recebe outra.
+    """
+    bloco = FUNCAO[FUNCAO.index("const PADRAO_ADMIN = {"):]
+    bloco = bloco[: bloco.index("};")]
+    do_servidor = set(re.findall(r"\bperm_[a-z_]+", bloco))
+    do_frontend = _bloco_do_perfil("admin")
+    assert do_servidor == do_frontend, (
+        "ROLE_DEFAULTS.admin e PADRAO_ADMIN não têm as mesmas chaves: "
+        f"só na tela {sorted(do_frontend - do_servidor)}, "
+        f"só no servidor {sorted(do_servidor - do_frontend)}"
+    )
+
+
+def test_falha_ao_ler_acessos_locais_nao_vira_lista_vazia():
+    """"Não consegui perguntar" não é "a estação entra sem código".
+
+    Um 401 ou 403 desenhava o aviso de que NENHUM código existe — enquanto doze
+    operadores entram com código. Quem lesse isso concluiria que a trava da
+    estação sumiu.
+    """
+    trecho = SCRIPT[SCRIPT.index("window.loadAcessosLocais = async function()"):]
+    trecho = trecho[: trecho.index("async function salvarAcessoLocalNoMotor")]
+    guarda = trecho.index("Nenhum acesso local cadastrado")
+    antes = trecho[:guarda]
+    assert "!resp.ok" in antes and "Array.isArray(data.acessos)" in antes, (
+        "a mensagem de lista vazia voltou a ser desenhada sem conferir a "
+        "resposta do servidor"
+    )

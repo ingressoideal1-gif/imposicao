@@ -16609,6 +16609,18 @@ const ROLE_DEFAULTS = {
         perm_producao_view:true, perm_producao_edit:true,
         perm_acabamento_view:true, perm_acabamento_edit:true,
         perm_lista_arte_view:true, perm_lista_arte_edit:true,
+        // As duas do catálogo de fontes faltavam AQUI, e só aqui — os outros
+        // sete perfis sempre as tiveram, e o `PADRAO_ADMIN` da Edge Function
+        // (`supabase/functions/painel/index.ts`) grava as duas como `true` desde
+        // que existe. A ausência não tirava fonte de administrador nenhum, mas
+        // estragava a tela de Usuários de duas maneiras, as duas na linha de
+        // QUEM É ADMINISTRADOR: o resumo dizia "✏️ grade personalizada" para
+        // toda conta ADM (chave presente no banco, ausente no padrão, e
+        // `resumoDaGrade` compara as duas), e o botão "↩️ Restaurar padrão" que
+        // aparece junto não tinha como consertar isso — ele reenvia justamente
+        // este objeto, sem as duas chaves, então a comparação seguinte dava
+        // "personalizada" outra vez. Um botão que nunca termina o trabalho.
+        perm_fontes_view:true, perm_fontes_edit:true,
         perm_gerar_pdf:true, perm_imprimir:true,
         perm_admin_view:true, perm_admin_edit:true,
     },
@@ -18147,16 +18159,19 @@ window.loadAdminUsers = async function() {
     try {
         // 1) Buscar TODOS os usuários do sistema parceiro
         let allUsers = [];
+        let falhaUsuarios = supabaseClient ? null : 'o painel está em modo local, sem banco';
         try {
             if (supabaseClient) {
                 const { data: profiles, error } = await supabaseClient
                     .from('usuarios')
                     .select('user_id, email, setor, avatar, is_admin, telefone')
                     .order('email', { ascending: true });
-                if (!error && profiles) allUsers = profiles;
+                if (error) falhaUsuarios = error.message || 'o banco recusou a consulta';
+                else if (profiles) allUsers = profiles;
             }
         } catch (e) {
             console.warn('[admin] Erro ao buscar usuarios:', e);
+            falhaUsuarios = e.message || 'erro de rede';
         }
 
         // 2) Buscar permissões do Imposition
@@ -18168,8 +18183,18 @@ window.loadAdminUsers = async function() {
         const resp = await fetch(`${API_PAINEL}/api/user/permissions`);
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok || !Array.isArray(data.permissions)) {
+            // O 401 tem nome, e dizer o nome economiza a hora de quem procura o
+            // defeito no lugar errado: ele significa que a página não tem sessão
+            // do site. É o que acontece com o painel aberto NA ESTAÇÃO, onde a
+            // entrada é pelo código local e não há login do Supabase para oferecer
+            // — e estas duas telas falam com a nuvem de propósito, porque mexem
+            // nas tabelas que só a chave de serviço alcança.
+            const motivo = data.detail
+                || (resp.status === 401 ? 'esta tela precisa da sessão do site — abra o painel pelo endereço da nuvem e entre com o seu login'
+                :  resp.status === 403 ? 'a sua conta não tem o módulo "Usuários"'
+                :  `servidor sem resposta (HTTP ${resp.status})`);
             tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:20px;">
-                Não deu para ler as permissões (${escapeHtml(data.detail || 'servidor sem resposta')}).<br>
+                Não deu para ler as permissões (${escapeHtml(motivo)}).<br>
                 <small style="color:var(--text-dim);">Nada foi alterado. Clique em Atualizar Lista para tentar de novo.</small>
             </td></tr>`;
             return;
@@ -18178,7 +18203,16 @@ window.loadAdminUsers = async function() {
         _permsUsuarios = permsMap;
 
         if (!allUsers.length) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-dim);">Nenhum usuário encontrado no sistema.</td></tr>';
+            // Quem some daqui não pode ser gerenciado por ninguém: a lista de
+            // pessoas desta tela vem da tabela `usuarios` do parceiro, e não da
+            // grade. Dizer "nenhum usuário encontrado" quando a consulta FALHOU
+            // mandaria o administrador procurar gente que está lá.
+            tbody.innerHTML = falhaUsuarios
+                ? `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:20px;">
+                    Não deu para ler a lista de pessoas do sistema (${escapeHtml(falhaUsuarios)}).<br>
+                    <small style="color:var(--text-dim);">Nada foi alterado. Clique em Atualizar Lista para tentar de novo.</small>
+                   </td></tr>`
+                : '<tr><td colspan="3" style="text-align:center; color: var(--text-dim);">Nenhum usuário encontrado no sistema.</td></tr>';
             return;
         }
 
@@ -18402,8 +18436,31 @@ window.loadAcessosLocais = async function() {
 
     try {
         const resp = await fetch(`${API_PAINEL}/api/acessos-locais`);
-        const data = await resp.json();
-        _acessosLocais = (data.ok && data.acessos) ? data.acessos : [];
+        const data = await resp.json().catch(() => ({}));
+
+        // "Não consegui perguntar" NÃO é "não há ninguém".
+        //
+        // Enquanto as duas respostas caíam na mesma mensagem, um 401 ou um 403
+        // desenhava na tela o aviso de que a estação entra SEM código — e ela
+        // entra com código, de doze operadores. O administrador que acreditasse
+        // nisso sairia cadastrando código por cima de quem já tinha, ou pior:
+        // concluiria que a trava da estação sumiu. O card ao lado, o de
+        // Usuários, já separa os dois casos; este ficou para trás.
+        if (!resp.ok || !data.ok || !Array.isArray(data.acessos)) {
+            const motivo = data.detail
+                || (resp.status === 401 ? 'esta tela precisa da sessão do site — abra o painel pelo endereço da nuvem e entre com o seu login'
+                :  resp.status === 403 ? 'a sua conta não tem o módulo "Usuários"'
+                :  `servidor sem resposta (HTTP ${resp.status})`);
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px;">
+                Não deu para ler os acessos locais (${escapeHtml(motivo)}).<br>
+                <small style="color:var(--text-dim);">Nada foi alterado, e os códigos que existem continuam valendo.
+                Clique em Atualizar para tentar de novo.</small>
+            </td></tr>`;
+            _acessosLocais = [];
+            return;
+        }
+
+        _acessosLocais = data.acessos;
 
         if (!_acessosLocais.length) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">
