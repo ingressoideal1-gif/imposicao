@@ -207,7 +207,14 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
     }), { id: 'a', numero: 301 });
     ok(comImagem.indexOf('<img') > 0 && comImagem.indexOf('data:image/png;base64,AAA') > 0,
         'com arte, mostra a miniatura', comImagem.slice(0, 80));
-    ok(comImagem.indexOf('openClienteLightbox') > 0, 'e o clique amplia');
+    // Ate 24/08/2026 esta verificacao travava o nome errado: o preview chamava
+    // openClienteLightbox, que so existe no cliente.js — e o index.html nao
+    // carrega o cliente.js. O clique nao fazia nada, e o teste passava. Por isso
+    // agora nao basta o nome: a funcao chamada tem de EXISTIR no script.js.
+    const chamada = (comImagem.match(/onclick="[^"]*?;\s*([A-Za-z0-9_$]+)\(/) || [])[1];
+    ok(chamada === 'abrirLightboxImagem', 'e o clique amplia', chamada);
+    ok(new RegExp('\\nfunction ' + chamada + '\\(').test(SCRIPT),
+        'e quem amplia mora no proprio script.js, senao o clique nao faz nada', chamada);
 
     // PDF nao vira imagem: sai o icone que abre o arquivo. Rasterizar a arte do
     // cliente esta fora de cogitacao neste projeto.

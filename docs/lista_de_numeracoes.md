@@ -11,13 +11,12 @@ Escopo: `frontend/index.html` (seção `#view-catalogo`, por volta da linha 619)
 ## O que a tela é
 
 Uma tabela agrupada por formato base, com as numerações cadastradas. Cada linha
-mostra nome, tipo, os tipos de elemento presentes e três ações: duplicar, editar e
-excluir. Acima, três filtros — busca por nome, formato e tipo — e o botão **+ Nova
-Numeração**.
+mostra nome, **miniatura**, tipo, os tipos de elemento presentes e três ações:
+duplicar, editar e excluir. Acima, três filtros — busca por nome, formato e tipo — e
+o botão **+ Nova Numeração**.
 
-Não há preview de imagem na lista. A coluna `preview_jpg` da tabela
-`producao_numeracoes` existe e é preenchida ao salvar, mas **nada neste
-repositório a lê** — nem esta tela. Ver "A coluna `preview_jpg`", abaixo.
+A miniatura sai da coluna `preview_jpg`, e clicar nela abre a imagem em tamanho
+grande. Ver "A coluna `preview_jpg`" e "A coluna Preview", abaixo.
 
 ## Como os dados chegam
 
@@ -153,14 +152,53 @@ Desde a v487 ela guarda uma **URL pública** para
 arquivo é nomeado pelo id do registro e gravado com upsert, então há no máximo um
 preview por numeração.
 
-Nada lê essa coluna hoje — nem esta tela, nem nenhuma outra. Ela é escrita e
-esquecida. Se um dia esta lista for ganhar miniaturas, é daqui que elas devem sair,
-e o custo é zero: a URL já está em `state.numeracoes` e o arquivo já existe.
+Desde 24/08/2026 quem a lê é a **coluna Preview** desta lista (abaixo). O custo é
+zero: o GET da lista é `select('*')`, então a URL já vinha em `state.numeracoes` sem
+que ninguém a usasse, e o arquivo já existia no bucket.
 
 Cuidado ao consumir: o valor pode voltar a ser base64 se o upload ao Storage falhar
 ou se o navegador ficar sem `supabaseClient`. Qualquer leitor precisa aceitar as
 duas formas, ou testar `startsWith('http')`. Detalhes em
 `docs/superpowers/specs/2026-08-08-preview-jpg-no-storage-design.md`.
+
+Medido no banco em 24/08/2026: **83 registros, 81 com preview — todos como URL,
+nenhum em base64**.
+
+## A coluna Preview
+
+Fica entre **Nome** e **Tipo**, e a imagem é o `preview_jpg` cru num `<img>` — as
+duas formas do valor (URL pública e data URL base64) servem direto, e é por isso que
+ali não há nenhum teste de `startsWith('http')`.
+
+Três decisões que valem conhecer antes de mexer:
+
+- **A caixa tem a forma do papel, não uma forma fixa.** A escala é
+  `min(200 / width_mm, 60 / height_mm)`, e largura e altura saem dela. A primeira
+  versão travava a altura em 54 px e só calculava a largura: num bracelete de
+  245×20 mm a arte virava uma tira fina no meio de uma chapa branca alta. Como o
+  agrupamento é por formato base, todas as linhas de um grupo saem com a mesma forma.
+
+- **As miniaturas são `loading="lazy"`.** São 26 linhas visíveis hoje e 83 registros
+  no banco; sem isso, abrir a lista dispararia dezenas de downloads de uma vez.
+  Consequência ao testar: uma miniatura fora da tela tem `naturalWidth === 0` e
+  parece quebrada. Role até ela antes de concluir qualquer coisa.
+
+- **Miniatura que não carrega vira uma marca 🖼️, não o ícone de imagem partida.**
+  É o `onerror` chamando `previewDaNumeracaoFalhou()`. O caso real existe:
+  `deleteNumeracao()` não apaga o `.jpg` do bucket, então uma faxina em
+  `artes/previews-numeracoes/` pode tirar o preview de baixo de um registro vivo.
+  O registro sem `preview_jpg` nenhum (2 dos 83) mostra a mesma marca.
+
+O clique abre `abrirLightboxImagem(src, legenda)`, que vive no `script.js` porque
+`openClienteLightbox` mora no `cliente.js` e o `index.html` não o carrega — a
+miniatura da prévia do **Painel de Produção** chamava justamente esse fantasma desde
+sempre, e o clique dela não fazia nada até 24/08/2026. A imagem abre numa caixa de
+`92vw × 78vh` com `object-fit: contain`: preenche a tela em vez de abrir no tamanho
+natural, que num monitor grande parecia que o clique não tinha funcionado.
+
+`ampliarPreviewNumeracao(id)` recebe o **id**, não a URL, porque um preview em
+base64 tem dezenas de KB e repetir isso dentro do `onclick` de cada linha incharia o
+HTML da lista.
 
 ## Ordenação
 

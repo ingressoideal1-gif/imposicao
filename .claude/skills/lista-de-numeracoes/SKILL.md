@@ -29,10 +29,12 @@ foi programada para fazer.
    Frente. Corrigido — mas ao acrescentar coluna nova em `producao_numeracoes`,
    decida conscientemente se ela entra em `duplicateCatalogNumeracao()`.
 
-O documento traz ainda: por que `elements` nunca contém `METADATA` na leitura, o que
-a coluna `preview_jpg` guarda desde a v487 e por que ninguém a lê, por que a ordem
-dos grupos na tela não é alfabética, a diferença entre `is_custom` e `Cli_Num`, e os
-cenários que valem exercitar ao verificar uma mudança.
+O documento traz ainda: por que `elements` nunca contém `METADATA` na leitura, como
+funciona a **coluna Preview** (a miniatura entre Nome e Tipo, que sai do
+`preview_jpg` e amplia no clique) e as três decisões dela — a caixa tem a forma do
+papel, as imagens são `loading="lazy"`, e a que não carrega vira uma marca 🖼️ —,
+por que a ordem dos grupos na tela não é alfabética, a diferença entre `is_custom` e
+`Cli_Num`, e os cenários que valem exercitar ao verificar uma mudança.
 
 `frontend/producao.html` tem uma cópia antiga desta view e **não** é a página viva —
 `app.py:103` redireciona para `/app/index.html`. Não a edite achando que está
