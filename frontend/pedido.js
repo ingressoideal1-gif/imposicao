@@ -3209,12 +3209,11 @@ async function enviarParaPedido(itemId, osId) {
     }
     const pedViewTitle = document.getElementById('ped-view-title');
     const pedViewSubtitle = document.getElementById('ped-view-subtitle');
-    if (pedViewTitle) {
-        const orderNum = activeOS ? (activeOS.numero || '') : '';
-        const displayTitle = nomeEvento ? `${orderNum} - ${nomeEvento}` : `${orderNum}`;
-        pedViewTitle.textContent = displayTitle;
-        pedViewTitle.style.fontSize = 'calc(2.2rem + 5pt)';
-        pedViewTitle.style.fontWeight = 'bold';
+    // As duas linhas do título moram no `script.js`, numa função só: dois
+    // caminhos chegam aqui, e escrever o título duas vezes o faria depender de
+    // por onde a pessoa entrou.
+    if (typeof pintarTituloDaTelaDePedido === 'function') {
+        pintarTituloDaTelaDePedido(pedViewTitle, activeOS, nomeEvento);
     }
     if (pedViewSubtitle) {
         pedViewSubtitle.style.display = 'none';

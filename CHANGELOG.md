@@ -4,7 +4,70 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v703** — 2026-08-23 | Agente **1.2.197**
+## Versão atual: **v704** — 2026-08-23 | Agente **1.2.198**
+
+---
+
+## [v704 — 2026-08-23] — Título do pedido em duas linhas, e o "Pesar este volume" na tela em qualquer tamanho
+
+### Tela de Pedido: o título em duas linhas, com os tamanhos que ele pediu
+
+Pedido do usuário: *"no Painel de Arte, na edição do Pedido, deixar o título 'número + Evento' 20%
+menor e a segunda linha 'Cliente + Número' 30% menor"*.
+
+```
+21085 - Expointer 2026 - Parte 2            ← 20% menor que o tamanho de antes
+ANGELA BEATRIZ DA COSTA SALOMAO - 53193     ← 30% menor, em amarelo
+```
+
+Mesma forma que o cabeçalho do Painel do Acabamento ganhou de manhã; o que muda são os tamanhos, que
+ele deu aqui um a um. **Os dois saem do mesmo tamanho de referência**, e não um em cima do outro: 30%
+menor que a *primeira linha* daria 56% do título, e não 70%. Por isso as duas são medidas em `em`
+sobre o `TAMANHO_DO_TITULO_DO_PEDIDO`.
+
+**Dois caminhos chegavam a esse cabeçalho e cada um escrevia o título por conta própria** — abrir um
+modelo pela tela de Pedido e voltar a ela pelo histórico do painel. Agora os dois chamam a mesma
+`pintarTituloDaTelaDePedido`; antes, bastava mexer num para o título passar a depender de por onde a
+pessoa entrou. Há teste travando isso.
+
+A linha do cliente devolve o próprio `-webkit-text-fill-color`, pela mesma razão do título do
+Acabamento: o degradê do `<h1>` se recorta no texto dos filhos, e um `color` sozinho sairia cinza.
+`tests/titulo_do_pedido_harness.js` (13 verificações) mede a cor e as duas proporções num Chrome de
+verdade, com o controle ao lado.
+
+### Acabamento: o "Pesar este volume" agora está na tela em qualquer tamanho
+
+Relato do usuário depois da v703: *"estou na V703 e ainda não existe o botão pesar este volume"*.
+
+Ele estava certo de novo, e a correção anterior tinha resolvido só metade. Medido em sete tamanhos
+de tela:
+
+| Largura da tela | v703 (`sticky`) | v704 (fixa) |
+|---|---|---|
+| 1920 / 1600 / 1366 / 1280 | na tela | na tela |
+| **1024 × 768** | **2.214 px abaixo da janela** | na tela |
+| 900 (tablet) | 2.217 px abaixo | na tela |
+| 412 (celular) | 4.828 px abaixo | na tela |
+
+**Por que o `sticky` não bastou.** Dois motivos somados. O `.prod-table-card` acima da barra tem
+`overflow: hidden`, e **ancestral com overflow escondido desliga o `position: sticky` do
+descendente**. E abaixo de 1024 px a media query vira o `.prod-panel-container` em coluna com
+`overflow: auto`, passando a ser ele quem rola — outro contexto, outra conta.
+
+**O conserto.** A barra saiu de dentro do detalhe e virou fixa contra a janela, no
+`#acab-barra-escolha`, fora das views — a mesma escolha que o Quadro de Avisos já tinha feito no
+mesmo dia, pelo mesmo motivo. Assim ela não depende de layout nenhum.
+
+Três coisas moram naquele canto agora — o Quadro de Avisos, esta barra e os avisos flutuantes — e se
+empilham pela convenção que o quadro criou: cada uma publica a própria altura numa variável de CSS
+(`--avisos-altura`, `--escolha-altura`) e a de cima se apoia nela. Nenhuma cobre a outra. Enquanto a
+escolha está em curso o corpo do pedido ganha folga embaixo, para o último card não ficar atrás da
+barra, e sair do Acabamento tira a barra junto.
+
+**O teste aprendeu a lição.** O harness de navegador que entrou na v703 media **um** tamanho de tela
+— justamente um em que o `sticky` funcionava. Agora ele mede **sete**, do monitor grande ao celular,
+passando pelo 1024, que é onde a chave vira. São 39 verificações, com o controle que dá sentido ao
+resto: devolvida para dentro do detalhe, em 1024×768, o botão volta a cair fora da janela.
 
 ---
 

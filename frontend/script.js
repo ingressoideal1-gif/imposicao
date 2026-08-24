@@ -22973,6 +22973,68 @@ function rotuloDoCliente(os) {
 }
 window.rotuloDoCliente = rotuloDoCliente;
 
+/**
+ * O tamanho de referência do título da tela de Pedido.
+ *
+ * As duas linhas são medidas em `em` a partir daqui: assim "20% menor" e "30%
+ * menor" continuam querendo dizer a mesma coisa — 20% e 30% MENOR QUE ISTO — se
+ * um dia este número mudar.
+ */
+const TAMANHO_DO_TITULO_DO_PEDIDO = 'calc(2.2rem + 5pt)';
+
+/**
+ * A linha do cliente, embaixo do título da tela de Pedido.
+ *
+ * O `-webkit-text-fill-color` é obrigatório, não decoração. O `<h1>` herda o
+ * degradê de `.page-header-text h1`, que pinta o texto por
+ * `-webkit-background-clip: text` com `-webkit-text-fill-color: transparent`.
+ * Esse transparente é HERDADO pelos filhos, e o degradê do `<h1>` se recorta no
+ * texto deles também: uma segunda linha só com `color: #fbbf24` sairia CINZA
+ * CLARA, igual à de cima, com o amarelo todo certo no código e ninguém vendo
+ * amarelo na tela. Foi medido num Chrome — ver
+ * `tests/titulo_do_acabamento_harness.js`, que desenha o controle ao lado.
+ */
+const ESTILO_CLIENTE_DO_PEDIDO = 'font-size: 0.7em; color: #fbbf24;'
+    + ' -webkit-text-fill-color: #fbbf24; background: none;';
+
+/**
+ * O título da tela de Pedido, em duas linhas.
+ *
+ * Pedido do usuário em 23/08/2026: *"no Painel de Arte, na edição do Pedido,
+ * deixar o título 'número + Evento' 20% menor e a segunda linha
+ * 'Cliente + Número' 30% menor"*.
+ *
+ * É a mesma forma que o cabeçalho do Painel do Acabamento ganhou na manhã do
+ * mesmo dia — número e evento em cima, cliente em amarelo embaixo. O que muda
+ * são os tamanhos, que ele deu aqui um a um.
+ *
+ * Mora numa função só porque DOIS caminhos chegam a este título: abrir um
+ * modelo pela tela de Pedido (`pedido.js`) e voltar a ela pelo histórico do
+ * painel (`script.js`). Escrito duas vezes, o título passaria a depender de por
+ * onde a pessoa entrou.
+ *
+ * Linha que não existe não é desenhada: pedido sem evento no briefing fica com
+ * a primeira linha só no número, em vez de terminar num hífen solto.
+ */
+function pintarTituloDaTelaDePedido(el, os, nomeEvento) {
+    if (!el) return;
+
+    const numero = os ? String(os.numero === undefined || os.numero === null ? '' : os.numero).trim() : '';
+    const evento = String(nomeEvento === undefined || nomeEvento === null ? '' : nomeEvento).trim();
+    const cliente = (typeof rotuloDoCliente === 'function' ? (rotuloDoCliente(os) || '') : '').trim();
+    const primeira = [numero, evento].filter(Boolean).join(' - ');
+
+    const linhas = [];
+    if (primeira) linhas.push(`<div style="font-size: 0.8em;">${escapeHtml(primeira)}</div>`);
+    if (cliente) linhas.push(`<div style="${ESTILO_CLIENTE_DO_PEDIDO}">${escapeHtml(cliente)}</div>`);
+
+    el.innerHTML = linhas.join('');
+    el.style.fontSize = TAMANHO_DO_TITULO_DO_PEDIDO;
+    el.style.fontWeight = 'bold';
+    el.style.lineHeight = '1.15';
+}
+window.pintarTituloDaTelaDePedido = pintarTituloDaTelaDePedido;
+
 // ──── As abas que o painel reaproveita ────────────────────────────────────
 //
 // `_blank` quer dizer "sempre outra aba": abrir cinco pedidos no Vibe deixava
@@ -26157,13 +26219,7 @@ window.showView = function(viewId) {
             }
             const pedViewTitle = document.getElementById('ped-view-title');
             const pedViewSubtitle = document.getElementById('ped-view-subtitle');
-            if (pedViewTitle) {
-                const orderNum = os ? (os.numero || '') : '';
-                const displayTitle = nomeEvento ? `${orderNum} - ${nomeEvento}` : `${orderNum}`;
-                pedViewTitle.textContent = displayTitle;
-                pedViewTitle.style.fontSize = 'calc(2.2rem + 5pt)';
-                pedViewTitle.style.fontWeight = 'bold';
-            }
+            pintarTituloDaTelaDePedido(pedViewTitle, os, nomeEvento);
             if (pedViewSubtitle) {
                 pedViewSubtitle.style.display = 'none';
             }

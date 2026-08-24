@@ -162,6 +162,14 @@ linha só com o número, em vez de terminar num hífen solto.
 > desenhando ao lado o controle sem o `text-fill`, para a armadilha ficar
 > visível na imagem `tests/_titulo_do_acabamento.png`.
 
+> [!NOTE]
+> A **tela de Pedido** ganhou a mesma forma no mesmo dia, com tamanhos próprios
+> (a primeira linha 20% menor, a do cliente 30% menor — pedido do usuário, com
+> os dois números medidos a partir do mesmo tamanho de referência). Ela é
+> montada por `pintarTituloDaTelaDePedido`, no `script.js`, e cai na mesma
+> armadilha do `-webkit-text-fill-color` descrita acima. Ver
+> [`lista_de_arte.md`](lista_de_arte.md).
+
 Duas miúdezas do degradê que custaram tempo e valem para quem for mexer:
 
 - ele foi refeito inline terminando em `#cbd5e1`, e não no `#94a3b8` do CSS: com

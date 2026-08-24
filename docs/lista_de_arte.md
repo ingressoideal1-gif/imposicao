@@ -456,6 +456,42 @@ lança: sem rede, a tela segue com o que tem. Ela roda também ao **mandar um
 modelo para a Imposição** e ao **abrir o pedido inteiro na Imposição**, porque
 o que vai para a folha tem de ser a numeração do banco, nunca a da aba.
 
+## O título da tela de Pedido
+
+Abrir um pedido leva à tela de **Pedido**, e o cabeçalho dela sai em duas
+linhas desde 23/08/2026, a pedido do usuário:
+
+```
+21085 - Expointer 2026 - Parte 2            ← 20% menor que o tamanho de antes
+ANGELA BEATRIZ DA COSTA SALOMAO - 53193     ← 30% menor, em #fbbf24
+```
+
+Os dois números saem do **mesmo** tamanho de referência
+(`TAMANHO_DO_TITULO_DO_PEDIDO`), e não um em cima do outro: 30% menor que a
+primeira linha daria 56% do título, e não 70%. Por isso as duas linhas são
+medidas em `em`.
+
+O cliente vem do `rotuloDoCliente`, que já devolve "NOME - NÚMERO" — o mesmo de
+todo o resto do painel. Pedido sem evento no briefing fica com a primeira linha
+só no número, em vez de terminar num hífen solto.
+
+> [!CAUTION]
+> A linha do cliente **devolve o próprio `-webkit-text-fill-color`**, e isso não
+> é decoração. O `<h1>` herda o degradê de `.page-header-text h1`, que pinta o
+> texto por `-webkit-background-clip: text` com fill transparente; esse
+> transparente é herdado, e o degradê se recorta no texto dos filhos também —
+> uma segunda linha só com `color: #fbbf24` sairia **cinza clara**, igual à de
+> cima. O `tests/titulo_do_pedido_harness.js` mede a cor no pixel e desenha ao
+> lado o controle sem o `text-fill`, para a armadilha ficar visível na imagem.
+
+**Dois caminhos chegam a esse cabeçalho** — abrir um modelo pela tela de Pedido
+(`pedido.js`) e voltar a ela pelo histórico do painel (`script.js`). Os dois
+chamam a mesma `pintarTituloDaTelaDePedido`: escrito duas vezes, o título
+passaria a depender de por onde a pessoa entrou. Há teste travando isso.
+
+O **Painel do Acabamento** tem a mesma forma no cabeçalho do pedido aberto, com
+tamanhos próprios — ver [`painel_do_acabamento.md`](painel_do_acabamento.md).
+
 ## Onde mexer
 
 | O quê | Onde |
@@ -465,6 +501,7 @@ o que vai para a folha tem de ser a numeração do banco, nunca a da aba.
 | A miniatura da arte | `previewDaArteDoPedidoHtml` |
 | O relógio e a cor | `anotarTempoNoCard`, `inicioDoTempoNoCard`, `corDoTempoNoCard`, `celulaDeTempoHtml` |
 | O carimbo dos concluídos | `celulaDeEntradaEmProducaoHtml` (e o `th-tempo-arte` em `renderOrdens`) |
+| O título da tela de Pedido | `pintarTituloDaTelaDePedido`, `ESTILO_CLIENTE_DO_PEDIDO` |
 | A caixa de designers | `renderDesignersBoxHTML` |
 | As travas do negócio | `podeDefinirDesigner`, `bloqueioDeModeloAprovado`, `divergenciaDeCelulasDoModelo`, `podeLiberarParaProducao` |
 | O botão do parceiro | `botaoDoVibeHtml`, `linkDoPedidoNoVibe` |
