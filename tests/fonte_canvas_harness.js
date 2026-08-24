@@ -42,8 +42,17 @@ async function corridaDeDoisDesenhos(fonte) {
         createElement: () => ({}),
         head: { appendChild: () => {} },
     };
-    // Sem catalogo o `carregarCatalogoFontesWeb` cai no catch e segue: o que
-    // este caso mede e a espera pela fonte, nao a busca do catalogo.
+    // O catalogo nao interessa a este caso -- o que ele mede e a espera pela
+    // FONTE. O stub existe para o `carregarCatalogoFontesWeb` nao cair no catch
+    // e imprimir um aviso; a mordaca no console, para a linha de sucesso dele
+    // nao ir para o stdout, que aqui carrega o JSON da resposta. Sem os dois, o
+    // barulho aparecia dentro do relatorio do `conferir.ps1`, onde parece
+    // defeito.
+    globalThis.lerCatalogoDeFontes = async () => [];
+    const calado = () => {};
+    const logOriginal = console.log, warnOriginal = console.warn;
+    console.log = calado; console.warn = calado;
+    const devolverConsole = () => { console.log = logOriginal; console.warn = warnOriginal; };
     setTimeout(() => { chegou = true; liberar(); }, 10);
 
     const primeiro = modulo.garantirFontesCarregadas([fonte]).then(() => chegou);
@@ -53,6 +62,7 @@ async function corridaDeDoisDesenhos(fonte) {
     // Depois de tudo pronto, uma terceira chamada nao pode mais esperar nada.
     const terceiro = await modulo.garantirFontesCarregadas([fonte]).then(() => chegou);
 
+    devolverConsole();
     return { primeiroEsperou: a, segundoEsperou: b, terceiroEsperou: terceiro };
 }
 
