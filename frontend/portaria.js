@@ -451,6 +451,20 @@
             });
             $('contador-numeros').textContent =
                 emPortugues(entraram) + ' / ' + emPortugues(contratado);
+            // A mesma conta em BARRA, logo abaixo do número (identidade
+            // "Fita", 24/08/2026). Ela não acrescenta informação nenhuma: diz
+            // de relance o que o número já diz, e é isso que serve a quem está
+            // de pé no portão e olha o celular de raspão. A lotação continua
+            // sendo a quantidade CONTRATADA no ERP — o denominador acima.
+            //
+            // Vai numa variável de CSS porque a barra é desenhada pelo
+            // `.contador::after`: sem contratado (setor ainda não impresso), a
+            // fração fica em zero e a barra some sozinha.
+            var cheio = contratado > 0
+                ? Math.max(0, Math.min(100, (entraram / contratado) * 100))
+                : 0;
+            var caixa = $('contador-numeros').parentNode;
+            if (caixa) { caixa.style.setProperty('--cheio', cheio.toFixed(1) + '%'); }
             // Some quando zera -- decisao do usuario. Uma marca fixa dizendo
             // "0 nao enviadas" e ruido no unico numero que o porteiro olha.
             $('contador-pendentes').textContent = naFila

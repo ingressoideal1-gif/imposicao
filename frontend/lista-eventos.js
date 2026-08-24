@@ -246,6 +246,14 @@
         var icone = document.createElement('span');
         icone.className = 'icone-ler';
         icone.appendChild(iconeCelularQR());
+        // O rótulo em texto embaixo do ícone (identidade "Fita", 24/08/2026).
+        // O celular-com-QR era a única pista de que a barra inteira é o botão
+        // de LER, e ícone sozinho não se explica — é a mesma regra que fez o
+        // "Digitar o número" da portaria ser palavra, e não desenho.
+        var rotulo = document.createElement('span');
+        rotulo.className = 'rotulo-ler';
+        rotulo.textContent = 'LER';
+        icone.appendChild(rotulo);
         barra.appendChild(icone);
 
         // O `aria-label` SUBSTITUI o conteúdo da barra para quem usa leitor de

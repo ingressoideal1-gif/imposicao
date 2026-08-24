@@ -1004,3 +1004,314 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
     border-top: 1px solid var(--border);
 }
 #caixa-carregar button + button { margin-top: 10px; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A IDENTIDADE "FITA" (24/08/2026)
+   ══════════════════════════════════════════════════════════════════════════
+
+   Aprovada pelo usuario a partir do canvas de design. Ela nao inventa marca
+   nenhuma: sai do que a marca JA tem -- as tres fitas laranja do logotipo NPI,
+   o ingresso recortado do icone do aplicativo, e o verde-agua que vira azul do
+   fundo dele. O logotipo continua sendo o ARQUIVO (`Logo Ideal Dark.png`), e
+   nunca um desenho meu.
+
+   Tres coisas carregam o resto:
+
+     1. O EVENTO E UM INGRESSO. `.barra-evento` ganha as duas meias-luas
+        recortadas, o picote pontilhado e o canhoto a direita, onde mora o
+        icone de ler. Recorte de verdade, com `mask` em CSS -- sem imagem, o
+        que importa numa tela que precisa abrir sem rede.
+
+     2. A FITA E A REGUA. As tres faixas inclinadas viram a marca de cada
+        etiqueta de secao, do titulo de secao da engrenagem e do fundo.
+
+     3. A TELA TEM TRES CAMADAS. Luz ambiente (que ja existia no `body`), grao
+        fino e as fitas ao fundo -- as duas ultimas entram aqui, em
+        pseudo-elementos do `body`, sem uma linha de HTML a mais.
+
+   Escrito como um bloco no fim do arquivo, e nao espalhado: assim da para ler
+   a identidade inteira de uma vez, e da para tirar de uma vez se ele quiser
+   voltar atras.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── As duas texturas ──────────────────────────────────────────────────────
+   `fixed` de proposito: a textura acompanha a janela, nao o documento, entao
+   rolar nao a repinta. E `pointer-events: none` para nao roubar nenhum toque.
+
+   O grao existe por um motivo pratico, e nao decorativo: o degrade do fundo,
+   em tela de celular, mostra faixas (banding). O ruido as quebra. */
+body::before, body::after {
+    content: "";
+    position: fixed;
+    inset: -30%;
+    z-index: 0;
+    pointer-events: none;
+}
+body::before {
+    background: repeating-linear-gradient(107deg,
+        rgba(240, 138, 60, .075) 0 26px, transparent 26px 40px,
+        rgba(240, 138, 60, .05)  40px 60px, transparent 60px 150px);
+    -webkit-mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .7) 100%);
+            mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .7) 100%);
+    animation: fita-anda 34s linear infinite;
+}
+/* So `transform`: e o que o navegador anima no compositor, sem repintar nada
+   -- a rolagem do celular continua lisa. */
+@keyframes fita-anda { to { transform: translateX(-150px); } }
+body::after {
+    inset: 0;
+    opacity: .62;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+}
+/* A folha sobe por cima das duas camadas. */
+.folha { position: relative; z-index: 1; }
+
+/* ── O brilho que atravessa a fita do cabecalho ────────────────────────────
+   Uma segunda camada de fundo no MESMO pseudo-elemento da fita, movida por
+   `background-position`. Num elemento de 2px de altura isso nao custa nada, e
+   evita um elemento a mais so para o enfeite. */
+.cabecalho::after {
+    background:
+        linear-gradient(90deg, transparent, rgba(255, 255, 255, .9), transparent)
+            -130px 0 / 130px 100% no-repeat,
+        linear-gradient(90deg, var(--teal-claro) 0%, var(--azul) 38%, var(--laranja) 62%, transparent 100%);
+    animation: brilho-da-fita 5.5s cubic-bezier(.6, 0, .4, 1) infinite;
+}
+@keyframes brilho-da-fita {
+    0%        { background-position: -130px 0, 0 0; }
+    55%, 100% { background-position: 520px 0, 0 0; }
+}
+.cabecalho .titulos strong { font-size: 1.44rem; letter-spacing: -0.032em; }
+.cabecalho .titulos span { font-size: .655rem; letter-spacing: .2em; }
+
+/* ── A etiqueta de secao ganha a fita ──────────────────────────────────────
+   No lugar de um titulo solto, a marca em miniatura. O olho acha as secoes
+   pelo risco antes de ler a palavra. */
+.rotulo-secao::before {
+    content: "";
+    flex: none;
+    width: 26px; height: 10px;
+    background: repeating-linear-gradient(107deg, var(--teal-claro) 0 3px, transparent 3px 7px);
+    opacity: .85;
+}
+.secao-titulo { display: flex; align-items: center; gap: 9px; }
+.secao-titulo::before {
+    content: "";
+    flex: none;
+    width: 18px; height: 11px;
+    background: repeating-linear-gradient(107deg, var(--apagado) 0 3px, transparent 3px 7px);
+}
+.secao-cabecalho[aria-expanded="true"] .secao-titulo::before {
+    background: repeating-linear-gradient(107deg, var(--teal-claro) 0 3px, transparent 3px 7px);
+}
+.zona-de-risco .secao-titulo::before {
+    background: repeating-linear-gradient(107deg, #f87171 0 3px, transparent 3px 7px);
+}
+/* Aberta, a secao se acende inteira -- e nao so o titulo. */
+.secao-cabecalho[aria-expanded="true"] {
+    background: linear-gradient(180deg, rgba(20, 184, 166, .16), rgba(18, 27, 46, .95));
+    border-color: rgba(45, 212, 191, .45);
+}
+
+/* ── O EVENTO E UM INGRESSO ────────────────────────────────────────────────
+   As duas meias-luas sao recortadas de verdade: dois degrades radiais
+   compostos em `mask`, um cobrindo a metade de cima e outro a de baixo, cada
+   um com um circulo transparente na linha do picote.
+
+   A mascara corta tambem a borda e a sombra EXTERNA -- por isso a borda saiu
+   (no lugar dela ficou o fio de luz do topo, que e sombra INTERNA e a mascara
+   respeita) e a sombra externa subiu para a `.linha-evento`, como
+   `drop-shadow`, que segue a forma recortada. */
+.barra-evento {
+    position: relative;
+    --pico: calc(100% - 58px);
+    min-height: 96px;
+    gap: 12px;
+    padding: 14px 0 14px 17px;
+    border: 0;
+    border-radius: 17px;
+    /* Os "veios": a mesma fita, a 3,5%, DENTRO da peca. E o que separa o
+       cartao do fundo agora que ele nao tem mais borda. */
+    background:
+        repeating-linear-gradient(107deg, rgba(255, 255, 255, .035) 0 18px, transparent 18px 52px),
+        linear-gradient(168deg, #1b2740 0%, #141d33 52%, #111a2e 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+    -webkit-mask:
+        radial-gradient(circle 9px at var(--pico) 0,    #0000 98%, #000) 0 0    / 100% 50.5% no-repeat,
+        radial-gradient(circle 9px at var(--pico) 100%, #0000 98%, #000) 0 100% / 100% 50.5% no-repeat;
+            mask:
+        radial-gradient(circle 9px at var(--pico) 0,    #0000 98%, #000) 0 0    / 100% 50.5% no-repeat,
+        radial-gradient(circle 9px at var(--pico) 100%, #0000 98%, #000) 0 100% / 100% 50.5% no-repeat;
+}
+.barra-evento:hover:not(:disabled) { border-color: transparent; }
+/* A sombra mora no PAI, porque `mask` apaga sombra externa. Ela pega tambem a
+   engrenagem ao lado, e isso e proposital: as duas pecas da linha ficam no
+   mesmo plano. */
+.linha-evento { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .55)); }
+/* O trilho da esquerda. Ele repete o que a luz ja diz, na altura inteira da
+   peca -- de relance, sem procurar a bolinha. `:has()` faz a cor seguir a luz;
+   onde o navegador nao souber `:has()`, o trilho fica cinza e nada quebra: a
+   luz continua sendo a informacao, e ela nunca dependeu disto. */
+.barra-evento::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 15px; bottom: 15px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, #64718a, #3f4a60);
+}
+.barra-evento:has(.luz.acesa)::before {
+    background: linear-gradient(180deg, var(--teal-claro), var(--azul));
+}
+.barra-evento:has(.luz.inativa)::before {
+    background: linear-gradient(180deg, #ef4444, #991b1b);
+}
+/* O picote, entre o corpo e o canhoto. */
+.barra-evento::after {
+    content: "";
+    position: absolute;
+    top: 13px; bottom: 13px;
+    left: calc(100% - 59px);
+    width: 2px;
+    background: repeating-linear-gradient(180deg, rgba(148, 163, 184, .45) 0 4px, transparent 4px 9px);
+}
+.barra-evento .luz { margin-left: 1px; }
+.barra-evento .nome-evento {
+    padding-right: 12px;
+    /* `anywhere` quebrava NO MEIO da palavra agora que o canhoto estreitou a
+       coluna -- "Show Sertanej / o". `break-word` so parte a palavra quando
+       ela sozinha nao cabe, que era o caso que a regra original protegia. */
+    overflow-wrap: break-word;
+    font-size: .995rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.16;
+}
+.sub-evento { font-size: .755rem; margin-top: 5px; line-height: 1.35; }
+
+/* O canhoto: o icone de ler com ROTULO EM TEXTO embaixo. Icone sozinho nao se
+   explica, e esta e a unica pista de que a barra inteira e o botao de LER. */
+.barra-evento .icone-ler {
+    width: 58px; height: auto;
+    flex-direction: column; gap: 5px;
+    background: none; border: 0;
+}
+.barra-evento .icone-ler svg {
+    width: 26px; height: 26px;
+    padding: 7px; box-sizing: content-box;
+    border-radius: 12px;
+    background: rgba(59, 130, 246, .15);
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, .32);
+}
+.barra-evento .rotulo-ler {
+    font-size: .56rem; font-weight: 800; letter-spacing: .16em; color: #93c5fd;
+}
+
+/* ── A barra dos pedidos: a porta de entrada, e o unico laranja da casa ─────
+   SEM textura, por decisao do usuario em 24/08/2026. E o degrade da fita e a
+   forma que a distinguem, nao o listrado.
+
+   Ela NAO e um ingresso: nao tem picote nem meia-lua. Ela leva a uma lista. */
+.barra-evento.destaque {
+    justify-content: flex-start;
+    min-height: 66px;
+    padding: 12px 16px 12px 18px;
+    background: linear-gradient(118deg, rgba(240, 138, 60, .30), rgba(226, 118, 42, .16) 52%, rgba(18, 27, 48, .92));
+    border: 1px solid rgba(240, 138, 60, .42);
+    color: #fdf1e6;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+    -webkit-mask: none;
+            mask: none;
+}
+.barra-evento.destaque::before, .barra-evento.destaque::after { content: none; }
+.barra-evento.destaque .nome-evento { flex: 1 1 auto; font-size: 1.06rem; padding-right: 0; }
+#bloco-novo-evento { filter: drop-shadow(0 16px 32px rgba(240, 138, 60, .22)); }
+.barra-evento .icone-lista {
+    width: 36px; height: 36px; border-radius: 11px;
+    color: #2b1405;
+    background: linear-gradient(135deg, #f9a75c, #e2762a);
+    box-shadow: 0 8px 16px -8px rgba(226, 118, 42, .95), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+#btn-meus-pedidos-mais {
+    background: linear-gradient(135deg, #f9a75c, #e2762a);
+    color: #2b1405;
+    box-shadow: 0 10px 22px -12px rgba(226, 118, 42, .85), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+
+/* ── Os cartoes tambem ganham os veios ─────────────────────────────────── */
+.cartao, .linha-finalizada {
+    background:
+        repeating-linear-gradient(107deg, rgba(255, 255, 255, .03) 0 18px, transparent 18px 52px),
+        linear-gradient(180deg, var(--card-2), var(--card));
+}
+
+/* ── O PEDIDO tambem e um ingresso ─────────────────────────────────────────
+   Aqui o picote corre na HORIZONTAL, e o que fica abaixo dele e a unica coisa
+   do cartao que muda alguma coisa: o "Carregar". */
+.cartao-pedido {
+    --picote-y: calc(100% - 66px);
+    border: 0;
+    -webkit-mask:
+        radial-gradient(circle 10px at 0    var(--picote-y), #0000 98%, #000) 0    0 / 50.5% 100% no-repeat,
+        radial-gradient(circle 10px at 100% var(--picote-y), #0000 98%, #000) 100% 0 / 50.5% 100% no-repeat;
+            mask:
+        radial-gradient(circle 10px at 0    var(--picote-y), #0000 98%, #000) 0    0 / 50.5% 100% no-repeat,
+        radial-gradient(circle 10px at 100% var(--picote-y), #0000 98%, #000) 100% 0 / 50.5% 100% no-repeat;
+}
+#pedidos { filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55)); }
+/* A linha do "Carregar" ja tinha um fio; ele vira o picote, na altura das
+   meias-luas. */
+.pedido-acoes {
+    position: relative;
+    border-top: 0;
+    padding-top: 20px;
+}
+.pedido-acoes::before {
+    content: "";
+    position: absolute;
+    left: -8px; right: 0; top: 0;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, rgba(148, 163, 184, .45) 0 5px, transparent 5px 11px);
+}
+/* O numero do pedido e o Carregar sao laranja: e o mesmo fio que comeca na
+   barra "Meus Pedidos". */
+.pedido-topo strong {
+    color: #f9a75c;
+    background: rgba(240, 138, 60, .13);
+    border-color: rgba(240, 138, 60, .36);
+}
+.cartao-pedido.tem-impresso::before { background: linear-gradient(180deg, #f9a75c, #e2762a); }
+.pedido-acoes button {
+    background: linear-gradient(135deg, #f9a75c, #e2762a);
+    color: #2b1405;
+    box-shadow: 0 12px 22px -12px rgba(226, 118, 42, .9), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+
+/* ── As PORTAS e o Carregar levam a fita inteira ───────────────────────────
+   A barra do alto desses cartoes era verde-agua → azul. Agora ela termina no
+   laranja da marca, como a do cabecalho: e a mesma assinatura, e ela liga
+   visualmente a porta da conta a porta dos pedidos. */
+#bloco-entrar::before, #trocar-senha::before,
+#caixa-entrar-config::before, #caixa-carregar::before {
+    background: linear-gradient(90deg, var(--teal-claro), var(--azul) 46%, var(--laranja) 78%, rgba(240, 138, 60, 0) 100%);
+}
+
+/* ── Nada disso pode atropelar quem pediu menos movimento ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+    body::before, .cabecalho::after { animation: none; }
+}
+
+/* A coluna do nome estava 13px mais estreita que o desenho aprovado, e nomes
+   de duas palavras quebravam sem precisar. Estes tres ajustes devolvem o
+   espaco sem encostar em alvo de toque nenhum: a engrenagem continua com 48px
+   (o minimo confortavel e 44). */
+.linha-evento { gap: 10px; }
+.botao-engrenagem { width: 48px; height: 48px; }
+.botao-engrenagem svg { width: 26px; height: 26px; }
+#btn-meus-pedidos-mais { font-size: 1.95rem; }
+/* A fita do fundo, mais discreta na metade de baixo da tela, onde o degrade
+   ambiente ja nao chega para diluir o listrado. */
+body::before {
+    -webkit-mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .45) 100%);
+            mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .45) 100%);
+}

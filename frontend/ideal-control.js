@@ -946,10 +946,31 @@
         if (!(d.recusas || []).length) {
             texto(recusas, 'p', 'Nenhuma leitura recusada até agora.', 'ic-dim');
         }
+        // A barra entrou junto com a identidade "Fita" (24/08/2026). Ela nao
+        // acrescenta dado nenhum -- o numero ao lado continua sendo a
+        // informacao --, mas poe os motivos em ordem de tamanho para o olho,
+        // que e a pergunta que se faz aqui: "o que mais barrou gente?".
+        //
+        // A escala e a MAIOR recusa, e nao o total de leituras: com 47 recusas
+        // em 1.300 leituras, todas as barras ficariam invisiveis e a caixa
+        // viraria enfeite.
+        var maiorRecusa = 0;
+        (d.recusas || []).forEach(function (r) {
+            maiorRecusa = Math.max(maiorRecusa, Number(r.quantas) || 0);
+        });
         (d.recusas || []).forEach(function (r) {
             var linha = document.createElement('div');
             linha.className = 'ic-barra-linha';
             texto(linha, 'span', r.rotulo, 'ic-barra-nome');
+            var trilho = document.createElement('div');
+            trilho.className = 'ic-barra-trilho';
+            var barra = document.createElement('div');
+            barra.className = 'ic-barra ic-barra-recusa';
+            barra.style.width = maiorRecusa
+                ? ((Number(r.quantas) || 0) / maiorRecusa * 100) + '%'
+                : '0%';
+            trilho.appendChild(barra);
+            linha.appendChild(trilho);
             texto(linha, 'strong', numero(r.quantas));
             recusas.appendChild(linha);
         });

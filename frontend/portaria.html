@@ -320,6 +320,214 @@
             background: rgba(20,184,166,0.12); color: var(--teal-claro);
             border: 1px solid rgba(20,184,166,0.45); box-shadow: none;
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+           A IDENTIDADE "FITA" NA PORTARIA (24/08/2026)
+           ══════════════════════════════════════════════════════════════════
+
+           A mesma identidade da casa, com UMA diferença que não se negocia: o
+           laranja da marca não entra aqui. Nesta tela o laranja já quer dizer
+           OUTRA PORTA, e o porteiro decide pela cor antes de ler a palavra —
+           então a fita, que na casa é laranja, aqui é desenhada em verde-água.
+           Mesma forma, sem roubar o significado.
+
+           A outra diferença é de orçamento: as texturas desta tela são
+           PARADAS. A câmera e o jsQR trabalham a cada quadro, e uma camada
+           animada de tela cheia disputaria o mesmo tempo de processador. O que
+           se mexe continua sendo só o visor — que é onde o movimento serve
+           para alguma coisa: dizer que o aparelho está vivo.
+           ────────────────────────────────────────────────────────────────── */
+
+        body::before, body::after {
+            content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        }
+        body::before {
+            background: repeating-linear-gradient(107deg,
+                rgba(45, 212, 191, .07) 0 24px, transparent 24px 38px,
+                rgba(45, 212, 191, .045) 38px 56px, transparent 56px 150px);
+            -webkit-mask: linear-gradient(180deg, #000, rgba(0,0,0,.25) 55%, rgba(0,0,0,.5));
+                    mask: linear-gradient(180deg, #000, rgba(0,0,0,.25) 55%, rgba(0,0,0,.5));
+        }
+        /* O grão quebra as faixas do degradê do fundo, que na tela do celular
+           aparecem como listras largas. */
+        body::after {
+            opacity: .55; mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 160px 160px;
+        }
+        .folha { position: relative; z-index: 1; }
+
+        /* O nome do setor ganha a fita ao lado. Fora do fluxo do texto, para o
+           nome continuar quebrando linha como quebrava. */
+        #topo-setores { position: relative; padding-left: 28px; }
+        #topo-setores::before {
+            content: ""; position: absolute; left: 0; top: .34em;
+            width: 20px; height: 12px;
+            background: repeating-linear-gradient(107deg, var(--verde-claro) 0 3px, transparent 3px 7px);
+        }
+
+        /* ── O visor ────────────────────────────────────────────────────────
+           As cantoneiras RESPIRAM, e a varredura deixou de ser um risco para
+           virar um facho largo. Os dois juntos dizem "estou lendo" de longe,
+           que é a distância de onde o porteiro olha. */
+        .visor::after { animation: mirar 3.2s ease-in-out infinite; }
+        @keyframes mirar {
+            0%, 100% { inset: 12px; opacity: .95; }
+            50%      { inset: 20px; opacity: .72; }
+        }
+        .visor::before {
+            inset: auto 0 auto 0; height: 190px; top: -70px;
+            background: linear-gradient(180deg, transparent,
+                rgba(45,212,191,.16) 46%, rgba(45,212,191,.85) 50%, rgba(45,212,191,.16) 54%, transparent);
+            animation: varrer-facho 2.9s cubic-bezier(.45, 0, .55, 1) infinite alternate;
+        }
+        @keyframes varrer-facho { from { top: -70px; } to { top: calc(100% - 120px); } }
+
+        /* ── A última leitura é um CANHOTO ─────────────────────────────────
+           A mesma peça da casa, em verde: meia-lua recortada, picote e o
+           talão à esquerda com o visto. É o único retorno visual do caminho
+           feliz, e agora ele tem a forma do que acabou de passar pela porta.
+
+           O conteúdo continua sendo UM texto só, escrito pelo `portaria.js`
+           com `textContent` — o visto e o picote são desenhados pelo CSS, e
+           não elementos a mais que aquele arquivo teria de manter. */
+        .faixa {
+            --pico: 84px;
+            position: relative;
+            display: flex; align-items: center;
+            text-align: left;
+            min-height: 76px;
+            padding: 14px 14px 14px 100px;
+            border-radius: 16px;
+            font-size: 1.16rem;
+            color: #06240f;
+            background:
+                repeating-linear-gradient(107deg, rgba(255,255,255,.13) 0 10px, transparent 10px 30px),
+                linear-gradient(150deg, #34d76a 0%, #22c55e 55%, #16a34a 100%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+            -webkit-mask:
+                radial-gradient(circle 9px at var(--pico) 0,    #0000 98%, #000) 0 0    / 100% 50.5% no-repeat,
+                radial-gradient(circle 9px at var(--pico) 100%, #0000 98%, #000) 0 100% / 100% 50.5% no-repeat;
+                    mask:
+                radial-gradient(circle 9px at var(--pico) 0,    #0000 98%, #000) 0 0    / 100% 50.5% no-repeat,
+                radial-gradient(circle 9px at var(--pico) 100%, #0000 98%, #000) 0 100% / 100% 50.5% no-repeat;
+        }
+        /* O visto, no talão. Desenhado por máscara para herdar a cor do texto. */
+        .faixa::before {
+            content: ""; position: absolute; left: 24px; top: 50%;
+            width: 36px; height: 36px; margin-top: -18px;
+            background: #06240f;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12.5 10 18 20 6'/%3E%3C/svg%3E") center / contain no-repeat;
+                    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12.5 10 18 20 6'/%3E%3C/svg%3E") center / contain no-repeat;
+        }
+        .faixa::after {
+            content: ""; position: absolute; top: 12px; bottom: 12px; left: 83px; width: 2px;
+            background: repeating-linear-gradient(180deg, rgba(6,36,15,.35) 0 4px, transparent 4px 9px);
+        }
+        /* Antes da primeira leitura não há canhoto nenhum: um talão verde
+           vazio na tela é um "pode entrar" sem ingresso atrás. */
+        .faixa.vazia {
+            padding: 16px 12px; justify-content: center; text-align: center;
+            background: rgba(255,255,255,.04); color: var(--dim);
+            border: 1px dashed var(--border-forte);
+            box-shadow: none;
+            -webkit-mask: none; mask: none;
+        }
+        .faixa.vazia::before, .faixa.vazia::after { content: none; }
+        #tela-lendo .sombra-canhoto { filter: drop-shadow(0 14px 26px rgba(16,120,60,.4)); }
+
+        /* ── O contador ganha a lotação em barra ───────────────────────────
+           O mesmo número, desenhado com a fita. A fração vem do `portaria.js`
+           na variável `--cheio`; sem contratado ela fica em zero e a barra
+           some sozinha. A lotação continua sendo a quantidade CONTRATADA. */
+        .contador {
+            display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+            text-align: left; padding: 13px 16px 14px;
+        }
+        #contador-numeros { font-size: 1.95rem; letter-spacing: -0.03em; line-height: 1.05; }
+        .contador::after {
+            content: ""; flex: 0 0 100%; height: 10px; margin-top: 10px; border-radius: 999px;
+            background:
+                repeating-linear-gradient(107deg, #2dd4bf 0 5px, #14b8a6 5px 7px, rgba(45,212,191,.30) 7px 11px)
+                    0 0 / var(--cheio, 0%) 100% no-repeat,
+                rgba(2, 6, 23, .55);
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
+        }
+
+        /* ── A RECUSA ocupa a tela ─────────────────────────────────────────
+           De borda a borda, sem cartão: o porteiro lê com o braço esticado e a
+           pessoa esperando. O topo continua à vista de propósito — é ele que
+           diz de qual fila esta tela está falando. */
+        #tela-resposta {
+            display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+            margin: 0 -14px -14px;
+        }
+        .resposta {
+            flex: 1 1 auto; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+            border-radius: 0; padding: 30px 22px 22px;
+            box-shadow: none;
+        }
+        /* A fita em branco por cima da cor: a marca aparece sem disputar com o
+           significado, que é quem manda nesta tela. */
+        .resposta::before {
+            content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+            background:
+                repeating-linear-gradient(107deg, rgba(255,255,255,.11) 0 22px, transparent 22px 66px),
+                radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.18), transparent 62%),
+                radial-gradient(120% 70% at 50% 110%, rgba(0,0,0,.38), transparent 65%);
+        }
+        .resposta > * { position: relative; z-index: 1; }
+        /* O picote: a resposta é ela mesma um canhoto sendo destacado. */
+        .resposta::after {
+            content: ""; position: absolute; left: 0; right: 0; bottom: 14px; height: 2px; z-index: 1;
+            background: repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 7px, transparent 7px 15px);
+        }
+        /* O ✕ num selo redondo, com o anel que pulsa até alguém tocar. */
+        .resposta .marca {
+            width: 104px; height: 104px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; line-height: 1; margin: 0 0 4px;
+            background: rgba(255,255,255,.17);
+            box-shadow: inset 0 0 0 3px rgba(255,255,255,.42);
+        }
+        .resposta .marca::after {
+            content: ""; position: absolute; inset: 0; border-radius: 50%;
+            animation: onda-da-recusa 1.9s ease-out infinite;
+        }
+        @keyframes onda-da-recusa {
+            0%   { box-shadow: 0 0 0 0 rgba(255,255,255,.5); }
+            70%  { box-shadow: 0 0 0 32px rgba(255,255,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+        }
+        .resposta .titulo {
+            font-size: 2.3rem; font-weight: 800; letter-spacing: -0.028em;
+            line-height: 1.05; text-transform: uppercase; margin: 20px 0 0;
+        }
+        .resposta .detalhe { font-size: 1.05rem; font-weight: 600; margin-top: 10px; }
+        /* O motivo é o que o porteiro lê em voz alta para a fila. Tarja
+           própria: bloqueio mudo vira "não sei, o sistema não deixou". */
+        .resposta .motivo:not(:empty) {
+            width: 100%; margin-top: 20px; padding: 15px 18px; border-radius: 16px;
+            background: rgba(0,0,0,.26);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,.22);
+            font-size: 1.2rem; font-weight: 800; line-height: 1.25;
+        }
+        .resposta .grande { font-size: 2rem; }
+        /* O botão fecha a tela por baixo, do tamanho da mão. Ele existe porque
+           a recusa PRECISA de um toque: é a única prova de que o porteiro viu. */
+        #btn-proximo {
+            margin: 0; min-height: 74px; border-radius: 0;
+            font-size: 1.12rem; font-weight: 800;
+            background: rgba(255,255,255,.96); color: #1b1010;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .visor::after, .resposta .marca::after { animation: none; }
+        }
+
     </style>
 </head>
 <body>

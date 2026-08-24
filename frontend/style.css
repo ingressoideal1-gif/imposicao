@@ -3025,6 +3025,144 @@ input[type=number] {
 /* Os tres botoes de acao do cartao de aparelho ficavam encostados. */
 .ic-aparelho .btn { margin-right: 8px; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   A IDENTIDADE "FITA" NA TELA DA GRAFICA (24/08/2026)
+   ══════════════════════════════════════════════════════════════════════════
+
+   A mesma identidade do aplicativo do cliente, em densidade de mesa. Tudo
+   aqui esta preso ao `#view-ideal-control` de proposito: o `style.css` serve
+   as dezenove telas do Ideal Imposition, e um retoque global mexeria em telas
+   que ninguem revisou. O menu lateral, os `.btn` e o `.card` genericos
+   continuam exatamente como estavam.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* A luz ambiente e a fita, atras do conteudo.
+
+   SEM camada de grao aqui, e de proposito: o `#view-ideal-control` nao pinta
+   fundo nenhum -- ele e transparente sobre o `.main-content` --, e uma camada
+   em `mix-blend-mode: overlay` sem fundo proprio por baixo vira uma neblina
+   cinza sobre a tela inteira. No aplicativo o `body` tem cor solida e o grao
+   funciona; aqui nao ha onde ele se apoiar. */
+#view-ideal-control { position: relative; }
+#view-ideal-control::before {
+    content: "";
+    position: absolute;
+    inset: -40px -40px auto;
+    height: 520px;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(107deg,
+            rgba(240, 138, 60, .055) 0 26px, transparent 26px 40px,
+            rgba(240, 138, 60, .035) 40px 60px, transparent 60px 150px),
+        radial-gradient(760px 380px at 16% -30%, rgba(20, 184, 166, .16), transparent 62%),
+        radial-gradient(720px 400px at 104% -20%, rgba(59, 130, 246, .13), transparent 60%);
+    -webkit-mask: linear-gradient(180deg, #000, transparent);
+            mask: linear-gradient(180deg, #000, transparent);
+}
+/* O conteudo sobe por cima da luz. */
+#view-ideal-control > * { position: relative; z-index: 1; }
+
+/* A fita da marca embaixo do titulo da pagina -- a mesma assinatura que abre a
+   casa do cliente. */
+#view-ideal-control .page-header { position: relative; padding-bottom: 16px; }
+#view-ideal-control .page-header::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, #2dd4bf 0%, #3b82f6 34%, #f08a3c 56%, rgba(240, 138, 60, 0) 100%);
+}
+#view-ideal-control .page-header h1 { letter-spacing: -0.035em; }
+
+/* Cada titulo de secao ganha a fita em miniatura. */
+#view-ideal-control .ic-secao-titulo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: .72rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--text-dim);
+}
+#view-ideal-control .ic-secao-titulo::before {
+    content: "";
+    flex: none; width: 20px; height: 11px;
+    background: repeating-linear-gradient(107deg, #2dd4bf 0 3px, transparent 3px 7px);
+}
+
+/* Os cartoes desta tela ganham os veios -- a fita a 3%, dentro da peca. */
+#view-ideal-control .card {
+    background:
+        repeating-linear-gradient(107deg, rgba(255, 255, 255, .03) 0 18px, transparent 18px 52px),
+        linear-gradient(180deg, #172136, #131c2e);
+    border-color: rgba(148, 163, 184, .18);
+}
+
+/* ── Os numeros do publico ──────────────────────────────────────────────── */
+#view-ideal-control .ic-kpi {
+    position: relative;
+    padding-left: 18px;
+    background: linear-gradient(168deg, rgba(23, 33, 54, .55), #131c2e);
+    border-color: rgba(148, 163, 184, .18);
+}
+#view-ideal-control .ic-kpi::before {
+    content: "";
+    position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, #2dd4bf, #3b82f6);
+}
+#view-ideal-control .ic-kpi-rotulo {
+    font-size: .655rem; font-weight: 800; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--text-dim);
+}
+#view-ideal-control .ic-kpi-valor {
+    font-size: 1.86rem; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+}
+#view-ideal-control .ic-kpi-ajuda { font-variant-numeric: tabular-nums; }
+
+/* ── As barras ──────────────────────────────────────────────────────────────
+   O verde-agua da marca (#14b8a6) reprova no teste de contraste e de faixa de
+   luminosidade contra este fundo escuro; o passo #0d9488 passa nos seis
+   testes, junto com o #dc2626 da recusa, inclusive nas simulacoes de
+   daltonismo. Por isso as barras nao usam a cor da marca crua. */
+#view-ideal-control .ic-barra-trilho {
+    background: rgba(2, 6, 23, .55);
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14);
+}
+#view-ideal-control .ic-barra { background: #0d9488; }
+/* "Por que recusou" conta RECUSAS: a barra segue a cor do que ela mede, e nao
+   a cor da acao. */
+#view-ideal-control .ic-barra-recusa { background: #dc2626; }
+
+/* ── Entradas por hora ─────────────────────────────────────────────────────
+   Duas series empilhadas, uma escala so, legenda sempre a vista. O vao de 2px
+   entre os dois pedacos e o que impede que eles se leiam como um bloco unico
+   -- e o que faz a divisao aparecer tambem em preto e branco. */
+#view-ideal-control .ic-pilha { gap: 2px; }
+#view-ideal-control .ic-parte-entrada { background: #0d9488; border-radius: 0 0 3px 3px; }
+#view-ideal-control .ic-parte-recusa  { background: #dc2626; border-radius: 3px 3px 0 0; }
+#view-ideal-control .ic-amostra-entrada { background: #0d9488; }
+#view-ideal-control .ic-amostra-recusa  { background: #dc2626; }
+#view-ideal-control .ic-coluna-rotulo { font-variant-numeric: tabular-nums; }
+
+/* ── O acesso do cliente ────────────────────────────────────────────────────
+   A senha provisoria e o QR de instalacao sao a PORTA do cliente para o
+   aplicativo -- o mesmo fio laranja que, no celular dele, comeca na barra
+   "Meus Pedidos". */
+#view-ideal-control .ic-codigo-caixa {
+    background: rgba(240, 138, 60, .09);
+    border: 1px solid rgba(240, 138, 60, .42);
+}
+#view-ideal-control .ic-codigo-caixa h4 { color: #f9a75c; }
+#view-ideal-control .ic-codigo-valor {
+    color: #fdf1e6; font-variant-numeric: tabular-nums; letter-spacing: .16em;
+}
+
+/* Os pedidos recentes e os selos: pilulas, como no aplicativo. */
+#view-ideal-control .ic-recentes .btn {
+    border-radius: 999px; font-weight: 700;
+}
+#view-ideal-control .ic-rotulo-busca {
+    font-size: .69rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase;
+}
+
+
 /* ---------------------------------------------------------------------------
    Opcoes do modelo: o par Sequencial / Blocado.
    Sao dois botoes e nao um select porque a escolha tem so dois valores e
