@@ -126,7 +126,12 @@ def test_o_toast_sobe_quando_a_barra_esta_na_tela():
     """
     css = _ler("frontend/style.css")
     assert "var(--avisos-altura" in css, "o toast nao esta se apoiando na altura da barra"
-    assert "bottom: calc(24px + var(--avisos-altura, 0px));" in css
+    # Em 23/08/2026 a barra da escolha de volume passou a morar no mesmo canto e
+    # entrou na mesma conta: cada barra publica a propria altura, e o toast se
+    # apoia na soma. Sem barra nenhuma, as duas variaveis nao existem e o valor
+    # volta a ser os 24px de sempre.
+    assert ("bottom: calc(24px + var(--avisos-altura, 0px) + var(--escolha-altura, 0px));"
+            in css), "o toast tem de se apoiar nas DUAS barras da base da tela"
 
     js = _ler("frontend/avisos.js")
     assert "--avisos-altura" in js, "e a barra nao esta publicando a propria altura"

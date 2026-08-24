@@ -1465,13 +1465,14 @@
                 </div>`;
         }).join('');
 
-        // A faixa do modo de escolha abraça a lista: o anúncio em cima, a conta
-        // do que foi marcado embaixo. As duas somem juntas quando não há
-        // escolha em curso.
+        // A faixa do modo de escolha anuncia o setor no topo da lista. A conta
+        // do que foi marcado NÃO vai aqui: ela é fixa contra a janela, no
+        // `#acab-barra-escolha`, porque dentro deste contêiner ela sumia da
+        // tela — ver o comentário do `barraDaEscolha`.
         corpo.innerHTML = boxDePesos(itens, os ? os.numero : '')
                         + faixaDaEscolha()
-                        + html
-                        + barraDaEscolha(itens);
+                        + html;
+        pintarBarraDaEscolha(itens);
 
         // Os campos de peso são desenhados junto com o pedido, então o valor
         // gravado tem de voltar a eles a cada desenho.
@@ -1489,6 +1490,10 @@
         if (lista) lista.style.display = emDetalhe ? 'none' : '';
         if (detalhe) detalhe.style.display = emDetalhe ? 'flex' : 'none';
         if (vazio && emDetalhe) vazio.style.display = 'none';
+
+        // A barra da escolha é fixa contra a janela: fechada a tela do pedido,
+        // ela ficaria boiando por cima da lista se ninguém a tirasse daqui.
+        pintarBarraDaEscolha([]);
     }
 
     // ─── O peso por setor ───────────────────────────────────────────────────
@@ -3499,20 +3504,26 @@
             </div>`;
     }
 
-    /**
-     * A barra da escolha, com a conta do que foi marcado e o botão de pesar.
-     *
-     * GRUDADA na base da área que rola (`position: sticky; bottom: 0`), e não
-     * simplesmente no fim da lista. Ela nasceu solta, e isso a punha fora da
-     * tela sempre: com UM modelo no setor o botão já ficava 144 px abaixo da
-     * área visível, e com quatro, 1.416 px. O operador marcava os modelos e não
-     * via acontecer nada — o botão que continua o trabalho estava lá embaixo,
-     * onde ninguém procura.
-     *
-     * As margens negativas fazem a barra encostar nas bordas da área, por baixo
-     * do `padding` do contêiner: uma faixa flutuando com folga dos lados pareceu
-     * um card solto, e não a base da tela.
-     */
+    // ─── A barra da escolha, FIXA contra a janela ───────────────────────────
+    //
+    // Ela mora no `#acab-barra-escolha`, fora das views, e não no fim da lista
+    // de modelos. Isso já custou duas correções, e a segunda ensinou a razão:
+    //
+    //  1. Solta no fim da lista, ficava fora da tela SEMPRE. Numa tela de
+    //     1366×768, com UM modelo no setor o botão já caía 144 px abaixo da
+    //     área visível; com quatro, 1.416 px.
+    //  2. Grudada com `position: sticky`, resolveu de 1280 px de largura para
+    //     cima e continuou quebrada abaixo disso: o `.prod-table-card` acima
+    //     dela tem `overflow: hidden`, e ancestral com overflow escondido
+    //     DESLIGA o sticky do descendente. Em 1024×768 o botão voltava a cair
+    //     2.214 px abaixo da janela; num celular, 4.828 px.
+    //
+    // Fixa contra a janela, ela não depende de layout nenhum — é a mesma
+    // escolha que a barra de avisos já tinha feito, pelo mesmo motivo.
+
+    const ID_DA_BARRA_DA_ESCOLHA = 'acab-barra-escolha';
+
+    /** O conteúdo da barra: a conta do que foi marcado e os dois botões. */
     function barraDaEscolha(itens) {
         const e = tela.escolhaDeVolume;
         if (!e) return '';
@@ -3522,10 +3533,9 @@
         const vazio = !marcados.length;
 
         return `
-            <div style="display: flex; align-items: center; gap: 12px; background: ${AZUL.fundo};
-                        border: 1px solid #4cc8f0; border-radius: 10px 10px 0 0; padding: 12px 16px;
-                        position: sticky; bottom: -10px; z-index: 30;
-                        margin: 14px -12px -10px;
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+                        background: ${AZUL.fundo};
+                        border: 1px solid #4cc8f0; border-radius: 10px; padding: 12px 16px;
                         box-shadow: 0 -6px 24px rgba(0,0,0,0.65);">
                 <span style="font-size: 1.05rem;">📦</span>
                 <strong style="font-size: 0.9rem; color: #ffffff;">
@@ -3547,6 +3557,47 @@
                     </button>
                 </span>
             </div>`;
+    }
+
+    /**
+     * Põe a barra na tela — ou a tira, quando não há escolha em curso.
+     *
+     * Ela é fixa contra a janela, e por isso não sai sozinha quando o pedido
+     * fecha: `renderDetalhe` deixa de desenhar o detalhe, e a barra ficaria
+     * boiando sobre a lista. Por isso o `mostrarLista` também chama isto.
+     *
+     * Três coisas moram neste canto da tela: o Quadro de Avisos, esta barra e
+     * os avisos flutuantes. Elas se empilham pela convenção que o quadro criou
+     * — cada uma publica a própria altura numa variável, e a de cima se apoia
+     * nela. Daqui sai a `--escolha-altura`; o CSS faz o resto.
+     */
+    function pintarBarraDaEscolha(itens) {
+        const caixa = document.getElementById(ID_DA_BARRA_DA_ESCOLHA);
+        if (!caixa) return;
+        // A tela do Acabamento precisa estar aberta. A barra é fixa contra a
+        // janela e não pertence a nenhuma view — sem esta condição ela apareceria
+        // por cima de qualquer outra tela do painel.
+        const secao = document.getElementById('view-acabamento');
+        const aberta = !!(secao && secao.classList && secao.classList.contains('active'));
+        const html = (aberta && tela.pedidoAberto) ? barraDaEscolha(itens) : '';
+        const raiz = document.documentElement;
+
+        if (!html) {
+            caixa.style.display = 'none';
+            caixa.innerHTML = '';
+            document.body.classList.remove('acab-escolhendo-volume');
+            if (raiz && raiz.style) raiz.style.setProperty('--escolha-altura', '0px');
+            return;
+        }
+        caixa.innerHTML = html;
+        caixa.style.display = '';
+        document.body.classList.add('acab-escolhendo-volume');
+
+        const altura = caixa.getBoundingClientRect
+            ? Math.round(caixa.getBoundingClientRect().height) : 0;
+        if (raiz && raiz.style) {
+            raiz.style.setProperty('--escolha-altura', (altura ? altura + 14 : 0) + 'px');
+        }
     }
 
     // ─── A janela de pesar o volume ─────────────────────────────────────────
@@ -5607,6 +5658,13 @@
                     try { AcabamentoPainel.aoAbrir(); } catch (e) {
                         console.warn('[acabamento] falha ao abrir a tela:', e);
                     }
+                }
+            } else {
+                // Saiu do Acabamento com uma escolha em curso: a barra é fixa
+                // contra a JANELA, e continuaria boiando por cima da tela de
+                // Formatos. Ela é daqui, e sai daqui.
+                try { pintarBarraDaEscolha([]); } catch (e) {
+                    console.warn('[acabamento] falha ao tirar a barra da escolha:', e);
                 }
             }
             return r;

@@ -1,25 +1,36 @@
 // A barra "Pesar este volume" tem de estar NA TELA, num Chrome de verdade.
 //
 // O modo de escolha do volume tem tres pecas: a faixa azul no topo ("Escolha o
-// que vai neste volume"), as caixinhas de marcar nos cards, e a barra do fim,
-// com a conta do que foi marcado e o botao que continua o trabalho.
+// que vai neste volume"), as caixinhas de marcar nos cards, e a barra com a
+// conta do que foi marcado e o botao que continua o trabalho.
 //
-// A barra nasceu SOLTA, no fim da lista de modelos, dentro da area que rola. O
-// resultado, medido nesta tela de 1366x768: com UM modelo no setor o botao ja
-// ficava 144 px abaixo da area visivel; com quatro, 1.416 px. O operador
-// marcava os modelos e nao via acontecer nada -- o unico botao que segue adiante
-// estava la embaixo, onde ninguem procura. O usuario relatou exatamente isso:
-// "Nao localizei o 4. Pesar este volume, apos selecionar os modelos".
+// Essa barra ja errou de lugar DUAS vezes, e das duas quem percebeu foi o
+// usuario, na estacao:
 //
-// O harness de regra (`acabamento_harness.js`) nao alcanca isso: ele mede o HTML
-// que a funcao devolve, e o HTML estava certo o tempo todo. Quem decide se o
-// botao existe PARA O OPERADOR e o layout -- e layout so se mede desenhando.
+//   1. Solta no fim da lista de modelos, dentro da area que rola. Numa tela de
+//      1366x768, com UM modelo no setor o botao ja ficava 144 px abaixo da area
+//      visivel; com quatro, 1.416 px. ("Nao localizei o 4. Pesar este volume,
+//      apos selecionar os modelos".)
+//   2. Grudada com `position: sticky`. Resolveu de 1280 px de largura para cima
+//      e deixou tudo abaixo disso quebrado: o `.prod-table-card` acima dela tem
+//      `overflow: hidden`, e ancestral com overflow escondido DESLIGA o sticky
+//      do descendente -- e abaixo de 1024 px o painel ainda troca de layout, com
+//      outro elemento passando a ser quem rola. Em 1024x768 o botao voltava a
+//      2.214 px abaixo da janela; num celular, 4.828 px. ("estou na V703 e ainda
+//      nao existe o botao pesar este volume".)
 //
-// Por isso este teste desenha a tela inteira e pergunta uma coisa so: o botao
-// esta dentro da area visivel? E, como CONTROLE, tira o `position: sticky` e
-// pergunta de novo -- se o controle passar a ficar visivel sozinho, e porque a
-// lista encolheu ou a area cresceu, e o `sticky` virou enfeite que ninguem
-// entende mais.
+// Hoje ela e FIXA contra a janela, no `#acab-barra-escolha`, fora das views --
+// a mesma escolha que o Quadro de Avisos ja tinha feito, pelo mesmo motivo.
+//
+// Duas licoes viraram teste aqui:
+//
+//   - O harness de regra (`acabamento_harness.js`) nao alcanca isto. Ele mede o
+//     HTML que a funcao devolve, e o HTML estava certo as duas vezes. Quem
+//     decide se o botao existe PARA O OPERADOR e o layout, e layout so se mede
+//     desenhando.
+//   - Um tamanho de tela so nao basta. Foi exatamente um tamanho nao medido que
+//     deixou a segunda versao passar, entao aqui sao SETE -- do monitor grande
+//     ao celular, passando pelo 1024, que e onde a media query vira a chave.
 //
 // Nada sai desta maquina: CDN nenhum, banco nenhum, rede nenhuma.
 const fs = require('fs');
@@ -50,7 +61,7 @@ const TIPOS = {
 
 const servidor = http.createServer((req, res) => {
     let rel = decodeURIComponent(req.url.split('?')[0]);
-    if (rel === '/' ) rel = '/index.html';
+    if (rel === '/') rel = '/index.html';
     // Nada de subir de pasta: este servidor so existe para o `frontend/`.
     const alvo = path.join(FRONTEND, path.normalize(rel).replace(/^(\.\.[\\/])+/, ''));
     if (!alvo.startsWith(FRONTEND) || !fs.existsSync(alvo) || fs.statSync(alvo).isDirectory()) {
@@ -60,7 +71,19 @@ const servidor = http.createServer((req, res) => {
     res.end(fs.readFileSync(alvo));
 });
 
-/** Semeia um pedido com `quantos` modelos no Laser e entra no modo de escolha. */
+// As telas que a gráfica usa, e as que o usuário pode abrir de fora dela.
+// O 1024 esta aqui por nome: e o ponto exato em que o painel troca de layout.
+const TAMANHOS = [
+    [1920, 1080, 'monitor grande'],
+    [1600, 900, 'notebook grande'],
+    [1366, 768, 'a estacao comum'],
+    [1280, 720, 'monitor menor'],
+    [1024, 768, 'o ponto em que o painel vira coluna'],
+    [900, 1200, 'tablet em pe'],
+    [412, 915, 'celular'],
+];
+
+/** Semeia um pedido com `quantos` modelos no Laser. */
 function semear(quantos) {
     state.ordens = [{ id: 'os-1', numero: 21085, cliente: 'Expointer', status_interno: 'PRODUCAO' }];
     state.cores = [{ id: 7, name: 'Vermelho', cor_referencia: '#e11d48' }];
@@ -75,7 +98,8 @@ function semear(quantos) {
             acabamento_status: 'Em acabamento', acabamento_responsavel: 'Ana Paula',
         });
     }
-    window._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: true };
+    window._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: true,
+                             perm_formatos_view: true };
     window.loadOrdens = async () => {};
     window.loadOSItens = async () => {};
     document.body.classList.remove('not-logged-in');
@@ -86,20 +110,36 @@ function semear(quantos) {
     window.showView('view-acabamento');
 }
 
-/** Onde uma peca da escolha caiu, em relacao a area que rola. */
-function medir(texto) {
-    const corpo = document.getElementById('acab-detalhe-corpo');
-    const alvo = [...corpo.querySelectorAll('button, strong')]
-        .find(e => e.textContent.trim().indexOf(texto) !== -1);
+/**
+ * Onde uma peca da escolha caiu, em relacao a JANELA.
+ *
+ * Contra a janela, e nao contra o contorno de algum contêiner: e a janela que o
+ * operador enxerga. Foi medir contra o contêiner que deixou passar a versao
+ * anterior, que estava certa dentro dele e fora da tela.
+ */
+function medir(texto, soNaBarra) {
+    const onde = soNaBarra ? document.getElementById('acab-barra-escolha') : document;
+    const alvo = onde ? [...onde.querySelectorAll('button, strong')]
+        .find(e => e.textContent.trim().indexOf(texto) !== -1) : null;
     if (!alvo) return { achou: false };
-    const ra = alvo.getBoundingClientRect();
-    const rc = corpo.getBoundingClientRect();
+    const r = alvo.getBoundingClientRect();
+    const barra = alvo.closest('#acab-barra-escolha');
+    const corpo = document.getElementById('acab-detalhe-corpo');
     return {
         achou: true,
-        visivel: ra.top < rc.bottom && ra.bottom > rc.top && ra.height > 0,
-        abaixoDaArea: Math.round(ra.top - rc.bottom),
-        sobraParaRolar: Math.round(corpo.scrollHeight - corpo.clientHeight),
-        posicao: getComputedStyle(alvo.closest('div[style*="sticky"]') || alvo.parentElement).position,
+        naJanela: r.top >= 0 && r.bottom <= window.innerHeight && r.height > 0 && r.width > 0,
+        topo: Math.round(r.top),
+        altura: window.innerHeight,
+        naBarraFixa: !!barra,
+        posicao: getComputedStyle(barra || alvo.parentElement).position,
+        sobraParaRolar: corpo ? Math.round(corpo.scrollHeight - corpo.clientHeight) : 0,
+        // O que estiver por cima do meio do botao. Se nao for o proprio botao,
+        // alguma outra camada o esta cobrindo.
+        porCima: (() => {
+            const e = document.elementFromPoint(
+                Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+            return e === alvo || alvo.contains(e) ? 'o proprio botao' : (e ? (e.id || e.className || e.tagName) : 'nada');
+        })(),
     };
 }
 
@@ -109,9 +149,6 @@ function medir(texto) {
 
     const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
     const page = await browser.newPage();
-    // A tela da estacao da grafica.
-    await page.setViewport({ width: 1366, height: 768 });
-
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
 
@@ -124,96 +161,135 @@ function medir(texto) {
                 status: 200,
                 contentType: u.endsWith('.css') ? 'text/css' : 'application/javascript',
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: u.indexOf('/rest/v1/') !== -1 || u.indexOf('/functions/v1/') !== -1 ? '[]' : '',
+                body: (u.indexOf('/rest/v1/') !== -1 || u.indexOf('/functions/v1/') !== -1) ? '[]' : '',
             });
         }
         req.continue();
     });
 
-    await page.exposeFunction('_nada', () => {});
+    await page.setViewport({ width: 1366, height: 768 });
     await page.goto('http://127.0.0.1:' + porta + '/index.html', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.AcabamentoPainel && window.showView, { timeout: 30000 });
 
-    // ─── Um modelo so: o caso mais magro que existe ──────────────────────────
-    await page.evaluate(semear, 1);
-    await page.evaluate(() => window.AcabamentoPainel.abrirPedido('os-1'));
-    await page.waitForFunction(() =>
-        document.getElementById('acab-detalhe-corpo').innerHTML.indexOf('volume') !== -1,
-        { timeout: 30000 });
+    /** Abre o pedido e entra no modo de escolha, com os modelos marcados. */
+    async function entrarNaEscolha(quantos, marcar) {
+        await page.evaluate(semear, quantos);
+        await page.evaluate(() => window.AcabamentoPainel.abrirPedido('os-1'));
+        await page.waitForFunction(() =>
+            document.getElementById('acab-detalhe-corpo').innerHTML.indexOf('volume') !== -1,
+            { timeout: 30000 });
+        await page.evaluate((ids) => {
+            window.AcabamentoPainel.novoVolume('LASER', 21085);
+            ids.forEach(id => window.AcabamentoPainel.marcarModelo(id));
+        }, marcar);
+    }
 
-    await page.evaluate(() => {
-        window.AcabamentoPainel.novoVolume('LASER', 21085);
-        window.AcabamentoPainel.marcarModelo(3001);
-    });
+    // ─── O botao na tela, em cada tamanho ────────────────────────────────────
+    for (const [w, h, apelido] of TAMANHOS) {
+        await page.setViewport({ width: w, height: h });
+        await entrarNaEscolha(4, [3001, 3003]);
 
-    const magro = await page.evaluate(medir, 'Pesar este volume');
-    ok(magro.achou, 'com 1 modelo, o botao "Pesar este volume" existe na tela');
-    ok(magro.sobraParaRolar > 0,
-        'e a lista JA passa da area visivel -- por isso o botao solto sumia',
-        magro.sobraParaRolar + ' px de sobra');
-    ok(magro.visivel, 'com 1 modelo o botao esta dentro da area visivel',
-        magro.visivel ? '' : magro.abaixoDaArea + ' px abaixo do fim da area');
-    ok(magro.posicao === 'sticky', 'porque a barra e grudada na base da area', magro.posicao);
+        const m = await page.evaluate(medir, 'Pesar este volume');
+        ok(m.achou, `${w}x${h} (${apelido}): o botao "Pesar este volume" existe`);
+        ok(m.naJanela, `${w}x${h} (${apelido}): e esta dentro da janela`,
+            m.achou ? `topo em ${m.topo} de ${m.altura}` : 'nao achei o botao');
+        ok(m.naBarraFixa && m.posicao === 'fixed',
+            `${w}x${h}: porque a barra e FIXA contra a janela, fora do detalhe`,
+            'naBarraFixa=' + m.naBarraFixa + ' position=' + m.posicao);
+        ok(m.porCima === 'o proprio botao',
+            `${w}x${h}: e nada esta por cima dele`, m.porCima);
+    }
 
-    const faixa = await page.evaluate(medir, 'Escolha o que vai neste volume');
-    ok(faixa.achou && faixa.visivel, 'e a faixa que diz o setor tambem esta na tela');
-
-    // ─── Quatro modelos: a lista que a grafica ve de verdade ─────────────────
-    await page.evaluate(semear, 4);
-    await page.evaluate(() => window.AcabamentoPainel.abrirPedido('os-1'));
-    await page.waitForFunction(() =>
-        document.getElementById('acab-detalhe-corpo').innerHTML.indexOf('volume') !== -1,
-        { timeout: 30000 });
-    await page.evaluate(() => {
-        window.AcabamentoPainel.novoVolume('LASER', 21085);
-        window.AcabamentoPainel.marcarModelo(3001);
-        window.AcabamentoPainel.marcarModelo(3003);
-    });
-
-    const cheio = await page.evaluate(medir, 'Pesar este volume');
-    ok(cheio.visivel, 'com 4 modelos o botao continua na tela',
-        cheio.visivel ? '' : cheio.abaixoDaArea + ' px abaixo do fim da area');
+    // ─── A conta e a saida moram na mesma barra ──────────────────────────────
+    await page.setViewport({ width: 1366, height: 768 });
+    await entrarNaEscolha(4, [3001, 3003]);
 
     const conta = await page.evaluate(medir, '2 modelos escolhidos');
-    ok(conta.achou && conta.visivel,
-        'e a conta do que foi marcado esta ao lado dele, visivel');
+    ok(conta.achou && conta.naJanela, 'a conta do que foi marcado esta na tela com ele');
 
-    // A faixa do topo continua la depois de rolar ate o fim.
+    // O Cancelar DA BARRA: a faixa do topo tem outro, e e o de baixo que
+    // precisa estar ao alcance de quem acabou de rolar a lista inteira.
+    const cancelar = await page.evaluate(medir, 'Cancelar', true);
+    ok(cancelar.achou && cancelar.naJanela,
+        'e o Cancelar da barra tambem -- a saida da escolha nao pode ficar fora da tela',
+        cancelar.achou ? ('topo em ' + cancelar.topo + ' de ' + cancelar.altura) : 'nao achei');
+
+    // Rolar a lista inteira nao tira nenhum dos dois de vista.
     await page.evaluate(() => {
         const c = document.getElementById('acab-detalhe-corpo');
         c.scrollTop = c.scrollHeight;
     });
-    const faixaRolada = await page.evaluate(medir, 'Escolha o que vai neste volume');
-    ok(faixaRolada.visivel,
-        'rolado ate o fim, a faixa do setor continua no topo -- e o Cancelar com ela',
-        faixaRolada.visivel ? '' : faixaRolada.abaixoDaArea + ' px fora');
+    const depoisDeRolar = await page.evaluate(medir, 'Pesar este volume');
+    ok(depoisDeRolar.naJanela, 'rolado ate o fim da lista, o botao continua na tela',
+        'topo em ' + depoisDeRolar.topo + ' de ' + depoisDeRolar.altura);
+
+    // A lista precisa mesmo rolar: sem isso o teste nao estaria provando nada.
+    ok(depoisDeRolar.sobraParaRolar > 0,
+        'e a lista de modelos passa MESMO da area visivel',
+        depoisDeRolar.sobraParaRolar + ' px de sobra');
 
     await page.screenshot({ path: path.join(RAIZ, 'tests', '_escolha_de_volume.png') });
 
-    // ─── O CONTROLE: sem o `sticky`, o botao volta a sumir ───────────────────
+    // ─── Sair da escolha tira a barra da tela ────────────────────────────────
+    await page.evaluate(() => window.AcabamentoPainel.cancelarVolume());
+    const saiu = await page.evaluate(medir, 'Pesar este volume');
+    ok(!saiu.achou, 'cancelar tira a barra da tela -- ela e fixa, nao sai sozinha');
+
+    // E fechar o pedido tambem, mesmo com a escolha em curso.
+    await entrarNaEscolha(4, [3001]);
+    await page.evaluate(() => window.AcabamentoPainel.fecharPedido());
+    const fechou = await page.evaluate(medir, 'Pesar este volume');
+    ok(!fechou.achou,
+        'e voltar para a lista tambem -- senao a barra boiaria sobre os pedidos');
+
+    // ─── Sair do Acabamento tambem tira a barra ──────────────────────────────
     //
-    // E ele que da sentido ao teste de cima. Se um dia este controle passar a
-    // dizer que o botao solto esta visivel, e porque a tela mudou de tamanho ou
-    // a lista encolheu -- e o `sticky` deixou de estar segurando alguma coisa.
+    // Ela e fixa contra a JANELA e nao pertence a nenhuma view: sem isto,
+    // continuaria boiando por cima da tela de Formatos.
+    await page.setViewport({ width: 1366, height: 768 });
+    await entrarNaEscolha(4, [3001]);
+    const antesDeTrocar = await page.evaluate(medir, 'Pesar este volume');
+    ok(antesDeTrocar.achou, 'com a escolha em curso, a barra esta na tela');
+
+    const trocou = await page.evaluate(() => {
+        window.showView('view-formatos');
+        const acab = document.getElementById('view-acabamento');
+        return !(acab && acab.classList.contains('active'));
+    });
+    ok(trocou, 'a troca de tela aconteceu mesmo -- sem isso o teste abaixo nao prova nada');
+    const noutraTela = await page.evaluate(medir, 'Pesar este volume');
+    ok(!noutraTela.achou, 'trocar de tela tira a barra do Acabamento junto');
+
+    await page.evaluate(() => window.showView('view-acabamento'));
+
+    // ─── O CONTROLE: dentro do detalhe, o botao volta a sumir ────────────────
+    //
+    // E ele que da sentido a tudo acima. Se um dia este controle passar a dizer
+    // que o botao ficaria visivel dentro do detalhe, e porque o layout do painel
+    // mudou -- e a barra fixa deixou de estar resolvendo alguma coisa.
+    await page.setViewport({ width: 1024, height: 768 });
+    await entrarNaEscolha(4, [3001]);
     const controle = await page.evaluate(() => {
         const corpo = document.getElementById('acab-detalhe-corpo');
-        const b = [...corpo.querySelectorAll('button')]
+        const barra = document.getElementById('acab-barra-escolha');
+        const b = [...barra.querySelectorAll('button')]
             .find(x => x.textContent.trim().indexOf('Pesar este volume') !== -1);
-        // Se a barra ja nao for grudada, o teste de cima ja falhou: aqui basta
-        // nao explodir, para o relatorio sair inteiro.
-        const barra = b.closest('div[style*="sticky"]');
-        if (barra) barra.style.position = 'static';
+        // De volta para onde ela morava: no fim da lista, dentro do que rola.
+        const solta = barra.firstElementChild;
+        solta.style.position = 'sticky';
+        solta.style.bottom = '0';
+        corpo.appendChild(solta);
         corpo.scrollTop = 0;
-        const ra = b.getBoundingClientRect();
-        const rc = corpo.getBoundingClientRect();
+        const r = b.getBoundingClientRect();
         return {
-            visivel: ra.top < rc.bottom && ra.bottom > rc.top,
-            abaixoDaArea: Math.round(ra.top - rc.bottom),
+            naJanela: r.top >= 0 && r.bottom <= window.innerHeight,
+            topo: Math.round(r.top),
+            altura: window.innerHeight,
         };
     });
-    ok(!controle.visivel,
-        'tirando o `sticky`, o botao volta a cair fora da area -- era esse o defeito',
-        'visivel=' + controle.visivel + ' (' + controle.abaixoDaArea + ' px abaixo)');
+    ok(!controle.naJanela,
+        'de volta para dentro do detalhe, em 1024x768, o botao cai fora da janela',
+        'topo em ' + controle.topo + ' de ' + controle.altura);
 
     ok(erros.length === 0, 'a tela nao soltou erro nenhum', erros.join(' | '));
 

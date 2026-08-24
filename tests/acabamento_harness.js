@@ -29,12 +29,18 @@ function ok(cond, oque, detalhe) {
 
 function criarElemento(id) {
     const classes = new Set();
+    // O `style` real tem `setProperty`: e por ele que o painel publica as
+    // alturas das barras da base da tela em variaveis de CSS.
+    const style = {};
+    style.setProperty = (nome, valor) => { style[nome] = valor; };
+    style.removeProperty = nome => { delete style[nome]; };
+    style.getPropertyValue = nome => style[nome] || '';
     return {
         id,
         textContent: '',
         innerHTML: '',
         value: '',
-        style: {},
+        style,
         dataset: {},
         classList: {
             add: c => classes.add(c),
@@ -62,8 +68,17 @@ function montarAmbiente() {
         querySelector: () => null,
         createElement: id => criarElemento(id),
         addEventListener: () => {},
-        body: { appendChild: () => {} },
+        // O `body` e o `documentElement` sao elementos como os outros: o
+        // `acabamento.js` poe classe no body e publica variavel de CSS na raiz,
+        // e um `body` so com `appendChild` explodia na primeira das duas.
+        body: criarElemento('body'),
+        documentElement: criarElemento('html'),
     };
+    documento.body.appendChild = () => {};
+    // A tela do Acabamento esta ABERTA em todo este harness -- e o que ele
+    // exercita. A barra da escolha de volume mora fora das views e so aparece
+    // com a secao ativa, para nao boiar por cima de outra tela.
+    documento.getElementById('view-acabamento').classList.add('active');
 
     const janela = {
         escapeHtml: v => String(v === undefined || v === null ? '' : v)
@@ -2472,7 +2487,9 @@ async function umVolumeLevaVariosModelos() {
 
     amb.painel.marcarModelo(3001);
     amb.painel.marcarModelo(3002);
-    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('2 modelos escolhidos') !== -1,
+    // A barra mora FORA do detalhe, fixa contra a janela: dentro dele ela caia
+    // fora da tela. Ver `tests/escolha_de_volume_harness.js`.
+    ok(amb.elementos['acab-barra-escolha'].innerHTML.indexOf('2 modelos escolhidos') !== -1,
        'a barra conta o que foi marcado');
 
     // A janela nasce com o que AINDA ESTA FORA de volume -- a tiragem inteira.

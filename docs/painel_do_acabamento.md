@@ -913,14 +913,33 @@ nenhum, e o card do modelo nem mostra o bloco de volumes.
    e tiragem — pedir que ele reconheça o mesmo material numa segunda lista, mais
    pobre, dentro de um popup, seria trabalho que a tela já fez por ele.
 
-   **As duas pontas do modo de escolha ficam grudadas na tela**: a faixa azul no
-   topo (com o setor e o Cancelar) e a barra da base (com a conta do marcado e o
-   `Pesar este volume`). Elas nasceram soltas, e isso as punha fora da vista
-   sempre — numa tela de 1366×768, com **um** modelo no setor o botão já caía
-   144 px abaixo da área visível, e com quatro, 1.416 px. O operador marcava os
-   modelos e não via acontecer nada. Há um harness de navegador travando isso
-   (`tests/escolha_de_volume_harness.js`), com o controle que prova o defeito:
-   tirado o `sticky`, o botão volta a sumir.
+   **A barra da escolha é FIXA contra a janela**, no `#acab-barra-escolha`, fora
+   das views — a mesma escolha que o Quadro de Avisos já tinha feito. Ela errou
+   de lugar duas vezes antes de chegar aí, e as duas o usuário é que percebeu:
+
+   1. **Solta no fim da lista de modelos**, dentro da área que rola. Numa tela
+      de 1366×768, com **um** modelo no setor o botão já caía 144 px abaixo da
+      área visível; com quatro, 1.416 px.
+   2. **Grudada com `position: sticky`.** Resolveu de 1280 px de largura para
+      cima e deixou tudo abaixo disso quebrado, por dois motivos somados: o
+      `.prod-table-card` acima dela tem `overflow: hidden`, e **ancestral com
+      overflow escondido desliga o `sticky` do descendente**; e abaixo de
+      1024 px a media query vira o `.prod-panel-container` em coluna, passando a
+      ser ele quem rola. Em 1024×768 o botão voltava a 2.214 px abaixo da
+      janela; num celular, 4.828 px.
+
+   Fixa contra a janela, ela não depende de layout nenhum. Três coisas moram
+   nesse canto — o Quadro de Avisos, esta barra e os avisos flutuantes — e se
+   empilham pela convenção que o quadro criou: cada uma publica a própria altura
+   numa variável de CSS (`--avisos-altura`, `--escolha-altura`) e a de cima se
+   apoia nela. Enquanto a escolha está em curso, o `#acab-detalhe-corpo` ganha
+   folga embaixo, para o último card não ficar atrás da barra; e sair do
+   Acabamento tira a barra junto, porque ela não pertence a view nenhuma.
+
+   `tests/escolha_de_volume_harness.js` mede tudo isso num Chrome, em **sete
+   tamanhos de tela** — foi um tamanho não medido que deixou a segunda versão
+   passar. Ele traz o controle que dá sentido ao resto: devolvida para dentro do
+   detalhe, em 1024×768, o botão volta a cair fora da janela.
 2. **`Pesar este volume`** abre a janela. Cada modelo marcado vira **um
    pacote**, com a quantidade **cheia com o que ainda está fora de volume** — um
    clique para "esta caixa leva o resto" — e com o responsável que o card já

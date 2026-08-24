@@ -3364,6 +3364,14 @@
          o painel aberto. Vazia ate la. -->
     <div id="barra-avisos" class="barra-avisos" style="display: none;"></div>
 
+    <!-- ESCOLHA DO VOLUME: a barra com a conta do que foi marcado e o botao
+         "Pesar este volume", no Painel do Acabamento. Fica FORA das views pelo
+         mesmo motivo da de avisos, e por um a mais, medido em 23/08/2026: dentro
+         do detalhe ela ficava presa pelo `overflow: hidden` do `.prod-table-card`,
+         e abaixo de 1024px de largura o `position: sticky` deixava de funcionar —
+         o botao caia 2.214 px abaixo da janela e o operador nao o encontrava. -->
+    <div id="acab-barra-escolha" class="barra-escolha" style="display: none;"></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

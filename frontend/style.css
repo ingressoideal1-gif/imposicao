@@ -542,6 +542,46 @@ input[type="color"].form-control {
     }
 }
 
+/* A barra da escolha de volume, no Painel do Acabamento.
+ *
+ * Mesmo posicionamento da de avisos, e pelo mesmo motivo — mais um, medido em
+ * 23/08/2026: dentro do detalhe do pedido ela ficava presa pelo
+ * `overflow: hidden` do `.prod-table-card`. Ancestral com overflow escondido
+ * DESLIGA o `position: sticky` do descendente, e abaixo de 1024px de largura o
+ * painel troca de layout (`.prod-panel-container` vira coluna e passa a ser
+ * quem rola). Nessa faixa o botao "Pesar este volume" caia 2.214 px abaixo da
+ * janela, e o operador nao tinha como encontra-lo. Fixa contra a janela, ela
+ * nao depende de layout nenhum.
+ *
+ * As tres coisas que moram neste canto se empilham pela mesma convencao que o
+ * Quadro de Avisos criou: cada uma publica a propria altura numa variavel, e a
+ * de cima se apoia nela. A de avisos e a mais baixa (`--avisos-altura`), a da
+ * escolha vem acima dela e publica `--escolha-altura`, e o toast se apoia nas
+ * duas. O `z-index` fica acima do 900 dos avisos e abaixo do 1001 do menu
+ * aberto: durante a escolha, a barra e o trabalho. */
+.barra-escolha {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + var(--avisos-altura, 0px));
+    z-index: 950;
+}
+
+@media (min-width: 1024px) {
+    .barra-escolha {
+        left: calc(var(--sidebar-w-collapsed) + 20px);
+        right: 20px;
+        bottom: calc(18px + var(--avisos-altura, 0px));
+    }
+}
+
+/* Enquanto a escolha esta em curso, a lista ganha folga embaixo: sem ela o
+ * ultimo card do pedido fica atras da barra, e o operador nao consegue marcar
+ * justamente o modelo do fim. */
+body.acab-escolhendo-volume #acab-detalhe-corpo {
+    padding-bottom: 110px;
+}
+
 /* ─── File Drop ─────────────────────────────────────────────────────────────── */
 .file-drop {
     border: 2px dashed var(--border);
@@ -916,7 +956,7 @@ input[type="color"].element-card-fields .form-control,
        outro lugar — ele esta ali desde sempre e o operador o procura ali —, o
        `avisos.js` publica a propria altura em `--avisos-altura` e o toast se
        apoia nela. Sem barra, a variavel nao existe e o valor volta a ser 24px. */
-    bottom: calc(24px + var(--avisos-altura, 0px));
+    bottom: calc(24px + var(--avisos-altura, 0px) + var(--escolha-altura, 0px));
     right: 24px;
     display: flex;
     flex-direction: column;
