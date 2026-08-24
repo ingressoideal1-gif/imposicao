@@ -20894,12 +20894,12 @@ async function loadOrdens() {
             let ordensFiltradas = data || [];
             const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
             if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                ordensFiltradas = ordensFiltradas.filter(os => {
-                    const osNumeroInt = parseInt(os.numero);
-                    const temNoComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
-                    const temNasArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(osNumeroInt));
-                    return temNoComercial || temNasArtes;
-                });
+                // A MESMA porta do caminho principal, com a mesma terceira
+                // condição: aqui o status vem de `propostasComerciais`, que é o
+                // que esta metade do código leu de `propostas`.
+                const jaNaGrafica = pedidosJaNaGrafica(propostasComerciais);
+                ordensFiltradas = ordensFiltradas.filter(os =>
+                    pedidoEntraNoPainel(parseInt(os.numero), pedidosComerciais, state.todasArtes, jaNaGrafica));
             }
 
             state.ordens = ordensFiltradas.map(os => {
@@ -21209,6 +21209,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
         const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
+        // Quem o ERP já entregou à gráfica. Ver `pedidoEntraNoPainel`.
+        const jaNaGrafica = pedidosJaNaGrafica(propostas);
+
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
         produtos.forEach(p => {
@@ -21216,9 +21219,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
             // FILTRAR: Se for produção (não-dev) ou se tiver pedidosComerciais populada, filtra
             if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                const existeComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
-                const existeArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(key));
-                if (!existeComercial && !existeArtes) {
+                if (!pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) {
                     return; // ignora este produto e não cria a OS
                 }
             }
@@ -23216,6 +23217,64 @@ function pedidoSaiuDaArte(os) {
     const si = (os.status_interno || '').trim().toUpperCase();
     return SINAIS_SAIU_DA_ARTE.includes(st) || SINAIS_SAIU_DA_ARTE.includes(si);
 }
+
+/**
+ * Os pedidos que o ERP já entregou à gráfica, pelo número.
+ *
+ * Recebe as linhas de `propostas` (que trazem `status_interno`) e devolve um
+ * conjunto de números. Quem pergunta é o `pedidoEntraNoPainel`.
+ *
+ * A régua é a MESMA do `pedidoSaiuDaArte`, de propósito: a lista
+ * `SINAIS_SAIU_DA_ARTE` já é o vocabulário deste projeto para "este pedido não
+ * é mais da arte, é da produção". Uma segunda lista aqui divergiria da de lá no
+ * primeiro status novo que o parceiro inventasse.
+ */
+function pedidosJaNaGrafica(propostas) {
+    return new Set((propostas || [])
+        .filter(pr => pr && pedidoSaiuDaArte({ status_interno: pr.status_interno }))
+        .map(pr => String(pr.id_int)));
+}
+window.pedidosJaNaGrafica = pedidosJaNaGrafica;
+
+/**
+ * Este pedido entra nos painéis?
+ *
+ * É a porta de entrada de TUDO: Fila de Arte, Fila de Produção e Painel do
+ * Acabamento desenham a mesma `state.ordens`, e o que não passa por aqui não
+ * existe para nenhum dos três.
+ *
+ * ## Por que a terceira condição existe
+ *
+ * Corrigido em 24/08/2026, com o pedido 20943 na mão do usuário: *"por que não
+ * aparece em nenhum painel?"*. Ele estava no banco, com modelo, e o ERP já o
+ * tinha mandado para a EXPEDIÇÃO — mas em painel nenhum.
+ *
+ * A regra nasceu como "entra quem está no comercial OU quem tem arte lançada".
+ * A metade comercial morreu: a tabela `pedidos` não existe neste banco, e
+ * `pedidosComerciais` passou a ser uma lista fixa vazia para não gastar uma
+ * consulta que sempre falharia. Sobrou a metade da arte, sozinha — e ela virou
+ * porta única. Quem nunca teve arte lançada no ERP ficava invisível para
+ * sempre, mesmo já fabricado: eram 8 dos 12 pedidos em expedição no dia em que
+ * isto foi escrito.
+ *
+ * A terceira condição devolve a metade que faltava, e pelo campo certo: não
+ * pela tabela que não existe, mas pelo que o próprio ERP diz do pedido. Se ele
+ * já saiu da arte — está em produção, em acabamento, na expedição, em trânsito
+ * ou entregue —, o material é da gráfica, e a gráfica precisa vê-lo.
+ *
+ * O que NÃO entra por aqui continua fora: NOVO, APROVADO, LIBERADO, AGUARDANDO
+ * e CANCELADO são estágios comerciais, e são a esmagadora maioria dos 8 mil
+ * pedidos do banco. A porta abriu para 17 pedidos, não para todos.
+ *
+ * `naGrafica` é o Set do `pedidosJaNaGrafica`.
+ */
+function pedidoEntraNoPainel(numero, comercial, artes, naGrafica) {
+    const n = String(numero);
+    if ((comercial || []).some(ped => String(ped.id_int) === n)) return true;
+    if ((artes || []).some(a => String(a.id_int) === n)) return true;
+    return !!(naGrafica && naGrafica.has(n));
+}
+window.pedidoEntraNoPainel = pedidoEntraNoPainel;
 
 // ──── Em que card da Lista de Arte um pedido cai ──────────────────────────
 //
