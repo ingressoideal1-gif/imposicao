@@ -164,6 +164,17 @@
         acabamento: {},
         erroAcabamento: '',
         avisouDoBanco: false,
+
+        // Os pedidos que o mapa acima JÁ cobre, pelo número.
+        //
+        // O mapa é montado a partir da lista de pedidos que existe no momento da
+        // consulta, e o `loadOrdens` pode trazer pedidos DEPOIS dela — na
+        // primeira abertura da tela ele traz a lista inteira, porque
+        // `state.ordens` ainda estava vazio. Sem saber o que já foi coberto, a
+        // tela desenhava esses pedidos sem estágio nenhum e caía na derivação da
+        // impressão. Ver `completarEstagiosDaLista`.
+        numerosNoMapa: new Set(),
+        buscandoEstagios: false,
         carregandoPedido: false,
 
         // Os pedidos que o usuário encerrou como TESTE, por número.
@@ -984,18 +995,40 @@
     }
 
     /**
-     * Lê o estágio e o responsável de todos os modelos da fila.
+     * Lê o estágio e o responsável de todos os modelos que a LISTA desenha.
      *
      * Consulta própria, e de propósito: as duas colunas são novas, e enquanto
      * `sql/painel_do_acabamento.sql` não tiver rodado o banco responde que a
      * coluna não existe. Aqui isso vira um recado nesta tela; se estivesse
      * junto da consulta do Painel de Produção, derrubaria a lista da gráfica.
+     *
+     * ## O recorte é o da LISTA, e não o da fila
+     *
+     * Corrigido em 24/08/2026, com a tela na mão do usuário: *"pedidos que já
+     * estavam marcados como pronto voltaram para a lista inicial"*.
+     *
+     * A causa não era o estágio nem o dado gravado — era este recorte. Ao ir
+     * para a expedição o pedido tem o `status_interno` trocado para EXPEDICAO e
+     * sai do `pedidosEmProducao`, mas continua na TABELA de propósito (ver
+     * `pedidosDoPainel`). Com a consulta presa ao recorte da fila, os modelos
+     * dele não entravam no mapa; o `estagioDoModelo` não achava escolha
+     * nenhuma, caía na derivação da impressão e respondia "Impresso". O pedido
+     * voltava para a lista de trabalho como se o acabamento não tivesse
+     * acontecido, e sumia do botão "Pronto" — que é exatamente onde o aviso do
+     * envio manda o operador procurá-lo.
+     *
+     * Quem desenha a lista e quem lê o estágio dela precisam enxergar o mesmo
+     * conjunto de pedidos. Por isso os dois chamam `pedidosDoPainel`.
      */
     async function carregarAcabamentoDosModelos() {
-        const numeros = pedidosEmProducao()
+        const numeros = pedidosDoPainel()
             .map(os => parseInt(os.numero))
             .filter(n => !isNaN(n));
-        if (!numeros.length) { tela.acabamento = {}; return; }
+        if (!numeros.length) {
+            tela.acabamento = {};
+            tela.numerosNoMapa = new Set();
+            return;
+        }
 
         try {
             if (typeof supabaseClient === 'undefined' || !supabaseClient) {
@@ -1021,6 +1054,7 @@
                 });
             }
             tela.acabamento = mapa;
+            tela.numerosNoMapa = new Set(numeros.map(String));
             tela.erroAcabamento = '';
         } catch (e) {
             tela.erroAcabamento = (e && e.message) ? e.message : String(e);
@@ -1038,6 +1072,45 @@
                 }
             }
         }
+    }
+
+    /**
+     * Há pedido na lista cujo estágio nunca foi buscado?
+     *
+     * `tela.numerosNoMapa` é o que a última consulta cobriu. Quando o
+     * `loadOrdens` traz pedidos depois dela — e na primeira abertura da tela ele
+     * traz TODOS, porque `state.ordens` ainda estava vazio quando o mapa foi
+     * montado —, esses pedidos ficam sem escolha nenhuma e caem na derivação da
+     * impressão. Um pedido inteiro em "Pronto" apareceria como "Impresso".
+     */
+    function faltamEstagiosNaLista() {
+        // O banco já disse que não dá (coluna ainda não existe): insistir só
+        // repetiria a falha a cada desenho, e o recado ao operador já foi dado.
+        if (tela.erroAcabamento) return false;
+        return pedidosDoPainel().some(os => {
+            const n = parseInt(os.numero);
+            return !isNaN(n) && !tela.numerosNoMapa.has(String(n));
+        });
+    }
+
+    /**
+     * Busca o estágio dos pedidos que chegaram depois da última consulta.
+     *
+     * Chamada de dentro do `renderOrdens` embrulhado, que é onde a lista de
+     * pedidos acaba de ser trocada. Não entra em laço: ou a consulta cobre os
+     * novos números — e aí não falta mais nada —, ou ela falha e o
+     * `erroAcabamento` fecha a porta.
+     */
+    function completarEstagiosDaLista() {
+        if (tela.buscandoEstagios || !faltamEstagiosNaLista()) return;
+        tela.buscandoEstagios = true;
+        carregarAcabamentoDosModelos()
+            .catch(() => {})
+            .then(() => {
+                tela.buscandoEstagios = false;
+                render();
+                if (tela.pedidoAberto) renderDetalhe();
+            });
     }
 
     // ─── O pedido aberto ────────────────────────────────────────────────────
@@ -5920,6 +5993,7 @@
             encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
             estagioDerivadoDaImpressao,
+            faltamEstagiosNaLista,
             prontoEmDoModelo,
             textoDaHoraDoPronto,
             setorQueFechaComEstePronto,
@@ -5975,6 +6049,9 @@
         window.renderOrdens = function () {
             const r = original.apply(this, arguments);
             try {
+                // A lista de pedidos acabou de ser trocada: se ela cresceu, o
+                // estágio dos que chegaram ainda não foi lido.
+                completarEstagiosDaLista();
                 render();
                 if (tela.pedidoAberto) renderDetalhe();
             } catch (e) {

@@ -94,6 +94,11 @@ function montarAmbiente() {
         findOSInState: id => (janela.state.ordens || []).find(o => String(o.id) === String(id)) || null,
         loadOrdens: () => Promise.resolve(),
         loadOSItens: () => Promise.resolve(),
+        // Mora no `script.js` e e chamado toda vez que a lista de pedidos e
+        // trocada. O `acabamento.js` o embrulha para redesenhar a tela dele --
+        // e, desde 24/08/2026, para buscar o estagio dos pedidos que chegaram
+        // depois. Sem ele aqui o embrulho nem se instalava.
+        renderOrdens: () => {},
         toast: () => {},
         state: { ordens: [], osItens: {}, modelosGlobais: {}, cores: [], numeracoes: [], produtosGlobais: [], todasArtes: [] },
         _currentPerms: null,
@@ -113,6 +118,7 @@ function montarAmbiente() {
         ],
         _gravacoes: [],
         _modelosDoBanco: [],
+        _perguntados: [],          // os `in(...)` que a tela mandou, na ordem
         _encerradosTeste: [],
         _erroDoBanco: null,
 
@@ -346,9 +352,24 @@ function montarAmbiente() {
             }
             return {
                 select: () => ({
-                    in: () => Promise.resolve(self._erroDoBanco
-                        ? { data: null, error: self._erroDoBanco }
-                        : { data: self._modelosDoBanco, error: null }),
+                    in: (coluna, valores) => {
+                        // O `in` e FILTRO de verdade aqui, e nao enfeite: era
+                        // devolvendo `_modelosDoBanco` inteiro que o harness
+                        // deixou passar, em 24/08/2026, a consulta que pedia so
+                        // os pedidos da fila e esquecia os ja expedidos. Com o
+                        // filtro real, um pedido fora do recorte volta sem
+                        // estagio -- que e o que acontecia na grafica.
+                        const pedidos = (valores || []).map(String);
+                        self._perguntados.push({ tabela, coluna, valores: pedidos });
+                        if (self._erroDoBanco) {
+                            return Promise.resolve({ data: null, error: self._erroDoBanco });
+                        }
+                        return Promise.resolve({
+                            data: self._modelosDoBanco.filter(m =>
+                                pedidos.indexOf(String(m[coluna])) !== -1),
+                            error: null,
+                        });
+                    },
                 }),
                 update(payload) {
                     return {
@@ -3785,6 +3806,101 @@ async function asContasDoRecorteDaListaSaoPuras() {
     ok(!r.ehExpedido({}), 'pedido sem status nenhum nao e expedido');
 }
 
+// ── O estagio do expedido tem de vir do banco, como o dos outros ───────────
+//
+// Corrigido em 24/08/2026, com o usuario olhando a tela: "pedidos que ja
+// estavam marcados como pronto voltaram para a lista inicial".
+//
+// O `ambienteDeExpedicao` acima planta `acabamento_status` DENTRO do
+// `modelosGlobais` -- e por isso ele nao pegava o defeito. Em producao o
+// `carregarModelosGlobais` do `script.js` nao pede essa coluna: o estagio da
+// lista vem SEMPRE da consulta propria do acabamento. E essa consulta pedia so
+// os pedidos da fila, deixando de fora justamente os que acabaram de ser
+// enviados a expedicao.
+//
+// Sem estagio nenhum, o `estagioDoModelo` caia na derivacao da impressao e
+// respondia "Impresso": o pedido voltava para a lista inicial e sumia do botao
+// "Pronto", que e onde o aviso do envio manda o operador procura-lo.
+async function oEstagioDoExpedidoVemDoBancoComoODosOutros() {
+    const os = pedido(600, null, { status_interno: 'EXPEDICAO' });
+    const amb = ambienteComPedidos([os], {
+        // A lista ENXUTA, do jeito que o `script.js` a monta: sem
+        // `acabamento_status`, so com o status de impressao.
+        600: [{ id: 801, quantidade: 300, status_impressao: 'Impresso' },
+              { id: 802, quantidade: 100, status_impressao: 'Impresso' }],
+    });
+    amb.banco._modelosDoBanco = [
+        { id: 801, id_int: 600, acabamento_status: 'Pronto', acabamento_responsavel: 'Ana Paula' },
+        { id: 802, id_int: 600, acabamento_status: 'Pronto', acabamento_responsavel: 'Ana Paula' },
+    ];
+
+    amb.painel.aoAbrir();
+    await new Promise(r => setTimeout(r, 0));
+
+    ok(amb.banco._perguntados.some(q => q.valores.indexOf('600') !== -1),
+       'a consulta do estagio pergunta pelo pedido ja expedido',
+       JSON.stringify(amb.banco._perguntados));
+
+    ok(listaDo(amb, 'geral').indexOf('>600<') === -1,
+       'ele NAO volta para a lista inicial: o acabamento dele terminou');
+    const prontos = listaDo(amb, 'prontos');
+    ok(prontos.indexOf('>600<') !== -1,
+       'e aparece no botao PRONTO, que e onde o operador foi mandado procura-lo');
+    ok(prontos.indexOf('NA EXPEDIÇÃO') !== -1, 'com a marca de que ja saiu do setor');
+}
+
+// ── E o pedido que chega DEPOIS do mapa tambem ganha estagio ───────────────
+//
+// A primeira abertura da tela: quando o mapa e montado, `state.ordens` ainda
+// esta vazio -- o `loadOrdens` so responde depois. Sem completar o mapa quando
+// a lista chega, TODO pedido pronto aparecia como "Impresso" ate o operador
+// clicar em Atualizar.
+async function oPedidoQueChegaDepoisGanhaEstagio() {
+    const amb = montarAmbiente();
+    amb.banco._modelosDoBanco = [
+        { id: 700, id_int: 500, acabamento_status: 'Pronto', acabamento_responsavel: 'Ana Paula' },
+    ];
+
+    amb.painel.aoAbrir();               // com a lista ainda vazia
+    await new Promise(r => setTimeout(r, 0));
+    ok(amb.painel._regras.faltamEstagiosNaLista() === false,
+       'com a lista vazia nao falta estagio nenhum');
+
+    // Agora o `loadOrdens` respondeu, e o `script.js` redesenha.
+    amb.janela.state.ordens = [pedido(500)];
+    amb.janela.state.modelosGlobais[500] = [{ id: 700, quantidade: 10, status_impressao: 'Impresso' }];
+    amb.janela.renderOrdens();
+    await new Promise(r => setTimeout(r, 0));
+
+    ok(listaDo(amb, 'prontos').indexOf('>500<') !== -1,
+       'o pedido que chegou depois esta em PRONTO');
+    ok(listaDo(amb, 'geral').indexOf('>500<') === -1,
+       'e nao na lista de trabalho');
+    ok(amb.painel._regras.faltamEstagiosNaLista() === false,
+       'e o mapa passa a cobrir a lista inteira');
+}
+
+// ── Banco sem a coluna nao vira laco de consulta ───────────────────────────
+async function semAColunaNoBancoNaoFicaPerguntandoParaSempre() {
+    const amb = montarAmbiente();
+    amb.banco._erroDoBanco = { message: 'column pedidos_modelos.acabamento_status does not exist' };
+    amb.janela.state.ordens = [pedido(510)];
+    amb.janela.state.modelosGlobais[510] = [{ id: 710, quantidade: 10 }];
+
+    amb.painel.aoAbrir();
+    await new Promise(r => setTimeout(r, 0));
+    const perguntas = amb.banco._perguntados.length;
+
+    amb.janela.renderOrdens();
+    amb.janela.renderOrdens();
+    await new Promise(r => setTimeout(r, 0));
+
+    ok(amb.banco._perguntados.length === perguntas,
+       'depois do erro a tela para de perguntar -- o recado ao operador ja foi dado',
+       perguntas + ' -> ' + amb.banco._perguntados.length);
+    ok(listaDo(amb, 'geral').indexOf('>510<') !== -1, 'e a lista continua de pe');
+}
+
 (async function () {
     await aListaDeResponsaveisVemDaViewDeOperadores();
     await oResponsavelGravadoForaDoPerfilContinuaAparecendo();
@@ -3819,6 +3935,9 @@ async function asContasDoRecorteDaListaSaoPuras() {
     await oPedidoJaExpedidoNaoOferecerEnviarDeNovo();
     await mandarParaExpedicaoNaoFazOPedidoSumir();
     await asContasDoRecorteDaListaSaoPuras();
+    await oEstagioDoExpedidoVemDoBancoComoODosOutros();
+    await oPedidoQueChegaDepoisGanhaEstagio();
+    await semAColunaNoBancoNaoFicaPerguntandoParaSempre();
     await asInformacoesDoModeloSaemEmTabela();
     await oCabecalhoDoPedidoAbertoDestacaNumeroEEvento();
     await semResponsavelOStatusNaoSeMexe();
