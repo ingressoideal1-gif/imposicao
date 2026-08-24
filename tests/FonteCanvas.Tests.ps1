@@ -198,3 +198,27 @@ Describe "Amarracao das paginas - o que de fato quebrou" {
         $comRamo.Count | Should Be 0
     }
 }
+
+Describe "garantirFontesCarregadas - dois modelos pedindo a mesma fonte" {
+
+    # O defeito do pedido 21118 (24/08/2026): os tres modelos usavam
+    # 'Bebas Neue', e o link do cliente monta os cards num `forEach` que NAO
+    # espera um card terminar para comecar o proximo. O primeiro desenho ia
+    # buscar a fonte; os outros dois viam o nome ja marcado como "carregada" e
+    # voltavam na hora, pintando com uma generica. Canvas nao reflui: ficava
+    # errado ate o cliente folhear as paginas, que redesenha -- e ai saia certo,
+    # inclusive voltando para a pagina 1.
+
+    It "o segundo desenho espera a fonte que o primeiro foi buscar" {
+        $r = Invoke-Fonte @{ acao = 'corridaDeDoisDesenhos'; fonte = 'Bebas Neue' }
+        $r.primeiroEsperou | Should Be $true
+        $r.segundoEsperou  | Should Be $true
+    }
+
+    It "com a fonte ja carregada, ninguem espera de novo" {
+        # A memoria continua valendo: repetir a busca a cada redesenho seria
+        # travar a tela por nada.
+        $r = Invoke-Fonte @{ acao = 'corridaDeDoisDesenhos'; fonte = 'Bebas Neue' }
+        $r.terceiroEsperou | Should Be $true
+    }
+}

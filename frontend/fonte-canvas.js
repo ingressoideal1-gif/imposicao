@@ -181,15 +181,34 @@
 
     // ── 4. Esperar a fonte chegar antes de desenhar ────────────────────────
 
-    const _jaCarregadas = new Set();
+    // Uma fonte pode estar em tres estados, e a diferenca entre os dois
+    // primeiros e o defeito que este mapa existe para impedir:
+    //
+    //   • EM VOO   -- alguem ja pediu, o arquivo ainda esta vindo. Fica em
+    //                 `_emVoo`, guardando a MESMA promessa para todo mundo.
+    //   • PRONTA   -- chegou (ou falhou de vez). Entra em `_prontas`.
+    //   • ausente  -- ninguem pediu ainda.
+    //
+    // Ate 24/08/2026 havia um conjunto so, marcado ANTES da espera. O segundo
+    // desenho a pedir a mesma fonte via o nome marcado, achava que estava
+    // pronta e pintava na hora -- com uma generica, porque o arquivo ainda
+    // estava vindo. Canvas nao reflui: ficava assim. Foi o que apareceu no
+    // pedido 21118, cujos tres modelos usam 'Bebas Neue': o link do cliente
+    // monta os cards num `forEach` que nao espera um terminar para comecar o
+    // proximo, entao dois deles saiam com a fonte errada ate o cliente folhear
+    // as paginas -- qualquer redesenho depois da chegada sai certo, inclusive
+    // voltando para a pagina 1.
+    const _emVoo = new Map();
+    const _prontas = new Set();
 
     function fonteJaCarregada(nome) {
-        return _jaCarregadas.has(String(nome || '').trim());
+        return _prontas.has(String(nome || '').trim());
     }
 
-    // Devolve os nomes que ESTA chamada foi buscar. Quem desenhou antes da hora
-    // usa isso para saber que vale a pena repetir o traco — repetir sem novidade
-    // seria redesenhar a tela inteira a toa.
+    // Devolve os nomes que ESTA chamada teve de esperar -- inclusive os que
+    // outro desenho ja tinha posto no ar. Quem desenhou antes da hora usa isso
+    // para saber que vale a pena repetir o traco; repetir sem novidade seria
+    // redesenhar a tela inteira a toa.
     async function garantirFontesCarregadas(nomes) {
         if (!nomes || !nomes.length) return [];
         // O @font-face precisa estar no documento ANTES do `document.fonts.load`:
@@ -202,15 +221,22 @@
         const pendentes = [];
         for (const bruto of nomes) {
             const nome = String(bruto || '').trim();
-            if (!nome || _jaCarregadas.has(nome)) continue;
-            _jaCarregadas.add(nome);
+            if (!nome || _prontas.has(nome)) continue;
             novas.push(nome);
-            // A string precisa ser um shorthand de font valido, senao load() rejeita
-            const spec = buildCanvasFont(16, nome);
-            pendentes.push(
-                document.fonts.load(spec).catch(e =>
-                    console.warn(`[Fonts] nao carregou ${nome}:`, e && e.message))
-            );
+            let promessa = _emVoo.get(nome);
+            if (!promessa) {
+                // A string precisa ser um shorthand de font valido, senao load() rejeita
+                const spec = buildCanvasFont(16, nome);
+                promessa = Promise.resolve()
+                    .then(() => document.fonts.load(spec))
+                    // Fonte que nao existe entra em `_prontas` do mesmo jeito: sem
+                    // isso, todo redesenho tentaria de novo e o `drawPreview` do
+                    // painel entraria em laco.
+                    .catch(e => console.warn(`[Fonts] nao carregou ${nome}:`, e && e.message))
+                    .then(() => { _prontas.add(nome); _emVoo.delete(nome); });
+                _emVoo.set(nome, promessa);
+            }
+            pendentes.push(promessa);
         }
         if (pendentes.length) await Promise.all(pendentes);
         return novas;
