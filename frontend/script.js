@@ -4003,15 +4003,48 @@ window.drawArteDoElemento = drawArteDoElemento;
  * a foto da primeira pessoa.
  */
 /**
+ * O banco de dados que serve de AMOSTRA para as janelas que desenham uma
+ * numeração — o canvas do editor, a prévia da Amostra, o gabarito rasterizado.
+ *
+ * A ordem existe para uma coisa só: **nenhuma numeração é desenhada com o banco
+ * de outra.**
+ *
+ * 1. `num.csv_data` — quem sabe qual numeração está desenhando manda.
+ * 2. `state.numCsvData` — no editor, o banco carregado é o da numeração aberta.
+ * 3. `state.csvData`, **só quando não é derivado** — é o arquivo solto que o
+ *    operador subiu na caixa da Imposição, e ele serve à amostra avulsa. A fatia
+ *    de uma numeração (`csvDataDerivado`) nunca é emprestada.
+ *
+ * O passo 3 é o que faltava, e o passo 2 vinha DEPOIS do 3. Quem abre o editor
+ * pelo card de um modelo traz em `state.csvData` a fatia da numeração daquele
+ * modelo, e ela tinha PRIORIDADE sobre o banco da numeração aberta: excluir o
+ * banco e o link da planilha desta não adiantava, porque o canvas continuava
+ * lendo o da outra. O operador via a numeração nova pintada com os nomes da
+ * anterior, e nada na tela explicava por quê — proposta 2320, 24/08/2026.
+ *
+ * É a mesma regra que `linhasDaAmostra()` já aplica ao card do modelo desde
+ * 22/08/2026 (o caso "Expointer 2026"); estas janelas nunca a receberam.
+ */
+function bancoDeAmostra(num) {
+    if (num && Array.isArray(num.csv_data) && num.csv_data.length) return num.csv_data;
+    if (Array.isArray(state.numCsvData) && state.numCsvData.length) return state.numCsvData;
+    if (state.csvDataDerivado) return null;
+    return (Array.isArray(state.csvData) && state.csvData.length) ? state.csvData : null;
+}
+
+/**
  * A linha do banco que serve de amostra para as janelas do editor.
  * É sempre a primeira — a mesma que o texto variável já usa como amostra.
+ *
+ * Passe `num` quando souber qual numeração está sendo desenhada; ver
+ * `bancoDeAmostra()`.
  *
  * O cache de imagens, o pré-carregamento e o desenho da janela de foto moram no
  * `foto-lib.js`, que a página do cliente também carrega: as duas telas têm de
  * mostrar o mesmo enquadramento.
  */
-function linhaDeAmostra() {
-    const dados = state.csvData || state.numCsvData || null;
+function linhaDeAmostra(num) {
+    const dados = bancoDeAmostra(num);
     return (dados && dados[0]) ? dados[0] : null;
 }
 
@@ -4102,7 +4135,7 @@ function drawElement(ctx, el, S) {
             label = `${el.prefix || ''}1/5`;
         } else if (el.source === 'database') {
             const colName = el.csv_column || '';
-            const csvData = state.csvData || state.numCsvData || null;
+            const csvData = bancoDeAmostra();
             const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
             if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
@@ -4162,7 +4195,7 @@ function drawElement(ctx, el, S) {
             qrText = el.fixed_value || '';
         } else if (el.source === 'database') {
             const colName = el.csv_column || '';
-            const csvData = state.csvData || state.numCsvData || null;
+            const csvData = bancoDeAmostra();
             const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
             if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
@@ -5421,7 +5454,7 @@ async function precarregarArtesDosElementos(elementos, linhas) {
     // seria baixar centenas de fotos para mostrar uma.
     const alvo = (linhas && linhas.length)
         ? linhas
-        : [(state.csvData || state.numCsvData || [])[0]].filter(Boolean);
+        : [linhaDeAmostra()].filter(Boolean);
     await window.precarregarFotosDosElementos(elementos, alvo);
     for (const el of (elementos || [])) {
         try {
@@ -19327,7 +19360,7 @@ window.onAmostraNumeracaoSelect = function() {
                     label = `${el.prefix || ''}1/5`;
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = state.csvData || state.numCsvData || null;
+                    const csvData = bancoDeAmostra(num);
                     const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
@@ -19361,7 +19394,7 @@ window.onAmostraNumeracaoSelect = function() {
                     qrText = el.fixed_value || '';
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = state.csvData || state.numCsvData || null;
+                    const csvData = bancoDeAmostra(num);
                     const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
@@ -19415,7 +19448,7 @@ window.onAmostraNumeracaoSelect = function() {
                 // A janela de amostra também é uma janela de arte: sem este ramo
                 // a foto simplesmente não aparecia aqui, e o operador via o
                 // modelo montado sem o rosto que ele vai imprimir.
-                desenharElementoFoto(ctx, el, S, false, linhaDeAmostra(),
+                desenharElementoFoto(ctx, el, S, false, linhaDeAmostra(num),
                     window.repintor('amostra', renderAmostraCombinada));
 
             } else if (el.type === 'SVG') {
@@ -35876,7 +35909,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
     // tarde. Sem esperar aqui, a janela sairia vazia no PDF entregue à produção —
     // e ninguém descobriria olhando a tela, que repinta.
     if (typeof window.precarregarFotosDosElementos === 'function') {
-        try { await window.precarregarFotosDosElementos(num.elements, [linhaDeAmostra()]); } catch (e) { }
+        try { await window.precarregarFotosDosElementos(num.elements, [linhaDeAmostra(num)]); } catch (e) { }
     }
 
     // Configurações base (S=8.0 para alta resolução: ~200 DPI)
@@ -35981,7 +36014,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
         } else if (el.type === 'FOTO') {
             // Gabarito rasterizado: desenha uma vez so. As fotos ja vieram pelo
             // precarregarArtesDosElementos que o chamador aguarda.
-            desenharElementoFoto(numCtx, el, S, false, linhaDeAmostra(), null);
+            desenharElementoFoto(numCtx, el, S, false, linhaDeAmostra(num), null);
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             const w = (el.width_mm || 20) * S;
             const h = (el.height_mm || 20) * S;

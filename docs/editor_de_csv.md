@@ -657,6 +657,52 @@ atualizar traz a planilha inteira, não um merge.
 Como todo o resto do editor, atualizar **carrega no editor e não grava**: quem
 grava é o botão de salvar da numeração.
 
+### Nenhuma numeração é desenhada com o banco de outra
+
+Regra do usuário, 24/08/2026: *"ao excluir um banco de dados da numeração, deve
+ser desvinculado da numeração anterior"*.
+
+O caso é a **proposta 2320**, um complemento de outra proposta: aproveita-se só a
+formatação da numeração antiga e carrega-se um banco novo, bem menor. O operador
+escolheu a numeração antiga no card do modelo, mandou editá-la — o que cria a
+exclusiva do modelo (`editCustomNumeracao`) —, e apagou o banco e o link da
+planilha. O registro gravou certo: `csv_data` nulo, `csv_url` vazio,
+`csv_headers` vazio. **Mas o canvas continuou pintando os nomes do banco
+anterior.**
+
+A causa não estava no que se gravou, e sim em de onde o desenho lia. As janelas
+faziam `state.csvData || state.numCsvData`, nesta ordem — e `state.csvData` é a
+fatia da numeração que o operador estava olhando **no pedido**, posta ali quando
+ele abriu o modelo. Ela tinha **prioridade** sobre o banco da numeração aberta no
+editor, então excluir o banco desta não adiantava: a fonte que o canvas lia era a
+da outra. Nada na tela explicava o porquê, e um F5 fazia sumir.
+
+Quem responde agora é `bancoDeAmostra(num)`, e a ordem é esta:
+
+1. **`num.csv_data`** — quem sabe qual numeração está desenhando manda. É o caso
+   da prévia da Amostra e do gabarito rasterizado, que recebem a numeração.
+2. **`state.numCsvData`** — no editor, o banco carregado é o da numeração aberta.
+3. **`state.csvData`, só quando não é derivado** — o arquivo solto que o operador
+   subiu na caixa da Imposição continua servindo à amostra avulsa. A fatia de uma
+   numeração (`csvDataDerivado`) **nunca** é emprestada.
+
+É a mesma regra que `linhasDaAmostra()` já aplicava ao card do modelo desde
+22/08/2026 (o caso "Expointer 2026", acima); as janelas de desenho nunca a
+receberam. Trocar a ordem também importa por si: o banco da numeração **aberta**
+vence qualquer coisa pendurada no `state`.
+
+**O que a regra não faz — e de propósito.** Excluir o banco **não** apaga os
+elementos que o liam. Eles continuam `source: 'database'` apontando para as
+colunas de antes, porque é exatamente a formatação que o operador quis
+aproveitar: apagar os campos destruiria o posicionamento que ele foi buscar na
+numeração antiga. Se o banco novo trouxer as mesmas colunas, eles voltam a
+imprimir sozinhos; se não trouxer, o card avisa pelo `bancoDeDadosIncompletoDoModelo`
+e segura o PRONTO até alguém reapontar cada um.
+
+Teste: `tests/banco_de_amostra_harness.js`. Um dos casos varre o `script.js`
+atrás de qualquer `state.csvData || state.numCsvData` sobrevivente — era essa
+linha que pintava o banco alheio, e sem a varredura ela volta em silêncio.
+
 ### O banco também se abre do card do modelo
 
 Chegar ao banco de dados exigia abrir o editor da numeração — uma tela de
