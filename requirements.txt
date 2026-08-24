@@ -11,3 +11,7 @@ firebase-admin>=6.2.0
 svglib>=1.5.1
 reportlab>=4.0.0
 
+
+# Obrigatoria para ler a balanca Urano CP POP na porta serial (balanca.py).
+# Sem ela o botao da balanca no Painel do Acabamento nao acha porta nenhuma.
+pyserial>=3.5

@@ -728,18 +728,21 @@ function ambienteComPedidoAberto() {
     // estacao e `anon` -- sem uma porta propria, o campo aceitaria o valor e
     // nada seria gravado.
     //
-    // Entao ha QUATRO rotas: tres da FICHA DE EXPEDICAO -- peso, carimbo do
-    // setor e o envio para a expedicao -- e, desde 21/08/2026, a conferencia da
-    // SENHA DE LIBERACAO do peso, que nao e da ficha: o agente so repassa o que
-    // o operador digitou e devolve sim ou nao. Nenhuma e do motor. Este teste
-    // existe para que continuem sendo quatro.
-    const ESPERADAS = ['expedicao', 'peso-setores', 'senha-liberacao', 'setor-concluido'];
+    // Entao ha CINCO rotas: tres da FICHA DE EXPEDICAO -- peso, carimbo do
+    // setor e o envio para a expedicao --; desde 21/08/2026 a conferencia da
+    // SENHA DE LIBERACAO do peso, que nao e da ficha (o agente so repassa o que
+    // o operador digitou e devolve sim ou nao); e, desde 24/08/2026, a BALANCA
+    // da estacao -- porta serial nao se le do navegador sem WebSerial, que pede
+    // permissao maquina a maquina, e nenhuma solucao daqui pode depender de
+    // configurar navegador. Nenhuma delas e do motor: nao ha impor, gerar PDF
+    // nem imprimir nesta tela, e este teste existe para que continue assim.
+    const ESPERADAS = ['balanca', 'expedicao', 'peso-setores', 'senha-liberacao', 'setor-concluido'];
     const rotas = [...new Set(
         (codigo.match(/urlDaEstacao\('([a-z0-9-]+)'/g) || [])
             .map(m => m.replace(/^urlDaEstacao\('/, '').replace(/'$/, ''))
     )].sort();
     ok(rotas.join(',') === ESPERADAS.join(','),
-       'as rotas de agente no acabamento.js sao as tres da ficha e a da senha', rotas.join(','));
+       'as rotas de agente no acabamento.js sao as tres da ficha, a senha e a balanca', rotas.join(','));
 
     // E o endereco se monta num lugar so: ha UM `/api/` no arquivo inteiro (o
     // `urlDeApi`, que serve ao agente e a Edge Function do painel). As duas
@@ -1190,6 +1193,175 @@ async function oErroDoAgenteChegaAoOperador() {
        textoDoQueFalta([], []).indexOf('não tem modelo') !== -1,
        'pedido sem modelo tem aviso proprio', textoDoQueFalta([], []));
 })();
+
+// ─── A balanca da estacao (24/08/2026) ───────────────────────────────────────
+//
+// O operador do acabamento pesa o material numa balanca Urano CP 3/0.5 POP e
+// ate aqui digitava no campo o numero que lia no visor. O botao ⚖ traz o numero
+// da propria balanca, pela porta serial, lida pelo AGENTE -- porta serial nao se
+// le do navegador sem WebSerial, que so existe no Chrome e pede permissao
+// maquina a maquina, e nenhuma solucao deste projeto pode depender de configurar
+// navegador.
+
+function ambienteComBalanca(responder) {
+    const amb = ambienteComEstimado();
+    amb.janela.SERVIDA_PELA_NUVEM = false;   // servida PELA ESTACAO
+    amb.janela.API_BASE_URL = '';
+    amb.banco._sessao = null;                // acesso local: sem sessao do Vibe
+    amb.chamadas = [];
+    amb.janela.fetch = (url, opcoes) => {
+        const metodo = (opcoes && opcoes.method) || 'GET';
+        amb.chamadas.push({ url, metodo, corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
+        if (url.indexOf('/api/balanca/') === 0) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(responder(url)) });
+        }
+        if (metodo === 'GET') {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ setores: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'success' }) });
+    };
+    return amb;
+}
+
+async function oBotaoDaBalancaSoExisteNaEstacao() {
+    // Na estacao ele fica ao lado do campo de peso de cada setor.
+    const naEstacao = ambienteComBalanca(() => ({ ok: true, peso_kg: 4.2, estavel: true }));
+    await naEstacao.painel.abrirPedido('os-200');
+    const html = naEstacao.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('acab-balanca-btn-acab-peso-PVC') !== -1,
+       'na estacao ha o botao da balanca ao lado do peso do setor');
+    ok(html.indexOf('AcabamentoPainel.lerBalanca(') !== -1,
+       'e ele chama a leitura da balanca');
+
+    // No site, nao. A balanca esta numa mesa, ligada a UM computador: botao que
+    // nao faz nada e pior que botao nenhum.
+    const noSite = ambienteComEstimado();
+    noSite.janela.SERVIDA_PELA_NUVEM = true;
+    await noSite.painel.abrirPedido('os-200');
+    const htmlDoSite = noSite.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(htmlDoSite.indexOf('acab-balanca-btn') === -1,
+       'no site o botao da balanca nao existe');
+    ok(htmlDoSite.indexOf('id="acab-peso-PVC"') !== -1,
+       'mas o campo para digitar a mao continua la');
+}
+
+async function aBalancaPreencheOPesoDoSetorEGravaPeloCaminhoDeSempre() {
+    const amb = ambienteComBalanca(() => ({
+        ok: true, peso_kg: 4.2, estavel: true, porta: 'COM7',
+    }));
+    await amb.painel.abrirPedido('os-200');
+    amb.chamadas.length = 0;
+
+    const deu = await amb.painel.lerBalanca('setor', '200', 'PVC');
+
+    ok(deu === true, 'a leitura deu certo');
+    ok(amb.chamadas[0] && amb.chamadas[0].url === '/api/balanca/peso',
+       'o peso foi pedido ao agente desta estacao, em caminho relativo',
+       JSON.stringify(amb.chamadas[0]));
+    ok(amb.elementos['acab-peso-PVC'].value === '4,2',
+       'o campo ficou com o peso da balanca, com virgula',
+       amb.elementos['acab-peso-PVC'].value);
+
+    // E gravou pelo caminho de sempre: a rota do peso do agente, nao uma nova.
+    const post = amb.chamadas.find(c => c.metodo === 'POST'
+        && c.url.indexOf('/api/peso-setores/') === 0);
+    ok(!!post && post.corpo.setor === 'PVC' && post.corpo.peso_real_kg === 4.2,
+       'e o peso foi gravado pela rota de sempre', JSON.stringify(post));
+    ok(!amb.elementos['acab-balanca'],
+       'dando certo, a caixa de diagnostico nem chega a ser montada');
+}
+
+async function oPesoDaBalancaPassaPelaReguaDosCincoPorCento() {
+    // 4,5 kg contra 4,16 estimados sao +8,2 %: mesmo vindo da balanca, o peso
+    // para no popup da senha. A balanca preenche o campo; ela nao libera nada.
+    const amb = ambienteComBalanca(() => ({ ok: true, peso_kg: 4.5, estavel: true }));
+    await amb.painel.abrirPedido('os-200');
+    amb.chamadas.length = 0;
+
+    await amb.painel.lerBalanca('setor', '200', 'PVC');
+
+    ok(amb.elementos['acab-liberacao'].style.display === 'flex',
+       'o popup da senha de liberacao abriu, como na digitacao a mao');
+    ok(!amb.chamadas.some(c => c.metodo === 'POST' && c.url.indexOf('/api/peso-setores/') === 0),
+       'e nada foi gravado antes da senha', JSON.stringify(amb.chamadas));
+}
+
+async function balancaMudaAbreACaixaQueDizOQueFazer() {
+    // A saida de dados da CP POP e opcional de fabrica, e mesmo instalada pode
+    // estar desligada no teclado dela. Nada disso o operador adivinha.
+    const amb = ambienteComBalanca(() => ({
+        ok: false,
+        motivo: 'A porta COM7 não respondeu como a balança CP POP.',
+        comoResolver: 'Na balança: FUNÇÃO, 8, senha 191249, e escolha "Tipo 1".',
+    }));
+    await amb.painel.abrirPedido('os-200');
+    amb.chamadas.length = 0;
+
+    const deu = await amb.painel.lerBalanca('setor', '200', 'PVC');
+
+    ok(deu === false, 'a leitura nao deu certo');
+    ok(amb.elementos['acab-balanca'].style.display === 'flex', 'e a caixa abriu');
+    ok(amb.elementos['acab-balanca-motivo'].textContent.indexOf('não respondeu') !== -1,
+       'dizendo o motivo', amb.elementos['acab-balanca-motivo'].textContent);
+    ok(amb.elementos['acab-balanca-saida'].textContent.indexOf('191249') !== -1,
+       'e a saida: os passos no teclado da balanca',
+       amb.elementos['acab-balanca-saida'].textContent);
+    ok(amb.elementos['acab-peso-PVC'].value !== '4,2', 'o campo nao foi preenchido com nada');
+    ok(!amb.chamadas.some(c => c.metodo === 'POST'), 'e nada foi gravado',
+       JSON.stringify(amb.chamadas));
+}
+
+async function oDiagnosticoMostraOQueCadaPortaRespondeu() {
+    // A pergunta que nenhuma tela responde de longe: a balanca esta mesmo ligada
+    // NESTA maquina, e em qual porta.
+    const amb = ambienteComBalanca(url => {
+        if (url === '/api/balanca/portas') {
+            return {
+                porta: 'COM7',
+                portas: [
+                    { porta: 'COM1', descricao: 'Porta de Comunicações', respondeu: false,
+                      detalhe: 'não respondeu' },
+                    { porta: 'COM7', descricao: 'USB Serial', respondeu: true,
+                      peso_kg: 2.5, estavel: true },
+                ],
+            };
+        }
+        if (url === '/api/balanca/porta') return { ok: true, porta: 'COM1' };
+        return { ok: false, motivo: 'Não achei a balança.' };
+    });
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.lerBalanca('setor', '200', 'PVC');
+    await amb.painel.procurarBalanca();
+
+    const lista = amb.elementos['acab-balanca-portas'].innerHTML;
+    ok(lista.indexOf('COM1') !== -1 && lista.indexOf('COM7') !== -1,
+       'a caixa lista as portas COM da maquina', lista);
+    ok(lista.indexOf('é a balança') !== -1, 'e diz qual delas e a balanca');
+    ok(lista.indexOf('2,5 kg') !== -1,
+       'mostrando o que ela marca agora, para conferir com o visor');
+    ok(lista.indexOf("usarPortaDaBalanca('COM1')") !== -1,
+       'as outras ficam com o botao de escolher a mao');
+
+    // Escolher uma porta a mao grava a escolha NESTA maquina.
+    amb.chamadas.length = 0;
+    await amb.painel.usarPortaDaBalanca('COM1');
+    const post = amb.chamadas.find(c => c.url === '/api/balanca/porta');
+    ok(!!post && post.metodo === 'POST' && post.corpo.porta === 'COM1',
+       'a escolha foi gravada pelo agente', JSON.stringify(post));
+    ok(amb.elementos['acab-balanca'].style.display === 'none', 'e a caixa fechou');
+}
+
+function aBalancaEstaNosTresCamposDePeso() {
+    // Os tres campos sao o MESMO ato de pesar, e o usuario pediu o botao nos
+    // tres (24/08/2026). Dois deles moram em popups montados uma vez so, fora do
+    // alcance do DOM de mentira -- por isso a medida aqui e na fonte.
+    ok(FONTE.indexOf("botaoDaBalanca('setor', numeroDoPedido, setor)") !== -1,
+       'o peso de cada setor, na ficha de expedicao');
+    ok(FONTE.indexOf("botaoDaBalanca('volume')") !== -1,
+       'o "Peso na balanca" do editor de caixa');
+    ok(FONTE.indexOf("botaoDaBalanca('obrigatorio')") !== -1,
+       'e a janela do peso que fecha o setor');
+}
 
 async function oBotaoDeExpedicaoSoAcendeComTudoPronto() {
     const amb = ambienteComPedidoAberto();
@@ -3668,6 +3840,14 @@ async function asContasDoRecorteDaListaSaoPuras() {
     await senhaCertaNoSiteGravaPeloCaminhoDeSempre();
     await senhaCertaNaEstacaoGravaPeloAgente();
     await semEstimadoGravaDireto();
+
+    // A balanca da estacao (24/08/2026)
+    await oBotaoDaBalancaSoExisteNaEstacao();
+    await aBalancaPreencheOPesoDoSetorEGravaPeloCaminhoDeSempre();
+    await oPesoDaBalancaPassaPelaReguaDosCincoPorCento();
+    await balancaMudaAbreACaixaQueDizOQueFazer();
+    await oDiagnosticoMostraOQueCadaPortaRespondeu();
+    aBalancaEstaNosTresCamposDePeso();
 
     if (falhas) {
         console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

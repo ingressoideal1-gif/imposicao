@@ -126,6 +126,15 @@ a = Analysis(
         'security_config',
         'font_cache',
         'agent_version',
+        'balanca',
+        # A balanca Urano da estacao, na porta serial. O 'serial.serialwin32' e o
+        # backend do Windows, escolhido em tempo de execucao -- o PyInstaller nao
+        # o acha varrendo o codigo, e sem ele o agente COMPILA e so falha na
+        # estacao, no clique do operador, sem nada no log que explique.
+        'serial',
+        'serial.tools',
+        'serial.tools.list_ports',
+        'serial.serialwin32',
     ],
     hookspath=[],
     hooksconfig={},

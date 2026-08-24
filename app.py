@@ -29,6 +29,7 @@ def log_diag(msg: str):
 from engine import ImpositionConfig, ImpositionEngine
 import db
 import print_service
+import balanca
 import color_profiles
 import hotfolder
 from contextlib import asynccontextmanager
@@ -713,6 +714,51 @@ async def gravar_peso_setor(pedido_id_int: int, request: Request,
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Nao deu para gravar o peso: {e}")
     return {"status": "success", **r}
+
+
+# ─── A balanca da estacao ────────────────────────────────────────────────────
+#
+# A balanca Urano CP 3/0.5 POP do acabamento, lida na porta serial. O protocolo
+# inteiro mora no `balanca.py`; aqui e so a porta de entrada do painel.
+#
+# Ler porta serial NAO da para fazer no navegador sem WebSerial, que so existe
+# no Chrome e pede permissao maquina a maquina — e nenhuma solucao deste projeto
+# pode depender de configurar navegador, porque cada estacao usa um diferente.
+# Por isso a leitura e do agente, como a impressao.
+#
+# As tres respondem 200 mesmo quando NAO acham a balanca, com `ok: false` e o
+# motivo escrito. Nao achar balanca e estado de operacao, nao falha de servidor:
+# a saida serial da CP POP e opcional de fabrica e pode estar desligada no
+# teclado dela (FUNCAO 8, senha 191249). Um 502 chegaria a tela como "erro
+# interno" e esconderia justamente a parte que o operador precisa ler.
+
+
+@app.get("/api/balanca/peso")
+def balanca_peso(porta: str = "", user: dict = Depends(get_current_user)):
+    """O peso agora, em quilos. Espera ate 4 s o peso estabilizar no prato."""
+    return balanca.ler_peso(porta=porta or None)
+
+
+@app.get("/api/balanca/portas")
+def balanca_portas(user: dict = Depends(get_current_user)):
+    """O diagnostico: o que cada porta COM desta maquina respondeu."""
+    achado = balanca.procurar()
+    achado.pop("_leitura", None)
+    return achado
+
+
+@app.post("/api/balanca/porta")
+async def balanca_porta(request: Request, user: dict = Depends(get_current_user)):
+    """Grava a porta escolhida a mao, para quando o diagnostico nao decidir."""
+    dados = await request.json()
+    porta = str(dados.get("porta") or "").strip()
+    if not porta:
+        return {"ok": False, "motivo": "Escolha uma porta da lista."}
+    if not balanca.guardar_porta(porta):
+        return {"ok": False, "porta": porta,
+                "motivo": "Não deu para gravar a escolha nesta máquina.",
+                "comoResolver": "Rode o agente com permissão de escrever na pasta dele."}
+    return {"ok": True, "porta": porta}
 
 
 def _repassar_recusa(e, oque: str):

@@ -4,7 +4,44 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v705** — 2026-08-24 | Agente **1.2.199**
+## Versão atual: **v707** — 2026-08-24 | Agente **1.2.202**
+
+---
+
+## [v707 — 2026-08-24] — Acabamento: a balança preenche o campo de peso sozinha
+
+Pedido do usuário: *"No painel do acabamento, na edição do pedido para o modelo, nós utilizamos a
+webcam para tirar foto. Também utilizamos uma balança para medir o peso. Precisamos fazer a leitura
+da balança para que o peso seja preenchido automaticamente no campo peso. A balança é da marca
+Urano, CP 3/0.5 POP."*
+
+Um botão **⚖** ao lado dos **três** campos de peso da tela — o peso de cada setor na ficha de
+expedição, o "Peso na balança" do editor de caixa, e a janela do peso que fecha o setor. Apertado,
+ele lê a balança e preenche o campo. O valor segue o caminho de sempre: a régua dos 5 %, a senha de
+liberação, a mesma gravação. Digitar à mão continua valendo.
+
+**A leitura é do agente, não do navegador.** Porta serial no navegador só existe com WebSerial:
+Chrome, e com permissão concedida à mão em cada máquina — e nenhuma solução deste projeto pode
+depender de configurar navegador, porque cada estação usa um diferente. O agente lê a porta e o
+painel pergunta a ele por `/api/balanca/peso`, do mesmo jeito que já pergunta o peso por setor. No
+site o botão **não existe**: a balança está numa mesa, ligada a um computador.
+
+**O protocolo saiu do manual da Urano** (linha CP POP, item 11.13.2): 9600 bps, 8 data bits, sem
+paridade, 2 stop bits; o computador manda um byte (`0x05`) e a balança responde um quadro com sinal,
+marca de estável, tara, **peso líquido em gramas**, peso médio e total de peças. O agente espera até
+4 segundos o peso estabilizar no prato antes de responder, e diz "sobrecarga" por nome quando o
+material passa dos 3 kg da balança.
+
+**Não achar a balança não é erro, e a tela diz o que fazer.** Na CP POP a saída de dados é opcional
+de fábrica (o conector serial RJ45 e o USB são acessórios), e mesmo instalada precisa ser ligada no
+teclado dela: `FUNÇÃO` `8`, senha `191249`, opção "Tipo 1". Nada disso o operador adivinha — então a
+falha abre uma caixa com o motivo, com esses passos, e com o **"Procurar a balança nas portas deste
+computador"**, que lista cada porta COM da máquina, o que ela respondeu e quanto está marcando, para
+conferir contra o visor.
+
+**Testes:** 25 verificações novas em `tests/test_balanca.py` (o quadro montado byte a byte a partir
+do manual: estável, instável, negativo, sobrecarga, quadro truncado, lixo) e 691 no harness do
+acabamento (eram 665).
 
 ---
 

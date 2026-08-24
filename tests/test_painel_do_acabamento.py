@@ -838,12 +838,17 @@ def test_as_tabelas_sao_nossas_para_a_estacao_conseguir_gravar():
 
 
 def test_o_volume_nao_abre_rota_nova_no_agente():
-    """A tela fala com o agente por quatro rotas e por mais nenhuma. Os volumes
-    nao acrescentaram uma quinta -- eles nem passam por la."""
+    """A tela fala com o agente por rotas contadas, e os volumes nao estao entre
+    elas -- eles nem passam por la.
+
+    Sao cinco: as tres da ficha de expedicao, a senha de liberacao do peso
+    (21/08/2026) e a balanca da estacao (24/08/2026). Nenhuma e do motor.
+    """
     js = _ler("frontend/acabamento.js")
 
     rotas = set(re.findall(r"urlDaEstacao\('([a-z0-9-]+)'", js))
-    assert rotas == {"peso-setores", "setor-concluido", "expedicao", "senha-liberacao"}, (
+    assert rotas == {"peso-setores", "setor-concluido", "expedicao", "senha-liberacao",
+                     "balanca"}, (
         "as rotas do agente mudaram: " + ", ".join(sorted(rotas))
     )
 

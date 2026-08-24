@@ -514,17 +514,85 @@ O agente não valida nada por conta própria: converter a vírgula e conferir a
 lista de setores nos dois lugares criaria duas verdades, e a que vale é a do
 servidor, que conhece o `CHECK` da tabela.
 
-São **quatro** as chamadas ao agente em toda a tela — o peso, o carimbo do setor,
-o envio para a expedição e a conferência da senha de liberação (a única que não é
-da ficha: ver a seção seguinte). Impor, gerar PDF,
-imprimir e perguntar a versão do NewProd continuam fora; há teste contando as
-rotas e exigindo que exista **um único** `/api/` no arquivo.
+São **cinco** as chamadas ao agente em toda a tela — o peso, o carimbo do setor,
+o envio para a expedição, a conferência da senha de liberação (a única que não é
+da ficha: ver a seção seguinte) e, desde 24/08/2026, a **balança** da estação.
+Impor, gerar PDF, imprimir e perguntar a versão do NewProd continuam fora; há
+teste contando as rotas e exigindo que exista **um único** `/api/` no arquivo.
 
 `propostas` passa pela mesma porta, e não porque precise: hoje a política
 `Enable read access for all` daquela tabela é ALL/public/true, então a chave
 anônima escreve nela. A rota existe assim mesmo para que o caminho da estação
 seja **um só** — no dia em que aquela política for fechada, a expedição não cai
 junto.
+
+### A balança, lida pelo agente (24/08/2026)
+
+Pedido do usuário: *"No painel do acabamento, na edição do pedido para o modelo,
+nós utilizamos a webcam para tirar foto. Também utilizamos uma balança para medir
+o peso. Precisamos fazer a leitura da balança para que o peso seja preenchido
+automaticamente no campo peso."*
+
+O modelo é uma **Urano CP 3/0.5 POP** — 3 kg de capacidade, divisão de 0,5 g. Um
+botão **⚖** ao lado dos **três** campos de peso da tela (o peso de cada setor, o
+"Peso na balança" do editor de caixa e a janela do peso que fecha o setor) lê a
+balança e preenche o campo. O valor preenchido segue o caminho de sempre: a régua
+dos 5 %, a senha de liberação, a mesma gravação. Digitar à mão continua valendo.
+
+#### O protocolo, do manual da Urano
+
+Manual de operação da linha CP POP, item 11.13.2 (senha 191249):
+
+- **9600 bps, 8 data bits, sem paridade, 2 stop bits.**
+- O computador pede o peso mandando **um byte** (`0x04` ou `0x05`), e a balança
+  responde um quadro só:
+
+  ```
+  [sinal][estável] DD/MM/AA _ <descrição, 20 caracteres> _ TTTTTTg _ LLLLLLg
+    __ MMM,MMMg _ PPPPPP <CR><LF><CK><CK>
+                             tara      líquido   peso médio   peças
+  ```
+
+- O **peso líquido vem em gramas**, seis dígitos; os campos da tela são em quilos.
+
+Duas leituras do quadro são deliberadamente frouxas, e o
+[`balanca.py`](../balanca.py) explica por quê: o sinal e a marca de estável são
+lidos como **conjunto** (o desenho do manual não diz qual dos dois vem primeiro,
+e apostar errado daria um peso "sempre instável" sem nada que explicasse), e o
+**checksum não recusa o quadro** (ele é mostrado no diagnóstico; recusar por ele
+transformaria uma balança que funciona numa que nunca lê).
+
+#### Por que a leitura é do agente
+
+Porta serial no navegador só existe com **WebSerial**: Chrome, e com permissão
+concedida à mão em cada máquina. Nenhuma solução deste projeto pode depender de
+configurar navegador — cada estação usa um diferente. Então o agente lê a porta, e
+o painel pergunta a ele por `/api/balanca/peso`, do mesmo jeito que já pergunta o
+peso por setor. **O botão não existe no site**: a balança está numa mesa, ligada a
+um computador, e botão que não faz nada é pior que botão nenhum.
+
+A porta escolhida fica em `balanca_config.json`, ao lado do executável, como o
+`print_configs.json` — em qual porta COM a balança está é propriedade física
+daquela máquina, e a escolha sobrevive à atualização do agente.
+
+#### Quando não achar a balança, a tela diz o que fazer
+
+As três rotas (`/api/balanca/peso`, `/api/balanca/portas`, `/api/balanca/porta`)
+respondem **HTTP 200 mesmo sem achar balança**, com `ok: false`, `motivo` e
+`comoResolver`. Não achar balança quase nunca é defeito:
+
+- na CP POP a saída de dados é **opcional de fábrica** — o conector serial RJ45 e
+  o USB são acessórios, e sem um deles não há o que ler;
+- mesmo instalada, a saída precisa ser **ligada no teclado da balança**: `FUNÇÃO`
+  `8`, senha `191249`, opção **"Tipo 1"** (responde ao computador). "Deslig"
+  também é uma das opções.
+
+Nada disso o operador adivinha, e um 502 chegaria à tela como "erro interno"
+escondendo justamente a parte útil. Por isso a falha abre uma caixa com o motivo,
+os passos do teclado, e o **"Procurar a balança nas portas deste computador"** —
+que lista cada porta COM da máquina, o que ela respondeu e quanto está marcando,
+para conferir contra o visor. É a saída na própria tela, como toda trava daqui
+precisa ter.
 
 ### O peso estimado, e a senha que libera a divergência
 

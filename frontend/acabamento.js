@@ -1717,6 +1717,279 @@
         return String(n).replace('.', ',');
     }
 
+    // ─── A balança ──────────────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 24/08/2026. Na edição do pedido o operador já
+    // fotografa o material pela webcam da estação; ele também o pesa, numa
+    // balança Urano CP 3/0.5 POP, e até aqui lia o número no visor e digitava.
+    // Agora um botão ⚖ ao lado de cada campo de peso traz o número da balança.
+    //
+    // ## Por que isto passa pelo agente, e não pelo navegador
+    //
+    // Porta serial no navegador só existe com WebSerial: Chrome, e com permissão
+    // concedida à mão em cada máquina. Nenhuma solução deste projeto pode
+    // depender de configurar navegador — cada estação usa um diferente. Então o
+    // agente lê a porta, e o painel pergunta a ele pela rota local
+    // `/api/balanca/peso`, do mesmo jeito que já pergunta o peso por setor.
+    //
+    // ## Por que o botão não existe no site
+    //
+    // Porque a balança está numa mesa, ligada a UM computador. Aberto o painel
+    // pelo site, não há porta serial nenhuma do outro lado — e botão que não faz
+    // nada é pior que botão nenhum. Quem decide é o `pelaEstacao()`.
+    //
+    // ## Por que "não achei a balança" não chega como erro
+    //
+    // Porque quase nunca é defeito. Na CP POP a saída de dados (serial RJ45 ou
+    // USB) é OPCIONAL de fábrica, e mesmo instalada precisa ser ligada no
+    // teclado da balança: FUNÇÃO 8, senha 191249, opção "Tipo 1". Nada disso o
+    // operador adivinha. Então a falha abre uma caixa que diz o motivo, mostra o
+    // que cada porta COM da máquina respondeu, e escreve os passos do teclado —
+    // a saída, na própria tela, como toda trava daqui precisa ter.
+
+    /** Onde cada botão ⚖ escreve o peso que leu. */
+    const CAMPO_DA_BALANCA = {
+        setor: (numeroDoPedido, setor) => 'acab-peso-' + setor,
+        volume: () => 'acab-vol-peso',
+        obrigatorio: () => 'acab-peso-obrig-campo',
+    };
+
+    const balanca = { lendo: false };
+
+    /** Só a estação tem balança ligada; no site não há o que ler. */
+    function haBalanca() {
+        return pelaEstacao();
+    }
+
+    /** O botão ⚖ ao lado de um campo de peso. Vazio fora da estação. */
+    function botaoDaBalanca(destino, a, b) {
+        const monta = CAMPO_DA_BALANCA[destino];
+        if (!haBalanca() || !monta) return '';
+        const args = [destino, a, b]
+            .filter(v => v !== undefined && v !== null)
+            .map(v => `'${escJs(String(v))}'`).join(', ');
+        return `<button type="button" id="acab-balanca-btn-${esc(monta(a, b))}"
+                        onclick="AcabamentoPainel.lerBalanca(${args})"
+                        title="Pesar: ler o peso direto da balança desta estação"
+                        style="background: rgba(69,137,215,0.16); border: 1px solid rgba(69,137,215,0.50);
+                               color: #4cc8f0; border-radius: 7px; padding: 5px 9px;
+                               font-size: 0.88rem; font-weight: 700; cursor: pointer;
+                               white-space: nowrap;">⚖</button>`;
+    }
+
+    /**
+     * Lê a balança e escreve o peso no campo.
+     *
+     * O agente espera até 4 s o peso estabilizar no prato — quem chama aqui não
+     * precisa saber disso. O valor preenchido segue o caminho de sempre: a régua
+     * dos 5 %, a senha de liberação e a mesma gravação da digitação à mão.
+     */
+    async function lerBalanca(destino, a, b) {
+        const monta = CAMPO_DA_BALANCA[destino];
+        if (!haBalanca() || !monta || balanca.lendo) return false;
+
+        const botao = document.getElementById('acab-balanca-btn-' + monta(a, b));
+        balanca.lendo = true;
+        if (botao) { botao.disabled = true; botao.textContent = '⏳'; }
+        try {
+            const r = await buscar(urlDaEstacao('balanca', 'peso'));
+            let dados = null;
+            try { dados = await r.json(); } catch (ignorado) { dados = null; }
+            if (!dados || dados.ok !== true) {
+                abrirBalanca(dados || {});
+                return false;
+            }
+            await usarPesoDaBalanca(destino, dados.peso_kg, a, b);
+            avisar(`Balança: ${pesoParaTexto(dados.peso_kg)} kg.`, 'success');
+            return true;
+        } catch (e) {
+            abrirBalanca({
+                motivo: `Não deu para falar com o agente desta estação (${e && e.message ? e.message : e}).`,
+                comoResolver: 'Confira se o NewProd Agent está rodando nesta máquina e '
+                    + 'abra o painel por http://localhost:9000.',
+            });
+            return false;
+        } finally {
+            balanca.lendo = false;
+            if (botao) { botao.disabled = false; botao.textContent = '⚖'; }
+        }
+    }
+
+    /** O peso lido entra no campo e segue o caminho de sempre daquele campo. */
+    async function usarPesoDaBalanca(destino, kg, a, b) {
+        const texto = pesoParaTexto(kg);
+        const campo = document.getElementById(CAMPO_DA_BALANCA[destino](a, b));
+        if (campo) campo.value = texto;
+
+        if (destino === 'setor') return gravarPeso(a, b, texto);
+        if (destino === 'volume') { pintarEstimadoDoVolume(); return; }
+        if (destino === 'obrigatorio') {
+            const erro = document.getElementById('acab-peso-obrig-erro');
+            if (erro) erro.textContent = '';
+        }
+    }
+
+    // ─── A caixa que explica a balança que não respondeu ────────────────────
+
+    function montarCaixaDaBalanca() {
+        let caixa = document.getElementById('acab-balanca');
+        if (caixa) return caixa;
+
+        caixa = document.createElement('div');
+        caixa.id = 'acab-balanca';
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100005; display: none;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(560px, 96vw); max-height: 92vh; background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">⚖️</span>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Balança desta estação</strong>
+                    <button type="button" id="acab-balanca-fechar"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px;
+                                   font-weight: 700; cursor: pointer;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; color: #cfe6fb; font-size: 0.9rem; line-height: 1.55;
+                            overflow: auto;">
+                    <div id="acab-balanca-motivo" style="color: #f87171; font-weight: 700;"></div>
+                    <div id="acab-balanca-saida" style="margin-top: 8px; color: #cfe6fb;"></div>
+
+                    <button type="button" id="acab-balanca-procurar"
+                            style="margin-top: 14px; background: rgba(69,137,215,0.16);
+                                   border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0;
+                                   border-radius: 8px; padding: 8px 14px; font-weight: 700;
+                                   cursor: pointer;">🔎 Procurar a balança nas portas deste computador</button>
+
+                    <div id="acab-balanca-portas" style="margin-top: 12px; display: flex;
+                         flex-direction: column; gap: 8px;"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18); flex-wrap: wrap;">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">O peso continua podendo ser digitado à mão.</span>
+                    <button type="button" id="acab-balanca-ok"
+                            style="margin-left: auto; background: linear-gradient(135deg, #4a61e8, #120a8f);
+                                   border: 1px solid #4cc8f0; color: #ffffff; border-radius: 8px;
+                                   padding: 9px 20px; font-weight: 800; cursor: pointer;">Fechar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+
+        ['acab-balanca-fechar', 'acab-balanca-ok'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.onclick = fecharBalanca;
+        });
+        const procurar = document.getElementById('acab-balanca-procurar');
+        if (procurar) procurar.onclick = procurarBalanca;
+        return caixa;
+    }
+
+    function abrirBalanca(dados) {
+        montarCaixaDaBalanca();
+        const motivo = document.getElementById('acab-balanca-motivo');
+        if (motivo) {
+            motivo.textContent = (dados && dados.motivo)
+                || 'Não consegui ler a balança desta estação.';
+        }
+        const saida = document.getElementById('acab-balanca-saida');
+        if (saida) {
+            saida.textContent = (dados && dados.comoResolver)
+                || 'Na balança: FUNÇÃO, 8, senha 191249, e escolha "Tipo 1" — é o modo em '
+                 + 'que ela responde ao computador. Confira também o cabo: na CP POP a saída '
+                 + 'serial RJ45 e a USB são opcionais de fábrica.';
+        }
+        const lista = document.getElementById('acab-balanca-portas');
+        if (lista) lista.innerHTML = '';
+        const caixa = document.getElementById('acab-balanca');
+        if (caixa) caixa.style.display = 'flex';
+    }
+
+    function fecharBalanca() {
+        const caixa = document.getElementById('acab-balanca');
+        if (caixa) caixa.style.display = 'none';
+    }
+
+    /**
+     * O diagnóstico: pergunta ao agente o que cada porta COM respondeu.
+     *
+     * É o que responde a pergunta que nenhuma tela responde de longe — se a
+     * balança está mesmo ligada NESTA máquina, e em qual porta.
+     */
+    async function procurarBalanca() {
+        const lista = document.getElementById('acab-balanca-portas');
+        const botao = document.getElementById('acab-balanca-procurar');
+        if (botao) { botao.disabled = true; botao.textContent = 'Procurando…'; }
+        if (lista) lista.innerHTML = '<span style="color: var(--text-dim);">Procurando…</span>';
+        try {
+            const r = await buscar(urlDaEstacao('balanca', 'portas'));
+            const dados = await r.json();
+            if (lista) lista.innerHTML = htmlDasPortas(dados);
+        } catch (e) {
+            if (lista) {
+                lista.innerHTML = `<span style="color: #f87171;">Não deu para perguntar ao agente `
+                    + `(${esc(e && e.message ? e.message : e)}).</span>`;
+            }
+        } finally {
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = '🔎 Procurar a balança nas portas deste computador';
+            }
+        }
+    }
+
+    function htmlDasPortas(dados) {
+        const portas = (dados && dados.portas) || [];
+        if (!portas.length) {
+            return '<span style="color: #f87171;">Este computador não tem nenhuma porta COM. '
+                 + 'A balança não está ligada a ele — ou está sem o conector serial/USB, '
+                 + 'que na CP POP é opcional de fábrica.</span>';
+        }
+        return portas.map(p => {
+            const achou = p.respondeu === true;
+            const peso = achou && p.peso_kg !== null && p.peso_kg !== undefined
+                ? ` — está marcando ${esc(pesoParaTexto(p.peso_kg))} kg` : '';
+            return `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                            background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
+                            border-radius: 8px; padding: 8px 10px;">
+                    <strong style="font-family: monospace; color: ${achou ? '#4ade80' : '#cfe6fb'};">${esc(p.porta)}</strong>
+                    <span style="font-size: 0.82rem; color: var(--text-dim);">${esc(p.descricao || '')}</span>
+                    <span style="font-size: 0.82rem; color: ${achou ? '#4ade80' : 'var(--text-dim)'};">
+                        ${achou ? '✔ é a balança' + peso : esc(p.detalhe || 'não respondeu')}</span>
+                    ${achou ? '' : `<button type="button"
+                        onclick="AcabamentoPainel.usarPortaDaBalanca('${escJs(p.porta)}')"
+                        style="margin-left: auto; background: rgba(69,137,215,0.16);
+                               border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0;
+                               border-radius: 7px; padding: 4px 10px; font-size: 0.78rem;
+                               font-weight: 700; cursor: pointer;">Usar esta</button>`}
+                </div>`;
+        }).join('');
+    }
+
+    /** Quando o operador sabe a porta e o diagnóstico não decidiu por ele. */
+    async function usarPortaDaBalanca(porta) {
+        try {
+            const r = await buscar(urlDaEstacao('balanca', 'porta'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ porta }),
+            });
+            const dados = await r.json();
+            if (dados && dados.ok) {
+                avisar(`A balança desta estação passa a ser lida na porta ${porta}.`, 'success');
+                fecharBalanca();
+            } else {
+                avisar((dados && dados.motivo) || 'Não deu para gravar a porta.', 'error');
+            }
+        } catch (e) {
+            avisar(`Não deu para gravar a porta (${e && e.message ? e.message : e}).`, 'error');
+        }
+    }
+
     // ─── O peso estimado, e a regra dos 5 % ─────────────────────────────────
     //
     // Pedido do usuário em 21/08/2026: ao lado do peso real de cada setor, o
@@ -2168,6 +2441,7 @@
                                       color: #cfe6fb; padding: 6px 8px; font-size: 0.92rem;
                                       font-family: monospace; opacity: ${pode ? '1' : '0.5'};" />
                         <span style="font-size: 0.8rem; color: var(--text-dim);">kg</span>
+                        ${pode ? botaoDaBalanca('setor', numeroDoPedido, setor) : ''}
                         <span id="acab-peso-est-${setor}"
                               title="Peso estimado: a soma dos pesos dos produtos deste setor no pedido, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
                               style="font-size: 0.74rem; color: ${estimado.cor}; white-space: nowrap;">${esc(estimado.texto)}</span>
@@ -3984,6 +4258,7 @@
                                               color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
                                               font-family: monospace;" />
                                 <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                                ${botaoDaBalanca('volume')}
                                 <span id="acab-vol-est" title="O peso esperado desta caixa: a quantidade de cada modelo vezes o peso da peça, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
                                       style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap;"></span>
                             </div>
@@ -4591,6 +4866,7 @@
                                       color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
                                       font-family: monospace;" />
                         <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                        ${botaoDaBalanca('obrigatorio')}
                         <span id="acab-peso-obrig-est" style="font-size: 0.8rem; color: var(--text-dim);"></span>
                     </div>
                     <div id="acab-peso-obrig-erro" style="margin-top: 8px; min-height: 1.2em;
@@ -5533,6 +5809,12 @@
         mudarPeso(numeroDoPedido, setor, valor) {
             return gravarPeso(numeroDoPedido, setor, valor);
         },
+
+        // A balança da estação (24/08/2026).
+        lerBalanca,
+        procurarBalanca,
+        usarPortaDaBalanca,
+        fecharBalanca,
 
         expedir(osId) {
             return mandarParaExpedicao(osId);
