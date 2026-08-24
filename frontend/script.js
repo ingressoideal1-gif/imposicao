@@ -36071,6 +36071,7 @@ window.switchAdmTab = function(tabId) {
     // Carregar dados se necessário
     if (tabId === 'imagens') loadAdmImages();
     if (tabId === 'aproveitamento' && typeof renderAdmAproveitamento === 'function') renderAdmAproveitamento();
+    if (tabId === 'fundo' && typeof carregarFundoAtual === 'function') carregarFundoAtual();
 };
 
 // Inicializa a view ADM ao entrar nela (hook no showView)
@@ -36680,3 +36681,336 @@ window.verificarAtualizacaoAgente = verificarAtualizacaoAgente;
 // `garantirFontesCarregadas` e `fontesDosElementos` moram no `fonte-canvas.js`
 // desde 13/08/2026, porque a página do cliente precisa das mesmas duas e não
 // carrega este arquivo.
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADM → FUNDO DO PWA — a foto de evento atrás das telas do Ideal Control
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Pedido do usuário em 24/08/2026, com uma regra que governa este bloco inteiro:
+// **na foto se trabalha apenas enquadramento e contraste, para boa leitura.**
+//
+// A foto é de autoria da empresa. Ela não se redesenha, não se borra, não se
+// dessatura e não se esquenta nem se esfria. O que esta tela faz é:
+//
+//   ENQUADRAMENTO — recorta para 9:16 (a proporção do celular) e deixa escolher
+//                   qual pedaço fica: o topo (palco e luz), o centro ou a base
+//                   (a plateia). É a única decisão de composição aqui.
+//
+//   CONTRASTE     — o véu escuro por cima, que mantém o texto legível. Ele NÃO
+//                   é assado na imagem: viaja como número até o celular e é
+//                   aplicado em CSS. Assim se ajusta sem reexportar nada, e o
+//                   arquivo no bucket continua sendo a foto da empresa, intacta.
+//
+// O recorte e a compressão acontecem AQUI, no navegador do ADM, e não num
+// servidor: a imagem que sobe já é a que o celular vai baixar, e quem publicou
+// viu exatamente ela na prévia ao lado.
+
+const FUNDO_BUCKET = 'app-imagens';
+const FUNDO_PASTA = 'fundo-pwa';
+const FUNDO_LARGURA = 1080;
+const FUNDO_ALTURA = 1920;
+const FUNDO_MIN_LARGURA = 720;
+const FUNDO_MIN_ALTURA = 1280;
+// O teto existe porque este arquivo entra no aparelho do cliente e fica lá.
+// Não é limite de upload: é o alvo que a busca de qualidade abaixo persegue.
+const FUNDO_TETO_BYTES = 220 * 1024;
+
+let _fundoImagem = null;        // a HTMLImageElement escolhida
+let _fundoEnquadramento = 'centro';
+let _fundoVeu = 0.45;
+let _fundoAtual = null;         // o que está publicado, vindo do banco
+
+// ── O recorte ──────────────────────────────────────────────────────────────
+//
+// Uma função só, usada pela prévia E pela exportação, de propósito: se as duas
+// tivessem contas próprias, a prévia mostraria um recorte e o celular receberia
+// outro — e ninguém descobriria até a foto estar no ar.
+function fundoRecorte(largura, altura, ancora) {
+    const alvo = FUNDO_ALTURA / FUNDO_LARGURA;
+    const atual = altura / largura;
+    if (atual < alvo) {
+        // Foto deitada: corta nas laterais, sempre pelo centro — é onde a ação
+        // costuma estar em foto de plateia.
+        const nova = Math.round(altura / alvo);
+        return { sx: Math.round((largura - nova) / 2), sy: 0, sw: nova, sh: altura };
+    }
+    if (atual > alvo) {
+        // Foto em pé: aqui a âncora decide o que fica.
+        const nova = Math.round(largura * alvo);
+        const sobra = altura - nova;
+        const sy = ancora === 'topo' ? 0 : (ancora === 'base' ? sobra : Math.round(sobra / 2));
+        return { sx: 0, sy, sw: largura, sh: nova };
+    }
+    return { sx: 0, sy: 0, sw: largura, sh: altura };
+}
+
+function fundoDesenhar(canvas, larguraDestino, alturaDestino) {
+    if (!_fundoImagem) return;
+    const r = fundoRecorte(_fundoImagem.naturalWidth, _fundoImagem.naturalHeight, _fundoEnquadramento);
+    canvas.width = larguraDestino;
+    canvas.height = alturaDestino;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, larguraDestino, alturaDestino);
+    ctx.drawImage(_fundoImagem, r.sx, r.sy, r.sw, r.sh, 0, 0, larguraDestino, alturaDestino);
+}
+
+// ── O véu, numa fórmula só ─────────────────────────────────────────────────
+//
+// A MESMA conta do `controle.css`. Repetida aqui porque a prévia não roda
+// dentro do PWA — e se as duas divergirem, o ADM aprova um contraste e o
+// cliente recebe outro.
+function fundoVeuCss(veu) {
+    const t = Math.min(1, veu + 0.10).toFixed(2);
+    const m = Math.max(0, veu - 0.08).toFixed(2);
+    const b = Math.min(1, veu + 0.06).toFixed(2);
+    return `linear-gradient(180deg, rgba(6,10,22,${t}) 0%, rgba(6,10,22,${m}) 46%, rgba(6,10,22,${b}) 100%)`;
+}
+
+function fundoAtualizarPrevia() {
+    const canvas = document.getElementById('fundo-previa-img');
+    const veu = document.getElementById('fundo-previa-veu');
+    if (!canvas || !veu) return;
+    if (_fundoImagem) {
+        fundoDesenhar(canvas, 270, 480);
+        canvas.style.display = '';
+    } else if (_fundoAtual && _fundoAtual._url) {
+        // Sem escolha nova, a prévia mostra o que está no ar.
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 270, 480);
+            ctx.drawImage(img, 0, 0, 270, 480);
+        };
+        img.src = _fundoAtual._url;
+    } else {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    veu.style.background = _fundoImagem || _fundoAtual ? fundoVeuCss(_fundoVeu) : 'none';
+}
+
+// ── Escolher a foto ────────────────────────────────────────────────────────
+
+function fundoErro(mensagem) {
+    const p = document.getElementById('fundo-erro');
+    if (!p) return;
+    if (!mensagem) { p.style.display = 'none'; return; }
+    p.textContent = mensagem;
+    p.style.display = '';
+}
+
+window.handleFundoSelect = function (event) {
+    const arquivo = (event.target.files || [])[0];
+    if (arquivo) fundoReceber(arquivo);
+    event.target.value = '';
+};
+
+window.handleFundoDrop = function (event) {
+    event.preventDefault();
+    const dz = document.getElementById('fundo-dropzone');
+    if (dz) dz.style.background = 'rgba(59,130,246,0.05)';
+    const arquivo = (event.dataTransfer.files || [])[0];
+    if (arquivo) fundoReceber(arquivo);
+};
+
+function fundoReceber(arquivo) {
+    fundoErro('');
+    if (!/^image\//.test(arquivo.type)) {
+        fundoErro('Isso não é uma imagem. Mande um JPG, PNG ou WEBP.');
+        return;
+    }
+    const img = new Image();
+    img.onload = () => {
+        // O ÚNICO motivo de recusa: resolução que não dá para consertar. Foto
+        // grande demais o recorte resolve; foto pequena demais borra no celular
+        // do cliente, e aí não há compressão que salve.
+        if (img.naturalWidth < FUNDO_MIN_LARGURA || img.naturalHeight < FUNDO_MIN_ALTURA) {
+            fundoErro(
+                `Esta foto tem ${img.naturalWidth} × ${img.naturalHeight}, e o mínimo é ` +
+                `${FUNDO_MIN_LARGURA} × ${FUNDO_MIN_ALTURA}. Menor que isso ela borra na tela do ` +
+                `celular. Procure o arquivo original — o que veio de WhatsApp ou de rede social ` +
+                `costuma vir reduzido.`);
+            _fundoImagem = null;
+            fundoAtualizarPrevia();
+            return;
+        }
+        _fundoImagem = img;
+        const ajustes = document.getElementById('fundo-ajustes');
+        if (ajustes) ajustes.style.display = '';
+        fundoAtualizarPrevia();
+        const situacao = document.getElementById('fundo-situacao');
+        if (situacao) situacao.textContent =
+            `escolhida: ${img.naturalWidth} × ${img.naturalHeight}`;
+    };
+    img.onerror = () => fundoErro('Não consegui abrir esta imagem. O arquivo pode estar corrompido.');
+    img.src = URL.createObjectURL(arquivo);
+}
+
+window.setFundoEnquadramento = function (qual) {
+    _fundoEnquadramento = qual;
+    document.querySelectorAll('.fundo-enq').forEach(b => {
+        const ativo = b.dataset.enq === qual;
+        b.style.borderColor = ativo ? 'var(--blue)' : '';
+        b.style.color = ativo ? 'var(--blue)' : '';
+    });
+    fundoAtualizarPrevia();
+};
+
+window.setFundoVeu = function (valor) {
+    _fundoVeu = Number(valor) / 100;
+    const rotulo = document.getElementById('fundo-veu-valor');
+    if (rotulo) rotulo.textContent = valor + '%';
+    fundoAtualizarPrevia();
+};
+
+window.cancelarFundo = function () {
+    _fundoImagem = null;
+    fundoErro('');
+    const ajustes = document.getElementById('fundo-ajustes');
+    if (ajustes) ajustes.style.display = 'none';
+    const situacao = document.getElementById('fundo-situacao');
+    if (situacao) situacao.textContent = _fundoAtual ? 'há um fundo no ar' : 'nenhum fundo publicado';
+    fundoAtualizarPrevia();
+};
+
+// ── Publicar ───────────────────────────────────────────────────────────────
+
+/** A maior qualidade que ainda cabe no teto de bytes. */
+function fundoExportar() {
+    const canvas = document.createElement('canvas');
+    fundoDesenhar(canvas, FUNDO_LARGURA, FUNDO_ALTURA);
+    return new Promise((resolve, reject) => {
+        const tentar = (q) => {
+            canvas.toBlob((blob) => {
+                if (!blob) { reject(new Error('o navegador não conseguiu gerar o arquivo')); return; }
+                if (blob.size <= FUNDO_TETO_BYTES || q <= 0.45) { resolve({ blob, q }); return; }
+                tentar(q - 0.05);
+            }, 'image/jpeg', q);
+        };
+        tentar(0.84);
+    });
+}
+
+window.publicarFundo = async function () {
+    if (!_fundoImagem) { fundoErro('Escolha uma foto antes de publicar.'); return; }
+    const botao = document.getElementById('fundo-publicar');
+    const antes = botao ? botao.textContent : '';
+    if (botao) { botao.disabled = true; botao.textContent = 'Publicando…'; }
+    fundoErro('');
+    try {
+        const { blob, q } = await fundoExportar();
+        // A versão vai no NOME do arquivo, e não só na tabela: o caminho antigo
+        // continua no cache dos aparelhos, e um nome novo é o que garante que
+        // ninguém receba a foto velha por conta de uma borda intermediária.
+        const versao = String(Date.now());
+        const caminho = `${FUNDO_PASTA}/${versao}.jpg`;
+
+        const envio = await supabaseClient.storage
+            .from(FUNDO_BUCKET)
+            .upload(caminho, blob, { contentType: 'image/jpeg', upsert: true });
+        if (envio.error) throw envio.error;
+
+        const quem = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || null;
+        const r = await supabaseClient.rpc('publicar_fundo_do_pwa', {
+            p_arquivo: caminho,
+            p_veu: _fundoVeu,
+            p_enquadramento: _fundoEnquadramento,
+            p_versao: versao,
+            p_por: quem,
+        });
+        if (r.error) throw r.error;
+
+        if (typeof toast === 'function') {
+            toast(`Fundo publicado — ${Math.round(blob.size / 1024)} KB, qualidade ${Math.round(q * 100)}%.`, 'success');
+        }
+        _fundoImagem = null;
+        const ajustes = document.getElementById('fundo-ajustes');
+        if (ajustes) ajustes.style.display = 'none';
+        await carregarFundoAtual();
+    } catch (e) {
+        const recado = (e && e.message) || String(e);
+        fundoErro(
+            /publicar_fundo_do_pwa|does not exist|schema cache/i.test(recado)
+                ? 'A tabela do fundo ainda não existe. Rode o arquivo sql/fundo_do_pwa.sql no editor SQL do Supabase e tente de novo.'
+                : 'Não deu para publicar: ' + recado);
+    } finally {
+        if (botao) { botao.disabled = false; botao.textContent = antes; }
+    }
+};
+
+window.removerFundo = async function () {
+    // Não apaga a imagem do bucket: desativa a linha. O aplicativo volta ao
+    // fundo que ele já tinha, e o histórico continua respondendo o que esteve
+    // no ar — que é o que permite voltar atrás depois.
+    try {
+        const r = await supabaseClient.rpc('remover_fundo_do_pwa');
+        if (r.error) throw r.error;
+        if (typeof toast === 'function') toast('Fundo retirado do ar.', 'success');
+        await carregarFundoAtual();
+    } catch (e) {
+        fundoErro('Não deu para tirar do ar: ' + ((e && e.message) || e));
+    }
+};
+
+// ── O que está no ar ───────────────────────────────────────────────────────
+
+async function carregarFundoAtual() {
+    const cartao = document.getElementById('fundo-atual-card');
+    const situacao = document.getElementById('fundo-situacao');
+    try {
+        const r = await supabaseClient
+            .from('imposition_fundo_pwa')
+            .select('arquivo, veu, enquadramento, versao, publicado_por, publicado_em')
+            .eq('ativo', true)
+            .order('publicado_em', { ascending: false })
+            .limit(1);
+        if (r.error) throw r.error;
+        _fundoAtual = (r.data && r.data[0]) || null;
+
+        if (!_fundoAtual) {
+            if (cartao) cartao.style.display = 'none';
+            if (situacao) situacao.textContent = 'nenhum fundo publicado';
+            fundoAtualizarPrevia();
+            return;
+        }
+
+        const { data } = supabaseClient.storage.from(FUNDO_BUCKET).getPublicUrl(_fundoAtual.arquivo);
+        _fundoAtual._url = data && data.publicUrl;
+
+        const thumb = document.getElementById('fundo-atual-thumb');
+        if (thumb && _fundoAtual._url) thumb.src = _fundoAtual._url;
+
+        const quando = new Date(_fundoAtual.publicado_em).toLocaleString('pt-BR',
+            { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const info = document.getElementById('fundo-atual-info');
+        if (info) {
+            info.innerHTML =
+                `Publicado em <strong>${quando}</strong>` +
+                (_fundoAtual.publicado_por ? ` por <strong>${_fundoAtual.publicado_por}</strong>` : '') +
+                `<br>Enquadramento: <strong>${_fundoAtual.enquadramento}</strong> · ` +
+                `contraste: <strong>${Math.round(Number(_fundoAtual.veu) * 100)}%</strong>`;
+        }
+        if (cartao) cartao.style.display = '';
+        if (situacao) situacao.textContent = 'há um fundo no ar';
+
+        // Os controles abrem já no estado publicado: quem entra aqui quase
+        // sempre quer ajustar o que existe, não recomeçar do zero.
+        _fundoVeu = Number(_fundoAtual.veu);
+        _fundoEnquadramento = _fundoAtual.enquadramento;
+        const range = document.getElementById('fundo-veu');
+        if (range) range.value = String(Math.round(_fundoVeu * 100));
+        const rotulo = document.getElementById('fundo-veu-valor');
+        if (rotulo) rotulo.textContent = Math.round(_fundoVeu * 100) + '%';
+        setFundoEnquadramento(_fundoEnquadramento);
+    } catch (e) {
+        if (cartao) cartao.style.display = 'none';
+        const recado = (e && e.message) || String(e);
+        if (situacao) situacao.textContent = 'não deu para ler o fundo atual';
+        if (/imposition_fundo_pwa|does not exist|schema cache/i.test(recado)) {
+            fundoErro('A tabela do fundo ainda não existe. Rode o arquivo sql/fundo_do_pwa.sql no editor SQL do Supabase.');
+        }
+    }
+}
+
+window.carregarFundoAtual = carregarFundoAtual;

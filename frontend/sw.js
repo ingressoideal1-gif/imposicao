@@ -85,6 +85,10 @@ const ARQUIVOS = [
     'supabase-js.min.js?v=' + VERSAO,
     'supabase-config.js?v=' + VERSAO,
     'acesso-conta.js?v=' + VERSAO,
+    // So a CASA carrega este; ele fica na lista mesmo assim porque a
+    // lista e do aplicativo, e nao de uma tela -- e um arquivo que a
+    // casa pede e o cache nao guarda e uma tela quebrada sem rede.
+    'fundo-do-app.js?v=' + VERSAO,
     'sw-registro.js?v=' + VERSAO,
 
     // Sem versao, de proposito: o `publicar.ps1` so renumera `.js?v=` e

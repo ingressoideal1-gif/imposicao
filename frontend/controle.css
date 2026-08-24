@@ -1035,37 +1035,58 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
    voltar atras.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* ── As duas texturas ──────────────────────────────────────────────────────
-   `fixed` de proposito: a textura acompanha a janela, nao o documento, entao
-   rolar nao a repinta. E `pointer-events: none` para nao roubar nenhum toque.
+/* ── O fundo da casa ───────────────────────────────────────────────────────
+   Duas camadas em pseudo-elementos do `body`, sem uma linha de HTML a mais.
 
-   O grao existe por um motivo pratico, e nao decorativo: o degrade do fundo,
-   em tela de celular, mostra faixas (banding). O ruido as quebra. */
+   A trama de linhas diagonais que morava aqui SAIU em 24/08/2026: o usuario
+   olhou no ar e ela nao ficou boa. No lugar dela entra a FOTO DE EVENTO que o
+   ADM publica (aba "Fundo do PWA"), e enquanto nao houver foto publicada o
+   fundo e so a luz ambiente do `body` mais o grao. A fita da marca continua
+   viva onde ela funciona: nas etiquetas de secao, no menu e nos titulos.
+
+   `fixed` de proposito: a textura acompanha a janela, nao o documento, entao
+   rolar nao a repinta. E `pointer-events: none` para nao roubar nenhum toque. */
 body::before, body::after {
     content: "";
     position: fixed;
-    inset: -30%;
+    inset: 0;
     z-index: 0;
     pointer-events: none;
 }
-body::before {
-    background: repeating-linear-gradient(107deg,
-        rgba(240, 138, 60, .075) 0 26px, transparent 26px 40px,
-        rgba(240, 138, 60, .05)  40px 60px, transparent 60px 150px);
-    -webkit-mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .7) 100%);
-            mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .7) 100%);
-    animation: fita-anda 34s linear infinite;
+
+/* A FOTO, com o veu por cima dela na MESMA camada -- a ordem das camadas de
+   `background` ja poe o degrade acima da imagem, e assim nao ha um terceiro
+   elemento so para escurecer.
+
+   Ela so existe com a classe `com-fundo`, posta pelo `fundo-do-app.js` depois
+   de a imagem estar no aparelho. Sem foto publicada, esta regra nao vale e o
+   `body::before` fica vazio: nenhum veu escurecendo a tela a toa.
+
+   O `--fundo-veu` vem do ADM, e e a UNICA coisa que se ajusta na foto junto do
+   enquadramento -- decisao do usuario em 24/08/2026: "trabalhar apenas
+   enquadramento e contraste para boa leitura". As tres paradas do degrade nao
+   sao capricho: o topo e o rodape carregam texto pequeno e precisam de mais
+   escuro que o meio, onde ficam os ingressos, que ja tem fundo proprio. */
+html.com-fundo body::before {
+    background:
+        linear-gradient(180deg,
+            rgba(6, 10, 22, calc(var(--fundo-veu, .45) + .10)) 0%,
+            rgba(6, 10, 22, calc(var(--fundo-veu, .45) - .08)) 46%,
+            rgba(6, 10, 22, calc(var(--fundo-veu, .45) + .06)) 100%),
+        var(--fundo-imagem) center / cover no-repeat;
 }
-/* So `transform`: e o que o navegador anima no compositor, sem repintar nada
-   -- a rolagem do celular continua lisa. */
-@keyframes fita-anda { to { transform: translateX(-150px); } }
+
+/* O GRAO. Ele existe por um motivo pratico, e nao decorativo: o degrade do
+   fundo, em tela de celular, mostra faixas (banding). O ruido as quebra. */
 body::after {
-    inset: 0;
     opacity: .62;
     mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 160px 160px;
 }
+/* Sobre a foto o grao atrapalha: ele clareia o que o veu acabou de escurecer. */
+html.com-fundo body::after { opacity: .3; }
+
 /* A folha sobe por cima das duas camadas. */
 .folha { position: relative; z-index: 1; }
 
@@ -1298,7 +1319,7 @@ body::after {
 
 /* ── Nada disso pode atropelar quem pediu menos movimento ─────────────── */
 @media (prefers-reduced-motion: reduce) {
-    body::before, .cabecalho::after { animation: none; }
+    .cabecalho::after { animation: none; }
 }
 
 /* A coluna do nome estava 13px mais estreita que o desenho aprovado, e nomes
@@ -1309,9 +1330,3 @@ body::after {
 .botao-engrenagem { width: 48px; height: 48px; }
 .botao-engrenagem svg { width: 26px; height: 26px; }
 #btn-meus-pedidos-mais { font-size: 1.95rem; }
-/* A fita do fundo, mais discreta na metade de baixo da tela, onde o degrade
-   ambiente ja nao chega para diluir o listrado. */
-body::before {
-    -webkit-mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .45) 100%);
-            mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .35) 46%, rgba(0, 0, 0, .45) 100%);
-}

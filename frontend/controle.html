@@ -546,6 +546,19 @@
 <script src="supabase-config.js?v=707"></script>
 <script src="acesso-conta.js?v=707"></script>
 
+<!-- O FUNDO DA CASA: a foto de evento que o ADM publica.
+
+     Depois do `supabase-config.js`, que e quem cria o cliente que ele usa,
+     e antes do arranque da tela, para o fundo entrar JUNTO com ela em vez
+     de saltar depois -- ele aplica primeiro a copia guardada no aparelho,
+     sem tocar na rede.
+
+     A PORTARIA nao carrega este script, e e de proposito: la a camera e o
+     leitor de QR trabalham a cada quadro, e a tela inteira ja e
+     significado -- verde passou, vermelho nao entra, laranja e outra
+     porta. -->
+<script src="fundo-do-app.js?v=707"></script>
+
 <!-- NAO ha mais camera nesta tela. Ela lia o QR do Pedido, e desde 17/08/2026
      um evento nasce de um pedido que a conta do cliente ja traz -- entao o
      leitor, o gerador de QR e o convite de instalar (que aqui nunca teve caixa

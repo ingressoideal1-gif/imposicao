@@ -102,6 +102,10 @@ PAINEL_ARQUIVOS = [
     "producao.html",
     "cliente.html",
     "acesso-conta.js",
+    # O fundo da casa do Ideal Control (24/08/2026). O `controle.html`
+    # que a estacao baixa ja pede este script: sem o nome aqui, a estacao
+    # serviria a pagina nova com um 404 no lugar dele.
+    "fundo-do-app.js",
     "controle.html",
     "controle.js",
     "controle.css",

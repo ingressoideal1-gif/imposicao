@@ -3166,6 +3166,13 @@
                         margin-bottom: -2px; border-radius: 6px 6px 0 0;
                         transition: all .2s;
                     ">📢 Avisos</button>
+                    <button class="adm-tab-btn" data-adm-tab="fundo" onclick="switchAdmTab('fundo')" style="
+                        background: none; border: none; cursor: pointer;
+                        padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
+                        color: var(--text-dim); border-bottom: 2.5px solid transparent;
+                        margin-bottom: -2px; border-radius: 6px 6px 0 0;
+                        transition: all .2s;
+                    ">🌄 Fundo do PWA</button>
                     <!-- Futuras abas serão adicionadas aqui -->
                 </div>
 
@@ -3221,6 +3228,189 @@
                 <!-- Os oito quadros (4 setores x 2 paineis) e o editor de cada
                      um. Preenchido por AvisosPainel.renderAdm(). -->
                 <div id="adm-tab-avisos" class="adm-tab-content" style="display:none;"></div>
+
+                <!-- ── ABA: FUNDO DO PWA ───────────────────────────────────
+                     A foto de evento que fica atrás das telas do Ideal Control
+                     no celular do cliente. Pedido do usuário em 24/08/2026.
+
+                     Na foto se mexe em DUAS coisas, e só nelas: enquadramento
+                     (qual pedaço fica, no formato do celular) e contraste (o
+                     véu que mantém o texto legível por cima). Cor, luz e
+                     nitidez não se tocam — a foto é de autoria da empresa e
+                     vai inteira.
+
+                     A PORTARIA não recebe este fundo: ali a câmera trabalha a
+                     cada quadro e a tela inteira já é significado. -->
+                <div id="adm-tab-fundo" class="adm-tab-content" style="display:none;">
+
+                    <div style="display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:20px; align-items:start;">
+
+                        <!-- ── Coluna da esquerda: a imagem e os controles ── -->
+                        <div style="display:flex; flex-direction:column; gap:20px; min-width:0;">
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <span class="card-title"><span class="icon">🌄</span> A imagem de fundo</span>
+                                    <span id="fundo-situacao" style="font-size:0.82rem; color: var(--text-dim);">—</span>
+                                </div>
+                                <div style="padding:20px;">
+
+                                    <!-- OS TAMANHOS, ditos na tela. Eles não barram
+                                         ninguém: a foto é recortada e comprimida aqui
+                                         mesmo. O aviso existe para a imagem entrar boa. -->
+                                    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:16px;">
+                                        <div style="padding:11px 13px; border-radius:10px; background:rgba(59,130,246,0.07); border:1px solid rgba(59,130,246,0.28);">
+                                            <div style="font-size:0.66rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--text-dim);">Tamanho ideal</div>
+                                            <div style="font-size:1.05rem; font-weight:800; margin-top:3px;">1080 × 1920</div>
+                                            <div style="font-size:0.75rem; color:var(--text-dim);">9:16 — a proporção do celular</div>
+                                        </div>
+                                        <div style="padding:11px 13px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border);">
+                                            <div style="font-size:0.66rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--text-dim);">Mínimo aceito</div>
+                                            <div style="font-size:1.05rem; font-weight:800; margin-top:3px;">720 × 1280</div>
+                                            <div style="font-size:0.75rem; color:var(--text-dim);">abaixo disso borra no celular</div>
+                                        </div>
+                                        <div style="padding:11px 13px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border);">
+                                            <div style="font-size:0.66rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--text-dim);">Peso final</div>
+                                            <div style="font-size:1.05rem; font-weight:800; margin-top:3px;">até 220 KB</div>
+                                            <div style="font-size:0.75rem; color:var(--text-dim);">a compressão é feita aqui</div>
+                                        </div>
+                                    </div>
+
+                                    <p style="color:var(--text-dim); font-size:0.86rem; line-height:1.55; margin:0 0 16px;">
+                                        Pode mandar a foto <strong>maior</strong> que o ideal — ela é recortada e
+                                        comprimida nesta tela, antes de subir. Foto <strong>deitada</strong> também
+                                        serve: o recorte pega a faixa central. O que não dá para consertar é
+                                        resolução baixa demais, e por isso o mínimo está aí em cima.
+                                        Formatos: <strong>JPG, PNG ou WEBP</strong>.
+                                    </p>
+
+                                    <div id="fundo-dropzone" onclick="document.getElementById('fundo-input').click()" style="
+                                        border:2px dashed var(--blue); border-radius:12px; padding:34px 20px;
+                                        text-align:center; cursor:pointer; background:rgba(59,130,246,0.05); transition:all .2s;"
+                                        ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)';"
+                                        ondragleave="this.style.background='rgba(59,130,246,0.05)';"
+                                        ondrop="handleFundoDrop(event)">
+                                        <div style="font-size:2.2rem; margin-bottom:8px;">🌄</div>
+                                        <div style="font-size:1rem; font-weight:600; margin-bottom:5px;">Clique ou arraste a foto do evento aqui</div>
+                                        <div style="font-size:0.82rem; color:var(--text-dim);">1080 × 1920 é o ideal — o recorte e a compressão são feitos aqui</div>
+                                        <input type="file" id="fundo-input" accept="image/*" style="display:none;" onchange="handleFundoSelect(event)">
+                                    </div>
+
+                                    <p id="fundo-erro" style="display:none; margin:14px 0 0; padding:11px 14px; border-radius:10px;
+                                        background:rgba(239,68,68,0.09); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:0.86rem;"></p>
+                                </div>
+                            </div>
+
+                            <!-- Os dois ajustes, e só eles. Nascem escondidos: sem
+                                 imagem escolhida não há o que enquadrar. -->
+                            <div class="card" id="fundo-ajustes" style="display:none;">
+                                <div class="card-header">
+                                    <span class="card-title"><span class="icon">🎚️</span> Enquadramento e contraste</span>
+                                </div>
+                                <div style="padding:20px;">
+
+                                    <div style="font-size:0.7rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px;">
+                                        Enquadramento — que pedaço da foto fica
+                                    </div>
+                                    <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                        <button class="btn btn-secondary fundo-enq" data-enq="topo"   onclick="setFundoEnquadramento('topo')"   style="flex:1;">⬆️ Topo</button>
+                                        <button class="btn btn-secondary fundo-enq" data-enq="centro" onclick="setFundoEnquadramento('centro')" style="flex:1;">⏺️ Centro</button>
+                                        <button class="btn btn-secondary fundo-enq" data-enq="base"   onclick="setFundoEnquadramento('base')"   style="flex:1;">⬇️ Base</button>
+                                    </div>
+                                    <p style="color:var(--text-dim); font-size:0.8rem; margin:0 0 20px;">
+                                        Numa foto de show: <strong>topo</strong> guarda o palco e a luz,
+                                        <strong>base</strong> guarda a plateia.
+                                    </p>
+
+                                    <div style="font-size:0.7rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px;">
+                                        Contraste — o quanto escurece por cima da foto
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:14px;">
+                                        <input type="range" id="fundo-veu" min="20" max="85" step="1" value="45"
+                                               oninput="setFundoVeu(this.value)" style="flex:1; accent-color: var(--blue);">
+                                        <span id="fundo-veu-valor" style="min-width:52px; text-align:right; font-weight:800; font-variant-numeric:tabular-nums;">45%</span>
+                                    </div>
+                                    <p style="color:var(--text-dim); font-size:0.8rem; margin:8px 0 0;">
+                                        É o que mantém o texto legível por cima da imagem. Confira na prévia ao lado
+                                        se o nome do evento e a data se leem sem esforço — é esse o único critério.
+                                    </p>
+
+                                    <div style="display:flex; gap:10px; margin-top:22px; padding-top:18px; border-top:1px solid var(--border);">
+                                        <button class="btn btn-primary" id="fundo-publicar" onclick="publicarFundo()">Publicar fundo</button>
+                                        <button class="btn btn-secondary" onclick="cancelarFundo()">Cancelar</button>
+                                    </div>
+                                    <p style="color:var(--text-dim); font-size:0.8rem; margin:12px 0 0;">
+                                        Publicado, o fundo chega ao celular do cliente na próxima vez que ele abrir o
+                                        aplicativo — e fica guardado no aparelho, para abrir sem internet depois disso.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- O que está no ar agora, e a saída para tirá-lo. -->
+                            <div class="card" id="fundo-atual-card" style="display:none;">
+                                <div class="card-header">
+                                    <span class="card-title"><span class="icon">📡</span> No ar agora</span>
+                                    <button class="btn btn-secondary btn-sm" onclick="removerFundo()">Tirar o fundo do ar</button>
+                                </div>
+                                <div style="padding:16px 20px; display:flex; gap:16px; align-items:center;">
+                                    <img id="fundo-atual-thumb" alt="Fundo publicado" style="width:64px; height:114px; object-fit:cover; border-radius:8px; flex:none; background:#0b1018;">
+                                    <div id="fundo-atual-info" style="font-size:0.86rem; color:var(--text-dim); line-height:1.6;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Coluna da direita: a prévia ─────────────────── -->
+                        <div class="card" style="position:sticky; top:20px;">
+                            <div class="card-header">
+                                <span class="card-title"><span class="icon">📱</span> Como fica no celular</span>
+                            </div>
+                            <div style="padding:20px; display:flex; justify-content:center;">
+                                <div id="fundo-previa" style="
+                                    position:relative; width:270px; height:480px; border-radius:20px; overflow:hidden;
+                                    background:
+                                        radial-gradient(420px 260px at 12% -10%, rgba(20,184,166,.24), transparent 62%),
+                                        radial-gradient(400px 270px at 112% -4%, rgba(59,130,246,.22), transparent 60%),
+                                        #0a0f1e;
+                                    box-shadow: 0 20px 40px -20px rgba(0,0,0,.85); flex:none;">
+                                    <canvas id="fundo-previa-img" width="270" height="480" style="position:absolute; inset:0; width:100%; height:100%;"></canvas>
+                                    <div id="fundo-previa-veu" style="position:absolute; inset:0;"></div>
+                                    <div id="fundo-previa-conteudo" style="position:relative; height:100%; padding:26px 12px 12px; font-family:'Manrope',system-ui,sans-serif;">
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <img src="/Logo Ideal Dark.png" alt="" style="height:26px; border-radius:5px;">
+                                            <div style="line-height:1.06;">
+                                                <div style="font-size:0.88rem; font-weight:800; letter-spacing:-.03em; color:#eef2f8;">Ideal Control</div>
+                                                <div style="font-size:0.42rem; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:#2dd4bf; margin-top:2px;">Controle de acesso</div>
+                                            </div>
+                                        </div>
+                                        <div style="height:2px; border-radius:2px; margin:9px 0 12px; background:linear-gradient(90deg,#2dd4bf,#3b82f6 40%,#f08a3c 66%,transparent);"></div>
+                                        <div style="display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:12px; color:#fdf1e6;
+                                            border:1px solid rgba(240,138,60,.42);
+                                            background:linear-gradient(118deg, rgba(240,138,60,.30), rgba(226,118,42,.16) 52%, rgba(18,27,48,.92));">
+                                            <span style="width:24px;height:24px;border-radius:8px;background:linear-gradient(135deg,#f9a75c,#e2762a);flex:none;"></span>
+                                            <span style="font-size:0.76rem; font-weight:800;">Meus Pedidos</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:7px; margin:14px 0 8px;">
+                                            <span style="width:18px;height:7px;background:repeating-linear-gradient(107deg,#2dd4bf 0 2px,transparent 2px 5px);"></span>
+                                            <span style="font-size:0.48rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#9aa6bb;">Meus eventos</span>
+                                        </div>
+                                        <div style="padding:11px 13px; border-radius:12px; margin-bottom:8px; background:linear-gradient(168deg,#1b2740,#141d33 52%,#111a2e);">
+                                            <div style="font-size:0.74rem; font-weight:800; letter-spacing:-.02em; color:#eef2f8;">Baile do Havaí 2026</div>
+                                            <div style="font-size:0.56rem; font-weight:600; color:#9aa6bb; margin-top:3px;">14/09 · Clube Recreativo</div>
+                                        </div>
+                                        <div style="padding:11px 13px; border-radius:12px; background:linear-gradient(168deg,#1b2740,#141d33 52%,#111a2e);">
+                                            <div style="font-size:0.74rem; font-weight:800; letter-spacing:-.02em; color:#eef2f8;">Festa Junina do Clube</div>
+                                            <div style="font-size:0.56rem; font-weight:600; color:#9aa6bb; margin-top:3px;">28/06 · Salão Bela Vista</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="padding:0 20px 20px; margin:0; color:var(--text-dim); font-size:0.8rem; line-height:1.55;">
+                                A prévia usa o mesmo recorte e o mesmo véu que o celular vai usar. Se o texto
+                                se lê aqui, se lê lá.
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- ── ABA: IMAGENS ────────────────────────────────────────── -->
                 <div id="adm-tab-imagens" class="adm-tab-content">
