@@ -478,7 +478,11 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     return amb;
 }
 
-(function oProntoSaiDaFila() {
+// Quem tira o pedido da lista de trabalho e o ENVIO A EXPEDICAO, e nao o
+// estagio (regra do usuario, 24/08/2026). Ate aqui bastava o ultimo modelo
+// virar "Pronto" para o pedido sumir sozinho -- e sumia justamente quando ainda
+// faltava pesar, embalar e entregar.
+(function soOEnvioAExpedicaoTiraOPedidoDaLista() {
     const pedidos = [pedido(101), pedido(102)];
     const modelos = {
         101: [{ id: 1, acabamento_status: 'Pronto', quantidade: 10 }],
@@ -489,12 +493,28 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     amb.painel.render();
     let html = amb.elementos['tbody-acabamento'].innerHTML;
     ok(html.indexOf('>102<') !== -1, 'o pedido em acabamento aparece na fila');
-    ok(html.indexOf('>101<') === -1, 'o pedido todo pronto NAO aparece na fila geral');
+    ok(html.indexOf('>101<') !== -1,
+       'e o pedido todo pronto CONTINUA na fila geral: ainda falta despacha-lo');
+    ok(html.indexOf('Pronto') !== -1, 'com o selo PRONTO, para se ver de relance');
 
     amb.painel.setFiltroPrazo('prontos');
     html = amb.elementos['tbody-acabamento'].innerHTML;
-    ok(html.indexOf('>101<') !== -1, 'com o recorte "Pronto" ligado ele reaparece');
-    ok(html.indexOf('>102<') === -1, 'e o que ainda esta em acabamento sai');
+    ok(html.indexOf('>101<') === -1,
+       'e no botao PRONTO ele NAO esta: essa lista e a do que ja foi entregue');
+    ok(html.indexOf('>102<') === -1, 'nem o que ainda esta em acabamento');
+
+    // Enviado, ele troca de lista -- as duas pontas da regra, no mesmo teste.
+    amb.painel.setFiltroPrazo('geral');
+    amb.janela.state.ordens[0].status_interno = 'EXPEDICAO';
+    amb.painel.render();
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>101<') === -1,
+       'depois de enviado a expedicao ele sai da geral');
+    amb.painel.setFiltroPrazo('prontos');
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>101<') !== -1,
+       'e so entao aparece no botao PRONTO');
+    amb.janela.state.ordens[0].status_interno = 'EM PRODUCAO';
+    amb.painel.setFiltroPrazo('geral');
+    amb.painel.render();
 
     // As metricas contam a fila inteira, e nao o recorte visivel.
     ok(amb.elementos['stat-acab-pedidos-fila'].textContent === 2,
@@ -503,6 +523,30 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1, 'um modelo em acabamento');
     ok(amb.elementos['stat-acab-pedidos-concluidos'].textContent === 1, 'um pedido concluido');
     ok(amb.elementos['badge-acabamento'].textContent === 2, 'o badge do menu conta a fila inteira');
+})();
+
+// O alerta de atraso conta o mesmo que a lista mostra (24/08/2026).
+//
+// Antes ele tirava da conta o pedido totalmente pronto -- fazia sentido quando
+// o pronto sumia da lista sozinho. Agora o pronto FICA na frente do operador
+// ate ser despachado, e um prazo vencido nele e atraso de verdade: o material
+// esta parado na bancada.
+(function oAlertaDeAtrasoContaOQueEstaNaLista() {
+    const atrasado = pedido(110);
+    atrasado._atrasado = true;
+    const amb = ambienteComPedidos([atrasado], {
+        110: [{ id: 11, acabamento_status: 'Pronto', quantidade: 10 }],
+    });
+
+    amb.painel.render();
+    ok(amb.painel._tela.temAtrasados === true,
+       'pedido pronto e atrasado, ainda na bancada, ACENDE o alerta');
+
+    // Despachado, ele sai da lista -- e sai da conta junto.
+    amb.janela.state.ordens[0].status_interno = 'EXPEDICAO';
+    amb.painel.render();
+    ok(amb.painel._tela.temAtrasados === false,
+       'depois de enviado a expedicao ele nao conta mais: nao e trabalho daqui');
 })();
 
 // ─── 3b. O cache da proposta nao responde pelo modelo ───────────────────
@@ -2522,8 +2566,8 @@ async function oEstagioDaListaVemDeConsultaPropria() {
        'o pronto veio da consulta propria', amb.elementos['stat-acab-modelos-prontos'].textContent);
     ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1,
        'e o em acabamento tambem');
-    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>301<') === -1,
-       'o pedido pronto sai da fila de trabalho');
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>301<') !== -1,
+       'e o pedido todo pronto continua na fila: so o envio a expedicao o tira de la');
 }
 
 async function bancoSemAsColunasNaoDerrubaATela() {
@@ -3872,10 +3916,10 @@ async function oPedidoQueChegaDepoisGanhaEstagio() {
     amb.janela.renderOrdens();
     await new Promise(r => setTimeout(r, 0));
 
-    ok(listaDo(amb, 'prontos').indexOf('>500<') !== -1,
-       'o pedido que chegou depois esta em PRONTO');
-    ok(listaDo(amb, 'geral').indexOf('>500<') === -1,
-       'e nao na lista de trabalho');
+    ok(listaDo(amb, 'geral').indexOf('>500<') !== -1,
+       'o pedido que chegou depois esta na lista');
+    ok(listaDo(amb, 'geral').indexOf('Pronto') !== -1,
+       'com o estagio que veio do banco, e nao com o derivado da impressao');
     ok(amb.painel._regras.faltamEstagiosNaLista() === false,
        'e o mapa passa a cobrir a lista inteira');
 }

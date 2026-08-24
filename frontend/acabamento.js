@@ -482,11 +482,6 @@
         return `<span class="badge ${s.cls}">${s.icone} ${s.texto}</span>`;
     }
 
-    function pedidoTotalmentePronto(os) {
-        const modelos = modelosDoPedido(os);
-        return modelos.length > 0 && estagioDoPedido(modelos) === 'Pronto';
-    }
-
     // ─── Prazo de entrega ───────────────────────────────────────────────────
     //
     // As regras de data são as do Painel de Produção, chamadas de lá: prazo é
@@ -503,11 +498,31 @@
         return f ? !!f(os) : false;
     }
 
+    /**
+     * O pedido passa no recorte de prazo que está ligado?
+     *
+     * ## Quem sai da lista de trabalho é quem FOI PARA A EXPEDIÇÃO
+     *
+     * Regra do usuário, 24/08/2026: *"pedidos do painel de acabamento só saem
+     * das listagens, mesmo marcados como prontos, quando forem clicados para
+     * enviar para a expedição. Após clicar em enviar para a expedição, aí sim
+     * eles vão para a lista de prontos"*.
+     *
+     * Até aqui quem mandava era o ESTÁGIO: bastava o último modelo virar
+     * "Pronto" e o pedido sumia das listas sozinho, sem ninguém decidir nada.
+     * Isso escondia o pedido justamente no momento em que ainda faltava o
+     * trabalho que fecha o setor — pesar, embalar e ENTREGAR à expedição. O
+     * operador terminava o último modelo e o pedido desaparecia da frente dele.
+     *
+     * Agora o que tira o pedido da lista é um ato: o clique em ENVIAR PARA A
+     * EXPEDIÇÃO. Enquanto ele não acontece, o pedido continua na Geral, na Para
+     * Hoje e na Atrasados — com o selo PRONTO, para se ver de relance que só
+     * falta despachar. Depois do clique ele vai para o botão "Pronto", que é a
+     * lista do que esta bancada já entregou.
+     */
     function passaNoPrazo(os) {
-        // Pedido pronto sai da fila de trabalho: só reaparece com o botão
-        // "Pronto" ligado. É o mesmo desenho do botão "Impresso" da Produção.
-        if (tela.prazo === 'prontos') return pedidoTotalmentePronto(os);
-        if (pedidoTotalmentePronto(os)) return false;
+        if (tela.prazo === 'prontos') return ehExpedido(os);
+        if (ehExpedido(os)) return false;
         if (tela.prazo === 'geral') return true;
         if (tela.prazo === 'atrasados') return estaAtrasado(os);
         return ehParaHoje(os);
@@ -717,9 +732,14 @@
         escrever('badge-acabamento', emProducao.length);
 
         // O alerta de atraso é global, sobre a fila inteira: não muda conforme
-        // setor, estágio ou busca. Pedido já pronto não conta — ele saiu da
-        // fila de trabalho.
-        tela.temAtrasados = emProducao.some(os => estaAtrasado(os) && !pedidoTotalmentePronto(os));
+        // setor, estágio ou busca.
+        //
+        // Ele conta o mesmo que a lista mostra (24/08/2026). Antes tirava da
+        // conta o pedido totalmente pronto; agora quem sai da lista é o
+        // expedido, e o `emProducao` já não o traz. Pedido pronto que ainda não
+        // foi despachado continua na frente do operador — e um atraso dele é
+        // atraso de verdade, porque o material está parado na bancada.
+        tela.temAtrasados = emProducao.some(estaAtrasado);
 
         // ── A tabela ────────────────────────────────────────────────────────
         // Aqui entra o que já foi para a expedição, e nas métricas acima não:
