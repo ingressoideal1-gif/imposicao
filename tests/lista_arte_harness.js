@@ -289,7 +289,10 @@ const { pedidoSaiuDaArte } = new Function(
     ok(regra(null) === null, 'sem modelo, nada');
 
     // E a regra esta ligada nos dois lugares: no botao do card e no clique.
-    ok(/travaDeCelulas \|\| travaDeBanco \? 'disabled'/.test(SCRIPT), 'o botao MARCAR PRONTO fica trancado pela trava de banco');
+    // A lista de travas cresce (em 25/08/2026 entrou a `travaDeGlifo`, do
+    // caractere que a fonte nao desenha), entao a conferencia e pela PRESENCA
+    // de cada uma na expressao do `disabled`, e nao pela frase inteira.
+    ok(/travaDeCelulas \|\| travaDeBanco[^?]*\? 'disabled'/.test(SCRIPT), 'o botao MARCAR PRONTO fica trancado pela trava de banco');
     ok(/\$\{faixaBancoIncompleto\}/.test(SCRIPT), 'o card mostra a faixa do banco incompleto');
     // `return false;` desde as acoes em lote (22/08/2026): a funcao passou a
     // devolver se gravou; a trava continua interrompendo o PRONTO do mesmo jeito.

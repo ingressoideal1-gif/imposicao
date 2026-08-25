@@ -87,6 +87,51 @@ def test_os_botoes_de_coluna_continuam_na_barra():
     js = _ler("frontend/script.js")
 
     i = js.index("num-csv-columns-bar")
-    corpo = js[i:i + 1500]
+    corpo = js[i:i + 2400]
     assert "state.numCsvHeaders.map" in corpo, "a barra precisa continuar listando uma coluna por botao"
     assert "addCsvColumnElement" in corpo
+
+
+def test_a_barra_de_colunas_so_poe_coluna_no_ticket():
+    """Uma porta por sala: o "Ver / Editar" duplicado saiu da barra de colunas.
+
+    Ate a v714 a barra "Colunas do Banco de Dados (CSV)" abria com um botao
+    "Ver / Editar CSV" que chamava EXATAMENTE a mesma funcao do "Ver / Editar"
+    da box "Banco de Dados (CSV)", logo acima, no mesmo painel. Duas portas para
+    a mesma sala, e a segunda disputando espaco com o recado que a barra precisa
+    dar ("clique numa coluna para por um campo no ticket").
+
+    Tirado a pedido do usuario em 25/08/2026. A porta do editor de numeracao e a
+    da box; a do dia a dia e o "Ver / editar" do card do modelo, no pedido.
+    """
+    js = _ler("frontend/script.js")
+
+    i = js.find("bar.innerHTML =")
+    assert i > 0, "nao achei a montagem da barra de colunas"
+    barra = js[i:i + 700]
+
+    assert "abrirEditorCsvDaNumeracao" not in barra, (
+        "o botao Ver / Editar voltou para a barra de colunas -- ele ja existe na "
+        "box 'Banco de Dados (CSV)', que e a porta do editor de numeracao"
+    )
+    assert "addCsvColumnElement(" in barra, (
+        "a barra de colunas precisa continuar oferecendo as colunas"
+    )
+
+
+def test_a_porta_do_pedido_continua_existindo():
+    """O caminho do dia a dia nao pode sumir junto com a limpeza.
+
+    O banco se corrige de dentro do pedido, no card do modelo: abrir o catalogo
+    de numeracoes so para acertar uma celula e dar a volta. Sao dois botoes ali,
+    e eles fazem trabalhos diferentes -- 'editar' e o conteudo (da numeracao),
+    'distribuir' e a fatia (do modelo).
+    """
+    js = _ler("frontend/script.js")
+
+    assert re.search(r"abrirCsvDoModelo\(\$\{idx\}, '\$\{osId\}', 'editar'\)", js), (
+        "sumiu o Ver / editar do card do modelo"
+    )
+    assert re.search(r"abrirCsvDoModelo\(\$\{idx\}, '\$\{osId\}', 'distribuir'\)", js), (
+        "sumiu o Linhas do card do modelo"
+    )

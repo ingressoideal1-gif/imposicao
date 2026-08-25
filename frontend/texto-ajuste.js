@@ -82,11 +82,39 @@
     // devolve o valor de ctx.font para aquele corpo (cada pagina tem seu builder).
     // Devolve {corpo, linhas, larguraPx} — larguraPx e a linha mais larga no
     // corpo final, para sublinhado de selecao e caixa de clique.
+    /**
+     * O texto COMO SAI NO PAPEL, e nao como o navegador gostaria de mostra-lo.
+     *
+     * Quando falta um caractere na fonte, o navegador troca de fonte SO naquele
+     * caractere, calado: a tela desenha "Ondřej Pek" com um `ř` emprestado de
+     * outra fonte. O PyMuPDF nao empresta nada — deixa o vao, e o papel sai
+     * "Ond ej Pek". Sem esta troca a previa mente duas vezes: no traco e na
+     * MEDIDA, porque o `ř` emprestado tem largura e o buraco do papel tem
+     * outra, e e a medida que decide o shrink e a quebra de linha.
+     *
+     * Cobertura desconhecida devolve o texto intacto — a regra de ouro do
+     * fonte-glifos.js. E se aquele arquivo nao estiver carregado (uma pagina
+     * que ainda nao o inclui), nada muda: a previa volta a ser a de antes em
+     * vez de o desenho inteiro quebrar.
+     */
+    function comoSaiNoPapel(texto, el) {
+        try {
+            const mapa = typeof window !== 'undefined' && window.mapaDeCoberturas
+                ? window.mapaDeCoberturas() : null;
+            const traduzir = typeof window !== 'undefined' ? window.textoComoSaiNoPapel : null;
+            if (!mapa || !traduzir || !el || !el.font_name) return texto;
+            const cob = mapa[String(el.font_name).trim().toLowerCase()];
+            return cob ? traduzir(texto, cob) : texto;
+        } catch (e) {
+            return texto;
+        }
+    }
+
     function desenharTextoAjustado(ctx, el, label, fsBase, pxPorMm, montarFonte) {
         const maxPx = (el && Number(el.max_width_mm) > 0) ? Number(el.max_width_mm) * pxPorMm : 0;
         const medir = function (t, fs) { ctx.font = montarFonte(fs); return ctx.measureText(t).width; };
         const modo = modoDoElemento(el);
-        const aj = ajustarTextoNaLargura(medir, label, fsBase, maxPx, modo);
+        const aj = ajustarTextoNaLargura(medir, comoSaiNoPapel(label, el), fsBase, maxPx, modo);
         const esc = aj.escalaX || 1;
 
         ctx.font = montarFonte(aj.corpo);
@@ -206,4 +234,5 @@
     window.ajustarTextoNaLargura = ajustarTextoNaLargura;
     window.desenharTextoAjustado = desenharTextoAjustado;
     window.conferirEstouroDaColuna = conferirEstouroDaColuna;
+    window.comoSaiNoPapel = comoSaiNoPapel;
 })();

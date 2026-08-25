@@ -4,6 +4,110 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — O caractere que a fonte não desenha: a tela mentia, o papel saía furado
+
+Pedido do usuário: *"o arquivo .csv é composto por nomes estrangeiros, com caracteres
+pouco comuns, esses caracteres visualizam corretamente nas janelas de visualização, mas
+geram pdf e impressão falhas — analisar se este tipo de divergência poderia ser evitado"*.
+
+**Podia, e o preço de não ter evitado já tinha sido pago.**
+
+### O defeito
+
+Quando falta um caractere na fonte, o **navegador troca de fonte só naquele caractere**, em
+silêncio, e a tela mostra o nome inteiro. O PyMuPDF não faz isso: desenha o que a fonte tem
+e deixa o vão. Mesmo dado, mesma fonte, dois resultados — e o único que alguém vê antes de
+imprimir é o que mente.
+
+Medido no pedido **21146** (credenciais do FITNP/FIDAF): a Gotham Book não tem `ř`, `ě` nem
+`č`. Gerando o PDF com a própria fonte do catálogo e lendo o texto de volta, `Ondřej Pek`
+volta `Ond ej Pek` — oito dos dez nomes tchecos daquele modelo. A amostra que o cliente
+**aprovou** às 12:37 daquele dia mostra o nome inteiro.
+
+E não era a primeira vez. O pedido **20495**, da mesma cliente e do mesmo evento, imprimiu
+**185 credenciais em 11/08** com as mesmas fontes e os mesmos nomes; Tchéquia e Macedônia do
+Norte voltaram `REPROVADA_CLIENTE`. O briefing do 21146 diz, com todas as letras, que ele é
+o retrabalho daquilo — e ia repetir o erro.
+
+Não é azar com uma fonte: das **273 fontes ativas do catálogo, 173 não conseguem imprimir
+aquela planilha**. As 100 que conseguem são quase todas fontes do Windows; as de marca
+(Gotham, Swis721, Swiss 911, Bodoni, Abril Fatface) falham em bloco. Varrendo o acervo,
+**7 das 19 numerações** com banco imprimiriam buraco.
+
+### O leitor de glifos
+
+`frontend/fonte-glifos.js` lê a tabela `cmap` do próprio arquivo da fonte — formatos 0, 4, 6
+e 12, em TTF, OTF, TTC e WOFF — e responde quais caracteres ela realmente desenha. Conferido
+contra o `has_glyph` do PyMuPDF, que é a verdade do motor, nas **273 fontes reais do
+catálogo: 271 idênticas, 0 divergentes**, 2 ilegíveis (PhagsPa) que viram "desconhecida".
+
+**A regra de ouro: fonte que não deu para ler não acusa ninguém.** WOFF2, fonte do sistema,
+arquivo que não baixou, binário torto — todos devolvem "não falta nada". Uma trava falsa
+pararia a gráfica por causa de um arquivo que o leitor não entendeu, e isso é pior do que o
+defeito que ela conserta.
+
+As Base-14 do PDF (`helv`, `times`, `cour`) são caso à parte e **não** se perguntam ao
+`fitz.Font`: nesta versão do PyMuPDF ele devolve uma fonte completa, que tem o `ř`, mas o
+que vai ao PDF é a Base-14 em WinAnsi. Medido: `insert_text` com `helv` grava
+`Ond·ej Pek` — não é um vão, é um caractere **trocado**, que é pior, porque ninguém
+estranha um ponto no meio do nome. A pergunta certa ali é o cp1252, e um teste trava as duas
+listas juntas.
+
+### As quatro camadas
+
+**1. A trava do card.** `fonteSemGlifoDoModelo` entra na mesma engrenagem de
+`divergenciaDeCelulasDoModelo` e `bancoDeDadosIncompletoDoModelo`: faixa vermelha, PRONTO
+desabilitado, e o pedido inteiro parado até alguém trocar a fonte — porque o pedido só vira
+"Enviar Arte" com todos os modelos PRONTO. A recusa está nos três caminhos (botão,
+`decisionAmostraItem` e o lote), não só no botão. Ela olha **a fatia de linhas daquele
+modelo**, não o banco inteiro: no 21146 só a Tchéquia é acusada; Macedônia e Organização,
+cujas linhas ativas não têm caron nenhum, passam.
+
+**2. A prévia mostra o buraco.** `comoSaiNoPapel`, no `texto-ajuste.js`, troca o caractere
+sem glifo por espaço **antes** do ajuste de largura — no traço e na medida. O `ř` emprestado
+tem uma largura e o vão do papel tem outra, e é a medida que decide o shrink e a quebra de
+linha.
+
+**3. O motor grita no log.** `_avisar_glifos_faltando` é a última defesa, para o caminho que
+não passa pela tela — hotfolder, reimpressão, API. Nunca levanta: um erro ali pararia uma
+impressão que ia sair de qualquer jeito.
+
+**4. O seletor de fontes é a saída da trava.** A faixa manda trocar a fonte; o seletor diz
+por qual. Ao abrir, ele confere a fonte atual (um arquivo, imediato) e marca ✅/⚠️ o que já
+estiver no cache; o botão **🔤 Conferir quais fontes servem** varre o catálogo em lotes de
+12. Fonte não conferida sai **sem selo nenhum** — marcar de verde o que ninguém leu seria a
+mesma mentira que este trabalho inteiro desfaz.
+
+### Dois defeitos vizinhos, encontrados no caminho
+
+**O cache de fonte do motor nunca rebaixava.** Era `fonts/<família>.ttf` puro, com
+`if not os.path.exists`: trocar o arquivo da fonte no catálogo — que é justamente o conserto
+de "esta fonte não tem o `ř`" — não chegava a nenhuma estação que já tivesse a versão velha.
+Cada máquina ficaria num estado diferente, em silêncio. O nome agora carrega um hash da URL.
+
+**O editor nunca pré-carregou as fontes.** `drawPreview` lia `state.elements`, que **nunca
+existiu** no state (é `state.numElements`): `fontesDosElementos` recebia `undefined`,
+devolvia lista vazia, e o pré-carregamento inteiro era letra morta — o editor desenhava com
+fonte genérica na primeira pintura e ficava assim, porque canvas não reflui.
+
+### E o nome do modelo no chat do cliente
+
+No `cliente.js`, o `onclick` do botão passa o id como **texto** e o banco devolve **número**:
+o `===` cru nunca achava o item, e a mensagem caía no rótulo genérico. No 21146 as três
+aprovações viraram três linhas idênticas dizendo `O cliente APROVOU a amostra do item:
+"Produto"` — o atendimento não tinha como saber qual dos três modelos foi aprovado, e com
+ALTERAR a observação da mudança chegava igualmente sem dono. O `script.js` já tinha a
+correção; esta cópia ficou para trás.
+
+### Conferido
+
+`tests/fonte_glifos_harness.js` (21 casos) e `tests/test_fonte_sem_glifo.py` (25 casos).
+No navegador, com os dados reais do 21146: antes da cobertura chegar, nenhuma acusação;
+depois, a Tchéquia acusa `"ř" (U+0159), "ě" (U+011B), "č" (U+010D)`, o PRONTO sai
+`disabled` com o motivo no `title`, e os outros dois modelos seguem liberados.
+
+---
+
 ## [2026-08-25] — Link do cliente: a aba da arte diz o que falta, e vira sozinha
 
 Conferência do fluxo de aprovação, dirigido de ponta a ponta num iPhone simulado nos

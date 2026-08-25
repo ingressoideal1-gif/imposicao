@@ -310,6 +310,18 @@ por onde ela passa — `saveAmostraToDB`.
 O que continua liberado é o botão **Em Alteração** e a descrição, e só para
 atendimento, gerente e administrador (`podeDestravarModeloAprovado`).
 
+E o **🔗 Copiar link da arte**, para **designer, atendimento e administrador**
+(`podeCopiarDeModeloAprovado`, regra do usuário de 25/08/2026). Copiar não é
+alterar: o link vai para a área de transferência para ser **colado em outro
+modelo**, e o modelo aprovado sai da operação como entrou. O **📥 Colar**
+continua travado, porque esse sim escreve.
+
+São duas saídas com listas de gente diferentes, e a trava do card as distingue
+por atributo: `data-libera-aprovado` para o que altera, `data-libera-copia` para
+o que só lê. Controle que não declara nenhum dos dois nasce travado — é o
+padrão que impede um controle novo de aparecer solto dentro de um modelo
+aprovado.
+
 > [!NOTE]
 > A trava é silenciosa quando o que está sendo gravado é só a prévia
 > (`amostra_arte_base64`), que o desenho do card reescreve a cada renderização.
@@ -345,6 +357,40 @@ vazio. A regra é `bancoDeDadosIncompletoDoModelo(item)`, ao lado da de células
 no link do cliente ela não aparece, porque o cliente não tem como consertar a
 numeração. O harness da Lista de Arte exercita os seis casos.
 
+### 5. Caractere que a fonte não desenha
+
+O buraco no nome estrangeiro. Quando falta um caractere na fonte, o **navegador
+troca de fonte só naquele caractere**, em silêncio, e a tela mostra o nome
+inteiro; o PyMuPDF não empresta nada — deixa o vão. Mesmo dado, mesma fonte,
+dois resultados, e o único que alguém vê antes de imprimir é o que mente.
+
+Se algum texto que o modelo imprime tiver um caractere fora da fonte escolhida,
+o card mostra faixa vermelha com **qual fonte, qual elemento, quais caracteres e
+um exemplo do antes e depois** — `"Ondřej Pek" sai "Ond ej Pek"` — e o **MARCAR
+PRONTO** fica trancado, nos três caminhos (botão, `decisionAmostraItem` e o
+lote). A regra é `fonteSemGlifoDoModelo(item)`; no link do cliente ela não
+aparece, porque o cliente não tem como trocar a fonte.
+
+Ela olha **a fatia de linhas daquele modelo**, e não o banco inteiro. No pedido
+21146 os três modelos dividem o mesmo CSV de 13 linhas, e só a Tchéquia é
+acusada: as linhas ativas de Macedônia e Organização não têm caron nenhum.
+
+Nasceu do pedido 21146, e do 20495 antes dele — mesma cliente, mesmo evento, 185
+credenciais impressas em 11/08/2026 com a Gotham Book, que não tem `ř`, `ě` nem
+`č`; Tchéquia e Macedônia do Norte voltaram `REPROVADA_CLIENTE`, e o 21146 é o
+retrabalho delas. Das 273 fontes ativas do catálogo, 173 não conseguem imprimir
+aquela planilha.
+
+> [!IMPORTANT]
+> **Fonte que não deu para ler não acusa ninguém.** WOFF2, fonte do sistema,
+> arquivo que não baixou — a trava se cala. Uma trava falsa pararia a gráfica
+> por causa de um arquivo que o leitor de fontes não entendeu.
+
+A saída fica no próprio seletor de fontes do editor: ele confere a fonte atual
+ao abrir e tem o botão **🔤 Conferir quais fontes servem**, que varre o catálogo
+e marca ✅/⚠️ cada uma contra o banco daquela numeração. Fonte não conferida sai
+sem selo — marcar de verde o que ninguém leu seria a mesma mentira.
+
 ### Aviso: células do banco repetidas entre modelos
 
 Não é trava — é aviso. Regra do usuário, 22/08/2026: o card avisa, em âmbar,
@@ -358,7 +404,7 @@ comum. A conta é feita uma vez por pedido (`celulasRepetidasDoPedido`), cada
 card consulta o seu id, e no link do cliente ela não é feita. O harness da
 fatia exercita os quatro cenários.
 
-### 5. Só o administrador libera para produção
+### 6. Só o administrador libera para produção
 
 O botão **PRODUÇÃO** (`podeLiberarParaProducao`) é de contingência. O caminho
 normal é o parceiro atualizar `propostas.status_interno` para `EM PRODUCAO`, o
@@ -549,7 +595,7 @@ tamanhos próprios — ver [`painel_do_acabamento.md`](painel_do_acabamento.md).
 | O carimbo dos concluídos | `celulaDeEntradaEmProducaoHtml` (e o `th-tempo-arte` em `renderOrdens`) |
 | O título da tela de Pedido | `pintarTituloDaTelaDePedido`, `ESTILO_CLIENTE_DO_PEDIDO` |
 | A caixa de designers | `renderDesignersBoxHTML` |
-| As travas do negócio | `podeDefinirDesigner`, `bloqueioDeModeloAprovado`, `divergenciaDeCelulasDoModelo`, `podeLiberarParaProducao` |
+| As travas do negócio | `podeDefinirDesigner`, `bloqueioDeModeloAprovado`, `divergenciaDeCelulasDoModelo`, `bancoDeDadosIncompletoDoModelo`, `fonteSemGlifoDoModelo`, `podeLiberarParaProducao` |
 | O botão do parceiro | `botaoDoVibeHtml`, `linkDoPedidoNoVibe` |
 | O link direto | `linkDiretoDoPedido`, `pedidoDoLinkDireto`, `abrirPedidoDoLinkDireto` |
 

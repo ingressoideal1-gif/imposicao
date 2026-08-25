@@ -239,6 +239,31 @@
             pendentes.push(promessa);
         }
         if (pendentes.length) await Promise.all(pendentes);
+
+        // ── E, na mesma espera, QUAIS CARACTERES essa fonte tem ──
+        //
+        // Ter a fonte no ar nao basta: o navegador desenha o caractere que ela
+        // NAO tem emprestando o traco de outra, calado, e a previa passa a
+        // mentir sobre o papel. Quem sabe a diferenca e o `fonte-glifos.js`, e
+        // ele precisa da resposta ANTES do primeiro traco -- por isso aqui, na
+        // funcao que todo mundo ja espera antes de pintar.
+        //
+        // Fora do laco acima de proposito: uma fonte ja em `_prontas` nao passa
+        // por ele, e a cobertura dela nunca seria pedida. `garantirCoberturas`
+        // tem cache proprio, entao repetir a pergunta nao custa rede.
+        //
+        // Opcional: pagina que ainda nao carrega o `fonte-glifos.js` continua
+        // desenhando como antes, em vez de quebrar.
+        let novasCoberturas = [];
+        if (typeof escopo.garantirCoberturas === 'function') {
+            try {
+                novasCoberturas = await escopo.garantirCoberturas(nomes, { catalogo: _catalogo }) || [];
+            } catch (e) {
+                console.warn('[Fonts] nao deu para ler a cobertura de glifos:', e && e.message);
+            }
+        }
+        for (const n of novasCoberturas) if (novas.indexOf(n) < 0) novas.push(n);
+
         return novas;
     }
 

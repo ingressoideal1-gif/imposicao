@@ -39,7 +39,8 @@ function extrairFuncao(nome) {
 }
 
 // Lidas do script.js, nunca copiadas.
-const FONTE = ['papelAtual', 'podeDestravarModeloAprovado', 'travarCardsDeModelosAprovados']
+const FONTE = ['papelAtual', 'podeDestravarModeloAprovado', 'podeCopiarDeModeloAprovado',
+               'travarCardsDeModelosAprovados']
     .map(extrairFuncao).join('\n');
 
 // O card aprovado com os controles que o card real tem, mais o card livre ao
@@ -54,13 +55,16 @@ const PAGINA = `
     <input id="a-upload" type="file">
     <button id="a-remove">Remover arte</button>
     <button id="a-pronto">MARCAR PRONTO</button>
+    <button id="a-colar">Colar link da arte</button>
     <textarea id="a-obs" data-libera-aprovado="1"></textarea>
     <button id="a-alteracao" data-libera-aprovado="1">EM ALTERACAO</button>
+    <button id="a-copy" data-libera-copia="1">Copiar link da arte</button>
   </div>
   <div class="card">
     <select id="b-cor"><option>Cor</option></select>
     <button id="b-pronto">MARCAR PRONTO</button>
     <textarea id="b-obs"></textarea>
+    <button id="b-copy" data-libera-copia="1">Copiar link da arte</button>
   </div>
 </div>`;
 
@@ -102,8 +106,12 @@ async function travados(page, papel, containerId) {
     ok(atendimento['a-remove'], 'remover a arte trava');
     ok(atendimento['a-pronto'], 'marcar PRONTO trava');
 
+    // Colar E alterar: escreve a arte no modelo aprovado, entao fecha.
+    ok(atendimento['a-colar'], 'colar a arte trava');
+
     ok(!atendimento['a-obs'], 'a anotacao continua de pe para o atendimento');
     ok(!atendimento['a-alteracao'], 'e o botao Em Alteracao tambem');
+    ok(!atendimento['a-copy'], 'e copiar o link da arte tambem');
 
     // O card do modelo que NAO esta aprovado nao pode ser afetado.
     ok(!atendimento['b-cor'], 'o card livre ao lado continua livre');
@@ -119,17 +127,34 @@ async function travados(page, papel, containerId) {
     const gerente = await travados(page, 'gerente', 'amostras-itens-container');
     ok(!gerente['a-alteracao'], 'o gerente tambem coloca em alteracao');
     ok(gerente['a-cor'], 'mas nem para ele a cor abre');
+    // A lista de quem COPIA nao e a mesma de quem DESTRAVA: o gerente devolve o
+    // modelo para alteracao, mas nao e ele quem trabalha a arte. Continua como
+    // sempre esteve -- nada aqui foi tirado dele.
+    ok(gerente['a-copy'], 'e copiar o link da arte tampouco');
 
     // ── Quem nao pode destravar: fecha ate a saida ──
+    // Regra do usuario, 25/08/2026: para o designer o card aprovado abre uma
+    // unica coisa, a copia do link da arte -- que le o modelo sem altera-lo.
     const designer = await travados(page, 'designer', 'amostras-itens-container');
     ok(designer['a-cor'], 'para o designer a cor tambem trava');
     ok(designer['a-obs'], 'e a anotacao trava');
     ok(designer['a-alteracao'], 'e o botao Em Alteracao trava');
+    ok(designer['a-colar'], 'e colar a arte trava');
+    ok(!designer['a-copy'], 'mas copiar o link da arte fica liberado para ele');
     ok(!designer['b-cor'], 'o card livre continua livre para ele');
+
+    // Quem nao esta na lista dos tres nao ganha nem a copia.
+    const impressor = await travados(page, 'impressor', 'amostras-itens-container');
+    ok(impressor['a-copy'], 'para quem nao esta na lista, nem a copia abre');
 
     // Papel ainda em viagem no primeiro desenho: fecha, e nao abre.
     const semPapel = await travados(page, '', 'amostras-itens-container');
     ok(semPapel['a-alteracao'], 'sem papel conhecido, nem a saida abre');
+    ok(semPapel['a-copy'], 'nem a copia');
+
+    // A saida de copia nao pode vazar para o card que NAO esta aprovado --
+    // la ela ja estava aberta para todo mundo, e continua.
+    ok(!semPapel['b-copy'], 'no card livre a copia continua livre para qualquer um');
 
     // ── O link do cliente ──
     // E a tela em que ELE aprova, e o card dele nem tem painel de configuracao.

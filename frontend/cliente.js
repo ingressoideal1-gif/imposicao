@@ -1849,7 +1849,16 @@ async function decisionAmostraItem(itemId, osId, status) {
         // Se for na página do cliente, vamos notificar no chat do pedido!
         const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
         if (isClientePage) {
-            const item = state.osItens[osId].find(i => i.id === itemId);
+            // `String(...)` dos dois lados: o `onclick` do botão passa o id
+            // como TEXTO ('1000547') e o banco devolve NÚMERO, então o `===`
+            // cru nunca achava o item e o chat do atendimento saía sempre com
+            // o rótulo genérico. Medido no pedido 21146: as três aprovações do
+            // cliente viraram três linhas idênticas — `O cliente APROVOU a
+            // amostra do item: "Produto"` — e ninguém tinha como saber qual dos
+            // três modelos foi aprovado. Com ALTERAR é pior: a observação da
+            // mudança também chega sem dizer de qual modelo é. O `script.js` já
+            // tinha a correção; esta cópia ficou para trás.
+            const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
             const prodNome = item ? item.produto : 'Produto';
             
             // Enviar mensagem no chat da proposta

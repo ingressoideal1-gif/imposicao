@@ -10,16 +10,40 @@ Desenho: `docs/superpowers/specs/2026-08-11-editor-csv-design.md`.
 
 ## Como se chega nele
 
-Três botões na box "Banco de Dados (CSV)" do editor de numeração, e um quarto
-mais abaixo. Quem alterna a visibilidade de todos é `renderNumCsvInterface()`
-(há CSV) e `clearNumCsvFile()` (não há):
+Três botões na box "Banco de Dados (CSV)" do editor de numeração. Quem alterna a
+visibilidade de todos é `renderNumCsvInterface()` (há CSV) e `clearNumCsvFile()`
+(não há):
 
 | Botão | Aparece quando | Chama |
 |---|---|---|
 | 📊 Upload CSV | sempre | `handleNumCsvSelected()` |
 | ➕ Criar vazio | **não** há CSV | `criarCsvVazioDaNumeracao()` |
 | 📋 Ver / Editar | há CSV | `abrirEditorCsvDaNumeracao()` |
-| 📋 Ver / Editar CSV (barra "Colunas do Banco de Dados") | há CSV | idem |
+
+### Uma porta por sala
+
+Até a v714 havia um quarto botão, **📋 Ver / Editar CSV**, dentro da barra
+"Colunas do Banco de Dados (CSV)". Ele chamava exatamente a mesma função do
+**📋 Ver / Editar** da box, logo acima, no mesmo painel — duas portas para a
+mesma sala, e a segunda disputando espaço com o recado que aquela barra precisa
+dar (*"clique numa coluna para pôr um campo no ticket"*). Saiu a pedido do
+usuário em 25/08/2026.
+
+Sobram duas portas, e elas servem a momentos diferentes:
+
+| Porta | Quando | Onde grava |
+|---|---|---|
+| 📋 Ver / Editar, na box do editor de numeração | montando ou consertando a numeração no catálogo | `producao_numeracoes.csv_data` |
+| 📊 Ver / editar, no card do modelo (dentro do pedido) | **o dia a dia** — o trabalho acontece no pedido | o mesmo lugar |
+
+O banco é **da numeração**: qualquer porta grava no mesmo registro, e a edição
+vale para todos os modelos que usam aquela numeração. Não há ambiguidade sobre o
+efeito — o que muda é só de onde se chega.
+
+O que **não** é a mesma coisa é o **🧩 Linhas**, ao lado do 📊 no card: ele
+reparte as linhas entre os modelos e grava em `pedidos_modelos.csv_selecao`.
+Consertar o conteúdo é um trabalho; repartir as linhas é outro. Ver "O banco
+também se abre do card do modelo", adiante.
 
 ### Começar do zero
 

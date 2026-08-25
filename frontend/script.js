@@ -445,6 +445,55 @@ window.deletarFonteWeb = deletarFonteWeb;
 
 // - Font Picker Component -
 // Cria um font picker interativo com busca, preview e suporte a fontes do sistema.
+/**
+ * Os caracteres DISTINTOS que a numeração aberta no editor manda ao papel.
+ *
+ * É por eles que se decide se uma fonte serve: não interessa se ela tem 3.000
+ * glifos, interessa se tem estes. Sai do banco carregado (só as colunas que os
+ * elementos leem) e dos textos digitados à mão — prefixo, sufixo e valor fixo.
+ *
+ * Devolve uma string sem repetição, pronta para `faltamNaFonte`.
+ */
+function caracteresDoBancoDaNumeracao() {
+    const vistos = new Set();
+    const juntar = (t) => {
+        for (const ch of String(t == null ? '' : t)) vistos.add(ch);
+    };
+    const linhas = Array.isArray(state.numCsvData) ? state.numCsvData : [];
+    (state.numElements || []).forEach(el => {
+        if (!el || el.type === 'METADATA') return;
+        if (el.fixed) juntar(el.fixed_value);
+        ['prefix', 'suffix', 'prefix_fila', 'prefix_lugar'].forEach(k => juntar(el[k]));
+        if (el.source === 'database' && el.csv_column) {
+            for (const linha of linhas) {
+                if (!linha || linha.__ativo === false) continue;   // desmarcada não imprime
+                juntar(linha[el.csv_column]);
+            }
+        }
+    });
+    // Separadores não são desenhados; cobrar glifo deles acusaria toda fonte.
+    ['\n', '\r', '\t'].forEach(c => vistos.delete(c));
+    return [...vistos].join('');
+}
+window.caracteresDoBancoDaNumeracao = caracteresDoBancoDaNumeracao;
+
+/**
+ * O veredito de UMA fonte sobre o banco aberto: serve, não serve, ou não sei.
+ *
+ * `null` quando não dá para saber — cobertura ainda não lida, fonte do sistema,
+ * arquivo que não abriu. É a regra de ouro do fonte-glifos.js aplicada à tela:
+ * o seletor cala a boca em vez de chutar.
+ */
+function vereditoDaFonteSobreOBanco(nomeDaFonte, caracteres) {
+    const mapa = typeof window.mapaDeCoberturas === 'function' ? window.mapaDeCoberturas() : null;
+    if (!mapa || typeof window.faltamNaFonte !== 'function') return null;
+    const cob = mapa[String(nomeDaFonte || '').trim().toLowerCase()];
+    if (!cob) return null;
+    const faltam = window.faltamNaFonte(cob, caracteres || '');
+    return { serve: faltam.length === 0, faltam: faltam };
+}
+window.vereditoDaFonteSobreOBanco = vereditoDaFonteSobreOBanco;
+
 function createFontPicker(elId, currentValue, onChange) {
     const wrap = document.createElement('div');
     wrap.className = 'font-picker-wrap';
@@ -492,6 +541,7 @@ function createFontPicker(elId, currentValue, onChange) {
             <div class="font-picker-list" id="fpl-${elId}">
                 <div class="font-picker-loading">Carregando fontes...</div>
             </div>
+            <div class="font-picker-glifos" id="fpg-${elId}" style="padding:8px 10px; border-top:1px solid rgba(148,163,184,0.25); font-size:0.74rem; line-height:1.35;"></div>
         </div>
     `;
 
@@ -499,8 +549,67 @@ function createFontPicker(elId, currentValue, onChange) {
     const dropdown    = wrap.querySelector(`#fpd-${elId}`);
     const searchInput = wrap.querySelector(`#fps-${elId}`);
     const list        = wrap.querySelector(`#fpl-${elId}`);
+    const rodape      = wrap.querySelector(`#fpg-${elId}`);
 
     let currentFont = currentValue || '';
+
+    // ── Quais fontes servem para o banco desta numeração ──
+    //
+    // É a saída da trava do card: ela diz "troque a fonte", e é aqui que o
+    // operador descobre por qual. Sem isto ele testaria 273 fontes no escuro.
+    //
+    // Ler a cobertura custa um download por fonte, então nada é baixado só por
+    // abrir a lista: entra em cena o que já estiver no cache, mais a fonte
+    // ATUAL (uma só, imediata) — e o resto fica atrás do botão, que é caro e
+    // por isso é escolha do operador.
+    let caracteresDoBanco = '';
+    let conferindoTudo = false;
+
+    const desenharRodape = () => {
+        if (!rodape) return;
+        if (!caracteresDoBanco) {
+            rodape.innerHTML = '<span style="color:#64748b;">Esta numeração ainda não tem texto de banco para conferir.</span>';
+            return;
+        }
+        const v = vereditoDaFonteSobreOBanco(currentFont, caracteresDoBanco);
+        let linha;
+        if (!v) {
+            linha = '<span style="color:#64748b;">Não dá para conferir os caracteres desta fonte '
+                + '(fonte do sistema ou arquivo que não abriu).</span>';
+        } else if (v.serve) {
+            linha = '<span style="color:#4ade80; font-weight:700;">✅ Esta fonte desenha todo o banco.</span>';
+        } else {
+            const chars = v.faltam.map(ch => (window.rotuloDoCaractere ? window.rotuloDoCaractere(ch) : ch)).join(', ');
+            linha = '<span style="color:#f87171; font-weight:700;">⚠️ Esta fonte não desenha ' + escapeHtml(chars)
+                + '</span><br><span style="color:#94a3b8;">Na tela o texto aparece inteiro; no papel esses caracteres saem como buraco.</span>';
+        }
+        const botao = conferindoTudo
+            ? '<span style="color:#94a3b8;">Conferindo as fontes do catálogo…</span>'
+            : `<button type="button" id="fpc-${elId}" class="btn" style="margin-top:6px; padding:3px 8px; font-size:0.72rem; height:auto;">🔤 Conferir quais fontes servem</button>`;
+        rodape.innerHTML = linha + '<div>' + botao + '</div>';
+        const btn = rodape.querySelector(`#fpc-${elId}`);
+        if (btn) btn.addEventListener('mousedown', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (conferindoTudo) return;
+            conferindoTudo = true;
+            desenharRodape();
+            try {
+                const catalogo = (state_fonts.catalogo || []);
+                // Em lotes: 273 downloads de uma vez disputam a rede com o
+                // resto da tela e o navegador enfileira do jeito dele.
+                for (let i = 0; i < catalogo.length; i += 12) {
+                    const lote = catalogo.slice(i, i + 12).map(f => f.nome);
+                    await window.garantirCoberturas(lote, { catalogo: catalogo });
+                }
+            } catch (err) {
+                console.warn('[Fonts] conferência de glifos:', err && err.message);
+            }
+            conferindoTudo = false;
+            renderList(searchInput.value);
+            desenharRodape();
+        });
+    };
 
     const renderList = (filter = '') => {
 
@@ -515,8 +624,19 @@ function createFontPicker(elId, currentValue, onChange) {
                 for (const f of catFiltered) {
                     const fullName = f.nome;
                     const sel = fullName === currentFont ? 'selected' : '';
-                    html += `<div class="font-picker-opt ${sel}" data-value="${fullName}">
+                    // O selo só aparece quando a cobertura JÁ é conhecida.
+                    // Fonte não conferida sai sem marca nenhuma — marcar de
+                    // verde o que ninguém leu seria a mesma mentira que este
+                    // trabalho inteiro existe para desfazer.
+                    const v = caracteresDoBanco ? vereditoDaFonteSobreOBanco(fullName, caracteresDoBanco) : null;
+                    const selo = !v ? ''
+                        : (v.serve
+                            ? '<span title="Desenha todo o banco desta numeração" style="color:#4ade80; flex-shrink:0;">✅</span>'
+                            : `<span title="${escapeHtml('Não desenha ' + v.faltam.join(' '))}" style="color:#f87171; flex-shrink:0;">⚠️</span>`);
+                    const apagada = v && !v.serve ? 'opacity:0.55;' : '';
+                    html += `<div class="font-picker-opt ${sel}" data-value="${fullName}" style="${apagada}">
                         <span class="fp-name" style="flex:1; font-size:0.85rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.nome}</span>
+                        ${selo}
                         <span class="fp-sample" style="font-family:'${f.font_family}',sans-serif; font-size:0.75rem; color:#64748b; flex-shrink:0;">Aa</span>
                     </div>`;
                 }
@@ -538,6 +658,16 @@ function createFontPicker(elId, currentValue, onChange) {
                 trigger.innerHTML = buildTriggerHTML(val);
                 closeDropdown();
                 if (onChange) onChange(val);
+                // A fonte recém-escolhida pode nunca ter sido lida. Vale um
+                // download para o operador saber JÁ se resolveu — e para o
+                // canvas redesenhar mostrando o buraco, se ainda houver.
+                if (typeof window.garantirCoberturas === 'function') {
+                    window.garantirCoberturas([val], { catalogo: state_fonts.catalogo || [] })
+                        .then(novas => {
+                            if (novas && novas.length && typeof drawPreview === 'function') drawPreview();
+                        })
+                        .catch(() => {});
+                }
             });
         });
 
@@ -551,7 +681,21 @@ function createFontPicker(elId, currentValue, onChange) {
         searchInput.value = '';
         searchInput.focus();
 
+        caracteresDoBanco = caracteresDoBancoDaNumeracao();
         renderList('');
+        desenharRodape();
+
+        // Só a fonte ATUAL vai à rede na abertura: é um arquivo, e é a resposta
+        // que o operador veio buscar ("a que está aí serve?"). O catálogo
+        // inteiro fica atrás do botão do rodapé.
+        if (caracteresDoBanco && typeof window.garantirCoberturas === 'function') {
+            try {
+                const novas = await window.garantirCoberturas([currentFont], {
+                    catalogo: state_fonts.catalogo || [],
+                });
+                if (novas && novas.length) { renderList(searchInput.value); desenharRodape(); }
+            } catch (e) { /* seletor nunca quebra por causa da conferência */ }
+        }
     };
 
     const closeDropdown = () => {
@@ -7688,8 +7832,19 @@ function drawPreview() {
     // ficar assim — canvas não redesenha sozinho. Desenha já com o que houver e
     // repete uma vez quando as fontes chegarem.
     try {
-        const _nomes = fontesDosElementos(state.elements)
-            .filter(n => !fonteJaCarregada(n));
+        // `state.numElements`, e não `state.elements` — este último NUNCA
+        // existiu no state (ver o objeto lá em cima), então `fontesDosElementos`
+        // recebia `undefined`, devolvia lista vazia e o pré-carregamento inteiro
+        // era letra morta: o editor desenhava com fonte genérica na primeira
+        // pintura e ficava assim, porque canvas não reflui. Agora também é por
+        // aqui que chega a COBERTURA de glifos, sem a qual a prévia volta a
+        // esconder o caractere que o papel não vai imprimir.
+        // Sem o filtro `fonteJaCarregada`: quem responde por AMBAS as esperas é
+        // `garantirFontesCarregadas`, e a segunda delas — a cobertura de
+        // glifos — tem cache próprio. Filtrar pela primeira esconderia da
+        // segunda justamente as fontes já no ar, que são a maioria. Ela devolve
+        // lista vazia quando não há novidade, e é isso que fecha o laço.
+        const _nomes = fontesDosElementos(state.numElements);
         if (_nomes.length) {
             garantirFontesCarregadas(_nomes).then(novas => {
                 if (novas && novas.length) drawPreview();
@@ -12117,9 +12272,15 @@ function renderNumCsvInterface() {
 
         container.style.display = 'block';
 
-        bar.innerHTML = `<button class="btn btn-sm btn-secondary" onclick="abrirEditorCsvDaNumeracao()" title="Ver e editar o banco de dados como planilha">📋 Ver / Editar CSV</button>`
-
-            + state.numCsvHeaders.map(col => `
+        // Esta barra tem UM trabalho: pôr coluna no ticket. O botão
+        // "📋 Ver / Editar CSV" morava aqui e chamava exatamente a mesma
+        // função do "📋 Ver / Editar" da box "Banco de Dados (CSV)", logo
+        // acima, no mesmo painel — duas portas para a mesma sala, e uma delas
+        // disputando espaço com o recado que esta barra precisa dar. Tirado a
+        // pedido do usuário em 25/08/2026. A porta do editor de numeração é a
+        // da box; a do dia a dia é o "📊 Ver / editar" no card do modelo,
+        // dentro do pedido, que é onde o trabalho acontece.
+        bar.innerHTML = state.numCsvHeaders.map(col => `
 
             <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Pôr esta coluna no ticket, como texto variável">📊 ${col}</button>
 
@@ -14608,6 +14769,123 @@ function bancoDeDadosIncompletoDoModelo(item) {
     return { motivo: 'coluna', texto: partes.join('; ') + '.' };
 }
 window.bancoDeDadosIncompletoDoModelo = bancoDeDadosIncompletoDoModelo;
+
+/**
+ * Caractere que a fonte escolhida NÃO desenha — o buraco no nome impresso.
+ *
+ * O navegador, quando falta um caractere na fonte, troca de fonte só naquele
+ * caractere, em silêncio: a tela mostra o nome inteiro. O PyMuPDF não faz isso
+ * — desenha o que a fonte tem e deixa o vão. Mesmo dado, mesma fonte, dois
+ * resultados, e o único que alguém vê antes de imprimir é o que mente.
+ *
+ * Nasceu do pedido 21146: a Gotham Book não tem `ř`, `ě` nem `č`, e oito dos
+ * dez nomes tchecos daquele modelo sairiam furados — "Ondřej Pek" vira
+ * "Ond ej Pek". A amostra que o cliente APROVOU mostra o nome inteiro. E já
+ * tinha acontecido: o pedido 20495, mesma cliente e mesmo evento, imprimiu 185
+ * credenciais em 11/08 com as mesmas fontes, e dois modelos voltaram
+ * REPROVADA_CLIENTE. O 21146 é o retrabalho deles.
+ *
+ * Trava, e não aviso: é a mesma engrenagem de `divergenciaDeCelulasDoModelo` e
+ * `bancoDeDadosIncompletoDoModelo` — o modelo não vira PRONTO, e como o pedido
+ * só vira "Enviar Arte" com todos PRONTO, o pedido inteiro espera. Nome errado
+ * em credencial é reimpressão, e reimpressão é papel, tinta e prazo.
+ *
+ * `coberturas` é o mapa `{ chave da fonte: cobertura|null }` de
+ * `window.mapaDeCoberturas()`. Fonte sem cobertura conhecida (a do sistema, a
+ * que não baixou, o WOFF2) NÃO acusa: uma trava falsa pararia a gráfica por
+ * causa de um arquivo que o leitor não entendeu. Puro; só lê.
+ */
+function fonteSemGlifoDoModelo(item, coberturas) {
+    const mapa = coberturas || (typeof window !== 'undefined' && window.mapaDeCoberturas
+        ? window.mapaDeCoberturas() : null);
+    const faltamNaFonte = typeof window !== 'undefined' ? window.faltamNaFonte : null;
+    const comoSaiNoPapel = typeof window !== 'undefined' ? window.textoComoSaiNoPapel : null;
+    const rotuloCh = typeof window !== 'undefined' ? window.rotuloDoCaractere : null;
+    if (!mapa || !faltamNaFonte) return null;
+    const chave = (n) => String(n || '').trim().toLowerCase();
+
+    const num = numeracaoDoModelo(item);
+    if (!num) return null;
+    const linhas = fatiaCsvDoItem(item, num);
+
+    const achados = [];
+    (num.elements || []).forEach(el => {
+        if (!el || el.type === 'METADATA') return;
+        const cob = mapa[chave(el.font_name)];
+        if (!cob) return;                       // desconhecida não acusa
+
+        // Todo texto que este elemento manda ao papel. Segue o engine.py: o
+        // elemento fixo imprime `fixed_value`; o de banco imprime o valor da
+        // coluna, SEM prefixo nem sufixo; e os demais colam prefixo e sufixo
+        // em volta do número — e prefixo e sufixo são digitados à mão, então
+        // também levam acento.
+        // Um CARACTERE por vez, e não um texto por vez. Um banco de 4.000
+        // linhas tem umas oitenta letras distintas: juntar primeiro e perguntar
+        // depois troca 4.000 varreduras por uma, e esta função roda a cada
+        // desenho de card.
+        const chars = new Map();     // caractere -> primeiro texto onde apareceu
+        const juntar = (t) => {
+            const s = String(t == null ? '' : t);
+            for (const ch of s) if (!chars.has(ch)) chars.set(ch, s);
+        };
+        if (el.fixed) {
+            juntar(el.fixed_value);
+        } else if (el.source === 'database' && el.csv_column) {
+            for (const linha of linhas) {
+                if (linha) juntar(linha[el.csv_column]);
+            }
+        }
+        ['prefix', 'suffix', 'prefix_fila', 'prefix_lugar'].forEach(k => juntar(el[k]));
+        if (!chars.size) return;
+
+        const faltam = faltamNaFonte(cob, [...chars.keys()].join(''));
+        if (!faltam.length) return;
+        // O exemplo é o texto inteiro onde o caractere apareceu — "Ondřej Pek"
+        // diz muito mais ao operador do que "ř".
+        const exemplo = chars.get(faltam[0]);
+
+        achados.push({
+            elemento: el.name || el.type || 'elemento',
+            fonte: el.font_name || '',
+            faltam: faltam,
+            exemplo: exemplo,
+            comoSai: comoSaiNoPapel ? comoSaiNoPapel(exemplo, cob) : null,
+        });
+    });
+
+    if (!achados.length) return null;
+
+    const partes = achados.map(a => {
+        const chars = a.faltam.map(ch => (rotuloCh ? rotuloCh(ch) : '"' + ch + '"')).join(', ');
+        let p = 'a fonte "' + a.fonte + '" do elemento «' + a.elemento + '» não desenha ' + chars;
+        if (a.exemplo && a.comoSai) p += ' — "' + a.exemplo + '" sai "' + a.comoSai + '"';
+        return p;
+    });
+    const todos = [];
+    achados.forEach(a => a.faltam.forEach(ch => { if (todos.indexOf(ch) < 0) todos.push(ch); }));
+
+    return {
+        motivo: 'glifo',
+        texto: partes.join('; ') + '.',
+        faltam: todos,
+        elementos: achados,
+    };
+}
+window.fonteSemGlifoDoModelo = fonteSemGlifoDoModelo;
+
+/** Os nomes de fonte que os modelos de um pedido usam — para pedir a cobertura. */
+function fontesDosModelosDoPedido(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    const nomes = new Set();
+    itens.forEach(it => {
+        const num = numeracaoDoModelo(it);
+        (num && num.elements || []).forEach(el => {
+            if (el && el.font_name) nomes.add(el.font_name);
+        });
+    });
+    return [...nomes];
+}
+window.fontesDosModelosDoPedido = fontesDosModelosDoPedido;
 
 /**
  * Células do banco que um modelo partilha com OUTRO modelo do mesmo pedido.
@@ -17360,6 +17638,30 @@ function podeDestravarModeloAprovado() {
 window.podeDestravarModeloAprovado = podeDestravarModeloAprovado;
 
 /**
+ * Quem continua podendo COPIAR de um modelo que o cliente já aprovou.
+ *
+ * Regra do usuário, 25/08/2026: "quando um modelo estiver aprovado, liberar
+ * apenas a opção de copiar para o designer, adm, atendente".
+ *
+ * Copiar não é alterar. O 🔗 põe o endereço da arte na área de transferência
+ * para que ela seja COLADA em outro modelo — o modelo aprovado sai da operação
+ * exatamente como entrou, e o acordo com o cliente continua de pé. Sem essa
+ * saída o designer que precisa repetir a mesma arte num modelo irmão tinha de
+ * pedir ao atendimento que devolvesse para alteração um modelo que ninguém
+ * queria alterar.
+ *
+ * Por isso a lista é diferente da de `podeDestravarModeloAprovado`: aqui entra
+ * o DESIGNER, que é quem trabalha a arte, e não entra o gerente, que não
+ * trabalha nela. Papel desconhecido responde NÃO, como nas outras regras de
+ * negócio — o custo de negar é um botão cinza por um instante na partida.
+ */
+function podeCopiarDeModeloAprovado() {
+    const papel = papelAtual();
+    return papel === 'admin' || papel === 'atendimento' || papel === 'designer';
+}
+window.podeCopiarDeModeloAprovado = podeCopiarDeModeloAprovado;
+
+/**
  * Quem libera um pedido para a produção.
  *
  * Regra do usuário, 19/08/2026: só o administrador. É o clique que tira o
@@ -17430,6 +17732,7 @@ function planoDaAcaoEmLote(itens, acao, ctx) {
     const c = ctx || {};
     const divergencia = typeof c.divergencia === 'function' ? c.divergencia : () => null;
     const bancoIncompleto = typeof c.bancoIncompleto === 'function' ? c.bancoIncompleto : () => null;
+    const semGlifo = typeof c.semGlifo === 'function' ? c.semGlifo : () => null;
     const aplicar = [];
     const pulados = [];
     for (const item of (itens || [])) {
@@ -17438,7 +17741,7 @@ function planoDaAcaoEmLote(itens, acao, ctx) {
         if (acao === 'PRONTO') {
             if (st === 'PRONTO') motivo = 'já está pronto';
             else if (modeloEstaAprovado(item)) motivo = 'aprovado pelo cliente — não se altera';
-            else motivo = divergencia(item) || bancoIncompleto(item) || null;
+            else motivo = divergencia(item) || bancoIncompleto(item) || semGlifo(item) || null;
         } else if (acao === 'APROVADA') {
             if (modeloEstaAprovado(item)) motivo = 'já está aprovado';
         } else if (acao === 'REPROVADA') {
@@ -17544,10 +17847,15 @@ function travarCardsDeModelosAprovados(container) {
     if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
 
     const podeDestravar = podeDestravarModeloAprovado();
+    const podeCopiar = podeCopiarDeModeloAprovado();
 
     container.querySelectorAll('[data-modelo-aprovado="1"]').forEach(card => {
         card.querySelectorAll('input, select, textarea, button').forEach(el => {
+            // Duas saídas, com listas de gente diferentes: `data-libera-aprovado`
+            // é o que ALTERA o modelo (a anotação e a volta para alteração), e
+            // `data-libera-copia` é o que só o LÊ (copiar o link da arte).
             if (podeDestravar && el.hasAttribute('data-libera-aprovado')) return;
+            if (podeCopiar && el.hasAttribute('data-libera-copia')) return;
             el.disabled = true;
             el.style.opacity = '0.45';
             el.style.cursor = 'not-allowed';
@@ -27276,6 +27584,33 @@ function renderAmostrasOSItens(osId) {
     }
     const itens = state.osItens[targetOSId] || state.osItens[osId] || [];
 
+    // ── A cobertura de glifos das fontes deste pedido ──
+    //
+    // Ler o cmap exige baixar o arquivo da fonte, e isso é rede: segurar o
+    // desenho dos cards por ela deixaria a tela em branco. Então os cards saem
+    // agora, sem a trava, e voltam a ser desenhados quando a resposta chega —
+    // `garantirCoberturas` devolve só os nomes cuja resposta MUDOU, e lista
+    // vazia é o fim do laço. Enquanto não chega, `fonteSemGlifoDoModelo` não
+    // acusa ninguém, que é a regra de ouro do fonte-glifos.js.
+    // A trava por PEDIDO, e nao global: quem abre o pedido A e pula para o B
+    // enquanto o A ainda busca não pode ficar sem a conferência do B.
+    state._coberturaEmVoo = state._coberturaEmVoo || {};
+    if (containerId === 'amostras-itens-container'
+        && typeof window.garantirCoberturas === 'function'
+        && !state._coberturaEmVoo[targetOSId]) {
+        const nomes = fontesDosModelosDoPedido(targetOSId);
+        if (nomes.length) {
+            state._coberturaEmVoo[targetOSId] = true;
+            const solta = () => { delete state._coberturaEmVoo[targetOSId]; };
+            window.garantirCoberturas(nomes, {
+                catalogo: typeof catalogoFontes === 'function' ? catalogoFontes() : [],
+            }).then(novas => {
+                solta();
+                if (novas && novas.length) renderAmostrasOSItens(osId);
+            }).catch(solta);
+        }
+    }
+
     if (typeof pdfViewerState !== 'undefined') {
         Object.keys(pdfViewerState).forEach(k => {
             // Preservar estado do PDF viewer para itens em modo_pdf que já têm arte carregada,
@@ -27444,6 +27779,7 @@ function renderAmostrasOSItens(osId) {
         const ehTelaDoCliente = (state.amostrasContainerId === 'cliente-amostras-itens-container');
         const modeloTravado = !ehTelaDoCliente && modeloEstaAprovado(item);
         const podeDestravar = podeDestravarModeloAprovado();
+        const podeCopiarNoTravado = podeCopiarDeModeloAprovado();
 
         // ── Qtd × linhas do banco ──
         // A conta é do usuário: Qtd X pede X linhas na Frente e 2X no FxVerso.
@@ -27458,6 +27794,13 @@ function renderAmostrasOSItens(osId) {
         // o card avisa e o PRONTO fica trancado, como na regra de células.
         const bancoIncompleto = ehTelaDoCliente ? null : bancoDeDadosIncompletoDoModelo(item);
         const travaDeBanco = !!bancoIncompleto;
+        // ── Caractere que a fonte não desenha ──
+        // O buraco do nome estrangeiro: a tela mostra "Ondřej Pek" porque o
+        // navegador cobre o `ř` com outra fonte; o papel sai "Ond ej Pek".
+        // Trava o PRONTO pelo mesmo motivo das duas de cima — nome errado em
+        // credencial é reimpressão.
+        const semGlifo = ehTelaDoCliente ? null : fonteSemGlifoDoModelo(item);
+        const travaDeGlifo = !!semGlifo;
         // ── Células do banco repetidas entre modelos ── (aviso, não trava)
         const repetidas = celulasRepetidas[String(item.id)] || null;
 
@@ -27469,7 +27812,9 @@ function renderAmostrasOSItens(osId) {
                     <span>${escapeHtml(tituloAprovado)} — nada aqui pode ser alterado.
                     ${podeDestravar
                         ? 'Para liberar, use <b>❌ EM ALTERAÇÃO</b> abaixo.'
-                        : 'Para liberar, peça ao atendimento para colocar o modelo <b>Em Alteração</b>.'}</span>
+                        : 'Para liberar, peça ao atendimento para colocar o modelo <b>Em Alteração</b>.'}${podeCopiarNoTravado
+                        ? ' O <b>🔗</b> segue liberado: copiar o link da arte não altera o modelo.'
+                        : ''}</span>
                 </div>` : '';
 
         const faixaDivergenciaCelulas = travaDeCelulas ? `
@@ -27486,6 +27831,14 @@ function renderAmostrasOSItens(osId) {
                     <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
                     Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.</span>
+                </div>` : '';
+
+        const faixaSemGlifo = travaDeGlifo ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">⚠️</span>
+                    <span>A fonte não desenha todos os caracteres deste banco — na tela o nome aparece inteiro, no papel sai com buraco. Este modelo não pode ser marcado PRONTO.<br>
+                    <span style="font-weight:700;color:#fca5a5;">${escapeHtml(semGlifo.texto)}</span><br>
+                    Abra a numeração no <b>✏️</b> e troque a fonte do elemento por uma que tenha esses caracteres — o seletor de fontes avisa quais não servem para este banco.</span>
                 </div>` : '';
 
         const faixaCelulasRepetidas = repetidas ? `
@@ -27516,6 +27869,7 @@ function renderAmostrasOSItens(osId) {
                         ${faixaModeloTravado}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'
@@ -27531,7 +27885,7 @@ function renderAmostrasOSItens(osId) {
                                 <button class="btn" data-libera-aprovado="1" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
                                     ❌ EM ALTERAÇÃO
                                 </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : '')}>
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco || travaDeGlifo ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : (travaDeGlifo ? `title="${escapeHtml(semGlifo.texto)}"` : ''))}>
                                     🎨 MARCAR PRONTO
                                 </button>
                                 ${podeAprovarPeloPainel ? `
@@ -27586,7 +27940,7 @@ function renderAmostrasOSItens(osId) {
                                             <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                             <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D da frente">🎨</button>
-                                            <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
                                             <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                             <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
                                             <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
@@ -27600,7 +27954,7 @@ function renderAmostrasOSItens(osId) {
                                             <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
                                             <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Criar Arte 2D do verso">🎨</button>
-                                            <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
                                             <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                             <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')" title="Remover Arte do Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">✕</button>
                                             <span id="amostra-item-arte-verso-name-${idx}" style="display:none;"></span>
@@ -27614,7 +27968,7 @@ function renderAmostrasOSItens(osId) {
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                         <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D para este modelo">🎨</button>
-                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                        <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
                                         <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                         <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
                                         <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
@@ -31234,6 +31588,16 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
                 + ' Abra a numeração no lápis, carregue o CSV e aponte a coluna do elemento.', 'warning');
             return false;
         }
+        // Caractere que a fonte não desenha: mesma trava, mesmo lugar. O botão
+        // já nasce desabilitado, mas o lote e o atalho de teclado entram por
+        // aqui — e é aqui que a última palavra tem de ser dada.
+        const semGlifo = fonteSemGlifoDoModelo(itemAlvo);
+        if (semGlifo) {
+            toast('Este modelo não pode ser marcado PRONTO: ' + semGlifo.texto
+                + ' Troque a fonte do elemento na numeração — na tela o nome aparece inteiro,'
+                + ' no papel sai com buraco.', 'warning');
+            return false;
+        }
 
         // A arte de aprovação é regerada AQUI, e esperada até o fim (regra do
         // usuário, 19/08/2026: "deve ser gerada e salva novamente sempre que
@@ -31426,6 +31790,10 @@ window.acaoEmLoteNoPedido = async function(osId, acao) {
         bancoIncompleto: item => {
             const b = bancoDeDadosIncompletoDoModelo(item);
             return b ? b.texto : null;
+        },
+        semGlifo: item => {
+            const g = fonteSemGlifoDoModelo(item);
+            return g ? g.texto : null;
         },
     };
     const plano = planoDaAcaoEmLote(itens, acao, ctx);

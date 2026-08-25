@@ -29,6 +29,83 @@ MM2PT = 2.8346   # 1mm em pontos PDF
 # Cache para evitar log repetido de resolução de fontes do sistema
 _font_log_cache: set = set()
 
+# Cache dos objetos fitz.Font usados só para perguntar se um glifo existe.
+# Chave: o nome do recurso no PDF (que já é único por arquivo).
+_glyph_font_cache: dict = {}
+
+
+def _avisar_glifos_faltando(font_name: str, family: str, texto: str,
+                            font_bytes: bytes = None) -> None:
+    """Grita no log quando a fonte não tem um caractere do texto.
+
+    ## Por que isto existe
+
+    O `insert_text` do PyMuPDF não empresta glifo de outra fonte: o caractere
+    que falta sai como um vão, e o PDF fica pronto sem erro nenhum. O navegador
+    faz o contrário — troca de fonte só naquele caractere, em silêncio — então a
+    tela mostra o nome inteiro e o papel sai furado.
+
+    Foi assim que o pedido 20495 imprimiu 185 credenciais em 11/08/2026: a
+    Gotham Book não tem `ř`, `ě` nem `č`, "Ondřej Pek" virou "Ond ej Pek", e
+    dois modelos voltaram REPROVADA_CLIENTE. O painel agora tranca o modelo
+    antes disso (`fonteSemGlifoDoModelo`), mas este aviso é a última defesa:
+    pega o caminho que não passa pela tela — hotfolder, reimpressão, API.
+
+    Nunca levanta e nunca muda o desenho: um erro aqui pararia uma impressão que
+    ia sair de qualquer jeito.
+    """
+    try:
+        # ── DOIS CAMINHOS, PORQUE SAO DOIS DEFEITOS DIFERENTES ──
+        #
+        # Fonte EMBUTIDA (temos os bytes): o `has_glyph` do arquivo e a verdade,
+        # e o que falta sai como VAO. Foi o que se mediu na Gotham Book:
+        # "Ondřej Pek" volta do PDF como "Ond ej Pek".
+        #
+        # Base-14 (`helv`, `times`, `cour`): NAO da para perguntar ao
+        # `fitz.Font(fontname=...)`. Nesta versao do PyMuPDF ele devolve uma
+        # fonte completa, que tem o `ř` — mas o que vai para o PDF e a Base-14
+        # com encoding WinAnsi, e ali o `ř` nem sequer existe como byte. Medido:
+        # `insert_text` com `helv` grava "Ond·ej Pek". Nao e um vao, e um
+        # caractere TROCADO, que e pior: o operador nem estranha um buraco.
+        # A pergunta certa, entao, e se o caractere cabe no cp1252.
+        if font_bytes:
+            fonte = _glyph_font_cache.get(font_name)
+            if fonte is None:
+                fonte = fitz.Font(fontbuffer=font_bytes)
+                _glyph_font_cache[font_name] = fonte
+            desenha = lambda c: bool(fonte.has_glyph(ord(c)))
+            estrago = "sai como VAO no papel"
+        else:
+            def desenha(c):
+                try:
+                    c.encode("cp1252")
+                    return True
+                except (UnicodeEncodeError, LookupError):
+                    return False
+            estrago = "sai TROCADO por outro no papel (fonte embutida do PDF, WinAnsi)"
+
+        # Caractere de controle nao e desenhado por fonte nenhuma; acusar um
+        # byte perdido no CSV seria ruido no log que ninguem mais leria.
+        def _controle(c):
+            n = ord(c)
+            return n < 0x20 or n == 0x7F or 0x80 <= n <= 0x9F
+
+        faltam = []
+        for ch in str(texto or ""):
+            if _controle(ch) or ch in faltam:
+                continue
+            if not desenha(ch):
+                faltam.append(ch)
+        for ch in faltam:
+            chave = "glifo:%s:%s" % (font_name, ch)
+            if chave in _font_log_cache:
+                continue
+            _font_log_cache.add(chave)
+            print("[engine] ATENCAO: a fonte '%s' nao desenha '%s' (U+%04X) — ele %s. Texto: %r"
+                  % (family or font_name, ch, ord(ch), estrago, str(texto)[:60]))
+    except Exception:
+        pass
+
 
 def _nome_de_fonte_para_pdf(familia: str, chave_unica) -> str:
     """O nome com que a fonte entra no PDF — que não é o nome da família.
@@ -1425,8 +1502,23 @@ class ImpositionEngine:
                 font_url = el.get("arquivo_url") or el.get("font_url")
                 if font_url:
                     try:
+                        import hashlib
                         import urllib.request, re
-                        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', family) + ".ttf"
+                        # O NOME DO CACHE CARREGA A URL, e não só a família.
+                        #
+                        # Era `<família>.ttf` puro, e o `if not os.path.exists`
+                        # abaixo nunca rebaixava: trocar o arquivo da fonte no
+                        # catálogo — que é justamente o conserto de "esta fonte
+                        # não tem o `ř`" — não chegava a nenhuma estação que já
+                        # tivesse baixado a versão velha. Cada máquina ficaria
+                        # num estado diferente, em silêncio, e o operador não
+                        # teria como saber por que a correção não pegou.
+                        #
+                        # Com a URL no nome, arquivo novo é caminho novo: baixa
+                        # sozinho. O antigo fica no disco sem atrapalhar, e a
+                        # `.\ferramentas\faxina.ps1` limpa quando quiser.
+                        _sufixo = hashlib.md5(font_url.encode("utf-8")).hexdigest()[:8]
+                        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', family) + "_" + _sufixo + ".ttf"
                         # Em ambientes serverless (Vercel), o FS raiz é read-only; usar /tmp
                         _base_dir = os.path.dirname(os.path.abspath(__file__))
                         fonts_dir = os.path.join(_base_dir, "fonts")
@@ -1488,6 +1580,15 @@ class ImpositionEngine:
                         # Arquivo nao existe mais — usar fonte padrao
                         insert_kwargs["fontname"] = "hebo" if is_bold else "helv"
                         font_file = None
+
+            # A ultima defesa contra o nome furado. Fica FORA do try acima de
+            # proposito: o que ele protege e o registro da fonte, e um aviso
+            # nunca pode ser o motivo de cair no fallback. Vale tambem para o
+            # ramo Base-14 (`font_file` nulo), onde `helv` e `times` escrevem em
+            # WinAnsi e comem tudo o que estiver fora do cp1252.
+            _avisar_glifos_faltando(
+                insert_kwargs["fontname"], family, val_str,
+                self._font_buffer_cache.get(font_file) if font_file else None)
 
             # ── Largura maxima do elemento (max_width_mm) ─────────────────
             # Ajusta ANTES de line_height/baseline: shrink muda o corpo,

@@ -161,6 +161,12 @@ PAINEL_ARQUIVOS = [
     "qr-ideal-hash.js",
     "fonte-canvas.js",
     "fonte-nome.js",
+    # Quais caracteres a fonte REALMENTE desenha (25/08/2026). As tres paginas
+    # ja tem a tag <script> apontando para ele. Fora desta lista, a estacao as
+    # serviria pedindo um script que da 404 -- e, sem `mapaDeCoberturas`, a
+    # trava do nome furado deixaria de existir EM SILENCIO: nenhum erro na
+    # tela, so o modelo virando PRONTO como antes e o `ř` sumindo no papel.
+    "fonte-glifos.js",
     "csv-editor.js",
     "texto-ajuste.js",
     "foto-lib.js",
