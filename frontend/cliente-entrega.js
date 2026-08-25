@@ -97,34 +97,103 @@ function cartaoDeChegada(dados) {
  * Toda trava desta casa mostra a saída na própria tela; um aviso que manda
  * procurar ajuda em outro lugar é a mesma coisa sem a saída.
  *
- * O número vem do cadastro da empresa (`grafica.telefone`), e não fica escrito
- * no código: gráfica que troca de telefone não pode depender de uma publicação
- * do site para o botão voltar a funcionar. Sem número, o botão NÃO nasce -- um
- * botão de contato que não contata é pior do que aviso nenhum.
- *
- * Celular vira conversa no WhatsApp; fixo vira ligação. A diferença sai do
- * próprio número (11 dígitos com 9 na frente é celular), e o rótulo diz qual
- * dos dois vai acontecer, para o toque não surpreender ninguém.
+ * Desde 25/08/2026 ele é SEMPRE WhatsApp, e sempre existe. Até então saía de
+ * `grafica.telefone`: sumia quando o cadastro não tinha número, e num fixo virava
+ * "Ligar para o meu atendimento" — um `tel:` disparado de dentro do navegador
+ * embutido do WhatsApp, que é justamente por onde este link é aberto.
  */
-function botaoDeAjuda(dados) {
-    const grafica = (dados && dados.grafica) || null;
-    const numero = grafica && grafica.telefone ? String(grafica.telefone) : '';
-    const digitos = numero.replace(/\D/g, '');
-    if (digitos.length < 10) return '';
+/**
+ * O WhatsApp do atendimento — um número só, com o recado já escrito.
+ *
+ * Endereços mandados pelo usuário em 25/08/2026. Os cinco links dele apontam
+ * para o MESMO telefone e diferem só no texto: quem separa um atendente do
+ * outro é o recado que já vai escrito, e não a linha.
+ *
+ * O número fica literal aqui, e não sai de `grafica.telefone`, porque são
+ * telefones diferentes: o do cadastro da empresa é o fixo (5132403363), que não
+ * tem WhatsApp. Trocar este exige uma publicação — é o preço de ele não estar no
+ * cadastro, e está anotado para quem precisar mexer.
+ */
+const WHATSAPP_DO_ATENDIMENTO = '555195343478';
 
-    const comPais = digitos.length <= 11 ? '55' + digitos : digitos;
-    const ehCelular = digitos.length === 11 && digitos.charAt(2) === '9';
+/**
+ * Os atendentes que têm recado próprio.
+ *
+ * São os quatro que o usuário nomeou, e são também os quatro maiores do banco:
+ * medidos em 25/08/2026, respondem por 3.700 dos 3.981 pedidos dos últimos 90
+ * dias. Os demais nomes que aparecem por lá — Lisiane Colbeich, Everton Dev,
+ * Edison Jr, Everton Farias — caem no recado genérico, que é justamente o link
+ * "Outros" que ele mandou.
+ *
+ * A grafia aqui é a do BANCO (`propostas.vendedor`), conferida antes de
+ * escrever. O casamento ignora acento e caixa, para um "ANDRE TONIAZZO" digitado
+ * de outro jeito continuar achando o dono.
+ */
+const ATENDENTES_COM_RECADO_PROPRIO = [
+    'André Toniazzo',
+    'Emily Boeira',
+    'Alexandre Almeida',
+    'Fábio Almeida'
+];
+
+/** Sem acento, sem espaço sobrando e em minúscula — para comparar nome. */
+function chaveDoAtendente(nome) {
+    return String(nome || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+/**
+ * O endereço do WhatsApp para falar com o atendente deste pedido.
+ *
+ * Conhecendo o nome, o recado já vai com ele: *"Olá André Toniazzo, preciso de
+ * atendimento..."*. É o que faz a mensagem chegar à pessoa certa num número
+ * único — quem lê do outro lado sabe para quem encaminhar sem perguntar.
+ *
+ * Nome desconhecido, vazio ou ausente cai no recado genérico, que diz de onde a
+ * pessoa veio: *"Olá, estou vindo do site da Ingresso Ideal..."*. É o link
+ * "Outros" do usuário, e é também a rede de segurança para o atendente novo que
+ * o ERP cadastrar amanhã — ninguém fica sem botão por não estar na lista.
+ */
+function linkDoAtendimento(vendedor) {
+    const chave = chaveDoAtendente(vendedor);
+    const dono = ATENDENTES_COM_RECADO_PROPRIO
+        .find(nome => chaveDoAtendente(nome) === chave);
+
+    const recado = dono
+        ? 'Olá ' + dono + ', preciso de atendimento...'
+        : 'Olá, estou vindo do site da Ingresso Ideal, aguardo atendimento... 😀';
+
+    return 'https://api.whatsapp.com/send?phone=' + WHATSAPP_DO_ATENDIMENTO
+         + '&text=' + encodeURIComponent(recado);
+}
+
+function botaoDeAjuda(dados) {
     const pedido = (dados && dados.pedido) || {};
 
-    if (ehCelular) {
-        const recado = 'Olá! Falo sobre o pedido nº ' + (pedido.numero || '') + '.';
-        return '<a class="portal-ajuda" href="https://wa.me/' + comPais
-             + '?text=' + encodeURIComponent(recado) + '" target="_blank" rel="noopener noreferrer">'
-             + iconeDaEntrega('chat', 18) + 'Falar com o meu atendimento</a>';
-    }
-
-    return '<a class="portal-ajuda" href="tel:+' + comPais + '">'
-         + iconeDaEntrega('chat', 18) + 'Ligar para o meu atendimento</a>';
+    // O botão existe SEMPRE, desde 25/08/2026.
+    //
+    // Antes ele dependia de `grafica.telefone` e sumia sem número — e num fixo
+    // virava "Ligar para o meu atendimento", um `tel:` que no navegador embutido
+    // do WhatsApp, que é por onde este link é aberto, é o pior lugar possível
+    // para mandar alguém discar. Agora é sempre conversa, e o recado já vai
+    // escrito.
+    // O ÍCONE: por enquanto o `chat` do nosso traço.
+    //
+    // O usuário pediu a LOGO do WhatsApp. Marca de terceiro, neste projeto, é
+    // arquivo -- é assim que estão SEDEX, VEPPO, São Miguel e Motoboy, todas em
+    // `app-imagens` e listadas no `LOGO_DO_FRETE`. Procurei no bucket em
+    // 25/08/2026: não há nenhuma imagem do WhatsApp lá.
+    //
+    // Desenhar a marca à mão aqui seria fazer o que este projeto não faz com
+    // marca de ninguém — e o traço monocromático deste conjunto de ícones não
+    // reproduz um logo colorido de qualquer modo. Assim que o arquivo estiver no
+    // bucket, é trocar esta linha por um `<img>`, como faz o `logoDoFreteHtml`.
+    return '<a class="portal-ajuda" href="' + escapeHtml(linkDoAtendimento(pedido.vendedor)) + '" '
+         + 'target="_blank" rel="noopener noreferrer">'
+         + iconeDaEntrega('chat', 18) + 'Falar com meu Atendimento</a>';
 }
 
 /**

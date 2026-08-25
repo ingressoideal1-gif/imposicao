@@ -310,6 +310,15 @@ BEGIN
             'modalidade_frete', v_prop.modalidade_frete,
             'texto_whatsapp',   v_prop.texto_whatsapp,
             'volume',           v_prop.volume,
+            -- O NOME DO ATENDENTE, para o botão de ajuda saber com quem o
+            -- cliente fala. Pedido do usuário em 25/08/2026: cada atendente tem
+            -- o seu link de WhatsApp, e o recado já vai escrito com o nome dele.
+            --
+            -- É o nome, e não um id: o botão casa por nome porque é assim que o
+            -- ERP grava (`propostas.vendedor` é texto). Quem não estiver na
+            -- lista do `botaoDeAjuda` cai no recado genérico -- e é o que
+            -- acontece hoje com 5 dos 10 nomes que aparecem no banco.
+            'vendedor',         NULLIF(btrim(COALESCE(v_prop.vendedor, '')), ''),
             'id_cliente',       COALESCE(v_prop.id_faturado, v_prop.id_cliente)
         ),
         -- Cinco campos, escolhidos um a um: são os cinco que a aba de

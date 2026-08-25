@@ -4,6 +4,53 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — "Falar com meu Atendimento": cada atendente com o seu WhatsApp
+
+Pedido do usuário: trocar *"Ligar para o meu atendimento"* por *"Falar com meu Atendimento"*, e
+dar a cada atendente o seu link — ele ditou os cinco endereços.
+
+### O que os cinco links têm em comum
+
+**Todos apontam para o mesmo telefone**, `555195343478`. O que separa um atendente do outro é o
+recado que já vai escrito na conversa: *"Olá André Toniazzo, preciso de atendimento..."*. Por
+isso o código guarda **um número só** e monta o texto — cinco linhas seriam cinco coisas a
+manter, e o telefone mudaria em cinco lugares.
+
+Conferido antes de escrever: reconstruindo com `encodeURIComponent`, os cinco endereços batem
+**byte a byte** com os que ele mandou. O harness compara contra os literais.
+
+### De onde sai o nome
+
+De `propostas.vendedor`, que a `link_cliente_pedido` passou a devolver. Os quatro nomeados são
+também os quatro maiores do banco — 3.700 dos 3.981 pedidos dos últimos 90 dias. Os outros
+nomes que existem por lá (Lisiane Colbeich, Everton Dev, Edison Jr, Everton Farias) caem no
+recado genérico, que é o link "Outros" dele — e é a rede de segurança para o atendente novo
+que o ERP cadastrar amanhã: ninguém fica sem botão por não estar na lista.
+
+O casamento **ignora acento e caixa**: `propostas.vendedor` é texto livre, e um acento perdido
+não pode tirar o cliente do atendente dele.
+
+### O botão agora existe sempre
+
+Antes ele saía de `grafica.telefone`: sumia quando o cadastro não tinha número, e num fixo
+virava um `tel:` — disparado de dentro do navegador embutido do WhatsApp, que é justamente por
+onde este link é aberto. Agora é sempre conversa, com o recado pronto.
+
+### O que ficou pendente: a logo
+
+O usuário pediu a **logo do WhatsApp** no botão. Neste projeto, marca de terceiro é **arquivo**
+— é assim que estão SEDEX, VEPPO, São Miguel e Motoboy, todas em `app-imagens`. Procurei no
+bucket: não há nenhuma imagem do WhatsApp lá.
+
+Desenhar a marca à mão seria fazer com a de outro o que este projeto não faz com a da casa, e o
+traço monocromático do conjunto de ícones não reproduz um logo colorido de qualquer forma. O
+botão está no ar com o ícone de conversa do nosso traço; assim que o arquivo estiver no bucket,
+é uma linha para trocar.
+
+Coberto por `tests/test_whatsapp_do_atendimento.py` e 26 conferências no harness.
+
+---
+
 ## [2026-08-25] — A aba Nota mostra o endereço do CNPJ que ela pede para conferir
 
 Pedido do usuário: *"no link onde mostra e pede confirmação dos dados da nota fiscal, deve
