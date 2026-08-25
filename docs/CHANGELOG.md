@@ -36,16 +36,20 @@ Antes ele saía de `grafica.telefone`: sumia quando o cadastro não tinha númer
 virava um `tel:` — disparado de dentro do navegador embutido do WhatsApp, que é justamente por
 onde este link é aberto. Agora é sempre conversa, com o recado pronto.
 
-### O que ficou pendente: a logo
+### A logo
 
-O usuário pediu a **logo do WhatsApp** no botão. Neste projeto, marca de terceiro é **arquivo**
-— é assim que estão SEDEX, VEPPO, São Miguel e Motoboy, todas em `app-imagens`. Procurei no
-bucket: não há nenhuma imagem do WhatsApp lá.
+Neste projeto, marca de terceiro é **arquivo** — é assim que estão SEDEX, VEPPO, São Miguel e
+Motoboy, todas em `app-imagens` (ver `LOGO_DO_FRETE`). Desenhá-la à mão seria fazer com a de
+outro o que este projeto não faz com a da casa, e o traço monocromático do conjunto de ícones
+não reproduz um logo colorido.
 
-Desenhar a marca à mão seria fazer com a de outro o que este projeto não faz com a da casa, e o
-traço monocromático do conjunto de ícones não reproduz um logo colorido de qualquer forma. O
-botão está no ar com o ícone de conversa do nosso traço; assim que o arquivo estiver no bucket,
-é uma linha para trocar.
+Procurei no bucket e não havia nenhuma; **o usuário mandou o arquivo** e ele entrou como
+`<img>` de 20×20, PNG com fundo transparente, direto sobre o botão.
+
+O `onerror` **remove** a imagem em vez de trocá-la por texto: o rótulo ao lado já diz o que o
+botão é, e um segundo "WhatsApp" escrito quando a imagem não carrega seria pior do que botão
+sem logo. É a mesma decisão da logo da transportadora, na aba de Envio. E ela vai com `alt=""`
+e `aria-hidden`: para quem usa leitor de tela, ouvir o nome duas vezes é ruído.
 
 Coberto por `tests/test_whatsapp_do_atendimento.py` e 26 conferências no harness.
 

@@ -117,6 +117,19 @@ function cartaoDeChegada(dados) {
 const WHATSAPP_DO_ATENDIMENTO = '555195343478';
 
 /**
+ * A logo do WhatsApp, mandada pelo usuário em 25/08/2026.
+ *
+ * Arquivo, e não desenho: é a mesma regra das transportadoras — SEDEX, VEPPO,
+ * São Miguel e Motoboy também moram em `app-imagens` e entram como `<img>` (ver
+ * `logoDoFreteHtml`). Marca de terceiro não se reconstrói à mão aqui.
+ *
+ * PNG de 157×159 com fundo transparente, então ela vai direto sobre o botão,
+ * sem cartão branco atrás.
+ */
+const LOGO_DO_WHATSAPP =
+    'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png';
+
+/**
  * Os atendentes que têm recado próprio.
  *
  * São os quatro que o usuário nomeou, e são também os quatro maiores do banco:
@@ -180,20 +193,21 @@ function botaoDeAjuda(dados) {
     // do WhatsApp, que é por onde este link é aberto, é o pior lugar possível
     // para mandar alguém discar. Agora é sempre conversa, e o recado já vai
     // escrito.
-    // O ÍCONE: por enquanto o `chat` do nosso traço.
+    // A LOGO, e não um ícone do nosso traço: quem abre este link precisa
+    // reconhecer para onde o botão leva antes de ler o rótulo, e a marca do
+    // WhatsApp faz isso num relance que nenhum desenho nosso faria.
     //
-    // O usuário pediu a LOGO do WhatsApp. Marca de terceiro, neste projeto, é
-    // arquivo -- é assim que estão SEDEX, VEPPO, São Miguel e Motoboy, todas em
-    // `app-imagens` e listadas no `LOGO_DO_FRETE`. Procurei no bucket em
-    // 25/08/2026: não há nenhuma imagem do WhatsApp lá.
-    //
-    // Desenhar a marca à mão aqui seria fazer o que este projeto não faz com
-    // marca de ninguém — e o traço monocromático deste conjunto de ícones não
-    // reproduz um logo colorido de qualquer modo. Assim que o arquivo estiver no
-    // bucket, é trocar esta linha por um `<img>`, como faz o `logoDoFreteHtml`.
+    // O `onerror` REMOVE a imagem em vez de trocá-la por texto — o rótulo ao
+    // lado já diz o que o botão é, e um segundo "WhatsApp" escrito quando a
+    // imagem não carrega seria pior do que botão sem logo. Mesma decisão da
+    // logo da transportadora, na aba de Envio.
+    const logo = '<img src="' + escapeHtml(LOGO_DO_WHATSAPP) + '" alt="" aria-hidden="true" '
+        + 'style="height: 20px; width: 20px; object-fit: contain; flex-shrink: 0;" '
+        + 'onerror="this.remove();">';
+
     return '<a class="portal-ajuda" href="' + escapeHtml(linkDoAtendimento(pedido.vendedor)) + '" '
          + 'target="_blank" rel="noopener noreferrer">'
-         + iconeDaEntrega('chat', 18) + 'Falar com meu Atendimento</a>';
+         + logo + 'Falar com meu Atendimento</a>';
 }
 
 /**

@@ -138,8 +138,20 @@ const logoDoFreteHtml = new Function(
     // painel apareceria duplicado.
     ok(/onerror="this\.remove\(\);"/.test(ENTREGA),
         'e quando a imagem nao carrega, ela some em vez de virar nome repetido');
-    ok(ENTREGA.indexOf('supabase.co/storage') < 0,
-        'o endereco das logos nao foi copiado para ca');
+    // A regra e nao COPIAR os enderecos das transportadoras -- quem sabe onde
+    // cada logo mora e o `LOGO_DO_FRETE`, e ter a mesma URL em dois arquivos e
+    // ter duas para trocar no dia em que a imagem mudar.
+    //
+    // A checagem compara os enderecos DE VERDADE, um a um, e nao qualquer coisa
+    // que contenha `supabase.co/storage`: desde 25/08/2026 a aba tem tambem a
+    // logo do WhatsApp, no botao de atendimento, que nao e transportadora
+    // nenhuma e mora aqui por direito.
+    const mapa = new Function(
+        extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\nreturn LOGO_DO_FRETE;')();
+    Object.values(mapa).forEach(url => {
+        ok(ENTREGA.indexOf(url) < 0,
+            'o endereco de uma logo de transportadora nao foi copiado para ca', url);
+    });
 })();
 
 (function asDuasPaginasCarregamOArquivo() {

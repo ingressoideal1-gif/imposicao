@@ -149,6 +149,23 @@ const DOS_OUTROS =
         'abre fora, sem dar acesso a esta pagina');
 })();
 
+(function aLogoEArquivoENaoDesenho() {
+    // Marca de terceiro neste projeto e ARQUIVO -- e assim que estao SEDEX,
+    // VEPPO, Sao Miguel e Motoboy, todas em `app-imagens` (ver `LOGO_DO_FRETE`).
+    // O usuario mandou a do WhatsApp em 25/08/2026.
+    const botao = semComentarios(recortar('botaoDeAjuda'));
+    ok(/LOGO_DO_WHATSAPP/.test(botao), 'o botao usa a logo, e nao um icone do nosso traco');
+    ok(/app-imagens\/1787694554509_Whatsapp\.png/.test(ENTREGA),
+        'o arquivo e o que o usuario mandou');
+    ok(!/iconeDaEntrega\('chat'/.test(botao), 'o icone de conversa saiu do botao');
+
+    // Sem isto, uma falha de rede deixaria um quadrado de imagem quebrada ao
+    // lado do rotulo. O rotulo ja diz o que o botao e.
+    ok(/onerror="this\.remove\(\);"/.test(botao), 'imagem que nao carrega some, em vez de quebrar');
+    ok(/alt=""/.test(botao) && /aria-hidden="true"/.test(botao),
+        'a logo e decorativa: quem le a tela ouve o rotulo, e nao a imagem duas vezes');
+})();
+
 (function oNomeDoAtendenteVemDoBANCO() {
     // Sem isto o botao nao teria como saber com quem o cliente fala.
     ok(/'vendedor',\s*NULLIF\(btrim\(COALESCE\(v_prop\.vendedor/.test(SQL),
