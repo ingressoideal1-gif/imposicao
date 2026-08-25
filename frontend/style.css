@@ -3348,6 +3348,11 @@ input[type=number] {
     padding: 0;
     background: var(--bg);
     border-radius: 10px;
+    /* `column` porque desde 25/08/2026 a barra pode ter DUAS coisas: o recado de
+       quantos modelos faltam aprovar, e o botão. Em linha, num monitor largo, o
+       recado ficaria ao LADO do botão em vez de acima dele. */
+    flex-direction: column;
+    gap: 0;
 }
 
 /* ─── O cabeçalho ─────────────────────────────────────────────────────────── */

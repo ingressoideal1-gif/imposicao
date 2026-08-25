@@ -4,6 +4,51 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — Link do cliente: a aba da arte diz o que falta, e vira sozinha
+
+Conferência do fluxo de aprovação, dirigido de ponta a ponta num iPhone simulado nos
+pedidos 21114 (3 modelos) e 21143 (7 modelos), com as gravações interceptadas — nada foi
+escrito no banco (conferido depois: os dois seguem com zero modelos aprovados).
+
+**O que o fluxo fazia:** marcar uma arte como aprovada não mudava de página. Só acendia o
+botão FINALIZAR no rodapé, e apenas quando o **último** modelo era aprovado. Duas coisas
+saíram daí.
+
+**1. A barra não dizia quantos modelos faltavam.** Com 4 de 7 aprovados o cliente
+encontrava um botão cinza morto, sem uma palavra explicando por quê — medido na tela:
+nenhum contador na aba, e o único texto da barra era o rótulo do próprio botão. Ele não
+tinha como saber se faltava rolar de volta ou se o sistema tinha travado. As abas de
+Entrega e Nota sempre disseram o que falta; a da arte era a única trava do portal sem a
+saída escrita ao lado.
+
+Agora: *"Faltam **3 modelos** para aprovar. Role a página e toque em APROVAR ou ALTERAR em
+cada um."*, com singular e plural certos, sumindo quando chega a zero.
+
+**2. Aprovar a última leva o cliente para a aba de Entrega**, sem ele ter de achar e tocar
+o botão FINALIZAR para dizer de novo o que acabou de dizer modelo a modelo. A barra mostra
+*"✅ Todas as artes aprovadas. Levando você para os dados de entrega..."*, espera 1,2 s e
+chama o mesmo `clienteFinalizarFluxo('APROVAR_TUDO')` de sempre.
+
+> [!CAUTION]
+> O salto nasce de um **clique**, e nunca da carga da página. Existem pedidos com todos os
+> modelos já em `APROVADA_CLIENTE` e status ainda em `Aguard. Aprovação` — o 21112 é um.
+> Decidido pelo estado, esse cliente abriria o link e seria empurrado para a Entrega antes
+> de ver a arte, gravando aprovação e mensagem no chat do parceiro sem ter tocado em nada.
+> Conferido: abrir esse link não dispara escrita nenhuma.
+
+Dois detalhes que só aparecem na tela: a trava do salto é uma **bandeira**
+(`state.arteSeguindoSozinho`), e não uma corrida com o relógio — o
+`atualizarBarraFinalCliente` roda 50 ms depois e faria o botão verde piscar no meio do
+caminho; e na última arte o toast "Item aprovado!" cede lugar ao aviso, porque ele nasce
+no rodapé e tapava a frase.
+
+Quem marca um modelo como ALTERAR continua sem salto: a barra vira o botão vermelho
+**SOLICITAR ALTERAÇÃO DE ARTE**, como antes.
+
+Coberto por 15 conferências novas em `tests/portal_abas_harness.js` (104 no total).
+
+---
+
 ## [2026-08-25] — Lista de Arte: a coluna Pagamento, com o carimbo PAGO
 
 Pedido do usuário: uma coluna entre **Status** e **Itens**, com o carimbo PAGO nos pedidos

@@ -363,6 +363,63 @@ preparação" — nunca numa tela em branco.
 
 ---
 
+## O que o cliente vê enquanto aprova (25/08/2026)
+
+Conferido no navegador, num iPhone simulado, dirigindo o fluxo de ponta a ponta
+nos pedidos 21114 (3 modelos) e 21143 (7 modelos).
+
+| Estado | Barra do rodapé |
+|---|---|
+| Nenhum aprovado | *Faltam **3 modelos** para aprovar. Role a página e toque em APROVAR ou ALTERAR em cada um.* + botão cinza |
+| Alguns aprovados | o mesmo, com a conta atualizada (*Falta **1 modelo***) |
+| **Todos aprovados** | *✅ **Todas as artes aprovadas.** Levando você para os dados de entrega...* e a página **vira sozinha** |
+| Algum em ALTERAR | botão vermelho **⚠️ SOLICITAR ALTERAÇÃO DE ARTE** — sem salto |
+
+### O contador
+
+Até 25/08/2026 não existia. O cliente de um pedido de sete modelos aprovava
+quatro, rolava até o fim e encontrava um botão cinza morto, sem uma palavra
+explicando por quê — medido na tela: nenhum contador na aba, e o único texto da
+barra era o rótulo do próprio botão. Ele não tinha como saber se faltava rolar de
+volta ou se o sistema tinha travado.
+
+As abas de Entrega e Nota sempre disseram o que falta ("Para finalizar, falta:
+..."). A da arte era a única trava do portal sem a saída escrita ao lado.
+
+### O salto automático
+
+Pedido do usuário no mesmo dia: *"ao aprovar todas, deve automaticamente passar a
+página seguinte"*. Quem faz é `seguirSozinhoSeAprovouTudo(osId)`, no `cliente.js`.
+Ela mostra o aviso, espera 1,2 s e chama o mesmo `clienteFinalizarFluxo('APROVAR_TUDO')`
+que o botão sempre chamou.
+
+> [!CAUTION]
+> **O salto nasce de um CLIQUE, e nunca da carga da página.** A função é chamada
+> de dentro do `decisionAmostraItem`, no ramo do cliente — não do
+> `atualizarBarraFinalCliente`, que também roda ao abrir.
+>
+> Existem pedidos com todos os modelos já em `APROVADA_CLIENTE` e status ainda em
+> `Aguard. Aprovação` — o 21112 é um deles. Se o avanço fosse decidido pelo
+> **estado**, esse cliente abriria o link e seria empurrado para a aba de Entrega
+> antes de ver a arte, e o pedido gravaria aprovação e mensagem no chat do
+> parceiro sem ele ter tocado em nada. Conferido: abrir esse link não dispara
+> escrita nenhuma.
+
+Dois detalhes que só aparecem na tela:
+
+- **A trava é uma bandeira (`state.arteSeguindoSozinho`), não uma corrida com o
+  relógio.** O `renderAmostrasOSItens` agenda o `atualizarBarraFinalCliente` para
+  dali a 50 ms; sem a bandeira, o botão verde FINALIZAR piscaria por um segundo
+  no meio do caminho — justamente o botão que este recurso existe para o cliente
+  não precisar procurar.
+- **Na última arte o toast "Item aprovado!" some.** Ele nasce no rodapé, onde a
+  barra fica, e tapava a frase que explica para onde a tela está indo.
+
+A pausa de 1,2 s é de propósito: o card acabou de ficar verde, e trocar a tela no
+mesmo instante faria o cliente perder de vista a própria ação.
+
+---
+
 ## Fluxo Detalhado — Passo a Passo
 
 ### 1. Preparação pelo Operador (Painel Interno)

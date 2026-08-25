@@ -205,6 +205,81 @@ const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
         'o botao de finalizar nao reaparece embaixo de arte ja aprovada');
 })();
 
+(function aBarraDizQuantosModelosFaltam() {
+    // Ate 25/08/2026 o cliente de um pedido de sete modelos aprovava quatro,
+    // rolava ate o fim e encontrava um botao cinza morto, sem uma palavra
+    // explicando por que. Conferido no navegador no pedido 21143: nenhum
+    // contador na aba, e o unico texto da barra era o rotulo do botao.
+    //
+    // As abas de Entrega e Nota sempre disseram o que falta. A da arte era a
+    // unica trava do portal sem a saida escrita ao lado.
+    const barra = extrairFuncao(CLIENTE, 'atualizarBarraFinalCliente');
+    const desabilitado = barra.slice(barra.lastIndexOf('} else {'));
+
+    ok(/amostra_status !== 'APROVADA'/.test(desabilitado),
+        'a barra conta quantos modelos ainda nao foram aprovados');
+    ok(/Faltam?\s?</.test(desabilitado) || /Falta <b>1 modelo/.test(desabilitado),
+        'e diz isso em texto, acima do botao');
+    ok(/faltam === 1/.test(desabilitado),
+        'com singular e plural: "Falta 1 modelo" e "Faltam 3 modelos"');
+    ok(desabilitado.indexOf('APROVAR') > 0 && desabilitado.indexOf('ALTERAR') > 0,
+        'e diz o que fazer para sair da trava, que e a regra desta casa');
+
+    // A barra empilha o recado ACIMA do botao, e nao ao lado dele num monitor.
+    ok(/\.cliente-page \.cliente-actions \{[^}]*flex-direction: column/.test(CSS),
+        'a barra empilha em coluna');
+})();
+
+(function aprovarAUltimaLEVAOClienteParaAEntrega() {
+    // Pedido do usuario em 25/08/2026: "ao aprovar todas, deve automaticamente
+    // passar a pagina seguinte".
+    const seguir = extrairFuncao(CLIENTE, 'seguirSozinhoSeAprovouTudo', true);
+    ok(/every\(i => i\.amostra_status === 'APROVADA'\)/.test(seguir),
+        'so segue quando TODAS estao aprovadas');
+    ok(/arteSomenteLeitura === true\) return/.test(seguir),
+        'e nao refaz nada num pedido que ja foi finalizado');
+    ok(/clienteFinalizarFluxo\('APROVAR_TUDO'\)/.test(seguir),
+        'segue pelo mesmo caminho do botao FINALIZAR');
+    ok(/Todas as artes aprovadas/.test(seguir),
+        'anunciando o que vai fazer: o que o sistema faz sozinho se explica');
+    ok(/setTimeout\(r, \d{3,}\)/.test(seguir),
+        'com uma pausa, para o cliente ver o proprio toque antes de a tela trocar');
+
+    // A BANDEIRA, e nao uma corrida com o relogio: o `renderAmostrasOSItens`
+    // agenda o `atualizarBarraFinalCliente` para dali a 50ms, e sem ela o botao
+    // verde FINALIZAR piscaria por um segundo no meio do caminho.
+    ok(/arteSeguindoSozinho = true/.test(seguir), 'levanta a bandeira antes de esperar');
+    const barra = extrairFuncao(CLIENTE, 'atualizarBarraFinalCliente');
+    ok(/arteSeguindoSozinho === true\) return/.test(barra),
+        'e a barra respeita a bandeira em vez de reescrever por cima');
+})();
+
+(function oSaltoNasceDeUmCLIQUE_eNuncaDaCargaDaPagina() {
+    // Existem pedidos com todos os modelos ja em APROVADA_CLIENTE e status
+    // ainda em `Aguard. Aprovacao` -- o 21112 e um. Se o avanco fosse decidido
+    // pelo ESTADO, esse cliente abriria o link e seria empurrado para a aba de
+    // Entrega antes de ver a arte, gravando aprovacao e mensagem no chat do
+    // parceiro sem ter tocado em nada.
+    const decisao = extrairFuncao(CLIENTE, 'decisionAmostraItem', true);
+    ok(/seguirSozinhoSeAprovouTudo\(osId\)/.test(decisao),
+        'quem chama o salto e a decisao do item');
+
+    const barra = extrairFuncao(CLIENTE, 'atualizarBarraFinalCliente');
+    ok(barra.indexOf('seguirSozinhoSeAprovouTudo') < 0,
+        'e NAO a barra, que tambem roda ao abrir a pagina');
+    const init = extrairFuncao(CLIENTE, 'initClientePage', true);
+    ok(init.indexOf('seguirSozinhoSeAprovouTudo') < 0, 'nem a carga da pagina');
+})();
+
+(function oToastNaoTapaOAvisoDoSalto() {
+    // O toast nasce no rodape, exatamente onde a barra fica.
+    const decisao = extrairFuncao(CLIENTE, 'decisionAmostraItem', true);
+    ok(/vaiSeguirSozinho \? '' : 'Item aprovado!'/.test(decisao),
+        'na ultima arte o toast de item cede lugar ao aviso grande');
+    ok(/if \(msg\) toast\(msg, toastType\)/.test(decisao),
+        'e um toast vazio nao vira um balao em branco');
+})();
+
 (function osBotoesDeDecisaoSAEMDoHtml() {
     // NAO com o atributo `hidden`, que era como estava ate 25/08/2026.
     //

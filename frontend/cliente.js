@@ -1702,6 +1702,11 @@ function atualizarBarraFinalCliente(osId) {
     const containerActions = document.querySelector('.cliente-actions');
     if (!containerActions) return;
 
+    // O portal está seguindo sozinho para a aba de Entrega (o cliente acabou de
+    // aprovar a última arte). A barra já está mostrando esse aviso, e reescrevê-la
+    // aqui faria o botão FINALIZAR piscar no meio do caminho.
+    if (state.arteSeguindoSozinho === true) return;
+
     // Pedido já decidido: a aba da arte agora continua existindo depois da
     // aprovação, e sem esta guarda o botão de finalizar reapareceria embaixo
     // das artes que o cliente só voltou para conferir.
@@ -1736,9 +1741,29 @@ function atualizarBarraFinalCliente(osId) {
             </button>
         `;
     } else {
-        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo.
+        // Inativo, cinza desabilitado — E DIZENDO QUANTOS FALTAM.
+        //
+        // Sem essa linha, o cliente de um pedido de sete modelos aprovava
+        // quatro, rolava até o fim e encontrava um botão cinza morto, sem uma
+        // palavra explicando por quê. Conferido no navegador em 25/08/2026, no
+        // pedido 21143: não havia contador nenhum na aba, e o único texto da
+        // barra era o rótulo do próprio botão. Ele não tinha como saber se
+        // faltava rolar de volta ou se o sistema tinha travado.
+        //
+        // As abas de Entrega e Nota sempre disseram o que falta ("Para
+        // finalizar, falta: ..."). A da arte era a única trava do portal sem a
+        // saída escrita ao lado — e aqui toda trava tem uma.
+        //
         // Cinza OPACO, sem `opacity`: ver o cabeçalho desta função.
+        const faltam = itens.filter(item => item.amostra_status !== 'APROVADA').length;
+        const recado = faltam === 1
+            ? 'Falta <b>1 modelo</b> para aprovar.'
+            : 'Faltam <b>' + faltam + ' modelos</b> para aprovar.';
+
         html = `
+            <div class="portal-aviso calmo" style="margin: 0 0 10px; text-align: center;">
+                ${recado} Role a página e toque em <b>APROVAR</b> ou <b>ALTERAR</b> em cada um.
+            </div>
             <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="${FORMA_DO_BOTAO_FINAL} background-color: #2b3444; color: #94a3b8; border: 1px solid #3d485c; cursor: not-allowed;">
                 ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
             </button>
@@ -1748,6 +1773,65 @@ function atualizarBarraFinalCliente(osId) {
     containerActions.innerHTML = html;
 }
 
+
+/**
+ * Aprovou a última arte → o portal fecha a aprovação e abre a aba de Entrega,
+ * sem o cliente ter de procurar o botão FINALIZAR.
+ *
+ * Pedido do usuário em 25/08/2026.
+ *
+ * ## Por que só a partir de um CLIQUE, e nunca na carga da página
+ *
+ * Esta função é chamada de dentro do `decisionAmostraItem`, no ramo do cliente
+ * — ou seja, só depois de ele tocar em APROVAR. Não é chamada pelo
+ * `atualizarBarraFinalCliente`, que também roda ao abrir a página.
+ *
+ * A diferença importa. Existem pedidos cujos modelos já estão todos aprovados e
+ * cujo status continua em `Aguard. Aprovação` — o 21112 é um deles, com o único
+ * modelo em `APROVADA_CLIENTE` desde ontem. Se o avanço fosse decidido pelo
+ * estado, e não pelo clique, esse cliente abriria o link e seria empurrado para
+ * a aba de Entrega antes de ver a arte — e o pedido gravaria aprovação e
+ * mensagem no chat do parceiro sem ele ter tocado em nada.
+ *
+ * ## Por que a pausa
+ *
+ * O card acabou de ficar verde e o toast "Item aprovado!" acabou de aparecer.
+ * Trocar a tela no mesmo instante faria o cliente perder os dois e não entender
+ * o que o levou dali. A pausa dá tempo de ele ver a própria ação, e o aviso
+ * diz, em texto, o que a página vai fazer — coisa que o sistema faz sozinho
+ * precisa se anunciar.
+ */
+async function seguirSozinhoSeAprovouTudo(osId) {
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) return;
+    if (!itens.every(i => i.amostra_status === 'APROVADA')) return;
+    // Já finalizado (o cliente voltou ao link): não refazer nada.
+    if (state.arteSomenteLeitura === true) return;
+
+    // A trava é uma BANDEIRA, e não uma corrida contra o relógio.
+    //
+    // O `renderAmostrasOSItens` que roda logo antes desta função agenda o
+    // `atualizarBarraFinalCliente` para dali a 50 ms. Sem a bandeira, ele
+    // reescreveria a barra e o cliente veria o botão verde FINALIZAR piscar por
+    // um segundo antes de a tela trocar sozinha — justamente o botão que este
+    // recurso existe para ele não precisar procurar.
+    state.arteSeguindoSozinho = true;
+
+    const barra = document.querySelector('.cliente-actions');
+    if (barra) {
+        barra.style.display = '';
+        barra.innerHTML = '<div class="portal-aviso ok" style="margin: 0; text-align: center;">'
+            + '✅ <b>Todas as artes aprovadas.</b> Levando você para os dados de entrega...'
+            + '</div>';
+    }
+
+    await new Promise(r => setTimeout(r, 1200));
+    try {
+        await clienteFinalizarFluxo('APROVAR_TUDO');
+    } finally {
+        state.arteSeguindoSozinho = false;
+    }
+}
 
 async function decisionAmostraItem(itemId, osId, status) {
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
@@ -1797,10 +1881,21 @@ async function decisionAmostraItem(itemId, osId, status) {
             }
         }
         
+        // Esta foi a ÚLTIMA arte? Então o portal vai seguir sozinho, e o aviso
+        // grande na barra ("Todas as artes aprovadas...") já diz mais do que o
+        // toast diria. Deixar os dois só empilha um balão em cima do outro: o
+        // toast nasce no rodapé, exatamente onde a barra fica, e tapa a frase
+        // que explica para onde a tela está indo — visto no navegador em
+        // 25/08/2026.
+        const vaiSeguirSozinho = isClientePage && status === 'APROVADA'
+            && state.arteSomenteLeitura !== true
+            && (state.osItens[osId] || []).length > 0
+            && (state.osItens[osId] || []).every(i => i.amostra_status === 'APROVADA');
+
         let msg = '';
         let toastType = 'info';
         if (status === 'APROVADA') {
-            msg = 'Item aprovado!';
+            msg = vaiSeguirSozinho ? '' : 'Item aprovado!';
             toastType = 'success';
         } else if (status === 'REPROVADA') {
             msg = 'Item marcado para alteração!';
@@ -1811,8 +1906,18 @@ async function decisionAmostraItem(itemId, osId, status) {
         } else {
             msg = `Status atualizado para ${status}`;
         }
-        toast(msg, toastType);
+        if (msg) toast(msg, toastType);
         renderAmostrasOSItens(osId);
+
+        // Aprovou a ÚLTIMA: o portal segue sozinho para a aba de Entrega.
+        //
+        // Pedido do usuário em 25/08/2026. Antes, aprovar o último modelo só
+        // acendia o botão FINALIZAR no rodapé, e o cliente tinha de achá-lo e
+        // tocá-lo — um passo a mais para dizer de novo o que ele acabou de
+        // dizer modelo a modelo.
+        if (vaiSeguirSozinho) {
+            await seguirSozinhoSeAprovouTudo(osId);
+        }
 
         // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
         // verificar se TODOS os modelos da OS estão PRONTO. Se sim → mudar status para 'Enviar Arte'
