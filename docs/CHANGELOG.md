@@ -4,6 +4,58 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — A aba Nota mostra o endereço do CNPJ que ela pede para conferir
+
+Pedido do usuário: *"no link onde mostra e pede confirmação dos dados da nota fiscal, deve
+mostrar também o endereço relativo ao CNPJ mostrado"*.
+
+### O detalhe que decide tudo
+
+**Não serve o endereço que a aba de Entrega já mostra.** Aquele é o endereço da ENTREGA,
+escolhido no pedido; a nota é emitida contra `id_faturado`, que pode ser outro cadastro. Em 6
+dos 62 links ativos os dois diferem — o pedido 20974 entrega na *Rua General Osório* e fatura
+na *Rua Marechal Deodoro*, CEPs diferentes. Repetir ali o da entrega poria, embaixo de um CNPJ,
+o endereço de outra empresa.
+
+Por isso a função do banco busca pelo **mesmo id que preenche o cadastro da nota**.
+
+### De onde ele vem
+
+Do endereço **PRINCIPAL** do faturado. Não existe endereço de faturamento no banco: medido em
+25/08/2026, `enderecos.tipo_endereco` só tem três valores — `PRINCIPAL`, `ENTREGA` e nulo. O
+principal é o endereço de cadastro da pessoa jurídica, que é o que a nota usa.
+
+Cobertura: dos 63 links ativos, **62 passaram a ter endereço na nota**. O mesmo desempate do
+bloco da entrega — sem principal, vale o endereço só quando ele é o único.
+
+O bloco não manda `recebedor` nem `cpf_recebedor`: aqueles são de quem recebe o PACOTE, e esta
+página é pública — campo que a tela não mostra não sai do banco.
+
+### Duas decisões de tela
+
+**O endereço entra logo depois do documento**, e não no fim do cartão: a proximidade é o que
+diz que ele é *daquele* CNPJ, sem precisar de um rótulo explicando.
+
+**Endereço que falta aparece em âmbar**, escrito "Não informado", e não some. Mesma regra da
+aba de Entrega, e pelo mesmo motivo: campo escondido é campo que ninguém corrige — quem
+descobre é o contador, com a nota já emitida.
+
+### De quebra: o documento ganhou máscara
+
+`14302058000102` virou `14.302.058/0001-02`, e o CPF virou `042.561.770-00`. O cartão inteiro
+existe para o cliente **conferir**, e catorze dígitos grudados não se conferem olhando. É a
+mesma decisão do CEP, tomada no mesmo dia. Documento incompleto continua passando cru: máscara
+em número truncado o faria parecer completo.
+
+A função `link_cliente_pedido` foi executada no banco — a mudança é **aditiva** (só acrescenta
+uma chave ao JSON), então a página antiga continuou funcionando na janela entre o SQL e o
+deploy.
+
+Coberto por 24 conferências novas no `portal_confirmacoes_harness.js` (81 no total) e 2 em
+`tests/test_portal_do_pedido.py`.
+
+---
+
 ## [2026-08-25] — O número do conhecimento do SEDEX, clicável, no Painel do Acabamento
 
 Pedido do usuário: *"quando já existir o link do número de conhecimento do sedex, ao clicar

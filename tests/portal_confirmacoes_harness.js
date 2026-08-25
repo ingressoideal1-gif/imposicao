@@ -200,7 +200,14 @@ function montar(linhas) {
 // ─── 4. As linhas da nota fiscal ─────────────────────────────────────────────
 
 const linhasDoFaturamento = new Function(
-    recortar(FATURAMENTO, 'linhasDoFaturamento') + '\nreturn linhasDoFaturamento;')();
+    recortar(DADOS, 'cepEmMascara') + '\n'
+    + recortar(DADOS, 'documentoEmMascara') + '\n'
+    + recortar(FATURAMENTO, 'linhasDoEnderecoDaNota') + '\n'
+    + recortar(FATURAMENTO, 'linhasDoFaturamento') + '\nreturn linhasDoFaturamento;')();
+
+const linhasDoEnderecoDaNota = new Function(
+    recortar(DADOS, 'cepEmMascara') + '\n'
+    + recortar(FATURAMENTO, 'linhasDoEnderecoDaNota') + '\nreturn linhasDoEnderecoDaNota;')();
 
 (function aIeVaziaViraIsento() {
     // Em nota fiscal, "sem I.E." e "isento de I.E." sao coisas diferentes -- e e
@@ -220,6 +227,77 @@ const linhasDoFaturamento = new Function(
 
 (function semCadastroDevolveVazio() {
     ok(linhasDoFaturamento(null).length === 0, 'pedido sem cadastro nao quebra');
+})();
+
+// ─── 4b. O endereco do CNPJ (25/08/2026) ─────────────────────────────────────
+//
+// Pedido do usuario: "no link onde mostra e pede confirmacao dos dados da nota
+// fiscal, deve mostrar tambem o endereco relativo ao CNPJ mostrado".
+//
+// Ele vem de `endereco_faturamento`, que a funcao do banco busca pelo MESMO id
+// que preenche o `cliente` -- `id_faturado`, e nao `id_cliente`. NAO e o mesmo
+// endereco da aba de Entrega: em 6 dos 62 links ativos o pedido fatura em outro
+// cadastro, e ali os dois sao de pessoas diferentes.
+
+const ENDERECO_DA_NOTA = {
+    endereco: 'RUA MARECHAL DEODORO', numero: '297', complemento: '',
+    bairro: 'CIDADE NOVA', cidade: 'Rio Grande', uf: 'RS', cep: '96211480'
+};
+
+(function oEnderecoEntraLogoDEPOISDoDocumento() {
+    // A proximidade e o que diz que o endereco e DAQUELE documento, sem precisar
+    // de um rotulo explicando.
+    const l = linhasDoFaturamento({ nome: 'X', documento: '14302058000102' }, ENDERECO_DA_NOTA);
+    const rotulos = l.map(x => x.rotulo);
+    ok(rotulos[0] === 'Nome / Razão social', 'o nome abre o cartao', rotulos);
+    ok(rotulos[1] === 'CPF / CNPJ', 'depois o documento', rotulos);
+    ok(rotulos[2] === 'Endereço', 'e o endereco vem logo em seguida', rotulos);
+    ok(rotulos.indexOf('Inscrição estadual') > rotulos.indexOf('CEP'),
+        'a I.E. e o contato ficam depois do endereco', rotulos);
+})();
+
+(function oEnderecoSaiCompletoEComOCepLegivel() {
+    const l = linhasDoEnderecoDaNota(ENDERECO_DA_NOTA);
+    const por = r => (l.find(x => x.rotulo === r) || {}).valor;
+    ok(por('Endereço') === 'RUA MARECHAL DEODORO, 297', 'rua e numero juntos', por('Endereço'));
+    ok(por('Bairro') === 'CIDADE NOVA', 'bairro');
+    ok(por('Cidade/UF') === 'Rio Grande - RS', 'cidade e uf');
+    ok(por('CEP') === '96211-480', 'o CEP com hifen, como num envelope', por('CEP'));
+    ok(l.every(x => x.rotulo !== 'Complemento'), 'complemento vazio nao vira linha', l);
+})();
+
+(function aNotaNaoPedeRecebedor() {
+    // `recebedor` e `cpf_recebedor` sao de quem recebe o PACOTE. Numa nota fiscal
+    // eles nao tem o que fazer -- e a funcao do banco nem os manda.
+    const rotulos = linhasDoEnderecoDaNota(ENDERECO_DA_NOTA).map(x => x.rotulo);
+    ok(rotulos.indexOf('Recebedor') < 0, 'sem recebedor', rotulos);
+    ok(rotulos.indexOf('CPF do recebedor') < 0, 'sem CPF do recebedor', rotulos);
+})();
+
+(function semEnderecoAPendenciaAPARECE() {
+    // Campo escondido e campo que ninguem corrige -- quem descobre e o contador,
+    // com a nota ja emitida. Mesma regra da aba de Entrega.
+    [null, undefined, {}].forEach(caso => {
+        const l = linhasDoEnderecoDaNota(caso);
+        ok(l.length === 1 && l[0].rotulo === 'Endereço', 'uma linha so', l);
+        ok(l[0].valor === 'Não informado', 'dizendo que falta', l);
+        ok(l[0].falta === true, 'e marcada como pendencia, para sair em ambar', l);
+    });
+})();
+
+(function oDocumentoSaiComMascara() {
+    // O cartao inteiro existe para o cliente CONFERIR. Catorze digitos grudados
+    // nao se conferem olhando.
+    const cnpj = linhasDoFaturamento({ nome: 'X', documento: '14302058000102' }, null);
+    ok(cnpj[1].valor === '14.302.058/0001-02', 'CNPJ pontuado', cnpj[1]);
+
+    const cpf = linhasDoFaturamento({ nome: 'X', documento: '04256177000' }, null);
+    ok(cpf[1].valor === '042.561.770-00', 'CPF pontuado', cpf[1]);
+
+    // Documento incompleto passa como esta: mascara em numero truncado o faria
+    // parecer completo.
+    const torto = linhasDoFaturamento({ nome: 'X', documento: '123' }, null);
+    ok(torto[1].valor === '123', 'documento curto fica cru', torto[1]);
 })();
 
 // ─── 5. As linhas do envio ───────────────────────────────────────────────────

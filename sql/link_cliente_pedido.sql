@@ -71,6 +71,7 @@ DECLARE
     v_prop     propostas%ROWTYPE;
     v_cli      clientes%ROWTYPE;
     v_end      enderecos%ROWTYPE;
+    v_end_fat  enderecos%ROWTYPE;   -- o endereço do CNPJ da nota (ver abaixo)
     v_os       propostas_os%ROWTYPE;
     v_arte     pedidos_artes%ROWTYPE;
     v_frete    cotacao_frete%ROWTYPE;
@@ -164,6 +165,52 @@ BEGIN
         END IF;
 
         v_end_do_cadastro := (v_end.id IS NOT NULL);
+    END IF;
+
+    -- O endereço DO CNPJ que vai na nota — a aba de Faturamento.
+    --
+    -- Pedido do usuário em 25/08/2026: *"no link onde mostra e pede confirmação
+    -- dos dados da nota fiscal, deve mostrar também o endereço relativo ao CNPJ
+    -- mostrado"*.
+    --
+    -- ## Por que não serve o endereço que a aba de Entrega já mostra
+    --
+    -- Porque eles são de duas pessoas diferentes quando o pedido fatura em outro
+    -- cadastro. A aba de Entrega mostra o endereço DA ENTREGA, escolhido no
+    -- pedido (`id_endereco_ent`) e, na falta dele, o principal de
+    -- `v_prop.id_cliente`. A nota é emitida contra `id_faturado`, que pode ser
+    -- outro — o pedido 20940 é do cliente 43520 e fatura no 66163. Repetir ali o
+    -- endereço da entrega poria, embaixo de um CNPJ, o endereço de outra empresa.
+    -- Por isso a busca é pelo MESMO id de quem preenche `cliente` acima.
+    --
+    -- ## Por que o PRINCIPAL
+    --
+    -- Porque não existe endereço de faturamento no banco: medido em 25/08/2026,
+    -- `enderecos.tipo_endereco` só tem três valores — `PRINCIPAL`, `ENTREGA` e
+    -- nulo. O principal é o endereço de cadastro da pessoa jurídica, que é o que
+    -- a nota usa.
+    --
+    -- Cobertura, nos 62 links ativos daquele dia: TODOS os 62 faturados têm um
+    -- principal. Nenhum ficou sem.
+    --
+    -- Mesmo desempate do bloco acima, e pela mesma razão: sem principal, vale o
+    -- endereço só quando ele é o único; havendo vários, escolher seria adivinhar.
+    IF COALESCE(v_prop.id_faturado, v_prop.id_cliente) IS NOT NULL THEN
+        SELECT e.* INTO v_end_fat
+          FROM enderecos e
+         WHERE e.id_cliente = COALESCE(v_prop.id_faturado, v_prop.id_cliente)
+           AND upper(btrim(COALESCE(e.tipo_endereco, ''))) = 'PRINCIPAL'
+         ORDER BY e.data_criacao NULLS LAST
+         LIMIT 1;
+
+        IF v_end_fat.id IS NULL THEN
+            SELECT e.* INTO v_end_fat
+              FROM enderecos e
+             WHERE e.id_cliente = COALESCE(v_prop.id_faturado, v_prop.id_cliente)
+               AND (SELECT count(*) FROM enderecos x
+                     WHERE x.id_cliente = COALESCE(v_prop.id_faturado, v_prop.id_cliente)) = 1
+             LIMIT 1;
+        END IF;
     END IF;
 
     -- O endereço da própria gráfica, para os pedidos de RETIRADA.
@@ -292,6 +339,19 @@ BEGIN
             -- apresentar como escolha dele.
             'do_cadastro',   v_end_do_cadastro
         ) END,
+        -- O endereço do CNPJ que vai na nota. SEM `recebedor` e sem
+        -- `cpf_recebedor`: aqueles dois são de quem recebe o PACOTE, e não têm o
+        -- que fazer numa nota fiscal — repeti-los aqui só confundiria as duas
+        -- abas. E esta página é pública: campo que a tela não mostra não sai.
+        'endereco_faturamento', CASE WHEN v_end_fat.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'endereco',    v_end_fat.endereco,
+            'numero',      v_end_fat.numero,
+            'complemento', v_end_fat.complemento,
+            'bairro',      v_end_fat.bairro,
+            'cidade',      v_end_fat.cidade,
+            'uf',          v_end_fat.uf,
+            'cep',         v_end_fat.cep
+        ) END,
         'grafica', CASE WHEN v_grafica.id IS NULL THEN NULL ELSE jsonb_build_object(
             'nome',        COALESCE(NULLIF(v_grafica.nome_fantasia, ''), v_grafica.empresa),
             'endereco',    v_grafica.logradouro,
@@ -366,3 +426,16 @@ SELECT l.numero_pedido,
  WHERE l.ativo IS TRUE
  ORDER BY l.created_at DESC
  LIMIT 3;
+
+-- E o endereço da nota, que entrou em 25/08/2026: quantos links ativos passam a
+-- ter um. O esperado é TODOS -- medido naquele dia, os 62 faturados tinham um
+-- endereço principal. A consulta conta em vez de imprimir: o endereço é de um
+-- cliente real.
+
+SELECT count(*)                                          AS links_ativos,
+       count(*) FILTER (WHERE j->'endereco_faturamento' <> 'null'::jsonb) AS com_endereco_na_nota,
+       count(*) FILTER (WHERE j->'endereco_faturamento' =  'null'::jsonb) AS sem_endereco_na_nota
+  FROM public.pedidos_links_cliente l
+ CROSS JOIN LATERAL (SELECT public.link_cliente_pedido(l.numero_pedido, l.token) AS j) t
+ WHERE l.ativo IS TRUE
+   AND t.j IS NOT NULL;

@@ -227,3 +227,40 @@ def test_o_endereco_da_grafica_vem_do_cadastro_do_erp():
     assert "'grafica'" in corpo
     # E nao escrito no codigo:
     assert "FELIZARDO" not in corpo.upper()
+
+
+def test_a_nota_traz_o_endereco_do_cnpj_que_ela_mostra():
+    """Pedido do usuario em 25/08/2026: *"no link onde mostra e pede confirmacao
+    dos dados da nota fiscal, deve mostrar tambem o endereco relativo ao CNPJ
+    mostrado"*.
+
+    O detalhe que decide tudo: a busca e pelo `id_faturado`, o MESMO id que
+    preenche o `cliente` da nota -- e nao pelo `id_cliente`, que e de quem recebe
+    o pacote. Em 6 dos 62 links ativos daquele dia os dois sao diferentes (o
+    pedido 20974 entrega na Rua General Osorio e fatura na Rua Marechal Deodoro),
+    e usar o errado poria, embaixo de um CNPJ, o endereco de outra empresa.
+    """
+    corpo = _so_o_sql(_corpo_da_funcao())
+
+    assert "'endereco_faturamento'" in corpo, "a funcao precisa devolver o campo"
+    assert "v_end_fat" in corpo, "com uma variavel propria, separada da entrega"
+
+    # A busca e pelo faturado.
+    assert "e.id_cliente = COALESCE(v_prop.id_faturado, v_prop.id_cliente)" in corpo, (
+        "o endereco da nota tem de sair do mesmo id que o cadastro da nota"
+    )
+
+
+def test_o_endereco_da_nota_nao_carrega_quem_recebe_o_pacote():
+    """`recebedor` e `cpf_recebedor` sao da ENTREGA.
+
+    Numa nota fiscal eles nao tem o que fazer, e esta pagina e publica: campo que
+    a tela nao mostra nao sai do banco.
+    """
+    corpo = _so_o_sql(_corpo_da_funcao())
+    i = corpo.index("'endereco_faturamento'")
+    bloco = corpo[i:corpo.index("END,", i)]
+
+    assert "recebedor" not in bloco, "o bloco da nota nao manda recebedor"
+    assert "cpf_recebedor" not in bloco, "nem o CPF dele"
+    assert "'cep'" in bloco and "'cidade'" in bloco, "mas manda o endereco todo"

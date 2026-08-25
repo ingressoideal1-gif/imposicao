@@ -250,6 +250,31 @@ function tipoDaPessoa(documento) {
  * hífen no meio de um número truncado o faria parecer completo, e a linha de
  * cima já pinta em âmbar o que falta.
  */
+/**
+ * O CPF ou o CNPJ com os pontos, como se lê num documento.
+ *
+ * `14302058000102` são catorze dígitos grudados; `14.302.058/0001-02` é o mesmo
+ * número numa forma que alguém consegue conferir olhando. E conferir é
+ * exatamente o que a aba de Nota pede ao cliente — o cartão inteiro existe para
+ * ele dizer se aquilo está certo.
+ *
+ * Só formata 11 ou 14 dígitos, que é o que `tipoDaPessoa` reconhece. Documento
+ * incompleto passa como está: pôr máscara num número truncado o faria parecer
+ * completo.
+ */
+function documentoEmMascara(documento) {
+    const bruto = String(documento || '').trim();
+    const d = bruto.replace(/\D/g, '');
+    if (d.length === 11) {
+        return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+    }
+    if (d.length === 14) {
+        return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8)
+             + '/' + d.slice(8, 12) + '-' + d.slice(12);
+    }
+    return bruto;
+}
+
 function cepEmMascara(cep) {
     const bruto = String(cep || '').trim();
     const digitos = bruto.replace(/\D/g, '');
@@ -422,6 +447,7 @@ window.prazoDeEntrega = prazoDeEntrega;
 window.enderecoEmLinhas = enderecoEmLinhas;
 window.tipoDaPessoa = tipoDaPessoa;
 window.cepEmMascara = cepEmMascara;
+window.documentoEmMascara = documentoEmMascara;
 window.entregaExigeRecebedor = entregaExigeRecebedor;
 window.ehRetirada = ehRetirada;
 window.enderecoDeEntrega = enderecoDeEntrega;
