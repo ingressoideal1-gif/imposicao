@@ -730,6 +730,50 @@ function apiDaFatia(state) {
         'e ele passa a fatia pelo corte antes de devolver', fatia && fatia[0].slice(-160));
 })();
 
+// ─── Aplicar sem atribuir nada não é uma distribuição ────────────────────────
+//
+// 25/08/2026, pedido 21146: o operador abriu o "Linhas", marcou as 13 linhas e
+// clicou em Aplicar — sem o segundo passo, que é clicar no NOME do modelo.
+// Nenhuma linha ganhou dono, e o modal devolve uma entrada por modelo INCLUSIVE
+// VAZIA. Os três modelos foram gravados com `ids: []`, que quer dizer "este
+// modelo não ficou com nenhuma linha", e o card passou a mostrar "0 de 13" em
+// vermelho. Repetir a operação zerava de novo — nas palavras dele, "nada muda".
+//
+// A regra da v630 continua de pé: numa distribuição de verdade, o modelo
+// esquecido PRECISA ficar gravado vazio, senão imprimiria o banco inteiro — o
+// oposto do que a tela diz. O que não pode é gravar zero para TODOS quando
+// ninguém recebeu nada: isso não é uma escolha do operador, é a ausência de uma.
+
+(function aplicarSemAtribuir() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const api = new Function(extrairFuncao(script, 'distribuicaoAtribuiuAlgo')
+        + '\nreturn { distribuicaoAtribuiuAlgo };')();
+    const f = api.distribuicaoAtribuiuAlgo;
+
+    ok(f({ 'm-1': { tipo: 'linhas', ids: [] },
+           'm-2': { tipo: 'linhas', ids: [] },
+           'm-3': { tipo: 'linhas', ids: [] } }) === false,
+        'aplicar sem atribuir nada a ninguém NÃO é uma distribuição');
+
+    ok(f({ 'm-1': { tipo: 'linhas', ids: ['1-37'] },
+           'm-2': { tipo: 'linhas', ids: [] } }) === true,
+        'distribuição com um modelo esquecido É gravada — a regra da v630 continua');
+
+    ok(f({}) === false, 'payload sem modelo nenhum não grava');
+    ok(f(null) === false, 'payload ausente não grava');
+    ok(f({ 'm-1': { tipo: 'linhas' } }) === false, 'entrada sem ids não conta como atribuição');
+    ok(f({ 'm-1': { tipo: 'linhas', ids: ['7'] } }) === true, 'uma faixa só já é distribuição');
+
+    // A guarda tem de rodar ANTES do laço que grava, senão não adianta.
+    const i = script.indexOf('onAplicar: async ({ rows, distribuicao })');
+    ok(i > 0, 'achei o onAplicar da distribuição');
+    const bloco = script.slice(i, i + 4000);
+    const guarda = bloco.indexOf('distribuicaoAtribuiuAlgo(');
+    const laco = bloco.indexOf('autoSaveOSItemField(');
+    ok(guarda > 0 && laco > 0 && guarda < laco,
+        'a guarda roda antes de gravar csv_selecao', { guarda, laco });
+})();
+
 // ─── Fim ──────────────────────────────────────────────────────────────────────
 
 if (falhas) {

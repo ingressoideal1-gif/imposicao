@@ -779,6 +779,42 @@ Sem foco — vindo do aviso da fila, em que se reparte entre todos ao mesmo temp
 vale a cor de cada modelo, que ali é a informação útil: não há um "outro" para
 alertar.
 
+#### Aplicar sem atribuir nada não grava distribuição
+
+Regra nova em 25/08/2026, do **pedido 21146**. Três modelos, cada um com a sua
+numeração e o seu banco de 13 linhas. O operador abriu 🧩 Linhas, marcou as 13
+linhas e clicou em Aplicar — **sem o segundo passo**, que é clicar no nome do
+modelo. Nenhuma linha ganhou dono.
+
+O modal manda uma entrada por modelo, sempre, inclusive vazia
+(`csv-editor.js`, `ed.modelos.forEach(m => { dist[m.id] = []; })`). Os três
+foram gravados com `ids: []`, que quer dizer "este modelo não ficou com nenhuma
+linha", e o card passou a mostrar **0 de 13** em vermelho. Repetir a operação
+zerava de novo, então não havia saída pela tela — nas palavras dele, *"mesmo
+selecionando o banco inteiro no Linhas, nada muda"*.
+
+Quem decide agora é `distribuicaoAtribuiuAlgo()`: se **nenhum** modelo recebeu
+linha, nada é gravado e um recado diz o passo que faltou. A regra da v630
+continua inteira — numa distribuição de verdade o modelo esquecido **é** gravado
+vazio, senão imprimiria o banco inteiro, o oposto do que a tela diz. O que mudou
+é só o caso em que ninguém recebeu nada, que não é uma escolha do operador: é a
+ausência de uma.
+
+Dois cuidados ao mexer aqui:
+
+- **A guarda vem antes do laço que grava**, e o harness verifica isso pela
+  posição no arquivo. Depois do laço ela não adiantaria nada.
+- **O banco continua sendo salvo** antes da guarda. As linhas podem ter ganhado
+  `__id` no `garantirIds` da abertura, e jogar isso fora faria a próxima
+  distribuição começar sem identidade — que é justamente o que impede a fatia de
+  um modelo de valer para outra pessoa.
+
+Vale lembrar do que **não** é bug: um modelo cuja numeração é só dele não tem o
+que repartir. O 🧩 ali só consegue tirar linhas, nunca dar — o estado certo desse
+modelo é `csv_selecao` **nulo**, que significa "leva o banco inteiro".
+
+Teste: o bloco `aplicarSemAtribuir` em `tests/csv_fatia_do_modelo_harness.js`.
+
 #### Selecionar por intervalo
 
 Repartir 3.000 assentos entre setores é trabalho de intervalo, não de clique:

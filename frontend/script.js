@@ -13803,6 +13803,33 @@ function rotuloDoModelo(item, i) {
  * Vale também com UM modelo só: escolher que ele imprime parte do banco é
  * legítimo, e era o único jeito de recortar uma fatia sem ter um segundo modelo.
  */
+/**
+ * A distribuição que o modal devolveu deu linha a ALGUM modelo?
+ *
+ * O modal manda uma entrada por modelo, sempre — inclusive vazia —, porque numa
+ * distribuição de verdade o modelo esquecido PRECISA ficar gravado com zero: ler
+ * a ausência como "o banco inteiro" fazia o esquecido imprimir tudo, o oposto do
+ * que a tela dizia, e em silêncio (v630).
+ *
+ * Só que "todos vazios" não é uma distribuição: é o operador que marcou as
+ * linhas e clicou em Aplicar sem o segundo passo, que é clicar no NOME do
+ * modelo. Gravar ali põe TODOS em zero, e modelo sem linha não imprime nada.
+ *
+ * Foi o que zerou o pedido 21146 em 25/08/2026: três modelos, cada um com a sua
+ * numeração e o seu banco de 13 linhas, todos gravados com `ids: []`. O card
+ * mostrava "0 de 13" em vermelho, e repetir a operação zerava de novo — nas
+ * palavras do usuário, "mesmo selecionando o banco inteiro no Linhas, nada
+ * muda". Não havia como sair pela tela.
+ */
+function distribuicaoAtribuiuAlgo(distribuicao) {
+    const d = distribuicao || {};
+    return Object.keys(d).some(k => {
+        const sel = d[k];
+        return !!(sel && Array.isArray(sel.ids) && sel.ids.length);
+    });
+}
+window.distribuicaoAtribuiuAlgo = distribuicaoAtribuiuAlgo;
+
 window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
     if (typeof window.abrirEditorCsv !== 'function') {
@@ -13856,7 +13883,26 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
             await salvarCsvDaNumeracao(num.id, rows);
 
-            // 2. A fatia de cada modelo vai para o registro dele no pedido.
+            // 2. Aplicar sem atribuir NENHUMA linha a NENHUM modelo não é uma
+            //    distribuição — é o segundo passo que faltou. Gravar aqui poria
+            //    todos em zero, e zero linha não imprime nada. Ver
+            //    distribuicaoAtribuiuAlgo(): o modelo esquecido de uma
+            //    distribuição de verdade continua sendo gravado vazio.
+            if (!distribuicaoAtribuiuAlgo(distribuicao)) {
+
+                renderImpOSQueue();
+
+                redesenharCardsDoPedido(osId);
+
+                toast('Nenhuma linha foi atribuída a nenhum modelo, então nada '
+                    + 'foi mudado. Marque as linhas e clique no NOME do modelo '
+                    + 'para dá-las a ele.', 'info');
+
+                return;
+
+            }
+
+            // 3. A fatia de cada modelo vai para o registro dele no pedido.
             let semFatia = 0;
 
             for (const it of grupo.itens) {
