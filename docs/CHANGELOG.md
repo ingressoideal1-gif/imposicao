@@ -4,6 +4,68 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — A numeração fantasma: duas com o mesmo nome, e o modelo trocando sozinho
+
+Relatado pelo usuário: *"estamos tendo problemas com numerações salvas com mesmo nome, não
+está avisando que já existe nem sobrescrevendo, está ficando numeração fantasma, hora carrega
+uma hora carrega a outra"*.
+
+### O que o banco mostrou
+
+`producao_numeracoes` **não tem UNIQUE em `name`** — só a chave primária, o
+`UNIQUE (id_gabarito)` e a FK do formato. Três nomes repetidos em 86 registros:
+`001 - Padrão Ideal` (2, criadas com 4 dias de diferença), `Personalizada` (2, 22 horas) e
+`1000535` (2, **28 minutos**).
+
+O `1000535` é o caso que dói: as duas são exclusivas do **mesmo modelo** — mesmo `Cli_Num`
+(61567), mesmo `os_item_id`. Uma ficou com 678 bytes de elementos e 77 kB de CSV; a outra,
+com 1.140 e 90 kB. O modelo aponta para a segunda, e o trabalho da primeira virou órfão —
+invisível na tela, porque registro com `Cli_Num` não aparece no catálogo.
+
+### O mecanismo do "hora uma, hora outra"
+
+Depois de salvar, o vínculo do modelo com a numeração exclusiva era feito **pelo nome**:
+
+```js
+const newNum = state.numeracoes.find(n => n.name === newNumName);
+```
+
+Com dois homônimos, `.find()` devolve o **primeiro da lista**. E a lista não tinha ordem: o
+`api('GET', '/numeracoes')` fazia `select('*')` sem `order`, então o Postgres devolvia na
+ordem **física** do heap — e um UPDATE grava uma versão nova da linha e a **move de lugar**.
+Conferido pelo `ctid`: as duas `1000535` estavam em `(19,6)` e `(19,7)`, e editar uma trocaria
+as posições. O modelo era vinculado a uma numeração diferente conforme quem tinha sido salvo
+por último.
+
+### O conserto
+
+**O vínculo passa a ser pelo id.** `idDaNumeracaoGravada` sai dos três caminhos de gravação —
+editar, substituir a homônima e criar. O de criar é o que engana: sem `supabaseClient` quem
+cunha o id é a própria `api()`, então ele vem do retorno do POST, que é a linha inserida.
+
+**O catálogo vem em ordem fixa.** `.order('id')` na consulta de `producao_numeracoes` — id, e
+não nome, porque ordenar por nome deixaria justamente as homônimas indefinidas entre si. É a
+segunda linha de defesa, para o próximo leitor.
+
+**O recado de falha diz o que aconteceu com o modelo.** Era `Numeração "X" NÃO encontrada
+após salvar!`, que soa como se a numeração tivesse se perdido; ela foi gravada, o que falhou
+foi o vínculo.
+
+### O que NÃO foi feito ainda
+
+Falta o **aviso ao operador** quando o nome já existe. Hoje o `saveNumeracao` procura a
+homônima em `state.numeracoes` — um cache do navegador — e, achando, **sobrescreve calada**
+(o toast "Numeração substituída!" vem como fato consumado). Não achando, cria a segunda. Foi
+assim que as três duplicatas nasceram: em todas, as criações estão longe o bastante para a
+página da segunda ter sido aberta antes de a primeira existir.
+
+Consertar isso é decidir o que deve acontecer na colisão, e essa decisão é do usuário — está
+pendente. As três duplicatas continuam no banco, intocadas.
+
+Coberto por `tests/test_numeracao_homonima.py` (5 casos).
+
+---
+
 ## [2026-08-25] — O caractere que a fonte não desenha: a tela mentia, o papel saía furado
 
 Pedido do usuário: *"o arquivo .csv é composto por nomes estrangeiros, com caracteres

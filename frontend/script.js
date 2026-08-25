@@ -946,7 +946,27 @@ async function api(method, path, body = null) {
                     // Cores sem os PDFs — ver COLUNAS_DA_COR_NA_LISTA no topo.
                     const colunas = (col === 'producao_cores') ? COLUNAS_DA_COR_NA_LISTA : '*';
 
-                    const { data, error } = await supabaseClient.from(col).select(colunas);
+                    // ORDEM FIXA para o catálogo de numerações.
+                    //
+                    // Sem `order`, o Postgres devolve na ordem FÍSICA do heap, e
+                    // um UPDATE grava uma versão nova da linha e a MOVE de lugar.
+                    // Com dois registros de mesmo nome — e `producao_numeracoes`
+                    // não tem UNIQUE em `name` —, qualquer `.find()` por nome
+                    // passava a devolver ora um, ora outro, conforme quem tinha
+                    // sido salvo por último. Foi assim que um modelo ficou
+                    // trocando de numeração sozinho (25/08/2026).
+                    //
+                    // Quem lê por id não depende disto, e o `saveNumeracao` já
+                    // não lê por nome. A ordem fica como segunda linha de
+                    // defesa: o próximo leitor encontra sempre a mesma lista.
+                    //
+                    // `id`, e não `name`: é a chave primária, nunca é nula e
+                    // nunca empata. Ordenar por nome deixaria justamente as
+                    // homônimas em ordem indefinida entre si.
+                    const consulta = supabaseClient.from(col).select(colunas);
+                    if (col === 'producao_numeracoes') consulta.order('id');
+
+                    const { data, error } = await consulta;
 
                     if (error) throw error;
 
@@ -7460,29 +7480,39 @@ window.saveNumeracao = async function () {
 
 
 
+        // O ID DE QUEM ACABOU DE SER GRAVADO.
+        //
+        // Ele existe porque o vínculo do modelo com a numeração exclusiva, mais
+        // abaixo, era feito PELO NOME — e nome de numeração não é único. Ver o
+        // comentário no `idDaNumeracaoGravada` lá embaixo.
+        let idDaNumeracaoGravada = null;
+
         if (id) {
 
             await api('PUT', `/numeracoes/${id}`, data);
+            idDaNumeracaoGravada = id;
 
             toast('Numeração atualizada!', 'success');
 
         } else if (homonima) {
 
             await api('PUT', `/numeracoes/${homonima.id}`, data);
+            idDaNumeracaoGravada = homonima.id;
 
             toast('Numeração substituída!', 'success');
 
         } else {
 
-            await api('POST', '/numeracoes', numeracaoId ? { id: numeracaoId, ...data } : data);
+            const criada = await api('POST', '/numeracoes', numeracaoId ? { id: numeracaoId, ...data } : data);
+            // O `api('POST')` devolve a linha inserida (`.insert().select().single()`),
+            // então o id vem de lá mesmo quando esta tela não o gerou — que é o
+            // caso sem `supabaseClient`, em que quem cunha o id é a própria `api`.
+            idDaNumeracaoGravada = (criada && criada.id) || numeracaoId || null;
 
             toast('Numeração salva!', 'success');
 
         }
 
-        // Guardar o nome da numeração ANTES de limpar o formulário
-        const savedNumName = document.getElementById('num-name').value.trim();
-        
         cancelNumEdit();
 await loadAll();
 
@@ -7490,16 +7520,41 @@ if (window.customNumeracaoEditState) {
     const customState = window.customNumeracaoEditState;
     window.customNumeracaoEditState = null;
     
-    // Encontrar a numeracao recem criada (pelo nome salvo antes do cancel)
-    const newNumName = savedNumName || customState.modelName || customState.modeloName;
-    const newNum = state.numeracoes.find(n => n.name === newNumName);
+    // A numeração recém-gravada, PELO ID.
+    //
+    // Até 25/08/2026 esta linha era `state.numeracoes.find(n => n.name === nome)`
+    // — e era daí que saía a "numeração fantasma" que o usuário relatou: hora
+    // carrega uma, hora carrega a outra.
+    //
+    // O mecanismo, medido no banco naquele dia. Nome de numeração NÃO é único
+    // (não há UNIQUE em `producao_numeracoes.name`), e havia três nomes
+    // repetidos, entre eles `1000535` — as duas exclusivas do MESMO modelo, com
+    // o mesmo `Cli_Num` e o mesmo `os_item_id`, criadas com 28 minutos de
+    // diferença. Com duas linhas de mesmo nome, o `.find()` devolve a PRIMEIRA
+    // da lista.
+    //
+    // E a ordem da lista não é estável: o `api('GET', '/numeracoes')` faz
+    // `select('*')` sem `order`, então o Postgres devolve na ordem FÍSICA do
+    // heap — e um UPDATE grava uma versão nova da linha e a MOVE de lugar.
+    // Conferido pelo `ctid`: as duas `1000535` estavam em `(19,6)` e `(19,7)`,
+    // e quem editasse uma trocaria as posições. Ou seja: o modelo era
+    // vinculado a uma numeração diferente conforme quem tinha sido salvo por
+    // último — e o trabalho feito na outra virava órfão, invisível na lista
+    // (registro com `Cli_Num` não aparece no catálogo).
+    //
+    // Pelo id não há ambiguidade nenhuma. O `.order('id')` que a `api()` passou
+    // a pedir é a segunda linha de defesa, para o próximo leitor.
+    const newNum = idDaNumeracaoGravada
+        ? state.numeracoes.find(n => String(n.id) === String(idDaNumeracaoGravada))
+        : null;
     
     if (customState.active || customState.view === 'amostras') {
         if (newNum) {
             // Associar a amostra
             await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
         } else {
-            toast('Numeração "' + newNumName + '" NÃO encontrada após salvar!', 'error');
+            toast('A numeração foi gravada, mas não voltou na recarga — '
+                + 'o modelo continua com a numeração anterior. Abra o modelo e escolha de novo.', 'error');
         }
         showView('view-amostras');
         if (typeof renderAmostrasOSItens === 'function') {
