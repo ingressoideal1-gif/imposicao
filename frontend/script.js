@@ -7238,6 +7238,62 @@ async function uploadToStorage(content, fileName, path, opts = {}) {
     });
 }
 
+/**
+ * As numerações que JÁ se chamam assim — perguntado ao banco, não ao cache.
+ *
+ * ## Por que não `state.numeracoes`
+ *
+ * Porque `state.numeracoes` é um retrato tirado no `loadAll()`, e a aba do
+ * operador pode estar aberta desde antes de a outra numeração existir. Foi
+ * exatamente assim que nasceram as três duplicatas encontradas no banco em
+ * 25/08/2026 — `001 - Padrão Ideal`, `Personalizada` e `1000535`: em todas, as
+ * duas criações estão longe o bastante uma da outra (4 dias, 22 horas e 28
+ * minutos) para a página da segunda ter sido aberta antes da primeira.
+ *
+ * O banco também não ajuda a evitar: `producao_numeracoes` **não tem UNIQUE em
+ * `name`**. Enquanto não tiver, esta consulta é a única guarda de verdade.
+ *
+ * ## Detalhes que parecem detalhe e não são
+ *
+ * - **Traz `id, name` de todas e compara aqui.** Filtrar no servidor com
+ *   `ilike` seria mais elegante e está errado: `%` e `_` são curinga no
+ *   `ilike`, e uma numeração chamada `Ticket_A` casaria com `TicketXA`. São 86
+ *   linhas de dois campos — alguns quilobytes.
+ * - **Compara sem caixa e sem espaço nas pontas**, que é como um operador lê
+ *   dois nomes e os considera "o mesmo".
+ * - **Ignora a própria linha** (`idAtual`), senão editar uma numeração sem
+ *   trocar o nome dela seria um choque consigo mesma.
+ * - **Sem `supabaseClient`, devolve o que o cache souber.** É pior do que
+ *   perguntar ao banco, e é melhor do que não conferir nada.
+ */
+async function homonimasDoCatalogo(nome, idAtual) {
+    const alvo = String(nome || '').trim().toLowerCase();
+    if (!alvo) return [];
+
+    const mesmoNome = linhas => (linhas || []).filter(n =>
+        n && String(n.name || '').trim().toLowerCase() === alvo
+        && String(n.id) !== String(idAtual || ''));
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        return mesmoNome(state.numeracoes);
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('producao_numeracoes')
+            .select('id, name')
+            .order('id');
+        if (error) throw error;
+        return mesmoNome(data);
+    } catch (e) {
+        // Recusa do banco não pode virar "pode salvar à vontade": o cache é a
+        // resposta mais próxima da verdade que ainda resta.
+        console.warn('[Numerações] Não deu para conferir homônimas no banco:', e.message || e);
+        return mesmoNome(state.numeracoes);
+    }
+}
+window.homonimasDoCatalogo = homonimasDoCatalogo;
+
 window.saveNumeracao = async function () {
 
     const id = document.getElementById('num-id').value;
@@ -7260,11 +7316,57 @@ window.saveNumeracao = async function () {
     // o mesmo id que o arquivo no bucket.
     const temSupabase = typeof supabaseClient !== 'undefined' && !!supabaseClient;
 
-    const homonima = id ? null : state.numeracoes.find(
+    // ── O nome já existe? ────────────────────────────────────────────────────
+    //
+    // Regra escolhida pelo usuário em 25/08/2026, depois de as duplicatas
+    // aparecerem em produção: **conferir no banco e PERGUNTAR**. Até então isto
+    // era um `.find()` sobre `state.numeracoes` que, achando, substituía calada
+    // — e o toast "Numeração substituída!" chegava como fato consumado, em cima
+    // do trabalho de outra pessoa que por acaso tinha escolhido o mesmo nome.
+    //
+    // São três situações, e elas terminam diferente de propósito:
+    //
+    //   1. A numeração EXCLUSIVA DE UM MODELO (`customNumeracaoEditState`).
+    //      Aqui o nome É o id do modelo, e a homônima é a versão anterior da
+    //      numeração desse mesmo modelo. Substituir é o certo, e perguntar
+    //      seria pedir ao operador que confirmasse o óbvio a cada salvamento.
+    //
+    //   2. CRIANDO no catálogo. Pergunta. Quem confirma substitui a existente;
+    //      quem cancela volta ao formulário com tudo preenchido, para trocar o
+    //      nome — a trava tem saída, e a saída está escrita.
+    //
+    //   3. EDITANDO no catálogo e renomeando para um nome que já é de OUTRA.
+    //      Aqui não há "substituir": seriam dois registros vivos virando um, e
+    //      fundir não é o que o operador pediu. Recusa e explica.
+    const doModelo = !!window.customNumeracaoEditState;
+    const homonimas = await homonimasDoCatalogo(name, id);
+    let homonima = null;
 
-        n => n.name.trim().toLowerCase() === name.toLowerCase()
+    if (homonimas.length && doModelo) {
+        homonima = id ? null : homonimas[0];
 
-    );
+    } else if (homonimas.length && id) {
+        return toast('Já existe outra numeração chamada "' + name + '". '
+            + 'Escolha um nome diferente para esta.', 'error');
+
+    } else if (homonimas.length > 1) {
+        // O catálogo já tem esse nome repetido de antes. "Substituir" não teria
+        // uma resposta só, e escolher por conta própria seria repetir o defeito
+        // que este conserto veio corrigir.
+        return toast('Já existem ' + homonimas.length + ' numerações chamadas "' + name
+            + '". Escolha outro nome, ou renomeie as antigas na Lista de Numerações.', 'error');
+
+    } else if (homonimas.length) {
+        const substituir = confirm(
+            'Já existe uma numeração chamada "' + name + '".\n\n'
+            + 'Substituir a existente pelo que está na tela agora?\n'
+            + 'O que estava salvo nela será perdido.\n\n'
+            + 'Cancelar para voltar e escolher outro nome.');
+        if (!substituir) {
+            return toast('Nada foi salvo. Troque o nome da numeração e salve de novo.', 'warning');
+        }
+        homonima = homonimas[0];
+    }
 
     const gerarUuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID)
 

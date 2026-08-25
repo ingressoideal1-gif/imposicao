@@ -444,3 +444,27 @@ Describe "rodar_sql.ps1 manda o SQL em UTF-8" {
         ($script -match '-Body \$corpo') | Should Be $false
     }
 }
+
+Describe "publicar.ps1 sobe as Edge Functions sem Docker" {
+    # A CLI do Supabase empacota a funcao dentro de um container antes de
+    # subir. Nenhuma maquina da grafica tem Docker instalado, entao a CLI
+    # avisava "Docker is not running", devolvia erro, e o `publicar.ps1`
+    # abortava a publicacao inteira ANTES do commit -- inclusive quando a
+    # mudanca nao tinha nada a ver com Edge Function.
+    #
+    # O `--use-api` monta o bundle no servidor do Supabase. O resultado
+    # publicado e' o mesmo; muda so onde ele e' montado.
+    $script = Get-Content "$PSScriptRoot\..\publicar.ps1" -Raw
+
+    It "passa --use-api no deploy" {
+        ($script -match 'functions deploy \$f --project-ref \$refEsperado --use-api') | Should Be $true
+    }
+    It "nao deixa nenhuma chamada de deploy sem --use-api" {
+        # So as CHAMADAS -- linha que comeca com o comando. O texto de ajuda
+        # do topo do script cita `npx supabase functions deploy` de proposito,
+        # e citar nao publica nada.
+        $semFlag = [regex]::Matches($script, '(?m)^\s*npx supabase functions deploy[^\r\n]*') |
+                   Where-Object { $_.Value -notmatch '--use-api' }
+        @($semFlag).Count | Should Be 0
+    }
+}

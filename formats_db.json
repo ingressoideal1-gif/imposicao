@@ -186,6 +186,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "a22f732a-a5b7-43a1-998a-7ec1017a8ee2",
+            "nome": "Archivo",
+            "font_family": "Archivo",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669111392_15_Archivo-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:10.79903+00:00"
+        },
+        {
+            "id": "e0252648-bab2-4687-b7c0-9aed15fb6f63",
+            "nome": "Archivo Bold",
+            "font_family": "Archivo Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669111892_16_Archivo-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:11.020093+00:00"
+        },
+        {
             "id": "3c533d64-dabe-4671-8428-bf7869178f81",
             "nome": "arial",
             "font_family": "arial",
@@ -852,6 +870,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "b1bd23ca-b7f9-406e-b14f-81236b6be5cc",
+            "nome": "DM Sans",
+            "font_family": "DM Sans",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669109509_7_DM_Sans-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:08.618102+00:00"
+        },
+        {
+            "id": "003770c5-3f3f-49a6-abd8-9096c1031df2",
+            "nome": "DM Sans Bold",
+            "font_family": "DM Sans Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669109712_8_DM_Sans-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:08.806965+00:00"
+        },
+        {
             "id": "0712e197-bde3-4a1e-9532-068a92064e6b",
             "nome": "Dosis",
             "font_family": "Dosis",
@@ -922,6 +958,24 @@
             "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/Exotc350_DmBd_BT_Demi-Bold.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "296676d7-be93-4f83-952e-a0d62a37f594",
+            "nome": "Figtree",
+            "font_family": "Figtree",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669109901_9_Figtree-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:08.979276+00:00"
+        },
+        {
+            "id": "c1137a59-c5c2-4e08-bf63-fab74cdd31cf",
+            "nome": "Figtree Bold",
+            "font_family": "Figtree Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669110073_10_Figtree-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:09.185961+00:00"
         },
         {
             "id": "e6955da5-dac3-4851-bb3d-5eb09aff466a",
@@ -1194,6 +1248,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "a98d789a-6e0b-49f1-9e30-5ed331132b7e",
+            "nome": "Gothic A1",
+            "font_family": "Gothic A1",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669112116_17_Gothic_A1-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:11.624991+00:00"
+        },
+        {
+            "id": "6edfaa22-8717-4aff-a1fe-c4c1087958d4",
+            "nome": "Gothic A1 Bold",
+            "font_family": "Gothic A1 Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669112723_18_Gothic_A1-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:12.729747+00:00"
+        },
+        {
             "id": "7fc65de3-8645-4d52-8b4b-63ca7d18eaa5",
             "nome": "HarmonyOS_Sans_SC_Bold",
             "font_family": "HarmonyOS_Sans_SC_Bold",
@@ -1228,6 +1300,24 @@
             "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/himalaya.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "5d969479-c5ee-4361-98e0-2cbc58a7e8d1",
+            "nome": "Hind",
+            "font_family": "Hind",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669114094_20_Hind-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:13.355257+00:00"
+        },
+        {
+            "id": "480dac41-e2a3-4ccc-84c4-86cb5cf0bdf5",
+            "nome": "Hind Bold",
+            "font_family": "Hind Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669114449_21_Hind-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:14.127245+00:00"
         },
         {
             "id": "f88bb737-ac9b-47a6-9d93-012a24fa8047",
@@ -1401,6 +1491,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "a324e450-39fb-437c-83f1-80bd384a8b4c",
+            "nome": "Jost",
+            "font_family": "Jost",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669109065_5_Jost-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:08.196122+00:00"
+        },
+        {
+            "id": "3afc2d85-917a-4764-8e18-2c48ecdc062b",
+            "nome": "Jost Bold",
+            "font_family": "Jost Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669109294_6_Jost-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:08.402423+00:00"
+        },
+        {
             "id": "456c981d-9545-4338-89a0-72c117e8150c",
             "nome": "Kaufmann BT",
             "font_family": "Kaufmann BT",
@@ -1453,6 +1561,24 @@
             "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/LeelUIsl.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "633ae7e7-0bc7-482e-b9c0-8c3c381588d8",
+            "nome": "Lexend",
+            "font_family": "Lexend",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669116011_25_Lexend-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:15.238377+00:00"
+        },
+        {
+            "id": "4d9dbf9d-cecb-4091-944f-d1ff6b60b4dc",
+            "nome": "Lexend Bold",
+            "font_family": "Lexend Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669116332_26_Lexend-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:15.428418+00:00"
         },
         {
             "id": "640eed70-6f34-4b22-acb4-515629298725",
@@ -1518,6 +1644,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "50fc6f96-8ab8-4d0a-a813-7a93be25e4b6",
+            "nome": "Manrope",
+            "font_family": "Manrope",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669110281_11_Manrope-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:09.558093+00:00"
+        },
+        {
+            "id": "fd77ad90-1ee7-42d4-9cba-73680d29b462",
+            "nome": "Manrope Bold",
+            "font_family": "Manrope Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669110652_12_Manrope-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:09.828919+00:00"
+        },
+        {
             "id": "f6481c65-433f-4aa9-b586-97078d4ce3d5",
             "nome": "marlett",
             "font_family": "marlett",
@@ -1576,9 +1720,18 @@
             "nome": "Montserrat",
             "font_family": "Montserrat",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/f3504655a78a9207.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669106039_c0_Montserrat-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "97832cb3-3cd0-4ac2-beef-208a3e00f6ca",
+            "nome": "Montserrat Bold",
+            "font_family": "Montserrat Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669108011_0_Montserrat-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:07.168213+00:00"
         },
         {
             "id": "2ba09d24-97c8-4f09-90aa-d6c15447dfde",
@@ -1603,9 +1756,18 @@
             "nome": "Mulish",
             "font_family": "Mulish",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3e6f85d167854de6.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669107808_c5_Mulish-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "35cfcdb2-e7a5-415c-a6b3-f895b3771d00",
+            "nome": "Mulish Bold",
+            "font_family": "Mulish Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669115785_24_Mulish-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:14.918229+00:00"
         },
         {
             "id": "2b98d6af-15c9-4cc7-a03b-b24d87840bd2",
@@ -1770,6 +1932,24 @@
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
         },
         {
+            "id": "4880a7b9-d928-4fd3-831b-3e9d80592c92",
+            "nome": "Nunito Sans",
+            "font_family": "Nunito Sans",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669110925_13_Nunito_Sans-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:10.060738+00:00"
+        },
+        {
+            "id": "c58a4b30-b129-4ff5-be17-0f516ee8da0f",
+            "nome": "Nunito Sans Bold",
+            "font_family": "Nunito Sans Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669111155_14_Nunito_Sans-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:10.298925+00:00"
+        },
+        {
             "id": "dc6478f6-126e-4414-9cb5-cac17559ac4b",
             "nome": "OCR-A BT",
             "font_family": "OCR-A BT",
@@ -1804,6 +1984,24 @@
             "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3c60ac93bf8ad49c.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "aa252778-7ef5-4c02-b90b-59fa44a65b89",
+            "nome": "Outfit",
+            "font_family": "Outfit",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669108467_2_Outfit-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:07.541494+00:00"
+        },
+        {
+            "id": "98f05c1c-2ddc-4b0d-9e7e-c18bb14d18d9",
+            "nome": "Outfit Bold",
+            "font_family": "Outfit Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669108638_3_Outfit-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:07.761028+00:00"
         },
         {
             "id": "b2665562-7d78-4fd6-91d4-38926ffc63c4",
@@ -1891,9 +2089,18 @@
             "nome": "Poppins",
             "font_family": "Poppins",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c74e082a80e7adb7.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669106422_c1_Poppins-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "d850e19a-6081-48d2-a791-06b67482a84d",
+            "nome": "Poppins Bold",
+            "font_family": "Poppins Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669108268_1_Poppins-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:07.370931+00:00"
         },
         {
             "id": "3bbedd1c-c52a-4f65-811d-e60d91338589",
@@ -1903,6 +2110,15 @@
             "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8e6560d4e575a68d.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "be1e7121-66f0-4e00-b5b0-8c8457f3a7d4",
+            "nome": "Questrial",
+            "font_family": "Questrial",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669113823_19_Questrial-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:13.000713+00:00"
         },
         {
             "id": "77bc8469-6bf4-45e0-9ede-2dd73dce9e48",
@@ -1918,9 +2134,36 @@
             "nome": "Raleway",
             "font_family": "Raleway",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/2908991aa99feda8.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669106683_c2_Raleway-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "680dc9a9-8e03-4811-981e-27b90ab78111",
+            "nome": "Raleway Bold",
+            "font_family": "Raleway Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669108855_4_Raleway-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:07.969526+00:00"
+        },
+        {
+            "id": "0413eeab-35a7-406e-8c1d-69476267d53c",
+            "nome": "Red Hat Display",
+            "font_family": "Red Hat Display",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669116523_27_Red_Hat_Display-Regular.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:15.630841+00:00"
+        },
+        {
+            "id": "bf70f20f-d7c5-4e94-845a-a2c8a4b024e3",
+            "nome": "Red Hat Display Bold",
+            "font_family": "Red Hat Display Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669116729_28_Red_Hat_Display-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:16.038987+00:00"
         },
         {
             "id": "03eebe99-2f60-4d50-a7a5-1af578ea47e8",
@@ -1954,9 +2197,18 @@
             "nome": "Rubik",
             "font_family": "Rubik",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/243f7cd8e05196b7.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669107278_c3_Rubik-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "92cc5d14-a751-483c-b409-558357feab3c",
+            "nome": "Rubik Bold",
+            "font_family": "Rubik Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669115221_22_Rubik-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:14.34567+00:00"
         },
         {
             "id": "e12864a4-22ea-41b9-903f-384b08a29d21",
@@ -2602,9 +2854,18 @@
             "nome": "Work Sans",
             "font_family": "Work Sans",
             "categoria": "Sans Serif",
-            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/b31068ff59a222ec.ttf",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669107576_c4_Work_Sans-Regular-completa.ttf",
             "ativo": true,
             "criado_em": "2026-08-15T22:03:47.231274+00:00"
+        },
+        {
+            "id": "3c3be966-d8a7-440f-8c16-ccf33c333645",
+            "nome": "Work Sans Bold",
+            "font_family": "Work Sans Bold",
+            "categoria": "Geral",
+            "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1787669115438_23_Work_Sans-Bold.ttf",
+            "ativo": true,
+            "criado_em": "2026-08-25T14:45:14.689653+00:00"
         },
         {
             "id": "e455b63f-ef1a-461a-928e-8c998625b3b8",

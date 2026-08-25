@@ -233,7 +233,12 @@ if ($funcoesEdge.Count -gt 0) {
     Write-Host "Publicando as Edge Functions ($($funcoesEdge.Count))..." -ForegroundColor Cyan
     foreach ($f in $funcoesEdge) {
         Write-Host "  $f" -ForegroundColor White
-        npx supabase functions deploy $f --project-ref $refEsperado
+        # --use-api: empacota a funcao no servidor do Supabase, em vez de
+        # subir um container local. Sem ele, a CLI procura o Docker, avisa
+        # "Docker is not running" e a publicacao inteira para — e nenhuma das
+        # estacoes da grafica tem Docker instalado. O bundle sai igual; o que
+        # muda e' so onde ele e' montado.
+        npx supabase functions deploy $f --project-ref $refEsperado --use-api
         if ($LASTEXITCODE -ne 0) {
             Abortar "A Edge Function '$f' NAO subiu." `
                     "Confira a mensagem acima. Nada foi publicado ainda."
