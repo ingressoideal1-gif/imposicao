@@ -51,18 +51,41 @@ segunda linha de defesa, para o próximo leitor.
 após salvar!`, que soa como se a numeração tivesse se perdido; ela foi gravada, o que falhou
 foi o vínculo.
 
-### O que NÃO foi feito ainda
+### A outra metade: o aviso quando o nome já existe
 
-Falta o **aviso ao operador** quando o nome já existe. Hoje o `saveNumeracao` procura a
-homônima em `state.numeracoes` — um cache do navegador — e, achando, **sobrescreve calada**
-(o toast "Numeração substituída!" vem como fato consumado). Não achando, cria a segunda. Foi
-assim que as três duplicatas nasceram: em todas, as criações estão longe o bastante para a
-página da segunda ter sido aberta antes de a primeira existir.
+Escolhido pelo usuário no mesmo dia, entre duas saídas: **conferir no banco e perguntar**.
 
-Consertar isso é decidir o que deve acontecer na colisão, e essa decisão é do usuário — está
-pendente. As três duplicatas continuam no banco, intocadas.
+Até então o `saveNumeracao` procurava a homônima em `state.numeracoes` — um retrato tirado no
+`loadAll()` — e, achando, **substituía calada**; o toast "Numeração substituída!" chegava como
+fato consumado, em cima do trabalho de outra pessoa que por acaso escolheu o mesmo nome. Não
+achando, criava a segunda. Foi assim que as três duplicatas nasceram: em todas, as criações
+estão longe o bastante (4 dias, 22 horas, 28 minutos) para a página da segunda ter sido aberta
+antes de a primeira existir.
 
-Coberto por `tests/test_numeracao_homonima.py` (5 casos).
+`homonimasDoCatalogo()` pergunta **ao banco** a cada salvamento. Três detalhes que parecem
+detalhe e não são: traz `id, name` de todas e compara aqui, em vez de filtrar no servidor com
+`ilike` — `%` e `_` são curinga ali, e `Ticket_A` casaria com `TicketXA`; compara sem caixa e
+sem espaço nas pontas, que é como um operador lê dois nomes e os considera o mesmo; e ignora a
+própria linha, senão editar sem renomear colidiria consigo mesma.
+
+O que acontece na colisão depende de onde ela é:
+
+| Situação | O que acontece |
+|---|---|
+| Numeração **exclusiva de um modelo** | Substitui direto, sem perguntar — o nome É o id do modelo, e a homônima é a versão anterior dele mesmo |
+| **Criando** no catálogo | Pergunta. Confirmou, substitui; cancelou, não grava nada e diz para trocar o nome |
+| **Editando** e renomeando para o nome de outra | Recusa — "substituir" ali seria fundir dois registros vivos |
+| O nome **já está repetido** no catálogo | Recusa e diz quantas são; escolher uma por conta própria repetiria o defeito |
+
+O `confirm` que não aparece devolve `false`, e aqui isso vale por cancelar: nada é destruído e
+o operador vê um recado. Falhar fechado é o certo quando o outro lado é apagar trabalho.
+
+As três duplicatas continuam no banco, intocadas — mexer em dado de produção é decisão do
+usuário. `producao_numeracoes` também segue **sem UNIQUE em `name`**; enquanto não tiver, esta
+consulta é a única guarda.
+
+Coberto por `tests/test_numeracao_homonima.py` e `tests/numeracao_homonima_harness.js`
+(26 conferências, os seis caminhos de decisão exercitados com o bloco recortado do `script.js`).
 
 ---
 

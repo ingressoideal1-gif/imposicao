@@ -48,9 +48,29 @@ nome já existe é decisão à parte, e está registrada no CHANGELOG.
 """
 import os
 import re
+import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(RAIZ, "frontend", "script.js")
+HARNESS = os.path.join(RAIZ, "tests", "numeracao_homonima_harness.js")
+
+
+def test_o_harness_da_decisao_de_homonima_passa():
+    """O bloco de decisão do `saveNumeracao`, exercitado com cenários de mentira.
+
+    Ele é recortado do `script.js` e roda de verdade — não é uma cópia que
+    envelhece sozinha. Cobre os seis caminhos: modelo, criar-confirmando,
+    criar-cancelando, `confirm` mudo, editar-colidindo e nome já duplicado.
+    """
+    assert os.path.exists(HARNESS), "o harness da homônima sumiu"
+
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    saida = (r.stdout or "") + (r.stderr or "")
+    assert r.returncode == 0, "o harness falhou:\n" + saida
+    assert "OK:" in saida, "o harness nao relatou sucesso:\n" + saida
 
 
 def _ler(caminho):
