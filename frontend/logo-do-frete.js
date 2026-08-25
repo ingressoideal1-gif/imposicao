@@ -76,6 +76,53 @@ function logoDoFreteHtml(nome, altura) {
          + '<span style="display: none; font-size: 0.85rem; color: var(--text);">' + rotulo + '</span>';
 }
 
+/**
+ * O rastreio nos Correios, ou `null` — que é o que impede um botão morto de
+ * nascer na tela para os pedidos que ainda não postaram.
+ *
+ * Mora aqui, e não no `cliente-dados.js` onde nasceu, porque desde 25/08/2026
+ * DUAS telas mostram o código: a aba de Entrega do link do cliente e a coluna
+ * Frete do Painel do Acabamento. Este é o módulo que as duas já carregam, e é o
+ * lugar temático — é aqui que mora tudo o que sabe de transportadora.
+ */
+function linkDeRastreio(codigo) {
+    const limpo = codigo ? String(codigo).trim().toUpperCase() : '';
+    if (!limpo) return null;
+    return 'https://rastreamento.correios.com.br/app/index.php?objeto=' + encodeURIComponent(limpo);
+}
+
+/**
+ * O código de rastreio como LINK, ou string vazia quando ainda não há código.
+ *
+ * Pedido do usuário em 25/08/2026: *"quando já existir o link do número de
+ * conhecimento do sedex, ao clicar abrir o rastreamento"*.
+ *
+ * Vazio, e não um traço: quem chama decide o que pôr no lugar. Na coluna Frete
+ * do Acabamento o lugar simplesmente não existe até o pedido ser postado — e um
+ * traço embaixo da logo da transportadora se leria como "sem rastreio", quando
+ * a verdade é "ainda não despachou".
+ *
+ * `noopener noreferrer` porque o destino é o site dos Correios, fora daqui; e
+ * `event.stopPropagation()` porque a linha inteira da tabela é clicável e abre o
+ * pedido — sem isso, tocar no código abriria as duas coisas.
+ */
+function rastreioHtml(codigo, opcoes) {
+    const url = linkDeRastreio(codigo);
+    if (!url) return '';
+    const o = opcoes || {};
+    const rotulo = String(codigo).trim().toUpperCase();
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer"'
+         + ' onclick="event.stopPropagation();"'
+         + ' title="Abrir o rastreamento nos Correios"'
+         + ' style="color: var(--blue); font-weight: 700; font-size: '
+         + (o.tamanho || '0.72rem') + '; letter-spacing: 0.02em;'
+         + ' text-decoration: underline; display: inline-block;'
+         + (o.margemTopo ? ' margin-top: ' + o.margemTopo + ';' : '') + '">'
+         + escapeHtml(rotulo) + ' ↗</a>';
+}
+
 window.LOGO_DO_FRETE = LOGO_DO_FRETE;
 window.logoDoFrete = logoDoFrete;
 window.logoDoFreteHtml = logoDoFreteHtml;
+window.linkDeRastreio = linkDeRastreio;
+window.rastreioHtml = rastreioHtml;

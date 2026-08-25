@@ -20,6 +20,7 @@ const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8')
 const ENTREGA = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-entrega.js'), 'utf8');
 const HTML_PAINEL = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const HTML_CLIENTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.html'), 'utf8');
+const ACABAMENTO = fs.readFileSync(path.join(RAIZ, 'frontend', 'acabamento.js'), 'utf8');
 
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
@@ -146,6 +147,62 @@ const logoDoFreteHtml = new Function(
     // desenhar -- e a coluna de frete do painel some.
     ok(/logo-do-frete\.js/.test(HTML_PAINEL), 'o painel carrega o arquivo');
     ok(/logo-do-frete\.js/.test(HTML_CLIENTE), 'e a pagina do cliente tambem');
+})();
+
+// ─── O rastreio nos Correios ────────────────────────────────────────────────
+//
+// Pedido do usuario em 25/08/2026: "quando ja existir o link do numero de
+// conhecimento do sedex, ao clicar abrir o rastreamento".
+//
+// `linkDeRastreio` mudou de casa nesse dia -- saiu do `cliente-dados.js` e veio
+// para ca --, porque duas telas passaram a mostrar o codigo: a aba de Entrega do
+// link do cliente e a coluna Frete do Painel do Acabamento. Este e o modulo que
+// as duas ja carregam, e e o lugar tematico: aqui mora o que sabe de
+// transportadora.
+
+// O `escapeHtml` de verdade mora no `script.js`/`cliente.js`; aqui ele so
+// precisa devolver texto, porque o que se mede e a FORMA do link.
+const RASTREIO = new Function('escapeHtml',
+    recortar(LOGO, 'linkDeRastreio') + '\n'
+    + recortar(LOGO, 'rastreioHtml') + '\n'
+    + 'return { linkDeRastreio, rastreioHtml };')(v => String(v == null ? '' : v));
+
+const linkDeRastreio = RASTREIO.linkDeRastreio;
+const rastreioHtml = RASTREIO.rastreioHtml;
+
+(function oCodigoViraEnderecoDosCorreios() {
+    const l = linkDeRastreio('AD831882537BR');
+    ok(/^https:\/\/rastreamento\.correios\.com\.br\//.test(l), 'aponta para os Correios', l);
+    ok(l.indexOf('AD831882537BR') > 0, 'com o codigo dentro', l);
+    ok(linkDeRastreio('  ad831882537br  ').indexOf('AD831882537BR') > 0,
+        'espaco em volta e minuscula nao atrapalham');
+})();
+
+(function semCodigoNaoNasceBotaoMorto() {
+    // A maioria dos pedidos da tela ainda nao foi postada.
+    ok(linkDeRastreio(null) === null, 'nulo');
+    ok(linkDeRastreio('') === null, 'vazio');
+    ok(linkDeRastreio('   ') === null, 'so espaco');
+    ok(rastreioHtml(null) === '', 'o HTML tambem sai vazio, e nao um traco');
+    ok(rastreioHtml('   ') === '', 'idem para so espaco');
+})();
+
+(function oLinkAbreFORAeNAOabreOPedidoJunto() {
+    const h = rastreioHtml('AD831882537BR');
+    ok(/target="_blank"/.test(h), 'abre em outra aba');
+    ok(/rel="noopener noreferrer"/.test(h), 'sem dar acesso a esta pagina ao site dos Correios');
+    // A linha inteira da tabela do Acabamento e clicavel e abre o pedido. Sem
+    // isto, tocar no codigo abriria as duas coisas ao mesmo tempo.
+    ok(/event\.stopPropagation\(\)/.test(h), 'o clique nao vaza para a linha da tabela');
+    ok(/AD831882537BR/.test(h), 'o codigo aparece escrito');
+    ok(/title="[^"]*rastrea/i.test(h), 'e o title diz o que o clique faz');
+})();
+
+(function asDuasTelasQueMostramOCodigo() {
+    ok(/rastreioHtml/.test(ACABAMENTO), 'a coluna Frete do Acabamento usa a funcao compartilhada');
+    ok(/linkDeRastreio/.test(ENTREGA), 'e a aba de Entrega do link do cliente tambem');
+    ok(!/rastreamento\.correios/.test(ENTREGA) && !/rastreamento\.correios/.test(ACABAMENTO),
+        'nenhuma das duas repete o endereco dos Correios por dentro');
 })();
 
 if (falhas) {

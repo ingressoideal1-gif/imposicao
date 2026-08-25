@@ -406,15 +406,12 @@ function entregaExigeRecebedor(endereco, cliente, pedido, frete) {
     return !(temNome && temCpf);
 }
 
-/**
- * O rastreio nos Correios, ou `null` — que é o que impede um botão morto de
- * nascer na tela para os pedidos que ainda não postaram.
- */
-function linkDeRastreio(codigo) {
-    const limpo = codigo ? String(codigo).trim().toUpperCase() : '';
-    if (!limpo) return null;
-    return 'https://rastreamento.correios.com.br/app/index.php?objeto=' + encodeURIComponent(limpo);
-}
+// `linkDeRastreio` mudou de casa em 25/08/2026: foi para `logo-do-frete.js`.
+//
+// Ele nasceu aqui porque so a aba de Entrega do link do cliente o usava. Agora
+// o Painel do Acabamento tambem mostra o codigo de rastreio, e o `logo-do-frete`
+// e o modulo que as duas telas ja carregam -- e o lugar tematico: e ali que
+// mora tudo o que sabe de transportadora.
 
 window.carregarPortal = carregarPortal;
 window.emReal = emReal;
@@ -429,4 +426,3 @@ window.entregaExigeRecebedor = entregaExigeRecebedor;
 window.ehRetirada = ehRetirada;
 window.enderecoDeEntrega = enderecoDeEntrega;
 window.linkDoMapa = linkDoMapa;
-window.linkDeRastreio = linkDeRastreio;

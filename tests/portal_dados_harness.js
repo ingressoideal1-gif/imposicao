@@ -61,7 +61,22 @@ const prazoDeEntrega = carregar('prazoDeEntrega',
     ['diasDoPrazo', 'emDiasUteis', 'prazoDeProducao', 'prazoDoFrete']);
 const cepEmMascara = carregar('cepEmMascara');
 const enderecoEmLinhas = carregar('enderecoEmLinhas', ['tipoDaPessoa', 'cepEmMascara']);
-const linkDeRastreio = carregar('linkDeRastreio');
+// `linkDeRastreio` mudou de casa em 25/08/2026: saiu do `cliente-dados.js` e
+// foi para o `logo-do-frete.js`, porque duas telas passaram a mostrar o codigo
+// -- a aba de Entrega do link do cliente e a coluna Frete do Painel do
+// Acabamento -- e aquele e o modulo que as duas ja carregam.
+const LOGO = fs.readFileSync(path.join(RAIZ, 'frontend', 'logo-do-frete.js'), 'utf8');
+
+/** Recorta uma funcao de OUTRO arquivo que nao o `cliente-dados.js`. */
+function carregarDe(fonte, nome) {
+    const marca = '\nfunction ' + nome + '(';
+    const i = fonte.indexOf(marca);
+    if (i < 0) throw new Error('nao achei a funcao ' + nome);
+    const corpo = fonte.slice(i, fonte.indexOf('\n}', i) + 2);
+    return new Function(corpo + '\nreturn ' + nome + ';')();
+}
+
+const linkDeRastreio = carregarDe(LOGO, 'linkDeRastreio');
 const tipoDaPessoa = carregar('tipoDaPessoa');
 const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa', 'ehRetirada']);
 const ehRetirada = carregar('ehRetirada');

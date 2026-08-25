@@ -234,7 +234,10 @@ const linhasDoEnvio = new Function(
     + recortar(DADOS, 'prazoDoFrete') + '\n'
     + recortar(DADOS, 'prazoDeEntrega') + '\n'
     + recortar(DADOS, 'ehRetirada') + '\n'
-    + recortar(DADOS, 'linkDeRastreio') + '\n'
+    // `linkDeRastreio` mudou de casa em 25/08/2026: do `cliente-dados.js` para o
+    // `logo-do-frete.js`, porque a coluna Frete do Painel do Acabamento passou a
+    // mostrar o codigo tambem, e aquele e o modulo que as duas telas carregam.
+    + recortar(LOGO, 'linkDeRastreio') + '\n'
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
     // A logo vem do seu proprio arquivo, e tem harness proprio
     // (`logo_do_frete_harness.js`). Aqui ela e so uma dependencia.

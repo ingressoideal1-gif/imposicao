@@ -333,6 +333,35 @@ O botão de recorte no topo, que na Produção é "Impresso", aqui é **"Pronto"
 pedido com todos os modelos prontos sai da fila de trabalho e só reaparece com
 esse botão ligado. É a mesma regra, aplicada ao estágio seguinte.
 
+### A coluna Frete traz o rastreio (25/08/2026)
+
+Embaixo da logo da transportadora aparece o **número do conhecimento**, clicável,
+que abre o rastreamento nos Correios. Pedido do usuário: *"quando já existir o
+link do número de conhecimento do sedex, ao clicar abrir o rastreamento"*.
+
+O código já existia em `propostas_os.codigo_rastreamento` e já virava link — mas
+só na aba de Entrega do **link do cliente**. Quem posta o pacote é a gráfica, e
+ela não o via em tela nenhuma: uma varredura por `codigo_rastreamento` no
+`frontend/` devolvia um arquivo só.
+
+Três decisões que valem conhecer:
+
+- **Sem código, nada é desenhado.** Um traço embaixo da logo se leria como "sem
+  rastreio", quando a verdade é "ainda não despachou" — e é o estado da maioria
+  dos pedidos desta tela.
+- **A consulta não é nova.** `propostas_os` já era lida no
+  `loadOrdensFromVibecode` pelo prazo de entrega; bastou pedir mais uma coluna.
+  Uma segunda ida ao banco por um campo de treze caracteres seria desperdício num
+  painel que abre com milhares de pedidos.
+- **O clique não abre o pedido junto.** A linha inteira da tabela é clicável, e o
+  link traz `event.stopPropagation()`. Sem isso, tocar no código abriria o
+  rastreamento *e* o pedido ao mesmo tempo.
+
+Quem monta o link é `rastreioHtml()`, em **`frontend/logo-do-frete.js`** — o
+módulo que esta tela e o link do cliente já carregam. Ele mudou de casa nesse dia
+(vinha do `cliente-dados.js`) para que as duas telas não montassem o endereço dos
+Correios cada uma por si.
+
 ## O que a tela não é
 
 **Não fala com o motor de imposição nem com o agente local.** Não impõe, não

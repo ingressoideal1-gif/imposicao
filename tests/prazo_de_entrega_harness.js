@@ -104,8 +104,19 @@ const AMANHA = comoOVibeGrava(diasDeHoje(1));
         'e ninguem mais a chama (fora de comentario)');
 
     ok(/\.from\('propostas_os'\)/.test(SCRIPT), 'o painel le a tabela propostas_os');
-    ok(/\.select\('id_int, data_termino'\)/.test(SCRIPT),
-        'pedindo so id_int e data_termino');
+
+    // O `codigo_rastreamento` entrou em 25/08/2026, de carona: a coluna Frete do
+    // Painel do Acabamento passou a mostrar o numero do conhecimento do SEDEX, e
+    // uma segunda ida ao banco por um campo de treze caracteres seria desperdicio
+    // num painel que abre com milhares de pedidos.
+    //
+    // O que este teste continua prendendo e o que NAO se pede: `select('*')`
+    // nesta tabela traria o link de pagamento e os dados de cobranca para dentro
+    // do painel inteiro, sem ninguem usar.
+    ok(/\.select\('id_int, data_termino, codigo_rastreamento'\)/.test(SCRIPT),
+        'pedindo as tres colunas que o painel usa, e nao `select(*)`');
+    ok(!/from\('propostas_os'\)[\s\S]{0,80}select\('\*'\)/.test(SCRIPT),
+        'e nunca `select(*)` em propostas_os');
     ok(/const prazoEntrega = prazosPorPedido\[String\(key\)\] \|\| null;/.test(SCRIPT),
         'e o prazo do pedido sai dali, ou fica nulo');
 

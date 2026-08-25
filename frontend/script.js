@@ -22164,16 +22164,32 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // do que campo vazio, pela mesma razão que derrubou os nomes de cliente
         // de mentira.
         let prazosPorPedido = {};
+
+        // O CÓDIGO DE RASTREIO vem de carona nesta mesma consulta.
+        //
+        // Pedido do usuário em 25/08/2026: quando já existe o número do
+        // conhecimento do SEDEX, clicar nele abre o rastreamento. Até então o
+        // código só era mostrado na aba de Entrega do LINK DO CLIENTE -- a
+        // gráfica, que é quem posta, não o via em tela nenhuma.
+        //
+        // Não custou consulta nova: `propostas_os` já era lida aqui pelo prazo
+        // de entrega, e bastou pedir mais uma coluna. Uma segunda ida ao banco
+        // para um campo de treze caracteres seria desperdício num painel que
+        // abre com milhares de pedidos.
+        let rastreioPorPedido = {};
         try {
             const idsParaPrazo = [...new Set(produtos.map(p => p.id_int).filter(Boolean))];
             if (idsParaPrazo.length > 0) {
                 const { data: osData, error: osError } = await vibeClient
                     .from('propostas_os')
-                    .select('id_int, data_termino')
+                    .select('id_int, data_termino, codigo_rastreamento')
                     .in('id_int', idsParaPrazo);
                 if (osError) throw osError;
                 (osData || []).forEach(linha => {
-                    if (linha && linha.data_termino) prazosPorPedido[String(linha.id_int)] = linha.data_termino;
+                    if (!linha) return;
+                    if (linha.data_termino) prazosPorPedido[String(linha.id_int)] = linha.data_termino;
+                    const codigo = (linha.codigo_rastreamento || '').trim();
+                    if (codigo) rastreioPorPedido[String(linha.id_int)] = codigo;
                 });
             }
         } catch (oe) {
@@ -22240,6 +22256,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                     data_pedido: dataPedido,
                     valor_total: valorTotal,
                     prazo_entrega: prazoEntrega,
+                    // O número do conhecimento, quando o pedido já foi postado.
+                    // Quem o mostra é a coluna Frete do Painel do Acabamento.
+                    codigo_rastreamento: rastreioPorPedido[String(key)] || null,
                     frete_escolhido: propReal?.frete_escolhido || null,
                     observacoes: `Proposta #${key} -- Vibecode`,
                     criado_por: null,

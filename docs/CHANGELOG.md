@@ -4,6 +4,56 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — O número do conhecimento do SEDEX, clicável, no Painel do Acabamento
+
+Pedido do usuário: *"quando já existir o link do número de conhecimento do sedex, ao clicar
+abrir o rastreamento"*.
+
+### O que já existia
+
+O código já virava link — mas **só na aba de Entrega do link do cliente**. Conferi no navegador
+antes de escrever qualquer linha, no pedido 20975: `AD831882537BR ↗` apontando para
+`rastreamento.correios.com.br`, HTTP 200. Funcionando.
+
+Quem posta o pacote, porém, é a **gráfica** — e ela não via o código em tela nenhuma. Uma
+varredura por `codigo_rastreamento` no `frontend/` devolvia um arquivo só: `cliente-entrega.js`.
+
+### Onde ele passou a aparecer
+
+Na coluna **Frete** do Painel do Acabamento, embaixo da logo da transportadora — a tela onde o
+pedido é entregue à expedição e onde fica a lista do que já foi despachado.
+
+**Sem código, nada é desenhado no lugar.** Um traço embaixo da logo se leria como "sem
+rastreio", quando a verdade é "ainda não despachou" — o estado da maioria dos pedidos ali.
+
+**O clique não abre o pedido junto.** A linha inteira da tabela é clicável; o link traz
+`event.stopPropagation()`. Sem isso, tocar no código abriria as duas coisas.
+
+### Duas decisões de estrutura
+
+**A função mudou de casa.** `linkDeRastreio` saiu do `cliente-dados.js` e foi para o
+`logo-do-frete.js`, que é o módulo que as duas telas já carregam e o lugar temático — ali mora
+o que sabe de transportadora. Duas telas montando o endereço dos Correios por conta própria é a
+mesma armadilha da regra de "pago", resolvida do mesmo jeito. Junto veio `rastreioHtml()`, que
+devolve string vazia quando não há código.
+
+**A consulta não é nova.** `propostas_os` já era lida no `loadOrdensFromVibecode` pelo prazo de
+entrega; bastou pedir mais uma coluna. Uma segunda ida ao banco por um campo de treze
+caracteres seria desperdício num painel que abre com milhares de pedidos.
+
+### Conferido
+
+No navegador, com dois pedidos semeados: o que tem código mostra `AD831882537BR ↗` em azul
+sublinhado embaixo da logo do SEDEX; o que não tem mostra só a logo. E o link do cliente segue
+funcionando igual.
+
+`tests/test_rastreio_do_sedex.py` (5 casos) e 16 conferências novas no
+`logo_do_frete_harness.js` (47 no total). **Esse harness era órfão** — nenhum `test_*.py` o
+chamava, então as 31 conferências que ele já tinha só rodavam se alguém digitasse `node` à mão.
+Agora ele entra na suíte.
+
+---
+
 ## [2026-08-25] — O PDF Gabarito parou de sair do tamanho da logo
 
 Relato do usuário: *"na lista de arte, ao editar um pedido, quando uma numeração possui um PDF

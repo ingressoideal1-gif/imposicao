@@ -788,10 +788,25 @@
             const prontosDoPedido = modelos.filter(m => estagioDoModelo(m) === 'Pronto').length;
             const qtdTotal = modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
 
+            // A logo da transportadora e, EMBAIXO dela, o número do
+            // conhecimento — clicável, quando o pedido já foi postado.
+            //
+            // Pedido do usuário em 25/08/2026: *"quando já existir o link do
+            // número de conhecimento do sedex, ao clicar abrir o rastreamento"*.
+            // O código já existia em `propostas_os.codigo_rastreamento` e só
+            // aparecia na aba de Entrega do LINK DO CLIENTE. Quem posta o pacote
+            // é a gráfica, e ela não o via em tela nenhuma.
+            //
+            // Sem código, nada é desenhado no lugar. Um traço embaixo da logo se
+            // leria como "sem rastreio", quando a verdade é "ainda não despachou"
+            // — e a maioria dos pedidos desta tela está justamente nesse estado.
             const freteBruto = (os.frete_escolhido || '').trim() || 'Retirada Local';
+            const rastreio = typeof rastreioHtml === 'function'
+                ? rastreioHtml(os.codigo_rastreamento, { margemTopo: '4px' })
+                : '';
             const freteHtml = logoFrete
-                ? `<div style="display:flex; justify-content:center;">${logoFrete(freteBruto)}</div>`
-                : esc(freteBruto);
+                ? `<div style="display:flex; flex-direction:column; align-items:center;">${logoFrete(freteBruto)}${rastreio}</div>`
+                : esc(freteBruto) + rastreio;
 
             const evento = eventoDoPedido(os);
             const eventoHtml = evento
