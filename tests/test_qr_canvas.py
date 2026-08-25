@@ -72,11 +72,20 @@ def test_o_modulo_carrega_ANTES_de_quem_desenha(pagina):
     texto = _ler(pagina)
     assert "qr-canvas.js" in texto, f"{pagina} nao carrega o modulo"
     pos_modulo = texto.index("qr-canvas.js")
+
+    # A busca ancora no INICIO do `src`, e nao no nome solto.
+    #
+    # Procurar so por "pedido.js?v=" casava tambem com
+    # `pagamento-do-pedido.js?v=`, criado em 25/08/2026 -- um modulo que nao
+    # desenha QR nenhum. O teste acusou uma inversao de ordem que nao existia, e
+    # qualquer arquivo futuro terminado em `-pedido.js` reabriria o falso alarme.
     for consumidor in ("script.js?v=", "pedido.js?v=", "cliente.js?v="):
-        if consumidor in texto:
-            assert pos_modulo < texto.index(consumidor), (
-                f"{pagina} carrega {consumidor} antes do qr-canvas.js"
-            )
+        for prefixo in ('src="', 'src="/'):
+            alvo = prefixo + consumidor
+            if alvo in texto:
+                assert pos_modulo < texto.index(alvo), (
+                    f"{pagina} carrega {consumidor} antes do qr-canvas.js"
+                )
 
 
 def test_o_modulo_esta_na_lista_que_as_estacoes_baixam():

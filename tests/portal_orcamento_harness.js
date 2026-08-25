@@ -73,11 +73,20 @@ const linhasDoOrcamento = new Function(
     + recortar(DADOS, 'rotuloDoFrete') + '\n'
     + recortar(ORCAMENTO, 'linhasDoOrcamento') + '\nreturn linhasDoOrcamento;')();
 
+// A regra de "pago" nao mora mais no `cliente-pagamento.js`: desde 25/08/2026
+// ela esta em `pagamento-do-pedido.js`, compartilhada com a coluna Pagamento da
+// Lista de Arte. O `statusDoPagamento` conta por ela, entao o harness precisa
+// injeta-la -- do arquivo de verdade, e nao de uma copia escrita aqui, senao a
+// copia e que passaria a ser testada.
+const REGRA_DE_PAGO = require(path.join(RAIZ, 'frontend', 'pagamento-do-pedido.js'));
+
 function doPagamento(nome, dependencias) {
     const corpo = (dependencias || []).map(d => (d === d.toUpperCase()
         ? extrairTabela(PAGAMENTO, d)
         : recortar(PAGAMENTO, d))).join('\n');
-    return new Function(corpo + '\n' + recortar(PAGAMENTO, nome) + '\nreturn ' + nome + ';')();
+    return new Function('contarCobrancas',
+        corpo + '\n' + recortar(PAGAMENTO, nome) + '\nreturn ' + nome + ';')(
+        REGRA_DE_PAGO.contarCobrancas);
 }
 
 const rotuloDaForma = doPagamento('rotuloDaForma', ['NOME_DA_FORMA']);

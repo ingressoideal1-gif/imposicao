@@ -163,15 +163,16 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
     const cabecalho = HTML.slice(iTabela, HTML.indexOf('</thead>', iTabela));
     const ths = (cabecalho.match(/<th[ >]/g) || []).length;
 
-    // A celula do Tempo nao esta escrita na linha: ela vem pronta da
-    // `celulaDeTempoHtml`, que devolve o <td> inteiro (com a cor e o titulo).
+    // Duas celulas nao estao escritas na linha: elas vem prontas de funcoes que
+    // devolvem o <td> inteiro. A do Tempo (com a cor e o titulo) e, desde
+    // 25/08/2026, a do Pagamento (o carimbo PAGO, ou o traco).
     const literais = (LINHA.match(/<td[ >]/g) || []).length;
-    const daFuncao = LINHA.indexOf('celulaDeTempoHtml(os)') > 0 ? 1 : 0;
-    ok(daFuncao === 1, 'a linha pede a celula de tempo pela funcao');
+    const porFuncao = ['celulaDeTempoHtml(os)', 'celulaDePagamentoHtml(os)'];
+    porFuncao.forEach(f => ok(LINHA.indexOf(f) > 0, 'a linha pede a celula pela ' + f));
 
-    const tds = literais + daFuncao;
+    const tds = literais + porFuncao.length;
     ok(ths === tds, 'a linha tem uma celula para cada titulo', 'th=' + ths + ' td=' + tds);
-    ok(ths === 9, 'que sao nove: Preview e Tempo entre as antigas', ths);
+    ok(ths === 10, 'que sao dez: Preview, Tempo e Pagamento entre as antigas', ths);
 })();
 
 (function oPreviewDaListaEOMesmoDoPainelDeProducao() {

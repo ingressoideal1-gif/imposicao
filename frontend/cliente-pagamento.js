@@ -61,10 +61,16 @@ function rotuloDoStatus(status) {
  * Ele não é o status de uma cobrança: é o das cobranças todas juntas. Com duas
  * cobranças e uma paga, dizer "Pago" mandaria o cliente embora devendo; dizer
  * "Aguardando" apagaria o que ele já pagou. Por isso existe o caso `parcial`.
+ *
+ * A CONTA vem de `pagamento-do-pedido.js`, e não daqui. Desde 25/08/2026 a
+ * Lista de Arte faz a mesma pergunta, para decidir o selo PAGO na frente do
+ * atendimento — e duas contas diferentes sobre o mesmo dinheiro fariam o
+ * cliente e a gráfica verem coisas diferentes, com a gráfica descobrindo por
+ * último. É lá também que mora o motivo de a cobrança CANCELADA não contar.
  */
 function statusDoPagamento(pagamentos) {
-    const lista = pagamentos || [];
-    if (!lista.length) {
+    const c = contarCobrancas(pagamentos);
+    if (!c.total) {
         return {
             chave: 'sem_cobranca',
             texto: 'Aguardando cobrança',
@@ -72,12 +78,11 @@ function statusDoPagamento(pagamentos) {
         };
     }
 
-    const pagas = lista.filter(p => String(p.status || '').toUpperCase() === 'PAID').length;
-    if (pagas === lista.length) return { chave: 'pago', texto: 'Pago', cor: '#22c55e' };
-    if (pagas > 0) {
+    if (c.pagas === c.total) return { chave: 'pago', texto: 'Pago', cor: '#22c55e' };
+    if (c.pagas > 0) {
         return {
             chave: 'parcial',
-            texto: 'Parcialmente pago (' + pagas + ' de ' + lista.length + ')',
+            texto: 'Parcialmente pago (' + c.pagas + ' de ' + c.total + ')',
             cor: '#f59e0b'
         };
     }

@@ -4,6 +4,46 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — Lista de Arte: a coluna Pagamento, com o carimbo PAGO
+
+Pedido do usuário: uma coluna entre **Status** e **Itens**, com o carimbo PAGO nos pedidos
+sinalizados como pagos. A imagem é o arquivo que ele mandou, no Storage do Supabase, usada
+como veio.
+
+**Só o pago ganha marca.** O pedido em aberto fica com um traço discreto. Medido no banco
+naquele dia, dos 2.629 pedidos então na Lista de Arte 1.950 estavam pagos: um selo em cada
+um dos outros 679 encheria a coluna de alarme para o estado *normal* de um pedido que
+acabou de entrar. O `title` diz qual é o caso — "Pedido pago", "Cobrança em aberto",
+"N cobranças, nem todas pagas", "Sem cobrança gerada".
+
+**A regra de "pago" ganhou casa própria**, em `frontend/pagamento-do-pedido.js`, porque a
+aba 💳 Pagar do link do cliente faz a mesma pergunta sobre o mesmo dinheiro. Duas contas
+diferentes fariam o cliente e a gráfica verem coisas diferentes — e é a gráfica que
+descobre por último. O `statusDoPagamento` do portal passou a contar pela mesma função.
+
+Ela diz PAGO quando **todas** as cobranças vivas estão em `PAID`:
+
+- há 12 pedidos no banco com uma paga e outra em aberto (entrada mais parcela, referência
+  `20927-A`, `20927-B`). Ali o selo verde faria o atendente deixar de cobrar;
+- a cobrança **CANCELADA não conta** — são 331, e são cobrança que a gráfica desfez;
+  contá-las impediria para sempre o selo de um pedido recotado;
+- pedido **sem cobrança** não é pago: ali ela ainda não saiu, não que alguém pagou;
+- status novo que o parceiro invente cai em "não pago" — o lado seguro do erro.
+
+As cobranças chegam por `carregarPagamentosGlobais()` **depois** do primeiro desenho: a
+coluna é apoio, e segurar a lista por ela atrasaria a tela que o atendimento abre de manhã.
+A consulta traz só `id_int` e `status`; link de cobrança e PIX não se espalham por
+listagem. Se a imagem não carregar, a célula cai num badge `✅ PAGO` — sem isso, uma falha
+de rede deixaria a célula igual à do pedido **não** pago.
+
+Conferido no navegador com os dados reais: 684 pedidos na tela, 411 com cobrança, 284 com o
+carimbo. E o mesmo pedido #21111 aparece "Pago" nas duas telas.
+
+Coberto por `tests/pagamento_do_pedido_harness.js` (42 conferências) e pelo contador de
+colunas que já existia no `lista_arte_enxuta_harness.js`, atualizado de nove para dez.
+
+---
+
 ## [2026-08-25] — Conferência geral do Link do cliente: seis defeitos
 
 Varredura da página do link do cliente (o Portal do Pedido), lida arquivo a arquivo e

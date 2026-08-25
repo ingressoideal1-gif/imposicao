@@ -90,6 +90,7 @@ nos pedidos que já saíram da arte.
 | **Tempo** | Há quanto tempo o pedido está no card atual — e, nos Concluídos, quando ele entrou em produção |
 | Entrega/Faturam. | Estado dos dados de entrega |
 | Status | Badge do status calculado + progresso das aprovações |
+| **Pagamento** | O carimbo PAGO nos pedidos quitados; um traço nos demais |
 | Itens | Quantidade de modelos |
 | Ações | Botões conforme o papel de quem está logado |
 
@@ -115,6 +116,51 @@ Ela escolhe o modelo de **número mais baixo** que tenha arte, e:
 - imagem → miniatura de 126 × 42, que amplia no clique;
 - **PDF → um atalho 📄 que abre o arquivo**, nunca uma miniatura rasterizada;
 - sem arte → moldura vazia com 🖼️.
+
+### Pagamento
+
+Pedida em 25/08/2026: uma coluna entre Status e Itens, com o carimbo PAGO nos
+pedidos sinalizados como pagos. A imagem é o arquivo que o usuário mandou, no
+Storage do Supabase, usado como veio — arte da empresa não se redesenha.
+
+**Só o pago ganha marca.** O pedido em aberto fica com um traço discreto, e não
+com um selo vermelho. Medido no banco naquele dia, dos 2.629 pedidos então na
+Lista de Arte 1.950 estavam pagos: um selo em cada um dos outros 679 encheria a
+coluna de alarme para o estado *normal* de um pedido que acabou de entrar. Quem
+precisa saltar aos olhos é o que já foi pago — que é o que libera o trabalho.
+
+O `title` de cada célula diz qual é o caso: "Pedido pago", "Cobrança em aberto",
+"N cobranças, nem todas pagas", "Sem cobrança gerada".
+
+**Quando um pedido está pago** é decidido por `pedidoEstaPago()`, em
+`frontend/pagamento-do-pedido.js`:
+
+- **todas** as cobranças vivas precisam estar em `PAID`. Um pedido pode ter mais
+  de uma — entrada mais parcela, com a referência indo `20927-A`, `20927-B` —, e
+  no banco há 12 com uma paga e a outra em aberto. Nesses, o selo verde na frente
+  do atendente o faria deixar de cobrar;
+- a cobrança **CANCELADA não conta**. São 331 no banco, e são cobrança que a
+  gráfica desfez: contá-las impediria para sempre o selo de um pedido recotado;
+- pedido **sem cobrança nenhuma não é pago**. Ali a cobrança ainda não saiu — não
+  que alguém pagou;
+- qualquer status novo que o parceiro invente cai em "não pago", que é o lado
+  seguro do erro.
+
+> [!IMPORTANT]
+> Essa regra mora num módulo à parte porque a aba 💳 Pagar do **link do cliente**
+> faz a mesma pergunta. Duas contas diferentes sobre o mesmo dinheiro fariam o
+> cliente e a gráfica verem coisas diferentes — e é a gráfica que descobre por
+> último. O `statusDoPagamento` do portal conta pela mesma função.
+
+As cobranças chegam por `carregarPagamentosGlobais()`, **depois** do primeiro
+desenho da tabela: a coluna é informação de apoio, e segurar a lista por ela
+atrasaria a tela que o atendimento abre de manhã. Enquanto não chega, a célula
+mostra o traço. A consulta traz só `id_int` e `status` — link de cobrança e PIX
+não têm o que fazer numa listagem.
+
+Se a imagem não carregar, a célula cai num badge de texto `✅ PAGO`. Sem isso,
+uma falha de rede deixaria a célula visualmente igual à do pedido **não** pago, e
+o atendente leria "não pago" onde a verdade é "não carregou".
 
 ### Tempo
 

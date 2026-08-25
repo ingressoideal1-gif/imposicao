@@ -21161,11 +21161,18 @@ async function loadOrdens() {
                 if (loaded) {
                     await carregarModelosGlobais().catch(e => console.warn('Erro ao carregar modelos globais:', e));
                     renderOrdens();
-                    
+
+                    // A coluna Pagamento chega depois do primeiro desenho, de
+                    // propósito: ela é informação de apoio, e segurar a tabela
+                    // por ela atrasaria a lista que o atendimento abre de manhã.
+                    // Enquanto não chega, a célula mostra o traço.
+                    carregarPagamentosGlobais().then(() => renderOrdens())
+                        .catch(e => console.warn('Erro ao carregar pagamentos:', e));
+
                     sincronizarStatusOrdensDinamico().then(() => {
                         renderOrdens();
                     }).catch(e => console.warn('Erro ao sincronizar status:', e));
-                    
+
                     return;
                 }
             }
@@ -21308,6 +21315,7 @@ async function loadOrdens() {
         }
         await sincronizarStatusOrdensDinamico();
         carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
+        carregarPagamentosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro pagamentos:', e));
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -21363,6 +21371,114 @@ async function carregarArtesGlobais() {
     } catch (e) {
         console.warn('[Artes] Erro ao carregar artes globais:', e.message);
     }
+}
+
+/**
+ * As cobranças dos pedidos que estão na tela, para a coluna Pagamento da Lista
+ * de Arte.
+ *
+ * ## O que ela busca, e o que ela deixa para trás
+ *
+ * Só `id_int` e `status`: a coluna precisa responder UMA pergunta — está pago?
+ * `url_cobranca`, `pix_copia_cola` e `linha_digitavel` não têm o que fazer numa
+ * listagem, e são justamente o que não se espalha por telas que não vão usar.
+ *
+ * A cobrança CANCELADA fica fora já na consulta. São 331 no banco, e são
+ * cobrança que a gráfica desfez: contá-las impediria para sempre o selo de um
+ * pedido recotado. É a mesma exclusão que a `link_cliente_pedido` faz para o
+ * cliente — o porquê inteiro está em `pagamento-do-pedido.js`.
+ *
+ * ## Por que em blocos de 200
+ *
+ * Mesma razão do `carregarModelosGlobais` logo abaixo: o `.in()` do PostgREST
+ * vira lista de valores na URL, e a Lista de Arte abre com milhares de pedidos.
+ * Uma URL só estouraria o limite do servidor e a consulta voltaria vazia --
+ * sem erro, o que é pior: a coluna inteira ficaria em branco e ninguém saberia
+ * por quê.
+ *
+ * Falhar aqui não trava a tela. Sem esta consulta a coluna mostra o traço de
+ * "sem informação", que é a verdade: não sabemos.
+ */
+async function carregarPagamentosGlobais() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (!state.ordens || state.ordens.length === 0) return;
+
+    try {
+        const numeros = state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
+        const bloco = 200;
+        let todas = [];
+
+        for (let i = 0; i < numeros.length; i += bloco) {
+            const { data, error } = await supabaseClient
+                .from('pagamentos_v2')
+                .select('id_int, status')
+                .in('id_int', numeros.slice(i, i + bloco))
+                .neq('status', 'CANCELADO');
+            if (error) throw error;
+            if (data) todas = todas.concat(data);
+        }
+
+        state.pagamentosGlobais = {};
+        todas.forEach(c => {
+            const chave = String(c.id_int);
+            if (!state.pagamentosGlobais[chave]) state.pagamentosGlobais[chave] = [];
+            state.pagamentosGlobais[chave].push(c);
+        });
+        console.log(`[Pagamentos] ${todas.length} cobranca(s) carregada(s) para a coluna Pagamento.`);
+    } catch (e) {
+        console.warn('[Pagamentos] Erro ao carregar as cobrancas:', e.message);
+    }
+}
+
+/**
+ * O carimbo PAGO, no Storage do Supabase.
+ *
+ * Endereço mandado pelo usuário em 25/08/2026. Fica aqui, e não desenhado em
+ * CSS ou SVG: arte da empresa se usa como arquivo -- redesenhar produz uma
+ * segunda versão que envelhece separada da que ele controla.
+ */
+const SELO_PAGO_URL = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787495041552_Pago.png';
+
+/**
+ * A célula da coluna Pagamento: o selo PAGO, ou o traço de quem ainda deve.
+ *
+ * O usuário pediu em 25/08/2026 uma coluna entre Status e Itens, com "uma logo
+ * com a informação PAGO" nos pedidos sinalizados como pagos. O selo é o arquivo
+ * que ele mandou, usado como veio -- carimbo verde, fundo transparente.
+ *
+ * ## Só o pago ganha marca
+ *
+ * O pedido em aberto fica com um traço discreto, e não com um selo vermelho.
+ * Medido no banco em 25/08/2026, dos 2.629 pedidos hoje na Lista de Arte 1.950
+ * estão pagos: um selo em cada um dos outros 679 encheria a coluna de alarme
+ * para o estado NORMAL de um pedido que acabou de entrar. Quem precisa saltar
+ * aos olhos é o que já foi pago -- que é o que libera o trabalho.
+ *
+ * O `title` diz em palavras o que o selo diz em imagem, para quem passa o mouse
+ * e para o leitor de tela: imagem sozinha não se explica.
+ *
+ * O `onerror` da imagem cai num badge de texto. Sem ele, uma falha de rede
+ * deixaria a célula visualmente IGUAL à do pedido não pago, e o atendente leria
+ * "não pago" onde a verdade é "não carregou".
+ */
+function celulaDePagamentoHtml(os) {
+    const cobrancas = (state.pagamentosGlobais || {})[String(os.numero)] || [];
+    const pago = typeof pedidoEstaPago === 'function' && pedidoEstaPago(cobrancas);
+
+    if (!pago) {
+        const quantas = cobrancas.length;
+        const titulo = quantas
+            ? (quantas === 1 ? 'Cobrança em aberto' : quantas + ' cobranças, nem todas pagas')
+            : 'Sem cobrança gerada';
+        return `<td style="text-align: center; vertical-align: middle;">`
+             + `<span style="color: var(--text-dim);" title="${titulo}">--</span></td>`;
+    }
+
+    return `<td style="text-align: center; vertical-align: middle;">`
+         + `<img src="${SELO_PAGO_URL}" alt="Pago" title="Pedido pago" `
+         + `style="height: 44px; width: auto; display: inline-block;" `
+         + `onerror="this.replaceWith(Object.assign(document.createElement('span'), `
+         + `{className:'badge badge-teal', textContent:'✅ PAGO'}));"></td>`;
 }
 
 async function carregarModelosGlobais() {
@@ -24649,6 +24765,7 @@ function renderOrdens() {
                             ${getStatusBadge(os.status_calculado || os.status)}
                             ${artProgressHtml}
                         </td>
+                        ${celulaDePagamentoHtml(os)}
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td onclick="event.stopPropagation();">
                             ${(() => {

@@ -141,6 +141,12 @@ PAINEL_ARQUIVOS = [
     # A logo da forma de envio, compartilhada entre o painel (coluna de frete da
     # lista de pedidos) e a aba de Entrega do Portal do Pedido, desde 20/08/2026.
     "logo-do-frete.js",
+    # A regra de "pago" (25/08/2026), compartilhada pela coluna Pagamento da
+    # Lista de Arte e pela aba de pagamento do Portal do Pedido. Fora desta
+    # lista, a estacao serviria as tres paginas pedindo um script que da 404 --
+    # e a coluna, sem `pedidoEstaPago`, marcaria TODO pedido como nao pago, em
+    # silencio: nenhum erro na tela, so uma coluna inteira de tracos.
+    "pagamento-do-pedido.js",
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
     "arte-de-impressao.js",
