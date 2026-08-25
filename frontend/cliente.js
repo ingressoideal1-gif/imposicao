@@ -200,6 +200,120 @@ function temArteVisivel(item) {
     return !/\.pdf($|\?)/i.test(img) && !img.toLowerCase().startsWith('data:application/pdf');
 }
 
+/**
+ * O bloco da ARTE no cartão do cliente: frente, verso, PDF e o folheador de
+ * ingressos — cada um com os ids que o desenho ao vivo procura.
+ *
+ * Ele vive aqui fora, e não dentro do template, porque o cartão do cliente foi
+ * reordenado em 25/08/2026 (a arte passou a vir ANTES da decisão) e o template
+ * interno continua com a ordem antiga. Sem esta função, os ids
+ * `amostra-item-canvas-*`, `amostra-pdf-*` e `amostra-csv-*` estariam escritos
+ * duas vezes no arquivo — e o próximo conserto de um deles seria feito só numa
+ * das cópias, sem ninguém perceber, porque as duas telas são desenhadas pelo
+ * mesmo código.
+ *
+ * `ctx` traz as quatro perguntas que o chamador já respondeu: se o desenho é ao
+ * vivo no canvas ou a imagem aprovada, se há arte visível na frente e no verso,
+ * e se este modelo tem ingressos para folhear.
+ */
+function blocoDeArteDoCliente(item, idx, ctx) {
+    const desenhoAoVivo = ctx.desenhoAoVivo;
+    const arteVisivel = ctx.arteVisivel;
+    const versoVisivel = ctx.versoVisivel;
+    const paginaCsv = ctx.paginaCsv;
+
+    return (item.verso ? `
+                        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
+                                ${item.modo_pdf ? `
+                                <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                        <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                    </div>
+                                    <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
+                                         <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">📄</div>
+                                         <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                                    </div>
+                                </div>
+                                ` : `
+                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                                `}
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte da frente ainda não enviada</p>
+                                </div>
+                            </div>
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
+                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoVisivel ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
+                                </div>
+                            </div>
+
+                            ${!paginaCsv ? '' : `
+                            <!-- Seletor de ingressos. Um so comanda as duas
+                                 faces: frente e verso mostram sempre a mesma
+                                 linha. So existe onde o desenho e ao vivo: sobre
+                                 a imagem aprovada nao haveria o que virar. -->
+                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
+                                <div class="rotulo">Confira os ingressos</div>
+                                <div class="controles">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
+                            </div>`}
+                        </div>
+                        ` : `
+                        ${item.modo_pdf ? `
+                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                            <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
+                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                 <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Aguardando upload do PDF.</p>
+                            </div>
+                        </div>
+                        ` : `
+                        ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                        `}
+
+                            ${!paginaCsv ? '' : `
+                            <!-- Seletor de ingressos. Um so comanda as duas
+                                 faces: frente e verso mostram sempre a mesma
+                                 linha. So existe onde o desenho e ao vivo: sobre
+                                 a imagem aprovada nao haveria o que virar. -->
+                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
+                                <div class="rotulo">Confira os ingressos</div>
+                                <div class="controles">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
+                            </div>`}
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
+                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Arte ainda não enviada pela gráfica</p>
+                             <p style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">Este modelo faz parte do pedido, mas ainda não há o que visualizar. Fale com o seu atendimento.</p>
+                        </div>
+                        `);
+}
+
 function renderAmostrasOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
@@ -384,6 +498,118 @@ function renderAmostrasOSItens(osId) {
         const versoVisivel = !!item.verso_amostra_arte_base64
             && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
 
+        const ehCliente = state.amostrasContainerId === 'cliente-amostras-itens-container';
+        const ctxDaArte = { desenhoAoVivo, arteVisivel, versoVisivel, paginaCsv };
+
+        // ── O cartão do modelo, na página do cliente ────────────────────────
+        //
+        // Ele sai daqui inteiro, e não pelo template de baixo, porque a ORDEM é
+        // outra: a arte vem primeiro e a decisão vem depois dela.
+        //
+        // Até 25/08/2026 era o contrário. O cartão abria com os botões APROVAR
+        // e ALTERAR e com uma caixa de texto rotulada "Anotações / Observações
+        // de Alteração", e só ABAIXO disso aparecia a arte. Lendo de cima para
+        // baixo — que é como se lê um celular — o cliente era convidado a
+        // decidir antes de ter visto o que estava decidindo, e a caixa aberta
+        // sugeria que escrever nela fazia parte de aprovar. O rótulo, ainda por
+        // cima, é vocabulário do painel interno: quem lê esta página é o
+        // cliente da gráfica, não o operador.
+        //
+        // Agora: nome do modelo e estado no topo, a arte grande, o que ela é
+        // (produto, quantidade, frente e verso) embaixo dela, e por último os
+        // dois botões — com a caixa de alteração nascendo só depois de ele
+        // pedir alteração.
+        if (ehCliente) {
+            const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
+
+            const chip = status === 'APROVADA'
+                ? '<span class="amostra-chip amostra-chip-aprovado">'
+                  + (typeof iconeClienteForte === 'function' ? iconeClienteForte('check', 13) : '')
+                  + 'Aprovado</span>'
+                : (status === 'REPROVADA'
+                    ? '<span class="amostra-chip amostra-chip-alteracao">' + icone('alerta', 13) + 'Alteração pedida</span>'
+                    : '<span class="amostra-chip amostra-chip-pendente">' + icone('relogio', 13) + 'Aguarda você</span>');
+
+            // O que o modelo É, embaixo da arte — e não no cabeçalho junto do
+            // nome. O cliente identifica o modelo pelo NOME dele ("Pista — Lote
+            // 1"); o produto e a quantidade são a conferência que ele faz
+            // depois de olhar o desenho.
+            const meta = '<div class="amostra-meta">'
+                + '<span class="amostra-meta-item">' + escapeHtml(item.nome_produto_real || item.produto || '--') + '</span>'
+                + '<span class="amostra-meta-item">' + icone('entrega', 12)
+                + escapeHtml(String(item.quantidade || 0)) + ' un</span>'
+                + (item.verso ? '<span class="amostra-meta-item">' + icone('duplex', 12) + 'Frente e verso</span>' : '')
+                + '</div>';
+
+            // O convite a ampliar: o toque na arte já abria o lightbox, e nada
+            // na tela dizia isso. `pointer-events: none` no CSS para o toque
+            // atravessar o chip e chegar na arte, que é quem tem o `onclick`.
+            const ampliar = (arteVisivel || desenhoAoVivo || item.modo_pdf)
+                ? '<span class="amostra-ampliar">' + icone('lupa', 14) + 'Ampliar</span>'
+                : '';
+
+            // A decisão: dois botões com o MESMO peso. Só depois de decidido é
+            // que a cor entra, para dizer o que ele escolheu.
+            const decisao = somenteLeitura ? '' : `
+                <div class="amostra-decisao-cliente amostra-decisao-btns">
+                    <button class="btn" style="${status === 'APROVADA'
+                        ? 'background-color: #22c55e; border: 1px solid #22c55e; color: #04240f;'
+                        : 'background-color: rgba(255,255,255,0.05); border: 1px solid rgba(148,163,184,0.30); color: var(--text);'}"
+                        onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                        ${icone('check', 17)}${status === 'APROVADA' ? 'Aprovado' : 'Aprovar'}
+                    </button>
+                    <button class="btn" style="${status === 'REPROVADA'
+                        ? 'background-color: #f97316; border: 1px solid #f97316; color: #fff;'
+                        : 'background-color: rgba(255,255,255,0.05); border: 1px solid rgba(148,163,184,0.30); color: var(--text);'}"
+                        onclick="abrirPedidoDeAlteracao('${item.id}')">
+                        ${icone('lapis', 17)}${status === 'REPROVADA' ? 'Alteração pedida' : 'Pedir alteração'}
+                    </button>
+                </div>`;
+
+            // A caixa de alteração nasce FECHADA e abre no toque de "Pedir
+            // alteração" — a não ser que este modelo já esteja em alteração, e
+            // aí ela abre com o que ele escreveu, para reler em vez de
+            // reescrever.
+            //
+            // O `display` vai no `style=""`, e não numa classe: regra de folha
+            // de estilo perde para atributo `style`, e nesta mesma tela um
+            // `hidden` já deixou de esconder dois botões por causa disso.
+            //
+            // O `<textarea>` continua existindo mesmo fechado, com o mesmo id:
+            // é dele que o `decisionAmostraItem` lê o texto, e é ele que
+            // recusa a alteração sem descrição.
+            const caixaAlteracao = somenteLeitura ? '' : `
+                <div class="amostra-alteracao" id="amostra-alteracao-${item.id}" style="display: ${status === 'REPROVADA' ? 'block' : 'none'};">
+                    <span class="amostra-alteracao-titulo">O que precisa mudar neste modelo?</span>
+                    <textarea id="amostra-obs-${item.id}" class="portal-caixa-de-texto" rows="3"
+                        style="margin: 0 0 10px;"
+                        placeholder="Ex.: trocar a data para 14/09 e aumentar o logo do patrocinador."
+                        onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${escapeHtml(obs)}</textarea>
+                    <button type="button" class="portal-botao atencao"
+                        onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                        ${icone('chat', 17)}Enviar pedido de alteração
+                    </button>
+                </div>`;
+
+            return `
+        <div class="card" style="border: 1px solid ${status === 'APROVADA' ? 'rgba(34,197,94,0.55)'
+            : (status === 'REPROVADA' ? 'rgba(249,115,22,0.55)' : 'var(--border)')}; margin-bottom: 6pt; padding: 0;">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 14px; margin: 0;">
+                <span class="card-title" style="font-weight: 800; min-width: 0; overflow-wrap: anywhere;">${escapeHtml(item.nome_modelo || `Modelo ${idx + 1}`)}</span>
+                ${chip}
+            </div>
+            <div class="amostra-card-corpo" style="padding: 14px;">
+                <div class="amostra-preview-container" style="position: relative; margin-top: 0;">
+                    ${blocoDeArteDoCliente(item, idx, ctxDaArte)}
+                    ${ampliar}
+                </div>
+                ${meta}
+                ${decisao}
+                ${caixaAlteracao}
+            </div>
+        </div>`;
+        }
+
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
             // Se for a numeração salva neste item, sempre exibe
@@ -513,97 +739,7 @@ function renderAmostrasOSItens(osId) {
                     <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: block; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
-                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
-                        (item.verso ? `
-                        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
-                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
-                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
-                                ${item.modo_pdf ? `
-                                <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
-                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
-                                        <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
-                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
-                                    </div>
-                                    <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
-                                         <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">📄</div>
-                                         <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
-                                    </div>
-                                </div>
-                                ` : `
-                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
-                                `}
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
-                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte da frente ainda não enviada</p>
-                                </div>
-                            </div>
-                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
-                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoVisivel ? 'none' : 'block'};">
-                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
-                                </div>
-                            </div>
-
-                            ${!paginaCsv ? '' : `
-                            <!-- Seletor de ingressos. Um so comanda as duas
-                                 faces: frente e verso mostram sempre a mesma
-                                 linha. So existe onde o desenho e ao vivo: sobre
-                                 a imagem aprovada nao haveria o que virar. -->
-                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
-                                <div class="rotulo">Confira os ingressos</div>
-                                <div class="controles">
-                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
-                                </div>
-                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
-                            </div>`}
-                        </div>
-                        ` : `
-                        ${item.modo_pdf ? `
-                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
-                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
-                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
-                            </div>
-                            <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
-                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
-                                 <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
-                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Aguardando upload do PDF.</p>
-                            </div>
-                        </div>
-                        ` : `
-                        ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
-                        `}
-
-                            ${!paginaCsv ? '' : `
-                            <!-- Seletor de ingressos. Um so comanda as duas
-                                 faces: frente e verso mostram sempre a mesma
-                                 linha. So existe onde o desenho e ao vivo: sobre
-                                 a imagem aprovada nao haveria o que virar. -->
-                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
-                                <div class="rotulo">Confira os ingressos</div>
-                                <div class="controles">
-                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
-                                </div>
-                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
-                            </div>`}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
-                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
-                             <p style="font-size: 0.95rem; font-weight: 600;">Arte ainda não enviada pela gráfica</p>
-                             <p style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">Este modelo faz parte do pedido, mas ainda não há o que visualizar. Fale com o seu atendimento.</p>
-                        </div>
-                        `)
+                    ${ehCliente ? blocoDeArteDoCliente(item, idx, ctxDaArte)
                     :
                         `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                          <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
@@ -821,6 +957,14 @@ function renderAmostrasOSItens(osId) {
         // Atualizar a barra final de ações do cliente dinamicamente
         atualizarBarraFinalCliente(osId);
     }, 50);
+
+    // O contador e a trilha saem JÁ, e não daqui a 50 ms: eles não dependem de
+    // nenhum canvas ter desenhado, e o cliente não deve ver a lista de modelos
+    // aparecer antes do "3 de 7 aprovados" que a explica.
+    if (!isInternal) {
+        desenharContadorDeModelos(itens);
+        if (typeof atualizarPainelDoPedido === 'function') atualizarPainelDoPedido();
+    }
 
     // Não inicialize o PDF viewer aqui. Havia um segundo laço, aos 200 ms, que
     // chamava `initPdfViewer` para todo item em modo PDF — sem guarda nenhuma,
@@ -1696,6 +1840,45 @@ document.addEventListener('DOMContentLoaded', () => {
 const FORMA_DO_BOTAO_FINAL = 'width: 100%; font-weight: 700; min-height: 56px; '
     + 'padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px;';
 
+/**
+ * "3 de 7 aprovados", com um ponto por modelo, acima da lista.
+ *
+ * O mesmo dado que a barra do rodapé já dava desde 25/08/2026 — só que ANTES,
+ * onde a decisão acontece. A barra fica no fim da rolagem: num pedido de sete
+ * modelos, o cliente só descobria por ela quantos faltavam depois de percorrer
+ * a lista inteira, e voltava ao topo sem saber quais.
+ *
+ * Os pontos são MARCADOR, e não botão. Um alvo de 8px não passa no piso de 44px
+ * desta casa, e um atalho que o dedo erra é pior do que atalho nenhum: quem
+ * navega entre modelos é a rolagem, e a cor de cada ponto diz o que procurar.
+ *
+ * Num pedido de um modelo só, o contador some: "1 de 1 aprovado" com um ponto
+ * ao lado é ruído em cima de um cartão que já diz tudo.
+ */
+function desenharContadorDeModelos(itens) {
+    const caixa = document.getElementById('portal-contador-modelos');
+    if (!caixa) return;
+
+    const lista = itens || [];
+    if (lista.length < 2 || state.arteSomenteLeitura === true) {
+        caixa.innerHTML = '';
+        return;
+    }
+
+    const aprovados = lista.filter(i => i.amostra_status === 'APROVADA').length;
+    const pontos = lista.map(i => {
+        const classe = i.amostra_status === 'APROVADA' ? ' portal-ponto-aprovado'
+                     : (i.amostra_status === 'REPROVADA' ? ' portal-ponto-alteracao' : '');
+        return '<span class="portal-ponto' + classe + '"></span>';
+    }).join('');
+
+    caixa.innerHTML =
+        '<span class="portal-contador-texto">Seus modelos — <b>'
+        + aprovados + ' de ' + lista.length + ' aprovados</b></span>'
+        + '<span class="portal-pontos" role="img" aria-label="'
+        + aprovados + ' de ' + lista.length + ' modelos aprovados">' + pontos + '</span>';
+}
+
 function atualizarBarraFinalCliente(osId) {
     if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
 
@@ -1725,19 +1908,28 @@ function atualizarBarraFinalCliente(osId) {
     // Verificar se pelo menos um modelo está reprovado (alteração)
     const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
 
+    // Os ícones, quando o módulo deles carregou. Sem ele o rótulo em texto
+    // continua dizendo tudo — que é a razão de o rótulo existir.
+    const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
+
     let html = '';
     if (todosAprovados) {
-        // Verde, ativo, Finalizar e Aprovar Pedido Completo
+        // Verde, ativo. O rótulo diz as DUAS coisas que o toque faz: aprova as
+        // artes e leva à etapa seguinte. "FINALIZAR E APROVAR PEDIDO COMPLETO"
+        // dizia só a primeira, e em caixa alta soava como o fim do caminho --
+        // quando na verdade ainda faltam a conferência da entrega e a da nota,
+        // que é para onde este botão leva.
         html = `
             <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
-                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+                ${icone('check', 18)}Aprovar artes e continuar
             </button>
         `;
     } else if (algumReprovado) {
-        // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
+        // Laranja, ativo. Mesma cor do chip "Alteração pedida" no cartão e da
+        // caixa onde ele escreveu: é o mesmo assunto atravessando a tela.
         html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #ef4444; color: #ffffff; border: 1px solid #ef4444; cursor: pointer; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
-                ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #f97316; color: #ffffff; border: 1px solid #f97316; cursor: pointer; box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);">
+                ${icone('chat', 18)}Enviar pedidos de alteração
             </button>
         `;
     } else {
@@ -1757,15 +1949,18 @@ function atualizarBarraFinalCliente(osId) {
         // Cinza OPACO, sem `opacity`: ver o cabeçalho desta função.
         const faltam = itens.filter(item => item.amostra_status !== 'APROVADA').length;
         const recado = faltam === 1
-            ? 'Falta <b>1 modelo</b> para aprovar.'
-            : 'Faltam <b>' + faltam + ' modelos</b> para aprovar.';
+            ? 'Falta <b>1 modelo</b> para decidir.'
+            : 'Faltam <b>' + faltam + ' modelos</b> para decidir.';
 
+        // Os nomes dos botões, escritos aqui como estão escritos LÁ. Se um dia
+        // o rótulo do cartão mudar e este texto não, a saída da trava passa a
+        // apontar para um botão que não existe — que é a pior forma de trava.
         html = `
             <div class="portal-aviso calmo" style="margin: 0 0 10px; text-align: center;">
-                ${recado} Role a página e toque em <b>APROVAR</b> ou <b>ALTERAR</b> em cada um.
+                ${recado} Role a página e toque em <b>Aprovar</b> ou <b>Pedir alteração</b> em cada um.
             </div>
             <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="${FORMA_DO_BOTAO_FINAL} background-color: #2b3444; color: #94a3b8; border: 1px solid #3d485c; cursor: not-allowed;">
-                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+                ${icone('check', 18)}Aprovar artes e continuar
             </button>
         `;
     }
@@ -3101,6 +3296,43 @@ async function renderItemAmostraCombinada(idx, osId) {
 function saveAmostraItemObs(itemId, osId, obs) {
     saveAmostraToDB(itemId, osId, { amostra_obs: obs });
 }
+
+/**
+ * Abre a caixa de alteração de um modelo — e não grava nada ainda.
+ *
+ * O par de botões do cliente é "Aprovar" e "Pedir alteração". O primeiro decide
+ * na hora; o segundo não pode, porque uma alteração sem descrição não serve
+ * para ninguém: o `decisionAmostraItem` recusa `REPROVADA` com a observação
+ * vazia, e é assim que tem de ser — a gráfica não sabe o que refazer.
+ *
+ * Até 25/08/2026 a caixa de texto ficava aberta em TODO modelo, o tempo todo,
+ * para atender a essa exigência. O preço era a tela: o cliente encontrava um
+ * campo de anotação aberto antes de olhar a arte, rotulado com vocabulário do
+ * painel interno, e sem nada dizendo para que servia.
+ *
+ * Agora a exigência continua e a caixa só aparece quando ele diz que quer
+ * alterar. Quem grava é o botão de dentro dela.
+ *
+ * Cuidado ao mexer: o `<textarea>` precisa continuar existindo no HTML mesmo
+ * com a caixa fechada. É dele que o `decisionAmostraItem` lê — e um botão que
+ * chame a gravação sem o campo na página faria a recusa cair num `focus()` de
+ * elemento inexistente, deixando o cliente com um aviso e nenhum lugar para
+ * escrever.
+ */
+function abrirPedidoDeAlteracao(itemId) {
+    const caixa = document.getElementById('amostra-alteracao-' + itemId);
+    if (!caixa) return;
+    caixa.style.display = 'block';
+
+    const campo = document.getElementById('amostra-obs-' + itemId);
+    if (campo) {
+        // `scrollIntoView` antes do foco: no celular o teclado sobe e cobre a
+        // metade de baixo da tela, e a caixa que acabou de abrir fica embaixo
+        // dele. Aqui ela vai para o meio da tela antes de o teclado nascer.
+        if (campo.scrollIntoView) campo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        campo.focus();
+    }
+}
 window.saveAmostraItemObs = saveAmostraItemObs;
 
 // ========== MODO PDF MULTI-PÁGINA (Cliente) ==========
@@ -3423,7 +3655,14 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
  * mensagem (é o caso de quando ainda não há arte pronta); `true` põe a mensagem
  * ACIMA das artes, que continuam visíveis e com lightbox.
  */
-function avisoDaArte(icone, titulo, texto, manterArtes) {
+/**
+ * O recado no alto da aba da arte: o que aconteceu com este pedido.
+ *
+ * `icone` é o NOME de um ícone do `icones-cliente.js`, e não um emoji, e
+ * `cor` é a do estado — a mesma que o selo do cabeçalho está usando, para o
+ * cliente ligar as duas coisas sem ter de ler duas vezes.
+ */
+function avisoDaArte(icone, cor, titulo, texto, manterArtes) {
     const secao = document.getElementById('secao-arte');
     if (!secao) return;
 
@@ -3435,9 +3674,16 @@ function avisoDaArte(icone, titulo, texto, manterArtes) {
         secao.insertBefore(aviso, secao.firstChild);
     }
 
+    // O ícone vem desenhado, e num círculo tingido da cor do estado. Antes era
+    // um emoji a 2,6rem: no Android do cliente, no iPhone e no Windows saíam
+    // três desenhos diferentes, e nenhum deles acompanhava a cor do recado.
+    const svg = typeof iconeCliente === 'function' ? iconeCliente(icone, 30, cor) : '';
+
     aviso.innerHTML = '<div style="text-align: center; padding: 6px 0 2px;">'
-        + '<div style="font-size: 2.6rem; line-height: 1.1;">' + icone + '</div>'
-        + '<h2 style="justify-content: center; border: 0; padding: 0; margin: 10px 0 6px;">'
+        + '<div style="width: 58px; height: 58px; margin: 0 auto; border-radius: 50%; '
+        + 'display: flex; align-items: center; justify-content: center; '
+        + 'background: ' + cor + '1f; border: 1px solid ' + cor + '59;">' + svg + '</div>'
+        + '<h2 style="justify-content: center; border: 0; padding: 0; margin: 12px 0 6px;">'
         + escapeHtml(titulo) + '</h2>'
         + '<p class="portal-vazio" style="margin: 0;">' + texto + '</p>'
         + '</div>';
@@ -3490,7 +3736,7 @@ function desenharSecaoArte(osId) {
 
     if (chave === 'aprovado') {
         renderAmostrasOSItens(osId);
-        avisoDaArte('✅', 'Artes aprovadas',
+        avisoDaArte('check', '#22c55e', 'Artes aprovadas',
             'Você já aprovou estas artes. Elas estão abaixo, como foram aprovadas — '
             + 'toque em qualquer uma para ampliar. Em breve seu pedido entra em produção.', true);
         return;
@@ -3498,7 +3744,7 @@ function desenharSecaoArte(osId) {
 
     if (chave === 'producao') {
         renderAmostrasOSItens(osId);
-        avisoDaArte('🖨️', 'Pedido em produção',
+        avisoDaArte('impressora', '#38bdf8', 'Pedido em produção',
             'Suas artes já estão na impressora. Confira o prazo e o endereço na aba '
             + '<b>Entrega</b>.', true);
         return;
@@ -3515,12 +3761,12 @@ function desenharSecaoArte(osId) {
                 texto += '<br>• <b>' + escapeHtml(p.modelo) + ':</b> ' + escapeHtml(p.texto);
             });
         }
-        avisoDaArte('🔧', 'Alteração solicitada', texto, true);
+        avisoDaArte('lapis', '#f97316', 'Alteração solicitada', texto, true);
         return;
     }
 
     // `preparando`, e qualquer status que o ERP invente amanhã.
-    avisoDaArte('🎨', 'Arte em preparação',
+    avisoDaArte('arte', '#94a3b8', 'Arte em preparação',
         'Nossa equipe está preparando sua arte. Quando ela estiver pronta, você recebe '
         + 'um aviso e ela aparece aqui, nesta mesma página. Enquanto isso, confira seus '
         + 'dados nas outras abas.', false);

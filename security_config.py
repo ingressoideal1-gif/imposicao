@@ -138,6 +138,12 @@ PAINEL_ARQUIVOS = [
     "cliente-faturamento.js",
     "cliente-orcamento.js",
     "cliente-pagamento.js",
+    # Os icones desenhados do Portal do Pedido (25/08/2026), que substituiram os
+    # emoji das abas, dos selos e dos botoes. Sem ele aqui a estacao serviria uma
+    # `cliente.html` que pede um script inexistente: as abas ficariam sem
+    # desenho -- com o rotulo em texto, que e o que salva a navegacao -- e o
+    # `pintarIconesDaPagina` nunca rodaria.
+    "icones-cliente.js",
     # A logo da forma de envio, compartilhada entre o painel (coluna de frete da
     # lista de pedidos) e a aba de Entrega do Portal do Pedido, desde 20/08/2026.
     "logo-do-frete.js",

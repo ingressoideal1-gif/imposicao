@@ -102,7 +102,7 @@ function desenharSecaoOrcamento() {
 
     if (resumo) {
         html += '<div class="portal-cartao">'
-             + '<h2>💰 Seu orçamento</h2>'
+             + '<h2>' + tituloDoCartao('orcamento', 'Seu orçamento') + '</h2>'
              + '<div class="portal-resumo">' + negritoDoWhatsapp(resumo) + '</div>'
              + '</div>';
     } else {
@@ -126,13 +126,15 @@ function desenharSecaoOrcamento() {
                   + '<span class="portal-linha-valor">' + escapeHtml(o.frete) + '</span>'
                   + '</div>';
         }
-        html += '<div class="portal-cartao"><h2>💰 Seu orçamento</h2>' + corpo + '</div>';
+        html += '<div class="portal-cartao"><h2>' + tituloDoCartao('orcamento', 'Seu orçamento') + '</h2>'
+             + corpo + '</div>';
     }
 
     html += '<div class="portal-cartao"><div class="portal-vazio">'
          + 'Este é o orçamento aprovado no fechamento do pedido. Para mudar quantidade, '
          + 'produto ou valor, fale com seu atendimento.'
-         + '</div></div>';
+         + '</div></div>'
+         + botaoDeAjuda(dados);
 
     secao.innerHTML = html;
 }

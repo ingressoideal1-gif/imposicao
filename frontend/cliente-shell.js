@@ -142,6 +142,11 @@ function abrirSecao(nome) {
 
     // A rolagem volta ao topo: a aba nova começa do começo.
     if (window.scrollTo) window.scrollTo(0, 0);
+
+    // A trilha marca em azul a etapa que está aberta, então ela se redesenha a
+    // cada troca de aba — depois do desenho da seção, para já ler o que a seção
+    // tenha decidido na montagem.
+    atualizarPainelDoPedido();
 }
 
 /** Marca uma seção para ser desenhada de novo na próxima abertura. */
@@ -150,15 +155,181 @@ function redesenharSecao(nome) {
     if (secaoAtual === nome) abrirSecao(nome);
 }
 
-/** O selo do status no cabeçalho. */
+/**
+ * O selo do status no cabeçalho — preenchido, e com um ponto na cor.
+ *
+ * Até 25/08/2026 ele era um contorno vazado: borda e texto na cor, fundo
+ * transparente. No escuro do fundo da página, e na tela de um celular no sol,
+ * âmbar (`aguardando aprovação`) e laranja (`alteração solicitada`) ficavam
+ * indistinguíveis um do outro — e são justamente os dois estados em que o
+ * cliente precisa fazer alguma coisa.
+ *
+ * O fundo tingido dá área de cor suficiente para o olho separar os dois, e o
+ * ponto repete o estado num segundo canal: mesmo sem enxergar a diferença de
+ * matiz, ele vê que há um marcador aceso. O texto continua sendo quem diz o
+ * que é — cor nenhuma nesta página carrega informação sozinha.
+ */
 function pintarSeloDoStatus(statusArte) {
     const el = document.getElementById('portal-selo');
     if (!el) return;
     const selo = seloDoStatus(statusArte);
-    el.textContent = selo.texto;
+
+    // Montado por DOM, e não por `innerHTML`: o texto do selo é nosso, mas esta
+    // função é chamada em toda troca de status, e um dia alguém passa por aqui
+    // um texto vindo do banco. Assim isso nunca vira injeção.
+    el.textContent = '';
+    const ponto = document.createElement('span');
+    ponto.className = 'portal-selo-ponto';
+    ponto.style.background = selo.cor;
+    el.appendChild(ponto);
+    el.appendChild(document.createTextNode(selo.texto));
+
     el.style.color = selo.cor;
     el.style.borderColor = selo.cor;
+    // `18` é o alfa em hexadecimal: ~9% de cor sobre o fundo escuro. Tingimento
+    // suficiente para separar os estados, fraco o bastante para o texto na
+    // mesma cor continuar legível por cima.
+    el.style.background = selo.cor.length === 7 ? selo.cor + '22' : 'transparent';
     el.dataset.chave = selo.chave;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  A trilha: as três etapas que fecham o pedido
+// ══════════════════════════════════════════════════════════════════════════
+//
+// O Portal tem cinco abas, mas só TRÊS delas pedem alguma coisa do cliente:
+// aprovar a arte, conferir a entrega e conferir os dados da nota. Orçamento e
+// Pagamento são consulta.
+//
+// Até 25/08/2026 essa distinção não existia na tela. As cinco abas eram
+// idênticas, e o que faltava só era dito DENTRO de cada uma, no fim da rolagem:
+// o cliente que abrisse na aba de Orçamento não tinha como saber que havia duas
+// conferências esperando por ele em outro lugar.
+//
+// A trilha mora fora das seções, acima de todas, e responde a pergunta antes de
+// ele ter de procurar: quantas etapas faltam, e quais.
+
+/** As três etapas, com o que já foi feito. */
+function etapasDoPedido() {
+    const c = window.portalConfirmacoes || {};
+
+    // A arte usa a MESMA pergunta que o cartão de finalização faz — e não uma
+    // conta paralela. Duas contas sobre a mesma coisa acabam divergindo, e o
+    // cliente veria a trilha dizer "concluída" com o botão de finalizar ainda
+    // travado por causa da arte.
+    const arteFeita = typeof artesJaAprovadas === 'function' ? artesJaAprovadas() : false;
+
+    // `null` é "ainda não decidiu"; `false` é "pediu alteração", que É uma
+    // decisão — o pedido dele já está registrado e vai para o atendimento.
+    const decidiu = v => v === true || v === false;
+
+    return [
+        { secao: 'arte',        nome: 'Arte',    feito: arteFeita },
+        { secao: 'entrega',     nome: 'Entrega', feito: decidiu(c.entrega) },
+        { secao: 'faturamento', nome: 'Nota',    feito: decidiu(c.faturamento) }
+    ];
+}
+
+/** Desenha a trilha. Chamada em toda abertura de aba e a cada decisão. */
+function desenharTrilha() {
+    const caixa = document.getElementById('portal-trilha');
+    if (!caixa) return;
+
+    const etapas = etapasDoPedido();
+    const feitas = etapas.filter(e => e.feito).length;
+    const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
+
+    const passos = etapas.map(e => {
+        const estado = e.feito ? 'feito' : (e.secao === secaoAtual ? 'agora' : 'pendente');
+        return '<button type="button" class="portal-passo portal-passo-' + estado + '" '
+             + 'data-abre="' + e.secao + '">'
+             + icone(e.feito ? 'check' : 'relogio', 15)
+             + '<span>' + e.nome + '</span>'
+             + '</button>';
+    }).join('');
+
+    caixa.innerHTML =
+        '<div class="portal-trilha-topo">'
+        + '<span class="portal-trilha-rotulo">Para fechar o pedido</span>'
+        + '<span class="portal-trilha-conta">' + feitas + ' de 3 concluídas</span>'
+        + '</div>'
+        + '<div class="portal-trilha-barra">'
+        + '<div class="portal-trilha-fill" style="width: ' + Math.round((feitas / 3) * 100) + '%;"></div>'
+        + '</div>'
+        + '<div class="portal-trilha-passos">' + passos + '</div>';
+
+    // Cada etapa leva à aba dela: a trilha diz o que falta E é o caminho até
+    // lá. Trilha que só informa obrigaria o cliente a traduzir "Nota" na aba
+    // certa lá embaixo.
+    caixa.querySelectorAll('.portal-passo').forEach(botao => {
+        botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
+    });
+
+    caixa.hidden = false;
+}
+
+/**
+ * O sinal de pendência em cima de cada aba.
+ *
+ * Três estados, e o terceiro é a ausência dos outros dois: ponto âmbar quando a
+ * aba espera uma ação, visto verde quando já foi resolvida, e nada quando a aba
+ * é só informação. Sem isso, as cinco abas são iguais e o cliente descobre o
+ * que falta abrindo uma por uma.
+ *
+ * Pagamento só acende quando há de fato o que ele possa fazer AQUI: cobrança em
+ * aberto com link que abre. Pedido faturado, ou cobrança sem link liberado, não
+ * ganha ponto — um sinal de pendência que não tem botão do outro lado é só
+ * cobrança em cima de quem não pode resolver.
+ */
+function atualizarSinaisDasAbas() {
+    const etapas = etapasDoPedido();
+    const sinais = {};
+    etapas.forEach(e => { sinais[e.secao] = e.feito ? 'ok' : 'pendente'; });
+
+    const dados = window.portalDados || {};
+    const cobrancas = dados.pagamentos || [];
+    if (typeof statusDoPagamento === 'function' && typeof podePagar === 'function') {
+        const chave = statusDoPagamento(cobrancas).chave;
+        if ((chave === 'aberto' || chave === 'parcial') && cobrancas.some(podePagar)) {
+            sinais.pagamento = 'pendente';
+        } else if (chave === 'pago') {
+            sinais.pagamento = 'ok';
+        }
+    }
+
+    SECOES.forEach(secao => {
+        const botao = document.querySelector('.portal-aba[data-abre="' + secao + '"]');
+        if (!botao) return;
+
+        let marca = botao.querySelector('.portal-aba-sinal');
+        const estado = sinais[secao];
+
+        if (!estado) {
+            if (marca) marca.remove();
+            botao.removeAttribute('data-sinal');
+            return;
+        }
+
+        if (!marca) {
+            marca = document.createElement('span');
+            marca.className = 'portal-aba-sinal';
+            botao.insertBefore(marca, botao.firstChild);
+        }
+        botao.dataset.sinal = estado;
+        marca.innerHTML = estado === 'ok' && typeof iconeClienteForte === 'function'
+            ? iconeClienteForte('check', 11, '#22c55e')
+            : '';
+        // O rótulo do estado vai para quem não vê a cor: o leitor de tela lê
+        // "Entrega, falta você" em vez de só "Entrega".
+        marca.setAttribute('aria-label', estado === 'ok' ? 'já resolvida' : 'falta você');
+        marca.setAttribute('role', 'img');
+    });
+}
+
+/** A trilha e os sinais, juntos — o que muda a cada decisão do cliente. */
+function atualizarPainelDoPedido() {
+    desenharTrilha();
+    atualizarSinaisDasAbas();
 }
 
 /**
@@ -169,6 +340,12 @@ function pintarSeloDoStatus(statusArte) {
  */
 function montarPortal(statusArte) {
     pintarSeloDoStatus(statusArte);
+
+    // Os ícones das abas e do lightbox: o HTML guarda só o NOME de cada um, e o
+    // desenho vem do `icones-cliente.js`. Se aquele arquivo não carregar, as
+    // abas ficam sem ícone e COM o rótulo escrito — que é o que o cliente
+    // precisa para achar o destino.
+    if (typeof pintarIconesDaPagina === 'function') pintarIconesDaPagina();
 
     document.querySelectorAll('.portal-aba').forEach(botao => {
         botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
@@ -188,3 +365,7 @@ window.registrarSecao = registrarSecao;
 window.abrirSecao = abrirSecao;
 window.redesenharSecao = redesenharSecao;
 window.montarPortal = montarPortal;
+window.etapasDoPedido = etapasDoPedido;
+window.desenharTrilha = desenharTrilha;
+window.atualizarSinaisDasAbas = atualizarSinaisDasAbas;
+window.atualizarPainelDoPedido = atualizarPainelDoPedido;

@@ -116,50 +116,163 @@ function vencimentoEmDia(valor) {
          + data.getFullYear();
 }
 
+/** O ícone, quando o módulo dele carregou. */
+function iconeDoPagamento(nome, px, cor) {
+    return typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
+}
+
+/**
+ * O dinheiro do pedido em três números: pago, falta e total.
+ *
+ * A soma sai das COBRANÇAS, e não de `propostas.valor_total`. São coisas
+ * diferentes quando o pedido foi cobrado em parcelas com entrada, ou quando o
+ * financeiro cancelou uma cobrança e emitiu outra: o total do orçamento fica
+ * onde estava, e o que o cliente tem a pagar é o que está em aberto nas
+ * cobranças vivas. Dizer "falta R$ 5.700" para quem já pagou a entrada seria
+ * cobrá-lo duas vezes na tela.
+ *
+ * Cobrança CANCELADA não entra em nenhum dos lados -- é a mesma regra do
+ * `contarCobrancas`, e o porquê está no `pagamento-do-pedido.js`.
+ *
+ * Cobrança sem valor numérico conta como zero na soma e continua aparecendo na
+ * lista abaixo, com o valor que tiver: sumir com ela do painel seria esconder
+ * dinheiro; somá-la como zero é só não inventar um número que não veio.
+ */
+function contasDoPagamento(cobrancas) {
+    const vivas = (cobrancas || []).filter(c => c && !cobrancaCancelada(c));
+    const soma = lista => lista.reduce((acc, c) => {
+        const n = Number(c.valor);
+        return acc + (isFinite(n) ? n : 0);
+    }, 0);
+
+    const pagas = vivas.filter(cobrancaPaga);
+    const abertas = vivas.filter(c => !cobrancaPaga(c));
+
+    return {
+        temCobranca: vivas.length > 0,
+        pago: soma(pagas),
+        falta: soma(abertas),
+        total: soma(vivas),
+        qtdPagas: pagas.length,
+        qtdTotal: vivas.length
+    };
+}
+
+/**
+ * O painel do dinheiro: um só, no lugar das duas caixas que havia.
+ *
+ * Até 25/08/2026 esta aba abria com DUAS caixas de destaque empilhadas -- uma
+ * com "Status do pagamento" e outra com "Total do pedido" --, e o total já era
+ * o mesmo número que a aba de Orçamento mostra em destaque. Duas caixas do
+ * mesmo tamanho, uma delas repetindo outra aba, e nenhuma respondendo o que o
+ * cliente vem perguntar aqui: quanto eu ainda devo?
+ *
+ * Agora o número grande é o que FALTA, com o já pago e o total em letra menor
+ * embaixo da barra -- presentes, porque o cliente confere, mas sem disputar a
+ * atenção com a resposta.
+ */
+function painelDoPagamento(cobrancas, pedido) {
+    const geral = statusDoPagamento(cobrancas);
+    const c = contasDoPagamento(cobrancas);
+
+    // Sem cobrança nenhuma não há o que faltar: o painel mostra o valor do
+    // pedido e o estado, e o cartão de baixo explica que a cobrança ainda não
+    // saiu. Dizer "falta R$ 0,00" aqui seria dizer que está pago.
+    if (!c.temCobranca) {
+        return '<div class="portal-pagamento-painel" style="border-color: ' + geral.cor + '59;">'
+            + '<div class="portal-pagamento-topo"><div>'
+            + '<span class="portal-pagamento-rotulo">Total do pedido</span>'
+            + '<span class="portal-pagamento-valor">' + escapeHtml(emReal(pedido && pedido.valor_total)) + '</span>'
+            + '</div>'
+            + '<span class="portal-pagamento-situacao" style="background: ' + geral.cor + '24; color: '
+            + geral.cor + ';">' + escapeHtml(geral.texto) + '</span>'
+            + '</div></div>';
+    }
+
+    const pago = geral.chave === 'pago';
+    const rotulo = pago ? 'Tudo pago' : 'Falta pagar';
+    const valor = pago ? c.total : c.falta;
+    const cor = pago ? '#22c55e' : geral.cor;
+
+    // A barra sai quando os valores não vieram: uma barra que não anda, ou que
+    // anda por engano, diz uma mentira sobre dinheiro. Aí a legenda conta
+    // COBRANÇAS ("1 de 2 pagas"), que é o que se sabe.
+    const medidor = c.total > 0
+        ? '<div class="portal-medidor"><div class="portal-medidor-fill" style="width: '
+          + Math.min(100, Math.round((c.pago / c.total) * 100)) + '%;"></div></div>'
+          + '<div class="portal-medidor-legenda">'
+          + '<b>' + escapeHtml(emReal(c.pago)) + ' pagos</b>'
+          + '<span>Total ' + escapeHtml(emReal(c.total)) + '</span>'
+          + '</div>'
+        : '<div class="portal-medidor-legenda" style="margin-top: 12px;">'
+          + '<b>' + c.qtdPagas + ' de ' + c.qtdTotal + ' cobranças pagas</b>'
+          + '<span>Total ' + escapeHtml(emReal(pedido && pedido.valor_total)) + '</span>'
+          + '</div>';
+
+    return '<div class="portal-pagamento-painel" style="border-color: ' + cor + '59;">'
+        + '<div class="portal-pagamento-topo"><div>'
+        + '<span class="portal-pagamento-rotulo">' + rotulo + '</span>'
+        + '<span class="portal-pagamento-valor" style="color: ' + cor + ';">'
+        + escapeHtml(emReal(valor)) + '</span>'
+        + '</div>'
+        + '<span class="portal-pagamento-situacao" style="background: ' + geral.cor + '24; color: '
+        + geral.cor + ';">' + escapeHtml(geral.texto) + '</span>'
+        + '</div>'
+        + medidor
+        + '</div>';
+}
+
 /** Um cartão por cobrança. */
 function cartaoDaCobranca(cobranca, indice, total) {
     const st = rotuloDoStatus(cobranca.status);
     const venc = vencimentoEmDia(cobranca.vencimento);
+    const paga = String(cobranca.status || '').toUpperCase() === 'PAID';
 
     // O título só numera quando há mais de uma: "Cobrança 1 de 1" é ruído.
     const titulo = total > 1
-        ? '💳 Cobrança ' + (indice + 1) + ' de ' + total
-        : '💳 Pagamento';
+        ? 'Parcela ' + (indice + 1) + ' de ' + total
+        : 'Pagamento';
 
-    let corpo = '<div class="portal-linha">'
-        + '<span class="portal-linha-rotulo">Forma de pagamento</span>'
-        + '<span class="portal-linha-valor forte">' + escapeHtml(rotuloDaForma(cobranca.forma)) + '</span>'
-        + '</div>'
-        + '<div class="portal-linha">'
+    // A cobrança em aberto vem à frente; a paga fica recolhida.
+    //
+    // O que muda entre as duas é o que o cliente ainda pode fazer. A paga é
+    // recibo: forma, valor e a data em que entrou, num cartão de peso normal.
+    // A aberta é tarefa: o valor grande, o vencimento e o botão que resolve.
+    const cabecalho = '<div class="portal-cobranca-topo">'
+        + '<span class="portal-cobranca-nome">'
+        + iconeDoPagamento(paga ? 'check' : 'pagar', 20, paga ? '#22c55e' : st.cor)
+        + '<span>' + escapeHtml(titulo)
+        + '<small>' + escapeHtml(rotuloDaForma(cobranca.forma))
+        + (venc ? (paga ? ' · venceu em ' : ' · vence em ') + escapeHtml(venc) : '') + '</small>'
+        + '</span></span>'
+        + '<span class="portal-cobranca-valor"' + (paga ? ' style="color: var(--text-dim);"' : '') + '>'
+        + escapeHtml(emReal(cobranca.valor)) + '</span>'
+        + '</div>';
+
+    const situacao = '<div class="portal-linha" style="border-bottom: 0; padding-bottom: 0;">'
         + '<span class="portal-linha-rotulo">Situação</span>'
         + '<span class="portal-linha-valor forte" style="color: ' + st.cor + ';">'
         + escapeHtml(st.texto) + '</span>'
-        + '</div>'
-        + '<div class="portal-linha">'
-        + '<span class="portal-linha-rotulo">Valor</span>'
-        + '<span class="portal-linha-valor">' + escapeHtml(emReal(cobranca.valor)) + '</span>'
         + '</div>';
 
-    if (venc) {
-        corpo += '<div class="portal-linha">'
-              + '<span class="portal-linha-rotulo">Vencimento</span>'
-              + '<span class="portal-linha-valor">' + escapeHtml(venc) + '</span>'
-              + '</div>';
-    }
+    let corpo = cabecalho + situacao;
 
     if (podePagar(cobranca)) {
         // `noopener noreferrer`: o destino é o sistema de pagamento, fora deste
         // domínio, e a página aberta não tem por que alcançar esta aqui.
         corpo += '<a class="portal-botao principal" style="margin-top: 14px;" href="'
               + escapeHtml(String(cobranca.link).trim())
-              + '" target="_blank" rel="noopener noreferrer">💳 Pagar agora</a>';
-    } else if (String(cobranca.status || '').toUpperCase() !== 'PAID') {
-        corpo += '<div class="portal-aviso calmo" style="margin-top: 14px;">'
+              + '" target="_blank" rel="noopener noreferrer">'
+              + iconeDoPagamento('fora', 18) + 'Pagar agora</a>';
+    } else if (!paga) {
+        corpo += '<div class="portal-aviso calmo" style="margin-top: 14px; margin-bottom: 0;">'
               + 'O link desta cobrança ainda não foi liberado. Fale com seu atendimento.'
               + '</div>';
     }
 
-    return '<div class="portal-cartao"><h2>' + titulo + '</h2>' + corpo + '</div>';
+    return '<div class="portal-cartao"'
+        + (podePagar(cobranca) ? ' style="border-color: ' + st.cor + '73;"' : '')
+        + '>' + corpo + '</div>';
 }
 
 function desenharSecaoPagamento() {
@@ -169,24 +282,15 @@ function desenharSecaoPagamento() {
     const dados = window.portalDados || {};
     const pedido = dados.pedido || {};
     const cobrancas = dados.pagamentos || [];
-    const geral = statusDoPagamento(cobrancas);
 
-    // O status em destaque, antes de tudo — é a resposta à pergunta que traz o
-    // cliente a esta aba.
-    let html = '<div class="portal-total" style="background: rgba(148, 163, 184, 0.08); '
-        + 'border-color: ' + geral.cor + ';">'
-        + '<span class="portal-total-rotulo">Status do pagamento</span>'
-        + '<span class="portal-total-valor" style="color: ' + geral.cor + '; font-size: 1.25rem;">'
-        + escapeHtml(geral.texto) + '</span>'
-        + '</div>'
-        + '<div class="portal-total">'
-        + '<span class="portal-total-rotulo">Total do pedido</span>'
-        + '<span class="portal-total-valor">' + escapeHtml(emReal(pedido.valor_total)) + '</span>'
-        + '</div>';
+    // Quanto falta, em destaque, antes de tudo — é a resposta à pergunta que
+    // traz o cliente a esta aba. Quem calcula o estado é o `painelDoPagamento`,
+    // pelo `statusDoPagamento`.
+    let html = painelDoPagamento(cobrancas, pedido);
 
     if (!cobrancas.length) {
         html += '<div class="portal-cartao">'
-             + '<h2>💳 Pagamento</h2>'
+             + '<h2>' + tituloDoCartao('pagar', 'Pagamento') + '</h2>'
              + '<div class="portal-vazio">'
              + 'A cobrança deste pedido ainda não foi gerada. Assim que ela sair, o link '
              + 'aparece aqui nesta mesma página — é só voltar por este link. Se precisar '
@@ -194,8 +298,17 @@ function desenharSecaoPagamento() {
              + escapeHtml(String(pedido.numero || '')) + '.'
              + '</div></div>';
     } else {
-        html += cobrancas.map((c, i) => cartaoDaCobranca(c, i, cobrancas.length)).join('');
+        // A cobrança em ABERTO primeiro, e a paga depois. O que o cliente veio
+        // fazer aqui é pagar o que falta; recibo de parcela quitada é
+        // conferência, e conferência espera.
+        const emAberto = cobrancas.filter(c => String(c.status || '').toUpperCase() !== 'PAID');
+        const quitadas = cobrancas.filter(c => String(c.status || '').toUpperCase() === 'PAID');
+        html += emAberto.concat(quitadas)
+            .map(c => cartaoDaCobranca(c, cobrancas.indexOf(c), cobrancas.length))
+            .join('');
     }
+
+    html += botaoDeAjuda(dados);
 
     secao.innerHTML = html;
 }
@@ -204,6 +317,8 @@ registrarSecao('pagamento', desenharSecaoPagamento);
 
 window.desenharSecaoPagamento = desenharSecaoPagamento;
 window.statusDoPagamento = statusDoPagamento;
+window.contasDoPagamento = contasDoPagamento;
+window.painelDoPagamento = painelDoPagamento;
 window.rotuloDaForma = rotuloDaForma;
 window.rotuloDoStatus = rotuloDoStatus;
 window.podePagar = podePagar;

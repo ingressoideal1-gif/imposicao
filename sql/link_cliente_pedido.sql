@@ -300,7 +300,25 @@ BEGIN
             'bairro',      v_grafica.bairro,
             'cidade',      v_grafica.municipio,
             'uf',          v_grafica.uf,
-            'cep',         v_grafica.cep
+            'cep',         v_grafica.cep,
+            -- O telefone da gráfica, para o botão "falar com o meu atendimento".
+            --
+            -- Meia dúzia de avisos daquela página terminam em "fale com seu
+            -- atendimento" e não ofereciam caminho nenhum: o cliente tinha de
+            -- sair do link e procurar a conversa. Toda trava desta casa mostra
+            -- a saída na própria tela, e esta era a exceção.
+            --
+            -- O número sai do CADASTRO, e não do código do site: gráfica que
+            -- troca de telefone não pode depender de uma publicação para o
+            -- botão voltar a funcionar. `telefone_nfse` primeiro porque é o
+            -- campo preenchido hoje; `telefone_nfe` é a reserva.
+            --
+            -- `btrim` porque o cadastro guarda o número com uma quebra de linha
+            -- na frente ("\r\n5132403363"), e a página monta um `href` com ele.
+            -- Vazio vira NULL, e sem número o botão simplesmente não nasce --
+            -- um botão de contato que não contata é pior do que aviso nenhum.
+            'telefone',    NULLIF(btrim(COALESCE(NULLIF(btrim(COALESCE(v_grafica.telefone_nfse, '')), ''),
+                                                 v_grafica.telefone_nfe, '')), '')
         ) END,
         'itens', COALESCE(v_itens, '[]'::jsonb),
         'os', CASE WHEN v_os.id IS NULL THEN NULL ELSE jsonb_build_object(

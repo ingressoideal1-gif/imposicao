@@ -292,10 +292,41 @@ const podePagar = doPagamento('podePagar');
 
 (function oStatusVaiEmDestaque() {
     // Pedido do usuario em 20/08/2026: o status do pagamento em destaque.
+    //
+    // Em 25/08/2026 as DUAS caixas empilhadas ("Status do pagamento" e "Total do
+    // pedido", uma delas repetindo a aba de Orcamento) viraram um painel so, e o
+    // numero grande passou a ser o que FALTA pagar -- que e a pergunta que traz
+    // o cliente a esta aba. O destaque continua existindo; mudou de nome.
     const desenha = recortar(PAGAMENTO, 'desenharSecaoPagamento');
-    ok(/portal-total/.test(desenha) || /portal-destaque/.test(desenha),
+    const painel = recortar(PAGAMENTO, 'painelDoPagamento');
+    ok(desenha.indexOf('painelDoPagamento') > 0, 'a aba abre pelo painel do dinheiro');
+    ok(/portal-pagamento-painel/.test(painel) || /portal-total/.test(painel),
         'o status usa a caixa de destaque, e nao uma linha qualquer');
-    ok(desenha.indexOf('statusDoPagamento') > 0, 'e vem do status calculado das cobrancas');
+    ok(painel.indexOf('statusDoPagamento') > 0, 'e vem do status calculado das cobrancas');
+})();
+
+(function oPainelNaoRepeteOTotalNoLugarDoQueFalta() {
+    // O numero grande e o que FALTA. O total e o ja pago continuam na tela, em
+    // letra menor embaixo da barra: o cliente confere, mas eles nao disputam a
+    // atencao com a resposta.
+    const painel = recortar(PAGAMENTO, 'painelDoPagamento');
+    ok(painel.indexOf('Falta pagar') > 0, 'o rotulo do numero grande e "Falta pagar"');
+    ok(/portal-medidor-legenda/.test(painel), 'e o total fica na legenda da barra');
+
+    // Sem cobranca nenhuma nao ha o que faltar: ali o painel mostra o valor do
+    // pedido. Dizer "falta R$ 0,00" seria dizer que esta pago -- e 350 dos
+    // pedidos da Lista de Arte estao nesse caso porque a cobranca ainda nao saiu.
+    ok(/!c\.temCobranca/.test(painel), 'pedido sem cobranca nao entra na conta do que falta');
+})();
+
+(function aContaDoDinheiroSaiDasCobrancas() {
+    // E nao de `propostas.valor_total`: sao numeros diferentes quando o pedido
+    // foi cobrado com entrada mais parcelas, ou quando o financeiro cancelou uma
+    // cobranca e emitiu outra.
+    const contas = recortar(PAGAMENTO, 'contasDoPagamento');
+    ok(/cobrancaCancelada/.test(contas), 'cobranca cancelada fica de fora dos dois lados');
+    ok(/cobrancaPaga/.test(contas), 'e a regra de pago e a compartilhada');
+    ok(/isFinite/.test(contas), 'cobranca sem valor numerico conta como zero, e nao como NaN');
 })();
 
 if (falhas) {

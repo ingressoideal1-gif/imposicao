@@ -222,8 +222,15 @@ const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
         'e diz isso em texto, acima do botao');
     ok(/faltam === 1/.test(desabilitado),
         'com singular e plural: "Falta 1 modelo" e "Faltam 3 modelos"');
-    ok(desabilitado.indexOf('APROVAR') > 0 && desabilitado.indexOf('ALTERAR') > 0,
+    // Os rotulos dos botoes sairam da caixa alta em 25/08/2026, e o ALTERAR
+    // virou "Pedir alteracao". O recado da barra tem de citar os nomes que
+    // estao ESCRITOS nos botoes: uma saida que aponta para um botao inexistente
+    // e a pior forma de trava.
+    ok(desabilitado.indexOf('Aprovar') > 0 && desabilitado.indexOf('Pedir altera') > 0,
         'e diz o que fazer para sair da trava, que e a regra desta casa');
+    const CARTAO_CLIENTE = CLIENTE.slice(CLIENTE.indexOf('if (ehCliente) {'));
+    ok(CARTAO_CLIENTE.indexOf("'Aprovar'") > 0 && CARTAO_CLIENTE.indexOf("'Pedir alteracao'") >= -1,
+        'e os botoes existem com esses nomes no cartao');
 
     // A barra empilha o recado ACIMA do botao, e nao ao lado dele num monitor.
     ok(/\.cliente-page \.cliente-actions \{[^}]*flex-direction: column/.test(CSS),
@@ -360,6 +367,149 @@ const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
     ok(CLIENTE.indexOf('isEntregaAlterada') < 0, 'e a de entrega alterada tambem');
     ok(/registrarSecao\('arte'/.test(CLIENTE), 'a arte virou uma secao registrada');
     ok(/montarPortal\(/.test(CLIENTE), 'e o portal e montado sempre');
+})();
+
+
+// ─── 5. O cartao do cliente: a arte primeiro, a decisao depois ───────────────
+//
+// Ate 25/08/2026 o cartao abria com os botoes APROVAR/ALTERAR e com uma caixa
+// de texto rotulada "Anotacoes / Observacoes de Alteracao", e a arte vinha
+// abaixo disso. Lendo de cima para baixo -- que e como se le um celular -- o
+// cliente era convidado a decidir antes de ter visto o que estava decidindo.
+
+// So o cartao do cliente: ele termina onde comeca o preparo do template
+// INTERNO (que continua com a ordem antiga e com o vocabulario do painel).
+const CARTAO = CLIENTE.slice(CLIENTE.indexOf('if (ehCliente) {'),
+                             CLIENTE.indexOf('const filteredNumeracoes'));
+
+(function aArteVemAntesDaDecisao() {
+    const arte = CARTAO.indexOf('blocoDeArteDoCliente(item, idx, ctxDaArte)');
+    const decisao = CARTAO.indexOf('${decisao}');
+    ok(arte > 0 && decisao > 0 && arte < decisao,
+        'no cartao do cliente a arte e desenhada ACIMA dos botoes', [arte, decisao]);
+})();
+
+(function oVocabularioDoPainelInternoSaiuDaTelaDoCliente() {
+    ok(CARTAO.indexOf('Anota') < 0, 'o rotulo "Anotacoes / Observacoes" nao aparece para o cliente');
+    ok(/O que precisa mudar neste modelo/.test(CARTAO),
+        'e a caixa pergunta em portugues de cliente');
+})();
+
+(function aCaixaDeAlteracaoNasceFechada() {
+    // Ela so aparece depois de o cliente dizer que quer alterar. Aberta em todo
+    // modelo, antes de qualquer decisao, ela sugeria que escrever ali fazia
+    // parte de aprovar.
+    ok(/display: \$\{status === 'REPROVADA' \? 'block' : 'none'\}/.test(CARTAO),
+        'a caixa nasce fechada, e so abre no modelo que ja esta em alteracao');
+    // No `style=""`, e nao numa classe: regra de folha de estilo perde para
+    // atributo `style`, e nesta mesma tela um `hidden` ja deixou de esconder
+    // dois botoes por causa disso.
+    ok(/style="display: /.test(CARTAO), 'e o display vai no atributo style');
+})();
+
+(function oTextareaCONTINUAExistindoComACaixaFechada() {
+    // E dele que o `decisionAmostraItem` le a observacao, e e ele que recusa a
+    // alteracao sem descricao. Se o campo nao estivesse no HTML, a recusa cairia
+    // num `focus()` de elemento inexistente e o cliente ficaria com o aviso
+    // "anotar alteracao" e nenhum lugar para escrever.
+    ok(/id="amostra-obs-\$\{item\.id\}"/.test(CARTAO),
+        'o campo esta no HTML mesmo com a caixa fechada');
+    const abrir = extrairFuncao(CLIENTE, 'abrirPedidoDeAlteracao');
+    ok(/display = 'block'/.test(abrir), 'o botao Pedir alteracao abre a caixa');
+    ok(abrir.indexOf('decisionAmostraItem') < 0,
+        'e NAO grava nada: quem grava e o botao de dentro da caixa');
+    ok(/Enviar pedido de altera/.test(CARTAO), 'que existe e diz o que faz');
+})();
+
+(function aArteAnunciaQueAmplia() {
+    // O toque na arte sempre abriu o lightbox, e nada dizia isso: imagem nao
+    // anuncia que e clicavel, e `cursor: zoom-in` nao existe no celular.
+    ok(/amostra-ampliar/.test(CARTAO), 'o convite a ampliar esta no cartao');
+    ok(/\.amostra-ampliar \{[^}]*pointer-events: none/.test(CSS),
+        'e ele deixa o toque passar para a arte, que e quem abre o lightbox');
+})();
+
+// ─── 6. A trilha e o sinal de pendencia nas abas ─────────────────────────────
+//
+// Cinco abas identicas nao diziam onde faltava o cliente, e o que faltava so era
+// dito DENTRO de cada uma, no fim da rolagem.
+
+(function aTrilhaTemAsTresEtapasQuePedemAlgo() {
+    const etapas = extrairFuncao(SHELL, 'etapasDoPedido');
+    ['arte', 'entrega', 'faturamento'].forEach(secao => {
+        ok(etapas.indexOf("'" + secao + "'") > 0, 'a etapa ' + secao + ' esta na trilha');
+    });
+    ok(etapas.indexOf("'orcamento'") < 0 && etapas.indexOf("'pagamento'") < 0,
+        'orcamento e pagamento nao entram: sao consulta, nao pedem acao');
+    ok(/artesJaAprovadas/.test(etapas),
+        'a arte usa a MESMA pergunta do cartao de finalizacao, e nao uma conta paralela');
+    ok(/v === true \|\| v === false/.test(etapas),
+        'pedir alteracao tambem e decidir: `false` conta como etapa cumprida');
+})();
+
+(function aTrilhaLevaAAbaDaEtapa() {
+    // Dizer o que falta sem oferecer o caminho e a metade do trabalho.
+    const desenha = extrairFuncao(SHELL, 'desenharTrilha');
+    ok(/abrirSecao\(botao\.dataset\.abre\)/.test(desenha), 'cada etapa e um botao que abre a aba');
+    ok(/\.portal-passo \{[^}]*min-height: 44px/.test(CSS),
+        'e com o piso de toque de 44px, porque e controle e nao rotulo');
+})();
+
+(function oSinalDaAbaTemTresEstados() {
+    const sinais = extrairFuncao(SHELL, 'atualizarSinaisDasAbas');
+    ok(/'pendente'/.test(sinais) && /'ok'/.test(sinais), 'pendente e resolvida tem marca');
+    ok(/marca\.remove\(\)/.test(sinais), 'e aba que nao pede nada nao ganha marca nenhuma');
+    // Pagamento so acende quando ha o que ele possa fazer AQUI. Um sinal de
+    // pendencia sem botao do outro lado e cobranca em cima de quem nao pode
+    // resolver.
+    ok(/cobrancas\.some\(podePagar\)/.test(sinais),
+        'o ponto do pagamento exige cobranca com link que abre');
+    ok(/aria-label/.test(sinais), 'e o estado vai em texto para quem nao ve a cor');
+})();
+
+(function aDecisaoDosDadosMexeNaTrilha() {
+    // Sem isso o cliente confirma a entrega e continua lendo "0 de 3
+    // concluidas" logo acima: o painel diria o contrario do cartao que ele
+    // acabou de tocar.
+    const CONF = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente-confirmacoes.js'), 'utf8');
+    const decidir = CONF.slice(CONF.indexOf('window.decidirDados'), CONF.indexOf('window.desfazerDecisao'));
+    ok(/atualizarPainelDoPedido\(\)/.test(decidir), 'confirmar redesenha a trilha');
+    const render = extrairFuncao(CLIENTE, 'renderAmostrasOSItens');
+    ok(/atualizarPainelDoPedido/.test(render), 'e decidir uma arte tambem');
+})();
+
+// ─── 7. Icone desenhado, e nunca emoji ───────────────────────────────────────
+//
+// Emoji e fonte do aparelho de quem abre: no Android do cliente o desenho e
+// outro, e -- por ser colorido por definicao -- ele nao acompanha a cor do
+// rotulo ao lado. O rotulo em texto continua obrigatorio dos dois jeitos.
+
+const ICONES = fs.readFileSync(path.join(RAIZ, 'frontend', 'icones-cliente.js'), 'utf8');
+const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2700}-\u{27BF}\u{2B00}-\u{2BFF}\u{2600}-\u{26FF}]/u;
+
+(function asAbasPedemODesenhoPeloNome() {
+    ['arte', 'entrega', 'nota', 'orcamento', 'pagar'].forEach(nome => {
+        ok(HTML.indexOf('data-icone="' + nome + '"') > 0, 'a aba pede o icone ' + nome);
+        ok(ICONES.indexOf('\n    ' + nome + ':') > 0 || ICONES.indexOf(nome + ':') > 0,
+            'e o icone ' + nome + ' existe no catalogo');
+    });
+    const barra = HTML.slice(HTML.indexOf('id="portal-abas"'), HTML.indexOf('</nav>'));
+    ok(!EMOJI.test(barra), 'e nao sobrou emoji na barra de abas');
+})();
+
+(function oIconeAcompanhaACorDoTexto() {
+    ok(/stroke="' \+ \(cor \|\| 'currentColor'\)/.test(ICONES),
+        'sem cor pedida, o desenho herda a cor do texto ao lado');
+    ok(/aria-hidden="true"/.test(ICONES),
+        'e nao e anunciado pelo leitor de tela, que ja le o rotulo');
+})();
+
+(function aPaginaSobreviveSemOModuloDosIcones() {
+    // Se o `icones-cliente.js` nao carregar, as abas ficam sem desenho e COM o
+    // rotulo escrito -- que e o que o cliente precisa para achar o destino.
+    ok(/typeof iconeCliente === 'function'/.test(CLIENTE), 'o cliente.js testa antes de usar');
+    ok(/typeof iconeCliente === 'function'/.test(SHELL), 'e o casco tambem');
+    ok(/if \(!tracos\) return '';/.test(ICONES), 'e nome desconhecido nao vira quadrado vazio');
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

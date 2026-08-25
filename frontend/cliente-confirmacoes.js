@@ -129,13 +129,19 @@ function cartaoDeDecisao(qual, bloqueio) {
     const decidido = window.portalConfirmacoes[qual];
     const texto = window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'];
 
+    // Os ícones vêm desenhados do `icones-cliente.js`, e não como emoji: emoji é
+    // fonte do aparelho de quem abre, muda de forma entre Android e iPhone e não
+    // acompanha a cor do aviso ao redor. Sem o módulo, a frase sozinha continua
+    // dizendo o que aconteceu.
+    const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
+
     let estado = '';
     if (decidido === true) {
-        estado = '<div class="portal-aviso ok">✅ Você confirmou estes dados. '
+        estado = '<div class="portal-aviso ok">' + icone('check', 16, '#22c55e') + ' Você confirmou estes dados. '
                + '<a href="#" onclick="desfazerDecisao(\'' + qual + '\'); return false;" '
                + 'style="color: var(--blue); margin-left: 6px;">Desfazer</a></div>';
     } else if (decidido === false) {
-        estado = '<div class="portal-aviso atencao">⚠️ Você pediu alteração nestes dados. '
+        estado = '<div class="portal-aviso atencao">' + icone('alerta', 16, '#f97316') + ' Você pediu alteração nestes dados. '
                + '<a href="#" onclick="desfazerDecisao(\'' + qual + '\'); return false;" '
                + 'style="color: var(--blue); margin-left: 6px;">Desfazer</a></div>';
     }
@@ -147,7 +153,7 @@ function cartaoDeDecisao(qual, bloqueio) {
                 ? 'Escreva o nome completo e o CPF de quem vai receber o pedido...'
                 : 'Escreva aqui o que precisa ser corrigido...') + '">' + escapeHtml(texto) + '</textarea>'
             + '<button type="button" class="portal-botao atencao" onclick="salvarCorrecaoDeDados(\'' + qual + '\')">'
-            + '💾 Salvar correção</button>'
+            + icone('salvar', 17) + 'Salvar correção</button>'
             + '<div id="portal-recibo-' + qual + '" class="portal-vazio" style="margin-top: 8px;"></div>'
           + '</div>'
         : '';
@@ -159,8 +165,8 @@ function cartaoDeDecisao(qual, bloqueio) {
     //
     // O ALTERAR continua vivo, porque é por ele que se sai da trava.
     const confirmar = bloqueio
-        ? '<button type="button" class="portal-botao" disabled>CONFIRMAR</button>'
-        : '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', true)">CONFIRMAR</button>';
+        ? '<button type="button" class="portal-botao" disabled>' + icone('check', 17) + 'Confirmar</button>'
+        : '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', true)">' + icone('check', 17) + 'Confirmar</button>';
     const motivo = bloqueio
         ? '<div class="portal-vazio" style="margin-top: 10px;">' + escapeHtml(bloqueio) + '</div>'
         : '';
@@ -170,7 +176,7 @@ function cartaoDeDecisao(qual, bloqueio) {
         + estado
         + '<div class="portal-par-de-botoes">'
         + confirmar
-        + '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', false)">ALTERAR</button>'
+        + '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', false)">' + icone('lapis', 17) + 'Alterar</button>'
         + '</div>'
         + motivo
         + caixa
@@ -185,9 +191,12 @@ function cartaoDeDecisao(qual, bloqueio) {
  * que ele não acha.
  */
 function cartaoDeFinalizacao() {
+    const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
+
     if (clienteState.pedidoFinalizado) {
         return '<div class="portal-cartao"><div class="portal-aviso ok">'
-             + '✅ Tudo certo! Recebemos sua aprovação e a conferência dos seus dados. '
+             + icone('check', 16, '#22c55e')
+             + ' Tudo certo! Recebemos sua aprovação e a conferência dos seus dados. '
              + 'Qualquer dúvida, fale com seu atendimento.</div></div>';
     }
 
@@ -212,13 +221,14 @@ function cartaoDeFinalizacao() {
     if (faltam.length) {
         return '<div class="portal-cartao">'
             + '<div class="portal-aviso calmo">Para finalizar, falta: ' + faltam.join('; ') + '.</div>'
-            + '<button type="button" class="portal-botao" disabled>FINALIZAR PEDIDO</button>'
+            + '<button type="button" class="portal-botao" disabled>' + icone('check', 17)
+            + 'Finalizar pedido</button>'
             + '</div>';
     }
 
     return '<div class="portal-cartao">'
         + '<button type="button" class="portal-botao principal" onclick="finalizarNoPortal()" '
-        + 'id="portal-btn-finalizar">✅ FINALIZAR PEDIDO</button>'
+        + 'id="portal-btn-finalizar">' + icone('check', 18) + 'Finalizar pedido</button>'
         + '</div>';
 }
 
@@ -230,12 +240,17 @@ window.decidirDados = function (qual, confirmou) {
     }
     redesenharSecao('entrega');
     redesenharSecao('faturamento');
+    // A trilha do topo e o sinal na aba contam esta decisão. Sem esta linha, o
+    // cliente confirma a entrega e continua vendo "0 de 3 concluídas" logo
+    // acima -- o painel diria o contrário do cartão que ele acabou de tocar.
+    atualizarPainelDoPedido();
 };
 
 window.desfazerDecisao = function (qual) {
     window.portalConfirmacoes[qual] = null;
     redesenharSecao('entrega');
     redesenharSecao('faturamento');
+    atualizarPainelDoPedido();
 };
 
 /**
@@ -343,34 +358,38 @@ window.finalizarNoPortal = async function () {
     // atendimento.
     redesenharSecao('entrega');
     redesenharSecao('faturamento');
+    atualizarPainelDoPedido();
 
     // Dizer "aprovado" quando a solicitação não entrou no banco é o pior dos
     // mundos: o cliente vai embora tranquilo e ninguém nunca leu o que ele
     // escreveu. Aqui ele fica sabendo, e fica sabendo o que fazer.
     if (!gravacao.ok) {
         console.error('[portal] a solicitação NÃO foi gravada:', gravacao.erro);
-        avisoDeFinalizacao('⚠️', 'Não conseguimos registrar sua conferência',
+        avisoDeFinalizacao('alerta', '#f59e0b', 'Não conseguimos registrar sua conferência',
             'Sua aprovação de arte foi salva, mas <b>a conferência dos dados de entrega e '
             + 'faturamento não pôde ser gravada agora</b>.<br><br>Por favor, <b>entre em contato '
             + 'com o seu atendente</b> e informe o pedido nº '
             + escapeHtml(String(clienteState.numero || '')) + '.');
     } else if (precisaAtencao) {
-        avisoDeFinalizacao('✅', 'Pedido finalizado',
+        avisoDeFinalizacao('check', '#22c55e', 'Pedido finalizado',
             'Recebemos sua aprovação e sua solicitação de correção. '
             + '<b style="color: #f97316;">Como você pediu alteração nos dados, aguarde o contato '
             + 'do seu atendente.</b>');
     } else {
-        avisoDeFinalizacao('✅', 'Pedido finalizado',
+        avisoDeFinalizacao('check', '#22c55e', 'Pedido finalizado',
             'Recebemos sua aprovação e a conferência dos seus dados. '
             + 'Em breve seu pedido entra em produção.');
     }
 };
 
 /** O resultado do fim, escrito na aba aberta — e não numa tela que come a página. */
-function avisoDeFinalizacao(icone, titulo, texto) {
+function avisoDeFinalizacao(nomeDoIcone, cor, titulo, texto) {
+    const svg = typeof iconeCliente === 'function' ? iconeCliente(nomeDoIcone, 30, cor) : '';
     const html = '<div class="portal-cartao" style="text-align: center;">'
-        + '<div style="font-size: 2.6rem;">' + icone + '</div>'
-        + '<h2 style="justify-content: center; border: 0; padding: 0; margin: 10px 0 6px;">'
+        + '<div style="width: 58px; height: 58px; margin: 0 auto; border-radius: 50%; '
+        + 'display: flex; align-items: center; justify-content: center; '
+        + 'background: ' + cor + '1f; border: 1px solid ' + cor + '59;">' + svg + '</div>'
+        + '<h2 style="justify-content: center; border: 0; padding: 0; margin: 12px 0 6px;">'
         + escapeHtml(titulo) + '</h2>'
         + '<p class="portal-vazio" style="margin: 0;">' + texto + '</p>'
         + '</div>';

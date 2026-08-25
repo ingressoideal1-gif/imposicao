@@ -1732,15 +1732,29 @@ body.not-logged-in .app-shell {
     flex-direction: column;
 }
 
+/* O cabeçalho, em duas faixas: marca e selo na primeira, pedido na segunda.
+
+   Antes era uma linha só que, no celular, empilhava em quatro — logo, título,
+   cliente, selo — e o selo, que é a resposta a "como está meu pedido?", nascia
+   por último. Em duas faixas o cliente lê marca e situação de uma vez, e a
+   arte, que é o que ele veio ver, começa mais acima na tela. */
 .cliente-header {
     display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px 24px;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 20px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    margin-bottom: 24px;
+    margin-bottom: 14px;
+}
+
+.cliente-header-faixa {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .cliente-title {
@@ -1877,11 +1891,17 @@ body.not-logged-in .app-shell {
 }
 
 @media (max-width: 600px) {
+    /* O cabeçalho JÁ é coluna; o que a tela estreita muda é o aperto. E não
+       centraliza: com a logo à esquerda e o selo à direita, o texto do pedido
+       alinhado à esquerda embaixo é uma coluna de leitura só. */
     .cliente-header {
-        flex-direction: column;
-        text-align: center;
-        gap: 12px;
+        padding: 14px 14px 15px;
+        gap: 10px;
     }
+    /* O aperto da logo e do selo NÃO mora aqui: `.cliente-logo` e `.portal-selo`
+       são redefinidos mais abaixo, no bloco do Portal, e regra escrita depois
+       vence regra de mesma especificidade — media query não muda isso. Os dois
+       estão no `@media` do fim do bloco do Portal. */
     .cliente-title {
         font-size: 1.15rem;
     }
@@ -3291,6 +3311,8 @@ input[type=number] {
 .portal-aba {
     /* 56px: o piso de 44px mais a folga que faz o dedo acertar sem mirar. */
     min-height: 56px;
+    /* Âncora do sinal de pendência, que é posicionado contra a aba. */
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -3319,8 +3341,43 @@ input[type=number] {
     background: rgba(59, 130, 246, 0.08);
 }
 
-.portal-aba-icone { font-size: 1.3rem; line-height: 1; }
+/* O ícone da aba é um SVG desenhado, e não um emoji.
+
+   Emoji é fonte do aparelho de quem abre: no Android do cliente o 🎨 tem outra
+   forma e outra paleta que no iPhone, e — por ser colorido por definição — ele
+   não acompanha o azul da aba ativa. O SVG herda `currentColor` e muda de cor
+   junto com o rótulo. O porquê inteiro está em `icones-cliente.js`. */
+.portal-aba-icone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    line-height: 1;
+}
+.portal-aba-icone .icone-cliente { width: 21px; height: 21px; }
 .portal-aba-rotulo { font-weight: 600; }
+
+/* O sinal de pendência, em cima do ícone.
+
+   Sem ele as cinco abas são idênticas, e o cliente descobre o que falta
+   abrindo uma por uma. Deslocado 13px do centro para não cair em cima do
+   desenho de 21px, que ocupa de -10,5 a +10,5. */
+.portal-aba-sinal {
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    margin-left: 13px;
+    width: 9px;
+    height: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.portal-aba[data-sinal="pendente"] .portal-aba-sinal {
+    border-radius: 50%;
+    background: var(--amber);
+}
+.portal-aba[data-sinal="ok"] .portal-aba-sinal { width: 11px; height: 11px; }
 
 /* ─── O que a barra empurra ───────────────────────────────────────────────── */
 
@@ -3369,28 +3426,49 @@ input[type=number] {
     /* 47px. O tamanho foi ajustado olhando o celular, que é onde esta página
        vive: 56 no primeiro corte, 67 a pedido, e 47 depois de ver os 67 num
        aparelho de verdade -- ali a logo passava a competir com o número do
-       pedido, que é o que o cliente veio ler. */
+       pedido, que é o que o cliente veio ler.
+
+       O `max-width` caiu de 82% para 58% em 25/08/2026: a logo agora divide a
+       primeira faixa com o selo do status, e a 82% ela empurrava o selo para a
+       linha de baixo em toda tela estreita. Como a altura manda e a proporção
+       é 945x280, 58% de 330px ainda sobra para os 47px de altura. */
     height: 47px;
     width: auto;
-    max-width: 82%;
+    max-width: 58%;
     object-fit: contain;
     flex-shrink: 0;
 }
 .cliente-header-texto { min-width: 0; }
 
 /* O selo do status: a primeira coisa que responde "como está meu pedido?" —
-   a pergunta que traz o cliente de volta ao link. */
+   a pergunta que traz o cliente de volta ao link.
+
+   PREENCHIDO, e com um ponto, desde 25/08/2026. Vazado (só borda e texto na
+   cor) ele tinha pouca área colorida, e no celular ao sol âmbar e laranja —
+   `aguardando aprovação` e `alteração solicitada`, justamente os dois estados
+   que pedem ação — ficavam iguais. O fundo e o ponto vêm do JS, na cor do
+   status; aqui fica só a forma. */
 .portal-selo {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 4px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px 5px 10px;
     border: 1px solid var(--text-dim);
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 700;
     color: var(--text-dim);
+    white-space: nowrap;
 }
 .portal-selo:empty { display: none; }
+
+.portal-selo-ponto {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
 
 #cliente-os-itens-count { margin-top: 6px; display: inline-block; }
 #cliente-os-itens-count:empty { display: none; }
@@ -3563,6 +3641,466 @@ input[type=number] {
     .cliente-page .cliente-container { padding-top: 92px; padding-bottom: 24px; }
     .cliente-page .cliente-actions { bottom: 20px; }
     .portal-cartao { padding: 22px 24px; }
+    .portal-trilha-passos { gap: 10px; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A TRILHA DO PEDIDO — as três etapas que o cliente precisa cumprir
+   ══════════════════════════════════════════════════════════════════════════
+
+   O Portal tem cinco abas, mas só três pedem alguma coisa dele: aprovar a
+   arte, conferir a entrega e conferir os dados da nota. Até 25/08/2026 isso só
+   era dito DENTRO de cada aba, no fim da rolagem — quem abrisse na aba de
+   Orçamento não tinha como saber que havia duas conferências esperando.
+
+   A trilha mora acima das seções e vale para as cinco. Cada etapa é um BOTÃO
+   que leva à aba dela: dizer o que falta sem oferecer o caminho seria a
+   metade do trabalho. */
+
+.portal-trilha {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px 13px;
+    margin-bottom: 14px;
+}
+.portal-trilha[hidden] { display: none; }
+
+.portal-trilha-topo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
+}
+.portal-trilha-rotulo {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+.portal-trilha-conta { font-size: 0.74rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+
+.portal-trilha-barra {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.2);
+    overflow: hidden;
+}
+.portal-trilha-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--blue);
+    transition: width 0.3s ease;
+}
+
+.portal-trilha-passos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.portal-passo {
+    /* 44px: o piso de toque. A etapa não é só um rótulo — é o caminho até a
+       aba, e caminho que o dedo erra não serve. */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 6px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.5);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1.15;
+    cursor: pointer;
+    transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+.portal-passo .icone-cliente { flex-shrink: 0; }
+.portal-passo-feito {
+    border-color: rgba(34, 197, 94, 0.5);
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--green);
+}
+.portal-passo-agora {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+}
+
+
+/* ── Onde o cliente está na lista de modelos ─────────────────────────────────
+   "3 de 7 aprovados", com um ponto por modelo. Numa lista de sete cartões, sem
+   isto ele só descobre o que falta ao chegar no fim da rolagem — e foi
+   exatamente essa a queixa que trouxe o contador para a barra de baixo em
+   25/08/2026. Aqui o mesmo dado aparece ANTES, onde a decisão acontece.
+
+   Os pontos NÃO são botões: são marcador de estado. Alvo de 8px não passa no
+   piso de 44px, e um controle que o dedo erra é pior do que nenhum. */
+.portal-contador {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 2px 4px 10px;
+}
+.portal-contador:empty { display: none; }
+.portal-contador-texto {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+.portal-contador-texto b { color: var(--text); }
+.portal-pontos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 5px;
+    max-width: 150px;
+}
+.portal-ponto {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.35);
+    flex-shrink: 0;
+}
+.portal-ponto-aprovado { background: var(--green); }
+.portal-ponto-alteracao { background: #f97316; }
+
+
+/* ── O cartão de cada modelo, na página do cliente ───────────────────────────
+   A ordem mudou em 25/08/2026: a ARTE vem primeiro e a decisão vem abaixo
+   dela. Antes os botões APROVAR/ALTERAR e a caixa de anotações ficavam ACIMA
+   da arte — o cliente era convidado a decidir antes de ter visto o que estava
+   decidindo. */
+
+.amostra-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.amostra-chip .icone-cliente { flex-shrink: 0; }
+.amostra-chip-pendente { background: rgba(245, 158, 11, 0.14); color: var(--amber); }
+.amostra-chip-aprovado { background: rgba(34, 197, 94, 0.16); color: var(--green); }
+.amostra-chip-alteracao { background: rgba(249, 115, 22, 0.16); color: #f97316; }
+
+/* O convite a ampliar, em cima da arte.
+
+   O toque na arte já abria o lightbox desde sempre — e ninguém tinha como
+   saber disso: uma imagem não anuncia que é clicável, e `cursor: zoom-in` não
+   existe no celular, que é onde esta página vive. */
+.amostra-ampliar {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px 8px 10px;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(10, 15, 30, 0.82);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    pointer-events: none;
+}
+
+.amostra-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+}
+.amostra-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 7px;
+    padding: 5px 9px;
+}
+
+/* Os dois botões de decisão do cliente, com o MESMO peso visual.
+
+   Pintar APROVAR de verde e ALTERAR de cinza empurra o cliente a aprovar sem
+   olhar — e é exatamente aqui que ele deveria olhar. A cor entra depois da
+   decisão, para dizer o que ele escolheu. */
+.amostra-decisao-cliente {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+}
+.amostra-decisao-cliente .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+/* A caixa de alteração, que só existe depois de o cliente pedir alteração.
+
+   Antes ela ficava aberta em todo modelo, com o rótulo "Anotações /
+   Observações de Alteração" — vocabulário do painel interno, numa página onde
+   quem lê é o cliente. Pior: aberta antes de qualquer decisão, ela sugeria que
+   escrever ali fazia parte de aprovar.
+
+   O `display` vem do `style=""` no template, e não daqui: regra de folha de
+   estilo perde para atributo `style`, e foi assim que um `hidden` já deixou de
+   esconder dois botões nesta mesma tela. */
+.amostra-alteracao {
+    margin-top: 12px;
+    padding: 12px 13px 13px;
+    border-radius: 10px;
+    background: rgba(249, 115, 22, 0.1);
+    border: 1px solid rgba(249, 115, 22, 0.4);
+}
+.amostra-alteracao-titulo {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #f97316;
+    margin-bottom: 8px;
+}
+
+
+/* ── A resposta de "quando chega?", na aba de Entrega ────────────────────────
+   A soma dos dois prazos já era calculada pelo `prazoDeEntrega`, e saía como
+   uma linha entre outras seis. Ela é a pergunta que traz o cliente de volta ao
+   link depois que a arte já foi aprovada — e por isso passou a abrir a aba. */
+.portal-chegada {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    border-radius: var(--radius);
+    padding: 15px 16px 16px;
+    margin-bottom: 14px;
+}
+.portal-chegada-rotulo {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+}
+.portal-chegada-valor {
+    display: block;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--green);
+    line-height: 1.2;
+    margin-top: 4px;
+}
+.portal-chegada-nota {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.45;
+    margin-top: 5px;
+}
+.portal-chegada-contas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.portal-chegada-caixa {
+    flex: 1 1 120px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+.portal-chegada-caixa .rotulo {
+    display: block;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+}
+.portal-chegada-caixa .valor { display: block; font-size: 0.86rem; font-weight: 800; margin-top: 2px; }
+.portal-chegada-transporte {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+.portal-chegada-transporte .icone-cliente { color: var(--text-dim); flex-shrink: 0; }
+
+
+/* ── O que falta, com o botão ao lado ────────────────────────────────────────
+   Antes o aviso dizia "toque em ALTERAR abaixo" e o cliente tinha de procurar
+   o botão mais para baixo, em outro cartão. Aqui a saída da trava fica na
+   própria linha que anuncia a trava — que é a regra desta casa. */
+.portal-falta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: rgba(249, 115, 22, 0.1);
+    border: 1px solid rgba(249, 115, 22, 0.4);
+}
+.portal-falta .icone-cliente { flex-shrink: 0; color: #f97316; }
+.portal-falta-texto { flex: 1 1 auto; min-width: 0; font-size: 0.8rem; line-height: 1.4; color: var(--text); }
+.portal-falta-texto b { display: block; color: #f97316; margin-bottom: 1px; }
+.portal-falta-botao {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 9px;
+    border: 1px solid #f97316;
+    background: #f97316;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+
+/* ── Falar com o atendimento ─────────────────────────────────────────────────
+   Vários avisos desta página terminam em "fale com seu atendimento" — e não
+   havia por onde. Um caminho sem porta é uma trava sem saída. */
+.portal-ajuda {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 10px 14px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none;
+    margin-bottom: 14px;
+}
+.portal-ajuda .icone-cliente { flex-shrink: 0; color: var(--text-dim); }
+
+
+/* ── O painel do pagamento ───────────────────────────────────────────────────
+   Um só, no lugar das duas caixas empilhadas que repetiam o valor do pedido.
+   O número que o cliente procura aqui é quanto FALTA — não o total, que ele já
+   viu no orçamento. */
+.portal-pagamento-painel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 15px 16px 16px;
+    margin-bottom: 14px;
+}
+.portal-pagamento-topo {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.portal-pagamento-rotulo {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+}
+.portal-pagamento-valor { display: block; font-size: 1.7rem; font-weight: 800; line-height: 1.1; margin-top: 3px; }
+.portal-pagamento-situacao {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px 5px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+    margin-top: 3px;
+}
+.portal-medidor {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.2);
+    overflow: hidden;
+    margin-top: 14px;
+}
+.portal-medidor-fill { height: 100%; border-radius: 999px; background: var(--green); }
+.portal-medidor-legenda {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 7px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.portal-medidor-legenda b { color: var(--green); }
+.portal-medidor-legenda span { color: var(--text-dim); }
+
+.portal-cobranca-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.portal-cobranca-nome { display: flex; align-items: center; gap: 9px; font-size: 0.92rem; font-weight: 800; min-width: 0; }
+.portal-cobranca-nome small { display: block; font-size: 0.72rem; font-weight: 600; color: var(--text-dim); margin-top: 2px; }
+.portal-cobranca-valor { font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
+
+
+/* ── O aperto do celular ─────────────────────────────────────────────────────
+   Este bloco fica no FIM do arquivo de propósito. `.cliente-logo` e
+   `.portal-selo` são definidos no bloco do Portal, acima; uma media query
+   escrita ANTES perde para eles, porque a especificidade é a mesma e vence
+   quem vem depois. Foi exatamente o que aconteceu na primeira tentativa: a
+   regra existia, era ignorada em silêncio, e a logo continuava a 47px. */
+@media (max-width: 600px) {
+    /* A logo e o selo têm de caber na MESMA linha, senão o cabeçalho volta a
+       ter quatro andares e a arte volta a começar no meio da tela — que é o
+       que esta mudança veio corrigir.
+
+       A conta, numa tela de 390: sobram ~350px dentro do cabeçalho; o selo
+       mais largo ("Aguardando sua aprovação") ocupa ~185px; então a logo
+       precisa ficar abaixo de ~150. A 38px de altura, na proporção 945x280,
+       ela dá 128px — com folga para um status de nome mais comprido. */
+    .cliente-logo { height: 38px; max-width: 50%; }
+    .portal-selo { font-size: 0.72rem; padding: 5px 10px 5px 8px; }
+
+    /* Três etapas numa tela de 320: o rótulo encolhe antes de quebrar linha. */
+    .portal-passo { font-size: 0.7rem; gap: 5px; padding: 7px 4px; }
 }
 
 

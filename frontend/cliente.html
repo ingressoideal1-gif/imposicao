@@ -36,16 +36,31 @@
          links do banco estavam num status em que a página não mostrava nada. -->
     <div id="cliente-page" class="cliente-page">
         <div class="cliente-container">
+            <!-- O cabeçalho, em duas faixas.
+                 A logo e o selo dividem a primeira: o selo é a primeira coisa
+                 que responde "como está meu pedido?", e no empilhamento antigo
+                 ele nascia na quarta linha, depois de a logo ocupar a tela
+                 inteira. Assim o cliente lê marca e situação de uma vez, e a
+                 arte -- que é o que ele veio ver -- começa mais acima. -->
             <header class="cliente-header">
-                <img src="https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg"
-                     alt="Ingresso Ideal — ingressos, pulseiras e credenciais" class="cliente-logo">
+                <div class="cliente-header-faixa">
+                    <img src="https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg"
+                         alt="Ingresso Ideal — ingressos, pulseiras e credenciais" class="cliente-logo">
+                    <span id="portal-selo" class="portal-selo"></span>
+                </div>
                 <div class="cliente-header-texto">
                     <h1 class="cliente-title">Pedido <span id="cliente-pedido-numero"></span></h1>
                     <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
-                    <span id="portal-selo" class="portal-selo"></span>
                     <span id="cliente-os-itens-count" class="badge badge-blue"></span>
                 </div>
             </header>
+
+            <!-- A trilha do pedido: as três etapas que fecham o pedido, e
+                 quantas já foram. Ela vive FORA das seções porque vale para as
+                 cinco: o cliente que abriu na aba de Pagamento continua vendo
+                 que falta conferir a nota. Quem a desenha é o
+                 `cliente-shell.js`; nasce escondida e aparece com os dados. -->
+            <div id="portal-trilha" class="portal-trilha" hidden></div>
 
             <!-- Erro / Loading -->
             <div id="cliente-loading" style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
@@ -63,6 +78,13 @@
 
                     <!-- 🎨 APROVAÇÃO DE ARTE -->
                     <section id="secao-arte" class="portal-secao">
+                        <!-- Onde o cliente está na lista de modelos: "3 de 7
+                             aprovados", com um ponto por modelo. Numa lista de
+                             sete cartões, sem isto ele só descobre o que falta
+                             ao chegar no fim da rolagem. Preenchido pelo
+                             `renderAmostrasOSItens`. -->
+                        <div id="portal-contador-modelos" class="portal-contador"></div>
+
                         <!-- Container de itens do pedido -->
                         <div id="cliente-amostras-itens-container" style="display: flex; flex-direction: column; gap: 6pt; margin-bottom: 24px;"></div>
 
@@ -74,7 +96,7 @@
                                  sumia pelos dois lados no celular. O tamanho do texto agora vem do
                                  CSS, que sabe encolher em tela estreita. -->
                             <button class="btn btn-success btn-lg" onclick="clienteAprovarTudo()" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; min-height: 56px; padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
-                                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+                                APROVAR ARTES E CONTINUAR
                             </button>
                         </div>
 
@@ -113,19 +135,19 @@
              diz para onde leva. -->
         <nav id="portal-abas" class="portal-abas" aria-label="Seções do pedido" hidden>
             <button type="button" class="portal-aba ativa" data-abre="arte">
-                <span class="portal-aba-icone" aria-hidden="true">🎨</span><span class="portal-aba-rotulo">Arte</span>
+                <span class="portal-aba-icone" data-icone="arte" aria-hidden="true"></span><span class="portal-aba-rotulo">Arte</span>
             </button>
             <button type="button" class="portal-aba" data-abre="entrega">
-                <span class="portal-aba-icone" aria-hidden="true">📦</span><span class="portal-aba-rotulo">Entrega</span>
+                <span class="portal-aba-icone" data-icone="entrega" aria-hidden="true"></span><span class="portal-aba-rotulo">Entrega</span>
             </button>
             <button type="button" class="portal-aba" data-abre="faturamento">
-                <span class="portal-aba-icone" aria-hidden="true">🧾</span><span class="portal-aba-rotulo">Nota</span>
+                <span class="portal-aba-icone" data-icone="nota" aria-hidden="true"></span><span class="portal-aba-rotulo">Nota</span>
             </button>
             <button type="button" class="portal-aba" data-abre="orcamento">
-                <span class="portal-aba-icone" aria-hidden="true">💰</span><span class="portal-aba-rotulo">Orçamento</span>
+                <span class="portal-aba-icone" data-icone="orcamento" aria-hidden="true"></span><span class="portal-aba-rotulo">Orçamento</span>
             </button>
             <button type="button" class="portal-aba" data-abre="pagamento">
-                <span class="portal-aba-icone" aria-hidden="true">💳</span><span class="portal-aba-rotulo">Pagar</span>
+                <span class="portal-aba-icone" data-icone="pagar" aria-hidden="true"></span><span class="portal-aba-rotulo">Pagar</span>
             </button>
         </nav>
     </div>
@@ -134,9 +156,10 @@
     <div id="cliente-lightbox-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 100000; align-items: center; justify-content: center; overflow: hidden; touch-action: none;">
         <div id="cliente-lightbox-container" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             <img id="cliente-lightbox-img" src="" style="max-width: 95%; max-height: 95%; transition: transform 0.2s ease; cursor: grab; user-select: none;">
-            <div style="position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; font-family: sans-serif; font-weight: bold; background: rgba(0,0,0,0.5); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 100001;" onclick="closeClienteLightbox()">✕</div>
+            <div style="position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; font-family: sans-serif; font-weight: bold; background: rgba(0,0,0,0.5); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 100001;" onclick="closeClienteLightbox()" data-icone="fechar" data-icone-tamanho="22" aria-label="Fechar"></div>
             <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.7); font-size: 0.85rem; pointer-events: none; text-align: center; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 20px; width: 85%; max-width: 340px; line-height: 1.3;">
-                🖐️ Arraste para mover • Pinça ou Duplo Toque para Zoom<br>Clique em ✕ ou fora para fechar
+                <span data-icone="arrastar" data-icone-tamanho="15" style="vertical-align: -3px;"></span>
+                Arraste para mover • Pinça ou duplo toque para ampliar<br>Toque fora da arte para fechar
             </div>
         </div>
     </div>
@@ -162,6 +185,9 @@
     <script src="/foto-lib.js?v=717"></script>
     <!-- A regra de "pago" antes de quem a usa: a mesma que a Lista de Arte lê
          para decidir o selo PAGO, para as duas telas não divergirem. -->
+    <!-- Os icones desenhados, antes de qualquer tela que os use: as abas, os
+         cartoes e os selos pedem o SVG a este arquivo em vez de escrever emoji. -->
+    <script src="/icones-cliente.js?v=718"></script>
     <script src="/pagamento-do-pedido.js?v=717"></script>
     <script src="/cliente-dados.js?v=717"></script>
     <script src="/cliente-shell.js?v=717"></script>

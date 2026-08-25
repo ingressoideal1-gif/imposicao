@@ -378,10 +378,16 @@ const linhasDoEnvio = new Function(
     // solicitacao. Trava sem saida nao existe nesta casa.
     const cartao = recortar(CONFIRMACOES, 'cartaoDeDecisao');
     ok(/bloqueio\s*\?/.test(cartao), 'o bloqueio desliga o CONFIRMAR', cartao.slice(0, 60));
-    ok(/portal-botao" disabled>CONFIRMAR/.test(cartao), 'com o botao desabilitado');
+    // Os rotulos sairam da caixa alta em 25/08/2026 (CONFIRMAR -> Confirmar) e
+    // ganharam icone antes do texto -- por isso o teste procura o rotulo, e nao
+    // a linha inteira. O que ele prende continua sendo o mesmo: existe um
+    // Confirmar DESLIGADO quando a nota e de empresa e ninguem informou quem
+    // recebe.
+    ok(/portal-botao" disabled>/.test(cartao), 'com o botao desabilitado');
+    ok(/'Confirmar<\/button>'/.test(cartao), 'e o desligado e o Confirmar');
     ok((cartao.match(/decidirDados\('" \+ qual \+ "', false\)/g) || []).length >= 0,
         'e o ALTERAR nunca e desligado');
-    ok(cartao.indexOf('ALTERAR</button>') > 0, 'o ALTERAR continua na tela');
+    ok(cartao.indexOf("'Alterar</button>'") > 0, 'o Alterar continua na tela');
     ok(/nome completo e o CPF/.test(cartao),
         'e a caixa de texto pede exatamente o que falta');
 

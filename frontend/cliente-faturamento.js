@@ -37,11 +37,12 @@ function desenharSecaoFaturamento() {
     const linhas = linhasDoFaturamento(dados && dados.cliente);
 
     secao.innerHTML =
-        cartaoDeLinhas('🧾 Dados para a nota fiscal', linhas,
+        cartaoDeLinhas(tituloDoCartao('nota', 'Dados para a nota fiscal'), linhas,
             'Os dados de faturamento ainda não foram cadastrados neste pedido. '
-            + 'Toque em ALTERAR abaixo e escreva os dados corretos, ou fale com seu atendimento.')
+            + 'Toque em Alterar abaixo e escreva os dados corretos, ou fale com seu atendimento.')
         + cartaoDeDecisao('faturamento')
-        + cartaoDeFinalizacao();
+        + cartaoDeFinalizacao()
+        + botaoDeAjuda(dados);
 }
 
 registrarSecao('faturamento', desenharSecaoFaturamento);
