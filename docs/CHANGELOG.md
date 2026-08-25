@@ -4,6 +4,50 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — O PDF Gabarito parou de sair do tamanho da logo
+
+Relato do usuário: *"na lista de arte, ao editar um pedido, quando uma numeração possui um PDF
+como elemento, ao tentar baixar o PDF gabarito, não está levando o gabarito correto. Está
+levando somente o elemento PDF da numeração"*. Estava certo.
+
+O `exportarPdfGabarito` fazia `copyPages(arquivoDoElemento, [0])` e usava aquela página **como**
+a página do modelo. O arquivo do elemento virava a folha inteira, e a posição e o tamanho dele
+na arte eram ignorados. Medido com os arquivos que estão no banco:
+
+| Numeração | Formato do modelo | Página que saía |
+|---|---|---|
+| `001 - Padrão Ideal` (Triband) | 245,00 × 20,00 mm | **14,76 × 20,30 mm** |
+| `1000547` (pedido 21146) | 105,00 × 148,00 mm | **105,71 × 146,21 mm** |
+
+A Triband é a que mostra o tamanho do estrago: o elemento é a logo `Logo_Tri.pdf`, de
+10,18 × 14 mm, encostada na ponta direita da pulseira. O gabarito de uma pulseira de 24,5 cm
+saía com 1,5 cm — só a logo. E a numeração rasterizada era desenhada nessa página com 245 mm de
+largura, 16,6× maior que o papel: tudo transbordava.
+
+O botão vizinho, **PDF Arte**, sempre acertou — ele faz `copiedPage.setSize(ptW, ptH)` depois de
+copiar. Era uma linha de diferença entre os dois.
+
+Agora a página do gabarito nasce sempre no tamanho do modelo, e os elementos PDF entram
+**vetoriais**, cada um no retângulo dele (`embedPage` + `drawPage`), sem distorção e com a
+opacidade do elemento — o mesmo que o motor faz no papel com `show_pdf_page(keep_proportion=True)`.
+A geometria mora em `caixaDoElementoPdfNaPagina`, função pura, e quatro conferências comparam o
+resultado com o do próprio motor, medindo a tinta na página em milímetros.
+
+Três coisas melhoraram junto, todas pelo mesmo caminho:
+
+- **Todos** os elementos PDF entram. O código antigo fazia `pdfEls.find(...)` e parava no
+  primeiro; uma numeração com dois PDFs impressos perdia o segundo.
+- O raster deixou de redesenhar por cima o que já entrou vetorial. Rasterizar arte vetorial do
+  cliente é proibido neste projeto.
+- O elemento marcado como **Layout** continua fora, e o registro legado que guarda a arte na
+  coluna `pdf_content` continua saindo como fundo do modelo inteiro.
+
+> [!NOTE]
+> Isto é PDF interno de conferência: o botão existe no `index.html` e no `producao.html`, e não
+> no link do cliente. O que vai ao cliente e o que vai à impressora não mudaram.
+
+---
+
 ## [2026-08-25] — O editor de numeração de um modelo ganhou saída
 
 Pedido do usuário: *"ao editar a numeração de um modelo, precisa ter o botão Voltar para poder

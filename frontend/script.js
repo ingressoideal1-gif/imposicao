@@ -4173,6 +4173,71 @@ function drawArteDoElemento(ctx, img, x, y, w, h, el) {
 window.drawArteDoElemento = drawArteDoElemento;
 
 /**
+ * Onde colar, numa página de PDF, o arquivo de um elemento PDF — a versão
+ * vetorial do que o `drawArteDoElemento` faz no canvas.
+ *
+ * Existe porque o gabarito fazia outra coisa: ele COPIAVA a página do arquivo
+ * do elemento e a usava como a página do modelo (`copyPages` + `addPage`).
+ * Numa credencial em que o PDF é a arte inteira isso quase acerta — errava 0,71
+ * mm na largura e 1,79 mm na altura da 1000547. Numa Triband, em que o elemento
+ * é a logo de 10,18 × 14 mm encostada na ponta direita, o gabarito de uma
+ * pulseira de 245 mm saía com 14,76 mm: só a logo, sem a pulseira. Medido em
+ * 25/08/2026 com os arquivos que estão no banco.
+ *
+ * As convenções, todas herdadas e nenhuma escolhida aqui:
+ *  · `x_mm`/`y_mm` são o CENTRO do elemento, contados do canto superior
+ *    esquerdo — é assim que o canvas desenha (`translate(x,y)` e depois
+ *    `-hw,-hh`) e é assim que o engine monta o `rect` (`cx - hw`, `cy - hh`).
+ *  · o PDF tem origem embaixo à esquerda, daí o `ptH -` no eixo Y.
+ *  · `rotation` é horária (canvas); o pdf-lib gira anti-horário, daí o sinal.
+ *  · sem distorção, encaixando pelo menor lado — o `keep_proportion=True` do
+ *    `show_pdf_page`. Regra do projeto: PDF e SVG entram no tamanho original.
+ *
+ * As medidas do elemento estão no espaço em milímetros do FORMATO, e a página
+ * pode ter outro tamanho (quando a cor traz medida própria). Converter por
+ * `ptW/fmt.width_mm` — e não por 72/25.4 — é o que mantém o vetor em cima da
+ * máscara rasterizada, que é esticada para a página do mesmo jeito.
+ *
+ * @returns {{x:number,y:number,width:number,height:number,rotate:number}|null}
+ *          em pontos, pronto para o `drawPage`; `null` se não dá para calcular.
+ */
+function caixaDoElementoPdfNaPagina(el, fmt, natW, natH, ptW, ptH) {
+    if (!el || !fmt) return null;
+    const fmtW = Number(fmt.width_mm), fmtH = Number(fmt.height_mm);
+    if (!(fmtW > 0) || !(fmtH > 0) || !(natW > 0) || !(natH > 0)) return null;
+    if (!(ptW > 0) || !(ptH > 0)) return null;
+
+    const kx = ptW / fmtW;
+    const ky = ptH / fmtH;
+
+    const caixaW = (Number(el.width_mm) || 20) * kx;
+    const caixaH = (Number(el.height_mm) || 20) * ky;
+    if (!(caixaW > 0) || !(caixaH > 0)) return null;
+
+    const escala = Math.min(caixaW / natW, caixaH / natH);
+    const w = natW * escala;
+    const h = natH * escala;
+
+    const cx = (Number(el.x_mm) || 0) * kx;
+    const cy = ptH - (Number(el.y_mm) || 0) * ky;
+
+    const graus = -(Number(el.rotation) || 0);
+    const rad = graus * Math.PI / 180;
+    const cos = Math.cos(rad), sen = Math.sin(rad);
+
+    // O `drawPage` gira em torno do ponto `x,y`. Recuar o centro já girado é o
+    // que faz o elemento girar em torno DELE, como no canvas e no engine.
+    return {
+        x: cx - (w / 2 * cos - h / 2 * sen),
+        y: cy - (w / 2 * sen + h / 2 * cos),
+        width: w,
+        height: h,
+        rotate: graus,
+    };
+}
+window.caixaDoElementoPdfNaPagina = caixaDoElementoPdfNaPagina;
+
+/**
  * Cache de imagens de foto por URL, para todas as janelas do app.
  *
  * O cache é por URL e NÃO por elemento, de propósito: o objeto do elemento é o
@@ -36854,7 +36919,9 @@ async function exportarPdfGabarito() {
             });
         }
 
-        const { PDFDocument, PDFName, PDFString, PDFNumber } = window.PDFLib;
+        // `degrees` porque o elemento PDF entra girado como está na arte, e o
+        // `drawPage` só aceita a rotação nesse embrulho do pdf-lib.
+        const { PDFDocument, PDFName, PDFString, PDFNumber, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.create();
         const nums = [];
         let addedPages = 0;
@@ -36883,50 +36950,77 @@ async function exportarPdfGabarito() {
             const ptW = targetW * (72 / 25.4);
             const ptH = targetH * (72 / 25.4);
 
-            let pageAdded = false;
-
-            if (num) {
-                // 1. Tentar localizar um PDF de fundo original na numeração (vector)
-                // O arquivo é do elemento, não da numeração: a coluna pdf_content é
-                // apenas derivada do primeiro elemento PDF ao salvar. Procurar no
-                // elemento primeiro é o que permite pular os marcados como Layout,
-                // que existem só para conferência na tela e não podem virar o fundo
-                // vetorial de um PDF de produção. A coluna fica como fallback para
-                // os registros legados, anteriores ao elemento PDF por elemento.
-                const pdfEls = (num.elements || []).filter(e => e.type === 'PDF' && e.pdf_content);
-                const pdfElImpresso = pdfEls.find(e => !elementoSoLayout(e));
-                let rawPdfContent = pdfElImpresso ? pdfElImpresso.pdf_content
-                    : (pdfEls.length ? null : num.pdf_content);
-
-                if (rawPdfContent) {
-                    try {
-                        const pdfData = await fetchPdfBytes(rawPdfContent);
-                        if (pdfData) {
-                            const originalDoc = await PDFDocument.load(pdfData);
-                            const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
-                            pdfDoc.addPage(copiedPage);
-                            pageAdded = true;
-                        }
-                    } catch (e) {
-                        console.warn(`Falha ao embutir background vetorial do gabarito ${idx}:`, e);
-                    }
-                }
-            }
-
-            if (!pageAdded) {
-                // 2. Adiciona página em branco no tamanho do formato
-                pdfDoc.addPage([ptW, ptH]);
-                pageAdded = true;
-            }
-
-            // 3. Obter a página corrente recém adicionada (ou copiada do vetor)
+            // 1. A página é SEMPRE do tamanho do modelo.
+            //
+            // Antes ela era a página COPIADA do arquivo do elemento PDF, e por
+            // isso o gabarito de uma Triband de 245 mm saía com 14,76 mm — o
+            // tamanho da logo. O arquivo do elemento é conteúdo dentro da
+            // página, nunca a página.
+            pdfDoc.addPage([ptW, ptH]);
             const pages = pdfDoc.getPages();
             const currentPage = pages[pages.length - 1];
 
-            // 4. Se a numeração tiver elementos de texto/código de barras, rasteriza em PNG e sobrepõe
-            if (num && num.elements && num.elements.length > 0) {
+            // 2. Os elementos PDF entram VETORIAIS, cada um no seu lugar.
+            //
+            // Todos, e não só o primeiro: uma numeração com dois PDFs impressos
+            // perdia o segundo. Os marcados como Layout ficam de fora, pela
+            // mesma razão que ficam de fora da imposição.
+            const pdfEls = num
+                ? (num.elements || []).filter(e => e.type === 'PDF' && e.pdf_content && !elementoSoLayout(e))
+                : [];
+
+            for (const el of pdfEls) {
                 try {
-                    const pngDataUrl = await criarCanvasNumeracaoRasterizada(num, fmt);
+                    const pdfData = await fetchPdfBytes(el.pdf_content);
+                    if (!pdfData) continue;
+                    const originalDoc = await PDFDocument.load(pdfData);
+                    const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
+                    const caixa = caixaDoElementoPdfNaPagina(
+                        el, fmt, embutida.width, embutida.height, ptW, ptH);
+                    if (!caixa) continue;
+                    currentPage.drawPage(embutida, {
+                        x: caixa.x, y: caixa.y,
+                        width: caixa.width, height: caixa.height,
+                        rotate: degrees(caixa.rotate),
+                        opacity: opacidadeDoElemento(el),
+                    });
+                } catch (e) {
+                    console.warn(`Falha ao embutir o elemento PDF '${el.id}' do gabarito ${idx}:`, e);
+                }
+            }
+
+            // 3. Registro legado: numeração antiga, sem elemento PDF, que guarda
+            //    a arte na coluna `pdf_content`. Ali ela sempre foi o fundo do
+            //    modelo inteiro, então entra ocupando a página, sem distorcer.
+            if (num && !pdfEls.length && num.pdf_content) {
+                try {
+                    const pdfData = await fetchPdfBytes(num.pdf_content);
+                    if (pdfData) {
+                        const originalDoc = await PDFDocument.load(pdfData);
+                        const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
+                        const escala = Math.min(ptW / embutida.width, ptH / embutida.height);
+                        const w = embutida.width * escala, h = embutida.height * escala;
+                        currentPage.drawPage(embutida, {
+                            x: (ptW - w) / 2, y: (ptH - h) / 2, width: w, height: h,
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Falha ao embutir o fundo legado do gabarito ${idx}:`, e);
+                }
+            }
+
+            // 4. O resto da numeração — texto, código, foto — rasterizado por cima.
+            //
+            // SEM os elementos PDF: eles acabaram de entrar vetoriais, e deixá-los
+            // aqui os desenharia duas vezes, a segunda em imagem por cima do
+            // vetor. Rasterizar arte vetorial do cliente é proibido no projeto.
+            const numParaRaster = num && Array.isArray(num.elements)
+                ? { ...num, elements: num.elements.filter(e => e.type !== 'PDF') }
+                : num;
+
+            if (numParaRaster && numParaRaster.elements && numParaRaster.elements.length > 0) {
+                try {
+                    const pngDataUrl = await criarCanvasNumeracaoRasterizada(numParaRaster, fmt);
                     if (pngDataUrl) {
                         const base64Data = pngDataUrl.split(',')[1];
                         const image = await pdfDoc.embedPng(base64Data);
