@@ -89,6 +89,41 @@ PDF, formatos compatíveis, e a arte de fundo da cor do formato base. Está em
 `frontend/script.js:2774`. Ver também `docs/superpowers/specs/2026-08-08-arte-de-fundo-automatica-por-cor-design.md`
 para o comportamento da arte de fundo.
 
+### A saída do editor: `← Voltar sem salvar`
+
+Pedida pelo usuário em 25/08/2026. Ela só aparece para quem chegou ao editor **de
+dentro de um pedido** — pelo ✏️ no card de um modelo (`editCustomNumeracao`) ou
+pelo clone da imposição. No catálogo a saída é o próprio menu lateral.
+
+Ela é mais do que conveniência, e o motivo é o `window.customNumeracaoEditState`.
+Esse objeto diz *"a numeração que for salva agora pertence ao modelo X do pedido
+Y"*, e é ele que faz o save gravar `is_custom`, `os_item_id` e `Cli_Num` e depois
+amarrar a numeração ao modelo.
+
+Até então o único caminho de volta era o menu lateral, que sai da tela e **deixa
+esse vínculo pendurado**. Com ele vivo, a próxima numeração salva — qualquer uma,
+inclusive uma do catálogo geral aberta pelo menu — nascia marcada como exclusiva
+daquele modelo e era amarrada a ele. Nada na tela denunciava.
+
+Por isso `cancelNumEdit()` passou a zerar o vínculo junto com o formulário, e o
+Voltar apenas o usa em vez de repetir a limpeza.
+
+> [!CAUTION]
+> **A ordem no `saveNumeracao` não pode inverter.** Ele também chama
+> `cancelNumEdit()`, e o código que amarra a numeração ao modelo roda **depois**.
+> Se lesse `window.customNumeracaoEditState` nesse ponto encontraria `null`, e o
+> modelo ficaria sem a numeração nova, calado. Por isso o save guarda o estado
+> numa variável (`customState`) **antes** de limpar.
+
+Dois detalhes de projeto:
+
+- **Não pergunta "tem certeza?".** O rótulo já diz "sem salvar", e pedir
+  confirmação para uma saída que a pessoa acabou de escolher é atrito em cima de
+  uma decisão consciente. O que se perde é o posicionamento não salvo; o que
+  estava no banco continua lá.
+- **É aceso DEPOIS do `editNumeracao()`**, nos dois caminhos de entrada, porque
+  ele passa pelo `cancelNumEdit()` — que esconde o botão junto com o resto.
+
 ### Excluir — `deleteNumeracao(id)`
 
 `frontend/script.js:3033`. Pede confirmação com `confirm()` e apaga.

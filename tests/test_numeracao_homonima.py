@@ -93,7 +93,7 @@ def _recortar(fonte, marcador, linhas=90):
 def test_o_vinculo_do_modelo_usa_o_id_e_nunca_o_nome():
     """Nome de numeração não é único; id é."""
     fonte = _ler(SCRIPT)
-    trecho = _recortar(fonte, "if (window.customNumeracaoEditState) {")
+    trecho = _recortar(fonte, "if (customState) {")
 
     assert "idDaNumeracaoGravada" in trecho, (
         "o vínculo precisa sair do id de quem acabou de ser gravado"
@@ -159,7 +159,7 @@ def test_o_recado_de_falha_diz_o_que_aconteceu_com_o_modelo():
     só o vínculo.
     """
     fonte = _ler(SCRIPT)
-    trecho = _recortar(fonte, "if (window.customNumeracaoEditState) {")
+    trecho = _recortar(fonte, "if (customState) {")
 
     assert "NÃO encontrada após salvar" not in trecho, "o texto antigo saiu"
     assert "continua com a numeração anterior" in trecho, (

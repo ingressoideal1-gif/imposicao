@@ -439,6 +439,14 @@
                     <div class="card-header">
                         <span class="card-title"><span class="icon">⚙️</span> Configuração da Numeração</span>
                         <div style="display:flex;gap:8px;">
+                            <!-- A saída de quem chegou aqui de dentro de um pedido, para editar a
+                                 numeração de um modelo. Sem ela o único caminho de volta era o menu
+                                 lateral, que sai da tela mas NÃO desfaz o vínculo com o modelo — e
+                                 a numeração seguinte, salva de qualquer lugar, nascia amarrada
+                                 àquele modelo. O rótulo diz "sem salvar" porque é isso que ele faz:
+                                 não há confirmação, e a palavra é o aviso. -->
+                            <button class="btn btn-ghost btn-sm" id="btn-num-voltar" style="display:none"
+                                onclick="voltarDaNumeracaoDoModelo()">← Voltar sem salvar</button>
                             <button class="btn btn-ghost btn-sm" id="btn-num-cancel" style="display:none"
                                 onclick="cancelNumEdit()">Cancelar</button>
                             <button class="btn btn-primary btn-sm" id="btn-num-save" onclick="saveNumeracao()">💾 Salvar

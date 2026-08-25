@@ -4,6 +4,43 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — O editor de numeração de um modelo ganhou saída
+
+Pedido do usuário: *"ao editar a numeração de um modelo, precisa ter o botão Voltar para poder
+sair sem salvar"*.
+
+Quem abre a numeração de um modelo (pelo ✏️ no card do pedido, ou pelo clone da imposição) cai
+no editor com `window.customNumeracaoEditState` armado — o objeto que diz *"a numeração que for
+salva agora pertence ao modelo X do pedido Y"*. Não havia botão de saída: o único caminho de
+volta era o menu lateral.
+
+E o menu lateral sai da tela **sem desfazer o vínculo**. Com ele pendurado, a próxima numeração
+salva — qualquer uma, inclusive uma do catálogo geral aberta pelo menu — nascia marcada como
+exclusiva daquele modelo (`is_custom`, `os_item_id`, `Cli_Num`) e ainda era amarrada a ele por
+`saveAmostraToDB`. Era mais um caminho para a numeração fantasma investigada no mesmo dia, e
+nada na tela denunciava.
+
+Agora `cancelNumEdit()` zera o vínculo junto com o formulário, e o `← Voltar sem salvar` apenas
+o usa: limpa, e devolve o operador para de onde veio — o pedido (redesenhando os cards) ou a
+imposição. Sem estado nenhum, cai no catálogo, que é de onde esta tela nasce.
+
+> [!CAUTION]
+> A ordem no `saveNumeracao` não pode inverter. Ele também chama `cancelNumEdit()`, e o código
+> que amarra a numeração ao modelo roda **depois**. Se lesse `window.customNumeracaoEditState`
+> nesse ponto encontraria `null` e o modelo ficaria sem a numeração nova, calado. Por isso o
+> save guarda o estado numa variável antes de limpar — e um teste prende essa ordem.
+
+**Não pergunta "tem certeza?".** O rótulo já diz "sem salvar", e pedir confirmação para uma
+saída que a pessoa acabou de escolher é atrito em cima de uma decisão consciente. O que se
+perde é o posicionamento não salvo; o que estava no banco continua lá.
+
+Conferido no navegador pelo caminho real (`editCustomNumeracao` com os dois `setTimeout` do
+fluxo): o vínculo sobrevive ao `editNumeracao`, o botão acende, e o clique devolve ao pedido
+com o vínculo desfeito e o formulário limpo. Coberto por
+`tests/test_voltar_da_numeracao_do_modelo.py` (7 casos).
+
+---
+
 ## [2026-08-25] — A numeração fantasma: duas com o mesmo nome, e o modelo trocando sozinho
 
 Relatado pelo usuário: *"estamos tendo problemas com numerações salvas com mesmo nome, não

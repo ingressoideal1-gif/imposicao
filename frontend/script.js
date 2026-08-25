@@ -3399,6 +3399,21 @@ function cancelNumEdit() {
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
+    // O vínculo com o modelo morre junto com o formulário.
+    //
+    // Ele diz "a numeração que for salva agora pertence ao modelo X do pedido
+    // Y". Deixá-lo pendurado depois de limpar o editor faria a PRÓXIMA numeração
+    // salva — qualquer uma, inclusive uma do catálogo geral aberta pelo menu —
+    // nascer marcada como exclusiva daquele modelo (`is_custom`, `os_item_id`,
+    // `Cli_Num`) e ainda ser amarrada a ele. Era mais um caminho para a
+    // numeração fantasma, e nada na tela denunciava.
+    //
+    // Quem salva já leu este valor antes de chamar esta função (ver o
+    // `customState` no `saveNumeracao`).
+    window.customNumeracaoEditState = null;
+    const btnVoltar = document.getElementById('btn-num-voltar');
+    if (btnVoltar) btnVoltar.style.display = 'none';
+
     // Esconder checkboxes de formatos compatíveis
     const compatContainer = document.getElementById('num-formatos-compat');
     if (compatContainer) compatContainer.style.display = 'none';
@@ -7615,13 +7630,21 @@ window.saveNumeracao = async function () {
 
         }
 
+        // De onde viemos, guardado ANTES de limpar o editor.
+        //
+        // O `cancelNumEdit()` agora zera o `customNumeracaoEditState` junto com o
+        // formulário — é ele quem devolve a tela ao estado neutro, e deixar o
+        // vínculo com o modelo pendurado ali é o que fazia o próximo salvamento
+        // de QUALQUER numeração do catálogo sair marcado como exclusiva daquele
+        // modelo. Quem sai por aqui já usou o vínculo; quem sai pelo Voltar não
+        // quer usá-lo. Nos dois casos ele não sobrevive à saída.
+        const customState = window.customNumeracaoEditState;
+
         cancelNumEdit();
 await loadAll();
 
-if (window.customNumeracaoEditState) {
-    const customState = window.customNumeracaoEditState;
-    window.customNumeracaoEditState = null;
-    
+if (customState) {
+
     // A numeração recém-gravada, PELO ID.
     //
     // Até 25/08/2026 esta linha era `state.numeracoes.find(n => n.name === nome)`
@@ -31548,11 +31571,77 @@ function editCustomNumeracao(idx, osId, itemId) {
             // Limpa ID para forcar INSERT e altera o nome
             document.getElementById('num-id').value = '';
             document.getElementById('num-name').value = String(itemId);
-            
+
+            // A saída. Depois do `editNumeracao`, que passa pelo `cancelNumEdit`
+            // e esconderia o botão de novo.
+            mostrarVoltarDaNumeracaoDoModelo();
+
             toast(`Editando numeração para o modelo: ${itemId}`, 'info');
         }, 150);
     }, 100);
 }
+
+/**
+ * Acende o botão "← Voltar sem salvar" do editor de numeração.
+ *
+ * Ele só existe para quem chegou ali de dentro de um pedido: no catálogo, a
+ * saída é o próprio menu lateral, e o vínculo com o modelo não existe para
+ * desfazer.
+ *
+ * Precisa ser chamado DEPOIS do `editNumeracao()`, porque ele passa pelo
+ * `cancelNumEdit()`, que esconde o botão junto com o resto do formulário.
+ */
+function mostrarVoltarDaNumeracaoDoModelo() {
+    const btn = document.getElementById('btn-num-voltar');
+    if (btn) btn.style.display = '';
+}
+window.mostrarVoltarDaNumeracaoDoModelo = mostrarVoltarDaNumeracaoDoModelo;
+
+/**
+ * Sai do editor de numeração sem gravar nada, e volta para de onde se veio.
+ *
+ * Pedido do usuário em 25/08/2026: *"ao editar a numeração de um modelo, precisa
+ * ter o botão Voltar para poder sair sem salvar"*.
+ *
+ * Antes, o único caminho de volta era o menu lateral — que sai da tela e deixa
+ * o `customNumeracaoEditState` pendurado. Esse estado diz "a numeração que for
+ * salva agora pertence ao modelo X do pedido Y": com ele vivo, a próxima
+ * numeração salva, mesmo uma do catálogo geral aberta pelo menu, nascia marcada
+ * como exclusiva daquele modelo e era amarrada a ele. Mais um caminho para a
+ * numeração fantasma, e nada na tela denunciava.
+ *
+ * Quem apaga o vínculo é o `cancelNumEdit()`, e é por isso que ele é chamado
+ * aqui — este botão não repete a limpeza, ele a usa.
+ *
+ * **Não pergunta "tem certeza?".** O rótulo já diz "sem salvar", e pedir
+ * confirmação para uma saída que a pessoa acabou de escolher é atrito em cima
+ * de uma decisão consciente. O que se perde é o posicionamento não salvo; o que
+ * estava gravado no banco continua lá, intacto.
+ */
+function voltarDaNumeracaoDoModelo() {
+    const de = window.customNumeracaoEditState;
+
+    cancelNumEdit();   // limpa o formulário E zera o vínculo com o modelo
+
+    // Sem estado nenhum (o operador recarregou a página no meio, por exemplo):
+    // o catálogo é o destino honesto — é de lá que esta tela nasce.
+    if (!de) {
+        showView('view-catalogo');
+        return;
+    }
+
+    if (de.view === 'imposicao') {
+        showView('view-imposicao');
+    } else {
+        showView('view-amostras');
+        if (typeof renderAmostrasOSItens === 'function' && de.osId) {
+            renderAmostrasOSItens(de.osId);
+        }
+    }
+
+    toast('Você saiu sem salvar. A numeração do modelo continua como estava.', 'info');
+}
+window.voltarDaNumeracaoDoModelo = voltarDaNumeracaoDoModelo;
 window.onItemCorSelect = onItemCorSelect;
 window.onItemNumSelect = onItemNumSelect;
 window.onItemArteUpload = onItemArteUpload;
@@ -31702,6 +31791,11 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
     
     // Marca como um novo cadastro (clone)
     document.getElementById('num-id').value = '';
+
+    // A saída, igual à do outro caminho. Depois do `editNumeracao`, que passa
+    // pelo `cancelNumEdit` e esconderia o botão de novo.
+    mostrarVoltarDaNumeracaoDoModelo();
+
     toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
 };
 
