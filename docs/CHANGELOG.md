@@ -4,6 +4,72 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-25] — Conferência geral do Link do cliente: seis defeitos
+
+Varredura da página do link do cliente (o Portal do Pedido), lida arquivo a arquivo e
+aberta num iPhone simulado com dois pedidos reais — um em produção e um aguardando
+aprovação. Seis defeitos, todos confirmados no navegador antes e depois do conserto.
+
+**1. Pedido já em produção ainda mostrava APROVADO / ALTERAR.** Os botões de decisão
+saíam com o atributo `hidden`, e o `[hidden] { display: none }` vem da folha do
+*navegador* — perde para `.amostra-decisao-btns { display: flex }`, que é nosso. Medido no
+pedido 20596, já na impressora: atributo presente, `display` calculado `flex`, botões
+clicáveis. O ALTERAR morria num beco (pedia a caixa de anotações, que o modo leitura tinha
+removido), mas o **APROVAR gravava**: regravava o status no banco e postava mais um
+"o cliente APROVOU a amostra" no chat do atendimento. Agora os botões saem do HTML.
+
+**2. A barra FINALIZAR era transparente e cobria o conteúdo.** O `.cliente-actions` é uma
+barra `sticky` sem fundo — quem tapa o que passa por baixo é o próprio botão. O estado
+desabilitado vinha com `opacity: 0.6`, então o card do modelo seguinte aparecia *através*
+do rótulo. É o primeiro estado que todo cliente vê. O cinza ficou opaco, e a barra ganhou
+fundo como segunda linha de defesa.
+
+De quebra, o `atualizarBarraFinalCliente` reescreve o `.cliente-actions` e devolvia
+`height: 48px` e `font-size: 1.1rem` **inline**, desfazendo em silêncio o conserto
+documentado no `cliente.html` (`min-height`, sem tamanho de fonte preso — atributo `style`
+ganha de media query). O rótulo cabia por dois pixels. Os três botões passam a dividir a
+mesma forma do HTML.
+
+**3. Quem já tinha conferido era obrigado a conferir de novo.** `portalConfirmacoes`
+nascia zerado a cada abertura, e o selo `entrega_dados` — que a carga do portal já trazia —
+não era lido em lugar nenhum. O cliente confirmava, finalizava, voltava pelo link no dia
+seguinte para ver o prazo e lia *"Para finalizar, falta: conferir os dados na aba
+Entrega"*. Refazia, e o atendimento recebia a mesma mensagem duas vezes. Agora
+`reidratarConfirmacoes` devolve o que ele já decidiu: `APROVADO` volta confirmado,
+`CORRIGIR` volta com o texto que ele escreveu. `ALTERADO` **não** volta — esse selo nasce
+do atendente pedindo nova conferência, e reidratá-lo apagaria o pedido dele.
+
+**4. O frete sumia do orçamento de reserva.** `linhasDoOrcamento` chamava
+`rotuloDoFrete(pedido)` com um argumento só. O segundo cobre os nomes que
+`propostas.frete_escolhido` não tem — "Frete Incluso", "Transportadora Parceira" —, e sem
+ele um pedido cujo frete só existe na cotação saía como "A combinar", com a transportadora
+já escolhida.
+
+**5. 82 kB de numerações alheias no 4G do cliente.** O catálogo vinha com `elements` de
+todas as 86 numerações do sistema, e o pedido usa uma ou duas. Medido: a consulta caiu de
+116 kB para 34 kB. As *linhas* continuam vindo todas de propósito — o
+`reconciliarCorNumDoModelo` acerta a numeração pelo nome quando o parceiro a troca, e uma
+lista filtrada por id deixaria de fora justamente a linha que só o nome acha.
+
+O cuidado que isso exigiu: `numIsDuplex` decide o verso e pergunta ao `elements`. No banco,
+**nenhuma** das 86 numerações tem `print_mode = 'duplex'` e **cinco** têm elemento no
+verso — ou seja, quem responde é só o `elements`. Por isso `carregarMioloDasNumeracoes`
+roda ANTES da montagem dos itens; buscado depois, essas cinco perderiam o verso em
+silêncio.
+
+**6. Polimento.** CEP com hífen (`94574-110`, não `94574110`) na aba de entrega e no
+endereço da gráfica; jargão interno fora do card do cliente (`NI: 1 → NF: 65`, `🏭 --`,
+`-- S/ VERSO`); a moldura vazia que sobrava no lugar do painel de decisão; e a
+`mostrarResultadoCliente` com a `<div id="cliente-resultado">`, mortas desde o Portal.
+
+**Os testes do Portal entraram na suite.** Varredura no mesmo dia mostrou que
+`portal_abas`, `portal_dados`, `portal_confirmacoes` e `portal_orcamento` não eram citados
+por nenhum `test_*.py`: 250 conferências que só rodavam se alguém digitasse `node` à mão.
+`tests/test_harnesses_do_portal.py` fecha isso — sem ele, as travas escritas para estes
+seis consertos nasceriam mortas. Total agora: 338 conferências nos quatro.
+
+---
+
 ## [2026-08-20] — O acento se perdia no caminho até o banco *(banco e ferramenta, sem versão nova do site)*
 
 Quando o cliente pedia alteração da arte, o status do link não mudava. A função

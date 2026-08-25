@@ -3334,10 +3334,20 @@ input[type=number] {
     padding-top: calc(20px + env(safe-area-inset-top, 0px));
 }
 
-/* O botão de aprovar continua colado no fim da tela, mas ACIMA da barra. */
+/* O botão de aprovar continua colado no fim da tela, mas ACIMA da barra.
+
+   O `background` não é enfeite: esta barra é `sticky`, e o conteúdo da página
+   passa por baixo dela. Quem tapava esse conteúdo era só o botão -- então
+   bastou o estado desabilitado ganhar um `opacity: 0.6` para o card do modelo
+   seguinte aparecer ATRAVÉS do rótulo, ilegível, no primeiro estado que todo
+   cliente vê. O `atualizarBarraFinalCliente` não usa mais `opacity`; a cor
+   aqui é a segunda linha de defesa, para a próxima variação de botão não
+   reabrir o mesmo buraco. */
 .cliente-page .cliente-actions {
     bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     padding: 0;
+    background: var(--bg);
+    border-radius: 10px;
 }
 
 /* ─── O cabeçalho ─────────────────────────────────────────────────────────── */

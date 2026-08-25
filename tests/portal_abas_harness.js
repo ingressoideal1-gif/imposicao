@@ -31,8 +31,9 @@ function ok(cond, nome, extra) {
     console.error('FALHOU: ' + nome + (extra !== undefined ? '\n         ' + JSON.stringify(extra) : ''));
 }
 
-function extrairFuncao(fonte, nome) {
-    const i = fonte.indexOf('\nfunction ' + nome + '(');
+function extrairFuncao(fonte, nome, assincrona) {
+    const cabeca = (assincrona ? '\nasync function ' : '\nfunction ') + nome + '(';
+    const i = fonte.indexOf(cabeca);
     if (i < 0) throw new Error('nao achei a funcao ' + nome);
     const fim = fonte.indexOf('\n}', i);
     if (fim < 0) throw new Error('nao achei o fim da funcao ' + nome);
@@ -171,6 +172,7 @@ const secaoValida = carregar(['SECOES', 'secaoValida'], 'secaoValida');
 // MODO, com decisao ou so leitura.
 
 const CLIENTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
 const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
 
 (function todasAsCincoChavesTemTratamento() {
@@ -198,11 +200,82 @@ const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
 (function soLeituraTiraOsBotoesEABarra() {
     ok(/somenteLeitura \? '' : `/.test(CLIENTE),
         'a caixa de observacao some quando nao ha mais o que decidir');
-    ok(/somenteLeitura \? 'hidden' : ''/.test(CLIENTE),
-        'e os botoes APROVAR/ALTERAR tambem');
     const barra = extrairFuncao(CLIENTE, 'atualizarBarraFinalCliente');
     ok(/arteSomenteLeitura === true/.test(barra),
         'o botao de finalizar nao reaparece embaixo de arte ja aprovada');
+})();
+
+(function osBotoesDeDecisaoSAEMDoHtml() {
+    // NAO com o atributo `hidden`, que era como estava ate 25/08/2026.
+    //
+    // O `[hidden] { display: none }` vem da folha do NAVEGADOR, e perde para
+    // qualquer regra de classe nossa -- e `.amostra-decisao-btns { display:
+    // flex }` esta no `style.css`. Medido no pedido 20596, ja EM PRODUCAO: o
+    // atributo estava la, o `display` calculado era `flex`, e os dois botoes
+    // apareciam clicaveis. O APROVAR gravava: regravava o status e postava mais
+    // um "o cliente APROVOU" no chat do atendimento, num pedido que ja estava
+    // na impressora.
+    ok(CLIENTE.indexOf("somenteLeitura ? 'hidden'") < 0,
+        'o `hidden` saiu: ele nao esconde nada contra uma regra de classe');
+    ok(/somenteLeitura \? '' : `\s*<div class="amostra-decisao-btns">/.test(CLIENTE),
+        'os botoes APROVAR/ALTERAR saem do HTML no modo leitura');
+    ok(!/class="amostra-decisao-btns"[^>]*hidden/.test(CLIENTE),
+        'e nao sobrou nenhum `hidden` nessa div');
+})();
+
+(function oBotaoFinalNaoDesfazOConsertoDoCelular() {
+    // O `atualizarBarraFinalCliente` reescreve o `innerHTML` do
+    // `.cliente-actions` -- ou seja, joga fora o botao escrito no
+    // `cliente.html`. Ate 25/08/2026 ele o trocava por um com `height: 48px` e
+    // `font-size: 1.1rem` presos no `style=""`, desfazendo em silencio o
+    // conserto documentado la: altura fixa mais um tamanho de fonte que a media
+    // query nao alcanca (regra de folha de estilo perde para atributo `style`).
+    const barra = extrairFuncao(CLIENTE, 'atualizarBarraFinalCliente');
+    ok(barra.indexOf('height: 48px') < 0, 'sem altura fixa');
+    ok(!/font-size:\s*1\.1rem/.test(barra), 'e sem tamanho de fonte preso no style');
+    ok(/min-height:\s*56px/.test(CLIENTE), 'a forma e a mesma do botao do HTML: `min-height`');
+
+    // E sem `opacity`: o `.cliente-actions` e uma barra `sticky` e o conteudo da
+    // pagina passa por baixo dela. Quem tapa esse conteudo e o proprio botao --
+    // entao bastou o estado desabilitado ganhar `opacity: 0.6` para o card do
+    // modelo seguinte aparecer ATRAVES do rotulo, ilegivel, no primeiro estado
+    // que todo cliente ve.
+    ok(!/opacity:/.test(barra), 'nenhum dos tres botoes finais e translucido');
+    ok(/\.cliente-page \.cliente-actions \{[^}]*background:/.test(CSS),
+        'e a propria barra tem fundo, como segunda linha de defesa');
+})();
+
+(function oCatalogoDeNumeracoesChegaLeve() {
+    // 82 dos 116 kB daquela consulta eram `elements` de 86 numeracoes, e o
+    // pedido usa uma ou duas. As LINHAS continuam vindo todas de proposito: o
+    // `reconciliarCorNumDoModelo` acerta a numeracao pelo NOME quando o parceiro
+    // a troca, e uma lista filtrada por id deixaria de fora justamente a linha
+    // que so o nome acha.
+    // A consulta do CATALOGO e a que ordena por nome; a do miolo filtra por id.
+    const catalogo = (CLIENTE.match(
+        /from\('producao_numeracoes'\)\s*\n\s*\.select\('([^']*)'\)\s*\n\s*\.order\('name'/) || [])[1];
+    ok(catalogo, 'a consulta do catalogo continua identificavel', catalogo);
+    ok(catalogo && catalogo.indexOf('elements') < 0,
+        'o catalogo vem sem `elements`', catalogo);
+    ok(catalogo && catalogo.indexOf('csv_data') < 0, 'e sem `csv_data`', catalogo);
+    ok(catalogo && /\bname\b/.test(catalogo) && /is_custom/.test(catalogo),
+        'mas com `name` e `is_custom`, que a reconciliacao pelo nome precisa', catalogo);
+
+    const miolo = extrairFuncao(CLIENTE, 'carregarMioloDasNumeracoes', true);
+    ok(/select\('id, elements, csv_data'\)/.test(miolo),
+        'o miolo vem depois, so das numeracoes deste pedido');
+    ok(/reconciliarCorNumDoModelo/.test(miolo),
+        'e a lista de quais sai da mesma reconciliacao que o item usa');
+
+    // A ORDEM: o `numIsDuplex` decide o verso e pergunta ao `elements`. Medido
+    // no banco em 25/08/2026: NENHUMA das 86 numeracoes tem
+    // `print_mode = 'duplex'`, e CINCO tem elemento no verso -- ou seja, quem
+    // responde essa pergunta e so o `elements`. Buscado depois da montagem,
+    // essas cinco perderiam o verso na tela do cliente, em silencio.
+    const chamada = CLIENTE.indexOf('carregarMioloDasNumeracoes(prodItems');
+    const montagem = CLIENTE.indexOf('prodItems.map(item =>');
+    ok(chamada > 0 && montagem > 0 && chamada < montagem,
+        'o miolo chega ANTES de os itens serem montados', [chamada, montagem]);
 })();
 
 (function aPaginaNaoDecideMaisSeAbre() {

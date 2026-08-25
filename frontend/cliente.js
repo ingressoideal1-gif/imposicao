@@ -358,7 +358,27 @@ function renderAmostrasOSItens(osId) {
         // observação saem. Botão que não decide mais nada, numa tela em que
         // ninguém explica isso, é convite para o cliente achar que dá para
         // desaprovar.
+        //
+        // Os botões saem do HTML, e NÃO com o atributo `hidden`. Era assim até
+        // 25/08/2026, e não funcionava: o `[hidden] { display: none }` vem da
+        // folha de estilo do navegador, e perde para qualquer regra de classe
+        // do nosso CSS -- `.amostra-decisao-btns { display: flex }`, no
+        // `style.css`. Medido no pedido 20596, já EM PRODUÇÃO: o atributo
+        // `hidden` estava lá, o `display` calculado era `flex`, e os dois
+        // botões apareciam com 38px de altura, clicáveis. O ALTERAR morria num
+        // beco (pedia a caixa de anotações, que o modo leitura tinha removido),
+        // mas o APROVAR gravava: regravava o status no banco e postava mais um
+        // "✅ O cliente APROVOU a amostra" no chat do atendimento, num pedido
+        // que já estava na impressora.
         const somenteLeitura = state.arteSomenteLeitura === true;
+
+        // O painel de decisão inteiro sai junto, na página do cliente em modo
+        // leitura: ali dentro só existem o título (que é do painel interno), a
+        // caixa de observação e os botões — e os três saem. O que sobrava era
+        // uma moldura arredondada vazia entre o cabeçalho do modelo e a arte,
+        // que se lê como algo que não carregou.
+        const painelDeDecisaoVazio = somenteLeitura
+            && state.amostrasContainerId === 'cliente-amostras-itens-container';
 
         const arteVisivel = temArteVisivel(item);
         const versoVisivel = !!item.verso_amostra_arte_base64
@@ -397,14 +417,19 @@ function renderAmostrasOSItens(osId) {
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? `
+                    ${item.verso ? '<span class="badge" style="font-size: 0.72rem;">✅ Frente e verso</span>' : ''}
+                    ` : `
                     <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
                     <span class="badge" style="font-size: 0.72rem;">${item.verso ? '✅ Verso' : '-- S/ Verso'}</span>
                     <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '--'}</span>
+                    `}
                     ${statusBadge}
                 </div>
             </div>
             <div class="amostra-card-corpo" style="padding: 24px;">
                 <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
+                    ${painelDeDecisaoVazio ? '' : `
                     <div class="amostra-decisao-panel">
                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                         <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
@@ -420,8 +445,9 @@ function renderAmostrasOSItens(osId) {
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         `}
-                        <div class="amostra-decisao-btns" ${somenteLeitura ? 'hidden' : ''}>
-                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
+                        ${somenteLeitura ? '' : `
+                        <div class="amostra-decisao-btns">
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `
                                 <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
                                     ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
@@ -437,7 +463,9 @@ function renderAmostrasOSItens(osId) {
                                 ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
                             </button>
                         </div>
+                        `}
                     </div>
+                    `}
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
@@ -875,6 +903,49 @@ async function gravarStatusDoLink(status) {
 }
 
 /**
+ * Busca `elements` e `csv_data` SÓ das numerações que este pedido usa, e as
+ * mescla no catálogo leve que já está em `state.numeracoes`.
+ *
+ * O catálogo chega sem essas duas colunas de propósito (ver a consulta em
+ * `initClientePage`): juntas elas são a maior parte do peso da página, e o
+ * cliente vê uma ou duas numerações, não as 86 do sistema.
+ *
+ * Recebe as linhas CRUAS de `pedidos_modelos`, e não os itens já montados,
+ * porque ela precisa rodar ANTES da montagem — é lá que se decide o verso, e
+ * essa decisão lê `elements`.
+ *
+ * A numeração de cada linha é a mesma que o `.map()` vai resolver adiante: a
+ * reconciliação pelo nome primeiro (o parceiro troca a numeração pelo nome, e o
+ * id em cache não pode continuar mandando), e o id gravado como reserva.
+ */
+async function carregarMioloDasNumeracoes(linhasCruas) {
+    try {
+        const ids = [...new Set((linhasCruas || []).map(linha => {
+            const reconciliado = (typeof reconciliarCorNumDoModelo === 'function')
+                ? reconciliarCorNumDoModelo(linha, state.cores, state.numeracoes).numId
+                : linha.amostra_num_id;
+            return reconciliado || linha.amostra_num_id || linha.numeracao_id;
+        }).filter(Boolean).map(String))];
+
+        if (!ids.length) return;
+
+        const { data: miolo } = await supabaseClient
+            .from('producao_numeracoes')
+            .select('id, elements, csv_data')
+            .in('id', ids);
+
+        (miolo || []).forEach(linha => {
+            const n = (state.numeracoes || []).find(x => String(x.id) === String(linha.id));
+            if (!n) return;
+            n.elements = linha.elements;
+            n.csv_data = linha.csv_data;
+        });
+    } catch (e) {
+        console.warn('Erro ao buscar os elementos e o banco das numeracoes:', e);
+    }
+}
+
+/**
  * Inicializa a página do cliente com validação de token
  */
 async function initClientePage(numero, token) {
@@ -959,12 +1030,27 @@ async function initClientePage(numero, token) {
                 supabaseClient.from('producao_cores')
                     .select('id, empresa_id, name, hex, pdf_url, pdf_filename, created_at, updated_at, formato_id, width_mm, height_mm, id_modelo_cor_num, name_verso, frente_verso, cor_referencia')
                     .order('name', { ascending: true }),
-                // Colunas explicitas, sem `csv_data`. Com `select('*')` o
-                // cliente baixava os bancos de TODAS as numeracoes do sistema —
-                // 569 KB, dos quais 84% eram CSV de pedidos alheios que ele
-                // nunca veria. O banco do proprio pedido vem logo abaixo.
+                // Colunas explicitas, sem `csv_data` e sem `elements`. Com
+                // `select('*')` o cliente baixava os bancos de TODAS as
+                // numeracoes do sistema — 569 KB, dos quais 84% eram CSV de
+                // pedidos alheios que ele nunca veria.
+                //
+                // `elements` saiu daqui em 25/08/2026 pelo mesmo motivo, e o
+                // numero e parecido: medido no banco, 82 kB dos 116 kB desta
+                // consulta sao os elementos de 86 numeracoes, e o pedido usa
+                // uma ou duas. Numa pagina que abre no 4G, pelo navegador do
+                // WhatsApp, isso e um terco do peso do primeiro pixel.
+                //
+                // As LINHAS continuam vindo todas, e isso e proposital: o
+                // `reconciliarCorNumDoModelo` acerta a numeracao pelo NOME
+                // quando o parceiro a troca, e uma lista filtrada por id
+                // deixaria de fora justamente a linha que so o nome acha. Ele
+                // precisa de `id`, `name` e `is_custom` — todos aqui.
+                //
+                // `elements` e `csv_data` das numeracoes DESTE pedido chegam
+                // logo abaixo, antes de qualquer desenho.
                 supabaseClient.from('producao_numeracoes')
-                    .select('id, name, tipo, formato_id, formato_ids, elements, print_mode, ticket_qtd, ticket_logica, csv_headers, csv_filename, Cli_Num, is_custom, os_item_id')
+                    .select('id, name, tipo, formato_id, formato_ids, print_mode, ticket_qtd, ticket_logica, csv_headers, csv_filename, Cli_Num, is_custom, os_item_id')
                     .order('name', { ascending: true }),
                 supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true }),
                 // Colunas explicitas, sem os textos fiscais.
@@ -1015,7 +1101,24 @@ async function initClientePage(numero, token) {
                 .from('produtos_proposta')
                 .select('id, nome_produto, id_produto')
                 .eq('id_int', queryNum);
-            
+
+            // O MIOLO das numeracoes deste pedido — `elements` e `csv_data` —,
+            // buscado ANTES de montar os itens.
+            //
+            // A ordem nao e detalhe. O `numIsDuplex` logo abaixo decide se o
+            // modelo tem verso, e ele pergunta duas coisas: `print_mode` e se
+            // algum elemento esta na face de tras. Medido no banco em
+            // 25/08/2026: NENHUMA das 86 numeracoes tem `print_mode = 'duplex'`,
+            // e CINCO tem elemento no verso. Ou seja, quem responde essa
+            // pergunta e so o `elements` — sem ele aqui, essas cinco perderiam
+            // o verso na tela do cliente em silencio.
+            //
+            // A conta de quais numeracoes buscar sai da mesma reconciliacao que
+            // o `.map()` refaz adiante. Ela e deterministica e nao olha
+            // `elements`: precisa de `id`, `name` e `is_custom`, que vieram na
+            // consulta leve.
+            await carregarMioloDasNumeracoes(prodItems || []);
+
             if (prodItems && prodItems.length > 0) {
                 itensCarregados = prodItems.map(item => {
                     const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
@@ -1066,25 +1169,7 @@ async function initClientePage(numero, token) {
 
         state.osItens[osId] = itensCarregados;
 
-        // 2. O banco de dados (CSV) apenas das numeracoes que ESTE pedido usa.
-        //    E o que permite folhear os ingressos sem baixar o catalogo inteiro.
-        try {
-            const numIds = [...new Set(
-                itensCarregados.map(it => it.amostra_num_id || it.numeracao_id).filter(Boolean).map(String)
-            )];
-            if (numIds.length) {
-                const { data: bancos } = await supabaseClient
-                    .from('producao_numeracoes')
-                    .select('id, csv_data')
-                    .in('id', numIds);
-                (bancos || []).forEach(b => {
-                    const n = (state.numeracoes || []).find(x => String(x.id) === String(b.id));
-                    if (n) n.csv_data = b.csv_data;
-                });
-            }
-        } catch (e) { console.warn('Erro ao buscar o banco de dados das numeracoes:', e); }
-
-        // 3. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
+        // 2. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
         try {
             const queryNum = parseInt(numero);
             if (!isNaN(queryNum)) {
@@ -1170,11 +1255,9 @@ async function initClientePage(numero, token) {
 
         // O selo da entrega vem junto na carga do portal -- era mais uma
         // consulta direta a `pedidos_artes` com a chave anônima.
-        let entregaStatus = '----';
         const numInt = parseInt(linkData.numero_pedido || linkData.id_int || numero);
         const seloEntrega = portal && portal.entrega && portal.entrega.entrega_dados;
         if (seloEntrega) {
-            entregaStatus = String(seloEntrega).toUpperCase();
             if (!state.todasArtes) state.todasArtes = [];
             const globalArte = state.todasArtes.find(a => String(a.id_int) === String(numInt));
             if (globalArte) {
@@ -1195,7 +1278,11 @@ async function initClientePage(numero, token) {
         // da aba da arte. O selo `ALTERADO` da entrega deixou de precisar
         // destrancar a página: a aba de entrega já está lá.
         clienteState.statusArte = osStatus;
-        clienteState.entregaStatus = entregaStatus;
+
+        // O que ele já decidiu em visitas anteriores, ANTES de a primeira aba
+        // ser desenhada: o cartão do fim é montado no desenho, e reidratar
+        // depois dele mostraria as perguntas de novo por um instante.
+        if (typeof reidratarConfirmacoes === 'function') reidratarConfirmacoes(portal);
 
         registrarSecao('arte', () => desenharSecaoArte(osId));
         montarPortal(osStatus);
@@ -1421,24 +1508,15 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega) {
     return { ok: true };
 }
 
-function mostrarResultadoCliente(icon, titulo, msg) {
-    const contentEl = document.getElementById('cliente-content');
-    const resultadoEl = document.getElementById('cliente-resultado');
-    const iconEl = document.getElementById('cliente-resultado-icon');
-    const tituloEl = document.getElementById('cliente-resultado-titulo');
-    const msgEl = document.getElementById('cliente-resultado-msg');
-
-    // Esconder o container de itens e o botão de aprovação, mostrar resultado
-    const container = document.getElementById('cliente-amostras-itens-container');
-    const actions = document.querySelector('.cliente-actions');
-    if (container) container.style.display = 'none';
-    if (actions) actions.style.display = 'none';
-    
-    if (resultadoEl) resultadoEl.style.display = 'block';
-    if (iconEl) iconEl.textContent = icon;
-    if (tituloEl) tituloEl.textContent = titulo;
-    if (msgEl) msgEl.innerHTML = msg;
-}
+// O `mostrarResultadoCliente` saiu daqui em 25/08/2026, junto da
+// `<div id="cliente-resultado">` do `cliente.html`.
+//
+// Ele era a tela de "acabou": escondia as artes e o botão e punha um ícone
+// grande no lugar da página. O Portal do Pedido acabou com essa ideia — quem
+// termina continua tendo prazo, endereço e link de pagamento para ver —, e
+// desde então nenhuma linha o chamava. Quem escreve o resultado hoje é o
+// `avisoDaArte`, na aba da arte, e o `avisoDeFinalizacao`, nas abas de dados:
+// os dois põem o recado ACIMA do conteúdo, sem comer a página.
 
 function openClienteLightbox(elementId) {
     const el = document.getElementById(elementId);
@@ -1591,8 +1669,33 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * Atualiza a barra final dinamicamente no link do cliente
+ * Atualiza a barra final dinamicamente no link do cliente.
+ *
+ * ## Por que os três botões dividem a mesma forma
+ *
+ * Esta função reescreve o `innerHTML` do `.cliente-actions` -- ou seja, ela
+ * joga fora o botão que está escrito no `cliente.html`. Até 25/08/2026 ela o
+ * substituía por um botão com `height: 48px` e `font-size: 1.1rem` presos no
+ * `style=""`, desfazendo em silêncio o conserto documentado lá: altura fixa
+ * mais um `font-size` inline que a media query não consegue encolher (regra de
+ * folha de estilo perde para atributo `style`). Medido num iPhone de 390px: o
+ * rótulo ocupava 46px dentro de uma caixa de 48. Cabia por dois pixels.
+ *
+ * `FORMA_DO_BOTAO_FINAL` é a mesma do HTML: `min-height`, que cresce quando o
+ * texto quebra, e nenhum tamanho de fonte -- ele vem do CSS, que sabe encolher
+ * em tela estreita.
+ *
+ * ## E por que nenhum deles tem `opacity`
+ *
+ * O `.cliente-actions` é uma barra `sticky` SEM fundo: quem tapa o conteúdo que
+ * passa por baixo é o próprio botão. O estado desabilitado vinha com
+ * `opacity: 0.6`, então o card do modelo seguinte aparecia ATRAVÉS dele -- e
+ * esse é justamente o estado em que todo cliente abre o link, antes de decidir
+ * qualquer coisa. O cinza agora é opaco.
  */
+const FORMA_DO_BOTAO_FINAL = 'width: 100%; font-weight: 700; min-height: 56px; '
+    + 'padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px;';
+
 function atualizarBarraFinalCliente(osId) {
     if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
 
@@ -1621,21 +1724,22 @@ function atualizarBarraFinalCliente(osId) {
     if (todosAprovados) {
         // Verde, ativo, Finalizar e Aprovar Pedido Completo
         html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
                 ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
             </button>
         `;
     } else if (algumReprovado) {
         // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
         html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #ef4444; color: #ffffff; border: none; cursor: pointer;">
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #ef4444; color: #ffffff; border: 1px solid #ef4444; cursor: pointer; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
                 ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
             </button>
         `;
     } else {
-        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
+        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo.
+        // Cinza OPACO, sem `opacity`: ver o cabeçalho desta função.
         html = `
-            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="${FORMA_DO_BOTAO_FINAL} background-color: #2b3444; color: #94a3b8; border: 1px solid #3d485c; cursor: not-allowed;">
                 ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
             </button>
         `;

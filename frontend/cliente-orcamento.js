@@ -57,8 +57,15 @@ function resumoLimpo(texto) {
 /**
  * O orçamento montado a partir dos itens — a reserva para os pedidos sem
  * resumo. Mesma ordem do resumo: produtos, frete, total.
+ *
+ * `frete` é a cotação escolhida, e precisa chegar até aqui. Até 25/08/2026 esta
+ * função chamava `rotuloDoFrete(pedido)` com um argumento só, e o segundo é
+ * justamente o que cobre os nomes que `propostas.frete_escolhido` não tem --
+ * "Frete Incluso", "Transportadora Parceira", "Retirada Local". Sem ele, um
+ * pedido cujo frete só existe na cotação saía como "A combinar" para o cliente,
+ * com a transportadora já escolhida.
  */
-function linhasDoOrcamento(itens, pedido) {
+function linhasDoOrcamento(itens, pedido, frete) {
     const lista = (itens || []).map(item => {
         const nome = item.nome_produto || item.modelo_descri || 'Item';
         const qtd = item.qtd ? String(item.qtd) + ' × ' : '';
@@ -73,7 +80,7 @@ function linhasDoOrcamento(itens, pedido) {
 
     return {
         itens: lista,
-        frete: rotuloDoFrete(pedido),
+        frete: rotuloDoFrete(pedido, frete),
         total: emReal(pedido && pedido.valor_total)
     };
 }
@@ -99,7 +106,7 @@ function desenharSecaoOrcamento() {
              + '<div class="portal-resumo">' + negritoDoWhatsapp(resumo) + '</div>'
              + '</div>';
     } else {
-        const o = linhasDoOrcamento(dados.itens, pedido);
+        const o = linhasDoOrcamento(dados.itens, pedido, dados.frete);
         let corpo = '';
         if (!o.itens.length) {
             corpo = '<div class="portal-vazio">Os itens deste pedido ainda não foram lançados. '

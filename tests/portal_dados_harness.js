@@ -59,7 +59,8 @@ const prazoDeProducao = carregar('prazoDeProducao', ['diasDoPrazo', 'emDiasUteis
 const prazoDoFrete = carregar('prazoDoFrete', ['emDiasUteis']);
 const prazoDeEntrega = carregar('prazoDeEntrega',
     ['diasDoPrazo', 'emDiasUteis', 'prazoDeProducao', 'prazoDoFrete']);
-const enderecoEmLinhas = carregar('enderecoEmLinhas', ['tipoDaPessoa']);
+const cepEmMascara = carregar('cepEmMascara');
+const enderecoEmLinhas = carregar('enderecoEmLinhas', ['tipoDaPessoa', 'cepEmMascara']);
 const linkDeRastreio = carregar('linkDeRastreio');
 const tipoDaPessoa = carregar('tipoDaPessoa');
 const entregaExigeRecebedor = carregar('entregaExigeRecebedor', ['tipoDaPessoa', 'ehRetirada']);
@@ -484,6 +485,38 @@ const linkDoMapa = carregar('linkDoMapa');
     ok(linkDeRastreio(null) === null, 'nulo');
     ok(linkDeRastreio('') === null, 'vazio');
     ok(linkDeRastreio('   ') === null, 'so espaco');
+})();
+
+// ─── O CEP com hifen ─────────────────────────────────────────────────────────
+//
+// O ERP grava dos dois jeitos, e o cliente lia `94574110` -- oito digitos
+// grudados, que ninguem confere de relance. E ele quem tem de olhar essa linha e
+// dizer se esta certa.
+
+(function oCepSaiComoSeEscreveNumEnvelope() {
+    ok(cepEmMascara('94574110') === '94574-110', 'oito digitos ganham o hifen', cepEmMascara('94574110'));
+    ok(cepEmMascara('94574-110') === '94574-110', 'ja com hifen fica igual', cepEmMascara('94574-110'));
+    ok(cepEmMascara('90660130') === '90660-130', 'o da grafica', cepEmMascara('90660130'));
+    ok(cepEmMascara(' 91310003 ') === '91310-003', 'espaco em volta nao atrapalha', cepEmMascara(' 91310003 '));
+})();
+
+(function oCepIncompletoPassaComoEsta() {
+    // Por o hifen no meio de um numero truncado o faria parecer completo -- e a
+    // linha ja e pintada em ambar quando o dado falta.
+    ok(cepEmMascara('9457') === '9457', 'curto demais fica cru', cepEmMascara('9457'));
+    ok(cepEmMascara('945741100') === '945741100', 'longo demais fica cru', cepEmMascara('945741100'));
+    ok(cepEmMascara('') === '', 'vazio continua vazio');
+    ok(cepEmMascara(null) === '', 'nulo nao vira "null"', cepEmMascara(null));
+})();
+
+(function aLinhaDoEnderecoUsaAMascara() {
+    const linhas = enderecoEmLinhas({
+        endereco: 'Rua Jacarandá', numero: '35580',
+        bairro: 'Querência', cidade: 'Viamão', uf: 'RS', cep: '94574110',
+        recebedor: 'Anna', cpf_recebedor: '671.490.570-04'
+    }, null);
+    const cep = linhas.find(l => l.rotulo === 'CEP');
+    ok(cep && cep.valor === '94574-110', 'o cliente le o CEP com hifen', cep);
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

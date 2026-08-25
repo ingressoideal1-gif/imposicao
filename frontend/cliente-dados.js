@@ -240,6 +240,24 @@ function tipoDaPessoa(documento) {
 }
 
 /**
+ * O CEP com o hífen, como se escreve num envelope: `94574-110`.
+ *
+ * O ERP grava dos dois jeitos, e o cliente lia `94574110` — oito dígitos
+ * grudados, que ninguém confere de relance. Como é ele quem tem de olhar essa
+ * linha e dizer se está certa, a leitura importa.
+ *
+ * Só formata o que TEM oito dígitos. Um CEP incompleto passa como está: pôr
+ * hífen no meio de um número truncado o faria parecer completo, e a linha de
+ * cima já pinta em âmbar o que falta.
+ */
+function cepEmMascara(cep) {
+    const bruto = String(cep || '').trim();
+    const digitos = bruto.replace(/\D/g, '');
+    if (digitos.length !== 8) return bruto;
+    return digitos.slice(0, 5) + '-' + digitos.slice(5);
+}
+
+/**
  * O endereço como uma lista de linhas prontas, na ordem em que se lê um
  * envelope. Linha sem valor não entra: rótulo com vazio ao lado é ruído.
  *
@@ -294,7 +312,7 @@ function enderecoEmLinhas(endereco, cliente) {
         { rotulo: 'Complemento', valor: (endereco.complemento || '').trim() },
         { rotulo: 'Bairro', valor: (endereco.bairro || '').trim() },
         { rotulo: 'Cidade/UF', valor: cidade && uf ? cidade + ' - ' + uf : (cidade || uf) },
-        { rotulo: 'CEP', valor: (endereco.cep || '').trim() }
+        { rotulo: 'CEP', valor: cepEmMascara(endereco.cep) }
     ];
 
     return linhas.filter(l => l.valor);
@@ -406,6 +424,7 @@ window.prazoDoFrete = prazoDoFrete;
 window.prazoDeEntrega = prazoDeEntrega;
 window.enderecoEmLinhas = enderecoEmLinhas;
 window.tipoDaPessoa = tipoDaPessoa;
+window.cepEmMascara = cepEmMascara;
 window.entregaExigeRecebedor = entregaExigeRecebedor;
 window.ehRetirada = ehRetirada;
 window.enderecoDeEntrega = enderecoDeEntrega;

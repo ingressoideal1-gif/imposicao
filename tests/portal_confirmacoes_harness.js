@@ -398,6 +398,84 @@ const linhasDoEnvio = new Function(
         'quem aprova a arte e levado para a aba de entrega');
 })();
 
+// ─── A conferencia que ele ja fez, lembrada na proxima visita ────────────────
+//
+// Ate 25/08/2026 `portalConfirmacoes` nascia zerado a cada abertura, e o selo
+// `entrega_dados` -- que a carga do portal ja trazia -- nao era lido em lugar
+// nenhum. O cliente confirmava, finalizava, voltava pelo link no dia seguinte
+// para ver o prazo, e lia "Para finalizar, falta: conferir os dados na aba
+// Entrega". Refazia, e o atendimento recebia a mesma mensagem duas vezes.
+
+function reidratar(portal) {
+    const janela = { portalConfirmacoes: { entrega: null, faturamento: null, textoEntrega: '', textoFaturamento: '' } };
+    const estado = {};
+    const fonte = recortar(CONFIRMACOES, 'reidratarConfirmacoes');
+    new Function('window', 'clienteState', fonte + '\nreidratarConfirmacoes(arguments[2]);')(
+        janela, estado, portal);
+    return { c: janela.portalConfirmacoes, estado };
+}
+
+(function aprovadoVoltaConfirmado() {
+    const { c, estado } = reidratar({ entrega: { entrega_dados: 'APROVADO', observacoes: {} } });
+    ok(c.entrega === true && c.faturamento === true, 'os dois voltam confirmados', c);
+    ok(estado.pedidoFinalizado === true, 'e o pedido volta finalizado', estado);
+})();
+
+(function corrigirVoltaComOTextoQueEleEscreveu() {
+    const { c, estado } = reidratar({ entrega: { entrega_dados: 'CORRIGIR', observacoes: {
+        correcao_entrega: 'A rua esta errada, e Av. Grecia 1100'
+    } } });
+    ok(c.entrega === false, 'a entrega volta como alteracao pedida', c.entrega);
+    ok(c.textoEntrega === 'A rua esta errada, e Av. Grecia 1100',
+        'com o texto dele, para ele reler em vez de reescrever', c.textoEntrega);
+    ok(c.faturamento === null, 'e a nota, que ele nao tocou, continua por decidir', c.faturamento);
+    ok(estado.pedidoFinalizado === true, 'ele ja finalizou', estado);
+})();
+
+(function aChaveAntigaMarcaOsDois() {
+    // Nos pedidos gravados antes de 20/08/2026 os dois assuntos vinham num
+    // texto so. Marcar os dois e o mais fiel que da para ser.
+    const { c } = reidratar({ entrega: { entrega_dados: 'CORRIGIR', observacoes: {
+        correcao_entrega_faturamento: 'endereco e CNPJ errados'
+    } } });
+    ok(c.entrega === false && c.faturamento === false, 'os dois', c);
+    ok(c.textoEntrega === 'endereco e CNPJ errados'
+        && c.textoFaturamento === 'endereco e CNPJ errados', 'com o mesmo texto', c);
+})();
+
+(function alteradoNaoVolta() {
+    // `ALTERADO` nao vem do cliente: nasce do atendente girando o selo na Lista
+    // de Arte, justamente para pedir que ele confira de novo. Reidratar aqui
+    // apagaria o pedido do atendente.
+    const { c, estado } = reidratar({ entrega: { entrega_dados: 'ALTERADO', observacoes: {} } });
+    ok(c.entrega === null && c.faturamento === null, 'as perguntas voltam', c);
+    ok(!estado.pedidoFinalizado, 'e o pedido nao se diz finalizado', estado);
+})();
+
+(function corrigirSemTextoNaoAdivinha() {
+    const { c, estado } = reidratar({ entrega: { entrega_dados: 'CORRIGIR', observacoes: {} } });
+    ok(c.entrega === null && c.faturamento === null,
+        'sem texto o selo nao diz de qual dos dois falava: pergunta de novo', c);
+    ok(!estado.pedidoFinalizado, 'e nao se diz finalizado', estado);
+})();
+
+(function selosDesconhecidosEPortalVazioNaoQuebram() {
+    ok(reidratar({}).c.entrega === null, 'portal sem entrega');
+    ok(reidratar(null).c.entrega === null, 'portal nulo');
+    ok(reidratar({ entrega: { entrega_dados: '----' } }).c.entrega === null, 'selo vazio do painel');
+    const comTexto = reidratar({ entrega: { entrega_dados: 'corrigir',
+        observacoes: '{"correcao_faturamento":"a IE mudou"}' } });
+    ok(comTexto.c.faturamento === false && comTexto.c.textoFaturamento === 'a IE mudou',
+        'selo em minuscula e observacoes como string tambem sao lidos', comTexto.c);
+})();
+
+(function aReidratacaoAconteceAntesDoPrimeiroDesenho() {
+    // Depois do desenho, o cartao do fim ja teria sido montado com as perguntas.
+    const i = CLIENTE.indexOf('reidratarConfirmacoes(portal)');
+    const j = CLIENTE.indexOf("registrarSecao('arte'");
+    ok(i > 0 && j > 0 && i < j, 'reidratar vem antes de registrar a primeira secao', [i, j]);
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' conferencias FALHARAM.');
     process.exit(1);

@@ -162,6 +162,28 @@ const podePagar = doPagamento('podePagar');
     ok(r.total === '--', 'sem valor, "--" e nao "R$ 0,00"', r.total);
 })();
 
+// A cotacao escolhida tem de CHEGAR ate aqui.
+//
+// Ate 25/08/2026 esta funcao chamava `rotuloDoFrete(pedido)` com um argumento
+// so. O segundo cobre os nomes que `propostas.frete_escolhido` nao tem --
+// "Frete Incluso", "Transportadora Parceira", "Retirada Local" --, e sem ele um
+// pedido cujo frete so existe na cotacao saia como "A combinar" para o cliente,
+// com a transportadora ja escolhida.
+(function oFreteVemDaCotacaoQuandoOPedidoNaoOTem() {
+    const r = linhasDoOrcamento(
+        [{ nome_produto: 'Credencial PVC', qtd: 88, valor_sub_total: 477.16 }],
+        { valor_total: 477.16, frete_escolhido: null, valor_frete: '18.00' },
+        { servico: 'Transportadora Parceira', prazo: '2 dias úteis' }
+    );
+    ok(r.frete === 'Transportadora Parceira — R$ 18,00',
+        'sem `frete_escolhido`, o nome vem da cotacao', r.frete);
+})();
+
+(function semCotacaoNenhumaContinuaACombinar() {
+    const r = linhasDoOrcamento([], { valor_total: 10 }, null);
+    ok(r.frete === 'A combinar', 'nada escolhido continua "A combinar"', r.frete);
+})();
+
 // ─── 4. O pagamento ──────────────────────────────────────────────────────────
 //
 // O link mora em `pagamentos_v2.url_cobranca` e a forma em `tipo_cobranca` --

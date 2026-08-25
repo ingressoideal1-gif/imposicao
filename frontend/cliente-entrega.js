@@ -157,7 +157,7 @@ function linhasDaGrafica(g) {
         { rotulo: 'Complemento', valor: (g.complemento || '').trim() },
         { rotulo: 'Bairro', valor: (g.bairro || '').trim() },
         { rotulo: 'Cidade/UF', valor: cidade && uf ? cidade + ' - ' + uf : (cidade || uf) },
-        { rotulo: 'CEP', valor: (g.cep || '').trim() }
+        { rotulo: 'CEP', valor: cepEmMascara(g.cep) }
     ].filter(l => l.valor);
 }
 

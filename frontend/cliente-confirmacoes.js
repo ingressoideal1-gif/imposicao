@@ -35,6 +35,73 @@ window.portalConfirmacoes = {
     textoFaturamento: ''
 };
 
+/**
+ * O que o cliente já decidiu em VISITAS ANTERIORES, lido do banco.
+ *
+ * Até 25/08/2026 isto não existia: `portalConfirmacoes` nascia zerado a cada
+ * abertura, e `clienteState.entregaStatus` -- que recebe `entrega_dados` na
+ * carga -- não era lido em lugar nenhum do projeto. O dado estava na mão da
+ * página e era jogado fora.
+ *
+ * O efeito para quem abre o link: o cliente confirma entrega e nota, finaliza,
+ * fecha o WhatsApp; volta pelo mesmo link no dia seguinte para ver o prazo, e
+ * lê "Para finalizar, falta: conferir os dados na aba Entrega; conferir os
+ * dados na aba Nota". Ele refaz -- e o atendimento recebe uma SEGUNDA mensagem
+ * no chat do pedido, idêntica à primeira.
+ *
+ * ## Os três selos, e por que só dois voltam
+ *
+ * `entrega_dados` guarda o resultado da conferência:
+ *
+ *   APROVADO   o cliente confirmou os dois. Volta como confirmado, e o pedido
+ *              volta finalizado -- não há o que refazer.
+ *   CORRIGIR   ele pediu alteração. Volta como alteração pedida, com o texto
+ *              que ele escreveu, para ele reler o que mandou em vez de
+ *              escrever de novo pelo WhatsApp.
+ *   ALTERADO   NÃO volta. Este selo não vem do cliente: nasce do atendente
+ *              girando o selo na Lista de Arte, justamente para pedir que ele
+ *              confira de novo. Reidratar aqui apagaria o pedido do atendente.
+ *
+ * Qual dos dois cartões pediu correção sai das chaves de `observacoes`. A
+ * chave antiga, `correcao_entrega_faturamento`, não distinguia os dois -- nos
+ * pedidos gravados antes de 20/08/2026 ela marca os DOIS, que é o mais fiel
+ * que dá para ser com um texto onde os dois assuntos se misturam.
+ */
+function reidratarConfirmacoes(portal) {
+    const entrega = (portal && portal.entrega) || null;
+    const selo = entrega && entrega.entrega_dados
+        ? String(entrega.entrega_dados).trim().toUpperCase() : '';
+    if (selo !== 'APROVADO' && selo !== 'CORRIGIR') return;
+
+    const c = window.portalConfirmacoes;
+
+    if (selo === 'APROVADO') {
+        c.entrega = true;
+        c.faturamento = true;
+        clienteState.pedidoFinalizado = true;
+        return;
+    }
+
+    let obs = entrega.observacoes || {};
+    if (typeof obs === 'string') {
+        try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
+    }
+    if (typeof obs !== 'object' || !obs) obs = {};
+
+    const antiga = String(obs.correcao_entrega_faturamento || '').trim();
+    const daEntrega = String(obs.correcao_entrega || '').trim() || antiga;
+    const doFaturamento = String(obs.correcao_faturamento || '').trim() || antiga;
+
+    // Sem texto nenhum, o selo CORRIGIR não diz de qual dos dois ele falava.
+    // Marcar os dois seria inventar; deixar como está devolve as perguntas, que
+    // é o comportamento seguro.
+    if (!daEntrega && !doFaturamento) return;
+
+    if (daEntrega) { c.entrega = false; c.textoEntrega = daEntrega; }
+    if (doFaturamento) { c.faturamento = false; c.textoFaturamento = doFaturamento; }
+    clienteState.pedidoFinalizado = true;
+}
+
 const ROTULO_DA_ABA = {
     entrega: { nome: 'entrega', titulo: 'Estes dados de entrega estão corretos?' },
     faturamento: { nome: 'faturamento', titulo: 'Estes dados para a nota fiscal estão corretos?' }
@@ -313,6 +380,7 @@ function avisoDeFinalizacao(icone, titulo, texto) {
     });
 }
 
+window.reidratarConfirmacoes = reidratarConfirmacoes;
 window.artesJaAprovadas = artesJaAprovadas;
 window.cartaoDeDecisao = cartaoDeDecisao;
 window.cartaoDeFinalizacao = cartaoDeFinalizacao;
