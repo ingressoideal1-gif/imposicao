@@ -23975,6 +23975,24 @@ window.atualizarPainelProducao = atualizarPainelProducao;
  * `CANCELADO` fica de fora de propósito: pedido cancelado não *saiu* da arte,
  * ele deixou de existir — e o card "Pedidos Concluídos" é de trabalho feito.
  * Se ele incomodar na lista, é outro assunto, com outro tratamento.
+ *
+ * ## A retirada no balcão (25/08/2026)
+ *
+ * Os pedidos 21105 e 21107 voltaram sozinhos para a Fila de Aprovação depois de
+ * terem ido à produção. O código não tinha mudado: o ERP passou a carimbar
+ * `A RETIRAR` nos pedidos de retirada local quando o material fica pronto no
+ * balcão esperando o cliente, e essa palavra não existia em nenhuma das 8.268
+ * propostas no dia em que a lista acima foi montada — eram os dois únicos
+ * pedidos com ela no banco inteiro.
+ *
+ * Sem a palavra aqui, o `pedidoSaiuDaArte` respondia "não saiu", e o pedido
+ * voltava a ser classificado pela arte: com `pedidos_artes.status = APROVADO` e
+ * `entrega_dados` vazio, ele cai exatamente na Fila de Aprovação. Ou seja, o
+ * pedido reaparecia na tela do designer *por estar mais adiantado*.
+ *
+ * `RETIRADO` entra junto, pelo mesmo motivo que `IMPRESSO` e `ENTREGUE`
+ * entraram sem existir: é o fim natural desse caminho — o cliente levou —, e é
+ * inequívoca. Melhor tê-la aqui hoje do que descobri-la no mesmo susto amanhã.
  */
 const SINAIS_SAIU_DA_ARTE = [
     'EM PRODUCAO', 'EM PRODUÇÃO', 'PRODUCAO', 'PRODUÇÃO',
@@ -23983,6 +24001,7 @@ const SINAIS_SAIU_DA_ARTE = [
     'REVISAO PRODUCAO', 'REVISÃO PRODUÇÃO',
     'EXPEDICAO', 'EXPEDIÇÃO',
     'EM TRANSITO', 'EM TRÂNSITO',
+    'A RETIRAR', 'RETIRADO',
     'ENTREGUE',
     'FINALIZADA', 'FINALIZADO',
 ];

@@ -71,6 +71,27 @@ const VAZIO = { ordens: [], todasArtes: [], modelosGlobais: {}, osItens: {}, lin
         'com a entrega aprovada, vai para a Fila de Aprovados');
 })();
 
+(function oPedidoNoBalcaoNaoVoltaParaAArte() {
+    // 25/08/2026, pedidos 21105 e 21107: os dois tinham ido a producao e
+    // reapareceram na Fila de Aprovacao. O ERP havia trocado o `status_interno`
+    // para `A RETIRAR` (retirada local, material pronto no balcao), palavra que
+    // o `SINAIS_SAIU_DA_ARTE` nao conhecia. Com a arte APROVADA e a entrega
+    // vazia, a classificacao pela arte joga o pedido exatamente na aprovacao --
+    // por isso o teste reproduz as duas coisas juntas, e nao so o status.
+    const api = classificador(Object.assign({}, VAZIO, {
+        todasArtes: [
+            { id_int: 21105, status: 'APROVADO', entrega_dados: null },
+            { id_int: 21107, status: 'APROVADO', entrega_dados: null },
+        ],
+    }));
+    ok(api.classificarPedidoNaArte({ numero: 21105, status_interno: 'A RETIRAR' }).fila === 'concluidos',
+        'pedido pronto no balcao fica em Pedidos Concluidos, nao volta para a arte');
+    ok(api.classificarPedidoNaArte({ numero: 21107, status_interno: 'A RETIRAR' }).fila === 'concluidos',
+        'e o 21107, igual');
+    ok(api.classificarPedidoNaArte({ numero: 21105, status_interno: 'RETIRADO' }).fila === 'concluidos',
+        'depois que o cliente leva, tambem nao volta');
+})();
+
 (function oPedidoComLinkGeradoSaiDeEmArte() {
     // Gerar o link para o cliente move o pedido para a Fila de Aprovacao mesmo
     // sem o status ter mudado -- e por isso ele deixa de contar para o designer.

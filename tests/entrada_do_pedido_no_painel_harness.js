@@ -84,6 +84,10 @@ const { pedidosJaNaGrafica, pedidoEntraNoPainel } = regras;
     const entram = [
         'EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM ACABAMENTO',
         'REVISAO PRODUCAO', 'EXPEDICAO', 'EXPEDIÇÃO', 'EM TRANSITO', 'ENTREGUE',
+        // 25/08/2026: a retirada no balcao. O ERP carimba `A RETIRAR` quando o
+        // pedido de retirada local fica pronto esperando o cliente -- foi o que
+        // devolveu o 21105 e o 21107 para a Fila de Aprovacao.
+        'A RETIRAR', 'RETIRADO',
     ];
     entram.forEach(st => {
         const set = pedidosJaNaGrafica([{ id_int: 1, status_interno: st }]);
