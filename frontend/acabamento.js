@@ -1186,29 +1186,27 @@
     }
 
     /**
-     * A caixa da amostra, que PREENCHE a altura da coluna.
+     * A janela da amostra, da MESMA altura da pilha de botões de status.
      *
-     * Antes ela tinha altura fixa (180 px nos avisos, 360 de teto na imagem) e
-     * ficava centrada no meio de uma coluna alta: sobrava um vão escuro em cima
-     * e embaixo da arte, e a arte — que é justamente o que o operador compara
-     * com o material na mesa — saía menor do que o card permitia. Agora a
-     * moldura é `flex: 1` dentro da coluna, e as três colunas do card terminam
-     * na mesma linha (pedido do usuário em 26/08/2026: aproveitar melhor os
-     * espaços e alinhar os objetos).
+     * Pedido do usuário em 26/08/2026: *"deixar janela da amostra na mesma
+     * altura dos botões"*. A altura vem de `ALTURA_DA_PILHA`, que é a conta dos
+     * quatro botões mais os espaços entre eles — não um número copiado. Assim a
+     * coluna da amostra e a coluna das decisões começam juntas (as duas abrem
+     * com um rótulo de 36 px) e terminam juntas, e o dia em que a altura do
+     * botão mudar, a janela acompanha sozinha.
      *
-     * O teto de altura sai daqui de propósito: quem limita a amostra são as
-     * colunas vizinhas — a tabela de especificação e os botões de status —, que
-     * ditam a altura da linha. A arte cresce até encostar nelas e para.
+     * Antes disto ela era `flex: 1` e crescia até a altura da coluna mais alta;
+     * antes ainda, tinha altura fixa de 180 px nos avisos e teto de 360 na
+     * imagem, e a arte ficava centrada no meio de um vão escuro.
      */
     function amostraHtml(item, idAmostra) {
         const { src, aprovada } = amostraDoModelo(item);
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
-        const moldura = 'width: 100%; flex: 1 1 auto; min-height: 150px;'
+        const moldura = 'width: 100%; flex: 0 0 auto; height: ' + ALTURA_DA_PILHA + 'px;'
             + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
             + ' display: flex; align-items: center; justify-content: center;';
-        const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;'
-            + ' flex: 1 1 auto; min-height: 0;';
+        const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;';
 
         if (!src) {
             return `<div style="${caixa}">
@@ -1380,11 +1378,15 @@
             // Texto ESCURO no botão pintado, e não branco: as quatro cores são
             // claras (o âmbar e o ciano principalmente), e branco sobre elas
             // fica com menos de 2,5:1 de contraste — some sob a luz da gráfica.
+            //
+            // A faixa da cor é o `border-left` de 4 px. Ela é o que faz os
+            // quatro se lerem como uma pilha só, e some no selecionado porque
+            // ali a cor já tomou o botão inteiro.
             const cor = ativo
-                ? `background: rgb(${rgb}); border-color: rgb(${rgb}); color: #0b1220; font-weight: 900;`
-                  + ` box-shadow: 0 0 0 3px rgba(${rgb},0.28), 0 6px 16px rgba(${rgb},0.45);`
-                : `background: rgba(${rgb},0.10); border-color: rgba(${rgb},0.34); color: rgb(${rgb});`
-                  + ` font-weight: 700;`;
+                ? `background: rgb(${rgb}); border-color: rgb(${rgb}); color: #0b1220; font-weight: 800;`
+                  + ` box-shadow: 0 3px 10px rgba(${rgb},0.32);`
+                : `background: rgba(255,255,255,0.045); border-color: rgba(${rgb},0.30);`
+                  + ` border-left: 4px solid rgb(${rgb}); color: rgb(${rgb}); font-weight: 700;`;
             const titulo = !temResponsavel
                 ? 'Escolha o responsável deste modelo para liberar o status'
                 : (ativo ? 'Este modelo está em ' + esc(e) : 'Marcar como ' + esc(e));
@@ -1394,7 +1396,9 @@
                         style="${ESTILO_BOTAO_ESTAGIO}${cor}${liberado ? '' : ESTILO_BOTAO_TRAVADO}"
                         onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${escJs(e)}')"
                         title="${titulo}">
-                    ${ativo ? '✓ ' : ''}${icone} ${esc(e)}
+                    <span style="width: 17px; flex: 0 0 17px; text-align: center;">${icone}</span>
+                    <span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(e)}</span>
+                    <span style="flex: 0 0 auto; font-weight: 900; opacity: ${ativo ? '1' : '0'};">✓</span>
                 </button>`;
         }).join('');
 
@@ -1411,10 +1415,10 @@
         // que não mostrar nenhuma.
         const hora = (atual === 'Pronto') ? textoDaHoraDoPronto(prontoEmDoModelo(item)) : '';
         const carimbo = hora
-            ? `<span style="font-size:0.7rem; color:#4ade80; display:block; margin-top:4px; text-align:center;">🕒 ${esc(hora)}</span>`
+            ? `<span style="font-size:0.7rem; color:#4ade80; display:block; margin-top:5px; padding-left:15px;">🕒 ${esc(hora)}</span>`
             : '';
 
-        return `<div style="display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%;">${botoes}</div>${carimbo}${recado}`;
+        return `<div style="display: grid; grid-template-columns: 1fr; gap: ${ESPACO_DOS_BOTOES}px; width: 100%;">${botoes}</div>${carimbo}${recado}`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
@@ -1459,15 +1463,47 @@
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
 
-    // Os botões de estágio. `min-height` generoso porque na estação se clica de
-    // pé, às vezes com a mão suja de tinta; `min-width: 0` porque sem ele uma
-    // coluna de grade não encolhe abaixo do conteúdo e as quatro deixam de ter
-    // o mesmo tamanho na tela estreita.
-    const ESTILO_BOTAO_ESTAGIO = 'display: inline-flex; align-items: center; justify-content: center;'
-        + ' gap: 5px; width: 100%; min-width: 0; min-height: 44px; padding: 8px 6px;'
-        + ' border-style: solid; border-width: 2px; border-radius: 8px; cursor: pointer;'
-        + ' font-size: 0.84rem; line-height: 1.15; text-align: center;'
-        + ' transition: box-shadow .12s ease, background-color .12s ease;';
+    // ## As medidas da pilha de botões, num lugar só
+    //
+    // 44 px de altura porque na estação se clica de pé, às vezes com a mão suja
+    // de tinta — é a regra do usuário de 22/08/2026, e a altura é FIXA e não um
+    // mínimo, para os quatro serem do mesmo tamanho mesmo quando um rótulo
+    // quebra em duas linhas.
+    //
+    // `ALTURA_DA_PILHA` sai daqui e é usada também pela janela da amostra, por
+    // pedido do usuário em 26/08/2026: *"deixar janela da amostra na mesma
+    // altura dos botões"*. As duas colunas passam a começar e a terminar na
+    // mesma linha, e não há dois números para manter em sincronia — se um dia a
+    // altura do botão mudar, a amostra acompanha sozinha.
+    const ALTURA_DO_BOTAO = 44;
+    const ESPACO_DOS_BOTOES = 6;
+    const ALTURA_DA_PILHA = ESTAGIOS.length * ALTURA_DO_BOTAO
+                          + (ESTAGIOS.length - 1) * ESPACO_DOS_BOTOES;
+
+    // ## O desenho do botão, refeito em 26/08/2026
+    //
+    // O usuário olhou a tela e disse que os botões estavam feios. Eram quatro
+    // pastilhas de cores diferentes, cada uma com fio de 2 px e fundo tingido na
+    // própria cor, e o rótulo CENTRADO — como cada estágio tem um nome de
+    // tamanho diferente, o texto começava num ponto diferente em cada botão, e a
+    // pilha saía toda desalinhada por dentro. O selecionado ainda ganhava um
+    // anel de 3 px por fora, que engordava o botão e o fazia brigar com os
+    // vizinhos.
+    //
+    // Agora os quatro são um SISTEMA: fundo neutro igual para todos, fio de
+    // 1 px, e a cor do estágio aparece só onde identifica — numa faixa de 4 px
+    // à esquerda, que alinha os quatro numa régua vertical. O ícone mora numa
+    // casa de largura fixa e o rótulo começa sempre no mesmo x. O selecionado é
+    // o único pintado por dentro, e o ✓ vai encostado na direita, formando
+    // coluna própria em vez de empurrar o texto.
+    //
+    // As quatro cores continuam sendo as de `COR_DO_ESTAGIO`, que o usuário
+    // ditou: elas codificam estado e não se repintam para combinar com nada.
+    const ESTILO_BOTAO_ESTAGIO = 'display: flex; align-items: center; gap: 9px;'
+        + ' width: 100%; min-width: 0; height: ' + ALTURA_DO_BOTAO + 'px; padding: 0 11px;'
+        + ' border-style: solid; border-width: 1px; border-radius: 9px; cursor: pointer;'
+        + ' font-size: 0.85rem; line-height: 1.1; text-align: left; font-family: inherit;'
+        + ' transition: background-color .12s ease, border-color .12s ease;';
     // Travado apaga o botão, mas não troca a cor: o operador sem permissão de
     // editar continua LENDO em que ponto o modelo está.
     const ESTILO_BOTAO_TRAVADO = ' opacity: 0.5; cursor: not-allowed; box-shadow: none;';
@@ -1597,7 +1633,7 @@
                      coluna das decisoes para a linha de baixo, porque a conta
                      de quebra usa a base e nao o min-width. -->
                 <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; padding: 14px 16px;">
-                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 10px;">
                         <div style="${ROTULO_DA_COLUNA}">Amostra</div>
                         ${amostraHtml(item, idAmostra)}
                     </div>

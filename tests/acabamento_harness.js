@@ -655,11 +655,17 @@ function ambienteComPedidoAberto() {
     ok(html.indexOf('amostras_renderizadas/3001.jpg') !== -1, 'a amostra aprovada e exibida');
     ok(/AcabamentoPainel\.ampliar\(/.test(html), 'e da para ampliar a amostra');
     // A amostra sai grande, e nao como miniatura. Ate 25/08/2026 isso era um
-    // teto fixo de 360 px; desde 26/08 quem limita a arte sao as colunas
-    // vizinhas -- a moldura e `flex: 1` dentro da coluna e a imagem preenche o
-    // que ela der. Um teto em pixel voltaria a deixar vao escuro no card alto.
-    ok(html.indexOf('flex: 1 1 auto; min-height: 150px') !== -1,
-       'a moldura da amostra cresce com a coluna');
+    // teto fixo de 360 px, com a arte centrada no meio de um vao escuro. Desde
+    // 26/08 a janela tem a altura da PILHA DE BOTOES -- pedido do usuario,
+    // "deixar janela da amostra na mesma altura dos botoes" --, e essa altura e
+    // calculada dos botoes (`ALTURA_DA_PILHA`), nao copiada. Sao 4 x 44 mais 3
+    // espacos de 6 = 194 px; se um dia o botao mudar de altura, a janela
+    // acompanha sozinha e este numero muda junto.
+    ok(html.indexOf('height: 194px') !== -1,
+       'a janela da amostra tem a altura da pilha de botoes');
+    ok(FONTE.indexOf('ALTURA_DA_PILHA') !== -1
+       && FONTE.indexOf("+ ALTURA_DA_PILHA + 'px") !== -1,
+       'e essa altura vem dos botoes, nao de um numero solto');
     ok(html.indexOf('max-height: 100%') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
 
     // Pedidos de 20/08/2026, depois de ver a tela.
