@@ -15418,13 +15418,24 @@ window.recarregarNumeracoesDoPedido = recarregarNumeracoesDoPedido;
 /**
  * Quantas linhas o banco deste modelo PRECISA ter para atender ao pedido.
  *
- * Regra do usuário, 19/08/2026: com Qtd X, a numeração tem de gerar X linhas
- * quando ela imprime só a Frente, e 2X quando é FxVerso — no frente e verso
- * cada peça consome duas linhas, uma por face.
+ * Regra do usuário: com Qtd X, a numeração tem de gerar X linhas — **sempre**,
+ * seja Frente ou FxVerso.
  *
- * O modo vem do `print_mode` da NUMERAÇÃO ('front' ou 'duplex'), que é onde o
- * usuário o define, e não do `verso_tipo` do modelo — os dois costumam andar
- * juntos, mas quem manda é a numeração.
+ * > *"modelos frente e verso utilizam as mesmas linhas em colunas diferentes,
+ * > se Qtd=15 devem ser utilizadas 15 linhas, sendo somente frente ou sendo
+ * > frente e verso"* (26/08/2026)
+ *
+ * Isto CORRIGE a versão de 19/08/2026, que esperava 2X no FxVerso por supor que
+ * cada face consumisse uma linha. Não é assim que a peça se monta: **uma linha é
+ * uma peça**, e o verso dela lê OUTRAS COLUNAS da mesma linha. O `engine.py`
+ * sempre trabalhou assim — `_render_item_back` recebe o mesmo `item_data` que o
+ * `_render_item_front`, e o que separa as faces é o campo `face` dos elementos,
+ * não o índice da linha. Quem estava errado era a conta desta trava, e ela
+ * bloqueava credencial FxVerso com o banco certo.
+ *
+ * O `print_mode` da numeração continua sendo lido, mas só para o RÓTULO da
+ * mensagem ("Frente" ou "FxVerso"): saber qual dos dois é ajuda o operador a
+ * entender o que está olhando, e não muda mais a conta.
  *
  * A Qtd é lida e NUNCA escrita: ela chega do ERP e é a quantidade contratada,
  * ou seja, o valor do pedido. Divergência se conserta na numeração.
@@ -15439,11 +15450,17 @@ function celulasEsperadasDoModelo(item) {
     if (!qtd || qtd <= 0) return null;
     const num = numeracaoDoModelo(item);
     if (!num) return null;
-    return qtd * (numeracaoEhDuplex(num) ? 2 : 1);
+    return qtd;
 }
 window.celulasEsperadasDoModelo = celulasEsperadasDoModelo;
 
-/** A numeração imprime frente e verso? É o "Modo de impressão" dela. */
+/**
+ * A numeração imprime frente e verso? É o "Modo de impressão" dela.
+ *
+ * Serve ao rótulo da divergência, e não à conta: desde 26/08/2026 o FxVerso
+ * espera as MESMAS linhas da Frente. Se algum dia isto voltar a multiplicar
+ * alguma coisa, leia antes o comentário do `celulasEsperadasDoModelo`.
+ */
 function numeracaoEhDuplex(num) {
     return String((num && num.print_mode) || 'front').trim().toLowerCase() === 'duplex';
 }

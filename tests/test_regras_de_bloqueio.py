@@ -9,11 +9,17 @@ nao e decisao de quem administra o painel -- e como a grafica trabalha.
   2. Modelo que o cliente aprovou nao se altera. Nem cor, nem numeracao, nem as
      tabelas do banco, nem a arte. Continuam de pe apenas a anotacao e o botao
      "Em Alteracao", e so para atendimento, gerente e administrador.
-  3. O banco da numeracao tem de fechar com a Qtd do pedido -- X linhas quando a
-     numeracao imprime so a Frente, 2X quando e FxVerso. Enquanto nao fechar, o
-     modelo nao pode ser marcado PRONTO, e sem todos os modelos PRONTO o pedido
-     nao vira "Enviar Arte". A Qtd NUNCA e corrigida pelo painel: ela vem do ERP
-     e e a quantidade contratada, ou seja, o valor do pedido.
+  3. O banco da numeracao tem de fechar com a Qtd do pedido -- X linhas, seja
+     Frente ou FxVerso. Enquanto nao fechar, o modelo nao pode ser marcado
+     PRONTO, e sem todos os modelos PRONTO o pedido nao vira "Enviar Arte". A
+     Qtd NUNCA e corrigida pelo painel: ela vem do ERP e e a quantidade
+     contratada, ou seja, o valor do pedido.
+
+     A regra 3 nasceu em 19/08 pedindo 2X no FxVerso, e o usuario a corrigiu em
+     26/08/2026: *"modelos frente e verso utilizam as mesmas linhas em colunas
+     diferentes, se Qtd=15 devem ser utilizadas 15 linhas, sendo somente frente
+     ou sendo frente e verso"*. Uma linha e UMA PECA; o verso dela le outras
+     colunas da mesma linha, que e como o `engine.py` sempre montou a folha.
 
 O harness de node roda as funcoes lidas do `script.js`, e nao copias delas.
 """

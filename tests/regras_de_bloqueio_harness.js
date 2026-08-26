@@ -314,24 +314,44 @@ function cenario(qtd, linhas, printMode) {
     ok(c.api.divergenciaDeCelulasDoModelo(c.item) === null, 'entao nao ha divergencia');
 })();
 
-(function fxVersoPedeODobro() {
-    // No frente e verso cada peca consome duas linhas, uma por face.
-    const c = cenario(1000, 2000, 'duplex');
-    ok(c.api.celulasEsperadasDoModelo(c.item) === 2000, 'FxVerso espera o dobro da Qtd');
-    ok(c.api.divergenciaDeCelulasDoModelo(c.item) === null, 'e 2000 linhas fecham');
+(function fxVersoUsaAsMesmasLinhasDaFrente() {
+    // Regra do usuario, 26/08/2026: *"modelos frente e verso utilizam as mesmas
+    // linhas em colunas diferentes, se Qtd=15 devem ser utilizadas 15 linhas,
+    // sendo somente frente ou sendo frente e verso"*.
+    //
+    // Corrige a versao de 19/08, que esperava o dobro. Uma linha e UMA PECA: o
+    // verso dela le outras colunas da mesma linha. O engine.py sempre fez assim
+    // — `_render_item_back` recebe o mesmo `item_data` do front.
+    const c = cenario(1000, 1000, 'duplex');
+    ok(c.api.celulasEsperadasDoModelo(c.item) === 1000, 'FxVerso espera a MESMA Qtd');
+    ok(c.api.divergenciaDeCelulasDoModelo(c.item) === null, 'e 1000 linhas fecham');
+
+    // O caso que o usuario mostrou na tela: credencial PVC, Qtd 15, FxVerso,
+    // 15 linhas. Antes da correcao a trava dizia "esperado 30 · faltam 15" e
+    // impedia o PRONTO de um modelo que estava certo.
+    const pvc = cenario(15, 15, 'duplex');
+    ok(pvc.api.divergenciaDeCelulasDoModelo(pvc.item) === null,
+        'Qtd 15 FxVerso com 15 linhas fecha — era o bloqueio da credencial PVC');
 })();
 
-(function fxVersoComOBancoDeUmaFaceSo() {
-    // O erro real: a numeracao virou FxVerso e o banco continuou o da frente.
-    const c = cenario(1000, 1000, 'duplex');
+(function fxVersoComOBancoDobrado() {
+    // O erro que sobra depois da correcao: alguem duplicou as linhas do banco
+    // achando que o verso pedia uma para ele.
+    const c = cenario(1000, 2000, 'duplex');
     const d = c.api.divergenciaDeCelulasDoModelo(c.item);
-    ok(d !== null, 'FxVerso com banco de uma face e divergencia');
-    ok(d && d.esperado === 2000 && d.gerado === 1000, 'a conta e 2000 contra 1000', d);
-    ok(d && d.diferenca === -1000, 'e faltam mil linhas', d);
+    ok(d !== null, 'FxVerso com o banco dobrado e divergencia');
+    ok(d && d.esperado === 1000 && d.gerado === 2000, 'a conta e 1000 contra 2000', d);
+    ok(d && d.diferenca === 1000, 'e sobram mil linhas', d);
     const frase = c.api.textoDaDivergenciaDeCelulas(d);
-    ok(/faltam 1000/.test(frase), 'a frase diz quantas faltam', frase);
-    ok(/FxVerso/.test(frase), 'e diz o modo de impressao', frase);
+    ok(/sobram 1000/.test(frase), 'a frase diz quantas sobram', frase);
+    ok(/FxVerso/.test(frase), 'e diz o modo de impressao — o rotulo continua, so a conta mudou', frase);
     ok(/Qtd 1000/.test(frase), 'e traz a Qtd do pedido', frase);
+
+    // E o banco curto continua sendo divergencia, no FxVerso como na Frente.
+    const curto = cenario(1000, 600, 'duplex');
+    const dc = curto.api.divergenciaDeCelulasDoModelo(curto.item);
+    ok(dc && dc.diferenca === -400, 'FxVerso com banco curto: faltam 400', dc);
+    ok(/faltam 400/.test(curto.api.textoDaDivergenciaDeCelulas(dc)), 'e a frase diz isso');
 })();
 
 (function bancoMaiorQueOPedidoTambemEDivergencia() {
