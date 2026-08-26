@@ -1293,6 +1293,62 @@
     }
 
     /**
+     * A FAIXA DA CONFERÊNCIA: quais colunas contam como identificação.
+     *
+     * Pedido do usuário em 26/08/2026: *"ao clicar em Linhas as colunas que são
+     * verificadas na conferência de dados devem vir marcadas (checkbox); ao
+     * desmarcar devem ignorar a conferência de repetições"*.
+     *
+     * Nascem todas marcadas, que é o comportamento de sempre. Desmarcar uma
+     * coluna a tira das duas contagens de repetido — a de dentro do próprio CSV
+     * e a de células repetidas entre modelos do pedido.
+     *
+     * O caso que pediu isto: a numeração do CAMAROTE CORPORATIVO lê `Codigo`,
+     * único por ingresso, e `Camarote`, que vai de 1 a 140 e repete por
+     * natureza. O aviso somava as duas e acusava 3.640 repetições onde não havia
+     * nenhum código repetido.
+     *
+     * **Isto não muda o que imprime.** A escolha vale só para a conferência; as
+     * linhas que vão ao papel continuam saindo da mesma regra de sempre.
+     */
+    function renderFaixaConferencia(bars) {
+        if (!ehDistribuicao() || !ed.conferencia || !ed.conferencia.length) return;
+
+        const faixa = document.createElement('div');
+        faixa.className = 'csv-ed-bar csv-ed-guia';
+
+        const rotulo = document.createElement('span');
+        rotulo.className = 'nota';
+        rotulo.textContent = '🔎 Conferir repetições em:';
+        rotulo.title = 'Colunas que contam quando o painel procura valor repetido. '
+            + 'Desmarcar não muda o que é impresso.';
+        faixa.appendChild(rotulo);
+
+        ed.conferencia.forEach(c => {
+            const lab = document.createElement('label');
+            lab.style.cssText = 'display:inline-flex;align-items:center;gap:5px;'
+                + 'margin-left:10px;font-size:.8rem;cursor:pointer;white-space:nowrap;';
+            const cx = document.createElement('input');
+            cx.type = 'checkbox';
+            cx.checked = !!c.conferida;
+            cx.style.cursor = 'pointer';
+            cx.onchange = () => { c.conferida = cx.checked; };
+            lab.appendChild(cx);
+            lab.appendChild(document.createTextNode(c.nome));
+            faixa.appendChild(lab);
+        });
+
+        const nota = document.createElement('span');
+        nota.className = 'nota';
+        nota.style.cssText = 'margin-left:12px;opacity:.75;';
+        nota.textContent = 'Coluna que repete por natureza (número de camarote, '
+            + 'data, lote) pode ficar de fora — isso não altera a impressão.';
+        faixa.appendChild(nota);
+
+        bars.appendChild(faixa);
+    }
+
+    /**
      * A faixa de quem chegou aqui apontando linhas — hoje, o conferidor de
      * espaço do texto do editor de numeração. Sem ela a tela abriria filtrada
      * e nada explicaria por que o banco "encolheu".
@@ -2023,6 +2079,7 @@
         bars.innerHTML = '';
 
         renderFaixaApontadas(bars);
+        renderFaixaConferencia(bars);
 
         // Faixa 1 — busca, filtro, desfazer, arquivo
         const b1 = document.createElement('div');
@@ -2482,6 +2539,11 @@
             Object.keys(dist).forEach(k => {
                 carga.distribuicao[k] = { tipo: 'linhas', ids: comprimirIds(dist[k]) };
             });
+            // A escolha dos checkboxes da faixa de conferencia, por coluna.
+            if (ed.conferencia && ed.conferencia.length) {
+                carga.conferencia = {};
+                ed.conferencia.forEach(c => { carga.conferencia[c.nome] = !!c.conferida; });
+            }
         }
         destruir();
         if (typeof cb === 'function') cb(carga);
@@ -2515,6 +2577,11 @@
             colunasDeFoto: Array.isArray(opts.colunasDeFoto) ? opts.colunasDeFoto.slice() : [],
             onAplicar: opts.onAplicar,
             modelos: Array.isArray(opts.modelos) ? opts.modelos.slice() : null,
+            // As colunas conferidas, so no modo distribuicao. Copia propria: o
+            // checkbox escreve nela, e cancelar nao pode vazar para o chamador.
+            conferencia: Array.isArray(opts.conferencia)
+                ? opts.conferencia.map(c => ({ nome: c.nome, conferida: !!c.conferida }))
+                : null,
             // Modelo de onde a tela foi aberta. Só destaca — não restringe nada.
             foco: opts.foco != null ? String(opts.foco) : null,
             dono: new Map(),

@@ -13393,9 +13393,11 @@ function renderNumCsvInterface() {
         // função do "📋 Ver / Editar" da box "Banco de Dados (CSV)", logo
         // acima, no mesmo painel — duas portas para a mesma sala, e uma delas
         // disputando espaço com o recado que esta barra precisa dar. Tirado a
-        // pedido do usuário em 25/08/2026. A porta do editor de numeração é a
-        // da box; a do dia a dia é o "📊 Ver / editar" no card do modelo,
-        // dentro do pedido, que é onde o trabalho acontece.
+        // pedido do usuário em 25/08/2026.
+        //
+        // Desde 26/08/2026 a box É a única porta: o "📊 Ver / editar" do card do
+        // modelo saiu, porque editar dali parecia mexer só naquele modelo e
+        // mexia na numeração inteira.
         bar.innerHTML = state.numCsvHeaders.map(col => `
 
             <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Pôr esta coluna no ticket, como texto variável">📊 ${col}</button>
@@ -14980,6 +14982,80 @@ function colunasDoBancoDaNumeracao(num) {
 }
 window.colunasDoBancoDaNumeracao = colunasDoBancoDaNumeracao;
 
+/**
+ * As colunas que ENTRAM na conferencia de repeticoes (26/08/2026).
+ *
+ * ## Por que nao e a mesma lista de cima
+ *
+ * `colunasDoBancoDaNumeracao` decide quais linhas IMPRIMEM: uma linha entra na
+ * fatia se tiver dado em alguma das colunas que a numeracao le. Mexer nela
+ * mudaria o papel. Esta aqui decide outra coisa, e so ela: quais colunas contam
+ * quando o painel procura valor repetido.
+ *
+ * ## O que ela conserta
+ *
+ * A conferencia tratava toda coluna de banco como identificacao. No pedido
+ * 21202 a numeracao do CAMAROTE CORPORATIVO le duas: `Codigo`, que e unico por
+ * ingresso, e `Camarote`, que vai de 1 a 140 e REPETE por natureza -- 25
+ * ingressos por camarote. O aviso somava as duas e dizia "3.640 celulas
+ * repetidas" quando o que repetia eram os 140 numeros de camarote, e nenhum
+ * codigo. Numero inflado por construcao ensina o operador a ignorar o aviso, e
+ * ai ele nao serve para o dia em que houver codigo repetido de verdade.
+ *
+ * ## Onde a escolha mora
+ *
+ * No proprio elemento, em `sem_conferencia`. Nao ha coluna nova na tabela do
+ * parceiro para isso, e nao precisa haver: `elements` ja e nosso, ja viaja com
+ * a numeracao e ja e gravado inteiro. Ausente = conferida, que e como todas as
+ * numeracoes que existiam antes deste dia continuam se comportando.
+ *
+ * Duas colunas iguais em elementos diferentes: basta UM elemento pedir para
+ * conferir para a coluna ser conferida. Desmarcar e uma decisao sobre a COLUNA,
+ * e a tela grava a marca em todos os elementos que a leem.
+ */
+function colunasConferidasDaNumeracao(num) {
+    if (!num) return [];
+    const conferidas = [], vistas = {};
+    (num.elements || []).forEach(el => {
+        if (!el || el.source !== 'database') return;
+        const col = String(el.csv_column || '').trim();
+        if (!col) return;
+        if (vistas[col] === undefined) { vistas[col] = false; conferidas.push(col); }
+        if (!el.sem_conferencia) vistas[col] = true;
+    });
+    return conferidas.filter(c => vistas[c]);
+}
+window.colunasConferidasDaNumeracao = colunasConferidasDaNumeracao;
+
+/** O estado dos checkboxes: toda coluna do banco, e se ela e conferida. */
+function conferenciaDasColunasDaNumeracao(num) {
+    const conferidas = colunasConferidasDaNumeracao(num);
+    return colunasDoBancoDaNumeracao(num)
+        .map(c => ({ nome: c, conferida: conferidas.indexOf(c) !== -1 }));
+}
+window.conferenciaDasColunasDaNumeracao = conferenciaDasColunasDaNumeracao;
+
+/**
+ * Grava nos elementos quais colunas ficam fora da conferencia. Devolve quantos
+ * elementos mudaram -- zero quer dizer que nao ha o que salvar.
+ */
+function aplicarConferenciaNasColunas(num, escolha) {
+    if (!num || !escolha) return 0;
+    let mudou = 0;
+    (num.elements || []).forEach(el => {
+        if (!el || el.source !== 'database') return;
+        const col = String(el.csv_column || '').trim();
+        if (!col || escolha[col] === undefined) return;
+        const fora = !escolha[col];
+        const antes = !!el.sem_conferencia;
+        if (antes === fora) return;
+        if (fora) el.sem_conferencia = true; else delete el.sem_conferencia;
+        mudou++;
+    });
+    return mudou;
+}
+window.aplicarConferenciaNasColunas = aplicarConferenciaNasColunas;
+
 
 
 /**
@@ -15180,6 +15256,11 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
         foco: focoItemId != null ? String(focoItemId) : null,
 
+        // Os checkboxes de "conferir repeticoes em" (26/08/2026). Nascem como
+        // a numeracao esta hoje -- e toda numeracao anterior a este dia nasce
+        // com todas marcadas, porque a marca de FORA e que e explicita.
+        conferencia: conferenciaDasColunasDaNumeracao(num),
+
         modelos: grupo.itens.map((it, i) => ({
 
             id: String(it.id),
@@ -15190,13 +15271,20 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
         })),
 
-        onAplicar: async ({ rows, distribuicao }) => {
+        onAplicar: async ({ rows, distribuicao, conferencia }) => {
 
             // 1. As linhas podem ter mudado (cancelar/reativar) e ganhado __id
             //    novo. Grava o banco de volta na numeração, uma vez só.
             num.csv_data = rows;
 
             await salvarCsvDaNumeracao(num.id, rows);
+
+            // A escolha das colunas conferidas mora nos ELEMENTOS, e por isso
+            // ela e gravada aqui e nao junto das fatias: fatia e do modelo,
+            // conferencia e da numeracao. Ver `colunasConferidasDaNumeracao`.
+            if (aplicarConferenciaNasColunas(num, conferencia)) {
+                await salvarCamposDaNumeracao(num.id, { elements: num.elements });
+            }
 
             // 2. Aplicar sem atribuir NENHUMA linha a NENHUM modelo não é uma
             //    distribuição — é o segundo passo que faltou. Gravar aqui poria
@@ -15580,14 +15668,8 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
             bEspera.style.color = '';
             bEspera.style.borderColor = '';
         }
-        const bEditarEspera = container.querySelector(`#btn-csv-editar-${idx}`);
-        if (bEditarEspera) bEditarEspera.disabled = true;
         return;
     }
-
-    const bEditar = container.querySelector(`#btn-csv-editar-${idx}`);
-
-    if (bEditar) bEditar.disabled = false;
 
     const minhas = fatiaCsvDoItem(item, num).length;
 
@@ -16226,9 +16308,9 @@ function celulasRepetidasDoPedido(osId) {
         if (!it) return;
         const num = numeracaoDoModelo(it);
         if (!num || !Array.isArray(num.csv_data) || !num.csv_data.length) return;
-        const colunas = Array.from(new Set((num.elements || [])
-            .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim())
-            .map(el => String(el.csv_column).trim())));
+        // So as colunas CONFERIDAS: `Camarote` vai de 1 a 140 e repete por
+        // natureza. Ver `colunasConferidasDaNumeracao`.
+        const colunas = colunasConferidasDaNumeracao(num);
         if (!colunas.length) return;
         const valores = new Set();
         fatiaCsvDoItem(it, num).forEach(linha => {
@@ -16377,9 +16459,9 @@ function conferenciaDeDadosDoPedido(osId) {
         if (divergencia) anotar(textoDaDivergenciaDeCelulas(divergencia));
 
         if (Array.isArray(num.csv_data) && num.csv_data.length) {
-            const colunas = Array.from(new Set(deBanco
-                .map(el => String(el.csv_column || '').trim())
-                .filter(Boolean)));
+            // A conferencia de repetidos DENTRO do CSV segue a mesma escolha
+            // do aviso entre modelos -- ver `colunasConferidasDaNumeracao`.
+            const colunas = colunasConferidasDaNumeracao(num);
             const fatia = fatiaCsvDoItem(it, num);
 
             // A 1ª linha traz SÓ as colunas que a numeração lê. Sem elemento de
@@ -18279,7 +18361,24 @@ function redesenharCardsDoPedido(osId) {
  *   'distribuir'  — repartir as linhas entre os modelos do pedido. Grava em
  *                   `pedidos_modelos.csv_selecao`, que é por modelo.
  */
-window.abrirCsvDoModelo = async function(idx, osId, modo) {
+/**
+ * A DISTRIBUICAO das linhas deste modelo. Uma coisa so, desde 26/08/2026.
+ *
+ * Este botao ja abriu duas telas: o "Ver / editar" (o banco da NUMERACAO) e o
+ * "Linhas" (a fatia DO MODELO). Elas parecem irmas e nao sao -- a primeira
+ * escreve numa coisa que todos os modelos daquela numeracao compartilham.
+ *
+ * O relato que fechou o assunto: *"2 modelos com a mesma numeracao, ao
+ * selecionar A no modelo 1 e B no modelo 2, o modelo 1 vira B"*. Estava
+ * correto: a marca de imprimir mora dentro da linha, e a linha e da numeracao.
+ * Um aviso chegou a ser posto na frente do botao; o usuario decidiu melhor --
+ * tirar a porta em vez de sinalizar o buraco.
+ *
+ * Editar o banco continua existindo, com uma porta so: abrir a numeracao no
+ * lapis e usar o "Ver / Editar" da box "Banco de Dados (CSV)", onde esta claro
+ * que se mexe na numeracao inteira.
+ */
+window.abrirCsvDoModelo = async function(idx, osId) {
 
     if (typeof window.abrirEditorCsv !== 'function') {
 
@@ -18304,151 +18403,7 @@ window.abrirCsvDoModelo = async function(idx, osId, modo) {
 
     }
 
-    if (modo === 'distribuir') {
-
-        return window.abrirDistribuicaoCsv(osId, num.id, item.id);
-
-    }
-
-    // ── O BANCO E DE TODOS OS MODELOS QUE USAM ESTA NUMERACAO ──────────────
-    //
-    // Relato do usuario em 26/08/2026: *"a selecao ver/editar no modelo nao
-    // esta funcionando, 2 modelos com a mesma numeracao ao selecionar A no
-    // modelo 1 e B no modelo 2, o modelo 1 vira B"*.
-    //
-    // E o que tem de acontecer, e o motivo cabe numa frase: a marca de imprimir
-    // mora DENTRO DA LINHA (`__ativo`), e a linha pertence a numeracao, nao ao
-    // modelo. Dois modelos na mesma numeracao leem as mesmas linhas; o segundo a
-    // marcar reescreve o primeiro. O `onAplicar` logo abaixo confirma -- ele
-    // grava `csv_data` na NUMERACAO, uma vez so.
-    //
-    // Quem reparte por modelo e o outro botao do card, o "Linhas": ele abre o
-    // modo distribuicao, onde a coluna Modelo diz de quem e cada linha, e grava
-    // em `pedidos_modelos.csv_selecao` -- uma fatia por modelo.
-    //
-    // Ate aqui nada na tela dizia isso. O operador marcava, ia ao proximo
-    // modelo, marcava, e voltava para achar o primeiro trocado -- sem erro, sem
-    // aviso, e sem jeito de descobrir o porque. A trava tem saida: da para abrir
-    // assim mesmo, que e o certo quando a intencao E mexer no banco inteiro.
-    const irmaos = (state.osItens[osId] || [])
-        .filter(it => String(numeracaoIdDoItem(it)) === String(num.id));
-
-    if (irmaos.length > 1 && window.caixaConfirmar && window.caixaConfirmar.perguntar) {
-
-        const seguir = await window.caixaConfirmar.perguntar(
-            `Atenção: este banco de dados é de ${irmaos.length} modelos deste pedido. `
-            + 'O que você marcar para imprimir aqui vale para TODOS eles — marcar num '
-            + 'modelo desmarca no outro, porque a marca fica na linha do banco, e o '
-            + 'banco é um só. Para dar linhas DIFERENTES a cada modelo, feche isto e '
-            + 'use o botão "🧩 Linhas" do card: ele reparte o banco entre os modelos, '
-            + 'e cada um guarda a fatia dele.',
-            { rotulo: 'Abrir assim mesmo', perigo: true }
-        );
-
-        if (!seguir) return;
-
-    }
-
-    window.abrirEditorCsv({
-
-        headers: num.csv_headers || [],
-
-        rows: num.csv_data,
-
-        filename: num.csv_filename || 'banco.csv',
-
-        // Mesma lista que a ponte do editor de numeração entrega: é ela que faz
-        // a célula sem foto ficar vermelha e que desfaz o vínculo quando o texto
-        // da célula muda. Sem ela, esta tela — aberta pelo pedido — editava a
-        // coluna da foto sem nenhuma das duas proteções.
-        colunasDeFoto: [...new Set(
-            (num.elements || [])
-                .filter(el => el && el.type === 'FOTO' && el.csv_column)
-                .map(el => el.csv_column)
-        )],
-
-        colunasEmUso: () => {
-
-            const uso = {};
-
-            (num.elements || []).forEach(el => {
-
-                if (el.source === 'database' && el.csv_column) {
-
-                    uso[el.csv_column] = (uso[el.csv_column] || 0) + 1;
-
-                }
-
-            });
-
-            return uso;
-
-        },
-
-        onAplicar: async ({ headers, rows, filename, renomeacoes }) => {
-
-            // Coluna renomeada arrasta junto os elementos que a usam, senão
-            // eles ficariam apontando para um nome que não existe mais.
-            let ajustados = 0;
-
-            (renomeacoes || []).forEach(({ de, para }) => {
-
-                (num.elements || []).forEach(el => {
-
-                    if (el.source === 'database' && el.csv_column === de) {
-
-                        el.csv_column = para;
-
-                        ajustados++;
-
-                    }
-
-                });
-
-            });
-
-            // Banco sem nenhuma linha equivale a não ter banco: deixar um array
-            // vazio manteria a numeração marcada como "tem CSV", e a Imposição
-            // tentaria imprimir zero itens.
-            const patch = rows.length
-
-                ? { csv_data: rows, csv_headers: headers, csv_filename: filename }
-
-                : { csv_data: null, csv_headers: [], csv_filename: '' };
-
-            if (ajustados) patch.elements = num.elements;
-
-            Object.assign(num, patch);
-
-            await salvarCamposDaNumeracao(num.id, patch);
-
-            redesenharCardsDoPedido(osId);
-
-            if (!rows.length) {
-
-                toast('Banco de dados vazio — a numeração ficou sem CSV.', 'info');
-
-                return;
-
-            }
-
-            const fora = rows.length - linhasAtivasCsv(rows).length;
-
-            toast(
-
-                `Banco salvo: ${rows.length} linhas`
-
-                + (fora ? `, ${fora} fora da impressão` : '')
-
-                + (ajustados ? `, ${ajustados} elemento(s) reapontados` : ''),
-
-                'success'
-
-            );
-
-        }
-
-    });
+    return window.abrirDistribuicaoCsv(osId, num.id, item.id);
 
 };
 
@@ -29424,9 +29379,17 @@ function renderAmostrasOSItens(osId) {
                                     🗂️ Banco de dados:
                                     <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
                                 </span>
+                                <!-- SO o "Linhas" (26/08/2026, decisao do usuario).
+                                     O "Ver / editar" morava aqui e editava o BANCO DA
+                                     NUMERACAO, que e o mesmo para todos os modelos que a
+                                     usam: marcar linhas por um modelo desmarcava no outro,
+                                     e foi assim que "o modelo 1 virou B". A edicao do banco
+                                     agora tem uma porta so, a do editor da numeracao
+                                     (a box "Banco de Dados (CSV)"), onde e obvio que se
+                                     esta mexendo na numeracao inteira. Aqui, dentro do
+                                     pedido, so existe o que e DO MODELO: a fatia dele. -->
                                 <div style="display:flex; gap:6px;">
-                                    <button class="btn btn-sm btn-secondary" id="btn-csv-editar-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Abrir o banco como planilha: corrigir célula, coluna, e marcar quais linhas imprimem">📊 Ver / editar</button>
-                                    <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
                                 </div>
                             </div>
                         </div>
@@ -29908,32 +29871,136 @@ function renderAmostrasOSItens(osId) {
 
 
 
-    setTimeout(async () => {
-        for (let idx = 0; idx < itens.length; idx++) {
-            const item = itens[idx];
-            const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
-            const numSelect = document.getElementById(`amostra-item-num-${idx}`);
-            const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
-            
-            const hasSavedLocal = (item.id && (localStorage.getItem(`ideal_arte_url_${item.id}_frente`) || localStorage.getItem(`ideal_arte_url_${item.id}_verso`) || localStorage.getItem(`ideal_arte_json_${item.id}_frente`) || localStorage.getItem(`ideal_arte_json_${item.id}_verso`))) ||
-                                  localStorage.getItem(`ideal_arte_url_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_url_${osId}_${idx}_verso`) ||
-                                  localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`);
-
-            if (item.modo_pdf || item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json || hasSavedLocal || hasSelectValue) {
-                await renderItemAmostraCombinada(idx, osId);
-                // Pequena pausa para permitir renderização fluida da UI sem travar o browser
-                await new Promise(r => setTimeout(r, 20));
-            }
-        }
-        // De novo: `renderItemAmostraCombinada` reescreve pedaços do card, e um
-        // controle redesenhado volta habilitado.
-        travarCardsDeModelosAprovados(container);
-
-        // Atualizar a barra final de ações do cliente dinamicamente
-        atualizarBarraFinalCliente(osId);
-    }, 50);
+    setTimeout(() => { desenharCardsAoAparecer(osId, itens, container); }, 50);
 
 }
+
+/** O modelo tem algo para desenhar? A mesma pergunta do laço antigo, com nome. */
+function cardTemOqueDesenhar(item, idx, osId) {
+    if (!item) return false;
+    const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
+    const hasSavedLocal = (item.id && (localStorage.getItem(`ideal_arte_url_${item.id}_frente`) || localStorage.getItem(`ideal_arte_url_${item.id}_verso`) || localStorage.getItem(`ideal_arte_json_${item.id}_frente`) || localStorage.getItem(`ideal_arte_json_${item.id}_verso`))) ||
+                          localStorage.getItem(`ideal_arte_url_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_url_${osId}_${idx}_verso`) ||
+                          localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`);
+    return !!(item.modo_pdf || item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64
+        || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json
+        || hasSavedLocal || hasSelectValue);
+}
+window.cardTemOqueDesenhar = cardTemOqueDesenhar;
+
+/**
+ * DESENHA O QUE ESTÁ NA TELA, E O RESTO CONFORME O OPERADOR ROLA (26/08/2026).
+ *
+ * ## O que havia aqui antes
+ *
+ * Um laço que percorria TODOS os modelos do pedido e desenhava cada card, em
+ * série, com 20 ms de pausa entre um e outro — estivessem na tela ou não. Num
+ * pedido de 52 modelos são 52 desenhos completos (arte, cor, numeração e, no
+ * modo PDF, o arquivo) mais um segundo só das pausas, enquanto o operador olha
+ * para os dois primeiros cards.
+ *
+ * Pergunta do usuário que levou aqui: *"conferir se os modelos multipáginas
+ * está trazendo ou tentando carregar a visualização ao rolar o pedido ou se
+ * busca carregar apenas ao tentar paginar o modelo"*. A paginação JÁ era sob
+ * demanda — o `amostraCsvPagina` redesenha uma linha, quando se clica. O que
+ * não era sob demanda era a ABERTURA.
+ *
+ * ## Como fica
+ *
+ * Cada card é desenhado quando entra no campo de visão, uma vez só. O
+ * `rootMargin` generoso manda desenhar um pouco ANTES de aparecer, para o card
+ * não chegar em branco a quem rola depressa.
+ *
+ * A conta dos desenhados vive no `state` por PEDIDO: redesenhar a lista — o que
+ * acontece a cada banco que chega e a cada status trocado — não pode reiniciar
+ * o trabalho todo; trocar de pedido tem de começar do zero.
+ *
+ * ## A saída de emergência
+ *
+ * `desenharTodosOsCards()` força o desenho de todos, e existe por causa do PDF
+ * Prova: ele fotografa a tela, e card nunca rolado nunca desenharia. Ver
+ * `prepararTelaParaOPdfProva`.
+ */
+function desenharCardsAoAparecer(osId, itens, container) {
+    if (!container) return;
+
+    state._cardsDesenhados = state._cardsDesenhados || {};
+    if (state._cardsDesenhados._osId !== osId) {
+        state._cardsDesenhados = { _osId: osId, feitos: {} };
+    }
+    const feitos = state._cardsDesenhados.feitos;
+
+    const desenhar = async (idx) => {
+        if (feitos[idx]) return;
+        const item = itens[idx];
+        if (!cardTemOqueDesenhar(item, idx, osId)) { feitos[idx] = true; return; }
+        feitos[idx] = true;
+        try {
+            await renderItemAmostraCombinada(idx, osId);
+        } catch (e) {
+            feitos[idx] = false;
+            console.warn('[Amostras] card ' + idx + ':', e);
+        }
+        // `renderItemAmostraCombinada` reescreve pedaços do card, e um controle
+        // redesenhado volta habilitado.
+        travarCardsDeModelosAprovados(container);
+        atualizarBarraFinalCliente(osId);
+    };
+    state._cardsDesenhados.desenhar = desenhar;
+
+    // Sem IntersectionObserver (navegador antigo), tudo como era antes: melhor
+    // devagar do que em branco.
+    if (typeof IntersectionObserver !== 'function') {
+        (async () => {
+            for (let idx = 0; idx < itens.length; idx++) {
+                await desenhar(idx);
+                await new Promise(r => setTimeout(r, 20));
+            }
+        })();
+        return;
+    }
+
+    if (state._cardsObserver) { try { state._cardsObserver.disconnect(); } catch (_) {} }
+    const observador = new IntersectionObserver((entradas) => {
+        entradas.forEach(en => {
+            if (!en.isIntersecting) return;
+            const idx = Number(en.target.dataset.amostraIdx);
+            observador.unobserve(en.target);
+            desenhar(idx);
+        });
+    }, { root: null, rootMargin: '600px 0px', threshold: 0 });
+    state._cardsObserver = observador;
+
+    // A ÂNCORA PRECISA SER VISÍVEL, e essa é a parte fácil de errar: o canvas do
+    // card e a caixa do banco nascem com `display:none`, e o IntersectionObserver
+    // NUNCA dispara para elemento escondido — observá-los deixaria o pedido
+    // inteiro em branco, para sempre. O cabeçalho do modelo (o título dourado) e
+    // o seletor de numeração estão sempre desenhados.
+    for (let idx = 0; idx < itens.length; idx++) {
+        const alvo = container.querySelector(`#amostra-item-header-${idx}`)
+            || container.querySelector(`#amostra-item-config-num-${idx}`);
+        if (!alvo) { desenhar(idx); continue; }   // sem âncora, desenha logo
+        alvo.dataset.amostraIdx = String(idx);
+        observador.observe(alvo);
+    }
+}
+window.desenharCardsAoAparecer = desenharCardsAoAparecer;
+
+/** Força o desenho de TODOS os cards do pedido. Ver o PDF Prova. */
+async function desenharTodosOsCards(osId, itens) {
+    const d = state._cardsDesenhados;
+    if (!d || d._osId !== osId || typeof d.desenhar !== 'function') return 0;
+    let n = 0;
+    for (let idx = 0; idx < (itens || []).length; idx++) {
+        if (d.feitos[idx]) continue;
+        await d.desenhar(idx);
+        n++;
+    }
+    return n;
+}
+window.desenharTodosOsCards = desenharTodosOsCards;
 
 /**
  * Atualiza a barra final dinamicamente no link do cliente
@@ -37576,6 +37643,13 @@ async function prepararTelaParaOPdfProva(osId, itens, tetoMs) {
         && numeracoesSemBancoBaixado(osId).length) {
         await carregarBancosDoPedido(osId);
         if (typeof renderAmostrasOSItens === 'function') renderAmostrasOSItens(osId);
+    }
+
+    // Card nunca rolado nunca desenha: desde 26/08/2026 o desenho é sob demanda.
+    // Sem esta linha, o PDF Prova esperaria o teto inteiro e listaria como "de
+    // fora" justamente os modelos que ninguém chegou a ver na tela.
+    if (typeof desenharTodosOsCards === 'function') {
+        try { await desenharTodosOsCards(osId, itens); } catch (e) { /* segue */ }
     }
 
     const limite = Date.now() + (tetoMs || 60000);

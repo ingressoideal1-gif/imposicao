@@ -101,8 +101,8 @@ def test_a_barra_de_colunas_so_poe_coluna_no_ticket():
     a mesma sala, e a segunda disputando espaco com o recado que a barra precisa
     dar ("clique numa coluna para por um campo no ticket").
 
-    Tirado a pedido do usuario em 25/08/2026. A porta do editor de numeracao e a
-    da box; a do dia a dia e o "Ver / editar" do card do modelo, no pedido.
+    Tirado a pedido do usuario em 25/08/2026. Desde 26/08/2026 a box e a UNICA
+    porta -- ver o teste abaixo.
     """
     js = _ler("frontend/script.js")
 
@@ -119,19 +119,38 @@ def test_a_barra_de_colunas_so_poe_coluna_no_ticket():
     )
 
 
-def test_a_porta_do_pedido_continua_existindo():
-    """O caminho do dia a dia nao pode sumir junto com a limpeza.
+def test_editar_o_banco_tem_UMA_porta_so_e_ela_e_a_do_editor_da_numeracao():
+    """Decisao do usuario em 26/08/2026: *"vamos deixar o Ver/editar apenas na
+    edicao da numeracao"*.
 
-    O banco se corrige de dentro do pedido, no card do modelo: abrir o catalogo
-    de numeracoes so para acertar uma celula e dar a volta. Sao dois botoes ali,
-    e eles fazem trabalhos diferentes -- 'editar' e o conteudo (da numeracao),
-    'distribuir' e a fatia (do modelo).
+    O card do modelo tinha os dois botoes lado a lado, e eles pareciam irmaos
+    sem ser: o "Ver / editar" escrevia no banco da NUMERACAO -- o mesmo para
+    todos os modelos que a usam --, e o "Linhas" na fatia DAQUELE modelo. Dali
+    saiu o relato *"2 modelos com a mesma numeracao, ao selecionar A no modelo 1
+    e B no modelo 2, o modelo 1 vira B"*: correto, e invisivel.
+
+    Agora, dentro do pedido, so existe o que e do modelo. Editar o banco e no
+    editor da numeracao, onde esta claro que se mexe na numeracao inteira.
     """
     js = _ler("frontend/script.js")
+    html = _ler("frontend/index.html")
+    modal = _ler("frontend/amostra-modal.js")
 
-    assert re.search(r"abrirCsvDoModelo\(\$\{idx\}, '\$\{osId\}', 'editar'\)", js), (
-        "sumiu o Ver / editar do card do modelo"
-    )
-    assert re.search(r"abrirCsvDoModelo\(\$\{idx\}, '\$\{osId\}', 'distribuir'\)", js), (
+    # No pedido: so a fatia.
+    assert re.search(r"abrirCsvDoModelo\(\$\{idx\}, '\$\{osId\}'\)", js), (
         "sumiu o Linhas do card do modelo"
+    )
+    assert "btn-csv-editar" not in js, (
+        "o Ver / editar voltou para o card do modelo — de la ele edita a "
+        "numeracao inteira, e o operador nao tem como saber disso"
+    )
+    assert "am-csv-edit" not in modal, "o Banco voltou para o modal da amostra"
+    assert "'editar'" not in js.split("window.abrirCsvDoModelo")[1][:1500], (
+        "o modo 'editar' voltou ao abrirCsvDoModelo"
+    )
+
+    # E a porta que ficou continua existindo, no editor da numeracao.
+    assert 'id="btn-ver-num-csv"' in html and "abrirEditorCsvDaNumeracao()" in html, (
+        "a box 'Banco de Dados (CSV)' perdeu o Ver / Editar — agora ela e a "
+        "UNICA porta, e sem ela nao ha como corrigir uma celula"
     )

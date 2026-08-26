@@ -64,7 +64,10 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                'distribuicaoOrfaDoModelo', 'CsvEditorColId',
                // O PDF Prova, que fotografa a tela e nao os dados (26/08/2026).
                'modelosForaDoPdfProva', 'textoDosModelosForaDoPdf',
-               'prepararTelaParaOPdfProva'];
+               'prepararTelaParaOPdfProva',
+               // Quais colunas contam na conferencia de repeticoes (26/08/2026).
+               'colunasConferidasDaNumeracao', 'conferenciaDasColunasDaNumeracao',
+               'aplicarConferenciaNasColunas', 'celulasEsperadasDoModelo'];
 
 let CODIGO;
 try {
@@ -494,6 +497,117 @@ function mundo(opts) {
     const fora2 = await m2.api.prepararTelaParaOPdfProva('os1', itens, 600);
     ok(fora2.length === 1 && fora2[0].idx === 1,
        'passado o teto, quem nao desenhou e devolvido para quem chamou', fora2);
+})();
+
+// ─── 12. Quais colunas contam na conferencia de repeticoes ─────────────────
+//
+// Pedido do usuario: "ao clicar em Linhas as colunas que sao verificadas na
+// conferencia de dados devem vir marcadas (checkbox); ao desmarcar devem
+// ignorar a conferencia de repeticoes".
+//
+// O caso real: a numeracao do CAMAROTE CORPORATIVO le `Codigo` (unico por
+// ingresso) e `Camarote` (1 a 140, repete por natureza, 25 ingressos cada). A
+// conferencia somava as duas e acusava 3.640 repeticoes sem NENHUM codigo
+// repetido -- numero inflado por construcao ensina a ignorar o aviso.
+
+(function quaisColunasContam() {
+    const { api } = mundo({});
+    const num = n => ({ id: 'n1', elements: n });
+
+    // Sem marca nenhuma: todas conferidas. E como toda numeracao anterior a
+    // 26/08/2026 se comporta -- a marca de FORA e que e explicita.
+    const a = num([
+        { source: 'database', csv_column: 'Codigo' },
+        { source: 'database', csv_column: 'Camarote' },
+    ]);
+    ok(api.colunasConferidasDaNumeracao(a).join(',') === 'Codigo,Camarote',
+       'sem marca, todas as colunas sao conferidas', api.colunasConferidasDaNumeracao(a));
+
+    // Camarote fora.
+    const b = num([
+        { source: 'database', csv_column: 'Codigo' },
+        { source: 'database', csv_column: 'Camarote', sem_conferencia: true },
+    ]);
+    ok(api.colunasConferidasDaNumeracao(b).join(',') === 'Codigo',
+       'desmarcada, a coluna sai da conferencia', api.colunasConferidasDaNumeracao(b));
+
+    // Dois elementos na MESMA coluna: basta um pedir para conferir.
+    const c = num([
+        { source: 'database', csv_column: 'Codigo', sem_conferencia: true },
+        { source: 'database', csv_column: 'Codigo' },
+    ]);
+    ok(api.colunasConferidasDaNumeracao(c).join(',') === 'Codigo',
+       'um elemento pedindo conferencia basta para a coluna ser conferida');
+
+    // O estado dos checkboxes: TODAS as colunas aparecem, marcadas ou nao.
+    const cx = api.conferenciaDasColunasDaNumeracao(b);
+    ok(cx.length === 2, 'a faixa mostra todas as colunas do banco', cx);
+    ok(cx[0].nome === 'Codigo' && cx[0].conferida === true, 'Codigo vem marcado', cx[0]);
+    ok(cx[1].nome === 'Camarote' && cx[1].conferida === false, 'Camarote vem desmarcado', cx[1]);
+
+    // Gravar a escolha.
+    const d = num([
+        { source: 'database', csv_column: 'Codigo' },
+        { source: 'database', csv_column: 'Camarote' },
+    ]);
+    const mudou = api.aplicarConferenciaNasColunas(d, { Codigo: true, Camarote: false });
+    ok(mudou === 1, 'so o elemento que mudou conta', mudou);
+    ok(d.elements[1].sem_conferencia === true, 'e a marca fica no elemento');
+    ok(d.elements[0].sem_conferencia === undefined, 'quem continua conferido nao ganha marca');
+    ok(api.aplicarConferenciaNasColunas(d, { Codigo: true, Camarote: false }) === 0,
+       'gravar a mesma escolha nao mexe em nada');
+    // E desmarcar volta atras, sem deixar a chave para tras.
+    api.aplicarConferenciaNasColunas(d, { Codigo: true, Camarote: true });
+    ok(!('sem_conferencia' in d.elements[1]), 're-marcar APAGA a chave, nao a deixa false');
+})();
+
+(function oAvisoDeixaDeContarAColunaDesmarcada() {
+    // Duas linhas, dois modelos com bancos diferentes. Os codigos sao unicos;
+    // o camarote e o mesmo nos dois -- exatamente o 21202.
+    const els = ok => [
+        { source: 'database', csv_column: 'Codigo' },
+        { source: 'database', csv_column: 'Camarote', sem_conferencia: !ok },
+    ];
+    const cenario = confereCamarote => mundo({ state: {
+        numeracoes: [
+            { id: 'nA', elements: els(confereCamarote), csv_headers: ['Codigo', 'Camarote'],
+              csv_data: [{ Codigo: 'A1', Camarote: '1' }, { Codigo: 'A2', Camarote: '2' }] },
+            { id: 'nB', elements: els(confereCamarote), csv_headers: ['Codigo', 'Camarote'],
+              csv_data: [{ Codigo: 'B1', Camarote: '1' }, { Codigo: 'B2', Camarote: '2' }] },
+        ],
+        osItens: { os1: [
+            { id: 'i1', amostra_num_id: 'nA', nome_modelo: 'A' },
+            { id: 'i2', amostra_num_id: 'nB', nome_modelo: 'B' },
+        ] },
+    } });
+
+    const com = cenario(true).api.celulasRepetidasDoPedido('os1');
+    ok(com['i1'] && com['i1'].total === 2,
+       'com Camarote conferido, os dois numeros de camarote sao acusados', com['i1']);
+
+    const sem = cenario(false).api.celulasRepetidasDoPedido('os1');
+    ok(Object.keys(sem).length === 0,
+       'desmarcado, o aviso some — e nenhum codigo repetia mesmo', sem);
+})();
+
+(function desmarcarNAOmudaOqueImprime() {
+    // A garantia que separa esta escolha de todas as outras deste arquivo: ela
+    // vale para a CONFERENCIA, e nunca para o papel.
+    const linhas = [{ Codigo: 'A1', Camarote: '1' }, { Codigo: '', Camarote: '2' }];
+    const faz = fora => {
+        const m = mundo({ state: {
+            numeracoes: [{ id: 'nA', csv_headers: ['Codigo', 'Camarote'], csv_data: linhas,
+                elements: [
+                    { source: 'database', csv_column: 'Codigo' },
+                    { source: 'database', csv_column: 'Camarote', sem_conferencia: fora },
+                ] }],
+            osItens: { os1: [{ id: 'i1', amostra_num_id: 'nA', quantidade: 2 }] },
+        } });
+        const it = m.state.osItens.os1[0];
+        return m.api.fatiaCsvDoItem(it, m.state.numeracoes[0]).length;
+    };
+    ok(faz(false) === 2 && faz(true) === 2,
+       'a fatia impressa e a MESMA com e sem o Camarote conferido');
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────

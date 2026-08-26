@@ -174,142 +174,81 @@ def test_o_card_diz_que_esta_baixando_em_vez_de_acusar_o_operador():
     )
 
 
-def test_ver_editar_avisa_quando_o_banco_e_de_mais_de_um_modelo():
-    """Relato do usuario em 26/08/2026: *"a selecao ver/editar no modelo nao
-    esta funcionando, 2 modelos com a mesma numeracao ao selecionar A no modelo
-    1 e B no modelo 2, o modelo 1 vira B"*.
+def test_o_card_do_modelo_nao_edita_mais_o_banco_da_numeracao():
+    """O aviso que este arquivo guardava saiu junto com o botao (26/08/2026).
 
-    E o que TEM de acontecer: a marca de imprimir mora dentro da linha
-    (`__ativo`), e a linha pertence a NUMERACAO, nao ao modelo. Dois modelos na
-    mesma numeracao leem as mesmas linhas, e o segundo a marcar reescreve o
-    primeiro -- o `onAplicar` grava `csv_data` na numeracao, uma vez so.
+    Em 26/08 o "Ver / editar" do card ganhou uma caixa avisando que o banco era
+    de N modelos. No mesmo dia o usuario decidiu melhor: *"vamos deixar o
+    Ver/editar apenas na edicao da numeracao"* -- tirar a porta em vez de
+    sinalizar o buraco. O aviso foi embora com ela, e nao ha o que testar num
+    caminho que nao existe.
 
-    Quem reparte por modelo e o outro botao do card ("Linhas"), que abre o modo
-    distribuicao e grava em `pedidos_modelos.csv_selecao`.
+    O que ficou para guardar e o contrario: que ele nao volte. A cobertura da
+    porta que sobrou esta em `test_colunas_so_quando_escolhidas.py`.
+    """
+    js = _ler("frontend/script.js")
+    corpo = js.split("window.abrirCsvDoModelo")[1][:1800]
 
-    O defeito era a tela nao dizer nada disso. A trava tem saida: da para abrir
-    assim mesmo, que e o certo quando a intencao E mexer no banco inteiro.
+    assert "abrirDistribuicaoCsv" in corpo, "o botao do card tem de abrir a distribuicao"
+    assert "caixaConfirmar" not in corpo, (
+        "sobrou o aviso do banco compartilhado num caminho que nao existe mais"
+    )
+    assert "abrirEditorCsv({" not in corpo, (
+        "o card voltou a abrir o editor do banco da numeracao"
+    )
+
+
+def test_a_faixa_de_conferencia_so_aparece_no_modo_distribuicao():
+    """Pedido do usuario em 26/08/2026: *"ao clicar em Linhas as colunas que sao
+    verificadas na conferencia de dados devem vir marcadas (checkbox); ao
+    desmarcar devem ignorar a conferencia de repeticoes"*.
+
+    No modo EDICAO nao ha o que escolher: aquele modal edita o banco, e a
+    conferencia e uma leitura do pedido.
+    """
+    js = _ler("frontend/csv-editor.js")
+    i = js.index("function renderFaixaConferencia(bars)")
+    corpo = js[i:i + 1400]
+    assert "if (!ehDistribuicao()" in corpo, "a faixa nao pode aparecer no modo edicao"
+    assert "type = 'checkbox'" in corpo.replace('"', "'"), "as colunas vem como checkbox"
+    assert "não altera a impressão" in js[i:i + 3000], (
+        "a faixa tem de dizer, ali mesmo, que desmarcar nao muda o papel"
+    )
+    # Desenhada junto com as outras faixas.
+    assert "renderFaixaConferencia(bars);" in js
+
+
+def test_a_escolha_das_colunas_conferidas_e_gravada_e_lida():
+    fonte = _ler("frontend/script.js")
+
+    # Entra pela abertura da distribuicao...
+    i = fonte.index("window.abrirDistribuicaoCsv")
+    corpo = fonte[i:i + 2500]
+    assert "conferencia: conferenciaDasColunasDaNumeracao(num)" in corpo, (
+        "os checkboxes nao nascem com o estado da numeracao"
+    )
+    # ...e volta pelo aplicar, gravada nos ELEMENTOS.
+    assert "aplicarConferenciaNasColunas(num, conferencia)" in corpo
+    assert "salvarCamposDaNumeracao(num.id, { elements: num.elements })" in corpo, (
+        "a escolha precisa ser gravada — ela mora nos elementos da numeracao"
+    )
+
+
+def test_a_lista_que_decide_a_IMPRESSAO_nao_foi_tocada():
+    """A separacao que torna esta escolha segura.
+
+    `colunasDoBancoDaNumeracao` decide quais linhas IMPRIMEM: uma linha entra na
+    fatia se tiver dado em alguma coluna que a numeracao le. `colunasConferidas`
+    decide outra coisa, e so ela: quais colunas contam na busca por repetido.
+    Confundir as duas faria um checkbox de conferencia mudar o que sai no papel.
     """
     fonte = _ler("frontend/script.js")
-    i = fonte.index("window.abrirCsvDoModelo = async function")
-    corpo = fonte[i:i + 4000]
-
-    assert "const irmaos = (state.osItens[osId] || [])" in corpo, (
-        "o Ver / editar nao conta quantos modelos usam este banco"
-    )
-    assert "irmaos.length > 1" in corpo
-    assert "caixaConfirmar.perguntar" in corpo, (
-        "o aviso precisa ser a caixa DOM do projeto — window.confirm nao responde "
-        "no aplicativo instalado"
-    )
-    assert "if (!seguir) return;" in corpo, "cancelar tem de fechar sem abrir"
-    # A saida, escrita na propria caixa.
-    assert "Linhas" in corpo and "reparte o banco entre os modelos" in corpo, (
-        "a trava precisa dizer, ali mesmo, qual e o botao que faz o que ele quer"
-    )
-    # E o caminho de distribuir continua saindo antes, sem aviso nenhum.
-    assert corpo.index("if (modo === 'distribuir')") < corpo.index("const irmaos ="), (
-        "quem ja clicou em Linhas nao pode levar o aviso do outro botao"
-    )
-
-
-def test_a_fatia_orfa_fala_antes_da_regra_de_qtd_e_a_cala():
-    """As duas descrevem o mesmo sintoma; so uma diz a causa.
-
-    No 21202, quatro modelos dividiam a "CAMAROTE CORPORATIVO" e alguem repartiu
-    as linhas: o 05/set ficou com `1-3500` e os outros tres com lista VAZIA.
-    Depois cada modelo ganhou um banco proprio, e as fatias passaram a apontar
-    para `__id` de um banco que aquele modelo nao usa mais.
-
-    A tela dizia *"O banco nao fecha com a quantidade do pedido... esperado 3500,
-    gerado 0"* e mandava corrigir as linhas do banco -- que estava perfeito, com
-    as 3500 linhas. A mensagem apontava para o lugar oposto ao do problema.
-    """
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("const orfa = ehTelaDoCliente ? null : distribuicaoOrfaDoModelo(item, osId);")
-    corpo = fonte[i:i + 700]
-    assert "const divergenciaCelulas = (ehTelaDoCliente || orfa) ? null" in corpo, (
-        "a regra de Qtd tem de ficar calada quando a fatia e orfa — senao o "
-        "operador le as duas e vai consertar o banco, que esta certo"
-    )
-    # A faixa sai ANTES da de Qtd no card.
-    assert fonte.index("${faixaDistribuicaoOrfa}") < fonte.index("${faixaDivergenciaCelulas}")
-
-
-def test_o_aviso_da_fatia_orfa_traz_a_saida_no_proprio_aviso():
-    """Trava sem saida nao pode: o botao que resolve fica no mesmo aviso."""
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("const faixaDistribuicaoOrfa = travaDeOrfa")
-    corpo = fonte[i:i + 1200]
-    assert "removerDistribuicaoDoModelo(${idx}, '${osId}')" in corpo, (
-        "o aviso da fatia orfa precisa do botao que a remove"
-    )
-    assert "Remover a distribuição" in corpo
-    assert "o que está sobrando é a divisão" in corpo, (
-        "o texto tem de dizer que o banco pode estar certo"
-    )
-
-
-def test_o_PRONTO_recusa_pela_fatia_orfa_antes_da_regra_de_qtd():
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("const orfa = distribuicaoOrfaDoModelo(itemAlvo, osId);")
-    corpo = fonte[i:i + 800]
-    assert "return false;" in corpo, "a fatia orfa tem de recusar o PRONTO"
-    assert corpo.index("const orfa =") < corpo.index("const divergencia ="), (
-        "a fatia orfa e conferida antes da regra de Qtd tambem no clique"
-    )
-
-
-def test_remover_a_distribuicao_grava_null_e_redesenha():
-    """`null` e nao lista vazia: ausente significa "leva o banco inteiro", e
-    lista vazia significa "ficou sem nenhuma linha" -- que e o proprio defeito.
-    """
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("window.removerDistribuicaoDoModelo")
-    corpo = fonte[i:i + 1200]
-    assert "csv_selecao: null" in corpo, "tem de gravar null, nunca lista vazia"
-    assert "item.csv_selecao = null" in corpo, "e a memoria da tela acompanha"
-    assert "redesenharCardsDoPedido(osId)" in corpo
-
-
-def test_o_pdf_prova_espera_a_tela_antes_de_fotografa_la():
-    """No 21202 ele saiu com 36 paginas para um pedido de 52 modelos.
-
-    O PDF Prova nao le os dados: percorre os cards e copia o canvas de cada um,
-    pulando o que ainda esta com `display:none` -- em silencio. Os 52 modelos
-    estavam certos no banco (nenhum em modo_pdf, nenhum sem camadas); 16 cards e
-    que ainda nao tinham desenhado.
-
-    Desde 26/08/2026 os bancos das numeracoes chegam em segundo plano, o que fez
-    essa janela ficar maior: card sem o banco nao desenha a numeracao.
-    """
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("async function exportarPdfModelos()")
-    corpo = fonte[i:i + 3000]
-
-    assert "await prepararTelaParaOPdfProva(osId, itens)" in corpo, (
-        "o PDF Prova voltou a fotografar a tela sem esperar ela ficar pronta"
-    )
-    assert "textoDosModelosForaDoPdf(fora, itens.length)" in corpo, (
-        "e sem dizer quem ficaria de fora"
-    )
-    assert "if (!seguir) {" in corpo and "return;" in corpo, (
-        "cancelar tem de abortar o PDF, nao gerar assim mesmo"
-    )
-    # A espera vem ANTES do laco que monta as paginas.
-    assert corpo.index("prepararTelaParaOPdfProva") < corpo.index("for (let idx = 0"), (
-        "esperar depois de montar as paginas nao serviria de nada"
-    )
-
-
-def test_o_pdf_prova_usa_a_mesma_regra_de_pular_para_saber_quem_falta():
-    """Uma copia da condicao aqui deixaria as duas discordarem no dia em que uma
-    mudasse — e a lista de ausentes passaria a mentir."""
-    fonte = _ler("frontend/script.js")
-    i = fonte.index("function modelosForaDoPdfProva")
+    i = fonte.index("function linhasComDadoDaNumeracao")
     corpo = fonte[i:i + 900]
-    assert "canvas.style.display === 'none'" in corpo
-    assert "!canvas ||" in corpo, "canvas que nem existe tambem fica de fora"
+    assert "colunasDoBancoDaNumeracao(num)" in corpo, (
+        "o filtro de linhas impressas passou a usar a lista da conferencia"
+    )
+    assert "colunasConferidas" not in corpo
 
 
 def test_o_aviso_de_repetidas_fica_calado_com_o_pedido_pela_metade():

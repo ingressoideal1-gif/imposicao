@@ -288,7 +288,12 @@ function extrairFuncao(src, nome) {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
     const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
                    'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
-                   'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas'];
+                   'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
+                   // Desde 26/08/2026 o aviso conta so as colunas CONFERIDAS: a
+                   // numeracao pode ter coluna que repete por natureza (numero de
+                   // camarote), e ela sai da conta por um checkbox no "Linhas".
+                   // Sem marca nenhuma, como nestes casos, todas sao conferidas.
+                   'colunasConferidasDaNumeracao'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     const state = { numeracoes: [], osItens: {} };
     const api = new Function('state', 'window', fonte + '\nreturn { celulasRepetidasDoPedido, textoDasCelulasRepetidas };')(state, global.window);
@@ -348,7 +353,10 @@ function extrairFuncao(src, nome) {
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
                    'celulasGeradasDoModelo', 'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas',
-                   'primeiraLinhaDoModelo', 'conferenciaDeDadosDoPedido', 'textoDaConferencia'];
+                   'primeiraLinhaDoModelo', 'conferenciaDeDadosDoPedido', 'textoDaConferencia',
+                   // Ver a nota no bloco acima: a conferencia conta so as colunas
+                   // CONFERIDAS desde 26/08/2026.
+                   'colunasConferidasDaNumeracao'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     const state = { numeracoes: [], osItens: {} };
     const api = new Function('state', 'window', fonte + '\nreturn { primeiraLinhaDoModelo, conferenciaDeDadosDoPedido, textoDaConferencia };')(state, global.window);
@@ -765,7 +773,10 @@ function apiDaFatia(state) {
     ok(f({ 'm-1': { tipo: 'linhas', ids: ['7'] } }) === true, 'uma faixa só já é distribuição');
 
     // A guarda tem de rodar ANTES do laço que grava, senão não adianta.
-    const i = script.indexOf('onAplicar: async ({ rows, distribuicao })');
+    // O `conferencia` entrou na desestruturacao em 26/08/2026 (os checkboxes de
+    // "conferir repeticoes em"). O que este teste guarda continua sendo a ORDEM:
+    // a guarda antes do laco que grava.
+    const i = script.indexOf('onAplicar: async ({ rows, distribuicao, conferencia })');
     ok(i > 0, 'achei o onAplicar da distribuição');
     const bloco = script.slice(i, i + 4000);
     const guarda = bloco.indexOf('distribuicaoAtribuiuAlgo(');

@@ -169,7 +169,10 @@
     <div class="am-tit" id="am-tit">Modelo</div>
     <div class="am-sub" id="am-sub"></div>
   </div>
-  <button class="am-b" id="am-csv-edit" title="Ver e editar o banco de dados (CSV) desta numeração">📊 Banco</button>
+  <!-- O "Banco" saiu em 26/08/2026, junto com o do card: ele editava a
+       NUMERACAO, que e a mesma para todos os modelos que a usam. Aqui, dentro
+       do pedido, so fica o que e DO MODELO. Editar o banco: abrir a numeracao
+       no lapis, box "Banco de Dados (CSV)". -->
   <button class="am-b" id="am-csv-fatia" title="Escolher as linhas do banco que este modelo imprime">🧩 Linhas do modelo</button>
   <button class="am-b" id="am-zoom" title="Alternar entre caber na tela e o tamanho natural">🔍 Tamanho real</button>
   <button class="am-b fechar" id="am-fechar" title="Fechar (Esc)">✕ Fechar</button>
@@ -198,7 +201,6 @@
             prev: ov.querySelector('#am-prev'),
             next: ov.querySelector('#am-next'),
             zoom: ov.querySelector('#am-zoom'),
-            bEdit: ov.querySelector('#am-csv-edit'),
             bFatia: ov.querySelector('#am-csv-fatia')
         };
 
@@ -209,8 +211,7 @@
         dom.next.onclick = () => andar(1);
         dom.goto.onchange = () => irPara(parseInt(dom.goto.value));
         dom.zoom.onclick = alternarZoom;
-        dom.bEdit.onclick = () => window.abrirCsvDoModelo(alvo.idx, alvo.osId, 'editar');
-        dom.bFatia.onclick = () => window.abrirCsvDoModelo(alvo.idx, alvo.osId, 'distribuir');
+        dom.bFatia.onclick = () => window.abrirCsvDoModelo(alvo.idx, alvo.osId);
         document.addEventListener('keydown', aoTeclar, true);
     }
 
@@ -304,7 +305,6 @@
         dom.sub.textContent = partes.join('  ·  ');
 
         const temCsv = !!(num && num.csv_data && num.csv_data.length);
-        dom.bEdit.style.display = temCsv ? '' : 'none';
         dom.bFatia.style.display = temCsv ? '' : 'none';
     }
 
