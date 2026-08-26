@@ -272,6 +272,46 @@ def test_remover_a_distribuicao_grava_null_e_redesenha():
     assert "redesenharCardsDoPedido(osId)" in corpo
 
 
+def test_o_pdf_prova_espera_a_tela_antes_de_fotografa_la():
+    """No 21202 ele saiu com 36 paginas para um pedido de 52 modelos.
+
+    O PDF Prova nao le os dados: percorre os cards e copia o canvas de cada um,
+    pulando o que ainda esta com `display:none` -- em silencio. Os 52 modelos
+    estavam certos no banco (nenhum em modo_pdf, nenhum sem camadas); 16 cards e
+    que ainda nao tinham desenhado.
+
+    Desde 26/08/2026 os bancos das numeracoes chegam em segundo plano, o que fez
+    essa janela ficar maior: card sem o banco nao desenha a numeracao.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("async function exportarPdfModelos()")
+    corpo = fonte[i:i + 3000]
+
+    assert "await prepararTelaParaOPdfProva(osId, itens)" in corpo, (
+        "o PDF Prova voltou a fotografar a tela sem esperar ela ficar pronta"
+    )
+    assert "textoDosModelosForaDoPdf(fora, itens.length)" in corpo, (
+        "e sem dizer quem ficaria de fora"
+    )
+    assert "if (!seguir) {" in corpo and "return;" in corpo, (
+        "cancelar tem de abortar o PDF, nao gerar assim mesmo"
+    )
+    # A espera vem ANTES do laco que monta as paginas.
+    assert corpo.index("prepararTelaParaOPdfProva") < corpo.index("for (let idx = 0"), (
+        "esperar depois de montar as paginas nao serviria de nada"
+    )
+
+
+def test_o_pdf_prova_usa_a_mesma_regra_de_pular_para_saber_quem_falta():
+    """Uma copia da condicao aqui deixaria as duas discordarem no dia em que uma
+    mudasse — e a lista de ausentes passaria a mentir."""
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function modelosForaDoPdfProva")
+    corpo = fonte[i:i + 900]
+    assert "canvas.style.display === 'none'" in corpo
+    assert "!canvas ||" in corpo, "canvas que nem existe tambem fica de fora"
+
+
 def test_o_aviso_de_repetidas_fica_calado_com_o_pedido_pela_metade():
     """Numero que muda sozinho na frente do operador nao vale nada."""
     fonte = _ler("frontend/script.js")

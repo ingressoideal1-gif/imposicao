@@ -61,7 +61,10 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'numeracaoDoModelo',
                'rotuloDoModelo', 'celulasRepetidasDoPedido',
                // A fatia salva que nao e deste banco (26/08/2026).
-               'distribuicaoOrfaDoModelo', 'CsvEditorColId'];
+               'distribuicaoOrfaDoModelo', 'CsvEditorColId',
+               // O PDF Prova, que fotografa a tela e nao os dados (26/08/2026).
+               'modelosForaDoPdfProva', 'textoDosModelosForaDoPdf',
+               'prepararTelaParaOPdfProva'];
 
 let CODIGO;
 try {
@@ -111,7 +114,16 @@ function mundo(opts) {
         },
     };
     const state = opts.state || {};
-    const document = { getElementById: id => (opts.selects || {})[id] || null };
+    // Os canvases dos cards, como o PDF Prova os enxerga: `display` vazio e
+    // desenhado, 'none' e ainda em branco, ausente e nem existe.
+    const telas = opts.canvases || {};
+    const document = {
+        getElementById: id => (opts.selects || {})[id] || telas[id] || null,
+        querySelector: sel => {
+            const m = String(sel).match(/#(.+)$/);
+            return m ? (telas[m[1]] || null) : null;
+        },
+    };
     // O `window.CsvEditor` de verdade importa aqui: e por ele que a regra da
     // fatia orfa le a coluna de identidade e expande a faixa "1-3500". Com um
     // `window` vazio ela devolveria null em silencio -- que foi exatamente o que
@@ -408,6 +420,80 @@ function mundo(opts) {
     m = cenario({ ids: ['1-50'], tipo: 'linhas' }, [], false);
     ok(m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1') === null,
        'sem banco carregado, nada e acusado');
+})();
+
+// ─── 11. O PDF Prova fotografa a tela, e nao os dados ──────────────────────
+//
+// No 21202 ele saiu com 36 paginas para um pedido de 52 modelos: o laco copia o
+// canvas de cada card e PULA o que ainda nao desenhou -- em silencio. Os 52
+// modelos estavam certos no banco; 16 cards e que ainda nao tinham desenhado.
+
+(function quemFicariaDeForaDoPdf() {
+    const itens = [
+        { id: 'i1', nome_modelo: 'A' },
+        { id: 'i2', nome_modelo: 'B' },
+        { id: 'i3', nome_modelo: 'C' },
+    ];
+    const m = mundo({
+        state: { osItens: { os1: itens } },
+        canvases: {
+            'amostra-item-canvas-0': { style: { display: '' } },      // desenhado
+            'amostra-item-canvas-1': { style: { display: 'none' } },  // ainda em branco
+            // o do indice 2 nem existe
+        },
+    });
+    const fora = m.api.modelosForaDoPdfProva(itens);
+    ok(fora.length === 2, 'os dois que nao entrariam sao encontrados', fora);
+    ok(fora[0].idx === 1 && fora[1].idx === 2,
+       'o escondido e o ausente — o desenhado fica de fora da lista', fora.map(f => f.idx));
+
+    // Todos desenhados: ninguem fica de fora.
+    const m2 = mundo({
+        state: { osItens: { os1: itens } },
+        canvases: {
+            'amostra-item-canvas-0': { style: { display: '' } },
+            'amostra-item-canvas-1': { style: { display: 'block' } },
+            'amostra-item-canvas-2': { style: { display: '' } },
+        },
+    });
+    ok(m2.api.modelosForaDoPdfProva(itens).length === 0, 'com tudo desenhado, ninguem fica de fora');
+})();
+
+(function aFraseDizQuantosEQuais() {
+    const { api } = mundo({});
+    const fora = n => Array.from({ length: n }, (_, i) => ({ idx: i, nome: 'M' + i }));
+
+    const t1 = api.textoDosModelosForaDoPdf(fora(2), 52);
+    ok(t1.indexOf('2 de 52') === 0, 'diz quantos de quantos', t1);
+    ok(t1.includes('M0, M1'), 'e nomeia os modelos', t1);
+    ok(/parece completo/.test(t1), 'e diz por que isso e perigoso', t1);
+
+    // Muitos: nomeia seis e conta o resto, para a caixa nao virar uma lista.
+    const t2 = api.textoDosModelosForaDoPdf(fora(16), 52);
+    ok(t2.includes('M5') && !t2.includes('M6,'), 'nomeia seis', t2);
+    ok(t2.includes('e mais 10'), 'e diz quantos sobraram', t2);
+})();
+
+(async function aTelaEEsperadaAntesDaFotografia() {
+    const itens = [{ id: 'i1', nome_modelo: 'A' }, { id: 'i2', nome_modelo: 'B' }];
+    const telas = {
+        'amostra-item-canvas-0': { style: { display: '' } },
+        'amostra-item-canvas-1': { style: { display: 'none' } },
+    };
+    const m = mundo({ state: { osItens: { os1: itens }, numeracoes: [] }, canvases: telas });
+
+    // O card 1 termina de desenhar durante a espera.
+    setTimeout(() => { telas['amostra-item-canvas-1'].style.display = 'block'; }, 300);
+    const fora = await m.api.prepararTelaParaOPdfProva('os1', itens, 5000);
+    ok(fora.length === 0, 'esperar deixa o card terminar de desenhar', fora);
+
+    // O que nunca desenha volta na lista quando o teto estoura -- o botao nao
+    // pode ficar preso esperando para sempre.
+    const telas2 = { 'amostra-item-canvas-0': { style: { display: '' } } };
+    const m2 = mundo({ state: { osItens: { os1: itens }, numeracoes: [] }, canvases: telas2 });
+    const fora2 = await m2.api.prepararTelaParaOPdfProva('os1', itens, 600);
+    ok(fora2.length === 1 && fora2[0].idx === 1,
+       'passado o teto, quem nao desenhou e devolvido para quem chamou', fora2);
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────

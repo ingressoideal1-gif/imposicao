@@ -37528,6 +37528,75 @@ document.addEventListener('DOMContentLoaded', () => {
 // gráfica. Um ping por carregamento de página não sobreviveria a nada disso.
 
 // --- Exportação de PDF dos Modelos ---
+/**
+ * Os modelos que o PDF Prova DEIXARIA de fora, agora.
+ *
+ * A regra e a mesma que o laco do `exportarPdfModelos` usa para pular: canvas
+ * que nao existe, ou que ainda esta escondido. Sai daqui, e nao de uma copia,
+ * para as duas nunca discordarem.
+ */
+function modelosForaDoPdfProva(itens, container) {
+    const onde = container || document;
+    const fora = [];
+    (itens || []).forEach((item, idx) => {
+        const canvas = onde.querySelector
+            ? onde.querySelector('#amostra-item-canvas-' + idx)
+            : document.getElementById('amostra-item-canvas-' + idx);
+        if (!canvas || canvas.style.display === 'none') {
+            fora.push({ idx, nome: rotuloDoModelo(item, idx), modoPdf: !!(item && item.modo_pdf) });
+        }
+    });
+    return fora;
+}
+window.modelosForaDoPdfProva = modelosForaDoPdfProva;
+
+/**
+ * Deixa a tela INTEIRA antes de fotografa-la (26/08/2026).
+ *
+ * ## Por que isto precisou existir
+ *
+ * O PDF Prova nao le os dados do pedido: ele percorre os cards e copia o canvas
+ * de cada um. Canvas que ainda nao desenhou esta com `display:none`, e o laco
+ * pula em silencio. No pedido 21202 isso saiu como um PDF de 36 paginas para um
+ * pedido de 52 modelos -- e nada na tela dizia que faltavam 16.
+ *
+ * Duas coisas atrasam o desenho, e as duas sao esperadas aqui:
+ *
+ *   1. o BANCO da numeracao, que desde 26/08/2026 chega em segundo plano (era
+ *      o preco de o pedido abrir em 72 ms em vez de 2 s);
+ *   2. o desenho de cada card, que e assincrono por natureza.
+ *
+ * O teto de espera existe para o botao nunca ficar preso: passado ele, quem
+ * chamou recebe a lista do que ficou de fora e decide -- e e isso que impede o
+ * PDF incompleto de sair calado.
+ */
+async function prepararTelaParaOPdfProva(osId, itens, tetoMs) {
+    if (typeof numeracoesSemBancoBaixado === 'function'
+        && typeof carregarBancosDoPedido === 'function'
+        && numeracoesSemBancoBaixado(osId).length) {
+        await carregarBancosDoPedido(osId);
+        if (typeof renderAmostrasOSItens === 'function') renderAmostrasOSItens(osId);
+    }
+
+    const limite = Date.now() + (tetoMs || 60000);
+    let fora = modelosForaDoPdfProva(itens);
+    while (fora.length && Date.now() < limite) {
+        await new Promise(r => setTimeout(r, 250));
+        fora = modelosForaDoPdfProva(itens);
+    }
+    return fora;
+}
+window.prepararTelaParaOPdfProva = prepararTelaParaOPdfProva;
+
+/** A frase que lista quem ficaria de fora. Texto, nunca HTML. */
+function textoDosModelosForaDoPdf(fora, total) {
+    const nomes = fora.slice(0, 6).map(f => f.nome).join(', ');
+    return fora.length + ' de ' + total + ' modelo(s) ainda não estão desenhados e ficariam DE FORA do PDF: '
+        + nomes + (fora.length > 6 ? ', e mais ' + (fora.length - 6) + '.' : '.')
+        + ' Um PDF de prova incompleto parece completo para quem recebe — por isso ele não sai sozinho assim.';
+}
+window.textoDosModelosForaDoPdf = textoDosModelosForaDoPdf;
+
 async function exportarPdfModelos() {
     const osId = state.amostrasOSAtivo;
     if (!osId) return;
@@ -37543,6 +37612,32 @@ async function exportarPdfModelos() {
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando PDF...';
     btn.disabled = true;
+
+    // A TELA INTEIRA ANTES DA FOTOGRAFIA.
+    //
+    // O laco abaixo copia o canvas de cada card e pula o que ainda nao
+    // desenhou. Sem esta espera, clicar cedo produz um PDF curto com cara de
+    // completo -- no 21202 foram 36 paginas para 52 modelos. Ver
+    // `prepararTelaParaOPdfProva`.
+    try {
+        const fora = await prepararTelaParaOPdfProva(osId, itens);
+        if (fora.length) {
+            const seguir = (window.caixaConfirmar && window.caixaConfirmar.perguntar)
+                ? await window.caixaConfirmar.perguntar(
+                    textoDosModelosForaDoPdf(fora, itens.length)
+                    + ' Espere os cards terminarem de desenhar e tente de novo, ou gere sem eles.',
+                    { rotulo: 'Gerar sem eles', perigo: true })
+                : false;
+            if (!seguir) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                toast('PDF não gerado — nenhum modelo ficou de fora sem você saber.', 'info');
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn('[PDF Prova] não consegui preparar a tela:', e);
+    }
 
     try {
         if (typeof window.jspdf === 'undefined') {
