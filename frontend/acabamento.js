@@ -1302,6 +1302,16 @@
      * competia com o contorno do card. Um fio embaixo do texto marca o começo da
      * coluna sem fechar nada.
      */
+    // A MEDIDA da faixa que abre cada coluna, sem a tipografia do rotulo.
+    //
+    // Ela existe desde 26/08/2026, quando o botao Fotografar passou a ocupar
+    // essa faixa na coluna da especificacao: pendurar o botao no
+    // `ROTULO_DA_COLUNA` fazia ele herdar `text-transform: uppercase` e o
+    // `letter-spacing` do rotulo -- o recado ao lado saia gritando em caixa
+    // alta. A regua e a altura; a tipografia e so de quem escreve rotulo.
+    const FAIXA_DA_COLUNA = 'display: flex; align-items: center; height: 36px;'
+        + ' padding: 0 2px; border-bottom: 1px solid rgba(76,200,240,0.22);';
+
     const ROTULO_DA_COLUNA = 'display: flex; align-items: center; height: 36px;'
         + ' font-size: 0.74rem; font-weight: 800; text-transform: uppercase;'
         + ' letter-spacing: 0.08em; color: #8fb6e0; padding: 0 2px;'
@@ -1430,7 +1440,7 @@
         // quatro botões cinzas e não tem como adivinhar o que falta. Só para
         // quem PODE editar — a quem não pode, o recado não serviria de nada.
         const recado = (podeEditar && !temResponsavel)
-            ? `<span style="font-size:0.7rem; color:#fcd34d; display:block; margin-top:2px;">⬇️ Escolha o <b>Responsável</b> abaixo para liberar o status.</span>`
+            ? `<span style="font-size:0.7rem; color:#fcd34d; display:block; margin-top:2px;">⬆️ Escolha o <b>Responsável</b> acima, na barra do modelo, para liberar o status.</span>`
             : '';
 
         // A hora em que ficou Pronto, logo abaixo dos botões (pedido do usuário,
@@ -1442,7 +1452,57 @@
             ? `<span style="font-size:0.7rem; color:#4ade80; display:block; margin-top:5px; padding-left:15px;">🕒 ${esc(hora)}</span>`
             : '';
 
-        return `<div style="display: grid; grid-template-columns: 1fr; gap: ${ESPACO_DOS_BOTOES}px; width: 100%;">${botoes}</div>${carimbo}${recado}`;
+        // A PILHA ESTICA para preencher a coluna (26/08/2026).
+        //
+        // Enquanto o responsável morava aqui embaixo, ele fechava a coluna e os
+        // quatro botões ocupavam a altura que tinham. Com ele na barra de
+        // título, os 194 px da pilha ficavam soltos ao lado de uma tabela de
+        // especificação bem mais alta, e sobrava um vão escuro no pé da coluna —
+        // exatamente o que o desenho de 26/08 veio desfazer nas outras duas.
+        //
+        // `flex: 1 1 0` faz a grade tomar a sobra -- base ZERO, e nao `auto`,
+        // pela mesma razao que a janela da amostra usa base 0: com `auto` quem
+        // mede a altura e o conteudo, e nao a coluna. E `grid-auto-rows` com
+        // `minmax` reparte essa altura em quatro fatias IGUAIS, nunca menores
+        // que os 44 px que o usuário fixou em 22/08/2026 — na estação se clica
+        // de pé, às vezes com a mão suja de tinta, e o alvo não pode encolher.
+        //
+        // `grid-template-columns: 1fr` fica: os quatro continuam um abaixo do
+        // outro, que é a régua vertical do desenho dos botões.
+        return `<div style="display: grid; grid-template-columns: 1fr;`
+             + ` grid-auto-rows: minmax(${ALTURA_DO_BOTAO}px, 1fr);`
+             + ` gap: ${ESPACO_DOS_BOTOES}px; width: 100%; flex: 1 1 0;`
+             + ` min-height: ${ALTURA_DA_PILHA}px;">${botoes}</div>${carimbo}${recado}`;
+    }
+
+    /**
+     * O responsável na BARRA DE TÍTULO do modelo, no lugar onde ficava o
+     * botão Fotografar.
+     *
+     * Pedido do usuário em 26/08/2026. A troca faz sentido pela hierarquia do
+     * card: a barra de título responde QUEM — o nome do modelo, o código, o
+     * estágio, o setor —, e o responsável é a última pergunta desse grupo. A
+     * foto é registro, não decisão, e desceu para junto da especificação.
+     *
+     * Ele governa os quatro botões de status (sem responsável, nenhum estágio se
+     * mexe), e agora esse comando fica ACIMA do que ele comanda, em vez de
+     * escondido no fim da terceira coluna.
+     *
+     * O rótulo vai ao lado, e não em cima: a barra é de uma linha só, e um
+     * rótulo empilhado a faria crescer para todos os modelos. Os recados de
+     * "nenhum operador cadastrado" continuam saindo do `selectResponsavel`, e
+     * quebram para a linha de baixo quando aparecem — é o `flex-wrap` da própria
+     * barra que cuida disso.
+     */
+    function responsavelNoTitulo(item, osId) {
+        return `
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;
+                        flex: 0 1 300px; min-width: 210px;">
+                <span style="${SUBROTULO_DO_CAMPO} white-space: nowrap;">Responsável</span>
+                <div style="flex: 1 1 auto; min-width: 0;">
+                    ${selectResponsavel(item, osId, podeEditar())}
+                </div>
+            </div>`;
     }
 
     function selectResponsavel(item, osId, podeEditar) {
@@ -1524,7 +1584,7 @@
     // As quatro cores continuam sendo as de `COR_DO_ESTAGIO`, que o usuário
     // ditou: elas codificam estado e não se repintam para combinar com nada.
     const ESTILO_BOTAO_ESTAGIO = 'display: flex; align-items: center; gap: 9px;'
-        + ' width: 100%; min-width: 0; height: ' + ALTURA_DO_BOTAO + 'px; padding: 0 11px;'
+        + ' width: 100%; min-width: 0; height: 100%; min-height: ' + ALTURA_DO_BOTAO + 'px; padding: 0 11px;'
         + ' border-style: solid; border-width: 1px; border-radius: 9px; cursor: pointer;'
         + ' font-size: 0.85rem; line-height: 1.1; text-align: left; font-family: inherit;'
         + ' transition: background-color .12s ease, border-color .12s ease;';
@@ -1638,7 +1698,7 @@
                         ${seloDoEstagio(estagio)}
                         ${chipDoSetor}
                     </div>
-                    ${blocoDaFoto(item, osId, idx)}
+                    ${responsavelNoTitulo(item, osId)}
                 </div>
 
                 <!-- As tres colunas, refeitas em 26/08/2026, a pedido do
@@ -1662,6 +1722,20 @@
                         ${amostraHtml(item, idAmostra)}
                     </div>
                     <div style="flex: 0 1 280px; min-width: 220px; display: flex; flex-direction: column;">
+                        <!-- O Fotografar ACIMA da especificacao, na mesma faixa
+                             em que as outras duas colunas trazem o rotulo
+                             (pedido do usuario, 26/08/2026). Ele saiu da barra
+                             de titulo, onde disputava lugar com o responsavel e
+                             onde -- sendo registro, e nao decisao -- nunca foi o
+                             assunto daquela linha.
+
+                             A faixa tem a altura do ROTULO_DA_COLUNA, que e a
+                             regua comum das tres colunas: assim a tabela azul
+                             continua comecando na mesma linha da moldura da
+                             amostra e da pilha de botoes. -->
+                        <div style="${FAIXA_DA_COLUNA} justify-content: flex-end; gap: 8px;">
+                            ${blocoDaFoto(item, osId, idx)}
+                        </div>
                         ${tabelaDeEspecificacao([
                             numeros,
                             // A numeração pelo NOME. Faltava no desenho que o
@@ -1687,13 +1761,14 @@
                          SEM caixa em volta, por pedido dele no mesmo dia: os
                          botões já têm contorno e cor próprios, e a moldura ao
                          redor deles só competia com a do bloco do modelo. -->
+                    <!-- A coluna das DECISÕES. O responsável saiu daqui em
+                         26/08/2026 e subiu para a barra de título; ficaram os
+                         quatro botões, que agora ESTICAM para preencher a altura
+                         da linha em vez de deixar um vão escuro embaixo. Ver o
+                         cabeçalho de botoesDeEstagio. -->
                     <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 10px;">
                         <div style="${ROTULO_DA_COLUNA}">Status do acabamento</div>
                         ${botoesDeEstagio(item, osId, podeEditar())}
-                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                            <span style="${SUBROTULO_DO_CAMPO}">Responsável</span>
-                            ${selectResponsavel(item, osId, podeEditar())}
-                        </div>
                         ${blocoDeVolumesDoModelo(item)}
                     </div>
                 </div>
@@ -5617,15 +5692,16 @@
                     style="height: 46px; object-fit: contain; cursor: zoom-in; display: block;" />`
             : '';
 
-        // Sem foto, o card diz isso em texto — minúsculo, mas dito.
-        const recado = foto
-            ? ''
-            : `<span style="font-size: 0.66rem; color: var(--text-dim);">Nenhuma foto do material ainda.</span>`;
-
+        // A frase "Nenhuma foto do material ainda." saiu em 26/08/2026, quando o
+        // bloco desceu da barra de título para a faixa acima da especificação.
+        //
+        // Ali cabe uma linha só, e a frase disputava lugar com o próprio botão.
+        // Ela também não dizia nada que o botão já não diga: sem foto ele lê
+        // "📷 Fotografar"; com foto ele lê "📷 Refazer foto" e a miniatura
+        // aparece ao lado. O estado está no rótulo, que é onde o operador olha.
         return `
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto;">
-                <div style="display: flex; align-items: center; gap: 8px;">${miniatura}${botao}</div>
-                ${recado}
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                ${miniatura}${botao}
             </div>`;
     }
 

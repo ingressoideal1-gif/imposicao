@@ -46,14 +46,58 @@ direita, numa linha só:
 | Coluna | O que traz | Largura |
 |---|---|---|
 | Amostra | a arte aprovada, para conferir contra o papel | elástica — sobrou espaço, é dela |
-| Especificação | a tabela abaixo | estreita (280px) |
-| Decisões | os quatro botões de status **empilhados** e o responsável **abaixo** deles, **sem caixa em volta** | 210px |
+| Especificação | o botão **📷 Fotografar** numa faixa em cima, e a tabela abaixo dele | estreita (280px) |
+| Decisões | os quatro botões de status **empilhados**, **sem caixa em volta**, esticando até o pé da linha | 210px |
+
+O **responsável** não está em coluna nenhuma: desde 26/08/2026 ele mora na
+**barra de título** do modelo (ver *O rearranjo de 26/08/2026*).
 
 Antes as decisões eram uma faixa no rodapé do card, com os botões deitados: de pé
 na estação, o operador percorria a linha inteira do card para chegar até elas.
 A coluna também não tem moldura própria — os botões já têm contorno e cor, e uma
 caixa em volta deles só competia com a do bloco do modelo (pedido do usuário,
 22/08/2026).
+
+### O rearranjo de 26/08/2026
+
+O usuário pediu três coisas na mesma frase: *"vamos passar o drop do
+responsável para a barra de título do modelo, no lugar do botão Fotografar;
+botão fotografar alinha acima das especificações; rediagramar botões de status
+para ocupar espaço de forma harmoniosa"*.
+
+**O responsável subiu para a barra de título.** A troca segue a hierarquia do
+card: a barra responde QUEM — nome do modelo, código, selo do estágio —, e o
+responsável é a última pergunta desse grupo. E ele **governa** os quatro botões:
+sem responsável, nenhum estágio se mexe. Agora esse comando fica *acima* do que
+ele comanda, em vez de escondido no pé da terceira coluna.
+
+**A foto desceu para uma faixa acima da especificação.** Ela é registro, não
+decisão, e nunca foi assunto da barra de título. A faixa toma a **medida** do
+rótulo das outras colunas (36 px de altura, o mesmo fio embaixo) sem tomar o
+**estilo**: pendurar o botão no `ROTULO_DA_COLUNA` o fazia herdar o
+`text-transform: uppercase`, e o texto ao lado saía gritando em caixa alta. Daí
+existir o `FAIXA_DA_COLUNA`, que é só a régua.
+
+A frase *"Nenhuma foto do material ainda."* saiu junto: na faixa cabe uma linha
+só, e ela disputava lugar com o próprio botão. O estado continua dito onde o
+operador olha — o rótulo do botão é *Fotografar* sem foto e *Refazer foto* com
+ela, e aí a miniatura aparece ao lado.
+
+**Os botões passaram a esticar.** Com o responsável fora da coluna, os 194 px da
+pilha ficavam soltos ao lado de uma tabela bem mais alta, e sobrava um vão
+escuro no pé. Agora a grade é `flex: 1 1 0` com `grid-auto-rows: minmax(44px,
+1fr)`: toma a sobra e a reparte em quatro fatias iguais, nunca menores que os
+44 px que o usuário fixou em 22/08/2026 — na estação se clica de pé, e o alvo
+não pode encolher.
+
+> [!NOTE]
+> **Base 0, e não `auto`.** Vale para a pilha pelo mesmo motivo que já valia
+> para a janela da amostra: com base `auto`, quem mede a altura é o conteúdo, e
+> não a coluna. Há teste proibindo `flex: 1 1 auto` com `min-height` fixo — e
+> ele pegou a primeira versão desta mudança.
+
+Medido na tela depois de pronto, numa estação de 1366 px: as três colunas saem
+com 360, 280 e 210 px, e as três **começam e terminam na mesma linha**.
 
 ### As cores por estágio
 
@@ -214,7 +258,10 @@ continua marcado: quem só vê precisa ler em que ponto o modelo está.
 
 **O status só se mexe depois do responsável** (regra do usuário, 22/08/2026).
 Modelo sem responsável escolhido tem os quatro botões travados e um recado ao pé
-deles: *"⬅️ Escolha o Responsável ao lado para liberar o status"*. Marcar um
+deles: *"⬆️ Escolha o Responsável acima, na barra do modelo, para liberar o
+status"*. A seta mudou de lado em 26/08/2026, quando o seletor subiu para a
+barra de título: seta que aponta para o lugar errado é pior do que seta
+nenhuma. Marcar um
 estágio é dizer que **alguém** fez aquele trabalho; sem nome, o registro não
 responde à pergunta que o setor faz depois — quem acabou este material. Escolhido
 o responsável, os botões liberam na hora, sem ATUALIZAR. A trava vale também na
@@ -428,7 +475,8 @@ usuário (a versão anterior empilhava tudo numa coluna só, "muito mal
 distribuída" nas palavras dele):
 
 1. **Topo — quem.** Bolinha da cor, nome, código e selo do estágio à esquerda;
-   a foto do material à direita, num botão compacto (ver *A foto do material*).
+   à direita, o seletor do **Responsável** (era o botão da foto até 26/08/2026;
+   ver *O rearranjo de 26/08/2026*).
 2. **Meio — o quê.** A amostra de um lado e os dados do outro, **metade a
    metade** (pedido de 20/08/2026; em tela estreita as metades empilham). Os
    dados vão numa grade alinhada em colunas, centrada na altura da amostra.
@@ -759,17 +807,19 @@ o **EDITAR**.
 
 ### A foto do material
 
-Cada modelo tem um botão **📷 Fotografar**, compacto, no **canto superior
-direito** do card (pedido do usuário em 21/08/2026 — até então era uma faixa
-inteira na base, com rótulo próprio e botão grande, pesando mais que os
-seletores, que são o trabalho de verdade desta tela). Ele abre a webcam da
+Cada modelo tem um botão **📷 Fotografar**, compacto, numa faixa **acima da
+tabela de especificação** (26/08/2026; de 21/08 até então ele ficava no canto
+superior direito do card, e antes disso era uma faixa inteira na base, com
+rótulo próprio e botão grande, pesando mais que os seletores, que são o
+trabalho de verdade desta tela). Ele abre a webcam da
 estação numa janela, com *Fotografar*, e depois *Repetir* ou *Salvar foto*. A
 foto vai para o Storage e o endereço dela fica em
 `pedidos_modelos.acabamento_foto_url`; a miniatura (46 px) aparece **ao lado do
 botão**, o texto dele vira *Refazer foto*, e ela amplia no mesmo lightbox da
-amostra. Sem foto, o card diz "Nenhuma foto do material ainda" em texto miúdo
-abaixo do botão — o rótulo "Foto do material" segue existindo, no `title` do
-botão e da miniatura, e o harness confere os três textos. Refazer grava um
+amostra. Sem foto, quem diz isso é o **próprio rótulo do botão** — a frase
+"Nenhuma foto do material ainda" saiu em 26/08/2026, porque na faixa cabe uma
+linha só. O rótulo "Foto do material" segue existindo, no `title` do botão e da
+miniatura, e o harness confere os textos. Refazer grava um
 arquivo novo e troca a URL — o anterior fica no bucket, porque apagar
 arriscaria remover a foto que outra estação acabou de tirar.
 

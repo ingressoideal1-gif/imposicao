@@ -733,13 +733,24 @@ function ambienteComPedidoAberto() {
     // amostra e os botoes voltam a flutuar centrados na vertical.
     ok((html.match(/height: 36px;/g) || []).length >= 4,
        'as tres colunas comecam na mesma linha, pelo rotulo de altura fixa');
-    // A ordem na tela: especificacao, depois status, depois responsavel.
+    // A ORDEM na tela, refeita em 26/08/2026 a pedido do usuario: o responsavel
+    // subiu para a BARRA DE TITULO, no lugar onde estava o botao Fotografar, e
+    // este desceu para a faixa acima da especificacao.
+    //
+    // A troca segue a hierarquia do card: a barra de titulo responde QUEM -- o
+    // nome do modelo, o codigo, o estagio, o setor --, e o responsavel e a
+    // ultima pergunta desse grupo. A foto e registro, nao decisao.
+    //
+    // E poe o comando ACIMA do que ele comanda: sem responsavel nenhum dos
+    // quatro botoes de status se mexe.
     const umModelo = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+    const posResp = umModelo.indexOf('Responsável');
+    const posFoto = umModelo.indexOf('Fotografar');
     const posEspec = umModelo.indexOf('Especificação');
     const posStatus = umModelo.indexOf('Status do acabamento');
-    const posResp = umModelo.indexOf('Responsável');
-    ok(posEspec < posStatus && posStatus < posResp,
-       'a ordem e especificacao, status e responsavel', { posEspec, posStatus, posResp });
+    ok(posResp < posFoto && posFoto < posEspec && posEspec < posStatus,
+       'a ordem e responsavel (no titulo), foto, especificacao e status',
+       { posResp, posFoto, posEspec, posStatus });
 
     // Amostra em PDF vira atalho, e nunca imagem: rasterizar a arte do cliente
     // esta fora de cogitacao neste projeto.
@@ -1768,8 +1779,11 @@ async function semResponsavelOStatusNaoSeMexe() {
     ok(botoes3002.every(b => b.indexOf('disabled') !== -1),
        'e todos travados enquanto nao ha responsavel');
     ok(do3002.indexOf('para liberar o status') !== -1, 'a tela diz o que falta');
-    ok(do3002.indexOf('<b>Responsável</b> abaixo') !== -1,
+    // Ele aponta para CIMA desde 26/08/2026: o seletor subiu para a barra do
+    // modelo. Uma seta que aponta para o lugar errado e pior do que seta nenhuma.
+    ok(do3002.indexOf('<b>Responsável</b> acima') !== -1,
        'e aponta para onde o responsavel ficou agora');
+    ok(do3002.indexOf('⬆️') !== -1, 'com a seta para cima, e nao para baixo');
     // ...mas o estagio continua LEGIVEL: travar nao e esconder.
     ok(/data-estagio="Impresso" aria-pressed="true"/.test(do3002),
        'o estagio derivado continua marcado');
@@ -2424,8 +2438,17 @@ async function semEstimadoGravaDireto() {
     ok(botoes.length === 2, 'um botao de camera por modelo', 'achei ' + botoes.length);
     ok(html.indexOf('Fotografar') !== -1, 'o botao diz o que faz');
     ok(html.indexOf('Foto do material') !== -1, 'e a faixa tem rotulo em texto');
-    ok(html.indexOf('Nenhuma foto do material ainda') !== -1,
-       'modelo sem foto diz que nao tem foto, em vez de mostrar caixa vazia');
+    // A frase "Nenhuma foto do material ainda." saiu em 26/08/2026, quando o
+    // bloco desceu da barra de titulo para a faixa acima da especificacao: ali
+    // cabe uma linha so, e ela disputava lugar com o proprio botao.
+    //
+    // Nada se perdeu, porque o ESTADO continua dito -- no rotulo do botao, que
+    // e onde o operador olha: sem foto ele le "Fotografar"; com foto ele le
+    // "Refazer foto" e a miniatura aparece ao lado.
+    ok(html.indexOf('Nenhuma foto do material ainda') === -1,
+       'a frase saiu junto com a mudanca de lugar');
+    ok((html.match(/📷 Fotografar/g) || []).length === 2,
+       'os dois modelos sem foto dizem "Fotografar" no proprio botao');
 
     // Com foto gravada, aparece a miniatura e o botao vira "Refazer".
     const amb2 = ambienteComPedidoAberto();
