@@ -543,6 +543,10 @@
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
 <script src="supabase-js.min.js?v=726"></script>
+<!-- ANTES do supabase-config.js: a barra que avisa "o banco nao esta
+     respondendo" conta o tempo das chamadas ao banco, e o carimbo de
+     sessao de la precisa ficar por cima dela. -->
+<script src="banco-nao-responde.js?v=726"></script>
 <script src="supabase-config.js?v=726"></script>
 <script src="acesso-conta.js?v=726"></script>
 

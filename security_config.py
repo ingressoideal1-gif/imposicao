@@ -180,6 +180,12 @@ PAINEL_ARQUIVOS = [
     "editor-foto.js",
     "amostra-modal.js",
     "mapas.js",
+    # A barra de "o banco de dados nao esta respondendo" (26/08/2026). Ela
+    # carrega ANTES do supabase-config.js nas quatro paginas que falam com o
+    # banco; sem o nome aqui, a estacao serviria essas paginas com um 404 no
+    # lugar dela -- e a estacao e justamente onde o operador fica esperando
+    # na frente da impressora quando o banco cai.
+    "banco-nao-responde.js",
     "supabase-config.js",
     "pdf-lib.min.js",
     # Vendorizados em 16/08/2026, quando sairam do CDN: sem eles aqui, a

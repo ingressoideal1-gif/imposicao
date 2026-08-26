@@ -4,6 +4,64 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-26] — Banco fora do ar: a tela avisa em vez de congelar
+
+Relato do usuário: *"APLICAÇÃO TRAVOU, PESQUISAR O MOTIVO"*.
+
+### O que aconteceu naquele dia
+
+Das **15:46 às 15:54** o banco do projeto Supabase do parceiro ficou fora do ar. O log do agente
+marcou os dois extremos:
+
+```
+15:46:35  Heartbeat OK                      <- último normal
+15:46:4x  Erro GET print_queue: timed out
+15:54:21  Heartbeat OK                      <- voltou sozinho
+```
+
+**Não foi a internet nem o agente.** Medido de fora, com a mesma chave e o mesmo endereço, durante a
+queda: o Google respondia em 206 ms; as Edge Functions do próprio projeto, que moram no mesmo
+endereço do banco, respondiam em 110 ms; o `/api/status` do agente local, em 47 ms. Só o `/rest/v1/`
+e o `/auth/v1/` estouravam — e o código que voltava era **522**, o gateway dizendo que a origem não
+atendeu. Ou seja: o caminho até lá estava aberto; quem estava fora era o serviço de banco.
+
+### Por que isso apareceu como tela travada
+
+As 71 chamadas ao banco espalhadas pelo painel **não tinham tempo limite**. Uma promessa que nunca
+se resolve não cai no `catch` de ninguém — ela fica pendurada, junto com a tela que a espera. Não
+havia erro, não havia mensagem, não havia nada para tocar.
+
+### A barra
+
+`frontend/banco-nao-responde.js` conta o tempo de cada chamada ao banco. Passados **15 segundos**
+sem resposta, uma barra aparece no alto da tela dizendo o que está acontecendo — e separando o que
+**não** é o problema, que é a internet da gráfica — com um botão de recarregar. Quando o banco
+volta, ela se anuncia em verde e sai sozinha em 5 segundos.
+
+**Nenhuma chamada é cancelada, e essa foi a decisão mais importante do desenho.** Uma gravação
+abortada aos 15 segundos pode já ter chegado ao banco; a tela diria "falhou", o operador refaria, e
+a gráfica ficaria com o registro duplicado. Tela congelada é um problema; pedido gravado duas vezes
+é outro, bem maior. A chamada segue viva — o que muda é a tela parar de mentir que está trabalhando.
+
+**O embrulho fica num lugar só**, o `window.fetch`. Mexer nos 71 pontos de chamada seria 71 chances
+de errar num caminho que a gráfica usa o dia inteiro; nenhum deles foi tocado.
+
+**Só `/rest/v1/` e `/auth/v1/` entram na conta.** O agente local fica de fora porque impor e gerar
+PDF levam minutos por natureza; o Storage porque subir fonte ou foto grande passa dos 15 s numa
+internet ruim sem que exista problema; a Edge Function porque ela nem depende do banco para atender.
+
+15 segundos é folga de 75 a 250 vezes sobre o tempo normal medido (60 a 200 ms). Errar para baixo
+custaria caro: barra piscando com o banco de pé é o tipo de aviso que o operador aprende a ignorar —
+e aí ela não serve para o dia em que o banco cair de verdade.
+
+Carrega **antes** do `supabase-config.js` nas quatro páginas que falam com o banco (`index.html`,
+`producao.html`, `cliente.html`, `controle.html`), e entrou na `PAINEL_ARQUIVOS`: sem o nome lá, a
+estação serviria essas páginas com um 404 no lugar da barra — e a estação é justamente onde o
+operador fica esperando na frente da impressora. A `portaria.html` ficou de fora de propósito: o
+aparelho da portaria fala com as Edge Functions e nunca com `/rest/v1/`.
+
+---
+
 ## [2026-08-25] — "Falar com meu Atendimento": cada atendente com o seu WhatsApp
 
 Pedido do usuário: trocar *"Ligar para o meu atendimento"* por *"Falar com meu Atendimento"*, e

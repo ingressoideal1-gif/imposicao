@@ -2055,6 +2055,10 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
+         depois, e o carimbo de sessao de la precisa ficar por cima da conta de
+         tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
+    <script src="/banco-nao-responde.js?v=726"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=726"></script>
     <script src="/cor-numeracao-do-modelo.js?v=726"></script>

@@ -82,6 +82,12 @@ const ARQUIVOS = [
     // Compartilhados pelas duas telas.
     'portaria-camera.js?v=' + VERSAO,
     'jsqr.min.js?v=' + VERSAO,
+    // A barra de "o banco de dados nao esta respondendo" (26/08/2026).
+    // Ela carrega antes do supabase-config.js na `controle.html`; fora
+    // desta lista, o aplicativo INSTALADO abriria sem rede pedindo um
+    // arquivo que o cache nao tem -- e sem erro visivel, que e o pior
+    // modo de faltar.
+    'banco-nao-responde.js?v=' + VERSAO,
     'supabase-js.min.js?v=' + VERSAO,
     'supabase-config.js?v=' + VERSAO,
     'acesso-conta.js?v=' + VERSAO,
