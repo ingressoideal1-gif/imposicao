@@ -275,6 +275,41 @@ cada modelo sempre listou toda numeração `is_custom` com o `Cli_Num` do client
 (`frontend/script.js`, em `renderAmostrasOSItens` e `onItemCorSelect`). O que faltava
 era o save.
 
+### O nome também decide o que o Salvar faz
+
+Regra do usuário, no mesmo dia:
+
+> *"ao salvar com mesmo nome deve repassar, ao mudar o nome deve duplicar, sem
+> alterar modelos com a outra numeração"*
+
+No editor, numa numeração **de cliente**:
+
+| No campo Nome | O que o 💾 Salvar faz |
+|---|---|
+| o mesmo nome | atualiza o registro — vale para todos os modelos que o usam |
+| um nome diferente | grava uma **cópia nova**; o original e os modelos dele ficam como estavam |
+
+É o "salvar como" de sempre, e é ele que atende o pedido de **duplicar uma
+numeração exclusiva para editar e seguir na cópia**. O modelo de onde se está
+editando passa a apontar para a cópia (o `saveAmostraToDB` do fim do
+`saveNumeracao`); os outros modelos continuam no original.
+
+Três recortes deliberados:
+
+- **Só na numeração de cliente.** Na genérica do catálogo, corrigir um erro de
+  digitação no nome continua sendo corrigir o nome — duplicar ali encheria o
+  catálogo de gêmeas sem ninguém pedir.
+- **Duplicando, o aviso de "esta numeração é usada por N modelos" não aparece.**
+  Ele existe para quando o save vai mexer em quem já usa; a cópia não mexe em
+  ninguém, e perguntar seria atrito em cima do caminho seguro.
+- **A cópia leva a arte de fundo no arquivo dela** (`duplicarFundoNoStorage`
+  reenvia os bytes sob o id novo). Apontar para o objeto do original faria as
+  duas compartilharem um arquivo só — o defeito que o `preview_jpg` ensinou.
+
+Quem quer **apenas renomear**, sem criar cópia, usa o 🏷️ da Lista de Numerações.
+Os dois gestos convivem porque resolvem coisas diferentes, e a dica embaixo do
+campo Nome (`#num-name-dica-modelo`) diz isso na tela.
+
 ### Editar não bifurca mais
 
 Os dois caminhos de entrada — `editCustomNumeracao` (o ✏️ no card do modelo) e
@@ -292,6 +327,9 @@ Agora a decisão está em `comoEditarNumeracaoDoModelo(baseNum, itemId, cliNum)`
 | uma **compartilhada deste cliente** | edita no lugar (UPDATE) — é o que faz o save valer para todos |
 | a exclusiva de **outro** modelo | clona (INSERT, nome = id deste modelo) |
 | uma numeração genérica do catálogo | clona (INSERT, nome = id deste modelo) |
+
+"Edita no lugar" é o que acontece **abrindo**. Na hora de salvar, o nome ainda
+pode transformar aquilo numa cópia — ver a seção acima.
 
 > [!CAUTION]
 > **`os_item_id` é a origem, não o último lugar por onde alguém passou.** O
@@ -318,7 +356,9 @@ vira `os_item_id`) e `_pedidoModeloId` (a linha de `pedidos_modelos`, onde mora 
 
 ### Renomear — `renomearNumeracao(id)`
 
-O 🏷️ da linha, ao lado do duplicar. Renomeia **sem criar outra numeração**: o nome
+O 🏷️ da linha, ao lado do duplicar. É o gesto de **renomear de verdade**, e existe
+justamente porque no editor trocar o nome significa outra coisa (duplicar).
+Renomeia **sem criar outra numeração**: o nome
 não vai ao papel, é rótulo, então não pede as travas de modelo aprovado. O que ele
 muda é a quem a numeração pertence — e o efeito está escrito dentro do próprio
 `prompt`, não só aqui.
@@ -385,9 +425,9 @@ há no máximo um fundo por numeração. Trocar um PDF por um PNG deixa o anteri
 no bucket, do mesmo tipo de lixo que `deleteNumeracao()` já deixa em
 `previews-numeracoes/`.
 
-`duplicateCatalogNumeracao()` **não** copia `bg_url`, pelo mesmo motivo do
-`preview_jpg`: dois registros apontando para o mesmo objeto do Storage. E a cópia
-nasce sem `Cli_Num`, então nem guardaria fundo.
+`duplicateCatalogNumeracao()` leva o `bg_url` — mas **reenviando os bytes** sob o
+id da cópia, nunca copiando a URL: dois registros apontando para o mesmo objeto do
+Storage é o defeito que o `preview_jpg` ensinou a evitar.
 
 ## `is_custom` não é o mesmo que `Cli_Num`
 
@@ -523,6 +563,10 @@ Cenários que valem cobrir, porque são justamente as armadilhas:
    genérica e a de outro cliente.
 7. `renomearNumeracao` manda ao Supabase um `update` **só com `name`**, recusa nome já
    usado por outra, e a numeração renomeada passa a contar como compartilhada.
+7b. No editor, salvar uma numeração de cliente com o **mesmo nome** atualiza o
+   registro; com **outro nome** grava uma cópia, o original não recebe UPDATE
+   nenhum, a arte de fundo vai para o arquivo da cópia, e o modelo de onde se
+   editava passa a apontar para ela. Numeração genérica continua só renomeando.
 8. Numeração de cliente com arte de fundo carregada: salvar sobe o arquivo para
    `artes/fundos-numeracoes/<id>.<ext>` e grava `bg_url`; reabrir traz a arte de
    volta em vez da arte da cor. Numeração genérica não grava nada. Removida a arte,

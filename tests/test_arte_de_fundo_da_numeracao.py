@@ -103,11 +103,40 @@ def test_a_arte_guardada_vence_a_arte_da_cor():
     )
 
 
-def test_duplicar_nao_leva_o_fundo_junto():
-    """Dois registros apontando para o mesmo objeto do Storage é o defeito que o
-    `preview_jpg` já ensinou a evitar."""
+def test_a_copia_leva_o_fundo_mas_no_arquivo_dela():
+    """A cópia precisa da mesma referência para o operador seguir editando.
+
+    O que ela não pode é apontar para o objeto do original: trocar o fundo de
+    uma trocaria o da outra — o defeito que o `preview_jpg` já ensinou a evitar.
+    Por isso os bytes são reenviados sob o id da cópia.
+    """
     fonte = _ler(SCRIPT)
     i = fonte.index("window.duplicateCatalogNumeracao = async function")
     corpo = fonte[i:fonte.index("\n};", i)]
-    assert "bg_url" not in corpo, "a cópia nasce sem fundo próprio"
-    assert "preview_jpg" not in corpo, "como já nasce sem preview"
+
+    assert "duplicarFundoNoStorage(n.bg_url" in corpo, (
+        "o fundo vai junto, reenviado sob o id da cópia"
+    )
+    assert "clone.bg_url = n.bg_url" not in corpo, (
+        "e NUNCA pela URL do original, que faria as duas dividirem um arquivo só"
+    )
+    assert "preview_jpg" not in corpo, "o preview continua fora: nasce no primeiro save"
+
+    # O destino é o id da CÓPIA, e não o do original.
+    j = fonte.index("async function duplicarFundoNoStorage")
+    helper = fonte[j:fonte.index("\n}", j)]
+    assert "fundos-numeracoes/${idDestino}." in helper
+
+
+def test_salvar_com_outro_nome_duplica_a_numeracao_do_cliente():
+    """Regra do usuário, 26/08/2026: salvar com o mesmo nome repassa; mudando o
+    nome, duplica, sem alterar os modelos que usam a outra numeração."""
+    fonte = _ler(SCRIPT)
+    i = fonte.index("const copiandoPorNome =")
+    trecho = fonte[i:i + 400]
+
+    assert "registroEmEdicao.Cli_Num" in trecho, (
+        "só a numeração de cliente duplica — na genérica, renomear é renomear"
+    )
+    assert "nomeDoRegistro !== name" in trecho, "o gatilho é o nome ter mudado"
+    assert "id = '';" in fonte[i:i + 900], "e duplicar é virar INSERT"

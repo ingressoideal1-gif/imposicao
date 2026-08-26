@@ -14,7 +14,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=724">
+    <link rel="stylesheet" href="/style.css?v=725">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -459,14 +459,18 @@
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
                                 placeholder="Ex: Numeração Ingresso VIP">
-                            <!-- Só aparece quando o editor foi aberto de dentro de um
-                                 modelo, ligado por `mostrarVoltarDaNumeracaoDoModelo`.
-                                 O nome ser o id do modelo é o que a prende a ele. -->
+                            <!-- Só aparece nas numerações exclusivas de cliente, ligada por
+                                 `atualizarDicaDoNomeDaNumeracao`. O nome faz duas coisas aqui:
+                                 diz a quem a numeração pertence, e decide se salvar atualiza ou
+                                 duplica. Nada mais na tela contaria isso. -->
                             <small id="num-name-dica-modelo"
-                                   style="display:none; color:var(--text-dim); font-size:0.78rem; line-height:1.35; margin-top:4px;">
-                                Enquanto o nome for o número do modelo, esta numeração é só dele.
-                                Dando um nome próprio, ela continua exclusiva deste cliente e passa a
-                                servir a todos os modelos dele.
+                                   style="display:none; color:var(--text-dim); font-size:0.78rem; line-height:1.4; margin-top:4px;">
+                                Salvar com o <strong>mesmo nome</strong> atualiza esta numeração — vale para
+                                todos os modelos que usam ela. <strong>Mudando o nome</strong>, salva uma
+                                cópia nova e os outros modelos ficam como estão.
+                                <br>Enquanto o nome for o número do modelo, ela é só dele; com nome próprio,
+                                serve a todos os modelos deste cliente.
+                                <br>Para apenas renomear, sem criar cópia, use o 🏷️ na Lista de Numerações.
                             </small>
                         </div>
                         <div class="form-group">
@@ -3609,37 +3613,37 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=724"></script>
-    <script src="cor-numeracao-do-modelo.js?v=724"></script>
-    <script src="logo-do-frete.js?v=724"></script>
+    <script src="mapas.js?v=725"></script>
+    <script src="cor-numeracao-do-modelo.js?v=725"></script>
+    <script src="logo-do-frete.js?v=725"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=724"></script>
-    <script src="arte-de-impressao.js?v=724"></script>
-    <script src="qr-canvas.js?v=724"></script>
+    <script src="pagamento-do-pedido.js?v=725"></script>
+    <script src="arte-de-impressao.js?v=725"></script>
+    <script src="qr-canvas.js?v=725"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=724"></script>
-    <script src="fonte-canvas.js?v=724"></script>
+    <script src="numero-da-pagina.js?v=725"></script>
+    <script src="fonte-canvas.js?v=725"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=724"></script>
-    <script src="fonte-nome.js?v=724"></script>
-    <script src="qr-ideal-colunas.js?v=724"></script>
-    <script src="csv-editor.js?v=724"></script>
-    <script src="amostra-modal.js?v=724"></script>
-    <script src="texto-ajuste.js?v=724"></script>
-    <script src="foto-lib.js?v=724"></script>
-    <script src="gerenciador-fotos.js?v=724"></script>
-    <script src="editor-foto.js?v=724"></script>
-    <script src="script.js?v=724"></script>
-    <script src="ideal-control.js?v=724"></script>
-    <script src="criador-arte.js?v=724"></script>
-    <script src="/pedido.js?v=724"></script>
-    <script src="acabamento.js?v=724"></script>
-    <script src="avisos.js?v=724"></script>
+    <script src="fonte-glifos.js?v=725"></script>
+    <script src="fonte-nome.js?v=725"></script>
+    <script src="qr-ideal-colunas.js?v=725"></script>
+    <script src="csv-editor.js?v=725"></script>
+    <script src="amostra-modal.js?v=725"></script>
+    <script src="texto-ajuste.js?v=725"></script>
+    <script src="foto-lib.js?v=725"></script>
+    <script src="gerenciador-fotos.js?v=725"></script>
+    <script src="editor-foto.js?v=725"></script>
+    <script src="script.js?v=725"></script>
+    <script src="ideal-control.js?v=725"></script>
+    <script src="criador-arte.js?v=725"></script>
+    <script src="/pedido.js?v=725"></script>
+    <script src="acabamento.js?v=725"></script>
+    <script src="avisos.js?v=725"></script>
 
 
 

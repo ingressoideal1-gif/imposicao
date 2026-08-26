@@ -3351,6 +3351,7 @@ function editNumeracao(id) {
         window.autoLoadCorBg(n.formato_id);
     }
     atualizarAvisoDaArteDeFundo();
+    atualizarDicaDoNomeDaNumeracao();
 
     // Carregar a arte de cada elemento PDF/SVG a partir do arquivo do proprio
     // elemento, e a lista da box "Adicionar Pdf e Svg".
@@ -3464,12 +3465,17 @@ window.deleteNumeracao = deleteNumeracao;
  * copiado, em silêncio. Três ficam de fora de propósito, por motivos
  * diferentes:
  *
- *   `Cli_Num`      a cópia nasce genérica, não presa ao cliente do original.
  *   `preview_jpg`  copiar a URL faria dois registros apontarem para o mesmo
  *                  arquivo no Storage, e salvar um mudaria o preview do outro.
- *   `bg_url`       pelo mesmo motivo do preview — e porque a cópia nasce sem
- *                  `Cli_Num`, e numeração sem cliente não guarda fundo: ela
- *                  tira o dela da cor do formato base, como sempre.
+ *                  A cópia nasce sem preview, e ganha o dela no primeiro save.
+ *
+ * O `Cli_Num` SAIU dessa lista em 26/08/2026: a cópia de uma numeração de
+ * cliente continua sendo daquele cliente. Sem ele, ela não aparecia nos selects
+ * dos modelos — que filtram a exclusiva pelo cliente da OS —, ou seja, sumia
+ * justamente de onde seria usada.
+ *
+ * O `bg_url` também entrou, mas não copiado: os bytes são REENVIADOS sob o id
+ * da cópia (`duplicarFundoNoStorage`), pelo mesmo motivo do `preview_jpg`.
  */
 window.duplicateCatalogNumeracao = async function (id) {
     const n = state.numeracoes.find(x => x.id === id);
@@ -3504,13 +3510,38 @@ window.duplicateCatalogNumeracao = async function (id) {
             pdf_filename: n.pdf_filename || "",
             is_custom: n.is_custom ? true : false,
             os_item_id: n.os_item_id || null,
+            // O cliente vem junto desde 26/08/2026.
+            //
+            // Antes a cópia nascia sem `Cli_Num` — genérica no papel, mas com
+            // `is_custom` e `os_item_id`, que é o estado legado de antes de o
+            // campo existir. Na prática ela sumia do lugar onde seria usada: os
+            // selects dos modelos filtram a exclusiva pelo cliente da OS.
+            // Duplicar a numeração de um cliente para variá-la é o caso real, e
+            // a cópia precisa continuar visível para ele.
+            Cli_Num: n.Cli_Num || null,
             elements: (n.elements || []).map(el => {
                 const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
                 return e;
             })
         };
 
-        await api('POST', '/numeracoes', clone);
+        // O id sai daqui para que a arte de fundo possa ir para o arquivo da
+        // CÓPIA antes de o registro ser gravado.
+        const idDaCopia = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID() : null;
+
+        if (idDaCopia && n.bg_url && n.Cli_Num && bancoGuardaArteDeFundo()) {
+            const url = await duplicarFundoNoStorage(n.bg_url, idDaCopia, n.bg_filename);
+            if (url) {
+                clone.bg_url = url;
+                clone.bg_filename = n.bg_filename || '';
+            } else {
+                toast('A cópia foi criada, mas a arte de fundo não veio junto. '
+                    + 'Carregue o arquivo de novo nela.', 'warning');
+            }
+        }
+
+        await api('POST', '/numeracoes', idDaCopia ? { id: idDaCopia, ...clone } : clone);
         toast('Numeração duplicada!', 'success');
         await loadAll();
     } catch (e) {
@@ -5539,6 +5570,34 @@ function atualizarAvisoDaArteDeFundo() {
     el.style.color = state.bgFile || state.bgUrl ? 'var(--green)' : 'var(--text-faint)';
 }
 window.atualizarAvisoDaArteDeFundo = atualizarAvisoDaArteDeFundo;
+
+/**
+ * Copia a arte de fundo de uma numeração para o arquivo de OUTRA.
+ *
+ * O caminho no bucket é `fundos-numeracoes/<id do registro>.<ext>`, então duas
+ * numerações nunca podem apontar para o mesmo objeto: trocar o fundo de uma
+ * trocaria o da outra, que é o defeito que o `preview_jpg` já ensinou a evitar.
+ * Ao duplicar, os bytes são reenviados sob o id do destino.
+ *
+ * Devolve '' quando não deu — quem chama avisa o operador, em vez de deixar a
+ * cópia apontando para o arquivo alheio.
+ */
+async function duplicarFundoNoStorage(bgUrl, idDestino, nomeArquivo) {
+    if (!bgUrl || !idDestino) return '';
+    try {
+        const bytes = await fetchPdfBytes(bgUrl);
+        if (!bytes) return '';
+        const base = String(nomeArquivo || bgUrl).split('?')[0];
+        const ext = (base.split('.').pop() || 'pdf').toLowerCase();
+        return await uploadToStorage(
+            new Blob([bytes]), (nomeArquivo || ('fundo.' + ext)), 'fundos-numeracoes',
+            { objectPath: `fundos-numeracoes/${idDestino}.${ext}` });
+    } catch (e) {
+        console.warn('[Numerações] Não deu para copiar a arte de fundo:', e.message || e);
+        return '';
+    }
+}
+window.duplicarFundoNoStorage = duplicarFundoNoStorage;
 
 /**
  * Traz de volta a arte de fundo guardada na própria numeração.
@@ -7832,7 +7891,37 @@ window.saveNumeracao = async function () {
     // `let`: virar cópia zera este registro junto com o `id`.
     let registroEmEdicao = id ? state.numeracoes.find(n => String(n.id) === String(id)) : null;
 
-    if (doModelo && registroEmEdicao && numeracaoEhCompartilhadaDoCliente(registroEmEdicao)) {
+    // ── O NOME decide: mesmo nome repassa, nome trocado duplica ─────────────
+    //
+    // Regra do usuário, 26/08/2026: *"ao salvar com mesmo nome deve repassar, ao
+    // mudar o nome deve duplicar, sem alterar modelos com a outra numeração"*.
+    //
+    // É o "salvar como" de sempre, e resolve o pedido que veio junto — poder
+    // duplicar uma numeração exclusiva para editar e seguir na cópia. Quem quer
+    // mesmo RENOMEAR o registro usa o 🏷️ da Lista de Numerações, que troca o
+    // nome sem criar nada.
+    //
+    // Vale só para a numeração exclusiva de CLIENTE. Na genérica do catálogo,
+    // corrigir um erro de digitação no nome continua sendo corrigir o nome —
+    // duplicar ali encheria o catálogo de gêmeas sem ninguém pedir.
+    //
+    // A cópia herda `Cli_Num` e `os_item_id` do original (é o
+    // `registroEmEdicao`, que segue vivo de propósito), então nasce
+    // compartilhada daquele cliente. O original não é tocado, e os modelos que
+    // o usam continuam nele: só o modelo de onde se está editando passa a
+    // apontar para a cópia, no fim desta função.
+    const nomeDoRegistro = String((registroEmEdicao && registroEmEdicao.name) || '').trim();
+    const copiandoPorNome = !!(registroEmEdicao && registroEmEdicao.Cli_Num
+        && nomeDoRegistro && nomeDoRegistro !== name);
+
+    if (copiandoPorNome) {
+        id = '';   // vira INSERT; o `registroEmEdicao` fica como fonte do vínculo
+    }
+
+    // A conferência de quem mais usa a numeração compartilhada só faz sentido
+    // quando o save vai MEXER nela. Duplicando, ninguém mais é afetado — que é
+    // exatamente o motivo de o operador estar duplicando.
+    if (!copiandoPorNome && doModelo && registroEmEdicao && numeracaoEhCompartilhadaDoCliente(registroEmEdicao)) {
         const itemIdAtual = window.customNumeracaoEditState.itemId;
 
         // O modelo atual responde por DOIS ids: o do item na proposta
@@ -7890,14 +7979,16 @@ window.saveNumeracao = async function () {
     const homonimas = await homonimasDoCatalogo(name, id);
     let homonima = null;
 
-    if (homonimas.length && doModelo && !id) {
+    if (homonimas.length && doModelo && !id && !copiandoPorNome) {
         // Sem id: é o INSERT de uma exclusiva nova, e a homônima é a versão
         // anterior da numeração DESTE modelo (o nome é o id dele). Substituir
         // é o certo. Com id, a numeração já existe e o caso é o de baixo —
         // renomear para um nome ocupado, que se recusa como no catálogo.
         homonima = homonimas[0];
 
-    } else if (homonimas.length && id) {
+    } else if (homonimas.length && (id || copiandoPorNome)) {
+        // Editando, ou duplicando para um nome que já é de outra: nos dois casos
+        // não há "substituir" — seriam dois registros vivos virando um.
         return toast('Já existe outra numeração chamada "' + name + '". '
             + 'Escolha um nome diferente para esta.', 'error');
 
@@ -8103,6 +8194,20 @@ window.saveNumeracao = async function () {
                 { objectPath: `fundos-numeracoes/${numeracaoId}.${extBg}` });
             bgNomeFinal = state.bgFile.name;
 
+        } else if (guardaFundo && state.bgUrl && copiandoPorNome) {
+            // A cópia leva a MESMA referência, mas no arquivo dela.
+            //
+            // Apontar para o objeto do original faria as duas compartilharem um
+            // arquivo só — o defeito que o `preview_jpg` já ensinou a evitar:
+            // trocar o fundo de uma trocaria o da outra. O caminho no bucket
+            // leva o id do registro, então basta reenviar os bytes.
+            bgUrlFinal = await duplicarFundoNoStorage(state.bgUrl, numeracaoId, state.bgFilename);
+            bgNomeFinal = bgUrlFinal ? (state.bgFilename || '') : '';
+            if (!bgUrlFinal) {
+                toast('A cópia foi salva, mas a arte de fundo não veio junto. '
+                    + 'Carregue o arquivo de novo nela.', 'warning');
+            }
+
         } else if (guardaFundo && state.bgUrl) {
             // Já estava no Storage e ninguém trocou: mantém como está.
             bgUrlFinal = state.bgUrl;
@@ -8221,7 +8326,10 @@ window.saveNumeracao = async function () {
             // caso sem `supabaseClient`, em que quem cunha o id é a própria `api`.
             idDaNumeracaoGravada = (criada && criada.id) || numeracaoId || null;
 
-            toast('Numeração salva!', 'success');
+            toast(copiandoPorNome
+                ? ('Cópia salva como "' + name + '". A "' + nomeDoRegistro
+                   + '" continua como estava, e os outros modelos seguem nela.')
+                : 'Numeração salva!', 'success');
 
         }
 
@@ -32262,12 +32370,26 @@ function editCustomNumeracao(idx, osId, itemId) {
 function mostrarVoltarDaNumeracaoDoModelo() {
     const btn = document.getElementById('btn-num-voltar');
     if (btn) btn.style.display = '';
-    // A dica de que o nome decide a quem a numeração pertence. Mesmo lugar e
-    // mesmo motivo do botão: só quem veio de um modelo pode renomear e mudar
-    // esse vínculo sem sair da tela.
-    const dica = document.getElementById('num-name-dica-modelo');
-    if (dica) dica.style.display = '';
+    atualizarDicaDoNomeDaNumeracao();
 }
+
+/**
+ * Acende a dica embaixo do campo Nome.
+ *
+ * O nome faz duas coisas na numeração exclusiva de cliente, e nenhuma delas é
+ * visível: diz a quem ela pertence (igual ao id do modelo = só dele) e decide o
+ * que o Salvar faz (mesmo nome atualiza, nome novo duplica). Quem aprende essas
+ * duas regras sem a frase, aprende perdendo trabalho.
+ *
+ * Aparece para qualquer numeração de cliente aberta no editor — inclusive uma
+ * aberta pela Lista de Numerações —, e não só para quem veio de um pedido.
+ */
+function atualizarDicaDoNomeDaNumeracao() {
+    const dica = document.getElementById('num-name-dica-modelo');
+    if (!dica) return;
+    dica.style.display = numeracaoDoEditorGuardaFundo() ? '' : 'none';
+}
+window.atualizarDicaDoNomeDaNumeracao = atualizarDicaDoNomeDaNumeracao;
 window.mostrarVoltarDaNumeracaoDoModelo = mostrarVoltarDaNumeracaoDoModelo;
 
 /**

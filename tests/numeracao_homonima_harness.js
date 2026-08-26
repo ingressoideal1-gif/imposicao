@@ -245,6 +245,66 @@ function decidir(cenario) {
             'exclusiva do modelo: segue direto, a guarda so vale para a compartilhada', r);
     }
 
+    // ── 5c. O NOME decide: mesmo nome repassa, nome novo duplica ─────────────
+    //
+    // Regra do usuario, 26/08/2026: *"ao salvar com mesmo nome deve repassar, ao
+    // mudar o nome deve duplicar, sem alterar modelos com a outra numeracao"*.
+    // E o "salvar como" de sempre, e e o que permite duplicar uma numeracao
+    // exclusiva para seguir editando a copia sem mexer em quem usa o original.
+
+    {
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: '1000535' }], homonimas: [],
+        });
+        ok(r.salvou && r.id === 'N1', 'mesmo nome: repassa na propria linha', r);
+    }
+
+    {
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP 2', registro: COMPARTILHADA,
+            usuarios: [{ id: '1000535' }, { id: 'OUTRO' }], homonimas: [],
+        });
+        ok(r.salvou, 'nome novo: grava', r);
+        ok(r.id === '', 'nome novo: vira INSERT — o original nao e tocado', r);
+        ok(r.name === 'Camarote VIP 2', 'e a copia fica com o nome novo', r);
+        ok(!r.perguntou, 'e NAO pergunta nada: duplicar nao afeta os outros modelos', r);
+    }
+
+    {
+        // Duplicar para um nome que ja e de outra numeracao nao tem resposta
+        // boa: substituir seria fundir dois registros vivos.
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Ja existe', registro: COMPARTILHADA,
+            homonimas: [{ id: 'OUTRA' }], confirma: true,
+        });
+        ok(!r.salvou, 'copia com nome ocupado: recusa', r);
+        ok(r.toastTipo === 'error', 'como erro', r);
+        ok(!r.perguntou, 'e nem oferece substituir', r);
+    }
+
+    {
+        // A regra vale so para a numeracao de CLIENTE. Na generica do catalogo,
+        // corrigir o nome continua sendo corrigir o nome.
+        const GENERICA = { id: 'N1', name: 'Numeracao do catalogo' };
+        const r = await decidir({
+            doModelo: false, id: 'N1', nome: 'Numeracao do catalogo v2',
+            registro: GENERICA, homonimas: [],
+        });
+        ok(r.salvou && r.id === 'N1', 'generica: renomear continua sendo renomear', r);
+    }
+
+    {
+        // Copiando com o modelo aprovado no meio: a guarda da compartilhada nao
+        // dispara, porque nada do que esta aprovado sera alterado.
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Variacao nova', registro: COMPARTILHADA,
+            usuarios: [{ id: 'OUTRO', amostra_status: 'APROVADA' }], homonimas: [],
+        });
+        ok(r.salvou && r.id === '', 'copia com aprovado no meio: grava a copia', r);
+        ok(!r.perguntou, 'sem perguntar — o aprovado continua intacto no original', r);
+    }
+
     // ── 6. A consulta é ao BANCO, e não ao cache ─────────────────────────────
 
     {
