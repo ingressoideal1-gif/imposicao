@@ -655,18 +655,45 @@ function ambienteComPedidoAberto() {
     ok(html.indexOf('amostras_renderizadas/3001.jpg') !== -1, 'a amostra aprovada e exibida');
     ok(/AcabamentoPainel\.ampliar\(/.test(html), 'e da para ampliar a amostra');
     // A amostra sai grande, e nao como miniatura. Ate 25/08/2026 isso era um
-    // teto fixo de 360 px, com a arte centrada no meio de um vao escuro. Desde
-    // 26/08 a janela tem a altura da PILHA DE BOTOES -- pedido do usuario,
-    // "deixar janela da amostra na mesma altura dos botoes" --, e essa altura e
-    // calculada dos botoes (`ALTURA_DA_PILHA`), nao copiada. Sao 4 x 44 mais 3
-    // espacos de 6 = 194 px; se um dia o botao mudar de altura, a janela
-    // acompanha sozinha e este numero muda junto.
-    ok(html.indexOf('height: 194px') !== -1,
-       'a janela da amostra tem a altura da pilha de botoes');
+    // teto fixo de 360 px, com a arte centrada no meio de um vao escuro.
+    //
+    // Desde 26/08/2026 a PILHA DE BOTOES e o piso da janela: ela nasce com a
+    // altura dos quatro botoes (o que alinha a coluna da amostra com a das
+    // decisoes, pedido do usuario) e cresce ate o fim da coluna. O minimo e
+    // calculado dos botoes (`ALTURA_DA_PILHA` = 4 x 44 + 3 x 6 = 194), nao
+    // copiado: se um dia o botao mudar de altura, a janela acompanha sozinha.
+    //
+    // O `min-` importa e nao e detalhe. Com altura EXATA, arte em pe -- uma
+    // credencial PVC, por exemplo -- encostava nos 194 px antes de usar um
+    // decimo da largura e saia do tamanho de um selo. Foi o proprio usuario que
+    // pegou isso na producao: "altura ficou pequena".
+    ok(html.indexOf('min-height: 194px') !== -1,
+       'a janela da amostra nunca fica menor que a pilha de botoes');
+    ok(html.indexOf('flex: 1 1 0; min-height: 194px') !== -1,
+       'e cresce dali para cima ate o fim da coluna');
+    // Base 0, e nao `auto`: com base `auto` a janela e medida pelo que esta
+    // DENTRO dela, e uma arte em pe esticada na largura da coluna arrastava a
+    // altura junto pela proporcao -- 830 px numa coluna de 600 --, esticando o
+    // card inteiro. Quem decide a altura tem de ser a COLUNA.
+    ok(html.indexOf('flex: 1 1 auto; min-height: 194px') === -1,
+       'a janela nao e medida pela imagem que esta dentro dela');
     ok(FONTE.indexOf('ALTURA_DA_PILHA') !== -1
        && FONTE.indexOf("+ ALTURA_DA_PILHA + 'px") !== -1,
-       'e essa altura vem dos botoes, nao de um numero solto');
-    ok(html.indexOf('max-height: 100%') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
+       'esse minimo vem dos botoes, nao de um numero solto');
+    // E a imagem ACOMPANHA a janela. Com `max-height` ela so encolhia: uma
+    // amostra cujo arquivo e menor que a janela era desenhada no tamanho do
+    // arquivo, com o resto da janela vazio em volta.
+    ok(html.indexOf('width: 100%; height: 100%; object-fit: contain') !== -1,
+       'a imagem preenche a janela, em vez de so caber nela');
+    // E preenche de FORA do fluxo: e isso que a impede de virar a regua da
+    // janela em vez de se acomodar nela.
+    ok(/<img[^>]*position: absolute; inset: 0; width: 100%; height: 100%/.test(html),
+       'e faz isso sem poder empurrar a janela');
+    // Nao ha teto em pixel na amostra, e isso e regra e nao acaso: quem limita
+    // a arte sao a janela e a coluna, nunca um numero escrito a mao. Um teto
+    // solto aqui reintroduz o vao escuro que 26/08/2026 tirou.
+    ok(!/max-height:\s*\d+px/.test(html),
+       'a amostra sai em bom tamanho, nao como miniatura');
 
     // Pedidos de 20/08/2026, depois de ver a tela.
     ok(html.indexOf('background: #ffffff') === -1, 'nao ha chapa branca atras da amostra');

@@ -1186,27 +1186,51 @@
     }
 
     /**
-     * A janela da amostra, da MESMA altura da pilha de botões de status.
+     * A janela da amostra: a pilha de botões é o PISO, não o teto.
      *
-     * Pedido do usuário em 26/08/2026: *"deixar janela da amostra na mesma
-     * altura dos botões"*. A altura vem de `ALTURA_DA_PILHA`, que é a conta dos
-     * quatro botões mais os espaços entre eles — não um número copiado. Assim a
-     * coluna da amostra e a coluna das decisões começam juntas (as duas abrem
-     * com um rótulo de 36 px) e terminam juntas, e o dia em que a altura do
-     * botão mudar, a janela acompanha sozinha.
+     * Duas correções do usuário no mesmo dia, 26/08/2026, e a segunda ajusta a
+     * primeira.
      *
-     * Antes disto ela era `flex: 1` e crescia até a altura da coluna mais alta;
-     * antes ainda, tinha altura fixa de 180 px nos avisos e teto de 360 na
-     * imagem, e a arte ficava centrada no meio de um vão escuro.
+     * A primeira foi *"deixar janela da amostra na mesma altura dos botões"*, e
+     * virou altura exata: `ALTURA_DA_PILHA`, a conta dos quatro botões mais os
+     * espaços entre eles. Com a arte deitada da Triband ficou bom.
+     *
+     * A segunda veio quando ele abriu um pedido de credencial PVC, cuja arte é
+     * EM PÉ: *"altura ficou pequena, imagem não acompanhou tamanho da janela"*.
+     * Numa janela larga e baixa, arte em pé encosta na altura antes de usar um
+     * décimo da largura — e 194 px de altura deixavam a credencial do tamanho de
+     * um selo no meio de uma faixa vazia.
+     *
+     * Então a altura passou a ser um MÍNIMO: a janela nasce com a altura da
+     * pilha de botões (é o que alinha a coluna da amostra com a das decisões) e
+     * cresce até o fim da coluna, que é onde a tabela de especificação também
+     * termina. O topo continua alinhado com o primeiro botão; o que mudou é que
+     * o rodapé agora encosta no rodapé da coluna em vez de parar no meio.
+     *
+     * A imagem é `position: absolute` com `inset: 0` de propósito. Fora do
+     * fluxo, ela não entra na conta da altura da janela — e é essa a diferença
+     * entre "a imagem acompanha a janela" e "a imagem manda na janela". Com ela
+     * no fluxo e `width: 100%`, uma arte em pé esticada na largura da coluna
+     * puxava a altura pela proporção e crescia o card inteiro. O
+     * `object-fit: contain` é o que mantém a proporção da arte: ela cresce até
+     * encostar no lado mais apertado da janela e para ali.
      */
     function amostraHtml(item, idAmostra) {
         const { src, aprovada } = amostraDoModelo(item);
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
-        const moldura = 'width: 100%; flex: 0 0 auto; height: ' + ALTURA_DA_PILHA + 'px;'
+        // `flex: 1 1 0` e não `1 1 auto`, e isto não é detalhe de estilo: com
+        // base `auto` a janela é medida pelo que está DENTRO dela, e a imagem
+        // esticada na largura da coluna arrastava a altura junto pela proporção
+        // — uma credencial em pé numa coluna de 600 px pedia 830 px de altura e
+        // esticava o card inteiro. Com base 0 quem decide a altura é a COLUNA,
+        // e a imagem se acomoda no que sobrou.
+        const moldura = 'width: 100%; flex: 1 1 0; min-height: ' + ALTURA_DA_PILHA + 'px;'
+            + ' position: relative;'
             + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
             + ' display: flex; align-items: center; justify-content: center;';
-        const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;';
+        const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;'
+            + ' flex: 1 1 auto; min-height: 0;';
 
         if (!src) {
             return `<div style="${caixa}">
@@ -1242,7 +1266,7 @@
             <div style="${caixa}">
                 <div style="${moldura} border: none; background: none; overflow: hidden;">
                     <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
-                         style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; display: block;"
+                         style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block;"
                          onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
                 </div>
                 <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
