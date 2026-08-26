@@ -2892,6 +2892,12 @@ function renderNumeracoes() {
     const searchValClean = (document.getElementById('catalogo-search')?.value || '').trim().toLowerCase();
     const isSearchNum = /^\d+$/.test(searchValClean);
 
+    // A caixa "Mostrar exclusivas de cliente" (26/08/2026). Sem ela, o único
+    // jeito de ver uma numeração de cliente era saber de cor o número dele e
+    // digitá-lo na busca — e sem vê-la não há como renomeá-la aqui.
+    // Desmarcada, a lista é exatamente a de sempre.
+    const mostrarExclusivas = !!document.getElementById('catalogo-mostrar-exclusivas')?.checked;
+
     const filtradas = state.numeracoes.filter(n => {
         // Se a busca for um número de cliente:
         if (isSearchNum) {
@@ -2899,8 +2905,8 @@ function renderNumeracoes() {
             return String(n.Cli_Num || '') === searchValClean;
         } else {
             // Se NÃO for busca por número de cliente (busca de texto ou vazia):
-            // Oculta todas as numerações exclusivas de qualquer cliente.
-            if (n.Cli_Num) {
+            // Oculta as exclusivas de cliente, a menos que a caixa peça o contrário.
+            if (n.Cli_Num && !mostrarExclusivas) {
                 return false;
             }
         }
@@ -2935,6 +2941,15 @@ function renderNumeracoes() {
 
     empty.style.display = 'none';
 
+    // Cliente → nome, tirado dos pedidos que já estão em memória. Serve só ao
+    // selo da linha: sem o pedido carregado, o selo mostra o número, que é o
+    // que o operador digita na busca de qualquer forma.
+    const nomeDoCliente = {};
+    (state.ordens || []).forEach(o => {
+        if (o && o.id_cliente && o.cliente && !nomeDoCliente[String(o.id_cliente)]) {
+            nomeDoCliente[String(o.id_cliente)] = String(o.cliente);
+        }
+    });
 
 
     // Agrupar por formato
@@ -3028,14 +3043,32 @@ function renderNumeracoes() {
                         onerror="previewDaNumeracaoFalhou(this)" />`
                 : semPreview;
 
+            // O selo de exclusividade. A regra do nome está em
+            // `numeracaoEhCompartilhadaDoCliente`: nome ainda igual ao
+            // `os_item_id` é de um modelo só; renomeada é do cliente inteiro.
+            let seloCliente = '';
+            if (n.Cli_Num) {
+                const cli = nomeDoCliente[String(n.Cli_Num)] || ('cliente ' + n.Cli_Num);
+                const compartilhada = numeracaoEhCompartilhadaDoCliente(n);
+                seloCliente = `<div style="margin-top:4px;">
+                    <span class="badge ${compartilhada ? 'badge-green' : 'badge-amber'}"
+                          title="${escapeHtml(compartilhada
+                              ? 'Compartilhada: qualquer modelo de ' + cli + ' pode usar esta numeração.'
+                              : 'Exclusiva do modelo ' + n.os_item_id + '. Renomeie para liberá-la aos outros modelos de ' + cli + '.')}">
+                        👤 ${escapeHtml(cli)} · ${compartilhada ? 'compartilhada' : 'só deste modelo'}
+                    </span></div>`;
+            }
+
             html += `
                 <tr>
-                    <td><strong>${n.name}</strong></td>
+                    <td><strong>${n.name}</strong>${seloCliente}</td>
                     <td>${previewCell}</td>
                     <td>${tipoBadge}</td>
                     <td>${typeBadges || '--'} <small style="color:var(--text-faint)">(${(n.elements || []).length} itens)</small></td>
 
                     <td class="actions-cell">
+
+                        <button class="btn btn-secondary btn-sm" onclick="renomearNumeracao('${escapeJsAttr(n.id)}')" title="Renomear (não cria numeração nova)">🏷️</button>
 
                         <button class="btn btn-secondary btn-sm" onclick="duplicateCatalogNumeracao('${n.id}')" title="Duplicar Numeração Completa">⧉</button>
 
@@ -3310,6 +3343,72 @@ window.editNumeracao = editNumeracao;
 
 
 
+/**
+ * Renomeia uma numeração SEM criar outra.
+ *
+ * Pedido do usuário em 26/08/2026, sobre as numerações exclusivas de cliente:
+ * *"preciso que elas possam ser renomeadas sem gerar uma nova numeração"*.
+ *
+ * O nome não vai ao papel — é rótulo —, então renomear não pede as travas de
+ * modelo aprovado. O que ele **muda** é a que a numeração pertence: enquanto o
+ * nome for o id do modelo ela é só daquele modelo; com um nome próprio ela
+ * passa a ficar disponível para todos os modelos daquele cliente (ver
+ * `numeracaoEhCompartilhadaDoCliente`). Por isso o efeito está escrito no
+ * próprio pedido de confirmação, e não só na documentação.
+ *
+ * A gravação fala direto com o Supabase, como o `deleteNumeracao`: o PUT do
+ * `db.py` reconstrói a linha a partir de uma lista fixa de campos, e mandar
+ * para ele um payload só com o nome apagaria o resto.
+ */
+async function renomearNumeracao(id) {
+    const n = state.numeracoes.find(x => String(x.id) === String(id));
+    if (!n) return toast('Numeração não encontrada. Recarregue a lista.', 'error');
+
+    const eraSoDoModelo = !!n.Cli_Num && !numeracaoEhCompartilhadaDoCliente(n);
+
+    const aviso = eraSoDoModelo
+        ? '\n\nATENÇÃO: hoje ela é exclusiva do modelo ' + n.os_item_id + '.'
+          + '\nCom um nome próprio ela continua exclusiva deste cliente, mas passa a'
+          + '\nficar disponível para TODOS os modelos dele — e editá-la de dentro de'
+          + '\nqualquer um deles grava para todos.'
+        : '';
+
+    const novo = (prompt('Novo nome para a numeração:' + aviso, n.name || '') || '').trim();
+    if (!novo) return;
+    if (novo === String(n.name || '').trim()) return;
+
+    const homonimas = await homonimasDoCatalogo(novo, id);
+    if (homonimas.length) {
+        return toast('Já existe outra numeração chamada "' + novo + '". Escolha um nome diferente.', 'error');
+    }
+
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('producao_numeracoes')
+                .update({ name: novo })
+                .eq('id', id);
+            if (error) throw error;
+        } else {
+            await api('PUT', `/numeracoes/${id}`, { ...n, name: novo });
+        }
+
+        const anterior = n.name;
+        n.name = novo;
+
+        toast(eraSoDoModelo
+            ? `"${anterior}" agora se chama "${novo}" e está disponível para todos os modelos deste cliente.`
+            : `Numeração renomeada para "${novo}".`, 'success');
+
+        renderNumeracoes();
+        if (typeof populateSelects === 'function') populateSelects();
+
+    } catch (e) {
+        toast('Não deu para renomear: ' + (e.message || e), 'error');
+    }
+}
+window.renomearNumeracao = renomearNumeracao;
+
 async function deleteNumeracao(id) {
 
     if (!confirm('Excluir esta numeração?')) return;
@@ -3413,6 +3512,10 @@ function cancelNumEdit() {
     window.customNumeracaoEditState = null;
     const btnVoltar = document.getElementById('btn-num-voltar');
     if (btnVoltar) btnVoltar.style.display = 'none';
+    // A dica do nome acompanha o botão: as duas só valem para quem chegou aqui
+    // de dentro de um modelo.
+    const dicaNome = document.getElementById('num-name-dica-modelo');
+    if (dicaNome) dicaNome.style.display = 'none';
 
     // Esconder checkboxes de formatos compatíveis
     const compatContainer = document.getElementById('num-formatos-compat');
@@ -7346,6 +7449,107 @@ async function uploadToStorage(content, fileName, path, opts = {}) {
  * - **Sem `supabaseClient`, devolve o que o cache souber.** É pior do que
  *   perguntar ao banco, e é melhor do que não conferir nada.
  */
+/**
+ * ── A regra do nome das numerações exclusivas de cliente ────────────────────
+ *
+ * Uma numeração criada de dentro de um modelo nasce com `name` = o id daquele
+ * modelo e `os_item_id` = esse mesmo modelo (ver `editCustomNumeracao`). Daí a
+ * regra que o usuário definiu em 26/08/2026:
+ *
+ *   nome AINDA igual ao `os_item_id`  →  exclusiva DAQUELE modelo
+ *   nome trocado por um nome próprio  →  continua exclusiva do CLIENTE, mas
+ *                                        compartilhada entre os modelos dele
+ *
+ * A comparação é com o `os_item_id`, e **não** com um teste de "o nome é só
+ * dígitos". Uma numeração batizada de `2026` é um nome próprio, não um id de
+ * modelo, e o teste de dígitos a devolveria para o modelo de origem calada.
+ *
+ * O registro sem `os_item_id` (o legado anterior a esse campo) conta como
+ * compartilhado: não há modelo de origem a que ele possa pertencer.
+ */
+function numeracaoEhCompartilhadaDoCliente(n) {
+    if (!n || !n.Cli_Num) return false;
+    if (!n.os_item_id) return true;
+    return String(n.name || '').trim() !== String(n.os_item_id).trim();
+}
+window.numeracaoEhCompartilhadaDoCliente = numeracaoEhCompartilhadaDoCliente;
+
+/**
+ * Abrir a numeração de um modelo edita o registro que já existe, ou cria um
+ * novo?
+ *
+ * Até 26/08/2026 era sempre "cria um novo": os dois caminhos de entrada
+ * apagavam o `num-id` para forçar INSERT, e a versão anterior era reencontrada
+ * no save **pelo nome**. Enquanto o nome fosse o id do modelo isso funcionava
+ * por acidente; bastava renomear para o nome não casar mais, nascer um
+ * registro novo e o antigo virar órfão invisível — a numeração fantasma.
+ *
+ * Agora: edita no lugar quando a base já é a numeração DESTE modelo, ou uma
+ * compartilhada DESTE cliente. Cria cópia nova quando a base é uma numeração
+ * genérica do catálogo ou a exclusiva de OUTRO modelo — nesses dois casos
+ * gravar por cima seria mexer no trabalho de outro.
+ */
+function comoEditarNumeracaoDoModelo(baseNum, itemId, cliNum) {
+    if (!baseNum || !baseNum.is_custom) return { noLugar: false };
+
+    if (baseNum.os_item_id && String(baseNum.os_item_id) === String(itemId)) {
+        return { noLugar: true, motivo: 'propria' };
+    }
+
+    if (numeracaoEhCompartilhadaDoCliente(baseNum)
+        && cliNum && String(baseNum.Cli_Num) === String(cliNum)) {
+        return { noLugar: true, motivo: 'compartilhada' };
+    }
+
+    return { noLugar: false };
+}
+window.comoEditarNumeracaoDoModelo = comoEditarNumeracaoDoModelo;
+
+/**
+ * Os modelos que hoje apontam para esta numeração (`pedidos_modelos.amostra_num_id`).
+ *
+ * É o que responde "salvar aqui muda o material de quantos modelos?" antes de
+ * uma numeração compartilhada ser gravada. Recusa do banco cai no que já está
+ * em memória, pelo mesmo motivo do `homonimasDoCatalogo`: não poder conferir
+ * não pode virar "pode salvar à vontade".
+ */
+async function modelosQueUsamNumeracao(numId) {
+    if (!numId) return [];
+
+    const emMemoria = () => {
+        const achados = [];
+        Object.keys(state.osItens || {}).forEach(osId => {
+            (state.osItens[osId] || []).forEach(it => {
+                const usa = it.numeracao_id || it.amostra_num_id;
+                if (usa && String(usa) === String(numId)) achados.push(it);
+            });
+        });
+        return achados;
+    };
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return emMemoria();
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_modelos')
+            .select('id, id_int, nome_modelo, nome_produto, modelo_descri, amostra_status, status_arte')
+            .eq('amostra_num_id', numId);
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.warn('[Numerações] Não deu para conferir quem usa a numeração:', e.message || e);
+        return emMemoria();
+    }
+}
+window.modelosQueUsamNumeracao = modelosQueUsamNumeracao;
+
+/** O nome legível de um modelo, para caber num aviso. */
+function nomeCurtoDoModelo(m) {
+    if (!m) return 'modelo';
+    return String(m.nome_modelo || m.nome_produto || m.modelo_descri || m.produto
+        || ('modelo ' + (m.id_int || m.id))).trim();
+}
+
 async function homonimasDoCatalogo(nome, idAtual) {
     const alvo = String(nome || '').trim().toLowerCase();
     if (!alvo) return [];
@@ -7376,9 +7580,11 @@ window.homonimasDoCatalogo = homonimasDoCatalogo;
 
 window.saveNumeracao = async function () {
 
-    const id = document.getElementById('num-id').value;
+    // `let`, e não `const`: a saída da trava da numeração compartilhada é
+    // gravar uma cópia exclusiva deste modelo, e isso troca os dois.
+    let id = document.getElementById('num-id').value;
 
-    const name = document.getElementById('num-name').value.trim();
+    let name = document.getElementById('num-name').value.trim();
 
     const fmtId = document.getElementById('num-formato').value;
     
@@ -7419,11 +7625,85 @@ window.saveNumeracao = async function () {
     //      Aqui não há "substituir": seriam dois registros vivos virando um, e
     //      fundir não é o que o operador pediu. Recusa e explica.
     const doModelo = !!window.customNumeracaoEditState;
+
+    // ── Esta numeração é compartilhada? Então o save mexe em mais gente ──────
+    //
+    // Regra do usuário, 26/08/2026: renomear uma numeração exclusiva tira ela
+    // do modelo e a entrega ao cliente inteiro — e a partir daí editá-la de
+    // dentro de QUALQUER modelo dele grava para todos. É o que ele pediu, mas
+    // não pode acontecer calado: quem abriu o modelo 3 não tem como adivinhar
+    // que está mexendo também no 1 e no 7.
+    //
+    // E há um caso em que nem o aviso serve: modelo aprovado não se altera. A
+    // saída existe e está escrita no próprio aviso — gravar uma cópia exclusiva
+    // deste modelo, deixando a compartilhada intacta.
+    // `let`: virar cópia zera este registro junto com o `id`.
+    let registroEmEdicao = id ? state.numeracoes.find(n => String(n.id) === String(id)) : null;
+
+    if (doModelo && registroEmEdicao && numeracaoEhCompartilhadaDoCliente(registroEmEdicao)) {
+        const itemIdAtual = window.customNumeracaoEditState.itemId;
+
+        // O modelo atual responde por DOIS ids: o do item na proposta
+        // (`item.id`, que é o que vira `os_item_id` da numeração) e o da linha
+        // em `pedidos_modelos` (`_pedidoModeloId`, que é onde mora o
+        // `amostra_num_id`). Comparar só com um deles deixaria o próprio
+        // modelo na lista de "outros", e o aviso contaria um a mais.
+        const itemLocalAtual = (state.osItens[window.customNumeracaoEditState.osId] || [])
+            .find(i => String(i.id) === String(itemIdAtual));
+        const idsDoModeloAtual = new Set([itemIdAtual, itemLocalAtual && itemLocalAtual._pedidoModeloId]
+            .filter(Boolean).map(String));
+
+        const usuarios = await modelosQueUsamNumeracao(id);
+        const outros = usuarios.filter(m => !idsDoModeloAtual.has(String(m.id)));
+        const aprovados = usuarios.filter(m => modeloEstaAprovado(m));
+
+        if (aprovados.length) {
+            const virarCopia = confirm(
+                'A numeração "' + registroEmEdicao.name + '" é compartilhada por '
+                + usuarios.length + ' modelo(s) deste cliente, e '
+                + aprovados.length + ' já está(ão) aprovado(s):\n\n'
+                + aprovados.map(m => '  • ' + nomeCurtoDoModelo(m)).join('\n') + '\n\n'
+                + 'Modelo aprovado não se altera, então salvar por cima dela está fora.\n\n'
+                + 'OK = gravar uma cópia exclusiva SÓ deste modelo (a compartilhada fica como está).\n'
+                + 'Cancelar = não salvar nada.');
+            if (!virarCopia) {
+                return toast('Nada foi salvo. A numeração compartilhada continua como estava.', 'warning');
+            }
+            // Vira cópia: sem id, o save insere; com o nome do modelo, ela
+            // nasce exclusiva dele pela mesma regra de sempre.
+            id = '';
+            name = String(itemIdAtual);
+            // A cópia não herda o vínculo da compartilhada: ela nasce deste
+            // modelo, e é o `customNumeracaoEditState` que diz qual é.
+            registroEmEdicao = null;
+            const campoNome = document.getElementById('num-name');
+            if (campoNome) campoNome.value = name;
+            const campoId = document.getElementById('num-id');
+            if (campoId) campoId.value = '';
+            toast('Gravando uma cópia exclusiva deste modelo.', 'info');
+
+        } else if (outros.length) {
+            const seguir = confirm(
+                'A numeração "' + registroEmEdicao.name + '" é compartilhada e está em uso por mais '
+                + outros.length + ' modelo(s) deste cliente:\n\n'
+                + outros.slice(0, 8).map(m => '  • ' + nomeCurtoDoModelo(m)).join('\n')
+                + (outros.length > 8 ? '\n  • ... e mais ' + (outros.length - 8) : '') + '\n\n'
+                + 'Salvar altera o material de todos eles. Continuar?');
+            if (!seguir) {
+                return toast('Nada foi salvo.', 'warning');
+            }
+        }
+    }
+
     const homonimas = await homonimasDoCatalogo(name, id);
     let homonima = null;
 
-    if (homonimas.length && doModelo) {
-        homonima = id ? null : homonimas[0];
+    if (homonimas.length && doModelo && !id) {
+        // Sem id: é o INSERT de uma exclusiva nova, e a homônima é a versão
+        // anterior da numeração DESTE modelo (o nome é o id dele). Substituir
+        // é o certo. Com id, a numeração já existe e o caso é o de baixo —
+        // renomear para um nome ocupado, que se recusa como no catálogo.
+        homonima = homonimas[0];
 
     } else if (homonimas.length && id) {
         return toast('Já existe outra numeração chamada "' + name + '". '
@@ -7641,9 +7921,23 @@ window.saveNumeracao = async function () {
             pdf_content: pdfUrl || "",
 
             pdf_filename: state.numPdfFilename || "",
-            is_custom: window.customNumeracaoEditState ? true : false,
-            os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
-            Cli_Num: window.customNumeracaoEditState ? window.customNumeracaoEditState.cliNum : (id ? (state.numeracoes.find(n => String(n.id) === String(id))?.Cli_Num || null) : null),
+            // ── A quem esta numeração pertence ─────────────────────────────
+            //
+            // Editando um registro que já existe, os três vêm DELE. Só o
+            // INSERT recebe o vínculo do editor.
+            //
+            // Antes, o `os_item_id` era reescrito com o modelo de onde se
+            // estava editando — e o `is_custom` de uma exclusiva aberta pelo
+            // catálogo era zerado calado. Os dois quebram a regra do nome:
+            // ela compara `name` com `os_item_id`, e o `os_item_id` é a
+            // origem, não o último lugar por onde alguém passou.
+            is_custom: doModelo ? true : (registroEmEdicao ? !!registroEmEdicao.is_custom : false),
+            os_item_id: registroEmEdicao
+                ? (registroEmEdicao.os_item_id || null)
+                : (doModelo ? window.customNumeracaoEditState.itemId : null),
+            Cli_Num: registroEmEdicao
+                ? (registroEmEdicao.Cli_Num || null)
+                : (doModelo ? window.customNumeracaoEditState.cliNum : null),
             print_mode: document.getElementById('num-print-mode')?.value || 'front',
 
             elements: [
@@ -31671,15 +31965,28 @@ function editCustomNumeracao(idx, osId, itemId) {
         editNumeracao(baseNumId);
         
         setTimeout(() => {
-            // Limpa ID para forcar INSERT e altera o nome
-            document.getElementById('num-id').value = '';
-            document.getElementById('num-name').value = String(itemId);
+            // Editar no lugar, ou clonar? Ver `comoEditarNumeracaoDoModelo`.
+            //
+            // Até 26/08/2026 estas duas linhas eram sempre "limpa o id para
+            // forçar INSERT e escreve o nome do modelo" — e era por isso que
+            // renomear uma numeração exclusiva criava outra em vez de renomear
+            // a que estava aberta.
+            const modo = comoEditarNumeracaoDoModelo(baseNum, itemId, cliNum);
+
+            if (modo.noLugar) {
+                // Mantém id e nome: o save vira UPDATE deste mesmo registro.
+                toast(modo.motivo === 'compartilhada'
+                    ? `Editando "${baseNum.name}", compartilhada entre os modelos deste cliente.`
+                    : `Editando a numeração deste modelo: ${baseNum.name}`, 'info');
+            } else {
+                document.getElementById('num-id').value = '';
+                document.getElementById('num-name').value = String(itemId);
+                toast(`Criando a numeração exclusiva do modelo: ${itemId}`, 'info');
+            }
 
             // A saída. Depois do `editNumeracao`, que passa pelo `cancelNumEdit`
             // e esconderia o botão de novo.
             mostrarVoltarDaNumeracaoDoModelo();
-
-            toast(`Editando numeração para o modelo: ${itemId}`, 'info');
         }, 150);
     }, 100);
 }
@@ -31697,6 +32004,11 @@ function editCustomNumeracao(idx, osId, itemId) {
 function mostrarVoltarDaNumeracaoDoModelo() {
     const btn = document.getElementById('btn-num-voltar');
     if (btn) btn.style.display = '';
+    // A dica de que o nome decide a quem a numeração pertence. Mesmo lugar e
+    // mesmo motivo do botão: só quem veio de um modelo pode renomear e mudar
+    // esse vínculo sem sair da tela.
+    const dica = document.getElementById('num-name-dica-modelo');
+    if (dica) dica.style.display = '';
 }
 window.mostrarVoltarDaNumeracaoDoModelo = mostrarVoltarDaNumeracaoDoModelo;
 
@@ -31883,23 +32195,38 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
         view: 'imposicao',
         fieldId: fieldId,
         modeloName: impName,
+        // O modelo de origem também aqui: sem ele, o `os_item_id` da numeração
+        // gravada por este caminho saía `undefined`, e a regra do nome (que
+        // compara `name` com `os_item_id`) ficava sem o lado direito.
+        itemId: activeOSItem ? activeOSItem.itemId : null,
         cliNum: cliNum
     };
     
     // Abre a numeração
     editNumeracao(numId);
-    
-    // Força o nome no editor da numeração a ser o ID do modelo atual
-    document.getElementById('num-name').value = String(activeOSItem.itemId);
-    
-    // Marca como um novo cadastro (clone)
-    document.getElementById('num-id').value = '';
+
+    // Editar no lugar, ou clonar? A mesma decisão do `editCustomNumeracao`.
+    const itemIdAtual = activeOSItem ? activeOSItem.itemId : null;
+    const modoImp = itemIdAtual
+        ? comoEditarNumeracaoDoModelo(baseNum, itemIdAtual, cliNum)
+        : { noLugar: false };
+
+    if (modoImp.noLugar) {
+        toast(`Editando "${baseNum.name}" — o save grava nela mesma.`, 'info');
+    } else if (itemIdAtual) {
+        document.getElementById('num-name').value = String(itemIdAtual);
+        document.getElementById('num-id').value = '';
+        toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
+    } else {
+        // Sem modelo ativo não há a quem pertencer: clona sem renomear, que é
+        // o mais perto do comportamento antigo sem estourar num `undefined`.
+        document.getElementById('num-id').value = '';
+        toast(`Clonando base "${baseNum.name}".`, 'info');
+    }
 
     // A saída, igual à do outro caminho. Depois do `editNumeracao`, que passa
     // pelo `cancelNumEdit` e esconderia o botão de novo.
     mostrarVoltarDaNumeracaoDoModelo();
-
-    toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
 };
 
 /**

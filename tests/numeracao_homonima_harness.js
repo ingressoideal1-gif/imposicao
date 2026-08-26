@@ -42,26 +42,62 @@ if (i < 0) throw new Error('nao achei o bloco de decisao das homonimas');
 const BLOCO = SCRIPT.slice(i, SCRIPT.indexOf(FIM, i));
 
 /**
+ * Uma função do `script.js`, recortada e viva.
+ *
+ * Os corpos destas funções não têm chave na coluna zero antes do fim, então o
+ * primeiro fim-de-linha seguido de `}` fecha o recorte. Ver a nota sobre CRLF
+ * no recorte do `homonimasDoCatalogo`, mais abaixo.
+ */
+function recortarFuncao(nome) {
+    const j = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    if (j < 0) throw new Error('nao achei a funcao ' + nome);
+    const corpo = SCRIPT.slice(j, SCRIPT.indexOf('\n}', j) + 2);
+    return new Function(corpo + '\nreturn ' + nome + ';')();
+}
+
+// A regra do nome (26/08/2026) é medida DE VERDADE: é ela que decide se o save
+// mexe num modelo só ou no cliente inteiro.
+const numeracaoEhCompartilhadaDoCliente = recortarFuncao('numeracaoEhCompartilhadaDoCliente');
+const modeloEstaAprovado = recortarFuncao('modeloEstaAprovado');
+const nomeCurtoDoModelo = m => String((m && (m.nome_modelo || m.nome_produto)) || 'modelo');
+
+/**
  * Roda o bloco com um cenário montado.
  *
  * @param cenario.doModelo   veio do fluxo da numeração exclusiva do modelo
  * @param cenario.id         o id no formulário ('' = criando)
  * @param cenario.homonimas  o que o banco respondeu
  * @param cenario.confirma   o que a pessoa respondeu ao `confirm`
+ * @param cenario.registro   a linha que está sendo editada (`state.numeracoes`)
+ * @param cenario.usuarios   os modelos que hoje apontam para ela
  */
 function decidir(cenario) {
-    const visto = { toastTipo: null, toastTexto: null, perguntou: false };
+    const visto = { toastTipo: null, toastTexto: null, perguntou: 0 };
 
-    const corpo = 'return (async () => {\n' + BLOCO + '\n  return { homonima, salvou: true };\n})();';
-    const fn = new Function('window', 'name', 'id', 'homonimasDoCatalogo', 'toast', 'confirm', corpo);
+    // `id` e `name` voltam junto: a saída da trava do modelo aprovado é virar
+    // cópia deste modelo, e isso troca os dois.
+    const corpo = 'return (async () => {\n' + BLOCO + '\n  return { homonima, salvou: true, id, name };\n})();';
+    const fn = new Function(
+        'window', 'name', 'id', 'homonimasDoCatalogo', 'toast', 'confirm',
+        'state', 'document', 'numeracaoEhCompartilhadaDoCliente',
+        'modelosQueUsamNumeracao', 'modeloEstaAprovado', 'nomeCurtoDoModelo',
+        corpo);
+
+    const registro = cenario.registro || null;
 
     return fn(
-        { customNumeracaoEditState: cenario.doModelo ? { itemId: '1000535' } : null },
+        { customNumeracaoEditState: cenario.doModelo ? { itemId: '1000535', osId: 'os-1' } : null },
         cenario.nome || 'Personalizada',
         cenario.id || '',
         async () => cenario.homonimas || [],
         (texto, tipo) => { visto.toastTexto = texto; visto.toastTipo = tipo; return undefined; },
-        () => { visto.perguntou = true; return !!cenario.confirma; }
+        () => { visto.perguntou++; return !!cenario.confirma; },
+        { numeracoes: registro ? [registro] : [], osItens: { 'os-1': [{ id: '1000535' }] } },
+        { getElementById: () => ({ value: '' }) },
+        numeracaoEhCompartilhadaDoCliente,
+        async () => cenario.usuarios || [],
+        modeloEstaAprovado,
+        nomeCurtoDoModelo
     ).then(r => Object.assign({ salvou: false }, r || {}, visto));
 }
 
@@ -135,6 +171,78 @@ function decidir(cenario) {
     {
         const r = await decidir({ doModelo: false, id: 'EU', homonimas: [] });
         ok(r.salvou && !r.homonima, 'editando sem colisao: atualiza a propria linha', r);
+    }
+
+    // ── 5b. A numeração COMPARTILHADA do cliente (26/08/2026) ────────────────
+    //
+    // Renomeada, ela deixa de ser de um modelo e passa a servir a todos os do
+    // cliente. Editá-la de dentro de qualquer um grava para todos — que é o que
+    // o usuário pediu, e por isso mesmo não pode acontecer calado.
+
+    const COMPARTILHADA = { id: 'N1', name: 'Camarote VIP', Cli_Num: '4321',
+                            is_custom: true, os_item_id: '1000535' };
+    const SO_DO_MODELO = { id: 'N1', name: '1000535', Cli_Num: '4321',
+                           is_custom: true, os_item_id: '1000535' };
+
+    {
+        // So este modelo usa: nao ha mais ninguem a avisar.
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: '1000535' }], homonimas: [],
+        });
+        ok(r.salvou && r.id === 'N1', 'compartilhada: grava na propria linha, sem clonar', r);
+        ok(!r.perguntou, 'compartilhada sem mais ninguem: nao incomoda o operador', r);
+    }
+
+    {
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: '1000535' }, { id: 'OUTRO', nome_modelo: 'Pista' }],
+            homonimas: [], confirma: true,
+        });
+        ok(r.perguntou, 'compartilhada em uso por outro modelo: avisa antes', r);
+        ok(r.salvou && r.id === 'N1', 'confirmou: grava na MESMA linha, valendo para todos', r);
+    }
+
+    {
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: '1000535' }, { id: 'OUTRO' }], homonimas: [], confirma: false,
+        });
+        ok(!r.salvou, 'compartilhada: cancelou, nada e gravado', r);
+        ok(r.toastTipo === 'warning', 'e avisa sem tratar como erro', r);
+    }
+
+    {
+        // Modelo aprovado nao se altera. A saida esta no proprio aviso: virar
+        // copia exclusiva deste modelo, deixando a compartilhada intacta.
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: 'OUTRO', amostra_status: 'APROVADA' }],
+            homonimas: [], confirma: true,
+        });
+        ok(r.salvou, 'aprovado: a trava tem saida, e ela grava', r);
+        ok(r.id === '', 'aprovado: vira INSERT -- nao toca na compartilhada', r);
+        ok(r.name === '1000535', 'aprovado: a copia nasce com o nome deste modelo', r);
+    }
+
+    {
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: 'Camarote VIP', registro: COMPARTILHADA,
+            usuarios: [{ id: 'OUTRO', status_arte: 'APROVADA_CLIENTE' }],
+            homonimas: [], confirma: false,
+        });
+        ok(!r.salvou, 'aprovado: recusou a copia, nada e gravado', r);
+    }
+
+    {
+        // Nome ainda igual ao os_item_id: e de um modelo so, nao ha o que avisar.
+        const r = await decidir({
+            doModelo: true, id: 'N1', nome: '1000535', registro: SO_DO_MODELO,
+            usuarios: [{ id: 'OUTRO', amostra_status: 'APROVADA' }], homonimas: [],
+        });
+        ok(r.salvou && r.id === 'N1' && !r.perguntou,
+            'exclusiva do modelo: segue direto, a guarda so vale para a compartilhada', r);
     }
 
     // ── 6. A consulta é ao BANCO, e não ao cache ─────────────────────────────

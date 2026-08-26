@@ -109,17 +109,32 @@ def test_os_dois_caminhos_de_entrada_acendem_o_botao():
     )
 
 
+def _corpo_do_clone_da_imposicao(fonte):
+    """`editImposicaoCustomNumeracao` é uma atribuição, não uma `function nome(`."""
+    i = fonte.index("window.editImposicaoCustomNumeracao = function")
+    corpo = fonte[i:fonte.index("\n};", i) + 3]
+    return "\n".join(l for l in corpo.splitlines() if not l.strip().startswith("//"))
+
+
 def test_o_botao_e_aceso_depois_do_editNumeracao():
-    """`editNumeracao` passa pelo `cancelNumEdit`, que esconde o botão de novo."""
+    """`editNumeracao` passa pelo `cancelNumEdit`, que esconde o botão de novo.
+
+    Mede as duas funções inteiras, e não uma janela de N caracteres em volta de
+    uma frase: em 26/08/2026 a decisão de editar-no-lugar entrou entre as duas
+    chamadas e a janela de 2.600 caracteres passou a cortar o acender, com o
+    teste acusando uma regressão que não existia.
+    """
     fonte = _ler(SCRIPT)
-    for inicio in ("function editCustomNumeracao(", "Clonando base"):
-        i = fonte.index(inicio)
-        trecho = fonte[i:i + 2600] if inicio.startswith("function") else fonte[i - 900:i]
-        carrega = trecho.rfind("editNumeracao(")
-        acende = trecho.rfind("mostrarVoltarDaNumeracaoDoModelo()")
-        assert carrega >= 0 and acende >= 0, inicio
+    corpos = {
+        "editCustomNumeracao": _funcao(fonte, "editCustomNumeracao"),
+        "editImposicaoCustomNumeracao": _corpo_do_clone_da_imposicao(fonte),
+    }
+    for nome, corpo in corpos.items():
+        carrega = corpo.rfind("editNumeracao(")
+        acende = corpo.rfind("mostrarVoltarDaNumeracaoDoModelo()")
+        assert carrega >= 0 and acende >= 0, nome
         assert carrega < acende, (
-            inicio + ": acender antes do editNumeracao não adianta — ele esconde de novo"
+            nome + ": acender antes do editNumeracao não adianta — ele esconde de novo"
         )
 
 

@@ -37,10 +37,12 @@ function desenhar(state, filtros) {
             if (id === 'catalogo-search') return { value: filtros.busca || '' };
             if (id === 'catalogo-filter-format') return { value: filtros.formato || '' };
             if (id === 'catalogo-filter-type') return { value: filtros.tipo || '' };
+            if (id === 'catalogo-mostrar-exclusivas') return { checked: !!filtros.mostrarExclusivas };
             return null;
         },
     };
     const fonte = [recortar('escapeHtml'), recortar('escapeJsAttr'),
+                   recortar('numeracaoEhCompartilhadaDoCliente'),
                    recortar('renderNumeracoes')].join('\n');
     new Function('state', 'document', fonte + '\nrenderNumeracoes();')(state, document);
     return { html: container.innerHTML, vazio: vazio.style.display };
@@ -190,6 +192,47 @@ function caixaDe(formatoId) {
     }, { busca: '4321' });
     ok(achada.html.indexOf('Do cliente') > 0, 'e aparece ao digitar o numero do cliente');
     ok(achada.html.indexOf('<img') > 0, 'com miniatura, como qualquer outra');
+})();
+
+// ─── 6. A caixa "Mostrar exclusivas de cliente" (26/08/2026) ────────────────
+//
+// Sem ver o registro nao ha como renomea-lo, e renomear e o que decide se a
+// numeracao e de um modelo so ou do cliente inteiro.
+
+(function aCaixaRevelaAsExclusivasEOSeloDizDeQuemEla() {
+    const numeracoes = [
+        numeracao({ id: 'n-geral', name: 'Geral' }),
+        // Nome ainda igual ao os_item_id: exclusiva daquele modelo.
+        numeracao({ id: 'n-mod', name: 'it-99', Cli_Num: '4321', is_custom: true, os_item_id: 'it-99' }),
+        // Renomeada: do cliente, compartilhada entre os modelos dele.
+        numeracao({ id: 'n-comp', name: 'Camarote VIP', Cli_Num: '4321', is_custom: true, os_item_id: 'it-99' }),
+    ];
+    const ordens = [{ id: 'os-1', id_cliente: '4321', cliente: 'Festa Boa' }];
+
+    const fechada = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: ordens });
+    ok(fechada.html.indexOf('Camarote VIP') < 0 && fechada.html.indexOf('it-99') < 0,
+        'caixa desmarcada: a lista continua exatamente a de sempre');
+    ok(fechada.html.indexOf('Geral') > 0, 'e as genericas seguem la');
+
+    const aberta = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: ordens },
+        { mostrarExclusivas: true });
+    ok(aberta.html.indexOf('Camarote VIP') > 0 && aberta.html.indexOf('it-99') > 0,
+        'caixa marcada: as exclusivas aparecem');
+    ok(aberta.html.indexOf('Festa Boa') > 0,
+        'com o nome do cliente no selo, tirado dos pedidos em memoria');
+    ok(/só deste modelo/.test(aberta.html), 'a que ainda se chama pelo id do modelo e so dele');
+    ok(/compartilhada/.test(aberta.html), 'a renomeada e do cliente inteiro');
+
+    const semPedidos = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: [] },
+        { mostrarExclusivas: true });
+    ok(semPedidos.html.indexOf('cliente 4321') > 0,
+        'sem o pedido carregado o selo mostra o numero, que e o que se digita na busca');
+})();
+
+(function todaLinhaOfereceRenomear() {
+    const r = desenhar({ formatos: FORMATOS, numeracoes: [numeracao({})] });
+    ok(/onclick="renomearNumeracao\('n-1'\)"/.test(r.html),
+        'o 🏷️ da linha renomeia sem criar numeracao nova');
 })();
 
 if (falhas) {

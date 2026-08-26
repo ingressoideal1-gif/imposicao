@@ -459,6 +459,15 @@
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
                                 placeholder="Ex: Numeração Ingresso VIP">
+                            <!-- Só aparece quando o editor foi aberto de dentro de um
+                                 modelo, ligado por `mostrarVoltarDaNumeracaoDoModelo`.
+                                 O nome ser o id do modelo é o que a prende a ele. -->
+                            <small id="num-name-dica-modelo"
+                                   style="display:none; color:var(--text-dim); font-size:0.78rem; line-height:1.35; margin-top:4px;">
+                                Enquanto o nome for o número do modelo, esta numeração é só dele.
+                                Dando um nome próprio, ela continua exclusiva deste cliente e passa a
+                                servir a todos os modelos dele.
+                            </small>
                         </div>
                         <div class="form-group">
                             <label>Formato Base <span style="font-weight:400;color:var(--text-dim);font-size:0.78rem;">(define o canvas)</span></label>
@@ -702,6 +711,12 @@
                             <option value="TEATRO">TEATRO</option>
                             <option value="CAMAROTE">CAMAROTE</option>
                         </select>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--text-dim); cursor:pointer; white-space:nowrap;"
+                               title="As numerações criadas de dentro de um pedido ficam escondidas da lista. Marque para vê-las e poder renomeá-las.">
+                            <input type="checkbox" id="catalogo-mostrar-exclusivas" onchange="renderNumeracoes()"
+                                   style="width:15px; height:15px; cursor:pointer;">
+                            Mostrar exclusivas de cliente
+                        </label>
                         <button class="btn btn-primary" onclick="novaNumeracao()">+ Nova Numeração</button>
                     </div>
                 </div>

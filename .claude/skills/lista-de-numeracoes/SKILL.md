@@ -12,7 +12,9 @@ foi programada para fazer.
 
 1. **A lista esconde boa parte dos registros, e o contador não.** Numerações com
    `Cli_Num` (exclusivas de cliente) são omitidas da tabela, mas o badge do menu
-   conta todas. Medido em 08/08/2026: 49 no total, 16 escondidas, 33 na tela.
+   conta todas. Medido em 08/08/2026: 49 no total, 16 escondidas, 33 na tela. A
+   caixa **Mostrar exclusivas de cliente** (26/08/2026) revela as escondidas; sem
+   ela marcada, nada mudou.
 
 2. **Digitar só números troca a semântica do filtro inteiro.** Uma busca que casa
    com `/^\d+$/` deixa de ser "buscar por nome" e vira "mostrar só as numerações
@@ -29,12 +31,23 @@ foi programada para fazer.
    Frente. Corrigido — mas ao acrescentar coluna nova em `producao_numeracoes`,
    decida conscientemente se ela entra em `duplicateCatalogNumeracao()`.
 
+5. **O nome decide a quem a numeração exclusiva pertence.** Nome ainda igual ao
+   `os_item_id` = exclusiva daquele modelo; renomeada = do cliente inteiro,
+   compartilhada entre os modelos dele (regra do usuário, 26/08/2026). Daí
+   `numeracaoEhCompartilhadaDoCliente` e `comoEditarNumeracaoDoModelo`, que decidem
+   se abrir a numeração de um modelo edita o registro ou cria outro — antes era
+   sempre "cria outro", e era assim que renomear gerava uma numeração nova e deixava
+   a antiga órfã.
+
 O documento traz ainda: por que `elements` nunca contém `METADATA` na leitura, como
 funciona a **coluna Preview** (a miniatura entre Nome e Tipo, que sai do
 `preview_jpg` e amplia no clique) e as três decisões dela — a caixa tem a forma do
 papel, as imagens são `loading="lazy"`, e a que não carrega vira uma marca 🖼️ —,
 por que a ordem dos grupos na tela não é alfabética, a diferença entre `is_custom` e
-`Cli_Num`, e os cenários que valem exercitar ao verificar uma mudança.
+`Cli_Num`, o **renomear** (o 🏷️ da linha, que grava só o `name` direto no Supabase
+porque o PUT do `db.py` reconstruiria a linha inteira), o aviso de quantos modelos uma
+numeração compartilhada afeta, e os cenários que valem exercitar ao verificar uma
+mudança.
 
 `frontend/producao.html` tem uma cópia antiga desta view e **não** é a página viva —
 `app.py:103` redireciona para `/app/index.html`. Não a edite achando que está

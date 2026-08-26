@@ -40,8 +40,12 @@ programada para fazer.
 ### 1. A lista esconde boa parte dos registros, e o contador não
 
 Qualquer numeração com `Cli_Num` preenchido — as **exclusivas de cliente**, criadas
-a partir de um pedido — é omitida da lista (`frontend/script.js:2620-2622`). Elas só
-aparecem se você digitar na busca **exatamente aquele número de cliente**.
+a partir de um pedido — é omitida da lista. Elas aparecem se você digitar na busca
+**exatamente aquele número de cliente**, ou se marcar a caixa **Mostrar exclusivas de
+cliente** (26/08/2026), ao lado dos filtros. Desmarcada, a lista é a de sempre.
+
+A caixa existe porque, sem ver o registro, não há como renomeá-lo — e renomear é
+justamente o que decide a quem a numeração pertence (ver "A regra do nome", abaixo).
 
 Medido no banco em 08/08/2026: **49 registros no total, 16 com `Cli_Num`, 33
 visíveis na tela**.
@@ -244,6 +248,89 @@ apareceu pela primeira vez na lista já ordenada por nome — não é a ordem al
 dos formatos nem a ordem da tabela `producao_formatos`. Trocar a ordenação das
 numerações reordena os grupos junto, o que costuma ser surpresa.
 
+## A regra do nome: exclusiva do modelo × compartilhada do cliente
+
+Regra do usuário, 26/08/2026:
+
+> *"se ela tiver o nome apenas com o numero do modelo ela é exclusiva daquele modelo,
+> mas se ela for renomeada continua sendo exclusiva do cliente mas compartilhada
+> entre modelos"*
+
+Uma numeração criada de dentro de um modelo nasce com `name` = o id daquele modelo e
+`os_item_id` = esse mesmo modelo. Daí:
+
+| Situação | Significado |
+|---|---|
+| `name === String(os_item_id)` | exclusiva **daquele modelo** |
+| `name` trocado por um nome próprio | exclusiva **do cliente**, compartilhada entre os modelos dele |
+
+Quem responde é `numeracaoEhCompartilhadaDoCliente(n)`. A comparação é com o
+`os_item_id`, e **não** com um teste de "o nome é só dígitos": uma numeração batizada
+de `2026` é um nome próprio, e o teste de dígitos a devolveria calada ao modelo de
+origem. Registro sem `os_item_id` (legado anterior ao campo) conta como compartilhado
+— não há modelo a que pertencer.
+
+A metade "compartilhar" já funcionava antes desta regra: o select de numeração de
+cada modelo sempre listou toda numeração `is_custom` com o `Cli_Num` do cliente da OS
+(`frontend/script.js`, em `renderAmostrasOSItens` e `onItemCorSelect`). O que faltava
+era o save.
+
+### Editar não bifurca mais
+
+Os dois caminhos de entrada — `editCustomNumeracao` (o ✏️ no card do modelo) e
+`editImposicaoCustomNumeracao` (o clone da imposição) — apagavam o `num-id` para
+**forçar INSERT**, e o `saveNumeracao` reencontrava a versão anterior **pelo nome**.
+Enquanto o nome fosse o id do modelo isso funcionava por acidente; bastava renomear
+para o nome não casar mais, nascer um registro novo e o antigo virar órfão invisível.
+Era mais uma porta para a numeração fantasma de 25/08.
+
+Agora a decisão está em `comoEditarNumeracaoDoModelo(baseNum, itemId, cliNum)`:
+
+| Base aberta | Resultado |
+|---|---|
+| a exclusiva **deste** modelo (`os_item_id` bate) | edita no lugar (UPDATE) |
+| uma **compartilhada deste cliente** | edita no lugar (UPDATE) — é o que faz o save valer para todos |
+| a exclusiva de **outro** modelo | clona (INSERT, nome = id deste modelo) |
+| uma numeração genérica do catálogo | clona (INSERT, nome = id deste modelo) |
+
+> [!CAUTION]
+> **`os_item_id` é a origem, não o último lugar por onde alguém passou.** O
+> `saveNumeracao` o reescrevia com o modelo de onde se estava editando, e zerava o
+> `is_custom` de uma exclusiva aberta pelo catálogo. Os dois quebram a regra acima,
+> que compara `name` com `os_item_id`. Hoje os três campos de vínculo
+> (`is_custom`, `os_item_id`, `Cli_Num`) vêm do **registro** quando ele já existe, e
+> só o INSERT os recebe do editor.
+
+### Salvar uma compartilhada avisa quem mais será afetado
+
+Antes de gravar, `modelosQueUsamNumeracao(id)` consulta `pedidos_modelos` por
+`amostra_num_id` e o operador vê em quantos modelos aquilo vai bater. Dois desfechos:
+
+- **Nenhum aprovado**: confirma, listando os modelos. Cancelar não grava nada.
+- **Algum aprovado**: gravar por cima está fora (modelo aprovado não se altera), e a
+  saída está escrita no próprio aviso — gravar uma **cópia exclusiva deste modelo**,
+  deixando a compartilhada intacta. É por isso que `id` e `name` no `saveNumeracao`
+  são `let`.
+
+O modelo atual é excluído da conta pelos **dois** ids que ele tem: `item.id` (que
+vira `os_item_id`) e `_pedidoModeloId` (a linha de `pedidos_modelos`, onde mora o
+`amostra_num_id`).
+
+### Renomear — `renomearNumeracao(id)`
+
+O 🏷️ da linha, ao lado do duplicar. Renomeia **sem criar outra numeração**: o nome
+não vai ao papel, é rótulo, então não pede as travas de modelo aprovado. O que ele
+muda é a quem a numeração pertence — e o efeito está escrito dentro do próprio
+`prompt`, não só aqui.
+
+A gravação fala **direto com o Supabase**, como o `deleteNumeracao`, e manda só o
+campo `name`. O PUT do `db.py` (`update_numeracao`) reconstrói a linha a partir de
+uma lista fixa de campos: mandar a ele um payload só com o nome apagaria o resto.
+
+O editor de numeração também mostra a dica (`#num-name-dica-modelo`) quando foi
+aberto de dentro de um modelo — acesa e apagada junto com o `← Voltar sem salvar`,
+pelo mesmo motivo: as duas só valem para quem chegou ali por um pedido.
+
 ## `is_custom` não é o mesmo que `Cli_Num`
 
 São dois campos distintos, e a diferença importa porque só um deles esconde o
@@ -371,6 +458,13 @@ Cenários que valem cobrir, porque são justamente as armadilhas:
 3. Filtro por um formato que está em `formato_ids` mas não é o `formato_id` exibe a
    numeração sob o cabeçalho do formato base.
 4. Filtro que não casa com nada mostra o estado vazio.
-5. Duplicar uma numeração FxVerso e TICKET preserva `print_mode`, `ticket_qtd` e
+5. A caixa **Mostrar exclusivas de cliente** revela os registros com `Cli_Num` e o
+   selo 👤 diz, por registro, se ele é "só deste modelo" ou "compartilhada".
+6. `comoEditarNumeracaoDoModelo` devolve `noLugar` para a exclusiva do próprio modelo
+   e para a compartilhada do mesmo cliente, e clone para a de outro modelo, a
+   genérica e a de outro cliente.
+7. `renomearNumeracao` manda ao Supabase um `update` **só com `name`**, recusa nome já
+   usado por outra, e a numeração renomeada passa a contar como compartilhada.
+8. Duplicar uma numeração FxVerso e TICKET preserva `print_mode`, `ticket_qtd` e
    `ticket_logica`. Dá para verificar sem gravar em produção: intercepte
    `supabaseClient.from('producao_numeracoes').insert` e inspecione o payload.
