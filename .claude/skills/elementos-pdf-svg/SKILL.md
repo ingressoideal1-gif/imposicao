@@ -61,8 +61,16 @@ no `engine.py`, e não remova a filtragem do payload achando que a do engine bas
 
 E uma armadilha de história: até a v489 o PDF da numeração também servia de **Arte de
 Fundo** do canvas, e reabrir uma numeração pintava o PDF do elemento por baixo a 55%
-de opacidade — o "fantasma". A arte de fundo é `state.bgImage` e mais nada. Se um
+de opacidade — o "fantasma". A arte de fundo **desenhada** é `state.bgImage` e mais nada: se um
 renderizador novo precisar de um fundo, é de lá que ele sai.
+
+Desde 26/08/2026 há três campos ao lado dela — `bgFile`, `bgUrl`, `bgFilename` — que
+não desenham nada: dizem se aquele fundo **pertence à numeração** e portanto se o save
+deve guardá-lo. Só a numeração exclusiva de cliente guarda (colunas `bg_url` e
+`bg_filename`); o fundo que vem da cor do formato base continua sendo da cor. O que
+sobe ao Storage é o **arquivo original**, nunca o `bgImage` — ele é a rasterização
+feita para a tela, e gravá-la quebraria a regra 1. Ver "A arte de fundo fica guardada"
+em `docs/lista_de_numeracoes.md`.
 
 `svglib` e `reportlab` são obrigatórios para impor SVG e estão no `requirements.txt`.
 O `NewProd.exe` carrega uma cópia congelada do `engine.py`: enquanto não for

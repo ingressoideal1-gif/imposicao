@@ -94,6 +94,18 @@ const state = {
 
     bgLoadToken: 0,         // invalida carregamentos de fundo assíncronos que ficaram para trás
 
+    // ── A arte de fundo que PERTENCE à numeração (26/08/2026) ───────────────
+    //
+    // `bgImage` é o que está pintado no canvas, venha de onde vier. Estes três
+    // dizem se aquilo é da NUMERAÇÃO — e portanto se o save deve guardá-lo.
+    //
+    // O fundo trazido pelo `autoLoadCorBg` é da COR do formato base, já vive em
+    // `producao_cores` e não se duplica aqui: aquele caminho zera os três. Só o
+    // upload manual e o que voltou do banco os preenchem.
+    bgFile: null,           // File | null — carregado agora, ainda não subiu
+    bgUrl: '',              // a URL pública já gravada, quando veio do banco
+    bgFilename: '',         // o nome que o operador reconhece, para o rótulo 📎
+
     impMultiArtes: [],      // array of arts for multi_artes pagination
 
 
@@ -3325,9 +3337,20 @@ function editNumeracao(id) {
 
     drawCanvas();
 
-    // Trazer a arte da cor mais antiga do formato base. Depois de onFormatoSelect,
-    // que é onde state.numFormato foi resolvido.
-    window.autoLoadCorBg(n.formato_id);
+    // A arte de fundo. Depois de onFormatoSelect, que é onde state.numFormato
+    // foi resolvido.
+    //
+    // A guardada na própria numeração vence a da cor do formato base — é o
+    // ponto inteiro de guardá-la. Sem `bg_url`, nada muda: cai no
+    // `autoLoadCorBg` de sempre.
+    if (n.bg_url) {
+        window.carregarBgSalvo(n).then(veio => {
+            if (!veio) window.autoLoadCorBg(n.formato_id);
+        });
+    } else {
+        window.autoLoadCorBg(n.formato_id);
+    }
+    atualizarAvisoDaArteDeFundo();
 
     // Carregar a arte de cada elemento PDF/SVG a partir do arquivo do proprio
     // elemento, e a lista da box "Adicionar Pdf e Svg".
@@ -3434,6 +3457,20 @@ window.deleteNumeracao = deleteNumeracao;
 
 
 
+/**
+ * Duplica uma numeração do catálogo.
+ *
+ * O `clone` copia uma lista EXPLÍCITA de campos: o que não estiver nela não é
+ * copiado, em silêncio. Três ficam de fora de propósito, por motivos
+ * diferentes:
+ *
+ *   `Cli_Num`      a cópia nasce genérica, não presa ao cliente do original.
+ *   `preview_jpg`  copiar a URL faria dois registros apontarem para o mesmo
+ *                  arquivo no Storage, e salvar um mudaria o preview do outro.
+ *   `bg_url`       pelo mesmo motivo do preview — e porque a cópia nasce sem
+ *                  `Cli_Num`, e numeração sem cliente não guarda fundo: ela
+ *                  tira o dela da cor do formato base, como sempre.
+ */
 window.duplicateCatalogNumeracao = async function (id) {
     const n = state.numeracoes.find(x => x.id === id);
     if (!n) return;
@@ -5318,6 +5355,15 @@ window.clearBgImage = function () {
 
     state.bgImageVerso = null;
 
+    // Tirar a arte da tela e salvar tem de APAGAR o que estava guardado. Sem
+    // isto, o ✕ removeria da tela e a numeração continuaria carregando o mesmo
+    // arquivo na próxima abertura — a tela dizendo uma coisa e o banco outra.
+    state.bgFile = null;
+
+    state.bgUrl = '';
+
+    state.bgFilename = '';
+
     // Invalida qualquer autoLoadCorBg em voo: quando a promessa dele resolver,
     // o token não vai mais bater e ela desiste sem sobrescrever este estado limpo.
     state.bgLoadToken++;
@@ -5429,6 +5475,130 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
 
 
 
+/**
+ * O banco desta instalação já tem as colunas da arte de fundo?
+ *
+ * `state.numeracoes` vem de um `select('*')`, então toda linha traz TODAS as
+ * colunas da tabela — mesmo as vazias. Se `bg_url` não está entre as chaves, o
+ * ALTER de `sql/alter_producao_numeracoes_arte_de_fundo.sql` ainda não rodou.
+ *
+ * Custo zero, e a resposta é exata. Sem esta pergunta, o `api()` — que ao ouvir
+ * "Could not find the 'X' column" apaga a coluna e tenta de novo — engoliria a
+ * arte de fundo em silêncio, e o operador só descobriria ao reabrir a numeração.
+ */
+function bancoGuardaArteDeFundo() {
+    const linha = (state.numeracoes || [])[0];
+    return !!linha && Object.prototype.hasOwnProperty.call(linha, 'bg_url');
+}
+window.bancoGuardaArteDeFundo = bancoGuardaArteDeFundo;
+
+/**
+ * A numeração aberta no editor guarda a arte de fundo?
+ *
+ * Regra do usuário (26/08/2026): só a EXCLUSIVA DE CLIENTE. A genérica do
+ * catálogo continua tirando o fundo da cor do formato base — um desenho
+ * compartilhado, que já tem dono em `producao_cores`.
+ */
+function numeracaoDoEditorGuardaFundo() {
+    if (window.customNumeracaoEditState) return true;   // nasce do cliente
+    const id = document.getElementById('num-id')?.value || '';
+    if (!id) return false;
+    const n = state.numeracoes.find(x => String(x.id) === String(id));
+    return !!(n && n.Cli_Num);
+}
+window.numeracaoDoEditorGuardaFundo = numeracaoDoEditorGuardaFundo;
+
+/**
+ * A frase ao lado do botão 🖼️ Arte de Fundo, que diz o que vai acontecer com o
+ * arquivo ao salvar.
+ *
+ * Ela existe porque o comportamento é diferente conforme a numeração, e nada
+ * na tela denunciaria isso: no catálogo o arquivo é descartado ao sair, na
+ * numeração de cliente ele fica. Sem a frase, o operador aprenderia a
+ * diferença perdendo trabalho.
+ */
+function atualizarAvisoDaArteDeFundo() {
+    const el = document.getElementById('bg-persistencia-aviso');
+    if (!el) return;
+
+    if (!numeracaoDoEditorGuardaFundo()) {
+        el.textContent = 'referência de tela — não fica salva nesta numeração';
+        el.style.color = 'var(--text-faint)';
+        return;
+    }
+
+    if (!bancoGuardaArteDeFundo()) {
+        el.textContent = '⚠️ falta rodar sql/alter_producao_numeracoes_arte_de_fundo.sql — sem isso ela não fica salva';
+        el.style.color = 'var(--amber)';
+        return;
+    }
+
+    el.textContent = state.bgFile || state.bgUrl
+        ? '📌 fica salva com esta numeração do cliente'
+        : 'carregue um arquivo para guardá-lo com esta numeração do cliente';
+    el.style.color = state.bgFile || state.bgUrl ? 'var(--green)' : 'var(--text-faint)';
+}
+window.atualizarAvisoDaArteDeFundo = atualizarAvisoDaArteDeFundo;
+
+/**
+ * Traz de volta a arte de fundo guardada na própria numeração.
+ *
+ * Vem antes do `autoLoadCorBg` e o substitui: a arte que o operador escolheu
+ * para AQUELA numeração vence a arte da cor do formato, senão guardá-la não
+ * teria efeito nenhum.
+ *
+ * Os bytes chegam pelo `fetchPdfBytes`, que apesar do nome busca qualquer
+ * arquivo e já tem o desvio pelo proxy. Para JPG/PNG isso importa por um
+ * segundo motivo: a imagem entra por uma URL `blob:` da própria página, e não
+ * pela URL remota. Um `<img>` remoto sem CORS contamina o canvas, e o
+ * `preview_jpg` — que é um `toDataURL` do mesmo canvas — passaria a estourar.
+ */
+window.carregarBgSalvo = async function (numeracao) {
+    if (!numeracao || !numeracao.bg_url) return false;
+
+    const meuToken = ++state.bgLoadToken;
+
+    try {
+        const bytes = await fetchPdfBytes(numeracao.bg_url);
+        if (meuToken !== state.bgLoadToken) return false;
+        if (!bytes) return false;
+
+        const nome = numeracao.bg_filename || numeracao.bg_url;
+        const ehPdf = /\.pdf(\?|$)/i.test(nome) || /\.pdf(\?|$)/i.test(numeracao.bg_url);
+
+        let img;
+        if (ehPdf) {
+            img = await window.rasterizePdfToImage(bytes);
+        } else {
+            const blob = new Blob([bytes]);
+            img = new Image();
+            img.src = URL.createObjectURL(blob);
+            img.dpiValue = await getDpi(blob);
+            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+        }
+        if (meuToken !== state.bgLoadToken) return false;
+
+        state.bgImage = img;
+        state.bgImageVerso = null;
+        state.bgFile = null;                    // já está no Storage; nada a subir
+        state.bgUrl = numeracao.bg_url;
+        state.bgFilename = numeracao.bg_filename || '';
+
+        const btn = document.getElementById('btn-remove-bg');
+        const name = document.getElementById('bg-file-name');
+        if (btn) btn.style.display = 'inline-flex';
+        if (name) name.textContent = '📎 ' + (state.bgFilename || 'arte de fundo');
+
+        drawCanvas();
+        atualizarAvisoDaArteDeFundo();
+        return true;
+
+    } catch (e) {
+        console.warn('[Editor] Erro carregando a arte de fundo guardada:', e);
+        return false;
+    }
+};
+
 // Carrega no Arte de Fundo o PDF da cor mais antiga do formato base.
 // Devolve true quando a frente foi carregada. Silencioso quando não há cor ou
 // PDF: a ausência é situação normal, não falha, e não rende toast.
@@ -5470,6 +5640,15 @@ window.autoLoadCorBg = async function (formatoId) {
 
         state.bgImage = img;
 
+        // Esta arte é da COR, não da numeração: não se guarda em bg_url. Zerar
+        // aqui é o que impede o save de copiar para dentro da numeração um
+        // desenho que já tem dono em `producao_cores`.
+        state.bgFile = null;
+
+        state.bgUrl = '';
+
+        state.bgFilename = '';
+
         const btn = document.getElementById('btn-remove-bg');
 
         const name = document.getElementById('bg-file-name');
@@ -5477,6 +5656,8 @@ window.autoLoadCorBg = async function (formatoId) {
         if (btn) btn.style.display = 'inline-flex';
 
         if (name) name.textContent = '📎 ' + (cor.pdf_filename || cor.name || '');
+
+        atualizarAvisoDaArteDeFundo();
 
         // Repintar já com a frente, sem esperar o verso: um verso pesado não pode
         // deixar o rótulo aparecer com o canvas ainda em branco por vários segundos.
@@ -5574,6 +5755,15 @@ async function loadBgImage(file) {
 
         state.bgImage = img;
 
+        // O arquivo ORIGINAL fica guardado para o save. Note que `img` já é a
+        // rasterização feita para o canvas: é ela que se desenha, e é o `file`
+        // que se grava. O que vai ao Storage é o PDF do cliente como ele veio.
+        state.bgFile = file;
+
+        state.bgFilename = file.name;
+
+        state.bgUrl = '';
+
         // O botão governa só a frente: descartar o verso que tenha vindo de uma cor,
 
         // senão o canvas duplex mostraria duas artes diferentes.
@@ -5589,6 +5779,8 @@ async function loadBgImage(file) {
         if (name) name.textContent = '📎 ' + file.name;
 
         drawCanvas();
+
+        atualizarAvisoDaArteDeFundo();
 
         toast('Arte de fundo carregada!', 'success');
 
@@ -7880,7 +8072,42 @@ window.saveNumeracao = async function () {
         state.numSvgFilename = primeiroSvg ? (primeiroSvg.svg_filename || state.numSvgFilename || '') : '';
         state.numPdfFilename = primeiroPdf ? (primeiroPdf.pdf_filename || state.numPdfFilename || '') : '';
 
+        // ── A arte de fundo (referência) da numeração do cliente ────────────
+        //
+        // Regra do usuário, 26/08/2026: numeração exclusiva de cliente guarda a
+        // arte de fundo carregada, e ela volta ao reabrir. A genérica do
+        // catálogo não guarda — o fundo dela é a arte da COR do formato base,
+        // que já vive em `producao_cores`.
+        //
+        // Sobe o arquivo ORIGINAL. A rasterização do canvas fica onde sempre
+        // esteve: na tela. O que vai ao Storage é o PDF do cliente como ele
+        // veio, e o caminho leva o id do registro, então há no máximo um fundo
+        // por numeração.
+        const cliNumFinal = registroEmEdicao
+            ? (registroEmEdicao.Cli_Num || null)
+            : (doModelo ? window.customNumeracaoEditState.cliNum : null);
 
+        const guardaFundo = !!cliNumFinal && bancoGuardaArteDeFundo();
+
+        // Guardado ANTES do save: o `cancelNumEdit()` lá embaixo passa pelo
+        // `clearBgImage()` e zera o `state.bgFile`.
+        const avisarFaltaSql = !!(cliNumFinal && state.bgFile && !bancoGuardaArteDeFundo());
+
+        let bgUrlFinal = '';
+        let bgNomeFinal = '';
+
+        if (guardaFundo && state.bgFile) {
+            const extBg = (String(state.bgFile.name || '').split('.').pop() || 'pdf').toLowerCase();
+            bgUrlFinal = await uploadToStorage(
+                state.bgFile, state.bgFile.name, 'fundos-numeracoes',
+                { objectPath: `fundos-numeracoes/${numeracaoId}.${extBg}` });
+            bgNomeFinal = state.bgFile.name;
+
+        } else if (guardaFundo && state.bgUrl) {
+            // Já estava no Storage e ninguém trocou: mantém como está.
+            bgUrlFinal = state.bgUrl;
+            bgNomeFinal = state.bgFilename || '';
+        }
 
         const data = {
 
@@ -7935,9 +8162,7 @@ window.saveNumeracao = async function () {
             os_item_id: registroEmEdicao
                 ? (registroEmEdicao.os_item_id || null)
                 : (doModelo ? window.customNumeracaoEditState.itemId : null),
-            Cli_Num: registroEmEdicao
-                ? (registroEmEdicao.Cli_Num || null)
-                : (doModelo ? window.customNumeracaoEditState.cliNum : null),
+            Cli_Num: cliNumFinal,
             print_mode: document.getElementById('num-print-mode')?.value || 'front',
 
             elements: [
@@ -7955,6 +8180,17 @@ window.saveNumeracao = async function () {
         };
 
 
+
+        // As colunas da arte de fundo só entram quando o ALTER já rodou.
+        //
+        // Mandar coluna que não existe faz o PostgREST recusar o REGISTRO
+        // INTEIRO — nenhuma numeração seria salva. O `api()` tem um socorro
+        // que apaga a coluna e tenta de novo, mas contar com ele deixaria a
+        // gravação silenciosamente pela metade; melhor não mandar, e avisar.
+        if (bancoGuardaArteDeFundo()) {
+            data.bg_url = bgUrlFinal;
+            data.bg_filename = bgNomeFinal;
+        }
 
         // O ID DE QUEM ACABOU DE SER GRAVADO.
         //
@@ -7997,6 +8233,11 @@ window.saveNumeracao = async function () {
         // de QUALQUER numeração do catálogo sair marcado como exclusiva daquele
         // modelo. Quem sai por aqui já usou o vínculo; quem sai pelo Voltar não
         // quer usá-lo. Nos dois casos ele não sobrevive à saída.
+        if (avisarFaltaSql) {
+            toast('A numeração foi salva, mas a ARTE DE FUNDO não: falta rodar '
+                + 'sql/alter_producao_numeracoes_arte_de_fundo.sql no Supabase.', 'warning');
+        }
+
         const customState = window.customNumeracaoEditState;
 
         cancelNumEdit();

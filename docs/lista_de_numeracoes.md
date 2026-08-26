@@ -331,6 +331,64 @@ O editor de numeração também mostra a dica (`#num-name-dica-modelo`) quando f
 aberto de dentro de um modelo — acesa e apagada junto com o `← Voltar sem salvar`,
 pelo mesmo motivo: as duas só valem para quem chegou ali por um pedido.
 
+## A arte de fundo fica guardada — só na numeração de cliente
+
+Pedido do usuário em 26/08/2026: *"quando a numeração for exclusiva do cliente e
+for carregado uma arte de fundo, ao salvar a numeração deve salvar a arte de fundo
+(referência), deve ser persistente"*.
+
+A **Arte de Fundo** é a referência por baixo do canvas do editor: é contra ela que o
+operador posiciona a numeração. Ela **não é impressa** — no papel, quem desenha o
+fundo é a camada da cor. Por isso ele a chama de referência.
+
+Havia dois jeitos de ela aparecer, e nenhum sobrevivia ao save:
+
+| Origem | O que acontece hoje |
+|---|---|
+| `autoLoadCorBg()` — o PDF da cor mais antiga do formato base | continua igual: a arte é da **cor**, já vive em `producao_cores`, e não se copia para dentro da numeração |
+| upload manual pelo 🖼️ **Arte de Fundo** | vivia só em memória; reabrir a numeração trazia de volta a arte da cor |
+
+Agora o upload manual fica guardado nas colunas `bg_url` e `bg_filename`
+(`sql/alter_producao_numeracoes_arte_de_fundo.sql`), e `editNumeracao` o traz de
+volta — a arte da numeração **vence** a arte da cor, senão guardá-la não teria efeito.
+Sem `bg_url`, nada muda: cai no `autoLoadCorBg` de sempre.
+
+### Só a numeração de cliente
+
+`numeracaoDoEditorGuardaFundo()` responde. A genérica do catálogo continua tirando o
+fundo da cor do formato base — um desenho compartilhado, que já tem dono. Duplicar
+aquilo por numeração seria manter duas verdades sobre a mesma coisa.
+
+A barra da Arte de Fundo diz na tela em qual dos dois casos se está
+(`#bg-persistencia-aviso`), porque nada mais denunciaria a diferença: no catálogo o
+arquivo é descartado ao sair; na do cliente, fica.
+
+### Três coisas que não podem inverter
+
+- **O que sobe é o arquivo ORIGINAL** (`state.bgFile`), nunca o `state.bgImage`. A
+  imagem do canvas é uma rasterização feita para a tela; gravá-la transformaria em
+  imagem o PDF vetorial do cliente, que é justamente o que está fora de cogitação
+  neste projeto. Há teste estático para isso.
+
+- **As colunas só entram no payload quando existem.** `bancoGuardaArteDeFundo()` olha
+  se a chave `bg_url` está numa linha de `state.numeracoes` — que vem de `select('*')`,
+  então a chave existe sempre que a coluna existir. Mandar coluna inexistente faz o
+  PostgREST **recusar o registro inteiro**, e nenhuma numeração seria salva. Enquanto
+  o ALTER não roda, a barra avisa qual arquivo SQL rodar em vez de fingir que guardou.
+
+- **`clearBgImage()` zera os três campos** (`bgFile`, `bgUrl`, `bgFilename`). Sem isso,
+  o ✕ tiraria a arte da tela e a numeração continuaria carregando o mesmo arquivo na
+  próxima abertura — a tela dizendo uma coisa e o banco outra.
+
+O arquivo vai para `artes/fundos-numeracoes/<id da numeração>.<ext>`, com upsert:
+há no máximo um fundo por numeração. Trocar um PDF por um PNG deixa o anterior órfão
+no bucket, do mesmo tipo de lixo que `deleteNumeracao()` já deixa em
+`previews-numeracoes/`.
+
+`duplicateCatalogNumeracao()` **não** copia `bg_url`, pelo mesmo motivo do
+`preview_jpg`: dois registros apontando para o mesmo objeto do Storage. E a cópia
+nasce sem `Cli_Num`, então nem guardaria fundo.
+
 ## `is_custom` não é o mesmo que `Cli_Num`
 
 São dois campos distintos, e a diferença importa porque só um deles esconde o
@@ -465,6 +523,10 @@ Cenários que valem cobrir, porque são justamente as armadilhas:
    genérica e a de outro cliente.
 7. `renomearNumeracao` manda ao Supabase um `update` **só com `name`**, recusa nome já
    usado por outra, e a numeração renomeada passa a contar como compartilhada.
-8. Duplicar uma numeração FxVerso e TICKET preserva `print_mode`, `ticket_qtd` e
+8. Numeração de cliente com arte de fundo carregada: salvar sobe o arquivo para
+   `artes/fundos-numeracoes/<id>.<ext>` e grava `bg_url`; reabrir traz a arte de
+   volta em vez da arte da cor. Numeração genérica não grava nada. Removida a arte,
+   salvar limpa as colunas.
+9. Duplicar uma numeração FxVerso e TICKET preserva `print_mode`, `ticket_qtd` e
    `ticket_logica`. Dá para verificar sem gravar em produção: intercepte
    `supabaseClient.from('producao_numeracoes').insert` e inspecione o payload.

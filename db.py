@@ -639,7 +639,11 @@ def add_numeracao(data: dict) -> str:
             "ticket_qtd": data.get("ticket_qtd", 1),
             "ticket_logica": data.get("ticket_logica", "PILHA"),
             "Cli_Num": data.get("Cli_Num"),
-            "print_mode": data.get("print_mode", "front")
+            "print_mode": data.get("print_mode", "front"),
+            # A arte de fundo guardada da numeracao exclusiva de cliente
+            # (26/08/2026). Lista fixa: o que nao estiver aqui nao e gravado.
+            "bg_url": data.get("bg_url", ""),
+            "bg_filename": data.get("bg_filename", ""),
         }
         _supabase_request("POST", "producao_numeracoes", clean_data)
         return new_id
@@ -665,7 +669,12 @@ def update_numeracao(num_id: str, data: dict) -> bool:
                 "ticket_qtd": data.get("ticket_qtd", 1),
                 "ticket_logica": data.get("ticket_logica", "PILHA"),
                 "Cli_Num": data.get("Cli_Num"),
-                "print_mode": data.get("print_mode", "front")
+                "print_mode": data.get("print_mode", "front"),
+                # A arte de fundo guardada da numeracao exclusiva de cliente
+                # (26/08/2026). Esta lista e fixa: o que nao estiver aqui nao e
+                # gravado, em silencio.
+                "bg_url": data.get("bg_url", ""),
+                "bg_filename": data.get("bg_filename", ""),
             }
             res = _supabase_request("PATCH", f"producao_numeracoes?id=eq.{num_id}", clean_data)
             return bool(res)
