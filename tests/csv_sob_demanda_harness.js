@@ -54,7 +54,12 @@ function extrairLinha(src, comeco) {
 }
 
 const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTemBanco',
-               'garantirCsvDoTrabalho', 'idsDeNumeracaoDoTrabalho'];
+               'garantirCsvDoTrabalho', 'idsDeNumeracaoDoTrabalho',
+               // A carga em segundo plano dos bancos do pedido aberto (26/08/2026).
+               'numeracoesSemBancoBaixado', 'carregarBancosDoPedido',
+               'numeracaoIdDoItem', 'linhasAtivasCsv', 'colunasDoBancoDaNumeracao',
+               'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'numeracaoDoModelo',
+               'rotuloDoModelo', 'celulasRepetidasDoPedido'];
 
 let CODIGO;
 try {
@@ -257,6 +262,70 @@ function mundo(opts) {
     const m2 = mundo({ state: { numeracoes: [{ id: 'nA' }] }, bancos: { nA: [{ x: 1 }] } });
     await m2.api.garantirCsvDoTrabalho(['nA', 'nA', null, undefined, 'nA']);
     ok(m2.consultas.length === 1, 'id repetido (e vazio) vira UMA consulta', m2.consultas.length);
+})();
+
+// ─── 8. O pedido aberto: os bancos chegam depois, um por um ────────────────
+
+(async function osBancosDoPedidoChegamDepois() {
+    const nums = [
+        { id: 'nA', csv_filename: 'a.csv' },                    // falta baixar
+        { id: 'nB', csv_data: null },                           // ja se sabe: sem banco
+        { id: 'nC', csv_data: [{ Codigo: '1' }] },              // ja esta aqui
+    ];
+    const state = {
+        numeracoes: nums,
+        osItens: { os1: [
+            { id: 'i1', amostra_num_id: 'nA' },
+            { id: 'i2', amostra_num_id: 'nB' },
+            { id: 'i3', amostra_num_id: 'nC' },
+            { id: 'i4', amostra_num_id: 'nA' },                 // repete a mesma
+            { id: 'i5' },                                       // sem numeracao
+        ] },
+    };
+    const m = mundo({ state, bancos: { nA: [{ Codigo: '9' }] } });
+
+    const faltando = m.api.numeracoesSemBancoBaixado('os1');
+    ok(faltando.length === 1 && faltando[0].id === 'nA',
+       'so o `undefined` conta como "falta baixar"',
+       faltando.map(n => n.id));
+
+    const chegadas = [];
+    const quantas = await m.api.carregarBancosDoPedido('os1', (num, i, total) => chegadas.push([num.id, i, total]));
+    ok(quantas === 1, 'baixou uma', quantas);
+    ok(m.consultas.length === 1, 'e foi UMA consulta, nao uma por modelo', m.consultas.length);
+    ok(chegadas.length === 1 && chegadas[0][0] === 'nA',
+       'o aviso de chegada diz qual banco chegou', chegadas);
+    ok(m.api.numeracoesSemBancoBaixado('os1').length === 0, 'e nao falta mais nenhum');
+})();
+
+// ─── 9. O aviso de repetidas fica calado com o pedido pela metade ──────────
+
+(async function oAvisoNaoFalaComOPedidoPelaMetade() {
+    const linhas = [{ Codigo: 'X1' }, { Codigo: 'X2' }];
+    const els = [{ source: 'database', csv_column: 'Codigo' }];
+    const state = {
+        numeracoes: [
+            { id: 'nA', elements: els, csv_data: linhas },
+            { id: 'nB', elements: els, csv_data: linhas },      // o MESMO banco
+            { id: 'nC', elements: els, csv_filename: 'c.csv' }, // ainda descendo
+        ],
+        osItens: { os1: [
+            { id: 'i1', amostra_num_id: 'nA', nome_modelo: 'A' },
+            { id: 'i2', amostra_num_id: 'nB', nome_modelo: 'B' },
+            { id: 'i3', amostra_num_id: 'nC', nome_modelo: 'C' },
+        ] },
+    };
+    const m = mundo({ state, bancos: { nC: [{ Codigo: 'X1' }] } });
+
+    ok(Object.keys(m.api.celulasRepetidasDoPedido('os1')).length === 0,
+       'com um banco ainda descendo, o aviso NAO sai — numero que muda sozinho nao vale nada');
+
+    await m.api.carregarBancosDoPedido('os1');
+    const r = m.api.celulasRepetidasDoPedido('os1');
+    ok(Object.keys(r).length === 3,
+       'com todos em maos, ele sai — e agora acusa os tres',
+       Object.keys(r));
+    ok(r['i1'] && r['i1'].total === 2, 'A repete os dois codigos com B', r['i1']);
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────

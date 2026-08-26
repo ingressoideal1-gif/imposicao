@@ -985,6 +985,42 @@ function numeracaoTemBanco(num) {
 }
 window.numeracaoTemBanco = numeracaoTemBanco;
 
+/** As numeracoes de um pedido cujo banco ainda nao desceu. */
+function numeracoesSemBancoBaixado(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    const ids = new Set();
+    itens.forEach(it => {
+        const id = numeracaoIdDoItem(it);
+        if (!id) return;
+        const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+        // `undefined` e o unico estado que falta baixar. `null` ja respondeu
+        // "nao tem banco", e array esta aqui. Ver `garantirCsvDaNumeracao`.
+        if (num && num.csv_data === undefined) ids.add(num);
+    });
+    return Array.from(ids);
+}
+window.numeracoesSemBancoBaixado = numeracoesSemBancoBaixado;
+
+/**
+ * Baixa, uma a uma, os bancos das numeracoes de um pedido.
+ *
+ * Uma por vez de proposito: no 21202 sao 22 MB somados, e dispara-las
+ * juntas entope a rede da estacao no momento em que o operador esta
+ * justamente esperando a tela. Em serie, cada card acende assim que o dele
+ * chega. Nunca lanca -- sem rede a tela fica como estava.
+ */
+async function carregarBancosDoPedido(osId, aoChegar) {
+    const faltando = numeracoesSemBancoBaixado(osId);
+    let baixadas = 0;
+    for (const num of faltando) {
+        try { await garantirCsvDaNumeracao(num); } catch (e) { /* segue */ }
+        baixadas++;
+        if (typeof aoChegar === 'function') { try { aoChegar(num, baixadas, faltando.length); } catch (e) {} }
+    }
+    return baixadas;
+}
+window.carregarBancosDoPedido = carregarBancosDoPedido;
+
 /**
  * O banco de dados de todas as numeracoes que um trabalho pode usar, na mao
  * antes de o payload ser montado.
@@ -15514,7 +15550,17 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
 
     if (!linha) return;
 
-    const temCsv = !!(num && num.csv_data && num.csv_data.length);
+    // TRES estados, e o do meio e novo (26/08/2026).
+    //
+    // A caixa aparece pelo `csv_filename`, e nao pelas linhas: enquanto o banco
+    // desce em segundo plano, `csv_data` e `undefined`, e a versao anterior
+    // desta funcao escondia a caixa inteira -- a caixa do banco piscava para
+    // fora da tela e voltava. Pior: o `minhas` daria zero e o botao ficaria
+    // VERMELHO dizendo "este modelo esta SEM nenhuma linha", que e a frase que
+    // manda o operador ir mexer numa distribuicao que esta certa.
+    const baixando = !!(num && num.csv_data === undefined && numeracaoTemBanco(num));
+
+    const temCsv = baixando || !!(num && num.csv_data && num.csv_data.length);
 
     linha.style.display = temCsv ? 'flex' : 'none';
 
@@ -15523,6 +15569,25 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
     const nome = container.querySelector(`#csv-nome-${idx}`);
 
     if (nome) nome.textContent = num.csv_filename || 'banco.csv';
+
+    if (baixando) {
+        const contaEmEspera = container.querySelector(`#csv-conta-${idx}`);
+        if (contaEmEspera) contaEmEspera.textContent = 'carregando…';
+        const bEspera = container.querySelector(`#btn-csv-fatia-${idx}`);
+        if (bEspera) {
+            bEspera.disabled = true;
+            bEspera.title = 'Baixando o banco de dados desta numeração…';
+            bEspera.style.color = '';
+            bEspera.style.borderColor = '';
+        }
+        const bEditarEspera = container.querySelector(`#btn-csv-editar-${idx}`);
+        if (bEditarEspera) bEditarEspera.disabled = true;
+        return;
+    }
+
+    const bEditar = container.querySelector(`#btn-csv-editar-${idx}`);
+
+    if (bEditar) bEditar.disabled = false;
 
     const minhas = fatiaCsvDoItem(item, num).length;
 
@@ -15535,6 +15600,8 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
     const bFatia = container.querySelector(`#btn-csv-fatia-${idx}`);
 
     if (!bFatia) return;
+
+    bFatia.disabled = false;
 
     bFatia.title = minhas
 
@@ -15737,15 +15804,28 @@ window.mesclarNumeracoesNoCatalogo = mesclarNumeracoesNoCatalogo;
  * o que o catalogo inteiro custaria para o pedido aberto. Nunca lanca — sem
  * rede, a tela segue com o que tem, exatamente como antes.
  */
-async function recarregarNumeracoesDoPedido(osId) {
+async function recarregarNumeracoesDoPedido(osId, opcoes) {
     try {
         if (typeof supabaseClient === 'undefined' || !supabaseClient) return 0;
         const itens = (state.osItens && state.osItens[osId]) || [];
         const ids = Array.from(new Set(itens.map(it => numeracaoIdDoItem(it)).filter(Boolean).map(String)));
         if (!ids.length) return 0;
+        // COM ou SEM o banco de dados de cada numeracao (26/08/2026).
+        //
+        // Medido no pedido 21202 -- 52 modelos, 17 numeracoes, 115.846 linhas
+        // de CSV:
+        //
+        //     select('*')          22,01 MB   2.015 ms
+        //     sem o csv_data        0,03 MB      72 ms
+        //
+        // Quem PRECISA das linhas na hora (a Conferencia de dados, as duas
+        // telas de imposicao) continua pedindo tudo, e paga os 2 segundos com
+        // conhecimento de causa. A tela de Amostras pede enxuto e deixa os
+        // bancos chegarem depois, card a card -- ver `renderAmostrasOSItens`.
+        const comBanco = !(opcoes && opcoes.comBanco === false);
         const { data, error } = await supabaseClient
             .from('producao_numeracoes')
-            .select('*')
+            .select(comBanco ? '*' : COLUNAS_DA_NUMERACAO_NA_LISTA)
             .in('id', ids);
         if (error) throw error;
         if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
@@ -16048,6 +16128,12 @@ window.fontesDosModelosDoPedido = fontesDosModelosDoPedido;
  * a comparação é pelo texto exato, sem espaços nas pontas. Só lê.
  */
 function celulasRepetidasDoPedido(osId) {
+    // Com um banco ainda descendo, a conta sairia MENOR que a verdade, e um
+    // aviso que muda de numero sozinho na frente do operador nao vale nada.
+    // Cala a boca ate os bancos estarem todos aqui -- o `renderAmostras`
+    // redesenha quando o ultimo chega. Ver `carregarBancosDoPedido`.
+    if (typeof numeracoesSemBancoBaixado === 'function'
+        && numeracoesSemBancoBaixado(osId).length) return {};
     const itens = (state.osItens && state.osItens[osId]) || [];
     const porValor = new Map();     // valor -> Set(id do modelo)
     const usoPorItem = {};          // id do modelo -> { nome, valores: Set }
@@ -18108,7 +18194,7 @@ function redesenharCardsDoPedido(osId) {
  *   'distribuir'  — repartir as linhas entre os modelos do pedido. Grava em
  *                   `pedidos_modelos.csv_selecao`, que é por modelo.
  */
-window.abrirCsvDoModelo = function(idx, osId, modo) {
+window.abrirCsvDoModelo = async function(idx, osId, modo) {
 
     if (typeof window.abrirEditorCsv !== 'function') {
 
@@ -18136,6 +18222,45 @@ window.abrirCsvDoModelo = function(idx, osId, modo) {
     if (modo === 'distribuir') {
 
         return window.abrirDistribuicaoCsv(osId, num.id, item.id);
+
+    }
+
+    // ── O BANCO E DE TODOS OS MODELOS QUE USAM ESTA NUMERACAO ──────────────
+    //
+    // Relato do usuario em 26/08/2026: *"a selecao ver/editar no modelo nao
+    // esta funcionando, 2 modelos com a mesma numeracao ao selecionar A no
+    // modelo 1 e B no modelo 2, o modelo 1 vira B"*.
+    //
+    // E o que tem de acontecer, e o motivo cabe numa frase: a marca de imprimir
+    // mora DENTRO DA LINHA (`__ativo`), e a linha pertence a numeracao, nao ao
+    // modelo. Dois modelos na mesma numeracao leem as mesmas linhas; o segundo a
+    // marcar reescreve o primeiro. O `onAplicar` logo abaixo confirma -- ele
+    // grava `csv_data` na NUMERACAO, uma vez so.
+    //
+    // Quem reparte por modelo e o outro botao do card, o "Linhas": ele abre o
+    // modo distribuicao, onde a coluna Modelo diz de quem e cada linha, e grava
+    // em `pedidos_modelos.csv_selecao` -- uma fatia por modelo.
+    //
+    // Ate aqui nada na tela dizia isso. O operador marcava, ia ao proximo
+    // modelo, marcava, e voltava para achar o primeiro trocado -- sem erro, sem
+    // aviso, e sem jeito de descobrir o porque. A trava tem saida: da para abrir
+    // assim mesmo, que e o certo quando a intencao E mexer no banco inteiro.
+    const irmaos = (state.osItens[osId] || [])
+        .filter(it => String(numeracaoIdDoItem(it)) === String(num.id));
+
+    if (irmaos.length > 1 && window.caixaConfirmar && window.caixaConfirmar.perguntar) {
+
+        const seguir = await window.caixaConfirmar.perguntar(
+            `Atenção: este banco de dados é de ${irmaos.length} modelos deste pedido. `
+            + 'O que você marcar para imprimir aqui vale para TODOS eles — marcar num '
+            + 'modelo desmarca no outro, porque a marca fica na linha do banco, e o '
+            + 'banco é um só. Para dar linhas DIFERENTES a cada modelo, feche isto e '
+            + 'use o botão "🧩 Linhas" do card: ele reparte o banco entre os modelos, '
+            + 'e cada um guarda a fatia dele.',
+            { rotulo: 'Abrir assim mesmo', perigo: true }
+        );
+
+        if (!seguir) return;
 
     }
 
@@ -28363,7 +28488,11 @@ async function navigateToAmostrasFromOS(osId) {
         // ter tirado o CSV de uma, criado outra, ou trocado a do modelo. E a
         // mesma razao pela qual os itens acima sao sempre relidos. Ver
         // recarregarNumeracoesDoPedido().
-        await recarregarNumeracoesDoPedido(realOSId);
+        // ENXUTO: o pedido abre em 72 ms em vez de 2 segundos. Os bancos de
+        // dados chegam depois, um por um, e o `renderAmostrasOSItens`
+        // redesenha conforme chegam -- o mesmo desenho da cobertura de
+        // glifos, que ja resolvia este problema ali dentro.
+        await recarregarNumeracoesDoPedido(realOSId, { comBanco: false });
         console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
 
         // Salvar o ID do pedido ativo na tela de Amostras
@@ -28780,6 +28909,28 @@ function renderAmostrasOSItens(osId) {
     // acusa ninguém, que é a regra de ouro do fonte-glifos.js.
     // A trava por PEDIDO, e nao global: quem abre o pedido A e pula para o B
     // enquanto o A ainda busca não pode ficar sem a conferência do B.
+    // ── Os bancos de dados das numeracoes deste pedido ──
+    //
+    // Mesmo desenho da cobertura de glifos logo abaixo, e pela mesma razao:
+    // segurar o desenho dos cards pela rede deixaria a tela em branco. No
+    // 21202 sao 22 MB de CSV; os cards saem agora, com o banco de quem ja
+    // tem, e a tela se redesenha a cada banco que chega.
+    //
+    // A trava e por PEDIDO: quem abre o A e pula para o B nao pode ficar sem
+    // os bancos do B.
+    state._bancosEmVoo = state._bancosEmVoo || {};
+    if (containerId === 'amostras-itens-container'
+        && typeof carregarBancosDoPedido === 'function'
+        && !state._bancosEmVoo[targetOSId]
+        && numeracoesSemBancoBaixado(targetOSId).length) {
+        state._bancosEmVoo[targetOSId] = true;
+        const solta = () => { delete state._bancosEmVoo[targetOSId]; };
+        carregarBancosDoPedido(targetOSId).then(quantas => {
+            solta();
+            if (quantas) renderAmostrasOSItens(osId);
+        }).catch(solta);
+    }
+
     state._coberturaEmVoo = state._coberturaEmVoo || {};
     if (containerId === 'amostras-itens-container'
         && typeof window.garantirCoberturas === 'function'

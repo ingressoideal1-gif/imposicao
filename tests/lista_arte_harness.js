@@ -226,13 +226,16 @@ const { pedidoSaiuDaArte } = new Function(
     const nav = SCRIPT.indexOf("console.log('[Nav] Carregando itens da OS...')");
     ok(nav > 0, 'achei a abertura do pedido na Lista de Arte');
     const trecho = SCRIPT.slice(nav, nav + 1500);
-    ok(/await loadOSItens\(realOSId\)[\s\S]{0,900}await recarregarNumeracoesDoPedido\(realOSId\)/.test(trecho),
+    // O `, { comBanco: false }` entrou em 26/08/2026: a tela de Amostras abre sem
+    // o `csv_data` (22 MB no pedido 21202) e os bancos chegam em segundo plano.
+    // O que este teste guarda continua sendo a ORDEM -- itens, depois numeracoes.
+    ok(/await loadOSItens\(realOSId\)[\s\S]{0,900}await recarregarNumeracoesDoPedido\(realOSId[,)]/.test(trecho),
         'abrir o pedido na Lista de Arte rele as numeracoes dele depois dos itens');
     ok(/async function enviarParaImposicao\([\s\S]{0,900}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
         'mandar o modelo para a Imposicao rele as numeracoes do pedido');
     ok(/async function abrirImposicaoDoPedido\([\s\S]{0,400}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
         'abrir o pedido inteiro na Imposicao rele as numeracoes');
-    ok(/async function recarregarNumeracoesDoPedido\([\s\S]{0,1500}catch \(e\)/.test(SCRIPT),
+    ok(/async function recarregarNumeracoesDoPedido\([\s\S]{0,3000}catch \(e\)/.test(SCRIPT),
         'a releitura nunca lanca: sem rede a tela segue com o que tem');
 
     // A linha relida entra com a MESMA forma que o api() entrega: sem o elemento

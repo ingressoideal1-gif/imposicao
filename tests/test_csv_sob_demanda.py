@@ -114,22 +114,113 @@ def test_a_consulta_da_lista_usa_a_lista_enxuta():
     )
 
 
-def test_as_numeracoes_do_pedido_aberto_continuam_vindo_inteiras():
-    """`recarregarNumeracoesDoPedido` le por id, poucas de cada vez.
+def test_a_releitura_do_pedido_tem_os_dois_modos():
+    """Quem precisa das linhas na hora pede tudo; a tela de Amostras nao.
 
-    E de proposito que ELA continue com `select('*')`: e o caminho que traz o
-    banco das numeracoes do pedido que esta na tela, que sao justamente as que
-    vao ser desenhadas e impressas. Trocar por lista enxuta aqui empurraria todo
-    o trabalho para o `garantirCsvDaNumeracao`, uma consulta por modelo.
+    Medido no pedido 21202 -- 52 modelos, 17 numeracoes, 115.846 linhas de CSV:
+
+        select('*')          22,01 MB   2.015 ms
+        sem o csv_data        0,03 MB      72 ms
+
+    O padrao continua sendo trazer tudo, porque a Conferencia de dados e as duas
+    telas de imposicao precisam das linhas antes de responder qualquer coisa. A
+    tela de Amostras -- a que o operador abre o dia inteiro -- pede enxuto e
+    deixa os bancos chegarem depois, um por um.
     """
     fonte = _ler("frontend/script.js")
     i = fonte.index("async function recarregarNumeracoesDoPedido")
-    corpo = fonte[i:i + 1200]
-    assert ".select('*')" in corpo, (
-        "recarregarNumeracoesDoPedido deixou de trazer a linha inteira — as "
-        "numeracoes do pedido aberto ficariam sem banco de dados"
+    corpo = fonte[i:i + 2500]
+    assert "comBanco ? '*' : COLUNAS_DA_NUMERACAO_NA_LISTA" in corpo, (
+        "recarregarNumeracoesDoPedido perdeu o modo enxuto"
     )
     assert ".in('id', ids)" in corpo, "e ela precisa continuar lendo so as do pedido"
+    # O padrao e trazer tudo: so quem pedir explicitamente recebe enxuto.
+    assert "const comBanco = !(opcoes && opcoes.comBanco === false);" in corpo, (
+        "o modo enxuto tem de ser opt-in — o padrao traz as linhas"
+    )
+    assert "recarregarNumeracoesDoPedido(realOSId, { comBanco: false })" in fonte, (
+        "a tela de Amostras voltou a esperar os 22 MB antes de abrir"
+    )
+
+
+def test_os_bancos_do_pedido_chegam_em_segundo_plano():
+    """Mesmo desenho da cobertura de glifos, que ja resolvia isto ali dentro.
+
+    Segurar o desenho dos cards pela rede deixa a tela em branco. Os cards saem
+    com o que ha, e a tela se redesenha a cada banco que chega. A trava e por
+    PEDIDO: quem abre o A e pula para o B nao pode ficar sem os bancos do B.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function renderAmostrasOSItens(osId)")
+    corpo = fonte[i:i + 4000]
+    assert "state._bancosEmVoo" in corpo, "o render nao busca os bancos que faltam"
+    assert "carregarBancosDoPedido(targetOSId)" in corpo
+    assert "renderAmostrasOSItens(osId)" in corpo, "e nao redesenha quando eles chegam"
+
+
+def test_o_card_diz_que_esta_baixando_em_vez_de_acusar_o_operador():
+    """A frase errada aqui manda o operador mexer numa distribuicao que esta certa.
+
+    Enquanto o banco desce, `csv_data` e `undefined` e a fatia da zero. Sem este
+    estado, o botao ficava VERMELHO dizendo "este modelo esta SEM nenhuma linha".
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function atualizarBotoesCsvDaAmostra")
+    corpo = fonte[i:i + 3000]
+    assert "const baixando = !!(num && num.csv_data === undefined && numeracaoTemBanco(num));" in corpo
+    assert "'carregando…'" in corpo, "o card precisa dizer que esta baixando"
+    assert corpo.index("if (baixando)") < corpo.index("const minhas ="), (
+        "o estado de espera tem de sair ANTES de a fatia ser contada"
+    )
+
+
+def test_ver_editar_avisa_quando_o_banco_e_de_mais_de_um_modelo():
+    """Relato do usuario em 26/08/2026: *"a selecao ver/editar no modelo nao
+    esta funcionando, 2 modelos com a mesma numeracao ao selecionar A no modelo
+    1 e B no modelo 2, o modelo 1 vira B"*.
+
+    E o que TEM de acontecer: a marca de imprimir mora dentro da linha
+    (`__ativo`), e a linha pertence a NUMERACAO, nao ao modelo. Dois modelos na
+    mesma numeracao leem as mesmas linhas, e o segundo a marcar reescreve o
+    primeiro -- o `onAplicar` grava `csv_data` na numeracao, uma vez so.
+
+    Quem reparte por modelo e o outro botao do card ("Linhas"), que abre o modo
+    distribuicao e grava em `pedidos_modelos.csv_selecao`.
+
+    O defeito era a tela nao dizer nada disso. A trava tem saida: da para abrir
+    assim mesmo, que e o certo quando a intencao E mexer no banco inteiro.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("window.abrirCsvDoModelo = async function")
+    corpo = fonte[i:i + 4000]
+
+    assert "const irmaos = (state.osItens[osId] || [])" in corpo, (
+        "o Ver / editar nao conta quantos modelos usam este banco"
+    )
+    assert "irmaos.length > 1" in corpo
+    assert "caixaConfirmar.perguntar" in corpo, (
+        "o aviso precisa ser a caixa DOM do projeto — window.confirm nao responde "
+        "no aplicativo instalado"
+    )
+    assert "if (!seguir) return;" in corpo, "cancelar tem de fechar sem abrir"
+    # A saida, escrita na propria caixa.
+    assert "Linhas" in corpo and "reparte o banco entre os modelos" in corpo, (
+        "a trava precisa dizer, ali mesmo, qual e o botao que faz o que ele quer"
+    )
+    # E o caminho de distribuir continua saindo antes, sem aviso nenhum.
+    assert corpo.index("if (modo === 'distribuir')") < corpo.index("const irmaos ="), (
+        "quem ja clicou em Linhas nao pode levar o aviso do outro botao"
+    )
+
+
+def test_o_aviso_de_repetidas_fica_calado_com_o_pedido_pela_metade():
+    """Numero que muda sozinho na frente do operador nao vale nada."""
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function celulasRepetidasDoPedido")
+    corpo = fonte[i:i + 900]
+    assert "numeracoesSemBancoBaixado(osId).length) return {}" in corpo, (
+        "o aviso pode sair com a conta pela metade enquanto os bancos descem"
+    )
 
 
 def test_as_DUAS_telas_de_imposicao_garantem_o_banco_antes_de_imprimir():
