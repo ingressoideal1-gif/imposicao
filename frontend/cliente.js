@@ -221,6 +221,9 @@ function blocoDeArteDoCliente(item, idx, ctx) {
     const arteVisivel = ctx.arteVisivel;
     const versoVisivel = ctx.versoVisivel;
     const paginaCsv = ctx.paginaCsv;
+    // O chip "Ampliar" vem de fora e é colado na ARTE -- ver `.amostra-arte-lugar`
+    // no style.css. Pendurado na moldura, ele caía sobre o folheador.
+    const ampliar = ctx.ampliar || '';
 
     return (item.verso ? `
                         <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
@@ -228,7 +231,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
                                 ${item.modo_pdf ? `
                                 <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                                    <span class="amostra-arte-lugar"><canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>${ampliar}</span>
                                     <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
                                         <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
                                         <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
@@ -240,7 +243,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                                     </div>
                                 </div>
                                 ` : `
-                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                                <span class="amostra-arte-lugar">${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}${ampliar}</span>
                                 `}
                                 <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
@@ -275,7 +278,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                         ` : `
                         ${item.modo_pdf ? `
                         <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <span class="amostra-arte-lugar"><canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>${ampliar}</span>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
@@ -288,7 +291,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                             </div>
                         </div>
                         ` : `
-                        ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
+                        <span class="amostra-arte-lugar">${desenhoAoVivo ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}${ampliar}</span>
                         `}
 
                             ${!paginaCsv ? '' : `
@@ -499,7 +502,12 @@ function renderAmostrasOSItens(osId) {
             && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
 
         const ehCliente = state.amostrasContainerId === 'cliente-amostras-itens-container';
-        const ctxDaArte = { desenhoAoVivo, arteVisivel, versoVisivel, paginaCsv };
+
+        // `ampliar` entra neste objeto mais abaixo, quando o `icone` já existe:
+        // ele é um `const` declarado dentro do cartão, e lê-lo aqui em cima cai
+        // na zona morta temporal -- a seção da arte deixava de desenhar inteira,
+        // com um `icone is not defined` no console.
+        const ctxDaArte = { desenhoAoVivo, arteVisivel, versoVisivel, paginaCsv, ampliar: '' };
 
         // ── O cartão do modelo, na página do cliente ────────────────────────
         //
@@ -522,6 +530,19 @@ function renderAmostrasOSItens(osId) {
         if (ehCliente) {
             const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
 
+            // O convite a ampliar: o toque na arte já abria o lightbox, e nada
+            // na tela dizia isso. `pointer-events: none` no CSS para o toque
+            // atravessar o chip e chegar na arte, que é quem tem o `onclick`.
+            //
+            // Ele viaja dentro do `ctxDaArte` porque quem o coloca na tela é o
+            // `blocoDeArteDoCliente`, COLADO NA ARTE. Até 26/08/2026 ele era
+            // pendurado no rodapé da moldura, e caía em cima do folheador -- no
+            // PDF, exatamente sobre a seta de avançar página (medido no pedido
+            // 20144: chip em x 275-360, seta em x 250-287).
+            ctxDaArte.ampliar = (arteVisivel || desenhoAoVivo || item.modo_pdf)
+                ? '<span class="amostra-ampliar">' + icone('lupa', 14) + 'Ampliar</span>'
+                : '';
+
             const chip = status === 'APROVADA'
                 ? '<span class="amostra-chip amostra-chip-aprovado">'
                   + (typeof iconeClienteForte === 'function' ? iconeClienteForte('check', 13) : '')
@@ -540,13 +561,6 @@ function renderAmostrasOSItens(osId) {
                 + escapeHtml(String(item.quantidade || 0)) + ' un</span>'
                 + (item.verso ? '<span class="amostra-meta-item">' + icone('duplex', 12) + 'Frente e verso</span>' : '')
                 + '</div>';
-
-            // O convite a ampliar: o toque na arte já abria o lightbox, e nada
-            // na tela dizia isso. `pointer-events: none` no CSS para o toque
-            // atravessar o chip e chegar na arte, que é quem tem o `onclick`.
-            const ampliar = (arteVisivel || desenhoAoVivo || item.modo_pdf)
-                ? '<span class="amostra-ampliar">' + icone('lupa', 14) + 'Ampliar</span>'
-                : '';
 
             // A decisão: dois botões com o MESMO peso. Só depois de decidido é
             // que a cor entra, para dizer o que ele escolheu.
@@ -601,7 +615,6 @@ function renderAmostrasOSItens(osId) {
             <div class="amostra-card-corpo" style="padding: 14px;">
                 <div class="amostra-preview-container" style="position: relative; margin-top: 0;">
                     ${blocoDeArteDoCliente(item, idx, ctxDaArte)}
-                    ${ampliar}
                 </div>
                 ${meta}
                 ${decisao}

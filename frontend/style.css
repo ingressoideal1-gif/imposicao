@@ -3805,6 +3805,22 @@ input[type=number] {
    O toque na arte já abria o lightbox desde sempre — e ninguém tinha como
    saber disso: uma imagem não anuncia que é clicável, e `cursor: zoom-in` não
    existe no celular, que é onde esta página vive. */
+/* O lugar da ARTE dentro da moldura, e a âncora do chip "Ampliar".
+   Ele é `position: absolute` e precisa de um pai posicionado. Até 26/08/2026
+   esse pai era a moldura inteira (`.amostra-preview-container`), e o chip
+   pousava no rodapé dela -- que deixou de ser a arte no dia em que o folheador
+   de páginas do PDF e o de ingressos do CSV entraram na mesma moldura. Medido
+   no pedido 20144: o chip ocupava x 275-360 e a seta ▶ x 250-287, na mesma
+   linha. O cliente tinha o botão de avançar página coberto.
+   `max-width` para o embrulho não passar da moldura: sem ele, um canvas de 620px
+   dentro de uma tela de 330 faria o `max-width: 100%` do canvas medir 620. */
+.amostra-arte-lugar {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+}
+
 .amostra-ampliar {
     position: absolute;
     right: 10px;

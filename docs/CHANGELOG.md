@@ -4,6 +4,59 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-26] — O "Ampliar" cobria a seta de avançar página
+
+Pergunta do usuário: *"verificar layout para arquivos com paginação, pdf e numeração com .csv, onde
+ficaram as setas para paginar no link do cliente"*.
+
+### Elas estavam lá — e alguém estava em cima delas
+
+Os dois folheadores renderizam normalmente. Medido no navegador, com pedidos reais:
+
+| caso | pedido | folheador |
+|---|---|---|
+| PDF multipágina | 20144 | `◀ Página 1 / N ▶`, 330×31px, visível |
+| Numeração com CSV | 21146 | `◀ Ingresso 1 de 10 ▶`, 330×114px, visível |
+
+O que havia era **sobreposição**. O chip "Ampliar" é `position: absolute; right: 10px; bottom: 10px`
+e estava ancorado na **moldura da arte** (`.amostra-preview-container`) — que deixou de terminar na
+arte no dia em que os folheadores entraram dentro dela. Resultado, medido no pedido 20144:
+
+```
+seta ▶      x 250 - 287
+chip        x 275 - 360     <- mesma linha
+```
+
+O cliente tinha **o botão de avançar página parcialmente coberto**. No caso do CSV o chip caía sobre
+o fim do resumo do ingresso (`pais: TCHÉQUIA · nome: Ondřej Pek · cargo: dancer`).
+
+### O conserto
+
+O chip passou a ser ancorado na **arte**, e não na moldura: `blocoDeArteDoCliente` embrulha a arte
+da frente num `.amostra-arte-lugar` (`position: relative`) e o chip vai dentro dele. São quatro
+pontos — o PDF nas duas variações de cartão, a frente do cartão com verso e a do cartão sem verso.
+
+O `max-width: 100%` no embrulho não é enfeite: sem ele, um canvas de 620px dentro de uma tela de
+330 faria o `max-width: 100%` do próprio canvas medir 620, e a arte transbordaria a moldura.
+
+Conferido depois, nos mesmos dois pedidos e em três larguras (320, 390 e 1280): o chip fica **dentro
+do retângulo da arte**, não cruza as setas nem o resumo, e não há rolagem horizontal.
+
+### Uma coisa que não era defeito
+
+No pedido 21146 o terceiro modelo não mostra setas, e está certo: a numeração tem 13 linhas
+repartidas entre os modelos pela Qtd (10 + 2 + 1), e aquele modelo tem **um ingresso só**. Não há o
+que folhear.
+
+### Cicatriz do caminho
+
+Na primeira tentativa o chip foi movido para perto do `ctxDaArte`, ~40 linhas acima — e o `icone`,
+que é um `const` declarado mais abaixo dentro do cartão, caiu na zona morta temporal. A seção da
+arte **deixou de desenhar inteira**, com um `icone is not defined` no console. Por isso ele hoje é
+atribuído ao contexto depois que o `icone` existe, com o motivo escrito ao lado.
+
+---
+
 ## [2026-08-26] — Banco fora do ar: a tela avisa em vez de congelar
 
 Relato do usuário: *"APLICAÇÃO TRAVOU, PESQUISAR O MOTIVO"*.
