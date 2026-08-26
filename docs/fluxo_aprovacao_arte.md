@@ -134,12 +134,74 @@ próximo salvamento do modelo.
 | 💰 Orçamento | `cliente-orcamento.js` | `propostas.texto_whatsapp`, com `produtos_proposta` de reserva |
 | 💳 Pagar | `cliente-pagamento.js` | `pagamentos_v2` (uma linha por cobrança) |
 
-O casco — cabeçalho, selo de status, barra de abas e troca de seção — está em
-`cliente-shell.js`. As duas decisões do cliente (entrega e faturamento) estão em
+O casco — cabeçalho, selo de status, barra de abas, **trilha do pedido**, **sinal
+de pendência nas abas** e troca de seção — está em `cliente-shell.js`. Os ícones
+desenhados (que substituíram os emoji em 25/08/2026) estão em
+`icones-cliente.js`. As duas decisões do cliente (entrega e faturamento) estão em
 `cliente-confirmacoes.js`. A carga dos dados e as contas de formatação estão em
 `cliente-dados.js`. **O motor de desenho da arte não saiu do `cliente.js`**: onze
 arquivos de teste apontam para ele pelo nome, e cinco recortam funções de lá para
 executar.
+
+### A trilha do pedido e o sinal nas abas (25/08/2026)
+
+> [!IMPORTANT]
+> Das cinco abas, só **três** pedem alguma coisa do cliente: **Arte**, **Entrega**
+> e **Nota**. Orçamento e Pagamento são consulta.
+
+Até 25/08/2026 essa distinção não existia na tela: as cinco abas eram idênticas, e
+o que faltava só era dito **dentro** de cada uma, no fim da rolagem. Quem abrisse
+na aba de Orçamento não tinha como saber que havia duas conferências esperando.
+
+**A trilha** (`desenharTrilha`, `etapasDoPedido`) mora acima das seções e vale para
+as cinco: *"Para fechar o pedido — 1 de 3 concluídas"*, com uma barra e as três
+etapas. Cada etapa é um **botão que abre a aba dela**, com o piso de toque de 44px
+— dizer o que falta sem oferecer o caminho é a metade do trabalho.
+
+| estado da etapa | quando |
+|---|---|
+| **concluída** (verde, visto) | a arte por `artesJaAprovadas()`; entrega e nota quando a decisão não é `null` |
+| **agora** (azul) | é a aba aberta |
+| **pendente** (cinza) | o resto |
+
+> **Pedir alteração também conta como decidir.** `false` em `portalConfirmacoes` é
+> uma decisão: o pedido do cliente já está registrado e vai ao atendimento. Só
+> `null` é "ainda não decidiu".
+
+> **A conta da arte é a MESMA do cartão de finalização** (`artesJaAprovadas`), e
+> não uma paralela: duas contas sobre a mesma coisa acabam divergindo, e o cliente
+> veria a trilha dizer "concluída" com o botão de finalizar ainda travado.
+
+**O sinal nas abas** (`atualizarSinaisDasAbas`): ponto âmbar quando a aba espera
+ação, visto verde quando resolvida, nada quando é só informação — com o estado
+repetido em `aria-label`, para quem não enxerga a cor.
+
+> **Pagamento só acende quando há o que fazer ali**: cobrança em aberto **com link
+> que abre** (`cobrancas.some(podePagar)`). Pedido faturado, ou cobrança sem link
+> liberado, não ganha ponto — sinal de pendência sem botão do outro lado é
+> cobrança em cima de quem não pode resolver.
+
+Os dois se redesenham em `abrirSecao`, a cada decisão de arte
+(`renderAmostrasOSItens`) e a cada decisão de dados (`decidirDados`,
+`desfazerDecisao`), pelo `atualizarPainelDoPedido()`.
+
+### Ícone desenhado, nunca emoji (25/08/2026)
+
+O `cliente.html` guarda só o **nome** de cada ícone (`data-icone="arte"`); o
+desenho vem do `icones-cliente.js`, e o `montarPortal` o pinta.
+
+Emoji não é desenho nosso: é uma **fonte do aparelho de quem abre**, e quem abre
+este link é o cliente, no celular, pelo navegador embutido do WhatsApp. O 🎨 do
+Android tem outra forma, outra paleta e outro peso que o do iPhone — e, por ser
+colorido por definição, ele **não acompanha a cor do texto ao lado**: a aba ativa
+fica azul e o ícone continua multicolorido.
+
+> **O rótulo em texto continua obrigatório.** Ícone sozinho não diz para onde
+> leva. Se o `icones-cliente.js` não carregar, as abas ficam sem desenho e **com**
+> o rótulo — e todo chamador testa `typeof iconeCliente === 'function'` antes.
+
+> `icones-cliente.js` está na `PAINEL_ARQUIVOS` do `security_config.py`. Fora
+> dela, a estação serviria uma `cliente.html` pedindo um script que dá 404.
 
 ### Uma consulta só, pela função do banco
 
@@ -180,17 +242,40 @@ misturavam.
 
 ### O Prazo de Entrega da aba de Entrega
 
-A aba mostra **uma** linha, com os dois prazos e a conta feita:
+Desde 25/08/2026 a conta **abre a aba**, num painel próprio (`cartaoDeChegada`):
 
 ```
-PRAZO DE ENTREGA
-Produção: 1 dia útil + Envio: 1 dia útil
-Recebimento a partir de 2 dias úteis
+SEU PEDIDO CHEGA EM
+7 dias úteis
+A contar da aprovação, e é o piso do prazo: a gráfica só despacha
+quando o último modelo do pedido fica pronto.
+
+[ PRODUÇÃO ]     [ TRANSPORTE ]
+  5 dias úteis     2 dias úteis
+
+🚚 SEDEX — R$ 148,90
 ```
 
 Foram duas linhas separadas por algumas horas, em 20/08/2026, até o usuário
 apontar que elas obrigavam o cliente a somar de cabeça a resposta que ele foi ali
-buscar.
+buscar. A conta ficou certa desde então — o que faltava era o **lugar**: ela saía
+como a segunda de sete linhas dentro do cartão de Envio, do mesmo tamanho do
+código de rastreio. *"Quando chega?"* é a pergunta que traz o cliente de volta ao
+link depois que a arte já foi aprovada.
+
+> [!IMPORTANT]
+> **O painel não nasce quando falta número dos dois lados.** Painel grande escrito
+> "a combinar" é espaço nobre gasto para não dizer nada — e o cartão de Envio
+> abaixo já diz isso. Na **retirada** ele muda de rótulo (*"Pronto para retirada
+> em"*) e perde a caixa de transporte: quem vai buscar é o cliente, e somar um dia
+> de frete que não vai acontecer daria a ele uma data pior do que a real.
+
+> [!NOTE]
+> `linhasDoEnvio` continua devolvendo **tudo** — é a função com teste, e é ela que
+> sabe das retiradas, dos prazos sem número e do rastreio. Quem tira as linhas de
+> prazo repetidas, quando o painel está aberto, é o `envioSemOsPrazos`, na camada
+> de tela. Repetir o mesmo número seis linhas abaixo faz o cliente parar para
+> conferir se são dois prazos diferentes.
 
 | parte | origem | regra |
 |---|---|---|
@@ -277,7 +362,13 @@ em 793 —, enquanto os dígitos nunca discordaram: 11 para CPF, 14 para CNPJ.
 portaria" sabe mais do que esta regra.
 
 > [!IMPORTANT]
-> **A trava tem saída, e é o ALTERAR.** Com CNPJ e sem recebedor, o CONFIRMAR
+> **A saída fica na própria linha do problema.** Desde 25/08/2026 o aviso de
+> recebedor faltando é uma linha com o botão **Informar** ao lado
+> (`portal-falta`), que chama o mesmo `decidirDados('entrega', false)` do Alterar.
+> Antes ele dizia *"toque em ALTERAR abaixo"* — e o Alterar fica noutro cartão,
+> depois de sete linhas de endereço.
+
+> **A trava tem saída, e é o Alterar.** Com CNPJ e sem recebedor, o Confirmar
 > fica desligado — o cliente não pode dizer "está correto" sobre um endereço que
 > a transportadora não consegue entregar. Mas a caixa de texto do ALTERAR passa a
 > pedir o nome e o CPF, e quem a usa deixa de ser cobrado no cartão de
@@ -298,7 +389,39 @@ banco em 20/08/2026 a partir do pedido 20927, cujo link é
 > cobrança nos últimos 90 dias.
 
 A aba mostra uma **lista** de cobranças, porque 190 desses pedidos têm duas ou
-mais — entrada mais parcelas, com a referência indo `20927-A`, `20927-B`.
+mais — entrada mais parcelas, com a referência indo `20927-A`, `20927-B`. A
+**em aberto vem à frente**, e a paga fica recolhida: o que o cliente veio fazer
+aqui é pagar o que falta.
+
+### Um painel só, e o número grande é o que FALTA (25/08/2026)
+
+Até 25/08/2026 a aba abria com **duas** caixas de destaque empilhadas — *"Status
+do pagamento"* e *"Total do pedido"* —, e o total já era o mesmo número que a aba
+de Orçamento mostra em destaque. Duas caixas do mesmo tamanho, uma repetindo outra
+aba, e nenhuma respondendo o que o cliente vem perguntar aqui: **quanto eu ainda
+devo?**
+
+```
+FALTA PAGAR                    [ Parcialmente pago (1 de 2) ]
+R$ 3.420,00
+▓▓▓▓▓▓▓▓░░░░░░░░░░░░
+R$ 2.280,00 pagos                       Total R$ 5.700,00
+```
+
+> [!IMPORTANT]
+> **A conta sai das COBRANÇAS, e não de `propostas.valor_total`.** São números
+> diferentes quando o pedido foi cobrado com entrada mais parcelas, ou quando o
+> financeiro cancelou uma e emitiu outra: dizer *"falta R$ 5.700"* a quem já pagou
+> a entrada seria cobrá-lo duas vezes na tela. Quem faz a conta é
+> `contasDoPagamento`, com a mesma regra de pago/cancelada do
+> `pagamento-do-pedido.js`.
+
+> **Pedido sem cobrança não entra nessa conta:** ali o painel mostra o valor do
+> pedido, porque *"falta R$ 0,00"* se lê como "está pago" — e são 350 dos pedidos
+> da Lista de Arte, onde a cobrança apenas ainda não saiu.
+
+> **A barra some quando os valores não vieram.** Uma barra que anda por engano diz
+> uma mentira sobre dinheiro; aí a legenda conta **cobranças** ("1 de 2 pagas").
 
 O **status em destaque** é o das cobranças todas juntas, e não o de uma:
 
@@ -370,10 +493,59 @@ nos pedidos 21114 (3 modelos) e 21143 (7 modelos).
 
 | Estado | Barra do rodapé |
 |---|---|
-| Nenhum aprovado | *Faltam **3 modelos** para aprovar. Role a página e toque em APROVAR ou ALTERAR em cada um.* + botão cinza |
+| Nenhum aprovado | *Faltam **3 modelos** para decidir. Role a página e toque em **Aprovar** ou **Pedir alteração** em cada um.* + botão cinza |
 | Alguns aprovados | o mesmo, com a conta atualizada (*Falta **1 modelo***) |
 | **Todos aprovados** | *✅ **Todas as artes aprovadas.** Levando você para os dados de entrega...* e a página **vira sozinha** |
-| Algum em ALTERAR | botão vermelho **⚠️ SOLICITAR ALTERAÇÃO DE ARTE** — sem salto |
+| Algum em alteração | botão laranja **Enviar pedidos de alteração** — sem salto |
+
+> Os rótulos saíram da caixa alta em 25/08/2026, e o botão verde passou a ser
+> **Aprovar artes e continuar**: *"FINALIZAR E APROVAR PEDIDO COMPLETO"* dizia só
+> metade do que o toque faz, e em caixa alta soava como o fim do caminho — quando
+> ainda faltam a conferência da entrega e a da nota, que é para onde ele leva.
+
+### A ordem do cartão: a arte primeiro (25/08/2026)
+
+O cartão de cada modelo abria com os botões **APROVAR** / **ALTERAR** e com uma
+caixa de texto rotulada *"Anotações / Observações de Alteração"*; a arte vinha
+**depois**. Lendo de cima para baixo — que é como se lê um celular — o cliente era
+convidado a decidir antes de ver o que estava decidindo, e a caixa aberta sugeria
+que escrever nela fazia parte de aprovar. O rótulo, ainda por cima, é vocabulário
+do painel interno.
+
+Hoje o cartão do cliente sai de um ramo próprio (`if (ehCliente)` em
+`renderAmostrasOSItens`), nesta ordem:
+
+```
+Nome do modelo                    [ chip de estado ]
+─────────────────────────────────────────────────
+            a ARTE (frente, verso, PDF)
+                          [ 🔍 Ampliar ]
+[ produto ] [ 180 un ] [ frente e verso ]
+
+[  ✓ Aprovar  ]  [  ✎ Pedir alteração  ]
+```
+
+> [!IMPORTANT]
+> **A caixa de alteração nasce fechada** e abre no toque de *Pedir alteração*
+> (`abrirPedidoDeAlteracao`), com o botão *Enviar pedido de alteração* dentro
+> dela. Mas o `<textarea>` **continua no HTML mesmo fechado**, com o mesmo id: é
+> dele que o `decisionAmostraItem` lê, e é ele que recusa `REPROVADA` sem
+> descrição. Sem o campo na página, a recusa cairia num `focus()` de elemento
+> inexistente e o cliente ficaria com o aviso e nenhum lugar para escrever.
+>
+> O `display` vai no `style=""`, e não numa classe: regra de folha de estilo perde
+> para atributo `style`, e nesta mesma tela um `hidden` já deixou de esconder dois
+> botões por causa disso.
+
+> **O par continua com o mesmo peso visual dos dois lados.** Pintar o Aprovar de
+> verde e o outro de cinza empurra o cliente a aprovar sem olhar — e é exatamente
+> aqui que ele deveria olhar. A cor entra **depois** da decisão, para dizer o que
+> ele escolheu.
+
+> **O convite a ampliar** (`amostra-ampliar`) existe porque o toque na arte sempre
+> abriu o lightbox e nada dizia isso: imagem não anuncia que é clicável, e
+> `cursor: zoom-in` não existe no celular. Ele tem `pointer-events: none`, para o
+> toque atravessar o chip e chegar na arte, que é quem tem o `onclick`.
 
 ### O contador
 
@@ -468,11 +640,13 @@ mesmo instante faria o cliente perder de vista a própria ação.
 
 ### 4. Aprovação pelo Cliente
 
-11. Se status = `Enviar ARTE`: cliente vê as janelas com:
-    - Canvas renderizado com a arte combinada (cor + numeração + arte)
-    - Botão **✅ APROVAR** e **❌ ALTERAR** por modelo
-    - Campo de **observações** para detalhar alterações
-    - Botão global **FINALIZAR E APROVAR PEDIDO COMPLETO**
+11. Se status = `Enviar ARTE`: cliente vê, por modelo:
+    - Canvas renderizado com a arte combinada (cor + numeração + arte), **acima**
+      da decisão
+    - Botões **Aprovar** e **Pedir alteração**, com o mesmo peso visual
+    - A caixa de alteração, **fechada**, que abre no toque de *Pedir alteração*
+    - Botão global **Aprovar artes e continuar** (cinza enquanto falta decidir
+      algum modelo, com o recado dizendo quantos)
 
 12. **Se Aprovar** (`clienteFinalizarFluxo('APROVAR_TUDO')`):
     - Status global → `ARTE_APROVADA`

@@ -4,7 +4,16 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v707** — 2026-08-24 | Agente **1.2.202**
+## Versão atual: **v720** — 2026-08-25 | Agente **1.2.215**
+
+> [!IMPORTANT]
+> **O registro detalhado vive em `docs/CHANGELOG.md`.** Este arquivo tem as
+> entradas por versão até a **v707** (24/08/2026); a partir da v708 as entradas
+> passaram a ser escritas lá, por data, e é lá que está o histórico das telas.
+>
+> Este cabeçalho ficou parado em v707 por onze publicações — o que é pior do que
+> não ter cabeçalho, porque quem abre o arquivo lê um número e acredita. Quando
+> voltar a divergir, é aqui que se conserta.
 
 ---
 

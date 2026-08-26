@@ -427,6 +427,149 @@ depois, a Tchéquia acusa `"ř" (U+0159), "ě" (U+011B), "č" (U+010D)`, o PRONT
 
 ---
 
+## [2026-08-25] — Link do cliente: a arte antes da decisão, a trilha do pedido e os ícones desenhados *(v718)*
+
+Pedido do usuário: *"reavaliar e propor melhorias visuais e de usabilidade no link do cliente,
+deixar mais fluido e prático"* — desenhado antes numa prancheta de proposta, com a tela de hoje ao
+lado da redesenhada, e aprovado com *"muito bom, executar"*.
+
+Nada aqui mudou regra de negócio nem o que sai impresso. As cores são as mesmas do `style.css`, os
+textos de aviso continuam sendo os que o código já escrevia, e o par de decisão continua com o
+mesmo peso visual dos dois lados — de propósito, para não empurrar ninguém a aprovar sem ler.
+
+### O cartão do modelo inverteu
+
+Ele abria com os botões **APROVAR** / **ALTERAR** e com uma caixa de texto rotulada *"Anotações /
+Observações de Alteração"*; a arte vinha **depois**. Lendo de cima para baixo — que é como se lê um
+celular — o cliente era convidado a decidir antes de ver o que estava decidindo, e a caixa aberta
+sugeria que escrever nela fazia parte de aprovar. O rótulo, ainda por cima, é vocabulário do painel
+interno.
+
+Agora: nome do modelo e estado no topo, **a arte**, o que ela é (produto, quantidade, frente e
+verso), e por último os dois botões — **Aprovar** e **Pedir alteração**.
+
+**A caixa de alteração nasce fechada** e abre no toque de *Pedir alteração*, com o botão *Enviar
+pedido de alteração* dentro dela. A exigência antiga continua de pé: o `decisionAmostraItem` recusa
+`REPROVADA` sem descrição, porque a gráfica não sabe o que refazer. Por isso o `<textarea>`
+**continua no HTML mesmo com a caixa fechada** — sem ele, a recusa cairia num `focus()` de elemento
+inexistente e o cliente ficaria com o aviso e nenhum lugar para escrever. O `display` vai no
+`style=""`, e não numa classe: regra de folha de estilo perde para atributo `style`, e nesta mesma
+tela um `hidden` já deixou de esconder dois botões por causa disso.
+
+### A trilha do pedido, acima das seções
+
+O Portal tem cinco abas, mas só **três** pedem alguma coisa do cliente: aprovar a arte, conferir a
+entrega e conferir os dados da nota. Orçamento e Pagamento são consulta.
+
+Essa distinção não existia na tela: as cinco abas eram idênticas, e o que faltava só era dito
+**dentro** de cada uma, no fim da rolagem. Quem abrisse na aba de Orçamento não tinha como saber que
+havia duas conferências esperando em outro lugar.
+
+A trilha mora fora das seções e vale para as cinco: *"Para fechar o pedido — 1 de 3 concluídas"*,
+com uma barra e três etapas. **Cada etapa é um botão que abre a aba dela** — dizer o que falta sem
+oferecer o caminho é a metade do trabalho — com o piso de toque de 44px, porque é controle e não
+rótulo.
+
+A conta da arte usa a **mesma** pergunta do cartão de finalização (`artesJaAprovadas`), e não uma
+conta paralela: duas contas sobre a mesma coisa acabam divergindo, e o cliente veria a trilha dizer
+"concluída" com o botão de finalizar ainda travado. Pedir alteração **também conta como decidir**: o
+pedido dele já está registrado e vai para o atendimento.
+
+### O sinal de pendência em cada aba
+
+Ponto âmbar quando a aba espera uma ação, visto verde quando já foi resolvida, e nada quando é só
+informação. O estado vai também em `aria-label`, para quem não enxerga a cor.
+
+**Pagamento só acende quando há o que o cliente possa fazer ali**: cobrança em aberto **com link que
+abre**. Pedido faturado, ou cobrança sem link liberado, não ganha ponto — sinal de pendência sem
+botão do outro lado é cobrança em cima de quem não pode resolver.
+
+### Ícones desenhados no lugar dos emoji
+
+Novo `frontend/icones-cliente.js`, e o `cliente.html` guarda só o **nome** de cada ícone
+(`data-icone="arte"`).
+
+Emoji não é desenho nosso: é uma **fonte do aparelho de quem abre**. Quem abre este link é o cliente
+da gráfica, no celular, pelo navegador embutido do WhatsApp — e ali o 🎨 do Android tem outra forma,
+outra paleta e outro peso que o do iPhone. Pior no detalhe que ninguém antecipa: emoji é colorido por
+definição, então ele **não acompanha a cor do texto ao lado** — a aba ativa fica azul e o ícone dela
+continua multicolorido.
+
+Traço de 1,8px numa grade de 24px resolve os três: mesmo desenho em todo aparelho, herda a cor por
+`currentColor`, escala sem borrar. **O rótulo em texto continua obrigatório** — ícone sozinho não diz
+para onde leva. Se o módulo não carregar, as abas ficam sem desenho e **com** o rótulo.
+
+> `icones-cliente.js` entrou na `PAINEL_ARQUIVOS` do `security_config.py` na mesma leva. Sem isso a
+> estação serviria uma `cliente.html` pedindo um script que dá 404 — o teste
+> `test_todo_arquivo_que_o_painel_carrega_esta_na_lista_de_sincronismo` pegou isso antes de sair.
+
+### Entrega: "quando chega?" virou a resposta que abre a aba
+
+A soma dos dois prazos já era calculada pelo `prazoDeEntrega` desde 20/08 — faltava o **lugar**. Ela
+saía como a segunda de sete linhas dentro do cartão de Envio, do mesmo tamanho do código de rastreio.
+
+Agora abre a aba: *"Seu pedido chega em **7 dias úteis**"*, com produção e transporte em duas caixas
+embaixo e a forma de envio na linha de baixo. Continua sendo **"a partir de"** — é o piso do prazo, e
+a gráfica não promete o dia exato; inventar uma data aqui criaria uma promessa que ninguém fez.
+
+O painel **não nasce** quando falta número dos dois lados: painel grande escrito "a combinar" é
+espaço nobre gasto para não dizer nada, e o cartão de Envio abaixo já diz isso. E o `linhasDoEnvio`
+continua devolvendo tudo (é a função com teste); quem filtra as linhas de prazo repetidas é o
+`envioSemOsPrazos`, na camada de tela.
+
+**O que falta virou uma linha com o botão ao lado.** Os avisos de recebedor terminavam em *"toque em
+ALTERAR abaixo"* — e o ALTERAR fica noutro cartão, depois de sete linhas de endereço. O botão
+*Informar* faz exatamente o que o Alterar faz (`decidirDados('entrega', false)`): mesma porta, na
+altura de quem leu o problema.
+
+### Pagar: um painel só
+
+A aba abria com **duas** caixas de destaque empilhadas — *"Status do pagamento"* e *"Total do
+pedido"* —, e o total já era o mesmo número que a aba de Orçamento mostra em destaque. Duas caixas do
+mesmo tamanho, uma repetindo outra aba, e nenhuma respondendo o que o cliente vem perguntar aqui:
+**quanto eu ainda devo?**
+
+Agora o número grande é o que **falta**, com o já pago e o total em letra menor embaixo da barra. A
+conta sai das **cobranças**, e não de `propostas.valor_total`: são números diferentes quando o pedido
+foi cobrado com entrada mais parcelas, ou quando o financeiro cancelou uma e emitiu outra — dizer
+"falta R$ 5.700" para quem já pagou a entrada seria cobrá-lo duas vezes na tela.
+
+Pedido **sem cobrança** não entra nessa conta: ali o painel mostra o valor do pedido, porque "falta
+R$ 0,00" se lê como "está pago". E a barra some quando os valores não vieram — uma barra que anda por
+engano diz uma mentira sobre dinheiro; aí a legenda conta **cobranças** ("1 de 2 pagas").
+
+Na lista, a cobrança **em aberto vem à frente** e a paga fica recolhida: o que o cliente veio fazer
+aqui é pagar o que falta.
+
+### O cabeçalho encolheu
+
+A logo e o selo dividem a primeira faixa; o pedido vem embaixo. Antes o cabeçalho empilhava em quatro
+andares no celular e o selo — que é a resposta a *"como está meu pedido?"* — nascia por último.
+**202px → 154px**, e a arte começa mais acima.
+
+O selo passou a ser **preenchido, com um ponto na cor**, no lugar do contorno vazado: no escuro do
+fundo, e na tela de um celular no sol, âmbar (`aguardando aprovação`) e laranja (`alteração
+solicitada`) ficavam indistinguíveis — e são justamente os dois estados em que o cliente precisa
+fazer alguma coisa.
+
+> **Uma armadilha do CSS, para quem vier depois:** o aperto do celular (logo a 38px, selo menor) teve
+> de ir para um `@media` no **fim** do `style.css`. `.cliente-logo` e `.portal-selo` são redefinidos
+> no bloco do Portal, e uma media query escrita **antes** perde para eles — mesma especificidade,
+> vence quem vem depois. Na primeira tentativa a regra existia, era ignorada em silêncio, e a logo
+> continuava a 47px.
+
+### Conferido no navegador, e não só nos testes
+
+Puppeteer a 390px e a 1200px, com sete modelos semeados: a arte acima dos botões, a caixa de
+alteração fechada e abrindo no toque, a trilha e os pontos acompanhando cada decisão, o cabeçalho com
+logo e selo na mesma linha, sem erro de console e sem rolagem horizontal. Também no estado de **só
+leitura** (pedido em produção): contador escondido, botões fora, aviso com o ícone no círculo.
+
+Os harnesses do Portal ganharam **42 conferências novas** para prender as decisões acima. Suíte
+inteira: 1.857 testes.
+
+---
+
 ## [2026-08-25] — Link do cliente: a aba da arte diz o que falta, e vira sozinha
 
 Conferência do fluxo de aprovação, dirigido de ponta a ponta num iPhone simulado nos

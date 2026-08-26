@@ -370,7 +370,21 @@ BEGIN
             'cidade',      v_grafica.municipio,
             'uf',          v_grafica.uf,
             'cep',         v_grafica.cep,
-            -- O telefone da gráfica, para o botão "falar com o meu atendimento".
+            -- O telefone da gráfica.
+            --
+            -- ATENÇÃO: NINGUÉM MAIS LÊ ESTE CAMPO. Ele nasceu em 25/08/2026 para
+            -- o botão "falar com o meu atendimento", e no mesmo dia o botão
+            -- mudou de fonte: passou a usar um link de WhatsApp POR ATENDENTE
+            -- (`linkDoAtendimento`, em `cliente-entrega.js`), porque o cadastro
+            -- da empresa só tem um fixo -- e mandar discar um fixo de dentro do
+            -- navegador embutido do WhatsApp é o pior destino possível.
+            --
+            -- Fica aqui porque tirá-lo custa uma nova DDL em produção para
+            -- economizar um campo de texto no JSON, e porque um telefone da
+            -- gráfica é o tipo de dado que a próxima tela vai querer. Se ele
+            -- continuar sem leitor na próxima passagem por este arquivo, remova.
+            --
+            -- O comentário original, que explica de onde ele sai:
             --
             -- Meia dúzia de avisos daquela página terminam em "fale com seu
             -- atendimento" e não ofereciam caminho nenhum: o cliente tinha de
