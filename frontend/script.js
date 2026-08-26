@@ -824,6 +824,45 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 // `name_verso` (verso): as duas colunas são gravadas junto com o arquivo.
 const COLUNAS_DA_COR_NA_LISTA = 'id,empresa_id,name,hex,pdf_url,pdf_filename,created_at,updated_at,formato_id,width_mm,height_mm,id_modelo_cor_num,name_verso,frente_verso,cor_referencia';
 
+// O CATÁLOGO DE NUMERAÇÕES SEM O BANCO DE DADOS DE CADA UMA (26/08/2026).
+//
+// Mesma doença da lista de cores logo acima, com um número pior. Medido contra
+// o banco real, `producao_numeracoes` tem 105 registros e 27 colunas:
+//
+//     select('*')                     29,17 MB   1.772 ms
+//     esta lista                       0,19 MB     273 ms
+//
+// A diferença inteira é UMA coluna. `csv_data` sozinho pesa 30,1 MB dos 30,3 MB
+// da tabela; as outras 26 somadas dão 209 KB. Não é uma lista de "colunas
+// leves" — é a tabela inteira menos o elefante.
+//
+// O que isso custava, e que não aparecia como erro em lugar nenhum: abrir o
+// painel baixava 29 MB antes de qualquer tela, e deixava 187.021 linhas de CSV
+// vivas na memória da aba — de bancos que a lista não mostra e ninguém pediu.
+// O sintoma que o usuário via era outro: um clique qualquer travando por 200 ms
+// (o INP do Chrome apontou o filtro do editor de CSV, que medido sozinho custa
+// 14 ms com 56.000 linhas). Quem paga a conta da memória é sempre o próximo
+// clique, não quem a encheu.
+//
+// Quem precisa das linhas chama `garantirCsvDaNumeracao(num)` e recebe a MESMA
+// numeração com o `csv_data` preenchido — uma por vez, só a que vai ser aberta,
+// desenhada ou impressa. As numerações do pedido aberto continuam vindo
+// inteiras pelo `recarregarNumeracoesDoPedido`, que lê por id.
+//
+// Para saber se existe banco SEM baixá-lo, use `csv_filename` e `csv_headers`:
+// as duas são gravadas junto com o CSV e estão nesta lista de propósito.
+//
+// COLUNA NOVA NA TABELA PRECISA ENTRAR AQUI. Não há "select tudo menos uma" no
+// PostgREST, então a lista é explícita e envelhece em silêncio: a coluna que
+// faltar chega como `undefined`, sem erro nenhum. O teste
+// `test_catalogo_de_numeracoes_sem_csv` trava isso contra o que a duplicação
+// copia, que é a enumeração mais completa que o código tem.
+const COLUNAS_DA_NUMERACAO_NA_LISTA = 'id,empresa_id,name,formato_id,formato_ids,tipo,'
+    + 'print_mode,ticket_qtd,ticket_logica,csv_filename,csv_headers,csv_url,'
+    + 'svg_content,svg_filename,pdf_content,pdf_filename,bg_url,bg_filename,'
+    + 'elements,preview_jpg,is_custom,os_item_id,id_gabarito,Cli_Num,'
+    + 'created_at,updated_at';
+
 const _pdfDeCorEmVoo = new Map();
 
 async function garantirPdfDaCor(cor) {
@@ -863,6 +902,131 @@ async function garantirPdfDaCor(cor) {
     return cor;
 }
 window.garantirPdfDaCor = garantirPdfDaCor;
+
+// As buscas de `csv_data` em voo, por id. Mesma mecânica do `_pdfDeCorEmVoo`:
+// duas telas pedindo o banco da mesma numeração ao mesmo tempo fazem UMA
+// consulta. O mapa é limpo a cada releitura do catálogo — ver o `api()`.
+const _csvDaNumeracaoEmVoo = new Map();
+
+/**
+ * Preenche o `csv_data` de uma numeração que veio da lista enxuta.
+ *
+ * ## Os três estados de `csv_data`, e por que eles não podem se confundir
+ *
+ *   `undefined` — veio da lista, o banco não foi buscado ainda. SÓ ESTE vai à rede.
+ *   `null`      — já foi buscado, e esta numeração não tem banco.
+ *   array       — está aqui.
+ *
+ * A diferença entre os dois primeiros é a coisa mais importante deste arquivo.
+ * Quase todo leitor de `csv_data` no painel pergunta `if (!num.csv_data)` e
+ * conclui "esta numeração não tem banco" — e uma numeração COM banco que
+ * simplesmente não foi baixado responde igual a uma SEM banco. O motor, sem
+ * linhas, ignora o banco e cai na numeração sequencial: sai número impresso no
+ * lugar do nome da pessoa, sem erro em tela nenhuma.
+ *
+ * É por isso que a lista enxuta NÃO traz a coluna (deixando `undefined`) em vez
+ * de trazê-la vazia, e por isso `numeracaoTemBanco()` existe: para quem precisa
+ * decidir "tem banco?" sem ter as linhas em mãos.
+ *
+ * Nunca lança: sem rede, a numeração volta como estava e quem chamou segue com
+ * o que tem — igual ao `garantirPdfDaCor`.
+ */
+async function garantirCsvDaNumeracao(num) {
+    if (!num || !num.id) return num;
+    if (num.csv_data !== undefined) return num;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return num;
+
+    const chave = String(num.id);
+    if (!_csvDaNumeracaoEmVoo.has(chave)) {
+        _csvDaNumeracaoEmVoo.set(chave, supabaseClient
+            .from('producao_numeracoes')
+            .select('csv_data')
+            .eq('id', num.id)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) throw error;
+                return data || { csv_data: null };
+            }));
+    }
+
+    try {
+        const linha = await _csvDaNumeracaoEmVoo.get(chave);
+        num.csv_data = linha.csv_data || null;
+        // A mesma numeração pode estar em duas referências (a do catálogo e uma
+        // cópia que a tela guardou). Mesma precaução do `garantirPdfDaCor`.
+        const noEstado = (state.numeracoes || []).find(n => String(n.id) === chave);
+        if (noEstado && noEstado !== num) noEstado.csv_data = num.csv_data;
+    } catch (e) {
+        _csvDaNumeracaoEmVoo.delete(chave);
+        console.warn('[numeracoes] nao consegui baixar o banco de dados da numeracao ' + num.id, e);
+    }
+    return num;
+}
+window.garantirCsvDaNumeracao = garantirCsvDaNumeracao;
+
+/** Esquece o `csv_data` baixado de uma numeração — quem grava tem de chamar. */
+function esquecerCsvDaNumeracao(numId) {
+    _csvDaNumeracaoEmVoo.delete(String(numId));
+}
+window.esquecerCsvDaNumeracao = esquecerCsvDaNumeracao;
+
+/**
+ * Esta numeração tem banco de dados? Responde SEM baixar as linhas.
+ *
+ * `csv_filename` e `csv_headers` são gravados junto com o CSV e vêm na lista
+ * enxuta de propósito. Perguntar por `csv_data.length` responderia "não" para
+ * toda numeração cujo banco ainda não desceu — ver o comentário do
+ * `garantirCsvDaNumeracao`.
+ */
+function numeracaoTemBanco(num) {
+    if (!num) return false;
+    if (Array.isArray(num.csv_data)) return num.csv_data.length > 0;
+    return !!(num.csv_filename || (num.csv_headers && num.csv_headers.length));
+}
+window.numeracaoTemBanco = numeracaoTemBanco;
+
+/**
+ * O banco de dados de todas as numeracoes que um trabalho pode usar, na mao
+ * antes de o payload ser montado.
+ *
+ * ## Por que isto e uma trava, e nao uma otimizacao
+ *
+ * O motor decide entre banco e numeracao SEQUENCIAL pelo tamanho de `rows`.
+ * Uma numeracao cujo `csv_data` ainda nao desceu chega com zero linhas e e
+ * indistinguivel de uma sem banco nenhum: o trabalho sai com numero impresso
+ * no lugar do nome da pessoa, sem erro em tela nenhuma e sem ninguem
+ * descobrir antes do papel. Enquanto o catalogo vinha com `select('*')` isso
+ * era impossivel por acidente; desde 26/08/2026 e possivel, e por isso passa
+ * a haver uma linha explicita que impede.
+ *
+ * Uma por vez e em serie, de proposito: sao poucas (as do pedido aberto), e
+ * as que ja estao em memoria voltam na hora, sem tocar a rede.
+ */
+async function garantirCsvDoTrabalho(ids) {
+    const unicos = Array.from(new Set((ids || []).filter(Boolean).map(String)));
+    for (const id of unicos) {
+        const num = (state.numeracoes || []).find(n => String(n.id) === id);
+        if (num) await garantirCsvDaNumeracao(num);
+    }
+}
+window.garantirCsvDoTrabalho = garantirCsvDoTrabalho;
+
+/** Os ids de numeracao que o trabalho da tela atual pode usar. */
+function idsDeNumeracaoDoTrabalho(idDoSelect) {
+    const doItem = it => it && (it.amostra_num_id || it.numeracao_id);
+    const ids = (state.selectedOSItems || []).map(sel => doItem(
+        ((state.osItens && state.osItens[sel.osId]) || [])
+            .find(i => String(i.id) === String(sel.itemId))));
+    const ativo = state.activeOSItem;
+    if (ativo) {
+        ids.push(doItem(((state.osItens && state.osItens[ativo.osId]) || [])
+            .find(i => String(i.id) === String(ativo.itemId))));
+    }
+    const sel = idDoSelect && document.getElementById(idDoSelect);
+    if (sel && sel.value) ids.push(sel.value);
+    return ids;
+}
+window.idsDeNumeracaoDoTrabalho = idsDeNumeracaoDoTrabalho;
 
 /** Baixa o PDF de referência da cor no clique — o catálogo não o traz. */
 window.baixarPdfDaCor = async function (id, face) {
@@ -955,8 +1119,15 @@ async function api(method, path, body = null) {
 
                 } else {
 
-                    // Cores sem os PDFs — ver COLUNAS_DA_COR_NA_LISTA no topo.
-                    const colunas = (col === 'producao_cores') ? COLUNAS_DA_COR_NA_LISTA : '*';
+                    // Cores sem os PDFs, numerações sem o banco de dados — ver as duas
+                    // constantes no topo. Nos dois casos a coluna pesada desce depois,
+                    // uma por vez, por `garantirPdfDaCor` / `garantirCsvDaNumeracao`.
+                    const colunas = (col === 'producao_cores') ? COLUNAS_DA_COR_NA_LISTA
+                        : (col === 'producao_numeracoes') ? COLUNAS_DA_NUMERACAO_NA_LISTA
+                        : '*';
+                    // Catálogo relido é catálogo novo: o que já se baixou de `csv_data`
+                    // não vale mais para estas linhas, que voltam com ele em `undefined`.
+                    if (col === 'producao_numeracoes') _csvDaNumeracaoEmVoo.clear();
 
                     // ORDEM FIXA para o catálogo de numerações.
                     //
@@ -3207,7 +3378,15 @@ window.novaNumeracao = function () {
 
 
 
-function editNumeracao(id) {
+// `async` desde 26/08/2026, e os TRES pontos de chamada passaram a esperar.
+//
+// O catalogo vem sem `csv_data`; o editor precisa das linhas para o "Ver /
+// Editar" e para a contagem. Preencher em segundo plano tentaria adivinhar
+// quando a tela ja trocou de numeracao -- esperar aqui e o que mantem uma
+// verdade so. Quem chama escreve no DOM logo depois (o `#num-name` do clone),
+// entao o `await` do lado de la nao e enfeite: sem ele essas linhas correriam
+// antes de este preencher a tela.
+async function editNumeracao(id) {
 
     const n = state.numeracoes.find(x => String(x.id) === String(id));
 
@@ -3215,6 +3394,8 @@ function editNumeracao(id) {
         toast('Numeração não encontrada. Recarregue a página e tente novamente.', 'warning');
         return;
     }
+
+    await garantirCsvDaNumeracao(n);
 
 
 
@@ -3480,6 +3661,12 @@ window.deleteNumeracao = deleteNumeracao;
 window.duplicateCatalogNumeracao = async function (id) {
     const n = state.numeracoes.find(x => x.id === id);
     if (!n) return;
+
+    // O banco de dados vem junto na copia. Sem esta linha, duplicar a partir
+    // do catalogo (que nao traz `csv_data`) criaria uma numeracao vazia com
+    // `csv_filename` preenchido -- e a copia imprimiria numero sequencial no
+    // lugar dos nomes, com a tela dizendo que ela tem banco.
+    await garantirCsvDaNumeracao(n);
 
     try {
         const clone = {
@@ -10943,6 +11130,11 @@ window.runImposition = async function (mode, returnBlob = false) {
     window.isImposing = true;
     try {
 
+    // O banco de dados das numeracoes deste trabalho, ANTES de qualquer conta.
+    // Ver `garantirCsvDoTrabalho`: sem esta linha, uma numeracao com banco que
+    // ainda nao desceu imprime numero sequencial no lugar dos nomes.
+    await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('imp-numeracao'));
+
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     let isMultiSelected = false;
@@ -15057,6 +15249,12 @@ async function salvarCsvDaNumeracao(numId, rows) {
  * e ali não há formulário para submeter: é uma alteração cirúrgica.
  */
 async function salvarCamposDaNumeracao(numId, patch) {
+
+    // Gravou por cima do banco de dados: o que `garantirCsvDaNumeracao` tiver
+    // baixado desta numeracao esta velho a partir de agora.
+    if (patch && Object.prototype.hasOwnProperty.call(patch, 'csv_data')) {
+        esquecerCsvDaNumeracao(numId);
+    }
 
     try {
 
@@ -32180,7 +32378,9 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
 async function garantirTabelasDaAmostra() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select(COLUNAS_DA_COR_NA_LISTA); if (data) state.cores = data; } catch(e) {}
-    if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
+    // Sem `csv_data`: quem desenha e o `regenerarAmostraDoModelo`, e e la que
+    // o banco da numeracao do modelo desce, um por vez.
+    if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select(COLUNAS_DA_NUMERACAO_NA_LISTA); if (data) state.numeracoes = data; } catch(e) {}
     if (!state.formatos || !state.formatos.length)     try { const { data } = await supabaseClient.from('producao_formatos').select('*');   if (data) state.formatos = data;   } catch(e) {}
 }
 window.garantirTabelasDaAmostra = garantirTabelasDaAmostra;
@@ -32218,6 +32418,17 @@ async function regenerarAmostraDoModelo(osId, item, idx, S) {
     if (!corId && !numId && !hasArteUrl && !hasVersoUrl) {
         console.log(`[Snapshot] Item ${idx} sem camadas, nada a gerar.`);
         return false;
+    }
+
+    // O banco de dados da numeracao deste modelo, se ela tiver um.
+    //
+    // O catalogo em memoria vem sem `csv_data` desde 26/08/2026, e amostra
+    // desenhada sem as linhas nao sai vazia: sai com o numero SEQUENCIAL no
+    // lugar do nome da pessoa -- uma arte errada que o cliente aprovaria sem
+    // desconfiar. Uma numeracao por vez, e so a que vai ser desenhada.
+    if (numId) {
+        await garantirCsvDaNumeracao(
+            (state.numeracoes || []).find(n => String(n.id) === String(numId)));
     }
 
     console.log(`[Snapshot] Item ${idx} — cor:${corId||'—'} num:${numId||'—'} arte:${hasArteUrl} verso:${hasVersoUrl}`);
@@ -32378,9 +32589,9 @@ function editCustomNumeracao(idx, osId, itemId) {
     // Mudar view
     showView('view-numeracao');
     
-    setTimeout(() => {
+    setTimeout(async () => {
         // Carrega numerao base
-        editNumeracao(baseNumId);
+        await editNumeracao(baseNumId);
         
         setTimeout(() => {
             // Editar no lugar, ou clonar? Ver `comoEditarNumeracaoDoModelo`.
@@ -32603,7 +32814,7 @@ window.selectClienteNumeracaoForField = function(fieldId, numId) {
     window.closeClienteNumeracoesModal();
 };
 
-window.editImposicaoCustomNumeracao = function(fieldId) {
+window.editImposicaoCustomNumeracao = async function(fieldId) {
     const numSelect = document.getElementById(fieldId);
     if (!numSelect || !numSelect.value) {
         toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
@@ -32635,7 +32846,7 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
     };
     
     // Abre a numeração
-    editNumeracao(numId);
+    await editNumeracao(numId);
 
     // Editar no lugar, ou clonar? A mesma decisão do `editCustomNumeracao`.
     const itemIdAtual = activeOSItem ? activeOSItem.itemId : null;

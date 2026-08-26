@@ -55,6 +55,12 @@ function montar(mundo) {
         'state', 'document', 'console', 'ESCALA_DA_AMOSTRA',
         'resolveItemCorNumIds', 'saveAmostraToDB', 'drawAmostraFace',
         'snapshotAmostraSync', 'preloadAmostraItemPdfElements',
+        // 26/08/2026: o catalogo passou a vir sem `csv_data`, e quem desenha a
+        // amostra garante o banco da numeracao do modelo antes de desenhar --
+        // amostra sem as linhas sai com numero sequencial no lugar do nome. Aqui
+        // ele e um duble: o que este arnes prova continua sendo a logistica da
+        // gravacao, e nao a descida do banco.
+        'garantirCsvDaNumeracao',
         fonte + '\nreturn regenerarAmostraDoModelo;')(
         mundo.state || {},
         { createElement: () => ({ width: 100, height: 40, getContext: () => ({}) }) },
@@ -64,7 +70,8 @@ function montar(mundo) {
         mundo.saveAmostraToDB || (async () => {}),
         mundo.drawAmostraFace || (async () => {}),
         mundo.snapshotAmostraSync || (async () => {}),
-        undefined);
+        undefined,
+        mundo.garantirCsvDaNumeracao || (async n => n));
 }
 
 const ESTADO = {

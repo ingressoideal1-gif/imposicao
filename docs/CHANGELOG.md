@@ -4,6 +4,67 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-26] — O catálogo de numerações para de baixar 29 MB para listar 105 nomes
+
+Pergunta do usuário, depois de a tela travar de novo: *"onde esta o gargalo? o que precisa
+melhorar na infraestrutura?"*.
+
+### O gargalo não era a infraestrutura
+
+Medido contra o banco real, `producao_numeracoes` tem 105 registros e 27 colunas:
+
+| | dados | rede |
+|---|---|---|
+| `select('*')` — o que o painel fazia | **29,17 MB** | **1.772 ms** |
+| a lista enxuta | 0,19 MB | 273 ms |
+
+**A diferença inteira é uma coluna.** `csv_data` sozinho pesa 30,1 MB dos 30,3 MB da tabela; as
+outras 26 somadas dão 209 KB. O maior banco é o `FRONT STAGE - Codigos.csv`, com 56.000 linhas ×
+7 colunas = 10,6 MB numa numeração só.
+
+O que isso custava não aparecia como erro em lugar nenhum: abrir o painel baixava 29 MB antes de
+qualquer tela e deixava **187.021 linhas de CSV vivas na memória da aba** — de bancos que a lista
+não mostra e ninguém pediu.
+
+O sintoma que o usuário via era outro. O DevTools acusou um INP de 208 ms no `select` do filtro do
+editor de CSV; medido sozinho, esse mesmo handler custa **14 ms com 56.000 linhas** — a grade é
+virtualizada e o trabalho dela é pequeno. Quem paga a conta da memória é sempre o próximo clique,
+não quem a encheu.
+
+### O perigo que a correção cria, e as três peças contra ele
+
+Quase todo leitor do painel pergunta `if (!num.csv_data)` e conclui *"esta numeração não tem
+banco"*. Uma numeração **com** banco que ainda não desceu responde igual a uma **sem** banco — e o
+motor, sem linhas, ignora o banco e cai na numeração sequencial: sai número impresso no lugar do
+nome da pessoa, sem erro em tela nenhuma, e quem descobre é o cliente olhando o papel.
+
+1. **A lista não traz a coluna**, em vez de trazê-la vazia. `csv_data` fica `undefined`, que é
+   distinguível do `null` de "já procurei e não tem".
+2. **`numeracaoTemBanco()`** responde "tem banco?" por `csv_filename`/`csv_headers`, sem precisar
+   das linhas — as duas continuam na lista de propósito.
+3. **`garantirCsvDoTrabalho()`** abre as **duas** telas de imposição: o banco de toda numeração do
+   trabalho está em mãos antes de o payload ser montado.
+
+### Onde o banco desce agora
+
+`garantirCsvDaNumeracao(num)`, nos moldes do `garantirPdfDaCor()` que já existia: uma numeração por
+vez, só a que vai ser aberta, desenhada ou impressa; duas telas pedindo junto fazem uma consulta;
+falha de rede não lança e não envenena a próxima tentativa. Os pontos: abrir no editor, duplicar do
+catálogo, desenhar a amostra e impor. **As numerações do pedido aberto continuam vindo inteiras**
+pelo `recarregarNumeracoesDoPedido`, que lê por id — é de propósito que ela mantenha o `select('*')`.
+
+Gravar por cima do `csv_data` esquece o que foi baixado, e releitura do catálogo limpa o cache
+inteiro: o banco que a tela mostra é sempre o que está gravado.
+
+### Um detalhe que envelhece em silêncio
+
+Não existe "select tudo menos uma" no PostgREST, então a lista de colunas é escrita à mão e uma
+coluna nova na tabela chegaria como `undefined`, sem erro. O teste
+`test_a_lista_traz_toda_coluna_que_a_duplicacao_copia` trava isso contra o `duplicateCatalogNumeracao`,
+que copia campo a campo e é a enumeração mais completa que o código tem.
+
+---
+
 ## [2026-08-26] — O "Ampliar" cobria a seta de avançar página
 
 Pergunta do usuário: *"verificar layout para arquivos com paginação, pdf e numeração com .csv, onde

@@ -110,8 +110,12 @@ def test_os_dois_caminhos_de_entrada_acendem_o_botao():
 
 
 def _corpo_do_clone_da_imposicao(fonte):
-    """`editImposicaoCustomNumeracao` é uma atribuição, não uma `function nome(`."""
-    i = fonte.index("window.editImposicaoCustomNumeracao = function")
+    """`editImposicaoCustomNumeracao` é uma atribuição, não uma `function nome(`.
+
+    E `async` desde 26/08/2026: ela espera o `editNumeracao`, que passou a
+    baixar o banco de dados da numeração antes de preencher a tela.
+    """
+    i = fonte.index("window.editImposicaoCustomNumeracao = async function")
     corpo = fonte[i:fonte.index("\n};", i) + 3]
     return "\n".join(l for l in corpo.splitlines() if not l.strip().startswith("//"))
 

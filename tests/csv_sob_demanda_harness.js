@@ -1,0 +1,270 @@
+// O BANCO DE DADOS DA NUMERACAO, BAIXADO SO QUANDO PRECISA (26/08/2026).
+//
+// O catalogo de numeracoes vinha com `select('*')`: 105 registros, 29,17 MB e
+// 1.772 ms, dos quais 30,1 MB de 30,3 MB sao uma coluna so -- `csv_data`. Sem
+// ela a mesma lista da 0,19 MB em 273 ms. O que sobrava na aba eram 187.021
+// linhas de CSV de bancos que a lista nao mostra.
+//
+// Tirar a coluna e facil; o perigo esta no que ela deixa para tras. Quase todo
+// leitor do painel pergunta `if (!num.csv_data)` e conclui "esta numeracao nao
+// tem banco" -- e uma numeracao COM banco que ainda nao desceu responde igual a
+// uma SEM banco. O motor, sem linhas, cai na numeracao sequencial: sai numero
+// impresso no lugar do nome da pessoa, sem erro em tela nenhuma.
+//
+// E isso que este harness protege. As funcoes sao LIDAS do `script.js`, nao
+// copiadas -- copia continua passando depois de o original mudar.
+//
+//   1. os tres estados de `csv_data` (undefined / null / array) e qual deles vai
+//      a rede;
+//   2. duas telas pedindo a mesma numeracao fazem UMA consulta;
+//   3. falha de rede nao lanca, e nao envenena a proxima tentativa;
+//   4. `numeracaoTemBanco` responde "tem" sem as linhas em maos -- e a peca que
+//      impede confundir "nao baixado" com "nao tem";
+//   5. a copia guardada no `state` acompanha;
+//   6. gravar por cima esquece o que foi baixado;
+//   7. a trava da impressao junta selecionados, ativo e o select da tela.
+const fs = require('fs');
+const path = require('path');
+const RAIZ = path.join(__dirname, '..');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+let total = 0, falhas = 0;
+function ok(cond, oque, extra) {
+    total++;
+    if (cond) return;
+    falhas++;
+    console.error('FALHOU: ' + oque + (extra !== undefined ? '\n         ' + JSON.stringify(extra) : ''));
+}
+
+/** Le uma funcao do script.js pelo nome, ate o `}` na coluna zero. */
+function extrairFuncao(src, nome) {
+    const i = src.indexOf('\nasync function ' + nome + '(') >= 0
+        ? src.indexOf('\nasync function ' + nome + '(')
+        : src.indexOf('\nfunction ' + nome + '(');
+    if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no script.js');
+    const fim = src.indexOf('\n}', i);
+    if (fim < 0) throw new Error('nao achei o fim da funcao ' + nome);
+    return src.slice(i, fim + 2);
+}
+
+function extrairLinha(src, comeco) {
+    const i = src.indexOf(comeco);
+    if (i < 0) throw new Error('nao achei a linha "' + comeco + '" no script.js');
+    return src.slice(i, src.indexOf('\n', i));
+}
+
+const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTemBanco',
+               'garantirCsvDoTrabalho', 'idsDeNumeracaoDoTrabalho'];
+
+let CODIGO;
+try {
+    CODIGO = [extrairLinha(SCRIPT, 'const _csvDaNumeracaoEmVoo = new Map();')]
+        .concat(NOMES.map(n => extrairFuncao(SCRIPT, n)))
+        .join('\n');
+} catch (e) {
+    console.error('FALHOU: ' + e.message);
+    process.exit(1);
+}
+
+/**
+ * Um mundo por caso: o `supabaseClient` de mentira conta quantas consultas
+ * saem e o que cada uma pediu, que e o que estes testes medem.
+ */
+function mundo(opts) {
+    opts = opts || {};
+    const consultas = [];
+    const supabaseClient = opts.semSupabase ? null : {
+        from(tabela) {
+            const pedido = { tabela };
+            return {
+                select(colunas) { pedido.colunas = colunas; return this; },
+                eq(campo, valor) { pedido.id = valor; return this; },
+                maybeSingle() {
+                    consultas.push(pedido);
+                    if (opts.erro) return Promise.resolve({ data: null, error: new Error('rede caiu') });
+                    const linhas = (opts.bancos || {})[String(pedido.id)];
+                    return Promise.resolve({
+                        data: linhas === undefined ? null : { csv_data: linhas }, error: null,
+                    });
+                },
+            };
+        },
+    };
+    const state = opts.state || {};
+    const document = { getElementById: id => (opts.selects || {})[id] || null };
+    const api = new Function('window', 'state', 'supabaseClient', 'document', 'console',
+        CODIGO + '\nreturn { ' + NOMES.join(', ') + ' };'
+    )({}, state, supabaseClient, document, { warn() {} });
+    return { api, consultas, state };
+}
+
+// ─── 1. Os tres estados de `csv_data` ───────────────────────────────────────
+
+(async function soOEstadoUndefinedVaiARede() {
+    const linhas = [{ Nome: 'Ana' }, { Nome: 'Bruno' }];
+
+    // undefined: veio da lista enxuta. Este, e so este, consulta.
+    let m = mundo({ bancos: { 'n1': linhas } });
+    let num = { id: 'n1', csv_filename: 'convidados.csv' };
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 1, 'undefined vai a rede', m.consultas);
+    ok(m.consultas[0].colunas === 'csv_data',
+       'e pede SO a coluna pesada, nao a linha inteira', m.consultas[0]);
+    ok(m.consultas[0].tabela === 'producao_numeracoes', 'na tabela certa', m.consultas[0]);
+    ok(num.csv_data === linhas, 'e as linhas chegam na propria numeracao');
+
+    // Uma segunda chamada nao repete a consulta.
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 1, 'ja preenchida, nao consulta de novo', m.consultas.length);
+
+    // null: ja foi buscado, e esta numeracao nao tem banco.
+    m = mundo({ bancos: {} });
+    num = { id: 'n2', csv_data: null };
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 0, 'null NAO vai a rede: ja se sabe que nao tem banco');
+
+    // array: esta aqui.
+    m = mundo({ bancos: { 'n3': linhas } });
+    num = { id: 'n3', csv_data: [{ Nome: 'Carla' }] };
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 0, 'array NAO vai a rede');
+    ok(num.csv_data.length === 1, 'e o que estava em memoria nao e sobrescrito');
+
+    // Numeracao sem banco no banco: vira null, nao undefined -- senao a
+    // proxima chamada consultaria de novo, para sempre.
+    m = mundo({ bancos: {} });
+    num = { id: 'n4', csv_filename: '' };
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(num.csv_data === null, 'sem banco no banco, o campo vira null', num.csv_data);
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 1, 'e a resposta "nao tem" tambem se guarda');
+})();
+
+// ─── 2. Duas telas, uma consulta ────────────────────────────────────────────
+
+(async function pedidosSimultaneosFazemUmaConsultaSo() {
+    const m = mundo({ bancos: { 'n1': [{ Nome: 'Ana' }] } });
+    const a = { id: 'n1' }, b = { id: 'n1' };
+    await Promise.all([m.api.garantirCsvDaNumeracao(a), m.api.garantirCsvDaNumeracao(b)]);
+    ok(m.consultas.length === 1, 'duas telas pedindo junto = UMA consulta', m.consultas.length);
+    ok(a.csv_data && b.csv_data, 'e as duas recebem as linhas');
+})();
+
+// ─── 3. Falha de rede nao lanca, e nao envenena a proxima tentativa ─────────
+
+(async function falharNaoLancaENaoPrendeORetry() {
+    const m = mundo({ erro: true });
+    const num = { id: 'n1', csv_filename: 'convidados.csv' };
+    let lancou = false;
+    try { await m.api.garantirCsvDaNumeracao(num); } catch (_) { lancou = true; }
+    ok(!lancou, 'falha de rede NAO lanca: a tela segue com o que tem');
+    ok(num.csv_data === undefined,
+       'e o campo continua undefined -- nunca vira null, que diria "nao tem banco"',
+       num.csv_data);
+
+    // A promessa quebrada nao pode ficar guardada: a proxima tentativa consulta.
+    const m2 = mundo({ semSupabase: true });
+    const num2 = { id: 'n9' };
+    await m2.api.garantirCsvDaNumeracao(num2);
+    ok(num2.csv_data === undefined, 'sem Supabase (modo offline), nada e inventado');
+})();
+
+// ─── 4. "Tem banco?" respondido SEM as linhas ──────────────────────────────
+
+(function temBancoSemBaixarAsLinhas() {
+    const { api } = mundo({});
+    const t = api.numeracaoTemBanco;
+
+    // A armadilha inteira mora nesta linha: veio da lista, sem `csv_data`, mas
+    // o `csv_filename` prova que ha banco.
+    ok(t({ id: 'n1', csv_filename: 'convidados.csv' }) === true,
+       'numeracao nao baixada com csv_filename TEM banco');
+    ok(t({ id: 'n1', csv_headers: ['Nome', 'Assento'] }) === true,
+       'so com os cabecalhos tambem TEM banco');
+    ok(t({ id: 'n1', csv_filename: '', csv_headers: [] }) === false,
+       'sem arquivo e sem cabecalhos, nao tem');
+    ok(t({ id: 'n1', csv_data: [] }) === false, 'array vazio nao tem');
+    ok(t({ id: 'n1', csv_data: [{ Nome: 'Ana' }] }) === true, 'array com linha tem');
+    ok(t(null) === false, 'e null nao quebra');
+
+    // O contraste que da sentido ao resto: perguntar por `csv_data` responderia
+    // "nao tem" para a primeira, que e o erro que imprime numero no lugar de nome.
+    const naoBaixada = { id: 'n1', csv_filename: 'convidados.csv' };
+    ok(!(naoBaixada.csv_data && naoBaixada.csv_data.length) && t(naoBaixada),
+       'e por isso as duas perguntas nao sao a mesma');
+})();
+
+// ─── 5. A copia guardada no state acompanha ────────────────────────────────
+
+(async function aCopiaNoCatalogoAcompanha() {
+    const noCatalogo = { id: 'n1' };
+    const m = mundo({ bancos: { 'n1': [{ Nome: 'Ana' }] }, state: { numeracoes: [noCatalogo] } });
+    const copia = { id: 'n1' };                       // a mesma numeracao, outra referencia
+    await m.api.garantirCsvDaNumeracao(copia);
+    ok(copia.csv_data && copia.csv_data.length === 1, 'a copia recebe as linhas');
+    ok(noCatalogo.csv_data === copia.csv_data,
+       'e a do catalogo acompanha -- senao a proxima tela consultaria de novo');
+})();
+
+// ─── 6. Gravar por cima esquece o que foi baixado ──────────────────────────
+
+(async function gravarPorCimaEsquece() {
+    const m = mundo({ bancos: { 'n1': [{ Nome: 'Ana' }] } });
+    const num = { id: 'n1' };
+    await m.api.garantirCsvDaNumeracao(num);
+    ok(m.consultas.length === 1, 'a primeira desceu');
+
+    m.api.esquecerCsvDaNumeracao('n1');
+    const outra = { id: 'n1' };                       // uma leitura nova do catalogo
+    await m.api.garantirCsvDaNumeracao(outra);
+    ok(m.consultas.length === 2,
+       'depois de gravar, a proxima leitura vai ao banco de novo', m.consultas.length);
+})();
+
+// ─── 7. A trava da impressao ───────────────────────────────────────────────
+
+(async function aTravaJuntaTudoQueOTrabalhoPodeUsar() {
+    const state = {
+        selectedOSItems: [{ osId: 'os1', itemId: 'i1' }, { osId: 'os1', itemId: 'i2' }],
+        activeOSItem: { osId: 'os1', itemId: 'i3' },
+        osItens: {
+            os1: [
+                { id: 'i1', amostra_num_id: 'nA' },
+                { id: 'i2', amostra_num_id: 'nB' },
+                { id: 'i3', numeracao_id: 'nC' },     // o nome antigo, so em memoria
+            ],
+        },
+        numeracoes: [{ id: 'nA' }, { id: 'nB' }, { id: 'nC' }, { id: 'nD' }],
+    };
+    const m = mundo({
+        state,
+        bancos: { nA: [{ x: 1 }], nB: [{ x: 2 }], nC: [{ x: 3 }], nD: [{ x: 4 }] },
+        selects: { 'imp-numeracao': { value: 'nD' } },
+    });
+
+    const ids = m.api.idsDeNumeracaoDoTrabalho('imp-numeracao');
+    ok(ids.includes('nA') && ids.includes('nB'), 'os modelos marcados entram', ids);
+    ok(ids.includes('nC'), 'o modelo ativo entra, inclusive pelo nome antigo do campo', ids);
+    ok(ids.includes('nD'), 'e a numeracao escolhida no select da tela entra', ids);
+
+    await m.api.garantirCsvDoTrabalho(ids);
+    ok(m.consultas.length === 4, 'as quatro descem antes de o payload ser montado',
+       m.consultas.length);
+    ok(state.numeracoes.every(n => Array.isArray(n.csv_data)),
+       'e nenhuma sobra sem banco na hora de imprimir');
+
+    // Id repetido nao vira duas consultas.
+    const m2 = mundo({ state: { numeracoes: [{ id: 'nA' }] }, bancos: { nA: [{ x: 1 }] } });
+    await m2.api.garantirCsvDoTrabalho(['nA', 'nA', null, undefined, 'nA']);
+    ok(m2.consultas.length === 1, 'id repetido (e vazio) vira UMA consulta', m2.consultas.length);
+})();
+
+// ─── Fecho ──────────────────────────────────────────────────────────────────
+
+setTimeout(() => {
+    if (falhas) {
+        console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
+        process.exit(1);
+    }
+    console.log('OK: ' + total + ' verificacoes do banco sob demanda passaram.');
+}, 80);

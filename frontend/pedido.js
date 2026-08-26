@@ -4056,7 +4056,7 @@ window.togglePedMultiArtes = function() {
 
 };
 
-window.editPedidoCustomNumeracao = function(fieldId) {
+window.editPedidoCustomNumeracao = async function(fieldId) {
     const numSelect = document.getElementById(fieldId);
     if (!numSelect || !numSelect.value) {
         toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
@@ -4086,8 +4086,10 @@ window.editPedidoCustomNumeracao = function(fieldId) {
         cliNum: cliNum
     };
     
-    // Abre a numeração
-    editNumeracao(numId);
+    // `await`: o `editNumeracao` espera o banco de dados da numeracao descer
+    // (o catalogo vem sem ele desde 26/08/2026), e as linhas abaixo escrevem
+    // no DOM que ele preenche.
+    await editNumeracao(numId);
     
     // Força o nome no editor da numeração a ser o ID do modelo atual
     document.getElementById('num-name').value = String(activeOSItem.itemId);
@@ -4103,6 +4105,13 @@ window.editPedidoCustomNumeracao = function(fieldId) {
 // Antes, o payload lia os checkboxes diretamente, e uma caixa esquecida marcada
 // fazia o botão principal imprimir só um pedaço da tiragem sem avisar ninguém.
 window.runPedImposition = async function (mode, isRefazer) {
+
+    // A gemea da linha que abre o `runImposition` no script.js. Sao duas telas
+    // de imposicao, e toda regra de impressao precisa das duas -- esta garante
+    // que o banco de dados das numeracoes esteja em maos antes do payload.
+    if (typeof garantirCsvDoTrabalho === 'function') {
+        await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('ped-numeracao'));
+    }
     if (window.isImposing) return;
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
