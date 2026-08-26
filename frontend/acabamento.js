@@ -1185,26 +1185,47 @@
             || /\.pdf($|\?)/i.test(s);
     }
 
+    /**
+     * A caixa da amostra, que PREENCHE a altura da coluna.
+     *
+     * Antes ela tinha altura fixa (180 px nos avisos, 360 de teto na imagem) e
+     * ficava centrada no meio de uma coluna alta: sobrava um vão escuro em cima
+     * e embaixo da arte, e a arte — que é justamente o que o operador compara
+     * com o material na mesa — saía menor do que o card permitia. Agora a
+     * moldura é `flex: 1` dentro da coluna, e as três colunas do card terminam
+     * na mesma linha (pedido do usuário em 26/08/2026: aproveitar melhor os
+     * espaços e alinhar os objetos).
+     *
+     * O teto de altura sai daqui de propósito: quem limita a amostra são as
+     * colunas vizinhas — a tabela de especificação e os botões de status —, que
+     * ditam a altura da linha. A arte cresce até encostar nelas e para.
+     */
     function amostraHtml(item, idAmostra) {
         const { src, aprovada } = amostraDoModelo(item);
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
-        const moldura = 'width: 100%; min-height: 150px;'
+        const moldura = 'width: 100%; flex: 1 1 auto; min-height: 150px;'
             + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
             + ' display: flex; align-items: center; justify-content: center;';
+        const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;'
+            + ' flex: 1 1 auto; min-height: 0;';
 
         if (!src) {
-            return `<div style="${moldura} height: 180px; color: var(--text-dim); flex-direction: column; gap: 6px; text-align: center; padding: 12px;">
-                        <span style="font-size: 1.8rem;">🖼️</span>
-                        <span style="font-size: 0.78rem;">Sem amostra enviada ao cliente</span>
+            return `<div style="${caixa}">
+                        <div style="${moldura} color: var(--text-dim); flex-direction: column; gap: 6px; text-align: center; padding: 12px;">
+                            <span style="font-size: 1.8rem;">🖼️</span>
+                            <span style="font-size: 0.78rem;">Sem amostra enviada ao cliente</span>
+                        </div>
                     </div>`;
         }
 
         if (ehPdf(src)) {
-            return `<div style="${moldura} height: 180px; flex-direction: column; gap: 8px; color: #4cc8f0; cursor: pointer; text-align: center; padding: 12px;"
-                         onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
-                        <span style="font-size: 2rem;">📄</span>
-                        <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
+            return `<div style="${caixa}">
+                        <div style="${moldura} flex-direction: column; gap: 8px; color: #4cc8f0; cursor: pointer; text-align: center; padding: 12px;"
+                             onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
+                            <span style="font-size: 2rem;">📄</span>
+                            <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
+                        </div>
                     </div>`;
         }
 
@@ -1215,11 +1236,17 @@
         // SEM fundo branco atras da imagem, por pedido do usuario em
         // 20/08/2026: a arte ja traz o proprio fundo, e a chapa branca em volta
         // dela recortava um retangulo claro no meio da caixa escura.
+        //
+        // A moldura tracejada some quando ha arte (`border: none`): ela existe
+        // para dar corpo ao aviso de "sem amostra", e em volta da arte era mais
+        // um fio competindo com o contorno do card.
         return `
-            <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
-                <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
-                     style="width: 100%; max-height: 360px; object-fit: contain; cursor: zoom-in; display: block; margin: 0 auto;"
-                     onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
+            <div style="${caixa}">
+                <div style="${moldura} border: none; background: none; overflow: hidden;">
+                    <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
+                         style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; display: block;"
+                         onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
+                </div>
                 <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
             </div>`;
     }
@@ -1236,6 +1263,31 @@
     // largura da tela, e ler "qual é o bloco deste modelo" exigia procurar o
     // rótulo no meio dos outros sete. Em tabela, cada informação está sempre na
     // mesma linha, e duas telas lado a lado se comparam.
+
+    /**
+     * O rótulo de uma coluna do card, da MESMA altura do cabeçalho azul da
+     * tabela de especificação.
+     *
+     * Pedido do usuário em 26/08/2026: ajustar os alinhamentos entre botões e
+     * objetos. As três colunas do card — amostra, especificação e acabamento —
+     * começavam em alturas diferentes, porque só a do meio tinha cabeçalho e as
+     * outras duas eram centradas na vertical. Com um rótulo de altura igual à do
+     * cabeçalho azul (36 px, que é o que aquele `th` mede com 9 px de padding e
+     * 0,92 rem de fonte), o primeiro item das três colunas nasce na mesma linha.
+     *
+     * O rótulo é uma FAIXA DE TEXTO, não uma caixa: em 22/08/2026 o usuário
+     * pediu que a coluna dos botões não tivesse moldura em volta, porque ela
+     * competia com o contorno do card. Um fio embaixo do texto marca o começo da
+     * coluna sem fechar nada.
+     */
+    const ROTULO_DA_COLUNA = 'display: flex; align-items: center; height: 36px;'
+        + ' font-size: 0.74rem; font-weight: 800; text-transform: uppercase;'
+        + ' letter-spacing: 0.08em; color: #8fb6e0; padding: 0 2px;'
+        + ' border-bottom: 1px solid rgba(76,200,240,0.22); white-space: nowrap;';
+
+    /** O sub-rótulo de um campo dentro da coluna (o "Responsável", o "Volumes"). */
+    const SUBROTULO_DO_CAMPO = 'font-size: 0.7rem; font-weight: 800; text-transform: uppercase;'
+        + ' letter-spacing: 0.04em; color: #94a3b8;';
 
     const ESPEC_CABECALHO = 'background: #0b63ce; color: #ffffff; font-weight: 900;'
         + ' text-transform: uppercase; letter-spacing: 0.06em; padding: 9px 12px;'
@@ -1265,8 +1317,11 @@
      * quadrantes e lugares, não em numeração inicial e final.
      */
     function tabelaDeEspecificacao(linhas) {
+        // `height: 100%` para a tabela terminar na mesma linha que a amostra e
+        // que os botões: as linhas repartem entre si a sobra da coluna mais
+        // alta, em vez de deixar um vão escuro embaixo da tabela.
         return `
-            <table style="width: 100%; border-collapse: collapse; border-radius: 10px;
+            <table style="width: 100%; height: 100%; border-collapse: collapse; border-radius: 10px;
                           overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.35);">
                 <thead>
                     <tr><th colspan="2" style="${ESPEC_CABECALHO}">Especificação</th></tr>
@@ -1494,25 +1549,59 @@
         //   meio  — O QUÊ: amostra e os dados do modelo, em grade alinhada.
         //   base  — A DECISÃO: status e responsável, os dois únicos campos
         //           que esta tela escreve, numa faixa própria mais escura.
+        // O setor do modelo, no cabeçalho do card. Ele já governava o peso e os
+        // volumes lá em cima, mas o card não o dizia: para saber de que setor
+        // era aquele modelo, o operador tinha de lembrar de qual produto ele
+        // vinha. O chip ocupa a faixa vazia que sobrava no meio do cabeçalho
+        // (pedido do usuário em 26/08/2026: aproveitar melhor os espaços).
+        const setorDoItem = normalizar(item && item.setor);
+        const rotuloSetor = ROTULO_DO_SETOR[setorDoItem];
+        const chipDoSetor = rotuloSetor
+            ? `<span title="Setor deste modelo — é por ele que se contam o peso e os volumes"
+                     style="display: inline-flex; align-items: center; gap: 5px;
+                            background: rgba(76,200,240,0.10); border: 1px solid rgba(76,200,240,0.30);
+                            color: #9fd8f2; border-radius: 999px; padding: 2px 10px;
+                            font-size: 0.72rem; font-weight: 700; white-space: nowrap;">
+                   ${rotuloSetor.icone} ${esc(rotuloSetor.nome)}
+               </span>`
+            : '';
+
         return `
             <div style="background: ${fundo}; ${estiloDoCardNaEscolha(item)} border-radius: 10px; margin-bottom: 12px; overflow: hidden;">
 
-                <div style="display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 11px 16px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1 1 auto; min-width: 220px;">
                         ${caixaDeEscolha(item)}
                         <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed rgba(207,230,251,0.45)'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
                         <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
                         <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
                         ${seloDoEstagio(estagio)}
+                        ${chipDoSetor}
                     </div>
                     ${blocoDaFoto(item, osId, idx)}
                 </div>
 
+                <!-- As tres colunas, refeitas em 26/08/2026, a pedido do
+                     usuario: aproveitar melhor os espacos e ajustar os
+                     alinhamentos. As tres comecam na MESMA linha (antes a
+                     amostra e a tabela eram centradas na vertical e a coluna
+                     dos botoes tambem, entao nenhuma compartilhava topo com as
+                     outras); cada uma abre com um rotulo da altura exata do
+                     cabecalho azul da tabela, que e a regua comum; e as tres
+                     TERMINAM juntas, em vez de deixar vao escuro embaixo.
+
+                     As LARGURAS sao as de 22/08/2026, de proposito. A amostra
+                     ja tem flex-grow 1 e por isso ja fica com toda a sobra da
+                     linha; engordar a base dela nao a fazia crescer numa tela
+                     larga, e numa de 1366 -- tamanho de estacao -- jogava a
+                     coluna das decisoes para a linha de baixo, porque a conta
+                     de quebra usa a base e nao o min-width. -->
                 <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; padding: 14px 16px;">
-                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="${ROTULO_DA_COLUNA}">Amostra</div>
                         ${amostraHtml(item, idAmostra)}
                     </div>
-                    <div style="flex: 0 1 280px; min-width: 220px; display: flex; align-items: center;">
+                    <div style="flex: 0 1 280px; min-width: 220px; display: flex; flex-direction: column;">
                         ${tabelaDeEspecificacao([
                             numeros,
                             // A numeração pelo NOME. Faltava no desenho que o
@@ -1538,19 +1627,30 @@
                          SEM caixa em volta, por pedido dele no mesmo dia: os
                          botões já têm contorno e cor próprios, e a moldura ao
                          redor deles só competia com a do bloco do modelo. -->
-                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 12px; justify-content: center;">
+                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="${ROTULO_DA_COLUNA}">Status do acabamento</div>
+                        ${botoesDeEstagio(item, osId, podeEditar())}
                         <div style="display: flex; flex-direction: column; gap: 5px;">
-                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Status do acabamento</span>
-                            ${botoesDeEstagio(item, osId, podeEditar())}
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Responsável</span>
+                            <span style="${SUBROTULO_DO_CAMPO}">Responsável</span>
                             ${selectResponsavel(item, osId, podeEditar())}
                         </div>
                         ${blocoDeVolumesDoModelo(item)}
                     </div>
                 </div>
             </div>`;
+    }
+
+    /**
+     * O progresso do pedido aberto: o selo e a barra do cabeçalho.
+     *
+     * Os dois juntos, numa função só, porque dizem a mesma coisa e não podem
+     * discordar — um `escrever` solto no selo, sem a barra, deixaria a barra
+     * mostrando o pedido anterior.
+     */
+    function pintarProgressoDoPedido(prontos, total) {
+        escrever('acab-detalhe-progresso', `${prontos}/${total} prontos`);
+        const barra = document.getElementById('acab-detalhe-barra');
+        if (barra) barra.style.width = (total > 0 ? Math.round((prontos / total) * 100) : 0) + '%';
     }
 
     function renderDetalhe() {
@@ -1579,12 +1679,12 @@
                        Este pedido não tem modelo cadastrado.<br>
                        <span style="font-size: 0.82rem;">Se isso não está certo, use VOLTAR e depois ATUALIZAR.</span>
                    </div>`;
-            escrever('acab-detalhe-progresso', '0/0 prontos');
+            pintarProgressoDoPedido(0, 0);
             return;
         }
 
         const prontos = itens.filter(i => estagioDoModelo(i) === 'Pronto').length;
-        escrever('acab-detalhe-progresso', `${prontos}/${itens.length} prontos`);
+        pintarProgressoDoPedido(prontos, itens.length);
 
         // Agrupado por produto, na mesma ordem em que a fila do Pedido desenha.
         const grupos = {};
@@ -2532,7 +2632,14 @@
                         </div>
                      </div>`;
         } else {
-            miolo = `<div style="padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 12px;">
+            // GRADE, e não fila: com `flex-wrap` os cards de setor cabiam um por
+            // linha e sobrava um vão à direita de cada um — o pedido com dois
+            // setores desenhava duas faixas quase vazias. Em
+            // `repeat(auto-fit, minmax(...))` eles se dividem a largura enquanto
+            // couberem lado a lado, e só descem para a linha de baixo quando o
+            // conteúdo não cabe mais (pedido do usuário em 26/08/2026).
+            miolo = `<div style="padding: 12px 14px; display: grid; gap: 12px;
+                                 grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));">
                 ${setores.map(setor => {
                     const r = ROTULO_DO_SETOR[setor] || { nome: setor, icone: '📦' };
                     const atual = tela.pesos[setor];
@@ -2543,7 +2650,7 @@
                     // mais largo (400 em vez de 240) porque a faixa carrega os
                     // chips — com 240 eles quebravam um por linha.
                     return `
-                    <div style="display: flex; flex-direction: column; gap: 9px; flex: 1 1 400px;
+                    <div style="display: flex; flex-direction: column; gap: 9px; min-width: 0;
                                 background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
                                 border-radius: 8px; padding: 10px 12px;">
                       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
@@ -2575,7 +2682,7 @@
             <div style="background: ${AZUL.superficie}; border: 1px solid ${AZUL.fio};
                         border-radius: 10px; overflow: hidden; margin-bottom: 14px;">
                 ${cabecalho}
-                <div style="display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: stretch; gap: 0; flex-wrap: wrap;">
                     <div style="flex: 1 1 420px; min-width: 0;">${miolo}</div>
                     ${botaoDeExpedicao(itens, numeroDoPedido)}
                 </div>
@@ -3837,7 +3944,7 @@
 
         return `
             <div style="display: flex; flex-direction: column; gap: 5px;">
-                <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Volumes</span>
+                <span style="${SUBROTULO_DO_CAMPO}">Volumes</span>
                 <div style="display: flex; flex-direction: column; gap: 5px;
                             background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
                             border-radius: 8px; padding: 8px 10px;">

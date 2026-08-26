@@ -654,7 +654,13 @@ function ambienteComPedidoAberto() {
     // A amostra, em tamanho grande e clicavel para ampliar.
     ok(html.indexOf('amostras_renderizadas/3001.jpg') !== -1, 'a amostra aprovada e exibida');
     ok(/AcabamentoPainel\.ampliar\(/.test(html), 'e da para ampliar a amostra');
-    ok(html.indexOf('max-height: 360px') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
+    // A amostra sai grande, e nao como miniatura. Ate 25/08/2026 isso era um
+    // teto fixo de 360 px; desde 26/08 quem limita a arte sao as colunas
+    // vizinhas -- a moldura e `flex: 1` dentro da coluna e a imagem preenche o
+    // que ela der. Um teto em pixel voltaria a deixar vao escuro no card alto.
+    ok(html.indexOf('flex: 1 1 auto; min-height: 150px') !== -1,
+       'a moldura da amostra cresce com a coluna');
+    ok(html.indexOf('max-height: 100%') !== -1, 'a amostra sai em bom tamanho, nao como miniatura');
 
     // Pedidos de 20/08/2026, depois de ver a tela.
     ok(html.indexOf('background: #ffffff') === -1, 'nao ha chapa branca atras da amostra');
@@ -676,12 +682,24 @@ function ambienteComPedidoAberto() {
     // (elastica), a especificacao (metade da largura que tinha) e, a direita
     // dela, as decisoes -- os quatro botoes de status empilhados e o responsavel
     // abaixo deles. Antes eram duas colunas e uma faixa de decisoes no rodape.
+    //
+    // As larguras continuam as de 22/08/2026, e e proposital: a conta que o
+    // navegador faz para decidir se as tres cabem na mesma linha usa a BASE do
+    // flex, nao o `min-width`. Engordar a base da amostra nao a faz crescer numa
+    // tela larga (ela ja tem `flex-grow: 1` e ja fica com a sobra), mas numa
+    // tela de 1366 -- tamanho de estacao -- joga a coluna das decisoes para a
+    // linha de baixo.
     const amostras = html.match(/flex: 1 1 200px/g) || [];
     ok(amostras.length === 2, 'a amostra e a coluna elastica, uma por modelo', amostras.length);
     const espec = html.match(/flex: 0 1 280px/g) || [];
     ok(espec.length === 2, 'a especificacao ficou estreita, uma por modelo', espec.length);
     const decisoes = html.match(/flex: 0 1 210px/g) || [];
     ok(decisoes.length === 2, 'e a coluna das decisoes fica a direita dela', decisoes.length);
+    // E as tres comecam na mesma linha: cada coluna abre com um rotulo da
+    // altura exata do cabecalho azul da tabela (26/08/2026). Sem essa regua, a
+    // amostra e os botoes voltam a flutuar centrados na vertical.
+    ok((html.match(/height: 36px;/g) || []).length >= 4,
+       'as tres colunas comecam na mesma linha, pelo rotulo de altura fixa');
     // A ordem na tela: especificacao, depois status, depois responsavel.
     const umModelo = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
     const posEspec = umModelo.indexOf('Especificação');

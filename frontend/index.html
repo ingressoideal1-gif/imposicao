@@ -2444,8 +2444,21 @@
                                          sairia cinza, junto com a linha de cima. -->
                                     <h1 id="acab-detalhe-titulo" style="font-size: calc(2.2rem + 5pt); font-weight: bold; margin-bottom: 0; line-height: 1.06; background-image: linear-gradient(to right, #f1f5f9, #cbd5e1);"></h1>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                                <!-- O progresso do pedido: o selo que ja existia
+                                     e, embaixo dele, a MESMA barra que a linha da
+                                     fila desenha (`barraDeProgresso`). Pedido do
+                                     usuario em 26/08/2026: o selo sozinho, num
+                                     canto de um cabecalho largo, obrigava a ler
+                                     dois numeros para saber o quanto falta; a
+                                     barra responde de relance, e e a mesma forma
+                                     que ele ja le na lista. Preenchida por
+                                     renderDetalhe(). -->
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; min-width: 140px;">
                                     <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 prontos</span>
+                                    <div style="width: 100%; height: 7px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);"
+                                         title="Quanto deste pedido ja esta pronto">
+                                        <div id="acab-detalhe-barra" style="width: 0%; height: 100%; background: #4589d7; border-radius: 4px; transition: width 0.3s ease;"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="prod-table-body custom-scroll" id="acab-detalhe-corpo" style="padding: 10px 12px;">
