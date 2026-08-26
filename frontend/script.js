@@ -15944,6 +15944,91 @@ function divergenciaDeCelulasDoModelo(item) {
 window.divergenciaDeCelulasDoModelo = divergenciaDeCelulasDoModelo;
 
 /**
+ * A DISTRIBUICAO ORFA: uma fatia salva que nao e deste banco (26/08/2026).
+ *
+ * ## O dia que deu origem a isto
+ *
+ * O pedido 21202 tinha quatro modelos dividindo a numeracao "CAMAROTE
+ * CORPORATIVO". Alguem repartiu as linhas pelo botao "Linhas": o 05/set ficou
+ * com `1-3500` e os outros tres ficaram com lista VAZIA. Depois cada modelo
+ * ganhou uma numeracao propria, com o banco inteiro dele -- e as fatias
+ * salvas passaram a apontar para `__id` de um banco que aquele modelo nao usa
+ * mais.
+ *
+ * Na tela isso apareceu como *"O banco nao fecha com a quantidade do pedido...
+ * esperado 3500, gerado 0"*, com a instrucao de corrigir as linhas do banco. E
+ * o banco estava certo, com as 3500 linhas. O que estava errado era a fatia --
+ * e a mensagem mandava o operador para o lugar oposto.
+ *
+ * ## Quando uma fatia e orfa
+ *
+ *   1. ela pede ids e NENHUM deles existe neste banco -- e fatia de outro; ou
+ *   2. ela esta vazia e a numeracao e so deste modelo -- com um banco por
+ *      modelo nao ha o que repartir, entao uma fatia vazia so pode ser sobra.
+ *
+ * Fatia vazia num banco que DOIS modelos dividem NAO entra aqui: e o estado
+ * legitimo de "este modelo ficou sem nenhuma linha" que o `abrirDistribuicaoCsv`
+ * grava de proposito, e quem avisa e a regra de Qtd.
+ *
+ * So le; nao apaga nada. Quem apaga e o operador, pelo botao do card.
+ */
+function distribuicaoOrfaDoModelo(item, osId) {
+    if (!item || !item.csv_selecao) return null;
+    const num = numeracaoDoModelo(item);
+    if (!num || !Array.isArray(num.csv_data) || !num.csv_data.length) return null;
+    if (String(numeracaoIdDoItem(item)) !== String(num.id)) return null;
+
+    const sel = item.csv_selecao;
+    const ids = (sel && Array.isArray(sel.ids)) ? sel.ids : null;
+    if (!ids) return null;
+
+    const donos = ((state.osItens && state.osItens[osId]) || [])
+        .filter(it => String(numeracaoIdDoItem(it)) === String(num.id)).length;
+
+    if (!ids.length) {
+        if (donos > 1) return null;              // repartir de verdade deixou este de fora
+        return { motivo: 'vazia_sem_irmaos',
+                 texto: 'Este modelo tem uma distribuição salva SEM nenhuma linha, e o banco '
+                      + 'de dados é só dele — não há o que repartir.' };
+    }
+
+    const existentes = new Set(num.csv_data.map(r => Number(r && r[CsvEditorColId()])));
+    const pedidos = (window.CsvEditor && window.CsvEditor.expandirIds)
+        ? window.CsvEditor.expandirIds(ids) : [];
+    if (!pedidos.length) return null;
+    const achados = pedidos.filter(i => existentes.has(Number(i))).length;
+    if (achados) return null;                    // a fatia e deste banco
+
+    return { motivo: 'outro_banco',
+             texto: 'A distribuição salva neste modelo aponta para ' + pedidos.length
+                  + ' linha(s) que não existem neste banco de dados — ela é de um banco anterior.' };
+}
+window.distribuicaoOrfaDoModelo = distribuicaoOrfaDoModelo;
+
+/** O nome da coluna de identidade da linha, que mora no csv-editor.js. */
+function CsvEditorColId() {
+    return (window.CsvEditor && window.CsvEditor.COL_ID) || '__id';
+}
+
+/** Tira a distribuicao do modelo e redesenha. Chamado pelo botao do card. */
+window.removerDistribuicaoDoModelo = async function (idx, osId) {
+    const item = ((state.osItens && state.osItens[osId]) || [])[idx];
+    if (!item) return;
+    item.csv_selecao = null;
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { error } = await supabaseClient.from('pedidos_modelos')
+                .update({ csv_selecao: null }).eq('id', item.id);
+            if (error) throw error;
+        }
+        toast('Distribuição removida — este modelo volta a levar o banco inteiro.', 'success');
+    } catch (e) {
+        toast('Não consegui remover a distribuição: ' + (e.message || e), 'error');
+    }
+    redesenharCardsDoPedido(osId);
+};
+
+/**
  * Elemento de banco de dados sem banco, ou sem coluna.
  *
  * Regra do usuário, 22/08/2026: sempre que a numeração do modelo tiver um
@@ -29123,7 +29208,12 @@ function renderAmostrasOSItens(osId) {
         // Enquanto não bater, o modelo não pode ser marcado PRONTO — e como o
         // pedido só vira "Enviar Arte" com todos os modelos PRONTO, o pedido
         // inteiro para até alguém corrigir a NUMERAÇÃO. A Qtd nunca é tocada.
-        const divergenciaCelulas = ehTelaDoCliente ? null : divergenciaDeCelulasDoModelo(item);
+        // A fatia orfa fala ANTES da regra de Qtd, e a cala. As duas descrevem
+        // o mesmo sintoma ("gerado 0"), mas so uma diz a causa: a de Qtd manda
+        // corrigir as linhas do banco, e o banco pode estar perfeito.
+        const orfa = ehTelaDoCliente ? null : distribuicaoOrfaDoModelo(item, osId);
+        const travaDeOrfa = !!orfa;
+        const divergenciaCelulas = (ehTelaDoCliente || orfa) ? null : divergenciaDeCelulasDoModelo(item);
         const travaDeCelulas = !!divergenciaCelulas;
         // ── Elemento de banco de dados sem banco ou sem coluna ──
         // Regra do usuário, 22/08/2026: numeração com elemento de banco de
@@ -29152,6 +29242,15 @@ function renderAmostrasOSItens(osId) {
                         : 'Para liberar, peça ao atendimento para colocar o modelo <b>Em Alteração</b>.'}${podeCopiarNoTravado
                         ? ' O <b>🔗</b> segue liberado: copiar o link da arte não altera o modelo.'
                         : ''}</span>
+                </div>` : '';
+
+        const faixaDistribuicaoOrfa = travaDeOrfa ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">⚠️</span>
+                    <span>Este modelo não pode ser marcado PRONTO: a distribuição de linhas salva nele não é deste banco de dados.<br>
+                    <span style="font-weight:700;color:#fca5a5;">${escapeHtml(orfa.texto)}</span><br>
+                    O banco pode estar certo — o que está sobrando é a divisão. Removendo-a, este modelo volta a levar o banco inteiro.
+                    <button class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="removerDistribuicaoDoModelo(${idx}, '${osId}')">🧹 Remover a distribuição</button></span>
                 </div>` : '';
 
         const faixaDivergenciaCelulas = travaDeCelulas ? `
@@ -29204,6 +29303,7 @@ function renderAmostrasOSItens(osId) {
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         ${faixaModeloTravado}
+                        ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
                         ${faixaSemGlifo}
@@ -33048,6 +33148,15 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         const itens = state.osItens[osId] || [];
         const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
         const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
+
+        // A fatia orfa vem primeiro: a de Qtd descreve o mesmo sintoma e manda
+        // consertar o lugar errado. Ver `distribuicaoOrfaDoModelo`.
+        const orfa = distribuicaoOrfaDoModelo(itemAlvo, osId);
+        if (orfa) {
+            toast('Este modelo não pode ser marcado PRONTO: ' + orfa.texto
+                + ' Remova a distribuição no aviso do card — o banco volta a valer inteiro.', 'warning');
+            return false;
+        }
 
         const divergencia = divergenciaDeCelulasDoModelo(itemAlvo);
         if (divergencia) {

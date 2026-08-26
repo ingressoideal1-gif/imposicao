@@ -59,7 +59,9 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                'numeracoesSemBancoBaixado', 'carregarBancosDoPedido',
                'numeracaoIdDoItem', 'linhasAtivasCsv', 'colunasDoBancoDaNumeracao',
                'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'numeracaoDoModelo',
-               'rotuloDoModelo', 'celulasRepetidasDoPedido'];
+               'rotuloDoModelo', 'celulasRepetidasDoPedido',
+               // A fatia salva que nao e deste banco (26/08/2026).
+               'distribuicaoOrfaDoModelo', 'CsvEditorColId'];
 
 let CODIGO;
 try {
@@ -75,6 +77,19 @@ try {
  * Um mundo por caso: o `supabaseClient` de mentira conta quantas consultas
  * saem e o que cada uma pediu, que e o que estes testes medem.
  */
+const CSVED = fs.readFileSync(path.join(RAIZ, 'frontend', 'csv-editor.js'), 'utf8');
+// O `expandirIds` de VERDADE, lido do csv-editor.js: e ele que entende a faixa
+// "1-3500" que o banco guarda, e uma copia aqui deixaria de acompanhar o
+// original no dia em que a notacao mudar.
+const EXPANDIR = (function () {
+    const abre = '    function expandirIds(faixas) {';
+    const i = CSVED.indexOf(abre);
+    const fecha = String.fromCharCode(10) + '    }';
+    const fim = CSVED.indexOf(fecha, i);
+    const corpo = CSVED.slice(i, fim + fecha.length);
+    return new Function(corpo + ';return expandirIds;')();
+})();
+
 function mundo(opts) {
     opts = opts || {};
     const consultas = [];
@@ -97,10 +112,15 @@ function mundo(opts) {
     };
     const state = opts.state || {};
     const document = { getElementById: id => (opts.selects || {})[id] || null };
+    // O `window.CsvEditor` de verdade importa aqui: e por ele que a regra da
+    // fatia orfa le a coluna de identidade e expande a faixa "1-3500". Com um
+    // `window` vazio ela devolveria null em silencio -- que foi exatamente o que
+    // aconteceu na primeira versao deste arnes.
+    const janela = { CsvEditor: { COL_ID: '__id', expandirIds: EXPANDIR } };
     const api = new Function('window', 'state', 'supabaseClient', 'document', 'console',
         CODIGO + '\nreturn { ' + NOMES.join(', ') + ' };'
-    )({}, state, supabaseClient, document, { warn() {} });
-    return { api, consultas, state };
+    )(janela, state, supabaseClient, document, { warn() {} });
+    return { api, consultas, state, janela };
 }
 
 // ─── 1. Os tres estados de `csv_data` ───────────────────────────────────────
@@ -326,6 +346,68 @@ function mundo(opts) {
        'com todos em maos, ele sai — e agora acusa os tres',
        Object.keys(r));
     ok(r['i1'] && r['i1'].total === 2, 'A repete os dois codigos com B', r['i1']);
+})();
+
+// ─── 10. A fatia salva que nao e deste banco ───────────────────────────────
+//
+// No 21202, quatro modelos dividiam a "CAMAROTE CORPORATIVO" e alguem repartiu
+// as linhas: o 05/set ficou com `1-3500`, os outros tres com lista VAZIA. Depois
+// cada modelo ganhou um banco proprio, e as fatias passaram a apontar para ids
+// de um banco que aquele modelo nao usa mais. A tela dizia "o banco nao fecha,
+// gerado 0" e mandava corrigir as linhas -- o banco estava perfeito.
+
+(function aFatiaOrfaEReconhecida() {
+    const banco = (de, ate) => {
+        const r = [];
+        for (let i = de; i <= ate; i++) r.push({ __id: i, Codigo: 'C' + i });
+        return r;
+    };
+    const els = [{ source: 'database', csv_column: 'Codigo' }];
+
+    const cenario = (selecao, linhas, irmaos) => {
+        const itens = [{ id: 'i1', amostra_num_id: 'n1', csv_selecao: selecao, nome_modelo: 'A' }];
+        if (irmaos) itens.push({ id: 'i2', amostra_num_id: 'n1', nome_modelo: 'B' });
+        return mundo({ state: {
+            numeracoes: [{ id: 'n1', elements: els, csv_data: linhas, csv_headers: ['Codigo'] }],
+            osItens: { os1: itens },
+        } });
+    };
+
+    // 1. Sem distribuicao nenhuma: nada a dizer.
+    ok(cenario(null, banco(1, 100), false).api
+        .distribuicaoOrfaDoModelo({ id: 'i1', amostra_num_id: 'n1' }, 'os1') === null,
+       'modelo sem distribuicao nao e acusado');
+
+    // 2. A fatia casa com o banco: nada a dizer.
+    let m = cenario({ ids: ['1-50'], tipo: 'linhas' }, banco(1, 100), false);
+    ok(m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1') === null,
+       'fatia que existe neste banco nao e orfa');
+
+    // 3. A fatia aponta para ids que NAO existem: e de outro banco.
+    //    E o caso exato do 06/set, cujo banco novo comeca no 3501.
+    m = cenario({ ids: ['1-3500'], tipo: 'linhas' }, banco(3501, 7000), false);
+    const r3 = m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1');
+    ok(r3 && r3.motivo === 'outro_banco', 'fatia de outro banco e reconhecida', r3);
+    ok(r3 && /nao existem neste banco|não existem neste banco/.test(r3.texto),
+       'e o texto diz isso, sem falar em quantidade', r3 && r3.texto);
+
+    // 4. Fatia VAZIA num banco que e so deste modelo: sobra de uma divisao
+    //    que deixou de existir.
+    m = cenario({ ids: [], tipo: 'linhas' }, banco(1, 100), false);
+    const r4 = m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1');
+    ok(r4 && r4.motivo === 'vazia_sem_irmaos', 'fatia vazia sem irmaos e orfa', r4);
+
+    // 5. Fatia VAZIA num banco que DOIS modelos dividem: e legitima.
+    //    O `abrirDistribuicaoCsv` grava assim de proposito o modelo que ficou de
+    //    fora de uma divisao de verdade -- quem avisa dele e a regra de Qtd.
+    m = cenario({ ids: [], tipo: 'linhas' }, banco(1, 100), true);
+    ok(m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1') === null,
+       'fatia vazia COM irmaos nao e orfa: e o modelo que ficou de fora da divisao');
+
+    // 6. Numeracao sem banco: nao ha o que comparar.
+    m = cenario({ ids: ['1-50'], tipo: 'linhas' }, [], false);
+    ok(m.api.distribuicaoOrfaDoModelo(m.state.osItens.os1[0], 'os1') === null,
+       'sem banco carregado, nada e acusado');
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────

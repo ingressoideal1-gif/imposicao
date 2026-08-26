@@ -410,9 +410,16 @@ function cenario(qtd, linhas, printMode) {
 (function aTravaDeCelulasEstaNoMarcarPronto() {
     const i = SCRIPT.indexOf('async function decisionAmostraItem');
     ok(i > 0, 'o decisionAmostraItem continua existindo');
-    const trecho = SCRIPT.slice(i, i + 1800);
+    // A janela cresceu em 26/08/2026: a trava da FATIA ORFA entrou antes da de
+    // Qtd (ela descreve o mesmo sintoma e diz a causa certa), e empurrou esta
+    // linha para baixo. O que se guarda aqui e que o PRONTO passa pelas duas.
+    const trecho = SCRIPT.slice(i, i + 3000);
     ok(/status === 'PRONTO'/.test(trecho) && /divergenciaDeCelulasDoModelo/.test(trecho),
         'e o PRONTO passa pela conta de Qtd x linhas');
+    ok(/distribuicaoOrfaDoModelo/.test(trecho),
+        'e pela fatia que nao e deste banco');
+    ok(trecho.indexOf('distribuicaoOrfaDoModelo') < trecho.indexOf('divergenciaDeCelulasDoModelo'),
+        'nessa ordem: a causa antes do sintoma');
 })();
 
 (function asTresPortasDoDesignerEstaoFechadas() {

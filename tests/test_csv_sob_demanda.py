@@ -213,6 +213,65 @@ def test_ver_editar_avisa_quando_o_banco_e_de_mais_de_um_modelo():
     )
 
 
+def test_a_fatia_orfa_fala_antes_da_regra_de_qtd_e_a_cala():
+    """As duas descrevem o mesmo sintoma; so uma diz a causa.
+
+    No 21202, quatro modelos dividiam a "CAMAROTE CORPORATIVO" e alguem repartiu
+    as linhas: o 05/set ficou com `1-3500` e os outros tres com lista VAZIA.
+    Depois cada modelo ganhou um banco proprio, e as fatias passaram a apontar
+    para `__id` de um banco que aquele modelo nao usa mais.
+
+    A tela dizia *"O banco nao fecha com a quantidade do pedido... esperado 3500,
+    gerado 0"* e mandava corrigir as linhas do banco -- que estava perfeito, com
+    as 3500 linhas. A mensagem apontava para o lugar oposto ao do problema.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("const orfa = ehTelaDoCliente ? null : distribuicaoOrfaDoModelo(item, osId);")
+    corpo = fonte[i:i + 700]
+    assert "const divergenciaCelulas = (ehTelaDoCliente || orfa) ? null" in corpo, (
+        "a regra de Qtd tem de ficar calada quando a fatia e orfa — senao o "
+        "operador le as duas e vai consertar o banco, que esta certo"
+    )
+    # A faixa sai ANTES da de Qtd no card.
+    assert fonte.index("${faixaDistribuicaoOrfa}") < fonte.index("${faixaDivergenciaCelulas}")
+
+
+def test_o_aviso_da_fatia_orfa_traz_a_saida_no_proprio_aviso():
+    """Trava sem saida nao pode: o botao que resolve fica no mesmo aviso."""
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("const faixaDistribuicaoOrfa = travaDeOrfa")
+    corpo = fonte[i:i + 1200]
+    assert "removerDistribuicaoDoModelo(${idx}, '${osId}')" in corpo, (
+        "o aviso da fatia orfa precisa do botao que a remove"
+    )
+    assert "Remover a distribuição" in corpo
+    assert "o que está sobrando é a divisão" in corpo, (
+        "o texto tem de dizer que o banco pode estar certo"
+    )
+
+
+def test_o_PRONTO_recusa_pela_fatia_orfa_antes_da_regra_de_qtd():
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("const orfa = distribuicaoOrfaDoModelo(itemAlvo, osId);")
+    corpo = fonte[i:i + 800]
+    assert "return false;" in corpo, "a fatia orfa tem de recusar o PRONTO"
+    assert corpo.index("const orfa =") < corpo.index("const divergencia ="), (
+        "a fatia orfa e conferida antes da regra de Qtd tambem no clique"
+    )
+
+
+def test_remover_a_distribuicao_grava_null_e_redesenha():
+    """`null` e nao lista vazia: ausente significa "leva o banco inteiro", e
+    lista vazia significa "ficou sem nenhuma linha" -- que e o proprio defeito.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("window.removerDistribuicaoDoModelo")
+    corpo = fonte[i:i + 1200]
+    assert "csv_selecao: null" in corpo, "tem de gravar null, nunca lista vazia"
+    assert "item.csv_selecao = null" in corpo, "e a memoria da tela acompanha"
+    assert "redesenharCardsDoPedido(osId)" in corpo
+
+
 def test_o_aviso_de_repetidas_fica_calado_com_o_pedido_pela_metade():
     """Numero que muda sozinho na frente do operador nao vale nada."""
     fonte = _ler("frontend/script.js")
