@@ -7771,7 +7771,7 @@ async function modelosQueUsamNumeracao(numId) {
         const achados = [];
         Object.keys(state.osItens || {}).forEach(osId => {
             (state.osItens[osId] || []).forEach(it => {
-                const usa = it.numeracao_id || it.amostra_num_id;
+                const usa = it.amostra_num_id || it.numeracao_id;
                 if (usa && String(usa) === String(numId)) achados.push(it);
             });
         });
@@ -8768,7 +8768,7 @@ function drawPreview() {
             if (!fmtId) fmtId = item.formato_id;
             // Ver o comentario em `runImposition`: a coluna do ERP e
             // `amostra_num_id`; `numeracao_id` so existe em memoria.
-            if (!numId) numId = item.numeracao_id || item.amostra_num_id;
+            if (!numId) numId = item.amostra_num_id || item.numeracao_id;
             if (!saiId) {
                 saiId = item.saida_id;
                 if (!saiId && fmtId) {
@@ -8793,7 +8793,7 @@ function drawPreview() {
     if (!numId && activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
-        if (item) numId = item.numeracao_id || item.amostra_num_id || '';
+        if (item) numId = item.amostra_num_id || item.numeracao_id || '';
     }
 
     const canvas = document.getElementById('preview-canvas');
@@ -8921,7 +8921,7 @@ function drawPreview() {
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
             // Verificar via numeracao_id/amostra_num_id
-            const fallbackNumId = item.numeracao_id || item.amostra_num_id;
+            const fallbackNumId = item.amostra_num_id || item.numeracao_id;
             if (fallbackNumId) {
                 const fallbackNum = (state.numeracoes || []).find(n => String(n.id) === String(fallbackNumId));
                 if (_isCamarote(fallbackNum)) isNumCamarote = true;
@@ -10958,7 +10958,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             saiId = firstItem.saida_id;
             // Ver o comentario em `runImposition`: a coluna do ERP e
             // `amostra_num_id`; `numeracao_id` so existe em memoria.
-            numId = firstItem.numeracao_id || firstItem.amostra_num_id;
+            numId = firstItem.amostra_num_id || firstItem.numeracao_id;
             // Modelos combinados: o modo salvo nos modelos decide primeiro
             // (Sequencial enche a folha na ordem), e dentro de Blocado a barra
             // escolhe entre folha própria e aproveitar a folha. Ver
@@ -11001,7 +11001,7 @@ window.runImposition = async function (mode, returnBlob = false) {
                 _pedido: numeroDoPedidoDoItem(s.osId),
                 _itemId: s.itemId,
                 _osId: s.osId,
-                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
                 num2_id: null,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
@@ -11025,7 +11025,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             // fallback, imprimir um modelo recem-carregado mandava numeracao
             // NULA ao motor: a folha saia sem numero e sem QR, com a previa
             // mostrando os dois. Aconteceu com o pedido 20508 em 15/08/2026.
-            numId = item.numeracao_id || item.amostra_num_id;
+            numId = item.amostra_num_id || item.numeracao_id;
             saiId = item.saida_id;
             if (!saiId && fmtId) {
                 const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
@@ -14677,14 +14677,52 @@ function itemAtivoDoPedido() {
 
 
 
-/** A numeração que um item usa. Em pedidos_modelos o campo é amostra_num_id. */
+/**
+ * A numeração que um item usa.
+ *
+ * ── Por que há DOIS nomes para uma coluna só ────────────────────────────────
+ *
+ * No banco existe um campo: `pedidos_modelos.amostra_num_id`. Em memória o item
+ * carrega esse valor em `amostra_num_id` E em `numeracao_id` — o segundo é um
+ * espelho antigo, que o `dbFieldMap` do `autoSaveOSItemField` traduz de volta
+ * para a coluna verdadeira.
+ *
+ * Dois nomes para o mesmo dado só funcionam enquanto alguém os mantém iguais, e
+ * ninguém mantinha. `onItemNumSelect` e `saveAmostraToDB` escreviam só o
+ * `amostra_num_id`; este leitor preferia o `numeracao_id`. Resultado, medido no
+ * pedido 21202 em 26/08/2026: trocar a numeração de um modelo — ou salvar uma
+ * cópia dela — atualizava o card, o rótulo do banco e o select, e o
+ * **📊 Ver / editar continuava abrindo o banco da numeração anterior**, até
+ * alguém recarregar a página. Pior no **🧩 Linhas**, que grava: a distribuição
+ * escreveria `csv_selecao` com os `__id` do banco errado.
+ *
+ * O conserto tem duas metades, e as duas importam:
+ *   1. `sincronizarNumeracaoDoItem()` escreve os dois nomes juntos, sempre.
+ *   2. este leitor passou a preferir `amostra_num_id` — a coluna do banco manda,
+ *      como em `dados-do-parceiro-mandam-sempre`.
+ */
 function numeracaoIdDoItem(item) {
 
     if (!item) return null;
 
-    return item.numeracao_id || item.amostra_num_id || null;
+    return item.amostra_num_id || item.numeracao_id || null;
 
 }
+
+/**
+ * Grava a numeração do item nos DOIS nomes locais.
+ *
+ * Use isto em vez de escrever `item.amostra_num_id` na mão: é o que impede os
+ * espelhos de discordarem de novo. Não fala com o banco — quem grava é o
+ * `autoSaveOSItemField` ou o `saveAmostraToDB`.
+ */
+function sincronizarNumeracaoDoItem(item, numId) {
+    if (!item) return;
+    const v = numId || null;
+    item.amostra_num_id = v;
+    item.numeracao_id = v;
+}
+window.sincronizarNumeracaoDoItem = sincronizarNumeracaoDoItem;
 
 
 
@@ -26632,6 +26670,13 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 if (field === 'verso_tipo') {
                     item.verso = !!(value && value !== 'Frente');
                 }
+                // `numeracao_id` e `amostra_num_id` são a MESMA coluna — o
+                // `dbFieldMap` logo abaixo traduz um no outro. Gravar só o nome
+                // que veio deixaria o outro com o valor velho, e metade da tela
+                // lê por um e metade pelo outro.
+                if (field === 'numeracao_id' || field === 'amostra_num_id') {
+                    sincronizarNumeracaoDoItem(item, value);
+                }
             }
         }
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -26939,7 +26984,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         // `amostra_num_id`. Sem o fallback, este matching automatico refazia o
         // trabalho de adivinhar a numeracao de um item que JA tinha uma
         // gravada — e podia gravar por cima com um palpite.
-        let numId = item.numeracao_id || item.amostra_num_id;
+        let numId = item.amostra_num_id || item.numeracao_id;
         if (!numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
@@ -27764,7 +27809,7 @@ function impQueueUpdateField(itemId, osId, field, value) {
     // Recalcular num_final se qtd ou num_inicial mudar
     if (field === 'qtd' || field === 'num_inicial') {
         let ticket_qtd = 1;
-        const numId = item.numeracao_id || item.amostra_num_id;
+        const numId = item.amostra_num_id || item.numeracao_id;
         if (numId) {
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(numId));
             if (selectedNum && selectedNum.tipo === 'TICKET') {
@@ -29866,7 +29911,7 @@ function onItemNumSelect(idx, osId, itemId) {
     let versoStateChanged = false;
     let limparAmostraVerso = false;
     if (item) {
-        item.amostra_num_id = numId || null;
+        sincronizarNumeracaoDoItem(item, numId);
         item.gabarito_operacional = numNome || null;
         item.numeracao = numNome || null;
         item.tipo_numeracao = numNome || null;
@@ -30452,6 +30497,13 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
             console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', itemLocal.id);
             Object.assign(itemLocal, dataToUpdate);
+            // O `Object.assign` copia a chave que veio e mais nada. Quando ela é
+            // a numeração — e é: é assim que o modelo passa a apontar para uma
+            // numeração nova salva no editor —, o espelho `numeracao_id` ficaria
+            // para trás.
+            if ('amostra_num_id' in dataToUpdate) {
+                sincronizarNumeracaoDoItem(itemLocal, dataToUpdate.amostra_num_id);
+            }
             const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
             const cacheKey = itemLocal.id;
             if (!overrides[cacheKey]) overrides[cacheKey] = {};

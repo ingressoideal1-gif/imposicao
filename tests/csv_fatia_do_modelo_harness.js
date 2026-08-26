@@ -776,6 +776,65 @@ function apiDaFatia(state) {
 
 // ─── Fim ──────────────────────────────────────────────────────────────────────
 
+// ─── Os DOIS nomes locais da mesma coluna (26/08/2026) ──────────────────────
+//
+// No banco existe UMA coluna: `pedidos_modelos.amostra_num_id`. Em memoria o
+// item carrega o valor em `amostra_num_id` E em `numeracao_id`, um espelho
+// antigo que o `dbFieldMap` do `autoSaveOSItemField` traduz de volta. Dois nomes
+// para o mesmo dado so funcionam enquanto alguem os mantem iguais — e ninguem
+// mantinha: `onItemNumSelect` e `saveAmostraToDB` escreviam so a coluna, e o
+// `numeracaoIdDoItem` lia o espelho primeiro.
+//
+// Medido no pedido 21202 naquele dia: trocar a numeracao do modelo, ou salvar
+// uma copia dela, atualizava o card, o rotulo do banco e o select — e o
+// "📊 Ver / editar" continuava abrindo o banco da numeracao ANTERIOR ate alguem
+// recarregar a pagina. Pior no "🧩 Linhas", que GRAVA: a distribuicao escreveria
+// `csv_selecao` com os `__id` do banco errado.
+
+(function osDoisEspelhosNaoPodemDiscordar() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nomes = ['numeracaoIdDoItem', 'sincronizarNumeracaoDoItem'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+    const api = new Function('window', fonte + '\nreturn { ' + nomes.join(', ') + ' };')(global.window);
+
+    // O estado exato do defeito: o save escreveu so a coluna do banco.
+    const item = { id: 'm1', numeracao_id: 'A', amostra_num_id: 'B' };
+    ok(api.numeracaoIdDoItem(item) === 'B',
+        'a COLUNA do banco manda; o espelho em memoria nao decide', item);
+
+    api.sincronizarNumeracaoDoItem(item, 'C');
+    ok(item.amostra_num_id === 'C' && item.numeracao_id === 'C',
+        'sincronizarNumeracaoDoItem escreve os DOIS nomes', item);
+
+    api.sincronizarNumeracaoDoItem(item, null);
+    ok(item.amostra_num_id === null && item.numeracao_id === null,
+        'e limpar limpa os dois', item);
+
+    // Item legado, anterior ao `amostra_num_id`: continua respondendo.
+    ok(api.numeracaoIdDoItem({ id: 'm2', numeracao_id: 'Z' }) === 'Z',
+        'so o espelho antigo ainda vale quando a coluna nao veio');
+    ok(api.numeracaoIdDoItem({ id: 'm3' }) === null, 'sem nenhum dos dois, null');
+    ok(api.numeracaoIdDoItem(null) === null, 'e item nulo nao estoura');
+})();
+
+(function ninguemMaisLePeloEspelhoPrimeiro() {
+    // Estatico, e de proposito: sao doze pontos de leitura espalhados por duas
+    // telas, e cada um que volte a ordem antiga volta a abrir o banco errado.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+    const errado = /numeracao_id \|\| \w+\.amostra_num_id/;
+
+    ok(!errado.test(script), 'script.js nao le pelo espelho primeiro');
+    ok(!errado.test(pedido), 'pedido.js tambem nao — a tela gemea conta');
+
+    ok(/sincronizarNumeracaoDoItem\(item, numId\)/.test(script),
+        'trocar a numeracao no card escreve os dois');
+    ok(/sincronizarNumeracaoDoItem\(itemLocal, dataToUpdate\.amostra_num_id\)/.test(script),
+        'e o save do modelo tambem');
+    ok(/field === 'numeracao_id' \|\| field === 'amostra_num_id'/.test(script),
+        'e o autoSave, que traduz um nome no outro para o banco');
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
     process.exit(1);

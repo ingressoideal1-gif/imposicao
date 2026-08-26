@@ -65,13 +65,58 @@ def test_todo_lugar_que_le_numeracao_id_do_item_cai_em_amostra_num_id():
     )
 
 
-def test_a_previa_e_a_impressao_usam_a_mesma_regra():
-    """Guarda a razão de o defeito ter passado despercebido: a prévia acertava.
+def test_a_coluna_do_banco_vem_sempre_primeiro():
+    """A ordem importa, e em 26/08/2026 ela cobrou o preço pelo outro lado.
 
-    Enquanto as duas resolverem igual, a tela não tem como mentir sobre isto.
+    Em 15/08 o defeito foi ler **só** `numeracao_id`, que não existe no banco: o
+    papel saiu sem numeração. O conserto de então foi o fallback
+    `numeracao_id || amostra_num_id` — que resolveu a impressão e deixou uma
+    segunda armadilha de pé.
+
+    Porque os dois nomes são a MESMA coluna, e nada os mantinha iguais em
+    memória. `onItemNumSelect` e `saveAmostraToDB` escreviam só o
+    `amostra_num_id`; quem lia pelo espelho continuava com o valor anterior.
+    Medido no pedido 21202: trocar a numeração de um modelo — ou salvar uma cópia
+    dela — atualizava o card, o rótulo do banco e o select, e o
+    **📊 Ver / editar abria o banco da numeração anterior** até alguém recarregar
+    a página. No **🧩 Linhas** era pior, porque ele grava: a distribuição
+    escreveria `csv_selecao` com os `__id` do banco errado.
+
+    Então a regra ficou mais forte que "tem fallback": a **coluna do banco vem
+    primeiro**, em todo lugar. É a mesma ideia de `dados-do-parceiro-mandam-sempre`
+    — nenhum valor derivado e guardado pelo painel pode continuar valendo depois
+    que o dado de origem muda.
     """
-    assert SCRIPT.count("numeracao_id || item.amostra_num_id") >= 1, (
-        "sumiu o fallback do caminho da previa; se a impressao tambem perder o "
-        "dele, as duas passam a errar juntas e o teste acima nao acusa mais a "
-        "divergencia"
+    erradas = []
+    for numero, linha in enumerate(SCRIPT.splitlines(), 1):
+        if re.search(r"\.numeracao_id\s*\|\|\s*\w+\.amostra_num_id", linha):
+            erradas.append(f"linha {numero}: {linha.strip()[:110]}")
+
+    assert not erradas, (
+        "o espelho em memoria nao pode ser lido antes da coluna do banco — "
+        "a tela volta a abrir a numeracao anterior depois de troca-la:\n  "
+        + "\n  ".join(erradas)
     )
+
+    # E o fallback continua existindo: item legado, gravado antes de a coluna
+    # ser preenchida, ainda precisa ser resolvido.
+    assert SCRIPT.count("amostra_num_id || item.numeracao_id") >= 1, (
+        "sumiu o fallback; item antigo sem amostra_num_id deixaria de resolver"
+    )
+
+
+def test_os_dois_nomes_sao_escritos_juntos():
+    """Ler na ordem certa não basta: eles têm de ser gravados juntos.
+
+    É o que impede a divergência de nascer. Sem isto, a ordem de leitura vira
+    remendo em cima de dois valores que já discordam.
+    """
+    assert "function sincronizarNumeracaoDoItem(" in SCRIPT, (
+        "o escritor único dos dois nomes precisa existir"
+    )
+    for quem, marca in [
+        ("trocar a numeracao no card", "sincronizarNumeracaoDoItem(item, numId)"),
+        ("salvar o modelo", "sincronizarNumeracaoDoItem(itemLocal, dataToUpdate.amostra_num_id)"),
+        ("o auto-save de campo", "field === 'numeracao_id' || field === 'amostra_num_id'"),
+    ]:
+        assert marca in SCRIPT, quem + " precisa manter os dois nomes de pe"

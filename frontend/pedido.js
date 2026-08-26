@@ -539,7 +539,7 @@ function drawPedPreview() {
                 nome: (sItem && typeof imprimeNumeroDoModelo === 'function' && imprimeNumeroDoModelo(sItem))
                     ? String(sItem.modelo || '')
                     : '',
-                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
                 is_selected: true,
@@ -1620,7 +1620,7 @@ function drawPedPreview() {
                             if (_isCamaroteLocal(itemNum)) isNumCamarote = true;
                         }
                         if (!isNumCamarote && activeOSItemObj) {
-                            const nid = activeOSItemObj.numeracao_id || activeOSItemObj.amostra_num_id;
+                            const nid = activeOSItemObj.amostra_num_id || activeOSItemObj.numeracao_id;
                             if (nid) {
                                 const itemNum = (state.numeracoes || []).find(n => String(n.id) === String(nid));
                                 if (_isCamaroteLocal(itemNum)) isNumCamarote = true;
@@ -4247,7 +4247,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // `payloadMultiArtes`, mais abaixo.
                 _itemId: s.itemId,
                 _osId: s.osId,
-                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
                 num2_id: null,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
@@ -5318,7 +5318,13 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
     if (num) {
         item.numeracao = num.name || num.tipo;
-        item.numeracao_id = num.id;
+        // Os dois nomes locais da mesma coluna, juntos. Ver
+        // `numeracaoIdDoItem` no script.js.
+        if (typeof window.sincronizarNumeracaoDoItem === 'function') {
+            window.sincronizarNumeracaoDoItem(item, num.id);
+        } else {
+            item.numeracao_id = num.id;
+        }
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
 
         // Atualizar verso_tipo baseado no print_mode da numeração (fonte de verdade: producao_numeracoes)
@@ -5375,7 +5381,7 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     // Recalcular num_final se qtd ou num_inicial mudar
     if (field === 'qtd' || field === 'num_inicial') {
         let ticket_qtd = 1;
-        const numId = item.numeracao_id || item.amostra_num_id;
+        const numId = item.amostra_num_id || item.numeracao_id;
         if (numId) {
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(numId));
             if (selectedNum && selectedNum.tipo === 'TICKET') {
