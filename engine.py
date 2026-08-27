@@ -699,7 +699,8 @@ class ImpositionConfig:
                  refazer_celulas: list = None,
                  pedido=None,
                  modelo=None,
-                 pool_qr=None):
+                 pool_qr=None,
+                 entregar_por_bloco: bool = False):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -712,6 +713,13 @@ class ImpositionConfig:
         self.cut_stack_mode = cut_stack_mode
         self.sheets_per_block = sheets_per_block
         self.block_depth = block_depth
+        # ENTREGAR ENQUANTO GERA (27/08/2026).
+        #
+        # Desmarcado por padrão: liga-lo troca UM arquivo por N na mão de quem
+        # opera, e novidade que muda o que chega na impressora entra desligada.
+        # Ver `_folhas_por_lote`, que é quem decide se o corte vale para este
+        # trabalho.
+        self.entregar_por_bloco = bool(entregar_por_bloco)
 
         # QR Ideal: as duas chaves que dao o codigo de cada ingresso.
         # `pedido` e `pedidos_modelos.id_int` e `modelo` e `pedidos_modelos.id`.
@@ -922,10 +930,55 @@ class ImpositionEngine:
         self._url_cache = {}
         self.on_file_generated = on_file_generated
         self.generated_files = TriggerList(on_file_generated)
+        # Quantas folhas ja foram ENTREGUES (nao so geradas). E o que a tela diz
+        # ao operador quando ele cancela no meio: papel entregue nao volta.
+        self.folhas_entregues = 0
         # Cache de bytes de fontes TTF: {font_file_path -> bytes}
         # Evita re-leitura do disco a cada chamada, mas PyMuPDF ainda
         # faz deduplicacao interna de streams identicos no PDF.
         self._font_buffer_cache: dict = {}
+
+    def _folhas_por_lote(self, cfg, refazendo):
+        """De quantas folhas e cada lote entregue enquanto o trabalho e gerado.
+
+        Devolve 0 quando este trabalho NAO deve ser cortado -- e o caminho de
+        sempre, um documento so, gravado no fim.
+
+        ## Por que isto existe (27/08/2026)
+
+        O usuario relatou o modelo de 14.000 celulas do pedido 21202: 1.400
+        folhas que o motor montava inteiras na memoria antes de sair a primeira.
+
+        A esteira de entregar enquanto gera JA existia e ja roda na grafica: o
+        `on_file_generated` dispara a cada `generated_files.append`, o `app.py`
+        empurra o arquivo para a resposta em streaming, e o frontend manda cada
+        um para o hotfolder ou para a impressora conforme chegam. O que faltava
+        era o CORTE: sem capa, o motor definia o bloco como o pedido inteiro
+        (`stack_size = total_sheets`), o laco nunca cruzava uma fronteira e nada
+        era gravado no meio.
+
+        ## As tres recusas, e por que cada uma
+
+        `has_cover` — este caminho JA corta, por set, e ja entrega. Cortar duas
+        vezes brigaria com a capa e a contracapa, que pertencem ao set.
+
+        `refazendo` — Refazer Celula nao pode mudar de significado. Sem capa, o
+        pedido inteiro e um bloco so, entao "refazer folhas 5 a 10" sao folhas
+        ABSOLUTAS. Com o corte ligado elas virariam "folhas 5 a 10 do bloco tal",
+        e o operador reimprimiria papel errado sem nenhum aviso.
+
+        `sheets_per_block` vazio — sem numero de bloco nao ha corte a fazer.
+        """
+        if not getattr(cfg, "entregar_por_bloco", False):
+            return 0
+        if cfg.has_cover:
+            return 0
+        if refazendo:
+            return 0
+        por_bloco = int(getattr(cfg, "sheets_per_block", 0) or 0)
+        if por_bloco <= 0:
+            return 0
+        return por_bloco * max(int(getattr(cfg, "block_depth", 1) or 1), 1)
 
     def _get_font_buffer(self, font_file: str) -> bytes:
         """Le o arquivo TTF do disco uma unica vez e cacheia os bytes em memoria."""
@@ -2054,15 +2107,23 @@ class ImpositionEngine:
 
         doc_out = fitz.open()
         self.generated_files = TriggerList(getattr(self, "on_file_generated", None))
+        self.folhas_entregues = 0
         doc_base = self._load_base_as_pdf()
         
+        # Sempre ligado: o `elif` la embaixo nao pode depender de curto-circuito
+        # para nao estourar quando o trabalho tem capa.
+        folhas_por_lote = 0
         if cfg.has_cover:
             if cfg.layout_schema == "cut_stack":
                 stack_size = cfg.sheets_per_block * cfg.block_depth
             else:
                 stack_size = total_sheets
         else:
-            stack_size = total_sheets
+            # Sem capa, o "bloco" era o pedido inteiro -- e por isso o laco nunca
+            # gravava nada no meio. Com a entrega por bloco ligada, ele passa a
+            # ser o bloco configurado no modelo. Ver `_folhas_por_lote`.
+            folhas_por_lote = self._folhas_por_lote(cfg, refazendo)
+            stack_size = folhas_por_lote if folhas_por_lote else total_sheets
 
         # ─── REFAZER CÉLULA: OS ITENS SÃO COMPACTADOS ───────────────────────────
         # Repor cinco tickets não pode custar cinco folhas de papel com um ticket
@@ -2596,6 +2657,18 @@ class ImpositionEngine:
                         self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                         if not refazendo:
                             self._generate_contracapa(set_idx_current, cfg, doc_base)
+                    elif len(doc_out) > 0 and folhas_por_lote:
+                        # ENTREGA ENQUANTO GERA: o lote fechado sai agora, e o
+                        # `append` e que dispara a esteira -- `on_file_generated`,
+                        # o streaming do app.py, e o frontend mandando para o
+                        # hotfolder ou para a impressora. Ver `_folhas_por_lote`.
+                        #
+                        # O nome leva o numero com tres zeros porque a ordem em
+                        # que os arquivos entram no RIP e a ordem do papel.
+                        out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
+                        _salvar_pdf(doc_out, out_name)
+                        self.generated_files.append({"type": "lote", "path": out_name, "name": os.path.basename(out_name)})
+                        self.folhas_entregues += len(doc_out)
                     doc_out.close()
                     doc_out = fitz.open()
 
@@ -3034,6 +3107,15 @@ class ImpositionEngine:
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                     if not refazendo:
                         self._generate_contracapa(set_idx_current, cfg, doc_base)
+        elif folhas_por_lote:
+            # O resto: o ultimo lote quase nunca fecha certo no numero do bloco.
+            if len(doc_out) > 0:
+                out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
+                _salvar_pdf(doc_out, out_name)
+                self.generated_files.append({"type": "lote", "path": out_name, "name": os.path.basename(out_name)})
+                self.folhas_entregues += len(doc_out)
+            print(f"[engine] entrega por bloco: {len(self.generated_files)} lote(s), "
+                  f"{self.folhas_entregues} folha(s) entregue(s) de {total_sheets}")
         else:
             if len(doc_out) > 0:
                 _salvar_pdf(doc_out, cfg.out_pdf)

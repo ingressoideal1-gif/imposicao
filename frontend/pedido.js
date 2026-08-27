@@ -4640,6 +4640,17 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
+        // ENTREGAR ENQUANTO GERA (27/08/2026). Desmarcado por padrao: liga-lo
+        // troca UM arquivo por N na mao de quem opera, e novidade que muda o
+        // que chega na impressora entra desligada.
+        //
+        // Nao confundir com a "Folha a Folha" logo acima dela na tela: aquela
+        // quebra o PDF DEPOIS de ele chegar pronto ao navegador, com o PDFLib,
+        // e por isso nao evita o acumulo -- acrescenta mais um. Esta corta no
+        // motor, antes, e cada lote ja sai entregue. Ver `_folhas_por_lote` no
+        // engine.py.
+        entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true,
+
         // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden ou fallback do item ativo)
         c_ini: (state.activeOSItem ? parseInt(state.activeOSItem.c_ini) : null) || parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
         q_cam: (state.activeOSItem ? parseInt(state.activeOSItem.q_cam) : null) || parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,

@@ -1509,7 +1509,13 @@ async def impose_file(
             # pedido o trabalho veio; o motor so calcula.
             pedido=data.get("pedido"),
             modelo=data.get("modelo"),
-            pool_qr=_pool_qr_ou_none()
+            pool_qr=_pool_qr_ou_none(),
+            # ENTREGAR ENQUANTO GERA (27/08/2026). Desmarcado por padrao -- ver
+            # `_folhas_por_lote` no engine.py. O caminho de entrega ja existia:
+            # cada lote que o motor grava dispara o `on_file_gen` logo abaixo, e
+            # de la vai para a resposta em streaming e para o hotfolder ou a
+            # impressora, sem esperar o trabalho terminar.
+            entregar_por_bloco=bool(data.get("entregar_por_bloco", False))
         )
 
         wants_stream = data.get("stream", False)
