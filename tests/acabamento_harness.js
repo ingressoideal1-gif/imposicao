@@ -17,6 +17,22 @@ const path = require('path');
 const RAIZ = path.dirname(__dirname);
 const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'acabamento.js'), 'utf8');
 
+// A regra dos status "depois da grafica" (EXPEDICAO, EM TRANSITO, ENTREGUE)
+// mora no `script.js`, porque o Painel de Producao obedece a mesma. Ela e LIDA
+// de la, e nao copiada: uma copia continuaria passando depois de o original
+// mudar.
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+const pedidoJaPassouDaGraficaReal = (() => {
+    const NL = String.fromCharCode(10);
+    const iLista = SCRIPT.indexOf('const SINAIS_DEPOIS_DA_GRAFICA = [');
+    if (iLista < 0) throw new Error('nao achei SINAIS_DEPOIS_DA_GRAFICA no script.js');
+    const lista = SCRIPT.slice(iLista, SCRIPT.indexOf('];', iLista) + 2);
+    const iFn = SCRIPT.indexOf(NL + 'function pedidoJaPassouDaGrafica(');
+    if (iFn < 0) throw new Error('nao achei pedidoJaPassouDaGrafica no script.js');
+    const corpo = SCRIPT.slice(iFn, SCRIPT.indexOf(NL + '}', iFn) + 2);
+    return new Function(lista + corpo + NL + 'return pedidoJaPassouDaGrafica;')();
+})();
+
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
     total++;
@@ -100,6 +116,8 @@ function montarAmbiente() {
         // depois. Sem ele aqui o embrulho nem se instalava.
         renderOrdens: () => {},
         toast: () => {},
+        // A regra de 27/08/2026, vinda do `script.js` de verdade.
+        pedidoJaPassouDaGrafica: pedidoJaPassouDaGraficaReal,
         state: { ordens: [], osItens: {}, modelosGlobais: {}, cores: [], numeracoes: [], produtosGlobais: [], todasArtes: [] },
         _currentPerms: null,
     };
@@ -547,6 +565,71 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     amb.painel.render();
     ok(amb.painel._tela.temAtrasados === false,
        'depois de enviado a expedicao ele nao conta mais: nao e trabalho daqui');
+})();
+
+// Status posterior ao trabalho da grafica tira o pedido da tela (27/08/2026).
+//
+// Regra do usuario: *"quando um pedido constar com Status posterior aos status
+// do painel de acabamento e do painel de producao (EXPEDICAO, EM TRANSITO,
+// ENTREGUE) devem sair da tela inicial dos paineis"*.
+//
+// EXPEDICAO ja saia da tela inicial pelo `passaNoPrazo` -- ele vai para o botao
+// Expedicao, que e o comprovante do que esta bancada despachou. EM TRANSITO e
+// ENTREGUE nao podem aparecer em lugar NENHUM daqui: o material ja saiu do
+// predio.
+(function statusPosteriorSaiDaTela() {
+    const amb = ambienteComPedidos([pedido(120)], {
+        120: [{ id: 12, acabamento_status: 'Pronto', quantidade: 10 }],
+    });
+
+    const naLista = () => amb.elementos['tbody-acabamento'].innerHTML.indexOf('>120<') !== -1;
+    const noBotaoExpedicao = () => {
+        amb.painel.setFiltroPrazo('expedicao');
+        amb.painel.render();
+        const tem = amb.elementos['tbody-acabamento'].innerHTML.indexOf('>120<') !== -1;
+        amb.painel.setFiltroPrazo('geral');
+        amb.painel.render();
+        return tem;
+    };
+
+    amb.janela.state.ordens[0].status_interno = 'EM PRODUCAO';
+    amb.painel.render();
+    ok(naLista(), 'EM PRODUCAO: o pedido esta na tela inicial');
+
+    amb.janela.state.ordens[0].status_interno = 'EXPEDICAO';
+    amb.painel.render();
+    ok(!naLista(), 'EXPEDICAO sai da tela inicial');
+    ok(noBotaoExpedicao(), 'e EXPEDICAO continua no botao Expedicao: e o comprovante da bancada');
+
+    for (const status of ['EM TRANSITO', 'EM TRÂNSITO', 'ENTREGUE']) {
+        amb.janela.state.ordens[0].status_interno = status;
+        amb.painel.render();
+        ok(!naLista(), status + ' sai da tela inicial');
+        ok(!noBotaoExpedicao(), status + ' tambem NAO aparece no botao Expedicao');
+    }
+
+    // E volta quando o ERP volta atras: a regra le o status, nao um carimbo nosso.
+    amb.janela.state.ordens[0].status_interno = 'EM PRODUCAO';
+    amb.painel.render();
+    ok(naLista(), 'de volta a EM PRODUCAO, o pedido reaparece');
+})();
+
+// A regra e a MESMA nos dois paineis, escrita uma vez so.
+(function aRegraVemDoScriptJs() {
+    const f = pedidoJaPassouDaGraficaReal;
+    ok(f({ status_interno: 'EXPEDICAO' }) === true, 'EXPEDICAO passou da grafica');
+    ok(f({ status_interno: 'EXPEDIÇÃO' }) === true, 'EXPEDICAO com cedilha e til');
+    ok(f({ status_interno: 'EM TRANSITO' }) === true, 'EM TRANSITO passou da grafica');
+    ok(f({ status_interno: 'EM TRÂNSITO' }) === true, 'EM TRANSITO com acento');
+    ok(f({ status_interno: 'ENTREGUE' }) === true, 'ENTREGUE passou da grafica');
+    ok(f({ status_interno: 'em transito' }) === true, 'a comparacao ignora a caixa');
+    ok(f({ status_interno: '  ENTREGUE  ' }) === true, 'e o espaco em volta');
+    ok(f({ status_interno: 'EM PRODUCAO' }) === false, 'EM PRODUCAO e trabalho daqui');
+    ok(f({ status_interno: 'EM ACABAMENTO' }) === false, 'EM ACABAMENTO e trabalho daqui');
+    ok(f({ status_interno: 'A RETIRAR' }) === false,
+       'A RETIRAR fica de fora: o material esta no balcao, nao entregue');
+    ok(f({}) === false, 'pedido sem status nao passou da grafica');
+    ok(f(null) === false, 'sem pedido, false');
 })();
 
 // ─── 3b. O cache da proposta nao responde pelo modelo ───────────────────

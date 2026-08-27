@@ -278,8 +278,26 @@
      * Quem cresce é só a lista, que é onde o operador procura o que ele acabou
      * de mandar.
      */
+    /**
+     * O pedido já passou do chão de fábrica? (EXPEDICAO, EM TRANSITO, ENTREGUE)
+     *
+     * Regra do usuário de 27/08/2026, escrita uma vez só no `script.js`, porque
+     * o Painel de Produção obedece à mesma. Se o `script.js` ainda não
+     * carregou, esta tela não esconde nada — esconder por engano é pior do que
+     * mostrar a mais.
+     */
+    function jaPassouDaGrafica(os) {
+        const f = fn('pedidoJaPassouDaGrafica');
+        return f ? !!f(os) : false;
+    }
+
     function pedidosDoPainel() {
         return (estado().ordens || [])
+            // Pedido despachado, em trânsito ou entregue não é mais trabalho
+            // desta bancada. O `ehExpedido` logo abaixo é a única exceção, e ela
+            // vive só no botão "Expedição": o `passaNoPrazo` tira o expedido de
+            // toda tela inicial (Geral, Para Hoje, Atrasados).
+            .filter(os => !jaPassouDaGrafica(os) || ehExpedido(os))
             .filter(os => ehDeProducao(os) || ehExpedido(os))
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
     }
@@ -6456,6 +6474,8 @@
         _regras: {
             ehDeProducao,
             ehExpedido,
+            jaPassouDaGrafica,
+            pedidosDoPainel,
             setoresDoPedido,
             // O recorte por setor (27/08/2026)
             setorDoModelo,

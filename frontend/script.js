@@ -25807,6 +25807,112 @@ function pedidoSaiuDaArte(os) {
 }
 
 /**
+ * Os status que ficam DEPOIS do trabalho da gráfica.
+ *
+ * Regra do usuário, 27/08/2026: *"quando um pedido constar com Status posterior
+ * aos status do painel de acabamento e do painel de produção (EXPEDICAO, EM
+ * TRANSITO, ENTREGUE) devem sair da tela inicial dos paineis"*.
+ *
+ * A razão é a mesma que rege o Acabamento desde 24/08/2026: o que fica na
+ * frente do operador é o trabalho DAQUELA mesa. Pedido despachado, em trânsito
+ * ou entregue não é mais trabalho de ninguém aqui dentro — ele só ocuparia a
+ * lista e faria o operador procurar entre pedidos que já saíram do prédio.
+ *
+ * As duas telas já se guiavam por listas POSITIVAS (a Produção aceita
+ * `EM PRODUCAO`/`EM IMPRESSAO`; o Acabamento aceita esses mais o `EXPEDICAO`
+ * do seu botão Expedição), e por isso os três já ficavam de fora por
+ * consequência. Aqui a regra passa a ser dita, e não deduzida: no dia em que
+ * alguém alargar uma daquelas listas, este guarda continua valendo.
+ *
+ * O `EXPEDICAO` entra nesta lista e mesmo assim continua alimentando o botão
+ * **Expedição** do Acabamento: aquele botão não é a tela inicial, é o
+ * comprovante do que a bancada acabou de despachar (ver `passaNoPrazo`).
+ */
+const SINAIS_DEPOIS_DA_GRAFICA = [
+    'EXPEDICAO', 'EXPEDIÇÃO',
+    'EM TRANSITO', 'EM TRÂNSITO',
+    'ENTREGUE',
+];
+
+/**
+ * O pedido já passou do chão de fábrica?
+ *
+ * Lê `status_interno`, que é o campo do ERP que de fato anda com o pedido — o
+ * `status_pedido` da mesma tabela está preso em `NAO_INICIADO` em 8.600 das
+ * 8.602 propostas e não serve para decidir nada.
+ */
+function pedidoJaPassouDaGrafica(os) {
+    if (!os) return false;
+    const si = (os.status_interno || '').trim().toUpperCase();
+    return SINAIS_DEPOIS_DA_GRAFICA.includes(si);
+}
+window.pedidoJaPassouDaGrafica = pedidoJaPassouDaGrafica;
+window.SINAIS_DEPOIS_DA_GRAFICA = SINAIS_DEPOIS_DA_GRAFICA;
+
+/**
+ * Relê o `status_interno` dos pedidos que estão na tela.
+ *
+ * Sem isto a regra acima só valeria no instante em que o painel carrega:
+ * `state.ordens` é montado uma vez, e o `status_interno` de cada pedido fica
+ * congelado nesse retrato. Quem move o pedido para EXPEDICAO, EM TRANSITO ou
+ * ENTREGUE é o ERP do parceiro, em outra tela e a qualquer hora — e o painel
+ * da gráfica continuava mostrando o pedido até alguém recarregar a página.
+ *
+ * É tráfego de controle, e não do caminho crítico do operador: duas colunas
+ * de uma tabela, uma vez por minuto, e só quando um dos dois painéis está
+ * aberto. Nada é redesenhado quando nada mudou.
+ */
+async function ressincronizarStatusInterno() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    const visivel = id => {
+        const el = document.getElementById(id);
+        return !!el && el.style.display !== 'none' && el.offsetParent !== null;
+    };
+    const naProducao = visivel('view-lista-impressao');
+    const noAcabamento = visivel('view-acabamento');
+    if (!naProducao && !noAcabamento) return;
+
+    const numeros = [...new Set((state.ordens || [])
+        .map(os => parseInt(os.numero))
+        .filter(n => Number.isFinite(n)))];
+    if (!numeros.length) return;
+
+    let linhas = null;
+    try {
+        const { data, error } = await supabaseClient
+            .from('propostas')
+            .select('id_int, status_interno')
+            .in('id_int', numeros);
+        if (error) throw error;
+        linhas = data;
+    } catch (e) {
+        // Banco fora do ar não pode mexer na tela: sem resposta, fica o que está.
+        console.warn('[Status] Não foi possível reler o status_interno:', e.message || e);
+        return;
+    }
+    if (!linhas) return;
+
+    const porNumero = new Map(linhas.map(l => [String(l.id_int), l.status_interno || null]));
+    let mudou = 0;
+    (state.ordens || []).forEach(os => {
+        const novo = porNumero.get(String(parseInt(os.numero)));
+        if (novo === undefined) return;
+        if ((os.status_interno || null) === novo) return;
+        console.log(`[Status] Pedido #${os.numero}: ${os.status_interno || '(vazio)'} → ${novo || '(vazio)'}`);
+        os.status_interno = novo;
+        mudou++;
+    });
+    if (!mudou) return;
+
+    if (naProducao && typeof renderOrdens === 'function') renderOrdens();
+    if (noAcabamento && window.AcabamentoPainel && typeof window.AcabamentoPainel.render === 'function') {
+        window.AcabamentoPainel.render();
+    }
+}
+window.ressincronizarStatusInterno = ressincronizarStatusInterno;
+
+/**
  * Os pedidos que o ERP já entregou à gráfica, pelo número.
  *
  * Recebe as linhas de `propostas` (que trazem `status_interno`) e devolve um
@@ -26251,6 +26357,10 @@ function ligarRelogioDaLista() {
     if (_relogioDaListaLigado) return;
     _relogioDaListaLigado = true;
     setInterval(atualizarRelogiosDaLista, 30000);
+    // De carona no mesmo gatilho de "a lista existe": o status do ERP também
+    // precisa ser relido, senão o pedido que foi para a expedição fica na tela
+    // até alguém recarregar a página.
+    setInterval(ressincronizarStatusInterno, 60000);
 }
 
 // ---- O preview da arte de um pedido -------------------------------------
@@ -26349,7 +26459,13 @@ function renderOrdens() {
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
     // Fila 1: Impressão (status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO')
+    //
+    // O `pedidoJaPassouDaGrafica` é redundância de propósito: a lista acima já
+    // é positiva, mas a regra de 27/08/2026 — EXPEDICAO, EM TRANSITO e ENTREGUE
+    // saem da tela inicial — fica dita aqui, e não dependendo de ninguém
+    // lembrar dela ao acrescentar um status novo à lista de cima.
     let ordensImpressao = state.ordens.filter(os => {
+        if (pedidoJaPassouDaGrafica(os)) return false;
         const st = (os.status_interno || '').toUpperCase();
         return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO' || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
     });

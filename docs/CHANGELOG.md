@@ -4,6 +4,51 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-27] — Pedido que já saiu do prédio sai da tela dos painéis
+
+Regra do usuário: *"quando um pedido constar com Status posterior aos status do
+painel de acabamento e do painel de produção (EXPEDICAO, EM TRANSITO, ENTREGUE)
+devem sair da tela inicial dos paineis"*.
+
+É a mesma razão que rege o Acabamento desde 24/08: o que fica na frente do
+operador é o trabalho **daquela** mesa. Pedido despachado, em trânsito ou
+entregue não é trabalho de ninguém aqui dentro.
+
+### O que já estava certo
+
+As duas telas se guiavam por listas **positivas** — a Produção aceita
+`EM PRODUCAO`/`EM IMPRESSAO`, o Acabamento aceita esses mais o `EXPEDICAO` do
+botão Expedição — e por consequência os três status já ficavam de fora. Mas por
+**dedução**, não por regra escrita: bastava alguém alargar uma daquelas listas
+para o pedido entregue voltar à tela sem ninguém perceber. A regra passou a ter
+um lugar só — `SINAIS_DEPOIS_DA_GRAFICA` e `pedidoJaPassouDaGrafica`, no
+`script.js` — e os dois painéis a consultam de lá.
+
+`EXPEDICAO` continua alimentando o botão **Expedição** do Acabamento: ele não é
+a tela inicial, é o comprovante do que a bancada acabou de despachar.
+`A RETIRAR` e `RETIRADO` ficaram de fora de propósito — material no balcão
+esperando o cliente ainda pode voltar para a bancada.
+
+### O que faltava de verdade: a regra não era viva
+
+`state.ordens` é montado **uma vez**, e o `status_interno` de cada pedido ficava
+congelado nesse retrato. Quem move o pedido para EXPEDICAO, EM TRANSITO ou
+ENTREGUE é o ERP do parceiro, em outra tela e a qualquer hora — e o painel da
+gráfica continuava mostrando o pedido até alguém recarregar a página. A regra
+valia no instante do carregamento e mais nada.
+
+`ressincronizarStatusInterno` relê `id_int, status_interno` da tabela
+`propostas` **uma vez por minuto**, e só quando um dos dois painéis está na
+tela. Duas colunas, tráfego de controle, fora do caminho crítico do operador.
+Nada é redesenhado quando nada mudou, e banco fora do ar não mexe na tela: sem
+resposta, fica o que está.
+
+Conferido por `tests/test_status_depois_da_grafica.py` e por 22 verificações
+novas no `tests/acabamento_harness.js`, que passou a ler a regra de dentro do
+`script.js` em vez de guardar uma cópia.
+
+---
+
 ## [2026-08-27] — PDF Gabarito: o verso ganhou página, e a frente parou de sair suja
 
 Relato do usuário: *"Na edição de um pedido em arte, ao clicar em PDF Gabarito,
