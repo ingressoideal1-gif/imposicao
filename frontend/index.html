@@ -438,7 +438,17 @@
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title"><span class="icon">⚙️</span> Configuração da Numeração</span>
+                        <!-- Acende quando a numeração aberta pertence a um cliente. A cor
+                             do cartão muda junto (classe `editando-exclusiva` no
+                             #view-numeracao) — ver `atualizarMarcaDaNumeracaoExclusiva`. -->
+                        <span id="num-selo-exclusiva" class="badge badge-amber" style="display:none; margin-left:10px;"></span>
                         <div style="display:flex;gap:8px;">
+                            <!-- Duplica a exclusiva como numeração PADRÃO, do catálogo
+                                 geral. A exclusiva original fica exatamente como está, e
+                                 os modelos que a usam continuam nela. -->
+                            <button class="btn btn-secondary btn-sm" id="btn-num-tornar-padrao" style="display:none"
+                                onclick="tornarNumeracaoPadrao()"
+                                title="Salvar uma cópia desta numeração no catálogo geral, sem dono. A exclusiva continua como está.">⇪ Tornar padrão</button>
                             <!-- A saída de quem chegou aqui de dentro de um pedido, para editar a
                                  numeração de um modelo. Sem ela o único caminho de volta era o menu
                                  lateral, que sai da tela mas NÃO desfaz o vínculo com o modelo — e
@@ -721,12 +731,19 @@
                             <option value="TEATRO">TEATRO</option>
                             <option value="CAMAROTE">CAMAROTE</option>
                         </select>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--text-dim); cursor:pointer; white-space:nowrap;"
-                               title="As numerações criadas de dentro de um pedido ficam escondidas da lista. Marque para vê-las e poder renomeá-las.">
-                            <input type="checkbox" id="catalogo-mostrar-exclusivas" onchange="renderNumeracoes()"
-                                   style="width:15px; height:15px; cursor:pointer;">
-                            Mostrar exclusivas de cliente
-                        </label>
+                        <!-- As numerações exclusivas de cliente ficam FORA da lista por
+                             padrão: são as criadas de dentro de um pedido, e são a maioria
+                             dos registros da tabela. Até 27/08/2026 isto era uma caixa de
+                             marcar de dois estados; virou drop porque faltava o terceiro —
+                             ver SÓ as exclusivas, que é como se confere o trabalho de um
+                             cliente sem o catálogo geral no meio. -->
+                        <select id="catalogo-filter-exclusivas" class="form-control" onchange="renderNumeracoes()"
+                            style="width: 215px;"
+                            title="As numerações exclusivas são as criadas de dentro de um pedido, e pertencem a um cliente.">
+                            <option value="padrao">Só numerações padrão</option>
+                            <option value="todas">Padrão + exclusivas</option>
+                            <option value="exclusivas">Só exclusivas de cliente</option>
+                        </select>
                         <button class="btn btn-primary" onclick="novaNumeracao()">+ Nova Numeração</button>
                     </div>
                 </div>

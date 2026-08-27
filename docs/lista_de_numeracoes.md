@@ -84,6 +84,87 @@ de `#view-catalogo`). Com 49 registros no banco e um filtro que não casa com na
 operador lê que não há nada cadastrado. `renderNumeracoes()` não distingue "vazio" de
 "filtrado a zero" (`:2643-2651`).
 
+## O drop das exclusivas de cliente (27/08/2026)
+
+`#catalogo-filter-exclusivas`, ao lado dos filtros de formato e de tipo. Três
+estados, e o primeiro é o que abre:
+
+| Valor | O que a lista mostra |
+|---|---|
+| `padrao` | só o catálogo geral — a lista de sempre |
+| `todas` | tudo junto |
+| `exclusivas` | **só** as de cliente, com preview e o número do cliente |
+
+Nasceu caixa de marcar em 26/08/2026 e virou drop porque faltava o terceiro
+estado: conferir o trabalho de um cliente sem o catálogo geral no meio. A busca
+por número continua **vencendo** o drop — digitar `27401` é dizer "quero as
+deste cliente", e nada mais (é a armadilha 2 acima).
+
+O selo da linha passou a trazer o **número** do cliente sempre, e o nome só
+quando o pedido dele está em memória: `👤 27401 · Maikel De Souza Trotta ·
+compartilhada`. Antes o número aparecia apenas quando o painel **não** sabia o
+nome (`cliente 27401`), ou seja, sumia justamente no caso bom — e é o número
+que se digita na busca e que identifica o cliente no ERP.
+
+O estado vazio deixou de mentir junto (era a armadilha 4): com filtro ligado ele
+diz que o filtro é que não achou nada, em vez de "Nenhuma numeração cadastrada
+ainda no catálogo".
+
+## Editar uma exclusiva: o editor muda de cor
+
+O editor de numeração é o mesmo para as duas famílias, e nada na tela dizia em
+qual delas o operador estava — a diferença aparecia só nas consequências, todas
+invisíveis na hora de editar: salvar com o mesmo nome repassa a mudança para
+todos os modelos daquele cliente, a arte de fundo fica guardada no registro, e a
+numeração some do catálogo depois de salva.
+
+Desde 27/08/2026 o `#view-numeracao` ganha a classe **`editando-exclusiva`**
+quando a numeração aberta pertence a um cliente: cabeçalho dos cartões em âmbar,
+faixa âmbar à esquerda, título da página em âmbar, e um selo
+`👤 EXCLUSIVA · CLIENTE 27401` ao lado de "Configuração da Numeração".
+
+O âmbar é o **mesmo** do seletor de Numeração do modelo (ver a seção "No pedido,
+a exclusiva do cliente sai amarela"), de propósito: *amarelo = exclusiva de
+cliente* vale no aplicativo inteiro, e não por tela.
+
+Quem responde é `clienteDaNumeracaoDoEditor()`, e ela olha as **duas** origens:
+a numeração que já existe no banco (`num-id` preenchido, `Cli_Num` na linha) e a
+que está nascendo de dentro de um modelo (`customNumeracaoEditState`, que carrega
+o cliente do pedido). `atualizarMarcaDaNumeracaoExclusiva()` é chamada em três
+pontos, e os três importam: ao abrir uma numeração (`editNumeracao`), ao chegar
+de dentro de um modelo (`mostrarVoltarDaNumeracaoDoModelo`) e ao limpar o editor
+(`cancelNumEdit`) — sem o terceiro, a numeração do catálogo aberta em seguida
+sairia vestida de exclusiva.
+
+### ⇪ Tornar padrão — `tornarNumeracaoPadrao()`
+
+O botão só aparece com uma exclusiva **já salva** aberta: sem original gravado
+não há o que duplicar.
+
+**Duplica, não converte.** A exclusiva fica exatamente como está e os modelos que
+apontam para ela continuam apontando. Converter no lugar mudaria o material de
+todo mundo que a usa hoje — inclusive de pedidos já aprovados — e faria isso
+calado, que é o oposto do que o resto desta tela faz.
+
+A cópia perde `Cli_Num` (era o que a prendia ao cliente), `os_item_id`,
+`is_custom`, a arte de fundo (só a numeração de cliente guarda) e o
+`preview_jpg` (ganha o dele no primeiro save, que é este mesmo).
+
+A gravação é o **`saveNumeracao()` de sempre** — ele já sabe subir preview,
+recusar nome ocupado e montar os `elements`. O truque é só zerar o `num-id` e o
+`customNumeracaoEditState` antes de chamá-lo: os três campos de posse do save
+saem todos do `registroEmEdicao`, que sem id não existe. Por isso
+`saveNumeracao` passou a **devolver o id gravado** — é como a cópia é reaberta no
+editor depois. Reencontrá-la pelo nome seria repetir o mecanismo exato da
+"numeração fantasma" de 25/08/2026: nome não é único nesta tabela.
+
+Se o save recusar (nome ocupado, erro do banco), a função **devolve** `num-id`,
+o nome digitado e o vínculo com o modelo ao editor — sem isso, o próximo Salvar
+gravaria uma numeração nova em vez de atualizar a exclusiva.
+
+Testes: `tests/numeracoes_exclusivas_no_catalogo_harness.js` (40 verificações),
+pelo `tests/test_numeracoes_exclusivas_no_catalogo.py`.
+
 ## As três ações da linha
 
 ### Editar — `editNumeracao(id)`

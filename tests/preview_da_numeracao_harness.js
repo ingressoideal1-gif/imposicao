@@ -29,7 +29,10 @@ function recortar(nome) {
 function desenhar(state, filtros) {
     filtros = filtros || {};
     const container = { innerHTML: '' };
-    const vazio = { style: { display: '' } };
+    // O <p> de dentro do estado vazio: desde 27/08/2026 o recado muda conforme
+    // o filtro, em vez de dizer sempre "Nenhuma numeracao cadastrada ainda".
+    const recado = { textContent: '' };
+    const vazio = { style: { display: '' }, querySelector: () => recado };
     const document = {
         getElementById(id) {
             if (id === 'catalogo-container') return container;
@@ -37,7 +40,8 @@ function desenhar(state, filtros) {
             if (id === 'catalogo-search') return { value: filtros.busca || '' };
             if (id === 'catalogo-filter-format') return { value: filtros.formato || '' };
             if (id === 'catalogo-filter-type') return { value: filtros.tipo || '' };
-            if (id === 'catalogo-mostrar-exclusivas') return { checked: !!filtros.mostrarExclusivas };
+            // 'padrao' | 'todas' | 'exclusivas' — ver o drop do catalogo.
+            if (id === 'catalogo-filter-exclusivas') return { value: filtros.exclusivas || 'padrao' };
             return null;
         },
     };
@@ -45,7 +49,7 @@ function desenhar(state, filtros) {
                    recortar('numeracaoEhCompartilhadaDoCliente'),
                    recortar('renderNumeracoes')].join('\n');
     new Function('state', 'document', fonte + '\nrenderNumeracoes();')(state, document);
-    return { html: container.innerHTML, vazio: vazio.style.display };
+    return { html: container.innerHTML, vazio: vazio.style.display, recado: recado.textContent };
 }
 
 const FORMATOS = [
@@ -194,12 +198,15 @@ function caixaDe(formatoId) {
     ok(achada.html.indexOf('<img') > 0, 'com miniatura, como qualquer outra');
 })();
 
-// ─── 6. A caixa "Mostrar exclusivas de cliente" (26/08/2026) ────────────────
+// ─── 6. O drop das exclusivas de cliente ────────────────────────────────────
 //
-// Sem ver o registro nao ha como renomea-lo, e renomear e o que decide se a
-// numeracao e de um modelo so ou do cliente inteiro.
+// Nasceu caixa de marcar em 26/08/2026 (sem ver o registro nao ha como
+// renomea-lo, e renomear e o que decide se a numeracao e de um modelo so ou do
+// cliente inteiro) e virou drop em 27/08/2026, quando faltou o terceiro estado:
+// ver SO as exclusivas, para conferir o trabalho de um cliente sem o catalogo
+// geral no meio.
 
-(function aCaixaRevelaAsExclusivasEOSeloDizDeQuemEla() {
+(function oDropRevelaAsExclusivasEOSeloDizDeQuemEla() {
     const numeracoes = [
         numeracao({ id: 'n-geral', name: 'Geral' }),
         // Nome ainda igual ao os_item_id: exclusiva daquele modelo.
@@ -211,22 +218,62 @@ function caixaDe(formatoId) {
 
     const fechada = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: ordens });
     ok(fechada.html.indexOf('Camarote VIP') < 0 && fechada.html.indexOf('it-99') < 0,
-        'caixa desmarcada: a lista continua exatamente a de sempre');
+        'no estado que abre, a lista continua exatamente a de sempre');
     ok(fechada.html.indexOf('Geral') > 0, 'e as genericas seguem la');
 
     const aberta = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: ordens },
-        { mostrarExclusivas: true });
+        { exclusivas: 'todas' });
     ok(aberta.html.indexOf('Camarote VIP') > 0 && aberta.html.indexOf('it-99') > 0,
-        'caixa marcada: as exclusivas aparecem');
+        'em "padrao + exclusivas", as exclusivas aparecem');
+    ok(aberta.html.indexOf('Geral') > 0, 'e as genericas continuam junto');
     ok(aberta.html.indexOf('Festa Boa') > 0,
         'com o nome do cliente no selo, tirado dos pedidos em memoria');
     ok(/só deste modelo/.test(aberta.html), 'a que ainda se chama pelo id do modelo e so dele');
     ok(/compartilhada/.test(aberta.html), 'a renomeada e do cliente inteiro');
 
+    // O terceiro estado, de 27/08/2026: so as exclusivas, sem o catalogo geral.
+    const so = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: ordens },
+        { exclusivas: 'exclusivas' });
+    ok(so.html.indexOf('Camarote VIP') > 0 && so.html.indexOf('it-99') > 0,
+        'em "so exclusivas", elas continuam la');
+    ok(so.html.indexOf('Geral') < 0, 'e a generica sai da lista');
+    ok(so.html.indexOf('<img') > 0 || so.html.indexOf('🖼️') > 0,
+        'com a coluna Preview, que e como se reconhece uma sem abrir');
+
+    // O NUMERO do cliente vem sempre. Antes ele so aparecia quando o painel NAO
+    // sabia o nome ("cliente 4321") — ou seja, sumia justamente no caso bom, e
+    // e o numero que se digita na busca e que identifica o cliente no ERP.
+    ok(/👤 4321 · Festa Boa/.test(aberta.html),
+        'o selo traz o numero E o nome quando o pedido esta em memoria',
+        (aberta.html.match(/👤[^<]*/) || [''])[0]);
+
     const semPedidos = desenhar({ formatos: FORMATOS, numeracoes: numeracoes, ordens: [] },
-        { mostrarExclusivas: true });
-    ok(semPedidos.html.indexOf('cliente 4321') > 0,
-        'sem o pedido carregado o selo mostra o numero, que e o que se digita na busca');
+        { exclusivas: 'todas' });
+    ok(/👤 4321 ·/.test(semPedidos.html),
+        'e so o numero quando o pedido nao esta carregado',
+        (semPedidos.html.match(/👤[^<]*/) || [''])[0]);
+})();
+
+(function oEstadoVazioDizPorQue() {
+    // Ate 27/08/2026 a tela dizia "Nenhuma numeracao cadastrada ainda" mesmo
+    // com filtro ligado — mentindo justamente para quem acabava de escolher
+    // "so exclusivas" num banco cheio de numeracoes.
+    const geral = numeracao({ id: 'n-geral', name: 'Geral' });
+
+    const semExclusivas = desenhar({ formatos: FORMATOS, numeracoes: [geral] },
+        { exclusivas: 'exclusivas' });
+    ok(semExclusivas.vazio === 'block', 'sem exclusivas, o estado vazio aparece');
+    ok(/exclusiva de cliente/.test(semExclusivas.recado),
+        'e o recado fala de exclusivas', semExclusivas.recado);
+
+    const buscaSemNada = desenhar({ formatos: FORMATOS, numeracoes: [geral] },
+        { busca: 'nao existe' });
+    ok(/esses filtros/.test(buscaSemNada.recado),
+        'com busca ligada, o recado fala do filtro', buscaSemNada.recado);
+
+    const vazioMesmo = desenhar({ formatos: FORMATOS, numeracoes: [] });
+    ok(/cadastrada ainda/.test(vazioMesmo.recado),
+        'e o catalogo realmente vazio continua dizendo isso', vazioMesmo.recado);
 })();
 
 (function todaLinhaOfereceRenomear() {

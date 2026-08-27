@@ -3111,23 +3111,29 @@ function renderNumeracoes() {
     const searchValClean = (document.getElementById('catalogo-search')?.value || '').trim().toLowerCase();
     const isSearchNum = /^\d+$/.test(searchValClean);
 
-    // A caixa "Mostrar exclusivas de cliente" (26/08/2026). Sem ela, o único
-    // jeito de ver uma numeração de cliente era saber de cor o número dele e
-    // digitá-lo na busca — e sem vê-la não há como renomeá-la aqui.
-    // Desmarcada, a lista é exatamente a de sempre.
-    const mostrarExclusivas = !!document.getElementById('catalogo-mostrar-exclusivas')?.checked;
+    // ── O drop das exclusivas de cliente (27/08/2026) ───────────────────────
+    //
+    // Três estados, e o do meio é o antigo padrão:
+    //
+    //   'padrao'      só o catálogo geral — a lista de sempre, e o que abre.
+    //   'todas'       tudo junto.
+    //   'exclusivas'  SÓ as de cliente, com preview e o número do cliente.
+    //
+    // Em 26/08/2026 isto era uma caixa de marcar, de dois estados. Faltava o
+    // terceiro: conferir o trabalho de um cliente sem o catálogo geral no meio.
+    // A busca por número continua vencendo o drop — digitar 27401 é dizer
+    // "quero as deste cliente", e nada mais.
+    const modoExclusivas = document.getElementById('catalogo-filter-exclusivas')?.value || 'padrao';
 
     const filtradas = state.numeracoes.filter(n => {
         // Se a busca for um número de cliente:
         if (isSearchNum) {
             // Mostra APENAS as numerações exclusivas desse cliente. Oculta todas as outras.
             return String(n.Cli_Num || '') === searchValClean;
-        } else {
-            // Se NÃO for busca por número de cliente (busca de texto ou vazia):
-            // Oculta as exclusivas de cliente, a menos que a caixa peça o contrário.
-            if (n.Cli_Num && !mostrarExclusivas) {
-                return false;
-            }
+        } else if (modoExclusivas === 'exclusivas') {
+            if (!n.Cli_Num) return false;
+        } else if (modoExclusivas !== 'todas') {
+            if (n.Cli_Num) return false;
         }
 
         if (filterFmt) {
@@ -3151,6 +3157,21 @@ function renderNumeracoes() {
     if (!filtradas.length) {
 
         container.innerHTML = '';
+
+        // O estado vazio dizia sempre "Nenhuma numeração cadastrada ainda",
+        // mesmo com filtro ligado — ou seja, mentia justamente para quem
+        // acabava de escolher "só exclusivas" num banco cheio de numerações.
+        const recado = empty.querySelector('p');
+        if (recado) {
+            const temFiltro = !!(searchValClean || filterFmt || filterType);
+            recado.textContent = modoExclusivas === 'exclusivas'
+                ? (temFiltro
+                    ? 'Nenhuma numeração exclusiva de cliente com esses filtros.'
+                    : 'Nenhuma numeração exclusiva de cliente. Elas nascem ao editar a numeração de dentro de um pedido.')
+                : (temFiltro
+                    ? 'Nenhuma numeração com esses filtros. Limpe a busca ou troque o formato e o tipo.'
+                    : 'Nenhuma numeração cadastrada ainda no catálogo.');
+        }
 
         empty.style.display = 'block';
 
@@ -3267,13 +3288,19 @@ function renderNumeracoes() {
             // `os_item_id` é de um modelo só; renomeada é do cliente inteiro.
             let seloCliente = '';
             if (n.Cli_Num) {
-                const cli = nomeDoCliente[String(n.Cli_Num)] || ('cliente ' + n.Cli_Num);
+                // O NÚMERO do cliente vem sempre, e o nome só quando o pedido
+                // dele já está em memória. Antes o número aparecia apenas nesse
+                // caso contrário ("cliente 27401"), ou seja: sumia justamente
+                // quando o painel sabia o nome — e é o número que se digita na
+                // busca e que identifica o cliente no ERP.
+                const nome = nomeDoCliente[String(n.Cli_Num)] || '';
+                const cli = nome ? (n.Cli_Num + ' · ' + nome) : String(n.Cli_Num);
                 const compartilhada = numeracaoEhCompartilhadaDoCliente(n);
                 seloCliente = `<div style="margin-top:4px;">
                     <span class="badge ${compartilhada ? 'badge-green' : 'badge-amber'}"
-                          title="${escapeHtml(compartilhada
-                              ? 'Compartilhada: qualquer modelo de ' + cli + ' pode usar esta numeração.'
-                              : 'Exclusiva do modelo ' + n.os_item_id + '. Renomeie para liberá-la aos outros modelos de ' + cli + '.')}">
+                          title="${escapeHtml('Cliente ' + (nome || n.Cli_Num) + '. ' + (compartilhada
+                              ? 'Compartilhada: qualquer modelo dele pode usar esta numeração.'
+                              : 'Exclusiva do modelo ' + n.os_item_id + '. Renomeie para liberá-la aos outros modelos dele.'))}">
                         👤 ${escapeHtml(cli)} · ${compartilhada ? 'compartilhada' : 'só deste modelo'}
                     </span></div>`;
             }
@@ -3569,6 +3596,7 @@ async function editNumeracao(id) {
     }
     atualizarAvisoDaArteDeFundo();
     atualizarDicaDoNomeDaNumeracao();
+    atualizarMarcaDaNumeracaoExclusiva();
 
     // Carregar a arte de cada elemento PDF/SVG a partir do arquivo do proprio
     // elemento, e a lista da box "Adicionar Pdf e Svg".
@@ -4070,6 +4098,9 @@ function cancelNumEdit() {
     // de dentro de um modelo.
     const dicaNome = document.getElementById('num-name-dica-modelo');
     if (dicaNome) dicaNome.style.display = 'none';
+    // E a cor do editor volta ao neutro junto. Sem isto, a próxima numeração
+    // aberta — uma do catálogo — sairia vestida de exclusiva.
+    atualizarMarcaDaNumeracaoExclusiva();
 
     // Esconder checkboxes de formatos compatíveis
     const compatContainer = document.getElementById('num-formatos-compat');
@@ -9120,7 +9151,10 @@ if (customState) {
     document.getElementById('view-catalogo').classList.add('active');
 }
 
-
+        // Quem chamou pode precisar do id do que acabou de ser gravado — é o
+        // caso do `tornarNumeracaoPadrao()`, que abre a cópia no editor logo
+        // depois. Erro ou recusa caem no `catch` e devolvem `undefined`.
+        return idDaNumeracaoGravada;
 
     } catch (e) { toast(e.message, 'error'); }
 
@@ -33453,6 +33487,7 @@ function mostrarVoltarDaNumeracaoDoModelo() {
     const btn = document.getElementById('btn-num-voltar');
     if (btn) btn.style.display = '';
     atualizarDicaDoNomeDaNumeracao();
+    atualizarMarcaDaNumeracaoExclusiva();
 }
 
 /**
@@ -33472,6 +33507,154 @@ function atualizarDicaDoNomeDaNumeracao() {
     dica.style.display = numeracaoDoEditorGuardaFundo() ? '' : 'none';
 }
 window.atualizarDicaDoNomeDaNumeracao = atualizarDicaDoNomeDaNumeracao;
+
+/**
+ * De que cliente é a numeração aberta no editor — ou `null`, se for do catálogo.
+ *
+ * São duas origens, e as duas contam: a numeração que já existe no banco
+ * (`num-id` preenchido, `Cli_Num` na linha) e a que está nascendo de dentro de
+ * um modelo (`customNumeracaoEditState`, que carrega o cliente do pedido).
+ */
+function clienteDaNumeracaoDoEditor() {
+    const id = document.getElementById('num-id')?.value || '';
+    if (id) {
+        const n = (state.numeracoes || []).find(x => String(x.id) === String(id));
+        if (n && n.Cli_Num) return n.Cli_Num;
+    }
+    if (window.customNumeracaoEditState) {
+        return window.customNumeracaoEditState.cliNum || null;
+    }
+    return null;
+}
+window.clienteDaNumeracaoDoEditor = clienteDaNumeracaoDoEditor;
+
+/**
+ * ── O editor muda de cor quando a numeração é exclusiva de cliente ──────────
+ *
+ * Pedido do usuário em 27/08/2026. O editor é o mesmo para as duas famílias, e
+ * nada na tela dizia em qual delas o operador estava — a diferença aparecia só
+ * nas consequências, todas invisíveis no momento de editar: salvar com o mesmo
+ * nome repassa a mudança para todos os modelos daquele cliente, a arte de fundo
+ * fica guardada no registro, e a numeração não aparece no catálogo depois.
+ *
+ * O âmbar é o mesmo que marca a exclusiva no seletor de Numeração do modelo, de
+ * propósito: "amarelo = exclusiva de cliente" passa a valer no aplicativo
+ * inteiro, em vez de ser uma convenção por tela.
+ *
+ * O selo traz o NÚMERO do cliente, e não só a palavra "exclusiva": é o número
+ * que identifica o cliente no ERP e o que se digita na busca do catálogo.
+ */
+function atualizarMarcaDaNumeracaoExclusiva() {
+    const view = document.getElementById('view-numeracao');
+    const selo = document.getElementById('num-selo-exclusiva');
+    const btn = document.getElementById('btn-num-tornar-padrao');
+
+    const cli = clienteDaNumeracaoDoEditor();
+    const idNoEditor = document.getElementById('num-id')?.value || '';
+
+    if (view) view.classList.toggle('editando-exclusiva', !!cli);
+
+    if (selo) {
+        selo.style.display = cli ? '' : 'none';
+        selo.textContent = cli ? ('👤 EXCLUSIVA · CLIENTE ' + cli) : '';
+        selo.title = cli
+            ? ('Esta numeração pertence ao cliente ' + cli + '. Ela não aparece no '
+               + 'catálogo geral, e salvar com o mesmo nome vale para todos os modelos dele.')
+            : '';
+    }
+
+    // Duplicar exige um original gravado. Com o editor numa numeração que ainda
+    // não existe no banco, não há o que duplicar — o botão sairia prometendo
+    // uma cópia de coisa nenhuma.
+    if (btn) btn.style.display = (cli && idNoEditor) ? '' : 'none';
+}
+window.atualizarMarcaDaNumeracaoExclusiva = atualizarMarcaDaNumeracaoExclusiva;
+
+/**
+ * ── Tornar padrão: a exclusiva vira uma numeração do catálogo geral ─────────
+ *
+ * Pedido do usuário em 27/08/2026: *"ao editar as numerações exclusivas, ter uma
+ * opção de transformá-las em numerações padrão, fazendo com que ela seja
+ * duplicada e mudada de exclusiva para padrão"*.
+ *
+ * **Duplica, não converte.** A exclusiva fica exatamente como está, e os
+ * modelos que apontam para ela continuam apontando. Converter no lugar mudaria
+ * o material de todo mundo que a usa hoje — inclusive de pedidos já aprovados —
+ * e faria isso calado, que é o oposto do que o resto desta tela faz.
+ *
+ * O que a cópia perde, e por quê:
+ *
+ *   `Cli_Num`     é o que a prendia ao cliente. Sem ele a numeração aparece no
+ *                 catálogo para qualquer pedido — que é o pedido inteiro.
+ *   `os_item_id`  a origem era um modelo daquele cliente; a cópia não tem.
+ *   `is_custom`   a marca de "nasceu de dentro de um pedido".
+ *   arte de fundo só a numeração de cliente guarda (regra de 26/08/2026); a do
+ *                 catálogo tira o fundo da cor do formato base.
+ *   `preview_jpg` como em toda duplicação: duas linhas apontando para o mesmo
+ *                 arquivo no Storage fariam salvar uma mudar o preview da outra.
+ *                 A cópia ganha o dela no primeiro save — que é este mesmo.
+ *
+ * A gravação é o `saveNumeracao()` de sempre, e é de propósito: ele já sabe
+ * subir preview, recusar nome ocupado e montar os `elements`. Zerar o `num-id`
+ * e o `customNumeracaoEditState` antes de chamá-lo é o que faz o INSERT sair
+ * sem dono — os três campos de posse do save saem todos do `registroEmEdicao`,
+ * que sem id não existe.
+ */
+async function tornarNumeracaoPadrao() {
+    const id = document.getElementById('num-id')?.value || '';
+    const cli = clienteDaNumeracaoDoEditor();
+
+    if (!id || !cli) {
+        return toast('Esta opção vale para uma numeração exclusiva de cliente já salva.', 'warning');
+    }
+
+    const atual = (state.numeracoes || []).find(x => String(x.id) === String(id));
+    // O CAMPO primeiro, e não o nome gravado: quem já digitou um nome novo sem
+    // salvar veria a digitação sumir se o caminho de recusa devolvesse o nome
+    // do banco por cima dela.
+    const nomeAtual = document.getElementById('num-name')?.value || (atual && atual.name) || '';
+
+    const novoNome = prompt(
+        'Nome da numeração PADRÃO que vai ser criada.\n\n'
+        + 'A exclusiva do cliente ' + cli + ' continua como está, e os modelos que usam '
+        + 'ela seguem nela. A cópia entra no catálogo geral, disponível para qualquer pedido.',
+        nomeAtual);
+
+    if (novoNome === null) return;
+    const nome = String(novoNome).trim();
+    if (!nome) return toast('A cópia precisa de um nome.', 'warning');
+
+    // Zera o vínculo: sem `num-id` o save INSERE, e sem `customNumeracaoEditState`
+    // ele não marca a linha nova como exclusiva de modelo nenhum.
+    const vinculo = window.customNumeracaoEditState;
+    document.getElementById('num-id').value = '';
+    window.customNumeracaoEditState = null;
+    const btnVoltar = document.getElementById('btn-num-voltar');
+    if (btnVoltar) btnVoltar.style.display = 'none';
+    document.getElementById('num-name').value = nome;
+
+    const novoId = await window.saveNumeracao();
+
+    if (!novoId) {
+        // O save já explicou o que houve — nome ocupado e recusado, ou erro do
+        // banco. Ele sai por um `return` que NÃO passa pelo `cancelNumEdit()`,
+        // então o formulário continua preenchido; o que ficou errado é o que
+        // esta função mexeu. Devolver os três é o que impede o próximo Salvar
+        // de gravar uma numeração nova em vez de atualizar a exclusiva.
+        document.getElementById('num-id').value = id;
+        document.getElementById('num-name').value = nomeAtual;
+        window.customNumeracaoEditState = vinculo;
+        if (btnVoltar && vinculo) btnVoltar.style.display = '';
+        atualizarMarcaDaNumeracaoExclusiva();
+        return;
+    }
+
+    toast('"' + nome + '" agora é uma numeração padrão do catálogo. '
+        + 'A exclusiva do cliente ' + cli + ' continua como estava.', 'success');
+
+    await editNumeracao(novoId);
+}
+window.tornarNumeracaoPadrao = tornarNumeracaoPadrao;
 window.mostrarVoltarDaNumeracaoDoModelo = mostrarVoltarDaNumeracaoDoModelo;
 
 /**

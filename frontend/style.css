@@ -521,6 +521,25 @@ select.num-select-exclusiva   { color: var(--amber); }
    regra do usuario e que so as exclusivas do cliente sejam amarelas. */
 select.num-select-exclusiva option                    { color: var(--text); }
 select.num-select-exclusiva option.num-opt-exclusiva  { color: var(--amber); }
+
+/* EDITANDO UMA NUMERACAO EXCLUSIVA DE CLIENTE (27/08/2026)
+   ------------------------------------------------------------------
+   O editor e o mesmo para as duas familias, e nada na tela dizia em qual delas
+   o operador estava — a diferenca aparecia so nas consequencias (salvar com o
+   mesmo nome repassa para todos os modelos do cliente; a arte de fundo fica
+   guardada; a numeracao nao aparece no catalogo). Pedido do usuario: uma
+   diferenciacao de cor.
+   O ambar e o mesmo que marca a exclusiva no seletor do modelo, para "amarelo
+   = exclusiva de cliente" valer no aplicativo inteiro. */
+#view-numeracao.editando-exclusiva .card-header {
+    background: linear-gradient(90deg, rgba(245,158,11,0.14), rgba(245,158,11,0.03));
+    border-bottom-color: rgba(245,158,11,0.35);
+}
+#view-numeracao.editando-exclusiva > .card {
+    border-color: rgba(245,158,11,0.35);
+    box-shadow: inset 3px 0 0 var(--amber);
+}
+#view-numeracao.editando-exclusiva .page-header-text h1 { color: var(--amber); }
 .badge-green  { background: rgba(34,197,94,0.12);       color: var(--green); }
 .badge-red    { background: rgba(239,68,68,0.1);        color: var(--red); }
 
