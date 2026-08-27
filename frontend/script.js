@@ -29922,9 +29922,18 @@ window.cardTemOqueDesenhar = cardTemOqueDesenhar;
  * `rootMargin` generoso manda desenhar um pouco ANTES de aparecer, para o card
  * não chegar em branco a quem rola depressa.
  *
- * A conta dos desenhados vive no `state` por PEDIDO: redesenhar a lista — o que
- * acontece a cada banco que chega e a cada status trocado — não pode reiniciar
- * o trabalho todo; trocar de pedido tem de começar do zero.
+ * ## A conta de "já desenhei" vale por RENDERIZAÇÃO, e não por pedido
+ *
+ * Esta função é chamada uma vez a cada `renderAmostrasOSItens`, e cada uma
+ * dessas reescreve o `container.innerHTML` — o que DESTRÓI todos os canvases.
+ * Guardar a conta por pedido, como na primeira versão, fazia a segunda
+ * renderização recusar desenhar ("já fiz esse") sobre um DOM que tinha acabado
+ * de nascer vazio: os cards desenhavam e sumiam. E quem redesenha logo depois
+ * da abertura é justamente a chegada dos bancos em segundo plano.
+ *
+ * Então cada chamada começa do zero. O `feitos` serve para uma coisa só: dois
+ * disparos do observador para o mesmo card, dentro da MESMA renderização, não
+ * desenharem duas vezes.
  *
  * ## A saída de emergência
  *
@@ -29935,10 +29944,9 @@ window.cardTemOqueDesenhar = cardTemOqueDesenhar;
 function desenharCardsAoAparecer(osId, itens, container) {
     if (!container) return;
 
-    state._cardsDesenhados = state._cardsDesenhados || {};
-    if (state._cardsDesenhados._osId !== osId) {
-        state._cardsDesenhados = { _osId: osId, feitos: {} };
-    }
+    // Do zero a cada renderização: o DOM que estes indices apontam acabou de ser
+    // reescrito, e o que foi desenhado na renderização anterior nao existe mais.
+    state._cardsDesenhados = { _osId: osId, feitos: {} };
     const feitos = state._cardsDesenhados.feitos;
 
     const desenhar = async (idx) => {

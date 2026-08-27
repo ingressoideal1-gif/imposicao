@@ -15,7 +15,9 @@
 //   1. so os cards visiveis desenham na abertura;
 //   2. rolar desenha os que aparecem, e so uma vez cada;
 //   3. `desenharTodosOsCards` alcanca os que ninguem rolou (o PDF Prova);
-//   4. trocar de pedido zera a conta, e redesenhar o mesmo pedido nao.
+//   4. REDESENHAR a lista redesenha os cards -- foi aqui que a primeira
+//      versao falhou em producao: ela guardava a conta por pedido, e cada
+//      renderizacao reescreve o DOM. Os cards desenhavam e sumiam.
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.join(__dirname, '..');
@@ -116,16 +118,33 @@ const CODIGO = ['cardTemOqueDesenhar', 'desenharCardsAoAparecer', 'desenharTodos
     ok(n > 0, 'e devolve quantos faltavam', n);
     ok(new Set(feitos).size === 52, 'sem repetir nenhum', feitos.length);
 
-    // ── 4. Trocar de pedido zera; redesenhar o mesmo, nao ───────────────────
-    await page.evaluate(() => { window.desenhados = []; });
+    // ── 4. REDESENHAR A LISTA TEM DE REDESENHAR OS CARDS ───────────────────
+    //
+    // Este caso nasceu de um defeito em producao: a primeira versao guardava a
+    // conta de "ja desenhei" por PEDIDO, e cada `renderAmostrasOSItens`
+    // reescreve o `container.innerHTML` -- o que destroi todos os canvases. A
+    // segunda renderizacao recusava desenhar ("ja fiz esse") sobre um DOM
+    // recem-nascido e vazio: os cards desenhavam e sumiam. E quem redesenha
+    // logo depois da abertura e justamente a chegada dos bancos.
+    //
+    // O teste que estava aqui antes afirmava o CONTRARIO -- que redesenhar nao
+    // refazia o trabalho -- e por isso passou por cima do defeito.
+    await page.evaluate(() => {
+        window.desenhados = [];
+        // O que a re-renderizacao faz de verdade: reescreve tudo.
+        const cont = document.getElementById('cont');
+        cont.innerHTML = cont.innerHTML;
+    });
     await abrir('os-1');                                  // o MESMO pedido
     feitos = await page.evaluate(() => window.desenhados.slice());
-    ok(feitos.length === 0, 'redesenhar o mesmo pedido nao refaz o trabalho todo', feitos.length);
+    ok(feitos.length > 0,
+       'redesenhar a lista redesenha os cards visiveis — o DOM anterior nao existe mais',
+       feitos.length);
 
     await page.evaluate(() => { window.desenhados = []; });
     await abrir('os-2');                                  // pedido NOVO
     feitos = await page.evaluate(() => window.desenhados.slice());
-    ok(feitos.length > 0, 'trocar de pedido comeca do zero', feitos.length);
+    ok(feitos.length > 0, 'trocar de pedido tambem desenha', feitos.length);
 
     if (erros.length) { console.error('ERROS NA PAGINA:', erros.slice(0, 3)); falhas++; }
     await browser.close();
