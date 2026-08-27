@@ -8176,6 +8176,70 @@ function numeracaoEhCompartilhadaDoCliente(n) {
 window.numeracaoEhCompartilhadaDoCliente = numeracaoEhCompartilhadaDoCliente;
 
 /**
+ * ── A numeração exclusiva sai AMARELA no dropdown do modelo (27/08/2026) ────
+ *
+ * Pedido do usuário: na lista de arte, ao editar um pedido, as numerações
+ * exclusivas do cliente daquele pedido aparecem em amarelo no seletor de
+ * Numeração; as demais continuam brancas.
+ *
+ * O dropdown já mistura as duas famílias — o filtro de `renderAmostrasOSItens`
+ * deixa passar as numerações do catálogo geral E as que têm `Cli_Num` deste
+ * cliente —, e nada distinguia uma da outra a não ser o nome. Numa lista de
+ * quarenta itens isso é escolher no escuro: a exclusiva é a que o operador
+ * desenhou para aquele cliente, e é a que ele procura.
+ *
+ * Repare que a pergunta aqui é mais larga que a de
+ * `numeracaoEhCompartilhadaDoCliente`: interessa se a numeração PERTENCE ao
+ * cliente, e não se ela já foi batizada e passou a valer para vários modelos
+ * dele. As duas famílias ficam amarelas.
+ *
+ * A comparação passa por `String(...).trim()` porque o `Cli_Num` chega número
+ * do banco e o `id_cliente` da ordem chega ora número, ora texto.
+ */
+function numeracaoEhDoCliente(n, idCliente) {
+    if (!n || !n.Cli_Num || idCliente === null || idCliente === undefined || idCliente === '') return false;
+    return String(n.Cli_Num).trim() === String(idCliente).trim();
+}
+window.numeracaoEhDoCliente = numeracaoEhDoCliente;
+
+/**
+ * A `<option>` do seletor de Numeração de um modelo, já pintada.
+ *
+ * Existe para os dois lugares que montam esse seletor — o desenho do card, em
+ * `renderAmostrasOSItens`, e o refiltro por formato, em `onItemCorSelect` —
+ * usarem a MESMA regra. Eram duas listas de `<option>` escritas na mão, e
+ * pintar só uma deixaria a cor sumir assim que o operador trocasse a Cor.
+ *
+ * O `data-exclusiva` não é enfeite: é por ele que `pintarSelectDeNumeracao`
+ * descobre, depois, se o que está escolhido é do cliente — a caixa fechada
+ * mostra o texto com a cor do próprio `<select>`, não a da opção.
+ */
+function opcaoDeNumeracaoDoModelo(n, idCliente, selecionada) {
+    const doCliente = numeracaoEhDoCliente(n, idCliente);
+    return '<option value="' + n.id + '"'
+        + (doCliente ? ' data-exclusiva="1" class="num-opt-exclusiva"' : '')
+        + (selecionada ? ' selected' : '') + '>' + (n.name || '') + '</option>';
+}
+window.opcaoDeNumeracaoDoModelo = opcaoDeNumeracaoDoModelo;
+
+/** Deixa a caixa fechada amarela quando a numeração escolhida é do cliente. */
+function pintarSelectDeNumeracao(select) {
+    if (!select || !select.options) return;
+    const opt = select.options[select.selectedIndex];
+    const exclusiva = !!(opt && opt.getAttribute && opt.getAttribute('data-exclusiva') === '1');
+    select.classList.toggle('num-select-exclusiva', exclusiva);
+}
+window.pintarSelectDeNumeracao = pintarSelectDeNumeracao;
+
+/** Passa por todos os seletores de Numeração de um pedido recém-desenhado. */
+function pintarSelectsDeNumeracao(container) {
+    const raiz = container || document;
+    if (!raiz.querySelectorAll) return;
+    raiz.querySelectorAll('select[id^="amostra-item-num-"]').forEach(pintarSelectDeNumeracao);
+}
+window.pintarSelectsDeNumeracao = pintarSelectsDeNumeracao;
+
+/**
  * Abrir a numeração de um modelo edita o registro que já existe, ou cria um
  * novo?
  *
@@ -29396,7 +29460,7 @@ function renderAmostrasOSItens(osId) {
         });
 
         const numOpts = filteredNumeracoes.map(n =>
-            `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
+            opcaoDeNumeracaoDoModelo(n, idCliente, String(n.id) === String(resolvedNumId))
         ).join('');
         // Aprovar pelo painel e privilegio de ADM e Atendimento; o papel pode
         // ainda estar em viagem no primeiro desenho — sem ele, o botao nao nasce.
@@ -30122,6 +30186,10 @@ function renderAmostrasOSItens(osId) {
     // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
     travarCardsDeModelosAprovados(container);
 
+    // A caixa fechada também fica amarela quando o que está escolhido é uma
+    // numeração exclusiva deste cliente.
+    pintarSelectsDeNumeracao(container);
+
 
     
     if (isInternal) {
@@ -30672,13 +30740,14 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     });
 
     numSelect.innerHTML = '<option value="">-- Selecione uma Numeração --</option>' +
-        filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+        filteredNums.map(n => opcaoDeNumeracaoDoModelo(n, idCliente, false)).join('');
 
     if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
         numSelect.value = curNumVal;
     } else {
         numSelect.value = '';
     }
+    pintarSelectDeNumeracao(numSelect);
 
     if (!isInitialLoad) {
         renderItemAmostraCombinada(idx, osId);
@@ -30688,6 +30757,7 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 function onItemNumSelect(idx, osId, itemId) {
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!numSelect) return;
+    pintarSelectDeNumeracao(numSelect);
     
     const numId = numSelect.value;
     const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;

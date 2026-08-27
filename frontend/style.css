@@ -510,6 +510,17 @@ input[type="color"].form-control {
 .badge-purple { background: rgba(139,92,246,0.12);      color: var(--purple); }
 .badge-teal   { background: rgba(20,184,166,0.12);      color: var(--teal); }
 .badge-amber  { background: rgba(245,158,11,0.12);      color: var(--amber); }
+
+/* Numeracao exclusiva do cliente do pedido, no seletor de Numeracao do modelo:
+   amarela na lista e na caixa fechada. As demais continuam brancas. Pedido do
+   usuario em 27/08/2026 — ver `opcaoDeNumeracaoDoModelo` no script.js. */
+.num-opt-exclusiva            { color: var(--amber); }
+select.num-select-exclusiva   { color: var(--amber); }
+/* A opcao comum precisa DIZER o branco dela: a <option> herda a cor do
+   <select>, entao dentro de uma caixa amarela ela sairia amarela tambem — e a
+   regra do usuario e que so as exclusivas do cliente sejam amarelas. */
+select.num-select-exclusiva option                    { color: var(--text); }
+select.num-select-exclusiva option.num-opt-exclusiva  { color: var(--amber); }
 .badge-green  { background: rgba(34,197,94,0.12);       color: var(--green); }
 .badge-red    { background: rgba(239,68,68,0.1);        color: var(--red); }
 

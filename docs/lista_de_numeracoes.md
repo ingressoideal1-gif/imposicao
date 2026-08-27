@@ -439,6 +439,48 @@ de antes de o `Cli_Num` existir — e **aparecem normalmente na lista**. Há um
 (`frontend/script.js:18197` e `:19200`), que casa pelo `os_item_id` em vez do
 cliente.
 
+## No pedido, a exclusiva do cliente sai amarela (27/08/2026)
+
+Isto não é da lista de numerações, mas é a mesma distinção vista do outro lado.
+Na **lista de arte**, ao editar um pedido, o seletor **Numeração** de cada modelo
+mistura duas famílias: o catálogo geral e as numerações com `Cli_Num` daquele
+cliente. O filtro de `renderAmostrasOSItens` já deixa as duas passarem — e a de
+outro cliente, não —, mas nada as distinguia a não ser o nome. Numa lista de
+dezenas de itens, escolher a certa era escolher no escuro.
+
+Desde 27/08/2026 a exclusiva do cliente aparece em **amarelo** (`var(--amber)`,
+o mesmo do resto do painel); as demais continuam brancas. Três funções, no
+`script.js`, ao lado de `numeracaoEhCompartilhadaDoCliente`:
+
+- **`numeracaoEhDoCliente(n, idCliente)`** — a pergunta é mais larga que a de
+  `numeracaoEhCompartilhadaDoCliente`: interessa se a numeração **pertence** ao
+  cliente, e não se ela já foi batizada. As duas famílias da seção "A regra do
+  nome" ficam amarelas. Compara com `String(...).trim()` porque o `Cli_Num` chega
+  número do banco e o `id_cliente` da ordem chega ora número, ora texto.
+- **`opcaoDeNumeracaoDoModelo(n, idCliente, selecionada)`** — monta a `<option>`.
+  Existe porque são **dois** lugares que montam esse seletor: o desenho do card,
+  em `renderAmostrasOSItens`, e o refiltro por formato, em `onItemCorSelect`.
+  Pintar só um faria a cor sumir assim que o operador trocasse a Cor — que é
+  justamente quando ele está escolhendo a numeração.
+- **`pintarSelectDeNumeracao(select)`** — a caixa **fechada**. Ela mostra o texto
+  com a cor do próprio `<select>`, não a da `<option>`, então a classe
+  `num-select-exclusiva` é ligada à parte, lendo o `data-exclusiva` da opção
+  escolhida. Chamada em três momentos: depois de desenhar o pedido inteiro
+  (`pintarSelectsDeNumeracao(container)`), ao trocar a Cor, e ao trocar a própria
+  numeração.
+
+Uma armadilha de CSS, medida no navegador: a `<option>` **herda** a cor do
+`<select>`. Com a caixa amarela, as opções comuns saíam amarelas também. Por isso
+o `style.css` tem quatro regras, e não duas — `select.num-select-exclusiva option`
+devolve o branco, e `select.num-select-exclusiva option.num-opt-exclusiva` recupera
+o amarelo por cima dela.
+
+O `frontend/cliente.js` tem uma cópia desse card e **não** recebeu a cor: ali todo
+pedido é do cliente que está olhando, e a marca não distinguiria nada.
+
+Testes: `tests/numeracao_amarela_do_cliente_harness.js` (35 verificações), pelo
+`tests/test_numeracao_amarela_do_cliente.py`.
+
 ## Travar, frente/trás e o espaço do texto (v546)
 
 Três controles nos cartões de elemento do editor de numeração, todos gravados no
