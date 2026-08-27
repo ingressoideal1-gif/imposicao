@@ -130,9 +130,50 @@ Dois detalhes de projeto:
 
 ### Excluir — `deleteNumeracao(id)`
 
-`frontend/script.js:3033`. Pede confirmação com `confirm()` e apaga.
+Pede confirmação com `confirm()` e apaga. Desde **27/08/2026** a confirmação
+diz antes **em que pedidos a numeração está em uso** — número, data, quantos
+modelos e o cliente:
 
-Dois detalhes: ela **não passa por `api()`** quando há `supabaseClient` — fala direto
+```
+A numeração "020 - Lisa" está em uso por 23 modelo(s), em 5 pedidos:
+
+  • Pedido 21229 — 26/08/2026 — 1 modelo — LISITON DOCUMENTOS SEGUROS LTDA
+  • Pedido 21074 — 21/08/2026 — 13 modelos — LISITON DOCUMENTOS SEGUROS LTDA
+  ...
+
+Excluir deixa esses modelos apontando para uma numeração que não existe mais:
+eles perdem número, QR e código de barras.
+```
+
+Antes a pergunta era só "Excluir esta numeração?". O registro saía do
+`producao_numeracoes` e os modelos que apontavam para ele ficavam com um
+`amostra_num_id` que não resolve mais — sem número, sem QR, sem código de
+barras, e sem aviso. Continua sendo decisão do operador (a numeração de um
+pedido antigo e entregue pode muito bem ser lixo a limpar); o que não pode é
+ele não saber.
+
+Quem responde é **`pedidosQueUsamNumeracao(numId)`**, que agrupa o resultado de
+`modelosQueUsamNumeracao` por pedido — um pedido com nove modelos vira uma
+linha, não nove, porque é pelo número do pedido que o usuário reconhece o
+trabalho. A **data sai de `propostas.created_at`**: conferido contra a produção
+em 27/08/2026, `propostas` responde por todos os pedidos, enquanto
+`propostas_os` (onde moram o `data_pedido` e o prazo de entrega) tinha 40
+linhas e deixaria a maioria sem data. Uma fonte só também evita uma lista com
+datas de origens diferentes, que não se comparam.
+
+#### `modelosQueUsamNumeracao` nunca tinha falado com o banco
+
+Achado no mesmo dia, medido no navegador contra a produção. A consulta pedia
+`nome_produto`, `modelo_descri` e `amostra_status` — e **nenhuma das três
+existe** em `pedidos_modelos`. O PostgREST recusa a consulta inteira quando uma
+coluna não existe (`column pedidos_modelos.nome_produto does not exist`), então
+a função caía calada no `emMemoria()` desde sempre: o aviso de "esta numeração
+é compartilhada por N modelos", no save, só enxergava os pedidos já carregados
+na tela. Corrigido para `id, id_int, nome_modelo, status_arte`. Ao acrescentar
+coluna ali, confira no banco antes — o harness lista as colunas conhecidas e
+recusa nome fora dela.
+
+Dois detalhes continuam valendo: ela **não passa por `api()`** quando há `supabaseClient` — fala direto
 com `supabaseClient.from('producao_numeracoes').delete()` (`:3040`) —, e **não remove
 o `.jpg` do preview** do bucket de Storage. Cada exclusão deixa um objeto órfão em
 `artes/previews-numeracoes/`. É lixo lento e inofensivo (os ids são UUID e nunca são

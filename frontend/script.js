@@ -3650,9 +3650,45 @@ async function renomearNumeracao(id) {
 }
 window.renomearNumeracao = renomearNumeracao;
 
+/**
+ * Excluir uma numeração — depois de dizer em que pedidos ela está em uso.
+ *
+ * Antes de 27/08/2026 a pergunta era "Excluir esta numeração?" e mais nada. O
+ * registro sai do `producao_numeracoes`, e os modelos que apontavam para ele
+ * ficam com um `amostra_num_id` que não resolve mais: perdem número, QR e
+ * código de barras, sem aviso nenhum. Quem descobre é o operador, no papel.
+ *
+ * Agora o aviso lista os PEDIDOS — número, data e quantos modelos —, porque é
+ * assim que o usuário reconhece o trabalho. Continua sendo decisão dele: a
+ * numeração de um pedido antigo e entregue pode muito bem ser lixo a limpar.
+ * O que não pode é ele não saber.
+ */
 async function deleteNumeracao(id) {
 
-    if (!confirm('Excluir esta numeração?')) return;
+    const emUso = typeof pedidosQueUsamNumeracao === 'function'
+        ? await pedidosQueUsamNumeracao(id) : [];
+
+    if (emUso.length) {
+        const n = (state.numeracoes || []).find(x => String(x.id) === String(id));
+        const quantosModelos = emUso.reduce((t, r) => t + (r.modelos || []).length, 0);
+        const MOSTRA = 12;
+
+        const texto = 'A numeração "' + ((n && n.name) || id) + '" está em uso por '
+            + quantosModelos + ' modelo(s), em '
+            + emUso.length + (emUso.length === 1 ? ' pedido:' : ' pedidos:') + '\n\n'
+            + emUso.slice(0, MOSTRA).map(linhaDoPedidoQueUsa).join('\n')
+            + (emUso.length > MOSTRA ? '\n  • ... e mais ' + (emUso.length - MOSTRA) + ' pedido(s)' : '')
+            + '\n\nExcluir deixa esses modelos apontando para uma numeração que não existe '
+            + 'mais: eles perdem número, QR e código de barras.\n\n'
+            + 'OK = excluir mesmo assim.\nCancelar = manter a numeração.';
+
+        if (!confirm(texto)) {
+            return toast('A numeração continua no catálogo.', 'info');
+        }
+
+    } else if (!confirm('Excluir esta numeração? Ela não está em uso em nenhum pedido.')) {
+        return;
+    }
 
     try {
 
@@ -8284,9 +8320,18 @@ async function modelosQueUsamNumeracao(numId) {
     const emMemoria = () => {
         const achados = [];
         Object.keys(state.osItens || {}).forEach(osId => {
+            // O item em memória nem sempre carrega o `id_int`; a ordem a que
+            // ele pertence sempre sabe o número do pedido. Sem isto, o aviso
+            // da exclusão ficaria sem o número justamente no caminho de
+            // emergência, que é quando ele mais importa.
+            const ordem = (state.ordens || []).find(o => String(o.id) === String(osId));
             (state.osItens[osId] || []).forEach(it => {
                 const usa = it.amostra_num_id || it.numeracao_id;
-                if (usa && String(usa) === String(numId)) achados.push(it);
+                if (usa && String(usa) === String(numId)) {
+                    achados.push(Object.assign({}, it, {
+                        id_int: it.id_int || (ordem ? ordem.numero : null),
+                    }));
+                }
             });
         });
         return achados;
@@ -8297,7 +8342,24 @@ async function modelosQueUsamNumeracao(numId) {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_modelos')
-            .select('id, id_int, nome_modelo, nome_produto, modelo_descri, amostra_status, status_arte')
+            // SO COLUNAS QUE EXISTEM. `nome_produto`, `modelo_descri` e
+            // `amostra_status` estiveram nesta lista ate 27/08/2026 e nenhuma
+            // das tres existe em `pedidos_modelos` — o PostgREST recusa a
+            // consulta INTEIRA por causa de uma coluna desconhecida, então
+            // esta função NUNCA falou com o banco: caía calada no
+            // `emMemoria()`, e o aviso de quantos modelos seriam afetados
+            // dependia de o pedido já estar carregado na tela.
+            //
+            // Medido no navegador, contra a produção: "column
+            // pedidos_modelos.nome_produto does not exist" e, depois de
+            // remover essa, "column pedidos_modelos.amostra_status does not
+            // exist". Ao acrescentar coluna aqui, confira no banco antes.
+            //
+            // Os leitores continuam tentando os nomes que não vêm —
+            // `nomeCurtoDoModelo` cai no `nome_modelo`, `modeloEstaAprovado`
+            // cai no `status_arte` — e é assim que o caminho de memória, onde
+            // os campos extras existem, continua funcionando.
+            .select('id, id_int, nome_modelo, status_arte')
             .eq('amostra_num_id', numId);
         if (error) throw error;
         return data || [];
@@ -8307,6 +8369,105 @@ async function modelosQueUsamNumeracao(numId) {
     }
 }
 window.modelosQueUsamNumeracao = modelosQueUsamNumeracao;
+
+/**
+ * ── Em que PEDIDOS esta numeração está sendo usada, e de quando eles são ────
+ *
+ * Pedido do usuário em 27/08/2026: ao tentar excluir uma numeração da lista,
+ * ver o número dos pedidos em que ela é usada e a data de cada um.
+ *
+ * O `modelosQueUsamNumeracao` responde por MODELO — é a pergunta certa para o
+ * save, que quer saber quanto material vai mudar. Para a exclusão a pergunta é
+ * outra: o operador reconhece o trabalho pelo número do pedido, não pelo nome
+ * do modelo. Um pedido com nove modelos vira uma linha, e não nove.
+ *
+ * **A data vem de `propostas.created_at`**, que é quando o pedido nasceu no ERP
+ * — o mesmo campo que o painel já usa como `data_liberacao` quando a proposta
+ * não traz outro. Conferido em 27/08/2026: `propostas` responde por todos os
+ * pedidos consultados, enquanto `propostas_os` (onde mora o `data_pedido` e o
+ * prazo de entrega) é tabela nova do parceiro, ainda sendo preenchida, e tinha
+ * 40 linhas — a maioria dos pedidos ficaria sem data nenhuma. Uma fonte só
+ * também evita a lista com datas de origens diferentes, que não se comparam.
+ *
+ * O que já está em memória é usado primeiro, e o banco responde só pelo que
+ * faltar: quem abre a lista de numerações normalmente acabou de carregar os
+ * pedidos. Recusa do banco não cancela o aviso — o pedido aparece sem a data,
+ * porque saber QUE está em uso já muda a decisão.
+ */
+async function pedidosQueUsamNumeracao(numId) {
+    const modelos = await modelosQueUsamNumeracao(numId);
+    if (!modelos.length) return [];
+
+    const porPedido = new Map();
+    modelos.forEach(m => {
+        const numero = m.id_int || null;
+        const chave = numero === null ? 'sem-pedido' : String(numero);
+        if (!porPedido.has(chave)) {
+            porPedido.set(chave, { numero, data: null, cliente: '', modelos: [], aprovados: 0 });
+        }
+        const reg = porPedido.get(chave);
+        reg.modelos.push(m);
+        if (typeof modeloEstaAprovado === 'function' && modeloEstaAprovado(m)) reg.aprovados++;
+    });
+
+    // O que o painel já carregou.
+    (state.ordens || []).forEach(os => {
+        const reg = porPedido.get(String(os.numero));
+        if (!reg) return;
+        reg.data = os.data_pedido || os.data_liberacao || os.created_at || null;
+        reg.cliente = os.cliente || '';
+    });
+
+    // E o resto, no banco.
+    const faltam = [...porPedido.values()]
+        .filter(r => r.numero !== null && !r.data)
+        .map(r => r.numero);
+
+    if (faltam.length && typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('propostas')
+                .select('id_int, created_at, cliente')
+                .in('id_int', faltam);
+            if (error) throw error;
+            (data || []).forEach(linha => {
+                const reg = porPedido.get(String(linha.id_int));
+                if (!reg) return;
+                reg.data = linha.created_at || null;
+                reg.cliente = reg.cliente || linha.cliente || '';
+            });
+        } catch (e) {
+            console.warn('[Numerações] Não deu para buscar a data dos pedidos:', e.message || e);
+        }
+    }
+
+    // Mais recente primeiro, que é a ordem da lista de pedidos do painel.
+    return [...porPedido.values()].sort((a, b) => (b.numero || 0) - (a.numero || 0));
+}
+window.pedidosQueUsamNumeracao = pedidosQueUsamNumeracao;
+
+/**
+ * A linha de um pedido no aviso da exclusão.
+ *
+ * Fica separada porque é o que o teste consegue medir sem navegador — e porque
+ * era fácil montar a frase no meio do `confirm()` e nunca mais conseguir
+ * conferir se o número e a data saem certos.
+ */
+function linhaDoPedidoQueUsa(reg) {
+    if (!reg) return '';
+    const numero = reg.numero === null || reg.numero === undefined
+        ? 'Pedido sem número' : ('Pedido ' + reg.numero);
+    const data = reg.data
+        ? (typeof formatDate === 'function' ? String(formatDate(reg.data)).split(' ')[0] : String(reg.data))
+        : 'sem data';
+    const quantos = (reg.modelos || []).length;
+    const modelos = quantos === 1 ? '1 modelo' : (quantos + ' modelos');
+    const cliente = String(reg.cliente || '').trim();
+    return '  • ' + numero + ' — ' + data + ' — ' + modelos
+        + (cliente ? ' — ' + cliente : '')
+        + (reg.aprovados ? '  ⚠ ' + reg.aprovados + ' já aprovado(s)' : '');
+}
+window.linhaDoPedidoQueUsa = linhaDoPedidoQueUsa;
 
 /** O nome legível de um modelo, para caber num aviso. */
 function nomeCurtoDoModelo(m) {
