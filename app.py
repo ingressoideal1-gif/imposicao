@@ -1547,7 +1547,12 @@ async def impose_file(
                         "type": "file",
                         "name": name,
                         "file_type": ftype,
-                        "data": b64_data
+                        "data": b64_data,
+                        # So os lotes trazem: e a conta que a tela mostra a quem
+                        # cancelar no meio. Ver `_folhas_por_lote` no engine.py.
+                        "folhas": file_info.get("folhas"),
+                        "folhas_entregues": file_info.get("folhas_entregues"),
+                        "folhas_no_trabalho": file_info.get("folhas_no_trabalho"),
                     })
                     # Pausa na thread do motor para liberar o GIL, permitindo que o event loop
                     # envie o arquivo atual antes que o motor comece a gerar o próximo

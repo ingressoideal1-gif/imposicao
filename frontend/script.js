@@ -11641,9 +11641,38 @@ function cancelarImpressaoOuGeracao() {
     window.isImposing = false;
     window.isPrinting = false;
 
-    if (typeof toast === 'function') toast('🛑 Impressão / Geração cancelada imediatamente!', 'warning');
+    if (typeof toast === 'function') toast(textoDoCancelamento(), 'warning');
+    window._entregaEmCurso = null;
 }
 window.cancelarImpressaoOuGeracao = cancelarImpressaoOuGeracao;
+
+/**
+ * O que o aviso de cancelamento diz.
+ *
+ * ## Por que ele nao pode ser so "cancelado" (27/08/2026)
+ *
+ * Desde a entrega por bloco, cancelar NAO desfaz o que ja saiu: cada lote vai
+ * para o hotfolder ou para a impressora assim que fica pronto, e papel entregue
+ * nao volta. Um aviso que diz apenas "cancelado" deixa o operador sem saber se
+ * conferir a bandeja, e de onde remandar.
+ *
+ * Entao ele diz o numero: quantas folhas de quantas ja foram, e em quantos
+ * lotes. `window._entregaEmCurso` e alimentado a cada lote recebido -- ver o
+ * pedido.js, no laco que le a resposta em streaming.
+ *
+ * Sem entrega por bloco (trabalho pequeno, ou a caixa desmarcada) nao ha o que
+ * contar, e o texto volta a ser o de sempre.
+ */
+function textoDoCancelamento() {
+    const e = window._entregaEmCurso;
+    if (!e || !e.folhas) return '🛑 Impressão / Geração cancelada imediatamente!';
+    const n = f => Number(f).toLocaleString('pt-BR');
+    const de = e.total ? ` de ${n(e.total)}` : '';
+    const lotes = e.lotes === 1 ? '1 lote' : `${e.lotes} lotes`;
+    return `🛑 Cancelado — mas ${n(e.folhas)} folha(s)${de} JÁ FORAM ENTREGUES `
+        + `à impressão, em ${lotes} (último: ${e.ultimo}). Confira o que já saiu antes de remandar.`;
+}
+window.textoDoCancelamento = textoDoCancelamento;
 
 let impositionAbortController = null;
 window.isImposing = false;

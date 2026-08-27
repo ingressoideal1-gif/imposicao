@@ -229,3 +229,28 @@ def test_a_caixa_da_tela_nasce_MARCADA():
     assert "checked" in marca, (
         "a caixa 'Entregar cada bloco enquanto gera' voltou a nascer desmarcada"
     )
+
+
+def test_cada_lote_diz_quantas_folhas_leva(tmp_path):
+    """A conta que a tela mostra a quem cancelar no meio.
+
+    Cancelar NAO desfaz o que ja saiu: cada lote vai para o hotfolder ou para a
+    impressora assim que fica pronto, e papel entregue nao volta. Um aviso que
+    diz apenas "cancelado" deixaria o operador sem saber se conferir a bandeja,
+    nem de onde remandar.
+    """
+    cfg = montar(tmp_path, 40, sheets_per_block=3, entregar_por_bloco=True)
+    arquivos, _ = gerar(cfg)
+
+    assert [a["folhas"] for a in arquivos] == [3, 3, 3, 1], arquivos
+    # O acumulado sobe lote a lote e fecha na tiragem.
+    assert [a["folhas_entregues"] for a in arquivos] == [3, 6, 9, 10]
+    assert all(a["folhas_no_trabalho"] == 10 for a in arquivos)
+
+
+def test_o_arquivo_unico_nao_finge_ter_entregue_nada(tmp_path):
+    """Sem corte nao ha o que contar, e o aviso volta a ser o de sempre."""
+    cfg = montar(tmp_path, 40, sheets_per_block=3)
+    arquivos, entregues = gerar(cfg)
+    assert entregues == 0
+    assert "folhas_entregues" not in arquivos[0]

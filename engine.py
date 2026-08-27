@@ -2672,8 +2672,15 @@ class ImpositionEngine:
                         # que os arquivos entram no RIP e a ordem do papel.
                         out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
                         _salvar_pdf(doc_out, out_name)
-                        self.generated_files.append({"type": "lote", "path": out_name, "name": os.path.basename(out_name)})
+                        # `folhas` acompanha o lote ate a tela: e com ele que o
+                        # operador que cancelar no meio sabe ate onde ja saiu
+                        # papel. Papel entregue nao volta.
                         self.folhas_entregues += len(doc_out)
+                        self.generated_files.append({
+                            "type": "lote", "path": out_name, "name": os.path.basename(out_name),
+                            "folhas": len(doc_out), "folhas_entregues": self.folhas_entregues,
+                            "folhas_no_trabalho": total_sheets,
+                        })
                     doc_out.close()
                     doc_out = fitz.open()
 
@@ -3117,8 +3124,12 @@ class ImpositionEngine:
             if len(doc_out) > 0:
                 out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
                 _salvar_pdf(doc_out, out_name)
-                self.generated_files.append({"type": "lote", "path": out_name, "name": os.path.basename(out_name)})
                 self.folhas_entregues += len(doc_out)
+                self.generated_files.append({
+                    "type": "lote", "path": out_name, "name": os.path.basename(out_name),
+                    "folhas": len(doc_out), "folhas_entregues": self.folhas_entregues,
+                    "folhas_no_trabalho": total_sheets,
+                })
             print(f"[engine] entrega por bloco: {len(self.generated_files)} lote(s), "
                   f"{self.folhas_entregues} folha(s) entregue(s) de {total_sheets}")
         else:

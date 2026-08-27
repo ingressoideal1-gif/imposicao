@@ -3190,6 +3190,25 @@ function updatePedSummary() {
     agendarRedesenhoDaPrevia();
 
 }
+/**
+ * A caixa "Entregar cada bloco enquanto gera" foi mexida: grava no modelo.
+ *
+ * Pela regra do projeto, escolha de impressao do operador fica salva no modelo,
+ * e nao so na sessao. A coluna `entregar_por_bloco` de `pedidos_modelos` aceita
+ * nulo, e nulo significa "usa o padrao da tela" -- ver a leitura no
+ * `enviarParaPedido`, que trata nulo como marcado.
+ */
+window.onPedEntregarPorBlocoToggle = function (marcado) {
+    const ativo = state.activeOSItem;
+    if (!ativo) return;
+    const itens = state.osItens[ativo.osId] || [];
+    const item = itens.find(i => String(i.id) === String(ativo.itemId));
+    if (item) item.entregar_por_bloco = !!marcado;
+    if (typeof autoSaveOSItemField === 'function') {
+        autoSaveOSItemField(ativo.itemId, ativo.osId, 'entregar_por_bloco', !!marcado);
+    }
+};
+
 window.onPedNumeracaoSelect = onPedNumeracaoSelect;
 window.updatePedSummary = updatePedSummary;
 
@@ -3332,6 +3351,15 @@ async function enviarParaPedido(itemId, osId) {
         // Cut & Stack da mesma pagina. Cada pagina do arquivo e um ingresso diferente,
         // entao a regra so pode ser Pdf Paginado.
         aplicarTravaModoPdf(!!item.modo_pdf);
+
+        // A ESCOLHA DE ENTREGA DESTE MODELO (27/08/2026).
+        //
+        // NULO na coluna significa "ninguem escolheu neste modelo" -- e ai vale
+        // o padrao da tela, que hoje e marcado. Por isso a leitura e
+        // `!== false` e nao `!!`: um `!!` transformaria o nulo em desmarcado e
+        // desligaria o recurso em todo modelo que nunca foi tocado.
+        const cxEntrega = document.getElementById('ped-entregar-por-bloco');
+        if (cxEntrega) cxEntrega.checked = (item.entregar_por_bloco !== false);
         updatePedSummary();
         if (typeof drawPedPreview === 'function') drawPedPreview();
     }, 800);
@@ -5029,6 +5057,23 @@ window.runPedImposition = async function (mode, isRefazer) {
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
                                 arquivosRecebidos++;
+
+                                // ATE ONDE JA SAIU PAPEL (27/08/2026).
+                                //
+                                // Com a entrega por bloco, cancelar no meio nao
+                                // desfaz o que ja foi para a impressora. O motor
+                                // manda a conta junto de cada lote, e a tela a
+                                // guarda para poder dizer, no cancelamento,
+                                // exatamente ate que folha o operador precisa
+                                // conferir antes de remandar.
+                                if (fileObj.folhas_entregues) {
+                                    window._entregaEmCurso = {
+                                        folhas: fileObj.folhas_entregues,
+                                        total: fileObj.folhas_no_trabalho || null,
+                                        lotes: arquivosRecebidos,
+                                        ultimo: fileObj.name,
+                                    };
+                                }
 
                                 const fallbackDownload = async () => {
                                     toast(`Baixando: ${fileObj.name}...`, 'info');
