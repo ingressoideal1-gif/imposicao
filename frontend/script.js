@@ -15282,7 +15282,8 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
             // A escolha das colunas conferidas mora nos ELEMENTOS, e por isso
             // ela e gravada aqui e nao junto das fatias: fatia e do modelo,
             // conferencia e da numeracao. Ver `colunasConferidasDaNumeracao`.
-            if (aplicarConferenciaNasColunas(num, conferencia)) {
+            const conferenciaMudou = !!aplicarConferenciaNasColunas(num, conferencia);
+            if (conferenciaMudou) {
                 await salvarCamposDaNumeracao(num.id, { elements: num.elements });
             }
 
@@ -15297,9 +15298,17 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
                 redesenharCardsDoPedido(osId);
 
-                toast('Nenhuma linha foi atribuída a nenhum modelo, então nada '
-                    + 'foi mudado. Marque as linhas e clique no NOME do modelo '
-                    + 'para dá-las a ele.', 'info');
+                // A frase precisa dizer o que ACONTECEU, e desde 26/08/2026 pode
+                // ter acontecido uma coisa: a escolha das colunas conferidas. Dizer
+                // "nada foi mudado" depois de gravá-la manda o operador achar que o
+                // checkbox não pegou -- e foi exatamente o que ele relatou.
+                toast(conferenciaMudou
+                    ? 'Colunas da conferência salvas. Nenhuma linha foi atribuída a '
+                      + 'nenhum modelo, então a distribuição ficou como estava.'
+                    : 'Nenhuma linha foi atribuída a nenhum modelo, então nada '
+                      + 'foi mudado. Marque as linhas e clique no NOME do modelo '
+                      + 'para dá-las a ele.',
+                    conferenciaMudou ? 'success' : 'info');
 
                 return;
 

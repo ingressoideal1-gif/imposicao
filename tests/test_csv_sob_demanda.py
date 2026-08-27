@@ -234,6 +234,29 @@ def test_a_escolha_das_colunas_conferidas_e_gravada_e_lida():
     )
 
 
+def test_aplicar_so_a_conferencia_nao_diz_que_nada_mudou():
+    """Relato do usuario: *"faltou apenas sumir o aviso das linhas repetidas no
+    modelo"*.
+
+    A escolha ERA gravada -- o banco confirmava `Camarote` fora da conferencia
+    nas oito numeracoes do 21202, e a funcao real sobre o dado real devolvia
+    zero modelos com aviso. O que enganava era a frase: quem so desmarcava a
+    coluna e clicava em Aplicar lia *"nada foi mudado"*, e concluia que o
+    checkbox nao tinha pegado.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("if (!distribuicaoAtribuiuAlgo(distribuicao))")
+    corpo = fonte[i:i + 1400]
+    assert "conferenciaMudou" in corpo, (
+        "a frase do Aplicar nao sabe se a conferencia mudou"
+    )
+    assert "Colunas da conferência salvas" in corpo, (
+        "quem so mexeu nos checkboxes precisa ler que a escolha foi salva"
+    )
+    # E a frase antiga continua para quem realmente nao mudou nada.
+    assert "então nada " in corpo and "foi mudado" in corpo
+
+
 def test_a_lista_que_decide_a_IMPRESSAO_nao_foi_tocada():
     """A separacao que torna esta escolha segura.
 
