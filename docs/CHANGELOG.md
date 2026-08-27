@@ -4,6 +4,49 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-27] — PDF Gabarito: o verso ganhou página, e a frente parou de sair suja
+
+Relato do usuário: *"Na edição de um pedido em arte, ao clicar em PDF Gabarito,
+verificar a geração do PDF para quando o modelo for frente e verso. Se tivermos
+dois modelos, um apenas frente e outro frente e verso, o PDF deve ser gerado com
+três páginas."*
+
+O `exportarPdfGabarito` adicionava **uma página por modelo**, sem nenhuma noção de
+face. Duas coisas saíam erradas ao mesmo tempo:
+
+1. **O verso não existia.** Aquele pedido de dois modelos saía com duas páginas, e
+   não três. O operador ficava sem o gabarito do lado que ele não tem como conferir
+   de outro jeito.
+2. **A frente vinha suja.** O `criarCanvasNumeracaoRasterizada` desenhava *todos* os
+   elementos da numeração, inclusive os marcados **Apenas Verso** no editor. O
+   gabarito da frente mostrava as duas faces empilhadas uma sobre a outra.
+
+Agora o export percorre `['front']` ou `['front', 'back']` conforme o modelo, e cada
+página leva só o que aparece naquela face — tanto os elementos PDF, que entram
+vetoriais, quanto o resto, que é rasterizado por cima. O **PICOTE** espelha no verso
+(`largura − x`), a mesma regra do card do pedido, porque o corte é o mesmo papel visto
+do avesso. O fundo legado da coluna `pdf_content` entra só na frente: ele nunca foi
+outra coisa. A etiqueta da página do verso é `<modelo> Verso`, igual à do PDF Arte.
+
+### Os dois botões vizinhos já acertavam — e agora contam pelo mesmo lugar
+
+O usuário pediu para conferir também o **Importar PDF Artes**. Ele já fatiava
+contando frente e verso, e o **PDF Arte** já emitia a página do verso; só o gabarito
+tinha ficado para trás. Mas os três liam o verso de jeitos diferentes, e o painel
+guarda esse dado em **dois nomes na memória**: `verso`, booleano, e `verso_tipo`, o
+texto que vem do ERP (`Frente` / `FxVerso`, mais os legados `VERSO COMUM` e
+`VERSO VARIÁVEL`). Os três passaram a chamar `modeloTemVerso(item)`, que lê os dois.
+
+Isso importa porque o operador confere o gabarito **por cima** da arte: se as
+contagens divergissem, a página 2 de um seria o verso do modelo 1 e a do outro seria
+a frente do modelo 2.
+
+Conferido por `tests/test_gabarito_frente_e_verso.py` e pelo harness em node
+`tests/gabarito_frente_e_verso_harness.js`, que lê o cálculo das faces de dentro do
+próprio `exportarPdfGabarito` — apagar o verso de lá reprova a suíte.
+
+---
+
 ## [2026-08-26] — O dia em que o painel parou de travar: oito publicações e o que cada relato escondia
 
 Um dia inteiro de relatos do usuário, cada um apontando para um lugar diferente do

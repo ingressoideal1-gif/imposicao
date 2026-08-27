@@ -38618,7 +38618,7 @@ async function exportarPdfSomenteArte() {
             addedPages++;
 
             // 2. Se for frente e verso, tratar arte do verso
-            if (item.verso) {
+            if (modeloTemVerso(item)) {
                 let versoPageAdded = false;
                 if (item.verso_arte_url) {
                     try {
@@ -38761,7 +38761,7 @@ async function importarPdfMultipage(event) {
         let requiredPages = 0;
         itens.forEach(item => {
             requiredPages++; // Frente
-            if (item.verso) requiredPages++; // Verso
+            if (modeloTemVerso(item)) requiredPages++; // Verso
         });
 
         if (totalPages !== requiredPages) {
@@ -38816,7 +38816,7 @@ async function importarPdfMultipage(event) {
             }
 
             // VERSO
-            if (item.verso) {
+            if (modeloTemVerso(item)) {
                 if (currentPageIndex < totalPages) {
                     const singlePageDoc = await PDFDocument.create();
                     const [copiedPage] = await singlePageDoc.copyPages(uploadedDoc, [currentPageIndex]);
@@ -38870,7 +38870,44 @@ window.importarPdfMultipage = importarPdfMultipage;
 
 
 
-async function criarCanvasNumeracaoRasterizada(num, fmt) {
+/**
+ * O modelo e impresso frente e verso?
+ *
+ * O mesmo dado mora em dois nomes na memoria do painel: `verso`, booleano, e
+ * `verso_tipo`, o texto que vem do ERP ('Frente' / 'FxVerso', mais os valores
+ * legados). Os dois sao gravados juntos, mas ler os dois e o que garante que os
+ * tres caminhos que contam paginas -- PDF Arte, PDF Gabarito e a importacao
+ * fatiada -- cheguem sempre ao MESMO numero. Se divergissem, a pagina 2 do
+ * gabarito deixaria de ser a pagina 2 da arte, e o operador conferiria o verso
+ * de um modelo contra a frente de outro.
+ */
+function modeloTemVerso(item) {
+    if (!item) return false;
+    if (item.verso === true) return true;
+    const vt = String(item.verso_tipo || '').trim().toUpperCase();
+    if (!vt) return false;
+    return vt !== 'FRENTE' && vt !== 'SÓ FRENTE' && vt !== 'SO FRENTE';
+}
+window.modeloTemVerso = modeloTemVerso;
+
+/**
+ * Um elemento da numeracao aparece nesta face?
+ *
+ * Mesma regra do card do pedido (`drawAmostraFace`): `face` do elemento vale
+ * 'front', 'back' ou 'both', e ausente quer dizer 'both'. O PICOTE e corte de
+ * papel, entao atravessa as duas faces sempre.
+ */
+function elementoVisivelNaFace(el, face) {
+    if (!el) return false;
+    if (el.type === 'PICOTE') return true;
+    const elFace = el.face || 'both';
+    return (face === 'back')
+        ? (elFace === 'back' || elFace === 'both')
+        : (elFace === 'front' || elFace === 'both');
+}
+window.elementoVisivelNaFace = elementoVisivelNaFace;
+
+async function criarCanvasNumeracaoRasterizada(num, fmt, face) {
     if (!num || !num.elements || num.elements.length === 0) return null;
 
     // O gabarito desenha UMA vez e vira PNG: não há repinte quando a foto chega
@@ -38893,12 +38930,23 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
     // Opcional: desenhar apenas elementos.
 
     // Desenhar cada elemento da numeração (transparente por padrão)
+    const faceDoGabarito = (face === 'back') ? 'back' : 'front';
+
     num.elements.forEach(el => {
         // O gabarito é um PDF de produção: o elemento marcado como Layout fica
         // de fora, pela mesma razão que fica de fora da imposição.
         if (elementoSoLayout(el)) return;
 
-        const x = el.x_mm * S;
+        // Cada face leva só o que aparece nela. Sem este filtro, a página da
+        // frente recebia também os elementos marcados "Apenas Verso", e o
+        // modelo frente e verso saía com as duas faces empilhadas numa página.
+        if (!elementoVisivelNaFace(el, faceDoGabarito)) return;
+
+        // PICOTE espelha no verso, como no card do pedido: o corte é o mesmo
+        // no papel, e visto do outro lado ele fica na distância oposta.
+        const x = (faceDoGabarito === 'back' && el.type === 'PICOTE')
+            ? (fmt.width_mm - el.x_mm) * S
+            : el.x_mm * S;
         const y = el.y_mm * S;
         const color = el.color || '#000000';
         const rot = (el.rotation || 0) * Math.PI / 180;
@@ -39071,95 +39119,113 @@ async function exportarPdfGabarito() {
             const ptW = targetW * (72 / 25.4);
             const ptH = targetH * (72 / 25.4);
 
-            // 1. A página é SEMPRE do tamanho do modelo.
-            //
-            // Antes ela era a página COPIADA do arquivo do elemento PDF, e por
-            // isso o gabarito de uma Triband de 245 mm saía com 14,76 mm — o
-            // tamanho da logo. O arquivo do elemento é conteúdo dentro da
-            // página, nunca a página.
-            pdfDoc.addPage([ptW, ptH]);
-            const pages = pdfDoc.getPages();
-            const currentPage = pages[pages.length - 1];
+            // Quantas páginas este modelo leva: uma por face impressa. Um pedido
+            // com um modelo só frente e outro frente e verso sai com TRÊS
+            // páginas. É a mesma conta do PDF Arte, de propósito: as duas
+            // exportações têm de casar página a página para o operador conferir
+            // o gabarito por cima da arte.
+            const faces = modeloTemVerso(item) ? ['front', 'back'] : ['front'];
 
-            // 2. Os elementos PDF entram VETORIAIS, cada um no seu lugar.
-            //
-            // Todos, e não só o primeiro: uma numeração com dois PDFs impressos
-            // perdia o segundo. Os marcados como Layout ficam de fora, pela
-            // mesma razão que ficam de fora da imposição.
-            const pdfEls = num
+            // Os elementos PDF da numeração, sem olhar a face ainda: a existência
+            // deles é o que decide se o registro legado entra (passo 3), e essa
+            // decisão é do modelo inteiro, não de uma face.
+            const todosPdfEls = num
                 ? (num.elements || []).filter(e => e.type === 'PDF' && e.pdf_content && !elementoSoLayout(e))
                 : [];
 
-            for (const el of pdfEls) {
-                try {
-                    const pdfData = await fetchPdfBytes(el.pdf_content);
-                    if (!pdfData) continue;
-                    const originalDoc = await PDFDocument.load(pdfData);
-                    const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
-                    const caixa = caixaDoElementoPdfNaPagina(
-                        el, fmt, embutida.width, embutida.height, ptW, ptH);
-                    if (!caixa) continue;
-                    currentPage.drawPage(embutida, {
-                        x: caixa.x, y: caixa.y,
-                        width: caixa.width, height: caixa.height,
-                        rotate: degrees(caixa.rotate),
-                        opacity: opacidadeDoElemento(el),
-                    });
-                } catch (e) {
-                    console.warn(`Falha ao embutir o elemento PDF '${el.id}' do gabarito ${idx}:`, e);
-                }
-            }
+            for (const face of faces) {
+                // 1. A página é SEMPRE do tamanho do modelo.
+                //
+                // Antes ela era a página COPIADA do arquivo do elemento PDF, e por
+                // isso o gabarito de uma Triband de 245 mm saía com 14,76 mm — o
+                // tamanho da logo. O arquivo do elemento é conteúdo dentro da
+                // página, nunca a página.
+                pdfDoc.addPage([ptW, ptH]);
+                const pages = pdfDoc.getPages();
+                const currentPage = pages[pages.length - 1];
 
-            // 3. Registro legado: numeração antiga, sem elemento PDF, que guarda
-            //    a arte na coluna `pdf_content`. Ali ela sempre foi o fundo do
-            //    modelo inteiro, então entra ocupando a página, sem distorcer.
-            if (num && !pdfEls.length && num.pdf_content) {
-                try {
-                    const pdfData = await fetchPdfBytes(num.pdf_content);
-                    if (pdfData) {
+                // 2. Os elementos PDF entram VETORIAIS, cada um no seu lugar.
+                //
+                // Todos, e não só o primeiro: uma numeração com dois PDFs impressos
+                // perdia o segundo. Os marcados como Layout ficam de fora, pela
+                // mesma razão que ficam de fora da imposição — e cada face leva
+                // apenas os seus.
+                const pdfEls = todosPdfEls.filter(e => elementoVisivelNaFace(e, face));
+
+                for (const el of pdfEls) {
+                    try {
+                        const pdfData = await fetchPdfBytes(el.pdf_content);
+                        if (!pdfData) continue;
                         const originalDoc = await PDFDocument.load(pdfData);
                         const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
-                        const escala = Math.min(ptW / embutida.width, ptH / embutida.height);
-                        const w = embutida.width * escala, h = embutida.height * escala;
+                        const caixa = caixaDoElementoPdfNaPagina(
+                            el, fmt, embutida.width, embutida.height, ptW, ptH);
+                        if (!caixa) continue;
                         currentPage.drawPage(embutida, {
-                            x: (ptW - w) / 2, y: (ptH - h) / 2, width: w, height: h,
+                            x: caixa.x, y: caixa.y,
+                            width: caixa.width, height: caixa.height,
+                            rotate: degrees(caixa.rotate),
+                            opacity: opacidadeDoElemento(el),
                         });
+                    } catch (e) {
+                        console.warn(`Falha ao embutir o elemento PDF '${el.id}' do gabarito ${idx} (${face}):`, e);
                     }
-                } catch (e) {
-                    console.warn(`Falha ao embutir o fundo legado do gabarito ${idx}:`, e);
                 }
-            }
 
-            // 4. O resto da numeração — texto, código, foto — rasterizado por cima.
-            //
-            // SEM os elementos PDF: eles acabaram de entrar vetoriais, e deixá-los
-            // aqui os desenharia duas vezes, a segunda em imagem por cima do
-            // vetor. Rasterizar arte vetorial do cliente é proibido no projeto.
-            const numParaRaster = num && Array.isArray(num.elements)
-                ? { ...num, elements: num.elements.filter(e => e.type !== 'PDF') }
-                : num;
-
-            if (numParaRaster && numParaRaster.elements && numParaRaster.elements.length > 0) {
-                try {
-                    const pngDataUrl = await criarCanvasNumeracaoRasterizada(numParaRaster, fmt);
-                    if (pngDataUrl) {
-                        const base64Data = pngDataUrl.split(',')[1];
-                        const image = await pdfDoc.embedPng(base64Data);
-                        currentPage.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+                // 3. Registro legado: numeração antiga, sem elemento PDF, que guarda
+                //    a arte na coluna `pdf_content`. Ali ela sempre foi o fundo da
+                //    FRENTE do modelo, então entra ocupando a página, sem distorcer,
+                //    e só na frente — o verso daquela época nunca morou nessa coluna.
+                if (face === 'front' && num && !todosPdfEls.length && num.pdf_content) {
+                    try {
+                        const pdfData = await fetchPdfBytes(num.pdf_content);
+                        if (pdfData) {
+                            const originalDoc = await PDFDocument.load(pdfData);
+                            const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
+                            const escala = Math.min(ptW / embutida.width, ptH / embutida.height);
+                            const w = embutida.width * escala, h = embutida.height * escala;
+                            currentPage.drawPage(embutida, {
+                                x: (ptW - w) / 2, y: (ptH - h) / 2, width: w, height: h,
+                            });
+                        }
+                    } catch (e) {
+                        console.warn(`Falha ao embutir o fundo legado do gabarito ${idx}:`, e);
                     }
-                } catch (e) {
-                    console.warn(`Falha ao rasterizar e embutir máscara visual do modelo ${idx}:`, e);
                 }
+
+                // 4. O resto da numeração — texto, código, foto — rasterizado por cima.
+                //
+                // SEM os elementos PDF: eles acabaram de entrar vetoriais, e deixá-los
+                // aqui os desenharia duas vezes, a segunda em imagem por cima do
+                // vetor. Rasterizar arte vetorial do cliente é proibido no projeto.
+                const numParaRaster = num && Array.isArray(num.elements)
+                    ? { ...num, elements: num.elements.filter(e => e.type !== 'PDF') }
+                    : num;
+
+                if (numParaRaster && numParaRaster.elements && numParaRaster.elements.length > 0) {
+                    try {
+                        const pngDataUrl = await criarCanvasNumeracaoRasterizada(numParaRaster, fmt, face);
+                        if (pngDataUrl) {
+                            const base64Data = pngDataUrl.split(',')[1];
+                            const image = await pdfDoc.embedPng(base64Data);
+                            currentPage.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+                        }
+                    } catch (e) {
+                        console.warn(`Falha ao rasterizar e embutir máscara visual do modelo ${idx} (${face}):`, e);
+                    }
+                }
+
+                // A etiqueta da página diz de qual modelo e de qual face ela é,
+                // com o mesmo texto que o PDF Arte usa.
+                const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
+                nums.push(PDFNumber.of(addedPages));
+                nums.push(pdfDoc.context.obj({
+                    Type: 'PageLabel',
+                    P: PDFString.of(face === 'back' ? `${numModelo} Verso` : numModelo)
+                }));
+
+                addedPages++;
             }
-
-            const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
-            nums.push(PDFNumber.of(addedPages));
-            nums.push(pdfDoc.context.obj({
-                Type: 'PageLabel',
-                P: PDFString.of(numModelo)
-            }));
-
-            addedPages++;
         }
 
         if (addedPages > 0) {
