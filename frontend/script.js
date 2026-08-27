@@ -27775,6 +27775,68 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
 }
 
 /**
+ * Redesenha as duas filas de modelos UMA vez por rajada de salvamentos.
+ *
+ * ## Por que isto existe (27/08/2026)
+ *
+ * O usuario relatou que no pedido 21202 nao dava para navegar entre os
+ * modelos. Depois de a rede sair do caminho (a releitura enxuta, v739), sobrou
+ * uma conta de CPU que era a maior parte do que ele sentia. Medido na tela, com
+ * o pedido aberto e todos os bancos ja em memoria, UM clique num modelo
+ * chamava:
+ *
+ *     renderPedOSQueue   8x   631 ms  -- 6 delas vindas daqui, 490 ms
+ *     renderImpOSQueue   7x   454 ms  -- 6 delas vindas daqui, 390 ms
+ *
+ * Abrir um modelo salva meia duzia de campos (formato, saida, numeracao, faixa,
+ * verso), e cada salvamento redesenhava as DUAS filas inteiras: 52 linhas, cada
+ * uma com um `<select>` de 152 numeracoes e outro de cores. O trabalho e o
+ * mesmo nas seis vezes -- so a ultima e que fica na tela.
+ *
+ * Entao o pedido de redesenho vira um agendamento com DOIS momentos: o comeco
+ * da rajada desenha na hora -- e ele que move o destaque para a linha que o
+ * operador clicou, e esse retorno nao pode esperar --, e o fim dela desenha uma
+ * vez so, depois que a tela assentou. As seis viram duas.
+ *
+ * Nao ha caminho que dependa do redesenho sincrono: nenhum chamador espera pelo
+ * `saveActiveOSItemField` (todos sao dispare-e-esqueca), e quem precisa da fila
+ * na hora chama `renderPedOSQueue()` direto, como o `abrirImposicaoDoPedido`
+ * faz de proposito antes de carregar o modelo -- os dois `render*OSQueue` tem
+ * efeito colateral no estado (aplicam `item.formato_id` e `item.saida_id`
+ * padrao do produto), e por isso nao podem ser simplesmente pulados.
+ */
+// A janela em que os pedidos de redesenho se juntam. Abrir um modelo espalha os
+// salvamentos por uma cascata de `setTimeout` de 400, 500, 600 e 800 ms -- e a
+// tela leva mesmo cerca de um segundo para assentar. Uma janela mais curta que
+// isso deixaria a cascata virar tres redesenhos em vez de um.
+const _JANELA_DO_REDESENHO_MS = 900;
+let _filasDesenhamAgora = false;      // ja desenhou o comeco desta rajada?
+let _filasNoFimDaRajada = null;       // o redesenho do fim, remarcado a cada pedido
+
+function _desenharAsFilas() {
+    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+}
+
+function agendarRedesenhoDasFilas() {
+    // COMECO da rajada: desenha ja. E ele que move o destaque da linha para o
+    // modelo que o operador acabou de clicar, e esse retorno nao pode esperar.
+    if (!_filasDesenhamAgora) {
+        _filasDesenhamAgora = true;
+        setTimeout(() => { _filasDesenhamAgora = false; }, _JANELA_DO_REDESENHO_MS);
+        _desenharAsFilas();
+    }
+    // FIM da rajada: um so, depois que tudo assentou, para a fila mostrar o
+    // resultado final. Cada novo pedido empurra este para a frente.
+    if (_filasNoFimDaRajada) clearTimeout(_filasNoFimDaRajada);
+    _filasNoFimDaRajada = setTimeout(() => {
+        _filasNoFimDaRajada = null;
+        _desenharAsFilas();
+    }, _JANELA_DO_REDESENHO_MS);
+}
+window.agendarRedesenhoDasFilas = agendarRedesenhoDasFilas;
+
+/**
  * Salva um campo do item ativo atualmente selecionado na imposição
  */
 async function saveActiveOSItemField(field, value) {
@@ -27805,10 +27867,10 @@ async function saveActiveOSItemField(field, value) {
                 : value;
                 
             await autoSaveOSItemField(itemId, osId, dbField, dbValue);
-            
-            // Re-renderizar filas para manter sincronizadas as tabelas de OS
-            if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-            if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+
+            // Re-renderizar filas para manter sincronizadas as tabelas de OS.
+            // UMA vez por rajada -- ver `agendarRedesenhoDasFilas`.
+            agendarRedesenhoDasFilas();
         }
     }
 }
