@@ -28821,6 +28821,30 @@ function impQueueUpdateNum(itemId, osId, numId) {
         item.numeracao_id = num.id;
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
 
+        // O TEXTO DO PARCEIRO VAI JUNTO COM O ID (27/08/2026).
+        //
+        // `pedidos_modelos` guarda a numeracao do modelo DUAS vezes: o texto,
+        // escrito pelo ERP (`gabarito_operacional`), e o id, derivado por este
+        // painel (`amostra_num_id`). Quando os dois discordam, quem manda e o
+        // texto -- essa e a regra do `cor-numeracao-do-modelo.js`, e ela existe
+        // porque o parceiro troca a numeracao de um modelo e o id em cache
+        // nunca mais deixaria a troca chegar a tela.
+        //
+        // Gravar so o id, como esta fila fazia, punha o operador num ciclo que
+        // ele nao tinha como vencer: ele escolhia a numeracao certa, o id ia
+        // para o banco, o texto ficava o antigo -- e na abertura seguinte a
+        // reconciliacao devolvia o id ao que o texto dizia. No pedido 21202 o
+        // modelo 1000563 (05/set CAMAROTE PATROCINADORES, Qtd 1.920) voltava
+        // sozinho para "CAMAROTE PRESIDENTE 05", de 3.000 linhas: a tela pedia
+        // 300 folhas onde cabiam 192, e o dado impresso seria de outro modelo.
+        //
+        // O card da tela de Amostras (`onItemNumSelect`) sempre gravou os dois.
+        // Esta linha e as duas telas de fila passando a fazer o mesmo.
+        item.gabarito_operacional = num.name || num.tipo || null;
+        item.tipo_numeracao = item.gabarito_operacional;
+        autoSaveOSItemField(itemId, osId, 'gabarito_operacional', item.gabarito_operacional);
+        autoSaveOSItemField(itemId, osId, 'tipo_numeracao', item.tipo_numeracao);
+
         // Atualizar modo de verso baseado na numeração
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : false;
         // Se a numeração é FxVerso, mudamos para FxVerso
