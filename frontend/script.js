@@ -16364,9 +16364,40 @@ function numeracaoDoModelo(item) {
 window.numeracaoDoModelo = numeracaoDoModelo;
 
 /**
+ * O `csv_data` que esta aba ja baixou continua descrevendo a linha relida?
+ *
+ * `updated_at` e escrito pelo gatilho `trg_producao_numeracoes_updated`, que
+ * dispara em TODO update de `producao_numeracoes` — inclusive o que troca o
+ * `csv_data`. Duas leituras com o mesmo carimbo sao a mesma linha, entao o
+ * banco que ja esta em memoria vale. Carimbo diferente, ou ausente de um dos
+ * lados, responde "nao": na duvida, baixar de novo custa uma consulta; usar o
+ * CSV velho custa papel impresso com os dados errados.
+ */
+function bancoBaixadoContinuaValendo(velha, nova) {
+    if (!velha || !nova) return false;
+    if (velha.csv_data === undefined) return false;   // nunca desceu — nada a preservar
+    if (!velha.updated_at || !nova.updated_at) return false;
+    return String(velha.updated_at) === String(nova.updated_at);
+}
+window.bancoBaixadoContinuaValendo = bancoBaixadoContinuaValendo;
+
+/**
  * Mescla numeracoes recem-lidas do banco no catalogo em memoria: a linha nova
  * substitui a antiga pelo id, e a que nao existia entra. Devolve quantas
  * entraram. Pura, sem rede — e a parte que o harness testa.
+ *
+ * ## A leitura ENXUTA nao pode desfazer o que ja desceu (27/08/2026)
+ *
+ * Quem le sem o `csv_data` (`recarregarNumeracoesDoPedido` com
+ * `comBanco: false`) recebe linhas SEM a coluna. Trocar a linha antiga por ela
+ * sem mais nada devolvia `csv_data` ao estado `undefined` — e, no pedido
+ * 21202, isso jogava fora os 17 MB que a tela de Amostras tinha acabado de
+ * baixar, banco a banco. Cada troca de modelo os pedia de novo.
+ *
+ * Entao: linha nova sem a coluna herda o `csv_data` da antiga, mas SO quando o
+ * `updated_at` das duas e o mesmo — ver `bancoBaixadoContinuaValendo`. Se a
+ * linha mudou no banco, `csv_data` fica `undefined` de proposito e o
+ * `garantirCsvDaNumeracao` desce a versao nova quando alguem precisar dela.
  */
 function mesclarNumeracoesNoCatalogo(catalogo, frescas) {
     if (!Array.isArray(catalogo) || !Array.isArray(frescas)) return 0;
@@ -16374,7 +16405,15 @@ function mesclarNumeracoesNoCatalogo(catalogo, frescas) {
     frescas.forEach(nova => {
         if (!nova || !nova.id) return;
         const i = catalogo.findIndex(n => String(n.id) === String(nova.id));
-        if (i >= 0) catalogo[i] = nova; else catalogo.push(nova);
+        if (i >= 0) {
+            const semColuna = !Object.prototype.hasOwnProperty.call(nova, 'csv_data');
+            if (semColuna && bancoBaixadoContinuaValendo(catalogo[i], nova)) {
+                nova.csv_data = catalogo[i].csv_data;
+            }
+            catalogo[i] = nova;
+        } else {
+            catalogo.push(nova);
+        }
         mescladas++;
     });
     return mescladas;
@@ -16427,7 +16466,20 @@ async function recarregarNumeracoesDoPedido(osId, opcoes) {
         if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
         // A mesma forma que o api() entrega: sem METADATA, com print_mode. Sem
         // isto o lapis do card abria o editor com um elemento fantasma (v683).
-        return mesclarNumeracoesNoCatalogo(state.numeracoes, (data || []).map(normalizarNumeracaoLida));
+        const frescas = (data || []).map(normalizarNumeracaoLida);
+        // Linha que mudou no banco invalida tambem a PROMESSA guardada no
+        // `_csvDaNumeracaoEmVoo`: sem isto, o `garantirCsvDaNumeracao` devolveria
+        // para sempre as linhas que baixou antes da mudanca, e a mescla logo
+        // abaixo teria deixado `csv_data` como `undefined` justamente para que
+        // ele fosse a rede. Ver `bancoBaixadoContinuaValendo`.
+        frescas.forEach(nova => {
+            if (!nova || !nova.id) return;
+            const velha = state.numeracoes.find(n => String(n.id) === String(nova.id));
+            if (velha && velha.csv_data !== undefined && !bancoBaixadoContinuaValendo(velha, nova)) {
+                esquecerCsvDaNumeracao(nova.id);
+            }
+        });
+        return mesclarNumeracoesNoCatalogo(state.numeracoes, frescas);
     } catch (e) {
         console.warn('[numeracoes] nao consegui reler as numeracoes do pedido:', (e && e.message) || e);
         return 0;
@@ -27863,7 +27915,32 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     // A numeracao que vai para a folha e a do banco, nao a do catalogo velho
     // desta aba: um CSV tirado ou trocado em outra aba nao pode ir para o papel
     // daqui. Ver recarregarNumeracoesDoPedido().
-    await recarregarNumeracoesDoPedido(osId);
+    //
+    // ENXUTO, e o banco so do modelo que abre (27/08/2026).
+    //
+    // Esta linha e o clique em qualquer modelo da fila: a tela de Pedido chega
+    // aqui pelo `enviarParaPedido`, e tudo o que preenche os campos vem DEPOIS
+    // deste await. Enquanto ela lia `select('*')`, trocar de modelo no pedido
+    // 21202 -- 52 modelos, 49 numeracoes, 96.910 linhas, 17 MB -- baixava e
+    // reprocessava os 17 MB INTEIROS a cada clique, e o operador via a tela
+    // parada: clicava de novo, e disparava outra leva de 17 MB por cima.
+    //
+    // Enxuto sao 30 KB e 72 ms. O que o modelo aberto precisa de verdade e o
+    // banco DELE (e o dos que estiverem marcados junto para a folha
+    // combinada), que desce logo abaixo -- uma numeracao, nao quarenta e nove.
+    // As demais continuam chegando pela tela de Amostras, em segundo plano, e
+    // a mescla preserva o que ja desceu.
+    await recarregarNumeracoesDoPedido(osId, { comBanco: false });
+
+    // O banco das numeracoes DESTE trabalho, antes de qualquer conta da tela.
+    // Sem ele o `updatePedSummary` leria `csv_data === undefined`, concluiria
+    // "esta numeracao nao tem banco" e liberaria a faixa NI/NF -- o mesmo
+    // engano que o `garantirCsvDoTrabalho` existe para impedir na impressao.
+    // `null` no lugar do id do select de proposito: o select ainda mostra a
+    // numeracao do modelo ANTERIOR neste ponto.
+    if (typeof garantirCsvDoTrabalho === 'function') {
+        await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho(null));
+    }
 
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
     // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
@@ -28169,7 +28246,10 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 async function abrirImposicaoDoPedido(osId, numeroOS) {
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     await loadOSItens(osId);
-    await recarregarNumeracoesDoPedido(osId);   // e as numeracoes deles, do banco
+    // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
+    // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
+    // gemea no `enviarParaImposicao`.
+    await recarregarNumeracoesDoPedido(osId, { comBanco: false });
 
     const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     const realOsId = osObj ? osObj.id : osId;

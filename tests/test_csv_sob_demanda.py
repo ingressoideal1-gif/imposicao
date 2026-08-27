@@ -425,3 +425,59 @@ def test_o_botao_de_separar_so_aparece_quando_ha_o_que_separar():
         "o botao precisa sumir quando nao ha o que separar — banco de um dia so, "
         "ou nenhum modelo que feche com o dia dele"
     )
+
+
+def test_trocar_de_modelo_le_ENXUTO_e_baixa_so_o_banco_do_modelo():
+    """O clique num modelo da fila nao pode baixar o pedido inteiro (27/08/2026).
+
+    O usuario relatou que no pedido 21202 nao dava para navegar entre os
+    modelos. Medido contra o banco real: 52 modelos, 49 numeracoes, 96.910
+    linhas de CSV, 17 MB. Todo clique num modelo da fila passa por
+    `enviarParaPedido` -> `enviarParaImposicao`, e la havia um
+    `await recarregarNumeracoesDoPedido(osId)` com `select('*')`: os 17 MB
+    inteiros baixados e reprocessados a cada clique, com tudo o que preenche a
+    tela vindo DEPOIS desse await. O operador clicava, nao via nada mudar,
+    clicava de novo -- e disparava outra leva de 17 MB por cima.
+
+    Enxuto sao 30 KB e 72 ms. O que o modelo aberto precisa de verdade e o
+    banco DELE, e disso cuida o `garantirCsvDoTrabalho` logo em seguida: sem
+    ele o `updatePedSummary` leria `csv_data === undefined`, concluiria "esta
+    numeracao nao tem banco" e liberaria a faixa NI/NF.
+    """
+    script = _ler("frontend/script.js")
+
+    i = script.index("async function enviarParaImposicao(")
+    corpo = script[i:i + 3000]
+    assert "recarregarNumeracoesDoPedido(osId, { comBanco: false })" in corpo, (
+        "trocar de modelo voltou a baixar o banco de TODAS as numeracoes do pedido"
+    )
+    assert "garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho(null))" in corpo, (
+        "o modelo abre sem o banco dele: a tela concluiria 'nao tem banco'"
+    )
+    assert corpo.index("recarregarNumeracoesDoPedido") < corpo.index("garantirCsvDoTrabalho"), (
+        "o banco do modelo tem de ser garantido DEPOIS da releitura -- "
+        "a mescla e que decide o que sobrou em memoria"
+    )
+
+    j = script.index("async function abrirImposicaoDoPedido(")
+    assert "recarregarNumeracoesDoPedido(osId, { comBanco: false })" in script[j:j + 1200], (
+        "abrir o pedido inteiro voltou a baixar todos os bancos de uma vez"
+    )
+
+
+def test_a_releitura_esquece_o_banco_da_numeracao_que_mudou():
+    """A promessa guardada nao pode sobreviver a mudanca da linha.
+
+    `_csvDaNumeracaoEmVoo` guarda a PROMESSA da consulta, ja resolvida, para
+    que duas telas pedindo a mesma numeracao facam uma consulta so. Quando a
+    mescla devolve `csv_data` a `undefined` por a linha ter mudado, o
+    `garantirCsvDaNumeracao` vai buscar de novo -- e receberia da promessa
+    velha exatamente as linhas que acabaram de ser descartadas.
+    """
+    script = _ler("frontend/script.js")
+    i = script.index("async function recarregarNumeracoesDoPedido")
+    corpo = script[i:script.index("window.recarregarNumeracoesDoPedido =", i)]
+    assert "esquecerCsvDaNumeracao(nova.id)" in corpo, (
+        "a releitura nao invalida o cache em voo da numeracao que mudou"
+    )
+    assert "bancoBaixadoContinuaValendo(velha, nova)" in corpo

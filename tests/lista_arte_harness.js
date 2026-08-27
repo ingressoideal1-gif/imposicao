@@ -231,9 +231,13 @@ const { pedidoSaiuDaArte } = new Function(
     // O que este teste guarda continua sendo a ORDEM -- itens, depois numeracoes.
     ok(/await loadOSItens\(realOSId\)[\s\S]{0,900}await recarregarNumeracoesDoPedido\(realOSId[,)]/.test(trecho),
         'abrir o pedido na Lista de Arte rele as numeracoes dele depois dos itens');
-    ok(/async function enviarParaImposicao\([\s\S]{0,900}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
+    // `[,)]` no fim: em 27/08/2026 estes dois passaram a ler ENXUTO tambem, com
+    // `, { comBanco: false }`. Trocar de modelo no 21202 baixava 17 MB por
+    // clique e a tela ficava parada -- ver test_csv_sob_demanda.py. O que este
+    // teste guarda continua sendo que a releitura ACONTECE.
+    ok(/async function enviarParaImposicao\([\s\S]{0,2500}await recarregarNumeracoesDoPedido\(osId[,)]/.test(SCRIPT),
         'mandar o modelo para a Imposicao rele as numeracoes do pedido');
-    ok(/async function abrirImposicaoDoPedido\([\s\S]{0,400}await recarregarNumeracoesDoPedido\(osId\)/.test(SCRIPT),
+    ok(/async function abrirImposicaoDoPedido\([\s\S]{0,900}await recarregarNumeracoesDoPedido\(osId[,)]/.test(SCRIPT),
         'abrir o pedido inteiro na Imposicao rele as numeracoes');
     ok(/async function recarregarNumeracoesDoPedido\([\s\S]{0,3000}catch \(e\)/.test(SCRIPT),
         'a releitura nunca lanca: sem rede a tela segue com o que tem');

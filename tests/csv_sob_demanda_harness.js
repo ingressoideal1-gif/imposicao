@@ -70,7 +70,9 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                'aplicarConferenciaNasColunas', 'celulasEsperadasDoModelo',
                // O "Separar por dia" dentro do painel (26/08/2026).
                'diaDoNomeDoModelo', 'diaDaLinhaDoBanco', 'linhasPorDiaDaNumeracao',
-               'planoDeSeparacaoPorDia', 'textoDoPlanoDeSeparacao'];
+               'planoDeSeparacaoPorDia', 'textoDoPlanoDeSeparacao',
+               // A releitura ENXUTA nao desfaz o que ja desceu (27/08/2026).
+               'bancoBaixadoContinuaValendo', 'mesclarNumeracoesNoCatalogo'];
 
 let CODIGO;
 try {
@@ -704,6 +706,82 @@ function mundo(opts) {
 
     const m2 = mundo({ state: { numeracoes: [], osItens: { os1: [] } } });
     ok(m2.api.planoDeSeparacaoPorDia('os1', null) === null, 'sem numeracao, sem plano');
+})();
+
+// ─── 20. A releitura ENXUTA nao joga fora o banco que ja desceu ────────────
+//
+// Trocar de modelo no pedido 21202 -- 52 modelos, 49 numeracoes, 96.910 linhas,
+// 17 MB -- rele as numeracoes do pedido para pegar o que outra aba mudou. Ate
+// 27/08/2026 essa releitura era `select('*')`: 17 MB baixados e reprocessados a
+// CADA clique num modelo da fila, com a tela parada esperando. Enxuta ela custa
+// 30 KB -- mas a linha enxuta vem SEM `csv_data`, e trocar a antiga por ela
+// devolvia o banco ao estado `undefined`, jogando fora o que a tela de Amostras
+// tinha acabado de baixar. Cada troca de modelo os pedia todos de novo.
+//
+// A regra que resolve: linha nova sem a coluna herda o banco da antiga, mas so
+// quando o `updated_at` das duas e o mesmo. O carimbo vem do gatilho
+// `trg_producao_numeracoes_updated`, que dispara em todo update da tabela.
+
+(function aReleituraEnxutaPreservaOBancoQueJaDesceu() {
+    const m = mundo({ state: { numeracoes: [] } });
+    const { bancoBaixadoContinuaValendo, mesclarNumeracoesNoCatalogo } = m.api;
+
+    const T1 = '2026-08-27T10:00:00Z';
+    const T2 = '2026-08-27T11:30:00Z';
+
+    // ── O carimbo sozinho ──
+    ok(bancoBaixadoContinuaValendo({ csv_data: [{ a: 1 }], updated_at: T1 }, { updated_at: T1 }),
+       'mesmo carimbo: o banco em memoria descreve a linha relida');
+    ok(!bancoBaixadoContinuaValendo({ csv_data: [{ a: 1 }], updated_at: T1 }, { updated_at: T2 }),
+       'carimbo diferente: a linha mudou, o banco em memoria esta velho');
+    ok(!bancoBaixadoContinuaValendo({ csv_data: [{ a: 1 }] }, { updated_at: T1 }),
+       'sem carimbo de um dos lados a resposta e "nao" -- baixar de novo custa uma consulta, '
+       + 'imprimir o CSV velho custa papel');
+    ok(!bancoBaixadoContinuaValendo({ updated_at: T1 }, { updated_at: T1 }),
+       'nunca desceu (`undefined`) nao tem o que preservar');
+    ok(bancoBaixadoContinuaValendo({ csv_data: null, updated_at: T1 }, { updated_at: T1 }),
+       'o `null` de "ja procurei e nao tem" tambem se preserva: reperguntar seria a mesma resposta');
+
+    // ── A mescla ──
+    const catalogo = [
+        { id: 'nA', name: 'A', updated_at: T1, csv_data: [{ Codigo: '1' }, { Codigo: '2' }] },
+        { id: 'nB', name: 'B', updated_at: T1, csv_data: [{ Codigo: '9' }] },
+        { id: 'nC', name: 'C', updated_at: T1 },   // nunca desceu
+    ];
+    const enxutas = [
+        { id: 'nA', name: 'A', updated_at: T1 },   // nao mudou
+        { id: 'nB', name: 'B', updated_at: T2 },   // outra aba mexeu nela
+        { id: 'nC', name: 'C', updated_at: T1 },
+        { id: 'nD', name: 'D', updated_at: T1 },   // nova no pedido
+    ];
+    const n = mesclarNumeracoesNoCatalogo(catalogo, enxutas);
+    ok(n === 4, 'as quatro entram no catalogo', n);
+
+    const porId = id => catalogo.find(x => x.id === id);
+    ok(porId('nA').csv_data && porId('nA').csv_data.length === 2,
+       'a que nao mudou fica com o banco que ja estava em memoria -- ninguem rebaixa 17 MB',
+       porId('nA').csv_data);
+    ok(porId('nB').csv_data === undefined,
+       'a que MUDOU volta a `undefined`: o `garantirCsvDaNumeracao` desce a versao nova. '
+       + '`null` aqui faria a tela concluir "nao tem banco" e imprimir numero sequencial',
+       porId('nB').csv_data);
+    ok(porId('nC').csv_data === undefined, 'a que nunca desceu continua como estava');
+    ok(porId('nD') && porId('nD').name === 'D', 'a numeracao nova entra');
+
+    // ── A leitura COMPLETA continua mandando ──
+    const cheio = [{ id: 'nA', name: 'A', updated_at: T1, csv_data: [{ Codigo: 'novo' }] }];
+    mesclarNumeracoesNoCatalogo(catalogo, cheio);
+    ok(porId('nA').csv_data.length === 1 && porId('nA').csv_data[0].Codigo === 'novo',
+       'quem le com `select(*)` traz a coluna, e ela vence -- a heranca so vale para a linha enxuta',
+       porId('nA').csv_data);
+
+    // Uma leitura completa que devolve `null` (numeracao sem banco) tambem manda.
+    mesclarNumeracoesNoCatalogo(catalogo, [{ id: 'nA', name: 'A', updated_at: T1, csv_data: null }]);
+    ok(porId('nA').csv_data === null,
+       'e "esta numeracao nao tem banco" nao e revertido pela heranca');
+
+    ok(mesclarNumeracoesNoCatalogo(catalogo, null) === 0
+        && mesclarNumeracoesNoCatalogo(null, []) === 0, 'sem lista, nada a mesclar');
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────
