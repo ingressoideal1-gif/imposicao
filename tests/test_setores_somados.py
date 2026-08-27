@@ -59,7 +59,15 @@ def test_os_dois_paineis_tem_a_mesma_regra():
 
     # Os dois somam: qualquer setor aceso serve, e nao todos ao mesmo tempo.
     assert "alvos.has(norm(item.setor || ''))" in script
-    assert "alvos.has(normalizar(m.setor))" in acab
+
+    # No Acabamento a soma passou a correr dentro do RECORTE (27/08/2026): com
+    # um card aceso, a linha inteira -- selo, progresso, itens, quantidade --
+    # fala so daquele setor. A regra de somar nao mudou; mudou de quem ela
+    # decide a vida. O `setorDoModelo` existe porque a lista e desenhada com
+    # `modelosGlobais`, que nao traz setor nenhum: ele resolve pelo produto de
+    # origem.
+    assert "alvos.has(setorDoModelo(m, os))" in acab
+    assert "function modelosDoRecorte(os)" in acab
 
 
 def test_o_filtro_antigo_nao_sobrou_em_lugar_nenhum():

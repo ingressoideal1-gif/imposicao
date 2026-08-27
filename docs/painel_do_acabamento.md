@@ -463,6 +463,70 @@ A linha *"Clique em mais de um setor para somar os pedidos"*, embaixo da grade,
 existe porque a soma não se descobre olhando: um card aceso e outro apagado
 parecem exatamente a tela de antes.
 
+### E recortam o pedido, não só a lista
+
+Regra do usuário em 27/08/2026: *"ao selecionar o filtro por setor, deve levar em
+consideração apenas o setor selecionado"*. O exemplo dele: um pedido com **Laser
+e Têxtil**, o card **Laser** aceso e o Laser todo pronto mostra **Pronto**, mesmo
+com o Têxtil ainda na bancada.
+
+Até aqui o card era filtro de **linhas**: escolhia quais pedidos apareciam, e
+tudo o que a linha dizia continuava sendo do pedido inteiro — o exemplo acima
+saía como "Em acabamento", que é o oposto. Agora, com card aceso, a linha fala só
+do recorte: **selo, barra de progresso, contagem de itens, quantidade e
+ordenação**. Com dois cards, o recorte é a união dos dois. Sem card nenhum, a
+linha volta a falar do pedido inteiro.
+
+O recorte se anuncia onde age: a célula do progresso ganha `◧ LASER` embaixo da
+barra, e o selo explica no `title` que aquele estágio é do setor. Sem isso a
+mesma linha diria "1/1 mod. · 100 %" com o card aceso e "3/8 mod." sem ele, e o
+operador leria o pedido inteiro como pronto.
+
+O mesmo recorte corrigiu um defeito **anterior** a ele, no cruzamento com o
+filtro de Estágio. As duas cláusulas eram independentes: a de setor perguntava
+"tem item em Laser?" e a de estágio, "tem *algum* modelo Pronto?", sem exigir que
+fosse o mesmo modelo. Com *Laser* e *Pronto* acesos entrava na lista o pedido
+cujo Laser estava aguardando e cujo Têxtil estava pronto — uma afirmação que não
+era verdade em setor nenhum. Hoje o estágio pergunta pelos modelos do recorte.
+
+**As três bordas da regra**, decididas com o usuário na mesma conversa:
+
+1. **A Expedição continua sendo do pedido inteiro.** Um setor não se despacha
+   sozinho, e `pedidoProntoParaExpedicao` continua exigindo todos os setores. O
+   recorte muda o que a linha *diz*, nunca o que o pedido *é* para a expedição.
+2. **Modelo sem setor some do recorte.** Não há pílula "(sem setor)" na lista —
+   ele só volta a ser contado quando nenhum card está aceso. Isso não é raro: 43
+   dos 68 produtos do catálogo do parceiro não têm `setor_pcp`, porque são itens
+   de estoque e revenda, que a produção não enxerga por definição. Por isso a
+   tela vazia sob um recorte diz que o botão **Todos os Setores** devolve o que
+   sumiu, em vez de parecer que não há trabalho.
+3. **As métricas laterais e o alerta de atraso contam a fila inteira.** Elas
+   medem trabalho a fazer, e trabalho a fazer não muda porque o operador filtrou
+   a vista.
+
+### De onde sai o setor de cada modelo
+
+A lista é desenhada com `modelosGlobais`, e essa consulta **não traz setor
+nenhum** — o recorte precisou de uma fonte. `pedidos_modelos.setor` existe no
+banco e seria o caminho óbvio, mas estava preenchida em **105 das 355** linhas
+quando isto foi escrito: filtrar por ela esconderia 70 % dos modelos.
+
+A fonte é `pedidos_modelos.id_produto_proposta_origem` (**355 das 355**
+preenchidos), que fecha a cadeia que o detalhe do pedido sempre usou:
+
+```
+pedidos_modelos.id_produto_proposta_origem
+    -> produtos_proposta.id
+    -> produtos.setor_pcp
+```
+
+O último salto não custa consulta: o `script.js` pré-carrega os produtos da
+proposta de **todos** os pedidos em `state.osItens`, com o setor já resolvido e o
+id da linha em `_vibe_produto_id`. A coluna nova pega carona na consulta de
+estágio que a tela já fazia — uma coluna a mais, nenhuma requisição a mais —, e
+não foi acrescentada ao `carregarModelosGlobais` do `script.js` justamente para
+não deixar o Painel de Produção refém desta tela.
+
 ## O pedido aberto
 
 Clicar numa linha **não** abre a Imposição: abre, no lugar da lista, a mesma

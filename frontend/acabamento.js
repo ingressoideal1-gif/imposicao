@@ -134,6 +134,10 @@
         prazo: 'geral',       // geral | hoje | atrasados | expedicao
         setores: [],        // vazio = todos; os cards SOMAM (ver setFiltroSetor)
         pesos: {},          // 'SETOR' -> { peso, existe } do pedido aberto
+
+        // 'os.id' -> { 'p:<produtos_proposta.id>': 'SETOR' } do recorte por
+        // setor. Vive um desenho e morre: ver `indiceDeSetorDoPedido`.
+        indiceDeSetor: {},
         pesosDoPedido: null,// de qual pedido é o mapa acima
         estimados: {},      // 'SETOR' -> kg estimado (só os que têm; ausente = null)
         gramasPorUnidade: {},// id da linha da proposta -> gramas de UMA unidade
@@ -318,6 +322,139 @@
         return completos;
     }
 
+    // ─── O recorte por setor ───────────────────────────────────────
+    //
+    // Regra do usuário, 27/08/2026: *"ao selecionar o filtro por setor, deve
+    // levar em consideração apenas o setor selecionado"*. O exemplo dele: um
+    // pedido com LASER e TEXTIL, o card LASER aceso e o LASER todo pronto mostra
+    // **Pronto**, mesmo com o TEXTIL ainda na bancada.
+    //
+    // Até aqui o card era filtro de LINHAS: escolhia quais pedidos apareciam, e
+    // tudo o que a linha dizia continuava sendo do pedido inteiro. O exemplo
+    // acima saía como "Em acabamento", que é o oposto do que ele descreveu.
+    //
+    // As três bordas da regra, decididas na mesma conversa:
+    //
+    //  1. O envio à EXPEDIÇÃO continua sendo do pedido inteiro — um setor não se
+    //     despacha sozinho, e `pedidoProntoParaExpedicao` continua exigindo
+    //     todos. O recorte muda o que a linha DIZ, nunca o que o pedido É.
+    //  2. Modelo sem setor SOME do recorte. Não há pílula "(sem setor)" na lista,
+    //     e ele só volta a ser contado quando nenhum card está aceso.
+    //  3. As métricas da coluna lateral e o alerta de atraso continuam contando
+    //     a fila INTEIRA: elas medem trabalho a fazer, e trabalho a fazer não
+    //     muda porque o operador filtrou a vista.
+
+    /**
+     * `produtos_proposta.id` -> setor, para os produtos deste pedido.
+     *
+     * Refeito a cada desenho e jogado fora no fim dele (ver `render`): o cache
+     * da proposta é remendado pelo `repararSetoresDosItens` do `script.js`
+     * enquanto os produtos chegam, e um índice que sobrevivesse ao desenho
+     * guardaria o retrato de antes do remendo — que é justamente o retrato sem
+     * setor nenhum.
+     *
+     * As chaves levam prefixo porque duas numerações diferentes entram aqui: a
+     * de `produtos_proposta` (2347) e a de `pedidos_modelos` (1000633). Sem o
+     * prefixo elas dividiriam o mesmo espaço por acaso.
+     */
+    function indiceDeSetorDoPedido(os) {
+        if (!os) return {};
+        const chave = String(os.id);
+        if (tela.indiceDeSetor[chave]) return tela.indiceDeSetor[chave];
+
+        const mapa = {};
+        const s = estado();
+        ((s.osItens && s.osItens[os.id]) || []).forEach(i => {
+            const setor = normalizar(i && i.setor);
+            if (!setor) return;
+            if (i._vibe_produto_id !== undefined && i._vibe_produto_id !== null) {
+                mapa['p:' + i._vibe_produto_id] = setor;
+            }
+            if (i.id_produto_proposta_origem !== undefined && i.id_produto_proposta_origem !== null) {
+                mapa['p:' + i.id_produto_proposta_origem] = setor;
+            }
+            if (i._pedidoModeloId !== undefined && i._pedidoModeloId !== null) {
+                mapa['m:' + i._pedidoModeloId] = setor;
+            }
+            // O `id` do item CARREGADO DO BANCO é o `pedidos_modelos.id`, o
+            // mesmo que a lista enxuta usa. É por ele que o recorte funciona no
+            // pedido já aberto, cujos itens têm setor mas cuja tabela continua
+            // sendo desenhada com `modelosGlobais`. Nos itens do cache da
+            // proposta o `id` é "vibe_item_2347", que não casa com modelo nenhum
+            // — entra na chave e nunca é encontrado, sem estragar nada.
+            if (i.id !== undefined && i.id !== null) mapa['m:' + i.id] = setor;
+        });
+
+        tela.indiceDeSetor[chave] = mapa;
+        return mapa;
+    }
+
+    /**
+     * O setor de um modelo, normalizado, ou '' quando não dá para saber.
+     *
+     * Três camadas, e a ordem importa:
+     *
+     *  1. O `setor` da própria linha. Existe nos itens que o `script.js` já
+     *     resolveu — o pedido aberto, e o cache da proposta.
+     *  2. O PRODUTO DE ORIGEM, que é o caminho da lista: a tabela é desenhada
+     *     com `modelosGlobais`, e essa consulta não traz setor nenhum.
+     *  3. Nada — e aí o modelo fica fora de todo recorte, por decisão.
+     *
+     * A camada 2 é a que sustenta o recorte na lista, e vale saber por que ela
+     * não é o óbvio. `pedidos_modelos.setor` existe no banco e seria o caminho
+     * direto, mas estava preenchida em 105 das 355 linhas quando isto foi
+     * escrito: filtrar por ela esconderia 70 % dos modelos. Já o
+     * `id_produto_proposta_origem` estava em 355 das 355, e fecha a mesma cadeia
+     * que o detalhe do pedido sempre usou:
+     * `id_produto_proposta_origem` -> `produtos_proposta.id` -> `produtos.setor_pcp`.
+     *
+     * O último salto não custa consulta nenhuma: o `script.js` pré-carrega os
+     * produtos da proposta de TODOS os pedidos em `state.osItens`, com o setor
+     * já resolvido e o id da linha em `_vibe_produto_id`.
+     */
+    function setorDoModelo(m, os) {
+        if (!m) return '';
+
+        const direto = normalizar(m.setor);
+        if (direto) return direto;
+
+        const doMapa = tela.acabamento[String(m.id)];
+        const origem = (m.id_produto_proposta_origem !== undefined && m.id_produto_proposta_origem !== null)
+            ? m.id_produto_proposta_origem
+            : (doMapa ? doMapa.produtoOrigem : null);
+
+        const indice = indiceDeSetorDoPedido(os);
+        if (origem !== undefined && origem !== null && origem !== '') {
+            const achado = indice['p:' + origem];
+            if (achado) return achado;
+        }
+        return indice['m:' + m.id] || '';
+    }
+
+    /**
+     * Os modelos do pedido que o recorte de setor deixa passar.
+     *
+     * Sem card aceso é o pedido inteiro, e aí esta função é o `modelosDoPedido`
+     * de sempre. Com card aceso, o que sobra é o que a linha passa a contar:
+     * progresso, itens, quantidade, selo e ordenação.
+     */
+    function modelosDoRecorte(os) {
+        const modelos = modelosDoPedido(os);
+        if (!tela.setores.length) return modelos;
+        const alvos = new Set(tela.setores.map(normalizar));
+        return modelos.filter(m => alvos.has(setorDoModelo(m, os)));
+    }
+
+    /** "LASER", ou "LASER + TÊXTIL" — o recorte escrito, na ordem dos cards. */
+    function rotuloDoRecorte() {
+        if (!tela.setores.length) return '';
+        const alvos = new Set(tela.setores.map(normalizar));
+        return SETORES_DO_BANCO
+            .filter(s => alvos.has(s))
+            .map(s => (ROTULO_DO_SETOR[s] ? ROTULO_DO_SETOR[s].nome : s).toUpperCase())
+            .join(' + ');
+    }
+
     /**
      * O estágio de acabamento de um modelo.
      *
@@ -484,7 +621,14 @@
 
     function seloDoEstagio(estagioTexto) {
         const s = SELO[estagioTexto] || { icone: '❓', cls: '', texto: estagioTexto || '—' };
-        return `<span class="badge ${s.cls}">${s.icone} ${s.texto}</span>`;
+        // Com card de setor aceso este selo fala do SETOR, e não do pedido. Um
+        // "Pronto" lido como pedido pronto mandaria o operador despachar
+        // material que ainda está na bancada de outro setor.
+        const recorte = rotuloDoRecorte();
+        const titulo = recorte
+            ? ` title="Estágio do setor ${esc(recorte)} neste pedido. Os outros setores não entram nesta conta."`
+            : '';
+        return `<span class="badge ${s.cls}"${titulo}>${s.icone} ${s.texto}</span>`;
     }
 
     // ─── Prazo de entrega ───────────────────────────────────────────────────
@@ -549,7 +693,11 @@
     };
 
     function valorDeOrdenacao(os, campo) {
-        const modelos = modelosDoPedido(os);
+        // O RECORTE: ordenar por progresso com o card LASER aceso tem de ordenar
+        // pelo progresso do LASER, que é o número que a coluna está mostrando.
+        // Ordenar por um valor que a tela não exibe embaralha a lista aos olhos
+        // do operador.
+        const modelos = modelosDoRecorte(os);
         const total = modelos.length || 1;
         switch (campo) {
             case 'numero':     return parseInt(os.numero) || 0;
@@ -673,8 +821,6 @@
         const rotulo = fn('rotuloDoCliente');
 
         return ordens.filter(os => {
-            const modelos = modelosDoPedido(os);
-
             if (busca) {
                 const num = String(os.numero || '');
                 const cli = (rotulo ? rotulo(os) : (os.cliente || '')).toLowerCase();
@@ -684,25 +830,47 @@
                 if (!num.includes(busca) && !cli.includes(busca) && !evento.includes(busca)) return false;
             }
 
-            if (tela.setores.length) {
-                // SOMA: o pedido entra se tiver item em QUALQUER um dos setores
-                // escolhidos. Ver a mesma regra no `setFiltroSetor` do script.js.
-                const alvos = new Set(tela.setores.map(normalizar));
-                const bate = modelos.some(m => alvos.has(normalizar(m.setor)))
-                    || (s.osItens[os.id] || []).some(i => alvos.has(normalizar(i.setor)));
-                if (!bate) return false;
-            }
+            // O RECORTE, e não mais o pedido inteiro. Com card aceso, tudo o
+            // que vem abaixo passa a falar só dos modelos daquele setor — ver a
+            // seção "O recorte por setor".
+            //
+            // SOMA continua valendo: com dois cards acesos o recorte é a união
+            // dos dois. Ver a mesma regra no `setFiltroSetor` do script.js.
+            const doRecorte = modelosDoRecorte(os);
+            if (tela.setores.length && !doRecorte.length) return false;
 
+            // O estágio pergunta pelos modelos DO RECORTE, e não pelos do pedido.
+            //
+            // As duas cláusulas eram independentes, e isso era um defeito por
+            // conta própria, anterior ao recorte: a de setor perguntava "tem item
+            // em LASER?" e a de estágio, "tem ALGUM modelo Pronto?", sem exigir
+            // que fosse o mesmo modelo. Com LASER e Pronto acesos entrava na
+            // lista o pedido cujo LASER estava aguardando e cujo TÊXTIL estava
+            // pronto — uma afirmação que não era verdade em setor nenhum.
             if (tela.estagio) {
-                if (!modelos.some(m => (estagioDoModelo(m) || 'Aguardando') === tela.estagio)) return false;
+                if (!doRecorte.some(m => (estagioDoModelo(m) || 'Aguardando') === tela.estagio)) return false;
             }
 
             return true;
         });
     }
 
+    /**
+     * A barra, e embaixo dela o recorte por escrito quando ele existe.
+     *
+     * Sem isto a mesma linha diria "3/3 mod. · 100 %" com o card LASER aceso e
+     * "3/8 mod." sem ele, sem nada na tela explicando por que o número mudou —
+     * e o operador leria o pedido inteiro como pronto. O recorte tem de se
+     * anunciar onde ele age.
+     */
     function barraDeProgresso(prontos, total) {
         const pct = total > 0 ? Math.round((prontos / total) * 100) : 0;
+        const recorte = rotuloDoRecorte();
+        const selo = recorte
+            ? `<div style="font-size: 0.64rem; font-weight: 800; letter-spacing: 0.04em;
+                           color: #4cc8f0; margin-top: 3px; font-family: monospace;"
+                    title="Estes números são só do setor filtrado. Limpe os cards para ver o pedido inteiro.">◧ ${esc(recorte)}</div>`
+            : '';
         return `
             <div style="width: 100%; min-width: 110px;">
                 <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
@@ -712,12 +880,18 @@
                 <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
                     <div style="width: ${pct}%; height: 100%; background: #4589d7; border-radius: 3px; transition: width 0.3s ease;"></div>
                 </div>
+                ${selo}
             </div>`;
     }
 
     function render() {
         const tbody = document.getElementById('tbody-acabamento');
         if (!tbody) return;
+
+        // O índice de setor é deste desenho e de mais nenhum: entre um e outro o
+        // `script.js` remenda o cache da proposta, e um índice guardado ficaria
+        // repetindo o retrato de antes do remendo. Ver `indiceDeSetorDoPedido`.
+        tela.indiceDeSetor = {};
 
         const s = estado();
         const emProducao = pedidosEmProducao();
@@ -770,6 +944,16 @@
 
         if (!lista.length) {
             tbody.innerHTML = '';
+            // Lista vazia com card de setor aceso tem de dizer QUE card a
+            // esvaziou, e como sair dali. Modelo cujo produto não tem setor no
+            // PCP não cai em pílula nenhuma — e isso não é raro —, então o
+            // operador precisa saber que o botão "Todos os Setores" devolve o
+            // que sumiu, em vez de concluir que não há trabalho.
+            const recorte = rotuloDoRecorte();
+            escrever('empty-acabamento-texto', recorte
+                ? `Nenhum pedido com material em ${recorte} neste recorte. `
+                  + 'Clique em "Todos os Setores" para ver a fila inteira.'
+                : 'Nenhum pedido em produção encontrado para o acabamento.');
             if (vazio) vazio.style.display = 'block';
             if (tabela) tabela.style.display = 'none';
             return;
@@ -783,7 +967,9 @@
         const previewArte = fn('previewDaArteDoPedidoHtml');
 
         tbody.innerHTML = lista.map(os => {
-            const modelos = modelosDoPedido(os);
+            // Daqui para baixo a linha fala do RECORTE. Sem card de setor aceso
+            // ele é o pedido inteiro, e nada muda.
+            const modelos = modelosDoRecorte(os);
             const total = modelos.length || 1;
             const prontosDoPedido = modelos.filter(m => estagioDoModelo(m) === 'Pronto').length;
             const qtdTotal = modelos.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
@@ -1085,7 +1271,7 @@
                 const fatia = numeros.slice(i, i + 200);
                 const { data, error } = await supabaseClient
                     .from('pedidos_modelos')
-                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em')
+                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em, id_produto_proposta_origem')
                     .in('id_int', fatia);
                 if (error) throw error;
                 (data || []).forEach(m => {
@@ -1094,6 +1280,14 @@
                         responsavel: m.acabamento_responsavel || '',
                         foto: m.acabamento_foto_url || '',
                         prontoEm: m.acabamento_pronto_em || '',
+                        // O produto que originou o modelo. É por ele que o
+                        // recorte por setor descobre a que setor o modelo
+                        // pertence — ver `setorDoModelo`. Vem de carona nesta
+                        // consulta, que já percorre os mesmos pedidos: uma coluna
+                        // a mais, nenhuma requisição a mais.
+                        produtoOrigem: (m.id_produto_proposta_origem === undefined
+                            || m.id_produto_proposta_origem === null)
+                            ? null : m.id_produto_proposta_origem,
                     };
                 });
             }
@@ -6263,6 +6457,10 @@
             ehDeProducao,
             ehExpedido,
             setoresDoPedido,
+            // O recorte por setor (27/08/2026)
+            setorDoModelo,
+            modelosDoRecorte,
+            rotuloDoRecorte,
             pesoDoTexto,
             pesoParaTexto,
             pelaEstacao,

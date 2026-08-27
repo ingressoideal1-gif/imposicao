@@ -988,6 +988,195 @@ function ambienteComPedidoAberto() {
        'e entra quando o Laser soma, lido do item do pedido aberto');
 })();
 
+// ─── O RECORTE POR SETOR (27/08/2026) ────────────────────────────────
+//
+// Regra do usuario: *"ao selecionar o filtro por setor, deve levar em
+// consideracao apenas o setor selecionado"*. O card deixou de ser filtro de
+// LINHAS e virou RECORTE: o que a linha diz passa a ser o do setor aceso.
+//
+// O exemplo que ele deu e o primeiro teste daqui, ao pe da letra.
+
+/** Um pedido com LASER pronto e TEXTIL ainda aguardando. */
+function pedidoDeDoisSetores() {
+    return ambienteComPedidos([pedido(701)], {
+        701: [
+            { id: 71, setor: 'LASER',  quantidade: 100, acabamento_status: 'Pronto' },
+            { id: 72, setor: 'TEXTIL', quantidade: 400 },
+        ],
+    });
+}
+
+(function oCardDeSetorRecortaOSeloDoPedido() {
+    const amb = pedidoDeDoisSetores();
+    const html = () => { amb.painel.render(); return amb.elementos['tbody-acabamento'].innerHTML; };
+
+    // Sem card aceso, o selo continua sendo o do PEDIDO INTEIRO.
+    ok(html().indexOf('Em acabamento') !== -1,
+       'sem recorte o selo fala do pedido: um setor pronto e outro nao');
+
+    // O exemplo do usuario: card LASER aceso, LASER pronto -> PRONTO.
+    amb.painel.setFiltroSetor('LASER');
+    const comLaser = html();
+    ok(comLaser.indexOf('Pronto') !== -1 && comLaser.indexOf('Em acabamento') === -1,
+       'com o card LASER aceso o selo e PRONTO, mesmo com o TEXTIL na bancada',
+       comLaser.slice(0, 400));
+    ok(comLaser.indexOf('1/1 mod.') !== -1, 'e o progresso e o do LASER: 1/1');
+    ok(comLaser.indexOf('100%') !== -1, 'ou seja, 100 %');
+    ok(comLaser.indexOf('>100<') !== -1,
+       'a quantidade tambem e so a do LASER', comLaser.slice(0, 600));
+    ok(comLaser.indexOf('1 modelo<') !== -1, 'e a contagem de itens tambem');
+
+    // O outro card, no mesmo pedido, diz a verdade oposta.
+    amb.painel.setFiltroSetor('LASER');   // apaga o LASER
+    amb.painel.setFiltroSetor('TEXTIL');
+    const comTextil = html();
+    ok(comTextil.indexOf('Aguardando') !== -1, 'com o card TEXTIL o selo e o do TEXTIL');
+    ok(comTextil.indexOf('0/1 mod.') !== -1, 'e o progresso, 0/1');
+
+    // Os cards SOMAM, e a soma volta a ser o pedido inteiro.
+    amb.painel.setFiltroSetor('LASER');
+    const comOsDois = html();
+    ok(comOsDois.indexOf('Em acabamento') !== -1,
+       'com os dois acesos o recorte e a uniao, e o selo volta a "Em acabamento"');
+    ok(comOsDois.indexOf('1/2 mod.') !== -1, 'com o progresso dos dois somados');
+})();
+
+(function oRecorteSeAnunciaNaTela() {
+    // Sem isto a mesma linha diz "1/1 mod." e "Pronto" sem nada explicando que
+    // aquilo e so um setor -- e o operador leria o pedido inteiro como pronto.
+    const amb = pedidoDeDoisSetores();
+    amb.painel.render();
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('◧') === -1,
+       'sem recorte a linha nao ganha marca nenhuma');
+
+    amb.painel.setFiltroSetor('LASER');
+    amb.painel.render();
+    const html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.indexOf('◧ LASER') !== -1,
+       'com recorte, a linha diz de que setor ela fala', html.slice(0, 500));
+    ok(html.indexOf('Estágio do setor LASER') !== -1,
+       'e o selo explica o mesmo no title, que e onde o operador confere');
+
+    amb.painel.setFiltroSetor('TEXTIL');
+    amb.painel.render();
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('◧ TÊXTIL + LASER') !== -1,
+       'com dois cards, os dois nomes aparecem na ordem dos cards');
+})();
+
+(function aConsultaDoEstagioPedeOProdutoDeOrigem() {
+    // Teste de FONTE, e nao de comportamento, de proposito.
+    //
+    // O `select` de mentira deste harness ignora a lista de colunas e devolve a
+    // linha inteira, entao a coluna pode sumir da consulta sem nenhum teste de
+    // comportamento piscar. Quem perceberia seria a grafica, e do pior jeito: o
+    // recorte por setor cegaria na lista, e os quatro cards ficariam vazios.
+    ok(/\.select\('id, id_int, acabamento_status[^']*id_produto_proposta_origem'/.test(FONTE),
+       'a consulta do estagio continua pedindo o id_produto_proposta_origem');
+
+    // E ela continua sendo UMA consulta: a coluna pega carona, e nao abre uma
+    // segunda ida ao banco por pedido.
+    const consultas = (FONTE.match(/from\('pedidos_modelos'\)\s*\.select\(/g) || []);
+    ok(consultas.length === 1,
+       'e ela e a unica leitura de pedidos_modelos da tela', String(consultas.length));
+})();
+
+(function oEstagioPerguntaPelosModelosDoRecorte() {
+    // Este defeito e ANTERIOR ao recorte, e vivia de as duas clausulas serem
+    // independentes: a de setor perguntava "tem item em LASER?" e a de estagio,
+    // "tem ALGUM modelo Pronto?", sem exigir que fosse o mesmo modelo.
+    const amb = ambienteComPedidos([pedido(702)], {
+        702: [
+            { id: 81, setor: 'LASER',  quantidade: 10 },                             // aguardando
+            { id: 82, setor: 'TEXTIL', quantidade: 20, acabamento_status: 'Pronto' },
+        ],
+    });
+    const html = () => { amb.painel.render(); return amb.elementos['tbody-acabamento'].innerHTML; };
+
+    amb.painel.setFiltroSetor('LASER');
+    amb.painel.setFiltroStatus('Pronto');
+    ok(html().indexOf('>702<') === -1,
+       'LASER + Pronto NAO lista o pedido cujo pronto e do TEXTIL');
+
+    amb.painel.setFiltroStatus('Aguardando');
+    ok(html().indexOf('>702<') !== -1, 'e LASER + Aguardando lista, porque o LASER aguarda');
+})();
+
+(function modeloSemSetorSomeDoRecorte() {
+    // Decisao do usuario em 27/08/2026, perguntado de frente: modelo sem setor
+    // NAO ganha pilula propria e nao entra em recorte nenhum. Ele so volta a ser
+    // contado quando nenhum card esta aceso.
+    //
+    // Nao e caso de laboratorio: 43 dos 68 produtos do catalogo do parceiro nao
+    // tem `setor_pcp`, porque sao itens de estoque e revenda.
+    const amb = ambienteComPedidos([pedido(703)], {
+        703: [
+            { id: 91, setor: 'LASER', quantidade: 10, acabamento_status: 'Pronto' },
+            { id: 92, quantidade: 999 },                       // sem setor nenhum
+        ],
+    });
+    const html = () => { amb.painel.render(); return amb.elementos['tbody-acabamento'].innerHTML; };
+
+    ok(html().indexOf('1.009') !== -1,
+       'sem recorte, o modelo sem setor conta na quantidade do pedido', html().slice(0, 600));
+
+    amb.painel.setFiltroSetor('LASER');
+    const comLaser = html();
+    ok(comLaser.indexOf('1/1 mod.') !== -1, 'com o card LASER, o sem-setor sai da conta');
+    ok(comLaser.indexOf('>10<') !== -1, 'e da quantidade tambem');
+
+    // E um pedido SO de material sem setor nao aparece em recorte nenhum.
+    const so = ambienteComPedidos([pedido(704)], { 704: [{ id: 93, quantidade: 5 }] });
+    so.painel.setFiltroSetor('LASER');
+    so.painel.render();
+    ok(so.elementos['tbody-acabamento'].innerHTML.indexOf('>704<') === -1,
+       'pedido so de material sem setor fica fora do recorte');
+    ok(so.elementos['empty-acabamento-texto'].textContent.indexOf('Todos os Setores') !== -1,
+       'e a tela vazia diz como sair dali, em vez de parecer que nao ha trabalho',
+       so.elementos['empty-acabamento-texto'].textContent);
+})();
+
+(function oRecorteNaoMexeNaExpedicaoNemNasMetricas() {
+    // As duas outras bordas da regra, decididas na mesma conversa:
+    //
+    //  1. o envio a EXPEDICAO continua sendo do pedido inteiro -- um setor nao se
+    //     despacha sozinho;
+    //  2. as metricas da coluna lateral e o alerta de atraso continuam contando a
+    //     fila INTEIRA: elas medem trabalho a fazer, e trabalho a fazer nao muda
+    //     porque o operador filtrou a vista.
+    const amb = pedidoDeDoisSetores();
+    amb.painel.render();
+    const prontosSemRecorte = String(amb.elementos['stat-acab-modelos-prontos'].textContent);
+    const filaSemRecorte = String(amb.elementos['stat-acab-pedidos-fila'].textContent);
+    const concluidosSemRecorte = String(amb.elementos['stat-acab-pedidos-concluidos'].textContent);
+
+    amb.painel.setFiltroSetor('LASER');
+    amb.painel.render();
+    ok(String(amb.elementos['stat-acab-modelos-prontos'].textContent) === prontosSemRecorte,
+       'a contagem de modelos prontos ignora o recorte');
+    ok(String(amb.elementos['stat-acab-pedidos-fila'].textContent) === filaSemRecorte,
+       'a de pedidos em fila tambem');
+    ok(String(amb.elementos['stat-acab-pedidos-concluidos'].textContent) === concluidosSemRecorte,
+       'e a de pedidos concluidos, que continua exigindo o pedido inteiro pronto');
+    ok(concluidosSemRecorte === '0',
+       'com um setor pendente o pedido NAO conta como concluido, recorte ou nao',
+       concluidosSemRecorte);
+
+    // A expedicao continua sendo do pedido inteiro, com o card aceso ou sem ele.
+    const itens = [
+        { id: 71, setor: 'LASER',  acabamento_status: 'Pronto' },
+        { id: 72, setor: 'TEXTIL' },
+    ];
+    ok(amb.painel._regras.pedidoProntoParaExpedicao(itens) === false,
+       'com o LASER pronto e o TEXTIL nao, o pedido NAO esta pronto para expedir');
+    ok(amb.painel._regras.setoresPendentes(itens).length === 1,
+       'e o TEXTIL continua constando como pendente');
+
+    // E o pedido nao sai da lista de trabalho so porque o recorte diz "Pronto".
+    amb.painel.setFiltroPrazo('expedicao');
+    ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>701<') === -1,
+       'o recorte pronto NAO manda o pedido para a lista de expedidos');
+})();
+
 // ─── 8. O peso por setor ────────────────────────────────────────────────────
 //
 // Pedido do usuario em 21/08/2026: um box acima dos modelos, com os setores dos
@@ -3967,6 +4156,68 @@ async function oEstagioDoExpedidoVemDoBancoComoODosOutros() {
     ok(naExpedicao.indexOf('NA EXPEDIÇÃO') !== -1, 'com a marca de que ja saiu do setor');
 }
 
+// ── O recorte descobre o setor pelo PRODUTO DE ORIGEM ──────────────────────
+//
+// Este e o caminho de verdade, e o unico que a grafica exercita: a tabela e
+// desenhada com `modelosGlobais`, e essa consulta NAO traz setor nenhum. Os
+// testes acima poem `setor` na linha enxuta, que e generoso demais com o
+// codigo -- em producao aquela chave nao existe.
+//
+// A cadeia real e `pedidos_modelos.id_produto_proposta_origem` ->
+// `produtos_proposta.id` -> `produtos.setor_pcp`, e o ultimo salto ja esta em
+// memoria: o `script.js` pre-carrega os produtos da proposta de TODOS os
+// pedidos em `state.osItens`, com o setor resolvido.
+//
+// `pedidos_modelos.setor` existe no banco e seria o caminho obvio, mas estava
+// preenchida em 105 das 355 linhas quando isto foi escrito. O
+// `id_produto_proposta_origem` estava em 355 das 355.
+async function oRecorteDescobreOSetorPeloProdutoDeOrigem() {
+    const amb = ambienteComPedidos([pedido(705)], {
+        // A lista ENXUTA, do jeito que o `script.js` a monta: sem setor.
+        705: [{ id: 1001, quantidade: 100, status_impressao: 'Impresso' },
+              { id: 1002, quantidade: 400, status_impressao: 'Impresso' }],
+    });
+
+    // O cache da proposta, que o `script.js` pre-carrega para todo pedido.
+    amb.janela.state.osItens['os-705'] = [
+        { id: 'vibe_item_31', _vibe_produto_id: 31, setor: 'LASER',  quantidade: 100 },
+        { id: 'vibe_item_32', _vibe_produto_id: 32, setor: 'TEXTIL', quantidade: 400 },
+    ];
+
+    // E o banco, que amarra um ao outro.
+    amb.banco._modelosDoBanco = [
+        { id: 1001, id_int: 705, acabamento_status: 'Pronto', id_produto_proposta_origem: 31 },
+        { id: 1002, id_int: 705, acabamento_status: '',       id_produto_proposta_origem: 32 },
+    ];
+
+    amb.painel.aoAbrir();
+    await new Promise(r => setTimeout(r, 0));
+
+    const html = () => { amb.painel.render(); return amb.elementos['tbody-acabamento'].innerHTML; };
+
+    ok(html().indexOf('Em acabamento') !== -1,
+       'sem recorte, o pedido inteiro esta em acabamento');
+
+    amb.painel.setFiltroSetor('LASER');
+    const comLaser = html();
+    ok(comLaser.indexOf('>705<') !== -1,
+       'o pedido entra no recorte de LASER mesmo sem setor na linha enxuta',
+       comLaser.slice(0, 300));
+    ok(comLaser.indexOf('1/1 mod.') !== -1,
+       'e a linha conta so o modelo do LASER', comLaser.slice(0, 600));
+    ok(comLaser.indexOf('Em acabamento') === -1 && comLaser.indexOf('Pronto') !== -1,
+       'com o selo do LASER, que esta pronto');
+
+    amb.painel.setFiltroSetor('LASER');    // apaga
+    amb.painel.setFiltroSetor('PVC');
+    ok(html().indexOf('>705<') === -1,
+       'e fica fora do PVC, onde ele nao tem material nenhum');
+
+    // A coluna tem de continuar sendo pedida: sem ela, o recorte da lista cega.
+    ok(amb.banco._perguntados.some(q => q.tabela === 'pedidos_modelos'),
+       'a consulta do estagio e a mesma que traz o produto de origem');
+}
+
 // ── E o pedido que chega DEPOIS do mapa tambem ganha estagio ───────────────
 //
 // A primeira abertura da tela: quando o mapa e montado, `state.ordens` ainda
@@ -4054,6 +4305,7 @@ async function semAColunaNoBancoNaoFicaPerguntandoParaSempre() {
     await mandarParaExpedicaoNaoFazOPedidoSumir();
     await asContasDoRecorteDaListaSaoPuras();
     await oEstagioDoExpedidoVemDoBancoComoODosOutros();
+    await oRecorteDescobreOSetorPeloProdutoDeOrigem();
     await oPedidoQueChegaDepoisGanhaEstagio();
     await semAColunaNoBancoNaoFicaPerguntandoParaSempre();
     await asInformacoesDoModeloSaemEmTabela();
