@@ -4,6 +4,190 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-26] — O dia em que o painel parou de travar: oito publicações e o que cada relato escondia
+
+Um dia inteiro de relatos do usuário, cada um apontando para um lugar diferente do
+que parecia. Vale ler junto, porque três das correções nasceram do preço da anterior.
+
+### 1. "APLICAÇÃO TRAVOU" — não era a aplicação (v727)
+
+O banco do projeto Supabase do parceiro ficou fora do ar das **15:46 às 15:54**. A
+internet estava perfeita (Google em 206 ms), as Edge Functions do próprio projeto
+respondiam em 110 ms, e o agente local servia o painel em 47 ms. Só `/rest/v1/` e
+`/auth/v1/` estouravam, com **código 522** — o gateway dizendo que a origem não
+atendeu.
+
+Na tela não apareceu erro nenhum: apareceu uma tela **parada**. As 71 chamadas ao
+banco do painel não tinham tempo limite, e promessa que nunca se resolve não cai no
+`catch` de ninguém.
+
+`frontend/banco-nao-responde.js` conta o tempo de cada chamada e, passados 15
+segundos, põe uma barra no alto da tela com um botão de recarregar; quando o banco
+volta, ela se anuncia e sai sozinha. **Nenhuma chamada é cancelada** — uma gravação
+abortada aos 15 s pode já ter chegado ao banco, e o operador refazendo deixaria o
+registro duplicado. Tela congelada é um problema; pedido gravado duas vezes é outro,
+bem maior.
+
+### 2. O catálogo baixava 29 MB para listar 105 nomes (v728)
+
+| | dados | rede |
+|---|---|---|
+| `select('*')` | **29,17 MB** | 1.772 ms |
+| a lista enxuta | 0,19 MB | 273 ms |
+
+A diferença inteira é **uma coluna**: `csv_data` pesa 30,1 MB dos 30,3 MB da tabela.
+Abrir o painel baixava isso antes de qualquer tela e deixava **187.021 linhas de CSV**
+vivas na memória da aba. O sintoma que o usuário via era outro — um INP de 208 ms num
+clique qualquer. Quem paga a conta da memória é sempre o próximo clique.
+
+O perigo da correção, e as três peças contra ele: quase todo leitor pergunta
+`if (!num.csv_data)` e conclui *"não tem banco"* — e uma numeração **com** banco não
+baixado responde igual a uma **sem**, fazendo o motor cair na numeração sequencial.
+Por isso a lista **não traz** a coluna (deixando `undefined`, distinguível do `null`
+de "procurei e não tem"), `numeracaoTemBanco()` responde sem as linhas, e
+`garantirCsvDoTrabalho()` abre as **duas** telas de imposição.
+
+### 3. O pedido grande esperava 2 segundos para abrir (v729)
+
+No 21202 — 52 modelos, 17 numerações, 115.846 linhas — o `recarregarNumeracoesDoPedido`
+baixava **22,01 MB em 2.015 ms** antes de a tela aparecer. Era o caminho que a correção
+anterior deixara de fora "porque são poucas numerações".
+
+A tela de Amostras passa a abrir enxuta (**0,03 MB, 72 ms**) e os bancos chegam depois,
+um a um, com o card se redesenhando a cada chegada — o mesmo desenho que a cobertura
+de glifos já usava ali dentro. Quem precisa das linhas na hora (Conferência de dados,
+as duas telas de imposição) continua pedindo tudo.
+
+As duas armadilhas do meio do caminho: o card diria **"SEM nenhuma linha"** em
+vermelho enquanto o banco desce (agora diz `carregando…`), e o aviso de repetidas
+sairia com a conta pela metade (agora fica calado até os bancos chegarem).
+
+### 4. "O modelo 1 vira B" — o botão certo no lugar errado (v730 e v732)
+
+Dois modelos na mesma numeração: marcar linhas no **Ver / editar** de um desmarcava no
+outro. Está correto — a marca de imprimir mora **dentro da linha** (`__ativo`), e a
+linha pertence à numeração, não ao modelo. O defeito era a tela não dizer isso.
+
+Decisão do usuário: **"vamos deixar o Ver/editar apenas na edição da numeração"**. Ele
+saiu do card do modelo e do modal da amostra; editar o banco tem uma porta só, a box
+"Banco de Dados (CSV)" do editor da numeração. Dentro do pedido ficou só o que é **do
+modelo**: a fatia.
+
+Como consequência, quatro modelos ficaram com uma **fatia órfã** — `csv_selecao`
+apontando para `__id` de um banco que já não usavam, e a tela dizia *"o banco não fecha
+com a quantidade"* mandando corrigir um banco que estava perfeito.
+`distribuicaoOrfaDoModelo` reconhece os dois casos legítimos e oferece o botão que
+remove. Fatia vazia num banco que **dois** modelos dividem não entra: aquilo é o estado
+legítimo de "ficou de fora da divisão".
+
+### 5. O PDF Prova saía com 36 páginas para 52 modelos (v731)
+
+Ele fotografa a **tela**, não os dados: copia o canvas de cada card e pula, em silêncio,
+o que ainda não desenhou. Os 52 modelos estavam certos no banco — os 16 que faltaram é
+que não tinham terminado de desenhar.
+
+Agora ele termina de baixar os bancos, força o desenho de todos os cards, espera cada
+canvas aparecer (teto de 60 s) e, se ainda faltar alguém, **diz quais pelo nome** e só
+gera com o "Gerar sem eles". Um PDF de prova incompleto parece completo para quem
+recebe.
+
+### 6. Quais colunas contam na conferência de repetições (v732)
+
+Pedido do usuário: *"ao clicar em Linhas as colunas que são verificadas na conferência
+de dados devem vir marcadas (checkbox); ao desmarcar devem ignorar a conferência de
+repetições"*.
+
+A numeração do CAMAROTE CORPORATIVO lê `Codigo` (único por ingresso) e `Camarote` (1 a
+140, repete por natureza). A conferência somava as duas e acusava **3.640 repetições
+sem nenhum código repetido** — número inflado por construção ensina o operador a
+ignorar o aviso.
+
+Nascem todas marcadas; a marca de **fora** é que é explícita, e mora nos elementos
+(`sem_conferencia`), não numa coluna nova da tabela do parceiro. A separação que torna
+isso seguro tem teste próprio: `colunasDoBancoDaNumeracao` decide quais linhas
+**imprimem**, `colunasConferidasDaNumeracao` decide quais **contam na busca por
+repetido**.
+
+### 7. Cards desenham ao aparecer — e a regressão que isso causou (v732 e v734)
+
+Abrir um pedido disparava um laço que desenhava **todos** os cards, em série, com 20 ms
+de pausa entre um e outro. Nos 52 modelos: 52 desenhos completos enquanto o operador
+olha para os dois primeiros. Agora cada card desenha quando entra no campo de visão.
+
+**Duas armadilhas, e a segunda chegou a ir ao ar:**
+
+A primeira foi evitada: observar o canvas do card não funciona, porque ele nasce
+`display:none` e o `IntersectionObserver` **nunca dispara para elemento escondido** — o
+pedido ficaria em branco para sempre, sem erro no console. A âncora é o cabeçalho do
+modelo. Por isso o arnês roda num Chrome de verdade; um dublê diria que está tudo certo.
+
+A segunda passou: a conta de "já desenhei" valia **por pedido**, e cada renderização
+reescreve o `container.innerHTML`, destruindo os canvases. A segunda renderização
+recusava desenhar sobre um DOM recém-nascido — e quem redesenha logo depois da abertura
+é justamente a chegada dos bancos da correção 3. **Os cards desenhavam e sumiam.** A
+conta passou a valer por renderização.
+
+O teste que acompanhava a versão com defeito afirmava exatamente o comportamento
+errado — *"redesenhar o mesmo pedido não refaz o trabalho todo"* — e por isso não pegou
+nada: era um teste da suposição de quem escreveu, e não do que o operador vê na tela.
+
+### 8. A Vercel mandava cachear e não cacheava (v732)
+
+`script.js?v=731` chegava com `no-cache, no-store`, apesar de o `vercel.json` pedir
+`max-age=3600`: a regra genérica `/(.*)` vinha **depois** e sobrescrevia — quando duas
+casam, a de baixo manda. Eram **1,9 MB baixados de novo a cada abertura e a cada F5**.
+
+Desperdício puro, porque o cache já é resolvido pelo `?v=NNN` que o `publicar.ps1`
+bumpa. Cinco referências estavam **sem** o carimbo (`supabase-config.js` em três
+páginas, `pdf-lib.min.js` em duas) e ficariam presas uma hora depois de publicar —
+carimbadas, com teste varrendo as páginas.
+
+O `no-store` continua para o HTML: é ele que impede a estação de servir painel velho.
+
+**A participação da Vercel na velocidade do painel é entregar os arquivos, e só.** Os
+redesenhos rodam no navegador, os dados vêm do Supabase, e na estação ela nem está no
+caminho — lá o agente serve do disco: **32 ms contra 972 ms da nuvem**.
+
+### 9. "Aplicar" dizia que nada mudou, e tinha mudado (v733)
+
+Quem só desmarcava uma coluna e clicava em Aplicar lia *"nada foi mudado"* logo depois
+de a escolha ser gravada — a frase que faz o operador concluir que o checkbox não
+pegou. Agora ela diz o que aconteceu.
+
+### O dado: o pedido 21202 reorganizado
+
+Não foi só código. O pedido de 52 modelos tinha **11 bancos divididos entre vários
+modelos, nenhum com distribuição** — o mesmo código sairia em até cinco modelos de dias
+diferentes. Pior: as únicas 3.500 linhas ativas do CAMAROTE CORPORATIVO eram todas de
+**12/09**, e quem apontava para ele eram os modelos de 05, 06 e 11/set.
+
+Por decisão do usuário — **uma numeração por dia** —, foram criadas 44 numerações novas
+(`CAMAROTE VIP 05`, `FRONT STAGE 06`, …), cada uma com as linhas do seu dia, e os
+modelos reapontados. Dois modelos apontavam para o banco errado e foram corrigidos.
+
+| | antes | depois |
+|---|---|---|
+| numerações distintas para 52 modelos | 17 | **52** |
+| bancos divididos entre 2+ modelos | 11 | **0** |
+| modelos sem banco (imprimiriam sequencial) | 1 | **0** |
+| modelos com linhas ≠ Qtd | 1 | **0** |
+| modelos com aviso de células repetidas | 46 | **0** |
+
+**Ressalva registrada:** a arte de fundo não pôde ser copiada para arquivos próprios —
+o Storage recusa a chave anônima, porque o painel faz esse upload com a sessão do
+operador. As cópias apontam para o arquivo do original, o que é seguro (o
+`deleteNumeracao` só apaga a linha, nunca o arquivo), **mas as numerações originais não
+devem ser apagadas** enquanto as cópias existirem.
+
+### O que ficou no caderno
+
+1. Levar a separação por dia para dentro do painel, onde o upload da arte de fundo tem
+   permissão — aí cada cópia ganha arquivo próprio e a ressalva acima deixa de existir.
+2. `test_controle_tela` e o harness da escolha de volume falham de vez em quando sob a
+   carga da suíte inteira e passam sozinhos: instabilidade do teste, não do código.
+
+---
+
 ## [2026-08-26] — O catálogo de numerações para de baixar 29 MB para listar 105 nomes
 
 Pergunta do usuário, depois de a tela travar de novo: *"onde esta o gargalo? o que precisa

@@ -4,7 +4,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v720** — 2026-08-25 | Agente **1.2.215**
+## Versão atual: **v734** — 2026-08-26 | Agente **1.2.229**
 
 > [!IMPORTANT]
 > **O registro detalhado vive em `docs/CHANGELOG.md`.** Este arquivo tem as
