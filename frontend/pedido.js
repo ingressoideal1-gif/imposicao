@@ -4681,7 +4681,15 @@ window.runPedImposition = async function (mode, isRefazer) {
         // e por isso nao evita o acumulo -- acrescenta mais um. Esta corta no
         // motor, antes, e cada lote ja sai entregue. Ver `_folhas_por_lote` no
         // engine.py.
-        entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true,
+        //
+        // A IMPRESSÃO REVERSA DESLIGA O CORTE. Ela inverte as páginas DENTRO de
+        // cada arquivo que chega à tela; com o trabalho inteiro num arquivo só
+        // isso é a inversão do trabalho, mas cortado em lotes viraria "lote 1
+        // invertido, depois lote 2 invertido" — a tiragem sairia na ordem
+        // errada, e só o papel contaria a história. Enquanto a reversa estiver
+        // marcada, o motor devolve o arquivo único de sempre.
+        entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true
+            && !(mode === 'print' && document.getElementById('ped-print-reverse')?.checked === true),
 
         // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden ou fallback do item ativo)
         c_ini: (state.activeOSItem ? parseInt(state.activeOSItem.c_ini) : null) || parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
@@ -5026,14 +5034,29 @@ window.runPedImposition = async function (mode, isRefazer) {
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
             let currentEvent = null;
-            // Acumular blobs no modo print para envio sequencial à impressora
+            // ENTREGAR AGORA, NÃO NO FIM (27/08/2026)
+            //
+            // Esta fila existia para juntar TODOS os arquivos do streaming e
+            // só mandar para a impressora depois que o motor terminasse. Com a
+            // entrega por bloco isso anulava o recurso: o motor soltava o
+            // primeiro lote em 4 s e a impressora não via nada até a última das
+            // 1.400 folhas ficar pronta.
+            //
+            // Agora cada lote é entregue assim que chega, dentro deste mesmo
+            // laço. A `printBlobQueue` continua aqui como rede: se o
+            // `criarEntregaDeImpressao` do script.js não estiver disponível, o
+            // comportamento antigo volta inteiro em vez de o trabalho se
+            // perder.
             const printBlobQueue = [];
+            let entrega = null;
+            let cancelouNoMeio = false;
             // Quantos arquivos o motor chegou a emitir. Zero é o sintoma de uma
             // faixa de refazer que não casou com folha nenhuma; sem esta conta a
             // tela terminava dizendo "concluído e arquivos salvos" sem arquivo.
             let arquivosRecebidos = 0;
 
             while (true) {
+                if (cancelouNoMeio || window._printCancelRequested) break;
                 const { value, done } = await reader.read();
                 if (done) break;
                 buffer += decoder.decode(value, { stream: true });
@@ -5042,6 +5065,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 buffer = lines.pop();
 
                 for (const line of lines) {
+                    if (cancelouNoMeio) break;
                     const cleanLine = line.trim();
                     if (!cleanLine) continue;
 
@@ -5089,8 +5113,23 @@ window.runPedImposition = async function (mode, isRefazer) {
                                 };
 
                                 if (mode === 'print') {
-                                    printBlobQueue.push({ name: fileObj.name, blob: fBlob });
-                                    toast(`Arquivo gerado: ${fileObj.name}`, 'info');
+                                    if (!entrega && typeof criarEntregaDeImpressao === 'function') {
+                                        // A validação de destino (impressora ou
+                                        // hot folder) acontece aqui, no primeiro
+                                        // lote — antes esperava o trabalho
+                                        // inteiro para só então reclamar.
+                                        entrega = criarEntregaDeImpressao();
+                                        if (!entrega) {
+                                            throw new Error('Escolha a impressora ou a pasta do HOT FOLDER antes de imprimir.');
+                                        }
+                                    }
+                                    if (entrega) {
+                                        await entrega.entregar([{ name: fileObj.name, blob: fBlob }]);
+                                        if (entrega.cancelado) { cancelouNoMeio = true; break; }
+                                    } else {
+                                        printBlobQueue.push({ name: fileObj.name, blob: fBlob });
+                                        toast(`Arquivo gerado: ${fileObj.name}`, 'info');
+                                    }
                                 } else if (directoryHandle) {
                                     try {
                                         toast(`Salvando: ${fileObj.name}...`, 'info');
@@ -5123,6 +5162,19 @@ window.runPedImposition = async function (mode, isRefazer) {
                 throw new Error(isRefazer
                     ? 'O motor não gerou nenhuma folha para esta seleção. Confira a faixa em "De/Até" e as células pedidas.'
                     : 'O motor terminou sem gerar nenhum arquivo.');
+            }
+
+            // Os lotes já foram entregues um a um laço acima; o que falta aqui é
+            // fechar a entrega (relatório, conferência do hot folder, botões de
+            // volta) e só então perguntar sobre o status de impresso.
+            if (mode === 'print' && entrega) {
+                if (overlay) overlay.classList.remove('active');
+                // Refazer é reimpressão de uma parte: o modelo já estava impresso
+                // (ou continua não estando). Ver a nota do bloco abaixo.
+                const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
+                const ok = entrega.finalizar({ interrompido: cancelouNoMeio });
+                if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
+                return;
             }
 
             if (mode === 'print' && printBlobQueue.length > 0) {
@@ -5319,6 +5371,10 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     } finally {
         window.isImposing = false;
+        // A entrega por lote acende `isPrinting` durante a geração, e não só no
+        // envio do fim. Um erro no meio deixaria a tela achando que ainda está
+        // imprimindo.
+        window.isPrinting = false;
         if (progressInterval) clearInterval(progressInterval);
 
         if (pBar) pBar.style.width = '100%';

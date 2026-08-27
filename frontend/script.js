@@ -38152,19 +38152,41 @@ async function processPrintQueueOptions(queue, options) {
     return newQueue;
 }
 
-// Envia os blobs gerados diretamente para a impressora configurada no painel lateral
-// sem abrir o modal (modo "print sem modal")
-async function sendPrintJobDirect(queue) {
+// ═══════════════════════════════════════════════════════════════════════
+// ENTREGAR CADA LOTE ENQUANTO O MOTOR AINDA GERA (27/08/2026)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// A tela juntava TODOS os arquivos que o streaming trazia num array e só
+// chamava o envio depois que o motor terminava. Com a entrega por bloco isso
+// anulava o recurso inteiro: no modelo de 14.000 células do pedido 21202 o
+// motor entregava o primeiro lote em 4 s, e a impressora não recebia nada até
+// a última das 1.400 folhas ficar pronta.
+//
+// A entrega virou um objeto de vida longa porque há estado que atravessa os
+// lotes e que se perderia se cada um fosse um envio independente:
+//
+//  - a ORDEM do spool (`nomeParaSpool`) tem de continuar subindo de lote em
+//    lote. Reiniciando em 00001 a cada lote, o watcher do hot folder — que lê
+//    a pasta em ordem alfabética — embaralharia a tiragem.
+//  - a pasta do lote no Storage (`loteId`), que o relay usa para achar os
+//    arquivos de um mesmo trabalho.
+//  - as contas do relatório final e os caminhos que o hot folder confere
+//    depois.
+//
+// `sendPrintJobDirect` continua com a mesma assinatura, agora escrito em cima
+// disto — os caminhos que já têm a fila inteira na mão (o fallback sem
+// streaming, o modal) não mudaram de comportamento.
+function criarEntregaDeImpressao({ total = null } = {}) {
     const { printerName, options } = getPedPrintOptions();
     const hotFolder = options.hot_folder_path || '';
 
     if (_hotFolderAtivo() && !hotFolder) {
         toast('HOT FOLDER está marcado, mas nenhuma pasta foi escolhida.', 'error');
-        return false;
+        return null;
     }
     if (!hotFolder && !printerName) {
         toast('Selecione uma impressora no painel de configuração de impressão.', 'error');
-        return false;
+        return null;
     }
 
     const btnCancelPed = document.getElementById('ped-btn-cancel-print');
@@ -38174,118 +38196,168 @@ async function sendPrintJobDirect(queue) {
     const btnImposePrint = document.getElementById('ped-btn-impose-print');
     if (btnImposePrint) btnImposePrint.style.display = 'none';
 
-    try {
-        window.isPrinting = true;
+    window.isPrinting = true;
 
-        // Aplicar transformações de Impressão Reversa / Folha a Folha se selecionados
-        if (options.impressao_reversa || options.folha_a_folha) {
-            const modoDesc = options.impressao_reversa && options.folha_a_folha
-                ? 'Reversa + Folha a Folha'
-                : (options.impressao_reversa ? 'Impressão Reversa' : 'Folha a Folha');
-            toast(`Processando páginas (${modoDesc})...`, 'info');
-            queue = await processPrintQueueOptions(queue, options);
-        }
+    const isLocalMode = !window._activeAgentData ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
 
-        const isLocalMode = !window._activeAgentData ||
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1';
+    const loteId = Date.now();   // pasta do lote no Storage (so o relay usa)
+    const caminhosSoltos = [];   // hot folder: o que conferir depois
+    let ordem = 0;               // prefixo do spool, continuo no trabalho inteiro
+    let successCount = 0;
+    let failCount = 0;
+    let cancelado = false;
+    let encerrada = false;
+    let avisouTransformacao = false;
 
-        const loteId = Date.now();   // pasta do lote no Storage (so o relay usa)
-        let successCount = 0;
-        let failCount = 0;
-        const caminhosSoltos = [];   // hot folder: o que conferir depois
+    async function enviarUm(item) {
+        ordem++;
+        toast(total
+            ? `Enviando ${ordem}/${total}: ${item.name}...`
+            : `Enviando ${ordem}: ${item.name}...`, 'info');
 
-        for (let i = 0; i < queue.length; i++) {
-            if (window._printCancelRequested) {
-                console.warn('[sendPrintJobDirect] Interrompido por solicitação de cancelamento.');
-                toast('🛑 Envio para a impressora cancelado!', 'warning');
-                window._printCancelRequested = false;
-                return false;
-            }
-
-            const item = queue[i];
-            toast(`Enviando ${i + 1}/${queue.length}: ${item.name}...`, 'info');
-
-            // Determinar bandeja correta baseado no tipo de arquivo (capa/miolo)
-            let itemOptions = { ...options };
-            if (options.tray_capa && options.tray_miolo) {
-                const nameLower = (item.name || '').toLowerCase();
-                if (nameLower.includes('_capa') || nameLower.includes('_contracapa')) {
-                    itemOptions.tray = options.tray_capa;
-                } else {
-                    itemOptions.tray = options.tray_miolo;
-                }
-            }
-
-            try {
-                if (isLocalMode && hotFolder) {
-                    // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
-                    // donos: o titulo do job no spooler e a ordem alfabetica em que
-                    // o watcher do Edge Print importa os arquivos da pasta.
-                    const formData = new FormData();
-                    formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
-                    formData.append('folder', hotFolder);
-                    const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData });
-                    if (!res.ok) {
-                        let motivo = `HTTP ${res.status}`;
-                        try { motivo = (await res.json()).detail || motivo; } catch (_) {}
-                        throw new Error(motivo);
-                    }
-                    const dropData = await res.json();
-                    if (dropData.path) caminhosSoltos.push(dropData.path);
-                } else if (isLocalMode) {
-                    const formData = new FormData();
-                    formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
-                    formData.append('printer_name', printerName);
-                    formData.append('options', JSON.stringify(itemOptions));
-                    const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
-                    if (!res.ok) {
-                        const errText = await res.text();
-                        throw new Error(errText || 'Falha ao enviar para impressora local.');
-                    }
-                } else {
-                    if (!_printerAgentActive || !window._activeAgentData) {
-                        throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
-                    }
-                    const fileName = nomeObjetoStorage(nomeParaSpool(i + 1, item.name));
-                    const filePath = `${window._activeAgentData.id}/${loteId}/${fileName}`;
-                    const { error: uploadError } = await supabaseClient.storage
-                        .from('print_jobs')
-                        .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
-                    if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
-                    const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
-                    const { error: dbError } = await supabaseClient.from('print_queue').insert({
-                        agent_id: window._activeAgentData.id,
-                        file_url: urlData.publicUrl,
-                        // Sem impressora escolhida no modo hot folder, mas a coluna
-                        // e o que o operador le no historico da fila — deixar vazio
-                        // ali nao ajuda ninguem a saber para onde o trabalho foi.
-                        printer_name: printerName || (hotFolder ? `HOT FOLDER: ${hotFolder}` : ''),
-                        ppd_options: options,
-                        status: 'pending'
-                    });
-                    if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
-                }
-                successCount++;
-            } catch (e) {
-                failCount++;
-                console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
-                toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+        // Determinar bandeja correta baseado no tipo de arquivo (capa/miolo)
+        let itemOptions = { ...options };
+        if (options.tray_capa && options.tray_miolo) {
+            const nameLower = (item.name || '').toLowerCase();
+            if (nameLower.includes('_capa') || nameLower.includes('_contracapa')) {
+                itemOptions.tray = options.tray_capa;
+            } else {
+                itemOptions.tray = options.tray_miolo;
             }
         }
 
-        if (failCount === 0) {
-            const destino = hotFolder ? `a pasta "${hotFolder}"` : `"${printerName}"`;
-            toast(`✓ ${successCount} arquivo(s) enviado(s) para ${destino}!`, 'success');
-            _conferirConsumoHotFolder(caminhosSoltos);
+        try {
+            if (isLocalMode && hotFolder) {
+                // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
+                // donos: o titulo do job no spooler e a ordem alfabetica em que
+                // o watcher do Edge Print importa os arquivos da pasta.
+                const formData = new FormData();
+                formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
+                formData.append('folder', hotFolder);
+                const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    let motivo = `HTTP ${res.status}`;
+                    try { motivo = (await res.json()).detail || motivo; } catch (_) {}
+                    throw new Error(motivo);
+                }
+                const dropData = await res.json();
+                if (dropData.path) caminhosSoltos.push(dropData.path);
+            } else if (isLocalMode) {
+                const formData = new FormData();
+                formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
+                formData.append('printer_name', printerName);
+                formData.append('options', JSON.stringify(itemOptions));
+                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || 'Falha ao enviar para impressora local.');
+                }
+            } else {
+                if (!_printerAgentActive || !window._activeAgentData) {
+                    throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
+                }
+                const fileName = nomeObjetoStorage(nomeParaSpool(ordem, item.name));
+                const filePath = `${window._activeAgentData.id}/${loteId}/${fileName}`;
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('print_jobs')
+                    .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
+                if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
+                const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
+                const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                    agent_id: window._activeAgentData.id,
+                    file_url: urlData.publicUrl,
+                    // Sem impressora escolhida no modo hot folder, mas a coluna
+                    // e o que o operador le no historico da fila — deixar vazio
+                    // ali nao ajuda ninguem a saber para onde o trabalho foi.
+                    printer_name: printerName || (hotFolder ? `HOT FOLDER: ${hotFolder}` : ''),
+                    ppd_options: options,
+                    status: 'pending'
+                });
+                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
+            }
+            successCount++;
+        } catch (e) {
+            failCount++;
+            console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
+            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+        }
+    }
+
+    return {
+        get cancelado() { return cancelado; },
+        get enviados() { return successCount; },
+        get falhas() { return failCount; },
+
+        // Entrega ESTES arquivos agora. Chamada uma vez por lote no caminho em
+        // streaming, e uma vez so, com a fila inteira, nos outros.
+        async entregar(itens) {
+            let fila = itens;
+            if (options.impressao_reversa || options.folha_a_folha) {
+                if (!avisouTransformacao) {
+                    const modoDesc = options.impressao_reversa && options.folha_a_folha
+                        ? 'Reversa + Folha a Folha'
+                        : (options.impressao_reversa ? 'Impressão Reversa' : 'Folha a Folha');
+                    toast(`Processando páginas (${modoDesc})...`, 'info');
+                    avisouTransformacao = true;
+                }
+                fila = await processPrintQueueOptions(fila, options);
+            }
+
+            for (const item of fila) {
+                if (window._printCancelRequested) {
+                    console.warn('[entregaDeImpressao] Interrompido por solicitação de cancelamento.');
+                    toast('🛑 Envio para a impressora cancelado!', 'warning');
+                    window._printCancelRequested = false;
+                    cancelado = true;
+                    return false;
+                }
+                await enviarUm(item);
+            }
             return true;
+        },
+
+        // Fecha a entrega: relatorio, conferencia do hot folder e a tela de
+        // volta ao normal. Idempotente de proposito — o caminho em streaming
+        // chama daqui e tambem do tratamento de erro, e chamar duas vezes nao
+        // pode deixar os botoes presos no estado de "imprimindo".
+        finalizar({ interrompido = false } = {}) {
+            const ok = failCount === 0 && !cancelado && !interrompido;
+            if (encerrada) return ok;
+            encerrada = true;
+
+            window.isPrinting = false;
+            if (btnCancelPed) btnCancelPed.style.display = 'none';
+            if (btnImpose) btnImpose.style.display = 'inline-flex';
+            if (btnImposePrint) btnImposePrint.style.display = 'inline-flex';
+
+            if (ok) {
+                const destino = hotFolder ? `a pasta "${hotFolder}"` : `"${printerName}"`;
+                toast(`✓ ${successCount} arquivo(s) enviado(s) para ${destino}!`, 'success');
+                _conferirConsumoHotFolder(caminhosSoltos);
+            } else if (successCount > 0) {
+                // Papel entregue nao volta: quem parou no meio ainda precisa da
+                // conferencia do que ja caiu na pasta.
+                _conferirConsumoHotFolder(caminhosSoltos);
+            }
+            return ok;
         }
-        return false;
-    } finally {
-        window.isPrinting = false;
-        if (btnCancelPed) btnCancelPed.style.display = 'none';
-        if (btnImpose) btnImpose.style.display = 'inline-flex';
-        if (btnImposePrint) btnImposePrint.style.display = 'inline-flex';
+    };
+}
+window.criarEntregaDeImpressao = criarEntregaDeImpressao;
+
+// Envia os blobs gerados diretamente para a impressora configurada no painel lateral
+// sem abrir o modal (modo "print sem modal")
+async function sendPrintJobDirect(queue) {
+    const entrega = criarEntregaDeImpressao({ total: (queue || []).length });
+    if (!entrega) return false;
+    try {
+        await entrega.entregar(queue);
+        return entrega.finalizar();
+    } catch (e) {
+        entrega.finalizar({ interrompido: true });
+        throw e;
     }
 }
 

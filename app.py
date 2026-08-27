@@ -1522,8 +1522,35 @@ async def impose_file(
 
         if wants_stream:
             import asyncio
+            import threading
             loop = asyncio.get_running_loop()
             queue = asyncio.Queue()
+
+            # QUANTOS LOTES O MOTOR PODE ESTAR NA FRENTE (27/08/2026)
+            #
+            # Aqui havia um `time.sleep(1.2)` na thread do motor a cada arquivo:
+            # uma pausa fixa para o event loop conseguir despachar o anterior.
+            # Com capa e miolo eram dois ou tres arquivos e ninguem sentia. Com
+            # a entrega por bloco sao centenas -- 350 lotes viravam sete minutos
+            # de espera pura, dentro do recurso que existe justamente para o
+            # papel comecar a sair antes.
+            #
+            # No lugar da pausa adivinhada, a conta de verdade: o motor so
+            # comeca o lote seguinte se houver vaga, e a vaga volta quando o
+            # lote anterior ja saiu na resposta. Duas vagas para que ele nunca
+            # fique parado esperando a rede, e nunca mais que dois lotes de
+            # base64 vivos na memoria.
+            vagas = threading.Semaphore(2)
+            cliente_saiu = threading.Event()
+
+            def esperar_vaga():
+                # Se o navegador fechar a aba no meio, o `finally` do gerador
+                # levanta o `cliente_saiu` e o motor segue ate o fim sem travar
+                # -- ele ainda precisa terminar para os temporarios serem
+                # apagados.
+                while not cliente_saiu.is_set():
+                    if vagas.acquire(timeout=1.0):
+                        return
 
             def on_file_gen(file_info):
                 import base64
@@ -1543,6 +1570,7 @@ async def impose_file(
                 if os.path.exists(path):
                     with open(path, "rb") as f_pdf:
                         b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
+                    esperar_vaga()
                     loop.call_soon_threadsafe(queue.put_nowait, {
                         "type": "file",
                         "name": name,
@@ -1554,10 +1582,6 @@ async def impose_file(
                         "folhas_entregues": file_info.get("folhas_entregues"),
                         "folhas_no_trabalho": file_info.get("folhas_no_trabalho"),
                     })
-                    # Pausa na thread do motor para liberar o GIL, permitindo que o event loop
-                    # envie o arquivo atual antes que o motor comece a gerar o próximo
-                    import time
-                    time.sleep(1.2)
 
             engine = ImpositionEngine(config, on_file_generated=on_file_gen)
             print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
@@ -1604,7 +1628,11 @@ async def impose_file(
                         yield f"event: file\ndata: {json.dumps(item)}\n\n"
                         # Pequena pausa assíncrona no event loop para forçar o flush de pacotes de rede
                         await asyncio.sleep(0.1)
+                        # Lote despachado: o motor ganha a vaga de volta. Como
+                        # sao duas, ele nao ficou parado durante a pausa acima.
+                        vagas.release()
                 finally:
+                    cliente_saiu.set()
                     if background_tasks:
                         background_tasks.add_task(cleanup_temp_files)
                     else:
