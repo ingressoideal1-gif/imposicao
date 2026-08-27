@@ -3705,8 +3705,41 @@ window.duplicateCatalogNumeracao = async function (id) {
     await garantirCsvDaNumeracao(n);
 
     try {
+        await clonarNumeracao(n, { name: n.name + ' (cópia)' });
+        toast('Numeração duplicada!', 'success');
+        await loadAll();
+    } catch (e) {
+        toast('Erro ao duplicar: ' + e.message, 'error');
+    }
+};
+
+/**
+ * CLONA UMA NUMERAÇÃO. A única do projeto — e é essa a razão de ela existir.
+ *
+ * A lista de campos abaixo morava solta dentro do `duplicateCatalogNumeracao`.
+ * Quando o "Separar por dia" (26/08/2026) precisou clonar também, copiar essa
+ * lista teria criado duas verdades sobre o que é uma cópia — e a segunda
+ * envelheceria em silêncio no dia em que a tabela ganhasse uma coluna.
+ *
+ * ## As três coisas que uma cópia NÃO herda, e por quê
+ *
+ *   `id_gabarito` — tem UNIQUE no banco; copiar dá erro 23505.
+ *   `preview_jpg` — a miniatura mora num arquivo por id, e salvar uma mudaria
+ *                   a miniatura da outra.
+ *   `bg_url`      — a arte de fundo é REENVIADA sob o id da cópia, pelo mesmo
+ *                   motivo do preview.
+ *
+ * Esse reenvio é a razão de esta operação morar DENTRO do painel: o Storage
+ * recusa a chave anônima, e só a sessão do operador tem permissão para gravar
+ * o arquivo novo. Fora daqui, as cópias teriam de dividir o arquivo do
+ * original — o que amarra as duas para sempre.
+ *
+ * `ajustes` sobrescreve o que o chamador quiser (hoje o `name` e o `csv_data`
+ * da fatia do dia). Devolve o id da cópia.
+ */
+async function clonarNumeracao(n, ajustes) {
         const clone = {
-            name: n.name + ' (cópia)',
+            name: n.name,
             formato_id: n.formato_id,
             formato_ids: n.formato_ids || [n.formato_id],
             tipo: n.tipo || 'SEQUENCIAL',
@@ -3748,6 +3781,9 @@ window.duplicateCatalogNumeracao = async function (id) {
             })
         };
 
+        // Quem chamou manda: hoje o nome e o `csv_data` da fatia do dia.
+        Object.assign(clone, ajustes || {});
+
         // O id sai daqui para que a arte de fundo possa ir para o arquivo da
         // CÓPIA antes de o registro ser gravado.
         const idDaCopia = (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -3759,16 +3795,207 @@ window.duplicateCatalogNumeracao = async function (id) {
                 clone.bg_url = url;
                 clone.bg_filename = n.bg_filename || '';
             } else {
-                toast('A cópia foi criada, mas a arte de fundo não veio junto. '
-                    + 'Carregue o arquivo de novo nela.', 'warning');
+                toast('A cópia "' + clone.name + '" foi criada, mas a arte de fundo não '
+                    + 'veio junto. Carregue o arquivo de novo nela.', 'warning');
             }
         }
 
         await api('POST', '/numeracoes', idDaCopia ? { id: idDaCopia, ...clone } : clone);
-        toast('Numeração duplicada!', 'success');
-        await loadAll();
-    } catch (e) {
-        toast('Erro ao duplicar: ' + e.message, 'error');
+        return idDaCopia;
+}
+window.clonarNumeracao = clonarNumeracao;
+
+// ══════════════════════════════════════════════════════════════════════════
+// SEPARAR A NUMERAÇÃO POR DIA (26/08/2026)
+// ══════════════════════════════════════════════════════════════════════════
+//
+// Um evento de vários dias chega como UM arquivo por produto, com uma coluna
+// `Data` dizendo de que dia é cada ingresso, e um modelo do pedido por dia. Sem
+// separar, os modelos dos quatro dias apontam para o mesmo banco e imprimem as
+// MESMAS linhas — o mesmo código sai em quatro pulseiras de dias diferentes.
+//
+// Foi o estado em que o pedido 21202 chegou: 11 bancos divididos entre 52
+// modelos, nenhum com distribuição, e as únicas linhas marcadas para imprimir
+// eram as de um dia só. Naquele dia a separação foi feita por fora, num script,
+// e o preço apareceu na hora: o Storage recusa a chave anônima, então as cópias
+// tiveram de dividir o arquivo de arte de fundo do original — o que amarra as
+// duas para sempre. Aqui dentro, com a sessão do operador, cada cópia ganha o
+// arquivo dela.
+//
+// O formato do usuário é UMA NUMERAÇÃO POR DIA, decidido em 26/08/2026: cada
+// modelo com um banco que é só dele, em vez de repartir um banco por
+// distribuição. Ver `memory/uma-numeracao-por-dia-no-evento-de-varios-dias`.
+
+/** O dia que o NOME do modelo anuncia: "05/set ..." → "05"; "EXTRAS ..." → "extras". */
+function diaDoNomeDoModelo(nome) {
+    const texto = String(nome || '');
+    const m = texto.match(/^(\d{2})\/\s*set/i) || texto.match(/^(\d{2})\//);
+    if (m) return m[1];
+    return /extra/i.test(texto) ? 'extras' : null;
+}
+window.diaDoNomeDoModelo = diaDoNomeDoModelo;
+
+/** O dia que a LINHA do banco anuncia: "05/09" → "05"; "EXTRA" → "extras". */
+function diaDaLinhaDoBanco(valor) {
+    const t = String(valor === null || valor === undefined ? '' : valor).trim();
+    if (/^\d{2}\/\d{2}$/.test(t)) return t.slice(0, 2);
+    if (/extra/i.test(t)) return 'extras';
+    return t || null;
+}
+window.diaDaLinhaDoBanco = diaDaLinhaDoBanco;
+
+/**
+ * As linhas do banco agrupadas por dia.
+ *
+ * Linha de RESUMO não é ingresso: os arquivos deste cliente trazem uma coluna
+ * `Página` que separa `Codigos` de `Resumo`, e o resumo não vira pulseira. Um
+ * banco sem essa coluna passa inteiro, que é o certo — a exclusão só vale onde
+ * ela existe e diz outra coisa.
+ *
+ * A marca de desmarcado sai da cópia: a numeração passa a ser DO dia, e o que
+ * sobrou marcado de uma triagem anterior não deve decidir o que ela imprime.
+ */
+function linhasPorDiaDaNumeracao(num) {
+    const porDia = new Map();
+    if (!num || !Array.isArray(num.csv_data)) return porDia;
+    const temColunaData = (num.csv_headers || []).indexOf('Data') !== -1
+        || (num.csv_data[0] && Object.prototype.hasOwnProperty.call(num.csv_data[0], 'Data'));
+    if (!temColunaData) return porDia;
+
+    num.csv_data.forEach(linha => {
+        if (!linha) return;
+        const pagina = String(linha['Página'] !== undefined ? linha['Página']
+            : (linha['Pagina'] !== undefined ? linha['Pagina'] : '')).trim();
+        if (pagina && pagina !== 'Codigos') return;
+        const dia = diaDaLinhaDoBanco(linha['Data']);
+        if (!dia) return;
+        if (!porDia.has(dia)) porDia.set(dia, []);
+        const copia = Object.assign({}, linha);
+        delete copia.__ativo;
+        porDia.get(dia).push(copia);
+    });
+    return porDia;
+}
+window.linhasPorDiaDaNumeracao = linhasPorDiaDaNumeracao;
+
+/**
+ * O PLANO da separação: o que vai acontecer, modelo a modelo, antes de gravar.
+ *
+ * Devolve `null` quando não há o que separar — banco sem coluna `Data`, ou com
+ * um dia só. É esse `null` que decide se o botão aparece: controle que não tem
+ * o que fazer não deve estar na tela.
+ *
+ * Um modelo entra no plano só quando a fatia do dia dele BATE com a Qtd. Não
+ * bater quer dizer que o nome do modelo e o banco discordam — foi assim que se
+ * descobriu, no 21202, um modelo de PATROCINADORES apontando para o banco do
+ * CORPORATIVO. Nesse caso ele fica de fora e o motivo é dito na tela, em vez de
+ * a separação adivinhar.
+ */
+function planoDeSeparacaoPorDia(osId, num) {
+    if (!num) return null;
+    const porDia = linhasPorDiaDaNumeracao(num);
+    if (porDia.size < 2) return null;
+
+    const itens = ((state.osItens && state.osItens[osId]) || [])
+        .filter(it => String(numeracaoIdDoItem(it)) === String(num.id));
+    if (!itens.length) return null;
+
+    const entram = [], ficamDeFora = [];
+    itens.forEach((it, i) => {
+        const dia = diaDoNomeDoModelo(it.nome_modelo || rotuloDoModelo(it, i));
+        const fatia = dia ? porDia.get(dia) : null;
+        const qtd = parseInt(it.quantidade !== undefined && it.quantidade !== null
+            ? it.quantidade : it.qtd) || 0;
+        const nome = rotuloDoModelo(it, i);
+        if (!dia) {
+            ficamDeFora.push({ item: it, nome, motivo: 'o nome não diz de que dia é' });
+        } else if (!fatia) {
+            ficamDeFora.push({ item: it, nome, motivo: 'o banco não tem linhas do dia ' + dia });
+        } else if (fatia.length !== qtd) {
+            ficamDeFora.push({ item: it, nome,
+                motivo: 'o dia ' + dia + ' tem ' + fatia.length + ' linhas e a Qtd é ' + qtd });
+        } else {
+            entram.push({ item: it, nome, dia, fatia, nomeNovo: num.name + ' ' + dia });
+        }
+    });
+
+    if (!entram.length) return null;
+    return { num, dias: Array.from(porDia.keys()), entram, ficamDeFora };
+}
+window.planoDeSeparacaoPorDia = planoDeSeparacaoPorDia;
+
+/** O texto da confirmação: o que vai ser criado, e quem fica de fora. */
+function textoDoPlanoDeSeparacao(plano) {
+    const linhas = plano.entram.map(e =>
+        '• ' + e.nome + '  →  "' + e.nomeNovo + '" (' + e.fatia.length + ' linhas)');
+    let texto = 'O banco "' + (plano.num.csv_filename || plano.num.name) + '" tem '
+        + plano.dias.length + ' dias, e ' + (plano.entram.length + plano.ficamDeFora.length)
+        + ' modelo(s) deste pedido usam ele. Vou criar '
+        + plano.entram.length + ' numeração(ões), cada uma só com as linhas do seu dia, '
+        + 'e apontar cada modelo para a sua:\n\n' + linhas.join('\n');
+    if (plano.ficamDeFora.length) {
+        texto += '\n\nFicam como estão (' + plano.ficamDeFora.length + '):\n'
+            + plano.ficamDeFora.map(f => '• ' + f.nome + ' — ' + f.motivo).join('\n');
+    }
+    texto += '\n\nO banco original não é alterado nem apagado.';
+    return texto;
+}
+window.textoDoPlanoDeSeparacao = textoDoPlanoDeSeparacao;
+
+/**
+ * Executa a separação. Uma numeração por dia, e cada modelo apontado para a sua.
+ *
+ * O original NÃO é tocado: ele continua no catálogo, com as linhas todas. Quem
+ * separou errado desfaz reapontando os modelos de volta — e é por isso que
+ * apagar o original não faz parte desta operação.
+ */
+window.separarNumeracaoPorDia = async function (idx, osId) {
+    const item = ((state.osItens && state.osItens[osId]) || [])[idx];
+    if (!item) return;
+    const num = numeracaoDoModelo(item);
+    if (!num) return;
+
+    await garantirCsvDaNumeracao(num);
+
+    const plano = planoDeSeparacaoPorDia(osId, num);
+    if (!plano) {
+        toast('Não há o que separar: este banco não tem uma coluna "Data" com mais de um dia, '
+            + 'ou nenhum modelo deste pedido fecha com as linhas de um dia.', 'info');
+        return;
+    }
+
+    const seguir = (window.caixaConfirmar && window.caixaConfirmar.perguntar)
+        ? await window.caixaConfirmar.perguntar(textoDoPlanoDeSeparacao(plano),
+            { rotulo: 'Separar por dia' })
+        : false;
+    if (!seguir) return;
+
+    let criadas = 0;
+    const falhas = [];
+    for (const e of plano.entram) {
+        try {
+            const novoId = await clonarNumeracao(num, { name: e.nomeNovo, csv_data: e.fatia });
+            if (!novoId) throw new Error('a cópia não devolveu id');
+            sincronizarNumeracaoDoItem(e.item, novoId);
+            await autoSaveOSItemField(e.item.id, osId, 'amostra_num_id', novoId);
+            criadas++;
+        } catch (err) {
+            falhas.push(e.nome + ' (' + ((err && err.message) || err) + ')');
+        }
+    }
+
+    await loadAll();
+    if (typeof recarregarNumeracoesDoPedido === 'function') {
+        try { await recarregarNumeracoesDoPedido(osId); } catch (_) { /* segue */ }
+    }
+    redesenharCardsDoPedido(osId);
+
+    if (falhas.length) {
+        toast(criadas + ' numeração(ões) criada(s). NÃO deu para ' + falhas.length
+            + ': ' + falhas.join('; '), 'error');
+    } else {
+        toast(criadas + ' numeração(ões) criada(s), uma por dia — cada modelo com o banco dele.',
+            'success');
     }
 };
 
@@ -15641,7 +15868,7 @@ function atualizarNavCsvDaAmostra(idx, item, num, container, osId) {
  * seletor sem redesenhar o card inteiro, quem decide isso é esta função, a cada
  * redesenho, e não o template.
  */
-function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
+function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
 
     const linha = container.querySelector(`#linha-csv-${idx}`);
 
@@ -15702,6 +15929,25 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
 
     // Um modelo sem nenhuma linha não imprime nada — avisar aqui é mais barato
     // do que descobrir na frente da impressora.
+    // ── O "Separar por dia" ──────────────────────────────────────────────
+    //
+    // Aparece so quando ha o que fazer: banco com coluna `Data` e mais de um
+    // dia, e ao menos um modelo do pedido cuja Qtd fecha com as linhas do dia
+    // que o NOME dele anuncia. Controle que nao tem o que fazer nao fica na
+    // tela -- e, aqui, um botao que criasse numeracoes por engano custaria
+    // caro.
+    const bDia = container.querySelector(`#btn-csv-dia-${idx}`);
+    if (bDia) {
+        let plano = null;
+        try { plano = planoDeSeparacaoPorDia(osId, num); } catch (e) { plano = null; }
+        bDia.style.display = plano ? '' : 'none';
+        if (plano) {
+            bDia.title = 'Criar ' + plano.entram.length + ' numeração(ões) — uma por dia ('
+                + plano.dias.join(', ') + ') — e apontar cada modelo para a sua. '
+                + 'O banco original não é alterado.';
+        }
+    }
+
     bFatia.style.color = minhas ? '' : 'var(--red, #ef4444)';
 
     bFatia.style.borderColor = minhas ? '' : 'var(--red, #ef4444)';
@@ -29399,6 +29645,13 @@ function renderAmostrasOSItens(osId) {
                                      pedido, so existe o que e DO MODELO: a fatia dele. -->
                                 <div style="display:flex; gap:6px;">
                                     <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
+                                    <!-- So aparece quando ha o que separar: banco com coluna
+                                         Data e mais de um dia, e algum modelo do pedido cuja
+                                         Qtd fecha com as linhas do dia dele. Quem decide e o
+                                         planoDeSeparacaoPorDia, chamado no
+                                         atualizarBotoesCsvDaAmostra -- CRASE aqui dentro
+                                         fecharia o template literal do card. -->
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-dia-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="separarNumeracaoPorDia(${idx}, '${osId}')" title="Criar uma numeração por dia, cada uma só com as linhas do seu dia">📆 Separar por dia</button>
                                 </div>
                             </div>
                         </div>
@@ -32574,7 +32827,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
 
     atualizarNavCsvDaAmostra(idx, item, num, container, osId);
-    atualizarBotoesCsvDaAmostra(idx, item, num, container);
+    atualizarBotoesCsvDaAmostra(idx, item, num, container, osId);
 
     if (item.verso) {
         const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);

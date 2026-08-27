@@ -109,10 +109,19 @@ def test_a_copia_leva_o_fundo_mas_no_arquivo_dela():
     O que ela não pode é apontar para o objeto do original: trocar o fundo de
     uma trocaria o da outra — o defeito que o `preview_jpg` já ensinou a evitar.
     Por isso os bytes são reenviados sob o id da cópia.
+
+    A regra mudou de casa em 26/08/2026, sem mudar de conteúdo: a clonagem saiu
+    de dentro do `duplicateCatalogNumeracao` e virou `clonarNumeracao`, porque o
+    "Separar por dia" passou a clonar também. Como só existe UMA clonagem, é ela
+    que este teste guarda — e guardá-la aqui cobre os dois caminhos de uma vez.
     """
     fonte = _ler(SCRIPT)
-    i = fonte.index("window.duplicateCatalogNumeracao = async function")
-    corpo = fonte[i:fonte.index("\n};", i)]
+    i = fonte.index("async function clonarNumeracao(n, ajustes)")
+    corpo = fonte[i:fonte.index("\nwindow.clonarNumeracao", i)]
+
+    # E os dois caminhos passam por ela: o duplicar do catálogo e a separação.
+    assert "clonarNumeracao(n, { name: n.name + ' (cópia)' })" in fonte
+    assert "clonarNumeracao(num, { name: e.nomeNovo, csv_data: e.fatia })" in fonte
 
     assert "duplicarFundoNoStorage(n.bg_url" in corpo, (
         "o fundo vai junto, reenviado sob o id da cópia"

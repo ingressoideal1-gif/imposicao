@@ -67,7 +67,10 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                'prepararTelaParaOPdfProva',
                // Quais colunas contam na conferencia de repeticoes (26/08/2026).
                'colunasConferidasDaNumeracao', 'conferenciaDasColunasDaNumeracao',
-               'aplicarConferenciaNasColunas', 'celulasEsperadasDoModelo'];
+               'aplicarConferenciaNasColunas', 'celulasEsperadasDoModelo',
+               // O "Separar por dia" dentro do painel (26/08/2026).
+               'diaDoNomeDoModelo', 'diaDaLinhaDoBanco', 'linhasPorDiaDaNumeracao',
+               'planoDeSeparacaoPorDia', 'textoDoPlanoDeSeparacao'];
 
 let CODIGO;
 try {
@@ -608,6 +611,99 @@ function mundo(opts) {
     };
     ok(faz(false) === 2 && faz(true) === 2,
        'a fatia impressa e a MESMA com e sem o Camarote conferido');
+})();
+
+// ─── 13. Separar a numeracao por dia, de dentro do painel ──────────────────
+//
+// Um evento de varios dias chega como UM arquivo por produto, com uma coluna
+// `Data`, e um modelo do pedido por dia. Sem separar, os modelos dos quatro
+// dias apontam para o mesmo banco e imprimem as MESMAS linhas.
+//
+// O que se mede aqui e o PLANO -- quem entra, quem fica de fora e por que --,
+// que e o que a caixa de confirmacao mostra antes de qualquer gravacao.
+
+(function oDiaSaiDoNomeEDaLinha() {
+    const { api } = mundo({});
+    ok(api.diaDoNomeDoModelo('05/set CAMAROTE VIP') === '05', 'o dia sai do nome do modelo');
+    ok(api.diaDoNomeDoModelo('12/set FRONT STAGE') === '12', 'e de qualquer dia');
+    ok(api.diaDoNomeDoModelo('EXTRAS CAMAROTE VIVA +') === 'extras', 'EXTRAS tem nome proprio');
+    ok(api.diaDoNomeDoModelo('Pulseira comum') === null, 'nome sem dia nao inventa um');
+
+    ok(api.diaDaLinhaDoBanco('05/09') === '05', 'e da linha do banco');
+    ok(api.diaDaLinhaDoBanco('EXTRA') === 'extras', 'EXTRA na linha casa com EXTRAS no nome');
+    ok(api.diaDaLinhaDoBanco('') === null, 'linha sem data nao entra em dia nenhum');
+})();
+
+(function oResumoNaoViraPulseira() {
+    const { api } = mundo({});
+    const num = {
+        csv_headers: ['Página', 'Data', 'Codigo'],
+        csv_data: [
+            { 'Página': 'Codigos', Data: '05/09', Codigo: 'A1' },
+            { 'Página': 'Codigos', Data: '05/09', Codigo: 'A2', __ativo: false },
+            { 'Página': 'Codigos', Data: '06/09', Codigo: 'B1' },
+            { 'Página': 'Resumo', Data: 'TOTAL', Codigo: '' },
+        ],
+    };
+    const porDia = api.linhasPorDiaDaNumeracao(num);
+    ok(porDia.size === 2, 'dois dias, e o Resumo fica de fora', [...porDia.keys()]);
+    ok(porDia.get('05').length === 2, 'a linha DESMARCADA entra na copia do dia');
+    ok(!('__ativo' in porDia.get('05')[1]),
+       'e entra sem a marca: a numeracao passa a ser DO dia');
+
+    // Banco sem coluna Data: nao ha o que separar, e nada e inventado.
+    ok(api.linhasPorDiaDaNumeracao({ csv_headers: ['Codigo'], csv_data: [{ Codigo: 'X' }] }).size === 0,
+       'banco sem coluna Data nao se separa');
+})();
+
+(function oPlanoDizQuemEntraEQuemFicaDeFora() {
+    const linhas = (dia, n) => Array.from({ length: n },
+        (_, i) => ({ 'Página': 'Codigos', Data: dia, Codigo: dia + '-' + i }));
+    const num = {
+        id: 'n1', name: 'CAMAROTE VIP', csv_filename: 'vip.csv',
+        csv_headers: ['Página', 'Data', 'Codigo'],
+        csv_data: [].concat(linhas('05/09', 200), linhas('06/09', 200), linhas('11/09', 150)),
+    };
+    const itens = [
+        { id: 'i1', amostra_num_id: 'n1', nome_modelo: '05/set CAMAROTE VIP', quantidade: 200 },
+        { id: 'i2', amostra_num_id: 'n1', nome_modelo: '06/set CAMAROTE VIP', quantidade: 200 },
+        // A Qtd nao bate com as 150 linhas do dia 11: fica de fora, com o motivo.
+        { id: 'i3', amostra_num_id: 'n1', nome_modelo: '11/set CAMAROTE VIP', quantidade: 200 },
+        // O nome nao diz o dia.
+        { id: 'i4', amostra_num_id: 'n1', nome_modelo: 'CAMAROTE VIP avulso', quantidade: 200 },
+    ];
+    const m = mundo({ state: { numeracoes: [num], osItens: { os1: itens } } });
+    const plano = m.api.planoDeSeparacaoPorDia('os1', num);
+
+    ok(plano && plano.entram.length === 2, 'entram os dois que fecham com o dia deles',
+       plano && plano.entram.map(e => e.nome));
+    ok(plano.entram[0].nomeNovo === 'CAMAROTE VIP 05', 'o nome novo e o do banco mais o dia',
+       plano.entram[0].nomeNovo);
+    ok(plano.entram[0].fatia.length === 200, 'e leva so as linhas do dia');
+    ok(plano.ficamDeFora.length === 2, 'e os outros dois ficam de fora', plano.ficamDeFora);
+    ok(/Qtd é 200/.test(plano.ficamDeFora[0].motivo) || /150 linhas/.test(plano.ficamDeFora[0].motivo),
+       'o motivo do que nao fecha diz os dois numeros', plano.ficamDeFora[0].motivo);
+    ok(/nome não diz/.test(plano.ficamDeFora[1].motivo),
+       'e o do sem dia diz que o nome nao anuncia', plano.ficamDeFora[1].motivo);
+
+    // O texto da caixa mostra o plano inteiro ANTES de gravar.
+    const t = m.api.textoDoPlanoDeSeparacao(plano);
+    ok(t.includes('CAMAROTE VIP 05') && t.includes('CAMAROTE VIP 06'), 'a caixa lista as copias', t.slice(0, 200));
+    ok(t.includes('Ficam como estão'), 'e lista quem fica de fora');
+    ok(/não é alterado nem apagado/.test(t),
+       'e diz que o original continua — e por onde se desfaz a separacao');
+})();
+
+(function semOqueSepararNaoHaPlano() {
+    const um = { id: 'n1', name: 'X', csv_headers: ['Página', 'Data', 'Codigo'],
+        csv_data: [{ 'Página': 'Codigos', Data: '05/09', Codigo: 'A' }] };
+    const m = mundo({ state: { numeracoes: [um],
+        osItens: { os1: [{ id: 'i1', amostra_num_id: 'n1', nome_modelo: '05/set X', quantidade: 1 }] } } });
+    ok(m.api.planoDeSeparacaoPorDia('os1', um) === null,
+       'um dia so nao e separacao — e o botao nao aparece');
+
+    const m2 = mundo({ state: { numeracoes: [], osItens: { os1: [] } } });
+    ok(m2.api.planoDeSeparacaoPorDia('os1', null) === null, 'sem numeracao, sem plano');
 })();
 
 // ─── Fecho ──────────────────────────────────────────────────────────────────

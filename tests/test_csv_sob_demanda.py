@@ -357,3 +357,71 @@ def test_gravar_o_banco_esquece_o_que_foi_baixado():
         "gravar por cima do csv_data sem esquecer o baixado deixa a tela "
         "mostrando o banco antigo ate a proxima releitura do catalogo"
     )
+
+
+def test_a_clonagem_da_numeracao_e_uma_so():
+    """Duas listas de campos seriam duas verdades sobre o que e uma copia.
+
+    A lista morava solta dentro do `duplicateCatalogNumeracao`. Quando o
+    "Separar por dia" (26/08/2026) precisou clonar tambem, copia-la teria criado
+    uma segunda versao que envelheceria em silencio no dia em que a tabela
+    ganhasse uma coluna.
+    """
+    fonte = _ler("frontend/script.js")
+    assert fonte.count("formato_ids: n.formato_ids || [n.formato_id]") == 1, (
+        "a lista de campos da copia foi duplicada — ha duas verdades sobre o "
+        "que uma numeracao clonada leva"
+    )
+    assert "async function clonarNumeracao(n, ajustes)" in fonte
+    # E os dois caminhos usam a mesma.
+    assert "clonarNumeracao(n, { name: n.name + ' (cópia)' })" in fonte
+    assert "clonarNumeracao(num, { name: e.nomeNovo, csv_data: e.fatia })" in fonte
+
+
+def test_a_separacao_por_dia_mora_no_painel_por_causa_da_arte_de_fundo():
+    """A razao de esta operacao existir DENTRO do painel.
+
+    Em 26/08/2026 a separacao do pedido 21202 foi feita por um script de fora, e
+    o preco apareceu na hora: o Storage recusa a chave anonima, entao as copias
+    tiveram de dividir o arquivo de arte de fundo do original -- o que amarra as
+    duas para sempre e proibe apagar o original. Aqui dentro, com a sessao do
+    operador, `duplicarFundoNoStorage` grava o arquivo da copia.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("async function clonarNumeracao")
+    corpo = fonte[i:i + 3000]
+    assert "duplicarFundoNoStorage(n.bg_url, idDaCopia, n.bg_filename)" in corpo, (
+        "a copia deixou de reenviar a arte de fundo sob o id dela"
+    )
+    # E o id nasce ANTES, porque o arquivo vai para o nome dele.
+    assert corpo.index("crypto.randomUUID") < corpo.index("duplicarFundoNoStorage")
+
+
+def test_o_separar_por_dia_confirma_antes_de_criar_e_nao_apaga_o_original():
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("window.separarNumeracaoPorDia")
+    corpo = fonte[i:i + 2500]
+
+    assert "caixaConfirmar" in corpo and "textoDoPlanoDeSeparacao(plano)" in corpo, (
+        "criar numeracoes em lote sem mostrar o plano antes e o tipo de coisa "
+        "que o operador descobre depois de feita"
+    )
+    assert "if (!seguir) return;" in corpo, "cancelar nao pode criar nada"
+    # Reaponta o modelo pelos DOIS nomes do campo, e grava.
+    assert "sincronizarNumeracaoDoItem(e.item, novoId)" in corpo
+    assert "autoSaveOSItemField(e.item.id, osId, 'amostra_num_id', novoId)" in corpo
+    # O original nao e tocado: e por ele que se desfaz.
+    assert "delete" not in corpo.lower().split("for (const e of plano.entram)")[1][:600], (
+        "a separacao nao pode apagar o banco original — e ele que permite desfazer"
+    )
+
+
+def test_o_botao_de_separar_so_aparece_quando_ha_o_que_separar():
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function atualizarBotoesCsvDaAmostra")
+    corpo = fonte[i:i + 4000]
+    assert "planoDeSeparacaoPorDia(osId, num)" in corpo
+    assert "bDia.style.display = plano ? '' : 'none';" in corpo, (
+        "o botao precisa sumir quando nao ha o que separar — banco de um dia so, "
+        "ou nenhum modelo que feche com o dia dele"
+    )

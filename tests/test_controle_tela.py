@@ -385,6 +385,28 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
     window.supabaseClient = {{ auth: {{
       getSession: async () => ({{ data: {{ session: {{ access_token: 'jwt-de-teste' }} }} }})
     }} }};
+
+    // ESPERAR PELA CONDICAO, E NAO PELO RELOGIO (26/08/2026).
+    //
+    // Este arquivo tinha 74 esperas fixas -- `setTimeout(r, 80)` e parentes --
+    // e cada uma e uma moeda ao ar: a suite roda 8 Chromes ao mesmo tempo, e a
+    // gravacao assincrona que cabia em 60 ms na maquina vazia nao cabe na
+    // cheia. Dois testes falhavam por isso em algumas rodadas e passavam
+    // sozinhos: `salvo is True` dava False, e o aviso ainda estava em `none`.
+    //
+    // Um numero maior nao conserta -- so muda a probabilidade e deixa a suite
+    // mais lenta. `ateQue` pergunta pela CONDICAO que o teste esta afirmando,
+    // dez vezes por segundo, e desiste com um teto largo. Na maquina vazia ela
+    // volta na primeira pergunta; na cheia, quando o trabalho terminou.
+    window.ateQue = async (condicao, teto) => {{
+      const limite = Date.now() + (teto || 5000);
+      for (;;) {{
+        try {{ if (condicao()) return true; }} catch (e) {{ /* ainda nao existe */ }}
+        if (Date.now() > limite) return false;
+        await new Promise(r => setTimeout(r, 25));
+      }}
+    }};
+
     {script_extra}
   }});
 
@@ -1244,7 +1266,11 @@ def test_tocar_no_setor_do_aparelho_grava_na_hora():
         const botao = document.getElementById('aparelho-setores-a1-s2');
         const antes = botao.getAttribute('aria-pressed');
         botao.click();
-        await new Promise(r => setTimeout(r, 60));
+        // A condicao que este teste afirma: a chamada saiu E o aviso de salvo
+        // apareceu. Esperar 60 ms era torcer para caber -- e sob a suite cheia
+        // nao cabia.
+        await ateQue(() => chamadas.some(c => c.caminho === '/aparelhos/a1')
+            && !document.getElementById('aparelho-salvo-a1').classList.contains('sumindo'));
 
         return { chamadas, antes, depois: botao.getAttribute('aria-pressed'),
                  salvo: !document.getElementById('aparelho-salvo-a1')
@@ -1529,7 +1555,11 @@ def test_o_painel_do_setor_continua_aberto_depois_de_gravar():
         const radio = document.getElementById('uso-s1-reentrada');
         radio.checked = true;
         radio.dispatchEvent(new Event('change'));
-        await new Promise(r => setTimeout(r, 120));
+        // A condicao afirmada logo abaixo: o aviso "salvo" ficou visivel.
+        await ateQue(() => {
+            const a = document.getElementById('setor-salvo-s1');
+            return a && getComputedStyle(a).display !== 'none';
+        });
 
         const painel = document.getElementById('setor-config-s1');
         const aviso = document.getElementById('setor-salvo-s1');
