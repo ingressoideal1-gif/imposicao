@@ -4640,9 +4640,13 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
-        // ENTREGAR ENQUANTO GERA (27/08/2026). Desmarcado por padrao: liga-lo
-        // troca UM arquivo por N na mao de quem opera, e novidade que muda o
-        // que chega na impressora entra desligada.
+        // ENTREGAR ENQUANTO GERA (27/08/2026). MARCADA por padrao, por decisao
+        // do usuario -- ele viu a medicao do modelo 1000567 do pedido 21202
+        // (primeira folha aos 4,2 s em vez de 534,6 s; trabalho inteiro em
+        // 118 s em vez de 535 s) e pediu que fosse o padrao.
+        //
+        // Ela troca UM arquivo por N na mao de quem opera, inclusive nos
+        // trabalhos pequenos. Quem quiser o arquivo unico desmarca aqui.
         //
         // Nao confundir com a "Folha a Folha" logo acima dela na tela: aquela
         // quebra o PDF DEPOIS de ele chegar pronto ao navegador, com o PDFLib,

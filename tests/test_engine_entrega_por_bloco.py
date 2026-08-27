@@ -63,10 +63,14 @@ def gerar(cfg):
 
 # ─── A decisao de cortar ou nao ────────────────────────────────────────────
 
-def test_desligado_por_padrao(tmp_path):
-    """Novidade que muda o que chega na impressora entra desmarcada.
+def test_o_MOTOR_so_corta_se_alguem_pedir(tmp_path):
+    """Na tela a caixa nasce marcada; aqui o padrao e nao cortar.
 
-    Ligar o corte troca UM arquivo por N na mao de quem opera.
+    Os dois nao se contradizem. A tela manda a escolha em todo trabalho -- o
+    usuario pediu que ela venha marcada depois de ver a medicao do modelo
+    1000567. Este `False` e a resposta para quem chamar o motor SEM dizer nada:
+    um script, um teste, um caminho novo do app.py. Cortar a tiragem de quem nao
+    pediu mudaria o que chega na impressora sem ninguem ter escolhido.
     """
     cfg = montar(tmp_path, 40)
     assert cfg.entregar_por_bloco is False
@@ -202,3 +206,26 @@ def test_o_motor_nao_segura_a_tiragem_inteira(tmp_path):
     for a in arquivos:
         with fitz.open(a["path"]) as d:
             assert len(d) <= 4, f"{a['name']} tem {len(d)} paginas, o bloco e 4"
+
+
+def test_a_caixa_da_tela_nasce_MARCADA():
+    """Decisao do usuario, 27/08/2026.
+
+    Ele viu a medicao do modelo 1000567 do pedido 21202 -- primeira folha
+    entregue aos 4,2 s em vez de 534,6 s, e o trabalho inteiro em 118 s em vez
+    de 535 s -- e pediu que a entrega por bloco fosse o padrao da tela.
+
+    O teste existe porque o padrao de uma caixa e uma decisao de produto que
+    some facil numa edicao de HTML: sem ele, um `checked` removido sem querer
+    devolveria a grafica aos nove minutos de espera sem ninguem perceber.
+    """
+    import io as _io
+    import os as _os
+    raiz = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    with _io.open(_os.path.join(raiz, "frontend", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    i = html.index('id="ped-entregar-por-bloco"')
+    marca = html[i:html.index(">", i)]
+    assert "checked" in marca, (
+        "a caixa 'Entregar cada bloco enquanto gera' voltou a nascer desmarcada"
+    )

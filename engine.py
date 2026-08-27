@@ -715,8 +715,13 @@ class ImpositionConfig:
         self.block_depth = block_depth
         # ENTREGAR ENQUANTO GERA (27/08/2026).
         #
-        # Desmarcado por padrão: liga-lo troca UM arquivo por N na mão de quem
-        # opera, e novidade que muda o que chega na impressora entra desligada.
+        # NA TELA a caixa nasce marcada, por decisão do usuário. AQUI o padrão é
+        # `False` de propósito, e os dois não se contradizem: a tela manda a
+        # escolha em todo trabalho, e este `False` é a resposta para quem chamar
+        # o motor SEM dizer nada — um script, um teste, um caminho novo. Cortar
+        # a tiragem de quem não pediu mudaria o que chega na impressora sem
+        # ninguém ter escolhido.
+        #
         # Ver `_folhas_por_lote`, que é quem decide se o corte vale para este
         # trabalho.
         self.entregar_por_bloco = bool(entregar_por_bloco)
