@@ -410,6 +410,44 @@ async function loadPedArtFile(file) {
 }
 window.loadPedArtFile = loadPedArtFile;
 
+/**
+ * Redesenha a janela de visualizacao UMA vez por rajada.
+ *
+ * Gemea do `agendarRedesenhoDasFilas` no script.js, pela mesma razao e com o
+ * mesmo desenho de duas pontas. Medido na tela, no pedido 21202, um clique num
+ * modelo chamava o `drawPedPreview` 8 a 9 vezes -- sete delas saindo do
+ * `updatePedSummary`, que por sua vez e disparado por cada `change` dos selects
+ * que a abertura do modelo preenche.
+ *
+ * Cada desenho custa ~33 ms (a janela mostra UMA folha, a atual -- nao as N do
+ * modelo), entao aqui a economia e modesta. O que ela evita, alem dos ~56 ms, e
+ * a folha piscando sete vezes no caminho ate a configuracao final.
+ *
+ * As duas pontas importam. O COMECO da rajada desenha na hora porque sair do
+ * `updatePedSummary` sem desenhar deixaria na tela a folha do desenho ANTERIOR
+ * -- e o operador conferiria uma folha que nao corresponde mais ao que esta
+ * configurado, que e o perigo anotado dentro do proprio `drawPedPreview`. O FIM
+ * desenha uma vez depois que a tela assentou.
+ */
+const _JANELA_DA_PREVIA_MS = 900;
+let _previaDesenhaAgora = false;
+let _previaNoFimDaRajada = null;
+
+function agendarRedesenhoDaPrevia() {
+    if (typeof drawPedPreview !== 'function') return;
+    if (!_previaDesenhaAgora) {
+        _previaDesenhaAgora = true;
+        setTimeout(() => { _previaDesenhaAgora = false; }, _JANELA_DA_PREVIA_MS);
+        drawPedPreview();
+    }
+    if (_previaNoFimDaRajada) clearTimeout(_previaNoFimDaRajada);
+    _previaNoFimDaRajada = setTimeout(() => {
+        _previaNoFimDaRajada = null;
+        drawPedPreview();
+    }, _JANELA_DA_PREVIA_MS);
+}
+window.agendarRedesenhoDaPrevia = agendarRedesenhoDaPrevia;
+
 function drawPedPreview() {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
@@ -3037,7 +3075,7 @@ function updatePedSummary() {
 
         box.style.display = 'none';
 
-        drawPedPreview();
+        agendarRedesenhoDaPrevia();
 
         return;
 
@@ -3149,7 +3187,7 @@ function updatePedSummary() {
 
     if (typeof window.togglePedNumEditButtons === 'function') window.togglePedNumEditButtons();
 
-    drawPedPreview();
+    agendarRedesenhoDaPrevia();
 
 }
 window.onPedNumeracaoSelect = onPedNumeracaoSelect;
