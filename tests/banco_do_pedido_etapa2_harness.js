@@ -451,5 +451,31 @@ function cenario(mapas) {
         'a amostra regenerada (a que o cliente ve) tambem');
 })();
 
+(function conferenciaMarcavelComBancoDoPedido() {
+    // 28/08/2026: as caixas de "conferir repeticoes em" voltaram para o modal
+    // de Linhas quando a fonte e o banco do pedido — listando as colunas das
+    // PECAS (a marca mora nos elementos; o mapa de cada modelo a leva ate a
+    // coluna do dia dele). Conferido no navegador: caixas com OR entre pecas,
+    // gravacao so nas pecas que mudaram, e a peca resolvida entregando a
+    // coluna do banco para a celulasRepetidasDoPedido.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/conferencia: conferenciaDasColunasDoGrupo\(fonte, grupo\.itens\)/.test(script),
+        'o modal de Linhas mostra as caixas nos DOIS mundos, sem porta so para a numeracao');
+    ok(/aplicarConferenciaNoGrupo\(fonte, grupo\.itens, conferencia\)/.test(script),
+        'e aplicar grava pelo grupo');
+
+    const doGrupo = script.slice(script.indexOf('function conferenciaDasColunasDoGrupo'),
+                                 script.indexOf('window.conferenciaDasColunasDoGrupo'));
+    ok(/pecaDoModelo/.test(doGrupo) && /conferenciaDasColunasDaNumeracao/.test(doGrupo),
+        'as caixas vem das colunas das PECAS dos modelos, nao das do banco');
+
+    const aplicar = script.slice(script.indexOf('async function aplicarConferenciaNoGrupo'),
+                                 script.indexOf('window.aplicarConferenciaNoGrupo'));
+    ok(/aplicarConferenciaNasColunas\(peca, escolha\)/.test(aplicar)
+        && /salvarCamposDaNumeracao\(peca\.id, \{ elements: peca\.elements \}\)/.test(aplicar),
+        'a escolha e gravada nos elementos de cada peca do grupo, so quando mudou');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

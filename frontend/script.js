@@ -15875,6 +15875,67 @@ function conferenciaDasColunasDaNumeracao(num) {
 window.conferenciaDasColunasDaNumeracao = conferenciaDasColunasDaNumeracao;
 
 /**
+ * Os checkboxes de conferencia para um grupo do modal de Linhas.
+ *
+ * Fonte NUMERACAO: o comportamento de sempre, as colunas da propria peca.
+ *
+ * Fonte BANCO DO PEDIDO (28/08/2026): as caixas voltam, mas listando as
+ * colunas que as PECAS dos modelos leem — e nao as do banco. A marca mora nos
+ * elementos da peca, e cada modelo chega a coluna do banco pelo SEU mapa:
+ * marcar "CODIGO" confere o 05/09 no modelo do dia 5 e o 06/09 no do dia 6,
+ * que e exatamente o que a `celulasRepetidasDoPedido` faz com a peca
+ * resolvida. Dois modelos com pecas diferentes no mesmo banco: a lista e a
+ * uniao, e coluna com o mesmo nome nas duas pecas vale uma caixa so.
+ */
+function conferenciaDasColunasDoGrupo(fonte, itens) {
+    if (!fonte) return [];
+    if (fonte.tipo === 'numeracao') return conferenciaDasColunasDaNumeracao(fonte.num);
+
+    const vistas = {};
+    const lista = [];
+    (itens || []).forEach(it => {
+        const peca = pecaDoModelo(it);
+        conferenciaDasColunasDaNumeracao(peca).forEach(c => {
+            if (vistas[c.nome] === undefined) {
+                vistas[c.nome] = c.conferida;
+                lista.push(c);
+            } else if (c.conferida && !vistas[c.nome]) {
+                // Basta UMA peca conferir para a caixa nascer marcada — a
+                // mesma regra dos elementos dentro de uma peca so.
+                vistas[c.nome] = true;
+                lista.find(x => x.nome === c.nome).conferida = true;
+            }
+        });
+    });
+    return lista;
+}
+window.conferenciaDasColunasDoGrupo = conferenciaDasColunasDoGrupo;
+
+/**
+ * Grava a escolha de conferencia em TODAS as pecas do grupo — uma so, no caso
+ * comum, mas o mesmo banco pode ser lido por modelos de pecas diferentes.
+ * As chaves de `escolha` sao nomes de coluna da peca, nos dois mundos.
+ */
+async function aplicarConferenciaNoGrupo(fonte, itens, escolha) {
+    if (!escolha) return;
+    const pecas = [];
+    if (fonte && fonte.tipo === 'numeracao' && fonte.num) {
+        pecas.push(fonte.num);
+    } else {
+        (itens || []).forEach(it => {
+            const p = pecaDoModelo(it);
+            if (p && pecas.indexOf(p) === -1) pecas.push(p);
+        });
+    }
+    for (const peca of pecas) {
+        if (aplicarConferenciaNasColunas(peca, escolha)) {
+            await salvarCamposDaNumeracao(peca.id, { elements: peca.elements });
+        }
+    }
+}
+window.aplicarConferenciaNoGrupo = aplicarConferenciaNoGrupo;
+
+/**
  * Grava nos elementos quais colunas ficam fora da conferencia. Devolve quantos
  * elementos mudaram -- zero quer dizer que nao ha o que salvar.
  */
@@ -16103,11 +16164,10 @@ window.abrirDistribuicaoCsv = function(osId, chaveDaFonte, focoItemId) {
         // Os checkboxes de "conferir repeticoes em" (26/08/2026). Nascem como
         // a numeracao esta hoje -- e toda numeracao anterior a este dia nasce
         // com todas marcadas, porque a marca de FORA e que e explicita.
-        // A conferencia mora nos ELEMENTOS da numeracao, e as colunas dela
-        // tem os nomes da PECA. Vindo do banco do pedido os nomes sao outros
-        // (e cada modelo pode mapear o seu), entao nao ha caixa que se possa
-        // marcar sem ambiguidade: some, em vez de gravar no lugar errado.
-        conferencia: fonte.tipo === 'numeracao' ? conferenciaDasColunasDaNumeracao(num) : [],
+        // Com banco do pedido (28/08/2026) as caixas voltam, mas pelas colunas
+        // da PECA: a marca mora nos elementos, e e o mapa de cada modelo que a
+        // leva ate a coluna do dia dele. Ver `conferenciaDasColunasDoGrupo`.
+        conferencia: conferenciaDasColunasDoGrupo(fonte, grupo.itens),
 
         modelos: grupo.itens.map((it, i) => ({
 
@@ -16127,16 +16187,11 @@ window.abrirDistribuicaoCsv = function(osId, chaveDaFonte, focoItemId) {
 
             // A escolha das colunas conferidas mora nos ELEMENTOS, e por isso
             // ela e gravada aqui e nao junto das fatias: fatia e do modelo,
-            // conferencia e da numeracao. Ver `colunasConferidasDaNumeracao`.
-            // So quando a fonte E a numeracao: vindo do banco do pedido o
-            // modal nem mostrou as caixas, e escrever aqui gravaria nomes de
-            // coluna do banco dentro dos elementos da peca.
-            if (fonte.tipo === 'numeracao' && num) {
-                const conferenciaMudou = !!aplicarConferenciaNasColunas(num, conferencia);
-                if (conferenciaMudou) {
-                    await salvarCamposDaNumeracao(num.id, { elements: num.elements });
-                }
-            }
+            // conferencia e da peca. As chaves de `conferencia` sao sempre os
+            // nomes de coluna DA PECA (ver conferenciaDasColunasDoGrupo), entao
+            // gravar e igual nos dois mundos — com banco do pedido, so muda que
+            // o grupo pode ter mais de uma peca.
+            await aplicarConferenciaNoGrupo(fonte, grupo.itens, conferencia);
 
             // 2. Aplicar sem atribuir NENHUMA linha a NENHUM modelo não é uma
             //    distribuição — é o segundo passo que faltou. Gravar aqui poria

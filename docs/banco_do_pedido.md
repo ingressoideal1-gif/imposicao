@@ -87,7 +87,7 @@ card. Sem vínculo automático não há vínculo acidental.
 |---|---|---|
 | **Vem de:** | escolhe: a numeração (padrão) ou um banco já carregado — **só escolha, nenhuma ação** | a peça tem campo de banco, ou já há banco/vínculo |
 | **🔤 Colunas** | os checkboxes das colunas que a peça conhece, e o de‑para por modelo | só com banco do pedido |
-| **🧩 Linhas** | reparte as linhas entre os modelos que leem a mesma fonte | há linhas para contar |
+| **🧩 Linhas** | reparte as linhas entre os modelos que leem a mesma fonte, e marca as **colunas conferidas** — as caixas listam as colunas das peças, e o mapa de cada modelo leva a marca até a coluna do dia dele | há linhas para contar |
 
 A trava de excluir continua: o `ON DELETE CASCADE` apagaria os vínculos junto e
 cada modelo cairia **calado** na numeração, imprimindo o dado errado. A trava diz
