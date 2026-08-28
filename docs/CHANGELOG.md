@@ -4,6 +4,119 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-27] — A tela e o papel passam a medir com a mesma régua
+
+Levantamento ponta a ponta da fidelidade dos elementos de numeração: onde as dez
+janelas que desenham um ingresso e o motor que o imprime concordavam sobre **tamanho
+e posição**, e onde não concordavam. Tudo medido na tinta — PDF gerado pelo próprio
+motor e rasterizado, mancha lida pixel a pixel, contra a mesma mancha desenhada num
+Chrome sem cabeça com o mesmo arquivo de fonte.
+
+Seis eixos já conferiam: a grade da folha, a âncora central dos elementos, a largura
+do texto, o QR, o tamanho de PDF e SVG e a janela da foto. **Sete divergiam**, e as
+sete foram corrigidas. O documento completo, com a tabela do antes e depois e o molde
+para medir um caso novo, é o [`docs/fidelidade_tela_papel.md`](fidelidade_tela_papel.md).
+
+### 1. A altura do texto vinha de uma média, não do arquivo da fonte
+
+O navegador centra o texto pelo `sTypoAscender`/`sTypoDescender` da tabela OS/2 do
+arquivo, normalizados para somarem o corpo. O motor usava uma fração fixa (0,72 e
+0,21) para toda fonte não embutida no PDF, e ainda por outra conta. Onde a fonte real
+tem outras proporções, o papel depositava a linha mais alta do que a tela mostrava —
+com Impact no corpo 40, **1,71 mm** mais alto.
+
+Não dá para usar `fitz.Font.ascender`: ele devolve a tabela `hhea`, que erra até 0,049
+do corpo — quatro vezes mais do que a média fixa que ela substituiria. A leitura é da
+OS/2, direto dos bytes, cacheada por caminho, com volta para a média de sempre se o
+arquivo não se deixar ler.
+
+Medido no acervo: dos 287 elementos de texto com fonte disponível para medir, 85 % se
+moviam menos de 0,15 mm e 16 passavam de meio milímetro, todos em Impact.
+
+### 2. Girar um elemento girava só o conteúdo, não a caixa
+
+Um SVG de 40 × 20 mm a 90 graus saía com **10,08 × 19,98** no papel — um quarto da
+área — enquanto a tela mostrava 20 × 40. A foto de 25 × 32 saía com 25,06 × 19,64.
+Quem monta o retângulo agora é `_caixa_girada()`.
+
+### 3. O código de barras virou vetor, e a tela passou a desenhar o código real
+
+A imagem do `python-barcode` traz 1 mm de branco em cima e outro embaixo, esticados
+junto: um elemento de 60 × 12 mm imprimia barras de **60,03 × 10,67**. Recortar a
+folga custaria 2,01 ms por código — mais de três minutos numa tiragem de 100.000.
+As barras deixaram de ser imagem: o motor pede o padrão de módulos e desenha
+retângulos vetoriais. Altura exata por construção, traço na resolução do RIP, e mais
+rápido. De brinde, o giro passou a ser um `morph`, que gira a caixa.
+
+Na tela, as dez janelas pintavam um padrão **fixo de 40 barras**, igual para qualquer
+valor e qualquer simbologia. O novo `frontend/barcode-canvas.js` desenha o código de
+verdade, com as tabelas extraídas da própria biblioteca do motor e os algoritmos
+espelhados — inclusive a troca de conjunto A/B/C do Code 128, que é onde duas
+implementações honestas divergem. O teste compara os dois lados valor a valor.
+
+### 4. A sangria era aparada na pose girada
+
+O formato `Credencial 90x140` gira as poses 2 e 3 em 180 graus, e nessas duas o motor
+montava o ingresso numa página do tamanho exato dele — que recorta o próprio conteúdo
+na borda. Medido numa imposição completa: poses 0 e 1 com **2,45 mm** de sangria,
+poses 2 e 3 com **0,00**. Metade das credenciais de cada folha saía sem a sobra que
+protege do desvio da guilhotina.
+
+O levantamento do banco decidiu a regra: 45 elementos PDF de 21 numerações passam da
+borda **de propósito**, e todos usam esse formato. Sangrar sempre. A página temporária
+passou a nascer com um ingresso de folga para cada lado, simétrica, e a colagem estica
+o retângulo da célula na mesma medida — o centro não se move.
+
+### 5. Duas janelas desenhavam antes de a fonte chegar, e uma esquecia o QR Ideal
+
+Canvas não reflui: fonte que chega depois do traço não redesenha. E como a
+centralização usa a largura **medida** do texto, a fonte errada desloca também a
+posição. A prévia do Painel de Produção e o Criador de Arte não esperavam.
+
+No mesmo arquivo, a camada de numeração do Criador de Arte não tinha ramo para
+`QR_IDEAL`: o elemento não pintava um pixel, nem a caixa vazia. Quem montava a arte
+via o ingresso sem o QR que vai ser impresso.
+
+### A rede da janela de sincronização
+
+A lista `PAINEL_ARQUIVOS` mora dentro do `NewProd.exe`. Uma estação com agente antigo
+baixa o `index.html` novo, que já pede o `barcode-canvas.js`, e recebe 404 — e a
+primeira numeração com código de barras derrubaria o desenho inteiro do canvas. O
+`script.js` e o `cliente.js` ganharam a mesma reserva que o `qr-canvas.js` tem desde a
+v559: avisam no console e desenham a caixa vazia.
+
+### O resultado
+
+O estudo foi refeito pelo mesmo método contra o código corrigido: **19 de 19 eixos**
+dentro do alvo. O pior erro que sobra é de 0,07 pt no texto, onde eram 4,86.
+
+Cinco arquivos de teste novos prendem cada correção, e cada um falhou antes de o
+conserto existir: `test_engine_altura_do_texto.py`, `test_engine_giro_do_elemento.py`,
+`test_engine_codigo_de_barras.py`, `test_engine_sangria.py`, `test_barcode_canvas.py` e
+`test_espera_de_fonte_nas_janelas.py`.
+
+### O que ficou de fora, de propósito
+
+A tela continua recortando na linha de corte, então a sangria que agora sai certa no
+papel ainda não aparece em janela nenhuma — mostrá-la faz a arte de uma peça invadir a
+vizinha na prévia, e isso é mudança visual numa tela já aprovada. E o PDF Gabarito
+desenha um QR falso de 7 × 7 blocos, que pode ser guia de posição de propósito.
+
+### Um caso real, para reconhecer o sintoma
+
+A numeração `1000540` do pedido 21143 (pulseira Texband, elemento em Impact corpo 35 no
+meio da tarja de 27 mm) foi relatada como *"na tela aparece centralizado, na impressão
+imprimiu deslocado para cima"*. É o pior caso do acervo inteiro para o defeito nº 1:
+medido, o papel depositava o número **1,50 mm acima** — 6,69 mm de folga em cima contra
+10,15 embaixo. Depois do conserto, tela e papel ficam a 0,02 mm um do outro, sem tocar
+na numeração: a âncora em 13,5 mm sempre esteve no meio exato da tarja.
+
+**O conserto viaja dentro do agente.** A imposição roda na estação, então as quatro
+correções que tocam o papel só chegam quando aquela estação atualiza o `NewProd.exe`.
+Site e agente saem na mesma leva, sempre.
+
+---
+
 ## [2026-08-27] — Pedido que já saiu do prédio sai da tela dos painéis
 
 Regra do usuário: *"quando um pedido constar com Status posterior aos status do

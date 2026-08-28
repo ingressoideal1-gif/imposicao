@@ -486,10 +486,14 @@ Renderiza o canvas do editor de numeração. Usa `state.canvasScale` (px/mm) par
 
 #### `drawElement(ctx, el, S, isSelected)`
 Desenha um único elemento VDP no canvas do editor:
-- `TEXT`/`FIXED`: texto com fonte correta
-- `QR`: grade 7×7
-- `BARCODE`: padrão de barras
-- `SVG`/`PDF`: `ctx.drawImage()` com `state.numSvgImage` / `state.numPdfImage`
+- `TEXT`/`FIXED`: `window.desenharTextoAjustado()`, o mesmo ajuste de largura que o motor faz
+- `QR` e `QR_IDEAL`: `window.renderQRCodeOnCtx()` / `window.desenharQRIdeal()`, do `qr-canvas.js`
+- `BARCODE`: `window.renderBarcodeOnCtx()`, do `barcode-canvas.js` — o código de verdade, com a
+  mesma codificação do motor. Até 27/08/2026 era um padrão fixo de 40 barras, igual para qualquer
+  valor; ver `docs/fidelidade_tela_papel.md`
+- `SVG`/`PDF`: `drawArteDoElemento()` sobre `el._svgImage` / `el._pdfCanvas` — por elemento, nunca
+  global (as variáveis `state.numSvgImage` e `state.numPdfImage` deixaram de existir na v490)
+- `FOTO`: `desenharElementoFoto()`
 - `PICOTE`: linha tracejada vertical que atravessa toda a altura do formato
 
 #### `saveNumeracao()`
@@ -510,28 +514,50 @@ Serializa `state.numElements` e faz upload de SVG/PDF para o Firebase Storage (s
 ### QR Code
 - **Backend:** `qrcode.QRCode(version=1, error_correction=ERROR_CORRECT_L, border=0)` + PIL → PNG → `fitz.insert_image`.
 - **Cor personalizada** via `fill_color` do `make_image`.
-- Dimensão controlada por `size_mm`.
+- Dimensão controlada por `size_mm`. A margem é **zero** dos dois lados: o QR ocupa a caixa inteira.
 
 ### BARCODE (Código de Barras)
-- **Backend:** `python-barcode` com `ImageWriter` → PNG → `fitz.insert_image`.
+- **Backend:** `_modulos_do_barcode()` pede à `python-barcode` só o **padrão de módulos**
+  (`build()`), e o motor desenha as barras como retângulos **vetoriais** — sem imagem. Assim a
+  altura impressa é a pedida por construção, e o traço sai na resolução do RIP.
+  Até 27/08/2026 era um PNG a 300 dpi, e a faixa branca de 1 mm que a biblioteca acrescenta era
+  esticada junto: um elemento de 60 × 12 mm imprimia barras de 60,03 × 10,67.
 - **Formatos suportados:** `code128`, `ean13`, `ean8`, `upca`, `itf`, `code39`, `codabar`.
-- Normalização automática de dados: EAN-13 → 12 dígitos, EAN-8 → 7 dígitos, UPC-A → 11 dígitos, ITF → comprimento par.
-- `write_text=False`, `quiet_zone=0` (sem texto nem zonas silenciosas).
+- Normalização automática de dados: EAN-13 → 12 dígitos, EAN-8 → 7 dígitos, UPC-A → 11 dígitos, ITF → comprimento par. A mesma normalização existe no `frontend/barcode-canvas.js`.
+- O fundo branco continua: é o contraste que o leitor pede sobre arte colorida.
+- **Frontend:** `frontend/barcode-canvas.js`, dono único do desenho nas dez janelas. As tabelas
+  foram extraídas da própria `python-barcode` e os algoritmos são espelho dos de lá — inclusive a
+  troca de conjunto A/B/C do Code 128. `tests/test_barcode_canvas.py` compara os dois lados.
 
 ### SVG
-- **Backend:** `svglib.svg2rlg()` + `reportlab.renderPDF.drawToString()` → PDF temporário em memória → `show_pdf_page`.
-- **Frontend editor:** `state.numSvgImage` (HTMLImageElement via `data:image/svg+xml`).
-- **Frontend preview:** `currentNum._svgImage`.
+- **Backend:** `svglib.svg2rlg()` + `reportlab.renderPDF.drawToString()` → PDF temporário em memória → `_colar_arte_pdf()` (que é `show_pdf_page` com o grupo de transparência, quando há opacidade).
+- **Frontend:** `el._svgImage`, **no próprio elemento** — desde a v490 não há mais fonte global. O
+  desenho é sempre `drawArteDoElemento()`, que encaixa sem distorcer.
+- **Tamanho natural:** `svgNaturalSizeMm()` lê o tamanho do texto do arquivo, reproduzindo a
+  interpretação do `svglib`. Medir pelo navegador erra quando o SVG não declara dimensão absoluta.
 
 ### PDF (Elemento PDF)
-- **Backend:** Decodifica `pdf_content` (base64 ou URL via proxy) → `fitz.open()` → `show_pdf_page`.
-- **Frontend editor:** `state.numPdfImage` (renderizado via pdfjsLib → canvas → PNG → Image).
+- **Backend:** Decodifica `pdf_content` (base64 ou URL via proxy) → `fitz.open()` → `_colar_arte_pdf()`. Entra **vetorial**, sempre: rasterizar a arte do cliente é proibido neste projeto.
+- **Frontend editor:** `el._pdfCanvas`, por elemento (renderizado via pdfjsLib).
 - **Frontend preview (imposição):** `el._pdfCanvas` — canvas offscreen renderizado assincronamente via pdfjsLib com escala 2x. Cache fica no próprio objeto elemento.
 - **Pré-carregamento:** ao selecionar uma numeração no painel de imposição, `preloadNumPdfElements()` dispara o carregamento de todos os PDFs dos elementos antes mesmo do primeiro `drawPreview()`.
 
 ### PICOTE
 - **Frontend editor:** Linha tracejada vertical que cruza todo o canvas na posição `x_mm`.
-- **Backend:** Ignorado na renderização (não aparece no PDF final).
+- **Backend:** Ignorado na renderização (não aparece no PDF final). É guia de acabamento, não tinta
+  — divergência de propósito, registrada em `docs/fidelidade_tela_papel.md`.
+- **No verso** ele espelha: `x = width_mm − x_mm`, porque o corte é físico e atravessa o papel.
+
+### Geometria comum a todos os elementos
+
+- `x_mm` e `y_mm` são o **centro** do elemento, contados do canto superior esquerdo da peça — dos
+  dois lados.
+- `rotation` (0, 90, 180 ou 270) gira a **caixa**, não só o conteúdo: um elemento de 40 × 20 mm a
+  90° ocupa 20 × 40 na peça. No motor isso é `_caixa_girada()`.
+- O texto é centrado na vertical pela régua do **arquivo da fonte**, não por uma média — ver
+  `_fracao_tipografica()` e `docs/fidelidade_tela_papel.md`.
+- O que passa da borda da peça **sangra** no papel, em todas as poses: é a sobra que protege do
+  desvio da guilhotina (`_folga_de_sangria()`).
 
 ---
 

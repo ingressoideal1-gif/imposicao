@@ -451,16 +451,37 @@ em frente do mesmo jeito.
   ser persistido no banco e enviado ao engine. Inofensivo hoje, mas é sujeira que
   contradiz a intenção das listas.
 
-- **Bounds e desenho discordam no engine quando falta `width_mm`.**
-  `_get_element_bounds` (`engine.py:461`) assume 20mm por default; o desenho do
-  elemento PDF (`:769-771`) usa o tamanho natural do PDF quando `width_mm` é `None`.
-  Um elemento sem dimensão é posicionado como se tivesse 20mm e desenhado com o
-  tamanho real.
+- ~~**Bounds e desenho discordam no engine quando falta `width_mm`.**~~ A função
+  `_get_element_bounds` não existe mais no `engine.py`. Registro mantido porque o
+  sintoma — a caixa que posiciona não ser a caixa que desenha — é a classe de
+  defeito que o giro de 90° reabriu em 2026-08-27; ver abaixo.
 
-- **O `except` do elemento PDF também é silencioso** (`engine.py:776-778`): imprime e
-  segue, produzindo PDF sem o elemento. Mesmo padrão do B1.
+- ~~**O `except` do elemento PDF também é silencioso**~~: hoje ele re-levanta, como o
+  do SVG. Um PDF impresso sem a arte custa papel e tempo.
 
 ---
+
+## Giro: a caixa gira junto (2026-08-27)
+
+`rotation` gira a **caixa** do elemento, e não só o conteúdo dentro dela. Um elemento
+de 40 × 20 mm a 90 graus ocupa 20 × 40 mm na peça — é assim que o canvas de todas as
+janelas sempre desenhou (`translate` na âncora, `rotate`, caixa em volta).
+
+O motor fazia outra coisa: mantinha o retângulo em pé e mandava o PyMuPDF girar o
+conteúdo dentro dele. Como PDF e SVG entram com `keep_proportion=True`, a arte
+**encolhia** para caber no que sobrava. Medido:
+
+```
+SVG 40x20 a 90 graus    tela 20,00 x 40,00      papel 10,08 x 19,98
+```
+
+Um quarto da área. Quem monta o retângulo agora é `_caixa_girada()`, no topo do
+`engine.py`, usada pelos ramos SVG, PDF e FOTO. Fora de 90 e 270 nada muda: o
+`show_pdf_page` e o `insert_image` só aceitam múltiplos de 90, e a interface só
+oferece os quatro valores.
+
+Ao acrescentar um tipo novo que cole arte numa caixa, é por ela que o retângulo tem de
+passar. O detalhe completo está em `docs/fidelidade_tela_papel.md`.
 
 ## Ordem sugerida de ataque
 
@@ -472,6 +493,7 @@ em frente do mesmo jeito.
 5. ~~**E3/E2**~~ — feito na v490: a numeração suporta N arquivos, um por elemento.
 6. **E4** — unificar o comportamento de "arquivo não carregou", em especial o export
    de gabarito, que não desenha nada e não avisa.
+7. ~~**Giro**~~ — feito em 2026-08-27, ver a seção acima.
 
 ## Como reproduzir as medições
 
