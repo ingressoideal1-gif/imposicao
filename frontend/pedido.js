@@ -450,6 +450,11 @@ window.agendarRedesenhoDaPrevia = agendarRedesenhoDaPrevia;
 
 function drawPedPreview() {
 
+    // Chegou a vez de desenhar: o recado de "montando a previa" sai daqui, e
+    // nao no fim, porque todos os caminhos desta funcao — inclusive os de erro
+    // — escrevem no proprio canvas. Ver limparPreviaEnquantoCarrega().
+    if (typeof previaFicouPronta === 'function') previaFicouPronta();
+
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
     const activeItem = state.activeOSItem;
     
@@ -3241,13 +3246,197 @@ function clearPedActiveOS() {
 }
 window.clearPedActiveOS = clearPedActiveOS;
 
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A JANELA DE VISUALIZACAO ABRE ABAIXO DO MODELO
+   ══════════════════════════════════════════════════════════════════════════
+
+   Ate 28/08/2026 a janela morava num card no FIM da pagina: o operador
+   escolhia o modelo no topo da fila e ia procurar a previa depois de todas as
+   caixas de produto. Num pedido com varios produtos, o olho perdia o vinculo
+   entre a linha escolhida e o que a previa mostrava.
+
+   Agora ela abre logo abaixo do modelo, dentro da caixa do produto.
+
+   O PONTO QUE NAO PODE SER PERDIDO DE VISTA: a janela e' UM elemento so, que
+   MUDA DE LUGAR. Ela nunca e' escrita dentro do HTML da fila. Redesenha-la
+   custaria o canvas ja pintado (voltaria em branco), remontaria o painel de
+   impressao — que vai buscar as capacidades da impressora no agente — e
+   devolveria bandeja, papel e copias ao padrao, apagando a escolha do
+   operador. Mover custa 3,4 ms e nao cresce com o tamanho do pedido; num
+   pedido de 52 modelos, redesenhar a fila inteira custa 160 ms nesta maquina
+   e quase 1 s numa estacao antiga.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** A janela, onde quer que ela esteja no momento. */
+function janelaDeVisualizacao() {
+    return document.getElementById('ped-preview-card-container');
+}
+
+/**
+ * Devolve a janela para a casa dela, fora da fila.
+ *
+ * Chamada SEMPRE antes de o `renderPedOSQueue` reescrever o corpo da fila: o
+ * `innerHTML` destroi tudo o que estiver la dentro, e a janela estando dentro
+ * seria destruida junto.
+ */
+function recolherJanelaParaCasa() {
+    const janela = janelaDeVisualizacao();
+    const casa = document.getElementById('ped-preview-home');
+    if (!janela || !casa) return;
+    if (janela.parentElement !== casa) casa.appendChild(janela);
+
+    // A linha-abrigo vazia nao fica na tabela: ela abriria um vao sem motivo.
+    document.querySelectorAll('#ped-os-queue-body tr.linha-da-janela')
+        .forEach(tr => tr.remove());
+}
+
+/**
+ * Leva a janela para uma linha-abrigo logo abaixo do modelo pedido.
+ *
+ * Devolve `true` se conseguiu. Falha em silencio (e devolve `false`) quando a
+ * linha nao esta na tela — o modelo pode ter sido escondido por um filtro, ou
+ * a fila pode ainda nao ter sido desenhada.
+ */
+function moverJanelaParaModelo(itemId) {
+    const janela = janelaDeVisualizacao();
+    if (!janela) return false;                    // producao.html nao tem a janela
+    const linha = document.getElementById(`ped-queue-row-${itemId}`);
+    if (!linha || linha.style.display === 'none') return false;
+
+    let abrigo = document.getElementById('ped-linha-da-janela');
+    if (!abrigo) {
+        abrigo = document.createElement('tr');
+        abrigo.id = 'ped-linha-da-janela';
+        abrigo.className = 'linha-da-janela';
+        // 11 colunas: e' o numero de celulas da linha do modelo nos DOIS
+        // desenhos possiveis (o normal e o de CAMAROTE). Ver renderPedOSQueue.
+        abrigo.innerHTML = '<td colspan="11"></td>';
+    }
+    linha.parentNode.insertBefore(abrigo, linha.nextSibling);
+    abrigo.firstElementChild.appendChild(janela);
+    janela.style.display = 'block';
+    return true;
+}
+
+/**
+ * Pinta o realce das linhas sem redesenhar a fila.
+ *
+ * Trocar de modelo aberto mexe em duas linhas — a que fechou e a que abriu.
+ * Fazer isso pelo `renderPedOSQueue` significaria remontar as 52 linhas e as
+ * 6.400 opcoes de cor e numeracao delas para mudar uma borda.
+ */
+function pintarLinhaAberta(itemId) {
+    document.querySelectorAll('#ped-os-queue-body tr.fila-linha.aberta')
+        .forEach(tr => tr.classList.remove('aberta'));
+    if (!itemId) return;
+    const linha = document.getElementById(`ped-queue-row-${itemId}`);
+    if (linha) linha.classList.add('aberta');
+}
+
+/**
+ * Apaga a previa no INSTANTE do clique.
+ *
+ * O carregamento de um modelo e' encadeado (400, 600 e 800 ms), e a previa so
+ * e' desenhada no fim. Com a janela abrindo ao lado do modelo, o operador fica
+ * olhando para ela esse tempo todo — e sem isto ela mostraria a folha do
+ * modelo ANTERIOR debaixo do nome do modelo novo. A regra do projeto e' que a
+ * janela mostra o modelo selecionado, nunca outro.
+ */
+function limparPreviaEnquantoCarrega() {
+    const canvas = document.getElementById('ped-preview-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.display = 'none';
+    }
+    const selo = document.getElementById('ped-preview-sheet-num');
+    if (selo) selo.textContent = 'Montando…';
+
+    const dono = canvas ? (canvas.closest('.ped-preview-canvas-container') || canvas.parentElement) : null;
+    if (dono && !dono.querySelector('.previa-montando')) {
+        const recado = document.createElement('div');
+        recado.className = 'previa-montando';
+        recado.innerHTML = '<span class="roda"></span><span>Montando a pr&eacute;via deste modelo…</span>';
+        dono.insertBefore(recado, dono.firstChild);
+    }
+}
+
+/** Tira o recado de "montando" e devolve o canvas. Chamada pelo drawPedPreview. */
+function previaFicouPronta() {
+    document.querySelectorAll('.previa-montando').forEach(el => el.remove());
+    const canvas = document.getElementById('ped-preview-canvas');
+    if (canvas) canvas.style.display = '';
+}
+window.previaFicouPronta = previaFicouPronta;
+
+/**
+ * Fecha a janela e desseleciona o modelo.
+ *
+ * NAO redesenha a fila: nada do conteudo das linhas mudou, so o realce de uma
+ * delas — e isso e' uma troca de classe.
+ */
+function fecharJanelaDoModelo() {
+    state.activeOSItem = null;
+    recolherJanelaParaCasa();
+    const janela = janelaDeVisualizacao();
+    if (janela) janela.style.display = 'none';
+    pintarLinhaAberta(null);
+    if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
+    if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
+}
+window.fecharJanelaDoModelo = fecharJanelaDoModelo;
+
+/**
+ * O CLIQUE NA LINHA E' UM INTERRUPTOR.
+ *
+ * Clicar num modelo o abre; clicar de novo NO MESMO fecha a janela e o
+ * desseleciona. A pagina passa a abrir sem nenhum modelo selecionado — antes
+ * ela sempre abria com o primeiro carregado, e o operador nao tinha como
+ * chegar a um estado neutro.
+ *
+ * Existe separado do `enviarParaPedido` DE PROPOSITO: aquele significa "abra
+ * este modelo" e e' chamado tambem por quem edita um campo da linha
+ * (pedQueueUpdateField, pedQueueUpdateCor, pedQueueUpdateNum). Se o
+ * interruptor morasse la, editar a quantidade do modelo aberto o fecharia.
+ */
+async function alternarModeloAberto(itemId, osId) {
+    const jaAberto = state.activeOSItem
+        && String(state.activeOSItem.itemId) === String(itemId)
+        && String(state.activeOSItem.osId) === String(osId);
+
+    if (jaAberto) {
+        fecharJanelaDoModelo();
+        return;
+    }
+    await enviarParaPedido(itemId, osId);
+}
+window.alternarModeloAberto = alternarModeloAberto;
+
 async function enviarParaPedido(itemId, osId) {
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
     const item = itens.find(i => String(i.id) === String(itemId)) || itens[0];
     if (!item) return toast('Item não encontrado.', 'error');
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
+    const trocouDeModelo = !state.activeOSItem
+        || String(state.activeOSItem.itemId) !== String(item.id);
     state.activeOSItem = { itemId: item.id, osId };
+
+    // O pedido que a fila desenha e' guardado a parte do modelo aberto: sem
+    // isso a fila sumiria da tela ao fechar a janela, porque ela se desenhava
+    // a partir de `activeOSItem` e nada mais.
+    state.pedidoAberto = { osId };
+
+    // A previa se apaga AGORA, antes de qualquer espera, para nunca mostrar a
+    // folha do modelo anterior debaixo do nome do modelo novo.
+    if (trocouDeModelo) limparPreviaEnquantoCarrega();
+
+    // O realce da linha e' imediato: o operador ve o clique valer sem esperar
+    // o carregamento. A janela vai junto, se a fila ja estiver desenhada.
+    pintarLinhaAberta(item.id);
+    moverJanelaParaModelo(item.id);
 
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
     // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
@@ -3290,9 +3479,17 @@ async function enviarParaPedido(itemId, osId) {
         }
     }
 
-    // Navegar para a view de Pedido (sem mudar para Imposição)
-    const navBtn = document.querySelector('[data-view="view-pedido"]');
-    if (navBtn) navBtn.click();
+    // Navegar para a view de Pedido (sem mudar para Imposição).
+    //
+    // `showView` direto, e NAO um clique no botao do menu: o clique no menu
+    // agora significa "quero a pagina inicial da tela" e fecha a janela do
+    // modelo — o que desfaria exatamente o que esta funcao acabou de fazer.
+    if (typeof window.showView === 'function') {
+        window.showView('view-pedido');
+    } else {
+        const navBtn = document.querySelector('[data-view="view-pedido"]');
+        if (navBtn) navBtn.click();
+    }
 
     // ====================================================================
     // DELEGAR resolução de Formato / Saída / Numeração / Arte
@@ -3768,6 +3965,20 @@ function aplicarFiltrosDaFila() {
 
     pintarBotaoSoAguardando();
 
+    // MODELO ESCONDIDO FECHA A JANELA.
+    //
+    // A janela agora mora dentro da fila, logo abaixo do modelo aberto. Se o
+    // filtro de cor ou o "so Aguardando" esconde justamente esse modelo, a
+    // janela ficaria pendurada embaixo de nada — e continuaria mandando na
+    // impressao de um modelo que o operador nao ve mais. E' o mesmo motivo da
+    // desmarcarModelosEscondidos() logo abaixo, aplicado a janela.
+    if (state.activeOSItem) {
+        const linhaAberta = document.getElementById(`ped-queue-row-${state.activeOSItem.itemId}`);
+        if (linhaAberta && linhaAberta.style.display === 'none') {
+            fecharJanelaDoModelo();
+        }
+    }
+
 }
 window.aplicarFiltrosDaFila = aplicarFiltrosDaFila;
 
@@ -3821,13 +4032,18 @@ function renderPedOSQueue() {
     const wrapper = document.getElementById( 'ped-os-queue-body' );
     if (!container || !wrapper) return;
 
-    const activeItem = state.activeOSItem;
-    if (!activeItem || !activeItem.osId) {
+    // A fila desenha o PEDIDO ABERTO, e nao o modelo ativo: desde 28/08/2026 a
+    // tela abre sem nenhum modelo selecionado, e fechar a janela deixa
+    // `activeOSItem` nulo. Lendo so o modelo ativo, a fila inteira sumiria da
+    // tela no primeiro clique de fechar.
+    const activeItem = state.activeOSItem || null;
+    const osId = (state.pedidoAberto && state.pedidoAberto.osId)
+        || (activeItem && activeItem.osId);
+    if (!osId) {
         container.style.display = 'none';
         return;
     }
 
-    const osId = activeItem.osId;
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
     if (!itens.length) {
         container.style.display = 'none';
@@ -3835,6 +4051,13 @@ function renderPedOSQueue() {
     }
 
     // Não selecionar item automaticamente. O usuário deve clicar explicitamente.
+
+    // A JANELA SAI DA FILA ANTES DE A FILA SER REESCRITA.
+    // O `innerHTML` la embaixo destroi tudo o que estiver dentro do corpo da
+    // fila. Com a janela dentro, ela seria destruida junto — canvas em branco,
+    // painel de impressao remontado, bandeja e papel de volta ao padrao. Ela
+    // volta para baixo do modelo aberto no fim desta funcao.
+    recolherJanelaParaCasa();
 
     container.style.display = 'block';
 
@@ -4024,18 +4247,24 @@ function renderPedOSQueue() {
         `;
 
         html += groupItens.map((item, idx) => {
-            const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
+            const isActive = !!activeItem && String(activeItem.itemId) === String(item.id);
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
-            
+
             let statusBg = '#65625e'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#162037'; // Impresso
             }
 
-            const isCurrentSelected = isSelected || isActive;
-            const rowStroke = isCurrentSelected ? 'outline: 2pt solid #f97316;' : 'outline: 1px solid #918f8c;';
-            const rowBg = `background: ${statusBg}; ${rowStroke}`;
+            // O contorno saiu do style inline e virou classe: `marcada` (entra na
+            // folha combinada) e `aberta` (a janela esta logo abaixo) passaram a
+            // ser estados DIFERENTES, e trocar de modelo aberto virou uma troca
+            // de classe em duas linhas, sem redesenhar a fila. Ver o CSS em
+            // style.css e a pintarLinhaAberta().
+            const classesDaLinha = 'hover-row fila-linha'
+                + (isSelected ? ' marcada' : '')
+                + (isActive ? ' aberta' : '');
+            const rowBg = `background: ${statusBg};`;
 
             let itemFmtId = boxFmtSel;
 
@@ -4110,10 +4339,10 @@ function renderPedOSQueue() {
             const jsOsId = osId;
 
             return `
-                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
+                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="${classesDaLinha}" id="ped-queue-row-${item.id}"
                     data-cor-chave="${corDoItem.chave}"
                     data-impresso="${normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso' ? 'sim' : 'nao'}"
-                    onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
+                    onclick="alternarModeloAberto('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 12px; width: 40px; text-align: center;">
                         <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
                                onclick="event.stopPropagation(); togglePedItemSelection('${jsItemId}', '${jsOsId}')"
@@ -4246,6 +4475,12 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
     aplicarFiltrosDaFila();
+
+    // A janela volta para baixo do modelo aberto. Depois do filtro, de
+    // propósito: se o filtro escondeu justamente o modelo aberto, a
+    // aplicarFiltrosDaFila ja fechou a janela e nao ha para onde leva-la.
+    if (state.activeOSItem) moverJanelaParaModelo(state.activeOSItem.itemId);
+
     updatePedImprimirButtonsVisibility();
     // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();

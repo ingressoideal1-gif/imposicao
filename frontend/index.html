@@ -1685,6 +1685,15 @@
                         </div>
                     </div>
 
+                    <!-- A CASA DA JANELA DE VISUALIZACAO.
+                         A janela nao mora mais no fim da pagina: ao abrir um modelo
+                         ela e MOVIDA para uma linha-abrigo logo abaixo dele, dentro
+                         da caixa do produto, e volta para ca quando o modelo fecha.
+                         E' um elemento SO, movido — nunca redesenhado junto com a
+                         fila. Redesenha-la apagaria o canvas ja pintado, remontaria
+                         o painel de impressao (nova ida ao agente) e devolveria
+                         bandeja e papel ao padrao. Ver moverJanelaParaModelo(). -->
+                    <div id="ped-preview-home">
                     <div class="imposicao-preview" id="ped-preview-card-container" style="display: none;">
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
@@ -2020,6 +2029,7 @@
                              </div><!-- /flex wrapper -->
                         </div>
                     </div>
+                    </div><!-- /ped-preview-home -->
                 </div>
             </section>
 

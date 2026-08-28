@@ -48,6 +48,11 @@ function extrairFuncao(src, nome) {
 
 const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem',
                'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
+               // `numeracaoDoModelo` entrou no script.js junto com as regras de
+               // bloqueio do negocio e a `quantidadeDoModelo` passou a chama-la.
+               // Sem o nome nesta lista, o harness inteiro morria com
+               // "numeracaoDoModelo is not defined" antes da primeira conta.
+               'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo',
                'quantidadeDoModelo', 'contaDaSoma', 'porQueNaoCombina',
                'itemAtivoDoPedido', 'itensDaImposicao', 'modoSomaFolha',
                'imprimeNumeroDoModelo', 'modoDeImpressaoDoModelo', 'blocagemDoModelo',

@@ -789,6 +789,18 @@ function toast(msg, type = 'info') {
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const viewId = btn.dataset.view;
+
+        // MENU ABRE A PAGINA INICIAL DA TELA, nunca o detalhe da visita
+        // anterior. A pagina inicial do Pedido passou a ser a fila com NENHUM
+        // modelo selecionado, entao vir pelo menu fecha a janela de
+        // visualizacao que tenha ficado aberta.
+        //
+        // Quem abre um modelo por codigo NAO passa por aqui: o
+        // `enviarParaPedido` chama `showView` direto, de proposito.
+        if (viewId === 'view-pedido' && typeof window.fecharJanelaDoModelo === 'function') {
+            window.fecharJanelaDoModelo();
+        }
+
         if (typeof window.showView === 'function') {
             window.showView(viewId);
         } else {
@@ -24670,6 +24682,11 @@ if (!state.ordens) state.ordens = [];
 if (!state.osItens) state.osItens = {};
 if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
+// O PEDIDO ABERTO na tela, guardado a parte do MODELO aberto. Desde 28/08/2026
+// a tela de Pedido abre sem nenhum modelo selecionado e fechar a janela deixa
+// `activeOSItem` nulo — as duas filas (Pedido e Imposicao) precisam de outra
+// coisa para saber o que desenhar. Ver renderPedOSQueue().
+if (!state.pedidoAberto) state.pedidoAberto = null;
 // Como somar modelos numa folha. Decisão de tiragem, não do pedido: vive aqui e
 // não vai ao banco. O padrão é o comportamento de sempre.
 if (!state.modoSomaFolha) state.modoSomaFolha = 'separado';
@@ -29936,30 +29953,45 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     state.impArtFile = null;
     state.impArtPdfDoc = null;
 
-    // Abrir sempre com o primeiro modelo do pedido já selecionado
-    const primeiro = getPrimeiroModeloDaOS(itens);
-    state.activeOSItem = { itemId: primeiro.id, osId: realOsId };
-
-    // IMPORTANTE: desenhar a fila ANTES de carregar o modelo.
-    // renderPedOSQueue/renderImpOSQueue aplicam o formato padrão do produto em
-    // item.formato_id; sem isso enviarParaImposicao acha o formato vazio, cai no
-    // fallback do primeiro formato do sistema e a cor do modelo se perde.
-    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-
-    if (typeof enviarParaPedido === 'function') {
-        // enviarParaPedido carrega o modelo (formato/saída/numeração/arte),
-        // redesenha a fila e já navega para a view de Pedido
-        await enviarParaPedido(primeiro.id, realOsId);
-        return;
+    // O PEDIDO ABRE SEM NENHUM MODELO SELECIONADO (28/08/2026).
+    //
+    // Ate aqui a tela abria com o primeiro modelo carregado, e nao havia como
+    // chegar a um estado neutro: sempre existia um modelo aberto. Agora quem
+    // escolhe e' o operador, clicando — e clicando de novo ele fecha.
+    //
+    // Quem manda na fila e' `state.pedidoAberto`; `activeOSItem` fica nulo ate
+    // o primeiro clique. Ver renderPedOSQueue() e alternarModeloAberto().
+    state.pedidoAberto = { osId: realOsId };
+    state.activeOSItem = null;
+    if (typeof fecharJanelaDoModelo === 'function') {
+        // Fecha a janela do pedido ANTERIOR: sem isso ela continuaria aberta,
+        // mostrando um modelo que nao pertence mais a esta tela.
+        fecharJanelaDoModelo();
     }
 
-    // Fallback caso pedido.js não esteja carregado
+    // renderPedOSQueue/renderImpOSQueue aplicam o formato padrão do produto em
+    // item.formato_id; sem isso enviarParaImposicao — que roda quando o
+    // operador clica num modelo — acharia o formato vazio, cairia no fallback
+    // do primeiro formato do sistema e a cor do modelo se perderia.
     if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
 
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
+
+    // O titulo da tela nao pode depender de um modelo aberto: ele e' do
+    // PEDIDO. Antes vinha de carona no enviarParaPedido, que nao roda mais aqui.
+    const pedViewTitle = document.getElementById('ped-view-title');
+    const pedViewSubtitle = document.getElementById('ped-view-subtitle');
+    if (typeof pintarTituloDaTelaDePedido === 'function') {
+        let nomeEvento = '';
+        if (state.todasArtes) {
+            const arteObj = state.todasArtes.find(a => String(a.id_int) === String(realOsId).replace('vibe_', ''));
+            if (arteObj) nomeEvento = arteObj.nome_evento || '';
+        }
+        pintarTituloDaTelaDePedido(pedViewTitle, osObj, nomeEvento);
+    }
+    if (pedViewSubtitle) pedViewSubtitle.style.display = 'none';
 }
 
 /**
@@ -29994,13 +30026,18 @@ function renderImpOSQueue() {
     const wrapper = document.getElementById( 'imp-os-queue-body' );
     if (!container || !wrapper) return;
 
-    const activeItem = state.activeOSItem;
-    if (!activeItem || !activeItem.osId) {
+    // Mesma leitura da fila do Pedido: quem manda e' o PEDIDO ABERTO, nao o
+    // modelo ativo. Desde 28/08/2026 a tela de Pedido abre sem modelo
+    // selecionado, e `activeOSItem` fica nulo — lendo so ele, esta fila
+    // desapareceria junto, sem ninguem ter fechado nada aqui.
+    const activeItem = state.activeOSItem || null;
+    const osId = (state.pedidoAberto && state.pedidoAberto.osId)
+        || (activeItem && activeItem.osId);
+    if (!osId) {
         container.style.display = 'none';
         return;
     }
 
-    const osId = activeItem.osId;
     const itens = state.osItens[osId] || [];
     if (!itens.length) {
         container.style.display = 'none';
@@ -30191,7 +30228,7 @@ function renderImpOSQueue() {
         `;
 
         html += groupItens.map((item, idx) => {
-            const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
+            const isActive = !!activeItem && String(activeItem.itemId) === String(item.id);
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
             
             let statusBg = '#65625e'; // Aguardando

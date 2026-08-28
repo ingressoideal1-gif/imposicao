@@ -4260,3 +4260,47 @@ input[type=number] {
     border-color: var(--acab-realce);
     color: var(--acab-realce-texto);
 }
+
+/* ─── Fila de modelos do Pedido: os dois estados de uma linha ────────────────
+
+   Eles dizem coisas DIFERENTES e por isso nao podem ter o mesmo desenho:
+
+   .marcada  = a caixinha esta marcada; o modelo entra na folha combinada.
+   .aberta   = a janela de visualizacao esta aberta logo abaixo desta linha.
+
+   Ate 28/08/2026 os dois usavam o mesmo contorno laranja, e so a caixinha os
+   distinguia. Agora a marcacao continua laranja (e' ela que decide o que sai
+   no papel) e o "aberto" ganha contorno azul — a mesma cor do nome do modelo
+   no cabecalho da janela, para o olho ligar uma coisa a outra.
+
+   Moram no CSS, e nao no style inline da linha, porque trocar de modelo aberto
+   passou a ser uma troca de CLASSE em duas linhas, sem redesenhar a fila: com
+   52 modelos o redesenho custa 160 ms e a troca de classe custa 3. */
+tr.fila-linha            { outline: 1px solid #918f8c; }
+tr.fila-linha.marcada    { outline: 2pt solid #f97316; }
+tr.fila-linha.aberta     { outline: 2pt solid #3b82f6; }
+tr.fila-linha.marcada.aberta {
+    outline: 2pt solid #f97316;
+    box-shadow: inset 5px 0 0 0 #3b82f6;
+}
+
+/* A linha que hospeda a janela de visualizacao dentro da caixa do produto.
+   Nao tem contorno nem fundo proprios: quem se apresenta e' a janela. E nao
+   apaga no hover, porque o hover da fila e' para escolher LINHA, e esta nao
+   e' uma linha para escolher. */
+tr.linha-da-janela > td  { padding: 0 0 10px 0; background: transparent; }
+tr.linha-da-janela:hover { opacity: 1 !important; }
+
+/* Recado de "estou montando" enquanto a previa do modelo novo nao fica pronta.
+   Existe porque o carregamento e' encadeado em 400/600/800 ms: sem ele, por
+   quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo
+   do nome do modelo novo. */
+.previa-montando {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 220px; color: var(--text-dim); font-size: 0.9rem;
+}
+.previa-montando .roda {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(99, 102, 241, 0.3); border-top-color: #6366f1;
+    animation: spin 0.8s linear infinite;
+}
