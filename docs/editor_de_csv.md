@@ -301,6 +301,12 @@ Nesse modo:
   entra na fatia de cada dono, e fatias que se cruzam voltam somadas quando o
   modal reabre. As contagens de "sobra" (toast e selo do grupo) contam linha
   única — sem nenhum dono — e não a diferença contra a soma das fatias.
+  Três acabamentos vieram do relato "continua o mesmo erro" (28/08/2026): a
+  remoção exclusiva **ensina a caixa** no próprio aviso ("Era para sair nos
+  DOIS modelos?…"); fatias gravadas que se cruzam **reabrem o modal com a
+  caixa ligada** (senão o próximo clique desmontaria o gravado em silêncio); e
+  a escolha da caixa **vale para as próximas aberturas** da página
+  (`compartilharPreferido`).
 - O rodapé responde a única pergunta que sobra — ficou alguém sem dono? — e
   clicar nele filtra a grade para essas linhas.
 

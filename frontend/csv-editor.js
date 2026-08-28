@@ -739,6 +739,13 @@
         return !!(ed && ed.modelos && ed.modelos.length);
     }
 
+    // A caixa "🔁 Linha em mais de um modelo" volta como o operador a deixou
+    // na última abertura DESTA página. Sem isto, o fluxo natural — dar as
+    // linhas a um modelo, aplicar, abrir pelo card do próximo — reabria sempre
+    // no exclusivo, e o segundo modelo tirava as linhas do primeiro (relato do
+    // usuário em 28/08/2026, pedido 21346).
+    let compartilharPreferido = false;
+
     function corDoModelo(id) {
         const i = ed.modelos.findIndex(m => String(m.id) === String(id));
         return i < 0 ? 'var(--text-faint,#475569)' : PALETA[i % PALETA.length];
@@ -845,9 +852,13 @@
         recalcular();
         const de = Object.keys(movidos)
             .map(k => movidos[k] + ' de ' + nomeDoModelo(k)).join(', ');
+        // Quando a atribuição TIROU linhas de outro modelo, o aviso ensina a
+        // saída: era exatamente o gesto do usuário em 28/08/2026 — ele queria
+        // as mesmas linhas nos dois modelos e nada na tela dizia como.
         aviso(
             n + ' linha(s) para ' + nomeDoModelo(modeloId)
-            + (de ? ' (tiradas de: ' + de + ')' : '') + '.',
+            + (de ? ' (tiradas de: ' + de + ')' : '') + '.'
+            + (de ? ' Era para sair nos DOIS modelos? Ligue a caixa "🔁 Linha em mais de um modelo" e atribua de novo.' : ''),
             'success'
         );
     }
@@ -2380,7 +2391,10 @@
         cComp.type = 'checkbox';
         cComp.id = 'csv-ed-compartilhar';
         cComp.checked = !!ed.compartilhar;
-        cComp.onchange = () => { ed.compartilhar = cComp.checked; };
+        cComp.onchange = () => {
+            ed.compartilhar = cComp.checked;
+            compartilharPreferido = cComp.checked;   // vale para as próximas aberturas
+        };
         lComp.appendChild(cComp);
         lComp.appendChild(document.createTextNode('🔁 Linha em mais de um modelo'));
         b2.appendChild(lComp);
@@ -2730,6 +2744,14 @@
                     }
                 });
             });
+
+            // Se as fatias gravadas JÁ se cruzam, este pedido trabalha com
+            // linha compartilhada: a caixa abre LIGADA — no exclusivo, o
+            // próximo clique desmontaria em silêncio o que está gravado. E a
+            // escolha feita numa abertura anterior desta página também vale.
+            let cruzou = false;
+            ed.dono.forEach(v => { if (v.length > 1) cruzou = true; });
+            if (cruzou || compartilharPreferido) ed.compartilhar = true;
         }
 
         montarModal();

@@ -608,6 +608,17 @@ function cenario(mapas) {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
     ok(/new Set\(grupo\.itens\.flatMap/.test(script) && /new Set\(g\.itens\.flatMap/.test(script),
         'as sobras (toast e selo do grupo) contam linha única, não a soma das fatias');
+
+    // O relato de 28/08 ("continua o mesmo erro"): a caixa existia mas era
+    // invisível no momento da remoção e voltava desligada a cada abertura.
+    // Reproduzido e corrigido no navegador (repro_gesto_do_usuario.js).
+    ok(/Era para sair nos DOIS modelos\? Ligue a caixa/.test(editor),
+        'a remoção exclusiva ENSINA a caixa — a trava tem saída na própria tela');
+    ok(/let compartilharPreferido = false/.test(editor)
+        && /compartilharPreferido = cComp\.checked/.test(editor),
+        'a escolha da caixa vale para as próximas aberturas da página');
+    ok(/if \(cruzou \|\| compartilharPreferido\) ed\.compartilhar = true/.test(editor),
+        'fatias gravadas que se cruzam reabrem o modal com a caixa LIGADA');
 })();
 
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
