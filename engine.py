@@ -347,6 +347,119 @@ def _opacidade_arte(el: dict) -> float:
     return max(0.0, min(1.0, n))
 
 
+_FRACOES_DO_MEIO: dict = {}
+_FRACAO_PADRAO = (_ASCENDER_DEFAULT - _DESCENDER_DEFAULT) / 2.0
+
+
+def _fracao_tipografica(asc: float, desc: float) -> float:
+    """A distancia do centro visual ate a linha de base, em fracao do corpo.
+
+    E a conta que o navegador faz para `textBaseline='middle'`: ele toma o
+    ascendente e o descendente TIPOGRAFICOS da fonte, normaliza os dois para que
+    somem o corpo, e poe o centro no meio disso. Em formula:
+
+        deslocamento = corpo x ( asc / (asc + |desc|) - 0,5 )
+
+    Conferido em nove fontes contra o Chrome, em 27/08/2026: bate ate a quinta
+    casa decimal. O motor fazia `(asc - desc) / 2`, que so coincide quando os dois
+    somam exatamente 1 — e quase nenhuma fonte real soma.
+    """
+    total = abs(asc) + abs(desc)
+    if total <= 0:
+        return _FRACAO_PADRAO
+    return abs(asc) / total - 0.5
+
+
+def _fracao_das_base14(font_name: str) -> float:
+    """A mesma fracao para as seis fontes embutidas no PDF.
+
+    A tela nao desenha Helvetica: ela desenha Arial, que e a substituta do
+    `getFontCSS`. As duas tem praticamente a mesma proporcao vertical — medido,
+    0,27622 contra 0,27575, dois milesimos de milimetro no corpo 12 —, entao a
+    formula unica serve as duas pontas sem tabela de excecao.
+    """
+    asc = ASCENDER_FRACTIONS.get(font_name, _ASCENDER_DEFAULT)
+    desc = DESCENDER_FRACTIONS.get(font_name, _DESCENDER_DEFAULT)
+    return _fracao_tipografica(asc, desc)
+
+
+def _fracao_do_meio_da_fonte(font_file: str) -> float:
+    """A fracao lida do ARQUIVO da fonte — `sTypoAscender` e `sTypoDescender`.
+
+    Le a tabela OS/2 direto dos bytes. Nao da para usar `fitz.Font.ascender`: ele
+    devolve as medidas da tabela `hhea`, que sao outras. Medido nas mesmas nove
+    fontes, a `hhea` erra ate 0,049 do corpo — quatro vezes mais do que a media
+    fixa que ela substituiria.
+
+    Cacheado por caminho: uma tiragem de 100.000 pecas le o arquivo uma vez.
+
+    Arquivo que nao se deixa ler volta para a media de sempre. Uma fonte
+    estranha nao pode ser motivo de a imposicao morrer com o operador na frente
+    da impressora — e o pior caso e voltar ao comportamento anterior.
+    """
+    if font_file in _FRACOES_DO_MEIO:
+        return _FRACOES_DO_MEIO[font_file]
+
+    fracao = _FRACAO_PADRAO
+    try:
+        import struct
+        with open(font_file, "rb") as fh:
+            dados = fh.read()
+        if dados[:4] == b"ttcf":                      # colecao: a primeira fonte
+            offset_tabelas = struct.unpack(">I", dados[12:16])[0]
+        else:
+            offset_tabelas = 0
+        num = struct.unpack(">H", dados[offset_tabelas + 4:offset_tabelas + 6])[0]
+        base = offset_tabelas + 12
+        os2 = None
+        for i in range(num):
+            reg = base + i * 16
+            if dados[reg:reg + 4] == b"OS/2":
+                ini, tam = struct.unpack(">II", dados[reg + 8:reg + 16])
+                os2 = dados[ini:ini + tam]
+                break
+        if os2 and len(os2) >= 74:
+            typo_asc, typo_desc = struct.unpack(">hh", os2[68:72])
+            if typo_asc or typo_desc:
+                fracao = _fracao_tipografica(typo_asc, typo_desc)
+    except Exception as ex:
+        _aviso = f"metrica:{font_file}"
+        if _aviso not in _font_log_cache:
+            _font_log_cache.add(_aviso)
+            print(f"[engine] nao consegui ler a altura da fonte ({ex}); "
+                  f"usando a media de sempre", flush=True)
+
+    _FRACOES_DO_MEIO[font_file] = fracao
+    return fracao
+
+
+def _caixa_girada(cx: float, cy: float, w_pt: float, h_pt: float, angle) -> fitz.Rect:
+    """O retangulo do elemento na pagina, com a CAIXA girada junto.
+
+    Girar 90 graus troca largura por altura — e assim que o canvas de todas as
+    janelas desenha: `translate` na ancora, `rotate`, e a caixa desenhada em
+    volta. O motor mantinha o retangulo em pe e mandava o PyMuPDF girar o
+    CONTEUDO dentro dele; como PDF, SVG e foto entram com encaixe proporcional, a
+    arte encolhia para caber no que sobrava.
+
+    Medido em 27/08/2026, num SVG de 40 x 20 mm a 90 graus: a tela mostrava
+    20 x 40 mm e o papel saia com 10,08 x 19,98 — um quarto da area. Numa janela
+    de foto de 25 x 32, o papel saia com 25,06 x 19,64 no lugar de 32 x 25.
+
+    A rotacao e um seletor de quatro opcoes no cartao de todo elemento, entao o
+    defeito estava a um clique. Fora dos quatro valores o retangulo fica como
+    estava: o `show_pdf_page` e o `insert_image` so aceitam multiplos de 90.
+    """
+    try:
+        giro = int(angle or 0) % 360
+    except (TypeError, ValueError):
+        giro = 0
+    if giro in (90, 270):
+        w_pt, h_pt = h_pt, w_pt
+    return fitz.Rect(cx - w_pt / 2.0, cy - h_pt / 2.0,
+                     cx + w_pt / 2.0, cy + h_pt / 2.0)
+
+
 def _folga_de_sangria(cfg) -> tuple[float, float]:
     """Quanto a pagina temporaria de um ingresso cresce para cada lado, em pontos.
 
@@ -1737,17 +1850,15 @@ class ImpositionEngine:
             lines_to_draw = val_str.split("\n")
             line_height = font_size * 1.2  # mesmo valor usado no canvas JS
 
-            # Frações de ascender e descender para o offset correto de baseline
+            # Do centro visual ate a linha de base — a mesma conta que o
+            # `textBaseline='middle'` do canvas faz, e com as medidas da MESMA
+            # fonte. Ver `_fracao_tipografica`.
             if font_file:
-                asc  = _ASCENDER_DEFAULT
-                desc = _DESCENDER_DEFAULT
+                fracao_do_meio = _fracao_do_meio_da_fonte(font_file)
             else:
-                asc  = ASCENDER_FRACTIONS.get(font_name,  _ASCENDER_DEFAULT)
-                desc = DESCENDER_FRACTIONS.get(font_name, _DESCENDER_DEFAULT)
+                fracao_do_meio = _fracao_das_base14(font_name)
 
-            # Offset do centro visual até a baseline (replicando textBaseline='middle')
-            # Em canvas: baseline = y_center + (asc - desc)/2 * font_size
-            baseline_offset = (asc - desc) / 2.0 * font_size
+            baseline_offset = fracao_do_meio * font_size
 
             # Altura total do bloco e topo do bloco (alinhado ao centro cy)
             total_height = len(lines_to_draw) * line_height
@@ -1956,7 +2067,7 @@ class ImpositionEngine:
                             # PyMuPDF sem `radius`: canto reto e melhor que erro.
                             pj.draw_rect(r_borda, color=cor, width=esp * 2)
 
-                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                rect = _caixa_girada(cx, cy, w_pt, h_pt, angle)
                 py_rotate = _graus_90(360 - angle)
 
                 if canto in ("round", "circle"):
@@ -2010,7 +2121,7 @@ class ImpositionEngine:
             if svg_content:
                 w_pt = el.get("width_mm", 20) * MM2PT
                 h_pt = el.get("height_mm", 20) * MM2PT
-                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                rect = _caixa_girada(cx, cy, w_pt, h_pt, angle)
                 py_rotate = (360 - angle) % 360
 
                 if _SVG_IMPORT_ERROR is not None:
@@ -2070,7 +2181,7 @@ class ImpositionEngine:
                     else:
                         w_pt = pdf_doc[0].rect.width
                         h_pt = pdf_doc[0].rect.height
-                    rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                    rect = _caixa_girada(cx, cy, w_pt, h_pt, angle)
                     py_rotate = (360 - angle) % 360
                     # keep_proportion=True: encaixa sem distorcer, igual ao canvas.
                     _colar_arte_pdf(page.parent, page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
