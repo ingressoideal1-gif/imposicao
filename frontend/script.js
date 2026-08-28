@@ -1085,6 +1085,92 @@ function modelosComBancoNaoBaixado(osId) {
 }
 window.modelosComBancoNaoBaixado = modelosComBancoNaoBaixado;
 
+/**
+ * A peca CRUA do catalogo, sem o banco do pedido nem o mapa de colunas.
+ *
+ * O `numeracaoDoModelo` devolve a resolvida, que e o que serve para desenhar e
+ * imprimir. Quem precisa desta e quem fala das colunas que a peca PEDE -- o
+ * modal de Colunas -- porque na resolvida elas ja estao trocadas.
+ */
+function pecaDoModelo(item) {
+    const nid = numeracaoIdDoItem(item);
+    if (!nid) return null;
+    return (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+}
+window.pecaDoModelo = pecaDoModelo;
+
+/**
+ * Escapa texto que vai para dentro de HTML montado a mao.
+ *
+ * Existe porque o `esc` deste arquivo e uma const LOCAL de outra funcao, e nome
+ * de banco e nome de coluna vem de arquivo do cliente: um `<` no cabecalho de
+ * um CSV quebraria o modal, e um `<script>` faria pior.
+ */
+function escDoBanco(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+window.escDoBanco = escDoBanco;
+
+/**
+ * Cria um banco do pedido a partir de um CSV ja lido. Devolve o registro
+ * gravado, ja dentro de `state.bancosDoPedido`.
+ *
+ * `garantirIds` antes de gravar, e nao depois: o `__id` e a identidade que a
+ * distribuicao de linhas guarda. Linha sem id gravada no banco faria a fatia de
+ * um modelo apontar para o vazio na proxima abertura do pedido.
+ */
+async function criarBancoDoPedido(idInt, nome, headers, rows, filename) {
+    if (!supabaseClient) throw new Error('Sem conexão com o banco.');
+    if (!idInt) throw new Error('Não sei de qual pedido é este banco.');
+    if (!Array.isArray(rows) || !rows.length) throw new Error('O arquivo não tem nenhuma linha.');
+    if (window.CsvEditor) window.CsvEditor.garantirIds(rows);
+
+    const { data, error } = await supabaseClient.from('pedidos_bancos').insert({
+        id_int: idInt,
+        nome: String(nome || filename || 'banco').slice(0, 120),
+        csv_filename: String(filename || ''),
+        csv_headers: headers || [],
+        csv_data: rows
+    }).select().single();
+    if (error) throw error;
+
+    if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
+    state.bancosDoPedido.push(data);
+    return data;
+}
+window.criarBancoDoPedido = criarBancoDoPedido;
+
+/**
+ * Liga um modelo a um banco do pedido, ou o desliga (bancoId nulo).
+ *
+ * Desligar apaga a linha inteira, e nao so o `banco_id`: sem banco nao ha mapa
+ * de colunas que faca sentido, e uma linha com os dois campos vazios diria
+ * "este modelo tem vinculo" para a trava do `modelosComBancoNaoBaixado`.
+ */
+async function ligarModeloAoBanco(itemId, bancoId, mapa) {
+    if (!supabaseClient) throw new Error('Sem conexão com o banco.');
+    if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
+    const chave = String(itemId);
+
+    if (!bancoId) {
+        const { error } = await supabaseClient.from('pedidos_modelos_banco')
+            .delete().eq('modelo_id', itemId);
+        if (error) throw error;
+        delete state.vinculosDeBanco[chave];
+        return null;
+    }
+
+    const linha = { modelo_id: itemId, banco_id: bancoId, csv_mapa: mapa || null };
+    const { data, error } = await supabaseClient.from('pedidos_modelos_banco')
+        .upsert(linha, { onConflict: 'modelo_id' }).select().single();
+    if (error) throw error;
+    state.vinculosDeBanco[chave] = data;
+    return data;
+}
+window.ligarModeloAoBanco = ligarModeloAoBanco;
+
 async function carregarBancosDoPedido(osId, aoChegar) {
     // Os bancos proprios do pedido primeiro. Se a consulta falhar — tabela
     // ainda nao criada, rede fora — o pedido segue pelo caminho de sempre, que
@@ -16283,11 +16369,39 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     // manda o operador ir mexer numa distribuicao que esta certa.
     const baixando = !!(num && num.csv_data === undefined && numeracaoTemBanco(num));
 
-    const temCsv = baixando || !!(num && num.csv_data && num.csv_data.length);
+    // A caixa aparece tambem quando o PEDIDO tem banco proprio, ou quando este
+    // modelo esta ligado a um (27/08/2026). Sem isso, a peca cujo CSV nao mora
+    // dentro dela nao teria onde receber o banco -- e um modelo ligado a um
+    // banco ficaria sem o controle que o desliga.
+    const vinculoDaqui = vinculoDeBancoDoModelo(item);
+    const pedidoTemBanco = !!(state.bancosDoPedido && state.bancosDoPedido.length);
+
+    const temCsv = baixando || !!(num && num.csv_data && num.csv_data.length)
+        || !!vinculoDaqui || pedidoTemBanco;
 
     linha.style.display = temCsv ? 'flex' : 'none';
 
     if (!temCsv) return;
+
+    desenharEscolhaDeBanco(idx, item, container, vinculoDaqui);
+
+    // O "Colunas" so existe com banco do pedido: no CSV de dentro da numeracao
+    // os campos ja apontam para as colunas dela, e nao ha de-para a fazer.
+    const bColunas = container.querySelector(`#btn-csv-colunas-${idx}`);
+    if (bColunas) bColunas.style.display = vinculoDaqui ? '' : 'none';
+
+    // Sem nenhuma linha para contar, o resto da caixa nao tem o que dizer. Sem
+    // esta saida o "Linhas" ficaria VERMELHO anunciando que o modelo esta sem
+    // linhas -- o que e falso: ele so ainda nao recebeu banco nenhum.
+    const semDado = !baixando && !(num && num.csv_data && num.csv_data.length);
+    const bLinhas = container.querySelector(`#btn-csv-fatia-${idx}`);
+    if (semDado) {
+        if (bLinhas) bLinhas.style.display = 'none';
+        const semNome = container.querySelector(`#csv-nome-${idx}`);
+        if (semNome) semNome.textContent = '—';
+        return;
+    }
+    if (bLinhas) bLinhas.style.display = '';
 
     const nome = container.querySelector(`#csv-nome-${idx}`);
 
@@ -16354,6 +16468,254 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
 }
 
 
+
+/**
+ * Enche o seletor "Vem de:" do card com as opcoes daquele modelo.
+ *
+ * A primeira opcao e sempre a numeracao, e ela e a escolhida quando nao ha
+ * vinculo -- e por isso que todo pedido que ja existe abre exatamente como
+ * antes, so que agora mostrando de onde o dado vem.
+ */
+function desenharEscolhaDeBanco(idx, item, container, vinculo) {
+    const sel = container.querySelector(`#banco-do-pedido-${idx}`);
+    if (!sel) return;
+    const esc = escDoBanco;
+
+    const bancos = state.bancosDoPedido || [];
+    const atual = vinculo ? String(vinculo.banco_id) : '';
+
+    const opcoes = ['<option value="">a numeração (padrão)</option>'];
+    bancos.forEach(b => {
+        const nome = esc(b.nome || b.csv_filename || 'banco');
+        const linhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
+        opcoes.push(`<option value="${esc(String(b.id))}">${nome} — ${linhas} linha(s)</option>`);
+    });
+    opcoes.push('<option value="__novo">+ Subir um CSV para este pedido…</option>');
+
+    sel.innerHTML = opcoes.join('');
+    sel.value = atual;
+    // Vinculo apontando para banco que nao veio: nao fingir que esta na
+    // numeracao. Quem barra a impressao nesse caso e o
+    // `modelosComBancoNaoBaixado`, e a tela tem de contar a mesma historia.
+    if (atual && sel.value !== atual) {
+        sel.insertAdjacentHTML('afterbegin',
+            `<option value="${esc(atual)}">banco não encontrado</option>`);
+        sel.value = atual;
+    }
+}
+window.desenharEscolhaDeBanco = desenharEscolhaDeBanco;
+
+/** O input de arquivo do banco do pedido, criado uma vez e reaproveitado. */
+let _bancoPedidoPendente = null;
+function _inputDoBancoDoPedido() {
+    let el = document.getElementById('banco-pedido-file');
+    if (el) return el;
+    el = document.createElement('input');
+    el.type = 'file';
+    el.id = 'banco-pedido-file';
+    el.accept = '.csv,text/csv,text/plain';
+    el.style.display = 'none';
+    el.addEventListener('change', () => { subirBancoDoPedido().catch(e => toast(String(e.message || e), 'error')); });
+    document.body.appendChild(el);
+    return el;
+}
+
+/**
+ * O operador mexeu no "Vem de:". Tres destinos: a numeracao (desligar), um
+ * banco que ja existe (ligar), ou subir um CSV novo.
+ */
+async function trocarBancoDoModelo(idx, osId, valor) {
+    const item = (state.osItens[osId] || [])[idx];
+    if (!item) return;
+
+    if (valor === '__novo') {
+        _bancoPedidoPendente = { idx, osId, itemId: item.id };
+        const inp = _inputDoBancoDoPedido();
+        inp.value = '';
+        inp.click();
+        // Volta o seletor para o que estava: quem confirma e o arquivo chegar.
+        const vinc = vinculoDeBancoDoModelo(item);
+        const sel = document.getElementById(`banco-do-pedido-${idx}`);
+        if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
+        return;
+    }
+
+    try {
+        await ligarModeloAoBanco(item.id, valor || null, null);
+        toast(valor ? 'Este modelo passou a ler o banco do pedido.'
+                    : 'Este modelo voltou a ler o banco da numeração.', 'success');
+        // Trocar o banco troca a identidade das linhas: a distribuicao que
+        // existia apontava para `__id` de OUTRO banco e nao quer dizer mais
+        // nada. Some junto, e o modelo volta a levar tudo.
+        if (item.csv_selecao) {
+            item.csv_selecao = null;
+            await supabaseClient.from('pedidos_modelos').update({ csv_selecao: null }).eq('id', item.id);
+            toast('A distribuição de linhas deste modelo foi limpa: o banco novo tem outras linhas.', 'info');
+        }
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        toast('Não deu para trocar o banco: ' + (e.message || e), 'error');
+        renderAmostrasOSItens(osId);
+    }
+}
+window.trocarBancoDoModelo = trocarBancoDoModelo;
+
+/**
+ * O de-para de colunas deste modelo: cada coluna que a PECA pede recebe uma
+ * coluna do banco do pedido.
+ *
+ * A lista da esquerda sai da peca CRUA (`pecaDoModelo`), e nao da resolvida:
+ * na resolvida os nomes ja estao trocados, e a tela mostraria o destino no
+ * lugar da origem -- reabrir o modal moveria o apontamento de novo.
+ */
+function abrirColunasDoModelo(idx, osId) {
+    const esc = escDoBanco;
+    const item = (state.osItens[osId] || [])[idx];
+    const peca = pecaDoModelo(item);
+    const vinc = vinculoDeBancoDoModelo(item);
+    const banco = window.BancoDoModelo.bancoDoModelo(vinc, state.bancosDoPedido || []);
+
+    if (!banco) {
+        toast('Este modelo não está ligado a nenhum banco do pedido. Escolha um em "Vem de:".', 'info');
+        return;
+    }
+
+    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
+    if (!pedidas.length) {
+        toast('Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
+        return;
+    }
+
+    const cabecalho = (banco.csv_headers || []).map(String);
+    const mapa = (vinc && vinc.csv_mapa) || {};
+
+    const quantosCampos = (col) => (peca.elements || [])
+        .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim() === col).length;
+
+    const linhas = pedidas.map(col => {
+        const escolhida = window.BancoDoModelo.colunaDoModelo(mapa, col);
+        const temNoBanco = cabecalho.indexOf(escolhida) !== -1;
+        const opcoes = ['<option value="">— escolher —</option>'].concat(
+            cabecalho.map(h => `<option value="${esc(h)}"${h === escolhida ? ' selected' : ''}>${esc(h)}</option>`)
+        ).join('');
+        const n = quantosCampos(col);
+        return `<tr>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-family:monospace;">${esc(col)}</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.85rem;">${n} campo${n === 1 ? '' : 's'}</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
+                <select class="form-control mapa-col" data-col="${esc(col)}"
+                    style="width:100%; ${temNoBanco ? '' : 'border-color:var(--red,#ef4444);'}">${opcoes}</select>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const over = document.createElement('div');
+    over.id = 'colunas-do-modelo-overlay';
+    over.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:12000;'
+        + 'display:flex; align-items:center; justify-content:center; padding:20px;';
+    over.innerHTML = `
+        <div style="background:var(--bg-card,#161b22); border:1px solid var(--border); border-radius:var(--radius,8px);
+                    max-width:680px; width:100%; max-height:85vh; display:flex; flex-direction:column;">
+            <div style="padding:14px 18px; border-bottom:1px solid var(--border);">
+                <div style="font-weight:800; font-size:1.05rem;">🔤 Colunas deste modelo</div>
+                <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
+                    ${esc(rotuloDoModelo(item, idx))} · peça: ${esc(peca.name || peca.tipo || 'numeração')}
+                    · banco: ${esc(banco.nome || 'banco')}
+                </div>
+            </div>
+            <div style="overflow:auto; padding:0 4px;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead><tr>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">A numeração lê</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Campos</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">No banco deste pedido</th>
+                    </tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+            </div>
+            <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="fecharColunasDoModelo()">Cancelar</button>
+                <button class="btn btn-primary" onclick="aplicarColunasDoModelo(${idx}, '${osId}')">Aplicar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(over);
+}
+window.abrirColunasDoModelo = abrirColunasDoModelo;
+
+function fecharColunasDoModelo() {
+    const o = document.getElementById('colunas-do-modelo-overlay');
+    if (o) o.remove();
+}
+window.fecharColunasDoModelo = fecharColunasDoModelo;
+
+async function aplicarColunasDoModelo(idx, osId) {
+    const over = document.getElementById('colunas-do-modelo-overlay');
+    if (!over) return;
+    const item = (state.osItens[osId] || [])[idx];
+    const vinc = vinculoDeBancoDoModelo(item);
+    if (!vinc) { fecharColunasDoModelo(); return; }
+
+    const mapa = {};
+    over.querySelectorAll('select.mapa-col').forEach(s => {
+        const col = s.getAttribute('data-col');
+        if (col && s.value) mapa[col] = s.value;
+    });
+
+    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(pecaDoModelo(item));
+    const limpo = window.BancoDoModelo.mapaLimpo(mapa, pedidas);
+
+    try {
+        await ligarModeloAoBanco(item.id, vinc.banco_id, limpo);
+        fecharColunasDoModelo();
+        toast('Colunas deste modelo atualizadas.', 'success');
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        toast('Não deu para salvar as colunas: ' + (e.message || e), 'error');
+    }
+}
+window.aplicarColunasDoModelo = aplicarColunasDoModelo;
+
+/** Lê o CSV escolhido, cria o banco do pedido e liga este modelo nele. */
+async function subirBancoDoPedido() {
+    const alvo = _bancoPedidoPendente;
+    const inp = document.getElementById('banco-pedido-file');
+    if (!alvo || !inp || !inp.files || !inp.files.length) return;
+    const file = inp.files[0];
+
+    const texto = await new Promise((ok, err) => {
+        const r = new FileReader();
+        r.onload = e => ok(e.target.result);
+        r.onerror = e => err(e.target.error);
+        r.readAsText(file);
+    });
+
+    const parsed = window.CsvEditor.parseCsv(texto);
+    if (!parsed.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
+
+    const item = (state.osItens[alvo.osId] || [])[alvo.idx];
+    const idInt = idIntDoPedido(alvo.osId);
+    const banco = await criarBancoDoPedido(idInt, file.name.replace(/\.csv$/i, ''),
+        parsed.headers, parsed.rows, file.name);
+    await ligarModeloAoBanco(alvo.itemId, banco.id, null);
+
+    if (item && item.csv_selecao) {
+        item.csv_selecao = null;
+        await supabaseClient.from('pedidos_modelos').update({ csv_selecao: null }).eq('id', item.id);
+    }
+
+    _bancoPedidoPendente = null;
+    toast(`Banco "${banco.nome}" criado com ${parsed.rows.length} linha(s) e ligado a este modelo.`, 'success');
+    renderAmostrasOSItens(alvo.osId);
+
+    // Coluna que a peca pede e o banco novo nao tem: dizer agora, com a saida
+    // na propria frase. Descobrir isso na frente da impressora custa papel.
+    const faltam = window.BancoDoModelo.colunasQueFaltam(pecaDoModelo(item), banco, null);
+    if (faltam.length) {
+        toast('A numeração lê ' + faltam.join(', ') + ', que não existe neste banco. '
+            + 'Abra 🔤 Colunas para apontar cada uma.', 'warning');
+    }
+}
+window.subirBancoDoPedido = subirBancoDoPedido;
 
 /**
  * O modelo ficou sem nenhuma linha do banco? Devolve o que dizer, ou null.
@@ -17078,12 +17440,38 @@ function celulasRepetidasDoPedido(osId) {
             });
         });
         const id = String(it.id);
-        usoPorItem[id] = { nome: rotuloDoModelo(it, i), valores };
+        // A assinatura existe por causa do formato largo (27/08/2026): quatro
+        // modelos no MESMO banco, cada um lendo a coluna do seu dia. Eles
+        // dividem as linhas de proposito, e a coluna de NOME e a mesma nos
+        // quatro -- a mesma pessoa recebe credencial em cada dia. Comparar so
+        // o valor acusaria os quatro dias legitimos, e um aviso que grita sem
+        // motivo e pior que aviso nenhum: quando vier o choque de verdade,
+        // ninguem olha.
+        const vinc = vinculoDeBancoDoModelo(it);
+        usoPorItem[id] = {
+            nome: rotuloDoModelo(it, i),
+            valores,
+            bancoId: vinc ? String(vinc.banco_id) : '',
+            assinatura: colunas.join('')
+        };
         valores.forEach(v => {
             if (!porValor.has(v)) porValor.set(v, new Set());
             porValor.get(v).add(id);
         });
     });
+
+    /**
+     * Dois modelos do MESMO banco do pedido que leem colunas diferentes nao
+     * disputam nada: a diferenca entre eles e justamente a coluna. Fora desse
+     * caso -- inclusive entre todos os modelos sem banco do pedido, que e como
+     * o painel funcionava ate aqui -- a resposta e `false` e a comparacao por
+     * valor segue exatamente como sempre foi.
+     */
+    const separadosPelaColuna = (a, b) => {
+        const A = usoPorItem[a], B = usoPorItem[b];
+        if (!A || !B || !A.bancoId || !B.bancoId) return false;
+        return A.bancoId === B.bancoId && A.assinatura !== B.assinatura;
+    };
     const saida = {};
     Object.keys(usoPorItem).forEach(id => {
         const porModelo = {};
@@ -17092,9 +17480,11 @@ function celulasRepetidasDoPedido(osId) {
         usoPorItem[id].valores.forEach(v => {
             const donos = porValor.get(v);
             if (!donos || donos.size < 2) return;
+            const disputam = Array.from(donos).filter(o => o === id || !separadosPelaColuna(id, o));
+            if (disputam.length < 2) return;
             total++;
             if (exemplos.length < 3) exemplos.push(v);
-            donos.forEach(outro => {
+            disputam.forEach(outro => {
                 if (outro !== id) porModelo[outro] = (porModelo[outro] || 0) + 1;
             });
         });
@@ -30371,6 +30761,15 @@ function renderAmostrasOSItens(osId) {
                                     🗂️ Banco de dados:
                                     <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
                                 </span>
+                                <!-- De onde o dado deste modelo vem (27/08/2026): o CSV
+                                     de dentro da numeracao, como sempre, ou um banco do
+                                     PROPRIO pedido. O padrao continua sendo a numeracao,
+                                     entao todo pedido que ja existe segue igual -- o que
+                                     muda e passar a haver escolha. -->
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;">Vem de:</span>
+                                    <select class="form-control" id="banco-do-pedido-${idx}" style="flex:1; min-width:0; height:26px; padding:2px 6px; font-size:0.8rem;" onchange="trocarBancoDoModelo(${idx}, '${osId}', this.value)" title="De qual banco de dados este modelo lê"></select>
+                                </div>
                                 <!-- SO o "Linhas" (26/08/2026, decisao do usuario).
                                      O "Ver / editar" morava aqui e editava o BANCO DA
                                      NUMERACAO, que e o mesmo para todos os modelos que a
@@ -30389,6 +30788,10 @@ function renderAmostrasOSItens(osId) {
                                          atualizarBotoesCsvDaAmostra -- CRASE aqui dentro
                                          fecharia o template literal do card. -->
                                     <button class="btn btn-sm btn-secondary" id="btn-csv-dia-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="separarNumeracaoPorDia(${idx}, '${osId}')" title="Criar uma numeração por dia, cada uma só com as linhas do seu dia">📆 Separar por dia</button>
+                                    <!-- So com banco do pedido: no CSV de dentro da
+                                         numeracao os campos ja apontam para as colunas
+                                         dela, e nao ha de-para nenhum a fazer. -->
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-colunas-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="De qual coluna do banco cada campo deste modelo lê">🔤 Colunas</button>
                                 </div>
                             </div>
                         </div>
