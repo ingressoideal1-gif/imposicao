@@ -1900,13 +1900,29 @@
                                                   A escolha vale para a IMPRESSORA (fica no agente da
                                                   estacao), nao para o pedido. -->
                                              <div id="ped-print-cor-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
-                                                 <div style="display:flex;align-items:center;justify-content:space-between;">
+                                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                                                      <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Gerenciamento de Cores</label>
-                                                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                                         <input type="checkbox" id="ped-print-cor-ativo" onchange="salvarCorImpressora()" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                         <span style="font-size:0.75rem;color:#94a3b8;">Ativo</span>
-                                                     </label>
+                                                     <div style="display:flex;align-items:center;gap:12px;">
+                                                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                                             <input type="checkbox" id="ped-print-cor-ativo" onchange="salvarCorImpressora()" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                             <span style="font-size:0.75rem;color:#94a3b8;">Ativo</span>
+                                                         </label>
+                                                         <!-- Os controles de cor sao muitos e o operador quase nunca mexe
+                                                              neles: o perfil e do EQUIPAMENTO, escolhido uma vez. Por isso
+                                                              a caixa abre fechada, e este botao a abre quando ele pedir.
+                                                              O que NAO se esconde e o estado: a caixa "Ativo" e a linha de
+                                                              status continuam a vista, porque dizem o que vai sair no papel. -->
+                                                         <button type="button" id="ped-print-cor-btn" aria-expanded="false"
+                                                                 aria-controls="ped-print-cor-corpo"
+                                                                 onclick="alternarGerenciamentoDeCores()"
+                                                                 title="Mostrar os controles de perfil e ajustes de cor"
+                                                                 style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.7rem;font-weight:600;padding:4px 9px;">
+                                                             <span id="ped-print-cor-btn-texto">Mostrar</span>
+                                                             <span id="ped-print-cor-btn-seta" style="font-size:0.6rem;">&#9660;</span>
+                                                         </button>
+                                                     </div>
                                                  </div>
+                                                 <div id="ped-print-cor-corpo" style="display:none;flex-direction:column;gap:8px;">
                                                  <div>
                                                      <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Perfil da impressora (.icm)</label>
                                                      <select id="ped-print-cor-perfil" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
@@ -1965,6 +1981,8 @@
                                                      </div>
                                                      <div style="font-size:0.7rem;color:#64748b;line-height:1.4;">Os ajustes valem nas impressões rasterizadas (modo GDI, o padrão) e são aplicados antes do perfil .icm. Salvam sozinhos ao mexer.</div>
                                                  </div>
+
+                                                 </div><!-- /ped-print-cor-corpo -->
 
                                                  <div id="ped-print-cor-status" style="font-size:0.72rem;color:#64748b;line-height:1.4;">Desligado: a impressão sai sem conversão de cores, como sempre saiu.</div>
                                              </div>

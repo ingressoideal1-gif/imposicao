@@ -39167,6 +39167,64 @@ async function carregarCorImpressora(printerName) {
     }
 }
 
+/**
+ * Mostra e esconde os controles do Gerenciamento de Cores.
+ *
+ * A caixa abre FECHADA. O perfil ICC e do equipamento, escolhido uma vez e
+ * valendo para todo pedido que va para aquela impressora — o operador que
+ * imprime dez trabalhos por dia nao mexe nela nenhuma vez, e ela ocupava metade
+ * do painel do driver com um seletor de perfil, um de intento, tres deslizadores
+ * e um editor de curvas.
+ *
+ * O que NAO se esconde e o estado: a caixa "Ativo" e a linha de status continuam
+ * a vista com a caixa fechada, porque dizem o que vai sair no papel. Esconder
+ * isso junto deixaria o operador imprimindo com um perfil ligado sem nada na
+ * tela dizendo que ha um perfil ligado.
+ *
+ * `mostrar` forca um estado; sem ele, alterna.
+ */
+function alternarGerenciamentoDeCores(mostrar) {
+
+    const corpo = document.getElementById('ped-print-cor-corpo');
+
+    if (!corpo) return;
+
+    const aberto = (mostrar === undefined) ? corpo.style.display === 'none' : !!mostrar;
+
+    corpo.style.display = aberto ? 'flex' : 'none';
+
+    const btn = document.getElementById('ped-print-cor-btn');
+
+    if (btn) {
+
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+
+        btn.title = aberto
+            ? 'Esconder os controles de perfil e ajustes de cor'
+            : 'Mostrar os controles de perfil e ajustes de cor';
+
+    }
+
+    const texto = document.getElementById('ped-print-cor-btn-texto');
+
+    if (texto) texto.textContent = aberto ? 'Ocultar' : 'Mostrar';
+
+    const seta = document.getElementById('ped-print-cor-btn-seta');
+
+    if (seta) seta.textContent = aberto ? '▲' : '▼';
+
+    // A curva e desenhada no canvas mesmo escondida (o tamanho vem dos atributos
+    // width/height, nao do layout), mas quem chega aqui pela primeira vez pode
+    // nao ter passado por nenhum desenho ainda.
+    if (aberto && typeof desenharCurvaCor === 'function') desenharCurvaCor();
+
+    if (aberto && typeof desenharPreviaCor === 'function') desenharPreviaCor();
+
+}
+window.alternarGerenciamentoDeCores = alternarGerenciamentoDeCores;
+
+
+
 function atualizarStatusCor() {
     const st = document.getElementById('ped-print-cor-status');
     const chkAtivo = document.getElementById('ped-print-cor-ativo');
