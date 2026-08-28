@@ -4658,6 +4658,25 @@ function drawCanvas() {
  * no papel. Sem esta guarda, cada janela que desenha um ingresso lançaria
  * `ReferenceError` e o editor inteiro pararia de pintar, que é muito pior.
  */
+// Mesma reserva do QR, e pelo mesmo motivo: a lista `PAINEL_ARQUIVOS` que decide
+// o que a estacao baixa mora DENTRO do NewProd.exe. Uma estacao que ainda nao se
+// atualizou tem a lista velha, sem o `barcode-canvas.js` — mas ja baixa o
+// index.html novo, que pede o arquivo. Sem esta reserva, a primeira numeracao com
+// codigo de barras derruba o desenho inteiro do canvas com TypeError.
+if (typeof window.renderBarcodeOnCtx !== 'function') {
+    console.error('[Barcode] barcode-canvas.js nao carregou. O codigo nao sera desenhado nesta sessao.');
+    window.modulosDoBarcode = function () { return ''; };
+    window.renderBarcodeOnCtx = function (ctx, texto, x, y, w, h, cor, formato, corFundo) {
+        if (corFundo !== 'transparent') {
+            ctx.fillStyle = corFundo || '#ffffff';
+            ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        }
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - w / 2 + 1, y - h / 2 + 1, w - 2, h - 2);
+    };
+}
+
 if (typeof window.renderQRCodeOnCtx !== 'function') {
     console.error('[QR] qr-canvas.js nao carregou. O QR nao sera desenhado nesta sessao.');
     window.renderQRCodeOnCtx = function (ctx, text, x, y, sz) {

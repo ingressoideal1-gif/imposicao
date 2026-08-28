@@ -2371,6 +2371,21 @@ function repintarAssinantesDoPreload(elementos) {
 // Rede de seguranca para a janela de sincronizacao do painel: se o modulo nao
 // tiver chegado a estacao, o QR nao desenha — mas a pagina do cliente continua
 // de pe, em vez de morrer com ReferenceError na frente dele.
+// A mesma rede, para o desenho do codigo de barras.
+if (typeof window.renderBarcodeOnCtx !== 'function') {
+    console.error('[Barcode] barcode-canvas.js nao carregou. O codigo nao sera desenhado.');
+    window.modulosDoBarcode = function () { return ''; };
+    window.renderBarcodeOnCtx = function (ctx, texto, x, y, w, h, cor, formato, corFundo) {
+        if (corFundo !== 'transparent') {
+            ctx.fillStyle = corFundo || '#ffffff';
+            ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        }
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - w / 2 + 1, y - h / 2 + 1, w - 2, h - 2);
+    };
+}
+
 if (typeof window.renderQRCodeOnCtx !== 'function') {
     console.error('[QR] qr-canvas.js nao carregou. O QR nao sera desenhado.');
     window.renderQRCodeOnCtx = function (ctx, text, x, y, sz) {

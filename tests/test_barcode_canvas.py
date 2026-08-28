@@ -134,3 +134,25 @@ def test_o_modulo_esta_na_lista_que_as_estacoes_baixam():
     """Fora dela a estacao da 404 e o painel congela — o defeito da v559."""
     import security_config
     assert "barcode-canvas.js" in security_config.PAINEL_ARQUIVOS
+
+
+@pytest.mark.parametrize("arquivo", ["frontend/script.js", "frontend/cliente.js"])
+def test_a_pagina_sobrevive_sem_o_modulo(arquivo):
+    """Janela de sincronizacao: estacao com agente ANTIGO servindo o HTML NOVO.
+
+    A lista `PAINEL_ARQUIVOS` que decide o que a estacao baixa mora dentro do
+    `NewProd.exe`. Uma estacao que ainda nao se atualizou tem a lista velha, sem o
+    `barcode-canvas.js` — mas baixa o `index.html` novo, que ja pede o arquivo com
+    `?v=744`. Resultado: 404 no script, `window.renderBarcodeOnCtx` indefinido, e
+    a primeira numeracao com codigo de barras derruba o desenho INTEIRO do canvas
+    com TypeError.
+
+    E o mesmo buraco que o `qr-canvas.js` ja tapa desde a v559. A saida e a
+    mesma: uma reserva que avisa e desenha a caixa vazia, em vez de quebrar a
+    janela toda.
+    """
+    with open(os.path.join(RAIZ, arquivo), encoding="utf-8") as f:
+        texto = f.read()
+    assert "typeof window.renderBarcodeOnCtx !== 'function'" in texto, (
+        f"{arquivo} nao tem reserva para o caso de o barcode-canvas.js nao carregar"
+    )
