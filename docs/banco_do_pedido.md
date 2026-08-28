@@ -125,6 +125,13 @@ apenas a informação dos elementos como seus tamanhos, origem, fontes"*.
   imprime vazio, calado. O recado manda abrir o 🔤.
 - O payload de **um modelo só** também resolve a peça pelo item ativo — o
   multi_artes já resolvia arte a arte.
+- **No card do modelo**, a faixa **"Colunas:"** mostra as escolhidas sem abrir
+  nada — uma ficha por elemento, só com o **nome da coluna** (a marca de
+  conferência de repetições **não** aparece ali, por decisão do usuário; ela
+  mora no 🔤). Elemento ainda sem coluna vira ficha vermelha *"sem coluna"* — a
+  mesma história da trava, contada antes do Imprimir — e clicar na faixa abre o
+  🔤. Quem desenha é `desenharColunasDoModeloNoCard`, chamada junto do "Vem de:"
+  a cada redesenho do card; sem banco do pedido a faixa fica escondida.
 
 A seção de checkboxes "colunas do banco nesta numeração" (da rodada anterior do
 mesmo dia) morreu com esta decisão: o Exemplo a tornou desnecessária.

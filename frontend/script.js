@@ -16672,6 +16672,7 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     if (!temCsv) return;
 
     desenharEscolhaDeBanco(idx, item, container, vinculoDaqui);
+    desenharColunasDoModeloNoCard(idx, item, container, vinculoDaqui);
 
     // O "Colunas" so existe com banco do pedido: no CSV de dentro da numeracao
     // os campos ja apontam para as colunas dela, e nao ha de-para a fazer.
@@ -16803,6 +16804,53 @@ function desenharEscolhaDeBanco(idx, item, container, vinculo) {
     }
 }
 window.desenharEscolhaDeBanco = desenharEscolhaDeBanco;
+
+/**
+ * As colunas escolhidas para ESTE modelo, no proprio card (consideracao do
+ * usuario em 28/08/2026): uma ficha por elemento de banco, com o nome da
+ * coluna que ele le. SO os nomes — a marca de conferencia de repeticoes fica
+ * no modal 🔤, por decisao dele, e nao aparece aqui.
+ *
+ * Elemento ainda sem coluna (ou apontando para coluna que o banco nao tem)
+ * vira ficha vermelha "sem coluna" — a mesma historia que a trava de
+ * impressao (`modelosComElementoSemColuna`) conta, contada antes de apertar
+ * Imprimir. Clicar na faixa abre o 🔤, que e onde se conserta.
+ */
+function desenharColunasDoModeloNoCard(idx, item, container, vinculo) {
+    const alvo = container.querySelector(`#csv-colunas-modelo-${idx}`);
+    if (!alvo) return;
+    const esc = escDoBanco;
+
+    const banco = window.BancoDoModelo
+        ? window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || [])
+        : null;
+    const peca = pecaDoModelo(item);
+    const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
+
+    // Sem banco do pedido nao ha escolha a mostrar: no caminho da numeracao
+    // as colunas moram na propria peca, como sempre.
+    if (!banco || !elementos.length) {
+        alvo.style.display = 'none';
+        alvo.innerHTML = '';
+        return;
+    }
+
+    const cabecalho = (banco.csv_headers || []).map(String);
+    const mapa = (vinculo && vinculo.csv_mapa) || {};
+    const fichas = elementos.map(el => {
+        const col = window.BancoDoModelo.colunaDoElemento(mapa, el);
+        const ok = col !== '' && cabecalho.indexOf(col) !== -1;
+        const nome = String(el.name || '').trim() || 'Elemento';
+        const titulo = ok ? (nome + ' lê a coluna ' + col) : (nome + ' ainda não tem coluna no banco');
+        const estilo = ok
+            ? 'border:1px solid var(--border); color:var(--text);'
+            : 'border:1px solid var(--red,#ef4444); color:var(--red,#ef4444);';
+        return `<span title="${esc(titulo)}" style="${estilo} border-radius:999px; padding:1px 8px; font-size:0.75rem; white-space:nowrap;">${ok ? esc(col) : 'sem coluna'}</span>`;
+    });
+    alvo.innerHTML = '<span style="font-size:0.75rem; color:var(--text-dim);">Colunas:</span>' + fichas.join('');
+    alvo.style.display = 'flex';
+}
+window.desenharColunasDoModeloNoCard = desenharColunasDoModeloNoCard;
 
 /** O input de arquivo do banco do pedido, criado uma vez e reaproveitado. */
 let _bancoPedidoPendente = null;
@@ -31673,6 +31721,11 @@ function renderAmostrasOSItens(osId) {
                                          Bancos de Dados, na coluna do Briefing. Aqui fica so
                                          o que e do MODELO: Vem de, Linhas e Colunas. -->
                                 </div>
+                                <!-- As colunas escolhidas para este modelo, sem abrir o 🔤.
+                                     Quem preenche e desenharColunasDoModeloNoCard(); fica
+                                     escondida enquanto o modelo nao esta ligado a um banco
+                                     do pedido. -->
+                                <div id="csv-colunas-modelo-${idx}" style="display:none; flex-wrap:wrap; align-items:center; gap:4px; cursor:pointer;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="As colunas do banco que os elementos deste modelo leem. Clique para mudar."></div>
                             </div>
                         </div>
                     </div>

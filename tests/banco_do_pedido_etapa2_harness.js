@@ -491,5 +491,31 @@ function cenario(mapas) {
         'a escolha e gravada nos elementos de cada peca do grupo, so quando mudou');
 })();
 
+(function colunasDoModeloVisiveisNoCard() {
+    // Consideracao do usuario em 28/08/2026: o card de cada modelo mostra as
+    // colunas escolhidas para ele, sem precisar abrir o 🔤 — e SO os nomes:
+    // a marca de conferencia de repeticoes fica no modal, nao no card.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/id="csv-colunas-modelo-\$\{idx\}"[^>]*onclick="abrirColunasDoModelo\(\$\{idx\}, '\$\{osId\}'\)"/.test(script),
+        'o card tem a faixa de colunas, e clicar nela abre o 🔤');
+
+    const atualizar = script.slice(script.indexOf('function atualizarBotoesCsvDaAmostra'),
+                                   script.indexOf('function desenharEscolhaDeBanco'));
+    ok(/desenharEscolhaDeBanco\(idx, item, container, vinculoDaqui\);\s*\n\s*desenharColunasDoModeloNoCard\(idx, item, container, vinculoDaqui\);/.test(atualizar),
+        'a faixa e redesenhada junto com o "Vem de:", em todo redesenho do card');
+
+    const corpo = script.slice(script.indexOf('function desenharColunasDoModeloNoCard'),
+                               script.indexOf('window.desenharColunasDoModeloNoCard'));
+    ok(/colunaDoElemento\(mapa, el\)/.test(corpo),
+        'cada ficha le a coluna do ELEMENTO — chave el:<id> primeiro, csv_column legado depois');
+    ok(/if \(!banco \|\| !elementos\.length\)/.test(corpo) && /display = 'none'/.test(corpo),
+        'sem banco do pedido (ou sem elemento de banco) a faixa fica escondida');
+    ok(/sem coluna/.test(corpo) && /var\(--red,#ef4444\)/.test(corpo),
+        'elemento sem coluna no banco vira ficha vermelha, a historia da trava');
+    ok(!/sem_conferencia/.test(corpo) && !/conferencia/i.test(corpo.replace(/marca de conferencia[^\n]*/g, '')),
+        'a faixa NAO mostra a marca de repeticoes — decisao do usuario, ela mora no 🔤');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);
