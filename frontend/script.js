@@ -8875,6 +8875,43 @@ window.saveNumeracao = async function () {
         }
     }
 
+    // ── A peça genérica do catálogo virou material compartilhado (27/08/2026)
+    //
+    // Enquanto o banco de dados morava DENTRO da numeração, reusar uma peça em
+    // outro pedido obrigava a duplicá-la — e era a cópia que protegia o pedido
+    // anterior: editar uma numeração nunca atravessava para outro trabalho.
+    //
+    // Com o banco podendo ser do pedido, a mesma peça do catálogo passa a
+    // servir vários pedidos de verdade. Mexer nela pelo catálogo mexe no
+    // material de todos eles, inclusive o que está na impressora agora. A
+    // proteção que a cópia dava de graça agora precisa ser dita.
+    //
+    // Só avisa pelos modelos APROVADOS: peça de catálogo aparece em dezenas de
+    // modelos ao longo do tempo, e um aviso a cada save viraria ruído — e ruído
+    // é o que faz o operador clicar OK sem ler no dia em que importa. É a mesma
+    // régua do aviso da numeração compartilhada de cliente, logo acima.
+    if (!doModelo && id && registroEmEdicao) {
+        let aprovados = [];
+        try {
+            aprovados = (await modelosQueUsamNumeracao(id)).filter(m => modeloEstaAprovado(m));
+        } catch (e) { aprovados = []; }
+
+        if (aprovados.length) {
+            const seguir = confirm(
+                'A numeração "' + (registroEmEdicao.name || '') + '" está em uso por '
+                + aprovados.length + ' modelo(s) JÁ APROVADO(S):\n\n'
+                + aprovados.slice(0, 8).map(m => '  • ' + nomeCurtoDoModelo(m)).join('\n')
+                + (aprovados.length > 8 ? '\n  • ... e mais ' + (aprovados.length - 8) : '') + '\n\n'
+                + 'Salvar muda o material de todos eles, inclusive o que já está em produção.\n\n'
+                + 'Para variar a peça sem tocar neles, cancele e use o ⧉ da Lista de\n'
+                + 'Numerações para duplicar — a cópia é sua para editar.\n\n'
+                + 'Continuar mesmo assim?');
+            if (!seguir) {
+                return toast('Nada foi salvo. A numeração continua como estava.', 'warning');
+            }
+        }
+    }
+
     const homonimas = await homonimasDoCatalogo(name, id);
     let homonima = null;
 

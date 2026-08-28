@@ -169,5 +169,25 @@ function cenario(mapas) {
         'sem o banco, a peca resolvida nao ganha linhas de lugar nenhum');
 })();
 
+// ── A peca do catalogo virou material compartilhado ─────────────────────────
+
+(function oSaveAvisaQuandoAPecaEstaEmProducao() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/JA APROVADO\(S\)|JÁ APROVADO\(S\)/.test(script),
+        'salvar uma peca do catalogo em uso por modelo aprovado avisa antes');
+
+    // Trava sem saida prende o operador. A saida citada tem de existir de
+    // verdade: o duplicar da Lista de Numeracoes.
+    ok(/para duplicar/i.test(script) && /duplicateCatalogNumeracao/.test(script),
+        'e o aviso aponta o duplicar, que existe na Lista de Numeracoes');
+
+    // So os aprovados: peca de catalogo aparece em dezenas de modelos ao longo
+    // do tempo, e avisar em todo save viraria ruido.
+    const trecho = script.slice(script.indexOf('A peça genérica do catálogo virou material'));
+    ok(/modeloEstaAprovado/.test(trecho.slice(0, 2000)),
+        'o aviso filtra por modelo aprovado, para nao virar ruido');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);
