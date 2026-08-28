@@ -619,22 +619,35 @@ def _generate_qr(data: str, color_hex: str = "#000000") -> bytes:
     return buf.getvalue()
 
 
-def _generate_barcode(data: str, width_mm: float, height_mm: float, color_hex: str = "#000000", barcode_format: str = "code128") -> bytes:
-    """Gera o código de barras como imagem PNG em bytes usando coloração nativa."""
+def _modulos_do_barcode(data: str, barcode_format: str = "code128") -> str:
+    """O PADRAO de barras do codigo — a fita de `1` e `0`, sem imagem nenhuma.
+
+    ## Por que nao e mais uma imagem
+
+    Ate 27/08/2026 o motor pedia um PNG ao `python-barcode` e o esticava para
+    dentro da caixa do elemento. A imagem vem com uma faixa branca fixa de 1 mm
+    em cima e outra embaixo, somadas ao `module_height` — e a folga era esticada
+    junto. Medido: um elemento de 60 x 12 mm imprimia barras de 60,03 x 10,67 mm,
+    89% da altura pedida. Altura de barra e requisito de leitura, nao estetica.
+
+    Recortar a folga da imagem resolveria, e custaria caro: medido, gerar o PNG
+    leva 4,58 ms por codigo e recortar somaria outros 2,01 ms — mais de tres
+    minutos numa tiragem de 100.000 pecas, numa grafica em que o tempo de
+    imposicao e o motivo de o agente local existir.
+
+    Pedindo so o padrao, quem desenha e o motor: retangulos vetoriais numa caixa
+    do tamanho exato do elemento. A altura passa a ser a pedida por construcao, e
+    o traco sai na resolucao do RIP da impressora em vez dos 300 dpi que o codigo
+    escolhia.
+
+    Conferido antes de trocar, nas seis simbologias: a imagem antiga desenhava
+    TODAS as barras com a mesma altura (linhas 11 a 188 de 200) — nao ha barra de
+    guarda mais comprida a reproduzir.
+    """
     try:
         import barcode
-        from barcode.writer import ImageWriter
     except ImportError:
         raise ImportError("Instale: pip install python-barcode[images]")
-
-    options = {
-        "write_text": False,
-        "module_height": 15.0,
-        "quiet_zone": 0,
-        "dpi": 300,
-        "foreground": color_hex,
-        "background": "white",
-    }
 
     # Assegurar que o formato está em minúsculas
     fmt = (barcode_format or "code128").lower()
@@ -671,10 +684,7 @@ def _generate_barcode(data: str, width_mm: float, height_mm: float, color_hex: s
                 
         data = clean_data
 
-    code = barcode.get(fmt, data, writer=ImageWriter())
-    buf = io.BytesIO()
-    code.write(buf, options)
-    return buf.getvalue()
+    return barcode.get(fmt, data).build()[0]
 
 
 def _rotate_rect(rect: fitz.Rect, angle: int, page: fitz.Page) -> tuple[fitz.Rect, fitz.Matrix]:
@@ -1818,15 +1828,43 @@ class ImpositionEngine:
                 page.insert_image(rect, stream=qr_bytes)
 
         elif t == "BARCODE":
+            # Vetorial, e desenhado aqui: ver `_modulos_do_barcode`. A caixa do
+            # elemento E a caixa das barras, entao a altura pedida e a impressa.
             w_pt = el.get("_w", 60 * MM2PT)
             h_pt = el.get("_h", 12 * MM2PT)
-            w_mm = el.get("width_mm", 60)
-            h_mm = el.get("height_mm", 12)
-            bc_format = el.get("barcode_format", "code128")
-            bc_bytes = _generate_barcode(val_str, w_mm, h_mm, color, bc_format)
-            rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-            py_rotate = (360 - angle) % 360
-            page.insert_image(rect, stream=bc_bytes, rotate=py_rotate, keep_proportion=False)
+            padrao = _modulos_do_barcode(val_str, el.get("barcode_format", "code128"))
+            if not padrao:
+                raise ValueError(f"codigo de barras vazio no elemento '{el.get('id', '?')}'")
+
+            # A rotacao gira a CAIXA, em torno da ancora do elemento — igual ao
+            # canvas do editor. E o `morph` que faz isso; a imagem antiga girava
+            # o conteudo DENTRO de um retangulo que nao girava, entao um codigo
+            # de 60x12 a 90 graus saia deitado num espaco em pe.
+            morph = ((fitz.Point(cx, cy), fitz.Matrix(-angle)) if angle else None)
+            extra = {"morph": morph} if morph else {}
+
+            # O fundo branco e o contraste que o leitor pede quando o codigo cai
+            # sobre arte colorida. Ele sempre esteve ali (a imagem tinha fundo
+            # branco); some-lo agora seria mudar o papel sem pedir.
+            page.draw_rect(fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt),
+                           color=None, fill=(1, 1, 1), **extra)
+
+            # Barras vizinhas viram UM retangulo: menos objetos na pagina e, mais
+            # importante, sem a fresta que o arredondamento deixaria entre elas.
+            larg_mod = w_pt / len(padrao)
+            i = 0
+            while i < len(padrao):
+                if padrao[i] == "1":
+                    j = i
+                    while j + 1 < len(padrao) and padrao[j + 1] == "1":
+                        j += 1
+                    page.draw_rect(
+                        fitz.Rect(el_x + i * larg_mod, el_y,
+                                  el_x + (j + 1) * larg_mod, el_y + h_pt),
+                        color=None, fill=rgb, **extra)
+                    i = j + 1
+                else:
+                    i += 1
 
         elif t == "FOTO":
             # A janela de foto da credencial. O retangulo do elemento E a janela:

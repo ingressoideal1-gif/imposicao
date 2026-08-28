@@ -1984,31 +1984,12 @@ function drawPedPreview() {
                         const bw = (el.width_mm || 40) * MM2PT * scale;
 
                         const bh = (el.height_mm || 10) * MM2PT * scale;
-                        const hbw = bw / 2, hbh = bh / 2;
 
-                        ctx.fillStyle = color;
-
-                        const barW = bw / 40;
-
-                        const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-
-                        for (let i = 0; i < pattern.length; i++) {
-
-                            if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
-
-                        }
-
-
-
-                        ctx.font = `${Math.max(5, bh * 0.3)}px Inter, sans-serif`;
-
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'top';
-
-                        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), 0, hbh + 2);
-
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'alphabetic';
+                        // `val_str` ja e o valor deste item — o mesmo que o motor
+                        // codifica. O rotulo com o nome da simbologia saiu junto
+                        // com o padrao falso: era desenhado FORA da caixa do
+                        // elemento, num lugar onde o papel nao tem nada.
+                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format);
 
                     } else if (el.type === 'FOTO') {
 

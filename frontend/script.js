@@ -5248,21 +5248,27 @@ function drawElement(ctx, el, S) {
         const bh = (el.height_mm || 10) * S;
         const hbw = bw / 2, hbh = bh / 2; // half-sizes para ancoragem central
 
-        // Desenhar barras (deterministico)
-
-        ctx.fillStyle = color;
-
-        const barW = bw / 40;
-
-        const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-
-        for (let i = 0; i < pattern.length; i++) {
-
-            if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
-
+        // O codigo de VERDADE, com o valor deste elemento — a mesma conta do QR
+        // logo acima. Ate 27/08/2026 todas as janelas pintavam um padrao fixo de
+        // 40 barras, igual para qualquer valor e qualquer simbologia.
+        let bcText = '';
+        if (el.fixed) {
+            bcText = el.fixed_value || '';
+        } else if (el.source === 'database') {
+            const colName = el.csv_column || '';
+            const csvData = bancoDeAmostra();
+            const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+            if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+            } else {
+                bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+            }
+        } else {
+            const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+            const raw = padVal > 0 ? String(el.ticket_pos || 1).padStart(padVal, '0') : String(el.ticket_pos || 1);
+            bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
         }
-
-
+        window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
 
         if (isSelected) {
 
@@ -10478,31 +10484,12 @@ function drawPreview() {
                         const bw = (el.width_mm || 40) * MM2PT * scale;
 
                         const bh = (el.height_mm || 10) * MM2PT * scale;
-                        const hbw = bw / 2, hbh = bh / 2;
 
-                        ctx.fillStyle = color;
-
-                        const barW = bw / 40;
-
-                        const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-
-                        for (let i = 0; i < pattern.length; i++) {
-
-                            if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
-
-                        }
-
-
-
-                        ctx.font = `${Math.max(5, bh * 0.3)}px Inter, sans-serif`;
-
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'top';
-
-                        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), 0, hbh + 2);
-
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'alphabetic';
+                        // `val_str` ja e o valor deste item — o mesmo que o motor
+                        // codifica. O rotulo com o nome da simbologia saiu junto
+                        // com o padrao falso: ele era desenhado FORA da caixa do
+                        // elemento, num lugar onde o papel nao tem nada.
+                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format);
 
                     } else if (el.type === 'FOTO') {
 
@@ -21823,19 +21810,25 @@ window.onAmostraNumeracaoSelect = function() {
                 const bw = (el.width_mm || 40) * S;
 
                 const bh = (el.height_mm || 10) * S;
-                const hbw = bw / 2, hbh = bh / 2;
 
-                ctx.fillStyle = color;
-
-                const barW = bw / 40;
-
-                const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-
-                for (let i = 0; i < pattern.length; i++) {
-
-                    if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
-
+                let bcText = '';
+                if (el.fixed) {
+                    bcText = el.fixed_value || '';
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvData = bancoDeAmostra(num);
+                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                    } else {
+                        bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+                    }
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                    const raw = padVal > 0 ? String(1).padStart(padVal, '0') : '1';
+                    bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
+                window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
 
             } else if (el.type === 'PICOTE') {
 
@@ -32503,13 +32496,27 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
         } else if (el.type === 'BARCODE') {
             const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
             const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
-            const hbw = bw / 2, hbh = bh / 2;
-            ctx.fillStyle = color;
-            const barW = bw / 40;
-            const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-            for (let i = 0; i < pattern.length; i++) {
-                if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+            let bcText = '';
+            if (el.fixed) {
+                bcText = el.fixed_value || '';
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = (typeof linhasDaAmostra === 'function')
+                    ? linhasDaAmostra(item, num)
+                    : (num?.csv_data || item?.csv_data || []);
+                const csvRow = csvData[pageNum - 1] || null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                const current_val = seqStart + (pageNum - 1);
+                const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
+                bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
+            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
         } else if (el.type === 'PICOTE') {
             ctx.strokeStyle = color;
             ctx.lineWidth = 2.0;
@@ -33298,13 +33305,26 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             } else if (el.type === 'BARCODE') {
                 const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
                 const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
-                const hbw = bw / 2, hbh = bh / 2;
-                numCtx.fillStyle = color;
-                const barW = bw / 40;
-                const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-                for (let i = 0; i < pattern.length; i++) {
-                    if (pattern[i]) numCtx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+                let bcText = '';
+                if (el.fixed) {
+                    bcText = el.fixed_value || '';
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvRow = _linhaCsv;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                    } else {
+                        bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+                    }
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                    const val = window.NumeroDaPagina.sequencial({
+                        start: _niAmostra, pagina: _pagAmostra
+                    });
+                    const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
+                    bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
+                window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color, el.barcode_format);
             } else if (el.type === 'PICOTE') {
                 numCtx.strokeStyle = color;
                 numCtx.lineWidth = 2.0;
@@ -39549,13 +39569,25 @@ async function criarCanvasNumeracaoRasterizada(num, fmt, face) {
         } else if (el.type === 'BARCODE') {
             const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
             const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
-            const hbw = bw / 2, hbh = bh / 2;
-            numCtx.fillStyle = color;
-            const barW = bw / 40;
-            const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
-            for (let i = 0; i < pattern.length; i++) {
-                if (pattern[i]) numCtx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+            // Fundo transparente: o gabarito e uma folha para sobrepor a arte.
+            let bcText = '';
+            if (el.fixed) {
+                bcText = el.fixed_value || '';
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                const raw = padVal > 0 ? String(1).padStart(padVal, '0') : '1';
+                bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
+            window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color,
+                                      el.barcode_format, 'transparent');
         } else if (el.type === 'PICOTE') {
             numCtx.strokeStyle = color;
             numCtx.lineWidth = 2.0;
