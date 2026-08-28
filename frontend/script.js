@@ -15915,9 +15915,12 @@ window.conferenciaDasColunasDoGrupo = conferenciaDasColunasDoGrupo;
  * Grava a escolha de conferencia em TODAS as pecas do grupo — uma so, no caso
  * comum, mas o mesmo banco pode ser lido por modelos de pecas diferentes.
  * As chaves de `escolha` sao nomes de coluna da peca, nos dois mundos.
+ *
+ * Devolve se ALGO mudou: a frase do Aplicar precisa disso para nao dizer
+ * "nada foi mudado" depois de gravar a escolha — foi um relato do usuario.
  */
 async function aplicarConferenciaNoGrupo(fonte, itens, escolha) {
-    if (!escolha) return;
+    if (!escolha) return false;
     const pecas = [];
     if (fonte && fonte.tipo === 'numeracao' && fonte.num) {
         pecas.push(fonte.num);
@@ -15927,11 +15930,14 @@ async function aplicarConferenciaNoGrupo(fonte, itens, escolha) {
             if (p && pecas.indexOf(p) === -1) pecas.push(p);
         });
     }
+    let mudou = false;
     for (const peca of pecas) {
         if (aplicarConferenciaNasColunas(peca, escolha)) {
             await salvarCamposDaNumeracao(peca.id, { elements: peca.elements });
+            mudou = true;
         }
     }
+    return mudou;
 }
 window.aplicarConferenciaNoGrupo = aplicarConferenciaNoGrupo;
 
@@ -16191,7 +16197,7 @@ window.abrirDistribuicaoCsv = function(osId, chaveDaFonte, focoItemId) {
             // nomes de coluna DA PECA (ver conferenciaDasColunasDoGrupo), entao
             // gravar e igual nos dois mundos — com banco do pedido, so muda que
             // o grupo pode ter mais de uma peca.
-            await aplicarConferenciaNoGrupo(fonte, grupo.itens, conferencia);
+            const conferenciaMudou = await aplicarConferenciaNoGrupo(fonte, grupo.itens, conferencia);
 
             // 2. Aplicar sem atribuir NENHUMA linha a NENHUM modelo não é uma
             //    distribuição — é o segundo passo que faltou. Gravar aqui poria

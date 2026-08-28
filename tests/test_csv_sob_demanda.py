@@ -230,16 +230,20 @@ def test_a_escolha_das_colunas_conferidas_e_gravada_e_lida():
     # a poder ser o banco do pedido) e as afirmacoes daqui ficaram para fora
     # de uma janela de N caracteres.
     corpo = fonte[i:fonte.index(chr(10) + "};", i)]
-    # A partir de 28/08/2026 a chamada e condicional: as caixas so nascem quando
-    # a fonte das linhas E a numeracao. Vindo do banco do pedido os nomes de
-    # coluna sao outros, e marcar uma caixa gravaria no lugar errado.
-    assert "conferenciaDasColunasDaNumeracao(num)" in corpo, (
-        "os checkboxes nao nascem com o estado da numeracao"
+    # Desde a segunda rodada de 28/08/2026 as caixas nascem nos DOIS mundos:
+    # com a fonte na numeracao e com o banco do pedido. Quem resolve a
+    # ambiguidade dos nomes e o conferenciaDasColunasDoGrupo — as caixas
+    # listam as colunas das PECAS, e o mapa de cada modelo leva a marca ate a
+    # coluna do banco. Ver tests/banco_do_pedido_etapa2_harness.js.
+    assert "conferenciaDasColunasDoGrupo(fonte, grupo.itens)" in corpo, (
+        "os checkboxes nao nascem com o estado das pecas do grupo"
     )
-    # ...e volta pelo aplicar, gravada nos ELEMENTOS.
-    assert "aplicarConferenciaNasColunas(num, conferencia)" in corpo
-    assert "salvarCamposDaNumeracao(num.id, { elements: num.elements })" in corpo, (
-        "a escolha precisa ser gravada — ela mora nos elementos da numeracao"
+    # ...e volta pelo aplicar, gravada nos ELEMENTOS de cada peca do grupo.
+    assert "aplicarConferenciaNoGrupo(fonte, grupo.itens, conferencia)" in corpo
+    aplicar = fonte[fonte.index("async function aplicarConferenciaNoGrupo"):]
+    aplicar = aplicar[: aplicar.index("window.aplicarConferenciaNoGrupo")]
+    assert "salvarCamposDaNumeracao(peca.id, { elements: peca.elements })" in aplicar, (
+        "a escolha precisa ser gravada — ela mora nos elementos da peca"
     )
 
 
