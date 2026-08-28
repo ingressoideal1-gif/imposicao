@@ -18436,19 +18436,20 @@ function celulasRepetidasDoPedido(osId) {
             });
         });
         const id = String(it.id);
-        // A assinatura existe por causa do formato largo (27/08/2026): quatro
-        // modelos no MESMO banco, cada um lendo a coluna do seu dia. Eles
-        // dividem as linhas de proposito, e a coluna de NOME e a mesma nos
-        // quatro -- a mesma pessoa recebe credencial em cada dia. Comparar so
-        // o valor acusaria os quatro dias legitimos, e um aviso que grita sem
-        // motivo e pior que aviso nenhum: quando vier o choque de verdade,
-        // ninguem olha.
-        const vinc = vinculoDeBancoDoModelo(it);
+        // Ate 28/08/2026 havia aqui uma isencao: modelos do MESMO banco lendo
+        // colunas diferentes nao disputavam valor (`separadosPelaColuna`, do
+        // formato largo de 27/08, em que o NOME repete entre os dias de
+        // proposito). Ela silenciava tambem o choque REAL -- o mesmo codigo em
+        // colunas diferentes de dois modelos -- e foi o que o usuario relatou:
+        // 'a Conferencia de dados nao esta verificando entre modelos'. Quem
+        // cala a repeticao legitima e a MARCA de conferencia (a caixinha
+        // Conferir do editor de colunas): coluna que repete por natureza se
+        // DESMARCA, como o proprio SETOR do pedido de teste 21346. A
+        // comparacao por valor vale entre TODOS os modelos, como sempre foi
+        // antes do formato largo.
         usoPorItem[id] = {
             nome: rotuloDoModelo(it, i),
-            valores,
-            bancoId: vinc ? String(vinc.banco_id) : '',
-            assinatura: colunas.join('')
+            valores
         };
         valores.forEach(v => {
             if (!porValor.has(v)) porValor.set(v, new Set());
@@ -18456,18 +18457,6 @@ function celulasRepetidasDoPedido(osId) {
         });
     });
 
-    /**
-     * Dois modelos do MESMO banco do pedido que leem colunas diferentes nao
-     * disputam nada: a diferenca entre eles e justamente a coluna. Fora desse
-     * caso -- inclusive entre todos os modelos sem banco do pedido, que e como
-     * o painel funcionava ate aqui -- a resposta e `false` e a comparacao por
-     * valor segue exatamente como sempre foi.
-     */
-    const separadosPelaColuna = (a, b) => {
-        const A = usoPorItem[a], B = usoPorItem[b];
-        if (!A || !B || !A.bancoId || !B.bancoId) return false;
-        return A.bancoId === B.bancoId && A.assinatura !== B.assinatura;
-    };
     const saida = {};
     Object.keys(usoPorItem).forEach(id => {
         const porModelo = {};
@@ -18476,11 +18465,9 @@ function celulasRepetidasDoPedido(osId) {
         usoPorItem[id].valores.forEach(v => {
             const donos = porValor.get(v);
             if (!donos || donos.size < 2) return;
-            const disputam = Array.from(donos).filter(o => o === id || !separadosPelaColuna(id, o));
-            if (disputam.length < 2) return;
             total++;
             if (exemplos.length < 3) exemplos.push(v);
-            disputam.forEach(outro => {
+            donos.forEach(outro => {
                 if (outro !== id) porModelo[outro] = (porModelo[outro] || 0) + 1;
             });
         });

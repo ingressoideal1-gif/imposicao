@@ -125,9 +125,22 @@ function cenario(mapas) {
     const { state, api } = cenario([
         { CODIGO: '05/09' }, { CODIGO: '06/09' }, { CODIGO: '11/09' }
     ]);
+    // Desde 28/08/2026 quem cala a repeticao legitima e a MARCA de
+    // conferencia: o NOME repete entre os dias DE PROPOSITO, entao ele se
+    // DESMARCA (caixinha Conferir do 🔤). A antiga isencao por coluna
+    // (separadosPelaColuna) calava junto o choque real do mesmo codigo em
+    // colunas diferentes — e morreu depois do relato do usuario.
+    state.numeracoes[0].elements.find(e => e.id === 'el_1').sem_conferencia = true;
     const rep = api.celulasRepetidasDoPedido('os-1');
     ok(Object.keys(rep).length === 0,
-        'tres modelos nas mesmas linhas e em dias diferentes NAO sao repeticao', rep);
+        'com o NOME desmarcado, tres modelos nas mesmas linhas e dias diferentes NAO acusam', rep);
+
+    // Com o NOME conferido, a mesma pessoa nos tres modelos ACUSA nos tres —
+    // era exatamente o que a isencao escondia.
+    delete state.numeracoes[0].elements.find(e => e.id === 'el_1').sem_conferencia;
+    const rep2 = api.celulasRepetidasDoPedido('os-1');
+    ok(Object.keys(rep2).length === 3,
+        'com o NOME conferido, o mesmo nome nos tres modelos acusa nos tres', Object.keys(rep2));
 })();
 
 (function mesmaColunaEMesmasLinhasEhRepeticao() {
@@ -619,6 +632,26 @@ function cenario(mapas) {
         'a escolha da caixa vale para as próximas aberturas da página');
     ok(/if \(cruzou \|\| compartilharPreferido\) ed\.compartilhar = true/.test(editor),
         'fatias gravadas que se cruzam reabrem o modal com a caixa LIGADA');
+})();
+
+(function conferenciaVerificaEntreTodosOsModelos() {
+    // 28/08/2026: "a Conferencia de dados nao esta verificando entre modelos".
+    // A isencao separadosPelaColuna (27/08) calava modelos do mesmo banco com
+    // colunas diferentes — e engolia o choque real do mesmo codigo em colunas
+    // distintas. Quem cala repeticao legitima e a MARCA de conferencia (coluna
+    // que repete por natureza se desmarca no 🔤). Reproduzido e provado no
+    // navegador (repro_conferencia_entre_modelos.js): '001' na coluna 1 do
+    // VIP 1 e na coluna 2 do VIP 2 acusa nos dois; SETOR desmarcado cala.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(!/const separadosPelaColuna/.test(script) && !/assinatura: colunas\.join/.test(script),
+        'a isencao por coluna morreu — a comparacao por valor vale entre TODOS os modelos');
+    const corpo = script.slice(script.indexOf('function celulasRepetidasDoPedido'),
+                               script.indexOf('window.celulasRepetidasDoPedido'));
+    ok(/donos\.forEach\(outro => \{/.test(corpo) && !/disputam/.test(corpo),
+        'todo dono do valor repetido entra na conta, sem filtro de coluna');
+    ok(/MARCA de conferencia/.test(corpo),
+        'o codigo explica quem cala a repeticao legitima: a caixinha Conferir');
 })();
 
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');

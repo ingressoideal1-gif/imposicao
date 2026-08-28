@@ -146,6 +146,15 @@ apenas a informação dos elementos como seus tamanhos, origem, fontes"*.
 A seção de checkboxes "colunas do banco nesta numeração" (da rodada anterior do
 mesmo dia) morreu com esta decisão: o Exemplo a tornou desnecessária.
 
+**A Conferência de dados compara entre TODOS os modelos** (28/08/2026). A
+isenção `separadosPelaColuna` (27/08, formato largo) calava modelos do mesmo
+banco que leem colunas diferentes — e engolia o choque real: o mesmo código em
+colunas distintas de dois modelos. Ela foi removida depois do relato *"a
+Conferência de dados não está verificando entre modelos"*. Quem cala a
+repetição legítima é a **marca de conferência**: coluna que repete por natureza
+(SETOR, NOME no formato largo) se **desmarca** na caixinha Conferir do 🔤 — e
+pronto, sem alarme falso e sem cegueira para o choque de verdade.
+
 ## As travas
 
 - **Banco que não desceu** — vínculo apontando para banco ausente **recusa a
