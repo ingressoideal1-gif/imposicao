@@ -301,8 +301,15 @@ function cenario(mapas) {
     // pede colunas e nao traz CSV dentro — ficava sem a porta que lhe daria um.
     const caixa = script.slice(script.indexOf('function atualizarBotoesCsvDaAmostra'));
     const ateOTemCsv = caixa.slice(0, caixa.indexOf('linha.style.display'));
-    ok(/colunasQueAPecaPede/.test(ateOTemCsv),
-        'a caixa do banco aparece tambem quando a PECA pede colunas e nao tem CSV');
+    // 28/08/2026, segunda rodada: a primeira versao usava colunasQueAPecaPede,
+    // que ignora campo SEM coluna escolhida — e a peca criada sem CSV nasce
+    // exatamente assim (a do pedido de teste 21346). A caixa aparece com
+    // qualquer campo de banco, nomeado ou nao.
+    const linhaAtiva = (ateOTemCsv.split('\n')
+        .filter(l => !l.trim().startsWith('//'))
+        .find(l => l.includes('pecaPedeColuna ='))) || '';
+    ok(/source === 'database'/.test(ateOTemCsv) && !linhaAtiva.includes('colunasQueAPecaPede'),
+        'a caixa aparece quando a peca TEM campo de banco, mesmo sem coluna escolhida', linhaAtiva.trim());
 
     // (2) A busca dos bancos do pedido ia junto com a das numeracoes, atras de
     // um portao que perguntava so por numeracao sem CSV baixado. Pedido cujas

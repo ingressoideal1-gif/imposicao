@@ -16512,12 +16512,15 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     const vinculoDaqui = vinculoDeBancoDoModelo(item);
     const pedidoTemBanco = !!(state.bancosDoPedido && state.bancosDoPedido.length);
 
-    // E aparece tambem quando a peca PEDE colunas e nao trouxe CSV nenhum: é
-    // exatamente a numeracao reaproveitada sem dado dentro, a que precisa da
-    // porta para receber o banco do pedido. Sem isto o "Vem de:" so existia
-    // onde ja havia banco — ou seja, em todo lugar menos onde ele serve.
-    const pecaPedeColuna = !!(num && window.BancoDoModelo
-        && window.BancoDoModelo.colunasQueAPecaPede(num).length);
+    // E aparece tambem quando a peca TEM campo de banco e nao trouxe CSV
+    // nenhum: é exatamente a numeracao reaproveitada (ou recem-criada) sem dado
+    // dentro, a que precisa da porta para receber o banco do pedido. Campo COM
+    // ou SEM coluna escolhida — a peca feita para este fluxo nasce sem CSV, e
+    // sem CSV nao ha coluna para escolher ainda: exigir o nome da coluna (o
+    // que `colunasQueAPecaPede` faz, de proposito, para o mapa) escondia o
+    // "Vem de:" justamente da peca nova do pedido de teste 21346 (28/08/2026).
+    const pecaPedeColuna = !!(num && (num.elements || [])
+        .some(el => el && el.source === 'database'));
 
     const temCsv = baixando || !!(num && num.csv_data && num.csv_data.length)
         || !!vinculoDaqui || pedidoTemBanco || pecaPedeColuna;
@@ -16753,7 +16756,14 @@ function abrirColunasDoModelo(idx, osId) {
 
     const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
     if (!pedidas.length) {
-        toast('Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
+        // Campo de banco SEM coluna escolhida nao entra nas pedidas — e uma
+        // peca criada sem CSV nasce exatamente assim. A trava diz a saida.
+        const temCampoSemNome = ((peca && peca.elements) || [])
+            .some(el => el && el.source === 'database' && !String(el.csv_column || '').trim());
+        toast(temCampoSemNome
+            ? 'Os campos de banco desta numeração ainda estão sem coluna. Abra a numeração e '
+              + 'digite o nome da coluna de cada campo (caixa "Coluna do CSV") — depois volte aqui para apontá-las no banco.'
+            : 'Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
         return;
     }
 
