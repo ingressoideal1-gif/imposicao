@@ -1210,3 +1210,118 @@ def test_mexer_na_lista_de_pacotes_nao_apaga_o_que_foi_digitado():
     assert "acab-volume-janela" not in corpo, (
         "remontar a janela inteira apagaria o peso que o operador ja digitou"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  A FOTO DA CAIXA  (28/08/2026)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Pedido do usuario:
+#
+#   "no painel de acabamento, ao clicar em dividir em volume e ao clicar pesar
+#    este volume, ao abrir o modal compartilhado entre modelos, adicionar o
+#    botao 'fotografar' -- a foto sera compartilhada entre os modelos do
+#    volume"
+#
+# A foto do material ja existia por MODELO desde 20/08/2026. A janela do volume
+# e o lugar em que os modelos ja estao reunidos: uma foto ali vale para todos
+# eles, e uma caixa com quatro modelos dentro deixa de pedir quatro fotos do
+# mesmo trabalho.
+#
+# O comportamento e medido pelo harness em Node. O que fica aqui e a LIGACAO: a
+# coluna existe no SQL, o arquivo vai para o mesmo bucket que ja funciona, e a
+# foto da caixa nao atropela a do revisor.
+
+SQL_DA_FOTO_DO_VOLUME = "sql/foto_do_volume.sql"
+
+
+def test_o_sql_da_foto_do_volume_e_aditivo():
+    sql = _ler(SQL_DA_FOTO_DO_VOLUME).lower()
+
+    assert "add column if not exists foto_url text" in sql, "a caixa ganha a coluna da foto"
+    assert "comment on column public.producao_volumes.foto_url" in sql, (
+        "com o comentario que explica que ela e compartilhada pelos modelos"
+    )
+    assert "drop table" not in sql, "migracao aditiva nao derruba tabela"
+    assert "drop column" not in sql, "nem tira coluna de ninguem"
+    assert "delete from" not in sql, "nem apaga linha"
+    # A estacao que estiver com o painel anterior aberto continua gravando sem
+    # a coluna nova, e por isso ela nao pode ser `not null`.
+    assert "foto_url text not null" not in sql, (
+        "coluna obrigatoria quebraria a estacao com o painel anterior"
+    )
+
+
+def test_a_foto_da_caixa_usa_o_bucket_que_ja_existe():
+    """Bucket novo com escrita anonima ja falhou neste projeto antes, e a
+    estacao da grafica grava sem sessao do Supabase."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function salvarFotoDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "subirFoto(" in corpo, "passa pelo mesmo upload da foto do modelo"
+    assert "volume_${v.numeroDoPedido}" in corpo, (
+        "e o nome do arquivo diz de qual caixa a foto e"
+    )
+
+    # E o upload continua sendo um so, no bucket `artes`, prefixo proprio.
+    i = js.index("async function subirFoto(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "BUCKET_DA_FOTO" in corpo and "PASTA_DA_FOTO" in corpo
+
+
+def test_a_foto_da_caixa_so_vai_ao_banco_no_gravar_volume():
+    """A janela inteira funciona assim. Um caminho de escrita a parte faria a
+    foto sobreviver a um Cancelar que desfaz todo o resto."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function salvarFotoDoVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "v.fotoUrl = url" in corpo, "o endereco fica na janela"
+    assert ".from(TABELA_DE_VOLUMES)" not in corpo, "e nao vai ao banco por aqui"
+
+    # Quem leva ao banco e o gravarVolume, e ele reencontra a foto ao EDITAR --
+    # senao corrigir o peso de uma caixa apagaria a foto dela.
+    i = js.index("async function gravarVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "foto_url: (v.fotoUrl || '').trim() || null" in corpo
+
+    i = js.index("function prepararVolumeEmEdicao(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "fotoUrl: v.foto || ''" in corpo, (
+        "editar um volume tem de trazer de volta a foto que ja estava"
+    )
+
+
+def test_a_foto_do_revisor_vem_antes_da_foto_da_caixa():
+    """Sao duas perguntas diferentes: a do modelo e o registro do que o REVISOR
+    viu; a da caixa, o registro do que foi EMBALADO. A segunda nao substitui a
+    primeira."""
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("function blocoDaFoto(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "const foto = fotoDoModelo(item)" in corpo
+    assert "const daCaixa = foto ? null : fotoDoVolumeDoModelo(item)" in corpo, (
+        "a foto da caixa so aparece quando o modelo ainda nao tem a dele"
+    )
+    # E o botao nao mente: sem foto propria ele continua dizendo "Fotografar".
+    assert "${foto ? 'Refazer foto' : 'Fotografar'}" in corpo
+
+
+def test_a_camera_abre_por_cima_da_janela_do_volume():
+    """A camera passou a ser aberta de DENTRO da janela do volume. Num z-index
+    menor que o dela, o operador clicaria em Fotografar e nao veria nada."""
+    js = _ler("frontend/acabamento.js")
+
+    def z(trecho):
+        i = js.index(trecho)
+        m = re.search(r"z-index: (\d+)", js[i:i + 400])
+        return int(m.group(1))
+
+    janela_do_volume = z("caixa.id = 'acab-volume-janela'")
+    camera = z("caixa.id = 'acab-camera'")
+    lightbox = z("overlay.id = 'acab-lightbox'")
+
+    assert camera > janela_do_volume, "a camera abre por cima da janela do volume"
+    assert lightbox > camera, "e a ampliacao da foto, por cima das duas"

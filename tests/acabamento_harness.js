@@ -161,6 +161,37 @@ function montarAmbiente() {
 
         _sessao: { user: { id: 'u1' } },   // null = estacao, sem sessao
 
+        // O Storage, so o suficiente para a camera (28/08/2026). Guarda o que
+        // subiu e devolve um endereco publico previsivel -- e assim o teste
+        // consegue seguir a foto do clique ate a coluna do banco.
+        _arquivosSubidos: [],      // [{ bucket, caminho, tipo }]
+        _erroAoSubirFoto: null,
+
+        storage: {
+            from(bucket) {
+                return {
+                    upload(caminho, _blob, opcoes) {
+                        if (banco._erroAoSubirFoto) {
+                            return Promise.resolve({ error: banco._erroAoSubirFoto });
+                        }
+                        banco._arquivosSubidos.push({
+                            bucket, caminho,
+                            tipo: (opcoes && opcoes.contentType) || '',
+                        });
+                        return Promise.resolve({ data: { path: caminho }, error: null });
+                    },
+                    getPublicUrl(caminho) {
+                        return {
+                            data: {
+                                publicUrl: `https://x.supabase.co/storage/v1/object/public/`
+                                    + `${bucket}/${caminho}`,
+                            },
+                        };
+                    },
+                };
+            },
+        },
+
         auth: {
             getSession() {
                 return Promise.resolve({ data: { session: banco._sessao }, error: null });
@@ -3026,6 +3057,9 @@ async function criarVolume(amb, opcoes) {
     amb.documento.getElementById('acab-vol-tipo').value = opcoes.tipo || 'Caixa';
     amb.documento.getElementById('acab-vol-responsavel').value = opcoes.responsavel || '';
     amb.documento.getElementById('acab-vol-obs').value = opcoes.observacao || '';
+    // A foto da caixa (28/08/2026) nao vem de campo: ela ja subiu ao Storage
+    // no "Salvar foto" da camera, e a janela guarda so o endereco.
+    if (opcoes.foto) amb.painel._tela.volumeEmEdicao.fotoUrl = opcoes.foto;
     await amb.painel.confirmarVolume();
 }
 
@@ -4008,6 +4042,211 @@ async function asContasDosPacotesSaoPuras() {
        'com nome, os dois juntos');
 }
 
+// ─── A foto da caixa (28/08/2026) ────────────────────────────────────────────
+//
+// Pedido do usuario:
+//
+//   "no painel de acabamento, ao clicar em dividir em volume e ao clicar pesar
+//    este volume, ao abrir o modal compartilhado entre modelos, adicionar o
+//    botao 'fotografar' -- a foto sera compartilhada entre os modelos do
+//    volume"
+//
+// A foto do material ja existia POR MODELO desde 20/08/2026: um botao de camera
+// em cada card. Uma caixa com quatro modelos dentro pedia quatro fotos do mesmo
+// trabalho. A janela do volume e o lugar em que os modelos ja estao reunidos, e
+// e por isso que UMA foto ali serve a todos eles.
+//
+// O que estes testes travam:
+//
+//   1. a janela oferece UM botao de foto, e nao um por pacote;
+//   2. "Salvar foto" sobe ao Storage e NAO grava -- quem grava e o Gravar
+//      volume, como todo o resto da janela;
+//   3. editar a caixa depois nao apaga a foto que ja estava;
+//   4. os modelos da caixa passam a mostra-la, e dizem de qual caixa ela e;
+//   5. a foto PROPRIA do modelo continua vindo primeiro -- a do revisor nao e
+//      substituida pela da embalagem;
+//   6. nada disso cria bucket novo: e o mesmo `artes/acabamento-fotos/`.
+
+const FOTO_DA_CAIXA = 'https://x.supabase.co/storage/v1/object/public/artes/'
+    + 'acabamento-fotos/volume_200_LASER_1_9.jpg';
+
+async function aJanelaDaCaixaOfereceFotografar() {
+    const amb = ambienteDeVolumes();
+    const janelas = capturarJanelas(amb);
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.marcarModelo(3002);
+    amb.painel.pesarVolume();
+
+    const janela = janelas.achar('acab-volume-janela');
+    ok(!!janela, 'a janela do volume abriu');
+    const html = janela ? janela.innerHTML : '';
+    ok(html.indexOf('Foto da caixa') !== -1, 'a janela tem o campo da foto da caixa');
+    ok(html.indexOf('fotografarVolume()') !== -1, 'e o botao chama a camera da caixa');
+    ok(html.indexOf('Fotografar') !== -1, 'caixa sem foto convida a fotografar');
+    // O ponto do pedido: UMA foto para a caixa inteira, e nao uma por modelo
+    // dentro dela -- senao a janela nao teria resolvido nada.
+    ok((html.match(/fotografarVolume\(\)/g) || []).length === 1,
+       'uma foto para a caixa, e nao uma por pacote',
+       String((html.match(/fotografarVolume\(\)/g) || []).length));
+}
+
+async function aFotoDaCaixaSobeAoStorageEEsperaOGravar() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    amb.painel.novoVolume('LASER', 200);
+    amb.painel.marcarModelo(3001);
+    amb.painel.pesarVolume();
+
+    // O operador aperta Fotografar e depois Salvar foto. O JPEG e de mentira:
+    // quem o produz e o canvas do navegador, e o que se mede aqui e o caminho
+    // que ele percorre depois.
+    const r = amb.painel._regras;
+    r.camera.alvo = 'volume';
+    r.camera.blob = { size: 51200 };
+    await r.salvarFoto();
+
+    ok(amb.banco._arquivosSubidos.length === 1, 'a foto subiu ao Storage',
+       String(amb.banco._arquivosSubidos.length));
+    const subiu = amb.banco._arquivosSubidos[0] || {};
+    ok(subiu.bucket === 'artes', 'no bucket que ja existe', String(subiu.bucket));
+    ok(String(subiu.caminho).indexOf('acabamento-fotos/volume_200_LASER_1_') === 0,
+       'com nome que diz de qual caixa ela e', String(subiu.caminho));
+    ok(/\.jpg$/.test(String(subiu.caminho)), 'e em jpeg');
+
+    // Subir NAO grava. Quem escreve no banco continua sendo o Gravar volume --
+    // um caminho de escrita a parte faria a foto sobreviver a um Cancelar que
+    // desfaz todo o resto da janela.
+    ok(amb.banco._volumesDoBanco.length === 0, 'a foto sozinha nao cria volume nenhum');
+    const emEdicao = amb.painel._tela.volumeEmEdicao;
+    ok(String(emEdicao && emEdicao.fotoUrl).indexOf('volume_200_LASER_1_') !== -1,
+       'a janela fica com o endereco da foto', String(emEdicao && emEdicao.fotoUrl));
+    ok(amb.documento.getElementById('acab-vol-foto').innerHTML.indexOf('Refazer foto') !== -1,
+       'e o botao passa a oferecer refazer, sem redesenhar a janela');
+
+    // Agora sim: o Gravar volume leva a foto ao banco.
+    campoDaQtd(amb, 3001).value = '5.000';
+    amb.documento.getElementById('acab-vol-peso').value = '12,48';
+    await amb.painel.confirmarVolume();
+    ok(amb.banco._volumesDoBanco.length === 1, 'o volume foi gravado');
+    ok(String((amb.banco._volumesDoBanco[0] || {}).foto_url).indexOf('volume_200_LASER_1_') !== -1,
+       'com a foto da caixa junto', String((amb.banco._volumesDoBanco[0] || {}).foto_url));
+}
+
+async function editarACaixaNaoPerdeAFoto() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, {
+        setor: 'LASER', marcar: [3001], qtds: { 3001: '5.000' },
+        peso: '12,48', responsavel: 'Bernardo Farias', foto: FOTO_DA_CAIXA,
+    });
+    ok(amb.banco._volumesDoBanco[0].foto_url === FOTO_DA_CAIXA, 'a caixa nasceu com a foto');
+
+    // Reabrir para corrigir o peso e gravar de novo NAO pode apagar a foto: a
+    // janela grava a linha inteira, e quem nao a trouxesse de volta a zeraria.
+    amb.painel.editarVolume(amb.banco._volumesDoBanco[0].id);
+    ok(amb.painel._tela.volumeEmEdicao.fotoUrl === FOTO_DA_CAIXA,
+       'a janela reabre com a foto que ja estava');
+    amb.documento.getElementById('acab-vol-peso').value = '12,50';
+    await amb.painel.confirmarVolume();
+    ok(amb.banco._volumesDoBanco[0].foto_url === FOTO_DA_CAIXA,
+       'e regravar o peso nao apaga a foto', String(amb.banco._volumesDoBanco[0].foto_url));
+}
+
+async function aFotoDaCaixaApareceNosModelosDela() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, {
+        setor: 'LASER', marcar: [3001, 3002], qtds: { 3001: '5.000', 3002: '500' },
+        peso: '12,48', responsavel: 'Bernardo Farias', foto: FOTO_DA_CAIXA,
+    });
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const quantas = (html.match(/volume_200_LASER_1_9\.jpg/g) || []).length;
+    ok(quantas === 2, 'os DOIS modelos da caixa mostram a mesma foto', String(quantas));
+    ok(html.indexOf('Foto do volume V1') !== -1, 'e o card diz de qual caixa ela e');
+    // O botao nao mente: nenhum dos dois tem foto PROPRIA ainda.
+    ok(html.indexOf('Refazer foto') === -1,
+       'o botao continua oferecendo a foto do material, que e outra coisa');
+}
+
+async function aFotoPropriaDoModeloVemPrimeiro() {
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+    amb.janela.state.osItens['os-200'][0].acabamento_foto_url =
+        'https://x.supabase.co/storage/v1/object/public/artes/acabamento-fotos/200_3001_1.jpg';
+
+    await criarVolume(amb, {
+        setor: 'LASER', marcar: [3001, 3002], qtds: { 3001: '5.000', 3002: '500' },
+        peso: '12,48', responsavel: 'Bernardo Farias', foto: FOTO_DA_CAIXA,
+    });
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('200_3001_1.jpg') !== -1, 'o modelo com foto propria continua mostrando a dele');
+    ok(html.indexOf('Refazer foto') !== -1, 'e o botao dele diz refazer');
+    const quantas = (html.match(/volume_200_LASER_1_9\.jpg/g) || []).length;
+    ok(quantas === 1, 'a foto da caixa aparece so no modelo que ainda nao tem a sua',
+       String(quantas));
+}
+
+async function aListaDoSetorMostraAFotoDaCaixa() {
+    const amb = ambienteDeVolumes();
+    const janelas = capturarJanelas(amb);
+    await amb.painel.abrirPedido('os-200');
+
+    await criarVolume(amb, {
+        setor: 'LASER', marcar: [3001], qtds: { 3001: '5.000' },
+        peso: '12,48', responsavel: 'Bernardo Farias', foto: FOTO_DA_CAIXA,
+    });
+    amb.painel.verVolumes('LASER');
+
+    const lista = janelas.achar('acab-volumes-lista');
+    ok(!!lista, 'a lista do setor abriu');
+    ok((lista ? lista.innerHTML : '').indexOf('volume_200_LASER_1_9.jpg') !== -1,
+       'com a miniatura da foto da caixa');
+}
+
+async function aFotoDaCaixaNaoCriaBucketNovo() {
+    const amb = ambienteDeVolumes();
+    const r = amb.painel._regras;
+
+    const url = await r.subirFoto('volume_200_LASER_2', { size: 10 });
+    const subiu = amb.banco._arquivosSubidos[0] || {};
+    ok(subiu.bucket === r.BUCKET_DA_FOTO,
+       'a foto da caixa vai para o mesmo bucket da foto do modelo', String(subiu.bucket));
+    ok(String(subiu.caminho).indexOf(r.PASTA_DA_FOTO + '/') === 0,
+       'e para o mesmo prefixo', String(subiu.caminho));
+    ok(subiu.tipo === 'image/jpeg', 'como jpeg', String(subiu.tipo));
+    ok(String(url).indexOf(String(subiu.caminho)) !== -1,
+       'e o endereco publico aponta para ela', String(url));
+}
+
+async function aFotoDoModeloContinuaIndoParaOCardDele() {
+    // A camera passou a ter DOIS alvos, e o do modelo e o que ja estava no ar.
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+
+    const r = amb.painel._regras;
+    r.camera.alvo = 'modelo';
+    r.camera.itemId = 3001;
+    r.camera.osId = 'os-200';
+    r.camera.blob = { size: 2048 };
+    await r.salvarFoto();
+
+    const gravou = amb.banco._gravacoes.filter(g => g.payload && g.payload.acabamento_foto_url);
+    ok(gravou.length === 1, 'a foto do modelo continua indo para a coluna dele',
+       String(gravou.length));
+    ok(String(gravou[0].valor) === '3001', 'no modelo certo', String(gravou[0].valor));
+    ok(String((amb.banco._arquivosSubidos[0] || {}).caminho).indexOf('acabamento-fotos/200_3001_') === 0,
+       'e com o nome de sempre', String((amb.banco._arquivosSubidos[0] || {}).caminho));
+    ok(amb.banco._volumesDoBanco.length === 0, 'sem tocar em volume nenhum');
+}
+
 
 (async function () {
     await setorSemVolumeSaiComoUmSo();
@@ -4041,6 +4280,16 @@ async function asContasDosPacotesSaoPuras() {
     await modeloIncompletoNaoFechaSozinho();
     await pacoteSemResponsavelNaoCarimbaNinguem();
     await asContasDosPacotesSaoPuras();
+
+    // A foto da caixa (28/08/2026)
+    await aJanelaDaCaixaOfereceFotografar();
+    await aFotoDaCaixaSobeAoStorageEEsperaOGravar();
+    await editarACaixaNaoPerdeAFoto();
+    await aFotoDaCaixaApareceNosModelosDela();
+    await aFotoPropriaDoModeloVemPrimeiro();
+    await aListaDoSetorMostraAFotoDaCaixa();
+    await aFotoDaCaixaNaoCriaBucketNovo();
+    await aFotoDoModeloContinuaIndoParaOCardDele();
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════

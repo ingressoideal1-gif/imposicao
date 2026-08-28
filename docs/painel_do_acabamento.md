@@ -7,8 +7,8 @@
 |---|---|
 | Onde fica | `frontend/index.html`, seção `view-acabamento`, menu **Produção → Painel do Acabamento** |
 | Quem desenha | [`frontend/acabamento.js`](../frontend/acabamento.js) |
-| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
-| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) |
+| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, as tabelas nossas `producao_volumes` (com `foto_url`) e `producao_volume_itens`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
+| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) + [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) + [`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql) + [`sql/foto_do_volume.sql`](../sql/foto_do_volume.sql) |
 | Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) — **ver e editar ligados em todo perfil** desde 22/08/2026 (decisão do usuário); [`sql/acabamento_para_todos.sql`](../sql/acabamento_para_todos.sql) ligou nas grades que já existiam |
 | Testes | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js) + [`tests/test_painel_do_acabamento.py`](../tests/test_painel_do_acabamento.py) |
 
@@ -1197,6 +1197,41 @@ nenhum, e o card do modelo nem mostra o bloco de volumes.
 4. **`Ver volumes`** abre a lista do setor, com os pacotes de cada caixa —
    quantidade e responsável, um por linha — mais editar, excluir e a
    conferência.
+
+### A foto da caixa é uma só para os modelos dela
+
+> "ao abrir o modal compartilhado entre modelos, adicionar o botão 'fotografar'
+> — a foto será compartilhada entre os modelos do volume" — usuário, 28/08/2026
+
+A janela do volume tem, ao lado do nome e do tipo, o botão **📷 Fotografar**. É
+a mesma câmera do card do modelo, com um alvo diferente: a foto é **da caixa**,
+e vale para **todos os modelos que estão dentro dela**. Uma caixa com quatro
+modelos deixa de pedir quatro fotos do mesmo trabalho.
+
+**Ela não substitui a foto do material.** As duas respondem a perguntas
+diferentes: a do modelo é o registro do que o **revisor** viu (o papel contra a
+amostra aprovada); a da caixa é o registro do que foi **embalado**. No card, a
+foto própria do modelo vem primeiro; a da caixa aparece só quando o modelo ainda
+não tem a dele, e o `title` da miniatura diz de qual volume ela é ("Foto do
+volume V1 — a caixa em que este modelo está"). O rótulo do botão do card também
+não mente: sem foto própria ele continua dizendo *Fotografar*, e não *Refazer*.
+
+**Onde ela é guardada.** No mesmo bucket `artes`, prefixo `acabamento-fotos/`,
+com nome `volume_<pedido>_<setor>_<numero>_<carimbo>.jpg`. O endereço vai para
+`producao_volumes.foto_url` ([`sql/foto_do_volume.sql`](../sql/foto_do_volume.sql),
+aditivo). Não há bucket novo de propósito: bucket novo com escrita anônima já
+falhou neste projeto antes, e a estação grava sem sessão do Supabase.
+
+**Quando ela vai ao banco.** O *Salvar foto* põe o arquivo no Storage e o
+endereço na janela; quem escreve no banco continua sendo o **Gravar volume**,
+como todo o resto dela — um caminho de escrita à parte faria a foto sobreviver a
+um *Cancelar* que desfaz tudo o mais. Ao **editar** uma caixa, a janela reabre
+com a foto que já estava: sem isso, corrigir o peso apagaria a foto.
+
+A câmera abre num `z-index` **acima** da janela do volume, e o lightbox acima
+das duas — senão o operador clicaria em Fotografar e não veria nada acontecer.
+O pacote **não** tem foto própria, de propósito: é a caixa que vai à balança e é
+a caixa que se fotografa.
 
 ### O peso do setor acompanha a soma das caixas
 

@@ -618,6 +618,26 @@
     }
 
     /**
+     * O VOLUME fotografado em que este modelo está — ou `null`.
+     *
+     * É a outra ponta do botão Fotografar da janela da caixa (28/08/2026): uma
+     * foto tirada lá vale para todos os modelos que estão dentro dela, e é aqui
+     * que o card de cada um a encontra.
+     *
+     * Ela NÃO substitui a foto do material. `fotoDoModelo` vem primeiro em
+     * `blocoDaFoto`: a foto do card é o registro do que o revisor viu, e a da
+     * caixa é o registro do que foi embalado. Um modelo em duas caixas mostra a
+     * primeira delas que tem foto — as duas são dele, e escolher a primeira é
+     * estável, enquanto "a mais recente" mudaria a cada caixa nova.
+     */
+    function fotoDoVolumeDoModelo(m) {
+        if (!m) return null;
+        const alvo = String(m.id);
+        return todosOsVolumes().find(v => (v.foto || '')
+            && (v.pacotes || []).some(p => String(p.modeloId) === alvo)) || null;
+    }
+
+    /**
      * O estágio do PEDIDO, a partir dos modelos dele.
      *
      * Pronto só quando TODOS estão prontos. Qualquer movimento parcial conta
@@ -3776,6 +3796,10 @@
                 peso: (l.peso_kg === null || l.peso_kg === undefined) ? null : Number(l.peso_kg),
                 responsavel: (l.responsavel || '').trim(),
                 observacao: (l.observacao || '').trim(),
+                // A foto da caixa (28/08/2026). Uma só por volume, e por isso
+                // COMPARTILHADA por todos os modelos que estão dentro dela —
+                // ver `fotoDoVolumeDoModelo`.
+                foto: (l.foto_url || '').trim(),
                 criadoEm: l.criado_em || '',
                 pacotes,
             });
@@ -4070,7 +4094,7 @@
             if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
             const { data, error } = await supabaseClient
                 .from(TABELA_DE_VOLUMES)
-                .select('id, setor, numero, nome, tipo, peso_kg, responsavel, observacao, criado_em, '
+                .select('id, setor, numero, nome, tipo, peso_kg, responsavel, observacao, foto_url, criado_em, '
                       + TABELA_DE_ITENS_DO_VOLUME + '(id, modelo_id, qtd, responsavel)')
                 .eq('id_int', idInt);
             if (error) throw error;
@@ -4105,6 +4129,11 @@
             peso_kg: (v.peso === null || v.peso === undefined) ? null : v.peso,
             responsavel: v.responsavel || null,
             observacao: v.observacao || null,
+            // A foto já está no Storage desde o "Salvar foto" da câmera; o que
+            // se grava aqui é só o endereço dela. Ao EDITAR um volume, o
+            // `prepararVolumeEmEdicao` traz a foto que já estava — é isso que
+            // impede uma edição de peso de apagar a foto sem querer.
+            foto_url: (v.fotoUrl || '').trim() || null,
         };
 
         let id = v.volumeId || null;
@@ -4531,6 +4560,7 @@
                 nome: v.nome || '',
                 tipo: v.tipo || TIPOS_DE_VOLUME[0], peso: v.peso,
                 responsavel: v.responsavel, observacao: v.observacao,
+                fotoUrl: v.foto || '',
                 pacotes: v.pacotes.map(i => ({
                     modeloId: i.modeloId, qtd: i.qtd, responsavel: i.responsavel || '',
                 })),
@@ -4546,6 +4576,7 @@
             numero: proximoNumeroDeVolume(lista),
             nome: '',
             tipo: TIPOS_DE_VOLUME[0], peso: null, responsavel: '', observacao: '',
+            fotoUrl: '',
             // Cada modelo marcado vira UM pacote, com a quantidade que AINDA
             // ESTÁ FORA de volume e com o responsável que o card já mostra. É o
             // caminho de um clique para "esta caixa leva o resto"; diminuir a
@@ -4751,6 +4782,54 @@
         repintarPacotes();
     }
 
+    // ─── A foto da caixa ────────────────────────────────────────────────────
+    //
+    // Pedido do usuário em 28/08/2026: "ao abrir o modal compartilhado entre
+    // modelos, adicionar o botão Fotografar — a foto será compartilhada entre
+    // os modelos do volume".
+    //
+    // É a mesma câmera do card do modelo, com um alvo diferente. O ganho é de
+    // trabalho do operador: uma caixa com quatro modelos dentro é UMA foto, e
+    // não quatro. Os quatro cards passam a mostrá-la (`fotoDoVolumeDoModelo`),
+    // e o modelo que tem foto PRÓPRIA continua mostrando a dele — a foto do
+    // material é registro do revisor, e a da caixa não a substitui.
+
+    const ID_DA_FOTO_DO_VOLUME = 'acab-vol-foto';
+
+    /** O botão e a miniatura, do jeito que a janela está agora. */
+    function htmlDaFotoDoVolume() {
+        const v = tela.volumeEmEdicao;
+        if (!v) return '';
+        const foto = (v.fotoUrl || '').trim();
+        const pode = podeEditar();
+
+        const miniatura = foto
+            ? `<img id="acab-vol-foto-img" src="${esc(foto)}" alt="Foto desta caixa"
+                    onclick="AcabamentoPainel.ampliar('acab-vol-foto-img')"
+                    title="Foto desta caixa — clique para ampliar"
+                    style="height: 40px; object-fit: contain; display: block; cursor: zoom-in;" />`
+            : '';
+
+        return `${miniatura}
+            <button type="button" ${pode ? '' : 'disabled'}
+                    onclick="AcabamentoPainel.fotografarVolume()"
+                    title="${pode
+                        ? 'Uma foto para a caixa inteira — ela vale para todos os modelos que estão dentro dela'
+                        : 'Você tem apenas permissão de ver'}"
+                    style="display: inline-flex; align-items: center; gap: 6px; background: rgba(69,137,215,0.16);
+                           border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 7px;
+                           padding: 8px 12px; font-size: 0.82rem; font-weight: 700; white-space: nowrap;
+                           font-family: inherit; cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
+                📷 ${foto ? 'Refazer foto' : 'Fotografar'}
+            </button>`;
+    }
+
+    /** Repinta só a foto — os campos já digitados na janela ficam onde estão. */
+    function pintarFotoDoVolume() {
+        const alvo = document.getElementById(ID_DA_FOTO_DO_VOLUME);
+        if (alvo) alvo.innerHTML = htmlDaFotoDoVolume();
+    }
+
     function abrirPopupDoVolume(volumeId) {
         const preparado = prepararVolumeEmEdicao(volumeId);
         if (!preparado) return;
@@ -4814,6 +4893,13 @@
                         <div style="display: flex; flex-direction: column; gap: 5px;">
                             <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Tipo</span>
                             ${selectDeTipoDoVolume(preparado.tipo)}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;"
+                                  title="Uma foto para a caixa inteira, compartilhada por todos os modelos que estão dentro dela">Foto da caixa</span>
+                            <div id="${ID_DA_FOTO_DO_VOLUME}" style="display: flex; align-items: center; gap: 8px;">
+                                ${htmlDaFotoDoVolume()}
+                            </div>
                         </div>
                     </div>
 
@@ -5042,6 +5128,9 @@
             peso,
             responsavel: responsavel ? responsavel.value : '',
             observacao: observacao ? observacao.value : '',
+            // Não vem do DOM: a foto já subiu ao Storage no "Salvar foto" da
+            // câmera, e o que a janela guarda é o endereço dela.
+            fotoUrl: v.fotoUrl || '',
             pacotes,
         };
 
@@ -5278,6 +5367,10 @@
                                      min-width: 34px; padding: 4px 8px; border-radius: 6px;
                                      background: rgba(76,200,240,0.14); border: 1px solid rgba(76,200,240,0.35);
                                      color: #4cc8f0; font-weight: 800; font-size: 0.82rem;">V${esc(v.numero)}</span>
+                        ${v.foto ? `<img id="acab-vol-lista-foto-${escJs(v.id)}" src="${esc(v.foto)}" alt="Foto desta caixa"
+                                         onclick="AcabamentoPainel.ampliar('acab-vol-lista-foto-${escJs(v.id)}')"
+                                         title="Foto desta caixa — clique para ampliar"
+                                         style="height: 34px; object-fit: contain; display: block; cursor: zoom-in;" />` : ''}
                         ${v.nome ? `<strong style="font-size: 0.92rem; color: #ffffff;">${esc(v.nome)}</strong>` : ''}
                         <span style="font-size: 0.86rem; font-weight: 600; color: ${v.nome ? 'var(--text-dim)' : '#ffffff'};">${esc(v.tipo || '—')}</span>
                         <span style="font-size: 0.78rem; color: var(--text-dim);">pesada por ${esc(v.responsavel || '—')}</span>
@@ -5883,6 +5976,12 @@
      */
     function blocoDaFoto(item, osId, idx) {
         const foto = fotoDoModelo(item);
+        // Sem foto própria, o card mostra a foto da CAIXA em que o modelo está
+        // (28/08/2026). O botão continua dizendo "Fotografar", e não "Refazer":
+        // este modelo ainda não tem a foto DELE, e o operador precisa saber
+        // disso ao olhar o card.
+        const daCaixa = foto ? null : fotoDoVolumeDoModelo(item);
+        const mostrada = foto || (daCaixa ? daCaixa.foto : '');
         const idFoto = `acab-foto-${escJs(osId)}-${escJs(item.id)}-${idx}`;
         const pode = podeEditar();
 
@@ -5897,10 +5996,12 @@
                 📷 ${foto ? 'Refazer foto' : 'Fotografar'}
             </button>`;
 
-        const miniatura = foto
-            ? `<img id="${idFoto}" src="${esc(foto)}" alt="Foto do material"
+        const miniatura = mostrada
+            ? `<img id="${idFoto}" src="${esc(mostrada)}" alt="${daCaixa ? 'Foto da caixa' : 'Foto do material'}"
                     onclick="AcabamentoPainel.ampliar('${idFoto}')"
-                    title="Foto do material — clique para ampliar"
+                    title="${daCaixa
+                        ? 'Foto do volume ' + esc(rotuloDoVolume(daCaixa)) + ' — a caixa em que este modelo está. Clique para ampliar'
+                        : 'Foto do material — clique para ampliar'}"
                     style="height: 46px; object-fit: contain; cursor: zoom-in; display: block;" />`
             : '';
 
@@ -5934,7 +6035,14 @@
     // aparelho; no computador, o seletor de arquivos. A foto entra pelo mesmo
     // caminho e vai para o mesmo lugar.
 
-    const camera = { fluxo: null, itemId: null, osId: null, blob: null, urlPrevia: '' };
+    // `alvo` diz de quem é a foto: do MODELO (o registro do revisor, um card)
+    // ou do VOLUME (a caixa inteira, compartilhada pelos modelos que estão
+    // dentro dela). A câmera, a prévia e o encolhimento são os mesmos; o que
+    // muda é para onde o endereço vai depois do upload — ver `salvarFoto`.
+    const camera = {
+        fluxo: null, alvo: 'modelo', itemId: null, osId: null,
+        rotulo: '', blob: null, urlPrevia: '',
+    };
 
     function montarCamera() {
         let caixa = document.getElementById('acab-camera');
@@ -5942,13 +6050,16 @@
 
         caixa = document.createElement('div');
         caixa.id = 'acab-camera';
-        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100001; display: none;'
+        // Acima da janela do volume (100005): desde 28/08/2026 a câmera também
+        // é aberta de DENTRO dela, e num z-index menor ela abriria por baixo —
+        // o operador clicaria em Fotografar e não veria nada acontecer.
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100006; display: none;'
             + ' align-items: center; justify-content: center; background: rgba(2,6,23,0.94); padding: 18px;';
         caixa.innerHTML = `
             <div style="width: min(920px, 96vw); background: ${AZUL.fundo}; border: 1px solid rgba(76,200,240,0.24);
                         border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <strong style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>
+                    <strong id="acab-camera-titulo" style="font-size: 1.05rem; color: #ffffff;">📷 Foto do material</strong>
                     <span id="acab-camera-modelo" style="color: #94a3b8; font-size: 0.88rem;"></span>
                     <button type="button" id="acab-camera-fechar"
                             style="margin-left: auto; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35);
@@ -6013,21 +6124,49 @@
         if (el) el.textContent = texto || '';
     }
 
+    /** A câmera do card do modelo: a foto é o registro do que o revisor viu. */
     async function abrirCamera(itemId, osId) {
         if (!podeEditar()) return;
-
+        const s = estado();
+        const item = ((s.osItens && s.osItens[osId]) || []).find(i => String(i.id) === String(itemId));
+        camera.alvo = 'modelo';
         camera.itemId = itemId;
         camera.osId = osId;
+        return ligarCamera('📷 Foto do material',
+                           item ? (item.produto || item.nome_modelo || '') : '');
+    }
+
+    /**
+     * A câmera da JANELA DO VOLUME: uma foto para a caixa inteira.
+     *
+     * Ela não grava nada sozinha. O "Salvar foto" põe o arquivo no Storage e o
+     * endereço em `tela.volumeEmEdicao.fotoUrl`; quem escreve no banco continua
+     * sendo o "Gravar volume", como todo o resto da janela.
+     */
+    async function abrirCameraDoVolume() {
+        if (!podeEditar()) return;
+        const v = tela.volumeEmEdicao;
+        if (!v) return;
+        camera.alvo = 'volume';
+        camera.itemId = null;
+        camera.osId = null;
+        return ligarCamera('📷 Foto da caixa',
+                           `Volume ${v.numero}${v.nome ? ' · ' + v.nome : ''} — setor ${nomeDoSetor(v.setor)}`);
+    }
+
+    async function ligarCamera(titulo, subtitulo) {
         camera.blob = null;
+        camera.titulo = titulo || '📷 Foto';
+        camera.rotulo = subtitulo || '';
 
         const caixa = montarCamera();
         caixa.style.display = 'flex';
         estadoDaCamera('');
 
-        const s = estado();
-        const item = ((s.osItens && s.osItens[osId]) || []).find(i => String(i.id) === String(itemId));
+        const cabecalho = document.getElementById('acab-camera-titulo');
+        if (cabecalho) cabecalho.textContent = titulo;
         const rotulo = document.getElementById('acab-camera-modelo');
-        if (rotulo) rotulo.textContent = item ? (item.produto || item.nome_modelo || '') : '';
+        if (rotulo) rotulo.textContent = camera.rotulo;
 
         const video = document.getElementById('acab-camera-video');
         const previa = document.getElementById('acab-camera-previa');
@@ -6088,6 +6227,7 @@
         camera.blob = null;
         camera.itemId = null;
         camera.osId = null;
+        camera.alvo = 'modelo';
         const caixa = document.getElementById('acab-camera');
         if (caixa) caixa.style.display = 'none';
     }
@@ -6129,12 +6269,13 @@
         mostrarPrevia(blob);
     }
 
+    /** Religa a câmera SEM trocar de alvo: repetir a foto da caixa é da caixa. */
     function repetirFoto() {
         const previa = document.getElementById('acab-camera-previa');
         if (previa) previa.style.display = 'none';
         camera.blob = null;
         estadoDaCamera('');
-        abrirCamera(camera.itemId, camera.osId);
+        ligarCamera(camera.titulo, camera.rotulo);
     }
 
     function escolherArquivo(ev) {
@@ -6154,8 +6295,62 @@
         img.src = URL.createObjectURL(arquivo);
     }
 
+    /**
+     * Põe o JPEG no Storage e devolve o endereço público.
+     *
+     * Nome novo a cada foto: o anterior fica no bucket. Sobrescrever seria mais
+     * limpo e mais arriscado — duas estações no mesmo pedido apagariam a foto
+     * uma da outra.
+     */
+    async function subirFoto(nome, blob) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+            throw new Error('sem conexão com o banco');
+        }
+        const caminho = `${PASTA_DA_FOTO}/${nome}_${Date.now()}.jpg`;
+        const { error: erroUpload } = await supabaseClient.storage
+            .from(BUCKET_DA_FOTO)
+            .upload(caminho, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+        if (erroUpload) throw erroUpload;
+
+        const { data } = supabaseClient.storage.from(BUCKET_DA_FOTO).getPublicUrl(caminho);
+        const url = data && data.publicUrl;
+        if (!url) throw new Error('o Storage não devolveu o endereço da foto');
+        return url;
+    }
+
+    /**
+     * O "Salvar foto" quando a câmera foi aberta pela JANELA DO VOLUME.
+     *
+     * A foto vai para o Storage agora e para o BANCO só no "Gravar volume" —
+     * a janela inteira funciona assim, e um caminho de escrita à parte faria a
+     * foto sobreviver a um Cancelar que desfaz todo o resto.
+     */
+    async function salvarFotoDoVolume() {
+        const v = tela.volumeEmEdicao;
+        if (!v) { fecharCamera(); return; }
+
+        estadoDaCamera('Enviando…');
+        mostrarBotoesDaCamera([]);
+        try {
+            const url = await subirFoto(
+                `volume_${v.numeroDoPedido}_${normalizar(v.setor)}_${v.numero}`, camera.blob);
+            v.fotoUrl = url;
+            pintarFotoDoVolume();
+            fecharCamera();
+            avisar('Foto da caixa guardada. Grave o volume para ela valer para os modelos.', 'success');
+        } catch (e) {
+            console.error('[acabamento] falha ao guardar a foto da caixa:', e);
+            estadoDaCamera('');
+            mostrarBotoesDaCamera(['repetir', 'salvar']);
+            recadoDaCamera('Não deu para guardar a foto: ' + esc(e && e.message ? e.message : String(e))
+                + '<br>A foto continua aqui — tente Salvar de novo.');
+        }
+    }
+
     async function salvarFoto() {
-        if (!camera.blob || !camera.itemId) return;
+        if (!camera.blob) return;
+        if (camera.alvo === 'volume') return salvarFotoDoVolume();
+        if (!camera.itemId) return;
         const itemId = camera.itemId;
         const osId = camera.osId;
 
@@ -6163,25 +6358,10 @@
         mostrarBotoesDaCamera([]);
 
         try {
-            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-                throw new Error('sem conexão com o banco');
-            }
             const buscar = fn('findOSInState');
             const os = buscar ? buscar(osId) : null;
             const pedido = os ? os.numero : 'sem-pedido';
-            // Nome novo a cada foto: o anterior fica no bucket. Sobrescrever
-            // seria mais limpo e mais arriscado — duas estações revisando o
-            // mesmo pedido apagariam a foto uma da outra.
-            const caminho = `${PASTA_DA_FOTO}/${pedido}_${itemId}_${Date.now()}.jpg`;
-
-            const { error: erroUpload } = await supabaseClient.storage
-                .from(BUCKET_DA_FOTO)
-                .upload(caminho, camera.blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
-            if (erroUpload) throw erroUpload;
-
-            const { data } = supabaseClient.storage.from(BUCKET_DA_FOTO).getPublicUrl(caminho);
-            const url = data && data.publicUrl;
-            if (!url) throw new Error('o Storage não devolveu o endereço da foto');
+            const url = await subirFoto(`${pedido}_${itemId}`, camera.blob);
 
             await gravar(itemId, osId, 'acabamento_foto_url', url);
             fecharCamera();
@@ -6211,7 +6391,10 @@
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'acab-lightbox';
-            overlay.style.cssText = 'position: fixed; inset: 0; z-index: 100000; display: none;'
+            // Acima de TODAS as janelas desta tela (a maior é a do volume, em
+            // 100006 com a câmera): a miniatura da foto da caixa é clicável de
+            // dentro delas, e em 100000 a ampliação abria por baixo.
+            overlay.style.cssText = 'position: fixed; inset: 0; z-index: 100010; display: none;'
                 + ' align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.92);'
                 + ' padding: 24px; cursor: zoom-out;';
             overlay.innerHTML = `
@@ -6423,6 +6606,11 @@
         confirmarVolume,
         /** Cada tecla nos campos da janela: refaz o peso esperado da caixa. */
         recalcularVolume: pintarEstimadoDoVolume,
+        /**
+         * "Fotografar" da janela da caixa (28/08/2026): UMA foto para o volume
+         * inteiro, compartilhada pelos modelos que estão dentro dele.
+         */
+        fotografarVolume: abrirCameraDoVolume,
         // ── Os pacotes dentro da caixa (23/08/2026) ──────────────────────
         /** "+ Pacote": mais um maço dentro da mesma caixa. */
         adicionarPacote,
@@ -6534,6 +6722,15 @@
             TABELA_DE_ITENS_DO_VOLUME,
             responsavelDoModelo,
             fotoDoModelo,
+            fotoDoVolumeDoModelo,
+            // A câmera não é regra pura, e está aqui por um motivo: sem uma
+            // costura, o caminho do "Salvar foto" da caixa só seria medido com
+            // uma webcam de verdade na frente da máquina. `camera` deixa o
+            // teste pôr um JPEG na mão dela; `subirFoto` e `salvarFoto` fazem o
+            // resto do percurso, do Storage até `volumeEmEdicao.fotoUrl`.
+            camera,
+            subirFoto,
+            salvarFoto,
             BUCKET_DA_FOTO,
             PASTA_DA_FOTO,
             estagioDoPedido,
