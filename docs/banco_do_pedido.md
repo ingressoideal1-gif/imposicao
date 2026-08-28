@@ -70,6 +70,13 @@ Todas no card do modelo, dentro do pedido, na caixa **🗂️ Banco de dados**:
 | **🔤 Colunas** | o de‑para de cada coluna que a peça pede | só com banco do pedido |
 | **🧩 Linhas** | reparte as linhas entre os modelos que leem a mesma fonte | há linhas para contar |
 | **📊 Editar banco do pedido** | corrige o conteúdo, avisando quantos modelos leem dali | só com banco do pedido |
+| **🗂️ Renomear ou excluir bancos…** | última opção do "Vem de:" — abre a lista dos bancos do pedido para renomear ou excluir | há algum banco no pedido |
+
+Excluir tem trava: banco lido por algum modelo não sai — o `ON DELETE CASCADE`
+apagaria os vínculos junto e cada modelo cairia **calado** na numeração, imprimindo
+o dado errado. A trava diz a saída (escolher "a numeração" no "Vem de:" desses
+modelos), e a conta de leitores olha todos os vínculos carregados, não só os itens
+do pedido aberto.
 
 A caixa aparece **também quando a peça pede colunas e não tem CSV nenhum** — é a
 numeração reaproveitada, exatamente quem precisa da porta para receber um banco.
@@ -112,7 +119,6 @@ arquivo no "Vem de:", sem porta para apagá-las.
 
 ## O que ainda falta
 
-- **Excluir e renomear** um banco pelo pedido. Hoje um banco órfão só sai pelo SQL.
 - **Atualizar pela planilha** (`csv_url`) não está ligado para banco do pedido.
 - **Fotos** como dado variável com banco do pedido: não testado — o Gerenciador de
   Fotos ainda escreve na numeração.

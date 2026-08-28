@@ -317,5 +317,32 @@ function cenario(mapas) {
         'e trocar de pedido descarta os bancos do anterior, para o card de um nao oferecer o banco do outro');
 })();
 
+(function renomearEExcluirTemPortaETrava() {
+    // 28/08/2026: a porta de gerenciar os bancos do pedido. O comportamento
+    // foi conferido no navegador de verdade (renomear grava, orfao sai, banco
+    // em uso e barrado); aqui fica o que nao pode se desfazer sozinho.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/window\.abrirBancosDoPedido/.test(script) && /__gerir/.test(script),
+        'existe a porta de renomear/excluir, oferecida no proprio "Vem de:"');
+
+    // A trava de excluir: o ON DELETE CASCADE apagaria os vinculos junto e o
+    // modelo cairia CALADO na numeracao — dado errado impresso sem aviso. So
+    // se exclui com zero leitores, e a conta olha TODOS os vinculos
+    // carregados, nao so os itens do pedido aberto.
+    const excluir = script.slice(script.indexOf('async function excluirBancoDoPedido'));
+    const antesDoDelete = excluir.slice(0, excluir.indexOf(".delete()"));
+    ok(/quantosLeemDoBanco/.test(antesDoDelete),
+        'excluir confere quem le ANTES de apagar');
+    ok(/escolha "a numera/.test(antesDoDelete),
+        'e a trava diz a saida: desligar os modelos no "Vem de:"');
+    ok(/confirm\(/.test(antesDoDelete),
+        'apagar de verdade pede confirmacao, com nome e contagem de linhas');
+    const conta = script.slice(script.indexOf('function quantosLeemDoBanco'),
+                               script.indexOf('window.quantosLeemDoBanco'));
+    ok(/state\.vinculosDeBanco/.test(conta) && !/osItens/.test(conta),
+        'a conta de leitores vem dos vinculos carregados, nao dos itens do pedido aberto');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

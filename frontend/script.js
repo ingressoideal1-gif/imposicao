@@ -16648,6 +16648,10 @@ function desenharEscolhaDeBanco(idx, item, container, vinculo) {
         opcoes.push(`<option value="${esc(String(b.id))}">${nome} — ${linhas} linha(s)</option>`);
     });
     opcoes.push('<option value="__novo">+ Subir um CSV para este pedido…</option>');
+    // A porta de excluir e renomear mora aqui, e nao num botao proprio: o card
+    // ja esta cheio, e e no "Vem de:" que os bancos aparecem — inclusive o
+    // orfao que se quer apagar. So aparece quando ha banco para gerenciar.
+    if (bancos.length) opcoes.push('<option value="__gerir">🗂️ Renomear ou excluir bancos…</option>');
 
     sel.innerHTML = opcoes.join('');
     sel.value = atual;
@@ -16694,6 +16698,16 @@ async function trocarBancoDoModelo(idx, osId, valor) {
         const vinc = vinculoDeBancoDoModelo(item);
         const sel = document.getElementById(`banco-do-pedido-${idx}`);
         if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
+        return;
+    }
+
+    if (valor === '__gerir') {
+        // Gerenciar nao e uma origem: o seletor volta ao que estava e o
+        // trabalho acontece no modal.
+        const vinc = vinculoDeBancoDoModelo(item);
+        const sel = document.getElementById(`banco-do-pedido-${idx}`);
+        if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
+        abrirBancosDoPedido(osId);
         return;
     }
 
@@ -16957,6 +16971,146 @@ async function aplicarRenomeacoesNoMapa(osId, bancoId, renomeacoes) {
     }
 }
 window.aplicarRenomeacoesNoMapa = aplicarRenomeacoesNoMapa;
+
+/**
+ * Quantos modelos leem deste banco, contando TODOS os vinculos carregados.
+ *
+ * Diferente do `modelosDoBanco`, que so olha os itens do pedido aberto: a
+ * exclusao precisa da conta inteira, porque o `carregarBancosDoPedidoNovo` traz
+ * os vinculos pelo banco_id, sem filtrar por pedido. Apagar um banco que outro
+ * modelo le derrubaria o vinculo dele em cascata — e o modelo cairia em
+ * silencio na numeracao, imprimindo o dado errado.
+ */
+function quantosLeemDoBanco(bancoId) {
+    return Object.values(state.vinculosDeBanco || {})
+        .filter(v => v && String(v.banco_id) === String(bancoId)).length;
+}
+window.quantosLeemDoBanco = quantosLeemDoBanco;
+
+/**
+ * Renomear e excluir os bancos do pedido.
+ *
+ * A porta existe porque sem ela um banco criado por engano fica para sempre na
+ * lista do "Vem de:" — foi o que aconteceu em 28/08/2026, quando o vinculo
+ * falhava e cada tentativa deixava um banco orfao. Excluir so e permitido com
+ * ZERO modelos lendo: o ON DELETE CASCADE apagaria os vinculos junto e cada
+ * modelo cairia calado na numeracao. A trava diz a saida, como toda trava
+ * deste projeto: desligar os modelos no "Vem de:" primeiro.
+ */
+function abrirBancosDoPedido(osId) {
+    // Fechar antes de conferir a lista: excluir o ultimo banco reabre por
+    // aqui, e a checagem abaixo tem de encontrar o modal antigo ja fechado.
+    fecharBancosDoPedido();
+    const esc = escDoBanco;
+    const bancos = state.bancosDoPedido || [];
+    if (!bancos.length) { toast('Este pedido não tem mais nenhum banco próprio.', 'info'); return; }
+
+    const linhas = bancos.map(b => {
+        const leitores = quantosLeemDoBanco(b.id);
+        const nLinhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
+        return `<tr data-banco="${esc(String(b.id))}">
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
+                <input class="form-control nome-banco" type="text" value="${esc(b.nome || '')}"
+                    maxlength="120" style="width:100%; min-width:180px;"
+                    title="O nome que aparece no Vem de:">
+            </td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); white-space:nowrap;">${nLinhas} linha(s)</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; ${leitores ? '' : 'color:var(--text-dim);'}">
+                ${leitores ? '🔗 ' + leitores + ' modelo(s)' : 'nenhum modelo'}
+            </td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; text-align:right;">
+                <button class="btn btn-sm btn-secondary" onclick="renomearBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')" title="Salvar o nome digitado ao lado">💾 Salvar nome</button>
+                <button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
+                    title="${leitores ? 'Para excluir, primeiro desligue os modelos que leem este banco (escolha a numeração no Vem de:)' : 'Excluir este banco do pedido'}">🗑 Excluir</button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const over = document.createElement('div');
+    over.id = 'bancos-do-pedido-overlay';
+    over.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:12000;'
+        + 'display:flex; align-items:center; justify-content:center; padding:20px;';
+    over.innerHTML = `
+        <div style="background:var(--bg-card,#161b22); border:1px solid var(--border); border-radius:var(--radius,8px);
+                    max-width:760px; width:100%; max-height:85vh; display:flex; flex-direction:column;">
+            <div style="padding:14px 18px; border-bottom:1px solid var(--border);">
+                <div style="font-weight:800; font-size:1.05rem;">🗂️ Bancos deste pedido</div>
+                <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
+                    Renomeie ou exclua os bancos de dados que pertencem a este pedido.
+                    Um banco lido por algum modelo não pode ser excluído — antes,
+                    escolha "a numeração" no "Vem de:" desses modelos.
+                </div>
+            </div>
+            <div style="overflow:auto; padding:0 4px;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead><tr>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Nome</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Conteúdo</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Lido por</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+            </div>
+            <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="fecharBancosDoPedido()">Fechar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(over);
+}
+window.abrirBancosDoPedido = abrirBancosDoPedido;
+
+function fecharBancosDoPedido() {
+    const o = document.getElementById('bancos-do-pedido-overlay');
+    if (o) o.remove();
+}
+window.fecharBancosDoPedido = fecharBancosDoPedido;
+
+async function renomearBancoDoPedido(bancoId, osId) {
+    const linha = document.querySelector(`#bancos-do-pedido-overlay tr[data-banco="${CSS.escape(String(bancoId))}"]`);
+    const nome = linha ? String(linha.querySelector('.nome-banco').value || '').trim() : '';
+    if (!nome) { toast('O nome não pode ficar vazio.', 'error'); return; }
+    try {
+        const { error } = await supabaseClient.from('pedidos_bancos')
+            .update({ nome, updated_at: new Date().toISOString() }).eq('id', bancoId);
+        if (error) throw error;
+        const b = (state.bancosDoPedido || []).find(x => String(x.id) === String(bancoId));
+        if (b) b.nome = nome;
+        toast('Banco renomeado para "' + nome + '".', 'success');
+        renderAmostrasOSItens(osId);   // o "Vem de:" de cada card mostra o nome novo
+    } catch (e) {
+        toast('Não deu para renomear: ' + (e.message || e), 'error');
+    }
+}
+window.renomearBancoDoPedido = renomearBancoDoPedido;
+
+async function excluirBancoDoPedido(bancoId, osId) {
+    const b = (state.bancosDoPedido || []).find(x => String(x.id) === String(bancoId));
+    if (!b) return;
+
+    const leitores = quantosLeemDoBanco(bancoId);
+    if (leitores) {
+        toast('O banco "' + (b.nome || 'banco') + '" é lido por ' + leitores + ' modelo(s). '
+            + 'Para excluir, primeiro escolha "a numeração" no "Vem de:" desses modelos.', 'error');
+        return;
+    }
+
+    const nLinhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
+    if (!confirm('Excluir o banco "' + (b.nome || 'banco') + '" (' + nLinhas
+        + ' linha(s)) deste pedido?\n\nIsso não altera nenhuma numeração — apaga só este banco.')) return;
+
+    try {
+        const { error } = await supabaseClient.from('pedidos_bancos').delete().eq('id', bancoId);
+        if (error) throw error;
+        state.bancosDoPedido = (state.bancosDoPedido || []).filter(x => String(x.id) !== String(bancoId));
+        toast('Banco "' + (b.nome || 'banco') + '" excluído.', 'success');
+        abrirBancosDoPedido(osId);     // redesenha a lista já sem ele
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        toast('Não deu para excluir: ' + (e.message || e), 'error');
+    }
+}
+window.excluirBancoDoPedido = excluirBancoDoPedido;
 
 /** Lê o CSV escolhido, cria o banco do pedido e liga este modelo nele. */
 async function subirBancoDoPedido() {
