@@ -741,7 +741,23 @@ function drawPedPreview() {
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
-
+    // A fonte precisa ter CHEGADO antes do traco. Canvas e raster: se ela ainda
+    // esta baixando, o navegador pinta com uma generica e NAO redesenha quando
+    // ela chega. E como a centralizacao usa a largura MEDIDA do texto, a fonte
+    // errada desloca tambem a posicao do numero na peca — nao e so o desenho da
+    // letra. Mesmo molde do `drawPreview` do script.js: dispara a busca e manda
+    // repintar quando vier fonte nova. Ver tests/test_espera_de_fonte_nas_janelas.py.
+    try {
+        const _nomesFonte = window.fontesDosElementos([
+            ...((num && num.elements) || []),
+            ...((num2 && num2.elements) || []),
+        ]);
+        if (_nomesFonte.length) {
+            window.garantirFontesCarregadas(_nomesFonte).then(novas => {
+                if (novas && novas.length) drawPedPreview();
+            });
+        }
+    } catch (_) { /* nunca impedir o desenho por causa disto */ }
 
     const MM2PT = 2.8346;
 

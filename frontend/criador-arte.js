@@ -339,6 +339,16 @@ async function setupEditorWorkspace() {
 
     // Renderizar Camadas 1 e 2
     await renderEditorLayer1Cor(cor, fmt, face);
+
+    // A fonte antes do traco. Aqui da para AGUARDAR de verdade — a funcao e
+    // async —, entao a camada 2 sai certa de primeira, sem repinte. Sem isto o
+    // canvas pintava com a fonte generica e ficava assim, porque canvas nao
+    // reflui. Ver tests/test_espera_de_fonte_nas_janelas.py.
+    try {
+        await window.garantirFontesCarregadas(
+            window.fontesDosElementos((num && num.elements) || []));
+    } catch (_) { /* seguir mesmo assim */ }
+
     renderEditorLayer2Numeracao(num, fmt, face);
 
     // Ajustar zoom inicial à tela
@@ -662,6 +672,19 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
                 ctx, el, label, fs, scalePx,
                 (f) => buildCanvasFont(f, el.font_name)
             );
+        } else if (el.type === 'QR_IDEAL') {
+            // Sem este ramo o elemento nao pintava um pixel — e nem a caixa vazia
+            // dos elementos sem arquivo: o `forEach` caia fora de todos os `else if`
+            // e seguia. Quem monta a arte via o ingresso SEM o QR que vai ser
+            // impresso, e nada avisava. Ver tests/test_qr_canvas.py.
+            const szIdeal = (el.size_mm || 15) * scalePx;
+            const startIdeal = parseInt(
+                item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1) || 1;
+            window.desenharQRIdeal(
+                ctx, el, szIdeal, color,
+                item?.id_int, item?.id, startIdeal
+            );
+
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * scalePx;
             let qrText = '';

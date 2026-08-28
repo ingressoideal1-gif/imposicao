@@ -183,3 +183,71 @@ def test_a_pagina_carrega_a_biblioteca_QUE_O_DESENHO_USA(pagina):
     assert "qrcode-generator" in _ler(pagina), (
         f"{pagina} nao carrega a qrcode-generator; o QR sairia como erro"
     )
+
+
+def _desenhar_camada2_do_criador(elementos):
+    """Roda a camada de numeração do Criador de Arte num Node com canvas de mentira.
+
+    O arquivo é avaliado no escopo global (e não por `require`) porque
+    `renderEditorLayer2Numeracao` é uma declaração de função solta: por `require`
+    ela ficaria presa ao módulo e o teste não a alcançaria.
+    """
+    CRIADOR = os.path.join(RAIZ, "frontend", "criador-arte.js")
+    script = r"""
+      globalThis.window = globalThis;
+      const fs = require('fs');
+      const qrlib = require(%s);
+      globalThis.qrcode = qrlib.qrcode || qrlib;
+      globalThis.Image = function () { return { complete: false, naturalWidth: 0 }; };
+      globalThis.document = { addEventListener() {}, getElementById: () => null,
+                              createElement: () => ({ getContext: () => ctx }),
+                              activeElement: null, head: { appendChild() {} } };
+      require(%s);
+      (0, eval)(fs.readFileSync(%s, 'utf8'));
+
+      let pintados = 0;
+      const ctx = {
+        fillStyle: '', strokeStyle: '', lineWidth: 0, font: '',
+        textAlign: '', textBaseline: '', globalAlpha: 1,
+        fillRect(x, y, w, h) { if (this.fillStyle !== '#ffffff') pintados += Math.abs(w * h); },
+        clearRect() {}, strokeRect() {}, save() {}, restore() {}, beginPath() {},
+        rect() {}, clip() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {},
+        drawImage() { pintados += 1; }, translate() {}, rotate() {}, scale() {},
+        setLineDash() {}, fillText() { pintados += 1; }, measureText() { return { width: 10 }; },
+      };
+      window.editorState.layer2Canvas = { width: 400, height: 200, getContext: () => ctx };
+      window.editorState.scalePxPerMm = 4;
+      window.editorState.activeItem = { id: 'm1', id_int: 21202, num_inicial: 1 };
+      globalThis.state = { csvData: null };
+      globalThis.buildCanvasFont = (fs2, nome) => fs2 + 'px sans-serif';
+
+      renderEditorLayer2Numeracao(
+        { elements: %s, tipo: 'SEQUENCIAL' },
+        { width_mm: 100, height_mm: 50 }, 'frente');
+      console.log(JSON.stringify({ pintados }));
+    """ % (json.dumps(BIBLIOTECA), json.dumps(MODULO), json.dumps(CRIADOR),
+           json.dumps(elementos))
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                       cwd=RAIZ, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr[:600]
+    return json.loads(r.stdout.strip())["pintados"]
+
+
+def test_o_criador_de_arte_desenha_o_QR_Ideal():
+    """A camada 2 não tinha ramo para QR_IDEAL: o elemento sumia sem aviso.
+
+    Quem monta a arte via o ingresso SEM o QR que vai ser impresso — e não é a
+    caixa vazia dos elementos sem arquivo, é nada. O `forEach` caía fora de
+    todos os `else if` e seguia para o próximo elemento.
+    """
+    qr_ideal = [{"type": "QR_IDEAL", "x_mm": 50, "y_mm": 25, "size_mm": 15,
+                 "rotation": 0, "color": "#000000", "face": "both"}]
+    qr_comum = [{"type": "QR", "x_mm": 50, "y_mm": 25, "size_mm": 15,
+                 "rotation": 0, "color": "#000000", "face": "both", "fixed": True,
+                 "fixed_value": "ABC123"}]
+
+    referencia = _desenhar_camada2_do_criador(qr_comum)
+    assert referencia > 0, "o QR comum tambem parou de desenhar — o teste esta furado"
+
+    pintado = _desenhar_camada2_do_criador(qr_ideal)
+    assert pintado > 0, "o QR Ideal nao pintou um pixel na camada 2 do Criador de Arte"
