@@ -347,6 +347,40 @@ def _opacidade_arte(el: dict) -> float:
     return max(0.0, min(1.0, n))
 
 
+def _folga_de_sangria(cfg) -> tuple[float, float]:
+    """Quanto a pagina temporaria de um ingresso cresce para cada lado, em pontos.
+
+    ## Por que ela existe
+
+    O motor monta o ingresso numa pagina temporaria quando a pose tem giro (ou
+    quando a folha leva o nome da arte). Essa pagina era do tamanho EXATO do
+    ingresso — e uma pagina de PDF recorta o proprio conteudo na borda. Tudo o
+    que passava do corte deixava de existir: a SANGRIA, que e justamente a sobra
+    que protege do desvio da guilhotina.
+
+    Na pose SEM giro nada disso acontece: arte e elementos vao direto na folha,
+    em coordenadas absolutas, e a sangria sai no papel. Ou seja, a MESMA folha
+    imprimia de dois jeitos. Medido em 27/08/2026 no formato `Credencial 90x140`,
+    que gira as poses 2 e 3 em 180 graus: poses 0 e 1 com 2,45 mm de sangria,
+    poses 2 e 3 com 0,00 mm. Metade das credenciais de cada folha saia aparada.
+
+    ## Por que um ingresso inteiro para cada lado
+
+    Porque nao ha o que estimar. Medir a sobra de cada elemento antes de desenhar
+    exigiria adivinhar a largura de um texto que ainda nao foi montado, e um chute
+    que erra para menos volta a aparar em silencio. Um ingresso de folga cobre
+    qualquer sangria concebivel — a de norma tem 3 mm — e para de custar ai: a
+    area extra e transparente, entao ela nao pinta nada nem cobre a celula
+    vizinha. O que cresce e a caixa da pagina, nao o desenho.
+
+    A folga e SIMETRICA de proposito: o centro da pagina continua sendo o centro
+    do ingresso, entao o giro segue em torno do mesmo ponto e a arte cai no mesmo
+    lugar de sempre. Quem cola na folha estica o retangulo da celula na mesma
+    medida, e a escala continua 1:1.
+    """
+    return cfg.item_w, cfg.item_h
+
+
 def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
     """Cola a primeira pagina de `doc_origem` em `rect`, com opacidade.
 
@@ -2846,10 +2880,12 @@ class ImpositionEngine:
                     else:
                         # FALLBACK: temp_doc para rotação de célula e arte_nome
                         temp_doc = fitz.open()
-                        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                        _fx, _fy = _folga_de_sangria(cfg)
+                        temp_page = temp_doc.new_page(
+                            width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
-                        art_temp_x0 = (cfg.item_w - base_w) / 2 + cfg.offset_h
-                        art_temp_y0 = (cfg.item_h - base_h) / 2 - cfg.offset_v
+                        art_temp_x0 = _fx + (cfg.item_w - base_w) / 2 + cfg.offset_h
+                        art_temp_y0 = _fy + (cfg.item_h - base_h) / 2 - cfg.offset_v
                         art_temp_x1 = art_temp_x0 + base_w
                         art_temp_y1 = art_temp_y0 + base_h
                         rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
@@ -2888,14 +2924,14 @@ class ImpositionEngine:
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                             self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
-                            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+                            self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
                         if arte_nome:
                             nome_str = str(arte_nome).zfill(6)
                             nome_color_hex = arte_data.get("nome_color", "#000000")
                             nome_rgb = _hex_to_rgb(nome_color_hex)
                             nome_font_size = 14
-                            nome_x = nome_font_size
+                            nome_x = _fx + nome_font_size
                             import os as _os
                             _impact_candidates = [
                                 "C:/Windows/Fonts/impact.ttf",
@@ -2912,7 +2948,7 @@ class ImpositionEngine:
                             # largura era SEMPRE o chute, com Impact ou sem ela.
                             text_width = _largura_do_texto(nome_str, _font_file_calc,
                                                            _font_name_calc, nome_font_size)
-                            nome_y = (cfg.item_h + text_width) / 2
+                            nome_y = _fy + (cfg.item_h + text_width) / 2
                             origin = fitz.Point(nome_x, nome_y)
                             pivot  = fitz.Point(nome_x, nome_y)
                             _nome_insert_kwargs = dict(
@@ -2932,7 +2968,7 @@ class ImpositionEngine:
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
                         out_page_front.show_pdf_page(
-                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                            fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                             _temp_doc_m,
                             0,
                             keep_proportion=False,
@@ -3028,7 +3064,9 @@ class ImpositionEngine:
 
                         # 1. Criar PDF temporário para renderizar o verso do item + elementos VDP
                         temp_doc = fitz.open()
-                        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                        _fx, _fy = _folga_de_sangria(cfg)
+                        temp_page = temp_doc.new_page(
+                            width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
                         if page_idx_back is not None and current_doc_base:
                             page_base_v = current_doc_base[page_idx_back]
@@ -3036,8 +3074,8 @@ class ImpositionEngine:
                             base_h_verso = page_base_v.rect.height
 
                             # Centralizar e aplicar offset no plano da célula temporária
-                            art_temp_x0 = (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-                            art_temp_y0 = (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
+                            art_temp_x0 = _fx + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
+                            art_temp_y0 = _fy + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
                             art_temp_x1 = art_temp_x0 + base_w_verso
                             art_temp_y1 = art_temp_y0 + base_h_verso
                             rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
@@ -3093,7 +3131,7 @@ class ImpositionEngine:
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
 
                             self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
-                            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+                            self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
                         # 2. Impor a pagina temporaria de verso na folha final
                         # FIX: materializar temp_doc para bytes (fix paginas em branco)
@@ -3101,7 +3139,7 @@ class ImpositionEngine:
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
                         out_page_back.show_pdf_page(
-                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                            fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                             _temp_doc_m,
                             0,
                             keep_proportion=False,
@@ -3382,11 +3420,13 @@ class ImpositionEngine:
                 self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
-            temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+            _fx, _fy = _folga_de_sangria(cfg)
+            temp_page = temp_doc.new_page(
+                width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
             if current_doc_base:
-                art_temp_x0 = (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
-                art_temp_y0 = (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
+                art_temp_x0 = _fx + (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
+                art_temp_y0 = _fy + (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
                 art_temp_x1 = art_temp_x0 + base_w_frente
                 art_temp_y1 = art_temp_y0 + base_h_frente
                 rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
@@ -3423,14 +3463,14 @@ class ImpositionEngine:
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
-                self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+                self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
             if arte_nome:
                 nome_str = str(arte_nome).zfill(6)
                 nome_color_hex = item_data.get("nome_color", "#000000")
                 nome_rgb = _hex_to_rgb(nome_color_hex)
                 nome_font_size = 14
-                nome_x = nome_font_size
+                nome_x = _fx + nome_font_size
                 import os as _os
                 _impact_candidates = [
                     "C:/Windows/Fonts/impact.ttf",
@@ -3445,7 +3485,7 @@ class ImpositionEngine:
                 # e a largura era sempre o chute.
                 text_width = _largura_do_texto(nome_str, _font_file_calc,
                                                _font_name_calc, nome_font_size)
-                nome_y = (cfg.item_h + text_width) / 2
+                nome_y = _fy + (cfg.item_h + text_width) / 2
                 pivot = fitz.Point(nome_x, nome_y)
                 _nome_insert_kwargs = dict(
                     fontsize=nome_font_size,
@@ -3464,7 +3504,7 @@ class ImpositionEngine:
             temp_doc.close()
             _temp_doc_m = fitz.open("pdf", _temp_bytes)
             out_page_front.show_pdf_page(
-                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                 _temp_doc_m,
                 0,
                 keep_proportion=False,
@@ -3550,11 +3590,13 @@ class ImpositionEngine:
                 self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
-            temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+            _fx, _fy = _folga_de_sangria(cfg)
+            temp_page = temp_doc.new_page(
+                width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
             if page_idx_back is not None and current_doc_base:
-                art_temp_x0 = (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-                art_temp_y0 = (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
+                art_temp_x0 = _fx + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
+                art_temp_y0 = _fy + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
                 art_temp_x1 = art_temp_x0 + base_w_verso
                 art_temp_y1 = art_temp_y0 + base_h_verso
                 rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
@@ -3591,14 +3633,14 @@ class ImpositionEngine:
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
-                self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+                self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
             if arte_nome:
                 nome_str = str(arte_nome).zfill(6)
                 nome_color_hex = item_data.get("nome_color", "#000000")
                 nome_rgb = _hex_to_rgb(nome_color_hex)
                 nome_font_size = 14
-                nome_x = nome_font_size
+                nome_x = _fx + nome_font_size
                 import os as _os
                 _impact_candidates = [
                     "C:/Windows/Fonts/impact.ttf",
@@ -3613,7 +3655,7 @@ class ImpositionEngine:
                 # e a largura era sempre o chute.
                 text_width = _largura_do_texto(nome_str, _font_file_calc,
                                                _font_name_calc, nome_font_size)
-                nome_y = (cfg.item_h + text_width) / 2
+                nome_y = _fy + (cfg.item_h + text_width) / 2
                 pivot = fitz.Point(nome_x, nome_y)
                 _nome_insert_kwargs = dict(
                     fontsize=nome_font_size,
@@ -3632,7 +3674,7 @@ class ImpositionEngine:
             temp_doc.close()
             _temp_doc_m = fitz.open("pdf", _temp_bytes)
             out_page_back.show_pdf_page(
-                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                 _temp_doc_m,
                 0,
                 keep_proportion=False,
