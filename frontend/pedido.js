@@ -4189,6 +4189,19 @@ window.runPedImposition = async function (mode, isRefazer) {
         }
     }
 
+    // E a trava da peca nova (28/08/2026), como no script.js: elemento de
+    // banco sem coluna apontada imprime VAZIO, calado.
+    if (typeof modelosComElementoSemColuna === 'function') {
+        const semColuna = modelosComElementoSemColuna();
+        if (semColuna.length) {
+            toast('Há elemento de banco sem coluna apontada em: '
+                + semColuna.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+                + '. Abra o 🔤 Colunas de cada um e aponte a coluna — imprimir agora '
+                + 'sairia com o campo em branco.', 'error');
+            return;
+        }
+    }
+
     if (window.isImposing) return;
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
@@ -4490,7 +4503,19 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
 
-    const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    let numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+    // Um modelo so tambem le o banco do PEDIDO (28/08/2026), como no script.js:
+    // sem resolver, a impressao de um modelo com vinculo sairia com a peca
+    // crua. O multi_artes abaixo ja resolve arte a arte.
+    if (numeracao && typeof resolverNumeracaoParaModelo === 'function'
+        && state.activeOSItem && state.activeOSItem.osId !== undefined) {
+        const itemAtivo = (state.osItens[state.activeOSItem.osId] || [])[state.activeOSItem.idx];
+        if (itemAtivo && typeof numeracaoIdDoItem === 'function'
+            && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
+            numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);
+        }
+    }
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 

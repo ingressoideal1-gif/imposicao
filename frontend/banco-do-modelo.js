@@ -41,16 +41,57 @@
         return destino === '' ? pedida : destino;
     }
 
+    /**
+     * A coluna que ESTE elemento le neste modelo.
+     *
+     * Desde 28/08/2026 o apontamento e por ELEMENTO (`el:<id>` no mapa): a
+     * peca nova nao tem `csv_column` — guarda so um "Exemplo:" — e a coluna e
+     * escolhida no modelo, direto do banco anexado. A chave por elemento vence
+     * SEMPRE; sem ela, vale o caminho legado (`csv_column` da peca, passado
+     * pelo mapa por nome) — e e assim que toda numeracao ja criada continua
+     * funcionando ate ser substituida, como o usuario exigiu.
+     */
+    function colunaDoElemento(mapa, el) {
+        if (!el) return '';
+        if (!_vazio(mapa) && el.id !== undefined && el.id !== null) {
+            var porElemento = mapa['el:' + el.id];
+            if (porElemento !== null && porElemento !== undefined) {
+                porElemento = String(porElemento).trim();
+                if (porElemento !== '') return porElemento;
+            }
+        }
+        var col = String(el.csv_column || '').trim();
+        if (!col) return '';
+        return colunaDoModelo(mapa, col);
+    }
+
     function elementosDoModelo(elements, mapa) {
         var lista = elements || [];
         if (_vazio(mapa)) return lista;
         return lista.map(function (el) {
             if (!el || el.source !== 'database') return el;
+            var novo = colunaDoElemento(mapa, el);
             var col = String(el.csv_column || '').trim();
-            if (!col) return el;
-            var novo = colunaDoModelo(mapa, col);
-            if (novo === col) return el;
+            if (novo === col || novo === '') return el;
             return Object.assign({}, el, { csv_column: novo });
+        });
+    }
+
+    /**
+     * Os elementos de banco deste modelo que ainda NAO tem coluna no banco:
+     * sem apontamento nenhum, ou apontados para coluna que o banco nao tem.
+     *
+     * Sem banco, lista vazia — a peca le o CSV dela e quem avisa e o caminho
+     * legado. Elemento sem coluna imprime VAZIO sem erro nenhum, entao esta
+     * lista alimenta a trava de impressao e o aviso do card.
+     */
+    function elementosSemColunaNoBanco(num, banco, mapa) {
+        if (!banco) return [];
+        var cabecalho = (banco.csv_headers || []).map(String);
+        return ((num && num.elements) || []).filter(function (el) {
+            if (!el || el.source !== 'database') return false;
+            var col = colunaDoElemento(mapa, el);
+            return col === '' || cabecalho.indexOf(col) === -1;
         });
     }
 
@@ -109,7 +150,7 @@
      * mesma coisa em toda a regra, e guardar `{}` faria uma linha existir em
      * `pedidos_modelos_banco` para dizer que nao ha nada a dizer.
      */
-    function mapaLimpo(mapa, pedidas) {
+    function mapaLimpo(mapa, pedidas, elementos) {
         if (_vazio(mapa)) return null;
         var saida = {}, quantas = 0;
         (pedidas || []).forEach(function (col) {
@@ -118,6 +159,21 @@
             destino = String(destino).trim();
             if (!destino || destino === col) return;
             saida[col] = destino;
+            quantas++;
+        });
+        // As chaves por ELEMENTO (28/08/2026): entram as dos elementos que a
+        // peca ainda tem, com destino de verdade. Apontamento igual ao
+        // `csv_column` legado do proprio elemento nao vale a pena guardar — o
+        // fallback ja o encontra pelo nome.
+        (elementos || []).forEach(function (el) {
+            if (!el || el.source !== 'database' || el.id === undefined || el.id === null) return;
+            var destino = mapa['el:' + el.id];
+            if (destino === null || destino === undefined) return;
+            destino = String(destino).trim();
+            if (!destino) return;
+            var legado = String(el.csv_column || '').trim();
+            if (destino === legado) return;
+            saida['el:' + el.id] = destino;
             quantas++;
         });
         return quantas ? saida : null;
@@ -135,20 +191,30 @@
      * das entradas que o mapa por acaso tem: a implicita ganha entrada, a
      * explicita e atualizada, e o que nao foi renomeado fica como estava.
      */
-    function mapaAposRenomear(mapa, pedidas, de2para) {
+    function mapaAposRenomear(mapa, pedidas, de2para, elementos) {
         var trocas = de2para || {};
         var novo = {};
         (pedidas || []).forEach(function (col) {
             var atual = colunaDoModelo(mapa, col);
             novo[col] = Object.prototype.hasOwnProperty.call(trocas, atual) ? trocas[atual] : atual;
         });
-        return mapaLimpo(novo, pedidas);
+        // As chaves por elemento apontam DIRETO para a coluna do banco: a
+        // renomeacao as acompanha uma a uma.
+        (elementos || []).forEach(function (el) {
+            if (!el || el.source !== 'database' || el.id === undefined || el.id === null) return;
+            var atual = colunaDoElemento(mapa, el);
+            if (!atual) return;
+            novo['el:' + el.id] = Object.prototype.hasOwnProperty.call(trocas, atual) ? trocas[atual] : atual;
+        });
+        return mapaLimpo(novo, pedidas, elementos);
     }
 
     escopo.BancoDoModelo = {
         bancoDoModelo: bancoDoModelo,
         colunaDoModelo: colunaDoModelo,
+        colunaDoElemento: colunaDoElemento,
         elementosDoModelo: elementosDoModelo,
+        elementosSemColunaNoBanco: elementosSemColunaNoBanco,
         numeracaoResolvida: numeracaoResolvida,
         colunasQueAPecaPede: colunasQueAPecaPede,
         colunasQueFaltam: colunasQueFaltam,

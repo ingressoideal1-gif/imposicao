@@ -103,20 +103,31 @@ banco do pedido. O 🧩 Linhas e a conferência de repetidos trabalham sobre a
 **fonte**, não sobre a numeração — sem isso, o modal abriria o poço errado e
 gravaria em `csv_selecao` `__id`s de um banco que aquele modelo não imprime.
 
-## As colunas entram por checkbox, e o editor as oferece em dropdown
+## A coluna é do modelo, não da peça (decisão final de 28/08/2026)
 
-Pedido do usuário em 28/08/2026: digitar o nome da coluna à mão no editor era o
-único caminho para a peça sem CSV, e uma letra errada imprime campo vazio. No
-🔤 Colunas, a peça **sem dado próprio** ganhou a lista das colunas do banco com
-checkbox — as marcadas viram o `csv_headers` da peça (só os nomes; nenhuma linha
-de dado é escrita). A partir daí o editor da numeração mostra essas colunas no
-**dropdown** "Coluna do CSV" de cada elemento, e a barra de colunas do editor
-cria campo no clique, como sempre fez.
+Nas palavras do usuário: *"a numeração sera compartilhada entre modelos e entre
+pedidos, a coluna deve ser selecionada apenas no modelo, a numeração guarda
+apenas a informação dos elementos como seus tamanhos, origem, fontes"*.
 
-Duas regras seguram isso: peça **com** CSV dentro não ganha checkbox (o dropdown
-dela vem do próprio arquivo, e mexer nos headers descasaria cabeçalho e linhas);
-e coluna que algum elemento já usa não sai por desmarcação — sumir com ela do
-dropdown não apagaria o uso, só o esconderia.
+- **No editor**, elemento com origem "Banco de Dados" tem o campo **"Exemplo:"**
+  — um texto só para a visualização (layout, tamanho, posição). Peça nova não
+  escolhe coluna. O controle "Coluna do CSV" sobrevive **apenas** para peça
+  legada com CSV/headers próprios.
+- **No 🔤 Colunas do modelo**, uma linha por **elemento** (selo + nome + ex.),
+  com dropdown das colunas do banco anexado e a caixinha **Conferir** (a marca
+  de conferência, que mora no elemento da peça e vale para todos os pedidos).
+- O apontamento grava no vínculo com **chave por elemento** (`el:<id>` no
+  `csv_mapa`). A resolução tenta essa chave primeiro e cai no caminho legado
+  (`csv_column` + mapa por nome) quando ela não existe — **é assim que toda
+  numeração já criada continua funcionando até ser substituída**, sem migração.
+- **Trava**: modelo com banco e elemento sem coluna apontada (ou apontada para
+  coluna que o banco não tem) **não imprime**, nas duas telas — elemento solto
+  imprime vazio, calado. O recado manda abrir o 🔤.
+- O payload de **um modelo só** também resolve a peça pelo item ativo — o
+  multi_artes já resolvia arte a arte.
+
+A seção de checkboxes "colunas do banco nesta numeração" (da rodada anterior do
+mesmo dia) morreu com esta decisão: o Exemplo a tornou desnecessária.
 
 ## As travas
 

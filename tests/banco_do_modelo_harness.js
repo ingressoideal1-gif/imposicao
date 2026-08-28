@@ -179,5 +179,76 @@ const BANCO = {
     ok(r3 === null, 'apontamento que virou identico ao pedido deixa de ser mapa', r3);
 })();
 
+// ── A coluna e do MODELO: apontamento por elemento (28/08/2026) ─────────────
+
+(function colunaDoElemento() {
+    const el = { id: 'e9', source: 'database', csv_column: '' };
+
+    ok(B.colunaDoElemento({ 'el:e9': '05/09' }, el) === '05/09',
+        'a chave por elemento aponta a coluna, mesmo com csv_column vazio');
+    ok(B.colunaDoElemento(null, el) === '',
+        'sem mapa e sem csv_column, o elemento esta SEM coluna — nao inventa');
+
+    const legado = { id: 'e1', source: 'database', csv_column: 'CODIGO' };
+    ok(B.colunaDoElemento({ CODIGO: '06/09' }, legado) === '06/09',
+        'sem chave por elemento, vale o caminho legado pelo nome da coluna');
+    ok(B.colunaDoElemento({ 'el:e1': '11/09', CODIGO: '06/09' }, legado) === '11/09',
+        'a chave por elemento VENCE o mapa legado quando as duas existem');
+    ok(B.colunaDoElemento(null, legado) === 'CODIGO',
+        'sem mapa nenhum, o legado le a propria coluna — nada muda para as pecas antigas');
+})();
+
+(function pecaNovaResolvePorElemento() {
+    const nova = {
+        id: 'num-nova', csv_data: null,
+        elements: [
+            { id: 'e1', type: 'TEXT', source: 'database', csv_column: '', exemplo: 'MARIA' },
+            { id: 'e2', type: 'QR', source: 'database', csv_column: '', exemplo: 'ABC123' }
+        ]
+    };
+    const r = B.numeracaoResolvida(nova, BANCO, { 'el:e1': 'NOME', 'el:e2': '05/09' });
+    ok(r.elements[0].csv_column === 'NOME' && r.elements[1].csv_column === '05/09',
+        'a peca nova resolve cada elemento pela sua chave', r.elements.map(e => e.csv_column));
+    ok(nova.elements[0].csv_column === '' && nova.elements[0].exemplo === 'MARIA',
+        'a peca do catalogo nao e tocada — o exemplo fica nela');
+    ok(r.elements[0].exemplo === 'MARIA',
+        'o exemplo viaja na copia resolvida, para a previa usar quando faltar dado');
+})();
+
+(function elementosSemColunaNoBanco() {
+    const nova = { elements: [
+        { id: 'e1', type: 'TEXT', source: 'database', csv_column: '' },
+        { id: 'e2', type: 'QR', source: 'database', csv_column: '' },
+        { id: 'e3', type: 'FIXED', fixed_value: 'X' }
+    ] };
+    ok(B.elementosSemColunaNoBanco(nova, BANCO, null).length === 2,
+        'sem apontamento, os dois elementos de banco estao soltos — o fixo nao conta');
+    ok(B.elementosSemColunaNoBanco(nova, BANCO, { 'el:e1': 'NOME' }).length === 1,
+        'apontado um, sobra um');
+    ok(B.elementosSemColunaNoBanco(nova, BANCO, { 'el:e1': 'NOME', 'el:e2': 'NAO_EXISTE' }).length === 1,
+        'apontar para coluna que o banco nao tem continua solto');
+    ok(B.elementosSemColunaNoBanco(nova, null, null).length === 0,
+        'sem banco nao ha o que cobrar — o caminho legado tem os avisos dele');
+    ok(B.elementosSemColunaNoBanco(PECA, BANCO, { CODIGO: '05/09' }).length === 0,
+        'peca legada mapeada por nome nao esta solta');
+})();
+
+(function mapaLimpoComChavesDeElemento() {
+    const els = [{ id: 'e1', source: 'database', csv_column: 'CODIGO' },
+                 { id: 'e2', source: 'database', csv_column: '' }];
+    const limpo = B.mapaLimpo({ 'el:e1': 'CODIGO', 'el:e2': '05/09', 'el:sumiu': 'X' }, [], els);
+    ok(limpo && limpo['el:e2'] === '05/09' && Object.keys(limpo).length === 1,
+        'guarda so o apontamento de verdade: igual ao legado dispensa, elemento que sumiu descarta', limpo);
+    ok(B.mapaLimpo({ 'el:e2': '' }, [], els) === null,
+        'apontamento vazio nao vira mapa');
+})();
+
+(function mapaAposRenomearComChavesDeElemento() {
+    const els = [{ id: 'e2', source: 'database', csv_column: '' }];
+    const r = B.mapaAposRenomear({ 'el:e2': '05/09' }, [], { '05/09': '05-09' }, els);
+    ok(r && r['el:e2'] === '05-09',
+        'renomear a coluna do banco arrasta o apontamento por elemento junto', r);
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

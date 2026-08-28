@@ -394,33 +394,47 @@ function cenario(mapas) {
     ok(/csv_url/.test(criar), 'criar o banco grava o csv_url quando veio de um link');
 })();
 
-(function colunasPorCheckboxAlimentamOEditor() {
-    // 28/08/2026: no 🔤 Colunas, a peca SEM dado escolhe por checkbox quais
-    // colunas do banco ela conhece; as marcadas viram o csv_headers dela, e e
-    // dai que o editor da numeracao tira o dropdown "Coluna do CSV" (e a barra
-    // de colunas que cria campo no clique). Conferido no navegador; aqui fica
-    // o que nao pode se desfazer sozinho.
+(function aColunaEDoModeloNaoDaPeca() {
+    // 28/08/2026, terceira rodada — a decisao final do usuario: "a coluna deve
+    // ser selecionada apenas no modelo; a numeracao guarda apenas a informacao
+    // dos elementos". O checkbox de colunas-na-peca (da rodada anterior)
+    // morreu junto. Comportamento conferido no navegador; aqui fica a forma.
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
+    // O 🔤 tem uma linha POR ELEMENTO, com dropdown das colunas do banco e a
+    // caixinha de conferencia — e nada de checkbox de vocabulario da peca.
     const abrir = script.slice(script.indexOf('function abrirColunasDoModelo'),
                                script.indexOf('window.abrirColunasDoModelo'));
-    ok(/col-do-banco/.test(abrir) && /pecaSemDado/.test(abrir),
-        'o modal tem os checkboxes das colunas do banco, so para peca sem dado proprio');
-    ok(/csv_data && peca\.csv_data\.length/.test(abrir),
-        'peca COM dado nao ganha checkbox — o dropdown dela vem do proprio CSV');
-
-    // A linha do de-para identifica o ELEMENTO — pelo mesmo selo da lista do
-    // editor, mais o nome que o operador deu — e nao so "1 campo": e pelo
-    // elemento que se escolhe a coluna certa (pedido do usuario, 28/08/2026).
-    ok(/nomeDoElemento/.test(abrir) && /Elemento</.test(abrir),
-        'o de-para mostra o nome do elemento, nao a contagem de campos');
+    ok(/mapa-el/.test(abrir) && /conferir-el/.test(abrir) && !/col-do-banco/.test(abrir),
+        'o 🔤 e por elemento: dropdown da coluna e caixinha de conferencia');
+    ok(/colunaDoElemento/.test(abrir),
+        'a coluna pre-selecionada vem da resolucao por elemento (com fallback legado)');
 
     const aplicar = script.slice(script.indexOf('async function aplicarColunasDoModelo'),
                                  script.indexOf('window.aplicarColunasDoModelo'));
-    ok(/salvarCamposDaNumeracao\(peca\.id, \{ csv_headers/.test(aplicar),
-        'aplicar grava as marcadas no csv_headers da peca — nomes, nenhuma linha de dado');
-    ok(/emUso/.test(aplicar),
-        'coluna que um elemento ja usa nao sai por desmarcacao');
+    ok(/'el:' \+ elId/.test(aplicar) && /mapaLimpo\(mapa, \[\], elementos\)/.test(aplicar),
+        'aplicar grava o apontamento com chave por elemento, no vinculo do modelo');
+    ok(/sem_conferencia/.test(aplicar) && /salvarCamposDaNumeracao\(peca\.id, \{ elements/.test(aplicar),
+        'a marca de conferencia grava nos elementos da peca, so quando mudou');
+    ok(!/csv_headers/.test(aplicar),
+        'aplicar NAO escreve mais csv_headers na peca — a peca nao escolhe coluna');
+
+    // O editor: elemento de banco tem o campo "Exemplo:", e o controle de
+    // coluna sobrevive SO para peca legada com headers.
+    ok(/Exemplo:/.test(script) && /'exemplo',this\.value/.test(script),
+        'o editor tem o campo Exemplo: para elemento de banco');
+    ok(/textoDeExemploDoElemento/.test(script),
+        'a previa mostra o exemplo quando nao ha dado');
+
+    // A trava: elemento sem coluna apontada nao imprime, nas DUAS telas.
+    const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+    ok(/modelosComElementoSemColuna/.test(script) && /modelosComElementoSemColuna/.test(pedido),
+        'a trava do elemento sem coluna esta nas duas telas de imposicao');
+
+    // O payload de UM modelo tambem resolve pelo banco do pedido — o
+    // multi_artes ja resolvia; o caminho single ficava com a peca crua.
+    ok(/itemAtivo/.test(script) && /itemAtivo/.test(pedido),
+        'o payload de um modelo so resolve a peca pelo item ativo, nas duas telas');
 })();
 
 (function oCardEAPaginacaoVeemOBancoResolvido() {

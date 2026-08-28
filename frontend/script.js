@@ -1086,6 +1086,37 @@ function modelosComBancoNaoBaixado(osId) {
 window.modelosComBancoNaoBaixado = modelosComBancoNaoBaixado;
 
 /**
+ * Os modelos do trabalho com elemento de banco SEM coluna apontada — ou
+ * apontada para coluna que o banco do modelo nao tem.
+ *
+ * Existe por causa da peca nova (28/08/2026), que nao escolhe coluna: cada
+ * elemento e apontado no modelo, no 🔤 Colunas. Elemento sem apontamento
+ * imprime VAZIO, sem erro em tela nenhuma — entao a impressao recusa e diz
+ * onde apontar. So conta modelo com vinculo de banco: o caminho legado (CSV
+ * dentro da peca) continua com os avisos de sempre.
+ */
+function modelosComElementoSemColuna() {
+    if (!window.BancoDoModelo) return [];
+    const osIds = new Set();
+    (state.selectedOSItems || []).forEach(sel => { if (sel && sel.osId) osIds.add(sel.osId); });
+    if (state.activeOSItem && state.activeOSItem.osId) osIds.add(state.activeOSItem.osId);
+    const fora = [];
+    osIds.forEach(osId => {
+        ((state.osItens && state.osItens[osId]) || []).forEach(it => {
+            const v = vinculoDeBancoDoModelo(it);
+            if (!v) return;
+            const banco = window.BancoDoModelo.bancoDoModelo(v, state.bancosDoPedido || []);
+            if (!banco) return;   // esse caso e da trava do banco nao baixado
+            const soltos = window.BancoDoModelo.elementosSemColunaNoBanco(
+                pecaDoModelo(it), banco, v.csv_mapa);
+            if (soltos.length) fora.push(it);
+        });
+    });
+    return fora;
+}
+window.modelosComElementoSemColuna = modelosComElementoSemColuna;
+
+/**
  * A peca CRUA do catalogo, sem o banco do pedido nem o mapa de colunas.
  *
  * O `numeracaoDoModelo` devolve a resolvida, que e o que serve para desenhar e
@@ -5349,7 +5380,7 @@ function drawElement(ctx, el, S) {
             if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
             } else {
-                label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                label = textoDeExemploDoElemento(el);
             }
         } else {
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
@@ -5409,7 +5440,7 @@ function drawElement(ctx, el, S) {
             if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
             } else {
-                qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                qrText = textoDeExemploDoElemento(el);
             }
         } else {
             const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
@@ -5456,7 +5487,7 @@ function drawElement(ctx, el, S) {
             if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
             } else {
-                bcText = `${el.prefix || ''}${colName || 'COLUNA'}${el.suffix || ''}`;
+                bcText = textoDeExemploDoElemento(el, true);
             }
         } else {
             const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
@@ -6059,7 +6090,7 @@ function getElementSizeMM(el) {
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                 label = `${el.prefix || ''}1/5`;
             } else if (el.source === 'database') {
-                label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
+                label = textoDeExemploDoElemento(el);
             } else {
                 label = `${el.prefix || ''}0001${el.suffix || ''}`;
             }
@@ -7628,9 +7659,18 @@ function renderElementsList() {
 
                 <div class="form-group" style="${el.source === 'database' ? '' : 'display:none;'}">
 
-                    <label>Coluna do CSV</label>
+                    <label>Exemplo:</label>
 
-                    ${state.numCsvHeaders && state.numCsvHeaders.length ? `
+                    <input class="form-control" type="text" value="${escapeHtml(el.exemplo || '')}" placeholder="Ex: MARIA DA SILVA"
+                        title="Um texto só para a visualização: ajuste o layout, o tamanho e a posição com ele. A coluna de verdade é escolhida no pedido, no 🔤 Colunas do modelo."
+                        onchange="updateEl('${el.id}','exemplo',this.value)">
+
+                </div>
+
+                ${el.source === 'database' && state.numCsvHeaders && state.numCsvHeaders.length ? `
+                <div class="form-group">
+
+                    <label>Coluna do CSV</label>
 
                     <select class="form-control" onchange="updateEl('${el.id}','csv_column',this.value)">
 
@@ -7640,13 +7680,8 @@ function renderElementsList() {
 
                     </select>
 
-                    ` : `
-
-                    <input class="form-control" type="text" value="${el.csv_column || ''}" placeholder="Ex: nome" onchange="updateEl('${el.id}','csv_column',this.value)">
-
-                    `}
-
                 </div>
+                ` : ''}
 
                 ${el.type === 'TEXT' ? boxEspacoDoTextoHTML(el) : ''}
 
@@ -10649,7 +10684,7 @@ function drawPreview() {
 
                         } else {
 
-                            val_str = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
+                            val_str = textoDeExemploDoElemento(el);
 
                         }
 
@@ -11999,6 +12034,17 @@ window.runImposition = async function (mode, returnBlob = false) {
         return;
     }
 
+    // E a trava da peca nova (28/08/2026): elemento de banco sem coluna
+    // apontada imprime VAZIO, calado. A saida esta na frase.
+    const semColuna = modelosComElementoSemColuna();
+    if (semColuna.length) {
+        toast('Há elemento de banco sem coluna apontada em: '
+            + semColuna.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+            + '. Abra o 🔤 Colunas de cada um e aponte a coluna — imprimir agora '
+            + 'sairia com o campo em branco.', 'error');
+        return;
+    }
+
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     let isMultiSelected = false;
@@ -12249,7 +12295,18 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
 
-    const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    let numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+    // Um modelo so tambem le o banco do PEDIDO (28/08/2026): sem resolver aqui,
+    // a impressao de um modelo com vinculo sairia com a peca crua — numero
+    // sequencial ou campo vazio no lugar do dado. O multi_artes ja resolvia
+    // arte a arte; este e o caminho de UM modelo.
+    if (numeracao && state.activeOSItem && state.activeOSItem.osId !== undefined) {
+        const itemAtivo = (state.osItens[state.activeOSItem.osId] || [])[state.activeOSItem.idx];
+        if (itemAtivo && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
+            numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);
+        }
+    }
 
     const num2Id = document.getElementById('imp-numeracao-2')?.value || '';
 
@@ -15800,6 +15857,25 @@ window.sincronizarNumeracaoDoItem = sincronizarNumeracaoDoItem;
  * pelos elementos `source: 'database'`. São elas que dizem o que daquele banco
  * vai para o papel; o resto do arquivo pode ser de outro modelo.
  */
+/**
+ * O que um elemento de banco mostra quando NAO ha dado para mostrar.
+ *
+ * Desde 28/08/2026 a peca nova nao escolhe coluna — o elemento guarda um
+ * "Exemplo:" digitado no editor, so para layout e posicionamento; a coluna
+ * real e apontada no modelo. Com exemplo, a previa mostra o exemplo; sem, cai
+ * no rotulo antigo `[coluna]`, que e como toda peca legada continua se
+ * comportando. `semColchetes` e para o codigo de barras, que nunca usou [].
+ */
+function textoDeExemploDoElemento(el, semColchetes) {
+    const exemplo = String((el && el.exemplo) || '').trim();
+    if (exemplo) return `${el.prefix || ''}${exemplo}${el.suffix || ''}`;
+    const col = (el && el.csv_column) || 'coluna';
+    return semColchetes
+        ? `${el.prefix || ''}${(el && el.csv_column) || 'COLUNA'}${el.suffix || ''}`
+        : `${el.prefix || ''}[${col}]${el.suffix || ''}`;
+}
+window.textoDeExemploDoElemento = textoDeExemploDoElemento;
+
 function colunasDoBancoDaNumeracao(num) {
 
     if (!num) return [];
@@ -16792,55 +16868,48 @@ function abrirColunasDoModelo(idx, osId) {
         return;
     }
 
-    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
-    const cabecalho = (banco.csv_headers || []).map(String);
-
-    // A peca SEM dado proprio escolhe aqui quais colunas do banco ela conhece:
-    // as marcadas vao para o `csv_headers` dela (so o vocabulario — nenhuma
-    // linha), e e essa lista que o editor da numeracao mostra no dropdown
-    // "Coluna do CSV" de cada elemento. Pedido do usuario em 28/08/2026 —
-    // digitar o nome da coluna a mao era o unico caminho, e errado uma letra
-    // o campo imprimia vazio. Peca COM dado nao entra: o dropdown dela vem do
-    // proprio CSV, e mexer nos headers descasaria cabecalho e linhas.
-    const pecaSemDado = !(peca.csv_data && peca.csv_data.length);
-    const mostraColunas = pecaSemDado && cabecalho.length > 0;
-
-    if (!pedidas.length && !mostraColunas) {
-        toast('Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
+    // UMA LINHA POR ELEMENTO (28/08/2026, redesenho do usuario): a peca nao
+    // escolhe mais coluna — guarda so o desenho e um "Exemplo:" — e e AQUI, no
+    // modelo, que cada elemento aponta a sua coluna, direto do banco anexado.
+    // O apontamento grava no vinculo com chave por elemento (`el:<id>`); o
+    // `csv_column` legado continua valendo como fallback, entao toda peca
+    // antiga abre com a coluna dela ja selecionada.
+    const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
+    if (!elementos.length) {
+        toast('Esta numeração não tem nenhum elemento de banco de dados — não há o que apontar.', 'info');
         return;
     }
 
+    const cabecalho = (banco.csv_headers || []).map(String);
     const mapa = (vinc && vinc.csv_mapa) || {};
 
     // O mesmo selo que a lista de elementos do editor usa, mais o nome que o
-    // operador deu ao item — e assim que ele reconhece o elemento, e e por ele
-    // que se escolhe a coluna certa (pedido do usuario em 28/08/2026, quando o
-    // modal so dizia "1 campo" e nao dava para saber qual).
+    // operador deu ao item — e assim que ele reconhece o elemento.
     const selo = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', QR_IDEAL: '🎟️ QR Ideal', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
     const nomeDoElemento = (el) => {
-        // O nome e digitado pelo operador: escapa antes de entrar no HTML.
+        // O nome e o exemplo sao digitados pelo operador: escapa antes do HTML.
         const tipo = esc(selo[el.type] || el.type || 'Elemento');
         const nome = String(el.name || '').trim();
-        return nome ? tipo + ' — ' + esc(nome) : tipo;
+        const exemplo = String(el.exemplo || '').trim();
+        return tipo + (nome ? ' — ' + esc(nome) : '')
+            + (exemplo ? '<br><span style="color:var(--text-dim); font-size:0.78rem;">ex.: ' + esc(exemplo) + '</span>' : '');
     };
-    const elementosDaColuna = (col) => ((peca.elements || [])
-        .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim() === col));
 
-    const linhas = pedidas.map(col => {
-        const escolhida = window.BancoDoModelo.colunaDoModelo(mapa, col);
-        const temNoBanco = cabecalho.indexOf(escolhida) !== -1;
+    const linhas = elementos.map(el => {
+        const escolhida = window.BancoDoModelo.colunaDoElemento(mapa, el);
+        const temNoBanco = escolhida !== '' && cabecalho.indexOf(escolhida) !== -1;
         const opcoes = ['<option value="">— escolher —</option>'].concat(
             cabecalho.map(h => `<option value="${esc(h)}"${h === escolhida ? ' selected' : ''}>${esc(h)}</option>`)
         ).join('');
-        // Dois elementos que leem a mesma coluna trocam JUNTOS — o de-para e
-        // por coluna, de proposito. Por isso a linha lista todos os nomes.
-        const nomes = elementosDaColuna(col).map(nomeDoElemento).join('<br>');
         return `<tr>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:0.85rem;">${nomes || '—'}</td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-family:monospace;">${esc(col)}</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:0.85rem;">${nomeDoElemento(el)}</td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
-                <select class="form-control mapa-col" data-col="${esc(col)}"
+                <select class="form-control mapa-el" data-el="${esc(String(el.id))}"
                     style="width:100%; ${temNoBanco ? '' : 'border-color:var(--red,#ef4444);'}">${opcoes}</select>
+            </td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); text-align:center;">
+                <input type="checkbox" class="conferir-el" data-el="${esc(String(el.id))}" ${el.sem_conferencia ? '' : 'checked'}
+                    title="Conferir repetições desta coluna na Conferência de dados. A marca vale para a numeração inteira, em todos os pedidos.">
             </td>
         </tr>`;
     }).join('');
@@ -16856,42 +16925,19 @@ function abrirColunasDoModelo(idx, osId) {
                 <div style="font-weight:800; font-size:1.05rem;">🔤 Colunas deste modelo</div>
                 <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
                     ${esc(rotuloDoModelo(item, idx))} · peça: ${esc(peca.name || peca.tipo || 'numeração')}
-                    · banco: ${esc(banco.nome || 'banco')}
+                    · banco: ${esc(banco.nome || 'banco')}<br>
+                    Aponte de qual coluna do banco cada elemento lê. A escolha vale só para ESTE modelo.
                 </div>
             </div>
-            ${mostraColunas ? `
-            <div style="padding:12px 18px; border-bottom:1px solid var(--border);">
-                <div style="font-weight:700; font-size:0.9rem; margin-bottom:4px;">Colunas do banco nesta numeração</div>
-                <div style="color:var(--text-dim); font-size:0.82rem; margin-bottom:8px;">
-                    Marque as colunas que esta numeração usa. Elas passam a aparecer no
-                    editor da numeração, na lista "Coluna do CSV" de cada elemento —
-                    sem precisar digitar o nome à mão.
-                </div>
-                <div style="display:flex; flex-wrap:wrap; gap:6px 14px;">
-                    ${cabecalho.map(h => {
-                        const marcada = ((peca.csv_headers || []).map(String)).includes(h);
-                        return `<label style="display:inline-flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer;">
-                            <input type="checkbox" class="col-do-banco" data-col="${esc(h)}" ${marcada ? 'checked' : ''}>
-                            <span style="font-family:monospace;">${esc(h)}</span>
-                        </label>`;
-                    }).join('')}
-                </div>
-            </div>` : ''}
             <div style="overflow:auto; padding:0 4px;">
-                ${pedidas.length ? `
                 <table style="width:100%; border-collapse:collapse;">
                     <thead><tr>
                         <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Elemento</th>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Lê a coluna</th>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">No banco deste pedido</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Coluna no banco</th>
+                        <th style="text-align:center; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;" title="Conferir repetições na Conferência de dados">Conferir</th>
                     </tr></thead>
                     <tbody>${linhas}</tbody>
-                </table>` : `
-                <div style="padding:12px 18px; color:var(--text-dim); font-size:0.85rem;">
-                    Os elementos desta numeração ainda não escolheram coluna. Marque as
-                    colunas acima, aplique, e abra a numeração: cada elemento de banco
-                    escolhe a sua na lista "Coluna do CSV".
-                </div>`}
+                </table>
             </div>
             <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="fecharColunasDoModelo()">Cancelar</button>
@@ -16915,39 +16961,42 @@ async function aplicarColunasDoModelo(idx, osId) {
     const vinc = vinculoDeBancoDoModelo(item);
     if (!vinc) { fecharColunasDoModelo(); return; }
 
-    const mapa = {};
-    over.querySelectorAll('select.mapa-col').forEach(s => {
-        const col = s.getAttribute('data-col');
-        if (col && s.value) mapa[col] = s.value;
-    });
-
     const peca = pecaDoModelo(item);
-    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
-    const limpo = window.BancoDoModelo.mapaLimpo(mapa, pedidas);
+    const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
+
+    // O apontamento por ELEMENTO, deste modelo. `mapaLimpo` dispensa o que o
+    // fallback ja acha sozinho (apontamento igual ao csv_column legado) e
+    // descarta chave de elemento que a peca nao tem mais.
+    const mapa = {};
+    over.querySelectorAll('select.mapa-el').forEach(s => {
+        const elId = s.getAttribute('data-el');
+        if (elId && s.value) mapa['el:' + elId] = s.value;
+    });
+    const limpo = window.BancoDoModelo.mapaLimpo(mapa, [], elementos);
 
     try {
-        // As colunas marcadas viram o `csv_headers` da peca — o vocabulario que
-        // o editor da numeracao mostra no dropdown "Coluna do CSV". So o nome
-        // das colunas: nenhuma linha de dado e escrita na peca. Coluna que um
-        // elemento ja usa nao sai por desmarcacao — sumir com ela do dropdown
-        // nao apagaria o uso, so o esconderia.
-        const checks = [...over.querySelectorAll('input.col-do-banco')];
-        if (checks.length && peca) {
-            const marcadas = checks.filter(c => c.checked).map(c => c.getAttribute('data-col'));
-            const emUso = pedidas.filter(c => !marcadas.includes(c));
-            const novas = [...checks.map(c => c.getAttribute('data-col')).filter(h => marcadas.includes(h)), ...emUso];
-            const antigas = (peca.csv_headers || []).map(String);
-            if (JSON.stringify(novas) !== JSON.stringify(antigas)) {
-                await salvarCamposDaNumeracao(peca.id, { csv_headers: novas });
-                peca.csv_headers = novas;   // a mesma referencia do catalogo
-                if (emUso.length) {
-                    toast('A coluna ' + emUso.map(c => '"' + c + '"').join(', ')
-                        + ' continua na lista: há elemento da numeração usando ela.', 'info');
-                }
-            }
+        await ligarModeloAoBanco(item.id, vinc.banco_id, limpo);
+
+        // A marca de conferencia mora no ELEMENTO da peca — vale para a
+        // numeracao inteira, em todos os pedidos, como o titulo da caixinha
+        // avisa. Grava so quando mudou.
+        const escolhaConferir = {};
+        over.querySelectorAll('input.conferir-el').forEach(c => {
+            escolhaConferir[c.getAttribute('data-el')] = c.checked;
+        });
+        let conferenciaMudou = 0;
+        elementos.forEach(el => {
+            const querida = escolhaConferir[String(el.id)];
+            if (querida === undefined) return;
+            const fora = !querida;
+            if (!!el.sem_conferencia === fora) return;
+            if (fora) el.sem_conferencia = true; else delete el.sem_conferencia;
+            conferenciaMudou++;
+        });
+        if (conferenciaMudou) {
+            await salvarCamposDaNumeracao(peca.id, { elements: peca.elements });
         }
 
-        await ligarModeloAoBanco(item.id, vinc.banco_id, limpo);
         fecharColunasDoModelo();
         toast('Colunas deste modelo atualizadas.', 'success');
         renderAmostrasOSItens(osId);
@@ -17069,8 +17118,9 @@ async function aplicarRenomeacoesNoMapa(osId, bancoId, renomeacoes) {
         const mapa = (vinc && vinc.csv_mapa) || null;
         const peca = pecaDoModelo(it);
         const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
+        const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
 
-        const limpo = window.BancoDoModelo.mapaAposRenomear(mapa, pedidas, de2para);
+        const limpo = window.BancoDoModelo.mapaAposRenomear(mapa, pedidas, de2para, elementos);
         await ligarModeloAoBanco(it.id, bancoId, limpo);
     }
 }
@@ -22922,7 +22972,7 @@ window.onAmostraNumeracaoSelect = function() {
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
-                        label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                        label = textoDeExemploDoElemento(el);
                     }
                 } else {
 
@@ -33713,7 +33763,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
-                    label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                    label = textoDeExemploDoElemento(el);
                 }
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 6;
@@ -34524,7 +34574,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
-                        label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                        label = textoDeExemploDoElemento(el);
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
