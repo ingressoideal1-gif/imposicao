@@ -88,10 +88,12 @@ const { pedidoSaiuDaArte } = new Function(
     // O atendente revisa ANTES de mandar ao cliente: ainda e trabalho de arte.
     ok(!pedidoSaiuDaArte({ status_interno: 'REVISAO ATENDENTE' }),
         'REVISAO ATENDENTE NAO tira da arte');
-    // Cancelado nao "saiu" da arte, deixou de existir. Card de concluidos e de
-    // trabalho feito.
+    // CANCELADO vai para o card de concluidos (regra de 28/08/2026), mas por
+    // OUTRA porta: o `pedidoCancelado`, testado mais abaixo. Fora desta lista
+    // ele tem de continuar, porque ela e tambem a entrada dos paineis
+    // (`pedidosJaNaGrafica`) -- e cancelado nao entra nos paineis.
     ok(!pedidoSaiuDaArte({ status_interno: 'CANCELADO' }),
-        'CANCELADO NAO vai para o card de concluidos');
+        'CANCELADO NAO entra em SINAIS_SAIU_DA_ARTE -- essa lista abre a porta dos paineis');
     ok(!pedidoSaiuDaArte({ status_interno: 'NOVO' }), 'NOVO e arte');
     ok(!pedidoSaiuDaArte({ status_interno: 'AGUARDANDO' }), 'AGUARDANDO e arte');
     ok(!pedidoSaiuDaArte({ status_interno: 'NOVO_ARTE_APROVADA' }), 'NOVO_ARTE_APROVADA e arte');
@@ -103,6 +105,59 @@ const { pedidoSaiuDaArte } = new Function(
     ok(!pedidoSaiuDaArte({ status: 'AGUARD. APROVAÇÃO' }), 'pedido em aprovacao fica');
     ok(!pedidoSaiuDaArte({}), 'pedido sem status nenhum fica');
     ok(!pedidoSaiuDaArte(null), 'e pedido nulo nao quebra a lista');
+})();
+
+// ─── O cancelado tambem e "concluido" (28/08/2026) ───────────────────────────
+//
+// Usuario: "pedidos com status 'cancelado' na coluna status_interno da tabela
+// propostas considerar pedido concluido (card)". Ele sai da fila do designer,
+// que abria um pedido morto para descobrir que nao havia nada a fazer.
+
+const { pedidoCancelado } = new Function(
+    extrairConst('SINAIS_CANCELADO') + '\n' + extrair('pedidoCancelado')
+    + '\nreturn { pedidoCancelado };')();
+
+(function oCanceladoEReconhecido() {
+    ok(pedidoCancelado({ status_interno: 'CANCELADO' }), 'CANCELADO e cancelado');
+    ok(pedidoCancelado({ status_interno: 'CANCELADA' }), 'no feminino tambem');
+    ok(pedidoCancelado({ status_interno: 'cancelado' }), 'em caixa baixa tambem');
+    ok(pedidoCancelado({ status_interno: '  CANCELADO  ' }), 'com espaco em volta tambem');
+})();
+
+(function soOStatusInternoConta() {
+    // O usuario nomeou a coluna. O `status` da OS carrega override local e
+    // status de arte -- um "CANCELADO" ali significaria outra coisa.
+    ok(!pedidoCancelado({ status: 'CANCELADO' }),
+        'o campo status da OS NAO cancela o pedido -- so o status_interno da proposta');
+    ok(!pedidoCancelado({ status_interno: 'EM PRODUCAO' }), 'quem esta em producao nao e cancelado');
+    ok(!pedidoCancelado({}), 'pedido sem status nenhum nao e cancelado');
+    ok(!pedidoCancelado(null), 'e pedido nulo nao quebra a lista');
+})();
+
+(function oCanceladoNaoAbreAPortaDosPaineis() {
+    // A regra so RECLASSIFICA quem ja esta na tela. Se `CANCELADO` entrasse na
+    // lista de cima, os paineis de Arte, Producao e Acabamento receberiam todos
+    // os cancelados do ERP, inclusive os que a grafica nunca viu.
+    ok(!/'CANCELAD[AO]'/.test(extrairConst('SINAIS_SAIU_DA_ARTE')),
+        'CANCELADO continua fora de SINAIS_SAIU_DA_ARTE');
+})();
+
+(function oCanceladoEAPerguntaAnteriorATODAS() {
+    // Antes de `pedidoSaiuDaArte` e antes das tres filas: com a arte aprovada no
+    // ERP, o cancelado caia em "Aprovados" e voltava para a frente do designer.
+    ok(/if \(pedidoCancelado\(os\)\) \{\s*return \{ statusCalculado: 'CANCELADA', fila: 'concluidos' \};/.test(SCRIPT),
+        'o cancelado e separado antes de qualquer outra pergunta, e vai para concluidos');
+    // Badge proprio: em Concluidos, "Em Arte" seria justamente a mentira que
+    // fazia o designer abrir o pedido.
+    ok(/'CANCELADA':\s*\{ icon: '❌'/.test(SCRIPT),
+        'e o status CANCELADA tem badge proprio no getStatusBadge');
+})();
+
+(function aColunaDeTempoNaoCarimbaProducaoNoCancelado() {
+    // Na lista de Concluidos a coluna vira "Entrou em Producao". O cancelado
+    // nunca entrou -- a celula diz o que houve em vez de carimbar uma data.
+    ok(/if \(pedidoCancelado\(os\)\) \{[\s\S]{0,400}?>Cancelado<\/td>/.test(SCRIPT),
+        'a celula de tempo do cancelado diz "Cancelado"');
 })();
 
 // ─── Onde a regra e aplicada ─────────────────────────────────────────────────

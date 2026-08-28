@@ -36,6 +36,8 @@ function recortarConst(nome) {
 function classificador(state) {
     const fonte = [
         recortarConst('SINAIS_SAIU_DA_ARTE'),
+        recortarConst('SINAIS_CANCELADO'),
+        recortar('pedidoCancelado'),
         recortarConst('ARTE_REPROVADOS'),
         recortarConst('ARTE_APROVADOS'),
         recortarConst('ARTE_EM_APROVACAO'),

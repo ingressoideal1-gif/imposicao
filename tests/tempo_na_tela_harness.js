@@ -38,6 +38,8 @@ const MAPA = SCRIPT.slice(iMapa, SCRIPT.indexOf('};', iMapa) + 2);
 const CODIGO = [
     SCRIPT.slice(SCRIPT.indexOf('const TEMPO_AZUL_SEG'), SCRIPT.indexOf(';', SCRIPT.indexOf('const TEMPO_VERMELHO_SEG')) + 1),
     MAPA,
+    SCRIPT.slice(SCRIPT.indexOf('const SINAIS_CANCELADO = ['), SCRIPT.indexOf('];', SCRIPT.indexOf('const SINAIS_CANCELADO = [')) + 2),
+    recortar('pedidoCancelado'),
     recortar('escapeHtml'),
     recortar('formatDateTime'),
     recortar('inicioDoTempoNoCard'),

@@ -26894,9 +26894,11 @@ window.atualizarPainelProducao = atualizarPainelProducao;
  * `IMPRESSO` e `ENTREGUE` entram sem existir hoje em `status_interno`: são
  * inequívocas, e é a palavra que o operador espera que funcione.
  *
- * `CANCELADO` fica de fora de propósito: pedido cancelado não *saiu* da arte,
- * ele deixou de existir — e o card "Pedidos Concluídos" é de trabalho feito.
- * Se ele incomodar na lista, é outro assunto, com outro tratamento.
+ * `CANCELADO` fica de fora DESTA lista, mas hoje cai no mesmo card por outro
+ * caminho — ver `pedidoCancelado`, logo abaixo. Aqui ele não entra porque esta
+ * lista é também a porta de entrada dos painéis (`pedidosJaNaGrafica`), e
+ * cancelado continua sendo estágio comercial: pô-lo aqui traria para as três
+ * telas dezenas de pedidos que a gráfica nunca viu.
  *
  * ## A retirada no balcão (25/08/2026)
  *
@@ -26927,6 +26929,43 @@ const SINAIS_SAIU_DA_ARTE = [
     'ENTREGUE',
     'FINALIZADA', 'FINALIZADO',
 ];
+
+/**
+ * O pedido foi cancelado no ERP.
+ *
+ * Regra do usuário, 28/08/2026: *"pedidos com status 'cancelado' na coluna
+ * `status_interno` da tabela `propostas` considerar pedido concluído (card)"*.
+ * Ou seja, cancelado vai para **Pedidos Concluídos**, e sai de "Em Arte", da
+ * "Fila de Aprovação" e da "Fila de Aprovados".
+ *
+ * Isto reverte, de propósito, a decisão anterior de manter o cancelado fora do
+ * card. O motivo antigo era conceitual — pedido cancelado não *saiu* da arte,
+ * ele deixou de existir, e Concluídos é de trabalho feito. Na mesa, porém, o
+ * efeito era outro: com a arte já aprovada no ERP, o cancelado continuava
+ * ocupando a fila do designer, que abria um pedido morto para descobrir que não
+ * havia nada a fazer. O card certo é o que tira o pedido da frente dele.
+ *
+ * ## Por que uma lista separada, e não uma palavra a mais em `SINAIS_SAIU_DA_ARTE`
+ *
+ * Aquela lista faz DUAS coisas: diz em que card o pedido cai **e** abre a porta
+ * dos painéis, pelo `pedidosJaNaGrafica`. Acrescentar `CANCELADO` lá mandaria
+ * para a Fila de Arte, a Fila de Produção e o Painel do Acabamento todos os
+ * pedidos cancelados do ERP — inclusive os que nunca tiveram arte lançada e que
+ * a gráfica nunca viu (eram 32 no banco quando a lista foi montada). Aqui a
+ * regra é mais estreita e mais segura: ela só reclassifica quem JÁ está na
+ * tela. Quem não entrou continua fora.
+ *
+ * Só `status_interno` é lido, como o usuário pediu. O `status` da OS não entra:
+ * ele carrega override local e status de arte, e um "CANCELADO" ali significaria
+ * outra coisa.
+ */
+const SINAIS_CANCELADO = ['CANCELADO', 'CANCELADA'];
+
+function pedidoCancelado(os) {
+    if (!os) return false;
+    return SINAIS_CANCELADO.includes((os.status_interno || '').trim().toUpperCase());
+}
+window.pedidoCancelado = pedidoCancelado;
 
 /**
  * O nome do cliente com o número dele ao lado: "Patrick Soares Furtado - 28449".
@@ -27375,6 +27414,14 @@ function classificarPedidoNaArte(os) {
     const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
     const isEmAprovacaoFila = (statusCalculado === 'Enviar Arte' || statusCalculado === 'Aguard. Aprovação' || statusCalculado === 'Arte Pronta' || statusCalculado === 'Aprovada');
 
+    // O cancelado vem ANTES de tudo: nenhum estágio de arte o traz de volta
+    // para a fila do designer, e o badge diz o que ele é. Sem esta linha ele
+    // apareceria em Concluídos marcado "Em Arte", que é justamente o que fazia
+    // o designer abrir um pedido morto.
+    if (pedidoCancelado(os)) {
+        return { statusCalculado: 'CANCELADA', fila: 'concluidos' };
+    }
+
     let fila;
     if (pedidoSaiuDaArte(os)) fila = 'concluidos';
     else if (isTotalmenteAprovado) fila = 'aprovados';
@@ -27638,6 +27685,14 @@ function celulaDeTempoHtml(os) {
     const datas = [];
     if (os.data_liberacao) datas.push('Liberação: ' + formatDateTime(os.data_liberacao));
     if (os.data_pedido) datas.push('Pedido: ' + formatDateTime(os.data_pedido));
+
+    // Cancelado não tem relógio nem hora de entrada na produção: ele nunca
+    // entrou. A coluna diz o que houve, em vez de carimbar uma data que
+    // significaria o contrário do que aconteceu.
+    if (pedidoCancelado(os)) {
+        const titulo = datas.concat(['Cancelado no ERP (status_interno)']).join('  •  ');
+        return `<td style="text-align: center; vertical-align: middle; font-size: 0.9rem; font-weight: 700; color: #ef4444;" title="${escapeHtml(titulo)}">Cancelado</td>`;
+    }
 
     // Concluído não tem relógio: tem hora de entrada na produção.
     const registro = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
