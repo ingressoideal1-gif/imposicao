@@ -3555,6 +3555,190 @@ window.togglePedItemSelection = function(itemId, osId) {
     drawPedPreview();
 };
 
+/**
+ * Quanto o produto tem e quanto dele ainda falta imprimir.
+ *
+ * É a pergunta que o operador faz de pé na frente da impressora — "quantas
+ * pulseiras esse pedido tem?" —, e que até aqui ele só respondia somando de
+ * cabeça as linhas da lista.
+ *
+ * Restante é o que ainda NÃO está impresso. Modelo em Parcial conta como
+ * restante inteiro: a tela não guarda quantos itens dele já saíram, e
+ * arredondá-lo para pronto mostraria menos trabalho do que existe. A conta erra
+ * sempre para o lado de sobrar, nunca para o de faltar.
+ */
+function contaDoProduto(itens) {
+
+    let total = 0;
+
+    let impressa = 0;
+
+    (itens || []).forEach(it => {
+
+        const q = parseInt(it.qtd !== undefined && it.qtd !== null ? it.qtd : it.quantidade) || 0;
+
+        total += q;
+
+        if (normalizarStatusImpressao(it.status_impressao || it.impressao) === 'Impresso') {
+            impressa += q;
+        }
+
+    });
+
+    return { total, impressa, restante: Math.max(0, total - impressa) };
+}
+window.contaDoProduto = contaDoProduto;
+
+
+
+/**
+ * A cor do modelo, resolvida do jeito que a fila sempre resolveu.
+ *
+ * O ERP grava a cor de duas maneiras — o id (`amostra_cor_id`) e o nome escrito
+ * à mão (`cor`/`padrao`) —, e nem sempre as duas. A ordem abaixo é a que a
+ * linha da fila já usava: o id primeiro, o nome exato depois, e só então o
+ * aproximado.
+ *
+ * Virou função porque agora tem DOIS leitores: a bolinha de cor da linha e o
+ * filtro por cor do cabeçalho do produto. Se cada um resolvesse a cor por conta
+ * própria, o filtro esconderia linhas que a bolinha pinta — e o operador não
+ * teria como saber qual dos dois está certo.
+ */
+function resolverCorDoModelo(item, coresDoFormato) {
+
+    const coresItem = coresDoFormato || [];
+
+    let selectedCorId = null;
+
+    const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
+    const corNomeAtual = item.cor || item.padrao || '';
+
+    if (corIdAtual) {
+        const found = coresItem.find(c => String(c.id) === corIdAtual);
+        if (found) selectedCorId = String(found.id);
+    }
+    if (!selectedCorId && corNomeAtual) {
+        const exactMatch = coresItem.find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual));
+        if (exactMatch) {
+            selectedCorId = String(exactMatch.id);
+        } else {
+            const fuzzyMatch = coresItem.find(c => globalFuzzyMatch(c.name, corNomeAtual));
+            if (fuzzyMatch) selectedCorId = String(fuzzyMatch.id);
+        }
+    }
+
+    let selectedCorObj = null;
+    if (selectedCorId) {
+        selectedCorObj = coresItem.find(c => String(c.id) === String(selectedCorId));
+    }
+    if (!selectedCorObj && corIdAtual) {
+        selectedCorObj = (state.cores || []).find(c => String(c.id) === String(corIdAtual));
+    }
+    if (!selectedCorObj && corNomeAtual) {
+        selectedCorObj = (state.cores || []).find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual) || globalFuzzyMatch(c.name, corNomeAtual));
+    }
+
+    const corRefHex = selectedCorObj ? (selectedCorObj.cor_referencia || selectedCorObj.hex || '') : '';
+
+    // O rótulo é o nome do catálogo quando ele existe, e o texto do ERP quando
+    // não: modelo cuja cor não bate com nenhuma cadastrada continua tendo cor no
+    // papel, e deixá-lo de fora do filtro faria o operador achar que ele sumiu.
+    const rotulo = (selectedCorObj && selectedCorObj.name) || String(corNomeAtual || '').trim();
+
+    const chave = rotulo ? globalNormStr(rotulo) : '__sem_cor__';
+
+    return { selectedCorId, selectedCorObj, corRefHex, rotulo, chave };
+}
+window.resolverCorDoModelo = resolverCorDoModelo;
+
+
+
+/** A cor escolhida no cabeçalho de cada produto, uma por caixa. */
+function filtroDeCorDaFila() {
+    if (!state.filtroCorDaFila) state.filtroCorDaFila = {};
+    return state.filtroCorDaFila;
+}
+window.filtroDeCorDaFila = filtroDeCorDaFila;
+
+
+
+/**
+ * O filtro por cor esconde linhas, NÃO redesenha a fila.
+ *
+ * Redesenhar custa caro aqui — cada linha carrega um `<select>` de todas as
+ * numerações e outro de todas as cores, e é por isso que os redesenhos já
+ * andam agrupados em `agendarRedesenhoDasFilas`. Trocar a cor no cabeçalho é um
+ * gesto de olhar, não de salvar: nada vai ao banco, e a escolha fica guardada
+ * em memória para sobreviver ao próximo redesenho, que a reaplica no fim.
+ */
+function aplicarFiltroDeCorNaFila() {
+
+    const filtros = filtroDeCorDaFila();
+
+    document.querySelectorAll('#ped-os-queue-body [data-caixa-cor]').forEach(caixa => {
+
+        const chaveDaCaixa = caixa.getAttribute('data-caixa-cor');
+
+        const escolhida = filtros[chaveDaCaixa] || '';
+
+        caixa.querySelectorAll('tr[data-cor-chave]').forEach(tr => {
+
+            const bate = !escolhida || tr.getAttribute('data-cor-chave') === escolhida;
+
+            tr.style.display = bate ? '' : 'none';
+
+        });
+
+    });
+
+}
+window.aplicarFiltroDeCorNaFila = aplicarFiltroDeCorNaFila;
+
+
+
+/**
+ * Modelo escondido pelo filtro sai da seleção.
+ *
+ * "Imprimir selecionados" imprime o que está MARCADO, não o que está na tela.
+ * Sem isto, filtrar por Vermelho depois de ter marcado um Azul deixaria o Azul
+ * marcado fora de vista — e ele sairia na folha junto. Folha impressa errada é
+ * refugo, e o operador não teria como ver de onde veio.
+ */
+function desmarcarModelosEscondidos() {
+
+    const marcados = state.selectedOSItems || [];
+
+    if (!marcados.length) return;
+
+    const restantes = marcados.filter(sel => {
+        const tr = document.getElementById(`ped-queue-row-${sel.itemId}`);
+        return !tr || tr.style.display !== 'none';
+    });
+
+    if (restantes.length === marcados.length) return;
+
+    state.selectedOSItems = restantes;
+
+    renderPedOSQueue();
+
+    if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
+
+    if (typeof drawPedPreview === 'function') drawPedPreview();
+
+}
+
+
+
+/** Guarda a cor escolhida no cabeçalho do produto e reaplica o filtro. */
+function filtrarFilaPorCor(chaveDaCaixa, chaveDaCor) {
+    filtroDeCorDaFila()[chaveDaCaixa] = chaveDaCor || '';
+    aplicarFiltroDeCorNaFila();
+    desmarcarModelosEscondidos();
+}
+window.filtrarFilaPorCor = filtrarFilaPorCor;
+
+
+
 function renderPedOSQueue() {
     const container = document.getElementById( 'ped-os-queue' );
     const wrapper = document.getElementById( 'ped-os-queue-body' );
@@ -3622,7 +3806,6 @@ function renderPedOSQueue() {
 
         // Box level Formato & Saida calculation
         let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
-        let boxSaiSel = groupItens[0].saida_id || '';
         
         // If there's a forced formato, auto-apply it to all items if missing
         if (formatoPadraoId) {
@@ -3635,12 +3818,82 @@ function renderPedOSQueue() {
                     const fObj = (state.formatos || []).find(f => String(f.id) === String(formatoPadraoId));
                     if (fObj && fObj.default_saida_id) {
                         item.saida_id = fObj.default_saida_id;
-                        boxSaiSel = fObj.default_saida_id; // Set header saídas as well
                         setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
                     }
                 }
             });
         }
+
+        // ── O que o cabeçalho do produto diz: quanto tem e quanto falta ──────
+        //
+        // A conta é do PRODUTO inteiro, somando todos os modelos da caixa, e NÃO
+        // segue o filtro de cor ao lado — de propósito: o total do produto é o
+        // mesmo com o filtro ligado ou desligado, e um número que encolhesse ao
+        // escolher uma cor já seria outra coisa.
+        const conta = contaDoProduto(groupItens);
+
+        const qtdTotalProduto = conta.total;
+
+        const qtdRestanteProduto = conta.restante;
+
+        // A cor de cada modelo, resolvida UMA vez: alimenta a lista do filtro
+        // aqui em cima e a bolinha de cada linha lá embaixo.
+        const coresDaCaixa = todasCores.filter(c => !boxFmtSel || !c.formato_id || String(c.formato_id) === String(boxFmtSel));
+
+        const corPorItem = new Map();
+        const coresDosModelos = new Map();
+
+        groupItens.forEach(it => {
+
+            const c = resolverCorDoModelo(it, coresDaCaixa);
+
+            corPorItem.set(String(it.id), c);
+
+            const jaVista = coresDosModelos.get(c.chave);
+
+            if (jaVista) {
+                jaVista.n += 1;
+            } else {
+                coresDosModelos.set(c.chave, { rotulo: c.rotulo || 'Sem cor', hex: c.corRefHex, n: 1 });
+            }
+
+        });
+
+        const resumoDoProduto = qtdTotalProduto > 0 ? `
+                    <span style="display:inline-flex; align-items:center; gap:8px; margin-left:18px;
+                                 padding:3px 12px; background:#1e293b; border:1px solid #918f8c;
+                                 border-radius:6px; font-size:0.95rem; font-weight:700; white-space:nowrap;"
+                          title="Soma das quantidades de todos os modelos deste produto, e quanto ainda não está impresso">
+                        <span style="color:#94a3b8; font-weight:600;">Total</span>
+                        <span style="color:#ffffff;">${qtdTotalProduto.toLocaleString('pt-BR')}</span>
+                        <span style="color:#918f8c;">·</span>
+                        <span style="color:#94a3b8; font-weight:600;">Restante</span>
+                        <span style="color:${qtdRestanteProduto > 0 ? '#f59e0b' : '#22c55e'};">${qtdRestanteProduto.toLocaleString('pt-BR')}</span>
+                    </span>` : '';
+
+        // ── O filtro por cor deste produto ──────────────────────────────────
+        //
+        // Só lista as cores que os modelos DESTE produto têm — não o catálogo
+        // inteiro de cores. Uma opção que não esconde nem mostra nada é uma
+        // opção que faz o operador duvidar do filtro.
+        const chaveDaCaixa = `${osId}::${prodId}`;
+
+        // Cor que sumiu da caixa (o modelo mudou de cor, ou o pedido é outro)
+        // deixaria a lista inteira escondida, sem nada na tela explicando por
+        // quê. Some com o filtro junto.
+        if (filtroDeCorDaFila()[chaveDaCaixa] && !coresDosModelos.has(filtroDeCorDaFila()[chaveDaCaixa])) {
+            filtroDeCorDaFila()[chaveDaCaixa] = '';
+        }
+
+        const corEscolhida = filtroDeCorDaFila()[chaveDaCaixa] || '';
+
+        const coresFiltroOptions = Array.from(coresDosModelos.entries())
+            .sort((a, b) => String(a[1].rotulo).localeCompare(String(b[1].rotulo), 'pt-BR'))
+            .map(([chave, info]) => {
+                const sel = chave === corEscolhida ? 'selected' : '';
+                const optStyle = info.hex ? `background-color: ${info.hex}; color: #000000; font-weight: bold;` : '';
+                return `<option value="${chave}" ${sel} style="${optStyle}">${escHtmlSimples(info.rotulo)} (${info.n})</option>`;
+            }).join('');
 
         const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
         const fmtHeaderStyle = formatoPadraoId ? selectHeaderStyleDisabled : selectHeaderStyle;
@@ -3650,11 +3903,6 @@ function renderPedOSQueue() {
             return `<option value="${f.id}" ${sel}>${f.name}</option>`;
         }).join('');
         
-        const saidasOptions = (state.saidas || []).map(s => {
-            const sel = String(s.id) === String(boxSaiSel) ? 'selected' : '';
-            return `<option value="${s.id}" ${sel}>${s.name}</option>`;
-        }).join('');
-
         // Os botões "📄 PDF Sel." e "🖨️ Imp. Sel." moravam aqui e saíram em
         // 18/08/2026. Eles chamavam `runImposition` — a função da ABA IMPOSIÇÃO —
         // e pediam de volta um PDF que ela nunca devolve: o `returnBlob` só pula
@@ -3674,21 +3922,22 @@ function renderPedOSQueue() {
                     <option value="">— Formato —</option>
                     ${formatosOptions}
                 </select>
-                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="Saída Padrão do Produto">
-                    <option value="">— Saída —</option>
-                    ${saidasOptions}
+                <select style="${selectHeaderStyle}" onchange="filtrarFilaPorCor('${chaveDaCaixa}', this.value)" title="Mostrar só os modelos desta cor">
+                    <option value="">— Todas as cores —</option>
+                    ${coresFiltroOptions}
                 </select>
                 <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">▼</span>
             </div>
         `;
 
         html += `
-        <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}">
+        <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}" data-caixa-cor="${chaveDaCaixa}">
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
                     <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
                         <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${nomeReal} ${setorBadge}
                     </h5>
+                    ${resumoDoProduto}
                 </div>
                 ${headerDropdowns}
             </div>
@@ -3720,36 +3969,12 @@ function renderPedOSQueue() {
             const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
             const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
 
-            let selectedCorId = null;
-            const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
-            const corNomeAtual = item.cor || item.padrao || '';
-            if (corIdAtual) {
-                const found = coresItem.find(c => String(c.id) === corIdAtual);
-                if (found) selectedCorId = String(found.id);
-            }
-            if (!selectedCorId && corNomeAtual) {
-                const exactMatch = coresItem.find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual));
-                if (exactMatch) {
-                    selectedCorId = String(exactMatch.id);
-                } else {
-                    const fuzzyMatch = coresItem.find(c => globalFuzzyMatch(c.name, corNomeAtual));
-                    if (fuzzyMatch) {
-                        selectedCorId = String(fuzzyMatch.id);
-                    }
-                }
-            }
-
-            let selectedCorObj = null;
-            if (selectedCorId) {
-                selectedCorObj = coresItem.find(c => String(c.id) === String(selectedCorId));
-            }
-            if (!selectedCorObj && corIdAtual) {
-                selectedCorObj = (state.cores || []).find(c => String(c.id) === String(corIdAtual));
-            }
-            if (!selectedCorObj && corNomeAtual) {
-                selectedCorObj = (state.cores || []).find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual) || globalFuzzyMatch(c.name, corNomeAtual));
-            }
-            const corRefHex = selectedCorObj ? (selectedCorObj.cor_referencia || selectedCorObj.hex || '') : '';
+            // A cor já foi resolvida na volta que montou a conta do produto e a
+            // lista do filtro — a bolinha da linha e o filtro do cabeçalho leem
+            // a MESMA resposta, e ninguém paga o casamento aproximado duas vezes.
+            const corDoItem = corPorItem.get(String(item.id)) || resolverCorDoModelo(item, coresItem);
+            const selectedCorId = corDoItem.selectedCorId;
+            const corRefHex = corDoItem.corRefHex;
 
             const coresOptions = coresItem.map(c => {
                 const sel = selectedCorId && String(c.id) === selectedCorId ? 'selected' : '';
@@ -3813,6 +4038,7 @@ function renderPedOSQueue() {
 
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
+                    data-cor-chave="${corDoItem.chave}"
                     onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 12px; width: 40px; text-align: center;">
                         <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
@@ -3947,6 +4173,7 @@ function renderPedOSQueue() {
     }
 
     wrapper.innerHTML = html;
+    aplicarFiltroDeCorNaFila();
     updatePedImprimirButtonsVisibility();
     // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
