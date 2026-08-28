@@ -50,8 +50,13 @@ linhas e nenhum modelo as reconheceria.
 
 A identidade é o `__id`, garantido em `recalcular()`. **Duplicar linha precisa
 apagar o `__id` da cópia**, senão nascem duas linhas com a mesma identidade e a
-fatia de um modelo passa a arrastar a linha do outro. A atribuição é exclusiva de
-propósito: é ela que impede o mesmo assento sair em dois modelos.
+fatia de um modelo passa a arrastar a linha do outro. A atribuição é exclusiva
+POR PADRÃO — é ela que impede o mesmo assento sair em dois modelos —, mas desde
+28/08/2026 a caixa **"🔁 Linha em mais de um modelo"** desliga a exclusividade à
+vista: o modelo entra na linha sem tirar os outros, para pedidos em que os
+modelos compartilham as linhas e cada um lê a própria coluna do banco. Por
+dentro, `ed.dono` é `Map(id → LISTA de donos)`; não volte a tratá-lo como valor
+único.
 
 Em `csv_selecao`, **ausente** e **lista vazia** não são a mesma coisa: ausente é
 "nunca distribuído" e leva o banco inteiro; lista vazia é "este modelo não ficou

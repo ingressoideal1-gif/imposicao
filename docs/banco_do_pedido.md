@@ -138,7 +138,10 @@ apenas a informação dos elementos como seus tamanhos, origem, fontes"*.
   (21346) o card do VIP 1 exibia a coluna do VIP 2. A regra vale no card do
   operador (`script.js`) e na página do cliente (`cliente.js`); peça sem coluna
   apontada cai no resumo antigo. Compartilhar as linhas é suportado de
-  propósito: sem distribuição no 🧩, todo modelo lê o banco inteiro.
+  propósito: sem distribuição no 🧩, todo modelo lê o banco inteiro — e, para
+  compartilhar só uma PARTE das linhas, o 🧩 tem a caixa **"🔁 Linha em mais de
+  um modelo"** (28/08/2026), que desliga a exclusividade da atribuição: o modelo
+  entra na linha sem tirar os outros. Ver `docs/editor_de_csv.md`.
 
 A seção de checkboxes "colunas do banco nesta numeração" (da rodada anterior do
 mesmo dia) morreu com esta decisão: o Exemplo a tornou desnecessária.

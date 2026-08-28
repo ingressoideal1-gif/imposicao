@@ -289,8 +289,18 @@ Nesse modo:
 - Sem edição de célula, sem coluna nova, sem colar, sem importar — trocar o banco
   no meio da distribuição daria identidade nova às linhas e nenhum modelo as
   reconheceria. Cancelar/reativar linha continua, porque faz parte do trabalho.
-- **A atribuição é exclusiva.** Dar uma linha a um modelo tira dela o dono
-  anterior. Linha repetida em dois modelos não acontece por construção.
+- **A atribuição é exclusiva por padrão.** Dar uma linha a um modelo tira dela o
+  dono anterior. Linha repetida em dois modelos não acontece por construção.
+- **"🔁 Linha em mais de um modelo"** (28/08/2026) desliga a exclusividade **de
+  propósito e à vista**: com a caixa ligada, o modelo ENTRA na linha sem tirar
+  os outros — é o pedido em que os modelos compartilham as linhas e cada um lê
+  a SUA coluna do banco (21346). Clicar num modelo que já tem todas as linhas
+  selecionadas o REMOVE delas, e só delas — o caminho de volta sem desmontar os
+  outros donos. O "— Sem modelo" limpa a linha inteira nos dois modos. Por
+  dentro, `ed.dono` guarda uma LISTA de donos por linha; no Aplicar, a linha
+  entra na fatia de cada dono, e fatias que se cruzam voltam somadas quando o
+  modal reabre. As contagens de "sobra" (toast e selo do grupo) contam linha
+  única — sem nenhum dono — e não a diferença contra a soma das fatias.
 - O rodapé responde a única pergunta que sobra — ficou alguém sem dono? — e
   clicar nele filtra a grade para essas linhas.
 
@@ -854,8 +864,9 @@ barra *Selecionar*, pede da linha N até a M — pelo número da coluna `#`, que
 ordem de impressão — com duas opções:
 
 - **Pular as linhas que já são de outro modelo (as vermelhas)**, ligada por
-  padrão. A posse é exclusiva: sem ela, atribuir um intervalo que invade a fatia
-  do vizinho **rouba** as linhas dele, em silêncio.
+  padrão. No modo exclusivo, sem ela, atribuir um intervalo que invade a fatia
+  do vizinho **rouba** as linhas dele, em silêncio. Vermelha é a linha que não é
+  minha de jeito nenhum — a compartilhada em que eu também estou é minha.
 - **Somar à seleção atual**, desligada por padrão, para juntar faixas soltas.
 
 Linhas desmarcadas (`__ativo: false`) são ignoradas — não vão ao papel, e

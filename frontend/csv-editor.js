@@ -650,7 +650,7 @@
         ed.undo.push({
             headers: ed.headers.slice(),
             rows: ed.rows.map(copiarLinha),
-            dono: new Map(ed.dono)
+            dono: copiaDonos(ed.dono)
         });
         while (ed.undo.length > limiteUndo()) ed.undo.shift();
         ed.redo.length = 0;
@@ -662,7 +662,7 @@
         ed.redo.push({
             headers: ed.headers.slice(),
             rows: ed.rows.map(copiarLinha),
-            dono: new Map(ed.dono)
+            dono: copiaDonos(ed.dono)
         });
         const s = ed.undo.pop();
         ed.headers = s.headers;
@@ -676,7 +676,7 @@
         ed.undo.push({
             headers: ed.headers.slice(),
             rows: ed.rows.map(copiarLinha),
-            dono: new Map(ed.dono)
+            dono: copiaDonos(ed.dono)
         });
         const s = ed.redo.pop();
         ed.headers = s.headers;
@@ -696,7 +696,7 @@
         const idx = [];
         for (let i = 0; i < ed.rows.length; i++) {
             const r = ed.rows[i];
-            if (ed.soSemModelo && (!linhaAtiva(r) || donoDaLinha(r) != null)) continue;
+            if (ed.soSemModelo && (!linhaAtiva(r) || donosDaLinha(r).length)) continue;
             if (ed.soDestacadas && ed.destacar && !ed.destacar.ids.has(Number(r[COL_ID]))) continue;
             if (fc && fv !== '' && String(r[fc] == null ? '' : r[fc]) !== fv) continue;
             if (busca) {
@@ -749,30 +749,96 @@
         return m ? m.nome : '(modelo fora do pedido)';
     }
 
-    /** Dono atual de uma linha, ou null. A posse é exclusiva por construção. */
-    function donoDaLinha(row) {
+    /**
+     * Donos de uma linha, como lista. Desde 28/08/2026 a posse pode ser de
+     * MAIS DE UM modelo — é o pedido em que os modelos compartilham as linhas
+     * e dividem as colunas. Lista vazia = sem dono.
+     */
+    function donosDaLinha(row) {
         const d = ed.dono.get(Number(row[COL_ID]));
-        return d === undefined ? null : d;
+        if (d === undefined || d === null) return [];
+        return Array.isArray(d) ? d : [d];
+    }
+
+    /** O primeiro dono de uma linha, ou null — para quem só precisa de um. */
+    function donoDaLinha(row) {
+        const ds = donosDaLinha(row);
+        return ds.length ? ds[0] : null;
+    }
+
+    /**
+     * Cópia profunda do mapa de donos. Os valores são listas: a cópia rasa do
+     * Map compartilharia as listas com o desfazer, e atribuir depois de um
+     * snapshot corromperia a história.
+     */
+    function copiaDonos(m) {
+        return new Map([...m].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : [v]]));
     }
 
     /**
      * Entrega as linhas selecionadas a um modelo — ou as deixa sem dono, quando
-     * `modeloId` é nulo. Exclusiva de propósito: dar uma linha a um modelo tira
-     * dela o dono anterior, e é isso que torna impossível imprimir o mesmo
-     * assento em dois modelos do mesmo pedido.
+     * `modeloId` é nulo.
+     *
+     * No modo de sempre a posse é EXCLUSIVA de propósito: dar uma linha a um
+     * modelo tira dela o dono anterior, e é isso que torna impossível imprimir
+     * o mesmo assento em dois modelos do mesmo pedido.
+     *
+     * Com "Linha em mais de um modelo" ligado (28/08/2026), a posse SOMA: o
+     * modelo entra na linha sem tirar os outros — é o pedido em que os modelos
+     * compartilham as linhas e cada um lê a SUA coluna do banco. Clicar num
+     * modelo que já tem todas as linhas selecionadas o REMOVE delas, para o
+     * caminho de volta existir sem desmontar os outros donos. O "— Sem modelo"
+     * continua limpando a linha inteira, nos dois modos.
      */
     function atribuir(modeloId) {
         if (!ed.sel.size) { aviso('Selecione as linhas primeiro.', 'error'); return; }
         snapshot();
+
+        if (modeloId == null) {
+            let n = 0;
+            for (const id of ed.sel) { ed.dono.delete(id); n++; }
+            ed.sel.clear();
+            recalcular();
+            aviso(n + ' linha(s) ficaram sem modelo.', 'success');
+            return;
+        }
+
+        if (ed.compartilhar) {
+            const donosDe = id => {
+                const d = ed.dono.get(id);
+                return d === undefined || d === null ? [] : (Array.isArray(d) ? d.slice() : [d]);
+            };
+            const todasDele = [...ed.sel].every(id =>
+                donosDe(id).some(x => String(x) === String(modeloId)));
+            let n = 0;
+            for (const id of ed.sel) {
+                const atual = donosDe(id);
+                if (todasDele) {
+                    const novo = atual.filter(x => String(x) !== String(modeloId));
+                    if (novo.length) ed.dono.set(id, novo); else ed.dono.delete(id);
+                } else if (!atual.some(x => String(x) === String(modeloId))) {
+                    ed.dono.set(id, atual.concat([modeloId]));
+                }
+                n++;
+            }
+            ed.sel.clear();
+            recalcular();
+            aviso(todasDele
+                ? n + ' linha(s) saíram de ' + nomeDoModelo(modeloId) + '. Os outros donos ficaram.'
+                : n + ' linha(s) TAMBÉM para ' + nomeDoModelo(modeloId) + ' — sem tirar dos outros modelos.',
+                'success');
+            return;
+        }
+
         const movidos = {};
         let n = 0;
         for (const id of ed.sel) {
             const antes = ed.dono.get(id);
-            if (antes !== undefined && String(antes) !== String(modeloId)) {
-                movidos[antes] = (movidos[antes] || 0) + 1;
-            }
-            if (modeloId == null) ed.dono.delete(id);
-            else ed.dono.set(id, modeloId);
+            (antes === undefined || antes === null ? [] : (Array.isArray(antes) ? antes : [antes]))
+                .forEach(p => {
+                    if (String(p) !== String(modeloId)) movidos[p] = (movidos[p] || 0) + 1;
+                });
+            ed.dono.set(id, [modeloId]);
             n++;
         }
         ed.sel.clear();
@@ -780,9 +846,7 @@
         const de = Object.keys(movidos)
             .map(k => movidos[k] + ' de ' + nomeDoModelo(k)).join(', ');
         aviso(
-            (modeloId == null
-                ? n + ' linha(s) ficaram sem modelo'
-                : n + ' linha(s) para ' + nomeDoModelo(modeloId))
+            n + ' linha(s) para ' + nomeDoModelo(modeloId)
             + (de ? ' (tiradas de: ' + de + ')' : '') + '.',
             'success'
         );
@@ -823,8 +887,9 @@
             // Linha desmarcada nao vai para o papel; atribui-la a um modelo nao
             // faria nada, e ainda inflaria a contagem da fatia.
             if (!linhaAtiva(row)) { desmarcadas++; continue; }
-            const dono = donoDaLinha(row);
-            const deTerceiro = dono != null && (!ed.foco || String(dono) !== String(ed.foco));
+            const donos = donosDaLinha(row);
+            const deTerceiro = donos.length > 0
+                && (!ed.foco || !donos.some(d => String(d) === String(ed.foco)));
             if (v.pular && deTerceiro) { deOutro++; continue; }
             ed.sel.add(Number(row[COL_ID]));
             pegas++;
@@ -847,10 +912,11 @@
         for (const r of ed.rows) {
             if (!linhaAtiva(r)) continue;
             ativas++;
-            const d = donoDaLinha(r);
-            if (d == null) semDono++;
-            else if (porModelo[d] !== undefined) porModelo[d]++;
-            else semDono++;      // dono de um modelo que saiu do pedido
+            // Linha compartilhada conta em CADA dono; a soma das faixas pode
+            // passar do total de ativas, e está certo assim.
+            const ds = donosDaLinha(r).filter(d => porModelo[d] !== undefined);
+            if (!ds.length) semDono++;   // sem dono, ou só donos que saíram do pedido
+            else ds.forEach(d => porModelo[d]++);
         }
         return { porModelo, semDono, ativas };
     }
@@ -978,7 +1044,8 @@
         head.appendChild(hChk);
 
         head.appendChild(fixa(W_IDX, '#', 'Ordem de impressão'));
-        if (distrib) head.appendChild(fixa(W_MODELO, 'Modelo', 'Qual modelo do pedido imprime esta linha'));
+        if (distrib) head.appendChild(fixa(W_MODELO, 'Modelo',
+            'Qual modelo do pedido imprime esta linha. Com "🔁 Linha em mais de um modelo" ligado, ela pode sair em vários.'));
 
         ed.headers.forEach((h, c) => {
             const d = document.createElement('div');
@@ -1156,18 +1223,19 @@
             const cm = document.createElement('div');
             cm.className = 'csv-ed-c mod';
             cm.style.width = W_MODELO + 'px';
-            const dono = donoDaLinha(row);
+            const donos = donosDaLinha(row);
             // Aberta a partir de um modelo (o 🧩 do card), a coluna vira
             // semaforo: verde e o que este modelo ainda pode pegar, vermelho e
             // o que ja pertence a outro. Sem foco — vindo do aviso da fila, em
             // que se reparte entre todos — vale a cor de cada modelo, que ali e
-            // a informacao util.
+            // a informacao util. Linha compartilhada mostra um chip por dono e
+            // os nomes somados.
             const comFoco = !!ed.foco;
-            const meu = comFoco && dono != null && String(dono) === String(ed.foco);
-            if (dono == null && !comFoco) {
+            const meu = comFoco && donos.some(d => String(d) === String(ed.foco));
+            if (!donos.length && !comFoco) {
                 cm.classList.add('sem');
                 cm.textContent = '— sem modelo';
-            } else if (dono == null) {
+            } else if (!donos.length) {
                 const chip = document.createElement('span');
                 chip.className = 'chip';
                 chip.style.background = '#22c55e';
@@ -1177,15 +1245,22 @@
                 nm.style.color = '#22c55e';
                 cm.appendChild(nm);
             } else {
-                const chip = document.createElement('span');
-                chip.className = 'chip';
-                chip.style.background = (comFoco && !meu) ? '#ef4444' : corDoModelo(dono);
-                cm.appendChild(chip);
+                const estranha = comFoco && !meu;
+                donos.slice(0, estranha ? 1 : 3).forEach(d => {
+                    const chip = document.createElement('span');
+                    chip.className = 'chip';
+                    chip.style.background = estranha ? '#ef4444' : corDoModelo(d);
+                    cm.appendChild(chip);
+                });
+                const nomes = donos.map(nomeDoModelo);
                 const nm = document.createElement('span');
-                nm.textContent = nomeDoModelo(dono);
-                if (comFoco && !meu) nm.style.color = '#ef4444';
+                nm.textContent = nomes.length <= 2
+                    ? nomes.join(' + ')
+                    : nomes.slice(0, 2).join(' + ') + ' +' + (nomes.length - 2);
+                if (estranha) nm.style.color = '#ef4444';
                 nm.style.overflow = 'hidden';
                 nm.style.textOverflow = 'ellipsis';
+                cm.title = nomes.join(', ');
                 cm.appendChild(nm);
             }
             el.appendChild(cm);
@@ -2287,6 +2362,28 @@
             () => atribuir(null));
         bNinguem.disabled = !ed.sel.size;
         b2.appendChild(bNinguem);
+
+        // O interruptor do compartilhamento (28/08/2026): desligado, vale a
+        // regra de sempre — dar a linha a um modelo TIRA do anterior, que é o
+        // que impede o mesmo assento sair duas vezes. Ligado, a linha pode ser
+        // de mais de um modelo — o pedido em que os modelos compartilham as
+        // linhas e cada um lê a SUA coluna do banco.
+        const lComp = document.createElement('label');
+        lComp.style.cssText = 'display:inline-flex; align-items:center; gap:5px; margin-left:10px;'
+            + 'font-size:0.8rem; cursor:pointer; color:var(--text,#e2e8f0); white-space:nowrap;';
+        lComp.title = 'Desligado (o normal): dar uma linha a um modelo tira do anterior — '
+            + 'ninguém imprime o mesmo assento duas vezes. '
+            + 'Ligado: o modelo ENTRA na linha sem tirar os outros — para modelos que '
+            + 'compartilham as linhas e leem colunas diferentes do banco. '
+            + 'Com ele ligado, clicar num modelo que já tem todas as linhas selecionadas o remove delas.';
+        const cComp = document.createElement('input');
+        cComp.type = 'checkbox';
+        cComp.id = 'csv-ed-compartilhar';
+        cComp.checked = !!ed.compartilhar;
+        cComp.onchange = () => { ed.compartilhar = cComp.checked; };
+        lComp.appendChild(cComp);
+        lComp.appendChild(document.createTextNode('🔁 Linha em mais de um modelo'));
+        b2.appendChild(lComp);
         bars.appendChild(b2);
 
         const b3 = document.createElement('div');
@@ -2532,8 +2629,10 @@
             const dist = {};
             ed.modelos.forEach(m => { dist[m.id] = []; });
             for (const r of ed.rows) {
-                const d = donoDaLinha(r);
-                if (d != null && dist[d]) dist[d].push(Number(r[COL_ID]));
+                // Linha compartilhada entra na fatia de CADA dono (28/08/2026).
+                donosDaLinha(r).forEach(d => {
+                    if (dist[d]) dist[d].push(Number(r[COL_ID]));
+                });
             }
             carga.distribuicao = {};
             Object.keys(dist).forEach(k => {
@@ -2620,7 +2719,16 @@
         if (ehDistribuicao()) {
             ed.modelos.forEach(m => {
                 const ids = (m.selecao && m.selecao.ids) ? expandirIds(m.selecao.ids) : [];
-                ids.forEach(id => ed.dono.set(Number(id), m.id));
+                // Fatias que se cruzam SOMAM donos em vez de o último engolir o
+                // primeiro: é assim que uma distribuição compartilhada gravada
+                // volta inteira quando o modal reabre (28/08/2026).
+                ids.forEach(id => {
+                    const k = Number(id);
+                    const atual = ed.dono.get(k) || [];
+                    if (!atual.some(x => String(x) === String(m.id))) {
+                        ed.dono.set(k, atual.concat([m.id]));
+                    }
+                });
             });
         }
 

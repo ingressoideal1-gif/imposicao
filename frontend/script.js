@@ -16327,13 +16327,11 @@ window.abrirDistribuicaoCsv = function(osId, chaveDaFonte, focoItemId) {
 
             const ativas = linhasAtivasCsv(rows).length;
 
-            const distribuidas = grupo.itens.reduce((acc, it) => {
-
-                const ids = (it.csv_selecao && it.csv_selecao.ids) || [];
-
-                return acc + window.CsvEditor.expandirIds(ids).length;
-
-            }, 0);
+            // Linha compartilhada (28/08/2026) conta UMA vez: a sobra é o que
+            // ficou sem NENHUM modelo, e não a diferença contra a soma das
+            // fatias — que passa do total quando os modelos dividem colunas.
+            const distribuidas = new Set(grupo.itens.flatMap(it =>
+                window.CsvEditor.expandirIds((it.csv_selecao && it.csv_selecao.ids) || []))).size;
 
             const sobra = ativas - distribuidas;
 
@@ -30081,7 +30079,10 @@ function renderImpOSQueue() {
 
         });
 
-        const distribuidas = porModelo.reduce((a, m) => a + m.n, 0);
+        // Única por linha, como no toast do Aplicar: com linha compartilhada a
+        // soma das fatias passa do total, e a sobra viraria número negativo.
+        const distribuidas = new Set(g.itens.flatMap(it =>
+            window.CsvEditor ? window.CsvEditor.expandirIds((it.csv_selecao && it.csv_selecao.ids) || []) : [])).size;
 
         const nenhumaFatia = porModelo.every(m => !m.temFatia);
 

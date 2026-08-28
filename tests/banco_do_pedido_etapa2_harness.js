@@ -581,5 +581,34 @@ function cenario(mapas) {
         'a porta antiga (na peça) ensina o caminho novo quando a peça não tem CSV');
 })();
 
+(function linhaEmMaisDeUmModelo() {
+    // 28/08/2026, pedido 21346: os modelos compartilham as linhas e dividem as
+    // colunas — e a atribuição exclusiva impedia dar as MESMAS linhas a dois
+    // modelos. A caixa "🔁 Linha em mais de um modelo" desliga a exclusividade
+    // à vista; desligada, tudo segue como sempre. Conferido no navegador
+    // (prova_linha_compartilhada.js): exclusivo, soma, remoção e reabertura.
+    const editor = fs.readFileSync(path.join(RAIZ, 'frontend', 'csv-editor.js'), 'utf8');
+
+    ok(/function donosDaLinha\(row\)/.test(editor) && /Array\.isArray\(d\) \? d : \[d\]/.test(editor),
+        'a posse virou LISTA de donos por linha');
+    ok(/copiaDonos\(ed\.dono\)/.test(editor) && !/dono: new Map\(ed\.dono\)/.test(editor),
+        'o desfazer copia as listas em profundidade — cópia rasa corromperia a história');
+    ok(/id="csv-ed-compartilhar"|cComp\.id = 'csv-ed-compartilhar'/.test(editor)
+        && /Linha em mais de um modelo/.test(editor),
+        'o interruptor existe e se explica');
+    ok(/if \(ed\.compartilhar\)/.test(editor) && /todasDele/.test(editor),
+        'ligado, atribuir SOMA — e clicar no dono de todas as selecionadas o remove');
+    ok(/ed\.dono\.set\(id, \[modeloId\]\)/.test(editor),
+        'desligado, atribuir segue exclusivo (lista de um dono)');
+    ok(/atual\.concat\(\[m\.id\]\)/.test(editor),
+        'fatias que se cruzam voltam SOMADAS quando o modal reabre');
+    ok(/donosDaLinha\(r\)\.forEach\(d => \{\s*\n?\s*if \(dist\[d\]\)/.test(editor),
+        'no Aplicar, a linha compartilhada entra na fatia de CADA dono');
+
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    ok(/new Set\(grupo\.itens\.flatMap/.test(script) && /new Set\(g\.itens\.flatMap/.test(script),
+        'as sobras (toast e selo do grupo) contam linha única, não a soma das fatias');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);
