@@ -68,10 +68,68 @@
         return saida;
     }
 
+    /**
+     * As colunas que a peca PEDE: os nomes que os campos de banco dela leem,
+     * sem repetir e na ordem em que aparecem.
+     *
+     * Repare que a peca nao declara isso em lugar nenhum -- sai dos proprios
+     * campos. E de proposito: nenhuma numeracao existente precisa ser alterada
+     * para entrar no caminho novo, que era a condicao do usuario.
+     */
+    function colunasQueAPecaPede(num) {
+        var vistas = [];
+        ((num && num.elements) || []).forEach(function (el) {
+            if (!el || el.source !== 'database') return;
+            var col = String(el.csv_column || '').trim();
+            if (!col || vistas.indexOf(col) !== -1) return;
+            vistas.push(col);
+        });
+        return vistas;
+    }
+
+    /**
+     * As colunas pedidas que o banco do pedido nao consegue alimentar.
+     *
+     * Sem banco, nada falta: a peca le o CSV dela e quem avisa de coluna
+     * errada continua sendo o `bancoDeDadosIncompletoDoModelo`.
+     */
+    function colunasQueFaltam(num, banco, mapa) {
+        if (!banco) return [];
+        var cabecalho = (banco.csv_headers || []).map(String);
+        return colunasQueAPecaPede(num).filter(function (col) {
+            return cabecalho.indexOf(colunaDoModelo(mapa, col)) === -1;
+        });
+    }
+
+    /**
+     * O mapa sem o que nao vale a pena guardar: entrada que aponta para a
+     * propria coluna e entrada de coluna que a peca nao pede mais.
+     *
+     * Devolve `null` quando nao sobra nada -- ausente e mapa vazio significam a
+     * mesma coisa em toda a regra, e guardar `{}` faria uma linha existir em
+     * `pedidos_modelos_banco` para dizer que nao ha nada a dizer.
+     */
+    function mapaLimpo(mapa, pedidas) {
+        if (_vazio(mapa)) return null;
+        var saida = {}, quantas = 0;
+        (pedidas || []).forEach(function (col) {
+            var destino = mapa[col];
+            if (destino === null || destino === undefined) return;
+            destino = String(destino).trim();
+            if (!destino || destino === col) return;
+            saida[col] = destino;
+            quantas++;
+        });
+        return quantas ? saida : null;
+    }
+
     escopo.BancoDoModelo = {
         bancoDoModelo: bancoDoModelo,
         colunaDoModelo: colunaDoModelo,
         elementosDoModelo: elementosDoModelo,
-        numeracaoResolvida: numeracaoResolvida
+        numeracaoResolvida: numeracaoResolvida,
+        colunasQueAPecaPede: colunasQueAPecaPede,
+        colunasQueFaltam: colunasQueFaltam,
+        mapaLimpo: mapaLimpo
     };
 })(typeof window !== 'undefined' ? window : globalThis);

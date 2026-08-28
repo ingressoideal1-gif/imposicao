@@ -110,5 +110,49 @@ const BANCO = {
         'o recado da trava diz o que fazer para sair dela');
 })();
 
+// ── Etapa 2: o que a peca pede, e o que o banco do pedido oferece ────────────
+
+(function colunasQueAPecaPede() {
+    const pede = B.colunasQueAPecaPede(PECA);
+    ok(pede.length === 2 && pede[0] === 'NOME' && pede[1] === 'CODIGO',
+        'a peca pede as colunas dos campos de banco, sem repetir', pede);
+    ok(B.colunasQueAPecaPede({ elements: [] }).length === 0, 'peca sem campo de banco nao pede nada');
+    ok(B.colunasQueAPecaPede(null).length === 0, 'sem peca, nada');
+
+    // Campo de banco sem coluna escolhida nao entra: nao ha o que mapear, e
+    // quem avisa desse caso e o `bancoDeDadosIncompletoDoModelo`.
+    const meia = { elements: [{ type: 'TEXT', source: 'database', csv_column: '' },
+                              { type: 'QR', source: 'database', csv_column: 'X' }] };
+    ok(B.colunasQueAPecaPede(meia).join(',') === 'X', 'campo sem coluna fica de fora');
+})();
+
+(function colunasQueFaltam() {
+    // Sem banco do pedido nao ha o que faltar: a peca le o CSV dela.
+    ok(B.colunasQueFaltam(PECA, null, null).length === 0,
+        'sem banco do pedido, nada falta — a peca le o CSV dela');
+
+    // Com banco, cada coluna pedida tem de achar destino no cabecalho dele.
+    const faltam = B.colunasQueFaltam(PECA, BANCO, null);
+    ok(faltam.length === 1 && faltam[0] === 'CODIGO',
+        'CODIGO nao existe no banco e nenhum mapa aponta para ela', faltam);
+
+    ok(B.colunasQueFaltam(PECA, BANCO, { 'CODIGO': '06/09' }).length === 0,
+        'com o mapa apontando, nao falta nada');
+
+    ok(B.colunasQueFaltam(PECA, BANCO, { 'CODIGO': 'NAO_EXISTE' }).join(',') === 'CODIGO',
+        'mapa apontando para coluna que o banco nao tem continua faltando');
+})();
+
+(function mapaLimpo() {
+    // Entrada que aponta para a propria coluna nao vale a pena guardar, e
+    // entrada de coluna que a peca nao pede mais e lixo de uma edicao antiga.
+    const limpo = B.mapaLimpo({ 'NOME': 'NOME', 'CODIGO': '06/09', 'SUMIU': 'X' }, ['NOME', 'CODIGO']);
+    ok(Object.keys(limpo).length === 1 && limpo['CODIGO'] === '06/09',
+        'sobra so a troca de verdade, das colunas que a peca pede', limpo);
+    ok(B.mapaLimpo(null, ['NOME']) === null, 'mapa ausente continua ausente');
+    ok(B.mapaLimpo({ 'NOME': 'NOME' }, ['NOME']) === null,
+        'mapa que nao troca nada vira ausente, e nao um objeto vazio guardado a toa');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);
