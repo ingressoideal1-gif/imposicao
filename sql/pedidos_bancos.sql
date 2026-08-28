@@ -40,8 +40,15 @@ CREATE TABLE IF NOT EXISTS pedidos_bancos (
 CREATE INDEX IF NOT EXISTS idx_pedidos_bancos_id_int ON pedidos_bancos (id_int);
 
 -- Um modelo tem no maximo um banco: a chave primaria e o proprio modelo.
+--
+-- O `modelo_id` e TEXT, e nao UUID: `pedidos_modelos` e do parceiro Vibe e o id
+-- dela e um NUMERO (1000409). A primeira versao desta tabela usou UUID por
+-- analogia com as tabelas nossas, e ligar um modelo morria com "invalid input
+-- syntax for type uuid". TEXT aceita o numero de hoje e o formato de amanha; o
+-- painel ja compara os dois lados com String(). Ver
+-- sql/pedidos_modelos_banco_modelo_id_texto.sql, a correcao do banco que ja existe.
 CREATE TABLE IF NOT EXISTS pedidos_modelos_banco (
-    modelo_id  UUID PRIMARY KEY,             -- pedidos_modelos.id
+    modelo_id  TEXT PRIMARY KEY,             -- pedidos_modelos.id (numero, no Vibe)
     banco_id   UUID NOT NULL REFERENCES pedidos_bancos (id) ON DELETE CASCADE,
     csv_mapa   JSONB,                        -- { "coluna da peca": "coluna deste banco" }
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

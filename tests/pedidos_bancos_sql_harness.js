@@ -33,5 +33,24 @@ ok(!/\bALTER\s+TABLE\s+PEDIDOS_MODELOS\b/.test(codigo),
 ok(/CREATE TABLE IF NOT EXISTS PEDIDOS_BANCOS/.test(codigo), 'cria pedidos_bancos');
 ok(/CREATE TABLE IF NOT EXISTS PEDIDOS_MODELOS_BANCO/.test(codigo), 'cria pedidos_modelos_banco');
 
+// ── O id do modelo e do parceiro, e nao e UUID ──────────────────────────────
+//
+// 28/08/2026: a tabela nasceu com `modelo_id UUID` por analogia com as tabelas
+// nossas, e ligar um modelo a um banco morria com "invalid input syntax for
+// type uuid: 1000409" — o id de `pedidos_modelos`, que e do Vibe, e um numero.
+// Quem instalar do zero nao pode reencontrar isso.
+ok(!/MODELO_ID\s+UUID/.test(codigo),
+    'o modelo_id NAO e UUID: o id de pedidos_modelos e do parceiro e hoje e numero');
+ok(/MODELO_ID\s+TEXT\s+PRIMARY KEY/.test(codigo),
+    'ele e TEXT, que aceita o numero de hoje e o formato de amanha');
+
+const conserto = fs.readFileSync(
+    path.join(RAIZ, 'sql', 'pedidos_modelos_banco_modelo_id_texto.sql'), 'utf8');
+const consertoCodigo = conserto.split('\n').filter(l => !l.trim().startsWith('--')).join('\n').toUpperCase();
+ok(/ALTER COLUMN MODELO_ID TYPE TEXT/.test(consertoCodigo),
+    'e existe a correcao para o banco que ja foi criado com UUID');
+ok(!/DROP/.test(consertoCodigo) && !/DELETE\s+FROM/.test(consertoCodigo),
+    'a correcao converte a coluna, sem derrubar nem apagar nada');
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

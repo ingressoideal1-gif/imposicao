@@ -16979,7 +16979,21 @@ async function subirBancoDoPedido() {
     const idInt = idIntDoPedido(alvo.osId);
     const banco = await criarBancoDoPedido(idInt, file.name.replace(/\.csv$/i, ''),
         parsed.headers, parsed.rows, file.name);
-    await ligarModeloAoBanco(alvo.itemId, banco.id, null);
+
+    // Banco criado e vinculo que falha deixaria um banco orfao na lista do
+    // pedido — e sem porta para apaga-lo. Foi o que aconteceu em 28/08/2026:
+    // tres tentativas de subir o mesmo arquivo, tres bancos, nenhum vinculo.
+    // Se a ligacao nao vai, o banco volta atras junto.
+    try {
+        await ligarModeloAoBanco(alvo.itemId, banco.id, null);
+    } catch (e) {
+        try {
+            await supabaseClient.from('pedidos_bancos').delete().eq('id', banco.id);
+        } catch (e2) { /* o desfazer e melhor-esforco; o erro que importa e o de baixo */ }
+        state.bancosDoPedido = (state.bancosDoPedido || []).filter(b => b.id !== banco.id);
+        _bancoPedidoPendente = null;
+        throw e;
+    }
 
     if (item && item.csv_selecao) {
         item.csv_selecao = null;
@@ -30644,8 +30658,16 @@ function renderAmostrasOSItens(osId) {
         const solta = () => { delete state._bancosEmVoo[targetOSId]; };
         carregarBancosDoPedido(targetOSId).then(quantas => {
             solta();
-            state._bancosPedidoDe = targetOSId;
-            if (quantas || trocouDePedido) renderAmostrasOSItens(osId);
+            // So marca como carregado se o numero do pedido era conhecido na
+            // hora: sem ele a busca dos bancos volta vazia sem consultar nada, e
+            // marcar aqui deixaria o pedido sem os proprios bancos ate o
+            // operador sair e voltar. Os itens chegam depois do primeiro
+            // desenho, entao isto acontece de verdade.
+            if (idIntDoPedido(targetOSId)) state._bancosPedidoDe = targetOSId;
+            // Redesenhar SO quando chegou alguma coisa. Redesenhar por
+            // "troquei de pedido" faria laco justamente no caso acima, em que a
+            // marca nao e posta: desenho -> busca -> desenho -> busca.
+            if (quantas || (state.bancosDoPedido || []).length) renderAmostrasOSItens(osId);
         }).catch(solta);
     }
 
