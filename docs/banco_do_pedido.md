@@ -60,22 +60,38 @@ Nenhuma linha de `producao_numeracoes` é lida ou escrita pela migração. As 12
 numerações que hoje têm CSV dentro continuam como estão, por decisão do usuário —
 não há conversão em massa nem prazo para haver.
 
-## As portas na tela
+## As portas na tela (redesenho de 28/08/2026)
 
-Todas no card do modelo, dentro do pedido, na caixa **🗂️ Banco de dados**:
+O usuário redesenhou a divisão: **o banco é do pedido, então se gerencia no
+pedido; o modelo apenas escolhe**. Duas casas:
+
+**No box "🗂️ Gerenciamento de Bancos de Dados"** — coluna direita da tela do
+pedido, entre o Briefing e os Anexos (`desenharBoxDeBancos`):
+
+| Porta | O que faz |
+|---|---|
+| **📤 Subir CSV** | cria um banco do pedido a partir de um arquivo |
+| **🌐 Buscar de link** | cria a partir de planilha compartilhada — **cada página vira um banco**, com o link da sua aba (`#gid`) |
+| nome editável | renomear grava no blur |
+| **🔄 Planilha** | traz de novo o conteúdo do link (só banco com `csv_url`) |
+| **📊 Conferir** | abre o editor de CSV no conteúdo do banco, avisando quantos modelos leem dali |
+| **🗑** | exclui — com trava: banco lido por algum modelo não sai |
+| **🗑 Excluir os N não usados** | limpeza em lote dos bancos que ninguém lê (aparece com 2+) |
+
+**Criar não vincula.** O banco nasce solto; a adoção é sempre uma escolha no
+card. Sem vínculo automático não há vínculo acidental.
+
+**No card do modelo** — só o que é do modelo:
 
 | Porta | O que faz | Aparece quando |
 |---|---|---|
-| **Vem de:** | escolhe a origem: a numeração (padrão), um banco do pedido, ou *+ Subir um CSV para este pedido…* | a peça pede colunas, ou já há banco/vínculo |
-| **🔤 Colunas** | os checkboxes das colunas do banco que a peça conhece, e o de‑para de cada coluna que a peça pede | só com banco do pedido |
+| **Vem de:** | escolhe: a numeração (padrão) ou um banco já carregado — **só escolha, nenhuma ação** | a peça tem campo de banco, ou já há banco/vínculo |
+| **🔤 Colunas** | os checkboxes das colunas que a peça conhece, e o de‑para por modelo | só com banco do pedido |
 | **🧩 Linhas** | reparte as linhas entre os modelos que leem a mesma fonte | há linhas para contar |
-| **📊 Editar banco do pedido** | corrige o conteúdo, avisando quantos modelos leem dali | só com banco do pedido |
-| **🗂️ Renomear ou excluir bancos…** | última opção do "Vem de:" — abre a lista dos bancos do pedido para renomear ou excluir | há algum banco no pedido |
 
-Excluir tem trava: banco lido por algum modelo não sai — o `ON DELETE CASCADE`
-apagaria os vínculos junto e cada modelo cairia **calado** na numeração, imprimindo
-o dado errado. A trava diz a saída (escolher "a numeração" no "Vem de:" desses
-modelos), e a conta de leitores olha todos os vínculos carregados, não só os itens
+A trava de excluir continua: o `ON DELETE CASCADE` apagaria os vínculos junto e
+cada modelo cairia **calado** na numeração, imprimindo o dado errado. A trava diz
+a saída, e a conta de leitores olha todos os vínculos carregados, não só os itens
 do pedido aberto.
 
 A caixa aparece **também quando a peça pede colunas e não tem CSV nenhum** — é a
@@ -134,11 +150,12 @@ arquivo no "Vem de:", sem porta para apagá-las.
 
 ## O banco pode nascer de um link compartilhado
 
-Desde 28/08/2026 o "Vem de:" também oferece **🌐 Buscar de um link
-compartilhado…**: cola-se o link de uma planilha do Google (compartilhada como
-"qualquer pessoa com o link") ou de um CSV na web, e o banco nasce dali, já
-ligado ao modelo. A busca passa pelo **mesmo** `baixarCsvDaWeb` da numeração —
-planilha de várias páginas vem inteira, link com `#gid=` traz só aquela página.
+O **🌐 Buscar de link** do box aceita o link de uma planilha do Google
+(compartilhada como "qualquer pessoa com o link") ou de um CSV na web. A busca
+passa pelo **mesmo** `baixarCsvDaWeb` da numeração. Planilha de várias páginas
+cria **um banco por página** — nome = planilha + página, cada um com o link da
+sua aba —, e a coluna "Página" não existe dentro deles, porque o banco *é* a
+página. Link com `#gid=` traz só aquela página, num banco só.
 
 O link fica gravado em `pedidos_bancos.csv_url`. Quando a lista mudar lá, o
 botão **🔄 Planilha** (no 🗂️ Renomear ou excluir bancos…) traz o conteúdo de

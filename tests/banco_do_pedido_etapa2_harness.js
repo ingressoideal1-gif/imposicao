@@ -271,13 +271,12 @@ function cenario(mapas) {
 (function aPortaExisteESoParaOBancoDoPedido() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
-    ok(/window\.abrirBancoDoPedido/.test(script), 'existe uma porta para editar o banco do pedido');
-    ok(/btn-banco-editar-/.test(script), 'e ela tem botao no card');
-
-    // A licao de 26/08/2026: o botao que saiu daqui editava o banco da
-    // NUMERACAO sem dizer. O rotulo deste diz de quem e o banco.
-    ok(/Editar banco do pedido/.test(script),
-        'o rotulo diz que o banco e do PEDIDO, e nao so "ver / editar"');
+    // Desde o redesenho de 28/08/2026 a porta mora no BOX do pedido, ao lado
+    // do banco — e o card do modelo nao tem mais botao de editar conteudo:
+    // no card fica so o que e do modelo (Vem de, Linhas, Colunas).
+    ok(/window\.abrirBancoDoPedidoPorId/.test(script), 'existe uma porta para editar o banco do pedido');
+    ok(/📊 Conferir/.test(script), 'e ela mora no box, ao lado do banco');
+    ok(!/btn-banco-editar-/.test(script), 'o card do modelo NAO tem mais botao de editar banco');
 
     // E o modal avisa o alcance antes de qualquer tecla.
     ok(/modelos deste pedido\. O que voc/.test(script),
@@ -330,8 +329,12 @@ function cenario(mapas) {
     // em uso e barrado); aqui fica o que nao pode se desfazer sozinho.
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
-    ok(/window\.abrirBancosDoPedido/.test(script) && /__gerir/.test(script),
-        'existe a porta de renomear/excluir, oferecida no proprio "Vem de:"');
+    // Desde 28/08/2026 a porta e o BOX "Gerenciamento de Bancos de Dados", na
+    // coluna do Briefing — o "Vem de:" do card so ESCOLHE, sem acoes dentro.
+    ok(/Gerenciamento de Bancos de Dados/.test(script) && /desenharBoxDeBancos/.test(script),
+        'existe o box do pedido para renomear/excluir os bancos');
+    ok(!/__gerir/.test(script) && !/__novo/.test(script) && !/__url/.test(script),
+        'o "Vem de:" nao carrega mais acoes disfarcadas de opcao');
 
     // A trava de excluir: o ON DELETE CASCADE apagaria os vinculos junto e o
     // modelo cairia CALADO na numeracao — dado errado impresso sem aviso. So
@@ -358,10 +361,24 @@ function cenario(mapas) {
     // sem link); aqui fica o que nao pode se desfazer sozinho.
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
-    ok(/__url/.test(script) && /abrirBancoDoPedidoPorLink/.test(script),
-        'o "Vem de:" oferece buscar de um link compartilhado');
+    ok(/abrirBancoDoPedidoPorLink/.test(script) && /🌐 Buscar de link/.test(script),
+        'o box oferece buscar de um link compartilhado');
     ok(/buscarBancoDoPedidoDaWeb/.test(script) && /baixarCsvDaWeb\(link/.test(script),
         'a busca passa pelo MESMO baixarCsvDaWeb da numeracao — planilha Google e CSV solto iguais nas duas portas');
+
+    // Redesenho de 28/08/2026: planilha de varias paginas vira UM BANCO POR
+    // PAGINA, cada um com o link da SUA aba — e criar NAO vincula modelo
+    // nenhum: a adocao e sempre uma escolha no card.
+    const buscar = script.slice(script.indexOf('async function buscarBancoDoPedidoDaWeb'),
+                                script.indexOf('window.buscarBancoDoPedidoDaWeb'));
+    ok(/res\.partes/.test(buscar) && /#gid=/.test(buscar),
+        'varias paginas criam um banco por pagina, cada um ligado a sua aba');
+    ok(!/ligarModeloAoBanco/.test(buscar),
+        'criar pelo link nao vincula modelo nenhum');
+    const subir = script.slice(script.indexOf('async function subirBancoDoPedido'),
+                               script.indexOf('window.subirBancoDoPedido'));
+    ok(!/ligarModeloAoBanco/.test(subir),
+        'subir CSV tambem nao vincula — a adocao e no "Vem de:" do modelo');
 
     // A atualizacao pela planilha herda a identidade POR POSICAO — a fatia dos
     // modelos aponta para o __id destas linhas, e id novo apontaria o vazio.

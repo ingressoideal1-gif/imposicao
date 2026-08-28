@@ -16541,19 +16541,10 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     const bColunas = container.querySelector(`#btn-csv-colunas-${idx}`);
     if (bColunas) bColunas.style.display = vinculoDaqui ? '' : 'none';
 
-    // A porta de edicao so existe para o banco do PEDIDO. O da numeracao
-    // continua com uma porta so, a do editor de numeracao — foi decisao do
-    // usuario em 26/08/2026 e nao se desfaz aqui.
-    const bEditar = container.querySelector(`#btn-banco-editar-${idx}`);
-    if (bEditar) {
-        const f = fonteDoModelo(item);
-        bEditar.style.display = (f && f.tipo === 'banco') ? '' : 'none';
-        if (f && f.tipo === 'banco') {
-            const quantos = modelosDoBanco(osId, f.id).length;
-            bEditar.title = 'Conferir e corrigir "' + f.nome + '"'
-                + (quantos > 1 ? ' — lido por ' + quantos + ' modelos deste pedido' : '');
-        }
-    }
+    // A edicao do conteudo do banco do PEDIDO mora no box "Gerenciamento de
+    // Bancos de Dados" (📊 Conferir), nao aqui: o card so tem o que e do
+    // MODELO. O banco da numeracao continua com uma porta so, a do editor de
+    // numeracao — decisao do usuario em 26/08/2026, redesenho em 28/08/2026.
 
     // Sem nenhuma linha para contar, o resto da caixa nao tem o que dizer. Sem
     // esta saida o "Linhas" ficaria VERMELHO anunciando que o modelo esta sem
@@ -16649,18 +16640,19 @@ function desenharEscolhaDeBanco(idx, item, container, vinculo) {
     const bancos = state.bancosDoPedido || [];
     const atual = vinculo ? String(vinculo.banco_id) : '';
 
+    // SO escolha, nenhuma acao (28/08/2026, redesenho do usuario): criar,
+    // renomear, atualizar e excluir bancos moram no box "Gerenciamento de
+    // Bancos de Dados" do pedido, na coluna do Briefing. Aqui o modelo apenas
+    // ADOTA um banco ja carregado — ou volta para a numeracao.
     const opcoes = ['<option value="">a numeração (padrão)</option>'];
     bancos.forEach(b => {
         const nome = esc(b.nome || b.csv_filename || 'banco');
         const linhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
         opcoes.push(`<option value="${esc(String(b.id))}">${nome} — ${linhas} linha(s)</option>`);
     });
-    opcoes.push('<option value="__novo">+ Subir um CSV para este pedido…</option>');
-    opcoes.push('<option value="__url">🌐 Buscar de um link compartilhado…</option>');
-    // A porta de excluir e renomear mora aqui, e nao num botao proprio: o card
-    // ja esta cheio, e e no "Vem de:" que os bancos aparecem — inclusive o
-    // orfao que se quer apagar. So aparece quando ha banco para gerenciar.
-    if (bancos.length) opcoes.push('<option value="__gerir">🗂️ Renomear ou excluir bancos…</option>');
+    if (!bancos.length) {
+        opcoes.push('<option value="" disabled>— crie um banco em "Gerenciamento de Bancos de Dados" —</option>');
+    }
 
     sel.innerHTML = opcoes.join('');
     sel.value = atual;
@@ -16691,35 +16683,13 @@ function _inputDoBancoDoPedido() {
 }
 
 /**
- * O operador mexeu no "Vem de:". Tres destinos: a numeracao (desligar), um
- * banco que ja existe (ligar), ou subir um CSV novo.
+ * O operador mexeu no "Vem de:". Dois destinos, e so escolha: a numeracao
+ * (desligar) ou um banco ja carregado no pedido (ligar). Criar banco e coisa
+ * do box "Gerenciamento de Bancos de Dados".
  */
 async function trocarBancoDoModelo(idx, osId, valor) {
     const item = (state.osItens[osId] || [])[idx];
     if (!item) return;
-
-    if (valor === '__novo') {
-        _bancoPedidoPendente = { idx, osId, itemId: item.id };
-        const inp = _inputDoBancoDoPedido();
-        inp.value = '';
-        inp.click();
-        // Volta o seletor para o que estava: quem confirma e o arquivo chegar.
-        const vinc = vinculoDeBancoDoModelo(item);
-        const sel = document.getElementById(`banco-do-pedido-${idx}`);
-        if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
-        return;
-    }
-
-    if (valor === '__gerir' || valor === '__url') {
-        // Gerenciar e buscar-de-link nao sao origens: o seletor volta ao que
-        // estava e o trabalho acontece no modal.
-        const vinc = vinculoDeBancoDoModelo(item);
-        const sel = document.getElementById(`banco-do-pedido-${idx}`);
-        if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
-        if (valor === '__gerir') abrirBancosDoPedido(osId);
-        else abrirBancoDoPedidoPorLink(idx, osId, item.id);
-        return;
-    }
 
     try {
         await ligarModeloAoBanco(item.id, valor || null, null);
@@ -16936,32 +16906,25 @@ function modelosDoBanco(osId, bancoId) {
 window.modelosDoBanco = modelosDoBanco;
 
 /**
- * Abre o banco do PEDIDO para conferir e corrigir, no mesmo editor de sempre.
+ * Abre um banco do PEDIDO para conferir e corrigir, no mesmo editor de sempre.
  *
- * ## Por que este botão existe no card, se o "Ver / editar" saiu daqui
- *
- * Em 26/08/2026 o usuário tirou o "Ver / editar" do card, e com razão: ali ele
- * editava o banco da NUMERAÇÃO, o mesmo para todos os modelos que a usam em
- * qualquer pedido — e nada na tela dizia isso. A edição do banco da numeração
- * ficou com uma porta só, a do editor de numeração, onde o alcance é óbvio.
- *
- * O banco do PEDIDO não tem porta nenhuma, e sem ela corrigir um nome digitado
- * errado exige subir o arquivo de novo. Este botão é essa porta — e a lição de
- * 26/08 entra no rótulo: ele diz que o banco é do pedido, e o modal diz, antes
- * de qualquer tecla, quantos modelos leem dali. O que estava errado não era
- * existir a porta; era a porta não dizer para onde dava.
+ * A porta mora no box "Gerenciamento de Bancos de Dados", ao lado do banco
+ * (28/08/2026, redesenho do usuario) — o botao 📊 saiu do card do modelo
+ * porque editar conteudo e coisa do PEDIDO, e a licao de 26/08 continua
+ * valendo: a porta diz o alcance antes de qualquer tecla, avisando quantos
+ * modelos leem dali. O banco da NUMERACAO segue com uma porta so, a do editor
+ * de numeracao.
  */
-window.abrirBancoDoPedido = function (idx, osId) {
+window.abrirBancoDoPedidoPorId = function (bancoId, osId) {
     if (typeof window.abrirEditorCsv !== 'function') {
         toast('O editor de CSV não carregou. Recarregue a página.', 'error');
         return;
     }
-    const item = (state.osItens[osId] || [])[idx];
-    const fonte = item ? fonteDoModelo(item) : null;
-    if (!fonte || fonte.tipo !== 'banco') {
-        toast('Este modelo não lê um banco do pedido. Escolha um em "Vem de:".', 'info');
-        return;
-    }
+    const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(bancoId));
+    if (!banco) return;
+    const fonte = { id: banco.id, nome: banco.nome || banco.csv_filename || 'banco',
+        headers: banco.csv_headers || [], rows: banco.csv_data || [],
+        filename: banco.csv_filename || '' };
 
     const usuarios = modelosDoBanco(osId, fonte.id);
     if (usuarios.length > 1) {
@@ -17006,7 +16969,7 @@ window.abrirBancoDoPedido = function (idx, osId) {
         onAplicar: async ({ headers, rows, filename, renomeacoes }) => {
             if (!rows.length) {
                 toast('Um banco sem nenhuma linha não imprime nada. Nada foi salvo — '
-                    + 'para desligar este modelo do banco, escolha "a numeração" em "Vem de:".', 'error');
+                    + 'para se livrar do banco, use o 🗑 dele no Gerenciamento de Bancos de Dados.', 'error');
                 return;
             }
             try {
@@ -17077,83 +17040,95 @@ window.quantosLeemDoBanco = quantosLeemDoBanco;
  * modelo cairia calado na numeracao. A trava diz a saida, como toda trava
  * deste projeto: desligar os modelos no "Vem de:" primeiro.
  */
-function abrirBancosDoPedido(osId) {
-    // Fechar antes de conferir a lista: excluir o ultimo banco reabre por
-    // aqui, e a checagem abaixo tem de encontrar o modal antigo ja fechado.
-    fecharBancosDoPedido();
+/**
+ * O corpo do box "Gerenciamento de Bancos de Dados" (28/08/2026, redesenho do
+ * usuario). O banco e do PEDIDO, entao criar, renomear, atualizar pela
+ * planilha e excluir moram aqui, na coluna do Briefing — o card do modelo so
+ * ESCOLHE um banco ja carregado, no "Vem de:".
+ *
+ * Chamado no fim de todo `renderAmostrasOSItens`: o box vive dentro do HTML da
+ * tela e se redesenha junto com ela.
+ */
+function desenharBoxDeBancos(osId) {
+    const alvo = document.getElementById(`bancos-pedido-lista-${osId}`);
+    if (!alvo) return;
     const esc = escDoBanco;
     const bancos = state.bancosDoPedido || [];
-    if (!bancos.length) { toast('Este pedido não tem mais nenhum banco próprio.', 'info'); return; }
+
+    if (!bancos.length) {
+        alvo.innerHTML = `<div style="font-size:0.85rem; color:var(--text-dim); padding:4px 2px;">
+            Este pedido ainda não tem banco de dados. Suba um CSV ou busque de um
+            link compartilhado — depois, escolha o banco no "Vem de:" de cada modelo.
+        </div>`;
+        return;
+    }
 
     const linhas = bancos.map(b => {
-        const leitores = quantosLeemDoBanco(b.id);
+        const leitores = modelosDoBanco(osId, b.id);
         const nLinhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
         const temLink = !!String(b.csv_url || '').trim();
-        return `<tr data-banco="${esc(String(b.id))}">
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
-                <input class="form-control nome-banco" type="text" value="${esc(b.nome || '')}"
-                    maxlength="120" style="width:100%; min-width:180px;"
-                    title="O nome que aparece no Vem de:">
-            </td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); white-space:nowrap;"
-                title="${temLink ? 'Ligado à planilha: ' + esc(b.csv_url) : ''}">${nLinhas} linha(s)${temLink ? ' 🌐' : ''}</td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; ${leitores ? '' : 'color:var(--text-dim);'}">
-                ${leitores ? '🔗 ' + leitores + ' modelo(s)' : 'nenhum modelo'}
-            </td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; text-align:right;">
+        const quemLe = leitores.map((it, i) => rotuloDoModelo(it, i)).join(', ');
+        return `
+        <div style="border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <input class="form-control" id="nome-banco-${esc(String(b.id))}" type="text" value="${esc(b.nome || '')}"
+                    maxlength="120" style="flex:1; min-width:0; height:28px; font-size:0.85rem;"
+                    title="O nome que aparece no Vem de: dos modelos"
+                    onchange="renomearBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')">
+                <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;"
+                    title="${temLink ? 'Ligado à planilha: ' + esc(b.csv_url) : 'Criado de um arquivo CSV'}">${temLink ? '🌐' : '📄'} ${nLinhas} linha(s)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span style="font-size:0.78rem; ${leitores.length ? '' : 'color:var(--text-dim);'}" title="${esc(quemLe)}">
+                    ${leitores.length ? '🔗 lido por ' + leitores.length + ' modelo(s)' : 'nenhum modelo lê este banco'}
+                </span>
+                <span style="flex:1;"></span>
                 ${temLink ? `<button class="btn btn-sm btn-secondary" id="btn-banco-planilha-${esc(String(b.id))}"
                     onclick="atualizarBancoDaPlanilha('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
-                    title="Trazer de novo o conteúdo da planilha ligada a este banco:\n${esc(b.csv_url)}">🔄 Planilha</button>` : ''}
-                <button class="btn btn-sm btn-secondary" onclick="renomearBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')" title="Salvar o nome digitado ao lado">💾 Salvar nome</button>
+                    style="font-size:0.75rem; padding:3px 8px;"
+                    title="Trazer de novo o conteúdo da planilha ligada a este banco">🔄 Planilha</button>` : ''}
+                <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorId('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
+                    style="font-size:0.75rem; padding:3px 8px;" title="Conferir e corrigir o conteúdo deste banco">📊 Conferir</button>
                 <button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
-                    title="${leitores ? 'Para excluir, primeiro desligue os modelos que leem este banco (escolha a numeração no Vem de:)' : 'Excluir este banco do pedido'}">🗑 Excluir</button>
-            </td>
-        </tr>`;
-    }).join('');
-
-    const over = document.createElement('div');
-    over.id = 'bancos-do-pedido-overlay';
-    over.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:12000;'
-        + 'display:flex; align-items:center; justify-content:center; padding:20px;';
-    over.innerHTML = `
-        <div style="background:var(--bg-card,#161b22); border:1px solid var(--border); border-radius:var(--radius,8px);
-                    max-width:760px; width:100%; max-height:85vh; display:flex; flex-direction:column;">
-            <div style="padding:14px 18px; border-bottom:1px solid var(--border);">
-                <div style="font-weight:800; font-size:1.05rem;">🗂️ Bancos deste pedido</div>
-                <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
-                    Renomeie ou exclua os bancos de dados que pertencem a este pedido.
-                    Um banco lido por algum modelo não pode ser excluído — antes,
-                    escolha "a numeração" no "Vem de:" desses modelos.
-                </div>
-            </div>
-            <div style="overflow:auto; padding:0 4px;">
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead><tr>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Nome</th>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Conteúdo</th>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Lido por</th>
-                        <th></th>
-                    </tr></thead>
-                    <tbody>${linhas}</tbody>
-                </table>
-            </div>
-            <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="fecharBancosDoPedido()">Fechar</button>
+                    style="font-size:0.75rem; padding:3px 8px;"
+                    title="${leitores.length ? 'Para excluir, primeiro escolha a numeração no Vem de: dos modelos que leem este banco' : 'Excluir este banco do pedido'}">🗑</button>
             </div>
         </div>`;
-    document.body.appendChild(over);
-}
-window.abrirBancosDoPedido = abrirBancosDoPedido;
+    }).join('');
 
-function fecharBancosDoPedido() {
-    const o = document.getElementById('bancos-do-pedido-overlay');
-    if (o) o.remove();
+    const semUso = bancos.filter(b => !quantosLeemDoBanco(b.id)).length;
+    alvo.innerHTML = linhas + (semUso >= 2
+        ? `<button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancosNaoUsados('${escapeJsAttr(osId)}')"
+              style="font-size:0.75rem; align-self:flex-start;"
+              title="Excluir de uma vez os bancos que nenhum modelo lê">🗑 Excluir os ${semUso} não usados</button>`
+        : '');
 }
-window.fecharBancosDoPedido = fecharBancosDoPedido;
+window.desenharBoxDeBancos = desenharBoxDeBancos;
+
+/** Exclui de uma vez todos os bancos do pedido que nenhum modelo le. */
+async function excluirBancosNaoUsados(osId) {
+    const soltos = (state.bancosDoPedido || []).filter(b => !quantosLeemDoBanco(b.id));
+    if (!soltos.length) return;
+    if (!confirm('Excluir ' + soltos.length + ' banco(s) que nenhum modelo lê?\n\n'
+        + soltos.map(b => '· ' + (b.nome || 'banco')).join('\n')
+        + '\n\nIsso não altera nenhuma numeração nem os bancos em uso.')) return;
+    try {
+        for (const b of soltos) {
+            const { error } = await supabaseClient.from('pedidos_bancos').delete().eq('id', b.id);
+            if (error) throw error;
+            state.bancosDoPedido = (state.bancosDoPedido || []).filter(x => String(x.id) !== String(b.id));
+        }
+        toast(soltos.length + ' banco(s) excluído(s).', 'success');
+    } catch (e) {
+        toast('Não deu para excluir tudo: ' + (e.message || e), 'error');
+    }
+    renderAmostrasOSItens(osId);
+}
+window.excluirBancosNaoUsados = excluirBancosNaoUsados;
 
 async function renomearBancoDoPedido(bancoId, osId) {
-    const linha = document.querySelector(`#bancos-do-pedido-overlay tr[data-banco="${CSS.escape(String(bancoId))}"]`);
-    const nome = linha ? String(linha.querySelector('.nome-banco').value || '').trim() : '';
+    const campo = document.getElementById('nome-banco-' + bancoId);
+    const nome = campo ? String(campo.value || '').trim() : '';
     if (!nome) { toast('O nome não pode ficar vazio.', 'error'); return; }
     try {
         const { error } = await supabaseClient.from('pedidos_bancos')
@@ -17189,8 +17164,7 @@ async function excluirBancoDoPedido(bancoId, osId) {
         if (error) throw error;
         state.bancosDoPedido = (state.bancosDoPedido || []).filter(x => String(x.id) !== String(bancoId));
         toast('Banco "' + (b.nome || 'banco') + '" excluído.', 'success');
-        abrirBancosDoPedido(osId);     // redesenha a lista já sem ele
-        renderAmostrasOSItens(osId);
+        renderAmostrasOSItens(osId);   // redesenha o box e os cards
     } catch (e) {
         toast('Não deu para excluir: ' + (e.message || e), 'error');
     }
@@ -17205,8 +17179,7 @@ window.excluirBancoDoPedido = excluirBancoDoPedido;
  * comportem igual nas duas portas. O link fica gravado em `csv_url`, e o
  * "🔄 Planilha" do gerenciador traz o conteudo de novo quando a lista mudar la.
  */
-function abrirBancoDoPedidoPorLink(idx, osId, itemId) {
-    const esc = escDoBanco;
+function abrirBancoDoPedidoPorLink(osId) {
     fecharBancoDoPedidoPorLink();
     const over = document.createElement('div');
     over.id = 'banco-url-overlay';
@@ -17220,9 +17193,9 @@ function abrirBancoDoPedidoPorLink(idx, osId, itemId) {
                 <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
                     Cole o link de uma planilha do Google compartilhada como
                     "qualquer pessoa com o link", ou de um arquivo CSV na web.
-                    O link fica guardado no banco: quando a lista mudar lá,
-                    o botão "🔄 Planilha" em "🗂️ Renomear ou excluir bancos…"
-                    traz o conteúdo de novo.
+                    Planilha com várias páginas cria um banco por página. O link
+                    fica guardado: quando a lista mudar lá, o "🔄 Planilha" do
+                    banco traz o conteúdo de novo.
                 </div>
             </div>
             <div style="padding:14px 18px; display:flex; flex-direction:column; gap:8px;">
@@ -17233,7 +17206,7 @@ function abrirBancoDoPedidoPorLink(idx, osId, itemId) {
             <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="fecharBancoDoPedidoPorLink()">Cancelar</button>
                 <button class="btn btn-primary" id="btn-buscar-banco-url"
-                    onclick="buscarBancoDoPedidoDaWeb(${idx}, '${escapeJsAttr(osId)}', '${escapeJsAttr(itemId)}')">Buscar</button>
+                    onclick="buscarBancoDoPedidoDaWeb('${escapeJsAttr(osId)}')">Buscar</button>
             </div>
         </div>`;
     document.body.appendChild(over);
@@ -17248,44 +17221,46 @@ function fecharBancoDoPedidoPorLink() {
 }
 window.fecharBancoDoPedidoPorLink = fecharBancoDoPedidoPorLink;
 
-async function buscarBancoDoPedidoDaWeb(idx, osId, itemId) {
+async function buscarBancoDoPedidoDaWeb(osId) {
     const campo = document.getElementById('banco-url-link');
     const link = campo ? String(campo.value || '').trim() : '';
     try {
         const res = await comBotaoOcupado(
             'btn-buscar-banco-url', '⏳ Buscando…', (p) => baixarCsvDaWeb(link, p));
-
-        const item = (state.osItens[osId] || []).find(it => String(it.id) === String(itemId))
-            || (state.osItens[osId] || [])[idx];
         const idInt = idIntDoPedido(osId);
-        const nome = String(res.filename || 'planilha').replace(/\.csv$/i, '');
-        const banco = await criarBancoDoPedido(idInt, nome, res.headers, res.rows, res.filename, link);
 
-        // Mesma regra do upload: vinculo que falha desfaz o banco recem-criado,
-        // para nao sobrar orfao na lista.
-        try {
-            await ligarModeloAoBanco(itemId, banco.id, null);
-        } catch (e) {
-            try { await supabaseClient.from('pedidos_bancos').delete().eq('id', banco.id); } catch (e2) { /* melhor-esforco */ }
-            state.bancosDoPedido = (state.bancosDoPedido || []).filter(b => b.id !== banco.id);
-            throw e;
+        // Planilha com varias paginas vira UM BANCO POR PAGINA (28/08/2026,
+        // redesenho do usuario): cada banco e uma pagina, selecionavel direto
+        // no "Vem de:" do modelo — sem a coluna "Página" e sem de-para para
+        // separar depois. Cada um guarda o link da SUA aba (#gid), entao o
+        // "🔄 Planilha" atualiza pagina a pagina, como as numeracoes ja fazem.
+        const partes = (Array.isArray(res.partes) && res.partes.length > 1) ? res.partes : null;
+        const criados = [];
+        if (partes) {
+            const caderno = String(res.filename || 'planilha')
+                .replace(/ \(\d+ p..?ginas\)\.csv$/i, '').replace(/\.csv$/i, '');
+            for (const p of partes) {
+                const linkDaPagina = res.idDaPlanilha && p.gid !== undefined && p.gid !== null
+                    ? `https://docs.google.com/spreadsheets/d/${res.idDaPlanilha}/edit#gid=${p.gid}`
+                    : link;
+                const b = await criarBancoDoPedido(idInt, caderno + ' — ' + p.nome,
+                    p.headers, p.rows, p.nome + '.csv', linkDaPagina);
+                criados.push(b);
+            }
+        } else {
+            const nome = String(res.filename || 'planilha').replace(/\.csv$/i, '');
+            criados.push(await criarBancoDoPedido(idInt, nome, res.headers, res.rows, res.filename, link));
         }
 
-        if (item && item.csv_selecao) {
-            item.csv_selecao = null;
-            await supabaseClient.from('pedidos_modelos').update({ csv_selecao: null }).eq('id', item.id);
-        }
-
+        // Criar NAO vincula: a adocao e sempre uma escolha no card do modelo.
         fecharBancoDoPedidoPorLink();
-        toast(`Banco "${banco.nome}" criado com ${res.rows.length} linha(s) do link e ligado a este modelo.`
-            + fraseDasPaginas(res), 'success');
+        toast(criados.length === 1
+            ? `Banco "${criados[0].nome}" criado com ${criados[0].csv_data.length} linha(s). `
+              + 'Escolha-o no "Vem de:" dos modelos.'
+            : `${criados.length} bancos criados, um por página: `
+              + criados.map(b => '"' + b.nome + '"').join(', ')
+              + '. Escolha cada um no "Vem de:" do seu modelo.', 'success');
         renderAmostrasOSItens(osId);
-
-        const faltam = window.BancoDoModelo.colunasQueFaltam(pecaDoModelo(item), banco, null);
-        if (faltam.length) {
-            toast('A numeração lê ' + faltam.join(', ') + ', que não existe neste banco. '
-                + 'Abra 🔤 Colunas para apontar cada uma.', 'warning');
-        }
     } catch (e) {
         toast('Erro ao buscar: ' + (e.message || e), 'error');
     }
@@ -17379,8 +17354,7 @@ async function atualizarBancoDaPlanilha(bancoId, osId) {
 
         toast(`Banco "${banco.nome || 'banco'}" atualizado: ${rows.length} linha(s), `
             + `${herdadas} mantendo a identidade que já tinham.` + fraseDasPaginas(res), 'success');
-        abrirBancosDoPedido(osId);
-        renderAmostrasOSItens(osId);
+        renderAmostrasOSItens(osId);   // redesenha o box e os cards
     } catch (e) {
         toast('Erro ao atualizar: ' + (e.message || e), 'error');
     }
@@ -17404,44 +17378,29 @@ async function subirBancoDoPedido() {
     const parsed = window.CsvEditor.parseCsv(texto);
     if (!parsed.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
 
-    const item = (state.osItens[alvo.osId] || [])[alvo.idx];
     const idInt = idIntDoPedido(alvo.osId);
     const banco = await criarBancoDoPedido(idInt, file.name.replace(/\.csv$/i, ''),
         parsed.headers, parsed.rows, file.name);
 
-    // Banco criado e vinculo que falha deixaria um banco orfao na lista do
-    // pedido — e sem porta para apaga-lo. Foi o que aconteceu em 28/08/2026:
-    // tres tentativas de subir o mesmo arquivo, tres bancos, nenhum vinculo.
-    // Se a ligacao nao vai, o banco volta atras junto.
-    try {
-        await ligarModeloAoBanco(alvo.itemId, banco.id, null);
-    } catch (e) {
-        try {
-            await supabaseClient.from('pedidos_bancos').delete().eq('id', banco.id);
-        } catch (e2) { /* o desfazer e melhor-esforco; o erro que importa e o de baixo */ }
-        state.bancosDoPedido = (state.bancosDoPedido || []).filter(b => b.id !== banco.id);
-        _bancoPedidoPendente = null;
-        throw e;
-    }
-
-    if (item && item.csv_selecao) {
-        item.csv_selecao = null;
-        await supabaseClient.from('pedidos_modelos').update({ csv_selecao: null }).eq('id', item.id);
-    }
-
+    // Criar NAO vincula (28/08/2026, redesenho do usuario): o banco e do
+    // pedido, e a adocao e sempre uma escolha feita no card, no "Vem de:".
+    // Sem vinculo automatico tambem nao ha vinculo acidental — e nao ha o que
+    // desfazer se algo falhar depois do insert.
     _bancoPedidoPendente = null;
-    toast(`Banco "${banco.nome}" criado com ${parsed.rows.length} linha(s) e ligado a este modelo.`, 'success');
+    toast(`Banco "${banco.nome}" criado com ${parsed.rows.length} linha(s). `
+        + 'Escolha-o no "Vem de:" dos modelos que vão ler dele.', 'success');
     renderAmostrasOSItens(alvo.osId);
-
-    // Coluna que a peca pede e o banco novo nao tem: dizer agora, com a saida
-    // na propria frase. Descobrir isso na frente da impressora custa papel.
-    const faltam = window.BancoDoModelo.colunasQueFaltam(pecaDoModelo(item), banco, null);
-    if (faltam.length) {
-        toast('A numeração lê ' + faltam.join(', ') + ', que não existe neste banco. '
-            + 'Abra 🔤 Colunas para apontar cada uma.', 'warning');
-    }
 }
 window.subirBancoDoPedido = subirBancoDoPedido;
+
+/** O botao 📤 do box: abre o seletor de arquivo para criar um banco do pedido. */
+function subirBancoPeloBox(osId) {
+    _bancoPedidoPendente = { osId };
+    const inp = _inputDoBancoDoPedido();
+    inp.value = '';
+    inp.click();
+}
+window.subirBancoPeloBox = subirBancoPeloBox;
 
 /**
  * O modelo ficou sem nenhuma linha do banco? Devolve o que dizer, ou null.
@@ -31542,13 +31501,11 @@ function renderAmostrasOSItens(osId) {
                                          numeracao os campos ja apontam para as colunas
                                          dela, e nao ha de-para nenhum a fazer. -->
                                     <button class="btn btn-sm btn-secondary" id="btn-csv-colunas-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="De qual coluna do banco cada campo deste modelo lê">🔤 Colunas</button>
-                                    <!-- A porta para corrigir o banco DO PEDIDO. O rotulo
-                                         diz de quem e o banco de proposito: o "Ver /
-                                         editar" saiu daqui em 26/08/2026 porque editava o
-                                         da NUMERACAO sem dizer, e o operador nao via o
-                                         alcance. Ver a funcao abrirBancoDoPedido -- CRASE
-                                         aqui dentro fecharia o template literal. -->
-                                    <button class="btn btn-sm btn-secondary" id="btn-banco-editar-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirBancoDoPedido(${idx}, '${osId}')" title="Conferir e corrigir o banco de dados deste pedido">📊 Editar banco do pedido</button>
+                                    <!-- O 📊 de corrigir o banco DO PEDIDO saiu do card em
+                                         28/08/2026 (redesenho do usuario): editar conteudo e
+                                         coisa do pedido e mora no box Gerenciamento de
+                                         Bancos de Dados, na coluna do Briefing. Aqui fica so
+                                         o que e do MODELO: Vem de, Linhas e Colunas. -->
                                 </div>
                             </div>
                         </div>
@@ -31762,6 +31719,29 @@ function renderAmostrasOSItens(osId) {
                                 ${obsAccordionHtml}
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Gerenciamento de Bancos de Dados (28/08/2026, redesenho do
+                         usuario): o banco e do PEDIDO, entao ele se cria, renomeia,
+                         atualiza e exclui AQUI — o card do modelo apenas escolhe um
+                         banco ja carregado, no "Vem de:". O corpo e preenchido por
+                         desenharBoxDeBancos(), no fim deste render. -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                    🗂️ Gerenciamento de Bancos de Dados
+                                </div>
+                                <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
+                                    Os bancos (CSV) deste pedido. Cada modelo escolhe o seu em "Vem de:".
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-sm btn-secondary" onclick="subirBancoPeloBox('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco deste pedido a partir de um arquivo CSV">📤 Subir CSV</button>
+                                <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorLink('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar bancos a partir de uma planilha compartilhada por link — cada página vira um banco">🌐 Buscar de link</button>
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>
                     </div>
 
                     <!-- Anexos do Pedido -->
@@ -32032,7 +32012,10 @@ function renderAmostrasOSItens(osId) {
         loadDadosEntregaInterno(osId, osNum);
     }
 
-
+    // O box de bancos vive dentro do HTML recem-escrito: preenche agora, com o
+    // que ja esta na memoria. Quando os bancos descem da rede, o
+    // carregarBancosDoPedido redesenha a tela inteira e ele enche de novo.
+    desenharBoxDeBancos(osId);
 
     setTimeout(() => { desenharCardsAoAparecer(osId, itens, container); }, 50);
 
