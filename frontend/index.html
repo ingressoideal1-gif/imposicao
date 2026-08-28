@@ -1384,9 +1384,17 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-pedido" class="view-section" style="max-width: 100%;">
                 <div class="page-header">
-                    <div class="page-header-text">
-                        <h1 id="ped-view-title">📦 Pedido</h1>
-                        <p id="ped-view-subtitle">Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
+                    <!-- O VOLTAR espelha o do detalhe do Acabamento: mesma classe,
+                         mesmo texto. Devolve ao Painel de Produção pelo caminho do
+                         menu, que reabre a lista na página inicial. -->
+                    <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
+                        <button type="button" class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem; flex-shrink: 0;" onclick="voltarAoPainelDeProducao()" title="Voltar para o Painel de Produção">
+                            <i class="fa-solid fa-arrow-left"></i> VOLTAR
+                        </button>
+                        <div class="page-header-text">
+                            <h1 id="ped-view-title">📦 Pedido</h1>
+                            <p id="ped-view-subtitle">Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
+                        </div>
                     </div>
                     <!-- O filtro "Aguardando" fica no lado oposto ao titulo, no topo
                          da pagina: ele vale para a fila inteira, e nao para um produto,

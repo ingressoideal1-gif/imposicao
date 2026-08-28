@@ -29944,6 +29944,16 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 // -------------------------------------------------------------------------------
 // ABRIR OS INTEIRA NA IMPOSIÇÃO
 // -------------------------------------------------------------------------------
+/**
+ * O VOLTAR do cabeçalho do Pedido (28/08/2026): devolve ao Painel de Produção
+ * pelo mesmo caminho do menu, para a lista reabrir na página inicial dela.
+ */
+function voltarAoPainelDeProducao() {
+    const nav = document.getElementById('nav-lista-impressao');
+    if (nav) nav.click();
+}
+window.voltarAoPainelDeProducao = voltarAoPainelDeProducao;
+
 async function abrirImposicaoDoPedido(osId, numeroOS) {
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     await loadOSItens(osId);
