@@ -517,5 +517,29 @@ function cenario(mapas) {
         'a faixa NAO mostra a marca de repeticoes — decisao do usuario, ela mora no 🔤');
 })();
 
+(function resumoDoPaginadorMostraAsColunasDoModelo() {
+    // 28/08/2026, pedido 21346: os modelos COMPARTILHAM as linhas e dividem as
+    // colunas — o resumo do paginador mostrava as 3 primeiras colunas do BANCO
+    // e punha no card do VIP 1 a coluna do VIP 2. O resumo agora sai das
+    // colunas que a peca RESOLVIDA le (colunasQueAPecaPede), com o resumo
+    // antigo de reserva para peca sem coluna apontada.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const nav = script.slice(script.indexOf('function atualizarNavCsvDaAmostra'),
+                             script.indexOf('function atualizarBotoesCsvDaAmostra'));
+    ok(/colunasQueAPecaPede\(num\)/.test(nav),
+        'o resumo do operador lista as colunas que ESTE modelo imprime');
+    ok(/doModelo\.length \? doModelo/.test(nav) && /num\.csv_headers/.test(nav),
+        'peca sem coluna apontada cai no resumo antigo (primeiras do banco)');
+
+    // A pagina do cliente tem a copia dela — mesma regra, derivada dos
+    // elementos (la nao ha BancoDoModelo carregado).
+    const cliente = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+    const navCli = cliente.slice(cliente.indexOf('function atualizarNavCsvDaAmostra'));
+    const resumoCli = navCli.slice(0, navCli.indexOf('const goto'));
+    ok(/source !== 'database'/.test(resumoCli) && /el\.csv_column/.test(resumoCli)
+        && /doModelo\.length \? doModelo/.test(resumoCli),
+        'o resumo do cliente tambem mostra so o que o modelo imprime');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

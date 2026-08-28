@@ -132,6 +132,13 @@ apenas a informação dos elementos como seus tamanhos, origem, fontes"*.
   mesma história da trava, contada antes do Imprimir — e clicar na faixa abre o
   🔤. Quem desenha é `desenharColunasDoModeloNoCard`, chamada junto do "Vem de:"
   a cada redesenho do card; sem banco do pedido a faixa fica escondida.
+- **O resumo do paginador** (a linha sob "Linha N / M") também mostra só as
+  colunas que **este modelo** imprime — vinha das 3 primeiras do banco, e no
+  pedido em que os modelos **compartilham as linhas e dividem as colunas**
+  (21346) o card do VIP 1 exibia a coluna do VIP 2. A regra vale no card do
+  operador (`script.js`) e na página do cliente (`cliente.js`); peça sem coluna
+  apontada cai no resumo antigo. Compartilhar as linhas é suportado de
+  propósito: sem distribuição no 🧩, todo modelo lê o banco inteiro.
 
 A seção de checkboxes "colunas do banco nesta numeração" (da rodada anterior do
 mesmo dia) morreu com esta decisão: o Exemplo a tornou desnecessária.

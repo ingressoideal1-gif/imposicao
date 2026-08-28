@@ -2595,9 +2595,20 @@ function atualizarNavCsvDaAmostra(idx, item, num, container) {
     if (info) info.textContent = `Ingresso ${pag + 1} de ${total}`;
     const resumo = container.querySelector(`#amostra-csv-resumo-${idx}`);
     if (resumo) {
-        const cols = (num.csv_headers && num.csv_headers.length)
-            ? num.csv_headers
-            : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id');
+        // As colunas do resumo sao as que ESTE modelo imprime — as que os
+        // elementos de banco da peca leem —, e nao as primeiras do CSV
+        // (28/08/2026, mesma regra do card do operador em script.js). Peca
+        // sem coluna apontada cai no resumo antigo.
+        const doModelo = [];
+        ((num && num.elements) || []).forEach(el => {
+            if (!el || el.source !== 'database') return;
+            const col = String(el.csv_column || '').trim();
+            if (col && doModelo.indexOf(col) === -1) doModelo.push(col);
+        });
+        const cols = doModelo.length ? doModelo
+            : ((num.csv_headers && num.csv_headers.length)
+                ? num.csv_headers
+                : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id'));
         resumo.textContent = cols.slice(0, 3)
             .map(c => `${c}: ${linha[c] == null ? '' : linha[c]}`)
             .join('  \u00b7  ');

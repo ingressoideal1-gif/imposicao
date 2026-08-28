@@ -16589,11 +16589,22 @@ function atualizarNavCsvDaAmostra(idx, item, num, container, osId) {
 
         // Um resumo curto da linha para o operador saber o que esta vendo sem
         // precisar abrir o banco.
-        const cols = (num.csv_headers && num.csv_headers.length)
+        //
+        // As colunas do resumo sao as que ESTE modelo imprime (28/08/2026):
+        // `num` aqui ja e a peca resolvida pelo banco do pedido, entao elas
+        // saem do 🔤 de cada modelo. Ha pedido em que os modelos COMPARTILHAM
+        // as linhas e dividem as colunas — mostrar as tres primeiras do banco
+        // punha no card a coluna do modelo vizinho. Peca sem coluna apontada
+        // nenhuma cai no resumo antigo, as primeiras colunas do banco.
+        const doModelo = window.BancoDoModelo
+            ? window.BancoDoModelo.colunasQueAPecaPede(num)
+            : [];
+        const cols = doModelo.length ? doModelo
+            : ((num.csv_headers && num.csv_headers.length)
 
             ? num.csv_headers
 
-            : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id');
+            : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id'));
 
         resumo.textContent = cols.slice(0, 3)
 
