@@ -8,6 +8,10 @@ Pedido do usuario em 28/08/2026, sobre o Painel de Producao -> edicao do pedido:
 drop no final desta mesma linha por um drop com as cores de cada produto, ao
 selecionar no drop uma cor, mostra apenas na tela os produtos da mesma cor."
 
+E, no mesmo dia: "Adicionar no topo da pagina, lateral direita da tela, lado
+oposto do titulo, um botao escrito 'Aguardando' quando clicado mostra apenas os
+modelos ainda nao impressos, desmarcado mostra todos".
+
 O comportamento (a conta, a cor e o filtro) e medido rodando as funcoes de
 verdade no harness em Node. O que este arquivo cobre e a ligacao com a tela:
 que o cabeçalho realmente mostre a conta, que o drop do fim da linha seja o de
@@ -83,9 +87,13 @@ def test_a_linha_e_a_caixa_carregam_a_cor_para_o_filtro_achar():
     assert 'data-cor-chave="${corDoItem.chave}"' in corpo, (
         "a linha nao carrega mais a cor: o filtro nao teria como escondê-la"
     )
-    assert "aplicarFiltroDeCorNaFila();" in corpo, (
-        "o redesenho da fila nao reaplica a cor escolhida, e o filtro se perde "
+    assert "aplicarFiltrosDaFila();" in corpo, (
+        "o redesenho da fila nao reaplica os filtros, e a escolha se perde "
         "a cada campo salvo"
+    )
+    assert 'data-impresso=' in corpo, (
+        "a linha nao diz mais se ja foi impressa: o botao Aguardando nao teria "
+        "como escondê-la"
     )
 
 
@@ -101,3 +109,41 @@ def test_a_cor_da_linha_e_a_do_filtro_sao_a_mesma_resposta():
         "o casamento aproximado de cor voltou para dentro do desenho da linha: "
         "ele mora em resolverCorDoModelo, que a fila e o filtro dividem"
     )
+
+
+def test_o_botao_aguardando_fica_no_topo_oposto_ao_titulo():
+    """Ele vale para a fila inteira, entao nao podia morar na caixa de um produto."""
+    for pagina in ("frontend/producao.html", "frontend/index.html"):
+        fonte = _ler(pagina)
+        i = fonte.index('<section id="view-pedido"')
+        cabecalho = fonte[i:fonte.index("<!-- Steps bar", i)]
+
+        assert 'id="btn-ped-so-aguardando"' in cabecalho, (
+            pagina + ": o botao Aguardando saiu do cabecalho do view-pedido"
+        )
+        assert "page-header-text" in cabecalho, pagina + ": cabecalho inesperado"
+        assert cabecalho.index("page-header-text") < cabecalho.index("btn-ped-so-aguardando"), (
+            pagina + ": o botao tem de vir DEPOIS do texto do titulo -- o "
+            ".page-header e um flex com space-between, e e essa ordem que o joga "
+            "para o lado oposto"
+        )
+        assert "alternarSoAguardando()" in cabecalho, (
+            pagina + ": o botao nao chama mais o filtro"
+        )
+
+
+def test_a_lista_vazia_pelo_filtro_se_explica():
+    """Tela vazia sem explicacao deixa o operador achar que o pedido sumiu."""
+    for pagina in ("frontend/producao.html", "frontend/index.html"):
+        fonte = _ler(pagina)
+        i = fonte.index('<div id="ped-os-queue"')
+        fim = fonte.index('<div class="form-grid', i)
+        fila = fonte[i:fim]
+
+        assert 'id="ped-fila-vazia"' in fila, (
+            pagina + ": o recado da lista vazia precisa morar DENTRO do "
+            "#ped-os-queue -- fora dele, ele apareceria sem pedido aberto"
+        )
+        assert "Aguardando" in fila, (
+            pagina + ": o recado tem de dizer qual botao desfaz o filtro"
+        )

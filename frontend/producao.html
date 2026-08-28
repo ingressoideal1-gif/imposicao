@@ -1116,6 +1116,15 @@
                         <h1>📦 Pedido</h1>
                         <p>Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
                     </div>
+                    <!-- O filtro "Aguardando" fica no lado oposto ao titulo, no topo
+                         da pagina: ele vale para a fila inteira, e nao para um produto,
+                         entao nao podia morar dentro da caixa de nenhum deles. -->
+                    <button type="button" class="filter-btn-pill" id="btn-ped-so-aguardando"
+                            aria-pressed="false" style="align-self: center; padding: 8px 20px; font-size: 0.85rem;"
+                            onclick="alternarSoAguardando()"
+                            title="Mostrar so os modelos que ainda nao foram impressos">
+                        Aguardando
+                    </button>
                 </div>
 
                 <!-- Steps bar removido da visualização de produção -->
@@ -1147,6 +1156,12 @@
                             <div id="ped-os-queue" style="display: none; margin-bottom: 16px;">
                                 <!-- Caixas por Produto serão injetadas aqui -->
                                 <div id="ped-os-queue-body" style="display: flex; flex-direction: column; gap: 15px;">
+                                </div>
+                                <!-- Tela vazia tem de dizer por que esta vazia, e como sair
+                                     dali: o filtro do topo pode esconder o pedido inteiro. -->
+                                <div id="ped-fila-vazia" style="display: none; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(255,255,255,0.04); color: var(--text-dim); font-size: 0.9rem;">
+                                    Nenhum modelo aguardando impress&atilde;o neste pedido &mdash; todos j&aacute; foram impressos.
+                                    Clique de novo em <b style="color: var(--text);">Aguardando</b>, no topo da p&aacute;gina, para ver a lista inteira.
                                 </div>
                             </div>
 

@@ -3663,36 +3663,113 @@ window.filtroDeCorDaFila = filtroDeCorDaFila;
 
 
 /**
- * O filtro por cor esconde linhas, NÃO redesenha a fila.
+ * O botão "Aguardando", no topo da página, está ligado?
+ *
+ * Fica em `state` e não no botão porque a fila se redesenha a cada campo salvo:
+ * quem guarda a escolha na tela a perde na primeira troca de modelo.
+ */
+function soAguardandoLigado() {
+    return !!state.filtroSoAguardando;
+}
+window.soAguardandoLigado = soAguardandoLigado;
+
+
+
+/** Liga e desliga o "Aguardando" do topo da página. */
+function alternarSoAguardando() {
+    state.filtroSoAguardando = !soAguardandoLigado();
+    aplicarFiltrosDaFila();
+    desmarcarModelosEscondidos();
+}
+window.alternarSoAguardando = alternarSoAguardando;
+
+
+
+/**
+ * O botão diz, ele mesmo, se está ligado.
+ *
+ * Sem isto o operador veria uma lista mais curta do que o pedido tem e não
+ * teria na tela o que a encurtou — nem como desfazer.
+ */
+function pintarBotaoSoAguardando() {
+
+    const btn = document.getElementById('btn-ped-so-aguardando');
+
+    if (!btn) return;
+
+    const ligado = soAguardandoLigado();
+
+    btn.classList.toggle('active', ligado);
+
+    btn.setAttribute('aria-pressed', ligado ? 'true' : 'false');
+
+    btn.title = ligado
+        ? 'Mostrando só os modelos que ainda não foram impressos. Clique para ver todos.'
+        : 'Mostrar só os modelos que ainda não foram impressos';
+
+}
+window.pintarBotaoSoAguardando = pintarBotaoSoAguardando;
+
+
+
+/**
+ * Os dois filtros da fila escondem linhas, NÃO redesenham a fila.
+ *
+ * São dois, e eles se somam: a COR, escolhida no cabeçalho de cada produto, e o
+ * AGUARDANDO, do topo da página, que vale para a fila inteira. Uma linha só fica
+ * na tela se passar pelos dois.
  *
  * Redesenhar custa caro aqui — cada linha carrega um `<select>` de todas as
  * numerações e outro de todas as cores, e é por isso que os redesenhos já
- * andam agrupados em `agendarRedesenhoDasFilas`. Trocar a cor no cabeçalho é um
- * gesto de olhar, não de salvar: nada vai ao banco, e a escolha fica guardada
- * em memória para sobreviver ao próximo redesenho, que a reaplica no fim.
+ * andam agrupados em `agendarRedesenhoDasFilas`. Filtrar é um gesto de olhar,
+ * não de salvar: nada vai ao banco, e as escolhas ficam guardadas em memória
+ * para sobreviver ao próximo redesenho, que as reaplica no fim.
  */
-function aplicarFiltroDeCorNaFila() {
+function aplicarFiltrosDaFila() {
 
     const filtros = filtroDeCorDaFila();
 
+    const soAguardando = soAguardandoLigado();
+
+    let visiveisNaTela = 0;
+
     document.querySelectorAll('#ped-os-queue-body [data-caixa-cor]').forEach(caixa => {
 
-        const chaveDaCaixa = caixa.getAttribute('data-caixa-cor');
+        const escolhida = filtros[caixa.getAttribute('data-caixa-cor')] || '';
 
-        const escolhida = filtros[chaveDaCaixa] || '';
+        let visiveisNaCaixa = 0;
 
         caixa.querySelectorAll('tr[data-cor-chave]').forEach(tr => {
 
-            const bate = !escolhida || tr.getAttribute('data-cor-chave') === escolhida;
+            const bateCor = !escolhida || tr.getAttribute('data-cor-chave') === escolhida;
 
-            tr.style.display = bate ? '' : 'none';
+            const bateStatus = !soAguardando || tr.getAttribute('data-impresso') !== 'sim';
+
+            const mostra = bateCor && bateStatus;
+
+            tr.style.display = mostra ? '' : 'none';
+
+            if (mostra) visiveisNaCaixa++;
 
         });
 
+        // Produto sem nenhuma linha na tela sai junto: sobraria um cabeçalho
+        // solto, com a conta de um produto cujos modelos nenhum aparece.
+        caixa.style.display = visiveisNaCaixa ? '' : 'none';
+
+        visiveisNaTela += visiveisNaCaixa;
+
     });
 
+    // Tela vazia precisa dizer por que está vazia, e como sair dali.
+    const recado = document.getElementById('ped-fila-vazia');
+
+    if (recado) recado.style.display = (soAguardando && visiveisNaTela === 0) ? 'block' : 'none';
+
+    pintarBotaoSoAguardando();
+
 }
-window.aplicarFiltroDeCorNaFila = aplicarFiltroDeCorNaFila;
+window.aplicarFiltrosDaFila = aplicarFiltrosDaFila;
 
 
 
@@ -3732,7 +3809,7 @@ function desmarcarModelosEscondidos() {
 /** Guarda a cor escolhida no cabeçalho do produto e reaplica o filtro. */
 function filtrarFilaPorCor(chaveDaCaixa, chaveDaCor) {
     filtroDeCorDaFila()[chaveDaCaixa] = chaveDaCor || '';
-    aplicarFiltroDeCorNaFila();
+    aplicarFiltrosDaFila();
     desmarcarModelosEscondidos();
 }
 window.filtrarFilaPorCor = filtrarFilaPorCor;
@@ -4039,6 +4116,7 @@ function renderPedOSQueue() {
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
                     data-cor-chave="${corDoItem.chave}"
+                    data-impresso="${normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso' ? 'sim' : 'nao'}"
                     onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 12px; width: 40px; text-align: center;">
                         <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
@@ -4173,7 +4251,7 @@ function renderPedOSQueue() {
     }
 
     wrapper.innerHTML = html;
-    aplicarFiltroDeCorNaFila();
+    aplicarFiltrosDaFila();
     updatePedImprimirButtonsVisibility();
     // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();

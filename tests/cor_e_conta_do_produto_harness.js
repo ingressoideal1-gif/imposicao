@@ -7,13 +7,18 @@
 // com as cores de cada produto, ao selecionar no drop uma cor, mostra apenas na
 // tela os produtos da mesma cor."
 //
+// E, no mesmo dia: "Adicionar no topo da pagina, lateral direita da tela, lado
+// oposto do titulo, um botao escrito 'Aguardando' quando clicado mostra apenas
+// os modelos ainda nao impressos, desmarcado mostra todos".
+//
 // As funcoes sao RECORTADAS do pedido.js e executadas -- nada aqui e copia da
 // regra. O que este arquivo cobre:
 //
 //   1. a conta (total e restante), inclusive o Parcial, que conta inteiro;
 //   2. a cor resolvida UMA vez, do mesmo jeito que a bolinha da linha sempre
 //      resolveu -- pelo id, pelo nome exato, e so entao pelo aproximado;
-//   3. o filtro que esconde linha em vez de redesenhar a fila;
+//   3. os dois filtros que escondem linha em vez de redesenhar a fila -- a COR,
+//      por produto, e o AGUARDANDO, do topo da pagina, que valem somados;
 //   4. e a trave que importa no papel: modelo escondido SAI da selecao, senao
 //      ele continuaria marcado fora de vista e sairia impresso junto.
 const fs = require('fs');
@@ -44,17 +49,22 @@ function recortarConst(fonte, nome, fim) {
 
 // --- Um DOM do tamanho da fila, e nada mais ---------------------------------
 
-function linha(itemId, chaveDaCor) {
+function linha(itemId, chaveDaCor, impresso) {
     return {
         id: 'ped-queue-row-' + itemId,
         style: { display: '' },
-        getAttribute: nome => (nome === 'data-cor-chave' ? chaveDaCor : null),
+        getAttribute: nome => {
+            if (nome === 'data-cor-chave') return chaveDaCor;
+            if (nome === 'data-impresso') return impresso ? 'sim' : 'nao';
+            return null;
+        },
     };
 }
 
 function caixa(chaveDaCaixa, linhas) {
     return {
         _linhas: linhas,
+        style: { display: '' },
         getAttribute: nome => (nome === 'data-caixa-cor' ? chaveDaCaixa : null),
         querySelectorAll: sel => (sel === 'tr[data-cor-chave]' ? linhas : []),
     };
@@ -63,10 +73,27 @@ function caixa(chaveDaCaixa, linhas) {
 function montar(caixas) {
     const linhasTodas = caixas.reduce((acc, c) => acc.concat(c._linhas), []);
 
+    // O botao do topo da pagina e o recado da lista vazia sao nos fixos do HTML.
+    const botao = {
+        classes: new Set(),
+        atributos: {},
+        title: '',
+        classList: {
+            toggle: (c, on) => { if (on) botao.classes.add(c); else botao.classes.delete(c); },
+        },
+        setAttribute: (n, v) => { botao.atributos[n] = v; },
+        get ligado() { return botao.classes.has('active'); },
+    };
+    const recado = { style: { display: 'none' } };
+
     const documento = {
         querySelectorAll: sel =>
             (sel === '#ped-os-queue-body [data-caixa-cor]' ? caixas : []),
-        getElementById: id => linhasTodas.find(l => l.id === id) || null,
+        getElementById: id => {
+            if (id === 'btn-ped-so-aguardando') return botao;
+            if (id === 'ped-fila-vazia') return recado;
+            return linhasTodas.find(l => l.id === id) || null;
+        },
     };
 
     const state = { selectedOSItems: [], cores: [] };
@@ -80,17 +107,21 @@ function montar(caixas) {
         recortar(PEDIDO, 'contaDoProduto', 'pedido.js'),
         recortar(PEDIDO, 'resolverCorDoModelo', 'pedido.js'),
         recortar(PEDIDO, 'filtroDeCorDaFila', 'pedido.js'),
-        recortar(PEDIDO, 'aplicarFiltroDeCorNaFila', 'pedido.js'),
+        recortar(PEDIDO, 'soAguardandoLigado', 'pedido.js'),
+        recortar(PEDIDO, 'alternarSoAguardando', 'pedido.js'),
+        recortar(PEDIDO, 'pintarBotaoSoAguardando', 'pedido.js'),
+        recortar(PEDIDO, 'aplicarFiltrosDaFila', 'pedido.js'),
         recortar(PEDIDO, 'desmarcarModelosEscondidos', 'pedido.js'),
         recortar(PEDIDO, 'filtrarFilaPorCor', 'pedido.js'),
         'return { contaDoProduto, resolverCorDoModelo, filtroDeCorDaFila,'
-        + ' aplicarFiltroDeCorNaFila, desmarcarModelosEscondidos, filtrarFilaPorCor };',
+        + ' soAguardandoLigado, alternarSoAguardando, aplicarFiltrosDaFila,'
+        + ' desmarcarModelosEscondidos, filtrarFilaPorCor };',
     ].join('\n');
 
     const api = new Function('state', 'document', 'renderPedOSQueue', fonte)(
         state, documento, () => { redesenhos++; });
 
-    return { api, state, redesenhos: () => redesenhos };
+    return { api, state, botao, recado, redesenhos: () => redesenhos };
 }
 
 // --- 1. A conta do produto --------------------------------------------------
@@ -199,7 +230,7 @@ function montar(caixas) {
 
     // Desenhou de novo? O filtro volta sozinho, sem passar pelo select.
     linhas.forEach(l => { l.style.display = ''; });
-    api.aplicarFiltroDeCorNaFila();
+    api.aplicarFiltrosDaFila();
     ok(linhas.map(l => l.style.display).join('|') === 'none||none',
        'o redesenho reaplica a cor escolhida', linhas.map(l => l.style.display));
 })();
@@ -252,7 +283,115 @@ function montar(caixas) {
        state.selectedOSItems);
 })();
 
+// --- 5. O botao "Aguardando" do topo da pagina ------------------------------
+
+(function ligadoDeixaSoOQueFaltaImprimir() {
+    const linhas = [linha(1, 'vermelho', true), linha(2, 'azul', false), linha(3, 'verde', false)];
+    const { api, state, botao } = montar([caixa('OS1::7', linhas)]);
+
+    ok(api.soAguardandoLigado() === false, 'comeca desligado: a lista inteira aparece');
+
+    api.alternarSoAguardando();
+
+    ok(linhas.map(l => l.style.display).join('|') === 'none||',
+       'ligado, o modelo ja IMPRESSO sai da tela', linhas.map(l => l.style.display));
+    ok(botao.ligado && botao.atributos['aria-pressed'] === 'true',
+       'e o botao se acende, para o operador ver o que encurtou a lista',
+       [botao.ligado, botao.atributos]);
+
+    api.alternarSoAguardando();
+
+    ok(linhas.every(l => l.style.display === ''), 'desmarcado, todos voltam',
+       linhas.map(l => l.style.display));
+    ok(!botao.ligado && botao.atributos['aria-pressed'] === 'false', 'e o botao apaga');
+})();
+
+(function oParcialAindaFaltaImprimir() {
+    // Parcial nao e Impresso: a folha dele ainda tem de sair, e some-lo aqui
+    // esconderia justamente o trabalho que falta.
+    const linhas = [linha(1, 'vermelho', false)];   // data-impresso="nao" = Parcial
+    const { api } = montar([caixa('OS1::7', linhas)]);
+
+    api.alternarSoAguardando();
+
+    ok(linhas[0].style.display === '', 'modelo em Parcial continua na tela com o filtro ligado');
+})();
+
+(function produtoInteiroImpressoSaiDaTela() {
+    const triband = [linha(1, 'vermelho', true), linha(2, 'azul', true)];
+    const mobi = [linha(3, 'vermelho', false)];
+    const cx = [caixa('OS1::7', triband), caixa('OS1::9', mobi)];
+    const { api, recado } = montar(cx);
+
+    api.alternarSoAguardando();
+
+    ok(cx[0].style.display === 'none',
+       'produto com tudo impresso sai junto -- senao sobraria um cabecalho solto',
+       cx[0].style.display);
+    ok(cx[1].style.display === '', 'e o produto que ainda tem trabalho fica');
+    ok(recado.style.display === 'none', 'com algo na tela, nenhum recado aparece');
+})();
+
+(function telaVaziaDizPorQueEComoSair() {
+    const linhas = [linha(1, 'vermelho', true), linha(2, 'azul', true)];
+    const { api, recado } = montar([caixa('OS1::7', linhas)]);
+
+    api.alternarSoAguardando();
+    ok(recado.style.display === 'block',
+       'pedido todo impresso mostra o recado, em vez de uma tela vazia sem explicacao');
+
+    api.alternarSoAguardando();
+    ok(recado.style.display === 'none', 'e o recado some quando a lista volta');
+})();
+
+(function osDoisFiltrosSeSomam() {
+    const linhas = [
+        linha(1, 'vermelho', true),
+        linha(2, 'vermelho', false),
+        linha(3, 'azul', false),
+    ];
+    const { api } = montar([caixa('OS1::7', linhas)]);
+
+    api.filtrarFilaPorCor('OS1::7', 'vermelho');
+    api.alternarSoAguardando();
+
+    ok(linhas.map(l => l.style.display).join('|') === 'none||none',
+       'sobra so o que e vermelho E ainda nao foi impresso',
+       linhas.map(l => l.style.display));
+})();
+
+(function impressoMarcadoSaiDaSelecaoAoLigarOFiltro() {
+    const linhas = [linha(1, 'vermelho', true), linha(2, 'azul', false)];
+    const { api, state, redesenhos } = montar([caixa('OS1::7', linhas)]);
+
+    state.selectedOSItems = [{ itemId: 1, osId: 'OS1' }, { itemId: 2, osId: 'OS1' }];
+
+    api.alternarSoAguardando();
+
+    ok(state.selectedOSItems.length === 1 && String(state.selectedOSItems[0].itemId) === '2',
+       'o impresso marcado sai da selecao junto com a linha -- senao reimprimiria sozinho',
+       state.selectedOSItems);
+    ok(redesenhos() === 1, 'e a fila e redesenhada para as caixinhas baterem com o estado');
+})();
+
+(function oRedesenhoReaplicaOAguardando() {
+    const linhas = [linha(1, 'vermelho', true), linha(2, 'azul', false)];
+    const { api, botao } = montar([caixa('OS1::7', linhas)]);
+
+    api.alternarSoAguardando();
+
+    // A fila se redesenha a cada campo salvo; sem reaplicar, o filtro sumiria
+    // sozinho na primeira troca de modelo.
+    linhas.forEach(l => { l.style.display = ''; });
+    botao.classes.clear();
+
+    api.aplicarFiltrosDaFila();
+
+    ok(linhas[0].style.display === 'none', 'o redesenho reaplica o Aguardando');
+    ok(botao.ligado, 'e reacende o botao, que e um no fixo do HTML');
+})();
+
 console.log(falhas === 0
-    ? 'OK: ' + total + ' verificacoes da barra do produto (conta, cor e filtro)'
+    ? 'OK: ' + total + ' verificacoes da fila do pedido (conta, cor, e o Aguardando)'
     : 'FALHAS: ' + falhas + '/' + total);
 process.exit(falhas === 0 ? 0 : 1);
