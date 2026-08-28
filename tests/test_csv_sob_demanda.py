@@ -166,7 +166,10 @@ def test_o_card_diz_que_esta_baixando_em_vez_de_acusar_o_operador():
     """
     fonte = _ler("frontend/script.js")
     i = fonte.index("function atualizarBotoesCsvDaAmostra")
-    corpo = fonte[i:i + 3000]
+    # A funcao inteira, e nao uma janela de N caracteres: ela cresceu em
+    # 27/08/2026 (o seletor do banco do pedido) e as afirmacoes daqui ficaram
+    # para fora da janela, quebrando o teste sem que nada tivesse regredido.
+    corpo = fonte[i:fonte.index(chr(10) + "}", i)]
     assert "const baixando = !!(num && num.csv_data === undefined && numeracaoTemBanco(num));" in corpo
     assert "'carregando…'" in corpo, "o card precisa dizer que esta baixando"
     assert corpo.index("if (baixando)") < corpo.index("const minhas ="), (
@@ -419,7 +422,7 @@ def test_o_separar_por_dia_confirma_antes_de_criar_e_nao_apaga_o_original():
 def test_o_botao_de_separar_so_aparece_quando_ha_o_que_separar():
     fonte = _ler("frontend/script.js")
     i = fonte.index("function atualizarBotoesCsvDaAmostra")
-    corpo = fonte[i:i + 4000]
+    corpo = fonte[i:fonte.index(chr(10) + "}", i)]
     assert "planoDeSeparacaoPorDia(osId, num)" in corpo
     assert "bDia.style.display = plano ? '' : 'none';" in corpo, (
         "o botao precisa sumir quando nao ha o que separar — banco de um dia so, "
