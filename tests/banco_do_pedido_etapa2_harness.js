@@ -392,6 +392,12 @@ function cenario(mapas) {
     ok(/csv_data && peca\.csv_data\.length/.test(abrir),
         'peca COM dado nao ganha checkbox — o dropdown dela vem do proprio CSV');
 
+    // A linha do de-para identifica o ELEMENTO — pelo mesmo selo da lista do
+    // editor, mais o nome que o operador deu — e nao so "1 campo": e pelo
+    // elemento que se escolhe a coluna certa (pedido do usuario, 28/08/2026).
+    ok(/nomeDoElemento/.test(abrir) && /Elemento</.test(abrir),
+        'o de-para mostra o nome do elemento, nao a contagem de campos');
+
     const aplicar = script.slice(script.indexOf('async function aplicarColunasDoModelo'),
                                  script.indexOf('window.aplicarColunasDoModelo'));
     ok(/salvarCamposDaNumeracao\(peca\.id, \{ csv_headers/.test(aplicar),

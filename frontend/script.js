@@ -16779,8 +16779,19 @@ function abrirColunasDoModelo(idx, osId) {
 
     const mapa = (vinc && vinc.csv_mapa) || {};
 
-    const quantosCampos = (col) => (peca.elements || [])
-        .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim() === col).length;
+    // O mesmo selo que a lista de elementos do editor usa, mais o nome que o
+    // operador deu ao item — e assim que ele reconhece o elemento, e e por ele
+    // que se escolhe a coluna certa (pedido do usuario em 28/08/2026, quando o
+    // modal so dizia "1 campo" e nao dava para saber qual).
+    const selo = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', QR_IDEAL: '🎟️ QR Ideal', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
+    const nomeDoElemento = (el) => {
+        // O nome e digitado pelo operador: escapa antes de entrar no HTML.
+        const tipo = esc(selo[el.type] || el.type || 'Elemento');
+        const nome = String(el.name || '').trim();
+        return nome ? tipo + ' — ' + esc(nome) : tipo;
+    };
+    const elementosDaColuna = (col) => ((peca.elements || [])
+        .filter(el => el && el.source === 'database' && String(el.csv_column || '').trim() === col));
 
     const linhas = pedidas.map(col => {
         const escolhida = window.BancoDoModelo.colunaDoModelo(mapa, col);
@@ -16788,10 +16799,12 @@ function abrirColunasDoModelo(idx, osId) {
         const opcoes = ['<option value="">— escolher —</option>'].concat(
             cabecalho.map(h => `<option value="${esc(h)}"${h === escolhida ? ' selected' : ''}>${esc(h)}</option>`)
         ).join('');
-        const n = quantosCampos(col);
+        // Dois elementos que leem a mesma coluna trocam JUNTOS — o de-para e
+        // por coluna, de proposito. Por isso a linha lista todos os nomes.
+        const nomes = elementosDaColuna(col).map(nomeDoElemento).join('<br>');
         return `<tr>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:0.85rem;">${nomes || '—'}</td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-family:monospace;">${esc(col)}</td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.85rem;">${n} campo${n === 1 ? '' : 's'}</td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
                 <select class="form-control mapa-col" data-col="${esc(col)}"
                     style="width:100%; ${temNoBanco ? '' : 'border-color:var(--red,#ef4444);'}">${opcoes}</select>
@@ -16835,8 +16848,8 @@ function abrirColunasDoModelo(idx, osId) {
                 ${pedidas.length ? `
                 <table style="width:100%; border-collapse:collapse;">
                     <thead><tr>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">A numeração lê</th>
-                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Campos</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Elemento</th>
+                        <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">Lê a coluna</th>
                         <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">No banco deste pedido</th>
                     </tr></thead>
                     <tbody>${linhas}</tbody>
