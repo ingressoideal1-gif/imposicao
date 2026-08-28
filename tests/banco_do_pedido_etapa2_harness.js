@@ -351,5 +351,31 @@ function cenario(mapas) {
         'a conta de leitores vem dos vinculos carregados, nao dos itens do pedido aberto');
 })();
 
+(function bancoPorLinkCompartilhado() {
+    // 28/08/2026: o banco do pedido pode nascer de um link compartilhado e ser
+    // atualizado por ele. O comportamento foi conferido no navegador de
+    // verdade (criar pelo link, herdar __id/__ativo por posicao, recusar banco
+    // sem link); aqui fica o que nao pode se desfazer sozinho.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/__url/.test(script) && /abrirBancoDoPedidoPorLink/.test(script),
+        'o "Vem de:" oferece buscar de um link compartilhado');
+    ok(/buscarBancoDoPedidoDaWeb/.test(script) && /baixarCsvDaWeb\(link/.test(script),
+        'a busca passa pelo MESMO baixarCsvDaWeb da numeracao — planilha Google e CSV solto iguais nas duas portas');
+
+    // A atualizacao pela planilha herda a identidade POR POSICAO — a fatia dos
+    // modelos aponta para o __id destas linhas, e id novo apontaria o vazio.
+    const atualizar = script.slice(script.indexOf('async function atualizarBancoDaPlanilha'),
+                                   script.indexOf('window.atualizarBancoDaPlanilha'));
+    ok(/__id = id/.test(atualizar) && /__ativo = false/.test(atualizar),
+        'atualizar pela planilha herda __id e __ativo por posicao');
+    ok(/confirm\(/.test(atualizar) && /POSI/.test(atualizar),
+        'e avisa antes que o reconhecimento e pela posicao');
+    // O link fica gravado no banco: e ele que permite atualizar meses depois.
+    const criar = script.slice(script.indexOf('async function criarBancoDoPedido'),
+                               script.indexOf('window.criarBancoDoPedido'));
+    ok(/csv_url/.test(criar), 'criar o banco grava o csv_url quando veio de um link');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

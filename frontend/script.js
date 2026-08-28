@@ -1208,7 +1208,7 @@ window.escDoBanco = escDoBanco;
  * distribuicao de linhas guarda. Linha sem id gravada no banco faria a fatia de
  * um modelo apontar para o vazio na proxima abertura do pedido.
  */
-async function criarBancoDoPedido(idInt, nome, headers, rows, filename) {
+async function criarBancoDoPedido(idInt, nome, headers, rows, filename, csvUrl) {
     if (!supabaseClient) throw new Error('Sem conexão com o banco.');
     if (!idInt) throw new Error('Não sei de qual pedido é este banco.');
     if (!Array.isArray(rows) || !rows.length) throw new Error('O arquivo não tem nenhuma linha.');
@@ -1219,7 +1219,10 @@ async function criarBancoDoPedido(idInt, nome, headers, rows, filename) {
         nome: String(nome || filename || 'banco').slice(0, 120),
         csv_filename: String(filename || ''),
         csv_headers: headers || [],
-        csv_data: rows
+        csv_data: rows,
+        // O link da planilha fica no banco: e ele que o "🔄 Planilha" usa para
+        // trazer o conteudo de novo, meses depois.
+        csv_url: String(csvUrl || '')
     }).select().single();
     if (error) throw error;
 
@@ -16651,6 +16654,7 @@ function desenharEscolhaDeBanco(idx, item, container, vinculo) {
         opcoes.push(`<option value="${esc(String(b.id))}">${nome} — ${linhas} linha(s)</option>`);
     });
     opcoes.push('<option value="__novo">+ Subir um CSV para este pedido…</option>');
+    opcoes.push('<option value="__url">🌐 Buscar de um link compartilhado…</option>');
     // A porta de excluir e renomear mora aqui, e nao num botao proprio: o card
     // ja esta cheio, e e no "Vem de:" que os bancos aparecem — inclusive o
     // orfao que se quer apagar. So aparece quando ha banco para gerenciar.
@@ -16704,13 +16708,14 @@ async function trocarBancoDoModelo(idx, osId, valor) {
         return;
     }
 
-    if (valor === '__gerir') {
-        // Gerenciar nao e uma origem: o seletor volta ao que estava e o
-        // trabalho acontece no modal.
+    if (valor === '__gerir' || valor === '__url') {
+        // Gerenciar e buscar-de-link nao sao origens: o seletor volta ao que
+        // estava e o trabalho acontece no modal.
         const vinc = vinculoDeBancoDoModelo(item);
         const sel = document.getElementById(`banco-do-pedido-${idx}`);
         if (sel) sel.value = vinc ? String(vinc.banco_id) : '';
-        abrirBancosDoPedido(osId);
+        if (valor === '__gerir') abrirBancosDoPedido(osId);
+        else abrirBancoDoPedidoPorLink(idx, osId, item.id);
         return;
     }
 
@@ -17018,17 +17023,22 @@ function abrirBancosDoPedido(osId) {
     const linhas = bancos.map(b => {
         const leitores = quantosLeemDoBanco(b.id);
         const nLinhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
+        const temLink = !!String(b.csv_url || '').trim();
         return `<tr data-banco="${esc(String(b.id))}">
             <td style="padding:8px 10px; border-bottom:1px solid var(--border);">
                 <input class="form-control nome-banco" type="text" value="${esc(b.nome || '')}"
                     maxlength="120" style="width:100%; min-width:180px;"
                     title="O nome que aparece no Vem de:">
             </td>
-            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); white-space:nowrap;">${nLinhas} linha(s)</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-dim); white-space:nowrap;"
+                title="${temLink ? 'Ligado à planilha: ' + esc(b.csv_url) : ''}">${nLinhas} linha(s)${temLink ? ' 🌐' : ''}</td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; ${leitores ? '' : 'color:var(--text-dim);'}">
                 ${leitores ? '🔗 ' + leitores + ' modelo(s)' : 'nenhum modelo'}
             </td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; text-align:right;">
+                ${temLink ? `<button class="btn btn-sm btn-secondary" id="btn-banco-planilha-${esc(String(b.id))}"
+                    onclick="atualizarBancoDaPlanilha('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
+                    title="Trazer de novo o conteúdo da planilha ligada a este banco:\n${esc(b.csv_url)}">🔄 Planilha</button>` : ''}
                 <button class="btn btn-sm btn-secondary" onclick="renomearBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')" title="Salvar o nome digitado ao lado">💾 Salvar nome</button>
                 <button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
                     title="${leitores ? 'Para excluir, primeiro desligue os modelos que leem este banco (escolha a numeração no Vem de:)' : 'Excluir este banco do pedido'}">🗑 Excluir</button>
@@ -17121,6 +17131,196 @@ async function excluirBancoDoPedido(bancoId, osId) {
     }
 }
 window.excluirBancoDoPedido = excluirBancoDoPedido;
+
+/**
+ * O banco do pedido nascido de um link compartilhado (28/08/2026).
+ *
+ * Mesmo caminho de rede da numeracao — `baixarCsvDaWeb` — para que planilha do
+ * Google, link com `#gid=`, caderno de varias paginas e CSV solto na web se
+ * comportem igual nas duas portas. O link fica gravado em `csv_url`, e o
+ * "🔄 Planilha" do gerenciador traz o conteudo de novo quando a lista mudar la.
+ */
+function abrirBancoDoPedidoPorLink(idx, osId, itemId) {
+    const esc = escDoBanco;
+    fecharBancoDoPedidoPorLink();
+    const over = document.createElement('div');
+    over.id = 'banco-url-overlay';
+    over.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:12000;'
+        + 'display:flex; align-items:center; justify-content:center; padding:20px;';
+    over.innerHTML = `
+        <div style="background:var(--bg-card,#161b22); border:1px solid var(--border); border-radius:var(--radius,8px);
+                    max-width:560px; width:100%; display:flex; flex-direction:column;">
+            <div style="padding:14px 18px; border-bottom:1px solid var(--border);">
+                <div style="font-weight:800; font-size:1.05rem;">🌐 Banco de um link compartilhado</div>
+                <div style="color:var(--text-dim); font-size:0.85rem; margin-top:3px;">
+                    Cole o link de uma planilha do Google compartilhada como
+                    "qualquer pessoa com o link", ou de um arquivo CSV na web.
+                    O link fica guardado no banco: quando a lista mudar lá,
+                    o botão "🔄 Planilha" em "🗂️ Renomear ou excluir bancos…"
+                    traz o conteúdo de novo.
+                </div>
+            </div>
+            <div style="padding:14px 18px; display:flex; flex-direction:column; gap:8px;">
+                <label style="font-size:0.78rem; color:var(--text-dim);">Link da planilha</label>
+                <input class="form-control" id="banco-url-link" type="text"
+                    placeholder="https://docs.google.com/spreadsheets/d/…" style="width:100%;">
+            </div>
+            <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="fecharBancoDoPedidoPorLink()">Cancelar</button>
+                <button class="btn btn-primary" id="btn-buscar-banco-url"
+                    onclick="buscarBancoDoPedidoDaWeb(${idx}, '${escapeJsAttr(osId)}', '${escapeJsAttr(itemId)}')">Buscar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(over);
+    const campo = document.getElementById('banco-url-link');
+    if (campo) campo.focus();
+}
+window.abrirBancoDoPedidoPorLink = abrirBancoDoPedidoPorLink;
+
+function fecharBancoDoPedidoPorLink() {
+    const o = document.getElementById('banco-url-overlay');
+    if (o) o.remove();
+}
+window.fecharBancoDoPedidoPorLink = fecharBancoDoPedidoPorLink;
+
+async function buscarBancoDoPedidoDaWeb(idx, osId, itemId) {
+    const campo = document.getElementById('banco-url-link');
+    const link = campo ? String(campo.value || '').trim() : '';
+    try {
+        const res = await comBotaoOcupado(
+            'btn-buscar-banco-url', '⏳ Buscando…', (p) => baixarCsvDaWeb(link, p));
+
+        const item = (state.osItens[osId] || []).find(it => String(it.id) === String(itemId))
+            || (state.osItens[osId] || [])[idx];
+        const idInt = idIntDoPedido(osId);
+        const nome = String(res.filename || 'planilha').replace(/\.csv$/i, '');
+        const banco = await criarBancoDoPedido(idInt, nome, res.headers, res.rows, res.filename, link);
+
+        // Mesma regra do upload: vinculo que falha desfaz o banco recem-criado,
+        // para nao sobrar orfao na lista.
+        try {
+            await ligarModeloAoBanco(itemId, banco.id, null);
+        } catch (e) {
+            try { await supabaseClient.from('pedidos_bancos').delete().eq('id', banco.id); } catch (e2) { /* melhor-esforco */ }
+            state.bancosDoPedido = (state.bancosDoPedido || []).filter(b => b.id !== banco.id);
+            throw e;
+        }
+
+        if (item && item.csv_selecao) {
+            item.csv_selecao = null;
+            await supabaseClient.from('pedidos_modelos').update({ csv_selecao: null }).eq('id', item.id);
+        }
+
+        fecharBancoDoPedidoPorLink();
+        toast(`Banco "${banco.nome}" criado com ${res.rows.length} linha(s) do link e ligado a este modelo.`
+            + fraseDasPaginas(res), 'success');
+        renderAmostrasOSItens(osId);
+
+        const faltam = window.BancoDoModelo.colunasQueFaltam(pecaDoModelo(item), banco, null);
+        if (faltam.length) {
+            toast('A numeração lê ' + faltam.join(', ') + ', que não existe neste banco. '
+                + 'Abra 🔤 Colunas para apontar cada uma.', 'warning');
+        }
+    } catch (e) {
+        toast('Erro ao buscar: ' + (e.message || e), 'error');
+    }
+}
+window.buscarBancoDoPedidoDaWeb = buscarBancoDoPedidoDaWeb;
+
+/**
+ * Traz de novo o conteudo do link ligado a um banco do pedido.
+ *
+ * O mesmo cuidado do `atualizarCsvDaPlanilha` da numeracao, pelo mesmo motivo:
+ * a fatia de cada modelo (`pedidos_modelos.csv_selecao`) aponta para o `__id`
+ * das linhas DESTE banco. A planilha baixada chega sem `__id`, e deixar nascer
+ * ids novos faria toda distribuicao ja feita apontar para o vazio. O `__id` e o
+ * `__ativo` sao herdados POSICAO A POSICAO, e a confirmacao diz isso antes.
+ */
+async function atualizarBancoDaPlanilha(bancoId, osId) {
+    const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(bancoId));
+    if (!banco) return;
+    const link = String(banco.csv_url || '').trim();
+    if (!link) { toast('Este banco não está ligado a nenhuma planilha.', 'error'); return; }
+
+    try {
+        const res = await comBotaoOcupado(
+            'btn-banco-planilha-' + bancoId, '⏳…', (p) => baixarCsvDaWeb(link, p));
+        const { headers, rows, filename } = res;
+        const antigas = Array.isArray(banco.csv_data) ? banco.csv_data : [];
+
+        // Coluna que sumiu e algum modelo do banco ainda le (ja atraves do
+        // mapa dele): imprime vazio — melhor saber antes de trocar.
+        const perdidas = new Set();
+        modelosDoBanco(osId, bancoId).forEach(it => {
+            const mapa = (vinculoDeBancoDoModelo(it) || {}).csv_mapa;
+            window.BancoDoModelo.colunasQueAPecaPede(pecaDoModelo(it)).forEach(col => {
+                const noBanco = window.BancoDoModelo.colunaDoModelo(mapa, col);
+                if (!headers.includes(noBanco)) perdidas.add(noBanco);
+            });
+        });
+        const aviso = perdidas.size
+            ? `\n\nATENÇÃO: ${[...perdidas].map(c => `"${c}"`).join(', ')} `
+              + 'não existe mais na planilha, e há modelo deste pedido lendo essa coluna.'
+            : '';
+
+        const diferenca = rows.length === antigas.length
+            ? 'O número de linhas é o mesmo.'
+            : (rows.length > antigas.length
+                ? `Entram ${rows.length - antigas.length} linha(s) no fim.`
+                : `Saem ${antigas.length - rows.length} linha(s) do fim.`);
+
+        const ok = confirm(
+            `Atualizar o banco "${banco.nome || 'banco'}" pela planilha?\n\n`
+            + `Aqui: ${antigas.length} linha(s).    Na planilha: ${rows.length} linha(s).\n`
+            + diferenca + '\n\n'
+            + 'As linhas são reconhecidas pela POSIÇÃO: a 1ª da planilha é a 1ª daqui. '
+            + 'Se você inseriu, apagou ou reordenou linhas na planilha, a distribuição de '
+            + 'linhas já feita nos modelos passa a apontar para outra linha.\n\n'
+            + 'O que tiver sido corrigido à mão no banco é substituído.'
+            + aviso
+        );
+        if (!ok) { toast('Atualização cancelada. Nada mudou.', 'info'); return; }
+
+        // Ids nao sao reaproveitados: linha nova comeca depois do maior ja usado.
+        let proximo = 1;
+        for (const r of antigas) {
+            const v = Number(r && r.__id);
+            if (Number.isFinite(v) && v >= proximo) proximo = v + 1;
+        }
+        let herdadas = 0;
+        rows.forEach((linha, i) => {
+            const velha = antigas[i];
+            const id = velha ? Number(velha.__id) : NaN;
+            if (Number.isFinite(id) && id > 0) {
+                linha.__id = id;
+                // Ausencia da chave significa ativa: so a desmarcacao viaja.
+                if (velha.__ativo === false) linha.__ativo = false;
+                herdadas++;
+            } else {
+                linha.__id = proximo++;
+            }
+        });
+
+        const { error } = await supabaseClient.from('pedidos_bancos').update({
+            csv_data: rows, csv_headers: headers,
+            csv_filename: filename || banco.csv_filename,
+            updated_at: new Date().toISOString()
+        }).eq('id', bancoId);
+        if (error) throw error;
+
+        banco.csv_data = rows;
+        banco.csv_headers = headers;
+        banco.csv_filename = filename || banco.csv_filename;
+
+        toast(`Banco "${banco.nome || 'banco'}" atualizado: ${rows.length} linha(s), `
+            + `${herdadas} mantendo a identidade que já tinham.` + fraseDasPaginas(res), 'success');
+        abrirBancosDoPedido(osId);
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        toast('Erro ao atualizar: ' + (e.message || e), 'error');
+    }
+}
+window.atualizarBancoDaPlanilha = atualizarBancoDaPlanilha;
 
 /** Lê o CSV escolhido, cria o banco do pedido e liga este modelo nele. */
 async function subirBancoDoPedido() {

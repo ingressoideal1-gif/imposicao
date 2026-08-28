@@ -117,9 +117,23 @@ banco existente: `sql/pedidos_modelos_banco_modelo_id_texto.sql`.
 um banco órfão na lista do pedido — foi assim que apareceram três entradas do mesmo
 arquivo no "Vem de:", sem porta para apagá-las.
 
-## O que ainda falta
+## O banco pode nascer de um link compartilhado
 
-- **Atualizar pela planilha** (`csv_url`) não está ligado para banco do pedido.
+Desde 28/08/2026 o "Vem de:" também oferece **🌐 Buscar de um link
+compartilhado…**: cola-se o link de uma planilha do Google (compartilhada como
+"qualquer pessoa com o link") ou de um CSV na web, e o banco nasce dali, já
+ligado ao modelo. A busca passa pelo **mesmo** `baixarCsvDaWeb` da numeração —
+planilha de várias páginas vem inteira, link com `#gid=` traz só aquela página.
+
+O link fica gravado em `pedidos_bancos.csv_url`. Quando a lista mudar lá, o
+botão **🔄 Planilha** (no 🗂️ Renomear ou excluir bancos…) traz o conteúdo de
+novo — com o mesmo cuidado do atualizar da numeração: `__id` e `__ativo` são
+herdados **posição a posição**, porque a distribuição de linhas dos modelos
+aponta para o `__id` destas linhas, e a confirmação avisa que inserir, apagar ou
+reordenar linhas na planilha desloca a distribuição. Coluna que sumiu e algum
+modelo ainda lê (já através do mapa dele) entra no aviso antes da troca.
+
+## O que ainda falta
 - **Fotos** como dado variável com banco do pedido: não testado — o Gerenciador de
   Fotos ainda escreve na numeração.
 - **A impressão de verdade** com banco do pedido nunca aconteceu. Antes de um
