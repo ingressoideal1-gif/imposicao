@@ -8,6 +8,13 @@ Arquivos: `frontend/csv-editor.js` (o modal inteiro, HTML e CSS incluídos),
 `frontend/script.js` (a ponte), `engine.py` (o filtro das linhas desmarcadas).
 Desenho: `docs/superpowers/specs/2026-08-11-editor-csv-design.md`.
 
+> **O banco também pode ser do pedido.** Desde 27/08/2026 um modelo pode ler um
+> CSV que não mora dentro da numeração, e sim em `pedidos_bancos`, apontando cada
+> coluna pelo `csv_mapa`. Tudo o que este documento descreve continua valendo para
+> o CSV de dentro da numeração; o que muda quando a origem é outra está em
+> [`docs/banco_do_pedido.md`](banco_do_pedido.md). Quem responde de onde um modelo
+> lê é `fonteDoModelo(item)`, e é sobre a **fonte** que o 🧩 Linhas trabalha.
+
 ## Como se chega nele
 
 Três botões na box "Banco de Dados (CSV)" do editor de numeração. Quem alterna a

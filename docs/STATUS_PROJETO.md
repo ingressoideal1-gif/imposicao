@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 19 de agosto de 2026, noite**
+**Última atualização: 28 de agosto de 2026**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + Edge Functions | **v652** | 19/08/2026 |
-| Agente NewProd | **1.2.147** | 19/08/2026 |
+| Site + Edge Functions | **v746** | 28/08/2026 |
+| Agente NewProd | **1.2.241** | 28/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -55,6 +55,30 @@ pelo esqueleto — **401 em todas**.
 > em 17/08/2026, mas a armadilha ficou: a conta do Supabase também tem projetos vazios com
 > nomes parecidos, e função publicada no projeto errado sobe sem erro e não enxerga
 > credencial nenhuma. O `publicar.ps1` confere o `project-ref` por isso.
+
+---
+
+## Onde parou: o banco de dados do pedido
+
+O trabalho de 27 e 28/08/2026. O CSV deixa de ser obrigatoriamente parte da
+numeração e pode ser um registro do **pedido**: a mesma peça serve vários modelos e
+vários pedidos, cada um com as suas linhas e as suas colunas. O que motivou foi o
+catálogo — 171 numerações, 77 delas a mesma peça duplicada só para trocar o CSV.
+
+**Nada antigo foi convertido**, e essa é a condição posta pelo usuário: modelo sem
+vínculo cai no mesmo código de antes, garantido por um teste que compara a peça por
+identidade. As numerações com CSV dentro seguem em uso, sem prazo para mudar.
+
+No ar desde a v745; a v746 consertou o "Vem de:" que não aparecia, e o mesmo dia
+trocou o tipo da coluna `modelo_id` (era UUID; o id do modelo, que vem do parceiro,
+é número).
+
+**Falta**: excluir/renomear banco pelo pedido, "atualizar pela planilha", fotos como
+dado variável com banco do pedido, e a **impressão de verdade** — que só acontece com
+papel na mão.
+
+Documentação: [docs/banco_do_pedido.md](banco_do_pedido.md) ·
+Plano: [docs/superpowers/plans/2026-08-27-peca-e-banco-etapa-1.md](superpowers/plans/2026-08-27-peca-e-banco-etapa-1.md)
 
 ---
 

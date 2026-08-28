@@ -4,6 +4,48 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-28] — O banco de dados pode ser do pedido
+
+O CSV deixa de ser obrigatoriamente parte da numeração. Uma peça só passa a servir
+vários modelos e vários pedidos, cada um com as suas linhas e as suas colunas —
+o que dispensa duplicar a numeração a cada evento. Documento completo:
+[`docs/banco_do_pedido.md`](banco_do_pedido.md).
+
+**Nada foi convertido.** As numerações que têm CSV dentro continuam exatamente como
+estavam: modelo sem vínculo cai no mesmo código de antes, e o teste que trava isso
+compara a peça por identidade (`===`), não por semelhança.
+
+### O que apareceu na tela (v745/v746)
+
+- **Vem de:** no card do modelo — a numeração (padrão), um banco do pedido, ou
+  *+ Subir um CSV para este pedido…*
+- **🔤 Colunas** — o de-para entre a coluna que a peça pede e a coluna do banco.
+- **📊 Editar banco do pedido** — corrige o conteúdo dizendo antes quantos modelos
+  leem dali.
+- O 🧩 Linhas e a conferência de repetidos passaram a trabalhar sobre a **fonte** do
+  modelo, e não sobre a numeração: sem isso o modal abriria o poço errado.
+
+### Correções do mesmo dia
+
+- **O "Vem de:" não aparecia** (v746). Duas causas: a busca dos bancos do pedido ia
+  pendurada na dos CSV das numerações, atrás de um portão que só abria quando alguma
+  numeração estava sem CSV — justamente o que nunca acontece num pedido de banco
+  próprio; e a caixa só aparecia onde já havia dado, de modo que a porta para criar o
+  primeiro banco só existia depois do primeiro banco existir.
+- **`invalid input syntax for type uuid`** ao ligar um modelo. A coluna `modelo_id`
+  nasceu UUID; o id de `pedidos_modelos`, que é do parceiro Vibe, é um número. Passou
+  a TEXT (`sql/pedidos_modelos_banco_modelo_id_texto.sql`, já aplicado).
+- **Vínculo que falha desfaz o banco recém-criado** — cada tentativa frustrada
+  deixava um banco órfão na lista do pedido, sem porta para apagá-lo.
+
+### Ainda em aberto
+
+Excluir/renomear banco pelo pedido, "atualizar pela planilha" para banco do pedido,
+fotos como dado variável com banco do pedido, e a impressão de verdade — que só
+acontece com papel na mão.
+
+---
+
 ## [2026-08-27] — A tela e o papel passam a medir com a mesma régua
 
 Levantamento ponta a ponta da fidelidade dos elementos de numeração: onde as dez

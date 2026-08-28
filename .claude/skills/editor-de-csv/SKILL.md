@@ -31,6 +31,16 @@ As quatro coisas que enganam:
    "começar a editar", e `ed.editando` fica preso em `true` engolindo todos os
    atalhos — e o colar é aplicado duas vezes. Já aconteceu.
 
+**O banco pode não ser da numeração.** Desde 27/08/2026 um modelo pode ler um CSV
+que mora em `pedidos_bancos` (do pedido), apontando cada coluna pelo `csv_mapa` em
+`pedidos_modelos_banco`. Antes de mexer em qualquer coisa que decida "de onde vem o
+dado deste modelo", use `fonteDoModelo(item)` — quem agrupa por numeração abre o poço
+errado e grava `csv_selecao` com `__id` de um banco que aquele modelo não imprime.
+Modelo **sem** vínculo tem de continuar caindo no código antigo, pela mesma
+referência: ver `docs/banco_do_pedido.md` e
+`tests/banco_do_pedido_regressao_harness.js`. E o `modelo_id` é **TEXT**, não UUID —
+o id de `pedidos_modelos` vem do parceiro e hoje é número.
+
 O modal tem **dois modos**, e confundi-los é o erro fácil. No modo edição a caixa
 de marcar diz "imprime / não imprime". No modo distribuição — aberto do pedido,
 quando dois ou mais modelos dividem a mesma numeração com CSV — ela é a seleção do
