@@ -541,5 +541,45 @@ function cenario(mapas) {
         'o resumo do cliente tambem mostra so o que o modelo imprime');
 })();
 
+(function fotosDoBancoDoPedido() {
+    // 28/08/2026: a porta das fotos no box — o Gerenciador de Fotos abre sobre
+    // as linhas do BANCO DO PEDIDO e grava na hora, em vez de exigir o CSV
+    // dentro da peça. Conferido no navegador (prova_fotos_do_banco.js).
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/abrirFotosDoBanco\('\$\{esc\(String\(b\.id\)\)\}', '\$\{escapeJsAttr\(osId\)\}'\)/.test(script),
+        'o box tem o botão 🖼️ Fotos por banco');
+    ok(/const temFotos = Object\.keys\(colunasDeFotoDoBanco\(osId, b\.id\)/.test(script),
+        'e o botão só aparece quando algum modelo aponta janela de foto para o banco');
+
+    const colunas = script.slice(script.indexOf('function colunasDeFotoDoBanco'),
+                                 script.indexOf('window.colunasDeFotoDoBanco'));
+    ok(/el\.type !== 'FOTO'/.test(colunas) && /colunaDoElemento\(mapa, el\)/.test(colunas),
+        'as colunas de foto resolvem por ELEMENTO — peça nova (el:<id>) e legada');
+
+    const porta = script.slice(script.indexOf("window.abrirFotosDoBanco"),
+                               script.indexOf('function desenharBoxDeBancos'));
+    ok(/chave: 'banco:' \+ banco\.id/.test(porta),
+        'a sessão de fotos sobrando é do banco, não da numeração');
+    ok(/rows: banco\.csv_data/.test(porta),
+        'o gerenciador recebe as linhas VIVAS do banco — o __fotos entra nelas');
+    ok(/fotos\/banco-\$\{banco\.id\}/.test(porta),
+        'o upload vai para o prefixo do banco no Storage');
+    ok(/salvarLinhasDaFonte\(\{ tipo: 'banco', id: banco\.id \}, banco\.csv_data\)/.test(porta),
+        'aplicar grava o banco NA HORA — não há passo "Salvar a numeração" aqui');
+    ok(/janelas\[coluna\]/.test(porta) && /diferentes/.test(porta),
+        'o enquadramento usa a janela do elemento que lê a coluna, avisando se diferem');
+
+    // O editor do banco (📊) marca célula sem foto e conta uso de coluna
+    // também para peça nova: resolução por elemento, não só csv_column legado.
+    const editor = script.slice(script.indexOf('window.abrirBancoDoPedidoPorId'),
+                                script.indexOf('function aplicarRenomeacoesNoMapa'));
+    ok(!/colunaNoBanco/.test(editor) && /colunaDoElemento\(mapa, el\)/.test(editor),
+        'colunasDeFoto e colunasEmUso do 📊 resolvem por elemento');
+
+    ok(/use o 🖼️ Fotos do box Gerenciamento de Bancos de Dados/.test(script),
+        'a porta antiga (na peça) ensina o caminho novo quando a peça não tem CSV');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

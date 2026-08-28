@@ -190,11 +190,43 @@ aponta para o `__id` destas linhas, e a confirmação avisa que inserir, apagar 
 reordenar linhas na planilha desloca a distribuição. Coluna que sumiu e algum
 modelo ainda lê (já através do mapa dele) entra no aviso antes da troca.
 
+## Fotos com banco do pedido (28/08/2026)
+
+A foto sempre viajou **dentro da linha do CSV** (`__fotos[coluna]`, gravado pelo
+Gerenciador de Fotos, ou uma URL/caminho direto na célula) — e o motor lê dali,
+com cache em disco na estação, sem saber de onde o CSV veio. O que prendia o
+fluxo à numeração era só a porta. Agora são duas:
+
+- **`abrirFotosDoElemento`** (a de sempre): dentro do editor da peça, sobre o
+  CSV **da peça**. Continua igual — e, quando a peça não tem CSV, o aviso
+  ensina o caminho novo.
+- **`abrirFotosDoBanco`** (a nova): o botão **🖼️ Fotos** na linha do banco, no
+  box Gerenciamento de Bancos de Dados. Abre o mesmo Gerenciador sobre as
+  linhas **do banco** e **grava na hora** (`salvarLinhasDaFonte`) — não existe
+  aqui o passo "Salvar a numeração", então um F5 não perde o lote.
+
+As regras da porta nova:
+
+- O 🖼️ **só aparece** quando algum modelo aponta uma janela de foto para o
+  banco (`colunasDeFotoDoBanco`, resolução por elemento — `el:<id>` do 🔤 ou
+  `csv_column` legado). Sem janela apontada, o clique não teria o que fazer.
+- A **janela de enquadramento** (tamanho/encaixe) vem do **elemento** que lê a
+  coluna. Modelos com janelas diferentes: vale a primeira, e a tela avisa qual.
+- Mais de uma coluna de foto no mesmo banco: o operador escolhe qual abrir.
+- O upload vai para `fotos/banco-<id>/<hash>.jpg` no bucket de sempre; a
+  sessão de fotos sobrando é `banco:<id>|<coluna>`.
+- O 📊 do banco marca célula sem foto e conta o uso das colunas **também para
+  peça nova**: `colunasDeFoto`/`colunasEmUso` resolvem por elemento.
+
+O fluxo completo: peça desenha a janela (sem coluna, sem foto) → pedido carrega
+o CSV no box → 🔤 aponta a coluna da foto → 🖼️ Fotos no box: importa o lote,
+casa foto com linha, enquadra, grava → imprime (trava e aquecimento de cache já
+existiam). O modo direto continua valendo: coluna com URLs públicas imprime sem
+Gerenciador.
+
 ## O que ainda falta
-- **Fotos** como dado variável com banco do pedido: não testado — o Gerenciador de
-  Fotos ainda escreve na numeração.
-- **A impressão de verdade** com banco do pedido nunca aconteceu. Antes de um
-  trabalho grande, tirar uma folha de prova.
+- **A impressão de verdade** com banco do pedido nunca aconteceu — nem com
+  fotos. Antes de um trabalho grande, tirar uma folha de prova.
 
 ## Como verificar uma mudança
 

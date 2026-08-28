@@ -15543,7 +15543,8 @@ window.abrirFotosDoElemento = function (elId) {
 
     if (!state.numCsvData || !state.numCsvData.length) {
 
-        toast('Esta numeração ainda não tem banco de dados. Crie ou importe o CSV antes de trazer as fotos.', 'error');
+        toast('Esta numeração ainda não tem banco de dados. Crie ou importe o CSV antes de trazer as fotos — '
+            + 'ou, se o banco é do PEDIDO, use o 🖼️ Fotos do box Gerenciamento de Bancos de Dados.', 'error');
 
         return;
 
@@ -15551,7 +15552,8 @@ window.abrirFotosDoElemento = function (elId) {
 
     if (!el.csv_column) {
 
-        toast('Escolha primeiro a coluna do banco em que a foto será guardada.', 'error');
+        toast('Escolha primeiro a coluna do banco em que a foto será guardada. '
+            + 'Numa peça que lê banco do pedido, aponte a coluna no 🔤 Colunas do modelo e use o 🖼️ Fotos do box.', 'error');
 
         return;
 
@@ -17104,18 +17106,17 @@ window.abrirBancoDoPedidoPorId = function (bancoId, osId) {
     // Cada modelo lê a coluna DEPOIS do mapa dele, então a contagem de uso tem
     // de passar pelo mapa: renomear "05/09" precisa avisar que dois campos do
     // modelo do dia 5 dependem dela, mesmo que a peça chame aquilo de CODIGO.
-    const colunaNoBanco = (it, col) => window.BancoDoModelo.colunaDoModelo(
-        (vinculoDeBancoDoModelo(it) || {}).csv_mapa, col);
-
+    // A resolução é por ELEMENTO (`colunaDoElemento`): cobre a peça nova, que
+    // não tem csv_column e aponta pelo `el:<id>` do 🔤, e a legada, pelo nome.
     const colunasEmUso = () => {
         const uso = {};
         usuarios.forEach(it => {
             const peca = pecaDoModelo(it);
+            const mapa = (vinculoDeBancoDoModelo(it) || {}).csv_mapa;
             (peca && peca.elements || []).forEach(el => {
                 if (!el || el.source !== 'database') return;
-                const col = String(el.csv_column || '').trim();
-                if (!col) return;
-                const noBanco = colunaNoBanco(it, col);
+                const noBanco = window.BancoDoModelo.colunaDoElemento(mapa, el);
+                if (!noBanco) return;
                 uso[noBanco] = (uso[noBanco] || 0) + 1;
             });
         });
@@ -17124,9 +17125,11 @@ window.abrirBancoDoPedidoPorId = function (bancoId, osId) {
 
     const colunasDeFoto = [...new Set(usuarios.flatMap(it => {
         const peca = pecaDoModelo(it);
+        const mapa = (vinculoDeBancoDoModelo(it) || {}).csv_mapa;
         return (peca && peca.elements || [])
-            .filter(el => el && el.type === 'FOTO' && el.csv_column)
-            .map(el => colunaNoBanco(it, el.csv_column));
+            .filter(el => el && el.type === 'FOTO')
+            .map(el => window.BancoDoModelo.colunaDoElemento(mapa, el))
+            .filter(Boolean);
     }))];
 
     window.abrirEditorCsv({
@@ -17186,6 +17189,137 @@ async function aplicarRenomeacoesNoMapa(osId, bancoId, renomeacoes) {
 window.aplicarRenomeacoesNoMapa = aplicarRenomeacoesNoMapa;
 
 /**
+ * As colunas de FOTO deste banco, resolvidas por ELEMENTO: cada janela de foto
+ * das peças dos modelos que leem o banco aponta uma coluna (pelo `el:<id>` do
+ * 🔤 ou pelo `csv_column` legado). Devolve `{ coluna: [janelas...] }`, cada
+ * janela com o tamanho/encaixe do elemento e o rótulo do modelo — é por elas
+ * que o Gerenciador de Fotos sabe COMO enquadrar.
+ */
+function colunasDeFotoDoBanco(osId, bancoId) {
+    const porColuna = {};
+    modelosDoBanco(osId, bancoId).forEach((it, i) => {
+        const peca = pecaDoModelo(it);
+        const mapa = (vinculoDeBancoDoModelo(it) || {}).csv_mapa;
+        ((peca && peca.elements) || []).forEach(el => {
+            if (!el || el.type !== 'FOTO') return;
+            const col = window.BancoDoModelo.colunaDoElemento(mapa, el);
+            if (!col) return;
+            (porColuna[col] = porColuna[col] || []).push({
+                w_mm: el.width_mm || 25, h_mm: el.height_mm || 32,
+                fit: el.fit || 'cover', modelo: rotuloDoModelo(it, i)
+            });
+        });
+    });
+    return porColuna;
+}
+window.colunasDeFotoDoBanco = colunasDeFotoDoBanco;
+
+/**
+ * A porta das fotos do BANCO DO PEDIDO (28/08/2026): abre o Gerenciador de
+ * Fotos sobre as linhas do banco, e grava na hora.
+ *
+ * É o mesmo Gerenciador da peça (`abrirFotosDoElemento`), com três diferenças
+ * de dono:
+ *   · as linhas são as do banco do pedido — o `__fotos` entra NELAS;
+ *   · a gravação é imediata (`salvarLinhasDaFonte`), porque o banco é do
+ *     pedido e não tem o passo "Salvar a numeração" do fluxo da peça;
+ *   · a janela de enquadramento vem do ELEMENTO que lê a coluna — quando
+ *     modelos usam janelas diferentes, vale a primeira e a tela avisa qual.
+ */
+window.abrirFotosDoBanco = function (bancoId, osId, coluna) {
+    if (typeof window.abrirGerenciadorDeFotos !== 'function') {
+        toast('O Gerenciador de Fotos não carregou. Recarregue a página.', 'error');
+        return;
+    }
+    const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(bancoId));
+    if (!banco) return;
+    if (!banco.csv_data || !banco.csv_data.length) {
+        toast('Este banco ainda não tem linhas carregadas. Feche e abra o pedido de novo.', 'error');
+        return;
+    }
+
+    const janelas = colunasDeFotoDoBanco(osId, bancoId);
+    const cabecalho = (banco.csv_headers || []).map(String);
+    const colunas = Object.keys(janelas).filter(c => cabecalho.indexOf(c) !== -1);
+    if (!colunas.length) {
+        toast(Object.keys(janelas).length
+            ? 'A coluna de foto apontada não existe neste banco. Corrija no 🔤 Colunas do modelo.'
+            : 'Nenhum modelo aponta uma janela de foto para este banco. Aponte a coluna do elemento FOTO no 🔤 Colunas do modelo.', 'info');
+        return;
+    }
+
+    if (!coluna) {
+        if (colunas.length === 1) coluna = colunas[0];
+        else {
+            const escolha = prompt('Este banco tem ' + colunas.length + ' colunas de foto:\n'
+                + colunas.map((c, i) => (i + 1) + '. ' + c).join('\n')
+                + '\n\nDigite o número da coluna para trazer as fotos:', '1');
+            const n = parseInt(escolha, 10);
+            if (!n || !colunas[n - 1]) return;
+            coluna = colunas[n - 1];
+        }
+    }
+
+    const usos = janelas[coluna] || [];
+    const janela = usos[0] || { w_mm: 25, h_mm: 32, fit: 'cover' };
+    const diferentes = usos.some(u => u.w_mm !== janela.w_mm || u.h_mm !== janela.h_mm || u.fit !== janela.fit);
+    if (diferentes) {
+        toast('Os modelos usam janelas de foto diferentes. O enquadramento vai usar a de '
+            + janela.modelo + ' (' + janela.w_mm + '×' + janela.h_mm + ' mm).', 'info');
+    }
+
+    window.abrirGerenciadorDeFotos({
+        janela: { w_mm: janela.w_mm, h_mm: janela.h_mm, fit: janela.fit },
+
+        // Identifica a sessão: é por ela que as fotos que sobraram voltam à
+        // tela quando o gerenciador é reaberto neste mesmo banco.
+        chave: 'banco:' + banco.id + '|' + coluna,
+
+        coluna: coluna,
+
+        headers: banco.csv_headers || [],
+
+        // As linhas VIVAS do banco: é escrevendo `__fotos` dentro delas que o
+        // enquadramento viaja com a pessoa — e todos os modelos que leem o
+        // banco imprimem a mesma foto.
+        rows: banco.csv_data,
+
+        subirFoto: (blob, hash) => uploadToStorage(blob, hash + '.jpg', 'fotos', {
+            objectPath: `fotos/banco-${banco.id}/${hash}.jpg`
+        }),
+
+        onAplicar: async ({ gravadas, queimadas, falhas, semFoto, sobrando, coluna }) => {
+            // Diferente do fluxo da peça, aqui não existe o passo "Salvar a
+            // numeração": o banco é do pedido, então grava agora — um F5 não
+            // pode jogar fora o enquadramento de um lote inteiro.
+            try {
+                await salvarLinhasDaFonte({ tipo: 'banco', id: banco.id }, banco.csv_data);
+                if (gravadas) {
+                    const reduzidas = queimadas
+                        ? ` ${queimadas} passava(m) de 350 dpi e subiu(ram) reamostrada(s) para 300.`
+                        : '';
+                    toast(`${gravadas} foto(s) ligadas à coluna “${coluna}” e gravadas no banco.${reduzidas}`, 'success');
+                }
+            } catch (e) {
+                toast('As fotos subiram, mas o banco não gravou: ' + (e.message || e), 'error');
+            }
+            if (falhas && falhas.length) {
+                toast(`${falhas.length} foto(s) não subiram. Elas continuam no lote.`, 'error');
+            }
+            if (semFoto && semFoto.length) {
+                toast(`${semFoto.length} linha(s) ainda estão sem foto — a impressão vai recusar.`, 'info');
+            }
+            if (sobrando) {
+                toast(`${sobrando} foto(s) continuam sem linha e seguem na tela do gerenciador.`, 'info');
+            }
+            // Os cards desenham a foto na amostra, e o 📊 passa a mostrar a
+            // célula ligada.
+            renderAmostrasOSItens(osId);
+        }
+    });
+};
+
+/**
  * Quantos modelos leem deste banco, contando TODOS os vinculos carregados.
  *
  * Diferente do `modelosDoBanco`, que so olha os itens do pedido aberto: a
@@ -17238,6 +17372,9 @@ function desenharBoxDeBancos(osId) {
         const nLinhas = Array.isArray(b.csv_data) ? b.csv_data.length : 0;
         const temLink = !!String(b.csv_url || '').trim();
         const quemLe = leitores.map((it, i) => rotuloDoModelo(it, i)).join(', ');
+        // O 🖼️ só aparece quando algum modelo aponta uma janela de foto para
+        // este banco — controle que não tem o que fazer não fica na tela.
+        const temFotos = Object.keys(colunasDeFotoDoBanco(osId, b.id) || {}).length > 0;
         return `
         <div style="border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">
@@ -17257,6 +17394,9 @@ function desenharBoxDeBancos(osId) {
                     onclick="atualizarBancoDaPlanilha('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
                     style="font-size:0.75rem; padding:3px 8px;"
                     title="Trazer de novo o conteúdo da planilha ligada a este banco">🔄 Planilha</button>` : ''}
+                ${temFotos ? `<button class="btn btn-sm btn-secondary" onclick="abrirFotosDoBanco('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
+                    style="font-size:0.75rem; padding:3px 8px;"
+                    title="Trazer e enquadrar as fotos das pessoas deste banco">🖼️ Fotos</button>` : ''}
                 <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorId('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
                     style="font-size:0.75rem; padding:3px 8px;" title="Conferir e corrigir o conteúdo deste banco">📊 Conferir</button>
                 <button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
