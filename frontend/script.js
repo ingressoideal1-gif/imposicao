@@ -16760,19 +16760,23 @@ function abrirColunasDoModelo(idx, osId) {
     }
 
     const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
-    if (!pedidas.length) {
-        // Campo de banco SEM coluna escolhida nao entra nas pedidas — e uma
-        // peca criada sem CSV nasce exatamente assim. A trava diz a saida.
-        const temCampoSemNome = ((peca && peca.elements) || [])
-            .some(el => el && el.source === 'database' && !String(el.csv_column || '').trim());
-        toast(temCampoSemNome
-            ? 'Os campos de banco desta numeração ainda estão sem coluna. Abra a numeração e '
-              + 'digite o nome da coluna de cada campo (caixa "Coluna do CSV") — depois volte aqui para apontá-las no banco.'
-            : 'Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
+    const cabecalho = (banco.csv_headers || []).map(String);
+
+    // A peca SEM dado proprio escolhe aqui quais colunas do banco ela conhece:
+    // as marcadas vao para o `csv_headers` dela (so o vocabulario — nenhuma
+    // linha), e e essa lista que o editor da numeracao mostra no dropdown
+    // "Coluna do CSV" de cada elemento. Pedido do usuario em 28/08/2026 —
+    // digitar o nome da coluna a mao era o unico caminho, e errado uma letra
+    // o campo imprimia vazio. Peca COM dado nao entra: o dropdown dela vem do
+    // proprio CSV, e mexer nos headers descasaria cabecalho e linhas.
+    const pecaSemDado = !(peca.csv_data && peca.csv_data.length);
+    const mostraColunas = pecaSemDado && cabecalho.length > 0;
+
+    if (!pedidas.length && !mostraColunas) {
+        toast('Esta numeração não lê nenhuma coluna de banco de dados — não há o que apontar.', 'info');
         return;
     }
 
-    const cabecalho = (banco.csv_headers || []).map(String);
     const mapa = (vinc && vinc.csv_mapa) || {};
 
     const quantosCampos = (col) => (peca.elements || [])
@@ -16809,7 +16813,26 @@ function abrirColunasDoModelo(idx, osId) {
                     · banco: ${esc(banco.nome || 'banco')}
                 </div>
             </div>
+            ${mostraColunas ? `
+            <div style="padding:12px 18px; border-bottom:1px solid var(--border);">
+                <div style="font-weight:700; font-size:0.9rem; margin-bottom:4px;">Colunas do banco nesta numeração</div>
+                <div style="color:var(--text-dim); font-size:0.82rem; margin-bottom:8px;">
+                    Marque as colunas que esta numeração usa. Elas passam a aparecer no
+                    editor da numeração, na lista "Coluna do CSV" de cada elemento —
+                    sem precisar digitar o nome à mão.
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px 14px;">
+                    ${cabecalho.map(h => {
+                        const marcada = ((peca.csv_headers || []).map(String)).includes(h);
+                        return `<label style="display:inline-flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" class="col-do-banco" data-col="${esc(h)}" ${marcada ? 'checked' : ''}>
+                            <span style="font-family:monospace;">${esc(h)}</span>
+                        </label>`;
+                    }).join('')}
+                </div>
+            </div>` : ''}
             <div style="overflow:auto; padding:0 4px;">
+                ${pedidas.length ? `
                 <table style="width:100%; border-collapse:collapse;">
                     <thead><tr>
                         <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">A numeração lê</th>
@@ -16817,7 +16840,12 @@ function abrirColunasDoModelo(idx, osId) {
                         <th style="text-align:left; padding:8px 10px; color:var(--text-dim); font-size:0.78rem; text-transform:uppercase;">No banco deste pedido</th>
                     </tr></thead>
                     <tbody>${linhas}</tbody>
-                </table>
+                </table>` : `
+                <div style="padding:12px 18px; color:var(--text-dim); font-size:0.85rem;">
+                    Os elementos desta numeração ainda não escolheram coluna. Marque as
+                    colunas acima, aplique, e abra a numeração: cada elemento de banco
+                    escolhe a sua na lista "Coluna do CSV".
+                </div>`}
             </div>
             <div style="padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="fecharColunasDoModelo()">Cancelar</button>
@@ -16847,10 +16875,32 @@ async function aplicarColunasDoModelo(idx, osId) {
         if (col && s.value) mapa[col] = s.value;
     });
 
-    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(pecaDoModelo(item));
+    const peca = pecaDoModelo(item);
+    const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
     const limpo = window.BancoDoModelo.mapaLimpo(mapa, pedidas);
 
     try {
+        // As colunas marcadas viram o `csv_headers` da peca — o vocabulario que
+        // o editor da numeracao mostra no dropdown "Coluna do CSV". So o nome
+        // das colunas: nenhuma linha de dado e escrita na peca. Coluna que um
+        // elemento ja usa nao sai por desmarcacao — sumir com ela do dropdown
+        // nao apagaria o uso, so o esconderia.
+        const checks = [...over.querySelectorAll('input.col-do-banco')];
+        if (checks.length && peca) {
+            const marcadas = checks.filter(c => c.checked).map(c => c.getAttribute('data-col'));
+            const emUso = pedidas.filter(c => !marcadas.includes(c));
+            const novas = [...checks.map(c => c.getAttribute('data-col')).filter(h => marcadas.includes(h)), ...emUso];
+            const antigas = (peca.csv_headers || []).map(String);
+            if (novas.join(' ') !== antigas.join(' ')) {
+                await salvarCamposDaNumeracao(peca.id, { csv_headers: novas });
+                peca.csv_headers = novas;   // a mesma referencia do catalogo
+                if (emUso.length) {
+                    toast('A coluna ' + emUso.map(c => '"' + c + '"').join(', ')
+                        + ' continua na lista: há elemento da numeração usando ela.', 'info');
+                }
+            }
+        }
+
         await ligarModeloAoBanco(item.id, vinc.banco_id, limpo);
         fecharColunasDoModelo();
         toast('Colunas deste modelo atualizadas.', 'success');

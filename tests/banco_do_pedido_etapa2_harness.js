@@ -377,5 +377,28 @@ function cenario(mapas) {
     ok(/csv_url/.test(criar), 'criar o banco grava o csv_url quando veio de um link');
 })();
 
+(function colunasPorCheckboxAlimentamOEditor() {
+    // 28/08/2026: no 🔤 Colunas, a peca SEM dado escolhe por checkbox quais
+    // colunas do banco ela conhece; as marcadas viram o csv_headers dela, e e
+    // dai que o editor da numeracao tira o dropdown "Coluna do CSV" (e a barra
+    // de colunas que cria campo no clique). Conferido no navegador; aqui fica
+    // o que nao pode se desfazer sozinho.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    const abrir = script.slice(script.indexOf('function abrirColunasDoModelo'),
+                               script.indexOf('window.abrirColunasDoModelo'));
+    ok(/col-do-banco/.test(abrir) && /pecaSemDado/.test(abrir),
+        'o modal tem os checkboxes das colunas do banco, so para peca sem dado proprio');
+    ok(/csv_data && peca\.csv_data\.length/.test(abrir),
+        'peca COM dado nao ganha checkbox — o dropdown dela vem do proprio CSV');
+
+    const aplicar = script.slice(script.indexOf('async function aplicarColunasDoModelo'),
+                                 script.indexOf('window.aplicarColunasDoModelo'));
+    ok(/salvarCamposDaNumeracao\(peca\.id, \{ csv_headers/.test(aplicar),
+        'aplicar grava as marcadas no csv_headers da peca — nomes, nenhuma linha de dado');
+    ok(/emUso/.test(aplicar),
+        'coluna que um elemento ja usa nao sai por desmarcacao');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

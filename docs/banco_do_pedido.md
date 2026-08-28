@@ -67,7 +67,7 @@ Todas no card do modelo, dentro do pedido, na caixa **🗂️ Banco de dados**:
 | Porta | O que faz | Aparece quando |
 |---|---|---|
 | **Vem de:** | escolhe a origem: a numeração (padrão), um banco do pedido, ou *+ Subir um CSV para este pedido…* | a peça pede colunas, ou já há banco/vínculo |
-| **🔤 Colunas** | o de‑para de cada coluna que a peça pede | só com banco do pedido |
+| **🔤 Colunas** | os checkboxes das colunas do banco que a peça conhece, e o de‑para de cada coluna que a peça pede | só com banco do pedido |
 | **🧩 Linhas** | reparte as linhas entre os modelos que leem a mesma fonte | há linhas para contar |
 | **📊 Editar banco do pedido** | corrige o conteúdo, avisando quantos modelos leem dali | só com banco do pedido |
 | **🗂️ Renomear ou excluir bancos…** | última opção do "Vem de:" — abre a lista dos bancos do pedido para renomear ou excluir | há algum banco no pedido |
@@ -86,6 +86,21 @@ Peça sem campo de banco não mostra caixa alguma.
 banco do pedido. O 🧩 Linhas e a conferência de repetidos trabalham sobre a
 **fonte**, não sobre a numeração — sem isso, o modal abriria o poço errado e
 gravaria em `csv_selecao` `__id`s de um banco que aquele modelo não imprime.
+
+## As colunas entram por checkbox, e o editor as oferece em dropdown
+
+Pedido do usuário em 28/08/2026: digitar o nome da coluna à mão no editor era o
+único caminho para a peça sem CSV, e uma letra errada imprime campo vazio. No
+🔤 Colunas, a peça **sem dado próprio** ganhou a lista das colunas do banco com
+checkbox — as marcadas viram o `csv_headers` da peça (só os nomes; nenhuma linha
+de dado é escrita). A partir daí o editor da numeração mostra essas colunas no
+**dropdown** "Coluna do CSV" de cada elemento, e a barra de colunas do editor
+cria campo no clique, como sempre fez.
+
+Duas regras seguram isso: peça **com** CSV dentro não ganha checkbox (o dropdown
+dela vem do próprio arquivo, e mexer nos headers descasaria cabeçalho e linhas);
+e coluna que algum elemento já usa não sai por desmarcação — sumir com ela do
+dropdown não apagaria o uso, só o esconderia.
 
 ## As travas
 
