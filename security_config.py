@@ -155,6 +155,7 @@ PAINEL_ARQUIVOS = [
     "pagamento-do-pedido.js",
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
+    "banco-do-modelo.js",
     "arte-de-impressao.js",
     "qr-canvas.js",
     # A conta do numero que cada pagina da visualizacao combinada mostra
