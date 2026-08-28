@@ -1009,7 +1009,89 @@ window.numeracoesSemBancoBaixado = numeracoesSemBancoBaixado;
  * justamente esperando a tela. Em serie, cada card acende assim que o dele
  * chega. Nunca lanca -- sem rede a tela fica como estava.
  */
+/** O numero da OS (`pedidos_modelos.id_int`), tirado dos modelos ja carregados. */
+function idIntDoPedido(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    const com = itens.find(it => it && it.id_int);
+    return com ? com.id_int : null;
+}
+window.idIntDoPedido = idIntDoPedido;
+
+/**
+ * Os bancos de dados do PEDIDO e o vinculo de cada modelo com eles.
+ *
+ * Duas consultas pequenas, uma por tabela. O `csv_data` vem junto porque e ele
+ * que o desenho precisa, e e a mesma ordem de grandeza do que o
+ * `garantirCsvDaNumeracao` ja baixa hoje.
+ *
+ * Pedido sem nenhum banco proprio devolve as duas estruturas vazias, e todo
+ * modelo dele segue pelo caminho de sempre — que e o caso de 100% dos pedidos
+ * ate a Etapa 2 existir. Ver `docs/superpowers/plans/2026-08-27-peca-e-banco-etapa-1.md`.
+ */
+async function carregarBancosDoPedidoNovo(osId, idInt) {
+    if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
+    if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
+    if (typeof supabaseClient === 'undefined' || !supabaseClient || !idInt) return 0;
+
+    const { data: bancos, error: e1 } = await supabaseClient
+        .from('pedidos_bancos').select('*').eq('id_int', idInt);
+    if (e1) throw e1;
+    state.bancosDoPedido = bancos || [];
+    if (!state.bancosDoPedido.length) { state.vinculosDeBanco = {}; return 0; }
+
+    const ids = state.bancosDoPedido.map(b => b.id);
+    const { data: vinculos, error: e2 } = await supabaseClient
+        .from('pedidos_modelos_banco').select('*').in('banco_id', ids);
+    if (e2) throw e2;
+    const mapa = {};
+    (vinculos || []).forEach(v => { if (v && v.modelo_id) mapa[String(v.modelo_id)] = v; });
+    state.vinculosDeBanco = mapa;
+    return state.bancosDoPedido.length;
+}
+window.carregarBancosDoPedidoNovo = carregarBancosDoPedidoNovo;
+
+/**
+ * Modelo com vinculo de banco cujo banco NAO chegou. Lista vazia = pode imprimir.
+ *
+ * Mesma armadilha que o `garantirCsvDoTrabalho` tapa do outro lado: o motor
+ * decide entre banco e numeracao SEQUENCIAL pelo tamanho de `rows`, entao um
+ * banco que nao desceu sai como numero impresso no lugar do nome da pessoa, sem
+ * erro em tela nenhuma. Aqui a falta e visivel e vira recusa, nao silencio.
+ */
+/**
+ * Os modelos do trabalho da tela cujo banco do pedido nao chegou.
+ *
+ * Olha os mesmos pedidos que o `idsDeNumeracaoDoTrabalho` olha: a selecao
+ * multipla e o modelo aberto.
+ */
+function modelosSemBancoDoTrabalho() {
+    const osIds = new Set();
+    (state.selectedOSItems || []).forEach(sel => { if (sel && sel.osId) osIds.add(sel.osId); });
+    if (state.activeOSItem && state.activeOSItem.osId) osIds.add(state.activeOSItem.osId);
+    let fora = [];
+    osIds.forEach(osId => { fora = fora.concat(modelosComBancoNaoBaixado(osId)); });
+    return fora;
+}
+window.modelosSemBancoDoTrabalho = modelosSemBancoDoTrabalho;
+
+function modelosComBancoNaoBaixado(osId) {
+    const itens = (state.osItens && state.osItens[osId]) || [];
+    if (!window.BancoDoModelo) return [];
+    return itens.filter(it => {
+        const v = vinculoDeBancoDoModelo(it);
+        if (!v) return false;
+        return !window.BancoDoModelo.bancoDoModelo(v, state.bancosDoPedido || []);
+    });
+}
+window.modelosComBancoNaoBaixado = modelosComBancoNaoBaixado;
+
 async function carregarBancosDoPedido(osId, aoChegar) {
+    // Os bancos proprios do pedido primeiro. Se a consulta falhar — tabela
+    // ainda nao criada, rede fora — o pedido segue pelo caminho de sempre, que
+    // e o comportamento correto: ausencia de vinculo significa banco de dentro
+    // da numeracao.
+    try { await carregarBancosDoPedidoNovo(osId, idIntDoPedido(osId)); } catch (e) { /* segue */ }
+
     const faltando = numeracoesSemBancoBaixado(osId);
     let baixadas = 0;
     for (const num of faltando) {
@@ -11685,6 +11767,18 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Ver `garantirCsvDoTrabalho`: sem esta linha, uma numeracao com banco que
     // ainda nao desceu imprime numero sequencial no lugar dos nomes.
     await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('imp-numeracao'));
+
+    // A mesma trava, do lado do banco que e do PEDIDO. Ver
+    // `modelosComBancoNaoBaixado`: sem isto, um vinculo cujo banco nao chegou
+    // imprime numero no lugar do nome, calado.
+    const semBancoDoPedido = modelosSemBancoDoTrabalho();
+    if (semBancoDoPedido.length) {
+        toast('O banco de dados não chegou para: '
+            + semBancoDoPedido.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+            + '. Feche e abra o pedido de novo para baixá-lo — imprimir agora sairia '
+            + 'com número no lugar do nome.', 'error');
+        return;
+    }
 
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;

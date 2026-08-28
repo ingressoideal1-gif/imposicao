@@ -84,5 +84,31 @@ const BANCO = {
     ok(B.bancoDoModelo(null, bancos) === null, 'sem vinculo, sem banco');
 })();
 
+(function travaDoBancoQueNaoDesceu() {
+    // Vinculo apontando para banco ausente NAO pode virar "sem banco": isso
+    // devolveria a peca com o csv_data do catalogo e imprimiria o dado errado.
+    // Quem barra e a trava do `modelosComBancoNaoBaixado`, e ela so consegue
+    // barrar porque este `null` aqui e distinguivel.
+    ok(B.bancoDoModelo({ banco_id: 'b-9' }, [BANCO]) === null,
+        'banco ausente devolve null, para a trava poder ver');
+    ok(B.numeracaoResolvida(PECA, null, { 'CODIGO': '06/09' }).csv_data === PECA.csv_data,
+        'sem banco, o csv continua sendo o da peca — quem barra e a trava, nao esta funcao');
+})();
+
+// ── A trava, e as duas telas ─────────────────────────────────────────────────
+
+(function asDuasTelasTemATrava() {
+    const fs = require('fs');
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+    ok(script.includes('modelosSemBancoDoTrabalho') && pedido.includes('modelosSemBancoDoTrabalho'),
+        'a trava do banco que nao desceu esta nas DUAS telas de imposicao');
+
+    // Trava sem saida na tela e trava que prende o operador: o recado tem de
+    // dizer o que fazer, e nao so que algo falta.
+    ok(/Feche e abra o pedido de novo/.test(script) && /Feche e abra o pedido de novo/.test(pedido),
+        'o recado da trava diz o que fazer para sair dela');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

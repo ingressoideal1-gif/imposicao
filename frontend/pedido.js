@@ -4194,6 +4194,20 @@ window.runPedImposition = async function (mode, isRefazer) {
     if (typeof garantirCsvDoTrabalho === 'function') {
         await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('ped-numeracao'));
     }
+
+    // A mesma trava, do lado do banco que e do PEDIDO (27/08/2026): vinculo cujo
+    // banco nao chegou imprimiria numero no lugar do nome, sem avisar.
+    if (typeof modelosSemBancoDoTrabalho === 'function') {
+        const semBancoDoPedido = modelosSemBancoDoTrabalho();
+        if (semBancoDoPedido.length) {
+            toast('O banco de dados não chegou para: '
+                + semBancoDoPedido.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+                + '. Feche e abra o pedido de novo para baixá-lo — imprimir agora sairia '
+                + 'com número no lugar do nome.', 'error');
+            return;
+        }
+    }
+
     if (window.isImposing) return;
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
