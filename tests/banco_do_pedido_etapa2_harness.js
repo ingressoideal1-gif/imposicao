@@ -291,5 +291,31 @@ function cenario(mapas) {
         'e NAO escreve nos elementos da numeracao');
 })();
 
+(function aPortaAparecePrecisamenteOndeServe() {
+    // 28/08/2026: o "Vem de:" nao aparecia. Duas causas, e as duas ficam
+    // presas aqui. O efeito na tela foi conferido no navegador de verdade;
+    // estas verificacoes existem para que a correcao nao se desfaca sozinha.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    // (1) A caixa so aparecia onde JA havia banco. A peca reaproveitada — a que
+    // pede colunas e nao traz CSV dentro — ficava sem a porta que lhe daria um.
+    const caixa = script.slice(script.indexOf('function atualizarBotoesCsvDaAmostra'));
+    const ateOTemCsv = caixa.slice(0, caixa.indexOf('linha.style.display'));
+    ok(/colunasQueAPecaPede/.test(ateOTemCsv),
+        'a caixa do banco aparece tambem quando a PECA pede colunas e nao tem CSV');
+
+    // (2) A busca dos bancos do pedido ia junto com a das numeracoes, atras de
+    // um portao que perguntava so por numeracao sem CSV baixado. Pedido cujas
+    // numeracoes nao tem CSV nenhum — o caso do banco do pedido — nunca tinha
+    // numeracao "faltando", e por isso abria sem os proprios bancos.
+    const render = script.slice(script.indexOf('function renderAmostrasOSItens'));
+    const portao = render.slice(render.indexOf('state._bancosEmVoo ='),
+                                render.indexOf('state._coberturaEmVoo ='));
+    ok(/trocouDePedido/.test(portao) && /numeracoesSemBancoBaixado/.test(portao),
+        'abrir o pedido busca os bancos DELE, e nao so os CSV das numeracoes');
+    ok(/state\.bancosDoPedido = \[\]/.test(portao),
+        'e trocar de pedido descarta os bancos do anterior, para o card de um nao oferecer o banco do outro');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

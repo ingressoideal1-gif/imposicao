@@ -16512,8 +16512,15 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     const vinculoDaqui = vinculoDeBancoDoModelo(item);
     const pedidoTemBanco = !!(state.bancosDoPedido && state.bancosDoPedido.length);
 
+    // E aparece tambem quando a peca PEDE colunas e nao trouxe CSV nenhum: é
+    // exatamente a numeracao reaproveitada sem dado dentro, a que precisa da
+    // porta para receber o banco do pedido. Sem isto o "Vem de:" so existia
+    // onde ja havia banco — ou seja, em todo lugar menos onde ele serve.
+    const pecaPedeColuna = !!(num && window.BancoDoModelo
+        && window.BancoDoModelo.colunasQueAPecaPede(num).length);
+
     const temCsv = baixando || !!(num && num.csv_data && num.csv_data.length)
-        || !!vinculoDaqui || pedidoTemBanco;
+        || !!vinculoDaqui || pedidoTemBanco || pecaPedeColuna;
 
     linha.style.display = temCsv ? 'flex' : 'none';
 
@@ -30618,16 +30625,27 @@ function renderAmostrasOSItens(osId) {
     //
     // A trava e por PEDIDO: quem abre o A e pula para o B nao pode ficar sem
     // os bancos do B.
+    // O portao abaixo perguntava SO pelas numeracoes sem CSV baixado. Só que
+    // quem desce os bancos do PROPRIO pedido é a mesma busca, e pedido cujas
+    // numeracoes nao tem CSV nenhum — que é justamente o caso do banco do
+    // pedido — nunca tem numeracao "faltando". Resultado: o pedido abria sem
+    // seus bancos, e o "Vem de:" so oferecia a numeracao. Por isso a marca de
+    // QUAL pedido esta carregado entra na conta.
     state._bancosEmVoo = state._bancosEmVoo || {};
+    const trocouDePedido = state._bancosPedidoDe !== targetOSId;
     if (containerId === 'amostras-itens-container'
         && typeof carregarBancosDoPedido === 'function'
         && !state._bancosEmVoo[targetOSId]
-        && numeracoesSemBancoBaixado(targetOSId).length) {
+        && (trocouDePedido || numeracoesSemBancoBaixado(targetOSId).length)) {
         state._bancosEmVoo[targetOSId] = true;
+        // Pular do pedido A para o B tem de trocar os bancos: manter os de A
+        // ofereceria, no card de B, um banco que nao é daquele trabalho.
+        if (trocouDePedido) { state.bancosDoPedido = []; state.vinculosDeBanco = {}; }
         const solta = () => { delete state._bancosEmVoo[targetOSId]; };
         carregarBancosDoPedido(targetOSId).then(quantas => {
             solta();
-            if (quantas) renderAmostrasOSItens(osId);
+            state._bancosPedidoDe = targetOSId;
+            if (quantas || trocouDePedido) renderAmostrasOSItens(osId);
         }).catch(solta);
     }
 
