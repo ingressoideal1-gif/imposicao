@@ -18,7 +18,10 @@
 //      sao fila de trabalho, e ali quem vem na frente e quem precisa sair
 //      primeiro;
 //   6. clicar num cabecalho continua vencendo: e uma escolha explicita do
-//      operador.
+//      operador;
+//   7. o botao IMPRESSO e liga/desliga (28/08/2026): o segundo clique no botao
+//      aceso volta ao filtro que estava ativo antes dele -- e os outros tres
+//      continuam sendo escolha simples.
 //
 // Roda em node, sem navegador: `node tests/ordem_dos_impressos_harness.js`.
 // Sai com codigo 1 se algum caso falhar.
@@ -226,6 +229,64 @@ function comPedidos(pedidos) {
     const iNova = SCRIPT.indexOf('filteredImpressao = ordenarImpressosPorData(filteredImpressao)');
     const iSort = SCRIPT.indexOf('filteredImpressao = aplicarProdSort(filteredImpressao)');
     ok(iNova > 0 && iSort > iNova, 'a ordenacao do cabecalho e aplicada depois', { iNova, iSort });
+})();
+
+// --- 4. O botao IMPRESSO liga e desliga --------------------------------------
+//
+// Pedido do usuario em 28/08/2026: "ao clicar novamente (desclicar) deve voltar
+// ao estado anterior". O filtro anterior fica em `state.filtroPrazoAnterior`,
+// gravado so ao ENTRAR no Impresso -- por isso ele nunca guarda 'impressos'.
+
+function apiFiltro(st) {
+    const codigo = extrairFuncao(SCRIPT, 'setFiltroPrazo');
+    return new Function('state', 'renderOrdens', 'updateFiltroPrazoBotoes',
+        codigo + '\nreturn { setFiltroPrazo };')(st, () => {}, () => {});
+}
+
+(function segundoCliqueVoltaAoGeral() {
+    const st = {};
+    const { setFiltroPrazo } = apiFiltro(st);
+    setFiltroPrazo('impressos');
+    ok(st.filtroPrazo === 'impressos', 'o primeiro clique liga o Impresso');
+    setFiltroPrazo('impressos');
+    ok(st.filtroPrazo === 'geral', 'o segundo clique volta ao Geral quando era ele o filtro', st.filtroPrazo);
+})();
+
+(function segundoCliqueVoltaAoFiltroDeAntes() {
+    const st = {};
+    const { setFiltroPrazo } = apiFiltro(st);
+    setFiltroPrazo('hoje');
+    setFiltroPrazo('impressos');
+    setFiltroPrazo('impressos');
+    ok(st.filtroPrazo === 'hoje', 'desligar o Impresso devolve o Para Hoje que estava ativo', st.filtroPrazo);
+})();
+
+(function trocarDiretoContinuaValendo() {
+    const st = {};
+    const { setFiltroPrazo } = apiFiltro(st);
+    setFiltroPrazo('impressos');
+    setFiltroPrazo('atrasados');
+    ok(st.filtroPrazo === 'atrasados', 'com o Impresso aceso, escolher outro filtro troca direto', st.filtroPrazo);
+})();
+
+(function outrosBotoesNaoViramToggle() {
+    const st = {};
+    const { setFiltroPrazo } = apiFiltro(st);
+    setFiltroPrazo('hoje');
+    setFiltroPrazo('hoje');
+    ok(st.filtroPrazo === 'hoje', 'clicar de novo no Para Hoje nao o desliga', st.filtroPrazo);
+})();
+
+(function oAnteriorNuncaGuardaImpressos() {
+    const st = {};
+    const { setFiltroPrazo } = apiFiltro(st);
+    setFiltroPrazo('impressos');
+    setFiltroPrazo('impressos');
+    setFiltroPrazo('impressos');
+    setFiltroPrazo('impressos');
+    ok(st.filtroPrazo === 'geral' && st.filtroPrazoAnterior !== 'impressos',
+        'ligar e desligar repetido nunca deixa o "anterior" apontando para o proprio Impresso',
+        { filtro: st.filtroPrazo, anterior: st.filtroPrazoAnterior });
 })();
 
 // --- Resultado --------------------------------------------------------------

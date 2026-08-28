@@ -2174,7 +2174,7 @@
                                      cabeçalho (e não posicionado por cima) para nunca encavalar o título
                                      em tela estreita. O posicionamento mora no style.css porque
                                      updateFiltroPrazoBotoes() reescreve o style inline a cada render. -->
-                                <button type="button" id="filtro-impresso" class="prod-btn-dark filter-btn-pill" data-prazo="impressos" onclick="setFiltroPrazo('impressos')" title="Somente os pedidos com todos os modelos impressos (ficam fora das outras listas)">Impresso</button>
+                                <button type="button" id="filtro-impresso" class="prod-btn-dark filter-btn-pill" data-prazo="impressos" onclick="setFiltroPrazo('impressos')" title="Somente os pedidos com todos os modelos impressos (ficam fora das outras listas). Clique de novo para voltar à lista anterior.">Impresso</button>
                                 <div id="filtro-prazo-grupo" style="display: flex; gap: 8px; margin: 0 auto;">
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="hoje" onclick="setFiltroPrazo('hoje')" title="Pedidos com prazo de entrega no dia de hoje">Para Hoje</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="atrasados" onclick="setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>
@@ -2415,7 +2415,7 @@
                                 <!-- Fora do grupo centralizado, igual ao "Impresso" da
                                      Produção: o pedido pronto não é um recorte da fila de
                                      trabalho, é o que já saiu dela. -->
-                                <button type="button" id="filtro-expedicao-acab" class="prod-btn-dark filter-btn-pill" data-prazo-acab="expedicao" onclick="AcabamentoPainel.setFiltroPrazo('expedicao')" title="Somente os pedidos já enviados à expedição. Quem traz o pedido para cá é o clique em ENVIAR PARA A EXPEDIÇÃO, dentro do pedido — ficar pronto, sozinho, não tira o pedido das outras listas.">Expedição</button>
+                                <button type="button" id="filtro-expedicao-acab" class="prod-btn-dark filter-btn-pill" data-prazo-acab="expedicao" onclick="AcabamentoPainel.setFiltroPrazo('expedicao')" title="Somente os pedidos já enviados à expedição. Quem traz o pedido para cá é o clique em ENVIAR PARA A EXPEDIÇÃO, dentro do pedido — ficar pronto, sozinho, não tira o pedido das outras listas. Clique de novo para voltar à lista anterior.">Expedição</button>
                                 <div id="filtro-prazo-grupo-acab" style="display: flex; gap: 8px; margin: 0 auto;">
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo-acab="hoje" onclick="AcabamentoPainel.setFiltroPrazo('hoje')" title="Pedidos com prazo de entrega no dia de hoje">Para Hoje</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo-acab="atrasados" onclick="AcabamentoPainel.setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>

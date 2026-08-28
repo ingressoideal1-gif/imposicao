@@ -6423,8 +6423,19 @@
     const AcabamentoPainel = {
         render,
 
+        /**
+         * "Expedição" é liga/desliga, igual ao botão Impresso da Produção
+         * (28/08/2026): o segundo clique no botão aceso volta ao filtro que
+         * estava ativo antes dele. Os outros três são escolha simples.
+         */
         setFiltroPrazo(valor) {
-            tela.prazo = ['hoje', 'atrasados', 'expedicao'].includes(valor) ? valor : 'geral';
+            const novo = ['hoje', 'atrasados', 'expedicao'].includes(valor) ? valor : 'geral';
+            if (novo === 'expedicao' && tela.prazo === 'expedicao') {
+                tela.prazo = tela.prazoAnterior || 'geral';
+            } else {
+                if (novo === 'expedicao') tela.prazoAnterior = tela.prazo || 'geral';
+                tela.prazo = novo;
+            }
             render();
         },
 

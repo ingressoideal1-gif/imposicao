@@ -26973,9 +26973,22 @@ function updateFiltroPrazoBotoes() {
 }
 window.updateFiltroPrazoBotoes = updateFiltroPrazoBotoes;
 
-/** Clique nos botões Para Hoje / Atrasados / Geral. */
+/**
+ * Clique nos botões Impresso / Para Hoje / Atrasados / Geral.
+ *
+ * "Impresso" é liga/desliga: o segundo clique no botão aceso volta ao filtro
+ * que estava ativo antes dele (pedido do usuário em 28/08/2026). Os outros
+ * três continuam agindo como escolha simples — "Geral" já é o estado neutro.
+ */
 function setFiltroPrazo(valor) {
-    state.filtroPrazo = (valor === 'hoje' || valor === 'atrasados' || valor === 'impressos') ? valor : 'geral';
+    const novo = (valor === 'hoje' || valor === 'atrasados' || valor === 'impressos') ? valor : 'geral';
+    if (novo === 'impressos' && (state.filtroPrazo || 'geral') === 'impressos') {
+        state.filtroPrazo = state.filtroPrazoAnterior || 'geral';
+    } else {
+        // `filtroPrazoAnterior` nunca guarda 'impressos': só é gravado ao ENTRAR nele.
+        if (novo === 'impressos') state.filtroPrazoAnterior = state.filtroPrazo || 'geral';
+        state.filtroPrazo = novo;
+    }
     // renderOrdens recalcula state.temPedidosAtrasados; pintar depois dele
     renderOrdens();
     updateFiltroPrazoBotoes();
