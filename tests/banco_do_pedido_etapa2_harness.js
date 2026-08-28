@@ -406,5 +406,33 @@ function cenario(mapas) {
         'coluna que um elemento ja usa nao sai por desmarcacao');
 })();
 
+(function oCardEAPaginacaoVeemOBancoResolvido() {
+    // 28/08/2026: o modelo ligado a um banco do pedido desenhava a peca CRUA —
+    // sem linhas, a paginacao nao acendia e a previa saia com numero
+    // sequencial no lugar do dado. Todo ponto que acha a peca para DESENHAR ou
+    // CONTAR tem de resolve-la pelo banco. Conferido no navegador (nav
+    // visivel, "Linha 1 / 5", resumo com o dado do banco, pager andando,
+    // quantidade = linhas do banco, trava de fatia vazia acusando); aqui fica
+    // a forma que nao pode se desfazer.
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+    const corpo = (nome) => {
+        const i = script.indexOf('function ' + nome + '(');
+        return script.slice(i, script.indexOf('\n}', i));
+    };
+    ok(/numeracaoDoModelo\(item\)/.test(corpo('modeloSemLinhasDoBanco')),
+        'a trava de fatia vazia olha a peca resolvida');
+    ok(/numeracaoDoModelo\(item\)/.test(corpo('quantidadeDoModelo')),
+        'a quantidade conta as linhas do banco resolvido');
+    const pagina = script.slice(script.indexOf('window.amostraCsvPagina'));
+    ok(/numeracaoDoModelo\(item\)/.test(pagina.slice(0, pagina.indexOf('renderItemAmostraCombinada'))),
+        'o paginador anda pelas linhas resolvidas');
+    const render = corpo('renderItemAmostraCombinada');
+    ok(/resolverNumeracaoParaModelo\(num, item\)/.test(render),
+        'o desenho do card resolve a peca pelo banco do pedido');
+    const regen = corpo('regenerarAmostraDoModelo');
+    ok(/resolverNumeracaoParaModelo\(num, item\)/.test(regen),
+        'a amostra regenerada (a que o cliente ve) tambem');
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

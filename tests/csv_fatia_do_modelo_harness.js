@@ -127,7 +127,10 @@ function extrairFuncao(src, nome) {
 
     const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'colunasDoBancoDaNumeracao',
                    'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
-                   'rotuloDoModelo', 'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia'];
+                   'rotuloDoModelo', 'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia',
+                   // A trava passou a olhar a peca RESOLVIDA pelo banco do
+                   // pedido (28/08/2026); sem vinculo, o caminho e o de sempre.
+                   'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
 
     const state = { numeracoes: [] };
@@ -610,7 +613,8 @@ function apiDaFatia(state) {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
     const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'colunasDoBancoDaNumeracao',
                    'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'rotuloDoModelo',
-                   'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia'];
+                   'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia',
+                   'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo'];
     const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
     return new Function('state', 'window', fonte
         + '\nreturn { colunasDoBancoDaNumeracao, linhasComDadoDaNumeracao, fatiaCsvDoItem,'

@@ -16381,7 +16381,9 @@ window.amostraCsvPagina = function(idx, osId, delta, absoluto) {
 
     if (!item) return;
 
-    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+    // Resolvida pelo banco do pedido: o total de paginas e o das linhas que
+    // este modelo de fato mostra (28/08/2026).
+    const num = numeracaoDoModelo(item);
 
     const total = linhasDaAmostra(item, num).length;
 
@@ -16904,7 +16906,7 @@ async function aplicarColunasDoModelo(idx, osId) {
             const emUso = pedidas.filter(c => !marcadas.includes(c));
             const novas = [...checks.map(c => c.getAttribute('data-col')).filter(h => marcadas.includes(h)), ...emUso];
             const antigas = (peca.csv_headers || []).map(String);
-            if (novas.join(' ') !== antigas.join(' ')) {
+            if (JSON.stringify(novas) !== JSON.stringify(antigas)) {
                 await salvarCamposDaNumeracao(peca.id, { csv_headers: novas });
                 peca.csv_headers = novas;   // a mesma referencia do catalogo
                 if (emUso.length) {
@@ -17457,7 +17459,9 @@ function modeloSemLinhasDoBanco(item) {
 
     if (!item) return null;
 
-    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+    // Resolvida pelo banco do pedido, quando o modelo tem um: a fatia vazia
+    // que esta trava caca existe la tambem (28/08/2026).
+    const num = numeracaoDoModelo(item);
 
     if (!num || !num.csv_data || !num.csv_data.length) return null;
 
@@ -17572,7 +17576,8 @@ window.setModoSomaFolha = function(valor) {
  */
 function quantidadeDoModelo(item) {
 
-    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+    // Resolvida: com banco do pedido, a conta e sobre as linhas DELE.
+    const num = numeracaoDoModelo(item);
 
     if (num && num.csv_data && num.csv_data.length) return fatiaCsvDoItem(item, num).length;
 
@@ -34698,7 +34703,12 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     // Obter cor, formato e numeração
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    // O card mostra a peca RESOLVIDA pelo banco do pedido: sem isto, o modelo
+    // ligado a um banco desenhava a peca crua — sem linhas, sem paginacao, com
+    // numero sequencial no lugar do dado (28/08/2026). O find continua pelo
+    // seletor (numId), porque o operador pode estar trocando a numeracao.
+    let num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    num = resolverNumeracaoParaModelo(num, item);
 
     const numIsDuplex = isNumeracaoDuplex(num);
     const oldVersoInCanvas = !!item.verso;
@@ -34968,7 +34978,10 @@ async function regenerarAmostraDoModelo(osId, item, idx, S) {
     // CAMINHO COMPOSTO: tem cor e/ou numeração — compor as camadas via canvas
     // ════════════════════════════════════════════════════════════════
     const cor = corId ? (state.cores || []).find(c => c.id === corId) : null;
-    const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
+    // Resolvida pelo banco do pedido — mesmo motivo do card (28/08/2026): a
+    // amostra regenerada e a que o cliente ve, e tem de mostrar o dado real.
+    let num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
+    num = resolverNumeracaoParaModelo(num, item);
 
     // Preload SVG/PDF e aguardar carregamento real dos elementos
     if (num && num.elements && num.elements.length > 0 && typeof preloadAmostraItemPdfElements === 'function') {
