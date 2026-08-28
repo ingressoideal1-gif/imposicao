@@ -38,7 +38,7 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
                'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo', 'pecaDoModelo',
                'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                'rotuloDoModelo', 'colunasConferidasDaNumeracao', 'celulasRepetidasDoPedido',
-               'modelosComBancoNaoBaixado', 'fonteDoModelo', 'fontePelaChave', 'gruposDeCsvDoPedido'];
+               'modelosComBancoNaoBaixado', 'fonteDoModelo', 'fontePelaChave', 'gruposDeCsvDoPedido', 'modelosDoBanco'];
 
 function sandbox(state) {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
@@ -46,7 +46,7 @@ function sandbox(state) {
     return new Function('state', 'window', fonte
         + '\nreturn { numeracaoDoModelo, fatiaCsvDoItem, celulasRepetidasDoPedido,'
         + ' colunasConferidasDaNumeracao, modelosComBancoNaoBaixado, fonteDoModelo,'
-        + ' fontePelaChave, gruposDeCsvDoPedido };')(state, global.window);
+        + ' fontePelaChave, gruposDeCsvDoPedido, modelosDoBanco };')(state, global.window);
 }
 
 /** O CSV do BACKSTAGE: as mesmas pessoas, um codigo por dia. */
@@ -256,6 +256,39 @@ function cenario(mapas) {
     ok(api.fontePelaChave('banco:b-99') === null, 'chave de banco que nao existe devolve null');
     ok(api.fontePelaChave('num:num-vip') === null,
         'peca sem csv proprio nao vira fonte, mesmo pedida pela chave');
+})();
+
+// ── A porta para editar o banco do pedido ───────────────────────────────────
+
+(function quemLeDoMesmoBanco() {
+    const { state, api } = cenario([{ CODIGO: '05/09' }, { CODIGO: '06/09' }]);
+    state.osItens['os-1'].push({ id: 'm-solto', id_int: 21202, nome_modelo: 'SOLTO', amostra_num_id: 'num-vip' });
+    const usuarios = api.modelosDoBanco('os-1', 'b-1');
+    ok(usuarios.length === 2, 'so os modelos ligados ao banco contam', usuarios.length);
+    ok(!usuarios.some(u => u.id === 'm-solto'), 'o modelo sem vinculo fica de fora');
+})();
+
+(function aPortaExisteESoParaOBancoDoPedido() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    ok(/window\.abrirBancoDoPedido/.test(script), 'existe uma porta para editar o banco do pedido');
+    ok(/btn-banco-editar-/.test(script), 'e ela tem botao no card');
+
+    // A licao de 26/08/2026: o botao que saiu daqui editava o banco da
+    // NUMERACAO sem dizer. O rotulo deste diz de quem e o banco.
+    ok(/Editar banco do pedido/.test(script),
+        'o rotulo diz que o banco e do PEDIDO, e nao so "ver / editar"');
+
+    // E o modal avisa o alcance antes de qualquer tecla.
+    ok(/modelos deste pedido\. O que voc/.test(script),
+        'e o modal diz quantos modelos leem dali antes de deixar mexer');
+
+    // Renomear coluna do banco arrasta o MAPA, e nao os elementos da peca.
+    ok(/aplicarRenomeacoesNoMapa/.test(script),
+        'renomear coluna do banco leva o mapa de cada modelo junto');
+    const trecho = script.slice(script.indexOf('async function aplicarRenomeacoesNoMapa'));
+    ok(!/salvarCamposDaNumeracao/.test(trecho.slice(0, 1500)),
+        'e NAO escreve nos elementos da numeracao');
 })();
 
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');

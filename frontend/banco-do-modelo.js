@@ -123,6 +123,28 @@
         return quantas ? saida : null;
     }
 
+    /**
+     * O mapa depois de o banco renomear colunas.
+     *
+     * A armadilha e a coluna IMPLICITA: quando a peca pede `NOME` e o banco tem
+     * uma coluna `NOME`, nao existe entrada no mapa -- as duas se acham pelo
+     * proprio nome. Renomeado o banco para `PARTICIPANTE`, o apontamento se
+     * perde em silencio, e o campo passa a ler uma coluna que nao existe mais.
+     *
+     * Por isso a reconstrucao parte do que cada coluna pedida le HOJE, e nao
+     * das entradas que o mapa por acaso tem: a implicita ganha entrada, a
+     * explicita e atualizada, e o que nao foi renomeado fica como estava.
+     */
+    function mapaAposRenomear(mapa, pedidas, de2para) {
+        var trocas = de2para || {};
+        var novo = {};
+        (pedidas || []).forEach(function (col) {
+            var atual = colunaDoModelo(mapa, col);
+            novo[col] = Object.prototype.hasOwnProperty.call(trocas, atual) ? trocas[atual] : atual;
+        });
+        return mapaLimpo(novo, pedidas);
+    }
+
     escopo.BancoDoModelo = {
         bancoDoModelo: bancoDoModelo,
         colunaDoModelo: colunaDoModelo,
@@ -130,6 +152,7 @@
         numeracaoResolvida: numeracaoResolvida,
         colunasQueAPecaPede: colunasQueAPecaPede,
         colunasQueFaltam: colunasQueFaltam,
-        mapaLimpo: mapaLimpo
+        mapaLimpo: mapaLimpo,
+        mapaAposRenomear: mapaAposRenomear
     };
 })(typeof window !== 'undefined' ? window : globalThis);

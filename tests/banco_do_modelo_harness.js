@@ -154,5 +154,30 @@ const BANCO = {
         'mapa que nao troca nada vira ausente, e nao um objeto vazio guardado a toa');
 })();
 
+(function mapaAposRenomearColunaDoBanco() {
+    const pedidas = ['NOME', 'CODIGO'];
+
+    // A armadilha: NOME era implicita — a peca pede NOME, o banco tinha NOME, e
+    // por isso nao havia entrada no mapa. Renomeada no banco, o apontamento se
+    // perderia em silencio.
+    const r1 = B.mapaAposRenomear({ CODIGO: '05/09' }, pedidas, { NOME: 'PARTICIPANTE' });
+    ok(r1 && r1.NOME === 'PARTICIPANTE',
+        'coluna implicita renomeada ganha entrada no mapa', r1);
+    ok(r1 && r1.CODIGO === '05/09', 'e a que ja tinha entrada nao se mexe', r1);
+
+    // A explicita renomeada e atualizada.
+    const r2 = B.mapaAposRenomear({ CODIGO: '05/09' }, pedidas, { '05/09': '05-09' });
+    ok(r2 && r2.CODIGO === '05-09', 'coluna explicita renomeada acompanha', r2);
+
+    // Renomeacao de coluna que ninguem le nao inventa entrada.
+    ok(B.mapaAposRenomear(null, pedidas, { SOBRA: 'OUTRA' }) === null,
+        'renomear coluna que a peca nao le nao cria mapa do nada');
+
+    // Renomear a coluna do banco para o mesmo nome que a peca pede volta a ser
+    // implicita, e a entrada some em vez de ficar guardada a toa.
+    const r3 = B.mapaAposRenomear({ CODIGO: '05/09' }, pedidas, { '05/09': 'CODIGO' });
+    ok(r3 === null, 'apontamento que virou identico ao pedido deixa de ser mapa', r3);
+})();
+
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');
 process.exit(falhas ? 1 : 0);

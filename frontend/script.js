@@ -16526,6 +16526,20 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     const bColunas = container.querySelector(`#btn-csv-colunas-${idx}`);
     if (bColunas) bColunas.style.display = vinculoDaqui ? '' : 'none';
 
+    // A porta de edicao so existe para o banco do PEDIDO. O da numeracao
+    // continua com uma porta so, a do editor de numeracao — foi decisao do
+    // usuario em 26/08/2026 e nao se desfaz aqui.
+    const bEditar = container.querySelector(`#btn-banco-editar-${idx}`);
+    if (bEditar) {
+        const f = fonteDoModelo(item);
+        bEditar.style.display = (f && f.tipo === 'banco') ? '' : 'none';
+        if (f && f.tipo === 'banco') {
+            const quantos = modelosDoBanco(osId, f.id).length;
+            bEditar.title = 'Conferir e corrigir "' + f.nome + '"'
+                + (quantos > 1 ? ' — lido por ' + quantos + ' modelos deste pedido' : '');
+        }
+    }
+
     // Sem nenhuma linha para contar, o resto da caixa nao tem o que dizer. Sem
     // esta saida o "Linhas" ficaria VERMELHO anunciando que o modelo esta sem
     // linhas -- o que e falso: ele so ainda nao recebeu banco nenhum.
@@ -16810,6 +16824,132 @@ async function aplicarColunasDoModelo(idx, osId) {
     }
 }
 window.aplicarColunasDoModelo = aplicarColunasDoModelo;
+
+/** Os modelos deste pedido que bebem do mesmo banco. */
+function modelosDoBanco(osId, bancoId) {
+    return ((state.osItens && state.osItens[osId]) || []).filter(it => {
+        const v = vinculoDeBancoDoModelo(it);
+        return v && String(v.banco_id) === String(bancoId);
+    });
+}
+window.modelosDoBanco = modelosDoBanco;
+
+/**
+ * Abre o banco do PEDIDO para conferir e corrigir, no mesmo editor de sempre.
+ *
+ * ## Por que este botão existe no card, se o "Ver / editar" saiu daqui
+ *
+ * Em 26/08/2026 o usuário tirou o "Ver / editar" do card, e com razão: ali ele
+ * editava o banco da NUMERAÇÃO, o mesmo para todos os modelos que a usam em
+ * qualquer pedido — e nada na tela dizia isso. A edição do banco da numeração
+ * ficou com uma porta só, a do editor de numeração, onde o alcance é óbvio.
+ *
+ * O banco do PEDIDO não tem porta nenhuma, e sem ela corrigir um nome digitado
+ * errado exige subir o arquivo de novo. Este botão é essa porta — e a lição de
+ * 26/08 entra no rótulo: ele diz que o banco é do pedido, e o modal diz, antes
+ * de qualquer tecla, quantos modelos leem dali. O que estava errado não era
+ * existir a porta; era a porta não dizer para onde dava.
+ */
+window.abrirBancoDoPedido = function (idx, osId) {
+    if (typeof window.abrirEditorCsv !== 'function') {
+        toast('O editor de CSV não carregou. Recarregue a página.', 'error');
+        return;
+    }
+    const item = (state.osItens[osId] || [])[idx];
+    const fonte = item ? fonteDoModelo(item) : null;
+    if (!fonte || fonte.tipo !== 'banco') {
+        toast('Este modelo não lê um banco do pedido. Escolha um em "Vem de:".', 'info');
+        return;
+    }
+
+    const usuarios = modelosDoBanco(osId, fonte.id);
+    if (usuarios.length > 1) {
+        toast('O banco "' + fonte.nome + '" é lido por ' + usuarios.length
+            + ' modelos deste pedido. O que você corrigir aqui vale para todos.', 'info');
+    }
+
+    // Cada modelo lê a coluna DEPOIS do mapa dele, então a contagem de uso tem
+    // de passar pelo mapa: renomear "05/09" precisa avisar que dois campos do
+    // modelo do dia 5 dependem dela, mesmo que a peça chame aquilo de CODIGO.
+    const colunaNoBanco = (it, col) => window.BancoDoModelo.colunaDoModelo(
+        (vinculoDeBancoDoModelo(it) || {}).csv_mapa, col);
+
+    const colunasEmUso = () => {
+        const uso = {};
+        usuarios.forEach(it => {
+            const peca = pecaDoModelo(it);
+            (peca && peca.elements || []).forEach(el => {
+                if (!el || el.source !== 'database') return;
+                const col = String(el.csv_column || '').trim();
+                if (!col) return;
+                const noBanco = colunaNoBanco(it, col);
+                uso[noBanco] = (uso[noBanco] || 0) + 1;
+            });
+        });
+        return uso;
+    };
+
+    const colunasDeFoto = [...new Set(usuarios.flatMap(it => {
+        const peca = pecaDoModelo(it);
+        return (peca && peca.elements || [])
+            .filter(el => el && el.type === 'FOTO' && el.csv_column)
+            .map(el => colunaNoBanco(it, el.csv_column));
+    }))];
+
+    window.abrirEditorCsv({
+        headers: fonte.headers,
+        rows: fonte.rows,
+        filename: fonte.filename,
+        colunasDeFoto,
+        colunasEmUso,
+        onAplicar: async ({ headers, rows, filename, renomeacoes }) => {
+            if (!rows.length) {
+                toast('Um banco sem nenhuma linha não imprime nada. Nada foi salvo — '
+                    + 'para desligar este modelo do banco, escolha "a numeração" em "Vem de:".', 'error');
+                return;
+            }
+            try {
+                const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(fonte.id));
+                const { error } = await supabaseClient.from('pedidos_bancos').update({
+                    csv_data: rows, csv_headers: headers,
+                    csv_filename: filename || fonte.filename,
+                    updated_at: new Date().toISOString()
+                }).eq('id', fonte.id);
+                if (error) throw error;
+                if (banco) { banco.csv_data = rows; banco.csv_headers = headers; banco.csv_filename = filename || banco.csv_filename; }
+
+                // Renomear coluna arrasta o MAPA de cada modelo, e não os
+                // elementos da peça: é o mapa que aponta para o nome do banco.
+                // Sem isto, renomear "05/09" faria os modelos do dia 5 lerem uma
+                // coluna que não existe mais — e o card só avisaria depois.
+                await aplicarRenomeacoesNoMapa(osId, fonte.id, renomeacoes || []);
+
+                toast('Banco "' + fonte.nome + '" salvo com ' + rows.length + ' linha(s).', 'success');
+                renderAmostrasOSItens(osId);
+            } catch (e) {
+                toast('Não deu para salvar o banco: ' + (e.message || e), 'error');
+            }
+        }
+    });
+};
+
+/** Leva as renomeações de coluna para o `csv_mapa` de cada modelo do banco. */
+async function aplicarRenomeacoesNoMapa(osId, bancoId, renomeacoes) {
+    if (!renomeacoes.length) return;
+    const de2para = {};
+    renomeacoes.forEach(r => { if (r && r.de && r.para) de2para[r.de] = r.para; });
+
+    for (const it of modelosDoBanco(osId, bancoId)) {
+        const vinc = vinculoDeBancoDoModelo(it);
+        const mapa = (vinc && vinc.csv_mapa) || null;
+        const peca = pecaDoModelo(it);
+        const pedidas = window.BancoDoModelo.colunasQueAPecaPede(peca);
+
+        const limpo = window.BancoDoModelo.mapaAposRenomear(mapa, pedidas, de2para);
+        await ligarModeloAoBanco(it.id, bancoId, limpo);
+    }
+}
+window.aplicarRenomeacoesNoMapa = aplicarRenomeacoesNoMapa;
 
 /** Lê o CSV escolhido, cria o banco do pedido e liga este modelo nele. */
 async function subirBancoDoPedido() {
@@ -30930,6 +31070,13 @@ function renderAmostrasOSItens(osId) {
                                          numeracao os campos ja apontam para as colunas
                                          dela, e nao ha de-para nenhum a fazer. -->
                                     <button class="btn btn-sm btn-secondary" id="btn-csv-colunas-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="De qual coluna do banco cada campo deste modelo lê">🔤 Colunas</button>
+                                    <!-- A porta para corrigir o banco DO PEDIDO. O rotulo
+                                         diz de quem e o banco de proposito: o "Ver /
+                                         editar" saiu daqui em 26/08/2026 porque editava o
+                                         da NUMERACAO sem dizer, e o operador nao via o
+                                         alcance. Ver a funcao abrirBancoDoPedido -- CRASE
+                                         aqui dentro fecharia o template literal. -->
+                                    <button class="btn btn-sm btn-secondary" id="btn-banco-editar-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirBancoDoPedido(${idx}, '${osId}')" title="Conferir e corrigir o banco de dados deste pedido">📊 Editar banco do pedido</button>
                                 </div>
                             </div>
                         </div>
