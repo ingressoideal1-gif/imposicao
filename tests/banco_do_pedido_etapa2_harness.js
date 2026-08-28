@@ -38,14 +38,15 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
                'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo', 'pecaDoModelo',
                'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                'rotuloDoModelo', 'colunasConferidasDaNumeracao', 'celulasRepetidasDoPedido',
-               'modelosComBancoNaoBaixado'];
+               'modelosComBancoNaoBaixado', 'fonteDoModelo', 'fontePelaChave', 'gruposDeCsvDoPedido'];
 
 function sandbox(state) {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
     const fonte = NOMES.map(n => extrairFuncao(script, n)).join('\n');
     return new Function('state', 'window', fonte
         + '\nreturn { numeracaoDoModelo, fatiaCsvDoItem, celulasRepetidasDoPedido,'
-        + ' colunasConferidasDaNumeracao, modelosComBancoNaoBaixado };')(state, global.window);
+        + ' colunasConferidasDaNumeracao, modelosComBancoNaoBaixado, fonteDoModelo,'
+        + ' fontePelaChave, gruposDeCsvDoPedido };')(state, global.window);
 }
 
 /** O CSV do BACKSTAGE: as mesmas pessoas, um codigo por dia. */
@@ -187,6 +188,74 @@ function cenario(mapas) {
     const trecho = script.slice(script.indexOf('A peça genérica do catálogo virou material'));
     ok(/modeloEstaAprovado/.test(trecho.slice(0, 2000)),
         'o aviso filtra por modelo aprovado, para nao virar ruido');
+})();
+
+// ── A distribuicao de linhas bebe do poco certo ──────────────────────────────
+//
+// Este bloco existe por causa de um defeito encontrado em 28/08/2026, depois de
+// a Etapa 2 estar escrita: o "Linhas" agrupava os modelos pelo id da NUMERACAO.
+// Com o banco do pedido isso abriria as linhas da numeracao e gravaria em
+// `csv_selecao` os `__id` de um banco que o modelo nao imprime — o modelo
+// passaria a levar as linhas erradas, ou nenhuma, sem nada na tela dizendo por
+// que. A `fonteDoModelo` e o conserto.
+
+(function aFonteSeparaOsPocos() {
+    const { state, api } = cenario([{ CODIGO: '05/09' }, { CODIGO: '06/09' }]);
+    const itens = state.osItens['os-1'];
+
+    const f1 = api.fonteDoModelo(itens[0]);
+    const f2 = api.fonteDoModelo(itens[1]);
+    ok(f1.tipo === 'banco' && f1.chave === 'banco:b-1', 'modelo com vinculo bebe do banco do pedido', f1.chave);
+    ok(f1.chave === f2.chave, 'os dois dividem o MESMO poco, mesmo lendo colunas diferentes');
+    ok(f1.rows.length === 10, 'e as linhas sao as do banco, nao as da peca', f1.rows.length);
+
+    // Um terceiro modelo, sem vinculo, numa peca que TEM csv proprio.
+    state.numeracoes.push({
+        id: 'num-outra', name: 'OUTRA', csv_filename: 'outra.csv',
+        csv_headers: ['CODIGO'], csv_data: [{ __id: 1, CODIGO: 'X1' }],
+        elements: [{ id: 'e', type: 'QR', source: 'database', csv_column: 'CODIGO' }]
+    });
+    state.osItens['os-1'].push({ id: 'm-9', id_int: 21202, nome_modelo: 'AVULSO', amostra_num_id: 'num-outra' });
+    const f3 = api.fonteDoModelo(state.osItens['os-1'][2]);
+    ok(f3.tipo === 'numeracao' && f3.chave === 'num:num-outra',
+        'modelo sem vinculo continua bebendo do CSV da numeracao', f3.chave);
+    ok(f3.chave !== f1.chave, 'e nao cai no mesmo poco dos outros');
+})();
+
+(function osGruposNaoMisturam() {
+    const { state, api } = cenario([{ CODIGO: '05/09' }, { CODIGO: '06/09' }]);
+    state.numeracoes.push({
+        id: 'num-outra', name: 'OUTRA', csv_filename: 'outra.csv',
+        csv_headers: ['CODIGO'], csv_data: [{ __id: 1, CODIGO: 'X1' }, { __id: 2, CODIGO: 'X2' }],
+        elements: [{ id: 'e', type: 'QR', source: 'database', csv_column: 'CODIGO' }]
+    });
+    state.osItens['os-1'].push(
+        { id: 'm-8', id_int: 21202, nome_modelo: 'A1', amostra_num_id: 'num-outra' },
+        { id: 'm-9', id_int: 21202, nome_modelo: 'A2', amostra_num_id: 'num-outra' });
+
+    const grupos = api.gruposDeCsvDoPedido('os-1');
+    ok(grupos.length === 2, 'dois grupos: o banco do pedido e a numeracao avulsa', grupos.length);
+    const doBanco = grupos.find(g => g.fonte.chave === 'banco:b-1');
+    const daNum = grupos.find(g => g.fonte.chave === 'num:num-outra');
+    ok(doBanco && doBanco.itens.length === 2, 'o do banco tem os dois modelos do banco');
+    ok(daNum && daNum.itens.length === 2, 'o da numeracao tem os dois de la');
+    ok(doBanco.itens.every(i => i.id !== 'm-8' && i.id !== 'm-9'),
+        'e nenhum modelo aparece no grupo do outro poco');
+})();
+
+(function vinculoSemBancoNaoCaiNaNumeracao() {
+    const { state, api } = cenario([{ CODIGO: '05/09' }]);
+    state.bancosDoPedido = [];   // o banco nao desceu
+    ok(api.fonteDoModelo(state.osItens['os-1'][0]) === null,
+        'vinculo sem banco na mao nao vira "a numeracao" — abriria o poco errado');
+})();
+
+(function aChaveAchaAFonteSemModelo() {
+    const { state, api } = cenario([{ CODIGO: '05/09' }]);
+    ok(api.fontePelaChave('banco:b-1').tipo === 'banco', 'a chave do banco resolve');
+    ok(api.fontePelaChave('banco:b-99') === null, 'chave de banco que nao existe devolve null');
+    ok(api.fontePelaChave('num:num-vip') === null,
+        'peca sem csv proprio nao vira fonte, mesmo pedida pela chave');
 })();
 
 console.log((falhas ? 'FALHAS: ' + falhas + ' de ' : 'OK: ') + total + ' casos');

@@ -226,8 +226,14 @@ def test_a_escolha_das_colunas_conferidas_e_gravada_e_lida():
 
     # Entra pela abertura da distribuicao...
     i = fonte.index("window.abrirDistribuicaoCsv")
-    corpo = fonte[i:i + 2500]
-    assert "conferencia: conferenciaDasColunasDaNumeracao(num)" in corpo, (
+    # A funcao inteira: ela cresceu em 28/08/2026 (a fonte das linhas passou
+    # a poder ser o banco do pedido) e as afirmacoes daqui ficaram para fora
+    # de uma janela de N caracteres.
+    corpo = fonte[i:fonte.index(chr(10) + "};", i)]
+    # A partir de 28/08/2026 a chamada e condicional: as caixas so nascem quando
+    # a fonte das linhas E a numeracao. Vindo do banco do pedido os nomes de
+    # coluna sao outros, e marcar uma caixa gravaria no lugar errado.
+    assert "conferenciaDasColunasDaNumeracao(num)" in corpo, (
         "os checkboxes nao nascem com o estado da numeracao"
     )
     # ...e volta pelo aplicar, gravada nos ELEMENTOS.

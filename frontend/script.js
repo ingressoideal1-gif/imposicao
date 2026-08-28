@@ -1100,6 +1100,93 @@ function pecaDoModelo(item) {
 window.pecaDoModelo = pecaDoModelo;
 
 /**
+ * De qual POCO de linhas este modelo bebe: o banco do pedido, quando ha
+ * vinculo, ou o CSV de dentro da numeracao, como sempre.
+ *
+ * Existe porque a distribuicao de linhas (o "🧩 Linhas") sempre agrupou os
+ * modelos pelo id da NUMERACAO. Com o banco do pedido isso passou a estar
+ * errado de duas maneiras, e a segunda estraga trabalho: o modal abriria as
+ * linhas da numeracao e gravaria em `csv_selecao` os `__id` de um banco que
+ * este modelo nao imprime. O modelo passaria a levar as linhas erradas -- ou
+ * nenhuma -- sem nada na tela dizendo por que.
+ *
+ * A `chave` e o que agrupa: dois modelos so aparecem no mesmo modal de
+ * distribuicao quando bebem do MESMO poco.
+ */
+function fonteDoModelo(item) {
+    const vinc = vinculoDeBancoDoModelo(item);
+    const banco = window.BancoDoModelo
+        ? window.BancoDoModelo.bancoDoModelo(vinc, state.bancosDoPedido || [])
+        : null;
+
+    if (vinc && banco) {
+        return {
+            chave: 'banco:' + banco.id, tipo: 'banco', id: banco.id,
+            headers: banco.csv_headers || [], rows: banco.csv_data || [],
+            filename: banco.csv_filename || (banco.nome || 'banco') + '.csv',
+            nome: banco.nome || banco.csv_filename || 'banco do pedido'
+        };
+    }
+    // Vinculo sem banco na mao NAO vira "a numeracao": seria o modal abrindo o
+    // poco errado. Quem barra e a trava do `modelosComBancoNaoBaixado`.
+    if (vinc) return null;
+
+    const num = pecaDoModelo(item);
+    if (!num || !Array.isArray(num.csv_data) || !num.csv_data.length) return null;
+    return {
+        chave: 'num:' + num.id, tipo: 'numeracao', id: num.id, num,
+        headers: num.csv_headers || [], rows: num.csv_data,
+        filename: num.csv_filename || 'banco.csv',
+        nome: num.csv_filename || num.name || 'numeração'
+    };
+}
+window.fonteDoModelo = fonteDoModelo;
+
+/** A fonte de uma chave (`banco:<id>` ou `num:<id>`), sem precisar de um modelo. */
+function fontePelaChave(chave) {
+    const texto = String(chave || '');
+    if (texto.indexOf('banco:') === 0) {
+        const b = (state.bancosDoPedido || []).find(x => String(x.id) === texto.slice(6));
+        if (!b) return null;
+        return {
+            chave: texto, tipo: 'banco', id: b.id,
+            headers: b.csv_headers || [], rows: b.csv_data || [],
+            filename: b.csv_filename || (b.nome || 'banco') + '.csv',
+            nome: b.nome || b.csv_filename || 'banco do pedido'
+        };
+    }
+    // Sem prefixo é o id de uma numeração — o formato antigo, que continua
+    // valendo para quem chama de fora com o id na mão.
+    const id = texto.indexOf('num:') === 0 ? texto.slice(4) : texto;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    if (!num || !Array.isArray(num.csv_data) || !num.csv_data.length) return null;
+    return {
+        chave: 'num:' + num.id, tipo: 'numeracao', id: num.id, num,
+        headers: num.csv_headers || [], rows: num.csv_data,
+        filename: num.csv_filename || 'banco.csv',
+        nome: num.csv_filename || num.name || 'numeração'
+    };
+}
+window.fontePelaChave = fontePelaChave;
+
+/** Grava as linhas de volta no lugar de onde elas vieram. */
+async function salvarLinhasDaFonte(fonte, rows) {
+    if (!fonte) return;
+    if (fonte.tipo === 'banco') {
+        const { error } = await supabaseClient.from('pedidos_bancos')
+            .update({ csv_data: rows, updated_at: new Date().toISOString() })
+            .eq('id', fonte.id);
+        if (error) throw error;
+        const b = (state.bancosDoPedido || []).find(x => String(x.id) === String(fonte.id));
+        if (b) b.csv_data = rows;
+        return;
+    }
+    if (fonte.num) fonte.num.csv_data = rows;
+    await salvarCsvDaNumeracao(fonte.id, rows);
+}
+window.salvarLinhasDaFonte = salvarLinhasDaFonte;
+
+/**
  * Escapa texto que vai para dentro de HTML montado a mao.
  *
  * Existe porque o `esc` deste arquivo e uma const LOCAL de outra funcao, e nome
@@ -15898,25 +15985,23 @@ function gruposDeCsvDoPedido(osId) {
 
     const itens = state.osItens[osId] || [];
 
-    const porNum = {};
+    // Agrupado pela FONTE (27/08/2026), e nao pela numeracao: dois modelos so
+    // dividem linhas quando bebem do MESMO poco. Ver `fonteDoModelo`.
+    const porFonte = {};
 
     itens.forEach(it => {
 
-        const nid = numeracaoIdDoItem(it);
+        const fonte = fonteDoModelo(it);
 
-        if (!nid) return;
+        if (!fonte) return;
 
-        const num = (state.numeracoes || []).find(n => String(n.id) === String(nid));
+        if (!porFonte[fonte.chave]) porFonte[fonte.chave] = { fonte, num: fonte.num || null, itens: [] };
 
-        if (!num || !num.csv_data || !num.csv_data.length) return;
-
-        if (!porNum[nid]) porNum[nid] = { num, itens: [] };
-
-        porNum[nid].itens.push(it);
+        porFonte[fonte.chave].itens.push(it);
 
     });
 
-    return Object.values(porNum).filter(g => g.itens.length >= 2);
+    return Object.values(porFonte).filter(g => g.itens.length >= 2);
 
 }
 
@@ -15970,7 +16055,7 @@ function distribuicaoAtribuiuAlgo(distribuicao) {
 }
 window.distribuicaoAtribuiuAlgo = distribuicaoAtribuiuAlgo;
 
-window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
+window.abrirDistribuicaoCsv = function(osId, chaveDaFonte, focoItemId) {
 
     if (typeof window.abrirEditorCsv !== 'function') {
 
@@ -15980,12 +16065,17 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
     }
 
-    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    // A FONTE, e nao a numeracao (27/08/2026): o modelo pode beber do banco do
+    // pedido, e ai as linhas -- e os `__id` que a distribuicao guarda -- sao as
+    // dele, nao as do CSV de dentro da numeracao. Ver `fonteDoModelo`.
+    const fonte = fontePelaChave(chaveDaFonte);
 
-    const itens = (state.osItens[osId] || [])
-        .filter(it => String(numeracaoIdDoItem(it)) === String(numId));
+    const itens = (state.osItens[osId] || []).filter(it => {
+        const f = fonteDoModelo(it);
+        return f && fonte && f.chave === fonte.chave;
+    });
 
-    if (!num || !num.csv_data || !num.csv_data.length || !itens.length) {
+    if (!fonte || !fonte.rows.length || !itens.length) {
 
         toast('Nenhum modelo deste pedido usa esse banco de dados.', 'error');
 
@@ -15993,22 +16083,28 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
     }
 
+    const num = fonte.num || null;
+
     const grupo = { num, itens };
 
     window.abrirEditorCsv({
 
-        headers: num.csv_headers || [],
+        headers: fonte.headers,
 
-        rows: num.csv_data,
+        rows: fonte.rows,
 
-        filename: num.csv_filename || 'banco.csv',
+        filename: fonte.filename,
 
         foco: focoItemId != null ? String(focoItemId) : null,
 
         // Os checkboxes de "conferir repeticoes em" (26/08/2026). Nascem como
         // a numeracao esta hoje -- e toda numeracao anterior a este dia nasce
         // com todas marcadas, porque a marca de FORA e que e explicita.
-        conferencia: conferenciaDasColunasDaNumeracao(num),
+        // A conferencia mora nos ELEMENTOS da numeracao, e as colunas dela
+        // tem os nomes da PECA. Vindo do banco do pedido os nomes sao outros
+        // (e cada modelo pode mapear o seu), entao nao ha caixa que se possa
+        // marcar sem ambiguidade: some, em vez de gravar no lugar errado.
+        conferencia: fonte.tipo === 'numeracao' ? conferenciaDasColunasDaNumeracao(num) : [],
 
         modelos: grupo.itens.map((it, i) => ({
 
@@ -16024,16 +16120,19 @@ window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
             // 1. As linhas podem ter mudado (cancelar/reativar) e ganhado __id
             //    novo. Grava o banco de volta na numeração, uma vez só.
-            num.csv_data = rows;
-
-            await salvarCsvDaNumeracao(num.id, rows);
+            await salvarLinhasDaFonte(fonte, rows);
 
             // A escolha das colunas conferidas mora nos ELEMENTOS, e por isso
             // ela e gravada aqui e nao junto das fatias: fatia e do modelo,
             // conferencia e da numeracao. Ver `colunasConferidasDaNumeracao`.
-            const conferenciaMudou = !!aplicarConferenciaNasColunas(num, conferencia);
-            if (conferenciaMudou) {
-                await salvarCamposDaNumeracao(num.id, { elements: num.elements });
+            // So quando a fonte E a numeracao: vindo do banco do pedido o
+            // modal nem mostrou as caixas, e escrever aqui gravaria nomes de
+            // coluna do banco dentro dos elementos da peca.
+            if (fonte.tipo === 'numeracao' && num) {
+                const conferenciaMudou = !!aplicarConferenciaNasColunas(num, conferencia);
+                if (conferenciaMudou) {
+                    await salvarCamposDaNumeracao(num.id, { elements: num.elements });
+                }
             }
 
             // 2. Aplicar sem atribuir NENHUMA linha a NENHUM modelo não é uma
@@ -19575,18 +19674,20 @@ window.abrirCsvDoModelo = async function(idx, osId) {
 
     if (!item) return;
 
-    const num = (state.numeracoes || [])
-        .find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+    const fonte = fonteDoModelo(item);
 
-    if (!num || !num.csv_data || !num.csv_data.length) {
+    if (!fonte) {
 
-        toast('A numeração deste modelo não usa banco de dados (CSV).', 'error');
+        const vinc = vinculoDeBancoDoModelo(item);
+        toast(vinc
+            ? 'O banco do pedido deste modelo ainda não chegou. Feche e abra o pedido de novo.'
+            : 'A numeração deste modelo não usa banco de dados (CSV).', 'error');
 
         return;
 
     }
 
-    return window.abrirDistribuicaoCsv(osId, num.id, item.id);
+    return window.abrirDistribuicaoCsv(osId, fonte.chave, item.id);
 
 };
 
@@ -29051,7 +29152,7 @@ function renderImpOSQueue() {
 
     for (const g of gruposCsv) {
 
-        const ativas = linhasAtivasCsv(g.num.csv_data).length;
+        const ativas = linhasAtivasCsv(g.fonte.rows).length;
 
         const porModelo = g.itens.map((it, i) => {
 
@@ -29103,13 +29204,13 @@ function renderImpOSQueue() {
                     display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
             <div style="flex:1; min-width:280px;">
                 <div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">
-                    &#128202; ${g.num.csv_filename || 'Banco de dados'}
+                    &#128202; ${g.fonte.filename || 'Banco de dados'}
                     <span style="font-weight:400; color:${cor};">— ${recado}</span>
                 </div>
                 <div style="font-size:0.82rem; color:#94a3b8; margin-top:3px;">${detalhe}</div>
             </div>
             <button class="btn btn-sm btn-secondary" style="white-space:nowrap;"
-                    onclick="abrirDistribuicaoCsv('${osId}', '${g.num.id}')"
+                    onclick="abrirDistribuicaoCsv('${osId}', '${g.fonte.chave}')"
                     title="Escolher quais linhas do banco cada modelo imprime">
                 &#129513; Distribuir entre os modelos
             </button>
