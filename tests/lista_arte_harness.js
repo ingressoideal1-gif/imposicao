@@ -265,7 +265,7 @@ const { pedidoSaiuDaArte } = new Function(
 // dizia isso. As funcoes sao LIDAS do script.js, com um `state` de mentira.
 
 (function bancoIncompletoTravaOPronto() {
-    const fonte = ['numeracaoIdDoItem', 'numeracaoDoModelo', 'bancoDeDadosIncompletoDoModelo']
+    const fonte = ['numeracaoIdDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo', 'bancoDeDadosIncompletoDoModelo']
         .map(extrair).join('\n');
     const state = { numeracoes: [] };
     const api = new Function('state', fonte + '\nreturn { bancoDeDadosIncompletoDoModelo };')(state);

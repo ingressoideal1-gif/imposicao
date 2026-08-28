@@ -59,7 +59,8 @@ function numeracaoAntiga() {
 (function modeloAntigoRecebeAMesmaNumeracao() {
     const state = { numeracoes: [] };
     const api = sandboxDoScript(state,
-        ['numeracaoIdDoItem', 'numeracaoDoModelo'], 'numeracaoDoModelo');
+        ['numeracaoIdDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo',
+         'vinculoDeBancoDoModelo'], 'numeracaoDoModelo');
     const num = numeracaoAntiga();
     state.numeracoes.push(num);
 
@@ -117,7 +118,11 @@ function numeracaoAntiga() {
 (function aGemeaTemODesvioTambem() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
     const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
-    const marca = 'banco_id';
+    // `resolverNumeracaoParaModelo` e a regra compartilhada: aplicar a um `num`
+    // ja escolhido o banco e o mapa de colunas do modelo. Se ela existir so
+    // numa das telas, a outra volta a imprimir o banco de dentro da numeracao —
+    // que foi exatamente o que aconteceu com a fatia por modelo no pedido 20495.
+    const marca = 'resolverNumeracaoParaModelo';
     ok(script.includes(marca) === pedido.includes(marca),
         'script.js e pedido.js estao na MESMA versao da regra do banco do pedido',
         { script: script.includes(marca), pedido: pedido.includes(marca) });

@@ -58,7 +58,7 @@ const NOMES = ['garantirCsvDaNumeracao', 'esquecerCsvDaNumeracao', 'numeracaoTem
                // A carga em segundo plano dos bancos do pedido aberto (26/08/2026).
                'numeracoesSemBancoBaixado', 'carregarBancosDoPedido',
                'numeracaoIdDoItem', 'linhasAtivasCsv', 'colunasDoBancoDaNumeracao',
-               'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'numeracaoDoModelo',
+               'linhasComDadoDaNumeracao', 'fatiaCsvDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo',
                'rotuloDoModelo', 'celulasRepetidasDoPedido',
                // A fatia salva que nao e deste banco (26/08/2026).
                'distribuicaoOrfaDoModelo', 'CsvEditorColId',

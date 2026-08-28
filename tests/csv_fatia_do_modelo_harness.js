@@ -286,7 +286,7 @@ function extrairFuncao(src, nome) {
 
 (function celulasRepetidasEntreModelos() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo',
                    'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    // Desde 26/08/2026 o aviso conta so as colunas CONFERIDAS: a
@@ -348,7 +348,7 @@ function extrairFuncao(src, nome) {
 
 (function aConferenciaDeDadosDoPedido() {
     const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo',
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo',
                    'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',

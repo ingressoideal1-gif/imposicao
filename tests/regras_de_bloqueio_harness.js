@@ -49,7 +49,7 @@ const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado
                'bloqueioDeModeloAprovado',
                'linhasAtivasCsv', 'numeracaoIdDoItem',
                'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
-               'numeracaoDoModelo', 'numeracaoEhDuplex',
+               'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo', 'numeracaoEhDuplex',
                'celulasEsperadasDoModelo', 'celulasGeradasDoModelo',
                'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas'];
 

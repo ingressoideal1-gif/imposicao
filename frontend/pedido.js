@@ -4514,16 +4514,23 @@ window.runPedImposition = async function (mode, isRefazer) {
             // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
             // do banco. Sem isto, os oito modelos receberiam as mesmas linhas.
             // Espelha runImposition no script.js.
+            const itArte = arte._itemId
+                ? (state.osItens[arte._osId] || []).find(i => String(i.id) === String(arte._itemId))
+                : null;
+
+            // A ESCOLHA da numeracao continua pelo `num1_id` da arte; o que
+            // entra e so a resolucao do banco do pedido (27/08/2026), que
+            // devolve a propria numeracao quando o modelo nao tem vinculo.
             let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
+
+            if (typeof resolverNumeracaoParaModelo === 'function') {
+                numArte = resolverNumeracaoParaModelo(numArte, itArte);
+            }
 
             let qtdArte = arte.qtd;
 
             if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId
                 && typeof fatiaCsvDoItem === 'function') {
-
-                const itArte = (state.osItens[arte._osId] || [])
-
-                    .find(i => String(i.id) === String(arte._itemId));
 
                 if (itArte && itArte.csv_selecao) {
 

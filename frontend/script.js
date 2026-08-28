@@ -11954,15 +11954,26 @@ window.runImposition = async function (mode, returnBlob = false) {
 
             // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
             // do banco. Sem isto, os tres modelos receberiam as mesmas linhas.
+            //
+            // O modelo desta arte manda, porque e ele que sabe de qual banco e
+            // de quais colunas o papel se alimenta (27/08/2026). Arte montada a
+            // mao na Lista de Imposicao nao tem `_itemId` e nao tem modelo: ali
+            // a busca antiga, pelo id da numeracao, continua sendo a certa.
+            const itArte = arte._itemId
+                ? (state.osItens[arte._osId] || []).find(i => String(i.id) === String(arte._itemId))
+                : null;
+
+            // A ESCOLHA da numeracao continua sendo pelo `num1_id` da arte, como
+            // sempre foi: trocar a origem da escolha aqui mudaria o papel de
+            // pedidos que ja estao rodando. O que entra e so a resolucao, e ela
+            // devolve a propria numeracao quando o modelo nao tem vinculo.
             let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
+
+            numArte = resolverNumeracaoParaModelo(numArte, itArte);
 
             let qtdArte = arte.qtd;
 
             if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId) {
-
-                const itArte = (state.osItens[arte._osId] || [])
-
-                    .find(i => String(i.id) === String(arte._itemId));
 
                 if (itArte && itArte.csv_selecao) {
 
@@ -16388,9 +16399,59 @@ window.quantidadeDoModelo = quantidadeDoModelo;
 function numeracaoDoModelo(item) {
     const nid = numeracaoIdDoItem(item);
     if (!nid) return null;
-    return (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+
+    // ── O desvio do banco do pedido (27/08/2026) ────────────────────────────
+    //
+    // Modelo sem vinculo sai por aqui com a MESMA numeracao de sempre, pela
+    // mesma referencia. Tudo o que existia antes desta data cai neste return e
+    // nao enxerga o caminho novo -- e e por isso que a mudanca nao altera
+    // nenhum dos pedidos em andamento.
+    //
+    // Devolver uma copia, ainda que identica, ja seria uma mudanca de
+    // comportamento: o `garantirCsvDaNumeracao` guarda a referencia da
+    // numeracao para escrever o `csv_data` nela quando o banco desce, e essa
+    // escrita cairia num objeto que mais ninguem le. Ver
+    // `tests/banco_do_pedido_regressao_harness.js`, que compara por identidade.
+    return resolverNumeracaoParaModelo(num, item);
 }
 window.numeracaoDoModelo = numeracaoDoModelo;
+
+/**
+ * Aplica a um `num` JA escolhido o banco e o mapa de colunas deste modelo.
+ *
+ * Separado do `numeracaoDoModelo` porque ha um segundo lugar que precisa dele:
+ * o payload `multi_artes` da imposicao, que escolhe a numeracao pelo `num1_id`
+ * da arte e nao pelo modelo. La a escolha nao pode mudar -- so a resolucao.
+ *
+ * Sem vinculo devolve o proprio `num`, pela mesma referencia.
+ */
+function resolverNumeracaoParaModelo(num, item) {
+    const vinculo = vinculoDeBancoDoModelo(item);
+    if (!num || !vinculo || !window.BancoDoModelo) return num;
+
+    return window.BancoDoModelo.numeracaoResolvida(
+        num,
+        window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || []),
+        vinculo.csv_mapa
+    );
+}
+window.resolverNumeracaoParaModelo = resolverNumeracaoParaModelo;
+
+/**
+ * O vinculo deste modelo com um banco do pedido, ou null.
+ *
+ * Mora em `pedidos_modelos_banco`, tabela NOSSA -- e nao em `pedidos_modelos`,
+ * que e do parceiro Vibe. `state.vinculosDeBanco` e preenchido pelo
+ * `carregarBancosDoPedidoNovo`; enquanto ele nao rodou, todo modelo e do
+ * caminho antigo, que e o padrao seguro.
+ */
+function vinculoDeBancoDoModelo(item) {
+    if (!item || !item.id) return null;
+    const mapa = state.vinculosDeBanco || {};
+    return mapa[String(item.id)] || null;
+}
+window.vinculoDeBancoDoModelo = vinculoDeBancoDoModelo;
 
 /**
  * O `csv_data` que esta aba ja baixou continua descrevendo a linha relida?
