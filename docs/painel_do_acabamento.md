@@ -374,7 +374,7 @@ tela:
 | Coluna | Na Produção | No Acabamento |
 |--------|-------------|---------------|
 | Progresso | modelos impressos / total | modelos **prontos** / total |
-| Status | Aguardando / Parcial / Impresso | Aguardando / Impresso / Em acabamento / Pronto |
+| Status | Aguardando / Impresso | Aguardando / Impresso / Em acabamento / Pronto |
 
 O botão de recorte no topo, que na Produção é "Impresso", aqui é **"Pronto"**:
 pedido com todos os modelos prontos sai da fila de trabalho e só reaparece com
@@ -975,15 +975,16 @@ Derivar **não é gravar**. Desenhar a tela não escreve no banco — é a regra
 A coluna continua nula até alguém escolher; a partir daí, a escolha vence o
 derivado, inclusive quando a escolha é voltar para *Aguardando*.
 
-Só `'Impresso'` conta como impresso. *Parcial* é meia impressão, e meia
-impressão não chegou ao acabamento; *Revisão* é problema na impressão, e também
-não chegou. As duas derivam para *Aguardando*, que é a verdade do ponto de vista
-desta tela.
+Só `'Impresso'` conta como impresso. Desde 28/08/2026 a impressão só tem dois
+status (Aguardando e Impresso), mas valores legados gravados antes disso
+(*Parcial*, *Revisão*) ainda podem existir no banco — e derivam para
+*Aguardando*, que é a verdade do ponto de vista desta tela: meia impressão ou
+problema não chegou ao acabamento.
 
 ### Por que a coluna é separada da impressão
 
 `status_impressao` é do setor de impressão e anda em
-Aguardando/Parcial/Impresso/Revisão. Espremer os dois vocabulários na mesma
+Aguardando/Impresso. Espremer os dois vocabulários na mesma
 coluna faria uma tela mentir sobre a outra — e mexeria no que já está aprovado e
 rodando na gráfica. O Acabamento **lê** aquele campo para saber por onde começar,
 e **nunca o escreve**.

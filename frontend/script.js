@@ -26040,56 +26040,34 @@ function getStatusBadge(status) {
 
 
 /**
- * Normaliza o status de impressão para as novas opções: Aguardando, Impresso, Parcial, Revisão
+ * Normaliza o status de impressão para as DUAS opções do painel: Aguardando e
+ * Impresso (redução de 28/08/2026 — antes havia também Parcial e Revisão, que
+ * nunca foram usados: zero ocorrências no banco).
+ *
+ * Valor antigo gravado à mão cai em Aguardando, a mesma leitura que o
+ * Acabamento sempre fez: meia impressão ou problema é material que ainda não
+ * saiu inteiro da impressora.
  */
 function normalizarStatusImpressao(status) {
     if (!status) return 'Aguardando';
     const s = status.toString().trim().toUpperCase();
-    if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
-    if (s === 'PARCIAL') return 'Parcial';
     if (s === 'IMPRESSO') return 'Impresso';
-    if (s === 'ERRO' || s === 'REVISAO' || s === 'REVISÃO') return 'Revisão';
-    
-    const lower = status.toString().trim().toLowerCase();
-    if (lower === 'impresso') return 'Impresso';
-    if (lower === 'parcial') return 'Parcial';
-    if (lower === 'aguardando') return 'Aguardando';
-    if (lower === 'revisao' || lower === 'revisão') return 'Revisão';
-    
+    if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
+    // Legado: Parcial, Revisão e Erro não existem mais como escolha.
+    if (s === 'PARCIAL' || s === 'ERRO' || s === 'REVISAO' || s === 'REVISÃO') return 'Aguardando';
     return status;
 }
 
 /**
- * Calcula o status de impressão do pedido a partir de seus modelos
+ * Calcula o status de impressão do pedido a partir de seus modelos: Impresso
+ * quando TODOS estão impressos, Aguardando no resto. O meio-caminho quem conta
+ * é a coluna Progresso (X/Y).
  */
 function calcularStatusImpressaoPedido(modelos) {
     if (!modelos || modelos.length === 0) return 'Aguardando';
-
-    // 1. Se qualquer modelo for 'Revisão', o status do pedido é 'Revisão'
-    const temRevisao = modelos.some(m => {
-        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
-        return st === 'Revisão';
-    });
-    if (temRevisao) return 'Revisão';
-
-    // Contar modelos impressos
-    const impressosCount = modelos.filter(m => {
-        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
-        return st === 'Impresso';
-    }).length;
-
-    // 2. Se todos os modelos estão impressos
-    if (impressosCount === modelos.length) {
-        return 'Impresso';
-    }
-
-    // 3. Se ao menos um está impresso (e nem todos, pois a condição acima falhou)
-    if (impressosCount > 0) {
-        return 'Parcial';
-    }
-
-    // 4. Se nenhum está impresso
-    return 'Aguardando';
+    const todosImpressos = modelos.every(m =>
+        normalizarStatusImpressao(m.impressao || m.status_impressao) === 'Impresso');
+    return todosImpressos ? 'Impresso' : 'Aguardando';
 }
 
 /**
@@ -26098,9 +26076,7 @@ function calcularStatusImpressaoPedido(modelos) {
 function getStatusImpressaoBadge(status) {
     const map = {
         'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
-        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' },
-        'Parcial': { icon: '🔄', cls: 'badge-amber', label: 'Parcial' },
-        'Revisão': { icon: '⚠️', cls: 'badge-red', label: 'Revisão' }
+        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' }
     };
     const s = map[status] || { icon: '❓', cls: '', label: status };
     return `<span class="badge ${s.cls}">${s.icon} ${s.label}</span>`;
@@ -26126,20 +26102,6 @@ function getAprovacaoBadge(aprov) {
     const key = aprov ? aprov.toUpperCase() : '';
     const s = map[key] || map[aprov] || { cls: '', icon: '', text: aprov || '--' };
     return `<span class="badge ${s.cls}">${s.icon} ${s.text}</span>`;
-}
-
-/**
- * Retorna badge HTML para impressão
- */
-function getImpressaoBadge(imp) {
-    const map = {
-        'AGUARD.': { cls: 'badge-amber', icon: '⏳' },
-        'PARCIAL': { cls: 'badge-blue', icon: '🔄' },
-        'IMPRESSO': { cls: 'badge-teal', icon: '✅' },
-        'ERRO': { cls: 'badge-red', icon: '❌' }
-    };
-    const s = map[imp] || { cls: '', icon: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${imp || '--'}</span>`;
 }
 
 /**
@@ -27006,7 +26968,7 @@ const PROD_SORT_COLUNAS = {
 };
 
 // Ordem de fluxo de produção para a coluna Status (mais útil que alfabética)
-const PROD_STATUS_ORDEM = { 'Aguardando': 1, 'Parcial': 2, 'Impresso': 3, 'Revisão': 4 };
+const PROD_STATUS_ORDEM = { 'Aguardando': 1, 'Impresso': 2 };
 
 /**
  * Valor de ordenação de cada coluna. Espelha exatamente o que a linha exibe
@@ -27043,7 +27005,7 @@ function getProdSortValue(os, campo) {
         case 'status': {
             const modelosParaStatus = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
             const st = calcularStatusImpressaoPedido(modelosParaStatus);
-            // Prefixo numérico mantém a ordem do fluxo (Aguardando → Parcial → Impresso → Revisão)
+            // Prefixo numérico mantém a ordem do fluxo (Aguardando → Impresso)
             return `${PROD_STATUS_ORDEM[st] || 9}_${st || ''}`;
         }
     }
@@ -28170,10 +28132,10 @@ function renderOrdens() {
         const itens = state.osItens[os.id] || [];
         
         itens.forEach(item => {
-            // Normalizar antes de comparar: item.impressao chega como 'Impresso'/'Parcial'
+            // Normalizar antes de comparar: item.impressao chega como 'Impresso'
             // (normalizarStatusImpressao), nunca em caixa alta.
             const impStatus = normalizarStatusImpressao(item.impressao);
-            if (impStatus === 'Impresso' || impStatus === 'Parcial') {
+            if (impStatus === 'Impresso') {
                 totalItensImpressao++;
             }
             
@@ -28909,9 +28871,7 @@ function renderOSItens(osId) {
                 <td style="text-align: center;" onclick="event.stopPropagation()">
                     <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                         <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
-                        <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
                         <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
-                        <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
                     </select>
                 </td>
             </tr>
@@ -28945,9 +28905,7 @@ function renderOSItens(osId) {
             <td>
                 <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
-                    <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
                     <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
-                    <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
                 </select>
             </td>
             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -30239,10 +30197,6 @@ function renderImpOSQueue() {
             let statusBg = '#65625e'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#162037'; // Impresso
-            } else if (rawStatus.includes('PARCIAL')) {
-                statusBg = '#32352e'; // Parcial
-            } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
-                statusBg = '#65625e'; // Aguardando
             }
 
             const rowStroke = isActive ? 'outline: 2pt solid #f97316;' : 'outline: 1px solid #918f8c;';
@@ -30446,9 +30400,7 @@ function renderImpOSQueue() {
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
-                                <option value="Parcial" ${normalizarStatusImpressao(item.status_impressao) === 'Parcial' ? 'selected' : ''}>Parcial</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
-                                <option value="Revisão" ${normalizarStatusImpressao(item.status_impressao) === 'Revisão' ? 'selected' : ''}>Revisão</option>
                             </select>
                         </div>
                     </td>

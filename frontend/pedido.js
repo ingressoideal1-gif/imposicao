@@ -3562,10 +3562,10 @@ window.togglePedItemSelection = function(itemId, osId) {
  * pulseiras esse pedido tem?" —, e que até aqui ele só respondia somando de
  * cabeça as linhas da lista.
  *
- * Restante é o que ainda NÃO está impresso. Modelo em Parcial conta como
- * restante inteiro: a tela não guarda quantos itens dele já saíram, e
- * arredondá-lo para pronto mostraria menos trabalho do que existe. A conta erra
- * sempre para o lado de sobrar, nunca para o de faltar.
+ * Restante é o que ainda NÃO está impresso. Só existem dois status desde
+ * 28/08/2026 (Aguardando e Impresso); um 'Parcial' legado gravado antes disso
+ * cai em Aguardando no normalizador e conta como restante inteiro — a conta
+ * erra sempre para o lado de sobrar, nunca para o de faltar.
  */
 function contaDoProduto(itens) {
 
@@ -4031,10 +4031,6 @@ function renderPedOSQueue() {
             let statusBg = '#65625e'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#162037'; // Impresso
-            } else if (rawStatus.includes('PARCIAL')) {
-                statusBg = '#32352e'; // Parcial
-            } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
-                statusBg = '#65625e'; // Aguardando
             }
 
             const isCurrentSelected = isSelected || isActive;
@@ -4232,9 +4228,7 @@ function renderPedOSQueue() {
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
-                                <option value="Parcial" ${normalizarStatusImpressao(item.status_impressao) === 'Parcial' ? 'selected' : ''}>Parcial</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
-                                <option value="Revisão" ${normalizarStatusImpressao(item.status_impressao) === 'Revisão' ? 'selected' : ''}>Revisão</option>
                             </select>
                         </div>
                     </td>
