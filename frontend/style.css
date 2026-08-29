@@ -246,7 +246,17 @@ body {
    voltar ao Painel devolve os 100% sem ninguém tocar em nada. Mudar o número
    abaixo é a única coisa necessária para mudar o tamanho de abertura. */
 #view-lista-impressao { zoom: 1; }
-#view-pedido          { zoom: 0.8; }
+
+/* A tela do Pedido voltou aos 100% em 28/08/2026.
+   Ela abria em 0,8 porque a linha da fila somava ~2.130 px: cada linha
+   carregava os proprios rotulos (QTD, NI, NF, Bloco, COR, Num., Verso,
+   Status) escritos dentro de cada celula. O zoom resolvia a largura ao preco
+   de encolher 20% TUDO — inclusive a fonte que foi feita grande de proposito
+   para leitura em pe, na frente da impressora.
+   Os rotulos viraram cabecalho de coluna e a linha caiu para ~1.400 px, entao
+   o curativo saiu junto com a causa. Ver tests/fila_do_pedido_harness.js, que
+   mede se a fila ainda cabe. */
+#view-pedido          { zoom: 1; }
 
 /* O "Impresso" sai do fluxo do flex de propósito: os três filtros de prazo
    continuam centralizados exatamente como sempre estiveram, e ele fica

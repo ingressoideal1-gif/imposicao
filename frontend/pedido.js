@@ -3330,6 +3330,54 @@ function mostrarControleDaPrevia(el, mostrar) {
 }
 window.mostrarControleDaPrevia = mostrarControleDaPrevia;
 
+/**
+ * Este modelo usa numeracao de CAMAROTE?
+ *
+ * Muda as quatro colunas do meio da fila (Q_CAM, L_CAM, C_INI no lugar de QTD,
+ * N. inicial, N. final), e por isso precisa ser respondido ANTES de desenhar o
+ * cabecalho da caixa — nao so' dentro de cada linha.
+ */
+function modeloEhCamarote(item) {
+    if (!item) return false;
+
+    // A COLUNA DO BANCO VEM PRIMEIRO. `amostra_num_id` e' a coluna;
+    // `numeracao_id` e' o espelho antigo, que so vale quando a coluna nao veio.
+    // Lendo o espelho primeiro, um modelo cuja numeracao foi trocada abre o
+    // banco errado — e sao doze pontos de leitura espalhados por duas telas.
+    // Ver `numeracaoIdDoItem` no script.js e o csv_fatia_do_modelo_harness.
+    const nid = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item)
+        : (item.amostra_num_id || item.numeracao_id);
+    let num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
+    if (!num) {
+        const nome = item.gabarito_operacional || item.numeracao || '';
+        if (nome && typeof globalNormStr === 'function') {
+            num = (state.numeracoes || []).find(n => globalNormStr(n.name || n.tipo || '') === globalNormStr(nome));
+        }
+    }
+    return !!(num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE'));
+}
+window.modeloEhCamarote = modeloEhCamarote;
+
+/**
+ * Preto ou branco por cima desta tinta?
+ *
+ * O seletor de Cor pinta o proprio fundo com a cor do modelo e ATE 28/08/2026
+ * forcava o texto em preto. Em tinta clara funcionava; em tinta escura — preto,
+ * azul-marinho, comuns em grafica — o nome da cor desaparecia dentro da propria
+ * caixa. A conta e' a luminancia relativa, a mesma que os guias de contraste
+ * usam: acima do meio pede texto escuro, abaixo pede texto claro.
+ */
+function textoLegivelSobre(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if (!m) return '#ffffff';
+    const n = parseInt(m[1], 16);
+    const canal = v => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const L = 0.2126 * canal((n >> 16) & 255) + 0.7152 * canal((n >> 8) & 255) + 0.0722 * canal(n & 255);
+    return L > 0.36 ? '#000000' : '#ffffff';
+}
+window.textoLegivelSobre = textoLegivelSobre;
+
 /** O Refazer (folhas ou celulas) esta ligado? */
 function refazerLigado() {
     return (typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo())
@@ -4231,15 +4279,27 @@ function renderPedOSQueue() {
 
         });
 
+        // TRES NUMEROS, E NAO DOIS (28/08/2026).
+        //
+        // Antes o selo dizia Total e Restante. Faltava o do meio, que e' o que o
+        // operador quer saber olhando a caixa: quanto ja saiu. A conta de
+        // impressas ja existia no `contaDoProduto` e nao chegava a tela.
+        //
+        // Fica no CENTRO da linha do produto, entre o nome e os seletores.
+        const qtdImpressaProduto = conta.impressa;
+
         const resumoDoProduto = qtdTotalProduto > 0 ? `
-                    <span style="display:inline-flex; align-items:center; gap:8px; margin-left:18px;
-                                 padding:3px 12px; background:#1e293b; border:1px solid #918f8c;
+                    <span style="display:inline-flex; align-items:center; gap:8px;
+                                 padding:3px 14px; background:#1e293b; border:1px solid #918f8c;
                                  border-radius:6px; font-size:0.95rem; font-weight:700; white-space:nowrap;"
-                          title="Soma das quantidades de todos os modelos deste produto, e quanto ainda não está impresso">
-                        <span style="color:#94a3b8; font-weight:600;">Total</span>
+                          title="Soma das quantidades de todos os modelos deste produto: quanto tem, quanto já saiu e quanto falta">
+                        <span style="color:#94a3b8; font-weight:600;">Total:</span>
                         <span style="color:#ffffff;">${qtdTotalProduto.toLocaleString('pt-BR')}</span>
-                        <span style="color:#918f8c;">·</span>
-                        <span style="color:#94a3b8; font-weight:600;">Restante</span>
+                        <span style="color:#918f8c;">-</span>
+                        <span style="color:#94a3b8; font-weight:600;">Impressas:</span>
+                        <span style="color:#22c55e;">${qtdImpressaProduto.toLocaleString('pt-BR')}</span>
+                        <span style="color:#918f8c;">-</span>
+                        <span style="color:#94a3b8; font-weight:600;">Faltam:</span>
                         <span style="color:${qtdRestanteProduto > 0 ? '#f59e0b' : '#22c55e'};">${qtdRestanteProduto.toLocaleString('pt-BR')}</span>
                     </span>` : '';
 
@@ -4302,19 +4362,52 @@ function renderPedOSQueue() {
             </div>
         `;
 
+        // ── O CABECALHO DE COLUNA ───────────────────────────────────────────
+        //
+        // Ate 28/08/2026 cada linha carregava os proprios rotulos: QTD, NI, NF,
+        // Bloco, COR, Num., Verso e Status escritos DENTRO de cada celula, em
+        // cada linha. Oito rotulos vezes N linhas empurravam a largura da linha
+        // para ~2.130 px, e era isso que obrigava a pagina a abrir com zoom de
+        // 0,8 — encolhendo 20% tudo o que foi feito grande de proposito para
+        // leitura em pe, na frente da impressora.
+        //
+        // CAIXA MISTURADA CONTINUA COM OS ROTULOS NA LINHA. As quatro colunas do
+        // meio mudam de significado no CAMAROTE (Q_CAM, L_CAM, C_INI no lugar de
+        // QTD, NI, NF): um cabecalho so mentiria para metade das linhas. E' raro,
+        // e vale mais um cabecalho ausente do que um cabecalho errado.
+        const temCamarote = groupItens.some(it => modeloEhCamarote(it));
+        const temComum = groupItens.some(it => !modeloEhCamarote(it));
+        const comRotulosNaLinha = temCamarote && temComum;
+
+        const th = (txt, largura) =>
+            `<th style="padding:4px 12px; width:${largura}px; font-size:0.78rem; font-weight:700; color:#94a3b8;
+                        text-transform:uppercase; letter-spacing:0.06em; text-align:left; white-space:nowrap;">${txt}</th>`;
+
+        const cabecalhoDaTabela = comRotulosNaLinha ? '' : `
+                    <thead>
+                        <tr>
+                            ${th('', 40)}${th('Código', 90)}${th('Modelo', 150)}
+                            ${temCamarote
+                                ? th('Q_CAM', 110) + th('L_CAM', 110) + th('C_INI', 110) + th('Bloco', 110)
+                                : th('Qtd', 110) + th('N. inicial', 110) + th('N. final', 110) + th('Bloco', 110)}
+                            ${th('Cor', 190)}${th('Numeração', 200)}${th('Verso', 120)}${th('Status', 150)}
+                        </tr>
+                    </thead>`;
+
         html += `
         <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}" data-caixa-cor="${chaveDaCaixa}">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
-                <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
+            <div class="card-header" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c; display:flex; align-items:center; gap:14px;">
+                <div style="cursor:pointer; display:flex; align-items:center; flex:1 1 0; min-width:0;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
                     <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
-                        <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${nomeReal} ${setorBadge}
+                        ${nomeReal} ${setorBadge}
                     </h5>
-                    ${resumoDoProduto}
                 </div>
-                ${headerDropdowns}
+                <div style="flex:0 0 auto;">${resumoDoProduto}</div>
+                <div style="flex:1 1 0; display:flex; justify-content:flex-end; min-width:0;">${headerDropdowns}</div>
             </div>
             <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue" style="padding: 0 3pt;">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 6pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 6pt;">
+                    ${cabecalhoDaTabela}
                     <tbody>
         `;
 
@@ -4357,8 +4450,12 @@ function renderPedOSQueue() {
                 return `<option value="${c.id}" ${sel} style="${optStyle}">${c.name}</option>`;
             }).join('');
 
+            // O texto do seletor de Cor calcula claro ou escuro pela tinta. Ate
+            // 28/08/2026 era preto fixo, e o nome de uma tinta escura sumia
+            // dentro da propria caixa. Ver textoLegivelSobre().
             const corSelectBg = corRefHex || '#1e293b';
-            const corSelectStyle = `${selectStyle}; background-color: ${corSelectBg} !important; color: #000000 !important; font-weight: bold;`;
+            const corSelectTexto = corRefHex ? textoLegivelSobre(corRefHex) : '#ffffff';
+            const corSelectStyle = `${selectStyle}; background-color: ${corSelectBg} !important; color: ${corSelectTexto} !important; font-weight: bold;`;
 
             let selectedNumId = null;
             const numIdAtual = item.numeracao_id ? String(item.numeracao_id) : (item.amostra_num_id ? String(item.amostra_num_id) : null);
@@ -4410,20 +4507,26 @@ function renderPedOSQueue() {
             const jsItemId = item.id;
             const jsOsId = osId;
 
+            // O rotulo dentro da celula so' sobrevive na caixa misturada, onde
+            // nao ha cabecalho possivel. Ver o comentario do cabecalho acima.
+            const rot = (txt, cor) => comRotulosNaLinha
+                ? `<span style="font-size:1.05rem; font-weight:bold; color:${cor || '#ffffff'}; white-space:nowrap;">${txt}</span>`
+                : '';
+
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="${classesDaLinha}" id="ped-queue-row-${item.id}"
                     data-cor-chave="${corDoItem.chave}"
                     data-impresso="${normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso' ? 'sim' : 'nao'}"
                     onclick="alternarModeloAberto('${jsItemId}', '${jsOsId}')">
-                    <td style="padding: 12px; width: 40px; text-align: center;">
+                    <td style="padding: 8px; width: 40px; text-align: center;">
                         <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
                                onclick="event.stopPropagation(); togglePedItemSelection('${jsItemId}', '${jsOsId}')"
                                ${isSelected ? 'checked' : ''} />
                     </td>
-                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:100px;" title="Código do Modelo">
+                    <td style="padding: 8px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:90px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
-                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:140px;" title="Nome do Modelo">
+                    <td style="padding: 8px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:150px;" title="Nome do Modelo">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
                             <span>${nomeDoModelo}</span>
@@ -4431,102 +4534,102 @@ function renderPedOSQueue() {
                     </td>
                     
                     ${isCamarote ? `
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Qtd. Locais (Q_CAM)">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Qtd. Locais (Q_CAM)">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">Q_CAM</span>
+                            ${rot('Q_CAM', '#f59e0b')}
                             <input type="number" min="0" value="${qCamVal}" style="${inputStyle}" placeholder="Q_CAM"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'q_cam', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Lotação por Local (L_CAM)">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Lotação por Local (L_CAM)">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">L_CAM</span>
+                            ${rot('L_CAM', '#f59e0b')}
                             <input type="number" min="1" value="${lCamVal}" style="${inputStyle}" placeholder="L_CAM"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'l_cam', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Início do Local (C_INI)">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Início do Local (C_INI)">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">C_INI</span>
+                            ${rot('C_INI', '#f59e0b')}
                             <input type="number" min="1" value="${cIniVal}" style="${inputStyle}" placeholder="C_INI"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'c_ini', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Bloco = L_CAM">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Bloco = L_CAM">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">Bloco</span>
+                            ${rot('Bloco', '#f59e0b')}
                             <input type="number" value="${blocoFinal}" style="${inputStyle}; opacity: 0.85;" placeholder="Bloco"
                                 readonly
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
                     ` : `
-                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Quantidade">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Quantidade">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">QTD</span>
-                            <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
+                            ${rot('QTD')}
+                            <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="Qtd"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Inicial">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Num. Inicial">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NI</span>
-                            <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
+                            ${rot('NI')}
+                            <input type="number" value="${niVal}" style="${inputStyle}" placeholder="N. inicial"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NF</span>
-                            <input type="number" value="${nfCalculado}" style="${inputStyle}; opacity: 0.85;" placeholder="NF"
+                            ${rot('NF')}
+                            <input type="number" value="${nfCalculado}" style="${inputStyle}; opacity: 0.85;" placeholder="N. final"
                                 readonly
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Ingressos por Bloco">
+                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Ingressos por Bloco">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Bloco</span>
+                            ${rot('Bloco')}
                             <input type="number" value="${blocoVal}" style="${inputStyle}" placeholder="Bloco"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'bloco', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
                     `}
-                    <td style="padding: 12px; width: 250px; min-width: 250px; max-width: 250px;" title="Cor">
+                    <td style="padding: 8px; width: 190px; min-width: 190px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
+                            ${rot('COR')}
                             <select style="${corSelectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                                 <option value="">— Cor —</option>
                                 ${coresOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="Numeração">
+                    <td style="padding: 8px; width: 200px; min-width: 200px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
+                            ${rot('Núm.')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                                 <option value="">— Numeração —</option>
                                 ${numsOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Frente e Verso/Tipo de Verso">
+                    <td style="padding: 8px; width: 120px; min-width: 120px;" title="Frente e Verso/Tipo de Verso">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
+                            ${rot('Verso')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
                                 <option value="Frente" ${item.verso_tipo === 'Frente' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
                                 <option value="FxVerso" ${item.verso_tipo === 'FxVerso' ? 'selected' : ''}>FxVerso</option>
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de Produção">
+                    <td style="padding: 8px; width: 150px; min-width: 150px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
+                            ${rot('Status')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
