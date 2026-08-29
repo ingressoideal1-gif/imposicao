@@ -4780,8 +4780,11 @@
                            <span style="font-size: 0.78rem; color: var(--text-dim);">kg</span>
                            ${botaoDaBalanca('linha', indice)}
                        </span>`
-                    : `<span id="acab-reg-parte-${indice}" style="font-size: 0.82rem; font-family: monospace;
-                             color: #cfe6fb; min-width: 92px; text-align: right;">—</span>`}
+                    : (linhas.length > 1
+                        ? `<span id="acab-reg-parte-${indice}" title="Quanto deste peso vai para este modelo"
+                                 style="font-size: 0.82rem; font-family: monospace;
+                                        color: #cfe6fb; min-width: 92px; text-align: right;">—</span>`
+                        : '')}
                 ${linhas.length > 1
                     ? `<button type="button" onclick="AcabamentoPainel.removerLinhaDoRegistro(${indice})"
                                title="Tirar este modelo deste registro"
@@ -5533,7 +5536,9 @@
                                 ${esc(kgParaTexto(v.peso || 0))} <span style="font-size: 1.1rem; color: #7fa9d4;">kg</span>
                             </span>
                             <span style="font-size: 0.78rem; color: var(--text-dim);">
-                                somados dos ${(v.registros || []).length} ${(v.registros || []).length === 1 ? 'registro' : 'registros'} abaixo${
+                                ${(v.registros || []).length === 1
+                                    ? 'somado do registro abaixo'
+                                    : 'somados dos ' + (v.registros || []).length + ' registros abaixo'}${
                                     est.kg !== null ? ` · est. ${esc(kgParaTexto(est.kg))} kg` : ''}
                             </span>
                             <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
