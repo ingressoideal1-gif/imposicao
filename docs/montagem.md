@@ -219,6 +219,31 @@ Se a gravação na pasta falhar por motivo do disco (a pasta sumiu, a rede caiu)
 trabalho **não se perde**: o PDF desce pelo navegador e o aviso diz o que falhou.
 A montagem já tinha dado certo; quem falhou foi o destino.
 
+### A linha da lista é o caminho de volta ao modelo
+
+Clicar numa linha devolve **aquele pedido e aquele modelo** ao compositor, com o
+cursor já no campo de posições. Pedido do usuário em 29/08/2026.
+
+Refazer célula é trabalho de **descoberta**: o operador acha mais uma pulseira
+estragada depois de já ter montado a folha. Sem isso ele teria de reescolher o
+pedido no seletor, esperar o `loadOSItens`, reescolher o modelo na lista e só
+então digitar — quatro gestos para dizer uma coisa que a linha já sabe.
+
+O campo de posições fica **vazio**, e não preenchido com o que já foi pedido: ele
+vem acrescentar, e ver a lista antiga no campo faria parecer que precisa apagá-la
+primeiro. O `adicionarNaMontagem` soma ao grupo que existe.
+
+Duas coisas são travadas por teste:
+
+- **o × continua sendo o ×.** Ele mora dentro da linha, e sem parar a propagação
+  tirar um modelo também levaria o compositor de volta a ele — para um modelo que
+  acabou de sair da lista;
+- **a linha ativa é derivada** do que o compositor mostra, e não um índice
+  guardado à parte. Um segundo estado ficaria mentindo assim que o operador
+  escolhesse o modelo pelos seletores, ou assim que a lista perdesse um grupo —
+  e digitar posições achando que são de outro modelo é erro que só aparece no
+  papel.
+
 ### Adicionar o mesmo modelo duas vezes SOMA ao grupo
 
 Não cria um segundo. Dois grupos do mesmo modelo dariam duas artes iguais no
@@ -317,7 +342,7 @@ função, e um teste que casa com a citação em vez da chamada não guarda nada
 | Harness | Verificações | O que trava |
 |---|---|---|
 | [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 62 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 61 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout, o payload e **a entrega do arquivo** |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 69 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout, o payload e **a entrega do arquivo** |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta o
 que só se lê no código-fonte — inclusive um teste que falha se alguém mexer no

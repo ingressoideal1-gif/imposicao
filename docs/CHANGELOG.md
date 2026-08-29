@@ -4,6 +4,29 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — Montagem: a linha da lista volta ao modelo
+
+Pedido do usuário: **"depois de ter modelos carregados na montagem, ao selecionar
+a linha do modelo, carrega o modelo para possibilitar adição de novas células
+deste modelo"**.
+
+Clicar numa linha devolve aquele pedido e aquele modelo ao compositor, com o
+cursor já no campo de posições. Refazer célula é trabalho de descoberta — o
+operador acha mais uma pulseira estragada depois de já ter montado a folha —, e
+sem isso eram quatro gestos para dizer o que a linha já sabe.
+
+O campo fica **vazio**, e não preenchido com o que já foi pedido: ele vem
+acrescentar, e o `adicionarNaMontagem` soma ao grupo que existe.
+
+A linha ativa fica marcada, e é **derivada** do que o compositor mostra — não um
+índice guardado à parte, que ficaria mentindo assim que o operador escolhesse o
+modelo pelos seletores. O × continua sendo o ×: ele para a propagação, senão
+tirar um modelo também levaria o compositor de volta a ele.
+
+Harness da tela: 61 → 69.
+
+---
+
 ## [2026-08-29] — Montagem: o PDF parou de sumir, e agora tem para onde ir
 
 Relato do usuário: **"parou de gerar o pdf, deve ter a opção de escolher o folder

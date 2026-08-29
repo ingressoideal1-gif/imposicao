@@ -163,6 +163,51 @@ def test_a_montagem_resolve_o_formato_por_conta_propria():
     )
 
 
+def test_a_linha_da_lista_volta_ao_modelo():
+    """Pedido do usuario em 29/08/2026.
+
+    Refazer celula e' trabalho de DESCOBERTA: o operador acha mais uma pulseira
+    estragada depois de ja ter montado a folha. Sem isto ele teria de reescolher
+    o pedido no seletor, esperar o `loadOSItens`, reescolher o modelo na lista e
+    so' entao digitar. A linha ja sabe de qual pedido e de qual modelo se trata.
+
+    Duas coisas ficam travadas aqui:
+
+    - o X continua sendo o X. Ele mora DENTRO da linha, e sem parar a propagacao
+      tirar um modelo tambem levaria o compositor de volta a ele — para um
+      modelo que acabou de sair da lista;
+    - a linha ativa e' DERIVADA do que o compositor mostra, e nao um indice
+      guardado a parte. Um segundo estado ficaria mentindo assim que o operador
+      escolhesse o modelo pelos seletores, ou assim que a lista perdesse um
+      grupo — e digitar posicoes achando que sao de outro modelo e' erro que so'
+      aparece no papel.
+    """
+    js = _ler("frontend/montagem.js")
+
+    assert "function retomarDaMontagem(" in js, "a volta ao modelo pela linha sumiu"
+    corpo = js[js.index("async function retomarDaMontagem(indice) {"):]
+    corpo = corpo[:corpo.index("\n}") + 2]
+    assert "onMontagemPedidoChange()" in corpo, (
+        "a volta parou de recarregar os modelos do pedido; o segundo seletor "
+        "ficaria com os modelos do pedido anterior"
+    )
+    assert "campo.value = ''" in corpo, (
+        "o campo de posicoes voltou a ser preenchido; o operador vem "
+        "acrescentar, e a lista antiga no campo faz parecer que precisa apagar"
+    )
+
+    assert "event.stopPropagation(); removerDaMontagem(" in js, (
+        "o X deixou de parar a propagacao: tirar um modelo levaria o compositor "
+        "de volta ao modelo que acabou de sair da lista"
+    )
+
+    ativa = js[js.index("function _mtgLinhaAtiva(g) {"):]
+    ativa = ativa[:ativa.index("\n}") + 2]
+    assert "state.montagem.pedidoSel" in ativa and "state.montagem.modeloSel" in ativa, (
+        "a linha ativa deixou de ser derivada do que o compositor mostra"
+    )
+
+
 def test_o_pdf_da_montagem_nao_depende_de_janela_nova():
     """O defeito de 29/08/2026: o PDF era gerado e sumia.
 

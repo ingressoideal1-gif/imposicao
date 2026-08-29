@@ -472,6 +472,9 @@ function onMontagemModeloChange() {
     const sel = document.getElementById('mtg-modelo');
     state.montagem.modeloSel = sel && sel.value ? sel.value : null;
     onMontagemPosicoesChange();
+    // Redesenha porque a linha ativa da lista sai daqui: escolher pelo seletor
+    // tem de marcar a mesma linha que clicar nela marcaria.
+    renderMontagem();
 }
 
 /**
@@ -611,6 +614,63 @@ function adicionarNaMontagem() {
     renderMontagem();
 }
 
+/**
+ * Este grupo é o que o compositor está mostrando agora?
+ *
+ * Derivado, e não um "índice selecionado" guardado à parte: a marca continua
+ * certa quando o operador escolhe o modelo pelos seletores em vez de clicar na
+ * linha, e não há um segundo estado para manter em dia quando a lista muda de
+ * ordem ou perde um grupo.
+ */
+function _mtgLinhaAtiva(g) {
+    return String(g.osId) === String(state.montagem.pedidoSel)
+        && String(g.itemId) === String(state.montagem.modeloSel);
+}
+
+/**
+ * Clicar na linha devolve aquele modelo ao compositor.
+ *
+ * Pedido do usuário em 29/08/2026. Refazer célula é trabalho de descoberta: o
+ * operador acha mais uma pulseira estragada depois de já ter montado a folha, e
+ * sem isto ele teria de reescolher o pedido no seletor, esperar o
+ * `loadOSItens`, reescolher o modelo na lista e só então digitar. A linha já
+ * sabe de qual pedido e de qual modelo se trata; ela é o caminho mais curto.
+ *
+ * O campo de posições fica VAZIO, e não preenchido com o que já foi pedido: o
+ * operador vem acrescentar, e ver a lista antiga no campo faria parecer que ele
+ * precisa apagá-la primeiro. O `adicionarNaMontagem` soma ao grupo que existe.
+ */
+async function retomarDaMontagem(indice) {
+    const g = state.montagem.grupos[indice];
+    if (!g) return;
+
+    const sel = document.getElementById('mtg-pedido');
+    if (sel) {
+        // O pedido pode não estar na lista dos 30 dias — foi buscado pelo número,
+        // ou o seletor foi redesenhado depois. Sem a opção, o `value` não pega e
+        // o clique não faria nada.
+        if (!Array.from(sel.options).some(o => o.value === String(g.osId))) {
+            const opt = document.createElement('option');
+            opt.value = String(g.osId);
+            opt.textContent = String(g.pedidoNumero || g.osId) + ' · na montagem';
+            sel.appendChild(opt);
+        }
+        sel.value = String(g.osId);
+    }
+
+    // Recarrega os modelos daquele pedido, que é o que enche o segundo seletor.
+    await onMontagemPedidoChange();
+
+    const selMod = document.getElementById('mtg-modelo');
+    if (selMod) {
+        selMod.value = String(g.itemId);
+        onMontagemModeloChange();
+    }
+
+    const campo = document.getElementById('mtg-posicoes');
+    if (campo) { campo.value = ''; campo.focus(); }
+}
+
 function removerDaMontagem(indice) {
     const grupos = state.montagem.grupos;
     if (indice >= 0 && indice < grupos.length) grupos.splice(indice, 1);
@@ -701,16 +761,21 @@ function renderMontagem() {
             <table class="data-table">
               <tr><th>Pedido</th><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Posições</th><th style="text-align:right;">Células</th><th style="width:40px;"></th></tr>
               ${grupos.map((g, i) => `
-                <tr>
+                <tr class="mtg-linha${_mtgLinhaAtiva(g) ? ' mtg-linha-ativa' : ''}"
+                    onclick="retomarDaMontagem(${i})"
+                    title="Voltar a este modelo para acrescentar posições">
                   <td>${escapeHtml(String(g.pedidoNumero || g.osId))}</td>
                   <td><span style="color:var(--text);">${escapeHtml(String(g.itemId))}</span><br>
                       <span style="font-size:0.78rem;">${escapeHtml(String(g.nome).slice(0, 46))}</span></td>
                   <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(g.qtd || 0).toLocaleString('pt-BR')}</td>
                   <td><span class="mtg-posicoes">${g.posicoes.map(p => `<span class="mtg-pos">#${p}</span>`).join('')}</span></td>
                   <td style="text-align:right;">${g.posicoes.length}</td>
-                  <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem" onclick="removerDaMontagem(${i})">&times;</span></td>
+                  <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem" onclick="event.stopPropagation(); removerDaMontagem(${i})">&times;</span></td>
                 </tr>`).join('')}
-            </table>`;
+            </table>
+            <p class="mtg-dica" style="margin-top:10px;">
+              Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições — elas se somam às que já estão lá.
+            </p>`;
     }
 
     // ── O selo ─────────────────────────────────────────────────────────────
@@ -1131,6 +1196,7 @@ if (typeof window !== 'undefined') {
     window.onMontagemPosicoesChange = onMontagemPosicoesChange;
     window.adicionarNaMontagem = adicionarNaMontagem;
     window.removerDaMontagem = removerDaMontagem;
+    window.retomarDaMontagem = retomarDaMontagem;
     window.limparMontagem = limparMontagem;
     window.renderMontagem = renderMontagem;
     window.gerarPdfDaMontagem = gerarPdfDaMontagem;

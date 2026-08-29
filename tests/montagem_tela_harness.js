@@ -56,6 +56,8 @@ const FUNCOES = [
     '_mtgDicaDoDestino', 'onMontagemPastaChange', 'encherPastasDaMontagem',
     'gravarPdfNaEstacao', 'baixarPdfDaMontagem', 'abrirPdfDaMontagemNaTela',
     'gerarPdfDaMontagem',
+    // A linha da lista como caminho de volta ao modelo (29/08/2026).
+    '_mtgLinhaAtiva', 'retomarDaMontagem', 'onMontagemModeloChange',
 ];
 
 // Três pedidos, quatro modelos, todos do mesmo formato/cor/saída/face.
@@ -123,6 +125,19 @@ const PECAS = [
         "function resolverNumeracaoParaModelo(n) { return n; }",
         "function numeracaoIdDoItem(i) { return i.amostra_num_id; }",
         "function onMontagemPosicoesChange() {}",
+        // O de verdade consulta o banco (loadOSItens). Aqui ele so' faz o que a
+        // tela ve': guarda o pedido escolhido e enche o seletor de modelos.
+        "async function onMontagemPedidoChange() {",
+        "  const sel = document.getElementById('mtg-pedido');",
+        "  state.montagem.pedidoSel = sel && sel.value ? sel.value : null;",
+        "  state.montagem.modeloSel = null;",
+        "  const selMod = document.getElementById('mtg-modelo');",
+        "  const ids = (window.__itensPorPedido || {})[state.montagem.pedidoSel] || [];",
+        "  selMod.innerHTML = '<option value=\"\"></option>' + ids.map(function (id) {",
+        "    return '<option value=\"' + id + '\">' + id + '</option>'; }).join('');",
+        "  selMod.disabled = ids.length === 0;",
+        "  renderMontagem();",
+        "}",
     ].join('\n');
 
     const POSLUDIO = [
@@ -142,6 +157,7 @@ const PECAS = [
         "  id: p.id, nome_modelo: p.nome, quantidade: p.qtd,",
         "  _vibe_id_produto: 501, cor: 'Azul Celeste', verso_tipo: 'Frente',",
         "  amostra_num_id: null, arte_url: 'x.pdf', num_inicial: 1 }; };",
+        "window.__itensPorPedido = { a: ['1000565', '1000589'], b: ['1000412'], c: ['1000203'] };",
         "window.__montar = function (pecas) {",
         "  state.montagem.grupos = pecas.map(function (p) { return {",
         "    osId: p.osId, itemId: p.id, pedidoNumero: p.pedido, nome: p.nome,",
@@ -259,7 +275,53 @@ const PECAS = [
     ok(/número do modelo em cada item/.test(numero.rotulo),
        'e o rótulo é o mesmo do Pedido, para o operador reconhecer', numero.rotulo);
 
-    // ── 3d. ONDE O PDF VAI PARAR ─────────────────────────────────────
+    // ── 3d. A LINHA DA LISTA VOLTA AO MODELO ────────────────────────
+    //
+    // Refazer célula é trabalho de descoberta: o operador acha mais uma pulseira
+    // estragada depois de já ter montado a folha. A linha já sabe de qual pedido
+    // e de qual modelo se trata — ela é o caminho mais curto de volta.
+    const voltar = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        return retomarDaMontagem(2).then(() => ({
+            pedido: document.getElementById('mtg-pedido').value,
+            modelo: document.getElementById('mtg-modelo').value,
+            posicoes: document.getElementById('mtg-posicoes').value,
+            focado: document.activeElement === document.getElementById('mtg-posicoes'),
+            ativas: Array.from(document.querySelectorAll('.mtg-linha-ativa'))
+                         .map(tr => tr.children[1].textContent.trim().split('\n')[0]),
+            clicaveis: document.querySelectorAll('.mtg-linha').length,
+            convite: (document.querySelector('#mtg-lista .mtg-dica') || {}).textContent || '',
+        }));
+    }, PECAS);
+    ok(voltar.pedido === 'b' && voltar.modelo === '1000412',
+       'clicar na linha devolve AQUELE pedido e AQUELE modelo ao compositor', voltar);
+    ok(voltar.posicoes === '',
+       'e o campo de posições fica vazio: ele vem acrescentar, não reescrever', voltar);
+    ok(voltar.focado, 'com o cursor já no campo — o próximo gesto é digitar', voltar);
+    ok(voltar.ativas.length === 1 && voltar.ativas[0] === '1000412',
+       'e SÓ a linha daquele modelo fica marcada como ativa', voltar.ativas);
+    ok(voltar.clicaveis === 4, 'toda linha é clicável', voltar);
+    ok(/Clique numa linha/.test(voltar.convite),
+       'e a tela DIZ que a linha leva de volta — clique escondido não existe', voltar.convite);
+
+    // O X continua tirando o modelo, e NAO leva de volta a ele: o clique no
+    // botao nao pode virar clique na linha.
+    const tirar = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        document.getElementById('mtg-pedido').value = '';
+        state.montagem.pedidoSel = null;
+        state.montagem.modeloSel = null;
+        document.querySelectorAll('.mtg-tirar')[1].click();
+        return {
+            linhas: document.querySelectorAll('#mtg-lista .data-table tr').length - 1,
+            pedidoSel: state.montagem.pedidoSel,
+        };
+    }, PECAS);
+    ok(tirar.linhas === 3, 'o × continua tirando o modelo da montagem', tirar);
+    ok(tirar.pedidoSel === null,
+       'e não dispara a volta ao modelo que acabou de sair da lista', tirar);
+
+    // ── 3e. ONDE O PDF VAI PARAR ─────────────────────────────────────
     //
     // Foi aqui que a tela falhou em producao, em 29/08/2026: ela entregava o
     // PDF com `window.open(blobUrl)`, o navegador bloqueia janela nova depois
