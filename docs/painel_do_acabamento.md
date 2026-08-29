@@ -40,64 +40,57 @@ manda, inclusive quando diz "não": a grade é editável caixa a caixa. Testes:
 
 ## O card do modelo, em três colunas
 
-Desde 22/08/2026, a pedido do usuário, cada modelo se lê da esquerda para a
+Refeito em 29/08/2026 a pedido do usuário. Cada modelo se lê da esquerda para a
 direita, numa linha só:
 
 | Coluna | O que traz | Largura |
 |---|---|---|
+| Foto | o botão **📷 Fotografar** numa faixa em cima, e a **janela da foto do material** abaixo dele | 180px |
 | Amostra | a arte aprovada, para conferir contra o papel | elástica — sobrou espaço, é dela |
-| Especificação | o botão **📷 Fotografar** numa faixa em cima, e a tabela abaixo dele | estreita (280px) |
-| Decisões | os quatro botões de status **empilhados**, **sem caixa em volta**, esticando até o pé da linha | 210px |
+| Especificação | a hora do Revisado numa faixa em cima, e a tabela abaixo dela | estreita (280px) |
 
-O **responsável** não está em coluna nenhuma: desde 26/08/2026 ele mora na
-**barra de título** do modelo (ver *O rearranjo de 26/08/2026*).
+**O responsável e o Revisado ficam na barra de título**, lado a lado, no fim
+dela.
 
-Antes as decisões eram uma faixa no rodapé do card, com os botões deitados: de pé
-na estação, o operador percorria a linha inteira do card para chegar até elas.
-A coluna também não tem moldura própria — os botões já têm contorno e cor, e uma
-caixa em volta deles só competia com a do bloco do modelo (pedido do usuário,
-22/08/2026).
+### O que mudou em 29/08/2026, e por quê
 
-### O rearranjo de 26/08/2026
+O usuário pediu três coisas na mesma conversa: *"deixar apenas a opção de marcar
+'pronto', que passaria a ser 'Revisado'"*; *"botão fotografar vai para a esquerda
+do preview do modelo, com sua janela própria para mostrar a foto"*; e *"perde
+muito espaço com as informações de título, poderiam ser quase todas na mesma
+linha, drop do responsável pode ser menor e sem legenda, legenda pode ficar
+dentro do próprio box, precisamos ganhar espaço vertical"*.
 
-O usuário pediu três coisas na mesma frase: *"vamos passar o drop do
-responsável para a barra de título do modelo, no lugar do botão Fotografar;
-botão fotografar alinha acima das especificações; rediagramar botões de status
-para ocupar espaço de forma harmoniosa"*.
+**A coluna das decisões saiu.** Eram quatro botões empilhados em 210 px —
+Aguardando · Impresso · Em acabamento · Pronto —, e dois deles nunca foram
+escolha deste setor: são derivados da impressão (ver *O estágio*). Sobrou uma
+decisão de verdade, e ela virou um botão só, ao lado do **Responsável** que a
+libera. Enquanto o seletor morava no alto da barra e os botões no pé da terceira
+coluna, a tela precisava de um recado com uma seta ligando um ao outro; lado a
+lado, o comando e a trava se explicam sozinhos.
 
-**O responsável subiu para a barra de título.** A troca segue a hierarquia do
-card: a barra responde QUEM — nome do modelo, código, selo do estágio —, e o
-responsável é a última pergunta desse grupo. E ele **governa** os quatro botões:
-sem responsável, nenhum estágio se mexe. Agora esse comando fica *acima* do que
-ele comanda, em vez de escondido no pé da terceira coluna.
+**A foto tomou o lugar dela.** Era uma miniatura de 46 px encostada no botão, e
+para ver o material era preciso ampliar. Numa janela do tamanho da amostra, do
+outro lado dela, o revisor compara o que o cliente aprovou com o que está na mesa
+**lado a lado** — que é o trabalho dele.
 
-**A foto desceu para uma faixa acima da especificação.** Ela é registro, não
-decisão, e nunca foi assunto da barra de título. A faixa toma a **medida** do
-rótulo das outras colunas (36 px de altura, o mesmo fio embaixo) sem tomar o
-**estilo**: pendurar o botão no `ROTULO_DA_COLUNA` o fazia herdar o
-`text-transform: uppercase`, e o texto ao lado saía gritando em caixa alta. Daí
-existir o `FAIXA_DA_COLUNA`, que é só a régua.
+**E o card encolheu.** A barra de título perde 8 px de recheio; o seletor do
+responsável fica menor e leva a palavra "Responsável" **dentro** da caixa, na
+mesma linha do nome; e as legendas das janelas ("Foto do material", "Amostra
+aprovada pelo cliente no link") saíram de baixo das molduras e entraram nelas,
+sobre um degradê. Medido na tela: a barra caiu de 61 para 49 px, e o card de 408
+para 392.
 
-A frase *"Nenhuma foto do material ainda."* saiu junto: na faixa cabe uma linha
-só, e ela disputava lugar com o próprio botão. O estado continua dito onde o
-operador olha — o rótulo do botão é *Fotografar* sem foto e *Refazer foto* com
-ela, e aí a miniatura aparece ao lado.
-
-**Os botões passaram a esticar.** Com o responsável fora da coluna, os 194 px da
-pilha ficavam soltos ao lado de uma tabela bem mais alta, e sobrava um vão
-escuro no pé. Agora a grade é `flex: 1 1 0` com `grid-auto-rows: minmax(44px,
-1fr)`: toma a sobra e a reparte em quatro fatias iguais, nunca menores que os
-44 px que o usuário fixou em 22/08/2026 — na estação se clica de pé, e o alvo
-não pode encolher.
+O ganho grande de altura, porém, não foi esse: foi o **box de peso sair de cima
+dos modelos** (ver *O Resumo do pedido*). O primeiro modelo passou a começar a
+162 px do topo, contra 380 antes — 218 px.
 
 > [!NOTE]
-> **Base 0, e não `auto`.** Vale para a pilha pelo mesmo motivo que já valia
-> para a janela da amostra: com base `auto`, quem mede a altura é o conteúdo, e
-> não a coluna. Há teste proibindo `flex: 1 1 auto` com `min-height` fixo — e
-> ele pegou a primeira versão desta mudança.
-
-Medido na tela depois de pronto, numa estação de 1366 px: as três colunas saem
-com 360, 280 e 210 px, e as três **começam e terminam na mesma linha**.
+> **As larguras cabem numa linha só.** 180 + 200 + 280, mais os dois vãos de 18,
+> dão 696 dentro dos ~780 px úteis do corpo do detalhe. Quem decide a quebra é a
+> soma dos `flex-basis`, e não os `min-width`. Estourar essa conta joga a última
+> coluna para a linha de baixo, que é o rodapé que o desenho de 22/08 veio
+> desfazer.
 
 ### As cores por estágio
 
@@ -235,67 +228,78 @@ lista, cabeçalho com cabeçalho.
 
 ---
 
-## O status: quatro botões, e não um seletor
+## O status: um botão, e não quatro
 
-Pedido do usuário em 22/08/2026: *"alterar o drop dos Status para 4 botões, do
-mesmo tamanho; o botão do status atual estará selecionado; ao selecionar, o
-status deve ficar muito bem destacado"*.
+Até 29/08/2026 cada modelo mostrava os quatro estágios lado a lado, numa grade de
+quatro colunas de `1fr` — desenho pedido pelo usuário em 22/08/2026, quando o
+seletor virou botões. Naquele dia ele pediu para *"reavaliar a possibilidade de
+retirarmos os Status sem perder as funcionalidades existentes hoje"*, deixando
+**apenas a opção de marcar "pronto", que passaria a ser "Revisado"**.
 
-Cada modelo mostra os quatro estágios lado a lado — **⏳ Aguardando**, **🖨️
-Impresso**, **✂️ Em acabamento**, **✅ Pronto** — numa grade de quatro colunas de
-`1fr`, então têm o mesmo tamanho em qualquer largura de tela. O do estágio atual
-vem **pintado por dentro** na cor daquele estágio, com anel, sombra e um ✓ à
-frente; os outros ficam só contornados. Um clique muda o estágio: não há mais
-abrir a lista e escolher.
+O levantamento mostrou que dava, e por quê: **dois dos quatro nunca foram escolha
+deste setor**. "Aguardando" e "Impresso" são *derivados* do Painel de Produção
+sempre que ninguém escolheu nada, e desde 21/08/2026 marcar "Aguardando" num
+modelo já impresso nem gruda. Sobravam dois cliques com informação — "Em
+acabamento" e "Pronto" —, e o primeiro já era respondido por outro campo da mesma
+tela (abaixo).
 
-As cores são as mesmas dos selos (`COR_DO_ESTAGIO` espelha `SELO`), e o texto do
-botão pintado é escuro de propósito — branco sobre âmbar ou ciano fica abaixo de
-2,5:1 de contraste. O fundo do bloco do modelo continua mudando com o estágio,
-como já fazia (`FUNDO_DO_ESTAGIO`).
-
-Sem permissão de editar, os quatro aparecem apagados e travados — mas o marcado
-continua marcado: quem só vê precisa ler em que ponto o modelo está.
+**O botão fica na barra de título, à direita do Responsável.** Aceso, ele é o
+carimbo de quem conferiu; clicar nele de novo **desmarca**, gravando vazio — e o
+estágio volta a ser derivado da impressão, que é a verdade sobre o material.
 
 **O status só se mexe depois do responsável** (regra do usuário, 22/08/2026).
-Modelo sem responsável escolhido tem os quatro botões travados e um recado ao pé
-deles: *"⬆️ Escolha o Responsável acima, na barra do modelo, para liberar o
-status"*. A seta mudou de lado em 26/08/2026, quando o seletor subiu para a
-barra de título: seta que aponta para o lugar errado é pior do que seta
-nenhuma. Marcar um
-estágio é dizer que **alguém** fez aquele trabalho; sem nome, o registro não
-responde à pergunta que o setor faz depois — quem acabou este material. Escolhido
-o responsável, os botões liberam na hora, sem ATUALIZAR. A trava vale também na
+Sem nome escolhido o botão fica travado, e o recado ao pé da barra diz
+*"Escolha o **Responsável** ao lado para liberar o Revisado."* A seta saiu junto
+com a distância: ela apontava para o alto porque o seletor estava longe, e seta
+que aponta para o lugar errado é pior do que seta nenhuma. A trava vale também na
 função (`mudarEstagio` confere antes de gravar): botão cinza não impede ninguém
 de chamar pelo console, e essa é a única porta por onde o status é gravado.
 
-Desenha `botoesDeEstagio` (`frontend/acabamento.js`); o harness confere que há um
-botão por estágio em cada modelo, que só um está marcado, e que todos travam
-para quem não edita.
+### O que se perdeu com "Em acabamento", e quem responde por ele agora
 
-### A hora em que o modelo ficou Pronto
+Perdeu-se a possibilidade de **afirmar** que alguém começou a trabalhar num
+modelo. Isso apagaria dois lugares da tela — o card de métrica *Modelos em
+acabamento* e o filtro *✂️ Em acabamento* da lista —, que iriam a zero para
+sempre.
+
+A saída já estava na tela: **o responsável é obrigatório antes do Revisado**.
+Modelo com nome escolhido e ainda não revisado **é** um modelo em cima da mesa, e
+é assim que os dois passaram a contar (`emAcabamentoAgora`). A conta ficou mais
+honesta do que a de antes, que dependia de o operador lembrar de um clique a
+mais — a mesma ideia que já tinha resolvido o "Aguardando": deixar a tela
+*derivar* o que ela consegue observar.
+
+O selo da linha do pedido não mudou: `estagioDoPedido` já respondia "Em
+acabamento" quando **algum** modelo estava em acabamento **ou** revisado, então o
+pedido com pelo menos um revisado continua se anunciando igual.
+
+### A hora em que o modelo foi revisado
 
 Pedido do usuário em 23/08/2026: *"Modelos prontos devem indicar a hora em que
-ficaram prontos"*. Abaixo dos botões, o modelo em **Pronto** mostra
-`🕒 Pronto às 14:32` — e `🕒 Pronto em 22/08 às 14:32` quando não foi hoje. A
-data só aparece nos outros dias porque o operador lê isto de pé na estação,
-quase sempre no mesmo dia; ali ela só atrapalharia.
+ficaram prontos"*. O modelo revisado mostra `🕒 Revisado às 14:32` — e
+`🕒 Revisado em 22/08 às 14:32` quando não foi hoje. A data só aparece nos
+outros dias porque o operador lê isto de pé na estação, quase sempre no mesmo
+dia; ali ela só atrapalharia.
+
+Desde 29/08/2026 ela mora na **faixa acima da tabela de especificação** — a faixa
+que era do botão Fotografar. Ela é a régua daquela coluna e não pode sumir, e a
+hora não tinha mais onde morar depois que a pilha de botões saiu.
 
 **Quem escreve a hora é o banco**, não a tela: a coluna
 `pedidos_modelos.acabamento_pronto_em` é carimbada pelo gatilho
-`trg_carimba_acabamento_pronto_em` (`sql/hora_do_pronto_no_acabamento.sql`). O
+`trg_carimba_acabamento_pronto_em` ([`sql/hora_do_pronto_no_acabamento.sql`](../sql/hora_do_pronto_no_acabamento.sql)). O
 estágio é gravado daqui, da estação e mexido pelo ERP — um carimbo feito no
 frontend deixaria buracos justamente nos modelos que a gráfica tocou pelo acesso
-local. O gatilho **apaga** a hora quando o modelo sai de Pronto, e **não a
+local. O gatilho **apaga** a hora quando o modelo sai de Revisado, e **não a
 renova** quando alguém reclica no botão que já estava aceso (a tela repete essa
 segunda regra no espelho otimista, para não piscar uma hora que o banco não vai
 gravar).
 
-Modelo marcado Pronto **antes de 23/08/2026 não tem hora**, e a migração não
-inventou uma: `updated_at` muda a cada foto, responsável ou observação, e uma
-hora aproximada seria lida como a de verdade. Esses cards simplesmente não
-mostram carimbo.
+Modelo marcado antes de 23/08/2026 não tem hora, e a migração não inventou uma:
+`updated_at` muda a cada foto, responsável ou observação, e uma hora aproximada
+seria lida como a de verdade. Esses cards simplesmente não mostram carimbo.
 
-### O peso do setor antes do último Pronto
+### O peso do setor antes do último Revisado
 
 Pedido do usuário em 23/08/2026: *"ao marcar o último modelo como pronto deve
 exigir indicar a informação do peso do setor que está pronto, só alterar status
@@ -596,35 +600,63 @@ levá-lo. Pedido do usuário em 21/08/2026.
 O `aoAbrir()` fecha o pedido e **desliga a câmera** junto: ela pertence ao
 detalhe, e deixá-la ligada manteria a webcam acesa atrás de uma tela que sumiu.
 
-### O peso por setor, acima dos modelos
+### Os botões de setor, acima do número do pedido
 
-Um box antes da lista de modelos, com **um campo de peso para cada setor dos
-produtos daquele pedido**. Pedido do usuário em 21/08/2026, no exemplo dele:
-*Triband + Credencial + Mobi* são dois setores, **Laser** e **PVC**, então duas
-linhas.
+Pedido do usuário em 29/08/2026: *"adicionar um drop seletor, para que sejam
+visualizados apenas os modelos do setor que está visualizando"* — e, logo em
+seguida, *"melhor colocar botões seletores, mostrando setores selecionados"*.
 
-Os setores saem do `setor` de cada item — o mesmo que o `script.js` resolve a
-partir de `produtos.setor_pcp` e que alimenta os cards da fila. Setor que o banco
-não aceita fica de fora: melhor não oferecer o campo do que oferecer um que
-devolveria erro na hora de gravar.
+São os **mesmos botões da fila**: mesma forma, mesma cor de aceso, e **somam**
+quando se clica em mais de um. O gesto já é conhecido da lista; repeti-lo aqui
+não pede aprendizado nenhum. Ficam acima do número do pedido, que é onde ele
+aparece na fila também.
 
-O peso vai para **`propostas_os_setores.peso_real_kg`**, uma linha por setor. Essa
-tabela é do parceiro, e escrever nela é a **única exceção** à regra de ouro do
-[REGRAS_BANCO.md](REGRAS_BANCO.md) — está documentada lá, com a lista exata do que
-pode ser tocado. Em resumo: só o peso e o `updated_at`; `prazo`, `hora`,
-`status_producao` e as colunas de volume nunca são encostados.
+Os quatro setores da casa aparecem **sempre**, na ordem do `SETORES_DO_BANCO`,
+com quantos modelos deste pedido cada um tem. Setor que o pedido não usa fica
+apagado e sem clique, em vez de sumir: sumindo, a fileira mudaria de tamanho de
+pedido para pedido e o olho perderia a referência — e a conta ao lado do nome
+diz, antes do clique, o que há lá dentro.
 
-Grava-se com **`UPDATE` primeiro, `INSERT` só quando não há linha**. É o caminho
-que menos mexe na tabela do parceiro, e o comum: o ERP cria essas linhas na
-expedição, então na maioria dos pedidos elas ainda não existem quando o
-acabamento pesa o material. Se duas pessoas pesarem o mesmo setor ao mesmo tempo,
-o `UNIQUE (id_int, setor)` derruba o segundo `INSERT` com 23505 e ele vira
-atualização.
+**Escolher um setor recorta a tela inteira do pedido**: os modelos desenhados, o
+progresso, a quantidade, os setores e o bloco de peso passam a ser só daquele
+setor, e o resumo se anuncia com **◧ SÓ LASER**. É a mesma regra que os cards da
+fila já aplicam à lista (ver *E recortam o pedido, não só a lista*).
 
-Vírgula e ponto valem o mesmo (`4,16` = `4.16`); campo vazio apaga o peso; letra
-ou número negativo não chegam ao banco. Ao lado de cada campo aparece **✓ gravado**
-ou **✕ não foi**, sem redesenhar o pedido — o operador não perde o que está
-digitando.
+O recorte é **leitura desta visita**: abrir ou fechar um pedido o zera. E ele
+limpa a escolha de modelos para volume junto — um modelo marcado que sumiu da
+tela continuaria contando na barra da escolha sem ninguém poder desmarcá-lo.
+
+**O que NÃO entra no recorte é a expedição** (abaixo).
+
+---
+
+## O Resumo do pedido, fixo à direita
+
+Pedido do usuário em 29/08/2026: *"dentro do pedido vamos retirar o painel com as
+métricas do dia e os estágios do acabamento; em seu lugar vamos passar para a
+lateral direita um painel redesenhado e melhorado do box de pesos por volume e o
+encaminhar à Expedição, um painel resumo do pedido, fixo na tela"*.
+
+A coluna da direita tem **duas moradoras, e nunca as duas juntas**: com a lista
+aberta, as *Métricas do Dia*; com um pedido aberto, o *Resumo do pedido*. Quem
+troca as duas é o `mostrarLista()`.
+
+O que havia antes respondia sobre outra coisa: as métricas falam da **fila
+inteira**, e dentro de um pedido elas não respondem nada. E o peso e a expedição
+moravam numa faixa larga **acima dos modelos**, que rolava junto com eles — quem
+estava no terceiro modelo já não via nenhum dos dois.
+
+O resumo traz, de cima para baixo:
+
+1. o **progresso** (`24/52 revisados`) e a barra, que saíram do cabeçalho: ter o
+   mesmo número em dois lugares, a dois palmos um do outro, só confundiria;
+2. a **ficha** — prazo, modelos, quantidade, setores e frete;
+3. **⚖️ Peso e volumes**, um card por setor, empilhados: a coluna tem 288 px, e
+   os cards de 340 px da faixa antiga não cabem lado a lado ali;
+4. o **rodapé**, preso embaixo, com o **📦 ENCAMINHAR À EXPEDIÇÃO**.
+
+Os ids dos campos do peso são os mesmos de antes (`acab-peso-*`), de propósito:
+é por eles que o `pintarPesos` devolve o valor gravado a cada desenho.
 
 #### Dois caminhos, porque a estação não tem sessão
 
@@ -777,27 +809,18 @@ A senha **nunca desce para a tela do operador**: a tela manda o que foi digitado
 recebe sim ou não. O endereço das rotas continua montado num lugar só (`urlDeApi`),
 com um único `/api/` no arquivo — a rota nova entra na lista que o harness confere.
 
-### O botão EXPEDIÇÃO, à direita do peso
+### O botão da expedição, no rodapé do Resumo
 
-No mesmo box, à direita dos campos de peso. Pedido do usuário em 21/08/2026.
+Ele **não** fica escondido quando o pedido não está pronto, e isso é de
+propósito: apagado e clicável, ele responde o que falta. Escondido, o operador
+ficaria procurando um botão que a tela não mostra.
 
-**Ele só fica ativo com TODOS os modelos de TODOS os setores em "Pronto".** Mas
-não fica escondido nem travado: apagado, ele continua clicável, e clicá-lo cedo
-responde exatamente **o que falta** — *"Ainda não dá para expedir: falta
-terminar Laser (1 modelo)"*. Um botão escondido faria o operador procurar o que
-a tela não mostra; um botão travado não explicaria por quê.
-
-Modelo **sem setor** não some dessa conta: ele aparece como *(sem setor)*. É
-material do pedido do mesmo jeito, e um pedido saindo da gráfica com modelo
-pendente é o erro caro desta tela.
-
-Clicado com tudo pronto, ele grava **`propostas.status_interno = 'EXPEDICAO'`** —
-estado que o ERP já usa, e que o painel já escrevia no botão de liberar para
-produção. A tela volta para a lista.
-
-A conferência é refeita **dentro** da função, e não só no `disabled`: quem
-digitar `AcabamentoPainel.expedir(...)` no console passaria direto pelo atributo,
-e o preço seria um pedido expedido com material na mesa.
+E ele **não entra no recorte por setor**. A expedição é do pedido **inteiro** —
+um setor não se expede sozinho —, então com um setor aceso o botão continua
+falando dos modelos todos. Sem aviso, o operador leria "3 de 3 revisados" no
+resumo e não entenderia por que o botão segue apagado: por isso, e só quando há
+recorte na tela, a linha *"a expedição é do pedido inteiro"* aparece logo acima
+dele.
 
 ### O pedido expedido continua na lista de PRONTO
 
@@ -854,11 +877,12 @@ mas não deu para marcar o setor Laser como concluído"*.
 
 ### Os dois únicos controles
 
-Por modelo, dois seletores — na **faixa da base** do card, desde 21/08/2026 —
+Por modelo, dois controles — na **barra de título** do card, desde 29/08/2026 —
 e nada mais é editável:
 
-1. **Status do acabamento** — Aguardando · Impresso · Em acabamento ·
-   Pronto. Grava em `pedidos_modelos.acabamento_status`.
+1. **Revisado** — um botão que alterna. Aceso grava `'Pronto'` em
+   `pedidos_modelos.acabamento_status`; apagado LIMPA a coluna, e o estágio
+   volta a ser derivado da impressão.
 2. **Responsável** — os operadores de acesso local da gráfica, por nome. Grava
    em `pedidos_modelos.acabamento_responsavel`.
 
@@ -872,16 +896,17 @@ o **EDITAR**.
 
 ### A foto do material
 
-Cada modelo tem um botão **📷 Fotografar**, compacto, numa faixa **acima da
-tabela de especificação** (26/08/2026; de 21/08 até então ele ficava no canto
-superior direito do card, e antes disso era uma faixa inteira na base, com
-rótulo próprio e botão grande, pesando mais que os seletores, que são o
-trabalho de verdade desta tela). Ele abre a webcam da
-estação numa janela, com *Fotografar*, e depois *Repetir* ou *Salvar foto*. A
-foto vai para o Storage e o endereço dela fica em
-`pedidos_modelos.acabamento_foto_url`; a miniatura (46 px) aparece **ao lado do
-botão**, o texto dele vira *Refazer foto*, e ela amplia no mesmo lightbox da
-amostra. Sem foto, quem diz isso é o **próprio rótulo do botão** — a frase
+Cada modelo tem uma **coluna própria para a foto**, à esquerda da amostra
+(29/08/2026): o botão **📷 Fotografar** numa faixa em cima, e abaixo dele uma
+janela do tamanho da amostra. Assim o revisor compara o que o cliente aprovou com
+o que está na mesa **lado a lado**, sem ampliar nada — antes a foto era uma
+miniatura de 46 px encostada no botão, numa faixa acima da especificação, e para
+vê-la era preciso ampliar.
+
+O botão abre a webcam da estação numa janela, com *Fotografar*, e depois
+*Repetir* ou *Salvar foto*. A foto vai para o Storage e o endereço dela fica em
+`pedidos_modelos.acabamento_foto_url`; ela preenche a janela, o texto do botão
+vira *Refazer*, e ela amplia no mesmo lightbox da amostra. Sem foto, quem diz isso é o **próprio rótulo do botão** — a frase
 "Nenhuma foto do material ainda" saiu em 26/08/2026, porque na faixa cabe uma
 linha só. O rótulo "Foto do material" segue existindo, no `title` do botão e da
 miniatura, e o harness confere os textos. Refazer grava um
@@ -915,9 +940,11 @@ entra pelo mesmo caminho, é reduzida igual e vai para o mesmo lugar.
 A câmera é desligada assim que a foto é tirada, e ao fechar a janela: webcam
 acesa depois que a tela sumiu é defeito, não detalhe.
 
-## O estágio: quatro, e nenhum deles nasce vazio
+## O estágio: quatro no banco, um botão na tela
 
-**Aguardando · Impresso · Em acabamento · Pronto.**
+**Aguardando · Impresso · Em acabamento · Pronto.** Os quatro continuam existindo
+na coluna e na leitura; o que mudou em 29/08/2026 é que **só um deles se escolhe
+na tela** (ver *O status: um botão, e não quatro*).
 
 Quando ninguém escolheu nada, o estágio é **derivado** do setor anterior: modelo
 com a impressão concluída entra como *Impresso*; qualquer outra coisa entra como
@@ -927,25 +954,34 @@ acompanha a paleta da tela. Foi o pedido do usuário em
 pode aparecer como impresso, e a opção vazia *"— Status —"* não dizia nada a
 quem estava olhando.
 
-### O nome mudou em 21/08/2026: "Revisado" virou "Pronto"
+*Em acabamento* continua sendo lido de linhas antigas, mas ninguém o grava mais:
+quem responde por ele hoje é o **responsável** do modelo.
 
-O último estágio se chamava **Revisado** quando a tela nasceu. O usuário trocou
-por **Pronto** no dia seguinte: "Revisado" descreve o que o conferente fez;
-"Pronto" descreve o que interessa a quem olha a fila de longe — o material pode
-ser embalado e entregue.
+### O nome, que foi e voltou
 
-A coluna `acabamento_status` guarda o **próprio rótulo, em texto**, e não um
-código. Isso foi decidido de propósito — o conjunto é pequeno, só esta tela lê,
-e um texto legível dispensa uma tabela de domínio para quatro valores. O preço
-dessa escolha é que renomear o rótulo exige reescrever as linhas já gravadas:
-é o que faz [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql),
-rodado no mesmo dia.
+O último estágio se chamava **Revisado** quando a tela nasceu. Em 21/08/2026 o
+usuário trocou por **Pronto**: "Revisado" descrevia o que o conferente fez;
+"Pronto" descrevia o que interessava a quem olhava a fila de longe. Em
+29/08/2026 ele voltou a **Revisado** — com um botão só, o estágio deixou de ser o
+quarto de uma escala e virou o carimbo de quem conferiu, e a palavra antiga
+descreve isso melhor.
 
-O código não depende dessa migração para estar certo. A constante `NOME_ANTIGO`
-traduz "Revisado" para "Pronto" **na leitura**, e existe por dois motivos: o
-intervalo entre publicar e migrar, e a estação que ainda tem a versão anterior
-em cache e pode gravar o nome velho por alguns minutos. Toda gravação nova já
-sai como "Pronto".
+**A volta foi só de vocabulário.** A coluna `acabamento_status` continua
+guardando **'Pronto'**, e é a tela que traduz, pelo `ROTULO_NA_TELA`. Trocar
+também o valor gravado pediria migração nova, mexeria no gatilho
+`trg_carimba_acabamento_pronto_em` (que compara com `'PRONTO'`) e abriria de
+novo a janela em que uma estação com a versão anterior em cache grava o nome
+velho — foi exatamente o que aconteceu na troca de 21/08, no sentido inverso, e é
+o que a migração [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql)
+teve de consertar.
+
+A coluna guarda o **próprio rótulo, em texto**, e não um código. Foi decidido de
+propósito — o conjunto é pequeno, só esta tela lê, e um texto legível dispensa
+uma tabela de domínio para quatro valores. O preço dessa escolha é justamente
+esse: o valor gravado não pode acompanhar cada troca de nome na tela.
+
+A constante `NOME_ANTIGO` traduz "Revisado" para "Pronto" **na leitura**, e
+continua valendo: ela cobre as linhas gravadas antes da migração de 21/08.
 
 ### "Aguardando" gravado não trava o que a impressora já terminou
 

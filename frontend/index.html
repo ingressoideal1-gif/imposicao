@@ -2747,7 +2747,21 @@
                                  ela o "box". O `page-header-text` traz o degrade do titulo
                                  das outras telas; o tamanho vem inline, como no
                                  `ped-view-title`. Preenchido por renderDetalhe(). -->
-                            <div class="flex-wrap" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px 6px;">
+                            <!-- OS BOTOES DE SETOR, acima do numero do pedido (29/08/2026).
+                                 Sao os MESMOS botoes da fila -- mesma forma, mesma cor de
+                                 aceso, e somam quando se clica em mais de um --, so que
+                                 compactos. O gesto ja e conhecido da lista; repeti-lo aqui
+                                 nao pede aprendizado nenhum.
+
+                                 Escolher um setor recorta a tela inteira do pedido: os
+                                 modelos, o progresso, a quantidade e o bloco de peso passam
+                                 a ser so daquele setor. O que NAO entra no recorte e o botao
+                                 da expedicao -- expedicao e do pedido inteiro, e um setor nao
+                                 se expede sozinho. Preenchida por renderDetalhe(). -->
+                            <div class="flex-wrap" id="acab-setores-do-pedido"
+                                 style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 12px 16px 0;"></div>
+
+                            <div class="flex-wrap" style="display: flex; align-items: center; gap: 14px; padding: 8px 16px 6px;">
                                 <button class="prod-btn-outline" style="width: auto; padding: 0.5rem 1.1rem; flex-shrink: 0;" onclick="AcabamentoPainel.fecharPedido()" title="Voltar para a lista de pedidos">
                                     <i class="fa-solid fa-arrow-left"></i> VOLTAR
                                 </button>
@@ -2779,13 +2793,6 @@
                                      barra responde de relance, e e a mesma forma
                                      que ele ja le na lista. Preenchida por
                                      renderDetalhe(). -->
-                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; min-width: 140px;">
-                                    <span class="badge badge-teal" id="acab-detalhe-progresso">0/0 prontos</span>
-                                    <div style="width: 100%; height: 7px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);"
-                                         title="Quanto deste pedido ja esta pronto">
-                                        <div id="acab-detalhe-barra" style="width: 0%; height: 100%; background: #4589d7; border-radius: 4px; transition: width 0.3s ease;"></div>
-                                    </div>
-                                </div>
                             </div>
                             <div class="prod-table-body custom-scroll" id="acab-detalhe-corpo" style="padding: 10px 12px;">
                                 <!-- Inserido dinamicamente via acabamento.js -->
@@ -2794,8 +2801,27 @@
 
                     </div>
 
-                    <!-- Métricas ao lado, na mesma forma da Produção -->
+                    <!-- A COLUNA DA DIREITA tem duas moradoras, e nunca as duas
+                         juntas (29/08/2026):
+
+                         - com a LISTA aberta, as Metricas do Dia, que falam da
+                           fila inteira;
+                         - com um PEDIDO aberto, o Resumo do pedido: progresso,
+                           dados de expedicao, peso e volumes por setor, e o botao
+                           de encaminhar preso no rodape.
+
+                         Antes as metricas ficavam ali tambem dentro do pedido,
+                         respondendo sobre a fila ao lado de um pedido so -- e o
+                         peso e a expedicao viviam numa faixa larga acima dos
+                         modelos, que rolava junto com eles: quem estava no
+                         terceiro modelo ja nao via nenhum dos dois.
+
+                         Quem troca as duas e o mostrarLista(); quem desenha o
+                         resumo e o painelResumoHtml(), no acabamento.js. -->
                     <div class="prod-side-metrics custom-scroll">
+                        <div id="acab-lateral-resumo" style="display: none; flex: 1; min-height: 0;"></div>
+
+                        <div id="acab-lateral-metricas" style="display: flex; flex-direction: column; gap: 0.5rem;">
                         <div class="prod-metrics-title">
                             Métricas do Dia
                             <p class="prod-metrics-subtitle">Acabamento</p>
@@ -2818,7 +2844,7 @@
                         <div class="prod-metric-card">
                             <span class="prod-metric-value text-teal" id="stat-acab-modelos-prontos">0</span>
                             <div class="prod-metric-label">
-                                Modelos<br><span>Prontos</span>
+                                Modelos<br><span>Revisados</span>
                             </div>
                         </div>
 
@@ -2852,8 +2878,9 @@
                             <button class="prod-filter-status filter-btn-pill active teal" onclick="AcabamentoPainel.setFiltroStatus('')">🌐 Todos</button>
                             <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Aguardando')">⏳ Aguardando</button>
                             <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Impresso')">🖨️ Impresso</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Em acabamento')">✂️ Em acabamento</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Pronto')">✅ Pronto</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Em acabamento')" title="Modelos com responsável escolhido e ainda não revisados">✂️ Em acabamento</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="AcabamentoPainel.setFiltroStatus('Pronto')">✅ Revisado</button>
+                        </div>
                         </div>
                     </div>
                 </div>

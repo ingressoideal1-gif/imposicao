@@ -60,11 +60,25 @@
     // da conta de concluídos sem ninguém entender por quê.
     const NOME_ANTIGO = { 'revisado': 'Pronto' };
 
+    /**
+     * O rotulo do estagio na TELA. O banco continua guardando 'Pronto'.
+     *
+     * Em 29/08/2026 o usuario devolveu ao ultimo estagio o nome com que a tela
+     * nasceu: com um botao so, ele deixou de ser o quarto de uma escala e virou
+     * o carimbo de quem conferiu, e "Revisado" descreve isso melhor. A troca e'
+     * so de vocabulario — trocar tambem o valor gravado pediria migracao nova,
+     * mexeria no gatilho `trg_carimba_acabamento_pronto_em` (que compara com
+     * 'PRONTO') e abriria de novo a janela em que uma estacao com a versao
+     * anterior em cache grava o nome velho.
+     */
+    const ROTULO_NA_TELA = { 'Pronto': 'Revisado' };
+    function rotuloDoEstagio(e) { return ROTULO_NA_TELA[e] || e; }
+
     const SELO = {
         'Aguardando':    { icone: '⏳', cls: 'badge-blue',  texto: 'Aguardando' },
         'Impresso':      { icone: '🖨️', cls: 'badge-teal',  texto: 'Impresso' },
         'Em acabamento': { icone: '✂️', cls: 'badge-amber', texto: 'Em acabamento' },
-        'Pronto':        { icone: '✅', cls: 'badge-green', texto: 'Pronto' },
+        'Pronto':        { icone: '✅', cls: 'badge-green', texto: 'Revisado' },
     };
 
     // Fundo do bloco do modelo E da linha do pedido na fila: o estágio se lê de
@@ -143,6 +157,11 @@
         gramasPorUnidade: {},// id da linha da proposta -> gramas de UMA unidade
         liberacaoPendente: null, // o peso fora dos 5 % que espera a senha (ver gravarPeso)
         prontoPendente: null,    // o "Pronto" que espera o peso do setor (23/08/2026)
+        // Os setores escolhidos DENTRO do pedido aberto (29/08/2026). Vazio é o
+        // pedido inteiro. Somam, como os cards da fila: com dois acesos, a tela
+        // mostra a união dos dois. Zerado ao abrir e ao fechar um pedido — é
+        // recorte de leitura, e não uma preferência que se carrega adiante.
+        setoresNoPedido: [],
 
         // Os VOLUMES do pedido aberto (23/08/2026). Ver a seção "Os volumes".
         volumes: {},             // 'SETOR' -> [volume, volume, …], na ordem do número
@@ -561,8 +580,8 @@
             && t.getMonth() === hoje.getMonth()
             && t.getDate() === hoje.getDate();
         return mesmoDia
-            ? `Pronto às ${hora}`
-            : `Pronto em ${dd(t.getDate())}/${dd(t.getMonth() + 1)} às ${hora}`;
+            ? `Revisado às ${hora}`
+            : `Revisado em ${dd(t.getDate())}/${dd(t.getMonth() + 1)} às ${hora}`;
     }
 
     /**
@@ -648,6 +667,23 @@
      * de trabalho é o `passaNoPrazo`, pelo envio à expedição — até 24/08/2026
      * era este estágio, e era esse o defeito.
      */
+    /**
+     * O modelo está EM ACABAMENTO agora?
+     *
+     * Até 29/08/2026 isto era um estágio que alguém marcava a mão, num dos
+     * quatro botões do card. Com o card reduzido ao Revisado, ninguém mais
+     * grava esse valor — e a conta passou a sair de onde a informação já
+     * estava: o RESPONSÁVEL é obrigatório antes do Revisado, então modelo com
+     * nome escolhido e ainda não revisado É um modelo em cima da mesa.
+     *
+     * A conta ficou mais honesta do que a de antes, que dependia de o operador
+     * lembrar de dar um clique a mais. Linhas antigas com 'Em acabamento'
+     * gravado continuam entrando: elas também têm responsável.
+     */
+    function emAcabamentoAgora(m) {
+        return !!responsavelDoModelo(m) && estagioDoModelo(m) !== 'Pronto';
+    }
+
     function estagioDoPedido(modelos) {
         if (!modelos || !modelos.length) return 'Aguardando';
         const estagios = modelos.map(estagioDoModelo);
@@ -886,7 +922,13 @@
             // lista o pedido cujo LASER estava aguardando e cujo TÊXTIL estava
             // pronto — uma afirmação que não era verdade em setor nenhum.
             if (tela.estagio) {
-                if (!doRecorte.some(m => (estagioDoModelo(m) || 'Aguardando') === tela.estagio)) return false;
+                // "Em acabamento" pergunta pelo responsável, e não pela coluna:
+                // ninguém grava esse estágio desde 29/08/2026. Ver
+                // `emAcabamentoAgora`.
+                const combina = tela.estagio === 'Em acabamento'
+                    ? (m => emAcabamentoAgora(m))
+                    : (m => (estagioDoModelo(m) || 'Aguardando') === tela.estagio);
+                if (!doRecorte.some(combina)) return false;
             }
 
             return true;
@@ -939,9 +981,8 @@
         emProducao.forEach(os => {
             const modelos = modelosDoPedido(os);
             modelos.forEach(m => {
-                const e = estagioDoModelo(m);
-                if (e === 'Em acabamento') emAcabamento++;
-                if (e === 'Pronto') prontos++;
+                if (emAcabamentoAgora(m)) emAcabamento++;
+                if (estagioDoModelo(m) === 'Pronto') prontos++;
             });
             if (modelos.length && estagioDoPedido(modelos) === 'Pronto') concluidos++;
         });
@@ -1457,7 +1498,7 @@
         // — uma credencial em pé numa coluna de 600 px pedia 830 px de altura e
         // esticava o card inteiro. Com base 0 quem decide a altura é a COLUNA,
         // e a imagem se acomoda no que sobrou.
-        const moldura = 'width: 100%; flex: 1 1 0; min-height: ' + ALTURA_DA_PILHA + 'px;'
+        const moldura = 'width: 100%; flex: 1 1 0; min-height: ' + ALTURA_DA_JANELA + 'px;'
             + ' position: relative;'
             + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
             + ' display: flex; align-items: center; justify-content: center;';
@@ -1494,14 +1535,17 @@
         // A moldura tracejada some quando ha arte (`border: none`): ela existe
         // para dar corpo ao aviso de "sem amostra", e em volta da arte era mais
         // um fio competindo com o contorno do card.
+        // A legenda vai DENTRO da janela desde 29/08/2026, sobre um degradê:
+        // embaixo dela ela custava 27 px de altura em cada modelo, e o pedido do
+        // usuário naquele dia foi ganhar espaço vertical.
         return `
             <div style="${caixa}">
                 <div style="${moldura} border: none; background: none; overflow: hidden;">
                     <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
                          style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block;"
                          onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
+                    <span style="${ESTILO_LEGENDA_DENTRO}">🔍 ${esc(legenda)}</span>
                 </div>
-                <span style="font-size: 0.72rem; color: var(--text-dim);">🔍 ${esc(legenda)}</span>
             </div>`;
     }
 
@@ -1624,87 +1668,85 @@
      * O fundo do bloco do modelo continua mudando com o estágio, como já fazia
      * (`FUNDO_DO_ESTAGIO`).
      */
-    function botoesDeEstagio(item, osId, podeEditar) {
-        // O estágio sempre tem um valor, nem que seja o derivado da impressão —
-        // por isso não há botão "nenhum": não existe modelo sem estágio.
-        const atual = estagioDoModelo(item);
-
-        // Sem responsável, o status não se mexe (regra do usuário, 22/08/2026).
-        // Quem marca um estágio está dizendo que ALGUÉM fez aquele trabalho; sem
-        // nome, o registro não responde à pergunta que o setor faz depois — quem
-        // acabou este material. Ler continua livre: os quatro botões aparecem, o
-        // atual continua marcado, e só o clique é que espera o nome.
+    /**
+     * O botão REVISADO, único, na barra de título do modelo.
+     *
+     * Até 29/08/2026 eram QUATRO botões empilhados numa coluna de 210 px:
+     * Aguardando · Impresso · Em acabamento · Pronto. Dois deles nunca foram
+     * escolha deste setor — `Aguardando` e `Impresso` são DERIVADOS da
+     * impressão, e marcar "Aguardando" num modelo já impresso nem grudava.
+     * Restava uma decisão de verdade, e ela virou um botão só.
+     *
+     * Ele fica ao lado do RESPONSÁVEL, que é quem o libera. Enquanto os quatro
+     * moravam no pé da terceira coluna e o seletor no alto da barra, a tela
+     * precisava de um recado com uma seta ligando um ao outro; lado a lado, o
+     * comando e a trava se explicam sozinhos.
+     *
+     * Clicar quando aceso DESMARCA: grava vazio, e o estágio volta a ser
+     * derivado da impressão — que é a verdade sobre o material, e o mesmo
+     * caminho que o `tirarDoVolume` já usava.
+     *
+     * O que se perdeu junto com "Em acabamento" foi a afirmação de que alguém
+     * começou o trabalho. Quem responde isso agora é o RESPONSÁVEL, que é
+     * obrigatório antes do Revisado: modelo com nome escolhido e ainda não
+     * revisado é um modelo em acabamento, e é assim que a métrica da fila e o
+     * filtro da lista passaram a contar.
+     */
+    function botaoDeRevisado(item, osId, pode) {
+        const revisado = estagioDoModelo(item) === 'Pronto';
         const temResponsavel = !!responsavelDoModelo(item);
-        const liberado = podeEditar && temResponsavel;
+        const liberado = pode && temResponsavel;
+        const rgb = COR_DO_ESTAGIO['Pronto'];
 
-        const botoes = ESTAGIOS.map(e => {
-            const rgb = COR_DO_ESTAGIO[e] || '148,163,184';
-            const icone = (SELO[e] || {}).icone || '';
-            const ativo = (atual === e);
-            // Texto ESCURO no botão pintado, e não branco: as quatro cores são
-            // claras (o âmbar e o ciano principalmente), e branco sobre elas
-            // fica com menos de 2,5:1 de contraste — some sob a luz da gráfica.
-            //
-            // A faixa da cor é o `border-left` de 4 px. Ela é o que faz os
-            // quatro se lerem como uma pilha só, e some no selecionado porque
-            // ali a cor já tomou o botão inteiro.
-            const cor = ativo
-                ? `background: rgb(${rgb}); border-color: rgb(${rgb}); color: #0b1220; font-weight: 800;`
-                  + ` box-shadow: 0 3px 10px rgba(${rgb},0.32);`
-                : `background: rgba(255,255,255,0.045); border-color: rgba(${rgb},0.30);`
-                  + ` border-left: 4px solid rgb(${rgb}); color: rgb(${rgb}); font-weight: 700;`;
-            const titulo = !temResponsavel
-                ? 'Escolha o responsável deste modelo para liberar o status'
-                : (ativo ? 'Este modelo está em ' + esc(e) : 'Marcar como ' + esc(e));
-            return `
-                <button type="button" data-estagio="${esc(e)}" aria-pressed="${ativo ? 'true' : 'false'}"
-                        ${liberado ? '' : 'disabled'}
-                        style="${ESTILO_BOTAO_ESTAGIO}${cor}${liberado ? '' : ESTILO_BOTAO_TRAVADO}"
-                        onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${escJs(e)}')"
-                        title="${titulo}">
-                    <span style="width: 17px; flex: 0 0 17px; text-align: center;">${icone}</span>
-                    <span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(e)}</span>
-                    <span style="flex: 0 0 auto; font-weight: 900; opacity: ${ativo ? '1' : '0'};">✓</span>
-                </button>`;
-        }).join('');
+        // Texto ESCURO no botão pintado, como nos quatro de antes: o verde é
+        // claro, e branco sobre ele some sob a luz da gráfica.
+        const cor = revisado
+            ? `background: rgb(${rgb}); border-color: rgb(${rgb}); color: #0b1220; font-weight: 800;`
+              + ` box-shadow: 0 3px 10px rgba(${rgb},0.32);`
+            : `background: rgba(255,255,255,0.045); border-color: rgba(${rgb},0.35);`
+              + ` border-left: 4px solid rgb(${rgb}); color: rgb(${rgb}); font-weight: 700;`;
 
-        // A saída da trava, escrita na própria tela: sem ela o operador vê
-        // quatro botões cinzas e não tem como adivinhar o que falta. Só para
-        // quem PODE editar — a quem não pode, o recado não serviria de nada.
-        const recado = (podeEditar && !temResponsavel)
-            ? `<span style="font-size:0.7rem; color:#fcd34d; display:block; margin-top:2px;">⬆️ Escolha o <b>Responsável</b> acima, na barra do modelo, para liberar o status.</span>`
-            : '';
+        const titulo = !temResponsavel
+            ? 'Escolha o responsável deste modelo, ao lado, para liberar o Revisado'
+            : (revisado
+                ? 'Este modelo está revisado — clique para desmarcar'
+                : 'Marcar este modelo como revisado');
 
-        // A hora em que ficou Pronto, logo abaixo dos botões (pedido do usuário,
-        // 23/08/2026). Só no Pronto, e só quando existe: modelo concluído antes
-        // de 23/08/2026 não tem hora registrada, e inventar uma seria pior do
-        // que não mostrar nenhuma.
-        const hora = (atual === 'Pronto') ? textoDaHoraDoPronto(prontoEmDoModelo(item)) : '';
-        const carimbo = hora
-            ? `<span style="font-size:0.7rem; color:#4ade80; display:block; margin-top:5px; padding-left:15px;">🕒 ${esc(hora)}</span>`
-            : '';
+        // Aceso, o clique DESMARCA (grava vazio). Apagado, marca.
+        const alvo = revisado ? '' : 'Pronto';
 
-        // A PILHA ESTICA para preencher a coluna (26/08/2026).
-        //
-        // Enquanto o responsável morava aqui embaixo, ele fechava a coluna e os
-        // quatro botões ocupavam a altura que tinham. Com ele na barra de
-        // título, os 194 px da pilha ficavam soltos ao lado de uma tabela de
-        // especificação bem mais alta, e sobrava um vão escuro no pé da coluna —
-        // exatamente o que o desenho de 26/08 veio desfazer nas outras duas.
-        //
-        // `flex: 1 1 0` faz a grade tomar a sobra -- base ZERO, e nao `auto`,
-        // pela mesma razao que a janela da amostra usa base 0: com `auto` quem
-        // mede a altura e o conteudo, e nao a coluna. E `grid-auto-rows` com
-        // `minmax` reparte essa altura em quatro fatias IGUAIS, nunca menores
-        // que os 44 px que o usuário fixou em 22/08/2026 — na estação se clica
-        // de pé, às vezes com a mão suja de tinta, e o alvo não pode encolher.
-        //
-        // `grid-template-columns: 1fr` fica: os quatro continuam um abaixo do
-        // outro, que é a régua vertical do desenho dos botões.
-        return `<div style="display: grid; grid-template-columns: 1fr;`
-             + ` grid-auto-rows: minmax(${ALTURA_DO_BOTAO}px, 1fr);`
-             + ` gap: ${ESPACO_DOS_BOTOES}px; width: 100%; flex: 1 1 0;`
-             + ` min-height: ${ALTURA_DA_PILHA}px;">${botoes}</div>${carimbo}${recado}`;
+        return `
+            <button type="button" data-revisado="${revisado ? '1' : '0'}"
+                    aria-pressed="${revisado ? 'true' : 'false'}"
+                    ${liberado ? '' : 'disabled'}
+                    style="${ESTILO_BOTAO_REVISADO}${cor}${liberado ? '' : ESTILO_BOTAO_TRAVADO}"
+                    onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${alvo}')"
+                    title="${esc(titulo)}">${revisado ? '✓ ' : ''}Revisado</button>`;
+    }
+
+    /**
+     * A saída da trava, escrita na tela.
+     *
+     * Só para quem PODE editar e ainda não escolheu o responsável — a quem só
+     * vê, o recado não serviria de nada. Ele quebra para a linha de baixo da
+     * barra sozinho, pelo `flex-wrap` dela.
+     */
+    function recadoDoResponsavel(item) {
+        if (!podeEditar() || responsavelDoModelo(item)) return '';
+        return `<span style="font-size:0.7rem; color:#fcd34d; width: 100%; text-align: right;">`
+             + `Escolha o <b>Responsável</b> ao lado para liberar o Revisado.</span>`;
+    }
+
+    /**
+     * A hora em que o modelo foi revisado, para a faixa acima da
+     * especificação. Só existe quando o banco carimbou — modelo revisado antes
+     * de 23/08/2026 não tem hora, e inventar uma seria pior do que não mostrar.
+     */
+    function carimboDoRevisado(item) {
+        if (estagioDoModelo(item) !== 'Pronto') return '';
+        const hora = textoDaHoraDoPronto(prontoEmDoModelo(item));
+        if (!hora) return '';
+        return `<span style="font-size:0.7rem; color:#4ade80; white-space: nowrap;">🕒 ${esc(hora)}</span>`;
     }
 
     /**
@@ -1727,13 +1769,16 @@
      * barra que cuida disso.
      */
     function responsavelNoTitulo(item, osId) {
+        const pode = podeEditar();
         return `
-            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;
-                        flex: 0 1 300px; min-width: 210px;">
-                <span style="${SUBROTULO_DO_CAMPO} white-space: nowrap;">Responsável</span>
-                <div style="flex: 1 1 auto; min-width: 0;">
-                    ${selectResponsavel(item, osId, podeEditar())}
+            <div style="display: flex; align-items: center; justify-content: flex-end;
+                        gap: 8px; margin-left: auto; flex: 0 1 420px; min-width: 300px;
+                        flex-wrap: wrap;">
+                <div style="flex: 1 1 auto; min-width: 150px;">
+                    ${selectResponsavel(item, osId, pode)}
                 </div>
+                ${botaoDeRevisado(item, osId, pode)}
+                ${recadoDoResponsavel(item)}
             </div>`;
     }
 
@@ -1763,21 +1808,36 @@
                     ? `<span style="font-size:0.7rem; color:var(--text-dim);">Nenhum operador com o perfil <b>✂️ Acabamento</b>. Em <b>Usuários → Acesso Local — NewProd</b>, escolha esse perfil para quem trabalha no setor, e volte aqui em <b>ATUALIZAR</b>.</span>`
                     : ''));
 
+        // A palavra "Responsável" vai DENTRO da caixa, na mesma linha do nome
+        // (pedido do usuário em 29/08/2026: "drop do responsável pode ser menor
+        // e sem legenda, legenda pode ficar dentro do próprio box"). O rótulo
+        // ao lado custava uma linha de altura em cada modelo, e a tela precisa
+        // de espaço vertical. O <select> continua sendo um <select> de verdade:
+        // ele fica transparente dentro da caixa, que é quem desenha a moldura.
         return `
-            <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}"
-                    onchange="AcabamentoPainel.mudarResponsavel('${escJs(item.id)}', '${escJs(osId)}', this.value)"
-                    title="Quem é o responsável pelo acabamento deste modelo">
-                ${opcoes}
-            </select>
+            <div style="${ESTILO_CAIXA_DO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}">
+                <span style="${SUBROTULO_DENTRO_DA_CAIXA}">Responsável</span>
+                <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}"
+                        onchange="AcabamentoPainel.mudarResponsavel('${escJs(item.id)}', '${escJs(osId)}', this.value)"
+                        title="Quem é o responsável pelo acabamento deste modelo">
+                    ${opcoes}
+                </select>
+            </div>
             ${recado}`;
     }
 
-    const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
+    const ESTILO_CAIXA_DO_SELECT = 'display: flex; align-items: center; gap: 8px;'
         + ' background: #0d0e20; border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;'
-        + ' color: #ffffff; padding: 8px 12px; font-size: 1.05rem; width: 100%;'
-        + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;'
+        + ' padding: 0 10px; width: 100%; min-width: 0;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
-    const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed; color: rgba(255,255,255,0.55);';
+    const SUBROTULO_DENTRO_DA_CAIXA = 'font-size: 0.62rem; font-weight: 800;'
+        + ' text-transform: uppercase; letter-spacing: 0.05em; color: #7f93a8;'
+        + ' white-space: nowrap; flex-shrink: 0;';
+    const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
+        + ' background: transparent; border: none; color: #ffffff;'
+        + ' padding: 6px 0; font-size: 0.92rem; flex: 1 1 auto; min-width: 0;'
+        + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;';
+    const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed;';
 
     // ## As medidas da pilha de botões, num lugar só
     //
@@ -1793,8 +1853,16 @@
     // altura do botão mudar, a amostra acompanha sozinha.
     const ALTURA_DO_BOTAO = 44;
     const ESPACO_DOS_BOTOES = 6;
-    const ALTURA_DA_PILHA = ESTAGIOS.length * ALTURA_DO_BOTAO
-                          + (ESTAGIOS.length - 1) * ESPACO_DOS_BOTOES;
+
+    // A altura mínima das janelas de imagem — a da amostra e, desde 29/08/2026,
+    // a da foto do material.
+    //
+    // Até essa data ela era DERIVADA da pilha de quatro botões de estágio: as
+    // duas colunas começavam e terminavam na mesma linha porque compartilhavam
+    // a mesma conta. Com a pilha desfeita, o número ficou sem dono, e passou a
+    // ser uma constante com o valor que já estava na tela — mudar a altura das
+    // janelas agora é decisão própria, e não efeito colateral de outra coisa.
+    const ALTURA_DA_JANELA = 194;
 
     // ## O desenho do botão, refeito em 26/08/2026
     //
@@ -1823,6 +1891,16 @@
     // Travado apaga o botão, mas não troca a cor: o operador sem permissão de
     // editar continua LENDO em que ponto o modelo está.
     const ESTILO_BOTAO_TRAVADO = ' opacity: 0.5; cursor: not-allowed; box-shadow: none;';
+
+    // O Revisado da barra de título. Mais baixo que os 44 px dos quatro botões
+    // de antes porque ele agora divide a linha com o seletor do responsável, e
+    // é a barra inteira que precisa ficar rasa — o pedido do usuário em
+    // 29/08/2026 foi ganhar espaço vertical.
+    const ESTILO_BOTAO_REVISADO = 'display: inline-flex; align-items: center; gap: 8px;'
+        + ' border-style: solid; border-width: 1px; border-radius: 7px; cursor: pointer;'
+        + ' padding: 6px 16px; font-size: 0.92rem; line-height: 1.1; white-space: nowrap;'
+        + ' font-family: inherit; flex-shrink: 0;'
+        + ' transition: background-color .12s ease, border-color .12s ease;';
 
     const ESTILO_BOTAO_CAMERA = 'display: inline-flex; align-items: center; gap: 8px;'
         + ' background: linear-gradient(135deg,#2b32af,#123a99); border: 1px solid #4cc8f0; color: #ffffff;'
@@ -1921,7 +1999,7 @@
         return `
             <div style="background: ${fundo}; ${estiloDoCardNaEscolha(item)} border-radius: 10px; margin-bottom: 12px; overflow: hidden;">
 
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 11px 16px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 14px; border-bottom: 1px dashed rgba(255,255,255,0.14);">
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1 1 auto; min-width: 220px;">
                         ${caixaDeEscolha(item)}
                         <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed rgba(207,230,251,0.45)'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
@@ -1933,40 +2011,40 @@
                     ${responsavelNoTitulo(item, osId)}
                 </div>
 
-                <!-- As tres colunas, refeitas em 26/08/2026, a pedido do
-                     usuario: aproveitar melhor os espacos e ajustar os
-                     alinhamentos. As tres comecam na MESMA linha (antes a
-                     amostra e a tabela eram centradas na vertical e a coluna
-                     dos botoes tambem, entao nenhuma compartilhava topo com as
-                     outras); cada uma abre com um rotulo da altura exata do
-                     cabecalho azul da tabela, que e a regua comum; e as tres
-                     TERMINAM juntas, em vez de deixar vao escuro embaixo.
+                <!-- AS TRÊS COLUNAS, refeitas em 29/08/2026 a pedido do usuário:
+                     Foto | Amostra | Especificação. A coluna das DECISÕES saiu —
+                     o Revisado subiu para a barra de título, ao lado do
+                     responsável que o libera — e a foto tomou o lugar dela, do
+                     outro lado da amostra: o revisor compara o que o cliente
+                     aprovou com o que está na mesa, lado a lado.
 
-                     As LARGURAS sao as de 22/08/2026, de proposito. A amostra
-                     ja tem flex-grow 1 e por isso ja fica com toda a sobra da
-                     linha; engordar a base dela nao a fazia crescer numa tela
-                     larga, e numa de 1366 -- tamanho de estacao -- jogava a
-                     coluna das decisoes para a linha de baixo, porque a conta
-                     de quebra usa a base e nao o min-width. -->
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: stretch; padding: 14px 16px;">
-                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 10px;">
+                     As LARGURAS: 180 + 200 + 280, mais os dois vãos de 18, dão
+                     696 dentro dos ~780 px úteis do corpo do detalhe. Quem
+                     decide a quebra de linha é a soma das bases, e não os
+                     min-width — estourá-la joga a última coluna para baixo, que
+                     é o rodapé que o desenho de 22/08 veio desfazer.
+
+                     As três continuam começando na mesma linha: a faixa de 36 px
+                     no alto de cada uma é a régua comum, e ela é a altura exata
+                     do cabeçalho azul da tabela de especificação. -->
+                <div style="display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch; padding: 12px 14px;">
+                    <div style="flex: 0 1 180px; min-width: 150px; display: flex; flex-direction: column; gap: 8px;">
+                        ${colunaDaFoto(item, osId, idx)}
+                        ${blocoDeVolumesDoModelo(item)}
+                    </div>
+
+                    <div style="flex: 1 1 200px; min-width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 8px;">
                         <div style="${ROTULO_DA_COLUNA}">Amostra</div>
                         ${amostraHtml(item, idAmostra)}
                     </div>
-                    <div style="flex: 0 1 280px; min-width: 220px; display: flex; flex-direction: column;">
-                        <!-- O Fotografar ACIMA da especificacao, na mesma faixa
-                             em que as outras duas colunas trazem o rotulo
-                             (pedido do usuario, 26/08/2026). Ele saiu da barra
-                             de titulo, onde disputava lugar com o responsavel e
-                             onde -- sendo registro, e nao decisao -- nunca foi o
-                             assunto daquela linha.
 
-                             A faixa tem a altura do ROTULO_DA_COLUNA, que e a
-                             regua comum das tres colunas: assim a tabela azul
-                             continua comecando na mesma linha da moldura da
-                             amostra e da pilha de botoes. -->
+                    <div style="flex: 0 1 280px; min-width: 220px; display: flex; flex-direction: column;">
+                        <!-- A faixa que era do botão Fotografar agora carrega a hora
+                             do Revisado: ela é a régua desta coluna e não pode sumir,
+                             e a hora não tinha mais onde morar depois que a pilha de
+                             botões saiu. -->
                         <div style="${FAIXA_DA_COLUNA} justify-content: flex-end; gap: 8px;">
-                            ${blocoDaFoto(item, osId, idx)}
+                            ${carimboDoRevisado(item)}
                         </div>
                         ${tabelaDeEspecificacao([
                             numeros,
@@ -1983,26 +2061,6 @@
                             linhaEspec('Situação', esc(impressao || '—'), '#9fd8f2'),
                         ].join(''))}
                     </div>
-
-                    <!-- A coluna das DECISÕES, à direita da especificação: os
-                         quatro botões de status um abaixo do outro e, embaixo
-                         deles, o responsável. Desenho pedido pelo usuário em
-                         22/08/2026. Antes isso era uma faixa no rodapé do card,
-                         com os botões deitados; de pé na estação, o operador
-                         percorria a linha inteira do card para chegar até ela.
-                         SEM caixa em volta, por pedido dele no mesmo dia: os
-                         botões já têm contorno e cor próprios, e a moldura ao
-                         redor deles só competia com a do bloco do modelo. -->
-                    <!-- A coluna das DECISÕES. O responsável saiu daqui em
-                         26/08/2026 e subiu para a barra de título; ficaram os
-                         quatro botões, que agora ESTICAM para preencher a altura
-                         da linha em vez de deixar um vão escuro embaixo. Ver o
-                         cabeçalho de botoesDeEstagio. -->
-                    <div style="flex: 0 1 210px; min-width: 180px; display: flex; flex-direction: column; gap: 10px;">
-                        <div style="${ROTULO_DA_COLUNA}">Status do acabamento</div>
-                        ${botoesDeEstagio(item, osId, podeEditar())}
-                        ${blocoDeVolumesDoModelo(item)}
-                    </div>
                 </div>
             </div>`;
     }
@@ -2014,8 +2072,69 @@
      * discordar — um `escrever` solto no selo, sem a barra, deixaria a barra
      * mostrando o pedido anterior.
      */
+    /**
+     * Os modelos que a tela do pedido mostra AGORA.
+     *
+     * Com nenhum setor aceso, são todos. Com um ou mais, só os daqueles — a
+     * mesma regra de recorte que os cards da fila já aplicam à lista, agora
+     * dentro do pedido (pedido do usuário em 29/08/2026).
+     */
+    function modelosVisiveisDoPedido() {
+        const todos = modelosDoPedidoAberto();
+        if (!tela.setoresNoPedido.length) return todos;
+        return todos.filter(m => tela.setoresNoPedido.indexOf(normalizar(m && m.setor)) !== -1);
+    }
+
+    /**
+     * A fileira de botões de setor, acima do número do pedido.
+     *
+     * Os quatro setores da casa aparecem SEMPRE, na ordem do
+     * `SETORES_DO_BANCO`, com quantos modelos deste pedido cada um tem. Setor
+     * que o pedido não usa fica apagado e sem clique, em vez de sumir: sumindo,
+     * a fileira mudaria de tamanho de pedido para pedido e o olho perderia a
+     * referência — e a conta ao lado do nome diz, antes do clique, o que há lá
+     * dentro.
+     */
+    function fileiraDeSetoresDoPedido(itens) {
+        const conta = {};
+        (itens || []).forEach(m => {
+            const st = normalizar(m && m.setor);
+            if (SETORES_DO_BANCO.indexOf(st) !== -1) conta[st] = (conta[st] || 0) + 1;
+        });
+
+        const todos = `<button type="button" class="prod-btn-dark filter-btn-pill${tela.setoresNoPedido.length ? '' : ' active'}"
+                    style="${ESTILO_PILULA_SETOR}"
+                    onclick="AcabamentoPainel.setSetorDoPedido('')"
+                    title="Mostrar todos os modelos deste pedido">🌐 Todos os Setores</button>`;
+
+        const pilulas = SETORES_DO_BANCO.map(st => {
+            const r = ROTULO_DO_SETOR[st] || { nome: st, icone: '📦' };
+            const quantos = conta[st] || 0;
+            const aceso = tela.setoresNoPedido.indexOf(st) !== -1;
+            if (!quantos) {
+                return `<button type="button" class="prod-btn-dark filter-btn-pill" disabled
+                        style="${ESTILO_PILULA_SETOR} opacity: 0.38; cursor: not-allowed;"
+                        title="Este pedido não tem modelo em ${esc(r.nome)}">${r.icone} ${esc(r.nome)}
+                        <span style="${ESTILO_CONTA_DA_PILULA}">—</span></button>`;
+            }
+            return `<button type="button" class="prod-btn-dark filter-btn-pill${aceso ? ' active' : ''}"
+                    style="${ESTILO_PILULA_SETOR}"
+                    onclick="AcabamentoPainel.setSetorDoPedido('${st}')"
+                    title="Somar ou tirar o setor ${esc(r.nome)} desta tela">${r.icone} ${esc(r.nome)}
+                    <span style="${ESTILO_CONTA_DA_PILULA}">${quantos}</span></button>`;
+        }).join('');
+
+        return todos + pilulas
+            + `<span style="font-size: 0.68rem; color: var(--text-dim); margin-left: 6px;">clique em mais de um para somar</span>`;
+    }
+
+    const ESTILO_PILULA_SETOR = 'padding: 0.4rem 0.8rem; border-radius: 0.75rem;'
+        + ' font-size: 0.75rem; font-weight: 700; width: auto; gap: 6px;'
+        + ' text-transform: none; white-space: nowrap;';
+    const ESTILO_CONTA_DA_PILULA = 'font-size: 0.68rem; font-weight: 800; opacity: 0.75;';
+
     function pintarProgressoDoPedido(prontos, total) {
-        escrever('acab-detalhe-progresso', `${prontos}/${total} prontos`);
+        escrever('acab-detalhe-progresso', `${prontos}/${total} revisados`);
         const barra = document.getElementById('acab-detalhe-barra');
         if (barra) barra.style.width = (total > 0 ? Math.round((prontos / total) * 100) : 0) + '%';
     }
@@ -2046,16 +2165,25 @@
                        Este pedido não tem modelo cadastrado.<br>
                        <span style="font-size: 0.82rem;">Se isso não está certo, use VOLTAR e depois ATUALIZAR.</span>
                    </div>`;
+            escreverHtml('acab-setores-do-pedido', '');
+            escreverHtml('acab-lateral-resumo', painelResumoHtml(os, [], []));
             pintarProgressoDoPedido(0, 0);
             return;
         }
 
-        const prontos = itens.filter(i => estagioDoModelo(i) === 'Pronto').length;
-        pintarProgressoDoPedido(prontos, itens.length);
+        // O RECORTE por setor manda em tudo o que vem abaixo: os modelos
+        // desenhados, o progresso e o resumo. Menos a expedição, que é do
+        // pedido inteiro — ver `rodapeDaExpedicao`.
+        const visiveis = modelosVisiveisDoPedido();
+        escreverHtml('acab-setores-do-pedido', fileiraDeSetoresDoPedido(itens));
+        escreverHtml('acab-lateral-resumo', painelResumoHtml(os, itens, visiveis));
+
+        const prontos = visiveis.filter(i => estagioDoModelo(i) === 'Pronto').length;
+        pintarProgressoDoPedido(prontos, visiveis.length);
 
         // Agrupado por produto, na mesma ordem em que a fila do Pedido desenha.
         const grupos = {};
-        itens.forEach(item => {
+        visiveis.forEach(item => {
             const prodId = item._vibe_id_produto || 'sem_produto';
             if (!grupos[prodId]) grupos[prodId] = [];
             grupos[prodId].push(item);
@@ -2096,8 +2224,11 @@
         // A conta do que foi marcado NÃO vai aqui: ela é fixa contra a janela,
         // no `#acab-barra-escolha`, porque dentro deste contêiner ela sumia da
         // tela — ver o comentário do `barraDaEscolha`.
-        corpo.innerHTML = boxDePesos(itens, os ? os.numero : '')
-                        + html;
+        // O peso e a expedição saíram daqui em 29/08/2026: eles agora moram no
+        // Resumo do pedido, na coluna da direita, que não rola com os modelos.
+        corpo.innerHTML = html || `<div style="padding: 28px; text-align: center; color: var(--text-dim);">
+                       Nenhum modelo neste setor. Clique em <b>Todos os Setores</b>, no topo, para ver o pedido inteiro.
+                   </div>`;
         pintarBarraDaEscolha(itens);
 
         // Os campos de peso são desenhados junto com o pedido, então o valor
@@ -2116,6 +2247,13 @@
         if (lista) lista.style.display = emDetalhe ? 'none' : '';
         if (detalhe) detalhe.style.display = emDetalhe ? 'flex' : 'none';
         if (vazio && emDetalhe) vazio.style.display = 'none';
+
+        // A coluna da direita troca de moradora: Métricas do Dia com a lista
+        // aberta, Resumo do pedido com um pedido aberto. Nunca as duas.
+        const metricas = document.getElementById('acab-lateral-metricas');
+        const resumo = document.getElementById('acab-lateral-resumo');
+        if (metricas) metricas.style.display = emDetalhe ? 'none' : 'flex';
+        if (resumo) resumo.style.display = emDetalhe ? 'flex' : 'none';
 
         // A barra da escolha é fixa contra a janela: fechada a tela do pedido,
         // ela ficaria boiando por cima da lista se ninguém a tirasse daqui.
@@ -2975,115 +3113,201 @@
      * Sem setor nenhum e sem sessão são dois "vazios" diferentes, e cada um diz
      * a sua razão: um box mudo faria o operador procurar defeito onde não há.
      */
-    function boxDePesos(itens, numeroDoPedido) {
-        const setores = setoresDoPedido(itens);
+    /**
+     * O bloco de PESO E VOLUMES, agora dentro do Resumo do pedido.
+     *
+     * Até 29/08/2026 ele era uma faixa larga acima dos modelos, em grade de
+     * cards de 340 px. Ali ele rolava junto com a lista: quem estava no
+     * terceiro modelo já não via nem o peso nem o botão da expedição. Agora
+     * mora na coluna da direita, que tem 288 px e não sai da tela — e por isso
+     * os cards viraram uma pilha, um setor embaixo do outro.
+     *
+     * Os ids dos campos são os mesmos de antes (`acab-peso-*`), de propósito:
+     * é por eles que o `pintarPesos` devolve o valor gravado a cada desenho.
+     *
+     * Com um setor aceso na fileira do topo, só ele aparece aqui — é a mesma
+     * regra de recorte da fila, aplicada dentro do pedido.
+     */
+    function blocoDePesoNoResumo(itens, numeroDoPedido) {
+        const todosOsSetores = setoresDoPedido(itens);
+        const setores = tela.setoresNoPedido.length
+            ? todosOsSetores.filter(x => tela.setoresNoPedido.indexOf(x) !== -1)
+            : todosOsSetores;
         const pode = podeEditar();
         // Sem caminho nenhum: nem agente servindo a página, nem sessão do Vibe.
         const semCaminho = !pelaEstacao() && tela.temSessao === false;
 
-        const cabecalho = `
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-                        background: ${AZUL.fundo}; border-bottom: 1px solid rgba(76,200,240,0.24);">
-                <span style="font-size: 1.1rem;">⚖️</span>
-                <strong style="font-size: 0.92rem; letter-spacing: 0.02em;">Peso por setor</strong>
-                <span style="font-size: 0.74rem; color: var(--text-dim);">
-                    Pedido ${esc(numeroDoPedido)} — ${pedidoTemVolumes()
-                        ? 'a soma dos volumes de cada setor'
-                        : 'um peso para cada setor dos produtos'}
-                </span>
+        const titulo = `
+            <div style="${ESTILO_TITULO_DO_BLOCO}">
+                <span style="font-size: 0.95rem;">⚖️</span> Peso e volumes
             </div>`;
 
-        let miolo;
         if (!setores.length) {
-            miolo = `<div style="padding: 14px; color: var(--text-dim); font-size: 0.84rem;">
-                        Os produtos deste pedido não têm setor definido, então não há peso a
-                        registrar. O setor vem do cadastro do produto no ERP.
-                     </div>`;
-        } else if (semCaminho) {
-            miolo = `<div style="padding: 14px; color: var(--text-dim); font-size: 0.84rem; line-height: 1.5;">
+            return titulo + `<div style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.45;">
+                       Os produtos deste pedido não têm setor definido, então não há peso a
+                       registrar. O setor vem do cadastro do produto no ERP.
+                   </div>`;
+        }
+
+        if (semCaminho) {
+            return titulo + `<div style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.5;">
                         <strong style="color: #4cc8f0;">Para registrar o peso, entre com a sua conta.</strong><br>
                         Esta tela está aberta com o acesso local da estação, e o peso é gravado na
                         ficha de expedição do ERP — que só aceita quem entrou com a conta do Vibe.
                         Abra o painel pelo site e faça login para preencher.
                         <div style="margin-top: 8px;">Setores deste pedido:
-                            ${setores.map(s => esc((ROTULO_DO_SETOR[s] || {}).nome || s)).join(' · ')}
+                            ${setores.map(x => esc((ROTULO_DO_SETOR[x] || {}).nome || x)).join(' · ')}
                         </div>
                      </div>`;
-        } else {
-            // GRADE, e não fila: com `flex-wrap` os cards de setor cabiam um por
-            // linha e sobrava um vão à direita de cada um — o pedido com dois
-            // setores desenhava duas faixas quase vazias. Em
-            // `repeat(auto-fit, minmax(...))` eles se dividem a largura enquanto
-            // couberem lado a lado, e só descem para a linha de baixo quando o
-            // conteúdo não cabe mais (pedido do usuário em 26/08/2026).
-            miolo = `<div style="padding: 12px 14px; display: grid; gap: 12px;
-                                 grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));">
-                ${setores.map(setor => {
-                    const r = ROTULO_DO_SETOR[setor] || { nome: setor, icone: '📦' };
-                    const atual = tela.pesos[setor];
-                    const valor = pesoParaTexto(atual ? atual.peso : null);
-                    const estimado = textoDoEstimado(setor);
-                    // Duas linhas desde 23/08/2026: em cima o peso do setor,
-                    // como sempre; embaixo a faixa dos volumes. O card ficou
-                    // mais largo (400 em vez de 240) porque a faixa carrega os
-                    // chips — com 240 eles quebravam um por linha.
-                    //
-                    // Num pedido COM volumes o campo vira LEITURA (29/08/2026):
-                    // o peso é a soma dos registros, e um campo digitável ao
-                    // lado dela convidaria a um segundo número que discordaria
-                    // do primeiro. O `id` continua o mesmo para o `pintarPesos`
-                    // achar o elemento — ele escreve `value`, e num `<span>`
-                    // isso não faz nada, então o texto é repintado no
-                    // `renderDetalhe` como todo o resto da faixa.
-                    const somado = pedidoTemVolumes();
-                    const campoDoPeso = somado
-                        ? `<span id="acab-peso-${setor}" data-somado="1"
-                                 title="O peso deste setor é a soma dos volumes — cada modelo foi pesado ao entrar num deles"
-                                 style="min-width: 92px; text-align: right; background: rgba(76,200,240,0.06);
-                                        border: 1px dashed rgba(76,200,240,0.30); border-radius: 6px;
-                                        color: #cfe6fb; padding: 6px 8px; font-size: 0.92rem;
-                                        font-family: monospace; display: inline-block;">${esc(valor || '—')}</span>`
-                        : `<input type="text" inputmode="decimal" id="acab-peso-${setor}"
-                                  value="${esc(valor)}" placeholder="0,00" ${pode ? '' : 'disabled'}
-                                  onchange="AcabamentoPainel.mudarPeso('${escJs(numeroDoPedido)}', '${setor}', this.value)"
-                                  title="${pode ? 'Peso real deste setor, em quilos' : 'Você tem apenas permissão de ver'}"
-                                  style="width: 92px; text-align: right; background: #0d0e20;
-                                         border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
-                                         color: #cfe6fb; padding: 6px 8px; font-size: 0.92rem;
-                                         font-family: monospace; opacity: ${pode ? '1' : '0.5'};" />`;
-                    return `
-                    <div style="display: flex; flex-direction: column; gap: 9px; min-width: 0;
-                                background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
-                                border-radius: 8px; padding: 10px 12px;">
-                      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <span style="font-size: 1.05rem;">${r.icone}</span>
-                        <strong style="min-width: 62px; font-size: 0.86rem;">${esc(r.nome)}</strong>
-                        ${campoDoPeso}
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">kg</span>
-                        ${(pode && !somado) ? botaoDaBalanca('setor', numeroDoPedido, setor) : ''}
-                        <span id="acab-peso-est-${setor}"
-                              title="Peso estimado: a soma dos pesos dos produtos deste setor no pedido, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
-                              style="font-size: 0.74rem; color: ${estimado.cor}; white-space: nowrap;">${esc(estimado.texto)}</span>
-                        ${somado ? `<span style="font-size: 0.72rem; color: #22c55e;">soma dos volumes</span>` : ''}
-                        <span id="acab-peso-sinal-${setor}" style="font-size: 0.74rem; min-width: 62px;
-                              color: var(--text-dim);"></span>
-                      </div>
-                      ${faixaDeVolumes(setor, itens, numeroDoPedido)}
-                    </div>`;
-                }).join('')}
-            </div>`;
         }
 
+        const cards = setores.map(setor => {
+            const r = ROTULO_DO_SETOR[setor] || { nome: setor, icone: '📦' };
+            const atual = tela.pesos[setor];
+            const valor = pesoParaTexto(atual ? atual.peso : null);
+            const estimado = textoDoEstimado(setor);
+            // Num pedido COM volumes o campo vira LEITURA: o peso é a soma dos
+            // registros, e um campo digitável ao lado dela convidaria a um
+            // segundo número que discordaria do primeiro.
+            const somado = pedidoTemVolumes();
+            const campoDoPeso = somado
+                ? `<span id="acab-peso-${setor}" data-somado="1"
+                         title="O peso deste setor é a soma dos volumes — cada modelo foi pesado ao entrar num deles"
+                         style="${ESTILO_PESO_SOMADO}">${esc(valor || '—')}</span>`
+                : `<input type="text" inputmode="decimal" id="acab-peso-${setor}"
+                          value="${esc(valor)}" placeholder="0,00" ${pode ? '' : 'disabled'}
+                          onchange="AcabamentoPainel.mudarPeso('${escJs(numeroDoPedido)}', '${setor}', this.value)"
+                          title="${pode ? 'Peso real deste setor, em quilos' : 'Você tem apenas permissão de ver'}"
+                          style="${ESTILO_PESO_CAMPO} opacity: ${pode ? '1' : '0.5'};" />`;
+
+            return `
+                <div style="${ESTILO_CARD_DE_SETOR}">
+                  <div style="display: flex; align-items: center; gap: 7px;">
+                    <span style="font-size: 1rem;">${r.icone}</span>
+                    <strong style="font-size: 0.84rem; flex: 1 1 auto; min-width: 0;">${esc(r.nome)}</strong>
+                    ${campoDoPeso}
+                    <span style="font-size: 0.76rem; color: var(--text-dim);">kg</span>
+                    ${(pode && !somado) ? botaoDaBalanca('setor', numeroDoPedido, setor) : ''}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span id="acab-peso-est-${setor}"
+                          title="Peso estimado: a soma dos pesos dos produtos deste setor no pedido, pelo ERP. Acima de 5 % de diferença, gravar pede a senha de liberação."
+                          style="font-size: 0.7rem; color: ${estimado.cor};">${esc(estimado.texto)}</span>
+                    ${somado ? `<span style="font-size: 0.7rem; color: #22c55e;">soma dos volumes</span>` : ''}
+                    <span id="acab-peso-sinal-${setor}" style="font-size: 0.7rem; color: var(--text-dim);"></span>
+                  </div>
+                  ${faixaDeVolumes(setor, itens, numeroDoPedido)}
+                </div>`;
+        }).join('');
+
+        return titulo + `<div style="display: flex; flex-direction: column; gap: 10px;">${cards}</div>`;
+    }
+
+    const ESTILO_TITULO_DO_BLOCO = 'display: flex; align-items: center; gap: 7px;'
+        + ' font-size: 0.7rem; font-weight: 800; text-transform: uppercase;'
+        + ' letter-spacing: 0.08em; color: #8fb6e0; padding-bottom: 6px;'
+        + ' border-bottom: 1px solid rgba(76,200,240,0.22); margin-bottom: 10px;';
+    const ESTILO_CARD_DE_SETOR = 'display: flex; flex-direction: column; gap: 8px; min-width: 0;'
+        + ' background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);'
+        + ' border-radius: 8px; padding: 9px 11px;';
+    const ESTILO_PESO_SOMADO = 'min-width: 76px; text-align: right; background: rgba(76,200,240,0.06);'
+        + ' border: 1px dashed rgba(76,200,240,0.30); border-radius: 6px; color: #cfe6fb;'
+        + ' padding: 4px 7px; font-size: 0.9rem; font-family: monospace; display: inline-block;';
+    const ESTILO_PESO_CAMPO = 'width: 76px; text-align: right; background: #0d0e20;'
+        + ' border: 1px solid rgba(76,200,240,0.26); border-radius: 6px; color: #cfe6fb;'
+        + ' padding: 4px 7px; font-size: 0.9rem; font-family: monospace;';
+
+    /**
+     * O RESUMO DO PEDIDO: a coluna da direita enquanto um pedido está aberto.
+     *
+     * Desenho pedido pelo usuário em 29/08/2026. No lugar das Métricas do Dia —
+     * que falam da fila inteira e não respondem nada sobre o pedido que está na
+     * tela — entram o progresso, os dados que a expedição precisa, o peso e os
+     * volumes de cada setor, e o botão de encaminhar preso no rodapé.
+     *
+     * Ele é FIXO: rola por dentro se precisar, e o botão do rodapé fica onde
+     * está. Era esse o defeito do desenho anterior, em que o peso e a expedição
+     * moravam numa faixa acima dos modelos e sumiam da tela ao rolar a lista.
+     *
+     * O recorte por setor vale aqui também (progresso, quantidade, setores e o
+     * bloco de peso), MENOS no botão da expedição: expedição é do pedido
+     * inteiro, e um setor não se expede sozinho. Por isso o aviso acima do
+     * botão quando há recorte na tela — sem ele o operador leria "3 de 3
+     * revisados" logo acima de um botão apagado e não entenderia o que falta.
+     */
+    function painelResumoHtml(os, itens, visiveis) {
+        const recortado = tela.setoresNoPedido.length > 0;
+        const total = visiveis.length;
+        const prontos = visiveis.filter(i => estagioDoModelo(i) === 'Pronto').length;
+        const qtd = visiveis.reduce((acc, m) => acc + (parseInt(m.quantidade || m.qtd || 0) || 0), 0);
+
+        const setores = tela.setoresNoPedido.length
+            ? tela.setoresNoPedido
+            : setoresDoPedido(itens);
+        const nomes = setores.map(x => (ROTULO_DO_SETOR[x] || {}).nome || x).join(' · ') || '—';
+
+        const prazo = fn('formatPrazoBadge');
+        const frete = ((os && os.frete_escolhido) || '').trim() || 'Retirada Local';
+
+        const selo = recortado
+            ? `<div style="font-family: monospace; font-size: 0.7rem; font-weight: 800;
+                          letter-spacing: 0.04em; color: #4cc8f0;"
+                    title="Estes números são só do setor escolhido no topo. Clique em Todos os Setores para ver o pedido inteiro.">`
+              + `◧ SÓ ${esc(nomes.toUpperCase())}</div>`
+            : '';
+
         return `
-            <div style="background: ${AZUL.superficie}; border: 1px solid ${AZUL.fio};
-                        border-radius: 10px; overflow: hidden; margin-bottom: 14px;">
-                ${cabecalho}
-                <div style="display: flex; align-items: stretch; gap: 0; flex-wrap: wrap;">
-                    <div style="flex: 1 1 420px; min-width: 0;">${miolo}</div>
-                    ${botaoDeExpedicao(itens, numeroDoPedido)}
+            <div style="${ESTILO_CAIXA_DO_RESUMO}">
+                <div style="${ESTILO_CABECALHO_DO_RESUMO}">
+                    <span style="font-size: 1rem;">📋</span>
+                    <strong style="font-size: 0.86rem; letter-spacing: 0.02em;">Resumo do pedido</strong>
                 </div>
+
+                <div class="custom-scroll" style="flex: 1; min-height: 0; overflow-y: auto;
+                            padding: 12px 14px; display: flex; flex-direction: column; gap: 14px;">
+                    ${selo}
+
+                    <div style="display: flex; flex-direction: column; gap: 7px;">
+                        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px;">
+                            <span style="${SUBROTULO_DO_CAMPO}">Revisados</span>
+                            <span class="badge badge-teal" id="acab-detalhe-progresso">${prontos}/${total} revisados</span>
+                        </div>
+                        <div style="width: 100%; height: 7px; background: rgba(255,255,255,0.08);
+                                    border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);"
+                             title="Quanto deste pedido já está revisado">
+                            <div id="acab-detalhe-barra" style="width: 0%; height: 100%; background: #4589d7;
+                                        border-radius: 4px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+
+                    <dl style="display: grid; grid-template-columns: auto 1fr; gap: 7px 12px;
+                               align-items: baseline; margin: 0;">
+                        <dt style="${SUBROTULO_DO_CAMPO}">Prazo</dt>
+                        <dd style="${ESTILO_VALOR_DA_FICHA} display: flex; justify-content: flex-end;">${prazo ? prazo(os) : '—'}</dd>
+                        <dt style="${SUBROTULO_DO_CAMPO}">Modelos</dt>
+                        <dd style="${ESTILO_VALOR_DA_FICHA}">${numeroComPonto(total)}</dd>
+                        <dt style="${SUBROTULO_DO_CAMPO}">Quantidade</dt>
+                        <dd style="${ESTILO_VALOR_DA_FICHA}">${numeroComPonto(qtd)} un</dd>
+                        <dt style="${SUBROTULO_DO_CAMPO}">Setores</dt>
+                        <dd style="${ESTILO_VALOR_DA_FICHA}">${esc(nomes)}</dd>
+                        <dt style="${SUBROTULO_DO_CAMPO}">Frete</dt>
+                        <dd style="${ESTILO_VALOR_DA_FICHA}">${esc(frete)}</dd>
+                    </dl>
+
+                    <div>${blocoDePesoNoResumo(itens, os ? os.numero : '')}</div>
+                </div>
+
+                ${rodapeDaExpedicao(itens, recortado)}
             </div>`;
     }
+
+    const ESTILO_CAIXA_DO_RESUMO = 'background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25);'
+        + ' border-radius: 14px; display: flex; flex-direction: column; overflow: hidden;'
+        + ' flex: 1; min-height: 0;';
+    const ESTILO_CABECALHO_DO_RESUMO = 'display: flex; align-items: center; gap: 8px;'
+        + ' padding: 11px 14px; background: #0b1730; border-bottom: 1px solid rgba(76,200,240,0.24);';
+    const ESTILO_VALOR_DA_FICHA = 'font-size: 0.9rem; font-weight: 700; color: #ffffff;'
+        + ' text-align: right; margin: 0; font-variant-numeric: tabular-nums;';
 
     /**
      * O botão EXPEDIÇÃO, à direita do peso.
@@ -3092,18 +3316,35 @@
      * propósito: apagado e clicável, ele responde o que falta. Escondido, o
      * operador ficaria procurando um botão que a tela não mostra.
      */
-    function botaoDeExpedicao(itens, numeroDoPedido) {
+    /**
+     * O RODAPÉ do Resumo: o botão de encaminhar à expedição, preso embaixo.
+     *
+     * Ele NÃO fica escondido quando o pedido não está pronto, e isso é de
+     * propósito: apagado e clicável, ele responde o que falta. Escondido, o
+     * operador ficaria procurando um botão que a tela não mostra.
+     *
+     * E ele NÃO entra no recorte por setor. A expedição é do pedido inteiro —
+     * um setor não se expede sozinho —, então com um setor aceso o botão
+     * continua falando dos modelos todos. Sem o aviso logo acima dele, o
+     * operador leria "3 de 3 revisados" no resumo e não entenderia por que o
+     * botão segue apagado.
+     */
+    function rodapeDaExpedicao(itens, recortado) {
+        const aviso = recortado
+            ? `<span style="font-size: 0.72rem; color: var(--text-dim);">a expedição é do pedido inteiro</span>`
+            : '';
+
         // Já entregue: o botão vira comprovante. Oferecer "enviar" de novo num
         // pedido que já saiu convidaria a uma segunda escrita sem sentido, e
         // esconder o botão deixaria o operador sem saber se o envio pegou.
         const aberto = (estado().ordens || []).find(o => String(o.id) === String(tela.pedidoAberto));
         if (aberto && ehExpedido(aberto)) {
             return `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;
-                        gap: 6px; padding: 12px 16px; border-left: 1px solid rgba(76,205,246,0.16);">
+            <div style="${ESTILO_RODAPE_DA_EXPEDICAO}">
+                ${aviso}
                 <span style="background: rgba(76,200,240,0.12); border: 1px solid #4cc8f0; color: #4cc8f0;
-                             border-radius: 8px; padding: 12px 22px; font-size: 0.95rem; font-weight: 800;
-                             letter-spacing: 0.06em; white-space: nowrap;">📦 NA EXPEDIÇÃO</span>
+                             border-radius: 8px; padding: 12px 14px; font-size: 0.9rem; font-weight: 800;
+                             letter-spacing: 0.04em; width: 100%; text-align: center;">📦 NA EXPEDIÇÃO</span>
                 <span style="font-size: 0.72rem; color: #7fa9d4;">já entregue — sai da lista ao embarcar</span>
             </div>`;
         }
@@ -3113,7 +3354,7 @@
         const pode = podeEditar();
 
         const cor = pronto && pode
-            ? `background: linear-gradient(135deg, ${'#4a61e8'}, ${'#120a8f'}); border-color: ${'#4cc8f0'}; color: #ffffff;`
+            ? `background: linear-gradient(135deg, #4a61e8, #120a8f); border-color: #4cc8f0; color: #ffffff;`
             : `background: rgba(43,50,175,0.35); border-color: rgba(76,205,246,0.20); color: #7fa9d4;`;
 
         const explicacao = !pode
@@ -3122,26 +3363,31 @@
                 ? 'Mandar este pedido para a expedição'
                 : 'Clique para ver o que ainda falta');
 
-        const rodape = pronto
-            ? `<span style="font-size: 0.72rem; color: ${'#4cc8f0'};">todos os modelos prontos</span>`
+        const nota = pronto
+            ? `<span style="font-size: 0.72rem; color: #4cc8f0;">todos os modelos revisados</span>`
             : `<span style="font-size: 0.72rem; color: #7fa9d4;">${
                   pendentes.length === 1 ? '1 setor pendente' : `${pendentes.length} setores pendentes`
-               }</span>`;
+               } — clique para ver o que falta</span>`;
 
         return `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;
-                        gap: 6px; padding: 12px 16px; border-left: 1px solid rgba(76,205,246,0.16);">
+            <div style="${ESTILO_RODAPE_DA_EXPEDICAO}">
+                ${aviso}
                 <button type="button" id="acab-btn-expedicao"
                         onclick="AcabamentoPainel.expedir('${escJs(tela.pedidoAberto)}')"
                         title="${esc(explicacao)}"
-                        style="${cor} border-width: 1px; border-style: solid; border-radius: 8px;
-                               padding: 12px 22px; font-size: 0.95rem; font-weight: 800;
-                               letter-spacing: 0.06em; cursor: pointer; white-space: nowrap;">
-                    📦 EXPEDIÇÃO
+                        style="${cor} ${ESTILO_BOTAO_DA_EXPEDICAO}">
+                    📦 ENCAMINHAR À EXPEDIÇÃO
                 </button>
-                ${rodape}
+                ${nota}
             </div>`;
     }
+
+    const ESTILO_RODAPE_DA_EXPEDICAO = 'padding: 12px 14px; border-top: 1px solid rgba(76,205,246,0.16);'
+        + ' display: flex; flex-direction: column; gap: 6px; align-items: center;'
+        + ' background: #0b1730; flex-shrink: 0;';
+    const ESTILO_BOTAO_DA_EXPEDICAO = 'border-width: 1px; border-style: solid; border-radius: 8px;'
+        + ' padding: 12px 14px; font-size: 0.84rem; font-weight: 800; letter-spacing: 0.04em;'
+        + ' cursor: pointer; width: 100%; line-height: 1.3; font-family: inherit;';
 
     // ─── A expedição ────────────────────────────────────────────────────────
     //
@@ -3637,7 +3883,7 @@
             return `${nomeDoSetor(g.setor)} (${quantos})`;
         }).join(', ');
         return `Ainda não dá para expedir: falta terminar ${lista}. `
-             + 'Um pedido só vai para a expedição com todos os modelos em "Pronto".';
+             + 'Um pedido só vai para a expedição com todos os modelos revisados.';
     }
 
     // ─── O popup da senha de liberação ──────────────────────────────────────
@@ -4251,7 +4497,7 @@
                     ${pode ? `<span style="margin-left: auto;">
                         <button type="button" style="${ESTILO_BOTAO_VOLUME}"
                                 onclick="AcabamentoPainel.novoVolume('${escJs(setor)}', '${escJs(numeroDoPedido)}')"
-                                title="A partir daqui, cada modelo marcado como Pronto vai dizer em qual volume entra e quanto pesa">Dividir em volumes</button></span>` : ''}
+                                title="A partir daqui, cada modelo marcado como Revisado vai dizer em qual volume entra e quanto pesa">Dividir em volumes</button></span>` : ''}
                 </div>`;
         }
 
@@ -4278,7 +4524,7 @@
                     ${pode ? `<span style="margin-left: auto;">
                         <button type="button" style="${ESTILO_BOTAO_VOLUME}"
                                 onclick="AcabamentoPainel.novoVolume('${escJs(setor)}', '${escJs(numeroDoPedido)}')"
-                                title="Criar mais um volume neste setor. Ele nasce vazio, e recebe modelos quando eles forem marcados como prontos.">+ Volume</button></span>` : ''}
+                                title="Criar mais um volume neste setor. Ele nasce vazio, e recebe modelos quando eles forem marcados como revisados.">+ Volume</button></span>` : ''}
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     ${lista.map(chipDoVolume).join('')}
@@ -4444,7 +4690,7 @@
                 ? ` Ele está ${meus.length === 1 ? 'no volume' : 'nos volumes'} `
                   + meus.map(x => 'V' + x.volume.numero).join(', ') + '.'
                 : '';
-            return `<span title="Este modelo está PRONTO.${esc(onde)} Para mexer nele, tire-o de Pronto — o material sai do volume e o peso sai da soma."
+            return `<span title="Este modelo está REVISADO.${esc(onde)} Para mexer nele, tire-o de Revisado — o material sai do volume e o peso sai da soma."
                           style="width: 22px; height: 22px; min-width: 22px; border-radius: 6px;
                                  background: rgba(34,197,94,0.20); border: 1px solid rgba(34,197,94,0.45);
                                  color: #22c55e; display: inline-flex; align-items: center;
@@ -4587,7 +4833,7 @@
             await carregarVolumes(numeroDoPedido);
             renderDetalhe();
             avisar(`Volume ${numero} criado no setor ${nomeDoSetor(alvo)}. `
-                 + 'A partir de agora, marcar um modelo como Pronto pergunta em qual volume ele entra.', 'success');
+                 + 'A partir de agora, marcar um modelo como Revisado pergunta em qual volume ele entra.', 'success');
         } catch (e) {
             console.error('[acabamento] erro ao criar o volume:', e);
             const duplicado = String((e && e.message) || '').indexOf('producao_volumes_unico') !== -1;
@@ -4956,7 +5202,7 @@
                            border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 7px;
                            padding: 8px 12px; font-size: 0.82rem; font-weight: 700; white-space: nowrap;
                            font-family: inherit; cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
-                📷 ${foto ? 'Refazer foto' : 'Fotografar'}
+                📷 ${foto ? 'Refazer' : 'Fotografar'}
             </button>`;
     }
 
@@ -5129,7 +5375,7 @@
         const parte1 = `<strong>${esc(nomeDoVolume)}</strong> passa a `
             + `<strong style="font-family: monospace;">${esc(kgParaTexto(depois))} kg</strong>`;
         const parte2 = fecham
-            ? ` e ${fecham === 1 ? 'o modelo fica' : `${fecham} modelos ficam`} <strong style="color: #22c55e;">Pronto${fecham === 1 ? '' : 's'}</strong>`
+            ? ` e ${fecham === 1 ? 'o modelo fica' : `${fecham} modelos ficam`} <strong style="color: #22c55e;">Revisado${fecham === 1 ? '' : 's'}</strong>`
             : '';
         const parte3 = parciais
             ? `<div style="font-size: 0.74rem; color: #fbbf24; margin-top: 4px;">⚠ `
@@ -5200,7 +5446,7 @@
                 <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
                             background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
                     <span style="font-size: 1.2rem;">✅</span>
-                    <strong style="font-size: 1.05rem; color: #ffffff;">Pronto — ${titulo}</strong>
+                    <strong style="font-size: 1.05rem; color: #ffffff;">Revisado — ${titulo}</strong>
                     <span style="font-size: 0.78rem; color: #cfe6fb;">Pedido ${esc(preparado.numeroDoPedido)} · setor ${esc(nomeDoSetor(preparado.setor))}</span>
                     <button type="button" onclick="AcabamentoPainel.fecharRegistro()"
                             style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
@@ -5211,7 +5457,7 @@
                 <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 15px;">
                     <span style="font-size: 0.82rem; color: #cfe6fb; line-height: 1.5;">
                         Este pedido tem volumes. Diga em qual ${quantos === 1 ? 'este modelo vai' : 'estes modelos vão'}
-                        e quanto ${quantos === 1 ? 'ele pesa' : 'eles pesam'} — é o que fecha o Pronto.
+                        e quanto ${quantos === 1 ? 'ele pesa' : 'eles pesam'} — é o que fecha o Revisado.
                     </span>
 
                     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -5289,7 +5535,7 @@
 
     const ROTULO_DO_PASSO = 'font-size: 0.7rem; font-weight: 800; text-transform: uppercase;'
         + ' letter-spacing: 0.05em; color: #8fb6e0;';
-    const ROTULO_DO_GRAVAR = 'Gravar e marcar Pronto';
+    const ROTULO_DO_GRAVAR = 'Gravar e marcar Revisado';
 
     /** Troca o volume escolhido — e com ele a foto que a janela oferece. */
     function escolherVolume(volumeId) {
@@ -5412,7 +5658,7 @@
             const duplicado = String((e && e.message) || '').indexOf('producao_volumes_unico') !== -1;
             mostrarRegistro();   // veio da senha? a janela precisa voltar
             dizer(duplicado
-                ? 'Outro operador acabou de criar este volume. Feche e abra o Pronto de novo.'
+                ? 'Outro operador acabou de criar este volume. Feche e abra o Revisado de novo.'
                 : `Não deu para gravar: ${(e && e.message) ? e.message : e}`);
         } finally {
             if (botao) { botao.disabled = false; botao.textContent = ROTULO_DO_GRAVAR; }
@@ -5540,7 +5786,7 @@
                     </span>
                     <span style="font-size: 0.74rem; color: var(--text-dim); min-width: 98px;">${esc(textoDoInstante(reg.registradoEm))}</span>
                     ${pode ? `<button type="button" onclick="AcabamentoPainel.tirarDoVolume('${escJs(v.id)}', '${escJs(reg.id)}')"
-                            title="Tirar este modelo do volume — ele volta para Em acabamento e o peso sai da soma"
+                            title="Tirar este modelo do volume — ele deixa de estar revisado e o peso sai da soma"
                             style="background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35);
                                    color: #f87171; border-radius: 6px; padding: 5px 10px; font-size: 0.74rem;
                                    font-weight: 700; cursor: pointer; font-family: inherit;">Tirar</button>` : ''}
@@ -5548,7 +5794,7 @@
             }).join('')
             : `<div style="padding: 18px; text-align: center; color: var(--text-dim); font-size: 0.86rem;">
                    Este volume ainda está vazio. Ele recebe material quando um modelo deste setor
-                   for marcado como <strong style="color: #cfe6fb;">Pronto</strong>.
+                   for marcado como <strong style="color: #cfe6fb;">Revisado</strong>.
                </div>`;
 
         caixa.innerHTML = `
@@ -5674,7 +5920,7 @@
 
         const pergunta = `Tirar ${nomeDoModelo(item)} (${numeroComPonto(reg.qtd)} un) do volume ${v.numero}?`
             + ((reg.peso !== null && reg.peso !== undefined) ? ` O peso de ${kgParaTexto(reg.peso)} kg sai da soma.` : '')
-            + (item && estagioDoModelo(item) === 'Pronto' ? ' O modelo volta para Em acabamento.' : '');
+            + (item && estagioDoModelo(item) === 'Pronto' ? ' O modelo deixa de estar revisado.' : '');
         const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
         const ok = (caixa && typeof caixa.perguntar === 'function')
             ? await caixa.perguntar(pergunta, { rotulo: 'Tirar', perigo: true })
@@ -5692,7 +5938,7 @@
             await atualizarPesoDoVolume(v, [registroId]);
 
             if (item && estagioDoModelo(item) === 'Pronto') {
-                await gravar(item.id, tela.pedidoAberto, 'acabamento_status', 'Em acabamento');
+                await gravar(item.id, tela.pedidoAberto, 'acabamento_status', '');
             }
             await carregarVolumes(tela.volumesDoPedido);
             fecharVolumeAberto();
@@ -5753,7 +5999,7 @@
             + (kg > 0 ? `, e ${kgParaTexto(kg)} kg saem da soma.` : '.');
         const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
         const ok = (caixa && typeof caixa.perguntar === 'function')
-            ? await caixa.perguntar(pergunta, { rotulo: 'Tirar de Pronto', perigo: true })
+            ? await caixa.perguntar(pergunta, { rotulo: 'Tirar de Revisado', perigo: true })
             : window.confirm(pergunta);
         if (!ok) return false;
 
@@ -5925,7 +6171,7 @@
             .join(' · ');
         avisar(feitos.length === 1
             ? `${quais} — todo o modelo entrou em volume, marcado como PRONTO.`
-            : `${feitos.length} modelos ficaram PRONTO ao entrar nos volumes: ${quais}.`, 'success');
+            : `${feitos.length} modelos ficaram REVISADOS ao entrar nos volumes: ${quais}.`, 'success');
     }
 
 
@@ -5991,7 +6237,7 @@
                                 style="background: linear-gradient(135deg, #4a61e8, #120a8f);
                                        border: 1px solid #4cc8f0; color: #ffffff; border-radius: 8px;
                                        padding: 10px 22px; font-weight: 800; letter-spacing: 0.05em;
-                                       cursor: pointer;">Gravar peso e marcar PRONTO</button>
+                                       cursor: pointer;">Gravar peso e marcar REVISADO</button>
                     </div>
                 </div>
             </div>`;
@@ -6064,7 +6310,7 @@
                 <div style="padding: 10px 12px; border-radius: 8px;
                             background: rgba(76,200,240,0.10); border: 1px solid rgba(76,200,240,0.32);">
                     Este é o <strong>último modelo</strong> do setor
-                    ${esc(nomeDoSetor(p.setor))}. Ao marcá-lo como <strong>PRONTO</strong> o setor fecha,
+                    ${esc(nomeDoSetor(p.setor))}. Ao marcá-lo como <strong>REVISADO</strong> o setor fecha,
                     e a expedição precisa do peso real para cotar o frete —
                     <strong>o status só muda depois que o peso for informado</strong>.
                 </div>
@@ -6086,7 +6332,7 @@
         const campo = document.getElementById('acab-peso-obrig-campo');
         if (campo) campo.value = somaDaqueleSetor > 0 ? pesoParaTexto(somaDaqueleSetor) : '';
         const ok = document.getElementById('acab-peso-obrig-ok');
-        if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar PRONTO'; }
+        if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar REVISADO'; }
 
         const caixa = document.getElementById('acab-peso-obrigatorio');
         if (caixa) caixa.style.display = 'flex';
@@ -6128,7 +6374,7 @@
             if (caixa) caixa.style.display = 'none';   // sai da frente do popup da senha
             await gravarPeso(p.numeroDoPedido, p.setor, texto);
         } finally {
-            if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar PRONTO'; }
+            if (ok) { ok.disabled = false; ok.textContent = 'Gravar peso e marcar REVISADO'; }
         }
 
         // Ainda pendente: o peso não entrou (foi para a senha, ou deu erro). O
@@ -6416,7 +6662,7 @@
      * botão pequeno no canto, e a miniatura ao lado dele quando existe.
      * O rótulo "Foto do material" continua existindo, no title dos dois.
      */
-    function blocoDaFoto(item, osId, idx) {
+    function colunaDaFoto(item, osId, idx) {
         const foto = fotoDoModelo(item);
         // Sem foto própria, o card mostra a foto do VOLUME em que o modelo
         // está (28/08/2026). O botão continua dizendo "Fotografar", e não
@@ -6435,7 +6681,7 @@
                            border: 1px solid rgba(69,137,215,0.50); color: #4cc8f0; border-radius: 7px;
                            padding: 5px 11px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
                            cursor: ${pode ? 'pointer' : 'not-allowed'}; opacity: ${pode ? '1' : '0.5'};">
-                📷 ${foto ? 'Refazer foto' : 'Fotografar'}
+                📷 ${foto ? 'Refazer' : 'Fotografar'}
             </button>`;
 
         const miniatura = mostrada
@@ -6454,11 +6700,53 @@
         // Ela também não dizia nada que o botão já não diga: sem foto ele lê
         // "📷 Fotografar"; com foto ele lê "📷 Refazer foto" e a miniatura
         // aparece ao lado. O estado está no rótulo, que é onde o operador olha.
+        // A COLUNA da foto, à esquerda da amostra (pedido do usuário em
+        // 29/08/2026). Até aqui a foto era uma miniatura de 46 px encostada no
+        // botão, numa faixa acima da especificação: para ver o material era
+        // preciso ampliar. Numa janela do tamanho da amostra, o revisor compara
+        // o que o cliente aprovou com o que está na mesa lado a lado, que é o
+        // trabalho dele.
+        //
+        // A legenda vai DENTRO da janela, sobre um vidro escuro, e não embaixo:
+        // embaixo ela custava 27 px de altura por coluna, e a tela precisa de
+        // espaço vertical.
+        const moldura = 'width: 100%; flex: 1 1 0; min-height: ' + ALTURA_DA_JANELA + 'px;'
+            + ' position: relative; border: 1px solid rgba(76,200,240,0.20);'
+            + ' background: #12161f; display: flex; align-items: center;'
+            + ' justify-content: center; overflow: hidden;';
+
+        const legenda = doVolume
+            ? 'Foto do volume ' + rotuloDoVolume(doVolume)
+            : 'Foto do material';
+
+        const janela = mostrada
+            ? `<div style="${moldura}">
+                   <img id="${idFoto}" src="${esc(mostrada)}" alt="${esc(legenda)}"
+                        onclick="AcabamentoPainel.ampliar('${idFoto}')"
+                        title="${esc(legenda)} — clique para ampliar"
+                        style="position: absolute; inset: 0; width: 100%; height: 100%;
+                               object-fit: cover; cursor: zoom-in; display: block;" />
+                   <span style="${ESTILO_LEGENDA_DENTRO}">🔍 ${esc(legenda)}</span>
+               </div>`
+            : `<div style="${moldura} flex-direction: column; gap: 6px; color: #7fa9d4;">
+                   <span style="font-size: 1.6rem;">📷</span>
+                   <span style="font-size: 0.74rem;">Sem foto do material ainda</span>
+               </div>`;
+
         return `
-            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-                ${miniatura}${botao}
-            </div>`;
+            <div style="${FAIXA_DA_COLUNA} justify-content: space-between; gap: 8px;">
+                <span style="${SUBROTULO_DO_CAMPO}">Foto</span>
+                ${botao}
+            </div>
+            ${janela}`;
     }
+
+    // A legenda por dentro da janela de imagem, sobre um degradê que a separa
+    // da foto sem tapar nada — desenho pedido pelo usuário em 29/08/2026.
+    const ESTILO_LEGENDA_DENTRO = 'position: absolute; left: 0; right: 0; bottom: 0;'
+        + ' padding: 4px 8px; font-size: 0.7rem; color: #cfe6fb; white-space: nowrap;'
+        + ' overflow: hidden; text-overflow: ellipsis;'
+        + ' background: linear-gradient(to top, rgba(2,6,23,0.82), rgba(2,6,23,0));';
 
     // ─── A câmera ───────────────────────────────────────────────────────────
     //
@@ -6906,6 +7194,26 @@
             render();
         },
 
+        /**
+         * Os setores DENTRO do pedido aberto. Somam, como os cards da fila:
+         * clicar num setor aceso o tira; `setSetorDoPedido('')` limpa tudo e
+         * devolve o pedido inteiro.
+         */
+        setSetorDoPedido(valor) {
+            if (!valor) {
+                tela.setoresNoPedido = [];
+            } else {
+                const i = tela.setoresNoPedido.indexOf(valor);
+                if (i === -1) tela.setoresNoPedido.push(valor);
+                else tela.setoresNoPedido.splice(i, 1);
+            }
+            // A escolha de modelos para volume é do recorte anterior: um modelo
+            // marcado que sumiu da tela continuaria contando na barra da escolha
+            // sem ninguém poder desmarcá-lo.
+            tela.marcados = {};
+            renderDetalhe();
+        },
+
         setSort(campo) {
             if (!COLUNAS[campo]) return;
             const atual = tela.sort;
@@ -6939,6 +7247,7 @@
             tela.volumes = {};
             tela.volumesDoPedido = null;
             tela.marcados = {};
+            tela.setoresNoPedido = [];
             fecharPopupDaLiberacao();
             fecharPopupDoPeso();
             fecharRegistro();
@@ -6978,6 +7287,7 @@
             fecharRegistro();
             fecharVolumeAberto();
             tela.marcados = {};
+            tela.setoresNoPedido = [];
             tela.pedidoAberto = null;
             mostrarLista();
             render();
@@ -7145,6 +7455,7 @@
             fecharRegistro();
             fecharVolumeAberto();
             tela.marcados = {};
+            tela.setoresNoPedido = [];
             tela.pedidoAberto = null;
             mostrarLista();
             carregarOperadores().then(() => { if (tela.pedidoAberto) renderDetalhe(); });
@@ -7185,6 +7496,9 @@
             textoDoQueFalta,
             encerradosTeste: tela.encerradosTeste,
             estagioDoModelo,
+            rotuloDoEstagio,
+            emAcabamentoAgora,
+            modelosVisiveisDoPedido,
             estagioDerivadoDaImpressao,
             faltamEstagiosNaLista,
             prontoEmDoModelo,

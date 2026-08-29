@@ -509,13 +509,17 @@ def test_so_o_envio_a_expedicao_tira_o_pedido_da_lista():
     )
 
 
-def test_o_ultimo_estagio_se_chama_pronto():
-    """Pedido do usuario em 21/08/2026: "Revisado" passou a se chamar "Pronto".
+def test_o_ultimo_estagio_se_chama_revisado_na_tela_e_pronto_no_banco():
+    """Em 29/08/2026 o usuario devolveu ao ultimo estagio o nome com que a tela
+    nasceu: com um botao so, ele deixou de ser o quarto de uma escala e virou o
+    carimbo de quem conferiu.
 
-    A coluna `pedidos_modelos.acabamento_status` guarda o proprio rotulo em
-    texto -- foi assim que a tela nasceu, para nao criar uma tabela de dominio
-    de quatro valores. O preco e que renomear o rotulo exige reescrever as
-    linhas ja gravadas, e e por isso que ha uma migracao.
+    A troca e SO de vocabulario. A coluna `pedidos_modelos.acabamento_status`
+    continua guardando 'Pronto', e e isso que este teste trava: mudar tambem o
+    valor gravado pediria migracao nova, mexeria no gatilho
+    `trg_carimba_acabamento_pronto_em` (que compara com 'PRONTO') e abriria de
+    novo a janela em que uma estacao com a versao anterior em cache grava o nome
+    velho -- foi o que aconteceu na troca de 21/08/2026, no sentido inverso.
     """
     js = _ler("frontend/acabamento.js")
     html = _ler("frontend/index.html")
@@ -523,11 +527,47 @@ def test_o_ultimo_estagio_se_chama_pronto():
     secao = secao[:secao.index("</section>")]
 
     assert "'Em acabamento', 'Pronto'" in js, "o estagio novo nao entrou na lista"
-    assert "setFiltroStatus('Pronto')" in secao, "o filtro lateral nao virou Pronto"
+    assert "setFiltroStatus('Pronto')" in secao, (
+        "o filtro continua mandando o VALOR gravado, e nao o rotulo da tela"
+    )
 
-    # Nenhum rotulo antigo sobrou na tela.
-    assert "Revisado" not in secao, "sobrou 'Revisado' na tela do acabamento"
-    assert "Revisados" not in secao, "sobrou 'Revisados' na metrica"
+    # O rotulo da tela mora num lugar so, e o valor gravado nao o acompanha.
+    assert "const ROTULO_NA_TELA = { 'Pronto': 'Revisado' };" in js, (
+        "o mapa que traduz o valor gravado para o rotulo da tela sumiu"
+    )
+    assert "'Pronto':        { icone: '✅', cls: 'badge-green', texto: 'Revisado' }" in js, (
+        "o selo do estagio precisa dizer Revisado"
+    )
+    assert "✅ Revisado" in secao, "o filtro da lista precisa dizer Revisado"
+
+    # E as frases que o operador lia com a palavra antiga nao voltaram. A lista
+    # e das que existiam em 29/08/2026, uma por lugar da tela em que a palavra
+    # aparecia -- se alguma voltar, e porque o vocabulario se partiu de novo.
+    #
+    # So o CODIGO entra na varredura. Os comentarios ficam de fora de proposito:
+    # varios deles citam pedidos do usuario entre aspas, com as palavras dele e
+    # com a data -- reescrever uma citacao para o vocabulario de hoje apagaria o
+    # registro de por que a tela e como e.
+    codigo = "\n".join(
+        linha for linha in js.splitlines()
+        if not linha.strip().startswith(("//", "*", "/*"))
+    )
+    for frase in [
+        "} prontos",                         # o selo do progresso do pedido
+        "todos os modelos prontos",         # o rodape da expedicao
+        'todos os modelos em "Pronto"',     # o aviso do que falta
+        "marcado como Pronto",              # os titles dos volumes
+        "marcados como prontos",
+        "está PRONTO",                      # a caixa de escolha travada
+        "Gravar e marcar Pronto",
+        "Gravar peso e marcar PRONTO",
+        "abra o Pronto de novo",
+        "Tirar de Pronto",
+        "ficaram PRONTO",
+        "fecha o Pronto",
+        "volta para Em acabamento",         # o desfazer do volume
+    ]:
+        assert frase not in codigo, "voltou a palavra antiga na tela: " + frase
 
     # A COR do estagio nao muda junto com o nome, e nao se escolhe aqui: ela diz
     # estado, e quem a define e o usuario. Estas quatro vieram dele em
@@ -916,9 +956,12 @@ def test_o_campo_do_peso_do_setor_continua_de_pe():
     total do setor" -- as palavras do usuario, 23/08/2026."""
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("function boxDePesos(")
+    # Desde 29/08/2026 o box mora dentro do Resumo do pedido, na coluna da
+    # direita, em vez de ser uma faixa larga acima dos modelos. Mudou de casa e
+    # de forma; a regra e os ids sao os mesmos.
+    i = js.index("function blocoDePesoNoResumo(")
     corpo = js[i:js.index("\n    }", i)]
-    assert 'id="acab-peso-${setor}"' in corpo, "o campo do peso por setor continua no box"
+    assert 'id="acab-peso-${setor}"' in corpo, "o campo do peso por setor continua no bloco"
     assert "AcabamentoPainel.mudarPeso(" in corpo, "e continua gravando pelo caminho de sempre"
     assert "faixaDeVolumes(setor, itens, numeroDoPedido)" in corpo, (
         "a faixa dos volumes entra ABAIXO dele, sem substitui-lo"
@@ -1396,14 +1439,17 @@ def test_a_foto_do_revisor_vem_antes_da_foto_da_caixa():
     primeira."""
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("function blocoDaFoto(")
+    # Desde 29/08/2026 a foto tem COLUNA e janela proprias, a esquerda da
+    # amostra: o revisor compara o que o cliente aprovou com o que esta na mesa
+    # lado a lado, sem ampliar nada.
+    i = js.index("function colunaDaFoto(")
     corpo = js[i:js.index("\n    }", i)]
     assert "const foto = fotoDoModelo(item)" in corpo
     assert "const doVolume = foto ? null : fotoDoVolumeDoModelo(item)" in corpo, (
         "a foto do volume so aparece quando o modelo ainda nao tem a dele"
     )
     # E o botao nao mente: sem foto propria ele continua dizendo "Fotografar".
-    assert "${foto ? 'Refazer foto' : 'Fotografar'}" in corpo
+    assert "${foto ? 'Refazer' : 'Fotografar'}" in corpo
 
 
 def test_a_camera_abre_por_cima_da_janela_do_volume():

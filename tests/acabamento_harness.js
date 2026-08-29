@@ -34,6 +34,22 @@ const pedidoJaPassouDaGraficaReal = (() => {
 })();
 
 let total = 0, falhas = 0;
+/**
+ * A tela do pedido aberto, nos dois pedacos em que ela mora.
+ *
+ * Ate 29/08/2026 tudo saia do `acab-detalhe-corpo`: os modelos, e acima deles a
+ * faixa larga do peso por setor com o botao da expedicao. Naquele dia o peso, os
+ * volumes e a expedicao mudaram para o Resumo do pedido, na coluna da direita,
+ * que NAO rola com os modelos -- antes, quem estava no terceiro modelo ja nao
+ * via nenhum dos dois.
+ *
+ * Os testes que perguntam pelo peso e pelos volumes leem daqui.
+ */
+function telaDoPedido(amb) {
+    return amb.elementos['acab-detalhe-corpo'].innerHTML
+         + amb.elementos['acab-lateral-resumo'].innerHTML;
+}
+
 function ok(cond, oque, detalhe) {
     total++;
     if (cond) return;
@@ -553,7 +569,11 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     const pedidos = [pedido(101), pedido(102)];
     const modelos = {
         101: [{ id: 1, acabamento_status: 'Pronto', quantidade: 10 }],
-        102: [{ id: 2, acabamento_status: 'Em acabamento', quantidade: 20 }],
+        // O modelo 2 tem RESPONSAVEL e nao esta revisado: e isso que faz dele um
+        // modelo em acabamento desde 29/08/2026, quando o estagio deixou de ser
+        // marcado a mao. O `acabamento_status` gravado e legado, e nao muda nada.
+        102: [{ id: 2, acabamento_status: 'Em acabamento', quantidade: 20,
+                acabamento_responsavel: 'Bernardo Farias' }],
     };
     const amb = ambienteComPedidos(pedidos, modelos);
 
@@ -562,7 +582,7 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     ok(html.indexOf('>102<') !== -1, 'o pedido em acabamento aparece na fila');
     ok(html.indexOf('>101<') !== -1,
        'e o pedido todo pronto CONTINUA na fila geral: ainda falta despacha-lo');
-    ok(html.indexOf('Pronto') !== -1, 'com o selo PRONTO, para se ver de relance');
+    ok(html.indexOf('Revisado') !== -1, 'com o selo REVISADO, para se ver de relance');
 
     amb.painel.setFiltroPrazo('expedicao');
     html = amb.elementos['tbody-acabamento'].innerHTML;
@@ -587,7 +607,18 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     ok(amb.elementos['stat-acab-pedidos-fila'].textContent === 2,
        'a metrica de pedidos conta a fila inteira', amb.elementos['stat-acab-pedidos-fila'].textContent);
     ok(amb.elementos['stat-acab-modelos-prontos'].textContent === 1, 'um modelo pronto');
-    ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1, 'um modelo em acabamento');
+    ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1,
+       'um modelo em acabamento: tem responsavel e ainda nao foi revisado',
+       amb.elementos['stat-acab-modelos-acabamento'].textContent);
+    // E a conta e do RESPONSAVEL, e nao da coluna: tirar o nome tira o modelo
+    // da metrica, mesmo com 'Em acabamento' gravado.
+    amb.janela.state.modelosGlobais[102][0].acabamento_responsavel = '';
+    amb.painel.render();
+    ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 0,
+       'sem responsavel ele nao conta: ninguem pegou o modelo ainda',
+       amb.elementos['stat-acab-modelos-acabamento'].textContent);
+    amb.janela.state.modelosGlobais[102][0].acabamento_responsavel = 'Bernardo Farias';
+    amb.painel.render();
     ok(amb.elementos['stat-acab-pedidos-concluidos'].textContent === 1, 'um pedido concluido');
     ok(amb.elementos['badge-acabamento'].textContent === 2, 'o badge do menu conta a fila inteira');
 })();
@@ -809,9 +840,13 @@ function ambienteComPedidoAberto() {
     // card inteiro. Quem decide a altura tem de ser a COLUNA.
     ok(html.indexOf('flex: 1 1 auto; min-height: 194px') === -1,
        'a janela nao e medida pela imagem que esta dentro dela');
-    ok(FONTE.indexOf('ALTURA_DA_PILHA') !== -1
-       && FONTE.indexOf("+ ALTURA_DA_PILHA + 'px") !== -1,
-       'esse minimo vem dos botoes, nao de um numero solto');
+    // Ate 29/08/2026 esse minimo era DERIVADO da pilha de quatro botoes de
+    // estagio, para as duas colunas comecarem e terminarem na mesma linha. Com a
+    // pilha desfeita o numero ficou sem dono, e virou constante propria -- mas
+    // continua num lugar so, e nao espalhado pelas duas janelas.
+    ok(FONTE.indexOf('const ALTURA_DA_JANELA = 194;') !== -1
+       && (FONTE.match(/\+ ALTURA_DA_JANELA \+ 'px/g) || []).length === 2,
+       'esse minimo vem de uma constante so, usada pelas duas janelas');
     // E a imagem ACOMPANHA a janela. Com `max-height` ela so encolhia: uma
     // amostra cujo arquivo e menor que a janela era desenhada no tamanho do
     // arquivo, com o resto da janela vazio em volta.
@@ -858,8 +893,14 @@ function ambienteComPedidoAberto() {
     ok(amostras.length === 2, 'a amostra e a coluna elastica, uma por modelo', amostras.length);
     const espec = html.match(/flex: 0 1 280px/g) || [];
     ok(espec.length === 2, 'a especificacao ficou estreita, uma por modelo', espec.length);
-    const decisoes = html.match(/flex: 0 1 210px/g) || [];
-    ok(decisoes.length === 2, 'e a coluna das decisoes fica a direita dela', decisoes.length);
+    // A coluna das DECISOES saiu em 29/08/2026: o Revisado subiu para a barra de
+    // titulo, ao lado do responsavel que o libera, e a FOTO tomou o lugar dela --
+    // do outro lado da amostra, para o revisor comparar o que o cliente aprovou
+    // com o que esta na mesa sem ampliar nada.
+    const foto = html.match(/flex: 0 1 180px/g) || [];
+    ok(foto.length === 2, 'a foto ganhou coluna propria, uma por modelo', foto.length);
+    ok((html.match(/flex: 0 1 210px/g) || []).length === 0,
+       'e a coluna das decisoes nao existe mais');
     // E as tres comecam na mesma linha: cada coluna abre com um rotulo da
     // altura exata do cabecalho azul da tabela (26/08/2026). Sem essa regua, a
     // amostra e os botoes voltam a flutuar centrados na vertical.
@@ -875,14 +916,23 @@ function ambienteComPedidoAberto() {
     //
     // E poe o comando ACIMA do que ele comanda: sem responsavel nenhum dos
     // quatro botoes de status se mexe.
-    const umModelo = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
+    // SEM os comentarios: eles viajam para a pagina junto com a marcacao, e uma
+    // palavra citada dentro de um deles ("Foto | Amostra | Especificação", por
+    // exemplo) desloca a conta da ordem para antes do elemento de verdade.
+    const semComentarios = html.replace(/<!--[\s\S]*?-->/g, '');
+    const umModelo = semComentarios.slice(semComentarios.indexOf('Pista Inteira'),
+                                          semComentarios.indexOf('Camarote'));
     const posResp = umModelo.indexOf('Responsável');
+    const posRevisado = umModelo.indexOf('Revisado</button>');
     const posFoto = umModelo.indexOf('Fotografar');
+    const posAmostra = umModelo.indexOf('>Amostra<');
     const posEspec = umModelo.indexOf('Especificação');
-    const posStatus = umModelo.indexOf('Status do acabamento');
-    ok(posResp < posFoto && posFoto < posEspec && posEspec < posStatus,
-       'a ordem e responsavel (no titulo), foto, especificacao e status',
-       { posResp, posFoto, posEspec, posStatus });
+    ok(posResp < posRevisado && posRevisado < posFoto
+       && posFoto < posAmostra && posAmostra < posEspec,
+       'a ordem e responsavel e Revisado (no titulo), foto, amostra e especificacao',
+       { posResp, posRevisado, posFoto, posAmostra, posEspec });
+    ok(umModelo.indexOf('Status do acabamento') === -1,
+       'e a coluna de status saiu da tela');
 
     // Amostra em PDF vira atalho, e nunca imagem: rasterizar a arte do cliente
     // esta fora de cogitacao neste projeto.
@@ -896,25 +946,23 @@ function ambienteComPedidoAberto() {
     ok(selects.length === 2, 'um seletor por modelo (o responsavel), dois modelos = dois', 'achei ' + selects.length);
     ok(html.indexOf('— Status —') === -1, 'nao ha opcao vazia de estagio');
 
-    // Os quatro estagios, como botoes do mesmo tamanho, um por estagio e por
-    // modelo. Se um sumir, o operador perde o caminho para aquele ponto.
-    ['Aguardando', 'Impresso', 'Em acabamento', 'Pronto'].forEach(e => {
-        const quantos = (html.match(new RegExp('data-estagio="' + e + '"', 'g')) || []).length;
-        ok(quantos === 2, 'o estagio "' + e + '" tem um botao em cada um dos dois modelos', quantos);
-    });
-    // Empilhados numa coluna so (22/08/2026): mesma coluna da grade, mesmo tamanho.
-    ok(/grid-template-columns: 1fr/.test(html), 'os quatro botoes ficam um abaixo do outro');
-    ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o botao de estagio grava o acabamento');
+    // UM botao, no lugar dos quatro (29/08/2026). Dois deles nunca foram escolha
+    // deste setor -- "Aguardando" e "Impresso" sao derivados da impressao --, e
+    // "Em acabamento" passou a ser respondido pelo responsavel, que e obrigatorio
+    // antes do Revisado.
+    const revisados = (html.match(/data-revisado="/g) || []).length;
+    ok(revisados === 2, 'um botao Revisado por modelo', revisados);
+    ok((html.match(/data-estagio="/g) || []).length === 0,
+       'e nenhum resto da pilha de quatro');
+    ok(/AcabamentoPainel\.mudarEstagio\(/.test(html), 'o botao Revisado grava o acabamento');
 
-    // O botao do estagio ATUAL e o unico marcado, em cada modelo. O 3001 esta
-    // em "Em acabamento"; o 3002 nao tem estagio gravado e deriva "Impresso"
-    // do status de impressao.
-    const marcados = (html.match(/aria-pressed="true"/g) || []).length;
-    ok(marcados === 2, 'um unico botao marcado por modelo', marcados);
-    const doModelo3001 = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
-    ok(/data-estagio="Em acabamento" aria-pressed="true"/.test(doModelo3001),
-       'o botao marcado e o do estagio em que o modelo esta');
-    ok(doModelo3001.indexOf('✓') !== -1, 'e o marcado se ve de relance');
+    // Nenhum dos dois modelos esta revisado: o 3001 esta em "Em acabamento" e o
+    // 3002 deriva "Impresso" da impressao. Os dois botoes ficam apagados.
+    ok((html.match(/aria-pressed="true"/g) || []).length === 0,
+       'nenhum modelo revisado, nenhum botao aceso');
+    // E clicar num apagado MARCA; clicar num aceso desmarca, gravando vazio.
+    ok(/mudarEstagio\('3001', 'os-200', 'Pronto'\)/.test(html),
+       'o botao apagado marca, gravando o valor que o banco guarda');
     ok(/AcabamentoPainel\.mudarResponsavel\(/.test(html), 'o seletor de responsavel grava o acabamento');
     ok(html.indexOf('Bernardo Farias') !== -1, 'o responsavel ja gravado aparece escolhido');
 
@@ -935,8 +983,8 @@ function ambienteComPedidoAberto() {
         ok(html.indexOf(proibido) === -1, 'o pedido aberto nao traz "' + proibido + '"');
     });
 
-    ok(amb.elementos['acab-detalhe-progresso'].textContent === '0/2 prontos',
-       'o cabecalho conta os prontos', amb.elementos['acab-detalhe-progresso'].textContent);
+    ok(amb.elementos['acab-detalhe-progresso'].textContent === '0/2 revisados',
+       'o resumo conta os revisados', amb.elementos['acab-detalhe-progresso'].textContent);
 })();
 
 (function semPermissaoDeEditarOsSeletoresTravam() {
@@ -944,17 +992,18 @@ function ambienteComPedidoAberto() {
     amb.janela._currentPerms = { perm_acabamento_view: true, perm_acabamento_edit: false };
     amb.painel.abrirPedido('os-200');
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    // Por modelo: o seletor do responsavel, os QUATRO botoes de estagio e o
-    // botao da camera = seis. Dois modelos = doze.
-    ok((html.match(/disabled/g) || []).length === 12,
-       'quem so tem VER encontra os seletores, os botoes e a camera travados',
+    // Por modelo: o seletor do responsavel, o botao Revisado e o da camera =
+    // tres. Dois modelos = seis.
+    ok((html.match(/disabled/g) || []).length === 6,
+       'quem so tem VER encontra o seletor, o Revisado e a camera travados',
        'achei ' + (html.match(/disabled/g) || []).length);
-    // Nenhum botao de estagio escapa: um solto grava o acabamento de quem so ve.
-    const botoes = html.match(/<button[^>]*data-estagio="[^"]*"[^>]*>/g) || [];
-    ok(botoes.length === 8, 'oito botoes de estagio na tela', botoes.length);
-    ok(botoes.every(b => b.indexOf('disabled') !== -1), 'e todos travados');
-    // Travado apaga, mas nao apaga a INFORMACAO: o marcado continua marcado.
-    ok((html.match(/aria-pressed="true"/g) || []).length === 2,
+    // Nenhum Revisado escapa: um solto grava o acabamento de quem so ve.
+    const botoes = html.match(/<button[^>]*data-revisado="[^"]*"[^>]*>/g) || [];
+    ok(botoes.length === 2, 'dois botoes Revisado na tela', botoes.length);
+    ok(botoes.every(b => b.indexOf('disabled') !== -1), 'e os dois travados');
+    // Travado apaga, mas nao apaga a INFORMACAO: o selo do estagio continua na
+    // barra de titulo, e e por ele que quem so ve sabe onde o modelo esta.
+    ok(html.indexOf('Em acabamento') !== -1 && html.indexOf('Impresso') !== -1,
        'quem so ve continua enxergando em que ponto cada modelo esta');
     ok(html.indexOf('apenas permiss\u00e3o de ver') !== -1,
        'e a camera travada explica por que esta travada');
@@ -1149,8 +1198,8 @@ function pedidoDeDoisSetores() {
     // O exemplo do usuario: card LASER aceso, LASER pronto -> PRONTO.
     amb.painel.setFiltroSetor('LASER');
     const comLaser = html();
-    ok(comLaser.indexOf('Pronto') !== -1 && comLaser.indexOf('Em acabamento') === -1,
-       'com o card LASER aceso o selo e PRONTO, mesmo com o TEXTIL na bancada',
+    ok(comLaser.indexOf('Revisado') !== -1 && comLaser.indexOf('Em acabamento') === -1,
+       'com o card LASER aceso o selo e REVISADO, mesmo com o TEXTIL na bancada',
        comLaser.slice(0, 400));
     ok(comLaser.indexOf('1/1 mod.') !== -1, 'e o progresso e o do LASER: 1/1');
     ok(comLaser.indexOf('100%') !== -1, 'ou seja, 100 %');
@@ -1371,9 +1420,9 @@ async function oBoxDePesoAbreComOsSetoresDoPedido() {
     ];
 
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
-    ok(html.indexOf('Peso por setor') !== -1, 'o box tem titulo');
+    ok(html.indexOf('Peso e volumes') !== -1, 'o bloco tem titulo');
     ok(html.indexOf('acab-peso-PVC') !== -1, 'ha campo para o PVC');
     ok(html.indexOf('acab-peso-LASER') !== -1, 'e para o Laser');
     ok(html.indexOf('acab-peso-FLEXO') === -1, 'e nenhum para setor que nao esta no pedido');
@@ -1459,9 +1508,9 @@ async function semSessaoOBoxDizOQueFazer() {
     amb.banco._sessao = null;
 
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
-    ok(html.indexOf('Peso por setor') !== -1, 'o box continua na tela');
+    ok(html.indexOf('Peso e volumes') !== -1, 'o bloco continua na tela');
     ok(html.indexOf('entre com a sua conta') !== -1, 'e diz o que fazer para poder gravar');
     ok(html.indexOf('acab-peso-PVC') === -1, 'sem campo que nao gravaria nada');
     ok(html.indexOf('PVC') !== -1, 'mas o setor do pedido continua visivel');
@@ -1472,9 +1521,9 @@ async function pedidoSemSetorExplicaOPorque() {
     amb.janela.state.osItens['os-200'].forEach(i => { i.setor = ''; });
 
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
-    ok(html.indexOf('Peso por setor') !== -1, 'o box aparece mesmo assim');
+    ok(html.indexOf('Peso e volumes') !== -1, 'o bloco aparece mesmo assim');
     ok(html.indexOf('nao ha peso a') !== -1 || html.indexOf('não há peso a') !== -1,
        'e explica por que nao ha campo nenhum');
 }
@@ -1537,7 +1586,7 @@ async function naEstacaoOPesoSaiPeloAgente() {
     ok(chamadas[0].url === '/api/peso-setores/200', 'na rota certa', chamadas[0].url);
     ok(chamadas[0].metodo === 'GET', 'com GET');
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('acab-peso-PVC') !== -1, 'e o campo aparece, mesmo sem sessao');
     ok(html.indexOf('entre com a sua conta') === -1,
        'sem o aviso de login: na estacao ha caminho');
@@ -1675,7 +1724,7 @@ async function oBotaoDaBalancaSoExisteNaEstacao() {
     // Na estacao ele fica ao lado do campo de peso de cada setor.
     const naEstacao = ambienteComBalanca(() => ({ ok: true, peso_kg: 4.2, estavel: true }));
     await naEstacao.painel.abrirPedido('os-200');
-    const html = naEstacao.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(naEstacao);
     ok(html.indexOf('acab-balanca-btn-acab-peso-PVC') !== -1,
        'na estacao ha o botao da balanca ao lado do peso do setor');
     ok(html.indexOf('AcabamentoPainel.lerBalanca(') !== -1,
@@ -1686,7 +1735,7 @@ async function oBotaoDaBalancaSoExisteNaEstacao() {
     const noSite = ambienteComEstimado();
     noSite.janela.SERVIDA_PELA_NUVEM = true;
     await noSite.painel.abrirPedido('os-200');
-    const htmlDoSite = noSite.elementos['acab-detalhe-corpo'].innerHTML;
+    const htmlDoSite = telaDoPedido(noSite);
     ok(htmlDoSite.indexOf('acab-balanca-btn') === -1,
        'no site o botao da balanca nao existe');
     ok(htmlDoSite.indexOf('id="acab-peso-PVC"') !== -1,
@@ -1821,7 +1870,7 @@ async function oBotaoDeExpedicaoSoAcendeComTudoPronto() {
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Em acabamento';
 
     await amb.painel.abrirPedido('os-200');
-    let html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    let html = telaDoPedido(amb);
 
     ok(html.indexOf('EXPEDIÇÃO') !== -1, 'o botao existe mesmo com o pedido pendente');
     ok(html.indexOf('1 setor pendente') !== -1, 'e ele diz quantos setores faltam', html.slice(0, 0));
@@ -1831,8 +1880,8 @@ async function oBotaoDeExpedicaoSoAcendeComTudoPronto() {
     amb.janela.state.osItens['os-200'][1].acabamento_status = 'Pronto';
     amb.painel.render();
     await amb.painel.abrirPedido('os-200');
-    html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    ok(html.indexOf('todos os modelos prontos') !== -1, 'com tudo pronto ele muda de cara');
+    html = telaDoPedido(amb);
+    ok(html.indexOf('todos os modelos revisados') !== -1, 'com tudo pronto ele muda de cara');
 }
 
 async function clicarCedoDemaisAbreOPopupComOQueFalta() {
@@ -2097,19 +2146,24 @@ async function semResponsavelOStatusNaoSeMexe() {
     // O 3002 nao tem responsavel. Os quatro botoes dele estao travados...
     const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
     const do3002 = html.slice(html.indexOf('Camarote'));
-    const botoes3002 = do3002.match(/<button[^>]*data-estagio="[^"]*"[^>]*>/g) || [];
-    ok(botoes3002.length === 4, 'os quatro botoes do modelo sem responsavel aparecem', botoes3002.length);
+    const botoes3002 = do3002.match(/<button[^>]*data-revisado="[^"]*"[^>]*>/g) || [];
+    ok(botoes3002.length === 1, 'o botao do modelo sem responsavel aparece', botoes3002.length);
     ok(botoes3002.every(b => b.indexOf('disabled') !== -1),
        'e todos travados enquanto nao ha responsavel');
-    ok(do3002.indexOf('para liberar o status') !== -1, 'a tela diz o que falta');
+    ok(do3002.indexOf('para liberar o Revisado') !== -1, 'a tela diz o que falta');
     // Ele aponta para CIMA desde 26/08/2026: o seletor subiu para a barra do
-    // modelo. Uma seta que aponta para o lugar errado e pior do que seta nenhuma.
-    ok(do3002.indexOf('<b>Responsável</b> acima') !== -1,
+    // Desde 29/08/2026 o seletor esta na MESMA LINHA do botao, e a seta saiu
+    // junto: o recado so precisa dizer onde o nome se escolhe, e "ao lado" e a
+    // verdade agora. Seta que aponta para o lugar errado e pior do que seta
+    // nenhuma -- foi por isso que ela mudou de lado em 26/08, e por isso que
+    // agora ela nao existe.
+    ok(do3002.indexOf('<b>Responsável</b> ao lado') !== -1,
        'e aponta para onde o responsavel ficou agora');
-    ok(do3002.indexOf('⬆️') !== -1, 'com a seta para cima, e nao para baixo');
+    ok(do3002.indexOf('⬆️') === -1 && do3002.indexOf('⬇️') === -1,
+       'sem seta: o seletor esta na mesma linha do botao');
     // ...mas o estagio continua LEGIVEL: travar nao e esconder.
-    ok(/data-estagio="Impresso" aria-pressed="true"/.test(do3002),
-       'o estagio derivado continua marcado');
+    ok(do3002.indexOf('Impresso') !== -1,
+       'o estagio derivado continua legivel no selo da barra');
 
     // O 3001 TEM responsavel: os botoes dele estao livres.
     const do3001 = html.slice(html.indexOf('Pista Inteira'), html.indexOf('Camarote'));
@@ -2186,11 +2240,11 @@ async function aHoraDoProntoApareceNoCard() {
     // O texto: hoje sai so a hora; noutro dia, a data junto.
     const hoje = new Date();
     hoje.setHours(14, 32, 0, 0);
-    ok(textoDaHoraDoPronto(hoje.toISOString()) === 'Pronto às 14:32',
+    ok(textoDaHoraDoPronto(hoje.toISOString()) === 'Revisado às 14:32',
        'no mesmo dia sai so a hora', textoDaHoraDoPronto(hoje.toISOString()));
 
     const outroDia = new Date(hoje.getTime() - 3 * 24 * 3600 * 1000);
-    ok(/^Pronto em \d\d\/\d\d às \d\d:\d\d$/.test(textoDaHoraDoPronto(outroDia.toISOString())),
+    ok(/^Revisado em \d\d\/\d\d às \d\d:\d\d$/.test(textoDaHoraDoPronto(outroDia.toISOString())),
        'noutro dia a data aparece junto', textoDaHoraDoPronto(outroDia.toISOString()));
 
     ok(textoDaHoraDoPronto('') === '' && textoDaHoraDoPronto(null) === '',
@@ -2207,8 +2261,8 @@ async function aHoraDoProntoApareceNoCard() {
     amb.janela.state.osItens['os-200'][0].acabamento_status = 'Pronto';
     amb.janela.state.osItens['os-200'][0].acabamento_pronto_em = hoje.toISOString();
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    ok(html.indexOf('Pronto às 14:32') !== -1, 'o card do modelo pronto mostra a hora', html.length);
+    const html = telaDoPedido(amb);
+    ok(html.indexOf('Revisado às 14:32') !== -1, 'o card do modelo revisado mostra a hora', html.length);
 
     // Modelo pronto SEM hora (concluido antes de 23/08/2026) nao mostra nada --
     // a migracao nao inventou historico, e a tela nao inventa tampouco.
@@ -2492,7 +2546,7 @@ function ambienteComEstimado() {
 async function oBoxMostraOEstimadoAoLadoDoPeso() {
     const amb = ambienteComEstimado();
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
     ok(html.indexOf('id="acab-peso-est-PVC"') !== -1, 'ha o estimado ao lado do PVC');
     ok(html.indexOf('est. 4,160 kg') !== -1, 'com tres casas e virgula, como o ERP soma', html.indexOf('est.'));
@@ -2663,7 +2717,7 @@ async function senhaCertaNaEstacaoGravaPeloAgente() {
     };
 
     await amb.painel.abrirPedido('os-200');
-    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('est. 4,160 kg') !== -1,
+    ok(telaDoPedido(amb).indexOf('est. 4,160 kg') !== -1,
        'o estimado aparece na estacao tambem: a leitura e publica, sem sessao');
     chamadas.length = 0;
 
@@ -2695,7 +2749,7 @@ async function semEstimadoGravaDireto() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('est. —') !== -1, 'o box mostra "est. —"');
+    ok(telaDoPedido(amb).indexOf('est. —') !== -1, 'o bloco mostra "est. —"');
     await amb.painel.mudarPeso(200, 'PVC', '999');
     ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'sem estimado nao ha popup');
     ok(amb.banco._pesosGravados.length === 1, 'e o peso grava direto', String(amb.banco._pesosGravados.length));
@@ -2780,7 +2834,7 @@ async function semEstimadoGravaDireto() {
     amb2.painel.abrirPedido('os-200');
     const html2 = amb2.elementos['acab-detalhe-corpo'].innerHTML;
     ok(html2.indexOf('acabamento-fotos/200_3001_1.jpg') !== -1, 'a foto gravada vira miniatura');
-    ok(html2.indexOf('Refazer foto') !== -1, 'e o botao passa a oferecer refazer');
+    ok(html2.indexOf('📷 Refazer') !== -1, 'e o botao passa a oferecer refazer');
 })();
 
 (function aFotoVaiParaOBucketQueJaAceitaEscrita() {
@@ -2952,7 +3006,7 @@ async function oEstagioDaListaVemDeConsultaPropria() {
     });
     amb.banco._modelosDoBanco = [
         { id: 900, id_int: 301, acabamento_status: 'Pronto', acabamento_responsavel: 'Bernardo Farias' },
-        { id: 901, id_int: 302, acabamento_status: 'Em acabamento', acabamento_responsavel: null },
+        { id: 901, id_int: 302, acabamento_status: 'Em acabamento', acabamento_responsavel: 'Ana Prado' },
     ];
 
     amb.painel.aoAbrir();
@@ -2962,7 +3016,8 @@ async function oEstagioDaListaVemDeConsultaPropria() {
     ok(amb.elementos['stat-acab-modelos-prontos'].textContent === 1,
        'o pronto veio da consulta propria', amb.elementos['stat-acab-modelos-prontos'].textContent);
     ok(amb.elementos['stat-acab-modelos-acabamento'].textContent === 1,
-       'e o em acabamento tambem');
+       'e o em acabamento tambem -- pelo responsavel que a consulta trouxe',
+       amb.elementos['stat-acab-modelos-acabamento'].textContent);
     ok(amb.elementos['tbody-acabamento'].innerHTML.indexOf('>301<') !== -1,
        'e o pedido todo pronto continua na fila: so o envio a expedicao o tira de la');
 }
@@ -3154,7 +3209,7 @@ function registrosDoBanco(amb, volumeId) {
 async function pedidoSemVolumeSegueOFluxoDeSempre() {
     const amb = ambienteDeVolumes();
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
     ok(html.indexOf('1 volume único') !== -1, 'o setor sem volume diz que sai como um so');
     ok(html.indexOf('pesado no fim') !== -1,
@@ -3182,7 +3237,7 @@ async function criarVolumeVazioLigaATravaDoPronto() {
     ok(v.id_int === 200 && v.setor === 'LASER' && v.numero === 1, 'no pedido e no setor certos');
     ok(registrosDoBanco(amb, v.id).length === 0, 'e sem nada dentro');
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('vazio') !== -1, 'a faixa diz que ele esta vazio');
     ok(html.indexOf('ainda sem volume') !== -1, 'e os modelos aparecem como sem volume');
 
@@ -3267,7 +3322,7 @@ async function registroParcialNaoFechaOModelo() {
     ok(!status.some(g => String(g.valor) === '3001'),
        'metade do modelo no volume NAO o marca como Pronto');
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('2.000 de 5.000 registrados') !== -1, 'o card diz quanto ja entrou', html.slice(0, 0));
     ok(html.indexOf('3.000 fora') !== -1, 'e quanto falta');
 
@@ -3375,7 +3430,7 @@ async function aReparticaoDoPesoEPura() {
 async function asCaixasDeMarcarNaoTemModo() {
     const amb = ambienteDeVolumes();
     await amb.painel.abrirPedido('os-200');
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
 
     ok(html.indexOf('marcarModelo(&#39;3001&#39;)') !== -1
        || html.indexOf("marcarModelo('3001')") !== -1,
@@ -3467,8 +3522,9 @@ async function tirarDoVolumeDevolveOModelo() {
        'e o peso dele saiu da soma', String(amb.banco._volumesDoBanco[0].peso_kg));
     const status = amb.banco._gravacoes.filter(g => g.payload && g.payload.acabamento_status !== undefined
         && String(g.valor) === '3001');
-    ok(status.length && status[status.length - 1].payload.acabamento_status === 'Em acabamento',
-       'e o modelo voltou para Em acabamento',
+    ok(status.length && !status[status.length - 1].payload.acabamento_status,
+       'e o modelo deixou de estar revisado: a coluna foi LIMPA, e nao reescrita '
+       + 'com um estagio que a tela nao oferece mais',
        JSON.stringify(status.map(g => g.payload.acabamento_status)));
 }
 
@@ -3495,7 +3551,7 @@ async function comVolumesOPesoDoSetorEDeLeitura() {
     await amb.painel.novoVolume('LASER', 200);
     await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('input type="text" inputmode="decimal" id="acab-peso-LASER"') === -1,
        'o campo do peso do setor deixou de ser digitavel');
     ok(html.indexOf('data-somado="1"') !== -1, 'ele virou leitura');
@@ -3647,7 +3703,7 @@ async function aFotoDoVolumeApareceNosModelosDele() {
     await registrar(amb, { grupo: [3001, 3002], peso: '12,48',
                            responsavel: 'Bernardo Farias', foto: FOTO_DO_VOLUME });
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     const quantas = (html.match(new RegExp(FOTO_DO_VOLUME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
     ok(quantas >= 2, 'os dois modelos do volume passam a mostrar a foto dele', String(quantas));
     ok(html.indexOf('Foto do volume V1') !== -1, 'e o card diz de qual volume ela e');
@@ -3661,10 +3717,10 @@ async function aFotoPropriaDoModeloVemPrimeiro() {
     await registrar(amb, { grupo: [3001, 3002], peso: '12,48',
                            responsavel: 'Bernardo Farias', foto: FOTO_DO_VOLUME });
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('https://x/propria.jpg') !== -1,
        'o modelo com foto propria continua mostrando a DELE');
-    ok(html.indexOf('Refazer foto') !== -1, 'e o botao dele diz Refazer');
+    ok(html.indexOf('📷 Refazer') !== -1, 'e o botao dele diz Refazer');
 }
 
 async function aFotoDoModeloContinuaIndoParaOCardDele() {
@@ -3707,7 +3763,7 @@ async function soExisteVolumeNoVocabulario() {
     const amb = ambienteDeVolumes();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     // Comentario de marcacao nao e vocabulario da tela: o `<!-- ... -->` do
     // card explica uma decisao de layout de 22/08/2026 e ninguem o le na
     // estacao. O que conta e o que fica visivel.
@@ -3826,10 +3882,10 @@ async function prontoNaoOfereceCaixaDeMarcar() {
     ok(!amb.painel._regras.marcadoNaEscolha(itens[0]),
        'marcar um Pronto pelo console tambem nao faz nada');
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
-    ok(html.indexOf('Este modelo está PRONTO.') !== -1,
+    const html = telaDoPedido(amb);
+    ok(html.indexOf('Este modelo está REVISADO.') !== -1,
        'a caixa travada diz por que esta travada');
-    ok(html.indexOf('tire-o de Pronto') !== -1,
+    ok(html.indexOf('tire-o de Revisado') !== -1,
        'e diz o que fazer para sair dela -- toda trava daqui tem saida');
     ok(html.indexOf('Ele está no volume V1.') !== -1,
        'dizendo tambem em qual volume ele esta');
@@ -3983,7 +4039,7 @@ async function excluirOUltimoVolumeApagaOPesoDoSetor() {
        'e o peso do setor foi apagado junto -- nao ha mais soma que o sustente',
        String(amb.banco._setoresDoBanco[0].peso_real_kg));
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('input type="text" inputmode="decimal" id="acab-peso-LASER"') !== -1,
        'e o campo volta a ser digitavel -- o pedido voltou ao fluxo de sempre');
     ok(html.indexOf('data-somado') === -1, 'sem o rotulo de leitura');
@@ -4135,8 +4191,8 @@ async function oPedidoExpedidoContinuaNaLista() {
     ok(html.indexOf('NA EXPEDIÇÃO') !== -1,
        'com a marca que o distingue de um pedido ainda na bancada');
 
-    // O selo do estagio e o de PRONTO, que e o que o usuario pediu.
-    ok(html.indexOf('Pronto') !== -1, 'e com o selo PRONTO');
+    // O selo do estagio e o de REVISADO, que e o que o usuario pediu.
+    ok(html.indexOf('Revisado') !== -1, 'e com o selo REVISADO');
 }
 
 async function oExpedidoAparecerSobOFiltroPronto() {
@@ -4182,7 +4238,7 @@ async function oPedidoJaExpedidoNaoOferecerEnviarDeNovo() {
     const amb = ambienteDeExpedicao('EXPEDICAO');
     await amb.painel.abrirPedido('os-200');
 
-    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    const html = telaDoPedido(amb);
     ok(html.indexOf('NA EXPEDIÇÃO') !== -1, 'o botao vira comprovante');
     ok(html.indexOf('já entregue') !== -1, 'dizendo que o pedido ja saiu');
     ok(html.indexOf('AcabamentoPainel.expedir(') === -1,
@@ -4314,8 +4370,8 @@ async function oRecorteDescobreOSetorPeloProdutoDeOrigem() {
        comLaser.slice(0, 300));
     ok(comLaser.indexOf('1/1 mod.') !== -1,
        'e a linha conta so o modelo do LASER', comLaser.slice(0, 600));
-    ok(comLaser.indexOf('Em acabamento') === -1 && comLaser.indexOf('Pronto') !== -1,
-       'com o selo do LASER, que esta pronto');
+    ok(comLaser.indexOf('Em acabamento') === -1 && comLaser.indexOf('Revisado') !== -1,
+       'com o selo do LASER, que esta revisado');
 
     amb.painel.setFiltroSetor('LASER');    // apaga
     amb.painel.setFiltroSetor('PVC');
@@ -4352,7 +4408,7 @@ async function oPedidoQueChegaDepoisGanhaEstagio() {
 
     ok(listaDo(amb, 'geral').indexOf('>500<') !== -1,
        'o pedido que chegou depois esta na lista');
-    ok(listaDo(amb, 'geral').indexOf('Pronto') !== -1,
+    ok(listaDo(amb, 'geral').indexOf('Revisado') !== -1,
        'com o estagio que veio do banco, e nao com o derivado da impressao');
     ok(amb.painel._regras.faltamEstagiosNaLista() === false,
        'e o mapa passa a cobrir a lista inteira');
