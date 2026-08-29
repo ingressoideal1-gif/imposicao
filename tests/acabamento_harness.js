@@ -361,11 +361,18 @@ function montarAmbiente() {
                 const filtros = {};
                 const remocao = {
                     eq: (c, v) => { filtros[c] = v; return remocao; },
+                    // `.in('id', [...])` e o caminho de quem tira VARIOS de uma
+                    // vez -- o modelo repartido que sai de Pronto.
+                    in: (c, vs) => { filtros[c] = { dentro: (vs || []).map(String) }; return remocao; },
                     then: (res, rej) => {
                         // Dois caminhos de exclusao: o volume inteiro
                         // (`volume_id`) e UM registro (`id`), que e o "Tirar".
                         self._itensDeVolume = self._itensDeVolume.filter(i => {
-                            if (filtros.id !== undefined) return String(i.id) !== String(filtros.id);
+                            if (filtros.id !== undefined) {
+                                return filtros.id && filtros.id.dentro
+                                    ? filtros.id.dentro.indexOf(String(i.id)) === -1
+                                    : String(i.id) !== String(filtros.id);
+                            }
                             return String(i.volume_id) !== String(filtros.volume_id);
                         });
                         self._volumesGravados.push({ tipo: 'tirar', filtros: { ...filtros } });
@@ -3788,6 +3795,199 @@ async function quemAssinaOModeloSaiDosRegistros() {
        'e registro sem dono nenhum nao carimba ninguem');
 }
 
+// ─── 12. O modelo PRONTO ja esta alocado (29/08/2026) ───────────────────────
+//
+// Regra do usuario, olhando a tela publicada:
+//
+//   "pedidos marcados prontos, ja estao alocados a um volume, nao podem
+//    oferecer opcao de serem adicionados a outros volumes, precisam sair do
+//    status de pronto para liberar o checkbox, e ao sair de pronto sai do
+//    volume e atualiza peso do volume. modelos marcados prontos vao para final
+//    da lista"
+//
+// E, logo depois: "ao excluir modelos de um volume, peso do volume deve
+// atualizar".
+
+async function prontoNaoOfereceCaixaDeMarcar() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+
+    const itens = amb.janela.state.osItens['os-200'];
+    ok(itens[0].acabamento_status === 'Pronto', 'o modelo ficou Pronto ao entrar inteiro');
+    ok(amb.painel._regras.marcavelNaEscolha(itens[0]) === false,
+       'e deixou de ser marcavel -- ele ja esta alocado');
+    ok(amb.painel._regras.marcavelNaEscolha(itens[1]) === true,
+       'enquanto o que nao esta pronto continua marcavel');
+
+    // E o clique nao passa nem por fora da tela.
+    amb.painel.marcarModelo(3001);
+    ok(!amb.painel._regras.marcadoNaEscolha(itens[0]),
+       'marcar um Pronto pelo console tambem nao faz nada');
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('Este modelo está PRONTO.') !== -1,
+       'a caixa travada diz por que esta travada');
+    ok(html.indexOf('tire-o de Pronto') !== -1,
+       'e diz o que fazer para sair dela -- toda trava daqui tem saida');
+    ok(html.indexOf('Ele está no volume V1.') !== -1,
+       'dizendo tambem em qual volume ele esta');
+}
+
+async function sairDeProntoTiraDoVolumeEAtualizaOPeso() {
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.confirm = () => true;
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const volumeId = amb.banco._volumesDoBanco[0].id;
+
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 28.6, 'o volume somava os dois');
+
+    await amb.painel.mudarEstagio(3001, 'os-200', 'Em acabamento');
+
+    const dentro = registrosDoBanco(amb, volumeId);
+    ok(dentro.length === 1 && Number(dentro[0].modelo_id) === 3002,
+       'sair de Pronto tirou o modelo do volume', JSON.stringify(dentro.map(r => r.modelo_id)));
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 2.6,
+       'e o peso do volume acompanhou', String(amb.banco._volumesDoBanco[0].peso_kg));
+    ok(amb.painel._regras.volumesDoSetor('LASER')[0].peso === 2.6,
+       'a tela le a soma nova');
+
+    const status = amb.banco._gravacoes.filter(g => g.payload
+        && g.payload.acabamento_status !== undefined && String(g.valor) === '3001');
+    ok(status.length && status[status.length - 1].payload.acabamento_status === 'Em acabamento',
+       'e o estagio mudou', JSON.stringify(status.map(g => g.payload.acabamento_status)));
+
+    // O peso do setor tambem: ele e a soma dos volumes.
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 2.6,
+       'o peso do setor encolheu junto', String(amb.banco._setoresDoBanco[0].peso_real_kg));
+
+    // E a caixa de marcar voltou.
+    const itens = amb.janela.state.osItens['os-200'];
+    ok(amb.painel._regras.marcavelNaEscolha(itens[0]) === true,
+       'sair de Pronto liberou o checkbox de novo');
+}
+
+async function oModeloRepartidoSaiDeTodosOsVolumes() {
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.confirm = () => true;
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const v1 = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10,40',
+                           responsavel: 'Bernardo Farias' });
+    await amb.painel.novoVolume('LASER', 200);
+    const v2 = amb.banco._volumesDoBanco[1].id;
+    await registrar(amb, { um: 3001, volumeId: v2, qtds: { 3001: '3000' }, peso: '15,60',
+                           responsavel: 'Cesar Almeida' });
+
+    await amb.painel.mudarEstagio(3001, 'os-200', 'Impresso');
+
+    ok(registrosDoBanco(amb, v1).length === 0 && registrosDoBanco(amb, v2).length === 0,
+       'o modelo repartido sai dos DOIS volumes');
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 0
+       && Number(amb.banco._volumesDoBanco[1].peso_kg) === 0,
+       'e os dois pesos zeram',
+       amb.banco._volumesDoBanco.map(v => v.peso_kg).join(' / '));
+    ok(!Number(amb.banco._setoresDoBanco[0].peso_real_kg),
+       'com todos os volumes vazios, o peso do setor tambem se apaga',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function cancelarASaidaDeProntoNaoMudaNada() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const volumeId = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+
+    amb.janela.confirm = () => false;
+    const antes = amb.banco._gravacoes.length;
+    await amb.painel.mudarEstagio(3001, 'os-200', 'Em acabamento');
+
+    ok(registrosDoBanco(amb, volumeId).length === 1, 'cancelar deixa o registro no volume');
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 26, 'e o peso do volume onde estava');
+    ok(amb.banco._gravacoes.length === antes,
+       'e o estagio NAO muda -- senao o modelo sairia de Pronto continuando dentro do volume');
+    ok(amb.janela.state.osItens['os-200'][0].acabamento_status === 'Pronto',
+       'o card continua Pronto');
+}
+
+async function tirarUmModeloAtualizaOPesoDoVolume() {
+    // "ao excluir modelos de um volume, peso do volume deve atualizar" --
+    // agora pelo botao Tirar da janela do volume, que e o outro caminho.
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.confirm = () => true;
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const volumeId = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
+
+    const alvo = registrosDoBanco(amb, volumeId).find(r => Number(r.modelo_id) === 3002);
+    await amb.painel.tirarDoVolume(volumeId, alvo.id);
+
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 26,
+       'tirar um modelo desconta o peso dele do volume',
+       String(amb.banco._volumesDoBanco[0].peso_kg));
+    ok(amb.painel._regras.volumesDoSetor('LASER')[0].peso === 26, 'e a tela mostra a soma nova');
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 26,
+       'o peso do setor tambem', String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function oPesoDoVolumeVelhoNaoEChutado() {
+    // Volume anterior a 29/08/2026: o peso morava no volume, e os registros nao
+    // tinham peso nenhum. Subtrair partiria do numero errado -- por isso o
+    // espelho e RECALCULADO do que sobrou.
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.confirm = () => true;
+    amb.banco._volumesDoBanco = [{ id: 'velho', id_int: 200, setor: 'LASER', numero: 1, peso_kg: 9.5 }];
+    amb.banco._itensDeVolume = [
+        { id: 'r-velho-1', volume_id: 'velho', modelo_id: 3001, qtd: 5000, peso_kg: null },
+        { id: 'r-velho-2', volume_id: 'velho', modelo_id: 3002, qtd: 500, peso_kg: null },
+    ];
+    await amb.painel.abrirPedido('os-200');
+
+    ok(amb.painel._regras.volumesDoSetor('LASER')[0].peso === 9.5,
+       'sem peso por registro, vale o que a balanca leu na epoca');
+
+    await amb.painel.tirarDoVolume('velho', 'r-velho-1');
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 0,
+       'tirado o registro, o espelho vem do que sobrou -- e o que sobrou nao tem peso',
+       String(amb.banco._volumesDoBanco[0].peso_kg));
+}
+
+async function osProntosVaoParaOFimDaLista() {
+    const amb = ambienteDeVolumesComPeso();
+    const r = amb.painel._regras;
+
+    const ordenado = r.ordenarProntosNoFim([
+        { id: 1, acabamento_status: 'Pronto' },
+        { id: 2, acabamento_status: 'Em acabamento' },
+        { id: 3, acabamento_status: 'Pronto' },
+        { id: 4, acabamento_status: 'Impresso' },
+    ]);
+    ok(ordenado.map(i => i.id).join(',') === '2,4,1,3',
+       'os prontos vao para o fim, e o resto fica na ordem em que estava',
+       ordenado.map(i => i.id).join(','));
+    ok(JSON.stringify(r.ordenarProntosNoFim([])) === '[]', 'lista vazia nao quebra');
+
+    // E na tela: o 3001 fica Pronto e desce para baixo do 3002.
+    await amb.painel.abrirPedido('os-200');
+    const antes = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(antes.indexOf('Credencial VIP') < antes.indexOf('Credencial Staff'),
+       'antes, o primeiro do pedido vem primeiro');
+
+    await amb.painel.novoVolume('LASER', 200);
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+
+    const depois = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(depois.indexOf('Credencial VIP') > depois.indexOf('Credencial Staff'),
+       'depois de Pronto, ele desce para o fim da lista do produto');
+}
+
 (async function () {
     await pedidoSemVolumeSegueOFluxoDeSempre();
     await criarVolumeVazioLigaATravaDoPronto();
@@ -3825,6 +4025,15 @@ async function quemAssinaOModeloSaiDosRegistros() {
     await soExisteVolumeNoVocabulario();
     await asContasDosVolumesSaoPuras();
     await quemAssinaOModeloSaiDosRegistros();
+
+    // O modelo PRONTO ja esta alocado (29/08/2026)
+    await prontoNaoOfereceCaixaDeMarcar();
+    await sairDeProntoTiraDoVolumeEAtualizaOPeso();
+    await oModeloRepartidoSaiDeTodosOsVolumes();
+    await cancelarASaidaDeProntoNaoMudaNada();
+    await tirarUmModeloAtualizaOPesoDoVolume();
+    await oPesoDoVolumeVelhoNaoEChutado();
+    await osProntosVaoParaOFimDaLista();
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════

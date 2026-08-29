@@ -1202,6 +1202,46 @@ pessoa só e com o **nome do setor** quando são várias. A janela avisa antes d
 gravar: *"⚠ um modelo entra em parte — ele continua em acabamento até o resto
 entrar noutro volume."*
 
+### O modelo PRONTO já está alocado
+
+Regra do usuário em 29/08/2026, olhando a tela publicada:
+
+> "pedidos marcados prontos, já estão alocados a um volume, não podem oferecer
+> opção de serem adicionados a outros volumes, precisam sair do status de pronto
+> para liberar o checkbox, e ao sair de pronto sai do volume e atualiza peso do
+> volume. modelos marcados prontos vão para final da lista"
+
+Três coisas, e as três são a mesma ideia — o que está pronto está **fechado**:
+
+- **A caixa de marcar de um modelo Pronto aparece marcada e travada**, em verde.
+  Oferecê-la convidaria a pôr o mesmo material num segundo volume, e a carga
+  contaria duas vezes. O `title` diz em qual volume ele está e como sair:
+  *"Para mexer nele, tire-o de Pronto — o material sai do volume e o peso sai da
+  soma."* `marcavelNaEscolha` recusa também quando alguém chama pelo console.
+- **Sair de Pronto tira o modelo do volume**, com pergunta antes, porque apaga
+  peso já conferido. Um modelo repartido sai de **todos** os volumes em que
+  estava. Cancelar a pergunta cancela o clique inteiro: sem isso o modelo sairia
+  de Pronto continuando dentro do volume, que é o estado que a regra existe para
+  impedir.
+- **Os Prontos vão para o fim da lista** de cada produto (`ordenarProntosNoFim`,
+  pura e estável). De pé na estação o operador rola a lista para achar o que
+  falta, e não o que acabou.
+
+### O peso do volume acompanha o que sai dele
+
+> "ao excluir modelos de um volume, peso do volume deve atualizar"
+
+Vale para os dois caminhos — o **Tirar** da janela do volume e a saída do
+Pronto. O espelho `producao_volumes.peso_kg` é **recalculado do que sobrou**
+(`atualizarPesoDoVolume`), e não subtraído do total: num volume anterior a
+29/08/2026 o peso pode vir do `peso_kg` gravado em vez da soma dos registros, e
+a subtração partiria do número errado.
+
+E o peso do **setor** encolhe junto. Quando o último registro sai e a soma chega
+a zero, o peso do setor é **apagado** em vez de ficar no número velho: num pedido
+com volumes ele é campo de leitura, e um número velho ali seria uma mentira que o
+operador não tem como corrigir.
+
 ### Tirar do volume desfaz as duas coisas
 
 **Tirar** é a saída de quem registrou no volume errado, e ele desfaz o que o

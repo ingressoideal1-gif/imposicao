@@ -765,9 +765,22 @@ def test_a_trava_do_peso_esta_na_unica_porta_do_status():
     js = _ler("frontend/acabamento.js")
 
     i = js.index("mudarEstagio(itemId, osId, valor) {")
-    corpo = js[i:i + 3200]
-    # A trava de 29/08/2026 vem primeiro: num pedido COM volume, o Pronto abre
-    # o registro em vez de gravar.
+    corpo = js[i:js.index("            return gravar(itemId, osId, 'acabamento_status', valor);", i)]
+
+    # Sair de Pronto tira o modelo do volume (29/08/2026), e cancelar a pergunta
+    # cancela o clique: o modelo nao pode sair de Pronto continuando dentro.
+    assert "tirarModeloDosVolumes(item0)" in corpo, (
+        "sair de Pronto precisa tirar o modelo do volume"
+    )
+    assert "if (!await tirarModeloDosVolumes(item0)) return false;" in corpo, (
+        "e cancelar a pergunta tem de cancelar a mudanca de estagio"
+    )
+    assert "atualizarPesoDoSetorPelosVolumes(item0.setor)" in corpo, (
+        "e o peso do setor encolhe junto"
+    )
+
+    # A trava do volume: num pedido COM volume, o Pronto abre o registro em vez
+    # de gravar.
     assert "pedidoTemVolumes()" in corpo, "a trava do volume precisa estar no mudarEstagio"
     assert "abrirRegistro([item])" in corpo, "e precisa abrir a janela do registro"
     # E a de 23/08 continua, para o pedido SEM volume -- o "pesado ao final".
@@ -1137,9 +1150,15 @@ def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
     assert "estimadoDoEmbalado(alvo)" in corpo, (
         "a regua compara com o que JA ESTA embalado, e nao com a tiragem inteira"
     )
-    assert "if (!(soma > 0)) return" in corpo, (
-        "sem caixa pesada nao ha o que copiar -- gravar zero apagaria um peso "
-        "digitado a mao"
+    assert "if (!lista.length) return;" in corpo, (
+        "setor SEM volume nao tem o que copiar -- gravar zero apagaria um peso "
+        "digitado a mao no box"
+    )
+    # COM volume e soma zero e outra coisa: o ultimo registro saiu, o peso E
+    # zero, e o campo virou leitura -- o numero velho seria uma mentira que o
+    # operador nao tem como corrigir.
+    assert "if (tinha) await gravarPeso(tela.volumesDoPedido, alvo, '');" in corpo, (
+        "com volume e soma zero, o peso do setor se apaga"
     )
     assert "!podeEditar()" in corpo, "quem so le nao dispara escrita nenhuma"
 

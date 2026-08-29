@@ -2060,6 +2060,11 @@
             if (!grupos[prodId]) grupos[prodId] = [];
             grupos[prodId].push(item);
         });
+        // E dentro de cada produto, os PRONTOS por último (regra do usuário,
+        // 29/08/2026). O que já saiu da mesa não pode ficar na frente do que
+        // ainda está nela — de pé na estação, o operador rola a lista para
+        // achar o que falta, e não o que acabou.
+        Object.keys(grupos).forEach(k => { grupos[k] = ordenarProntosNoFim(grupos[k]); });
 
         const html = Object.keys(grupos).map(prodId => {
             const doGrupo = grupos[prodId];
@@ -4134,6 +4139,18 @@
         return estimadoDoVolume(registros, modelosDoPedidoAberto()).kg;
     }
 
+    /**
+     * Os modelos com os PRONTOS no fim, sem mexer no resto da ordem.
+     *
+     * `sort` é estável em JS desde o ES2019, então o que não é Pronto continua
+     * exatamente na ordem em que o pedido o entregou — a mesma da fila. Pura,
+     * para o teste.
+     */
+    function ordenarProntosNoFim(itens) {
+        return (itens || []).slice().sort((a, b) =>
+            (estagioDoModelo(a) === 'Pronto' ? 1 : 0) - (estagioDoModelo(b) === 'Pronto' ? 1 : 0));
+    }
+
     /** O nome do modelo como o card o escreve. */
     function nomeDoModelo(item) {
         return (item && (item.produto || item.nome_modelo)) || 'Modelo';
@@ -4368,10 +4385,18 @@
         return '';
     }
 
-    /** Este modelo pode ser marcado agora? */
+    /**
+     * Este modelo pode ser marcado agora?
+     *
+     * Modelo PRONTO fica de fora (regra do usuário, 29/08/2026): ele já está
+     * alocado a um volume, e oferecer a caixa de marcar convidaria a pô-lo num
+     * segundo — o mesmo material contado duas vezes na carga. A saída é tirá-lo
+     * de Pronto, e aí a caixa volta junto com o material, que sai do volume.
+     */
     function marcavelNaEscolha(item) {
         const setor = normalizar(item && item.setor);
         if (SETORES_DO_BANCO.indexOf(setor) === -1) return false;
+        if (estagioDoModelo(item) === 'Pronto') return false;
         const fixado = setorDaEscolha();
         return !fixado || fixado === setor;
     }
@@ -4410,6 +4435,23 @@
      */
     function caixaDeEscolha(item) {
         if (!podeEditar()) return '';
+
+        // PRONTO: a caixa aparece MARCADA e travada, porque o modelo de fato já
+        // entrou — e o title diz a saída, como toda trava daqui.
+        if (estagioDoModelo(item) === 'Pronto') {
+            const meus = registrosDoModelo(volumesDoSetor(item && item.setor), item && item.id);
+            const onde = meus.length
+                ? ` Ele está ${meus.length === 1 ? 'no volume' : 'nos volumes'} `
+                  + meus.map(x => 'V' + x.volume.numero).join(', ') + '.'
+                : '';
+            return `<span title="Este modelo está PRONTO.${esc(onde)} Para mexer nele, tire-o de Pronto — o material sai do volume e o peso sai da soma."
+                          style="width: 22px; height: 22px; min-width: 22px; border-radius: 6px;
+                                 background: rgba(34,197,94,0.20); border: 1px solid rgba(34,197,94,0.45);
+                                 color: #22c55e; display: inline-flex; align-items: center;
+                                 justify-content: center; font-weight: 800; font-size: 0.9rem;
+                                 cursor: not-allowed;">✓</span>`;
+        }
+
         if (!marcavelNaEscolha(item)) {
             return `<span title="Um volume não mistura setores — a escolha em curso é do setor ${esc(nomeDoSetor(setorDaEscolha()))}"
                           style="width: 22px; height: 22px; min-width: 22px; border-radius: 6px;
@@ -5647,10 +5689,7 @@
                 .from(TABELA_DE_ITENS_DO_VOLUME).delete().eq('id', registroId);
             if (error) throw error;
 
-            const gramas = Math.round((v.peso || 0) * 1000)
-                         - Math.round(((reg.peso === null || reg.peso === undefined) ? 0 : reg.peso) * 1000);
-            await supabaseClient.from(TABELA_DE_VOLUMES)
-                .update({ peso_kg: Math.max(0, gramas) / 1000 }).eq('id', v.id);
+            await atualizarPesoDoVolume(v, [registroId]);
 
             if (item && estagioDoModelo(item) === 'Pronto') {
                 await gravar(item.id, tela.pedidoAberto, 'acabamento_status', 'Em acabamento');
@@ -5664,6 +5703,77 @@
             console.error('[acabamento] erro ao tirar do volume:', e);
             avisar(`Não deu para tirar do volume: ${(e && e.message) ? e.message : e}`, 'error');
         }
+    }
+
+    /**
+     * Reescreve `producao_volumes.peso_kg` com a soma dos registros que SOBRAM.
+     *
+     * "ao excluir modelos de um volume, peso do volume deve atualizar" — o
+     * usuário, 29/08/2026. A tela já lia a soma dos registros, mas o espelho no
+     * banco precisa acompanhar: é ele que a estação com o painel anterior lê, e
+     * é ele que sobra se alguém consultar a tabela por fora.
+     *
+     * Recalculado do que sobrou, e não subtraído do total: num volume anterior
+     * à migração o `peso` pode vir do `peso_kg` gravado em vez da soma, e aí a
+     * subtração partiria do número errado.
+     */
+    async function atualizarPesoDoVolume(volume, idsQueSairam) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+        const fora = (idsQueSairam || []).map(String);
+        const gramas = (volume.registros || [])
+            .filter(r => fora.indexOf(String(r.id)) === -1)
+            .reduce((soma, r) => soma + Math.round(((r.peso === null || r.peso === undefined) ? 0 : r.peso) * 1000), 0);
+        const { error } = await supabaseClient.from(TABELA_DE_VOLUMES)
+            .update({ peso_kg: gramas / 1000 }).eq('id', volume.id);
+        if (error) throw error;
+    }
+
+    /**
+     * Tira TODOS os registros de um modelo dos volumes do setor dele.
+     *
+     * É o que acontece quando o modelo sai de Pronto (regra do usuário,
+     * 29/08/2026): "ao sair de pronto sai do volume e atualiza peso do volume".
+     * Um modelo pode estar repartido em vários volumes, e todos eles precisam
+     * devolver o material e encolher o peso.
+     *
+     * Devolve `false` quando o operador cancela — e aí quem chamou não muda o
+     * estágio tampouco, senão o modelo sairia de Pronto continuando no volume.
+     * Sem registro nenhum não há o que perguntar: devolve `true` na hora.
+     */
+    async function tirarModeloDosVolumes(item) {
+        const lista = volumesDoSetor(item && item.setor);
+        const meus = registrosDoModelo(lista, item && item.id);
+        if (!meus.length) return true;
+
+        const kg = meus.reduce((soma, x) => soma
+            + Math.round(((x.registro.peso === null || x.registro.peso === undefined) ? 0 : x.registro.peso) * 1000), 0) / 1000;
+        const quais = meus.map(x => 'V' + x.volume.numero).join(', ');
+        const pergunta = `Tirar ${nomeDoModelo(item)} de Pronto?`
+            + ` Ele sai ${meus.length === 1 ? 'do volume' : 'dos volumes'} ${quais}`
+            + (kg > 0 ? `, e ${kgParaTexto(kg)} kg saem da soma.` : '.');
+        const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
+        const ok = (caixa && typeof caixa.perguntar === 'function')
+            ? await caixa.perguntar(pergunta, { rotulo: 'Tirar de Pronto', perigo: true })
+            : window.confirm(pergunta);
+        if (!ok) return false;
+
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+            throw new Error('esta tela está sem conexão com o banco');
+        }
+        const ids = meus.map(x => String(x.registro.id));
+        const { error } = await supabaseClient
+            .from(TABELA_DE_ITENS_DO_VOLUME).delete().in('id', ids);
+        if (error) throw error;
+
+        // Um volume por vez: o modelo pode estar repartido, e cada um tem a sua
+        // soma para refazer.
+        const tocados = [];
+        meus.forEach(x => { if (tocados.indexOf(x.volume) === -1) tocados.push(x.volume); });
+        for (const v of tocados) await atualizarPesoDoVolume(v, ids);
+
+        await carregarVolumes(tela.volumesDoPedido);
+        avisar(`${nomeDoModelo(item)} saiu ${tocados.length === 1 ? 'do volume' : 'dos volumes'} ${quais}.`, 'success');
+        return true;
     }
 
     /** Os registros vão junto, pelo `on delete cascade` da tabela. */
@@ -5731,10 +5841,23 @@
         const alvo = normalizar(setor);
         if (!podeEditar() || !haComoGravarPeso()) return;
 
-        const soma = somaDosVolumes(volumesDoSetor(alvo));
-        // Nenhuma caixa foi à balança ainda: não há o que copiar. Gravar zero
-        // aqui apagaria um peso que alguém pode ter digitado à mão no box.
-        if (!(soma > 0)) return;
+        const lista = volumesDoSetor(alvo);
+        const soma = somaDosVolumes(lista);
+        // Sem volume nenhum não há o que copiar: gravar zero aqui apagaria um
+        // peso que alguém digitou à mão no box.
+        //
+        // COM volume e soma zero é outra coisa: o último registro acabou de
+        // sair, o peso do setor É zero, e deixar o número velho num campo que o
+        // operador não pode mais editar seria uma mentira que ele não tem como
+        // corrigir. Apagar é o que devolve a tela à verdade.
+        if (!lista.length) return;
+        if (!(soma > 0)) {
+            const atualVazio = tela.pesos[alvo];
+            const tinha = atualVazio && atualVazio.peso !== null && atualVazio.peso !== undefined
+                && Number(atualVazio.peso) > 0;
+            if (tinha) await gravarPeso(tela.volumesDoPedido, alvo, '');
+            return;
+        }
 
         const linha = tela.pesos[alvo];
         const atual = (linha && linha.peso !== null && linha.peso !== undefined)
@@ -6846,7 +6969,7 @@
             render();
         },
 
-        mudarEstagio(itemId, osId, valor) {
+        async mudarEstagio(itemId, osId, valor) {
             // Aqui, e não só nos botões: botão cinza não impede ninguém de
             // chamar a função pelo console, e esta é a única porta por onde o
             // status do acabamento é gravado.
@@ -6855,7 +6978,32 @@
                 if (aviso) {
                     aviso('Escolha primeiro o responsável deste modelo — o status só muda com um nome.', 'warning');
                 }
-                return Promise.resolve(false);
+                return false;
+            }
+
+            // SAIR do Pronto tira o modelo do volume (regra do usuário,
+            // 29/08/2026): "ao sair de pronto sai do volume e atualiza peso do
+            // volume". As duas coisas andam juntas — deixar o material no
+            // volume com o modelo em acabamento faria a carga contar peso de
+            // material que voltou para a mesa.
+            //
+            // E o estágio só muda se a saída do volume acontecer: cancelar a
+            // pergunta cancela o clique inteiro, senão o modelo sairia de Pronto
+            // continuando dentro do volume.
+            if (String(valor).toLowerCase() !== 'pronto') {
+                const s0 = estado();
+                const itens0 = (s0.osItens && s0.osItens[osId]) || [];
+                const item0 = itens0.find(i => String(i.id) === String(itemId));
+                if (item0 && estagioDoModelo(item0) === 'Pronto') {
+                    try {
+                        if (!await tirarModeloDosVolumes(item0)) return false;
+                    } catch (e) {
+                        console.error('[acabamento] erro ao tirar o modelo do volume:', e);
+                        avisar(`Não deu para tirar do volume: ${(e && e.message) ? e.message : e}`, 'error');
+                        return false;
+                    }
+                    await atualizarPesoDoSetorPelosVolumes(item0.setor);
+                }
             }
 
             // O VOLUME antes do Pronto (regra do usuário, 29/08/2026): num
@@ -6872,7 +7020,7 @@
                 const s = estado();
                 const itens = (s.osItens && s.osItens[osId]) || [];
                 const item = itens.find(i => String(i.id) === String(itemId));
-                if (item && abrirRegistro([item])) return Promise.resolve(false);
+                if (item && abrirRegistro([item])) return false;
             }
 
             // O PESO antes do último Pronto do setor (regra do usuário,
@@ -6891,7 +7039,7 @@
                         numeroDoPedido: os ? os.numero : osId,
                     };
                     abrirPopupDoPeso();
-                    return Promise.resolve(false);
+                    return false;
                 }
             }
 
@@ -7040,6 +7188,7 @@
             faltaEmbalar,
             proximoNumeroDeVolume,
             faltandoNoSetor,
+            ordenarProntosNoFim,
             gramasPorUnidadeDaLinha,
             gramasPorUnidadeDoModelo,
             estimadoDoVolume,
