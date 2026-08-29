@@ -28149,7 +28149,26 @@ function ligarRelogioDaLista() {
 //
 // Arte em PDF nao vira imagem aqui: sai um icone que abre o arquivo.
 // Rasterizar a arte do cliente esta fora de cogitacao neste projeto.
+
 function previewDaArteDoPedidoHtml(os) {
+    /**
+     * A imagem que entra quando nenhum modelo do pedido tem arte para mostrar.
+     *
+     * Escolhida pelo usuario em 29/08/2026, e servida do bucket publico
+     * `app-imagens`. Antes daqui saia um quadro cinza com o emoji da moldura,
+     * que nas duas listas (Producao e Acabamento) parecia falha de
+     * carregamento — a imagem diz, com a marca da casa, que o que falta e' a
+     * arte.
+     *
+     * Fica DENTRO da funcao de proposito: o
+     * `tests/lista_arte_enxuta_harness.js` recorta esta funcao do script.js e a
+     * roda sozinha, entao tudo o que ela usa tem de morar aqui. Uma constante
+     * la fora quebra o teste com `ReferenceError`.
+     */
+    const IMAGEM_SEM_ARTE =
+        'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public'
+        + '/app-imagens/1788032373050_sem_foto.jpg';
+
     const osItensList = (state.osItens && state.osItens[os.id]) || [];
     // Preview da arte do modelo de número mais baixo
     const numOsPreview = parseInt(os.numero);
@@ -28176,10 +28195,14 @@ function previewDaArteDoPedidoHtml(os) {
         }
     }
 
+    // `object-fit: contain` sobre `#084065`: o arquivo tem 394x157 (2,51:1) e a
+    // caixa da lista tem 126x42 (3:1), entao `cover` cortaria as pontas dos
+    // icones; e `#084065` e' o proprio fundo do arquivo, o que faz a sobra dos
+    // lados desaparecer em vez de virar moldura.
     let previewHtml = `
-        <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
-            🖼️
-        </div>
+        <img src="${IMAGEM_SEM_ARTE}" alt="Sem arte cadastrada"
+             style="width: 126px; height: 42px; object-fit: contain; background: #084065; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); display: block; margin: 0 auto;"
+             title="Sem arte cadastrada" />
     `;
     if (previewSrc) {
         const isPdf = previewSrc.startsWith('data:application/pdf') || previewSrc.includes('JVBERi') || previewSrc.toLowerCase().endsWith('.pdf');

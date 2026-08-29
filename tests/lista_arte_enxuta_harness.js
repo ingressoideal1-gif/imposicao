@@ -223,8 +223,13 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
     }
     const base = { modelosGlobais: {}, osItens: {}, todasArtes: [] };
 
+    // Pedido sem arte nenhuma mostra a imagem "sem foto" da casa, escolhida pelo
+    // usuario em 29/08/2026. Antes era um quadro cinza com o emoji da moldura,
+    // que nas duas listas parecia falha de carregamento.
     const semArte = preview(base, { id: 'a', numero: 300 });
-    ok(semArte.indexOf('Sem arte cadastrada') > 0, 'pedido sem arte mostra a moldura vazia', semArte.slice(0, 80));
+    ok(semArte.indexOf('Sem arte cadastrada') > 0, 'pedido sem arte se anuncia como tal', semArte.slice(0, 80));
+    ok(semArte.indexOf('sem_foto.jpg') > 0,
+        'e o lugar vazio e a imagem "sem foto" do bucket, nao um emoji', semArte.slice(0, 120));
 
     const comImagem = preview(Object.assign({}, base, {
         osItens: { a: [{ modelo: 1, amostra_arte_base64: 'data:image/png;base64,AAA' }] },
