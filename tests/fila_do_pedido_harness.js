@@ -158,6 +158,73 @@ function cenario(quantos, comCamarote) {
        'e o zoom de 0,8 saiu do style.css: a fonte grande da fila volta ao tamanho de verdade',
        medida);
 
+    // ── 1b. UMA escala so na tela, a 100% ───────────────────────────────────
+    //
+    // Tirado o zoom de 0,8, a fila passou a desenhar 25% maior do que sempre
+    // foi, e o usuario descreveu a distorcao: a fila ficava melhor a 80% e a
+    // janela de visualizacao melhor a 100%. Duas escalas na mesma tela.
+    //
+    // A fila continua sendo a parte de fonte MAIOR da pagina — ela e' lida em
+    // pe, na frente da impressora —, mas dentro de uma distancia que convive
+    // com a janela no mesmo 100%.
+    const escala = await aba.evaluate(() => {
+        const px = el => parseFloat(getComputedStyle(el).fontSize);
+        return {
+            campo: px(document.querySelector('#ped-os-queue-body tbody input[type="number"]')),
+            seletor: px(document.querySelector('#ped-os-queue-body tbody select')),
+            nome: px(document.querySelector('#ped-os-queue-body tbody td[title="Nome do Modelo"]')),
+            cabecalho: px(document.querySelector('#ped-os-queue-body thead th')),
+        };
+    });
+    ok(escala.campo <= 16 && escala.seletor <= 16,
+       'os campos da fila cabem na escala de 100% — a 1,2rem de antes so' + ' fechava com o zoom de 0,8',
+       escala);
+    ok(escala.campo >= 14 && escala.nome >= 13,
+       'e continuam maiores que os controles da janela: a fila e lida em pe, na frente da impressora',
+       escala);
+
+    // ── 1c. O nome do modelo e' a coluna mais larga ────────────────────────
+    //
+    // Pedido do usuario: Qtd, N. inicial, N. final, Bloco e Cor a 65% da
+    // largura que tinham, e o que sobrar vai para o nome — que e' por onde ele
+    // reconhece a peca, e vinha cortado.
+    const colunas = await aba.evaluate(() => {
+        const larg = {};
+        document.querySelectorAll('#ped-os-queue-body thead th').forEach(t => {
+            larg[t.textContent.trim() || 'marcar'] = Math.round(t.getBoundingClientRect().width);
+        });
+        return larg;
+    });
+    ok(colunas['Modelo'] === Math.max(...Object.values(colunas)),
+       'o nome do modelo e a coluna mais larga da fila', colunas);
+    for (const campo of ['Qtd', 'N. inicial', 'N. final', 'Bloco']) {
+        ok(colunas[campo] < colunas['Modelo'] / 4,
+           `a coluna ${campo} guarda tres ou quatro digitos e nao ocupa mais que isso`, colunas);
+    }
+    ok(colunas['Cor'] < colunas['Numeração'],
+       'e a Cor cabe em menos espaco que a Numeracao, cujo nome e longo', colunas);
+
+    // ── 1d. O quadro de cada modelo: cantos redondos e respiro entre eles ───
+    const quadro = await aba.evaluate(() => {
+        const linhas = document.querySelectorAll('#ped-os-queue-body tbody tr.fila-linha');
+        const a = linhas[0].getBoundingClientRect(), b = linhas[1].getBoundingClientRect();
+        const raio = el => parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+        return {
+            raioDaLinha: raio(linhas[0]),
+            raioDaPrimeiraCelula: raio(linhas[0].querySelector('td:first-child')),
+            raioDaUltimaCelula: parseFloat(
+                getComputedStyle(linhas[0].querySelector('td:last-child')).borderTopRightRadius) || 0,
+            distancia: Math.round(b.top - a.bottom),
+        };
+    });
+    ok(quadro.raioDaLinha >= 8, 'o quadro de cada modelo tem os cantos arredondados', quadro);
+    ok(quadro.raioDaPrimeiraCelula >= 8 && quadro.raioDaUltimaCelula >= 8,
+       'nas duas pontas — com border-collapse separate, quem desenha os cantos sao as celulas',
+       quadro);
+    ok(quadro.distancia >= 10,
+       'e ha respiro entre um modelo e o seguinte: as linhas sao quadros, nao uma grade colada',
+       quadro);
+
     // ── 2. O cabecalho de coluna existe, e os rotulos sairam das linhas ─────
     const cabecalho = await aba.evaluate(() => {
         const ths = Array.from(document.querySelectorAll('#ped-os-queue-body thead th')).map(t => t.textContent.trim());

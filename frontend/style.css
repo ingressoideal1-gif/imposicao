@@ -4174,13 +4174,27 @@ input[type=number] {
 
    Moram no CSS, e nao no style inline da linha, porque trocar de modelo aberto
    passou a ser uma troca de CLASSE em duas linhas, sem redesenhar a fila: com
-   52 modelos o redesenho custa 160 ms e a troca de classe custa 3. */
-tr.fila-linha            { outline: 1px solid #918f8c; }
+   52 modelos o redesenho custa 160 ms e a troca de classe custa 3.
+
+   O quadro de cada modelo tem os cantos arredondados (29/08/2026, pedido do
+   usuario). O raio precisa ser dito em TRES lugares: no `tr`, que e' quem
+   pinta o fundo e recebe o contorno, e nas duas celulas das pontas, que sao
+   quem de fato desenha os cantos da linha — com `border-collapse: separate`,
+   o `<tr>` sozinho nao arredonda as extremidades. */
+tr.fila-linha            { outline: 1px solid #918f8c; border-radius: 10px; }
 tr.fila-linha.marcada    { outline: 2pt solid #f97316; }
 tr.fila-linha.aberta     { outline: 2pt solid #3b82f6; }
 tr.fila-linha.marcada.aberta {
     outline: 2pt solid #f97316;
     box-shadow: inset 5px 0 0 0 #3b82f6;
+}
+tr.fila-linha > td:first-child {
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+tr.fila-linha > td:last-child {
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
 }
 
 /* A linha que hospeda a janela de visualizacao dentro da caixa do produto.

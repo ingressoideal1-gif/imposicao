@@ -4278,12 +4278,28 @@ function renderPedOSQueue() {
 
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
-    const inputStyle = 'background:#030a00; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
-    const selectStyle = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; color: #ffffff; padding: 8px 12px; font-size: 1.15rem; width: 100%; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; cursor: pointer; text-align: center; text-align-last: center; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: all 0.2s ease;';
-    const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 8px 12px; font-size: 1.15rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600; opacity: 0.6;';
+    // ── A ESCALA DA FILA (29/08/2026) ───────────────────────────────────────
+    //
+    // Estes tamanhos foram desenhados quando a tela abria com `zoom: 0.8`: a
+    // fonte de 1,2rem chegava aos olhos como ~15 px. Tirado o zoom, a fila
+    // passou a desenhar 25% maior do que sempre foi, e o usuario descreveu a
+    // distorcao com precisao: a fila ficava melhor a 80%, e a janela de
+    // visualizacao — que usa os tamanhos do proprio aplicativo — ficava melhor
+    // a 100%. Duas escalas na mesma tela, e nenhum zoom que servisse as duas.
+    //
+    // Entao a escala desceu para onde ela ja estava DE FATO na tela: cada
+    // medida daqui e' a de antes multiplicada por 0,8. A fila continua sendo a
+    // parte de fonte maior da pagina (0,96rem contra os 0,8rem da janela),
+    // porque ela e' lida em pe, na frente da impressora — o que mudou e' que
+    // agora as duas convivem no mesmo 100%.
+    //
+    // NAO devolva estes numeros ao tamanho antigo sem devolver o zoom junto.
+    const inputStyle = 'background:#030a00; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:6px 8px; font-size:0.96rem; width:100%;';
+    const selectStyle = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; color: #ffffff; padding: 6px 9px; font-size: 0.92rem; width: 100%; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; cursor: pointer; text-align: center; text-align-last: center; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: all 0.2s ease;';
+    const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 6px 9px; font-size: 0.92rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600; opacity: 0.6;';
 
-    const selectHeaderStyle = 'background:#1e293b; border:1px solid #918f8c; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
-    const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
+    const selectHeaderStyle = 'background:#1e293b; border:1px solid #918f8c; border-radius:4px; color:#f1f5f9; padding:3px 7px; font-size:0.78rem; cursor:pointer;';
+    const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:3px 7px; font-size:0.78rem; cursor:not-allowed;';
 
     let html = '';
 
@@ -4376,7 +4392,7 @@ function renderPedOSQueue() {
         const resumoDoProduto = qtdTotalProduto > 0 ? `
                     <span style="display:inline-flex; align-items:center; gap:8px;
                                  padding:3px 14px; background:#1e293b; border:1px solid #918f8c;
-                                 border-radius:6px; font-size:0.95rem; font-weight:700; white-space:nowrap;"
+                                 border-radius:6px; font-size:0.8rem; font-weight:700; white-space:nowrap;"
                           title="Soma das quantidades de todos os modelos deste produto: quanto tem, quanto já saiu e quanto falta">
                         <span style="color:#94a3b8; font-weight:600;">Total:</span>
                         <span style="color:#ffffff;">${qtdTotalProduto.toLocaleString('pt-BR')}</span>
@@ -4464,18 +4480,31 @@ function renderPedOSQueue() {
         const temComum = groupItens.some(it => !modeloEhCamarote(it));
         const comRotulosNaLinha = temCamarote && temComum;
 
+        // ── A REPARTICAO DA LARGURA (29/08/2026) ────────────────────────────
+        //
+        // Pedido do usuario: os campos de Qtd, N. inicial, N. final, Bloco e Cor
+        // a 65% da largura que tinham, e o que sobrar vai para o NOME DO MODELO.
+        //
+        // A conta faz sentido: aqueles campos guardam numeros de tres ou quatro
+        // digitos e nunca precisaram do espaco que ocupavam, enquanto o nome do
+        // modelo — que e' por onde o operador reconhece a peca — vinha cortado.
+        // Os 230 px liberados vao inteiros para ele: 150 px viram 380.
+        const L_NUM = 72;    // era 110 — os quatro campos numericos
+        const L_COR = 124;   // era 190
+        const L_NOME = 380;  // era 150
+
         const th = (txt, largura) =>
-            `<th style="padding:4px 12px; width:${largura}px; font-size:0.78rem; font-weight:700; color:#94a3b8;
+            `<th style="padding:3px 8px; width:${largura}px; font-size:0.72rem; font-weight:700; color:#94a3b8;
                         text-transform:uppercase; letter-spacing:0.06em; text-align:left; white-space:nowrap;">${txt}</th>`;
 
         const cabecalhoDaTabela = comRotulosNaLinha ? '' : `
                     <thead>
                         <tr>
-                            ${th('', 40)}${th('Código', 90)}${th('Modelo', 150)}
+                            ${th('', 34)}${th('Código', 84)}${th('Modelo', L_NOME)}
                             ${temCamarote
-                                ? th('Q_CAM', 110) + th('L_CAM', 110) + th('C_INI', 110) + th('Bloco', 110)
-                                : th('Qtd', 110) + th('N. inicial', 110) + th('N. final', 110) + th('Bloco', 110)}
-                            ${th('Cor', 190)}${th('Numeração', 200)}${th('Verso', 120)}${th('Status', 150)}
+                                ? th('Q_CAM', L_NUM) + th('L_CAM', L_NUM) + th('C_INI', L_NUM) + th('Bloco', L_NUM)
+                                : th('Qtd', L_NUM) + th('N. inicial', L_NUM) + th('N. final', L_NUM) + th('Bloco', L_NUM)}
+                            ${th('Cor', L_COR)}${th('Numeração', 200)}${th('Verso', 120)}${th('Status', 150)}
                         </tr>
                     </thead>`;
 
@@ -4483,7 +4512,7 @@ function renderPedOSQueue() {
         <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}" data-caixa-cor="${chaveDaCaixa}">
             <div class="card-header" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c; display:flex; align-items:center; gap:14px;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1 1 0; min-width:0;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
-                    <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
+                    <h5 class="mb-0" style="color: #facc15; font-size: calc(0.9rem + 2pt); font-weight:bold;">
                         ${nomeReal} ${setorBadge}
                     </h5>
                 </div>
@@ -4491,7 +4520,7 @@ function renderPedOSQueue() {
                 <div style="flex:1 1 0; display:flex; justify-content:flex-end; min-width:0;">${headerDropdowns}</div>
             </div>
             <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue" style="padding: 0 3pt;">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 6pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.85rem; margin:0; width:100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 8pt;">
                     ${cabecalhoDaTabela}
                     <tbody>
         `;
@@ -4596,7 +4625,7 @@ function renderPedOSQueue() {
             // O rotulo dentro da celula so' sobrevive na caixa misturada, onde
             // nao ha cabecalho possivel. Ver o comentario do cabecalho acima.
             const rot = (txt, cor) => comRotulosNaLinha
-                ? `<span style="font-size:1.05rem; font-weight:bold; color:${cor || '#ffffff'}; white-space:nowrap;">${txt}</span>`
+                ? `<span style="font-size:0.84rem; font-weight:bold; color:${cor || '#ffffff'}; white-space:nowrap;">${txt}</span>`
                 : '';
 
             return `
@@ -4604,23 +4633,23 @@ function renderPedOSQueue() {
                     data-cor-chave="${corDoItem.chave}"
                     data-impresso="${normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso' ? 'sim' : 'nao'}"
                     onclick="alternarModeloAberto('${jsItemId}', '${jsOsId}')">
-                    <td style="padding: 8px; width: 40px; text-align: center;">
-                        <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
+                    <td style="padding: 6px; width: 34px; text-align: center;">
+                        <input type="checkbox" style="width: 16px; height: 16px; cursor: pointer;"
                                onclick="event.stopPropagation(); togglePedItemSelection('${jsItemId}', '${jsOsId}')"
                                ${isSelected ? 'checked' : ''} />
                     </td>
-                    <td style="padding: 8px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:90px;" title="Código do Modelo">
+                    <td style="padding: 6px; font-size: 0.92rem; font-weight:600; color:#ffffff; min-width:84px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
-                    <td style="padding: 8px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:150px;" title="Nome do Modelo">
+                    <td style="padding: 6px; font-size: 0.92rem; font-weight:600; color:#ffffff; min-width:${L_NOME}px;" title="Nome do Modelo">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
+                            <span style="width: 18px; height: 18px; min-width: 18px; min-height: 18px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
                             <span>${nomeDoModelo}</span>
                         </div>
                     </td>
                     
                     ${isCamarote ? `
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Qtd. Locais (Q_CAM)">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Qtd. Locais (Q_CAM)">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Q_CAM', '#f59e0b')}
                             <input type="number" min="0" value="${qCamVal}" style="${inputStyle}" placeholder="Q_CAM"
@@ -4628,7 +4657,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Lotação por Local (L_CAM)">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Lotação por Local (L_CAM)">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('L_CAM', '#f59e0b')}
                             <input type="number" min="1" value="${lCamVal}" style="${inputStyle}" placeholder="L_CAM"
@@ -4636,7 +4665,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Início do Local (C_INI)">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Início do Local (C_INI)">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('C_INI', '#f59e0b')}
                             <input type="number" min="1" value="${cIniVal}" style="${inputStyle}" placeholder="C_INI"
@@ -4644,7 +4673,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Bloco = L_CAM">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Bloco = L_CAM">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Bloco', '#f59e0b')}
                             <input type="number" value="${blocoFinal}" style="${inputStyle}; opacity: 0.85;" placeholder="Bloco"
@@ -4653,7 +4682,7 @@ function renderPedOSQueue() {
                         </div>
                     </td>
                     ` : `
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Quantidade">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Quantidade">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('QTD')}
                             <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="Qtd"
@@ -4661,7 +4690,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Num. Inicial">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Num. Inicial">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('NI')}
                             <input type="number" value="${niVal}" style="${inputStyle}" placeholder="N. inicial"
@@ -4669,7 +4698,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Num. Final">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('NF')}
                             <input type="number" value="${nfCalculado}" style="${inputStyle}; opacity: 0.85;" placeholder="N. final"
@@ -4677,7 +4706,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 110px; min-width: 110px;" title="Ingressos por Bloco">
+                    <td style="padding: 6px; width: ${L_NUM}px; min-width: ${L_NUM}px;" title="Ingressos por Bloco">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Bloco')}
                             <input type="number" value="${blocoVal}" style="${inputStyle}" placeholder="Bloco"
@@ -4686,7 +4715,7 @@ function renderPedOSQueue() {
                         </div>
                     </td>
                     `}
-                    <td style="padding: 8px; width: 190px; min-width: 190px;" title="Cor">
+                    <td style="padding: 6px; width: ${L_COR}px; min-width: ${L_COR}px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('COR')}
                             <select style="${corSelectStyle}" data-lista="cores" data-fmt="${itemFmtId || ''}"
@@ -4697,7 +4726,7 @@ function renderPedOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 200px; min-width: 200px;" title="Numeração">
+                    <td style="padding: 6px; width: 200px; min-width: 200px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Núm.')}
                             <select style="${selectStyle}" data-lista="nums" data-fmt="${itemFmtId || ''}"
@@ -4708,7 +4737,7 @@ function renderPedOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 120px; min-width: 120px;" title="Frente e Verso/Tipo de Verso">
+                    <td style="padding: 6px; width: 120px; min-width: 120px;" title="Frente e Verso/Tipo de Verso">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Verso')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
@@ -4717,7 +4746,7 @@ function renderPedOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 8px; width: 150px; min-width: 150px;" title="Status de Produção">
+                    <td style="padding: 6px; width: 150px; min-width: 150px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Status')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
