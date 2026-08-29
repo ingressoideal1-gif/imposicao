@@ -4,6 +4,112 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-28] — A tela do Pedido: a janela abre abaixo do modelo
+
+Pedido do usuário: *"o ponto principal é que os modelos após selecionados ficam
+distantes da janela de visualização, a ideia era abrir a janela abaixo de cada
+modelo ao selecionar"* — com a condição de **não perder nenhuma funcionalidade
+atual**. O estudo de layout que precedeu a execução está na prancheta
+[Análise da Tela do Pedido](https://claude.ai/code/artifact/364af95b-12c8-492c-8557-3b851e2666ac).
+
+### A janela mudou de lugar
+
+Ela morava num card no **fim da página**: o operador escolhia o modelo no topo
+da fila e ia procurar a prévia depois de todas as caixas de produto. Agora abre
+numa linha-abrigo **logo abaixo do modelo**, dentro da caixa do produto.
+
+É **um** elemento só, que **muda de lugar** — nunca escrito dentro do HTML da
+fila. Recriá-la custaria o canvas já pintado, remontaria o painel de impressão
+(nova ida ao agente para ler as capacidades da impressora) e devolveria bandeja,
+papel e cópias ao padrão. Mover custa 3,4 ms e **não cresce com o tamanho do
+pedido**.
+
+### O clique virou interruptor
+
+A tela passa a abrir **sem nenhum modelo selecionado**. Clicar num modelo o abre;
+clicar de novo no mesmo fecha e desseleciona. Antes sempre havia um modelo
+carregado e não existia estado neutro.
+
+Três regras vieram junto, todas por causa do lugar novo da janela:
+
+- **A prévia se apaga no instante do clique** e diz que está montando. O
+  carregamento é encadeado em 400/600/800 ms; sem isso, por quase um segundo ela
+  mostraria a folha do modelo *anterior* debaixo do nome do modelo novo.
+- **Modelo escondido pelo filtro fecha a janela** — mesma razão que já o tirava
+  da marcação: o que sumiu da tela não pode continuar mandando na impressão.
+- **Vir pelo menu** devolve a tela ao estado inicial.
+
+### A janela em três colunas
+
+O cabeçalho tem **uma linha** (de que modelo é esta janela, mais os números da
+imposição). Os controles da prévia ficam à **esquerda**; a prévia fica com o
+**centro inteiro**; as ações ficam à **direita**, em quatro grupos que abrem e
+fecham: Imprimir e PDF, Configuração de Impressão, Gerenciamento de Cores,
+Refazer Folhas.
+
+**Um** par de Gerar PDF / Imprimir. O par próprio do Refazer saiu; com o Refazer
+ligado, o par único vale para a faixa escolhida. Isso obrigou a escrever uma
+exceção que antes se resolvia sozinha: modelo já impresso perde o botão Imprimir,
+mas com o Refazer ligado ele volta — reimprimir uma faixa só faz sentido depois
+que a tiragem saiu.
+
+Duas coisas **voltaram a aparecer**; estavam no código e ninguém via, dentro do
+bloco escondido do formulário antigo: o **Sumário** (Formato, Grade, Total,
+Folhas, Células vazias, Saída) e o botão **Cancelar Impressão**.
+
+O botão "Mostrar" de dentro do Gerenciamento de Cores saiu — com o grupo já
+abrindo e fechando, eram dois interruptores para a mesma coisa. A trave continua
+de pé: o **estado** não se esconde com os controles, e um selo no botão do grupo
+diz que há conversão de cor ligada mesmo com o grupo fechado.
+
+### A fila voltou aos 100%
+
+Cada linha carregava os próprios rótulos — QTD, NI, NF, Bloco, COR, Núm., Verso
+e Status escritos dentro de cada célula. Oito rótulos × N linhas empurravam a
+largura para ~2.130 px, e era isso que obrigava a tela a abrir com `zoom: 0.8`,
+encolhendo 20% a fonte feita grande de propósito para leitura em pé.
+
+Os rótulos viraram **cabeçalho de coluna** e o zoom saiu. Caixa que mistura
+Camarote e comum continua com os rótulos na linha: as quatro colunas do meio
+mudam de significado ali, e um cabeçalho único mentiria para metade das linhas.
+
+Junto: o resumo do produto passou a dizer **três** números — *Total, Impressas,
+Faltam* — no centro da linha; e o nome da tinta no seletor de Cor calcula texto
+claro ou escuro pela luminância, em vez de preto fixo (em tinta escura o nome
+sumia dentro da própria caixa).
+
+### O redesenho ficou 4× mais rápido
+
+Os seletores de Cor e Numeração nasciam com a lista inteira: 124 opções por
+linha, quase três quartos dos elementos da tela, para o operador ver uma linha
+de cada. Agora nascem com a opção escolhida e se enchem quando ele os abre —
+com uma rede de segurança que preenche o que sobrou 1,5 s depois, porque cada
+estação usa um navegador diferente.
+
+Medido num Chrome de verdade, com a `renderPedOSQueue` real dos dois lados, no
+pedido 21202 (52 modelos — o maior real):
+
+| máquina | antes | depois | ganho |
+|---|---|---|---|
+| esta estação | 179,5 ms | 43,7 ms | 4,1× |
+| 2× mais lenta | 396,7 ms | 100,8 ms | 3,9× |
+| 4× mais lenta | 934 ms | 212,1 ms | 4,4× |
+| elementos na tela | 8.932 | 2.033 | |
+
+Isso importa porque a fila se redesenha a cada clique num modelo — e o clique
+acabou de virar um interruptor que o operador usa mais vezes que antes.
+
+### Testes
+
+Três harnesses novos rodam num Chrome de verdade: `janela_do_modelo_harness.js`
+(a janela é movida e não recriada — canvas ainda pintado, bandeja ainda
+escolhida — e sobrevive ao redesenho da fila), `janela_tres_colunas_harness.js`
+(desenha a janela real com o CSS real e confere o layout mais os 62 controles
+que ela não pode perder) e `fila_do_pedido_harness.js` (roda a
+`renderPedOSQueue` de verdade com os 52 modelos e mede se a fila cabe em 100%).
+
+---
+
 ## [2026-08-28] — O banco de dados pode ser do pedido
 
 O CSV deixa de ser obrigatoriamente parte da numeração. Uma peça só passa a servir
