@@ -7,8 +7,8 @@
 |---|---|
 | Onde fica | `frontend/index.html`, seção `view-acabamento`, menu **Produção → Painel do Acabamento** |
 | Quem desenha | [`frontend/acabamento.js`](../frontend/acabamento.js) |
-| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, as tabelas nossas `producao_volumes` (com `foto_url`) e `producao_volume_itens`, e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
-| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) + [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) + [`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql) + [`sql/foto_do_volume.sql`](../sql/foto_do_volume.sql) |
+| Banco | `pedidos_modelos.acabamento_status`, `.acabamento_responsavel`, `.acabamento_foto_url`, view `imposition_operadores`, as tabelas nossas `producao_volumes` (com `foto_url`; `peso_kg` virou espelho da soma) e `producao_volume_itens` (com `peso_kg` e `registrado_em`), e `propostas_os_setores.peso_real_kg` (do parceiro — ver REGRAS_BANCO). Só leitura: `produtos_proposta.peso_total` (o estimado) e `imposition_segredos.PESO_LIBERACAO_SEGREDO` (a senha semanal) |
+| SQL | [`sql/painel_do_acabamento.sql`](../sql/painel_do_acabamento.sql) + [`sql/acabamento_foto_do_modelo.sql`](../sql/acabamento_foto_do_modelo.sql) + [`sql/acabamento_status_pronto.sql`](../sql/acabamento_status_pronto.sql) + [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) + [`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql) + [`sql/foto_do_volume.sql`](../sql/foto_do_volume.sql) + [`sql/volumes_por_registro.sql`](../sql/volumes_por_registro.sql) |
 | Permissão | módulo **Painel do Acabamento** (`perm_acabamento_view` / `perm_acabamento_edit`) — **ver e editar ligados em todo perfil** desde 22/08/2026 (decisão do usuário); [`sql/acabamento_para_todos.sql`](../sql/acabamento_para_todos.sql) ligou nas grades que já existiam |
 | Testes | [`tests/acabamento_harness.js`](../tests/acabamento_harness.js) + [`tests/test_painel_do_acabamento.py`](../tests/test_painel_do_acabamento.py) |
 
@@ -675,8 +675,9 @@ o peso. Precisamos fazer a leitura da balança para que o peso seja preenchido
 automaticamente no campo peso."*
 
 O modelo é uma **Urano CP 3/0.5 POP** — 3 kg de capacidade, divisão de 0,5 g. Um
-botão **⚖** ao lado dos **três** campos de peso da tela (o peso de cada setor, o
-"Peso na balança" do editor de caixa e a janela do peso que fecha o setor) lê a
+botão **⚖** ao lado dos campos de peso da tela (o peso de cada setor, o "Peso na
+balança" da janela do registro — e o de cada linha, quando se pesa um a um — e a
+janela do peso que fecha o setor) lê a
 balança e preenche o campo. O valor preenchido segue o caminho de sempre: a régua
 dos 5 %, a senha de liberação, a mesma gravação. Digitar à mão continua valendo.
 
@@ -1116,258 +1117,141 @@ e com a Lista de Arte; recolori-las aqui mudaria as três telas.
 
 ## Os volumes
 
-Pedido do usuário em 23/08/2026, logo depois de o peso por setor entrar:
+Pedido do usuário em 23/08/2026, logo depois de o peso por setor entrar, e
+**refeito por ele em 29/08/2026**, que é a versão que vale:
 
-> "existe a situação em que 1 modelo grande é realizado por vários responsáveis
-> e situações onde vários modelos são pesados juntos pelo mesmo usuário,
-> situação onde precisaria selecionar vários modelos e criar um volume e pesar
-> volumes individualmente, e situações onde precisa dividir o mesmo modelo em
-> vários volumes, nada disso invalida o campo já existente onde precisa
-> informar o peso total do setor."
+> "pedido sem criação de volumes seguem o fluxo existente, ao criar volumes cada
+> modelo registrado como pronto precisa indicar a qual volume pertence e
+> registrar seu peso, esse registro pode ser feito em grupos, volumes já criados
+> podem receber novos modelos ou grupos de modelos, somando os pesos ao volume,
+> retirar o conceito de caixa e pacote e rolo, teremos apenas o conceito de
+> volumes."
 
-**O volume é a caixa.** Ele tem número (V1, V2, V3…), **nome** ("Camarote",
-"Staff dia 2" — opcional), tipo (Caixa, Fardo, Rolo, Palete), o peso da balança,
-quem pesou, e uma lista de **pacotes**.
+E, sobre o gesto na estação, no mesmo dia:
 
-**O pacote é o maço.** Um modelo, uma quantidade, um responsável. É o nível que
-o usuário pediu horas depois dos volumes, e é ele que faz as três situações
-caberem num desenho só:
+> "modelos são pesados antes de colocados no volume, as somas dos pesos dos
+> modelos são o peso do volume. pedidos sem volume criado é pesado ao final"
 
-| A situação | Como ela cabe |
-|---|---|
-| 1 modelo grande, vários responsáveis | dois pacotes do mesmo modelo, um por pessoa, dentro da mesma caixa |
-| vários modelos pesados juntos | uma caixa com um pacote de cada modelo |
-| o mesmo modelo repartido em caixas | o modelo aparece em vários volumes, e as quantidades somam a tiragem |
+**Só existe VOLUME.** Caixa, pacote, fardo e rolo saíram do vocabulário — da
+tela e do código. O que vai dentro de um volume é um **registro**: um modelo,
+uma quantidade, um peso, quem fez e quando.
 
-O tipo **"Pacote"** saiu da lista de tipos de volume quando a palavra passou a
-significar o maço de dentro — uma caixa do tipo "pacote" com três pacotes
-dentro seria confusão garantida na estação. Volume já gravado com aquele tipo
-não o perde: o seletor devolve à lista qualquer valor que já esteja no banco.
+### Três consequências, e delas sai todo o resto
 
-### Setor sem volume é 1 volume único
+1. **O volume deixa de ser um cadastro paralelo e vira a condição do PRONTO.**
+   Num pedido que tem volume, clicar em *Pronto* abre a janela do registro em
+   vez de gravar o status.
+2. **O peso é do REGISTRO, não do volume.** Cada modelo vai à balança antes de
+   entrar; o peso do volume é a soma (`pesoDosRegistros`), e ninguém digita peso
+   de volume em lugar nenhum.
+3. **O peso do setor, com volumes, é leitura.** Ele é a soma dos volumes daquele
+   setor, gravado na ficha do parceiro pelo `gravarPeso` de sempre.
 
-Isso é a decisão mais importante do desenho, e ela é para quem **não** usa o
-recurso. A faixa de um setor sem volume nenhum não fica vazia: ela diz *"Sem
-volumes — este setor sai como 1 volume único de 3,240 kg"* e oferece o botão
-**Dividir em volumes**. O pedido simples, que é a maioria, não ganhou cadastro
-nenhum, e o card do modelo nem mostra o bloco de volumes.
+### Pedido sem volume não mudou em nada
+
+Peso por setor digitado à mão, *"Sem volumes — este setor sai como 1 volume
+único de 3,240 kg, pesado no fim"*, e a cobrança do peso ao marcar o último
+modelo do setor como Pronto — que é o **"pesado ao final"** da regra. É a
+maioria dos pedidos, e ela não ganhou cadastro nenhum.
+
+O que liga o outro fluxo é criar o primeiro volume, pelo botão **Dividir em
+volumes** (ou **+ Volume**) da faixa do setor. Ele nasce **vazio** e a tela
+avisa: *"A partir de agora, marcar um modelo como Pronto pergunta em qual volume
+ele entra."* Volume vazio é estado legítimo e **excluível** — criar um por engano
+não tranca a tela, que é a regra da casa: toda trava diz como sair dela.
 
 ### O caminho do operador
 
-1. **`+ Volume`** na faixa do setor põe a lista do pedido em **modo de escolha**.
-   Os modelos daquele setor ganham caixa de marcar; os de outro setor continuam
-   desenhados, apagados, dizendo por quê. A lista já está na tela, com foto, cor
-   e tiragem — pedir que ele reconheça o mesmo material numa segunda lista, mais
-   pobre, dentro de um popup, seria trabalho que a tela já fez por ele.
+| Passo | O que ele faz | O que a tela faz |
+|---|---|---|
+| 1 | Clica em **Pronto** num card (ou marca vários e usa **Registrar num volume**) | Abre a janela do registro |
+| 2 | Escolhe o volume nos chips — ou **＋ Novo volume** | O último volume do setor já vem escolhido |
+| 3 | Confere a quantidade | Já vem com o que **ainda está fora** de volume |
+| 4 | Põe o material na balança e clica em **⚖ Pesar** | Mostra `est. 12,150 kg · +6,2%` e a régua dos 5 % |
+| 5 | Diz quem fez e, se quiser, fotografa o volume | A foto vale para todos os modelos que estão dentro dele |
+| 6 | **Gravar e marcar Pronto** | Grava o registro, soma no volume, atualiza o peso do setor e fecha os modelos que entraram por inteiro |
 
-   **A barra da escolha é FIXA contra a janela**, no `#acab-barra-escolha`, fora
-   das views — a mesma escolha que o Quadro de Avisos já tinha feito. Ela errou
-   de lugar duas vezes antes de chegar aí, e as duas o usuário é que percebeu:
+As caixas de marcar dos cards ficam **sempre visíveis**, sem modo: até
+28/08/2026 escolher vários era um MODO que apagava os cards de outro setor,
+grudava uma faixa no topo e tomava a tela do pedido. Com o registro nascendo do
+Pronto, o modo perdeu a razão de ser. O primeiro modelo marcado **fixa o setor**
+— um volume não atravessa setor, porque o peso é conferido por setor.
 
-   1. **Solta no fim da lista de modelos**, dentro da área que rola. Numa tela
-      de 1366×768, com **um** modelo no setor o botão já caía 144 px abaixo da
-      área visível; com quatro, 1.416 px.
-   2. **Grudada com `position: sticky`.** Resolveu de 1280 px de largura para
-      cima e deixou tudo abaixo disso quebrado, por dois motivos somados: o
-      `.prod-table-card` acima dela tem `overflow: hidden`, e **ancestral com
-      overflow escondido desliga o `sticky` do descendente**; e abaixo de
-      1024 px a media query vira o `.prod-panel-container` em coluna, passando a
-      ser ele quem rola. Em 1024×768 o botão voltava a 2.214 px abaixo da
-      janela; num celular, 4.828 px.
+A barra da conta continua **fixa contra a janela**, no `#acab-barra-escolha`.
+Isso não é detalhe de estilo: ela já errou de lugar duas vezes na estação, e
+`tests/escolha_de_volume_harness.js` mede sete tamanhos de tela por causa disso.
 
-   Fixa contra a janela, ela não depende de layout nenhum. Três coisas moram
-   nesse canto — o Quadro de Avisos, esta barra e os avisos flutuantes — e se
-   empilham pela convenção que o quadro criou: cada uma publica a própria altura
-   numa variável de CSS (`--avisos-altura`, `--escolha-altura`) e a de cima se
-   apoia nela. Enquanto a escolha está em curso, o `#acab-detalhe-corpo` ganha
-   folga embaixo, para o último card não ficar atrás da barra; e sair do
-   Acabamento tira a barra junto, porque ela não pertence a view nenhuma.
+### Uma pesagem só, repartida — ou uma por modelo
 
-   `tests/escolha_de_volume_harness.js` mede tudo isso num Chrome, em **sete
-   tamanhos de tela** — foi um tamanho não medido que deixou a segunda versão
-   passar. Ele traz o controle que dá sentido ao resto: devolvida para dentro do
-   detalhe, em 1024×768, o botão volta a cair fora da janela.
-2. **`Pesar este volume`** abre a janela. Cada modelo marcado vira **um
-   pacote**, com a quantidade **cheia com o que ainda está fora de volume** — um
-   clique para "esta caixa leva o resto" — e com o responsável que o card já
-   mostra. Diminuir a quantidade reparte o modelo em várias caixas.
-3. **`+ Pacote`**, dentro da janela, acrescenta outro maço à mesma caixa. Ele
-   nasce do **mesmo modelo do anterior**, com o que sobrou dele — porque o caso
-   que criou o botão é o modelo grande repartido entre duas pessoas. O seletor
-   de modelo em cada linha deixa trocá-lo quando for outra coisa.
-4. **`Ver volumes`** abre a lista do setor, com os pacotes de cada caixa —
-   quantidade e responsável, um por linha — mais editar, excluir e a
-   conferência.
+Quando vários modelos vão juntos ao prato, a balança devolve **um** número. Ele
+é repartido entre as linhas na **proporção do peso estimado** de cada uma
+(quantidade × peso da peça, que é o número mais preciso que o ERP tem);
+sem base no ERP para nenhuma linha, cai para a proporção da quantidade. A conta
+é feita em gramas inteiras e a **última linha recebe a sobra do arredondamento**,
+para a soma das parcelas ser exatamente o peso lido.
 
-### A foto da caixa é uma só para os modelos dela
+O botão **Pesar um a um** abre um campo de peso por linha, para quando cada
+modelo foi à balança sozinho. `repartirPeso` é pura e tem teste.
 
-> "ao abrir o modal compartilhado entre modelos, adicionar o botão 'fotografar'
-> — a foto será compartilhada entre os modelos do volume" — usuário, 28/08/2026
+### Registro parcial não fecha o modelo
 
-A janela do volume tem, ao lado do nome e do tipo, o botão **📷 Fotografar**. É
-a mesma câmera do card do modelo, com um alvo diferente: a foto é **da caixa**,
-e vale para **todos os modelos que estão dentro dela**. Uma caixa com quatro
-modelos deixa de pedir quatro fotos do mesmo trabalho.
+Diminuir a quantidade é o que reparte um modelo entre volumes: o resto continua
+livre para o próximo. O modelo só fica **Pronto** quando a última leva entra —
+é o `fecharModelosEmbalados`, que assina com o nome de quem fez quando é uma
+pessoa só e com o **nome do setor** quando são várias. A janela avisa antes de
+gravar: *"⚠ um modelo entra em parte — ele continua em acabamento até o resto
+entrar noutro volume."*
 
-**Ela não substitui a foto do material.** As duas respondem a perguntas
-diferentes: a do modelo é o registro do que o **revisor** viu (o papel contra a
-amostra aprovada); a da caixa é o registro do que foi **embalado**. No card, a
-foto própria do modelo vem primeiro; a da caixa aparece só quando o modelo ainda
-não tem a dele, e o `title` da miniatura diz de qual volume ela é ("Foto do
-volume V1 — a caixa em que este modelo está"). O rótulo do botão do card também
-não mente: sem foto própria ele continua dizendo *Fotografar*, e não *Refazer*.
+### Tirar do volume desfaz as duas coisas
 
-**Onde ela é guardada.** No mesmo bucket `artes`, prefixo `acabamento-fotos/`,
-com nome `volume_<pedido>_<setor>_<numero>_<carimbo>.jpg`. O endereço vai para
-`producao_volumes.foto_url` ([`sql/foto_do_volume.sql`](../sql/foto_do_volume.sql),
-aditivo). Não há bucket novo de propósito: bucket novo com escrita anônima já
-falhou neste projeto antes, e a estação grava sem sessão do Supabase.
+**Tirar** é a saída de quem registrou no volume errado, e ele desfaz o que o
+registro fez: o material sai do volume (e o peso sai da soma) **e** o modelo
+volta para *Em acabamento*. Deixar o Pronto de pé mostraria um modelo concluído
+que não está em volume nenhum — exatamente o estado que a regra existe para
+impedir.
 
-**Quando ela vai ao banco.** O *Salvar foto* põe o arquivo no Storage e o
-endereço na janela; quem escreve no banco continua sendo o **Gravar volume**,
-como todo o resto dela — um caminho de escrita à parte faria a foto sobreviver a
-um *Cancelar* que desfaz tudo o mais. Ao **editar** uma caixa, a janela reabre
-com a foto que já estava: sem isso, corrigir o peso apagaria a foto.
+Excluir o volume inteiro é diferente: ele leva os registros junto (pelo
+`on delete cascade`) e **não** desfaz o Pronto de ninguém. Desfazer decisão de
+gente é do Tirar, um a um.
 
-A câmera abre num `z-index` **acima** da janela do volume, e o lightbox acima
-das duas — senão o operador clicaria em Fotografar e não veria nada acontecer.
-O pacote **não** tem foto própria, de propósito: é a caixa que vai à balança e é
-a caixa que se fotografa.
+### A foto é uma só para os modelos do volume
 
-### O peso do setor acompanha a soma das caixas
+Uma foto por volume, compartilhada por todos os modelos que estão dentro dele
+(28/08/2026). O ganho é de trabalho: um volume com quatro modelos dentro é UMA
+foto, e não quatro. Ela **não substitui** a foto do material, que é o registro
+do revisor e continua sendo do modelo — `blocoDaFoto` mostra a própria primeiro,
+e só cai para a do volume quando o modelo ainda não tem a dele.
 
-> "ao adicionar os volumes, volumes criados a soma de seus pesos vai atualizando
-> o peso real do setor" — usuário, 23/08/2026
+O "Salvar foto" sobe ao Storage (`artes/acabamento-fotos/`) e guarda só o
+endereço na janela; quem grava no banco é o **Gravar e marcar Pronto**. Trocar
+de volume nos chips troca a foto que a janela está mexendo — sem isso,
+fotografar carimbaria a foto do volume anterior no volume novo.
 
-A cada caixa gravada, e a cada caixa excluída, a soma dos pesos entra no campo
-do setor **sozinha**. A faixa anuncia isso em verde (*"o peso do setor acompanha
-a soma das caixas — cada caixa gravada o atualiza"*), porque o que o sistema faz
-sozinho tem de se anunciar: sem essa linha, o operador veria o campo mudar de
-valor sem ter digitado nada.
+### A régua dos 5 %, agora mais precisa
 
-Três coisas que essa automação **não** furou:
-
-- **Passa pelo `gravarPeso` de sempre**, e não por um atalho. É ele que conhece
-  os dois caminhos de escrita (agente na estação, PostgREST no site) e a senha de
-  liberação.
-- **A régua compara com o que já está embalado**, e não com a tiragem inteira.
-  Com três das cinco caixas prontas, comparar a soma delas com o setor todo
-  acusaria 40 % de divergência num trabalho perfeitamente certo. Quem calcula a
-  base é `estimadoDoEmbalado`; o `gravarPeso` a aceita por `opcoes.estimado`, e
-  um `null` explícito quer dizer *"não há régua"* — não *"use a do setor"*.
-- **Caixa sem peso não escreve nada.** Gravar zero apagaria um peso que alguém
-  digitou à mão no box.
-
-Digitar outro número no box continua valendo — é o caso do setor pesado inteiro
-na balança grande. Aí a diferença volta a aparecer em âmbar (*"o peso do setor
-está 20 g acima da soma dos volumes — alguém o digitou à mão"*) e **não trava
-nada**: caixa, fita e plástico pesam. Em "Ver volumes", o botão *"Usar 12,480 kg
-como peso do setor"* é a saída para voltar à soma — e ele só aparece quando os
-dois números divergem.
-
-### O modelo embalado por inteiro fecha sozinho
-
-> "modelos com mais de 1 volume ao atingir a quantidade total, quando mais de 1
-> responsável mostra no drop responsável o nome do setor e marca status como
-> pronto, se todos os pacotes do volume são mesmo responsável marca este como
-> responsável." — usuário, 23/08/2026
-
-Embalar **é** terminar. Quando o último pacote de um modelo entra numa caixa,
-o modelo vira **Pronto** sem ninguém clicar, e quem assina sai dos pacotes:
-
-| Os pacotes daquele modelo | Quem assina |
-|---|---|
-| todos da mesma pessoa | o nome dela |
-| duas ou mais pessoas | **o nome do setor** ("Laser") |
-| algum pacote sem responsável, junto com outros que têm | o nome do setor |
-| todos sem responsável | ninguém — o modelo **não** fecha |
-
-O nome do setor no lugar da pessoa é o que resolve o modelo grande que passou
-por três mãos: ele não tem um dono, tem o setor. Quem fez o quê continua
-escrito, pacote a pacote, na janela do volume. O seletor do card mostra "Laser"
-escolhido, porque ele já devolvia à lista qualquer nome gravado que não fosse de
-um operador.
-
-Quatro limites, cada um por um motivo:
-
-- **O peso entra antes do Pronto.** A regra da casa é que o setor não fecha sem
-  peso registrado; invertida a ordem, o último Pronto automático fecharia um
-  setor com o campo vazio.
-- **A trava do peso continua valendo.** Se o modelo for o último pendente do
-  setor e o setor ainda estiver sem peso — nenhuma caixa pesada, por exemplo —,
-  ele fica de fora, e o operador recebe o popup que pede o peso, como sempre.
-- **Pronto já dado não é reescrito.** É decisão de alguém, e a embalagem não
-  desfaz nem sobrescreve decisão de gente.
-- **Excluir a caixa não desfaz o Pronto.** O peso do setor desce junto com a
-  soma, mas desmarcar um modelo concluído é do operador.
-
-E um aviso na tela sempre que isso acontece: *"Credencial VIP (Laser, mais de
-uma pessoa) — todos os pacotes embalados, modelo marcado como PRONTO"*. Sem
-ele, o operador voltaria para a lista e encontraria cards verdes que não marcou.
-
-Na janela que **cobra o peso ao fechar o setor**, o campo já nasce com a soma
-dos volumes quando ela existe, e a janela diz de onde o número saiu. Sem volume,
-aquela janela é exatamente a de antes.
-
-### Cada caixa é conferida pela quantidade que leva
-
-Pedido do usuário em 23/08/2026, no dia seguinte ao dos volumes:
-
-> "Ao criar um volume de apenas 1 modelo (dividir um modelo em mais de um
-> volume) deve ser informado a quantidade de itens do volume e calcular o peso
-> da quantidade informada, seguindo a mesma regra dos 5% para cada volume, ao
-> criar um volume de vários modelos, deve somar as quantidades dos modelos
-> selecionados e seguir mesma regra dos 5%."
-
-A janela de pesar mostra, ao lado do campo do peso, **`est. 10,400 kg`** — a
-quantidade digitada vezes o peso da peça. Um modelo só ou cinco, a conta é a
-mesma; o que muda é quantas parcelas ela tem. Acima de 5 % de diferença, gravar
-**pede a senha de liberação**, exatamente como o peso do setor.
-
-**A base vem do ERP.** `produtos_proposta.peso_total` é coluna gerada
-(`peso_uni * qtd`), em gramas; dividida pela quantidade da linha devolve o peso
-unitário que o ERP guardou. Conferido no pedido 21085: 141.128 g ÷ 27.140 un =
-**5,2 g a peça**. O modelo chega na sua linha pelo `id_produto_proposta_origem`.
-
-É por **unidade**, e não por modelo, de propósito: várias credenciais diferentes
-saem da mesma linha da proposta — as oito do 21085 saem da linha 2281 — e o que
-elas têm em comum é o peso de cada peça.
-
-**O que isso fecha.** O peso por setor só é conferido quando o último modelo
-dele fica pronto. Até lá, uma caixa pesada errado — 30 kg digitados numa caixa de
-3 — passava sem ninguém ver, e a soma dos volumes só denunciava o engano no fim,
-quando o material já estava fechado.
-
-Três cuidados que o código carrega:
-
-- **A conta se refaz a cada tecla.** No box do setor a base é fixa (a tiragem
-  inteira), e basta repintar quando o peso é gravado. Aqui a base **muda com o
-  que o operador digita**: baixar de 3.000 para 1.500 muda o peso esperado da
-  caixa. Por isso as quantidades são lidas do DOM (`pacotesDigitados`), e
-  não do estado de quando a janela abriu.
-- **Sem base no ERP a tela não inventa uma.** O campo mostra `est. —` e o volume
-  grava como gravava. Modelo sem peso no meio de outros que têm entraria como
-  zero e faria a estimativa sair baixa — acusando divergência em cima de um
-  volume certo —, então a tela diz `(1 modelo sem peso no ERP)` em vez de
-  esconder o buraco.
-- **Cancelar a senha não apaga o trabalho.** A janela do volume é **escondida**,
-  não desmontada, enquanto o popup da senha está na frente; ao cancelar ela volta
-  com os modelos escolhidos e as quantidades digitadas, mais um recado dizendo
-  por que não gravou.
-
-A régua é a **mesma função** do setor (`precisaDeLiberacao`), e a tolerância é a
-mesma constante. Duas réguas para a mesma pergunta seriam o começo de uma
-discordar da outra — o setor liberando o que o volume trava. Há teste contando as
-ocorrências de `TOLERANCIA_DO_PESO`.
+É a **mesma** função do peso do setor (`precisaDeLiberacao`, uma tolerância só
+no arquivo inteiro), aplicada ao registro. E ela ficou melhor: no setor a base é
+a tiragem inteira; aqui é exatamente o que foi ao prato. Acima de 5 % a gravação
+espera a **senha de liberação**, e cancelar a senha devolve a janela com tudo o
+que o operador já tinha digitado — `esconderRegistro` esconde sem desmontar.
 
 ### Onde isso mora, e por que ali
 
 Duas tabelas **nossas**: `producao_volumes` e `producao_volume_itens` — esta
-última é a tabela dos **pacotes**, e não mudou de nome de propósito (renomear
+última é a tabela dos **registros**, e não mudou de nome de propósito (renomear
 quebraria a estação com o painel da versão anterior aberto na tela).
 [`sql/volumes_do_acabamento.sql`](../sql/volumes_do_acabamento.sql) cria as
 duas; [`sql/pacotes_do_acabamento.sql`](../sql/pacotes_do_acabamento.sql)
-acrescenta o nome da caixa, e no pacote a chave própria e o responsável.
+acrescenta o nome do volume e, no registro, a chave própria e o responsável;
+[`sql/volumes_por_registro.sql`](../sql/volumes_por_registro.sql) acrescenta o
+**peso** e a **hora** do registro, e desce para eles o peso dos volumes que já
+existiam.
+
+`producao_volumes.peso_kg` **não** foi removida, e passou a ser **espelho**: a
+tela lê a soma dos registros, mas o painel escreve a soma ali a cada gravação,
+para a estação que ainda estiver com a versão anterior aberta continuar
+desenhando um número certo. `producao_volumes.tipo` continua no banco com o que
+já está gravado e simplesmente deixa de ser escrita.
 
 A ficha `propostas_os_setores` tem `qtd_volumes` e `tipo_volume`, e daria para
 gravar ali. O usuário decidiu que **não** — ver
@@ -1381,29 +1265,29 @@ e não passam pelo agente.
 ### Detalhes que já custaram caro em outros recursos daqui
 
 - **A soma é feita em gramas inteiras** e dividida no fim. Somar `0.1 + 0.2` em
-  ponto flutuante dá `0.30000000000000004`, e a diferença contra o peso do setor
-  viraria um aviso âmbar em cima de nada.
-- **`faltaEmbalar` nunca é negativo.** Se alguém embalar mais do que a tiragem,
+  ponto flutuante dá `0.30000000000000004`, e um centésimo de grama fantasma
+  viraria aviso âmbar em cima de um trabalho certo.
+- **`pesoDosRegistros` só cai para o `peso_kg` gravado enquanto NENHUM registro
+  tiver peso.** É a saída para o volume anterior a 29/08/2026; assim que um
+  registro ganha peso, manda a soma — misturar os dois faria o peso contar duas
+  vezes.
+- **`faltaEmbalar` nunca é negativo.** Se alguém registrar mais do que a tiragem,
   o que a tela precisa dizer é "não falta nada", não um número negativo.
 - **`UNIQUE (id_int, setor, numero)`** protege contra dois operadores criando o
-  V3 ao mesmo tempo. A janela traduz o erro do banco em *"Outro operador acabou
-  de criar este volume. Feche e clique em + Volume de novo"* — a trava tem
-  saída, como toda trava deste projeto.
-- **No modo edição**, o que já está *naquele* volume não conta como ocupado.
-  Sem isso, o próprio pacote apareceria como "0 livres" e o operador não
-  conseguiria corrigir a quantidade que ele mesmo acabou de gravar.
-- **Os campos do pacote são numerados pela POSIÇÃO** (`acab-vol-qtd-0`), e não
-  pelo id do modelo. Dois pacotes do mesmo modelo na mesma caixa dariam dois
-  campos com o mesmo id, e o navegador entregaria sempre o primeiro.
-- **`+ Pacote` e `✕` leem o DOM antes de redesenhar.** Sem isso, as quantidades
-  e os nomes das linhas de cima voltariam ao valor de quando a janela abriu. E o
-  redesenho é **só da lista de pacotes** — remontar a janela inteira apagaria o
-  peso que o operador já digitou.
+  V3 ao mesmo tempo. A tela traduz o erro do banco em *"Outro operador acabou de
+  criar este volume. Clique em + Volume de novo"* — a trava tem saída.
+- **Os campos do registro são numerados pela POSIÇÃO** (`acab-reg-qtd-0`), e não
+  pelo id do modelo. Duas linhas do mesmo modelo dariam dois campos com o mesmo
+  id, e o navegador entregaria sempre o primeiro.
+- **Tirar uma linha e trocar para "Pesar um a um" leem o DOM antes de
+  redesenhar.** Sem isso, as quantidades das linhas de cima voltariam ao valor
+  de quando a janela abriu. E o redesenho é **só da lista** — remontar a janela
+  inteira apagaria o peso que o operador já digitou.
 - **O "livres" de cada linha desconta as outras linhas da mesma janela.** Sem
-  essa parcela, dois pacotes do mesmo modelo apareceriam os dois com a tiragem
-  inteira disponível, e o operador embalaria o dobro sem a tela dizer nada.
-  Passar da tiragem não trava: a linha diz *"2.000 un a mais do que a tiragem"*
-  em âmbar.
+  essa parcela, duas linhas do mesmo modelo apareceriam as duas com a tiragem
+  inteira disponível, e o operador registraria o dobro sem a tela dizer nada.
+- **O registro é ACRÉSCIMO, e não substituição.** Um volume recebe modelos ao
+  longo do dia; reescrever a lista a cada gravação apagaria o que já estava lá.
 
 ## Como a tela se pendura no que já existe
 
@@ -1452,6 +1336,11 @@ Usuários por completo e trancaria quem entra pela primeira vez.
 1. Rodar `sql/painel_do_acabamento.sql` e `sql/acabamento_foto_do_modelo.sql`,
    conferindo a saída dos SELECTs do fim de cada um. Da máquina de trabalho dá
    para rodar sem abrir o painel: `.\ferramentas\rodar_sql.ps1 <arquivo>`.
+   Para os volumes, na ordem: `sql/volumes_do_acabamento.sql`,
+   `sql/pacotes_do_acabamento.sql`, `sql/foto_do_volume.sql` e
+   `sql/volumes_por_registro.sql` — este último tem de terminar com
+   `volumes_fora_da_conta = 0`, que é a prova de que o peso dos volumes antigos
+   desceu para os registros sem mudar nenhuma soma.
 2. `.\publicar.ps1 "mensagem"` — publica o site e a Edge Function `painel`.
 3. `.\publicar_agente.ps1 <versão nova>` — o agente vai junto, sempre: é ele que
    leva o `acabamento.js` novo para as estações, pela lista `PAINEL_ARQUIVOS`

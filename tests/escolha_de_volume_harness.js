@@ -171,7 +171,13 @@ function medir(texto, soNaBarra) {
     await page.goto('http://127.0.0.1:' + porta + '/index.html', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.AcabamentoPainel && window.showView, { timeout: 30000 });
 
-    /** Abre o pedido e entra no modo de escolha, com os modelos marcados. */
+    /**
+     * Abre o pedido e marca os modelos.
+     *
+     * Desde 29/08/2026 nao ha MODO: as caixas de marcar ficam sempre na tela, e
+     * a barra aparece quando algo e marcado. O que continua igual -- e e o que
+     * este arquivo mede -- e a barra ser fixa contra a janela.
+     */
     async function entrarNaEscolha(quantos, marcar) {
         await page.evaluate(semear, quantos);
         await page.evaluate(() => window.AcabamentoPainel.abrirPedido('os-1'));
@@ -179,7 +185,6 @@ function medir(texto, soNaBarra) {
             document.getElementById('acab-detalhe-corpo').innerHTML.indexOf('volume') !== -1,
             { timeout: 30000 });
         await page.evaluate((ids) => {
-            window.AcabamentoPainel.novoVolume('LASER', 21085);
             ids.forEach(id => window.AcabamentoPainel.marcarModelo(id));
         }, marcar);
     }
@@ -189,8 +194,8 @@ function medir(texto, soNaBarra) {
         await page.setViewport({ width: w, height: h });
         await entrarNaEscolha(4, [3001, 3003]);
 
-        const m = await page.evaluate(medir, 'Pesar este volume');
-        ok(m.achou, `${w}x${h} (${apelido}): o botao "Pesar este volume" existe`);
+        const m = await page.evaluate(medir, 'Registrar');
+        ok(m.achou, `${w}x${h} (${apelido}): o botao "Registrar num volume" existe`);
         ok(m.naJanela, `${w}x${h} (${apelido}): e esta dentro da janela`,
             m.achou ? `topo em ${m.topo} de ${m.altura}` : 'nao achei o botao');
         ok(m.naBarraFixa && m.posicao === 'fixed',
@@ -204,14 +209,14 @@ function medir(texto, soNaBarra) {
     await page.setViewport({ width: 1366, height: 768 });
     await entrarNaEscolha(4, [3001, 3003]);
 
-    const conta = await page.evaluate(medir, '2 modelos escolhidos');
+    const conta = await page.evaluate(medir, '2 modelos marcados');
     ok(conta.achou && conta.naJanela, 'a conta do que foi marcado esta na tela com ele');
 
-    // O Cancelar DA BARRA: a faixa do topo tem outro, e e o de baixo que
-    // precisa estar ao alcance de quem acabou de rolar a lista inteira.
-    const cancelar = await page.evaluate(medir, 'Cancelar', true);
+    // O Desmarcar: a saida da escolha precisa estar ao alcance de quem acabou
+    // de rolar a lista inteira.
+    const cancelar = await page.evaluate(medir, 'Desmarcar', true);
     ok(cancelar.achou && cancelar.naJanela,
-        'e o Cancelar da barra tambem -- a saida da escolha nao pode ficar fora da tela',
+        'e o Desmarcar da barra tambem -- a saida da escolha nao pode ficar fora da tela',
         cancelar.achou ? ('topo em ' + cancelar.topo + ' de ' + cancelar.altura) : 'nao achei');
 
     // Rolar a lista inteira nao tira nenhum dos dois de vista.
@@ -219,7 +224,7 @@ function medir(texto, soNaBarra) {
         const c = document.getElementById('acab-detalhe-corpo');
         c.scrollTop = c.scrollHeight;
     });
-    const depoisDeRolar = await page.evaluate(medir, 'Pesar este volume');
+    const depoisDeRolar = await page.evaluate(medir, 'Registrar');
     ok(depoisDeRolar.naJanela, 'rolado ate o fim da lista, o botao continua na tela',
         'topo em ' + depoisDeRolar.topo + ' de ' + depoisDeRolar.altura);
 
@@ -232,13 +237,13 @@ function medir(texto, soNaBarra) {
 
     // ─── Sair da escolha tira a barra da tela ────────────────────────────────
     await page.evaluate(() => window.AcabamentoPainel.cancelarVolume());
-    const saiu = await page.evaluate(medir, 'Pesar este volume');
-    ok(!saiu.achou, 'cancelar tira a barra da tela -- ela e fixa, nao sai sozinha');
+    const saiu = await page.evaluate(medir, 'Registrar');
+    ok(!saiu.achou, 'desmarcar tira a barra da tela -- ela e fixa, nao sai sozinha');
 
     // E fechar o pedido tambem, mesmo com a escolha em curso.
     await entrarNaEscolha(4, [3001]);
     await page.evaluate(() => window.AcabamentoPainel.fecharPedido());
-    const fechou = await page.evaluate(medir, 'Pesar este volume');
+    const fechou = await page.evaluate(medir, 'Registrar');
     ok(!fechou.achou,
         'e voltar para a lista tambem -- senao a barra boiaria sobre os pedidos');
 
@@ -248,7 +253,7 @@ function medir(texto, soNaBarra) {
     // continuaria boiando por cima da tela de Formatos.
     await page.setViewport({ width: 1366, height: 768 });
     await entrarNaEscolha(4, [3001]);
-    const antesDeTrocar = await page.evaluate(medir, 'Pesar este volume');
+    const antesDeTrocar = await page.evaluate(medir, 'Registrar');
     ok(antesDeTrocar.achou, 'com a escolha em curso, a barra esta na tela');
 
     const trocou = await page.evaluate(() => {
@@ -257,7 +262,7 @@ function medir(texto, soNaBarra) {
         return !(acab && acab.classList.contains('active'));
     });
     ok(trocou, 'a troca de tela aconteceu mesmo -- sem isso o teste abaixo nao prova nada');
-    const noutraTela = await page.evaluate(medir, 'Pesar este volume');
+    const noutraTela = await page.evaluate(medir, 'Registrar');
     ok(!noutraTela.achou, 'trocar de tela tira a barra do Acabamento junto');
 
     await page.evaluate(() => window.showView('view-acabamento'));
@@ -273,7 +278,7 @@ function medir(texto, soNaBarra) {
         const corpo = document.getElementById('acab-detalhe-corpo');
         const barra = document.getElementById('acab-barra-escolha');
         const b = [...barra.querySelectorAll('button')]
-            .find(x => x.textContent.trim().indexOf('Pesar este volume') !== -1);
+            .find(x => x.textContent.trim().indexOf('Registrar') !== -1);
         // De volta para onde ela morava: no fim da lista, dentro do que rola.
         const solta = barra.firstElementChild;
         solta.style.position = 'sticky';

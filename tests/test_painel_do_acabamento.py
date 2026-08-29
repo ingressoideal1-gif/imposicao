@@ -765,9 +765,17 @@ def test_a_trava_do_peso_esta_na_unica_porta_do_status():
     js = _ler("frontend/acabamento.js")
 
     i = js.index("mudarEstagio(itemId, osId, valor) {")
-    corpo = js[i:i + 1800]
-    assert "pesoExigidoAntesDoPronto" in corpo, "a trava precisa estar dentro do mudarEstagio"
+    corpo = js[i:i + 3200]
+    # A trava de 29/08/2026 vem primeiro: num pedido COM volume, o Pronto abre
+    # o registro em vez de gravar.
+    assert "pedidoTemVolumes()" in corpo, "a trava do volume precisa estar no mudarEstagio"
+    assert "abrirRegistro([item])" in corpo, "e precisa abrir a janela do registro"
+    # E a de 23/08 continua, para o pedido SEM volume -- o "pesado ao final".
+    assert "pesoExigidoAntesDoPronto" in corpo, "a trava do peso precisa continuar ali"
     assert "abrirPopupDoPeso()" in corpo, "e precisa abrir a saida na propria tela"
+    assert corpo.index("pedidoTemVolumes()") < corpo.index("pesoExigidoAntesDoPronto"), (
+        "o volume vem antes: com ele o peso do setor e a soma, e nao ha o que cobrar"
+    )
 
 
 def test_a_trava_do_peso_tem_saida_quando_nao_ha_onde_gravar():
@@ -903,9 +911,18 @@ def test_o_campo_do_peso_do_setor_continua_de_pe():
         "a faixa dos volumes entra ABAIXO dele, sem substitui-lo"
     )
 
-    # E adotar a soma passa pelo `gravarPeso`, que e quem conhece a regra dos
-    # 5 % e a senha de liberacao. Um atalho aqui furaria a senha.
-    i = js.index("function usarSomaDosVolumes(")
+    # Desde 29/08/2026 ele so e DIGITAVEL enquanto o pedido nao usa volumes.
+    # Com volumes o peso passa a ser a soma dos registros, e um campo digitavel
+    # ao lado dela convidaria a um segundo numero que discordaria do primeiro.
+    assert "const somado = pedidoTemVolumes();" in corpo, (
+        "o campo precisa saber se o pedido usa volumes"
+    )
+    assert 'data-somado="1"' in corpo, "com volumes ele vira leitura"
+    assert "soma dos volumes" in corpo, "e a tela diz de onde o numero vem"
+
+    # E quem escreve a soma na ficha do parceiro continua sendo o `gravarPeso`,
+    # que e quem conhece os dois caminhos de escrita e a senha de liberacao.
+    i = js.index("async function atualizarPesoDoSetorPelosVolumes(")
     assert "gravarPeso(" in js[i:js.index("\n    }", i)]
 
 
@@ -960,12 +977,12 @@ def test_o_volume_usa_a_mesma_regua_dos_cinco_por_cento_do_setor():
     """
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("async function confirmarVolume(")
+    i = js.index("async function confirmarRegistro(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "estimadoDoVolume(pacotes, modelosDoPedidoAberto())" in corpo, (
+    assert "estimadoDoVolume(linhas, modelos)" in corpo, (
         "o peso esperado tem de sair das quantidades digitadas"
     )
-    assert "precisaDeLiberacao(peso, est.kg)" in corpo, (
+    assert "precisaDeLiberacao(total, est.kg)" in corpo, (
         "a conferencia precisa passar pela MESMA funcao que o peso do setor usa"
     )
     assert "abrirPopupDaLiberacao()" in corpo, "e abrir a mesma janela de senha"
@@ -1002,12 +1019,12 @@ def test_a_conta_se_refaz_a_cada_tecla():
     """
     js = _ler("frontend/acabamento.js")
 
-    assert "oninput=\"AcabamentoPainel.recalcularVolume()\"" in js, (
+    assert "oninput=\"AcabamentoPainel.recalcularRegistro()\"" in js, (
         "os campos da janela precisam refazer a conta enquanto se digita"
     )
-    i = js.index("function pacotesDigitados(")
+    i = js.index("function linhasDigitadas(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "document.getElementById('acab-vol-qtd-'" in corpo, (
+    assert "document.getElementById('acab-reg-qtd-'" in corpo, (
         "as quantidades tem de ser lidas do DOM, e nao do estado de quando a "
         "janela abriu"
     )
@@ -1020,9 +1037,9 @@ def test_cancelar_a_senha_nao_apaga_o_trabalho_do_operador():
 
     i = js.index("function cancelarLiberacao(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "mostrarPopupDoVolume()" in corpo, "a janela do volume precisa voltar"
+    assert "mostrarRegistro()" in corpo, "a janela do registro precisa voltar"
 
-    i = js.index("function esconderPopupDoVolume(")
+    i = js.index("function esconderRegistro(")
     corpo = js[i:js.index("\n    }", i)]
     assert "display = 'none'" in corpo and "removeChild" not in corpo, (
         "esconder nao pode desmontar a janela: o que ele digitou tem de sobreviver"
@@ -1077,17 +1094,33 @@ def test_a_chave_do_pacote_deixa_dois_do_mesmo_modelo_na_mesma_caixa():
     assert "if exists (" in sql
 
 
-def test_o_pacote_e_gravado_com_quantidade_e_responsavel():
+def test_o_registro_e_gravado_com_quantidade_peso_e_responsavel():
+    """A coluna que sustenta a regra inteira de 29/08/2026: o peso e do
+    REGISTRO, e o do volume e a soma deles."""
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("async function gravarVolume(")
+    i = js.index("async function gravarRegistro(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "responsavel: (i.responsavel || '').trim() || null" in corpo, (
-        "cada pacote leva o nome de quem o fez"
+    assert "peso_kg: (l.peso === null || l.peso === undefined) ? null : l.peso" in corpo, (
+        "cada registro leva o peso que foi a balanca"
     )
-    assert "nome: (v.nome || '').trim() || null" in corpo, (
-        "e a caixa leva o nome que o operador deu -- vazio vira nulo"
+    assert "qtd: l.qtd" in corpo, "e a quantidade que entrou"
+    assert "responsavel: (dados.responsavel || '').trim() || null" in corpo, (
+        "e o nome de quem fez"
     )
+    # ACRESCIMO, e nao substituicao: o volume recebe modelos ao longo do dia.
+    assert ".delete()" not in corpo, (
+        "reescrever a lista apagaria o que ja estava no volume"
+    )
+    # E o espelho, para a estacao que ainda estiver com o painel anterior.
+    assert "campos = { peso_kg: gramas / 1000 }" in corpo, (
+        "producao_volumes.peso_kg recebe a soma, para a estacao atrasada"
+    )
+
+    # O nome do volume tem caminho proprio, e vazio vira NULO.
+    i = js.index("async function renomearVolume(")
+    corpo = js[i:js.index("\n    }", i)]
+    assert "nome: (texto || '').trim() || null" in corpo
 
 
 def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
@@ -1111,7 +1144,7 @@ def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
     assert "!podeEditar()" in corpo, "quem so le nao dispara escrita nenhuma"
 
     # E o volume gravado chama isso.
-    i = js.index("async function gravarVolumeConferido(")
+    i = js.index("async function gravarRegistroConferido(")
     corpo = js[i:js.index("\n    }", i)]
     assert "atualizarPesoDoSetorPelosVolumes(dados.setor)" in corpo
 
@@ -1121,7 +1154,7 @@ def test_o_peso_entra_antes_do_pronto_automatico():
     ultimo Pronto automatico fecharia um setor com o campo do peso vazio."""
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("async function gravarVolumeConferido(")
+    i = js.index("async function gravarRegistroConferido(")
     corpo = js[i:js.index("\n    }", i)]
     assert corpo.index("atualizarPesoDoSetorPelosVolumes") < corpo.index("fecharModelosEmbalados")
 
@@ -1133,11 +1166,11 @@ def test_o_peso_entra_antes_do_pronto_automatico():
     )
 
 
-def test_quem_assina_o_modelo_fechado_pelos_pacotes():
+def test_quem_assina_o_modelo_fechado_pelos_registros():
     """Um responsavel assina com o nome dele; mais de um, com o nome do setor."""
     js = _ler("frontend/acabamento.js")
 
-    i = js.index("function responsavelPelosPacotes(")
+    i = js.index("function responsavelPelosRegistros(")
     corpo = js[i:js.index("\n    }", i)]
 
     assert "if (nomes.length === 1 && !anonimo) return { nome: nomes[0], varios: false }" in corpo
@@ -1148,66 +1181,100 @@ def test_quem_assina_o_modelo_fechado_pelos_pacotes():
         "so fecha ao ATINGIR a quantidade total"
     )
     assert "if (!nomes.length) return null" in corpo, (
-        "todos os pacotes sem dono: ninguem assinou, e o modelo nao fecha"
+        "todos os registros sem dono: ninguem assinou, e o modelo nao fecha"
     )
 
     # Pronto ja dado nao e reescrito pela embalagem.
-    i = js.index("function fechamentosPelosPacotes(")
+    i = js.index("function fechamentosPelosRegistros(")
     corpo = js[i:js.index("\n    }", i)]
     assert "estagioDoModelo(i) !== 'Pronto'" in corpo, (
         "um Pronto ja dado e decisao de alguem: a caixa nao a desfaz nem a reescreve"
     )
 
 
-def test_o_tipo_pacote_saiu_da_lista_de_tipos_de_volume():
-    """O usuario passou a chamar de PACOTE o maco que vai dentro da caixa. Um
-    tipo de volume com o mesmo nome faria a janela dizer "pacote com 3 pacotes".
+SQL_DOS_VOLUMES_POR_REGISTRO = "sql/volumes_por_registro.sql"
+
+
+def _codigo(js):
+    """O JS sem comentario nenhum.
+
+    Os comentarios do arquivo CITAM as palavras que sairam, para explicar por
+    que elas sairam. O que a regra proibe e o que chega a tela.
     """
-    js = _ler("frontend/acabamento.js")
-
-    i = js.index("const TIPOS_DE_VOLUME = ")
-    linha = js[i:js.index("\n", i)]
-    assert "'Pacote'" not in linha, "o tipo 'Pacote' saiu da lista"
-    assert "'Caixa'" in linha, "e 'Caixa' continua sendo o padrao"
-
-    # Mas o valor ja gravado no banco nao pode se perder ao editar.
-    i = js.index("function selectDeTipoDoVolume(")
-    corpo = js[i:js.index("\n    }", i)]
-    assert "tipos.indexOf(escolhido) === -1) tipos.unshift(escolhido)" in corpo, (
-        "tipo antigo volta para a lista, senao editar um volume o trocaria sozinho"
+    sem_bloco = re.sub(r"/\*.*?\*/", " ", js, flags=re.S)
+    return "\n".join(
+        l for l in sem_bloco.split("\n") if not re.match(r"^\s*(//|\*)", l)
     )
 
 
-def test_os_campos_do_pacote_sao_numerados_pela_posicao():
-    """Dois pacotes do mesmo modelo na mesma caixa dariam dois campos com o
+def test_so_existe_o_conceito_de_volume():
+    """"retirar o conceito de caixa e pacote e rolo, teremos apenas o conceito
+    de volumes" -- o usuario, 29/08/2026."""
+    codigo = _codigo(_ler("frontend/acabamento.js"))
+
+    assert "TIPOS_DE_VOLUME" not in codigo, "o seletor de tipo do volume sumiu"
+    assert "selectDeTipoDoVolume" not in codigo, "e a funcao que o montava"
+    for palavra in ("'Caixa'", "'Fardo'", "'Rolo'", "'Palete'"):
+        assert palavra not in codigo, "o tipo " + palavra + " ainda esta na tela"
+    assert not re.search(r"[Pp]acote", codigo), (
+        "a palavra 'pacote' nao pode chegar a tela nem ao codigo"
+    )
+
+
+def test_o_sql_do_peso_por_registro_e_aditivo():
+    """A coluna que sustenta a regra inteira. Nada e apagado: `producao_volumes.tipo`
+    continua no banco com o que ja esta gravado, e so deixa de ser escrita."""
+    sql = _ler(SQL_DOS_VOLUMES_POR_REGISTRO).lower()
+
+    assert "add column if not exists peso_kg numeric(10,3)" in sql, (
+        "o registro ganha o peso que foi a balanca"
+    )
+    assert "add column if not exists registrado_em timestamptz" in sql, (
+        "e a hora em que ele entrou no volume"
+    )
+    assert "drop table" not in sql, "migracao aditiva nao derruba tabela"
+    assert "drop column" not in sql, "nem apaga coluna"
+    assert "rename to" not in sql, (
+        "renomear producao_volume_itens quebraria a estacao com o painel anterior"
+    )
+    # O peso dos volumes que ja existem desce para os registros deles: sem
+    # isso, todo volume anterior a hoje passaria a somar zero na tela.
+    assert "update public.producao_volume_itens" in sql, "o peso antigo e rateado"
+    assert "volumes_fora_da_conta" in sql, (
+        "e a conferencia do fim tem de provar que a soma bate com o que estava gravado"
+    )
+
+
+def test_os_campos_do_registro_sao_numerados_pela_posicao():
+    """Dois registros do mesmo modelo no mesmo volume dariam dois campos com o
     mesmo id, e o navegador entregaria sempre o primeiro."""
     js = _ler("frontend/acabamento.js")
 
-    assert 'id="acab-vol-qtd-${indice}"' in js
-    assert 'id="acab-vol-resp-${indice}"' in js
-    assert 'id="acab-vol-modelo-${indice}"' in js
-    assert "acab-vol-qtd-${esc(i.modeloId)}" not in js, (
-        "o id por modelo colidiria com dois pacotes do mesmo modelo"
+    assert 'id="acab-reg-qtd-${indice}"' in js
+    assert 'id="acab-reg-peso-${indice}"' in js
+    assert 'id="acab-reg-livre-${indice}"' in js
+    assert "acab-reg-qtd-${esc(l.modeloId)}" not in js, (
+        "o id por modelo colidiria com dois registros do mesmo modelo"
     )
 
 
-def test_mexer_na_lista_de_pacotes_nao_apaga_o_que_foi_digitado():
-    """"+ Pacote" e o botao de tirar redesenham a lista. Sem ler o DOM antes, as
-    quantidades e os nomes das linhas de cima virariam o valor de quando a
+def test_mexer_na_lista_do_registro_nao_apaga_o_que_foi_digitado():
+    """Tirar uma linha e trocar para "Pesar um a um" redesenham a lista. Sem ler
+    o DOM antes, as quantidades das linhas de cima virariam o valor de quando a
     janela abriu."""
     js = _ler("frontend/acabamento.js")
 
-    for nome in ("adicionarPacote", "removerPacote", "trocarModeloDoPacote"):
+    for nome in ("removerLinhaDoRegistro", "alternarPesagemPorModelo"):
         i = js.index("function " + nome + "(")
         corpo = js[i:js.index("\n    }", i)]
-        assert "lerPacotesDoDom()" in corpo, nome + " precisa guardar o que esta nos campos"
-        assert "repintarPacotes()" in corpo, nome + " precisa redesenhar a lista"
+        assert "lerRegistroDoDom()" in corpo, nome + " precisa guardar o que esta nos campos"
+        assert "repintarRegistro()" in corpo, nome + " precisa redesenhar a lista"
 
-    # E o redesenho e SO da lista: o peso e o nome ja digitados ficam.
-    i = js.index("function repintarPacotes(")
+    # E o redesenho e SO da lista: o que ja foi digitado fica.
+    i = js.index("function repintarRegistro(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "acab-vol-pacotes" in corpo
-    assert "acab-volume-janela" not in corpo, (
+    assert "acab-reg-linhas" in corpo
+    assert "acab-registro-janela" not in corpo, (
         "remontar a janela inteira apagaria o peso que o operador ja digitou"
     )
 
@@ -1260,8 +1327,8 @@ def test_a_foto_da_caixa_usa_o_bucket_que_ja_existe():
     i = js.index("async function salvarFotoDoVolume(")
     corpo = js[i:js.index("\n    }", i)]
     assert "subirFoto(" in corpo, "passa pelo mesmo upload da foto do modelo"
-    assert "volume_${v.numeroDoPedido}" in corpo, (
-        "e o nome do arquivo diz de qual caixa a foto e"
+    assert "volume_${r.numeroDoPedido}" in corpo, (
+        "e o nome do arquivo diz de qual volume a foto e"
     )
 
     # E o upload continua sendo um so, no bucket `artes`, prefixo proprio.
@@ -1277,20 +1344,20 @@ def test_a_foto_da_caixa_so_vai_ao_banco_no_gravar_volume():
 
     i = js.index("async function salvarFotoDoVolume(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "v.fotoUrl = url" in corpo, "o endereco fica na janela"
+    assert "r.fotoUrl = url" in corpo, "o endereco fica na janela"
     assert ".from(TABELA_DE_VOLUMES)" not in corpo, "e nao vai ao banco por aqui"
 
-    # Quem leva ao banco e o gravarVolume, e ele reencontra a foto ao EDITAR --
-    # senao corrigir o peso de uma caixa apagaria a foto dela.
-    i = js.index("async function gravarVolume(")
+    # Quem leva ao banco e o gravarRegistro. E ele so ESCREVE a foto quando ha
+    # uma: senao registrar de novo num volume ja fotografado a apagaria.
+    i = js.index("async function gravarRegistro(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "foto_url: (v.fotoUrl || '').trim() || null" in corpo
+    assert "if (foto) campos.foto_url = foto;" in corpo
 
-    i = js.index("function prepararVolumeEmEdicao(")
+    # E a janela nasce com a foto do volume escolhido, para nao trocar por
+    # engano a foto de um volume que ja tinha a dele.
+    i = js.index("function prepararRegistro(")
     corpo = js[i:js.index("\n    }", i)]
-    assert "fotoUrl: v.foto || ''" in corpo, (
-        "editar um volume tem de trazer de volta a foto que ja estava"
-    )
+    assert "fotoUrl: ultimo ? (ultimo.foto || '') : ''" in corpo
 
 
 def test_a_foto_do_revisor_vem_antes_da_foto_da_caixa():
@@ -1302,8 +1369,8 @@ def test_a_foto_do_revisor_vem_antes_da_foto_da_caixa():
     i = js.index("function blocoDaFoto(")
     corpo = js[i:js.index("\n    }", i)]
     assert "const foto = fotoDoModelo(item)" in corpo
-    assert "const daCaixa = foto ? null : fotoDoVolumeDoModelo(item)" in corpo, (
-        "a foto da caixa so aparece quando o modelo ainda nao tem a dele"
+    assert "const doVolume = foto ? null : fotoDoVolumeDoModelo(item)" in corpo, (
+        "a foto do volume so aparece quando o modelo ainda nao tem a dele"
     )
     # E o botao nao mente: sem foto propria ele continua dizendo "Fotografar".
     assert "${foto ? 'Refazer foto' : 'Fotografar'}" in corpo
