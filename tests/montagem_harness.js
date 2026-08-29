@@ -37,13 +37,26 @@ function extrair(nome) {
 const NOMES = [
     'posicoesDaMontagem', 'totalDeItensDoModelo', 'porQueNaoCabeNaMontagem',
     'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
-    'grupoDaMontagem',
+    'grupoDaMontagem', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
 ];
 
+// O `state` do painel, com o catálogo que a resolução do formato consulta.
+const state = {
+    formatos: [
+        { id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm', cols: 1, rows: 10, default_saida_id: 'S1' },
+        { id: 'F2', id_formato_num: 88, nome: 'PVC credencial',    cols: 2, rows: 2,  default_saida_id: 'S2' },
+    ],
+    produtosGlobais: [
+        { id_produto: 501, id_formato: 77 },
+        { id_produto: 502, id_formato: 88 },
+        { id_produto: 503, id_formato: 999 },   // aponta para formato que nao existe
+    ],
+};
+
 const api = new Function(
-    'fatiaCsvDoItem',
+    'fatiaCsvDoItem', 'state',
     NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};'
-)(null);
+)(null, state);
 
 // ── 1. As posições digitadas ────────────────────────────────────────────────
 {
@@ -239,6 +252,73 @@ const api = new Function(
 
     const qtdAlternativa = { qtd: 17 };
     ok(api.totalDeItensDoModelo(qtdAlternativa, null) === 17, 'a quantidade vale por `quantidade` ou por `qtd`');
+}
+
+// ── 7. O FORMATO, resolvido pela própria tela ───────────────────────────────
+//
+// O bloco que este harness não tinha, e por isso não pegou o defeito de
+// 29/08/2026: `formato_id` NÃO existe em `pedidos_modelos` — quem o preenche na
+// memória é o DESENHO da fila do Pedido. A Montagem carrega os modelos e nunca
+// desenha aquela fila, então os itens chegavam SEM FORMATO.
+//
+// Deu duas falhas, e a segunda é a que assusta: o payload ia com `formato: null`
+// e o motor recusou ("Formato não encontrado" na tela do operador); e a
+// conferência comparava '' com '' e devolvia "cabe" SEMPRE — a regra de
+// compatibilidade estava inerte, e uma folha com dois materiais diferentes teria
+// passado sem aviso.
+{
+    const item = { id: '1', _vibe_id_produto: 501 };
+    const f = api.formatoDoItem(item);
+    ok(f && f.id === 'F1', 'o formato sai do PRODUTO do item, como no desenho da fila', f);
+
+    const outro = api.formatoDoItem({ id: '2', _vibe_id_produto: 502 });
+    ok(outro && outro.id === 'F2', 'produto diferente, formato diferente', outro);
+
+    // Produto que aponta para formato inexistente cai no formato_id do item.
+    const orfao = api.formatoDoItem({ id: '3', _vibe_id_produto: 503, formato_id: 'F2' });
+    ok(orfao && orfao.id === 'F2', 'produto sem formato casado cai no formato_id do item', orfao);
+
+    ok(api.formatoDoItem({ id: '4' }) === null, 'sem produto e sem formato_id, nao inventa formato');
+    ok(api.formatoDoItem({ id: '5', _vibe_id_produto: 'sem_produto' }) === null,
+       '"sem_produto" e o mesmo que nao ter produto');
+    ok(api.formatoDoItem(null) === null, 'item nulo nao explode');
+
+    // A saida: a do item vence; sem ela, a padrao do formato.
+    ok(api.saidaIdDoItem({ saida_id: 'S9' }, state.formatos[0]) === 'S9', 'a saida do item vence');
+    ok(api.saidaIdDoItem({}, state.formatos[0]) === 'S1', 'sem ela, a padrao do formato');
+    ok(api.saidaIdDoItem({}, null) === '', 'sem as duas, vazio — e nao undefined');
+
+    // A peca normalizada, que a conferencia e o payload leem.
+    const p = api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' });
+    ok(p.formato_id === 'F1', 'a peca leva o formato resolvido', p);
+    ok(p.celulas_por_folha === 10, 'e quantas celulas cabem na folha — cols x rows', p);
+    ok(p.saida_id === 'S1', 'e a saida', p);
+    ok(p.formato_nome === 'Triband 245x20 mm', 'e o nome, para a trava mostrar', p);
+    ok(p._item && p._item.id === '1', 'e guarda o item, que o payload usa para a arte', !!p._item);
+
+    // A peca do item sem formato, e a recusa que ela agora produz.
+    const semFmt = api.pecaDaMontagem({ id: '9' });
+    ok(semFmt.formato_id === '', 'item sem formato produz peca sem formato');
+
+    const boa = api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' });
+    ok(api.porQueNaoCabeNaMontagem(semFmt, semFmt) !== null,
+       'DUAS pecas sem formato NAO cabem juntas — era isso que passava, e era a regra inteira inerte');
+    ok(api.porQueNaoCabeNaMontagem(boa, semFmt) !== null,
+       'e uma peca sem formato nao entra numa montagem que tem formato');
+    ok(/tela do Pedido/.test(api.porQueNaoCabeNaMontagem(boa, semFmt)),
+       'e a recusa diz o que fazer: abrir o pedido na tela do Pedido uma vez',
+       api.porQueNaoCabeNaMontagem(boa, semFmt));
+
+    // Duas pecas de formatos diferentes continuam recusadas pelo motivo certo.
+    const outraF = api.pecaDaMontagem({ id: '2', _vibe_id_produto: 502, cor: 'Azul', verso_tipo: 'Frente' });
+    ok(api.porQueNaoCabeNaMontagem(boa, outraF) === 'o formato é outro',
+       'formatos diferentes continuam recusados, e pelo motivo certo');
+
+    // E duas pecas iguais continuam cabendo — a guarda nova nao pode barrar
+    // o caminho que funciona.
+    ok(api.porQueNaoCabeNaMontagem(boa, api.pecaDaMontagem(
+        { id: '7', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' })) === null,
+       'e duas pecas do mesmo produto e da mesma cor cabem, como sempre');
 }
 
 if (falhas) {

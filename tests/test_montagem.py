@@ -118,6 +118,50 @@ def test_a_arte_leva_a_tiragem_inteira_no_payload():
     )
 
 
+def test_a_montagem_resolve_o_formato_por_conta_propria():
+    """O defeito que so' apareceu em producao, em 29/08/2026.
+
+    `formato_id` NAO existe em `pedidos_modelos`: quem o preenche na memoria e' o
+    DESENHO da fila do Pedido (`renderPedOSQueue`), a partir do produto do ERP. A
+    Montagem carrega os modelos com o `loadOSItens` e nunca desenha aquela fila,
+    entao os itens chegavam SEM FORMATO.
+
+    Deu duas falhas, e a segunda e' pior que a primeira:
+
+      1. o payload ia com `formato: null` e o motor recusou — o operador viu
+         "Erro 500: 400: Formato nao encontrado";
+      2. o `porQueNaoCabeNaMontagem` comparava '' com '' e devolvia "cabe"
+         SEMPRE. A regra de compatibilidade que o usuario decidiu estava
+         INERTE, e uma folha com dois materiais diferentes teria passado sem
+         nenhum aviso — descoberta na impressora.
+
+    A tela passou a resolver o formato pela MESMA regra do desenho da fila:
+    produto do item -> `id_formato` do produto -> o formato cujo `id_formato_num`
+    casa.
+    """
+    js = _ler("frontend/montagem.js")
+
+    assert "function formatoDoItem(" in js, "a resolucao do formato sumiu"
+    corpo = js[js.index("function formatoDoItem(item) {"):]
+    corpo = corpo[:corpo.index("\n}") + 2]
+    assert "_vibe_id_produto" in corpo and "id_formato_num" in corpo, (
+        "a resolucao deixou de seguir o produto do ERP, que e' a regra do "
+        "desenho da fila"
+    )
+    assert "autoSaveOSItemField" not in corpo, (
+        "a Montagem passou a GRAVAR o formato no pedido; ela e' tela de leitura "
+        "e nao tem por que carimbar o pedido de ninguem"
+    )
+
+    # A guarda que faltava: peca sem formato nao passa.
+    conf = js[js.index("function porQueNaoCabeNaMontagem(a, b) {"):]
+    conf = conf[:conf.index("\n}") + 2]
+    assert "if (!a.formato_id)" in conf and "if (!b.formato_id)" in conf, (
+        "voltou a comparar formato vazio com formato vazio, e a regra inteira "
+        "fica inerte de novo"
+    )
+
+
 def test_a_montagem_nao_tem_caminho_para_a_nuvem():
     """Impressao so' acontece pela estacao da grafica.
 

@@ -4,6 +4,55 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — A Montagem não sabia o formato (v772)
+
+Relato do usuário logo depois da v771, ao gerar o PDF:
+
+```
+Erro 500: 400: Formato não encontrado.
+```
+
+### A causa, e a segunda falha que ela escondia
+
+**`formato_id` não existe em `pedidos_modelos`.** Quem o preenche na memória é o
+**desenho da fila do Pedido** (`renderPedOSQueue`), a partir do produto do ERP. A
+Montagem carrega os modelos com o `loadOSItens` e nunca desenha aquela fila —
+então os itens chegavam ali **sem formato**.
+
+O erro do motor foi o sintoma visível. **O invisível era pior:** o
+`porQueNaoCabeNaMontagem` comparava `'' !== ''`, falso nas quatro conferências, e
+devolvia *"cabe"* **sempre**. A regra que o usuário decidiu — formato, cor, saída
+e face — estava **inerte**. Uma folha com dois materiais diferentes teria passado
+sem um aviso, e a descoberta seria na impressora.
+
+### O conserto
+
+A Montagem passou a resolver o formato pela **mesma regra** do desenho da fila —
+produto do item → `id_formato` do produto → o formato cujo `id_formato_num` casa
+—, a guardar o resultado numa **peça normalizada** que a conferência e o payload
+leem (antes cada um resolvia por um caminho, e podiam discordar), e a **recusar**
+a célula cujo formato ela não consegue resolver, dizendo o que fazer.
+
+Ela **não grava** o resultado de volta: o desenho da fila escreve com
+`autoSaveOSItemField`, mas a Montagem é tela de leitura e não carimba pedido de
+ninguém.
+
+### A lição, que vale além desta tela
+
+Um campo que **parece** vir do banco pode ser preenchido pelo *desenho* de outra
+tela. Tela nova que lê modelos não pode supor que outra tela já rodou.
+
+E o formato do defeito repete: **a conferência que compara campos vazios não
+falha — ela passa.** É a forma mais silenciosa de uma regra morrer, e é a
+terceira vez em dois dias: a trava da gerência (28/08) e a trava do Hot Folder
+(29/08) também nasceram inertes, as duas pegas por harness.
+
+**20 verificações novas** no núcleo (42 → 62), e o harness da tela passou a montar
+o item **sem `formato_id`**, como ele chega do banco, exercitando a resolução de
+verdade em vez de semear o resultado pronto.
+
+---
+
 ## [2026-08-29] — Montagem: refazer células de pedidos diferentes numa folha só
 
 > *"vamos criar uma nova página/menu, vai se chamar Montagem, ela será utilizada

@@ -129,6 +129,83 @@ function totalDeItensDoModelo(item, num) {
 }
 
 /**
+ * O FORMATO deste modelo, resolvido aqui — e essa é a parte que quase custou
+ * caro.
+ *
+ * `formato_id` NÃO existe em `pedidos_modelos`: quem o preenche na memória é o
+ * DESENHO da fila do Pedido (`renderPedOSQueue`), a partir do produto do ERP.
+ * A Montagem carrega os modelos com o `loadOSItens` e nunca desenha aquela
+ * fila, então os itens chegavam aqui **sem formato**.
+ *
+ * Isso produziu duas falhas em 29/08/2026, e a segunda é pior que a primeira:
+ *
+ *  1. o payload ia com `formato: null` e o motor recusava — "Formato não
+ *     encontrado", que ao menos aparece na tela;
+ *  2. o `porQueNaoCabeNaMontagem` comparava `'' !== ''` e devolvia "cabe"
+ *     SEMPRE. A regra que o usuário decidiu — formato, cor, saída e face —
+ *     estava **inerte**, e uma folha com dois materiais diferentes teria
+ *     passado sem um aviso.
+ *
+ * A regra abaixo é a MESMA do desenho da fila, e não uma aproximação: produto
+ * do item → `id_formato` do produto → o formato cujo `id_formato_num` casa.
+ * Sem produto ou sem casamento, vale o `formato_id` que o item porventura
+ * traga do banco.
+ *
+ * Não grava nada. O desenho da fila escreve o resultado de volta com
+ * `autoSaveOSItemField`; a Montagem é tela de leitura e não tem por que
+ * carimbar o pedido de ninguém.
+ */
+function formatoDoItem(item) {
+    if (!item) return null;
+
+    const prodId = item._vibe_id_produto;
+    if (prodId && prodId !== 'sem_produto') {
+        const prod = (state.produtosGlobais || [])
+            .find(p => String(p.id_produto) === String(prodId));
+        if (prod && prod.id_formato) {
+            const f = (state.formatos || [])
+                .find(x => String(x.id_formato_num) === String(prod.id_formato));
+            if (f) return f;
+        }
+    }
+
+    if (item.formato_id) {
+        return (state.formatos || [])
+            .find(x => String(x.id) === String(item.formato_id)) || null;
+    }
+
+    return null;
+}
+
+/** A saída: a do item, ou a padrão do formato — a mesma ordem do desenho da fila. */
+function saidaIdDoItem(item, fmt) {
+    if (item && item.saida_id) return String(item.saida_id);
+    if (fmt && fmt.default_saida_id) return String(fmt.default_saida_id);
+    return '';
+}
+
+/**
+ * A peça normalizada: o que a conferência compara e o que o payload usa.
+ *
+ * Existe para os dois lerem a MESMA coisa. Enquanto a conferência olhava
+ * `item.formato_id` cru e o payload resolvia por outro caminho, dava para a
+ * tela aceitar uma célula que o motor recusaria — que foi exatamente o que
+ * aconteceu.
+ */
+function pecaDaMontagem(item) {
+    const fmt = formatoDoItem(item);
+    return {
+        formato_id: fmt ? String(fmt.id) : '',
+        formato_nome: fmt ? (fmt.nome || '') : '',
+        celulas_por_folha: fmt ? ((parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0)) : 0,
+        saida_id: saidaIdDoItem(item, fmt),
+        cor: item ? (item.cor || item.padrao || '') : '',
+        verso_tipo: item ? item.verso_tipo : null,
+        _item: item,
+    };
+}
+
+/**
  * Por que estas duas peças NÃO podem dividir a mesma folha de montagem.
  *
  * Devolve o motivo em português, ou `null` quando cabem.
@@ -158,6 +235,13 @@ function totalDeItensDoModelo(item, num) {
  */
 function porQueNaoCabeNaMontagem(a, b) {
     if (!a || !b) return null;
+
+    // Peça sem formato conhecido NAO passa. Antes de 29/08/2026 ela passava:
+    // duas pecas sem formato comparavam '' com '' e a conferencia dizia "cabe",
+    // deixando a regra inteira inerte. Quem nao sabe o proprio formato nao pode
+    // ser comparado com ninguem.
+    if (!a.formato_id) return 'não sei o formato da folha desta montagem';
+    if (!b.formato_id) return 'não dá para saber o formato deste modelo — abra o pedido na tela do Pedido uma vez e volte aqui';
 
     const cor = x => String(x.cor || x.padrao || '').toLowerCase().trim();
     const face = x => (x.verso_tipo && x.verso_tipo !== 'Frente' && x.verso_tipo !== 'SÓ FRENTE')
@@ -270,11 +354,12 @@ function _mtgNumeracaoDoItem(item) {
     return num;
 }
 
-/** Quantas células cabem numa folha deste formato. */
-function _mtgCelulasPorFolha(formatoId) {
-    const f = (state.formatos || []).find(x => String(x.id) === String(formatoId));
-    if (!f) return 0;
-    return (parseInt(f.cols) || 0) * (parseInt(f.rows) || 0);
+/** Quantas células cabem na folha desta montagem. */
+function _mtgCelulasPorFolha(grupos) {
+    // Vem da PECA resolvida, e nao de uma busca propria: duas resolucoes do
+    // mesmo formato podem discordar, e ai a conta da folha diria uma coisa e o
+    // papel sairia outra.
+    return (grupos && grupos.length) ? (grupos[0].peca.celulas_por_folha || 0) : 0;
 }
 
 /**
@@ -380,16 +465,21 @@ function onMontagemPosicoesChange() {
     let recusa = null;
 
     if (item) {
+        const peca = pecaDaMontagem(item);
         const grupos = state.montagem.grupos;
-        if (grupos.length) {
-            const primeiro = grupos[0];
-            recusa = porQueNaoCabeNaMontagem(primeiro.peca, item);
+        if (!peca.formato_id) {
+            // Sem formato nao da para conferir nem para impor: melhor dizer
+            // aqui do que deixar o motor recusar com o material ja esperando.
+            recusa = 'não dá para saber o formato deste modelo — abra o pedido na tela do Pedido uma vez e volte aqui';
+        } else if (grupos.length) {
+            recusa = porQueNaoCabeNaMontagem(grupos[0].peca, peca);
         }
     }
 
     if (caixaRecusa) {
         if (recusa && item) {
-            caixaRecusa.innerHTML = _mtgHtmlDaRecusa(recusa, state.montagem.grupos[0].peca, item);
+            const daFolha = state.montagem.grupos.length ? state.montagem.grupos[0].peca : null;
+            caixaRecusa.innerHTML = _mtgHtmlDaRecusa(recusa, daFolha, pecaDaMontagem(item));
             caixaRecusa.style.display = 'flex';
         } else {
             caixaRecusa.style.display = 'none';
@@ -422,7 +512,19 @@ function onMontagemPosicoesChange() {
 
 /** O aviso de que este modelo não cabe — com o que difere E o que fazer. */
 function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
-    const cor = x => escapeHtml(String(x.cor || x.padrao || '—'));
+    const cor = x => escapeHtml(String((x && (x.cor || x.padrao)) || '—'));
+    // Sem folha ainda (o primeiro modelo e' que nao tem formato), a comparacao
+    // nao existe — e prometer uma comparacao vazia so' confundiria.
+    const comparacao = aceita ? `
+          <p style="margin:0 0 10px;font-size:0.82rem;color:var(--text);line-height:1.55;">
+            A folha já está em <strong>${cor(aceita)}</strong> e este modelo é <strong>${cor(tentado)}</strong>.
+            Uma folha é de um material só — as duas não saem da mesma passagem pela impressora.
+          </p>` : '';
+    const saida = aceita ? `
+          <button type="button" class="btn btn-secondary btn-sm" onclick="limparMontagem()">
+            Começar uma montagem com este modelo
+          </button>
+          <span style="font-size:0.76rem;color:var(--text-faint);margin-left:8px;">a montagem atual é descartada</span>` : '';
     return `
         <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" style="flex-shrink:0;color:var(--red);margin-top:1px;">
           <path fill="currentColor" d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg>
@@ -430,14 +532,7 @@ function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
           <p style="margin:0 0 7px;font-size:0.9rem;font-weight:700;color:#fca5a5;line-height:1.4;">
             Este modelo não cabe nesta montagem: ${escapeHtml(motivo)}.
           </p>
-          <p style="margin:0 0 10px;font-size:0.82rem;color:var(--text);line-height:1.55;">
-            A folha já está em <strong>${cor(aceita)}</strong> e este modelo é <strong>${cor(tentado)}</strong>.
-            Uma folha é de um material só — as duas não saem da mesma passagem pela impressora.
-          </p>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="limparMontagem()">
-            Começar uma montagem com este modelo
-          </button>
-          <span style="font-size:0.76rem;color:var(--text-faint);margin-left:8px;">a montagem atual é descartada</span>
+          ${comparacao}${saida}
         </div>`;
 }
 
@@ -446,15 +541,19 @@ function adicionarNaMontagem() {
     const item = _mtgItemEscolhido();
     if (!item) return;
 
+    const peca = pecaDaMontagem(item);
+    // A ULTIMA barreira antes do papel. A tela ja avisa ao escolher o modelo,
+    // mas quem decide o que entra na montagem e' esta linha: sem formato, ou
+    // incompativel, nao entra.
+    if (!peca.formato_id) return;
+
     const grupos = state.montagem.grupos;
-    if (grupos.length) {
-        const recusa = porQueNaoCabeNaMontagem(grupos[0].peca, item);
-        if (recusa) return;
-    }
+    if (grupos.length && porQueNaoCabeNaMontagem(grupos[0].peca, peca)) return;
 
     const num = _mtgNumeracaoDoItem(item);
     const total = totalDeItensDoModelo(item, num);
     const campo = document.getElementById('mtg-posicoes');
+    void num;
     const { posicoes } = posicoesDaMontagem(campo ? campo.value : '', total);
     if (!posicoes.length) return;
 
@@ -472,7 +571,7 @@ function adicionarNaMontagem() {
             nome: item.nome_modelo || item.produto || 'modelo',
             qtd: total,
             posicoes: [],
-            peca: item,
+            peca: peca,
         };
         grupos.push(g);
     }
@@ -513,7 +612,7 @@ function renderMontagem() {
     if (!lista) return;
 
     const celulas = totalDeCelulasDaMontagem(grupos);
-    const porFolha = grupos.length ? _mtgCelulasPorFolha(grupos[0].peca.formato_id) : 0;
+    const porFolha = _mtgCelulasPorFolha(grupos);
     const conta = contaDaMontagem(grupos, porFolha);
 
     if (btnPdf) btnPdf.disabled = celulas === 0;
@@ -531,7 +630,6 @@ function renderMontagem() {
             trava.style.display = 'none';
         } else {
             const p = grupos[0].peca;
-            const fmt = (state.formatos || []).find(f => String(f.id) === String(p.formato_id));
             const sai = (state.saidas || []).find(s => String(s.id) === String(p.saida_id));
             const face = (p.verso_tipo && p.verso_tipo !== 'Frente' && p.verso_tipo !== 'SÓ FRENTE')
                 ? 'Frente e verso' : 'Só frente';
@@ -540,8 +638,8 @@ function renderMontagem() {
                   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2zm-8-2a3 3 0 0 1 6 0v2H9V7z"/></svg>
                   A folha aceita
                 </span>
-                <span class="mtg-chip">${escapeHtml(fmt ? fmt.nome : 'formato ' + p.formato_id)}</span>
-                <span class="mtg-chip">${escapeHtml(String(p.cor || p.padrao || 'sem cor'))}</span>
+                <span class="mtg-chip">${escapeHtml(p.formato_nome || ('formato ' + p.formato_id))}</span>
+                <span class="mtg-chip">${escapeHtml(String(p.cor || 'sem cor'))}</span>
                 <span class="mtg-chip">${escapeHtml(sai ? sai.nome : 'saída ' + p.saida_id)}</span>
                 <span class="mtg-chip">${face}</span>
                 <span style="margin-left:auto;font-size:0.75rem;color:var(--text-faint);">definido pela primeira célula</span>`;
@@ -721,26 +819,30 @@ async function _mtgEstacao() {
  */
 function payloadDaMontagem(grupos) {
     const primeiro = grupos[0].peca;
+    // O formato e a saida vem da PECA — resolvidos uma vez, no `pecaDaMontagem`.
+    // Buscar de novo aqui abriria espaco para a tela e o payload discordarem,
+    // que foi o defeito de 29/08/2026.
     const fmt = (state.formatos || []).find(f => String(f.id) === String(primeiro.formato_id)) || null;
     const sai = (state.saidas || []).find(s => String(s.id) === String(primeiro.saida_id)) || null;
 
     const artes = grupos.map(g => {
-        const num = _mtgNumeracaoDoItem(g.peca);
+        const it = g.peca._item || {};
+        const num = _mtgNumeracaoDoItem(it);
         return {
             qtd: g.qtd,
-            pdf_url: g.peca.arte_url || null,
-            pdf_verso_url: g.peca.arte_verso_url || null,
+            pdf_url: it.arte_url || null,
+            pdf_verso_url: it.arte_verso_url || null,
             pdf_name: g.nome,
             nome: '',
             nome_color: '#000000',
             num1_id: num ? num.id : null,
             num2_id: null,
-            start: parseInt(g.peca.num_inicial || g.peca.numeracao_inicio || 1) || 1,
+            start: parseInt(it.num_inicial || it.numeracao_inicio || 1) || 1,
             numeracao: num,
             numeracao_2: null,
             has_raw_file: false,
-            q_cam: parseInt(g.peca.q_cam) || 0,
-            l_cam: parseInt(g.peca.l_cam) || 1,
+            q_cam: parseInt(it.q_cam) || 0,
+            l_cam: parseInt(it.l_cam) || 1,
             modelo: g.itemId,
             pedido: g.pedidoNumero || null,
         };

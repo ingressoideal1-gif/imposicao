@@ -46,6 +46,8 @@ const FUNCOES = [
     'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
     'grupoDaMontagem', '_mtgCelulasPorFolha', 'renderMontagem', 'limparMontagem',
     'removerDaMontagem', '_mtgHtmlDaRecusa', 'payloadDaMontagem', '_mtgNumeracaoDoItem',
+    // A resolucao do formato: o caminho que faltava na primeira versao.
+    'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
 ];
 
 // Três pedidos, quatro modelos, todos do mesmo formato/cor/saída/face.
@@ -96,7 +98,12 @@ const PECAS = [
     const PRELUDIO = [
         "const state = {",
         "  montagem: { grupos: [], pedidoSel: null, modeloSel: null },",
-        "  formatos: [{ id: 'F1', nome: 'Triband 245x20 mm', cols: 1, rows: 10 }],",
+        // O catalogo que a resolucao do formato consulta. O produto 501 e' o
+        // caminho de verdade: `formato_id` nao existe em pedidos_modelos, e a
+        // Montagem resolve pelo produto do ERP.
+        "  formatos: [{ id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm',",
+        "               cols: 1, rows: 10, default_saida_id: 'S1' }],",
+        "  produtosGlobais: [{ id_produto: 501, id_formato: 77 }],",
         "  saidas:   [{ id: 'S1', nome: 'SRA3' }],",
         "  numeracoes: [], osItens: {}, ordens: [],",
         "};",
@@ -117,15 +124,20 @@ const PECAS = [
         "window.limparMontagem = limparMontagem;",
         "window.porQueNaoCabeNaMontagem = porQueNaoCabeNaMontagem;",
         "window.payloadDaMontagem = payloadDaMontagem;",
+        "window.pecaDaMontagem = pecaDaMontagem;",
         "window.posicoesCombinadas = posicoesCombinadas;",
-        "window.__peca = function (p) { return {",
+        // O ITEM como ele chega do banco: SEM formato_id. Quem resolve o
+        // formato e' o `pecaDaMontagem`, pelo produto — que e' o caminho que
+        // faltava e derrubou a primeira versao em producao.
+        "window.__item = function (p) { return {",
         "  id: p.id, nome_modelo: p.nome, quantidade: p.qtd,",
-        "  formato_id: 'F1', cor: 'Azul Celeste', saida_id: 'S1', verso_tipo: 'Frente',",
+        "  _vibe_id_produto: 501, cor: 'Azul Celeste', verso_tipo: 'Frente',",
         "  amostra_num_id: null, arte_url: 'x.pdf', num_inicial: 1 }; };",
         "window.__montar = function (pecas) {",
         "  state.montagem.grupos = pecas.map(function (p) { return {",
         "    osId: p.osId, itemId: p.id, pedidoNumero: p.pedido, nome: p.nome,",
-        "    qtd: p.qtd, posicoes: p.pos.slice(), peca: window.__peca(p) }; });",
+        "    qtd: p.qtd, posicoes: p.pos.slice(),",
+        "    peca: pecaDaMontagem(window.__item(p)) }; });",
         "  renderMontagem();",
         "};",
     ].join('\n');

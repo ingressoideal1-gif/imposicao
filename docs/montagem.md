@@ -164,7 +164,49 @@ todas as posições dos modelos seguintes sairiam erradas.
 
 ---
 
-## 6. O que a Montagem não faz
+## 6. O defeito de estreia, e o que ele ensinou
+
+A primeira versão foi ao ar na **v771** e o operador viu, ao gerar o PDF:
+
+```
+Erro 500: 400: Formato não encontrado.
+```
+
+**A causa:** `formato_id` **não existe** em `pedidos_modelos`. Quem o preenche na
+memória é o **desenho da fila do Pedido** (`renderPedOSQueue`), a partir do
+produto do ERP. A Montagem carrega os modelos com o `loadOSItens` e nunca desenha
+aquela fila — então os itens chegavam **sem formato**.
+
+**E a segunda falha era pior que a primeira.** O erro do motor ao menos aparece
+na tela. Mas o `porQueNaoCabeNaMontagem` comparava `'' !== ''`, que é falso em
+todas as quatro conferências — e devolvia *"cabe"* **sempre**. A regra de
+compatibilidade que o usuário decidiu estava **inerte**: uma folha com dois
+materiais diferentes teria passado sem um aviso, e a descoberta seria na
+impressora.
+
+**O conserto:** a Montagem resolve o formato pela **mesma regra** do desenho da
+fila — produto do item → `id_formato` do produto → o formato cujo
+`id_formato_num` casa —, guarda o resultado numa **peça normalizada**
+(`pecaDaMontagem`) que a conferência e o payload leem, e **recusa** a célula cujo
+formato ela não consegue resolver, dizendo o que fazer.
+
+Ela **não grava** o resultado: o desenho da fila escreve de volta com
+`autoSaveOSItemField`, mas a Montagem é tela de leitura e não carimba o pedido de
+ninguém.
+
+> **A lição, que vale além desta tela:** um campo que parece vir do banco pode
+> ser preenchido pelo *desenho* de outra tela. Tela nova que lê modelos não pode
+> supor que outra tela já rodou — e a conferência que compara campos vazios não
+> falha, ela **passa**, que é a forma mais silenciosa de uma regra morrer. Foi o
+> mesmo formato de defeito da trava da gerência em 28/08 e da trava do Hot Folder
+> em 29/08: nasceram inertes.
+
+Os dois harnesses ganharam o caso. O da tela passou a montar o item **sem
+`formato_id`**, como ele chega do banco, e a exercitar a resolução de verdade.
+
+---
+
+## 7. O que a Montagem não faz
 
 - **Não muda status nem quantidade.** É reposição: o modelo já está impresso, a
   quantidade contratada é do ERP e não se escreve de volta.
@@ -175,11 +217,11 @@ todas as posições dos modelos seguintes sairiam erradas.
 
 ---
 
-## 7. Testes
+## 8. Testes
 
 | Harness | Verificações | O que trava |
 |---|---|---|
-| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 42 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
+| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 62 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
 | [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 38 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout e o payload |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta o
