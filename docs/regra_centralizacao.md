@@ -31,7 +31,7 @@ const drawY = (canvasHeight - drawH) / 2;
 ---
 
 ### B. No Motor de Imposição (Backend - PyMuPDF)
-No arquivo [engine.py](file:///c:/Users/Junior/.gemini/antigravity/Projetos%20Ingresso%20ideal/ideal-imposition/engine.py), ao impor as páginas individuais do PDF na grade de células da folha de saída:
+No arquivo [engine.py](../engine.py), ao impor as páginas individuais do PDF na grade de células da folha de saída:
 1. Obtemos a largura (`base_w`) e a altura (`base_h`) da página a partir de `page_base.rect.width` e `page_base.rect.height` (que representam a área útil pós-corte do CropBox).
 2. Calculamos o retângulo de destino centralizado na célula física da folha:
 

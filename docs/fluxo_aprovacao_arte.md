@@ -799,13 +799,13 @@ flowchart LR
 
 | Função | Linha | Descrição |
 |--------|-------|-----------|
-| [renderAmostrasOSItens](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L12570) | ~12570 | Renderiza as janelas de cada modelo com dropdowns de cor/num, upload de arte, botões de decisão |
-| [renderItemAmostraCombinada](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L13110) | ~13110 | Desenha a visualização combinada (cor + numeração + arte) no canvas |
-| [voltarParaAtendimento](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L12815) | ~12815 | Verifica se todos os modelos estão PRONTO, atualiza status e gera link |
-| [changeOSStatus](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L12099) | ~12099 | Altera status da OS (localStorage + Supabase) |
-| [getOrCreateLinkCliente](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L13944) | ~13944 | Busca ou cria o link do cliente na tabela `pedidos_links_cliente` |
-| [gerarLinkCliente](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L13989) | ~13989 | Wrapper que gera link, copia para clipboard e exibe toast |
-| [saveAmostraToDB](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L13030) | ~13030 | Salva dados de amostra (cor, numeração, arte, status) no banco |
+| [renderAmostrasOSItens](../frontend/script.js#L12570) | ~12570 | Renderiza as janelas de cada modelo com dropdowns de cor/num, upload de arte, botões de decisão |
+| [renderItemAmostraCombinada](../frontend/script.js#L13110) | ~13110 | Desenha a visualização combinada (cor + numeração + arte) no canvas |
+| [voltarParaAtendimento](../frontend/script.js#L12815) | ~12815 | Verifica se todos os modelos estão PRONTO, atualiza status e gera link |
+| [changeOSStatus](../frontend/script.js#L12099) | ~12099 | Altera status da OS (localStorage + Supabase) |
+| [getOrCreateLinkCliente](../frontend/script.js#L13944) | ~13944 | Busca ou cria o link do cliente na tabela `pedidos_links_cliente` |
+| [gerarLinkCliente](../frontend/script.js#L13989) | ~13989 | Wrapper que gera link, copia para clipboard e exibe toast |
+| [saveAmostraToDB](../frontend/script.js#L13030) | ~13030 | Salva dados de amostra (cor, numeração, arte, status) no banco |
 
 ### Página do Cliente
 

@@ -302,6 +302,37 @@ Get-ChildItem "frontend\*.html" | ForEach-Object {
     }
 }
 
+# ─── Cabecalho do CHANGELOG ──────────────────────────────────────────────────
+# O cabecalho do CHANGELOG.md da raiz diz "Versao atual: vNNN | Agente X.Y.Z".
+# Escrito a mao, ele ficou parado em v707 por ONZE publicacoes — o proprio
+# arquivo registra o episodio. Numero errado num arquivo que se le para saber o
+# numero e' pior do que numero nenhum, entao agora quem escreve e' a publicacao.
+$changelogRaiz = "$raiz\CHANGELOG.md"
+if (Test-Path $changelogRaiz) {
+    $agente = ''
+    $mv = [regex]::Match((Get-Content -Raw -Encoding UTF8 "$raiz\agent_version.py"),
+                         'AGENT_VERSION\s*=\s*"([\d.]+)"')
+    if ($mv.Success) { $agente = $mv.Groups[1].Value }
+
+    $hoje = Get-Date -Format 'yyyy-MM-dd'
+    $linha = "## Vers" + [char]0xE3 + "o atual: **v$proxima** " + [char]0x2014 + " $hoje"
+    if ($agente) { $linha += " | Agente **$agente**" }
+
+    $texto = Get-Content -Raw -Encoding UTF8 $changelogRaiz
+    # `Vers.o` sem o acento no padrao: este script e' lido em contextos que nem
+    # sempre acertam a codificacao, e o ponto casa com o "a" til de qualquer jeito.
+    $novoTexto = [regex]::Replace($texto, '(?m)^## Vers.o atual:.*$', $linha, 1)
+    if ($novoTexto -ne $texto) {
+        # WriteAllText com UTF8Encoding($false), e nao Set-Content -Encoding UTF8:
+        # o Set-Content do PowerShell 5.1 grava UTF-8 COM BOM, e o BOM entraria no
+        # arquivo na primeira publicacao, mexendo num byte que ninguem pediu.
+        [System.IO.File]::WriteAllText($changelogRaiz, $novoTexto,
+                                       (New-Object System.Text.UTF8Encoding($false)))
+        $bumpados += 'CHANGELOG.md'
+        Write-Host "  CHANGELOG.md: cabecalho em v$proxima / agente $agente" -ForegroundColor Gray
+    }
+}
+
 # ─── Git ─────────────────────────────────────────────────────────────────────
 Write-Host "Commitando..." -ForegroundColor Cyan
 if ($Somente) {

@@ -204,4 +204,4 @@ Para manter o banco de dados leve e com excelente tempo de resposta, arquivos bi
 ### 10. SQL (DDL e Migrations)
 
 *   **Aviso Importante:** *Nenhum comando SQL foi executado ou gerado no banco Supabase até o presente momento.*
-*   O script SQL com as definições físicas exatas de tabelas, triggers e índices foi previamente rascunhado no arquivo local [schema_imposition.sql](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/schema_imposition.sql) e está integralmente **bloqueado**. A sua liberação e execução só serão realizadas após a aprovação formal de todos os itens deste documento técnico por parte do parceiro.
+*   O script SQL com as definições físicas exatas de tabelas, triggers e índices foi previamente rascunhado no arquivo local [schema_imposition.sql](../sql/schema_imposition.sql) e está integralmente **bloqueado**. A sua liberação e execução só serão realizadas após a aprovação formal de todos os itens deste documento técnico por parte do parceiro.

@@ -4,16 +4,19 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v744** — 2026-08-27 | Agente **1.2.239**
+## Versão atual: **v769** — 2026-08-29 | Agente **1.2.259**
 
 > [!IMPORTANT]
-> **O registro detalhado vive em `docs/CHANGELOG.md`.** Este arquivo tem as
-> entradas por versão até a **v707** (24/08/2026); a partir da v708 as entradas
-> passaram a ser escritas lá, por data, e é lá que está o histórico das telas.
+> **O registro detalhado vive em [`docs/CHANGELOG.md`](docs/CHANGELOG.md).** Este
+> arquivo tem as entradas por versão até a **v707** (24/08/2026); a partir da
+> v708 as entradas passaram a ser escritas lá, por data, e é lá que está o
+> histórico das telas.
 >
-> Este cabeçalho ficou parado em v707 por onze publicações — o que é pior do que
-> não ter cabeçalho, porque quem abre o arquivo lê um número e acredita. Quando
-> voltar a divergir, é aqui que se conserta.
+> **A linha acima não é mais escrita à mão.** Ela ficou parada em v707 por onze
+> publicações — número errado num arquivo que se lê justamente para saber o
+> número. Desde 29/08/2026 quem a escreve é o `publicar.ps1`, a cada publicação,
+> com a versão que acabou de subir e a versão do agente que está no repositório.
+> Se ela voltar a divergir, o conserto é no script, não aqui.
 
 ---
 
@@ -2662,7 +2665,7 @@ A tela do porteiro já abria sem rede e já guardava o evento inteiro no celular
 faltava era ela ser um **aplicativo**: com ícone na tela de início, sem barra de navegador,
 e com os recursos que só fazem sentido com o aparelho na mão, no portão.
 
-**Instalável.** Um *web app manifest* ([frontend/portaria.webmanifest](frontend/portaria.webmanifest))
+**Instalável.** Um *web app manifest* (`frontend/portaria.webmanifest`, hoje [`frontend/app.webmanifest`](frontend/app.webmanifest))
 com nome, cores e ícones próprios — cinco PNGs gerados por
 [ferramentas/gerar_icones_pwa.py](ferramentas/gerar_icones_pwa.py), incluindo os *maskable*
 que o Android exige para não desenhar a marca dentro de um quadrado branco. No Chrome do

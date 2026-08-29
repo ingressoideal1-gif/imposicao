@@ -354,6 +354,66 @@ Describe "O painel de verdade passa no freio do frontend" {
     }
 }
 
+Describe "O cabecalho do CHANGELOG e escrito pela publicacao" {
+    # Nasceu de um estrago silencioso: o cabecalho "Versao atual: vNNN" da raiz
+    # ficou parado em v707 por ONZE publicacoes. Numero errado num arquivo que se
+    # le justamente para saber o numero e' pior do que numero nenhum.
+    $raiz = Split-Path -Parent $PSScriptRoot
+    $textoPub = Get-Content -Raw -Encoding UTF8 "$raiz\publicar.ps1"
+
+    It "o publicar.ps1 reescreve o cabecalho" {
+        $textoPub | Should Match 'CHANGELOG.md'
+        $textoPub | Should Match '\^## Vers\.o atual:'
+    }
+
+    It "reescreve ANTES do commit, senao a mudanca fica de fora" {
+        $escreve = $textoPub.IndexOf('Cabecalho do CHANGELOG')
+        $commit  = $textoPub.IndexOf('git commit -m')
+        $escreve | Should Not Be -1
+        ($escreve -lt $commit) | Should Be $true
+    }
+
+    # O bloco inteiro, do titulo ate o comeco da secao Git. Recortar por numero de
+    # caracteres quebrava a cada comentario novo — e um teste que quebra sozinho
+    # ensina a ignorar teste quebrado.
+    $ini = $textoPub.IndexOf('Cabecalho do CHANGELOG')
+    $fim = $textoPub.IndexOf('Commitando...')
+    $bloco = if ($ini -ge 0 -and $fim -gt $ini) { $textoPub.Substring($ini, $fim - $ini) } else { '' }
+
+    It "entra na leva do -Somente" {
+        # Sem isso, uma publicacao recortada commitaria tudo menos o cabecalho, e
+        # o arquivo ficaria mentindo na pasta ate a proxima publicacao inteira.
+        $bloco | Should Match '\$bumpados \+= ''CHANGELOG.md'''
+    }
+
+    It "o padrao casa com o cabecalho que esta na pasta agora" {
+        # O teste que importa: um padrao que nao casa nao da erro nenhum — ele
+        # simplesmente nao troca nada, e o cabecalho volta a envelhecer calado.
+        $changelog = Get-Content -Raw -Encoding UTF8 "$raiz\CHANGELOG.md"
+        ([regex]::IsMatch($changelog, '(?m)^## Vers.o atual:.*$')) | Should Be $true
+    }
+
+    It "grava sem BOM, para nao mexer num byte que ninguem pediu" {
+        # O Set-Content -Encoding UTF8 do PowerShell 5.1 grava UTF-8 COM BOM.
+        # Usado aqui, ele poria um BOM no CHANGELOG.md na primeira publicacao.
+        $bloco | Should Match 'UTF8Encoding\(\$false\)'
+        $bloco | Should Not Match 'Set-Content .*\$changelogRaiz'
+    }
+
+    It "o CHANGELOG.md da raiz continua sem BOM" {
+        $bytes = [System.IO.File]::ReadAllBytes("$raiz\CHANGELOG.md")
+        ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) | Should Be $false
+    }
+
+    It "o cabecalho de hoje aponta para uma tag que existe" {
+        $changelog = Get-Content -Raw -Encoding UTF8 "$raiz\CHANGELOG.md"
+        $m = [regex]::Match($changelog, '(?m)^## Vers.o atual: \*\*v(\d+)\*\*')
+        $m.Success | Should Be $true
+        $tags = @(git -C $raiz tag --list "v$($m.Groups[1].Value)")
+        $tags.Count | Should Be 1
+    }
+}
+
 Describe "Select-ArquivosDaLeva" {
     # Existe porque neste repositorio e' rotina haver duas sessoes trabalhando ao
     # mesmo tempo. Publicar enquanto a outra esta no meio de uma edicao levaria o

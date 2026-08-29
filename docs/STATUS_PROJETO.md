@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 28 de agosto de 2026**
+**Última atualização: 29 de agosto de 2026**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,11 +11,16 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + Edge Functions | **v746** | 28/08/2026 |
-| Agente NewProd | **1.2.241** | 28/08/2026 |
+| Site + Edge Functions | **v769** | 29/08/2026 |
+| Agente NewProd | **1.2.259** | 29/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
+
+> Para saber o número que está no ar **agora**, não confie nesta tabela: rode
+> `.\ferramentas\conferir.ps1`. Ele responde as seis perguntas que importam —
+> commit não publicado, trabalho pendente, agente em sincronia, branch acumulando,
+> segredo versionado e testes — e lista a versão de cada estação da gráfica.
 
 > [!NOTE]
 > **O dia 19/08/2026 foi inteiro na Lista de Arte** — oito versões, da v645 à v652.
@@ -55,6 +60,50 @@ pelo esqueleto — **401 em todas**.
 > em 17/08/2026, mas a armadilha ficou: a conta do Supabase também tem projetos vazios com
 > nomes parecidos, e função publicada no projeto errado sobe sem erro e não enxerga
 > credencial nenhuma. O `publicar.ps1` confere o `project-ref` por isso.
+
+---
+
+## Onde procurar cada coisa
+
+| Assunto | Documento |
+|---|---|
+| **O que mudou, por data** | [`CHANGELOG.md`](CHANGELOG.md) (detalhado, da v708 em diante) e [`../CHANGELOG.md`](../CHANGELOG.md) (por versão, até a v707) |
+| **Publicar, voltar atrás, o que fazer quando dá errado** | [`PUBLICAR.md`](PUBLICAR.md) |
+| **O agente da estação** | [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md) |
+| **O banco: tabelas, permissões, regras** | [`REGRAS_BANCO.md`](REGRAS_BANCO.md) |
+| **Tela do Pedido** (escolher modelo, prévia, imprimir) | [`tela_do_pedido.md`](tela_do_pedido.md) |
+| **Painel do Acabamento** | [`painel_do_acabamento.md`](painel_do_acabamento.md) |
+| **Lista de Arte / aprovação de arte** | [`lista_de_arte.md`](lista_de_arte.md), [`fluxo_aprovacao_arte.md`](fluxo_aprovacao_arte.md) |
+| **Numerações e o editor** | [`lista_de_numeracoes.md`](lista_de_numeracoes.md), [`editor_de_arte.md`](editor_de_arte.md) |
+| **Banco de dados do pedido / CSV** | [`banco_do_pedido.md`](banco_do_pedido.md), [`editor_de_csv.md`](editor_de_csv.md) |
+| **Controle de acesso (QR Ideal, Ideal Control)** | [`controle_acesso.md`](controle_acesso.md), [`qr_ideal.md`](qr_ideal.md) |
+| **Motor de imposição, elementos VDP, duplex** | [`DOCUMENTACAO.md`](DOCUMENTACAO.md) (com ressalva no topo), [`regra_centralizacao.md`](regra_centralizacao.md), [`aproveitamento_de_folha.md`](aproveitamento_de_folha.md), [`modelos_somados.md`](modelos_somados.md) |
+| **Tela × papel: por que o que se vê é o que sai** | [`fidelidade_tela_papel.md`](fidelidade_tela_papel.md), [`fluxo_elementos_pdf_svg.md`](fluxo_elementos_pdf_svg.md) |
+| **Conferência de um pedido no banco** | [`conferencia_pedido_21202.md`](conferencia_pedido_21202.md) + as consultas em [`../sql/consultas/`](../sql/consultas/) |
+
+---
+
+## Onde parou: a tela do Pedido (28 e 29/08)
+
+A reforma foi **feita e publicada** (v764 à v769). A janela de visualização abre
+abaixo do modelo, o clique virou interruptor, a fila voltou aos 100% numa escala
+só, os seletores só se enchem quando alguém os abre (redesenho **4× mais rápido**)
+e a linha do modelo passou a pedir a **senha da gerência**.
+
+A tela inteira está descrita em [`tela_do_pedido.md`](tela_do_pedido.md) — as
+regras, o motivo de cada uma e as armadilhas de quem for mexer. As três que mais
+custam:
+
+1. **A janela é movida, nunca recriada.** Recriá-la perde o canvas pintado,
+   remonta o painel de impressão (nova ida ao agente) e devolve bandeja e papel
+   ao padrão.
+2. **Dois atributos de evento iguais no mesmo elemento** — o navegador guarda o
+   primeiro e ignora o segundo **em silêncio**. Foi assim que a trava da gerência
+   nasceu inerte.
+3. **Tirar um zoom exige reescalar junto** tudo o que estava dentro dele.
+
+**Duas coisas ficaram em aberto**, ambas na seção *Em aberto* no fim deste
+documento: o INP de 2.105 ms e a divergência do modelo 1000565.
 
 ---
 
@@ -666,6 +715,44 @@ vermelha por elemento desenhado.
 
 ---
 
+## Em aberto desde 29/08/2026
+
+**1. 🔴 O modelo 1000565 do pedido 21202 — decisão do usuário.** Contratadas
+**3.000**, mas o banco da numeração ligada (`CAMAROTE PRESIDENTE`) tem **12.806
+linhas** e não há recorte. Impresso como está, **saem 12.806 peças no lugar de
+3.000**. A conta e o nome dizem que é o banco-mestre do evento, não o banco de um
+dia: 3.000 × 4 dias + 800 extras = 12.800, e é a única numeração do pedido **sem
+o dia no nome**. Nada foi alterado — o usuário pediu *"apenas analizar, não
+alterar"*. Caminhos possíveis: criar a numeração do dia 05 a partir do
+banco-mestre, ou aplicar um recorte ao modelo. Detalhe em
+[`conferencia_pedido_21202.md`](conferencia_pedido_21202.md#-modelo-1000565--05set-camarote-presidente).
+
+**2. Um INP de 2.105 ms num clique da tela do Pedido.** Capturado pelo usuário no
+DevTools da estação. Já foram descartados com medição a varredura do CSV (7,5 ms
+para os 51 bancos, 128.286 linhas), a `contaDoProduto`, o redesenho da fila
+(44 ms) e a troca de tela. Sobram **1,9 segundos** sem dono. O candidato que
+restou é a geração de **QR na prévia** — todas as numerações deste pedido têm QR,
+e a Triband tem 10 células por folha —, mas **não foi medido**. Fecha-se de duas
+maneiras: expandindo aquela linha no DevTools da estação (mostra função, arquivo
+e linha) ou instrumentando o caminho do clique. Ver
+[`conferencia_pedido_21202.md`](conferencia_pedido_21202.md#5-o-inp-de-2105-ms-ainda-em-aberto).
+
+**3. Trazer a `divergenciaDeCelulasDoModelo` para a tela do Pedido.** Ela compara
+contratado × gerado e já está ligada em quatro lugares — card do modelo, bloqueio
+da aprovação, bloqueio da promoção do pedido e o relatório *🔎 Conferência de
+dados* —, mas **todos na tela de Amostras**. Na tela do Pedido, onde se manda
+imprimir, o selo da janela nunca compara com o contratado. Oferecido ao usuário,
+ainda não decidido. (Cuidado ao fazer: a função só varre o banco quando a tiragem
+ficou curta, de propósito, porque roda a cada redesenho de card.)
+
+**4. O `gabarito_operacional` não serve para conferência.** O campo, que vem do
+ERP, diverge da numeração ligada em casos onde a numeração está **certa** (modelo
+1000602: gabarito `Backstage 11` num modelo de 12/set com numeração `Backstage
+12`, correta). Não usar como fonte para conferir dia ou peça — produz alarme
+falso.
+
+---
+
 ## Em aberto desde 19/08/2026
 
 Nada disto bloqueia o que está no ar. Estão aqui para não se perderem.
@@ -697,10 +784,11 @@ arquitetura de junho — Firebase e servidor Python na nuvem —, e as duas cois
 mudaram. Ganhou um aviso no topo dizendo o que ainda vale e o que não vale, mas a
 revisão de verdade está pendente.
 
-**6. Estações atrás do agente**: `DESKTOP-5N8AF7D` (1.2.137) e `DESKTOP-PM6TG1B`
-(1.2.129), ambas com sinal recente. Elas se atualizam sozinhas quando abrirem;
-vale conferir se abriram. `PRD-ACABAMENTO` e `CESAR-CPD` são instalações de teste,
-não estações da gráfica.
+**6. Estações atrás do agente.** A lista muda todo dia — quem responde é o
+`.\ferramentas\conferir.ps1`, no item 3. Elas se atualizam sozinhas quando
+abrirem; vale conferir se abriram. Em 29/08 estavam atrás `PC-JR-HOME`,
+`LASER-04`, `LASER-02`, `GUSTAVO-PROD`, `LAPTOP-9BSK81S0` e `DESKTOP-PM6TG1B`.
+`PRD-ACABAMENTO` e `CESAR-CPD` são instalações de teste, não estações da gráfica.
 
 ---
 

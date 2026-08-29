@@ -7,7 +7,8 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 ## [2026-08-29] — Acabamento da tela do Pedido, e um freio que faltava
 
 Continuação da reforma do dia anterior (v764 a v769), em duas sessões de
-trabalho.
+trabalho. A tela inteira, com as regras e as armadilhas, virou documento:
+[`docs/tela_do_pedido.md`](tela_do_pedido.md).
 
 ### O que mudou na tela
 
@@ -27,8 +28,55 @@ trabalho.
   **Opções do modelo** (modo de impressão, imprimir o número) para a coluna
   esquerda. As duas ficavam no topo da página, longe do modelo de que falavam. As
   seis fichas de sumário saíram: o selo diz numa frase o que elas diziam em seis.
-- **Cores dos estados** revistas pelo usuário, e a janela passou a alinhar a
-  própria base com a base da tela ao abrir.
+- **Cores dos estados** revistas pelo usuário — modelo selecionado com fundo
+  `#2c1669` e fio `#920fc3` —, e a janela passou a alinhar a própria base com a
+  base da tela ao abrir.
+- **Dois seletores saíram da página**: a *Regra de Paginação* e o *Formato* do
+  produto. O usuário circulou os dois numa captura: *"esses 2 drops não devem
+  aparecer nesta página"*.
+
+### A linha do modelo passou a pedir a senha da gerência
+
+> *"os imputs, drops, cores, etc... da linha do modelo só podem ser alteradas
+> mediante apresentação da senha da gerência, mesma senha apresentada na
+> divergência de peso no painel do acabamento"* — e, em seguida: *"o status da
+> impressão continua livre"*.
+
+Ficam atrás da senha **Qtd, N. inicial, N. final, Bloco, os campos de camarote,
+Cor, Numeração e Verso**. Continuam livres o **Status da impressão** (marcar o
+que já saiu é o trabalho normal do operador; pedir senha ali pararia a produção)
+e a caixinha da folha combinada, que não altera dado nenhum.
+
+A linha travada mostra um **cadeado** que explica a regra e abre a caixa da
+senha — trava com saída visível, não campo que não responde. Liberado um modelo,
+ele fica liberado **até a janela dele ser fechada**.
+
+A senha é conferida **no servidor**, pela *mesma* função do Painel do Acabamento
+(`conferirSenhaDeLiberacao`, exportada de lá), para não existirem duas políticas
+de senha no produto. Senha errada, rede fora ou função ausente: nada é liberado.
+
+**Ela nasceu inerte, e o harness pegou.** Os seletores de Cor e Numeração
+acabaram com **dois atributos `onmousedown`** — um do preenchimento tardio, outro
+da trava. O navegador guarda o primeiro e ignora o segundo **em silêncio**. A
+correção foi unificar os dois cuidados numa função só, `portaDoSeletor`, porque
+os dois moram no mesmo gesto.
+
+### Por que o mesmo modelo mostrava 70 e depois 192 folhas
+
+Pergunta do usuário sobre o modelo 1000589 do pedido 21202. A `drawPedPreview`
+conta os itens **pela faixa numérica** enquanto o banco não desceu, e **pelo
+número de linhas do banco** assim que ele chega. 1.920 ÷ 10 = 192; 700 ÷ 10 = 70.
+
+A regra está certa — o banco manda, porque é ele que vira papel. O número
+oscilando é sintoma de **divergência no dado**: o banco ligado não entregava a
+quantidade contratada. O dado foi corrigido no ERP entre as duas consultas.
+
+Isso levou a uma **conferência somente-leitura dos 51 modelos** do pedido, a
+pedido do usuário (*"apenas analizar, não alterar"*). Cinquenta estão certos; um
+não. As quatro consultas ficaram guardadas em [`sql/consultas/`](../sql/consultas/)
+e o achado está em
+[`docs/conferencia_pedido_21202.md`](conferencia_pedido_21202.md) — junto com a
+investigação, ainda aberta, de um INP de 2.105 ms.
 
 ### O freio que faltava no `publicar.ps1`
 
@@ -43,6 +91,66 @@ arquivo todo. Agora existe o **"Conferindo se o painel abre"** — um
 `node --check` em cada `.js` do frontend, que custa menos de um segundo e teria
 parado aquela publicação. Quatro testes novos travam o freio, e um quinto
 confere que o painel que está na pasta agora passa por ele.
+
+### O cabeçalho do CHANGELOG parou de ser escrito à mão
+
+O `CHANGELOG.md` da raiz abre com *"Versão atual: vNNN | Agente X.Y.Z"*. Escrito à
+mão, ele **ficou parado em v707 por onze publicações** — o próprio arquivo tinha
+registrado o episódio e pedido que se consertasse ali quando voltasse a divergir.
+Voltou: estava em v744 com a v769 no ar.
+
+Consertar o número de novo só adiaria o problema. Agora quem escreve a linha é o
+`publicar.ps1`, logo depois do bump dos assets e **antes do commit**, com a versão
+que acabou de subir e a versão do agente lida do `agent_version.py`. O arquivo
+entra na leva também no caminho recortado (`-Somente`), senão ficaria mentindo na
+pasta até a próxima publicação inteira.
+
+Cinco testes travam isso — inclusive o que mais importa: **o padrão casa com o
+cabeçalho que está na pasta agora**. Um padrão que não casa não dá erro nenhum;
+ele simplesmente não troca nada, e o cabeçalho voltaria a envelhecer calado. A
+suíte da publicação foi de 80 para **85**.
+
+O `docs/PUBLICAR.md` também estava desatualizado — dizia "quatro freios" com
+cinco no ar — e foi corrigido.
+
+### Onze links quebrados na documentação, e o teste que impede o próximo
+
+Ao ligar os documentos novos aos antigos, uma varredura achou **onze** links
+apontando para arquivo que não existe. Dez eram a mesma coisa: caminhos absolutos
+`file:///C:/Users/...` gravados por editores antigos, alguns apontando para
+pastas que **nem existem mais nesta máquina** (`c:/Antigravity Projetos/`).
+Nenhum funcionava em computador nenhum, e ficaram anos ali sem que nada acusasse.
+
+Todos viraram caminho relativo. O `schema_imposition.sql` estava sendo procurado
+na raiz e mora em `sql/`; o `portaria.webmanifest` virou `app.webmanifest` e a
+entrada histórica agora diz as duas coisas.
+
+O novo `tests/test_os_links_da_documentacao.py` confere duas coisas: que **todo
+link entre documentos aponta para arquivo que existe**, e que nenhum documento
+usa caminho absoluto do Windows — este segundo pela **forma**, não pela sorte,
+porque um `file:///` que por acaso resolve nesta máquina não resolve na próxima.
+
+O custo desses links não é o clique perdido: a documentação deste projeto é a
+memória de uma gráfica que roda de verdade. Quando ela manda ler outro documento
+e o documento não abre, quem está com o problema na mão desiste e resolve de
+cabeça.
+
+### O que ficou documentado
+
+- **[`docs/tela_do_pedido.md`](tela_do_pedido.md)** — a tela inteira: a janela que
+  se move (e por que recriá-la é caro), o clique-interruptor, a escala, a trava da
+  gerência, os testes que a travam e as armadilhas de quem for mexer.
+- **[`docs/conferencia_pedido_21202.md`](conferencia_pedido_21202.md)** — a
+  conferência somente-leitura dos 51 modelos, a divergência do 1000565, as notas
+  de esquema do banco, e o INP de 2.105 ms com tudo o que já foi descartado.
+- **[`sql/consultas/`](../sql/consultas/)** — as quatro consultas de conferência,
+  cada uma com o marcador `<<< TROQUE AQUI o numero do pedido`, para servirem a
+  qualquer pedido.
+- **[`ferramentas/medir_varredura_csv.mjs`](../ferramentas/medir_varredura_csv.mjs)**
+  — o medidor que roda as funções reais do `script.js` contra bancos do tamanho
+  dos de verdade.
+- O `STATUS_PROJETO.md` ganhou um índice de **onde procurar cada coisa** e as
+  quatro pendências abertas hoje.
 
 ### A rede de segurança dos seletores desfazia a própria economia
 

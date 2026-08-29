@@ -3,7 +3,7 @@
 > **Data da decisão**: 2026-06-13
 > **Aprovado por**: Junior (proprietário)
 > **Status**: ✅ ATIVO — Consultar SEMPRE antes de modificar tabelas
-> **Ref**: [Regras de Segurança Vibecode](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/Regras%20de%20Seguran%C3%A7a%20Vibecode.txt)
+> **Ref**: **Regras de Segurança Vibecode** (fora do repositório)
 
 ---
 

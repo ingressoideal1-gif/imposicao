@@ -67,7 +67,7 @@ Quando combinados com o esquema de imposição `cut_stack` (principalmente no mo
 
 ## 5. Implementação no Código
 
-### Backend ([engine.py](file:///c:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/engine.py))
+### Backend ([engine.py](../engine.py))
 
 *   **Resolução de Contexto**: A numeração de ticket usa propriedades dinâmicas extraídas por item (`item_num_tipo`, `item_ticket_qtd`, `item_start_base` e `item_local_idx`) nos loops de desenho de frente e verso.
 *   **Mapeamento de Renderização**:
@@ -78,7 +78,7 @@ Quando combinados com o esquema de imposição `cut_stack` (principalmente no mo
         current_val = item_start_base + (item_local_idx * item_ticket_qtd) + (pos_val - 1)
     ```
 
-### Frontend ([script.js](file:///c:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js) e [pedido.js](file:///c:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/pedido.js))
+### Frontend ([script.js](../frontend/script.js) e [pedido.js](../frontend/pedido.js))
 
 *   As interfaces gráficas calculam a quantidade física total e de imposição de forma linear, garantindo que `QTD` represente as poses de papel físicas na tela e na requisição de geração do PDF:
     ```javascript

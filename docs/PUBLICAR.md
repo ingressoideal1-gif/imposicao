@@ -48,7 +48,7 @@ gráfica é o build do agente.
 .\publicar.ps1 "descreva o que mudou"
 ```
 
-Antes de mandar qualquer coisa, o script confere quatro pontos e mostra o resultado. Se
+Antes de mandar qualquer coisa, o script confere **cinco** pontos e mostra o resultado. Se
 algo estiver errado ele **para antes do commit** — nada foi ao ar e nada precisa ser
 desfeito:
 
@@ -57,11 +57,19 @@ desfeito:
 3. **Segredo** — recusa a chave `service_role`, que dá controle total do banco.
 4. **O motor sobe** — testa se o Python carrega sem erro. É o freio que evita o pior
    caso: um erro de digitação derrubar o motor sem ninguém perceber.
+5. **O painel abre** — passa um `node --check` em cada `.js` do frontend. Nasceu de um
+   estrago real: a **v765** foi ao ar com um `}` a menos no `script.js`, e erro de
+   sintaxe derruba o **arquivo inteiro** — 41 mil linhas que o navegador não carrega, e
+   o painel morre. A v766 consertou três minutos depois. Custa menos de um segundo.
 
 Depois ele pergunta `Publicar? (s/n)`. Esse é o último freio, e é seu.
 
 Ao terminar, grava um **ponto de restauração** com o número da versão (`v491`). É o que
 torna possível voltar depois.
+
+> O script também reescreve sozinho o cabeçalho *"Versão atual: vNNN | Agente X.Y.Z"* do
+> `CHANGELOG.md` da raiz, com a versão que acabou de subir. Antes disso ele era escrito à
+> mão e ficou parado em v707 por onze publicações.
 
 Para ver os pontos de restauração que existem:
 
@@ -88,9 +96,13 @@ Para levar só o seu:
 Aceita arquivo e pasta. Antes da pergunta final, o script **diz em voz alta o que ficou de
 fora**, e esses arquivos continuam na pasta, intactos.
 
-Duas coisas que o `-Somente` **não** faz: ele não pula freio nenhum — rascunho, segredo e
-"o motor sobe?" continuam valendo —, e não recorta a história: commits já feitos vão junto
-de qualquer jeito, porque publicar é mandar o `main` inteiro.
+Duas coisas que o `-Somente` **não** faz: ele não pula freio nenhum — rascunho, segredo,
+"o motor sobe?" e "o painel abre?" continuam valendo —, e não recorta a história: commits
+já feitos vão junto de qualquer jeito, porque publicar é mandar o `main` inteiro.
+
+O que ele leva **além** do que você declarou: as páginas que o bump da versão dos assets
+mexeu, e o cabeçalho do `CHANGELOG.md`. Os dois são parte desta publicação, e ficar de
+fora deixaria o arquivo mentindo na pasta.
 
 ---
 
@@ -163,7 +175,8 @@ Detalhes de funcionamento em [GUIA_AGENTE.md](../GUIA_AGENTE.md).
 
 | O que você vê | Causa provável | O que fazer |
 |---|---|---|
-| `PAROU ANTES DE PUBLICAR` | um dos quatro freios | leia a linha "O que fazer" na tela — nada foi ao ar |
+| `PAROU ANTES DE PUBLICAR` | um dos cinco freios | leia a linha "O que fazer" na tela — nada foi ao ar |
+| `Erro de sintaxe no frontend: <arquivo>` | o freio 5 — o `.js` não carregaria no navegador | rode `node --check frontend\<arquivo>` para ver a linha, conserte e publique de novo |
 | O site abre, mas dá erro em tudo | alguma Edge Function não subiu | `npx supabase functions list`; se persistir, `.\voltar.ps1` |
 | A tela é a antiga mesmo depois de publicar | cache do navegador | `Ctrl+Shift+R`; se persistir, confira se a versão em `frontend/index.html` subiu |
 | `O push falhou` | sem internet, ou alguém publicou antes | `git pull --rebase origin main` e publique de novo |

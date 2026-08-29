@@ -6,15 +6,15 @@ Implementamos com sucesso uma barra de progresso visual de alta fidelidade e com
 
 ## 🛠️ Mudanças Realizadas
 
-1. **Estrutura Visual (HTML - [index.html](file:///c:/Antigravity%20Projetos/imposicao/frontend/index.html))**:
+1. **Estrutura Visual (HTML - [index.html](../frontend/index.html))**:
    * Substituímos o indicador de carregamento estático por uma barra de progresso (`.progress-container` e `.progress-bar-fill`) e um elemento dinâmico de texto explicativo do tempo restante (`#loading-progress-text`) dentro da div `#loading-overlay`.
 
-2. **Estilização Premium (CSS - [style.css](file:///c:/Antigravity%20Projetos/imposicao/frontend/style.css))**:
+2. **Estilização Premium (CSS - [style.css](../frontend/style.css))**:
    * **Visual Glassmorphism**: Adicionamos `.progress-container` com um fundo semi-transparente, borda fina e sombra interna.
    * **Gradiente de Preenchimento**: Criamos a classe `.progress-bar-fill` que exibe um preenchimento gradiente dinâmico de azul para violeta (`linear-gradient(90deg, #3b82f6, #8b5cf6)`) com uma sombra brilhante azulada nas bordas e transição suave.
    * **Tipografia**: O texto do cronômetro (`.progress-text`) usa fontes estilizadas em largura fixa para evitar oscilações visuais de números.
 
-3. **Lógica Dinâmica (JS - [script.js](file:///c:/Antigravity%20Projetos/imposicao/frontend/script.js))**:
+3. **Lógica Dinâmica (JS - [script.js](../frontend/script.js))**:
    * **Cálculo de Itens**: A lógica agora identifica com precisão o número de itens reais (conforme regras de paginação como `pdf_multiple` ou base de dados CSV) antes de iniciar.
    * **Temporizador Inteligente**: 
      * Calcula dinamicamente o tempo estimado em segundos considerando se o processamento é feito localmente no computador do usuário (~180 itens por segundo) ou remotamente na nuvem (~35 itens por segundo) mais latência de rede.

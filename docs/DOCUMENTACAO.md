@@ -24,6 +24,8 @@
 > [`REGRAS_BANCO.md`](REGRAS_BANCO.md) (o banco),
 > [`lista_de_arte.md`](lista_de_arte.md) e
 > [`fluxo_aprovacao_arte.md`](fluxo_aprovacao_arte.md) (as telas de arte),
+> [`tela_do_pedido.md`](tela_do_pedido.md) (a tela onde se manda imprimir),
+> [`painel_do_acabamento.md`](painel_do_acabamento.md) (o Acabamento),
 > [`PUBLICAR.md`](PUBLICAR.md) e [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md)
 > (publicação e agente).
 >
@@ -612,7 +614,7 @@ Em modo não-duplex, todos os elementos usam `face = el.get("face", "both")`.
 
 ## 11. Regra de Centralização de Artes
 
-> Documentação técnica detalhada em: [regra_centralizacao.md](file:///./regra_centralizacao.md)
+> Documentação técnica detalhada em: [regra_centralizacao.md](regra_centralizacao.md)
 
 PDFs exportados de CorelDraw, Illustrator e InDesign frequentemente têm origem deslocada no CropBox (ex.: `Rect(100, 150, 355, 291)` para um cartão de 90×50mm). Sem tratamento, isso causa:
 - **Deslocamento na folha** (offset indesejado)
