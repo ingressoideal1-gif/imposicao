@@ -3477,10 +3477,175 @@ window.encherSeletorDaFila = encherSeletorDaFila;
  */
 function encherSeletoresDaLinha(linha) {
     if (!linha) return;
+
+    // LINHA TRAVADA NAO ENCHE. Desde 29/08/2026 os seletores de Cor e Numeracao
+    // so' abrem com a senha da gerencia — montar a lista de um seletor que nao
+    // vai abrir seria pagar o preco que este bloco inteiro existe para evitar,
+    // e pagar por NADA. Na pratica isso deixa a fila permanentemente enxuta: so'
+    // o modelo liberado carrega as suas duas listas.
+    const id = String(linha.id || '').replace('ped-queue-row-', '');
+    if (id && !modeloEstaLiberado(id)) return;
+
     linha.querySelectorAll('select[data-lista]:not([data-cheio="1"])')
         .forEach(encherSeletorDaFila);
 }
 window.encherSeletoresDaLinha = encherSeletoresDaLinha;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OS CAMPOS DA LINHA SO' SE ALTERAM COM A SENHA DA GERENCIA (29/08/2026)
+   ══════════════════════════════════════════════════════════════════════════
+
+   Qtd, N. inicial, Bloco, Cor, Numeracao e Verso — e, no CAMAROTE, Q_CAM, L_CAM
+   e C_INI — decidem o que sai no papel e o que o cliente contratou. A tela do
+   Pedido fica aberta no chao de fabrica, e ate agora qualquer um que passasse
+   podia mudar a quantidade de uma tiragem com um clique.
+
+   A senha e' a MESMA do peso fora dos 5 % no Painel do Acabamento, conferida no
+   MESMO lugar: o servidor. Ela nunca esta no navegador — a funcao que pergunta
+   vem do `acabamento.js`, exportada de la para nao existirem duas politicas.
+
+   O QUE NAO PASSA PELA TRAVA:
+   - O **Status da impressao**. Marcar o que ja saiu e' o trabalho normal do
+     operador, e pedir senha para isso pararia a producao (decisao do usuario).
+   - A caixinha de marcar para a folha combinada, que escolhe o que imprimir e
+     nao altera dado nenhum do modelo.
+
+   O ALCANCE, decidido pelo usuario: liberado o modelo, ele fica liberado ATE A
+   JANELA DELE SER FECHADA. Abrir outro modelo, fechar a janela ou sair da tela
+   tranca tudo de novo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Este modelo esta com os campos liberados? */
+function modeloEstaLiberado(itemId) {
+    return !!(state.modeloLiberado && String(state.modeloLiberado) === String(itemId));
+}
+window.modeloEstaLiberado = modeloEstaLiberado;
+
+/** Fecha a liberacao. Chamada ao trocar de modelo e ao fechar a janela. */
+function trancarCamposDoModelo() {
+    if (!state.modeloLiberado) return;
+    state.modeloLiberado = null;
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+}
+window.trancarCamposDoModelo = trancarCamposDoModelo;
+
+/**
+ * O porteiro de cada campo travado.
+ *
+ * Devolve `true` quando o campo pode ser usado. Travado, ele impede o gesto
+ * (o menu do seletor nao abre, o campo nao recebe o cursor) e abre a caixa da
+ * senha — o operador descobre a regra tentando, que e' quando ela importa.
+ */
+function travaDaGerencia(evento, itemId) {
+    if (modeloEstaLiberado(itemId)) return true;
+    if (evento) {
+        evento.preventDefault();
+        evento.stopPropagation();
+    }
+    pedirSenhaDaGerencia(itemId);
+    return false;
+}
+window.travaDaGerencia = travaDaGerencia;
+
+/** Abre a caixa da senha para este modelo. */
+function pedirSenhaDaGerencia(itemId) {
+    const caixa = document.getElementById('ped-senha-gerencia');
+    if (!caixa) return;
+
+    caixa.dataset.item = itemId;
+
+    const nome = document.getElementById('ped-senha-modelo');
+    if (nome) {
+        const itens = (state.pedidoAberto && state.osItens[state.pedidoAberto.osId]) || [];
+        const item = itens.find(i => String(i.id) === String(itemId));
+        nome.textContent = item
+            ? ((item.modelo ? item.modelo + ' · ' : '') + (item.produto || 'modelo'))
+            : 'modelo';
+    }
+
+    const erro = document.getElementById('ped-senha-erro');
+    if (erro) erro.textContent = '';
+    caixa.style.display = 'flex';
+
+    const campo = document.getElementById('ped-senha-campo');
+    if (campo) { campo.value = ''; setTimeout(() => campo.focus(), 30); }
+}
+window.pedirSenhaDaGerencia = pedirSenhaDaGerencia;
+
+function fecharSenhaDaGerencia() {
+    const caixa = document.getElementById('ped-senha-gerencia');
+    if (caixa) caixa.style.display = 'none';
+}
+window.fecharSenhaDaGerencia = fecharSenhaDaGerencia;
+
+/**
+ * Confere a senha e libera os campos daquele modelo.
+ *
+ * Senha errada ou rede fora: a caixa FICA aberta com o motivo, e nada e'
+ * liberado. E' a mesma postura do popup do Acabamento — nada passa antes do sim
+ * do servidor.
+ */
+async function liberarCamposDoModelo() {
+    const caixa = document.getElementById('ped-senha-gerencia');
+    const campo = document.getElementById('ped-senha-campo');
+    const erro = document.getElementById('ped-senha-erro');
+    const botao = document.getElementById('ped-senha-ok');
+    if (!caixa || !campo) return;
+
+    const senha = String(campo.value || '').trim();
+    if (!senha) {
+        if (erro) erro.textContent = 'Digite a senha da gerência.';
+        return;
+    }
+
+    if (typeof window.conferirSenhaDeLiberacao !== 'function') {
+        // Sem quem conferir, NADA e' liberado. Uma trava que se abre sozinha
+        // quando a conferencia falha nao e' trava.
+        if (erro) erro.textContent = 'Não consigo conferir a senha agora. Recarregue a página e tente de novo.';
+        return;
+    }
+
+    if (botao) { botao.disabled = true; botao.textContent = 'Conferindo…'; }
+    try {
+        const confere = await window.conferirSenhaDeLiberacao(senha);
+        if (!confere) {
+            if (erro) erro.textContent = 'Senha incorreta.';
+            campo.value = '';
+            campo.focus();
+            return;
+        }
+        state.modeloLiberado = caixa.dataset.item || null;
+        fecharSenhaDaGerencia();
+        renderPedOSQueue();
+        if (typeof toast === 'function') {
+            toast('Campos liberados neste modelo até fechar a janela dele.', 'success');
+        }
+    } catch (e) {
+        console.error('[pedido] erro ao conferir a senha da gerência:', e);
+        if (erro) erro.textContent = `Não deu para conferir a senha (${e && e.message ? e.message : e}).`;
+    } finally {
+        if (botao) { botao.disabled = false; botao.textContent = 'Liberar'; }
+    }
+}
+window.liberarCamposDoModelo = liberarCamposDoModelo;
+
+/**
+ * A porta de um seletor da fila: primeiro a trava, depois a lista.
+ *
+ * Os dois cuidados moram na MESMA funcao porque moram no mesmo gesto. Escritos
+ * como dois `onmousedown` no mesmo elemento, o navegador guarda o primeiro e
+ * ignora o segundo em silencio — foi assim que a trava da gerencia nasceu
+ * inerte, e o harness pegou.
+ *
+ * Travado: o gesto e' barrado e a caixa da senha aparece; a lista nem chega a
+ * ser montada, porque nao ha o que escolher.
+ */
+function portaDoSeletor(evento, el, itemId) {
+    if (!travaDaGerencia(evento, itemId)) return false;
+    encherSeletorDaFila(el);
+    return true;
+}
+window.portaDoSeletor = portaDoSeletor;
 
 /** O Refazer (folhas ou celulas) esta ligado? */
 function refazerLigado() {
@@ -3615,12 +3780,23 @@ window.previaFicouPronta = previaFicouPronta;
  */
 function fecharJanelaDoModelo() {
     state.activeOSItem = null;
+
+    // FECHAR A JANELA TRANCA OS CAMPOS DE NOVO. E' o alcance que o usuario
+    // definiu para a senha da gerencia: liberado o modelo, ele fica liberado
+    // ate a janela dele ser fechada. So' redesenha se havia algo liberado —
+    // fechar uma janela sem liberacao continua custando o caminho barato.
+    const haviaLiberacao = !!state.modeloLiberado;
+    state.modeloLiberado = null;
     recolherJanelaParaCasa();
     const janela = janelaDeVisualizacao();
     if (janela) janela.style.display = 'none';
     pintarLinhaAberta(null);
     if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
+
+    // Os campos liberados voltam a nascer travados, e isso exige redesenhar a
+    // linha: `readonly` e os porteiros dos seletores estao no HTML dela.
+    if (haviaLiberacao) renderPedOSQueue();
 }
 window.fecharJanelaDoModelo = fecharJanelaDoModelo;
 
@@ -3659,6 +3835,10 @@ async function enviarParaPedido(itemId, osId) {
     const trocouDeModelo = !state.activeOSItem
         || String(state.activeOSItem.itemId) !== String(item.id);
     state.activeOSItem = { itemId: item.id, osId };
+
+    // Abrir OUTRO modelo tranca o que estava liberado: a senha da gerencia vale
+    // para um modelo so', ate a janela dele fechar.
+    if (trocouDeModelo) state.modeloLiberado = null;
 
     // O pedido que a fila desenha e' guardado a parte do modelo aberto: sem
     // isso a fila sumiria da tela ao fechar a janela, porque ela se desenhava
@@ -4666,6 +4846,31 @@ function renderPedOSQueue() {
                 ? `<span style="font-size:0.84rem; font-weight:bold; color:${cor || '#ffffff'}; white-space:nowrap;">${txt}</span>`
                 : '';
 
+            // ── A TRAVA DA GERENCIA ─────────────────────────────────────────
+            //
+            // Vai em TODO campo que muda o que sai no papel ou o que o cliente
+            // contratou. Fora dela, de proposito: o Status da impressao (marcar
+            // o que ja saiu e' o trabalho normal) e a caixinha de marcar para a
+            // folha combinada (escolhe o que imprimir, nao altera o modelo).
+            const liberado = modeloEstaLiberado(item.id);
+            const porteiro = `onmousedown="return travaDaGerencia(event, '${jsItemId}')"`
+                + ` onkeydown="return travaDaGerencia(event, '${jsItemId}')"`;
+            // `readonly` e nao `disabled`: campo desabilitado nao recebe evento
+            // nenhum, e o operador clicaria nele sem a tela dizer por que nao
+            // responde. Assim ele clica, o gesto e' barrado, e a caixa da senha
+            // aparece explicando.
+            const travaCampo = liberado ? '' : ` readonly data-trancado="1" ${porteiro}`;
+            // Um so' conjunto de eventos por seletor: a porta trata a trava e o
+            // preenchimento na ordem certa. Ver portaDoSeletor().
+            const porta = `onmousedown="return portaDoSeletor(event, this, '${jsItemId}')"`
+                + ` onfocus="return portaDoSeletor(event, this, '${jsItemId}')"`
+                + ` onkeydown="return portaDoSeletor(event, this, '${jsItemId}')"`
+                + ` ontouchstart="return portaDoSeletor(event, this, '${jsItemId}')"`;
+
+            const cadeado = liberado
+                ? `<span class="ped-cadeado liberado" title="Campos liberados neste modelo até fechar a janela dele.">&#128275;</span>`
+                : `<span class="ped-cadeado" title="Qtd, N. inicial, Bloco, Cor, Numeração e Verso só mudam com a senha da gerência. Clique num deles para liberar." onclick="event.stopPropagation(); pedirSenhaDaGerencia('${jsItemId}')">&#128274;</span>`;
+
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="${classesDaLinha}" id="ped-queue-row-${item.id}"
                     data-cor-chave="${corDoItem.chave}"
@@ -4684,6 +4889,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="width: 18px; height: 18px; min-width: 18px; min-height: 18px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
                             <span>${nomeDoModelo}</span>
+                            ${cadeado}
                         </div>
                     </td>
                     
@@ -4692,7 +4898,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Q_CAM', '#f59e0b')}
                             <input type="number" min="0" value="${qCamVal}" style="${inputStyle}" placeholder="Q_CAM"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'q_cam', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'q_cam', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4700,7 +4906,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('L_CAM', '#f59e0b')}
                             <input type="number" min="1" value="${lCamVal}" style="${inputStyle}" placeholder="L_CAM"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'l_cam', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'l_cam', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4708,7 +4914,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('C_INI', '#f59e0b')}
                             <input type="number" min="1" value="${cIniVal}" style="${inputStyle}" placeholder="C_INI"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'c_ini', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'c_ini', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4725,7 +4931,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('QTD')}
                             <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="Qtd"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4733,7 +4939,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('NI')}
                             <input type="number" value="${niVal}" style="${inputStyle}" placeholder="N. inicial"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4749,7 +4955,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Bloco')}
                             <input type="number" value="${blocoVal}" style="${inputStyle}" placeholder="Bloco"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'bloco', this.value)"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'bloco', this.value)"${travaCampo}
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -4758,9 +4964,8 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('COR')}
                             <select style="${corSelectStyle}" data-lista="cores" data-fmt="${itemFmtId || ''}"
-                                    onmousedown="encherSeletorDaFila(this)" onfocus="encherSeletorDaFila(this)"
-                                    onkeydown="encherSeletorDaFila(this)" ontouchstart="encherSeletorDaFila(this)"
-                                    onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                    ${porta}
+                                    onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" data-trancado="${liberado ? '' : '1'}" onclick="event.stopPropagation()">
                                 ${coresOptions || '<option value="">— Cor —</option>'}
                             </select>
                         </div>
@@ -4769,9 +4974,8 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Núm.')}
                             <select style="${selectStyle}" data-lista="nums" data-fmt="${itemFmtId || ''}"
-                                    onmousedown="encherSeletorDaFila(this)" onfocus="encherSeletorDaFila(this)"
-                                    onkeydown="encherSeletorDaFila(this)" ontouchstart="encherSeletorDaFila(this)"
-                                    onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                    ${porta}
+                                    onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" data-trancado="${liberado ? '' : '1'}" onclick="event.stopPropagation()">
                                 ${numsOptions || '<option value="">— Numeração —</option>'}
                             </select>
                         </div>
@@ -4779,7 +4983,7 @@ function renderPedOSQueue() {
                     <td style="padding: 6px; width: 120px; min-width: 120px;" title="Frente e Verso/Tipo de Verso">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Verso')}
-                            <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
+                            <select style="${selectStyle}" ${liberado ? '' : porteiro} onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" data-trancado="${liberado ? '' : '1'}" onclick="event.stopPropagation()">
                                 <option value="Frente" ${item.verso_tipo === 'Frente' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
                                 <option value="FxVerso" ${item.verso_tipo === 'FxVerso' ? 'selected' : ''}>FxVerso</option>
                             </select>

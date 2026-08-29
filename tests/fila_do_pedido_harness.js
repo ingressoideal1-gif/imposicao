@@ -42,7 +42,7 @@ const REAIS = ['renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',
-               'encherSeletoresDaLinha'];
+               'encherSeletoresDaLinha', 'modeloEstaLiberado', 'travaDaGerencia', 'portaDoSeletor'];
 
 // ─── O pedido 21202: 52 modelos numa caixa so, o maior real ──────────────────
 function cenario(quantos, comCamarote) {
@@ -126,6 +126,14 @@ function cenario(quantos, comCamarote) {
             // teste decide quando ela roda, para medir os dois estados.
             window.encherSeletorDaFila = encherSeletorDaFila;
             window.encherSeletoresDaLinha = encherSeletoresDaLinha;
+            window.travaDaGerencia = travaDaGerencia;
+            window.portaDoSeletor = portaDoSeletor;
+            window.modeloEstaLiberado = modeloEstaLiberado;
+            // A caixa da senha vive no index.html; aqui basta saber SE ela foi
+            // pedida, e para qual modelo.
+            window.__pedidos = [];
+            function pedirSenhaDaGerencia(id) { window.__pedidos.push(String(id)); }
+            window.pedirSenhaDaGerencia = pedirSenhaDaGerencia;
             renderPedOSQueue();
         `);
     }
@@ -329,6 +337,10 @@ function cenario(quantos, comCamarote) {
 
     // ── 7. Abrir o seletor traz a lista inteira, sem perder a escolha ───────
     const aberto = await aba.evaluate(() => {
+        // A trava da gerencia vem antes de tudo nesta fila: sem liberar, o
+        // seletor nem abre. Ela e' medida no bloco 10.
+        state.modeloLiberado = 'm1';
+        renderPedOSQueue();
         const s = document.querySelector('#ped-os-queue-body td[title="Cor"] select');
         const antes = s.value;
         s.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -345,8 +357,12 @@ function cenario(quantos, comCamarote) {
     // a lista ja esta pronta quando o operador clica — sem que nada tenha sido
     // montado em lote.
     const hover = await aba.evaluate(() => {
+        // Linha travada nao enche: montar a lista de um seletor que nao vai
+        // abrir seria pagar o preco por nada. Aqui o modelo esta liberado.
+        state.modeloLiberado = 'm6';
+        renderPedOSQueue();
         const filaAntes = document.querySelectorAll('#ped-os-queue-body option').length;
-        const linha = document.querySelectorAll('#ped-os-queue-body tbody tr.fila-linha')[5];
+        const linha = document.getElementById('ped-queue-row-m6');
         const antes = linha.querySelectorAll('option').length;
         linha.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
         const depois = linha.querySelectorAll('option').length;
@@ -373,6 +389,9 @@ function cenario(quantos, comCamarote) {
             const linha = Array.from(linhas).find(l =>
                 l.querySelectorAll('select[data-lista]:not([data-cheio="1"])').length === 2);
             if (!linha) return { erro: 'acabaram as linhas virgens' };
+            // O caminho medido aqui e' o do PREENCHIMENTO. A trava, que vem
+            // antes dele, tem bloco proprio (o 10).
+            state.modeloLiberado = String(linha.id).replace('ped-queue-row-', '');
             const s = linha.querySelector('td[title="Numeração"] select');
             const antes = s.options.length;
             s.dispatchEvent(new window[cls](ev, { bubbles: true }));
@@ -380,6 +399,83 @@ function cenario(quantos, comCamarote) {
         }, evento, Classe);
         ok(cheio.depois > 100, `abrir o seletor por ${evento} traz a lista inteira`, cheio);
     }
+
+    // ── 10. A TRAVA DA GERENCIA ─────────────────────────────────────────────
+    //
+    // Qtd, N. inicial, Bloco, Cor, Numeracao e Verso decidem o que sai no papel
+    // e o que o cliente contratou. A tela do Pedido fica aberta no chao de
+    // fabrica, e ate 29/08/2026 qualquer um que passasse podia mudar a
+    // quantidade de uma tiragem com um clique.
+    await desenhar(cenario(6, false));
+
+    const travados = await aba.evaluate(() => {
+        const linha = document.querySelector('#ped-os-queue-body tbody tr.fila-linha');
+        const por = t => linha.querySelector(`td[title="${t}"]`);
+        const trancado = el => !!(el && el.dataset.trancado === '1');
+        return {
+            qtd: trancado(por('Quantidade')?.querySelector('input')),
+            numInicial: trancado(por('Num. Inicial')?.querySelector('input')),
+            bloco: trancado(por('Ingressos por Bloco')?.querySelector('input')),
+            cor: trancado(por('Cor')?.querySelector('select')),
+            numeracao: trancado(por('Numeração')?.querySelector('select')),
+            verso: trancado(por('Frente e Verso/Tipo de Verso')?.querySelector('select')),
+            // fora da trava, de proposito
+            status: trancado(por('Status de Produção')?.querySelector('select')),
+            marcar: trancado(linha.querySelector('input[type="checkbox"]')),
+            somenteLeitura: !!por('Quantidade')?.querySelector('input')?.readOnly,
+            cadeado: !!linha.querySelector('.ped-cadeado'),
+        };
+    });
+    for (const campo of ['qtd', 'numInicial', 'bloco', 'cor', 'numeracao', 'verso']) {
+        ok(travados[campo] === true, `o campo ${campo} nasce travado pela senha da gerencia`, travados);
+    }
+    ok(travados.status === false,
+       'o Status da impressao NAO passa pela trava: marcar o que ja saiu e o trabalho normal do operador',
+       travados);
+    ok(travados.marcar === false,
+       'nem a caixinha de marcar, que escolhe o que imprimir e nao altera o modelo', travados);
+    ok(travados.somenteLeitura, 'o campo travado e readonly — nao da para digitar por cima', travados);
+    ok(travados.cadeado, 'e a linha mostra o cadeado antes de o operador tentar', travados);
+
+    // O gesto e' BARRADO e a caixa da senha aparece — o operador descobre a
+    // regra tentando, que e' quando ela importa.
+    const gesto = await aba.evaluate(() => {
+        window.__pedidos = [];
+        const sel = document.querySelector('#ped-os-queue-body td[title="Cor"] select');
+        const antes = sel.options.length;
+        const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        sel.dispatchEvent(ev);
+        return { barrado: ev.defaultPrevented, pediuSenha: window.__pedidos.length === 1,
+                 naoEncheu: sel.options.length === antes };
+    });
+    ok(gesto.barrado, 'clicar num seletor travado nao abre a lista', gesto);
+    ok(gesto.pediuSenha, 'e pede a senha da gerencia', gesto);
+
+    // Liberado, tudo volta a funcionar — e SO' naquele modelo.
+    const liberado = await aba.evaluate(() => {
+        state.modeloLiberado = 'm1';
+        renderPedOSQueue();
+        const linhaLiberada = document.getElementById('ped-queue-row-m1');
+        const outra = document.getElementById('ped-queue-row-m2');
+        const trancado = (l, t, tag) => {
+            const el = l.querySelector(`td[title="${t}"] ${tag}`);
+            return !!(el && el.dataset.trancado === '1');
+        };
+        const sel = linhaLiberada.querySelector('td[title="Cor"] select');
+        const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        sel.dispatchEvent(ev);
+        return {
+            liberada: !trancado(linhaLiberada, 'Cor', 'select') && !trancado(linhaLiberada, 'Quantidade', 'input'),
+            outraContinuaTravada: trancado(outra, 'Cor', 'select'),
+            abriu: !ev.defaultPrevented,
+            cadeadoAberto: !!linhaLiberada.querySelector('.ped-cadeado.liberado'),
+        };
+    });
+    ok(liberado.liberada, 'com a senha aceita, os campos daquele modelo abrem', liberado);
+    ok(liberado.abriu, 'e o seletor volta a abrir a lista', liberado);
+    ok(liberado.outraContinuaTravada,
+       'mas SO daquele modelo: a linha vizinha continua travada', liberado);
+    ok(liberado.cadeadoAberto, 'e o cadeado da linha liberada mostra que ela esta aberta', liberado);
 
     await navegador.close();
 

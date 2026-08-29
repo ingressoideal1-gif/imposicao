@@ -4340,6 +4340,54 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     }
 }
 
+/* ─── A senha da gerencia na tela do Pedido ──────────────────────────────────
+
+   Os campos da linha do modelo mudam o que vai para o papel e o que o cliente
+   contratou. So' a gerencia os altera, com a mesma senha do peso fora dos 5 %
+   no Painel do Acabamento. O Status da impressao fica de fora: marcar o que ja
+   saiu e' o trabalho normal do operador. */
+#ped-senha-gerencia {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ped-senha-fundo {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.72);
+}
+.ped-senha-caixa {
+    position: relative;
+    width: min(440px, calc(100vw - 32px));
+    background: var(--card, #1e293b);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 14px);
+    padding: 22px 24px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.ped-senha-titulo { font-size: 1.05rem; font-weight: 800; color: var(--text); margin-bottom: 10px; }
+.ped-senha-texto  { font-size: 0.85rem; line-height: 1.5; color: var(--text-dim); margin: 0; }
+.ped-senha-rotulo {
+    display: block; margin: 16px 0 5px; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
+}
+#ped-senha-campo { width: 100%; letter-spacing: 0.18em; font-size: 1rem; }
+.ped-senha-erro { min-height: 18px; margin-top: 7px; font-size: 0.8rem; color: #f87171; }
+.ped-senha-botoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.ped-senha-nota {
+    margin: 14px 0 0; padding-top: 12px; font-size: 0.74rem; line-height: 1.45;
+    color: var(--text-faint, #64748b); border-top: 1px solid var(--border);
+}
+
+/* O cadeado na linha: diz que os campos estao travados ANTES de o operador
+   tentar mexer, e o que fazer para sair dali. */
+.ped-cadeado { font-size: 0.82rem; cursor: pointer; opacity: 0.75; flex: 0 0 auto; }
+.ped-cadeado:hover { opacity: 1; }
+.ped-cadeado.liberado { opacity: 1; }
+
 /* Recado de "estou montando" enquanto a previa do modelo novo nao fica pronta.
    Existe porque o carregamento e' encadeado em 400/600/800 ms: sem ele, por
    quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo

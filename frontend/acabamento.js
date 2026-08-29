@@ -6754,6 +6754,16 @@
 
     window.AcabamentoPainel = AcabamentoPainel;
 
+    // A SENHA DA GERENCIA E' UMA SO' NO PRODUTO.
+    //
+    // Ela nasceu aqui, para liberar peso fora dos 5 %. Desde 29/08/2026 a tela
+    // do Pedido tambem a pede, para destravar os campos da linha do modelo — e
+    // pede a MESMA senha, conferida no MESMO lugar (o servidor; a senha nunca
+    // esta no navegador). Exportada em vez de copiada de proposito: duas
+    // conferencias seriam duas politicas, e a que ficasse para tras viraria a
+    // porta destrancada.
+    window.conferirSenhaDeLiberacao = conferirSenhaDeLiberacao;
+
     // ─── Embrulhos: nada do que já existe é reescrito ────────────────────────
 
     (function embrulharRenderOrdens() {

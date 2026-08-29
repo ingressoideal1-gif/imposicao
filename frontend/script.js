@@ -24690,6 +24690,11 @@ if (!state.activeOSItem) state.activeOSItem = null;
 // `activeOSItem` nulo — as duas filas (Pedido e Imposicao) precisam de outra
 // coisa para saber o que desenhar. Ver renderPedOSQueue().
 if (!state.pedidoAberto) state.pedidoAberto = null;
+// O modelo cujos campos a gerencia liberou, se algum. Nasce nulo a cada carga
+// da pagina de proposito: uma liberacao que sobrevivesse a um F5 seria uma
+// porta destrancada que ninguem lembra de ter aberto. Ver a trava da gerencia
+// no pedido.js.
+if (!state.modeloLiberado) state.modeloLiberado = null;
 // Como somar modelos numa folha. Decisão de tiragem, não do pedido: vive aqui e
 // não vai ao banco. O padrão é o comportamento de sempre.
 if (!state.modoSomaFolha) state.modoSomaFolha = 'separado';

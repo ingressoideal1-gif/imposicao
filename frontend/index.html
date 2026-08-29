@@ -2165,6 +2165,41 @@
                         </div>
                     </div>
                     </div><!-- /ped-preview-home -->
+
+                    <!-- ── A SENHA DA GERÊNCIA ─────────────────────────────────
+                         Os campos da linha do modelo (Qtd, N. inicial, Bloco,
+                         Cor, Numeração, Verso) mudam o que vai para o papel e o
+                         que o cliente contratou. Desde 29/08/2026 só se mexe
+                         neles com a senha da gerência — a MESMA do peso fora
+                         dos 5 % no Painel do Acabamento, conferida no servidor.
+
+                         O Status da impressão NÃO passa por aqui: marcar o que
+                         já saiu é o trabalho normal do operador. -->
+                    <div id="ped-senha-gerencia" style="display:none;">
+                        <div class="ped-senha-fundo" onclick="fecharSenhaDaGerencia()"></div>
+                        <div class="ped-senha-caixa" role="dialog" aria-modal="true" aria-labelledby="ped-senha-titulo">
+                            <div id="ped-senha-titulo" class="ped-senha-titulo">&#128274; Campo travado</div>
+                            <p class="ped-senha-texto">
+                                Qtd, N&ordm; inicial, Bloco, Cor, Numera&ccedil;&atilde;o e Verso mudam o que vai para o papel
+                                e o que o cliente contratou. Para alter&aacute;-los neste modelo, a ger&ecirc;ncia digita a senha
+                                &mdash; a mesma do peso no Acabamento.
+                            </p>
+                            <p class="ped-senha-texto" style="margin-top:6px;">
+                                Modelo: <b id="ped-senha-modelo" style="color: var(--blue);">&mdash;</b>
+                            </p>
+                            <label class="ped-senha-rotulo" for="ped-senha-campo">Senha da ger&ecirc;ncia</label>
+                            <input type="password" id="ped-senha-campo" class="form-control" autocomplete="off"
+                                   placeholder="Digite a senha" />
+                            <div id="ped-senha-erro" class="ped-senha-erro"></div>
+                            <div class="ped-senha-botoes">
+                                <button type="button" class="btn btn-ghost" onclick="fecharSenhaDaGerencia()">Cancelar</button>
+                                <button type="button" class="btn btn-primary" id="ped-senha-ok" onclick="liberarCamposDoModelo()">Liberar</button>
+                            </div>
+                            <p class="ped-senha-nota">
+                                A libera&ccedil;&atilde;o vale para <b>este modelo</b> at&eacute; a janela dele ser fechada.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
