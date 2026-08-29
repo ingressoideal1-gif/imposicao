@@ -102,8 +102,9 @@ custam:
    nasceu inerte.
 3. **Tirar um zoom exige reescalar junto** tudo o que estava dentro dele.
 
-**Duas coisas ficaram em aberto**, ambas na seção *Em aberto* no fim deste
-documento: o INP de 2.105 ms e a divergência do modelo 1000565.
+**O que ficou em aberto** está na seção *Em aberto desde 29/08/2026*, no fim
+deste documento: o INP de 2.105 ms, e a decisão de trazer a verificação de
+contratado × banco para a janela do modelo.
 
 ---
 
@@ -717,39 +718,38 @@ vermelha por elemento desenhado.
 
 ## Em aberto desde 29/08/2026
 
-**1. 🔴 O modelo 1000565 do pedido 21202 — decisão do usuário.** Contratadas
-**3.000**, mas o banco da numeração ligada (`CAMAROTE PRESIDENTE`) tem **12.806
-linhas** e não há recorte. Impresso como está, **saem 12.806 peças no lugar de
-3.000**. A conta e o nome dizem que é o banco-mestre do evento, não o banco de um
-dia: 3.000 × 4 dias + 800 extras = 12.800, e é a única numeração do pedido **sem
-o dia no nome**. Nada foi alterado — o usuário pediu *"apenas analizar, não
-alterar"*. Caminhos possíveis: criar a numeração do dia 05 a partir do
-banco-mestre, ou aplicar um recorte ao modelo. Detalhe em
-[`conferencia_pedido_21202.md`](conferencia_pedido_21202.md#-modelo-1000565--05set-camarote-presidente).
-
-**2. Um INP de 2.105 ms num clique da tela do Pedido.** Capturado pelo usuário no
-DevTools da estação. Já foram descartados com medição a varredura do CSV (7,5 ms
+**1. Um INP de 2.105 ms num clique da tela do Pedido.** Capturado pelo usuário no
+DevTools da estação. Já foram descartados com medição a varredura do CSV (7,8 ms
 para os 51 bancos, 128.286 linhas), a `contaDoProduto`, o redesenho da fila
 (44 ms) e a troca de tela. Sobram **1,9 segundos** sem dono. O candidato que
 restou é a geração de **QR na prévia** — todas as numerações deste pedido têm QR,
 e a Triband tem 10 células por folha —, mas **não foi medido**. Fecha-se de duas
 maneiras: expandindo aquela linha no DevTools da estação (mostra função, arquivo
 e linha) ou instrumentando o caminho do clique. Ver
-[`conferencia_pedido_21202.md`](conferencia_pedido_21202.md#5-o-inp-de-2105-ms-ainda-em-aberto).
+[`conferencia_pedido_21202.md`](conferencia_pedido_21202.md#6-o-inp-de-2105-ms-ainda-em-aberto).
 
-**3. Trazer a `divergenciaDeCelulasDoModelo` para a tela do Pedido.** Ela compara
+**2. Trazer a `divergenciaDeCelulasDoModelo` para a tela do Pedido.** Ela compara
 contratado × gerado e já está ligada em quatro lugares — card do modelo, bloqueio
 da aprovação, bloqueio da promoção do pedido e o relatório *🔎 Conferência de
 dados* —, mas **todos na tela de Amostras**. Na tela do Pedido, onde se manda
-imprimir, o selo da janela nunca compara com o contratado. Oferecido ao usuário,
-ainda não decidido. (Cuidado ao fazer: a função só varre o banco quando a tiragem
-ficou curta, de propósito, porque roda a cada redesenho de card.)
+imprimir, o selo da janela nunca compara com o contratado, nem avisa quando o
+número de folhas muda sozinho ao banco descer. Oferecido ao usuário, ainda não
+decidido. (Cuidado ao fazer: a função só varre o banco quando a tiragem ficou
+curta, de propósito, porque roda a cada redesenho de card.)
 
-**4. O `gabarito_operacional` não serve para conferência.** O campo, que vem do
-ERP, diverge da numeração ligada em casos onde a numeração está **certa** (modelo
-1000602: gabarito `Backstage 11` num modelo de 12/set com numeração `Backstage
-12`, correta). Não usar como fonte para conferir dia ou peça — produz alarme
-falso.
+**3. O `gabarito_operacional` não serve para conferência.** O campo, que vem do
+ERP, diverge da numeração ligada em casos onde a numeração está **certa** — o
+modelo 1000602 é de 12/set com numeração `Backstage 12`, correta, e o gabarito
+diz `Backstage 11`; outros três trazem o nome sem o dia. Não usar como fonte para
+conferir dia ou peça: produz alarme falso.
+
+> **O pedido 21202 foi conferido e está certo.** Os 51 modelos imprimem
+> exatamente a quantidade contratada. A primeira versão daquela conferência
+> acusou o modelo 1000565 de gerar 12.806 peças em vez de 3.000; era **erro
+> meu**, por contar a linha crua do banco em vez de aplicar o corte por coluna
+> que o produto aplica. O usuário desfez o alarme mostrando a tela. A explicação,
+> e a regra que evita repetir isso, estão na seção 2 de
+> [`conferencia_pedido_21202.md`](conferencia_pedido_21202.md).
 
 ---
 

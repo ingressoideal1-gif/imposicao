@@ -72,11 +72,31 @@ oscilando é sintoma de **divergência no dado**: o banco ligado não entregava 
 quantidade contratada. O dado foi corrigido no ERP entre as duas consultas.
 
 Isso levou a uma **conferência somente-leitura dos 51 modelos** do pedido, a
-pedido do usuário (*"apenas analizar, não alterar"*). Cinquenta estão certos; um
-não. As quatro consultas ficaram guardadas em [`sql/consultas/`](../sql/consultas/)
-e o achado está em
-[`docs/conferencia_pedido_21202.md`](conferencia_pedido_21202.md) — junto com a
-investigação, ainda aberta, de um INP de 2.105 ms.
+pedido do usuário (*"apenas analizar, não alterar"*). **Os 51 estão certos** — o
+que cada modelo imprime bate com o contratado.
+
+**Mas a primeira versão dessa conferência acusou uma divergência que não
+existia**, e vale registrar: eu disse que o modelo 1000565 tinha 3.000
+contratadas contra 12.806 linhas no banco, e que imprimi-lo geraria 12.806 peças.
+O usuário desfez com a tela: *"o 1000565 mostra 300 folhas e já foi impresso
+corretamente"*.
+
+Erro meu, com nome. Eu contava `jsonb_array_length(csv_data)` — o banco **cru** —
+e comparava com a quantidade contratada. O produto não usa esse número: o
+`fatiaCsvDoItem` aplica antes o corte de **`linhasComDadoDaNumeracao`**, e linha
+sem dado nas colunas que *aquela* numeração lê não é célula daquele modelo. O
+"CAMAROTE PRESIDENTE" é banco-mestre de 12.806 linhas com 3.000 preenchidas na
+coluna `Codigo`. A tela nunca esteve errada.
+
+**A regra que fica:** conferência SQL tem de reproduzir a regra que o código
+aplica, não uma aproximação dela — e quando a tela discorda da minha consulta, o
+errado é a consulta. As duas consultas afetadas foram reescritas com o corte
+certo, e trazem o episódio no cabeçalho: alarme falso ensina o operador a ignorar
+o aviso, e aí ele não serve no dia da divergência de verdade.
+
+As quatro consultas ficaram em [`sql/consultas/`](../sql/consultas/), e tudo está
+em [`docs/conferencia_pedido_21202.md`](conferencia_pedido_21202.md) — junto com
+a investigação, ainda aberta, de um INP de 2.105 ms.
 
 ### O freio que faltava no `publicar.ps1`
 
@@ -141,8 +161,9 @@ cabeça.
   se move (e por que recriá-la é caro), o clique-interruptor, a escala, a trava da
   gerência, os testes que a travam e as armadilhas de quem for mexer.
 - **[`docs/conferencia_pedido_21202.md`](conferencia_pedido_21202.md)** — a
-  conferência somente-leitura dos 51 modelos, a divergência do 1000565, as notas
-  de esquema do banco, e o INP de 2.105 ms com tudo o que já foi descartado.
+  conferência somente-leitura dos 51 modelos, o alarme falso que ela produziu na
+  primeira versão e a regra que evita repeti-lo, as notas de esquema do banco, e
+  o INP de 2.105 ms com tudo o que já foi descartado.
 - **[`sql/consultas/`](../sql/consultas/)** — as quatro consultas de conferência,
   cada uma com o marcador `<<< TROQUE AQUI o numero do pedido`, para servirem a
   qualquer pedido.

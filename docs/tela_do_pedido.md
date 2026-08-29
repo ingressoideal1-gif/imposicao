@@ -348,8 +348,9 @@ bloqueio da promoção do pedido e o relatório do botão *🔎 Conferência de 
 Na tela do Pedido, onde o operador manda imprimir, o selo da janela diz *"20
 folha(s) · 200 itens · a folha fecha certo"* e **nunca compara com o contratado**.
 Trazer a verificação para esse selo foi oferecido ao usuário e ainda não foi
-decidido. O caso concreto que motivou a oferta — um modelo com 3.000 contratadas
-e 12.806 linhas no banco — está no documento acima.
+decidido. O sintoma concreto que motivou a oferta está no documento acima: o
+número de folhas que **muda sozinho** segundos depois de abrir o modelo, quando a
+faixa contratada e o banco ligado não falam da mesma quantidade.
 
 > Quem for fazer isso: a função só varre o banco quando a tiragem ficou **curta**,
 > de propósito, porque roda a cada redesenho de card. Numa tela que redesenha 52
