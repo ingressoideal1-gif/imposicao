@@ -61,6 +61,13 @@ function montar(mundo) {
         // ele e um duble: o que este arnes prova continua sendo a logistica da
         // gravacao, e nao a descida do banco.
         'garantirCsvDaNumeracao',
+        // 27/08/2026: o desvio do banco do pedido. A `regenerarAmostraDoModelo`
+        // passou a resolver a numeracao pelo vinculo do modelo, e sem este nome
+        // aqui o arnes inteiro morria com "resolverNumeracaoParaModelo is not
+        // defined" antes da primeira verificacao. Duble de passagem, pelo mesmo
+        // motivo do `garantirCsvDaNumeracao` logo acima: o que se prova aqui e a
+        // logistica da gravacao, nao a escolha do banco.
+        'resolverNumeracaoParaModelo',
         fonte + '\nreturn regenerarAmostraDoModelo;')(
         mundo.state || {},
         { createElement: () => ({ width: 100, height: 40, getContext: () => ({}) }) },
@@ -71,7 +78,8 @@ function montar(mundo) {
         mundo.drawAmostraFace || (async () => {}),
         mundo.snapshotAmostraSync || (async () => {}),
         undefined,
-        mundo.garantirCsvDaNumeracao || (async n => n));
+        mundo.garantirCsvDaNumeracao || (async n => n),
+        mundo.resolverNumeracaoParaModelo || (num => num));
 }
 
 const ESTADO = {

@@ -1625,36 +1625,13 @@
                                 </div>
                             </div>
 
-                            <!-- Sumário -->
-                            <div class="summary-box" id="ped-summary" style="display:none">
-                                <div class="summary-item">
-                                    <span class="summary-label">Formato</span>
-                                    <span class="summary-value" id="ped-sum-formato">—</span>
-                                </div>
-                                <div class="summary-item">
-                                    <span class="summary-label">Grade</span>
-                                    <span class="summary-value" id="ped-sum-grade">—</span>
-                                </div>
-                                <div class="summary-item">
-                                    <span class="summary-label">Total de Itens</span>
-                                    <span class="summary-value" id="ped-sum-total">—</span>
-                                </div>
-                                <div class="summary-item">
-                                    <span class="summary-label">Folhas Estimadas</span>
-                                    <span class="summary-value" id="ped-sum-folhas">—</span>
-                                </div>
-                                <!-- Quanto papel esta tiragem deixa vazio. Fica ao lado de
-                                     Folhas Estimadas porque e aqui que o operador le os numeros
-                                     da imposicao. Ver docs/aproveitamento_de_folha.md -->
-                                <div class="summary-item">
-                                    <span class="summary-label">Celulas vazias</span>
-                                    <span class="summary-value" id="ped-sum-vazias">—</span>
-                                </div>
-                                <div class="summary-item">
-                                    <span class="summary-label">Saída</span>
-                                    <span class="summary-value" id="ped-sum-saida">—</span>
-                                </div>
-                            </div>
+                            <!-- O Sumário (Formato, Grade, Total, Folhas, Células vazias,
+                                 Saída) saiu daqui em 28/08/2026. Ele estava escondido sem
+                                 querer: mora dentro deste `display:none !important` desde
+                                 que o formulário antigo saiu da tela, então os números da
+                                 imposição não chegavam ao operador. Foi INTEIRO, com os
+                                 mesmos ids, para o cabeçalho da janela de visualização —
+                                 quem escreve neles continua sendo o updatePedSummary. -->
 
 <!-- Upload Arte -->
                             <div class="file-drop" id="ped-drop-area">
@@ -1677,9 +1654,11 @@
                                 <button class="btn btn-primary" id="ped-btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
                                     🖨️ Imprimir
                                 </button>
-                                <button class="btn btn-danger" id="ped-btn-cancel-print" onclick="cancelarImpressaoOuGeracao()" style="display:none; flex:1; background: linear-gradient(135deg, #ef4444, #dc2626); border-color: #ef4444; color: white; padding: 12px; border-radius: 8px; font-weight: 700; box-shadow: 0 4px 12px rgba(239,68,68,0.3);" title="Cancelar Impressão / Envio Imediatamente">
-                                    🛑 Cancelar Impressão
-                                </button>
+                                <!-- O "Cancelar Impressão" saiu daqui: ele morava dentro
+                                     deste bloco escondido, então cancelar um envio em
+                                     andamento não era possível por esta tela. Foi para o
+                                     grupo "Imprimir e PDF" da janela, onde aparece
+                                     enquanto o envio acontece. -->
                             </div>
                             </div>
                         </div>
@@ -1695,338 +1674,463 @@
                          bandeja e papel ao padrao. Ver moverJanelaParaModelo(). -->
                     <div id="ped-preview-home">
                     <div class="imposicao-preview" id="ped-preview-card-container" style="display: none;">
-                        <div class="card">
-                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
-                                <div style="display: flex; gap: 16px; align-items: center;">
-                                    <span class="card-title">👁️ Pré-visualização da Folha</span>
+                        <div class="card" style="margin:0;">
 
-                                    <!-- Botões de ação do modelo em visualização -->
-                                    <button id="ped-preview-btn-pdf" onclick="pedPreviewGerarPDF()" style="padding:5px 14px;background:linear-gradient(135deg,#a78bfa,#7c3aed);border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(124,58,237,0.3);transition:all 0.2s;display:flex;align-items:center;gap:5px;">
-                                        <span>📄</span> Gerar PDF
-                                    </button>
-                                    <button id="ped-preview-btn-print" onclick="pedPreviewImprimir()" style="padding:5px 14px;background:linear-gradient(135deg,#34d399,#059669);border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(5,150,105,0.3);transition:all 0.2s;display:flex;align-items:center;gap:5px;">
-                                        <span>🖨️</span> Imprimir
-                                    </button>
+                            <!-- ── O CABECALHO TEM UMA LINHA SO ────────────────────────────
+                                 Ele diz DE QUE MODELO e' esta janela e os numeros da
+                                 imposicao. As acoes sairam daqui: moraram misturadas com os
+                                 controles da previa e com o Refazer, e o operador reclamou
+                                 que o cabecalho estava confuso enquanto a previa ficava
+                                 "perdida no meio da tela". Agora as acoes estao em grupos,
+                                 na coluna da direita. -->
+                            <div class="card-header ped-janela-cabecalho">
+                                <span class="card-title" style="white-space:nowrap;">
+                                    &#128065;&#65039; Pr&eacute;-visualiza&ccedil;&atilde;o
+                                    <span style="color: var(--text-dim); font-weight: 400;">&mdash;</span>
+                                    <span id="ped-preview-modelo" style="color: var(--blue);">&mdash;</span>
+                                </span>
 
-                                    <!-- REFAZER: reimpressão de parte de uma tiragem que já saiu.
-                                         dois modos EXCLUDENTES (marcar um desmarca o outro).
-                                         "Refazer Folhas": De/Ate contam folhas DENTRO DO SET e a
-                                         folha sai inteira. "Refazer Celula": a lista e de POSICOES
-                                         DO ITEM NO MODELO (o 1o, o 6o, o 22o ticket) — nao e a pose
-                                         da folha — e os itens sao compactados numa folha nova.
-                                         Ver montarRefazerPayload() em pedido.js e `fontes` no
-                                         engine.py. -->
-                                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap;">
-                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz apenas uma faixa de folhas do set. A numeração é exatamente a mesma da tiragem original.">
-                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle('folhas')">
-                                            Refazer Folhas
-                                        </label>
-                                        <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
-                                            <select id="ped-refazer-set" class="form-control" style="width: auto; padding: 2px 4px; height: 24px; font-size: 0.8rem; display: none;" onchange="onRefazerFolhaChange()">
-                                                <option value="1">Set 1</option>
-                                            </select>
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
-                                            <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha da faixa. A prévia pula para ela assim que você digita.">
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
-                                            <input type="number" id="ped-refazer-ate" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 10">
-                                            <span id="ped-refazer-total" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
-                                        </div>
-
-                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz itens escolhidos pela POSIÇÃO no modelo (o 1º, o 6º, o 22º ticket). Eles são compactados: preenchem a folha célula a célula, sem espaço em branco.">
-                                            <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle('celulas')">
-                                            Refazer Célula
-                                        </label>
-                                        <div id="ped-refazer-cel-inputs" style="display: none; align-items: center; gap: 6px;">
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">Itens:</span>
-                                            <input type="text" id="ped-refazer-cel" class="form-control" style="width: 92px; padding: 2px 6px; height: 24px; font-size: 0.8rem; text-align: center;" placeholder="Ex: 1,6,22" oninput="onRefazerCelulaChange()" title="Posições do item no modelo, separadas por vírgula (o 1º, o 6º, o 22º...). Faixas também valem: 1-4. Não é a célula da folha: 22 num formato de 10 células é válido. A prévia rotula cada um com #posição.">
-                                            <span id="ped-refazer-cel-info" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
-                                        </div>
-
-                                        <div id="ped-refazer-acoes" style="display: none; align-items: center; gap: 6px;">
-                                            <button class="btn btn-sm" style="background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('pdf', true)">Gerar PDF</button>
-                                            <button class="btn btn-sm" id="ped-refazer-btn-print" style="background: linear-gradient(135deg, #34d399, #059669); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('print', true)">Imprimir</button>
-                                        </div>
+                                <!-- Os numeros da imposicao. Este bloco existia e estava
+                                     escondido sem querer: morava dentro de um
+                                     `display:none !important` desde que o formulario antigo
+                                     saiu da tela. O `updatePedSummary` continua sendo quem
+                                     escreve nele — por isso ele veio inteiro, com os mesmos
+                                     ids, em vez de virar um bloco novo. -->
+                                <div class="summary-box ped-janela-chips" id="ped-summary" style="display:none">
+                                    <div class="summary-item">
+                                        <span class="summary-label">Formato</span>
+                                        <span class="summary-value" id="ped-sum-formato">&mdash;</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Grade</span>
+                                        <span class="summary-value" id="ped-sum-grade">&mdash;</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Total de Itens</span>
+                                        <span class="summary-value" id="ped-sum-total">&mdash;</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Folhas Estimadas</span>
+                                        <span class="summary-value" id="ped-sum-folhas">&mdash;</span>
+                                    </div>
+                                    <!-- Quanto papel esta tiragem deixa vazio.
+                                         Ver docs/aproveitamento_de_folha.md -->
+                                    <div class="summary-item">
+                                        <span class="summary-label">Celulas vazias</span>
+                                        <span class="summary-value" id="ped-sum-vazias">&mdash;</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Sa&iacute;da</span>
+                                        <span class="summary-value" id="ped-sum-saida">&mdash;</span>
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <label style="font-size: 0.78rem; margin-bottom: 0; display: flex; align-items: center; gap: 5px; cursor: pointer; background: rgba(56,189,248,0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; font-weight: 700;" title="Adicionar a camada base da COR (Amostra) à visualização da imposição (Apenas visualização, NUNCA é impressa)">
-                                        <input type="checkbox" id="ped-preview-toggle-amostra" onchange="drawPedPreview()" style="cursor: pointer; accent-color: #0284c7;"> 🎨 AMOSTRA
-                                    </label>
-                                    <select id="ped-preview-set-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto; display: none;" onchange="changePedPreviewPage()">
-                                        <option value="1">Set 1</option>
-                                    </select>
-                                    <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePedPreviewPage()">
-                                        <option value="miolo">Miolo</option>
-                                        <option value="capa">Capa</option>
-                                        <option value="contracapa">Contracapa</option>
-                                    </select>
-                                    <input type="number" id="ped-preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePedPreviewPage()">
-                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="prevPedPreviewPage()">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                    </button>
-                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="nextPedPreviewPage()">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                    </button>
-                                    <span class="badge badge-teal" id="ped-preview-sheet-num">Sem Arte</span>
-                                </div>
                             </div>
-                             <!-- Layout flex: Canvas 70% | Painel Driver 30% -->
-                             <div style="display:flex;gap:0;align-items:stretch;min-height:500px;overflow:hidden;">
 
-                                 <!-- Canvas de preview (70%) -->
-                                 <div class="ped-preview-canvas-container" style="flex:0 0 70%;width:70%;max-width:70%;min-width:0;overflow:auto;flex-direction:column;gap:12px;border-right:1px solid rgba(255,255,255,0.07);">
-                                     <canvas id="ped-preview-canvas"></canvas>
-                                     <div class="preview-face-selector" id="ped-preview-face-container" style="display: none; width: 100%; text-align: center;">
-                                         <div style="display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
-                                             <button class="btn btn-sm" id="ped-btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPedPreviewFace('front')">Frente</button>
-                                             <button class="btn btn-sm" id="ped-btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPedPreviewFace('back')">Verso</button>
-                                         </div>
-                                     </div>
-                                 </div>
+                            <!-- Painel que so aparece quando o caso pede: Cut & Stack,
+                                 Camarote, Mapa de Teatro e Multi-Artes. Fica entre o
+                                 cabecalho e o corpo porque muda o que a previa desenha. -->
+                            <div id="ped-janela-condicionais"></div>
 
-                                 <!-- Painel de Opções do Driver de Impressão (30%) -->
-                                 <div id="ped-print-driver-panel" style="flex:0 0 30%;min-width:220px;display:flex;flex-direction:column;background:rgba(0,0,0,0.2);overflow-y:auto;">
+                            <!-- ── O CORPO TEM TRES COLUNAS ────────────────────────────────
+                                 Esquerda: os controles da previa (que folha, que parte, que
+                                 face). Centro: a previa, com o espaco inteiro. Direita: as
+                                 acoes, separadas por tipo em grupos que abrem e fecham. -->
+                            <div class="ped-janela-corpo">
 
-                                     <!-- Header do painel -->
-                                     <div style="padding:14px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px;">
-                                         <span style="font-size:0.85rem;font-weight:700;color:#a5b4fc;">&#128424; Configuração de Impressão</span>
-                                     </div>
+                                <!-- ── ESQUERDA: os controles da previa ──────────────────── -->
+                                <div class="ped-janela-esquerda">
+                                    <span class="badge badge-teal" id="ped-preview-sheet-num" style="align-self:stretch; text-align:center;">Sem Arte</span>
 
-                                     <div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px;flex:1;">
+                                    <div class="ped-janela-controle">
+                                        <label class="ped-janela-rotulo">Folha</label>
+                                        <div style="display:flex; align-items:center; gap:4px;">
+                                            <button class="btn btn-sm btn-ghost" style="padding:2px 6px; height:28px;" onclick="prevPedPreviewPage()" title="Folha anterior">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                            </button>
+                                            <input type="number" id="ped-preview-page-input" class="form-control" style="flex:1; min-width:0; padding:2px 6px; height:28px; text-align:center; border-radius:4px; border:1px solid var(--border-color); font-size:0.85rem;" value="1" min="1" onchange="changePedPreviewPage()">
+                                            <button class="btn btn-sm btn-ghost" style="padding:2px 6px; height:28px;" onclick="nextPedPreviewPage()" title="Pr&oacute;xima folha">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                            </button>
+                                        </div>
+                                    </div>
 
-                                         <!-- Hot Folder — impressora conduzida por pasta observada (RIP) -->
-                                         <div id="ped-hotfolder-box" style="padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);border-radius:8px;display:flex;flex-direction:column;gap:9px;">
-                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#fbbf24;cursor:pointer;user-select:none;">
-                                                 <input type="checkbox" id="ped-hotfolder-enabled" onchange="onPedHotFolderToggle()" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;">
-                                                 <span>&#128193; HOT FOLDER</span>
-                                             </label>
+                                    <div class="ped-janela-controle" id="ped-preview-set-box" style="display:none;">
+                                        <label class="ped-janela-rotulo">Set</label>
+                                        <select id="ped-preview-set-input" class="form-control" style="height:28px; padding:2px 6px; font-size:0.85rem; width:100%;" onchange="changePedPreviewPage()">
+                                            <option value="1">Set 1</option>
+                                        </select>
+                                    </div>
 
-                                             <div id="ped-hotfolder-detalhes" style="display:none;flex-direction:column;gap:8px;">
-                                                 <input type="text" id="ped-hotfolder-path" placeholder="Nenhuma pasta escolhida" onchange="validarHotFolderDigitada()" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.75rem;font-family:monospace;">
-                                                 <button id="ped-hotfolder-pick-btn" onclick="escolherHotFolder()" style="width:100%;padding:7px 12px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#fbbf24;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;">&#128194; Escolher pasta…</button>
-                                                 <div id="ped-hotfolder-status" style="display:none;font-size:0.7rem;line-height:1.35;padding:5px 8px;border-radius:5px;"></div>
-                                                 <div style="font-size:0.7rem;line-height:1.4;color:#94a3b8;">
-                                                     &#9888; Bandeja, papel, frente/verso, cor e cópias vêm do preset da pasta no RIP, não deste painel.
-                                                     <strong style="color:#cbd5e1;">Impressão reversa e Folha a Folha continuam valendo</strong> — elas são aplicadas ao PDF antes do envio.
-                                                 </div>
-                                             </div>
-                                         </div>
+                                    <div class="ped-janela-controle" id="ped-preview-part-box">
+                                        <label class="ped-janela-rotulo">Parte</label>
+                                        <select id="ped-preview-part-input" class="form-control" style="height:28px; padding:2px 6px; font-size:0.85rem; width:100%;" onchange="changePedPreviewPage()">
+                                            <option value="miolo">Miolo</option>
+                                            <option value="capa">Capa</option>
+                                            <option value="contracapa">Contracapa</option>
+                                        </select>
+                                    </div>
 
-                                         <!-- Impressora -->
-                                         <div id="ped-printer-box">
-                                             <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Impressora</label>
-                                             <div style="display:flex;gap:6px;align-items:center;">
-                                                 <select id="ped-print-printer" onchange="onPedPrinterChange()" style="flex:1;min-width:0;background:#0f172a;border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                     <option value="">Selecione...</option>
-                                                 </select>
-                                                 <button onclick="reloadPedPrinterList()" title="Recarregar impressoras" id="ped-print-reload-btn" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:0.85rem;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">&#128260;</button>
-                                             </div>
-                                             <!-- Status do driver -->
-                                             <div id="ped-driver-status" style="display:none;margin-top:6px;padding:5px 8px;border-radius:6px;font-size:0.72rem;"></div>
-                                         </div>
+                                    <div class="ped-janela-controle preview-face-selector" id="ped-preview-face-container" style="display:none;">
+                                        <label class="ped-janela-rotulo">Face</label>
+                                        <div style="display:flex; border-radius:4px; overflow:hidden; border:1px solid var(--border);">
+                                            <button class="btn btn-sm" id="ped-btn-preview-front" style="flex:1; background: var(--blue); color: white; border-radius:0;" onclick="setPedPreviewFace('front')">Frente</button>
+                                            <button class="btn btn-sm" id="ped-btn-preview-back" style="flex:1; background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius:0;" onclick="setPedPreviewFace('back')">Verso</button>
+                                        </div>
+                                    </div>
 
-                                         <!-- Modos Especiais de Impressão.
-                                              Ficam FORA de #ped-driver-options de propósito: são aplicados
-                                              ao PDF pelo navegador (processPrintQueueOptions), não pelo
-                                              driver. Continuam valendo no modo hot folder, onde o bloco
-                                              do driver inteiro fica desabilitado e vazio. -->
-                                         <div id="ped-print-modes-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
-                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
-                                                 <input type="checkbox" id="ped-print-reverse" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                 <span>🔄 Impressão reversa</span>
-                                             </label>
-                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
-                                                 <input type="checkbox" id="ped-print-sheet-by-sheet" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                 <span>📄 Folha a Folha</span>
-                                             </label>
-                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;"
-                                                    title="A estacao entrega cada bloco assim que ele fica pronto, em vez de montar a tiragem inteira antes de imprimir. Use em trabalhos grandes. O tamanho do lote e o numero de Blocos do modelo.">
-                                                 <input type="checkbox" id="ped-entregar-por-bloco" checked onchange="onPedEntregarPorBlocoToggle(this.checked)" style="width:16px;height:16px;accent-color:#22c55e;cursor:pointer;">
-                                                 <span>&#9193; Entregar cada bloco enquanto gera</span>
-                                             </label>
-                                         </div>
+                                    <label class="ped-janela-amostra" title="Adicionar a camada base da COR (Amostra) a visualizacao da imposicao (Apenas visualizacao, NUNCA e impressa)">
+                                        <input type="checkbox" id="ped-preview-toggle-amostra" onchange="drawPedPreview()" style="cursor:pointer; accent-color:#0284c7;">
+                                        &#127912; AMOSTRA
+                                    </label>
+                                    <div class="ped-janela-nota">A camada de cor e' so' da tela. Nunca vai ao papel.</div>
+                                </div>
 
-                                         <!-- Carregando -->
-                                         <div id="ped-driver-loading" style="display:none;text-align:center;padding:12px;color:#64748b;">
-                                             <div style="width:18px;height:18px;border:2px solid rgba(99,102,241,0.3);border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 6px;"></div>
-                                             <span style="font-size:0.75rem;">Lendo driver...</span>
-                                         </div>
+                                <!-- ── CENTRO: a previa, com o espaco inteiro ─────────────── -->
+                                <div class="ped-preview-canvas-container ped-janela-centro">
+                                    <canvas id="ped-preview-canvas"></canvas>
+                                </div>
 
-                                         <!-- Opções do driver -->
-                                         <div id="ped-driver-options" style="display:none;display:flex;flex-direction:column;gap:12px;">
+                                <!-- ── DIREITA: as acoes, separadas por tipo ──────────────── -->
+                                <div class="ped-janela-direita">
 
-                                             <!-- Bandeja (modo único) -->
-                                             <div id="ped-tray-single">
-                                                 <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128229; Bandeja</label>
-                                                 <select id="ped-print-tray" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
-                                             </div>
+                                    <!-- 1) IMPRIMIR + PDF — o unico par da tela.
+                                         O Refazer tinha um par proprio, que saiu: dois
+                                         caminhos para a mesma acao foi o que ja produziu
+                                         defeito nesta tela. Com o Refazer ligado, este par
+                                         passa a valer para a faixa escolhida — e o aviso
+                                         abaixo dos botoes diz isso na hora. -->
+                                    <div class="jg jg-aberto" id="jg-imprimir">
+                                        <button type="button" class="jg-botao" aria-expanded="true" aria-controls="jg-imprimir-corpo" onclick="alternarGrupoDaJanela('jg-imprimir')">
+                                            <span>&#128424; Imprimir e PDF</span>
+                                            <span class="jg-seta">&#9650;</span>
+                                        </button>
+                                        <div class="jg-corpo" id="jg-imprimir-corpo">
+                                            <div style="display:flex; gap:8px;">
+                                                <button id="ped-preview-btn-pdf" onclick="pedPreviewGerarPDF()" style="flex:1; padding:9px 12px; background:linear-gradient(135deg,#a78bfa,#7c3aed); border:none; color:#fff; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; box-shadow:0 2px 8px rgba(124,58,237,0.3); display:flex; align-items:center; justify-content:center; gap:6px;">
+                                                    <span>&#128196;</span> Gerar PDF
+                                                </button>
+                                                <button id="ped-preview-btn-print" onclick="pedPreviewImprimir()" style="flex:1; padding:9px 12px; background:linear-gradient(135deg,#34d399,#059669); border:none; color:#fff; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; box-shadow:0 2px 8px rgba(5,150,105,0.3); display:flex; align-items:center; justify-content:center; gap:6px;">
+                                                    <span>&#128424;</span> Imprimir
+                                                </button>
+                                            </div>
+                                            <!-- Existia no codigo e nunca aparecia: morava
+                                                 dentro do bloco escondido do formulario
+                                                 antigo, entao cancelar um envio em andamento
+                                                 nao era possivel por esta tela. -->
+                                            <button class="btn btn-danger" id="ped-btn-cancel-print" onclick="cancelarImpressaoOuGeracao()" style="display:none; width:100%; margin-top:8px; background:linear-gradient(135deg,#ef4444,#dc2626); border-color:#ef4444; color:white; padding:9px; border-radius:8px; font-weight:700;" title="Cancelar Impress&atilde;o / Envio Imediatamente">
+                                                &#128721; Cancelar Impress&atilde;o
+                                            </button>
+                                            <div id="ped-aviso-refazer" style="display:none; margin-top:8px; font-size:0.72rem; line-height:1.4; color:#fbbf24; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:6px; padding:6px 8px;">
+                                                O <b>Refazer</b> est&aacute; ligado: estes dois bot&otilde;es valem para a faixa escolhida, e n&atilde;o para a tiragem inteira.
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                             <!-- Bandeja Dupla (modo capa/miolo) -->
-                                             <div id="ped-tray-dual" style="display:none;">
-                                                 <div style="margin-bottom:8px;">
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">📥 Bandeja Capa</label>
-                                                     <select id="ped-print-tray-capa" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
-                                                 </div>
-                                                 <div>
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">📄 Bandeja Miolo</label>
-                                                     <select id="ped-print-tray-miolo" style="width:100%;background:#0f172a;border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
-                                                 </div>
-                                             </div>
+                                    <!-- 2) CONFIGURACAO DE IMPRESSAO -->
+                                    <div class="jg" id="jg-config">
+                                        <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-config-corpo" onclick="alternarGrupoDaJanela('jg-config')">
+                                            <span>&#9881;&#65039; Configura&ccedil;&atilde;o de Impress&atilde;o</span>
+                                            <span class="jg-seta">&#9660;</span>
+                                        </button>
+                                        <div class="jg-corpo" id="jg-config-corpo" style="display:none;">
+                                            <div id="ped-print-driver-panel" style="display:flex; flex-direction:column; gap:14px;">
 
-                                             <!-- Tamanho Papel -->
-                                             <div>
-                                                 <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128196; Papel</label>
-                                                 <select id="ped-print-paper" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
-                                             </div>
+                                                <!-- Hot Folder — impressora conduzida por pasta observada (RIP) -->
+                                                <div id="ped-hotfolder-box" style="padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);border-radius:8px;display:flex;flex-direction:column;gap:9px;">
+                                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#fbbf24;cursor:pointer;user-select:none;">
+                                                        <input type="checkbox" id="ped-hotfolder-enabled" onchange="onPedHotFolderToggle()" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;">
+                                                        <span>&#128193; HOT FOLDER</span>
+                                                    </label>
 
-                                             <!-- Duplex -->
-                                             <div>
-                                                 <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#8596; Frente/Verso</label>
-                                                 <select id="ped-print-duplex" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                     <option value="1">Simplex (Só Frente)</option>
-                                                     <option value="2">Duplex — Borda Longa</option>
-                                                     <option value="3">Duplex — Borda Curta</option>
-                                                 </select>
-                                             </div>
+                                                    <div id="ped-hotfolder-detalhes" style="display:none;flex-direction:column;gap:8px;">
+                                                        <input type="text" id="ped-hotfolder-path" placeholder="Nenhuma pasta escolhida" onchange="validarHotFolderDigitada()" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.75rem;font-family:monospace;">
+                                                        <button id="ped-hotfolder-pick-btn" onclick="escolherHotFolder()" style="width:100%;padding:7px 12px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#fbbf24;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;">&#128194; Escolher pasta&hellip;</button>
+                                                        <div id="ped-hotfolder-status" style="display:none;font-size:0.7rem;line-height:1.35;padding:5px 8px;border-radius:5px;"></div>
+                                                        <div style="font-size:0.7rem;line-height:1.4;color:#94a3b8;">
+                                                            &#9888; Bandeja, papel, frente/verso, cor e c&oacute;pias v&ecirc;m do preset da pasta no RIP, n&atilde;o deste painel.
+                                                            <strong style="color:#cbd5e1;">Impress&atilde;o reversa e Folha a Folha continuam valendo</strong> &mdash; elas s&atilde;o aplicadas ao PDF antes do envio.
+                                                        </div>
+                                                    </div>
+                                                </div>
 
-                                             <!-- Cor -->
-                                             <div>
-                                                 <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#127912; Cor</label>
-                                                 <select id="ped-print-color" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                     <option value="2">Colorido</option>
-                                                     <option value="1">Preto e Branco</option>
-                                                 </select>
-                                             </div>
+                                                <!-- Impressora -->
+                                                <div id="ped-printer-box">
+                                                    <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Impressora</label>
+                                                    <div style="display:flex;gap:6px;align-items:center;">
+                                                        <select id="ped-print-printer" onchange="onPedPrinterChange()" style="flex:1;min-width:0;background:#0f172a;border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                            <option value="">Selecione...</option>
+                                                        </select>
+                                                        <button onclick="reloadPedPrinterList()" title="Recarregar impressoras" id="ped-print-reload-btn" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:0.85rem;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">&#128260;</button>
+                                                    </div>
+                                                    <!-- Status do driver -->
+                                                    <div id="ped-driver-status" style="display:none;margin-top:6px;padding:5px 8px;border-radius:6px;font-size:0.72rem;"></div>
+                                                </div>
 
-                                             <!-- Cópias e Orientação -->
-                                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                                                 <div>
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Cópias</label>
-                                                     <input type="number" id="ped-print-copies" min="1" max="999" value="1" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;">
-                                                 </div>
-                                                 <div>
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Orient.</label>
-                                                     <select id="ped-print-orientation" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                         <option value="1">Retrato</option>
-                                                         <option value="2">Paisagem</option>
-                                                     </select>
-                                                 </div>
-                                             </div>
+                                                <!-- Modos Especiais de Impressao.
+                                                     Ficam FORA de #ped-driver-options de proposito: sao aplicados
+                                                     ao PDF pelo navegador (processPrintQueueOptions), nao pelo
+                                                     driver. Continuam valendo no modo hot folder, onde o bloco
+                                                     do driver inteiro fica desabilitado e vazio. -->
+                                                <div id="ped-print-modes-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
+                                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
+                                                        <input type="checkbox" id="ped-print-reverse" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                        <span>&#128260; Impress&atilde;o reversa</span>
+                                                    </label>
+                                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
+                                                        <input type="checkbox" id="ped-print-sheet-by-sheet" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                        <span>&#128196; Folha a Folha</span>
+                                                    </label>
+                                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;"
+                                                           title="A estacao entrega cada bloco assim que ele fica pronto, em vez de montar a tiragem inteira antes de imprimir. Use em trabalhos grandes. O tamanho do lote e o numero de Blocos do modelo.">
+                                                        <input type="checkbox" id="ped-entregar-por-bloco" checked onchange="onPedEntregarPorBlocoToggle(this.checked)" style="width:16px;height:16px;accent-color:#22c55e;cursor:pointer;">
+                                                        <span>&#9193; Entregar cada bloco enquanto gera</span>
+                                                    </label>
+                                                </div>
 
-                                             <!-- Gerenciamento de Cores: perfil ICC por impressora.
-                                                  A escolha vale para a IMPRESSORA (fica no agente da
-                                                  estacao), nao para o pedido. -->
-                                             <div id="ped-print-cor-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
-                                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                                                     <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Gerenciamento de Cores</label>
-                                                     <div style="display:flex;align-items:center;gap:12px;">
-                                                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                                             <input type="checkbox" id="ped-print-cor-ativo" onchange="salvarCorImpressora()" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                             <span style="font-size:0.75rem;color:#94a3b8;">Ativo</span>
-                                                         </label>
-                                                         <!-- Os controles de cor sao muitos e o operador quase nunca mexe
-                                                              neles: o perfil e do EQUIPAMENTO, escolhido uma vez. Por isso
-                                                              a caixa abre fechada, e este botao a abre quando ele pedir.
-                                                              O que NAO se esconde e o estado: a caixa "Ativo" e a linha de
-                                                              status continuam a vista, porque dizem o que vai sair no papel. -->
-                                                         <button type="button" id="ped-print-cor-btn" aria-expanded="false"
-                                                                 aria-controls="ped-print-cor-corpo"
-                                                                 onclick="alternarGerenciamentoDeCores()"
-                                                                 title="Mostrar os controles de perfil e ajustes de cor"
-                                                                 style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.7rem;font-weight:600;padding:4px 9px;">
-                                                             <span id="ped-print-cor-btn-texto">Mostrar</span>
-                                                             <span id="ped-print-cor-btn-seta" style="font-size:0.6rem;">&#9660;</span>
-                                                         </button>
-                                                     </div>
-                                                 </div>
-                                                 <div id="ped-print-cor-corpo" style="display:none;flex-direction:column;gap:8px;">
-                                                 <div>
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Perfil da impressora (.icm)</label>
-                                                     <select id="ped-print-cor-perfil" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                         <option value="">— sem perfil —</option>
-                                                     </select>
-                                                 </div>
-                                                 <div>
-                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Intento de renderização</label>
-                                                     <select id="ped-print-cor-intento" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
-                                                         <option value="relativo">Colorimétrico Relativo (fiel, com compensação de ponto preto)</option>
-                                                         <option value="perceptual">Perceptual (comprime o gamut suavemente)</option>
-                                                     </select>
-                                                 </div>
-                                                 <input type="file" id="ped-print-cor-upload" accept=".icc,.icm" style="display:none;" onchange="enviarPerfilIcc(this)">
-                                                 <button onclick="document.getElementById('ped-print-cor-upload').click()" style="width:100%;padding:7px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.78rem;">📥 Enviar perfil .icm desta impressora…</button>
+                                                <!-- Carregando -->
+                                                <div id="ped-driver-loading" style="display:none;text-align:center;padding:12px;color:#64748b;">
+                                                    <div style="width:18px;height:18px;border:2px solid rgba(99,102,241,0.3);border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 6px;"></div>
+                                                    <span style="font-size:0.75rem;">Lendo driver...</span>
+                                                </div>
 
-                                                 <!-- Ajustes de cor: valem por impressora, com ou sem perfil.
-                                                      A matematica da previa ESPELHA a do aplicar_ajustes()
-                                                      do color_profiles.py — mudou la, muda aqui. -->
-                                                 <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;display:flex;flex-direction:column;gap:8px;">
-                                                     <div style="display:flex;align-items:center;justify-content:space-between;">
-                                                         <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Ajustes de cor</label>
-                                                         <button onclick="resetarAjustesCor()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.7rem;padding:4px 8px;">Voltar ao neutro</button>
-                                                     </div>
-                                                     <div style="display:flex;align-items:center;gap:8px;">
-                                                         <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Saturação</label>
-                                                         <input type="range" id="ped-cor-saturacao" min="0" max="200" value="100" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
-                                                         <span id="ped-cor-saturacao-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">100</span>
-                                                     </div>
-                                                     <div style="display:flex;align-items:center;gap:8px;">
-                                                         <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Brilho</label>
-                                                         <input type="range" id="ped-cor-brilho" min="-100" max="100" value="0" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
-                                                         <span id="ped-cor-brilho-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">0</span>
-                                                     </div>
-                                                     <div style="display:flex;align-items:center;gap:8px;">
-                                                         <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Contraste</label>
-                                                         <input type="range" id="ped-cor-contraste" min="-100" max="100" value="0" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
-                                                         <span id="ped-cor-contraste-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">0</span>
-                                                     </div>
-                                                     <div>
-                                                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-                                                             <label style="font-size:0.72rem;color:#94a3b8;">Curvas — clique adiciona ponto, arraste move, duplo clique remove</label>
-                                                         </div>
-                                                         <div style="display:flex;gap:4px;margin-bottom:5px;">
-                                                             <button id="ped-cor-canal-master" onclick="trocarCanalCurva('master')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.12);color:#f1f5f9;font-size:0.7rem;cursor:pointer;">Master</button>
-                                                             <button id="ped-cor-canal-r" onclick="trocarCanalCurva('r')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:transparent;color:#f87171;font-size:0.7rem;cursor:pointer;">R</button>
-                                                             <button id="ped-cor-canal-g" onclick="trocarCanalCurva('g')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(34,197,94,0.4);background:transparent;color:#4ade80;font-size:0.7rem;cursor:pointer;">G</button>
-                                                             <button id="ped-cor-canal-b" onclick="trocarCanalCurva('b')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(59,130,246,0.4);background:transparent;color:#60a5fa;font-size:0.7rem;cursor:pointer;">B</button>
-                                                         </div>
-                                                         <canvas id="ped-cor-curva-canvas" width="220" height="150" style="width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:#0f172a;cursor:crosshair;display:block;"></canvas>
-                                                     </div>
-                                                     <div>
-                                                         <label style="display:block;font-size:0.72rem;color:#94a3b8;margin-bottom:4px;">Prévia — como a impressora recebe (antes / depois)</label>
-                                                         <canvas id="ped-cor-previa-antes" width="220" height="30" style="width:100%;display:block;border-radius:5px 5px 0 0;"></canvas>
-                                                         <canvas id="ped-cor-previa-depois" width="220" height="30" style="width:100%;display:block;border-radius:0 0 5px 5px;"></canvas>
-                                                     </div>
-                                                     <div style="font-size:0.7rem;color:#64748b;line-height:1.4;">Os ajustes valem nas impressões rasterizadas (modo GDI, o padrão) e são aplicados antes do perfil .icm. Salvam sozinhos ao mexer.</div>
-                                                 </div>
+                                                <!-- Opcoes do driver -->
+                                                <div id="ped-driver-options" style="display:none;flex-direction:column;gap:12px;">
 
-                                                 </div><!-- /ped-print-cor-corpo -->
+                                                    <!-- Bandeja (modo unico) -->
+                                                    <div id="ped-tray-single">
+                                                        <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128229; Bandeja</label>
+                                                        <select id="ped-print-tray" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
+                                                    </div>
 
-                                                 <div id="ped-print-cor-status" style="font-size:0.72rem;color:#64748b;line-height:1.4;">Desligado: a impressão sai sem conversão de cores, como sempre saiu.</div>
-                                             </div>
+                                                    <!-- Bandeja Dupla (modo capa/miolo) -->
+                                                    <div id="ped-tray-dual" style="display:none;">
+                                                        <div style="margin-bottom:8px;">
+                                                            <label style="display:block;font-size:0.72rem;font-weight:600;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128229; Bandeja Capa</label>
+                                                            <select id="ped-print-tray-capa" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
+                                                        </div>
+                                                        <div>
+                                                            <label style="display:block;font-size:0.72rem;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128196; Bandeja Miolo</label>
+                                                            <select id="ped-print-tray-miolo" style="width:100%;background:#0f172a;border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
+                                                        </div>
+                                                    </div>
 
-                                         </div><!-- /ped-driver-options -->
+                                                    <!-- Tamanho Papel -->
+                                                    <div>
+                                                        <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128196; Papel</label>
+                                                        <select id="ped-print-paper" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
+                                                    </div>
 
-                                          <!-- Botão Salvar Config do Produto -->
-                                          <div id="ped-print-save-section" style="display:none;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
-                                              <div id="ped-print-saved-indicator" style="display:none;padding:6px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);margin-bottom:8px;">
-                                                  <span style="font-size:0.72rem;color:#22c55e;">✓ Config carregada automaticamente</span>
-                                              </div>
-                                              <button id="ped-print-save-btn" onclick="savePrintConfigForProduct()" style="width:100%;padding:9px 14px;background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700;box-shadow:0 3px 10px rgba(99,102,241,0.3);transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;">
-                                                  <span>💾</span>
-                                                  <span id="ped-print-save-label">Salvar Config</span>
-                                              </button>
-                                          </div>
+                                                    <!-- Duplex -->
+                                                    <div>
+                                                        <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#8596; Frente/Verso</label>
+                                                        <select id="ped-print-duplex" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                            <option value="1">Simplex (S&oacute; Frente)</option>
+                                                            <option value="2">Duplex &mdash; Borda Longa</option>
+                                                            <option value="3">Duplex &mdash; Borda Curta</option>
+                                                        </select>
+                                                    </div>
 
-                                          <!-- Aviso quando não há impressora selecionada -->
-                                         <div id="ped-driver-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;color:#475569;padding:10px;gap:8px;">
-                                             <span style="font-size:1.8rem;">&#128424;</span>
-                                             <span style="font-size:0.78rem;line-height:1.4;">Selecione uma impressora para ver as opções do driver</span>
-                                         </div>
+                                                    <!-- Cor -->
+                                                    <div>
+                                                        <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#127912; Cor</label>
+                                                        <select id="ped-print-color" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                            <option value="2">Colorido</option>
+                                                            <option value="1">Preto e Branco</option>
+                                                        </select>
+                                                    </div>
 
-                                     </div><!-- /padding -->
-                                 </div><!-- /ped-print-driver-panel -->
+                                                    <!-- Copias e Orientacao -->
+                                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                                                        <div>
+                                                            <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">C&oacute;pias</label>
+                                                            <input type="number" id="ped-print-copies" min="1" max="999" value="1" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;">
+                                                        </div>
+                                                        <div>
+                                                            <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Orient.</label>
+                                                            <select id="ped-print-orientation" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                                <option value="1">Retrato</option>
+                                                                <option value="2">Paisagem</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
 
-                             </div><!-- /flex wrapper -->
+                                                </div><!-- /ped-driver-options -->
+
+                                                <!-- Botao Salvar Config do Produto -->
+                                                <div id="ped-print-save-section" style="display:none;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
+                                                    <div id="ped-print-saved-indicator" style="display:none;padding:6px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);margin-bottom:8px;">
+                                                        <span style="font-size:0.72rem;color:#22c55e;">&#10003; Config carregada automaticamente</span>
+                                                    </div>
+                                                    <button id="ped-print-save-btn" onclick="savePrintConfigForProduct()" style="width:100%;padding:9px 14px;background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700;box-shadow:0 3px 10px rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;gap:6px;">
+                                                        <span>&#128190;</span>
+                                                        <span id="ped-print-save-label">Salvar Config</span>
+                                                    </button>
+                                                </div>
+
+                                                <!-- Aviso quando nao ha impressora selecionada -->
+                                                <div id="ped-driver-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#475569;padding:10px;gap:8px;">
+                                                    <span style="font-size:1.8rem;">&#128424;</span>
+                                                    <span style="font-size:0.78rem;line-height:1.4;">Selecione uma impressora para ver as op&ccedil;&otilde;es do driver</span>
+                                                </div>
+
+                                            </div><!-- /ped-print-driver-panel -->
+                                        </div>
+                                    </div>
+
+                                    <!-- 3) GERENCIAMENTO DE CORES.
+                                         Saiu de dentro da Configuracao de Impressao e virou
+                                         grupo proprio. O botao "Mostrar" que existia aqui
+                                         dentro sumiu junto: com o grupo abrindo e fechando,
+                                         eram dois interruptores para a mesma coisa. -->
+                                    <div class="jg" id="jg-cores">
+                                        <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-cores-corpo" onclick="alternarGrupoDaJanela('jg-cores')">
+                                            <span>&#127912; Gerenciamento de Cores</span>
+                                            <!-- O ESTADO NAO SE ESCONDE COM OS CONTROLES.
+                                                 Esconder o seletor de perfil e os deslizadores e
+                                                 economia de tela; esconder o fato de haver
+                                                 conversao de cor LIGADA seria outra coisa — o
+                                                 operador imprimiria com um perfil valendo sem
+                                                 nada na tela dizendo isso, e so descobriria
+                                                 olhando o papel. Por isso este selo fica no
+                                                 botao do grupo, visivel com o grupo fechado.
+                                                 Quem o escreve e' o atualizarStatusCor(). -->
+                                            <span id="ped-cor-selo-ativo" class="jg-selo" style="display:none;">ativo</span>
+                                            <span class="jg-seta">&#9660;</span>
+                                        </button>
+                                        <div class="jg-corpo" id="jg-cores-corpo" style="display:none;">
+                                            <!-- A escolha vale para a IMPRESSORA (fica no agente
+                                                 da estacao), nao para o pedido. -->
+                                            <div id="ped-cor-sem-impressora" style="font-size:0.75rem;line-height:1.45;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+                                                Estes ajustes s&atilde;o da <b style="color:#cbd5e1;">impressora</b>, n&atilde;o do pedido.
+                                                Escolha a impressora em <b style="color:#cbd5e1;">Configura&ccedil;&atilde;o de Impress&atilde;o</b> para carregar os dela.
+                                            </div>
+                                            <div id="ped-print-cor-box" style="display:flex;flex-direction:column;gap:8px;">
+                                                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                                                    <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Convers&atilde;o de cores</label>
+                                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                                        <input type="checkbox" id="ped-print-cor-ativo" onchange="salvarCorImpressora()" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                        <span style="font-size:0.75rem;color:#94a3b8;">Ativo</span>
+                                                    </label>
+                                                </div>
+                                                <div id="ped-print-cor-corpo" style="display:flex;flex-direction:column;gap:8px;">
+                                                <div>
+                                                    <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Perfil da impressora (.icm)</label>
+                                                    <select id="ped-print-cor-perfil" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                        <option value="">&mdash; sem perfil &mdash;</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Intento de renderiza&ccedil;&atilde;o</label>
+                                                    <select id="ped-print-cor-intento" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                        <option value="relativo">Colorim&eacute;trico Relativo (fiel, com compensa&ccedil;&atilde;o de ponto preto)</option>
+                                                        <option value="perceptual">Perceptual (comprime o gamut suavemente)</option>
+                                                    </select>
+                                                </div>
+                                                <input type="file" id="ped-print-cor-upload" accept=".icc,.icm" style="display:none;" onchange="enviarPerfilIcc(this)">
+                                                <button onclick="document.getElementById('ped-print-cor-upload').click()" style="width:100%;padding:7px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.78rem;">&#128229; Enviar perfil .icm desta impressora&hellip;</button>
+
+                                                <!-- Ajustes de cor: valem por impressora, com ou sem perfil.
+                                                     A matematica da previa ESPELHA a do aplicar_ajustes()
+                                                     do color_profiles.py — mudou la, muda aqui. -->
+                                                <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;display:flex;flex-direction:column;gap:8px;">
+                                                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                                                        <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Ajustes de cor</label>
+                                                        <button onclick="resetarAjustesCor()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.7rem;padding:4px 8px;">Voltar ao neutro</button>
+                                                    </div>
+                                                    <div style="display:flex;align-items:center;gap:8px;">
+                                                        <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Satura&ccedil;&atilde;o</label>
+                                                        <input type="range" id="ped-cor-saturacao" min="0" max="200" value="100" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
+                                                        <span id="ped-cor-saturacao-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">100</span>
+                                                    </div>
+                                                    <div style="display:flex;align-items:center;gap:8px;">
+                                                        <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Brilho</label>
+                                                        <input type="range" id="ped-cor-brilho" min="-100" max="100" value="0" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
+                                                        <span id="ped-cor-brilho-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">0</span>
+                                                    </div>
+                                                    <div style="display:flex;align-items:center;gap:8px;">
+                                                        <label style="flex:0 0 72px;font-size:0.72rem;color:#94a3b8;">Contraste</label>
+                                                        <input type="range" id="ped-cor-contraste" min="-100" max="100" value="0" oninput="onAjusteCorInput()" style="flex:1;accent-color:#6366f1;">
+                                                        <span id="ped-cor-contraste-val" style="flex:0 0 34px;font-size:0.72rem;color:#f1f5f9;text-align:right;">0</span>
+                                                    </div>
+                                                    <div>
+                                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                                                            <label style="font-size:0.72rem;color:#94a3b8;">Curvas &mdash; clique adiciona ponto, arraste move, duplo clique remove</label>
+                                                        </div>
+                                                        <div style="display:flex;gap:4px;margin-bottom:5px;">
+                                                            <button id="ped-cor-canal-master" onclick="trocarCanalCurva('master')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.12);color:#f1f5f9;font-size:0.7rem;cursor:pointer;">Master</button>
+                                                            <button id="ped-cor-canal-r" onclick="trocarCanalCurva('r')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(239,68,68,0.4);background:transparent;color:#f87171;font-size:0.7rem;cursor:pointer;">R</button>
+                                                            <button id="ped-cor-canal-g" onclick="trocarCanalCurva('g')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(34,197,94,0.4);background:transparent;color:#4ade80;font-size:0.7rem;cursor:pointer;">G</button>
+                                                            <button id="ped-cor-canal-b" onclick="trocarCanalCurva('b')" style="flex:1;padding:4px;border-radius:5px;border:1px solid rgba(59,130,246,0.4);background:transparent;color:#60a5fa;font-size:0.7rem;cursor:pointer;">B</button>
+                                                        </div>
+                                                        <canvas id="ped-cor-curva-canvas" width="220" height="150" style="width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:#0f172a;cursor:crosshair;display:block;"></canvas>
+                                                    </div>
+                                                    <div>
+                                                        <label style="display:block;font-size:0.72rem;color:#94a3b8;margin-bottom:4px;">Pr&eacute;via &mdash; como a impressora recebe (antes / depois)</label>
+                                                        <canvas id="ped-cor-previa-antes" width="220" height="30" style="width:100%;display:block;border-radius:5px 5px 0 0;"></canvas>
+                                                        <canvas id="ped-cor-previa-depois" width="220" height="30" style="width:100%;display:block;border-radius:0 0 5px 5px;"></canvas>
+                                                    </div>
+                                                    <div style="font-size:0.7rem;color:#64748b;line-height:1.4;">Os ajustes valem nas impress&otilde;es rasterizadas (modo GDI, o padr&atilde;o) e s&atilde;o aplicados antes do perfil .icm. Salvam sozinhos ao mexer.</div>
+                                                </div>
+
+                                                </div><!-- /ped-print-cor-corpo -->
+
+                                                <div id="ped-print-cor-status" style="font-size:0.72rem;color:#64748b;line-height:1.4;">Desligado: a impress&atilde;o sai sem convers&atilde;o de cores, como sempre saiu.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 4) REFAZER FOLHAS — reimpressao de parte de uma tiragem
+                                         que ja saiu. Dois modos EXCLUDENTES (marcar um desmarca
+                                         o outro). "Refazer Folhas": De/Ate contam folhas DENTRO
+                                         DO SET e a folha sai inteira. "Refazer Celula": a lista
+                                         e de POSICOES DO ITEM NO MODELO (o 1o, o 6o, o 22o
+                                         ticket) — nao e a pose da folha — e os itens sao
+                                         compactados numa folha nova. Ver montarRefazerPayload()
+                                         em pedido.js e `fontes` no engine.py. -->
+                                    <div class="jg" id="jg-refazer">
+                                        <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-refazer-corpo" onclick="alternarGrupoDaJanela('jg-refazer')">
+                                            <span>&#8634; Refazer Folhas</span>
+                                            <span class="jg-seta">&#9660;</span>
+                                        </button>
+                                        <div class="jg-corpo" id="jg-refazer-corpo" style="display:none;">
+                                            <label style="font-size:0.8rem;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;" title="Refaz apenas uma faixa de folhas do set. A numeracao e exatamente a mesma da tiragem original.">
+                                                <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle('folhas')" style="width:16px;height:16px;cursor:pointer;">
+                                                Refazer Folhas
+                                            </label>
+                                            <div id="ped-refazer-inputs" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 10px 22px;">
+                                                <select id="ped-refazer-set" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;display:none;" onchange="onRefazerFolhaChange()">
+                                                    <option value="1">Set 1</option>
+                                                </select>
+                                                <span style="font-size:0.78rem;color:var(--text-dim);">De:</span>
+                                                <input type="number" id="ped-refazer-de" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha da faixa. A pr&eacute;via pula para ela assim que voc&ecirc; digita.">
+                                                <span style="font-size:0.78rem;color:var(--text-dim);">At&eacute;:</span>
+                                                <input type="number" id="ped-refazer-ate" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 10">
+                                                <span id="ped-refazer-total" style="flex-basis:100%;font-size:0.72rem;color:var(--text-dim);"></span>
+                                            </div>
+
+                                            <label style="font-size:0.8rem;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;" title="Refaz itens escolhidos pela POSICAO no modelo (o 1o, o 6o, o 22o ticket). Eles sao compactados: preenchem a folha celula a celula, sem espaco em branco.">
+                                                <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle('celulas')" style="width:16px;height:16px;cursor:pointer;">
+                                                Refazer C&eacute;lula
+                                            </label>
+                                            <div id="ped-refazer-cel-inputs" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 0 22px;">
+                                                <span style="font-size:0.78rem;color:var(--text-dim);">Itens:</span>
+                                                <input type="text" id="ped-refazer-cel" class="form-control" style="width:120px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" placeholder="Ex: 1,6,22" oninput="onRefazerCelulaChange()" title="Posi&ccedil;&otilde;es do item no modelo, separadas por v&iacute;rgula (o 1&ordm;, o 6&ordm;, o 22&ordm;...). Faixas tamb&eacute;m valem: 1-4. N&atilde;o &eacute; a c&eacute;lula da folha: 22 num formato de 10 c&eacute;lulas &eacute; v&aacute;lido. A pr&eacute;via rotula cada um com #posi&ccedil;&atilde;o.">
+                                                <span id="ped-refazer-cel-info" style="flex-basis:100%;font-size:0.72rem;color:var(--text-dim);"></span>
+                                            </div>
+
+                                            <!-- Os botoes proprios de Gerar PDF e Imprimir saíram
+                                                 daqui: existe UM par na tela, no grupo Imprimir e
+                                                 PDF, e com o Refazer ligado ele passa a valer para
+                                                 a faixa escolhida. Dois caminhos para a mesma acao
+                                                 foi o que ja produziu defeito nesta tela. -->
+                                            <div id="ped-refazer-acoes" style="display:none;margin-top:10px;font-size:0.72rem;line-height:1.4;color:#fbbf24;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:6px 8px;">
+                                                Use <b>Gerar PDF</b> ou <b>Imprimir</b>, no grupo de cima: com o Refazer ligado, eles valem para a faixa escolhida aqui.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div><!-- /ped-janela-direita -->
+                            </div><!-- /ped-janela-corpo -->
                         </div>
                     </div>
                     </div><!-- /ped-preview-home -->

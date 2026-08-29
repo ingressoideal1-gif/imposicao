@@ -39179,61 +39179,19 @@ async function carregarCorImpressora(printerName) {
     }
 }
 
-/**
- * Mostra e esconde os controles do Gerenciamento de Cores.
+/* O `alternarGerenciamentoDeCores` saiu em 28/08/2026.
  *
- * A caixa abre FECHADA. O perfil ICC e do equipamento, escolhido uma vez e
- * valendo para todo pedido que va para aquela impressora — o operador que
- * imprime dez trabalhos por dia nao mexe nela nenhuma vez, e ela ocupava metade
- * do painel do driver com um seletor de perfil, um de intento, tres deslizadores
- * e um editor de curvas.
+ * Ele abria e fechava um bloco DENTRO da caixa de cores, por um botao
+ * "Mostrar" proprio. Com a janela de visualizacao reorganizada em grupos, o
+ * Gerenciamento de Cores virou um dos quatro grupos da coluna direita — e o
+ * grupo ja abre e fecha sozinho. Eram dois interruptores para a mesma coisa.
  *
- * O que NAO se esconde e o estado: a caixa "Ativo" e a linha de status continuam
- * a vista com a caixa fechada, porque dizem o que vai sair no papel. Esconder
- * isso junto deixaria o operador imprimindo com um perfil ligado sem nada na
- * tela dizendo que ha um perfil ligado.
- *
- * `mostrar` forca um estado; sem ele, alterna.
- */
-function alternarGerenciamentoDeCores(mostrar) {
+ * O que ele protegia continua protegido, e agora pelo `atualizarStatusCor`: o
+ * ESTADO nao se esconde com os controles. O selo `#ped-cor-selo-ativo` fica no
+ * botao do grupo, visivel com o grupo fechado, dizendo que ha conversao de cor
+ * ligada e qual perfil. Sem isso o operador imprimiria com um perfil valendo
+ * sem nada na tela dizendo isso, e so descobriria olhando o papel. */
 
-    const corpo = document.getElementById('ped-print-cor-corpo');
-
-    if (!corpo) return;
-
-    const aberto = (mostrar === undefined) ? corpo.style.display === 'none' : !!mostrar;
-
-    corpo.style.display = aberto ? 'flex' : 'none';
-
-    const btn = document.getElementById('ped-print-cor-btn');
-
-    if (btn) {
-
-        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
-
-        btn.title = aberto
-            ? 'Esconder os controles de perfil e ajustes de cor'
-            : 'Mostrar os controles de perfil e ajustes de cor';
-
-    }
-
-    const texto = document.getElementById('ped-print-cor-btn-texto');
-
-    if (texto) texto.textContent = aberto ? 'Ocultar' : 'Mostrar';
-
-    const seta = document.getElementById('ped-print-cor-btn-seta');
-
-    if (seta) seta.textContent = aberto ? '▲' : '▼';
-
-    // A curva e desenhada no canvas mesmo escondida (o tamanho vem dos atributos
-    // width/height, nao do layout), mas quem chega aqui pela primeira vez pode
-    // nao ter passado por nenhum desenho ainda.
-    if (aberto && typeof desenharCurvaCor === 'function') desenharCurvaCor();
-
-    if (aberto && typeof desenharPreviaCor === 'function') desenharPreviaCor();
-
-}
-window.alternarGerenciamentoDeCores = alternarGerenciamentoDeCores;
 
 
 
@@ -39241,6 +39199,24 @@ function atualizarStatusCor() {
     const st = document.getElementById('ped-print-cor-status');
     const chkAtivo = document.getElementById('ped-print-cor-ativo');
     const selPerfil = document.getElementById('ped-print-cor-perfil');
+
+    // O ESTADO TEM DE APARECER COM O GRUPO FECHADO.
+    //
+    // Esconder o seletor de perfil e os deslizadores e economia de tela;
+    // esconder o fato de haver conversao de cor LIGADA seria outra coisa: o
+    // operador imprimiria com um perfil valendo sem nada na tela dizendo isso,
+    // e so descobriria olhando o papel. Este selo mora no botao do grupo, que
+    // continua visivel com o grupo fechado.
+    const selo = document.getElementById('ped-cor-selo-ativo');
+    if (selo) {
+        const ligado = chkAtivo?.checked === true;
+        selo.style.display = ligado ? 'inline-block' : 'none';
+        if (ligado) {
+            const p = (_corPerfisCache || []).find(x => x.filename === selPerfil?.value);
+            selo.textContent = p ? p.nome : 'ativo';
+        }
+    }
+
     if (!st) return;
     const temAjustes = typeof _ajustesSaoNeutros === 'function' && !_ajustesSaoNeutros(_corAjustes);
     if (!chkAtivo?.checked) {
@@ -39255,6 +39231,10 @@ function atualizarStatusCor() {
             (p && p.classe ? ` (${p.classe})` : '') +
             (temAjustes ? ', com os ajustes de cor aplicados antes.' : ' na hora de imprimir.');
     }
+
+    // A frase inteira vai para o selo do grupo fechado: quem passa o mouse le
+    // o mesmo que leria abrindo o grupo.
+    if (selo) selo.title = st.textContent;
 }
 
 async function salvarCorImpressora() {
@@ -39548,13 +39528,24 @@ async function onPedPrinterChange() {
 
     const printerName = sel ? sel.value : '';
 
+    // O Gerenciamento de Cores virou um grupo proprio da janela, fora da
+    // Configuracao de Impressao. Como os ajustes sao da IMPRESSORA e nao do
+    // pedido, sem impressora escolhida o grupo precisa dizer isso e para onde
+    // ir — senao ele abriria com os controles vazios, sem explicacao.
+    const semImpressora = document.getElementById('ped-cor-sem-impressora');
+    const caixaDeCor = document.getElementById('ped-print-cor-box');
+
     if (!printerName) {
         if (optDiv) optDiv.style.display = 'none';
         if (hintDiv) hintDiv.style.display = 'flex';
         if (statusEl) statusEl.style.display = 'none';
+        if (semImpressora) semImpressora.style.display = 'block';
+        if (caixaDeCor) caixaDeCor.style.display = 'none';
         return;
     }
 
+    if (semImpressora) semImpressora.style.display = 'none';
+    if (caixaDeCor) caixaDeCor.style.display = 'flex';
     if (hintDiv) hintDiv.style.display = 'none';
     if (loadDiv) loadDiv.style.display = 'block';
     if (optDiv) optDiv.style.display = 'none';

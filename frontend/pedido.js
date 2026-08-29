@@ -703,8 +703,8 @@ function drawPedPreview() {
     if (previewPartEl) {
         const isDuplex = state.printMode === 'duplex';
         if (fmt.has_cover || isDuplex) {
-            previewPartEl.style.display = 'inline-block';
-            
+            mostrarControleDaPrevia(previewPartEl, true);
+
             const currentVal = previewPartEl.value;
             
             let optionsHtml = '';
@@ -734,7 +734,7 @@ function drawPedPreview() {
             
             previewPart = previewPartEl.value;
         } else {
-            previewPartEl.style.display = 'none';
+            mostrarControleDaPrevia(previewPartEl, false);
             previewPartEl.value = 'miolo';
             previewPart = 'miolo';
         }
@@ -915,7 +915,7 @@ function drawPedPreview() {
     const refazerSetSelect = document.getElementById('ped-refazer-set');
     if (setSelect && refazerSetSelect) {
         if (sets_needed >= 1 && (schema === "cut_stack" || schema === "multi_artes")) {
-            setSelect.style.display = 'inline-block';
+            mostrarControleDaPrevia(setSelect, true);
             refazerSetSelect.style.display = 'inline-block';
             
             if (setSelect.options.length !== sets_needed) {
@@ -931,7 +931,7 @@ function drawPedPreview() {
                 refazerSetSelect.value = currentRefVal <= sets_needed ? currentRefVal : 1;
             }
         } else {
-            setSelect.style.display = 'none';
+            mostrarControleDaPrevia(setSelect, false);
             refazerSetSelect.style.display = 'none';
             setSelect.innerHTML = '<option value="1">Set 1</option>';
             refazerSetSelect.innerHTML = '<option value="1">Set 1</option>';
@@ -2558,9 +2558,20 @@ window.onRefazerToggle = function(origem) {
     const boxCels = document.getElementById('ped-refazer-cel-inputs');
     if (boxCels) boxCels.style.display = marcadoCels ? 'flex' : 'none';
 
-    // Os botões pertencem aos dois modos: aparecem se qualquer um estiver ligado
+    // O aviso pertence aos dois modos: aparece se qualquer um estiver ligado.
+    // Ele substituiu o par de botoes que morava aqui — hoje existe UM par de
+    // Gerar PDF / Imprimir na janela, no grupo de cima, e com o Refazer ligado
+    // ele vale para a faixa escolhida. O aviso e' o que diz isso ao operador,
+    // dos dois lados: aqui, e junto dos proprios botoes.
+    const ligado = marcadoFolhas || marcadoCels;
     const acoes = document.getElementById('ped-refazer-acoes');
-    if (acoes) acoes.style.display = (marcadoFolhas || marcadoCels) ? 'flex' : 'none';
+    if (acoes) acoes.style.display = ligado ? 'block' : 'none';
+    const avisoNoPar = document.getElementById('ped-aviso-refazer');
+    if (avisoNoPar) avisoNoPar.style.display = ligado ? 'block' : 'none';
+
+    // Ligar o Refazer devolve o botao Imprimir a um modelo ja IMPRESSO: e' o
+    // unico momento em que reimprimir uma faixa faz sentido.
+    if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
 
     // Ligar ou desligar as células troca o que a prévia é (folha da tiragem x
     // folha compactada), então a contagem de páginas muda embaixo do operador.
@@ -2914,7 +2925,7 @@ function updatePedSummary() {
 
         if (state.printMode === 'duplex') {
 
-            faceContainer.style.display = 'block';
+            faceContainer.style.display = 'flex';
 
         } else {
 
@@ -3275,6 +3286,58 @@ function janelaDeVisualizacao() {
 }
 
 /**
+ * Abre e fecha um dos grupos de acao da coluna direita da janela.
+ *
+ * Sao quatro, separados por tipo: Imprimir e PDF (o unico aberto de partida),
+ * Configuracao de Impressao, Gerenciamento de Cores e Refazer Folhas. Antes
+ * tudo isso morava aberto ao mesmo tempo — o painel do driver ocupava 30% da
+ * largura o tempo todo, e a previa ficava espremida no meio.
+ */
+function alternarGrupoDaJanela(id) {
+    const grupo = document.getElementById(id);
+    if (!grupo) return;
+    const corpo = document.getElementById(id + '-corpo');
+    const botao = grupo.querySelector('.jg-botao');
+    const seta = grupo.querySelector('.jg-seta');
+
+    const abrir = !grupo.classList.contains('jg-aberto');
+    grupo.classList.toggle('jg-aberto', abrir);
+    if (corpo) corpo.style.display = abrir ? 'flex' : 'none';
+    if (botao) botao.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (seta) seta.textContent = abrir ? '▲' : '▼';
+
+    // As curvas de cor sao desenhadas num canvas cujo tamanho vem dos atributos
+    // width/height, e nao do layout — mas quem abre o grupo pela primeira vez
+    // pode nao ter passado por nenhum desenho ainda.
+    if (abrir && id === 'jg-cores') {
+        if (typeof desenharCurvaCor === 'function') desenharCurvaCor();
+        if (typeof desenharPreviaCor === 'function') desenharPreviaCor();
+    }
+}
+window.alternarGrupoDaJanela = alternarGrupoDaJanela;
+
+/**
+ * Mostra ou esconde um controle da coluna esquerda da previa.
+ *
+ * Os controles ganharam um rotulo proprio ("Folha", "Set", "Parte", "Face"), e
+ * esconder so o `<select>` deixaria o rotulo orfao na tela. Esconde a caixa
+ * inteira quando existe uma.
+ */
+function mostrarControleDaPrevia(el, mostrar) {
+    if (!el) return;
+    const caixa = el.closest ? (el.closest('.ped-janela-controle') || el) : el;
+    caixa.style.display = mostrar ? (caixa === el ? 'inline-block' : 'flex') : 'none';
+}
+window.mostrarControleDaPrevia = mostrarControleDaPrevia;
+
+/** O Refazer (folhas ou celulas) esta ligado? */
+function refazerLigado() {
+    return (typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo())
+        || (typeof refazerCelulasAtivo === 'function' && refazerCelulasAtivo());
+}
+window.refazerLigado = refazerLigado;
+
+/**
  * Devolve a janela para a casa dela, fora da fila.
  *
  * Chamada SEMPRE antes de o `renderPedOSQueue` reescrever o corpo da fila: o
@@ -3432,6 +3495,15 @@ async function enviarParaPedido(itemId, osId) {
     // A previa se apaga AGORA, antes de qualquer espera, para nunca mostrar a
     // folha do modelo anterior debaixo do nome do modelo novo.
     if (trocouDeModelo) limparPreviaEnquantoCarrega();
+
+    // O cabecalho da janela diz DE QUE MODELO ela e'. Com a janela abrindo
+    // dentro da fila, entre dezenas de linhas parecidas, isso deixou de ser
+    // enfeite: e' o que liga o que esta desenhado ao que foi clicado.
+    const nomeNoCabecalho = document.getElementById('ped-preview-modelo');
+    if (nomeNoCabecalho) {
+        const codigo = item.modelo ? String(item.modelo) + ' · ' : '';
+        nomeNoCabecalho.textContent = codigo + (item.produto || item.nome_modelo || 'modelo');
+    }
 
     // O realce da linha e' imediato: o operador ve o clique valer sem esperar
     // o carregamento. A janela vai junto, se a fila ja estiver desenhada.
@@ -4502,16 +4574,22 @@ function updatePedImprimirButtonsVisibility() {
     const btnImposePrint = document.getElementById('ped-btn-impose-print');
     const btnPreviewPrint = document.getElementById('ped-preview-btn-print');
 
+    // O REFAZER MANDA MAIS QUE O "JA IMPRESSO".
+    //
+    // Modelo ja impresso perde o botao Imprimir, para nao duplicar tiragem por
+    // engano. Mas com o Refazer ligado a regra se inverte: reimprimir uma faixa
+    // de folhas so faz sentido depois que a tiragem saiu — a folha amassou.
+    // Enquanto o Refazer tinha botao proprio isso se resolvia sozinho; agora
+    // que existe UM par so, e' aqui que a excecao precisa morar, senao a
+    // reimpressao ficaria inalcancavel justamente quando serve.
+    const escondeImprimir = activeIsImpresso && !(typeof refazerLigado === 'function' && refazerLigado());
+
     if (btnImposePrint) {
-        btnImposePrint.style.display = activeIsImpresso ? 'none' : 'flex';
+        btnImposePrint.style.display = escondeImprimir ? 'none' : 'flex';
     }
     if (btnPreviewPrint) {
-        btnPreviewPrint.style.display = activeIsImpresso ? 'none' : 'flex';
+        btnPreviewPrint.style.display = escondeImprimir ? 'none' : 'flex';
     }
-
-    // O Imprimir da caixa "Refazer" NÃO segue essa regra. Esconder a reimpressão
-    // justamente quando o modelo já está IMPRESSO tirava o recurso da mão do
-    // operador no único momento em que ele serve: a folha amassou depois de sair.
 
     // Trocar de modelo zera a caixa "Refazer" — uma faixa de folhas do modelo
     // anterior não quer dizer nada aqui, e deixá-la marcada leva a refazer a
@@ -6224,14 +6302,21 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
 window.pedQueueGerarPDF = pedQueueGerarPDF;
 window.pedQueueImprimir = pedQueueImprimir;
 
-// Botões do preview — atuam sobre o modelo em visualização
+// ─── O PAR DE BOTOES DA JANELA — E' UM SO ────────────────────────────────────
+//
+// O Refazer tinha um par proprio de Gerar PDF / Imprimir, ao lado do daqui.
+// Dois caminhos para a mesma acao ja produziram defeito nesta tela: em
+// 18/08/2026 um segundo par ("PDF Sel." e "Imp. Sel.", no cabecalho do produto)
+// chamava a funcao da OUTRA aba e imprimia um modelo quando dois estavam
+// marcados. Agora existe UM par, e com o Refazer ligado ele passa a valer para
+// a faixa escolhida — que e' exatamente o que o par do Refazer fazia.
 window.pedPreviewGerarPDF = function() {
     if (!state.activeOSItem) {
         toast('Nenhum modelo selecionado para gerar PDF.', 'warning');
         return;
     }
     if (typeof runPedImposition === 'function') {
-        runPedImposition('pdf');
+        runPedImposition('pdf', refazerLigado());
     }
 };
 
@@ -6241,7 +6326,7 @@ window.pedPreviewImprimir = function() {
         return;
     }
     if (typeof runPedImposition === 'function') {
-        runPedImposition('print');
+        runPedImposition('print', refazerLigado());
     }
 };
 

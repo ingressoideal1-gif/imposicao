@@ -1,25 +1,29 @@
 # -*- coding: utf-8 -*-
-"""A caixa de Gerenciamento de Cores abre fechada, e um botao a mostra.
-
-Pedido do usuario em 28/08/2026: "adicionar botao para esconder o gerenciamento
-de cores, so mostrar quando solicitado".
+"""O Gerenciamento de Cores se esconde, mas o ESTADO dele nunca.
 
 O perfil ICC e do EQUIPAMENTO -- escolhido uma vez, vale para todo pedido que va
 para aquela impressora. O operador que imprime dezenas de trabalhos por dia nao
-mexe nele nenhuma vez, e a caixa ocupava metade do painel do driver: seletor de
-perfil, intento de renderizacao, tres deslizadores, editor de curvas e duas
-previas. Fechada, ela cai de 686 px para 52 px de altura na tela.
+mexe nele nenhuma vez, e os controles ocupavam metade do painel do driver:
+seletor de perfil, intento de renderizacao, tres deslizadores, editor de curvas
+e duas previas.
 
-O comportamento do botao e medido rodando a funcao de verdade no harness em
-Node. O que este arquivo cobre e a ligacao com a tela -- e, principalmente, o
-que NAO pode ser escondido junto.
+O pedido original (28/08/2026) foi "adicionar botao para esconder o
+gerenciamento de cores, so mostrar quando solicitado", e a primeira versao
+resolveu com um botao "Mostrar" DENTRO da caixa. No mesmo dia a janela de
+visualizacao foi reorganizada em quatro grupos que abrem e fecham, e o
+Gerenciamento de Cores virou um deles -- entao o botao interno saiu: eram dois
+interruptores para a mesma coisa.
+
+A TRAVE E A MESMA DAS DUAS VEZES, e e por ela que este arquivo existe:
+esconder os CONTROLES e economia de tela; esconder o ESTADO seria outra coisa.
+O operador imprimiria com um perfil ICC ligado sem nada na tela dizendo que ha
+um perfil ligado, e so descobriria olhando o papel. Com o grupo fechado, quem
+diz isso e o selo no proprio botao do grupo.
 """
 import io
 import os
-import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HARNESS = os.path.join(RAIZ, "tests", "caixa_de_cores_harness.js")
 
 
 def _ler(rel):
@@ -27,15 +31,14 @@ def _ler(rel):
         return f.read()
 
 
-def _caixa_de_cores():
-    """O bloco #ped-print-cor-box inteiro, do index.html."""
-    fonte = _ler("frontend/index.html")
-    i = fonte.index('<div id="ped-print-cor-box"')
+def _bloco(fonte, abertura):
+    """O elemento inteiro que comeca em `abertura`, contando <div> aninhados."""
+    i = fonte.index(abertura)
     profundidade, j = 0, i
     while True:
         abre = fonte.find("<div", j)
         fecha = fonte.find("</div>", j)
-        assert fecha >= 0, "a caixa de cores nao fecha"
+        assert fecha >= 0, "o bloco nao fecha: " + abertura
         if 0 <= abre < fecha:
             profundidade += 1
             j = abre + 4
@@ -46,56 +49,80 @@ def _caixa_de_cores():
                 return fonte[i:j]
 
 
-def test_o_harness_da_caixa_de_cores_passa():
-    assert os.path.exists(HARNESS), "o harness da caixa de cores sumiu"
+def test_o_gerenciamento_de_cores_e_um_grupo_que_abre_e_fecha():
+    grupo = _bloco(_ler("frontend/index.html"), '<div class="jg" id="jg-cores">')
 
-    r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=120,
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    assert "alternarGrupoDaJanela('jg-cores')" in grupo, (
+        "o grupo nao abre nem fecha mais -- os controles de cor voltariam a "
+        "ocupar a tela o tempo todo"
     )
-    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
-    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
-
-
-def test_a_caixa_nasce_fechada_e_tem_botao():
-    caixa = _caixa_de_cores()
-
-    assert 'id="ped-print-cor-corpo"' in caixa, (
-        "o corpo colapsavel sumiu: sem ele nao ha o que o botao esconda"
-    )
-    corpo = caixa[caixa.index('id="ped-print-cor-corpo"'):]
+    assert 'id="jg-cores-corpo"' in grupo, "o corpo do grupo sumiu"
+    corpo = grupo[grupo.index('id="jg-cores-corpo"'):]
     assert "display:none" in corpo[:200], (
-        "o corpo nao nasce mais escondido -- o usuario pediu que a caixa so "
-        "aparecesse quando solicitada"
+        "o grupo nao nasce mais fechado -- o usuario pediu que estes controles "
+        "so aparecessem quando solicitados"
     )
-    assert "alternarGerenciamentoDeCores()" in caixa, (
-        "o botao nao chama mais o alternador"
+    assert 'id="ped-print-cor-perfil"' in grupo and 'id="ped-cor-curva-canvas"' in grupo, (
+        "os controles de cor nao estao dentro do grupo"
     )
-    assert 'id="ped-print-cor-btn"' in caixa, "o botao de mostrar/ocultar sumiu"
+
+
+def test_o_botao_mostrar_de_dentro_da_caixa_nao_voltou():
+    """Dois interruptores para a mesma coisa e o que a mudanca desfez."""
+    html = _ler("frontend/index.html")
+    assert 'id="ped-print-cor-btn"' not in html, (
+        "voltou o botao Mostrar dentro da caixa de cores: com o grupo ja "
+        "abrindo e fechando, sao dois interruptores para a mesma coisa"
+    )
+    script = _ler("frontend/script.js")
+    assert "function alternarGerenciamentoDeCores(" not in script, (
+        "a funcao do botao interno voltou ao script.js sem ninguem chamar"
+    )
 
 
 def test_o_que_diz_o_que_sai_no_papel_nao_se_esconde():
     """A trave desta mudanca.
 
-    Esconder os CONTROLES e economia de tela. Esconder o ESTADO seria outra
-    coisa: o operador imprimiria com um perfil ICC ligado sem nada na tela
-    dizendo que ha um perfil ligado, e so descobriria olhando o papel.
-
-    Por isso a caixa "Ativo" e a linha de status ficam FORA do corpo que colapsa.
+    Com o grupo FECHADO, o operador ainda precisa ver que ha conversao de cor
+    ligada. Quem diz isso e o selo no botao do grupo -- que fica FORA do corpo
+    que colapsa -- escrito pelo `atualizarStatusCor`.
     """
-    caixa = _caixa_de_cores()
+    grupo = _bloco(_ler("frontend/index.html"), '<div class="jg" id="jg-cores">')
+
+    i_selo = grupo.index('id="ped-cor-selo-ativo"')
+    i_corpo = grupo.index('id="jg-cores-corpo"')
+    assert i_selo < i_corpo, (
+        "o selo de estado entrou no corpo que colapsa: com o grupo fechado o "
+        "operador nao veria que o gerenciamento de cores esta ligado"
+    )
+
+    script = _ler("frontend/script.js")
+    corpo_fn = script[script.index("function atualizarStatusCor()"):]
+    corpo_fn = corpo_fn[:corpo_fn.index("\nasync function salvarCorImpressora")]
+    assert "ped-cor-selo-ativo" in corpo_fn, (
+        "o selo parou de ser escrito pela funcao que conhece o estado da cor"
+    )
+    assert "selo.title = st.textContent" in corpo_fn, (
+        "o selo perdeu a frase inteira: quem passa o mouse tem de ler o mesmo "
+        "que leria abrindo o grupo"
+    )
+
+
+def test_a_caixa_de_ativo_continua_fora_do_bloco_de_controles():
+    """`Ativo` e a linha de status ficam fora do `#ped-print-cor-corpo`.
+
+    Isto ja valia antes e continua valendo: dentro do grupo aberto, o operador
+    ve o estado sem precisar rolar os controles todos.
+    """
+    caixa = _bloco(_ler("frontend/index.html"), '<div id="ped-print-cor-box"')
 
     i_corpo = caixa.index('id="ped-print-cor-corpo"')
     i_fecha = caixa.index("/ped-print-cor-corpo")
 
-    i_ativo = caixa.index('id="ped-print-cor-ativo"')
-    assert i_ativo < i_corpo, (
-        'a caixa "Ativo" entrou no bloco que colapsa: com a caixa fechada o '
-        "operador nao veria que o gerenciamento de cores esta ligado"
+    assert caixa.index('id="ped-print-cor-ativo"') < i_corpo, (
+        'a caixa "Ativo" entrou no bloco de controles'
     )
-
-    i_status = caixa.index('id="ped-print-cor-status"')
-    assert i_status > i_fecha, (
-        "a linha de status entrou no bloco que colapsa: e ela que diz, em uma "
+    assert caixa.index('id="ped-print-cor-status"') > i_fecha, (
+        "a linha de status entrou no bloco de controles: e ela que diz, em uma "
         "frase, o que vai sair no papel"
     )

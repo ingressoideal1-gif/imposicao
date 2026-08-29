@@ -4150,6 +4150,180 @@ input[type=number] {
 }
 
 
+/* ─── Fila de modelos do Pedido: os dois estados de uma linha ────────────────
+
+   Eles dizem coisas DIFERENTES e por isso nao podem ter o mesmo desenho:
+
+   .marcada  = a caixinha esta marcada; o modelo entra na folha combinada.
+   .aberta   = a janela de visualizacao esta aberta logo abaixo desta linha.
+
+   Ate 28/08/2026 os dois usavam o mesmo contorno laranja, e so a caixinha os
+   distinguia. Agora a marcacao continua laranja (e' ela que decide o que sai
+   no papel) e o "aberto" ganha contorno azul — a mesma cor do nome do modelo
+   no cabecalho da janela, para o olho ligar uma coisa a outra.
+
+   Moram no CSS, e nao no style inline da linha, porque trocar de modelo aberto
+   passou a ser uma troca de CLASSE em duas linhas, sem redesenhar a fila: com
+   52 modelos o redesenho custa 160 ms e a troca de classe custa 3. */
+tr.fila-linha            { outline: 1px solid #918f8c; }
+tr.fila-linha.marcada    { outline: 2pt solid #f97316; }
+tr.fila-linha.aberta     { outline: 2pt solid #3b82f6; }
+tr.fila-linha.marcada.aberta {
+    outline: 2pt solid #f97316;
+    box-shadow: inset 5px 0 0 0 #3b82f6;
+}
+
+/* A linha que hospeda a janela de visualizacao dentro da caixa do produto.
+   Nao tem contorno nem fundo proprios: quem se apresenta e' a janela. E nao
+   apaga no hover, porque o hover da fila e' para escolher LINHA, e esta nao
+   e' uma linha para escolher. */
+tr.linha-da-janela > td  { padding: 0 0 10px 0; background: transparent; }
+tr.linha-da-janela:hover { opacity: 1 !important; }
+
+/* ─── A janela de visualizacao, em tres colunas ──────────────────────────────
+
+   O operador reclamou de duas coisas na versao anterior: o cabecalho estava
+   confuso — titulo, dois botoes, a caixa inteira do Refazer e os controles da
+   previa, tudo na mesma faixa — enquanto a previa da imposicao ficava "perdida
+   no meio da tela", espremida entre a regua de cima e o painel do driver.
+
+   Agora: o cabecalho tem UMA linha (de que modelo e' esta janela, e os numeros
+   da imposicao); os controles da previa ficam a esquerda; a previa fica com o
+   centro inteiro; e as acoes ficam a direita, separadas por tipo em grupos que
+   abrem e fecham. O que nao se usa a toda hora nao ocupa tela. */
+.ped-janela-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 10px;
+}
+
+/* Os numeros da imposicao viram fichas na propria linha do titulo. O
+   `updatePedSummary` acende esta caixa com `display: grid`, e por isso o
+   layout tem de ser resolvido pelo grid — nao por flex. */
+.ped-janela-chips.summary-box {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    gap: 18px;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    justify-content: flex-end;
+}
+.ped-janela-chips .summary-item { padding: 0; border: none; background: none; }
+.ped-janela-chips .summary-label { font-size: 0.66rem; }
+.ped-janela-chips .summary-value { font-size: 0.82rem; white-space: nowrap; }
+
+.ped-janela-corpo {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-height: 460px;
+}
+
+.ped-janela-esquerda {
+    flex: 0 0 178px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 14px 14px 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ped-janela-controle { display: flex; flex-direction: column; gap: 5px; }
+.ped-janela-rotulo {
+    font-size: 0.68rem; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em; margin: 0;
+}
+.ped-janela-amostra {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    font-size: 0.78rem; font-weight: 700; color: #38bdf8; margin: 0;
+    background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 6px; padding: 6px 9px;
+}
+.ped-janela-nota { font-size: 0.68rem; line-height: 1.35; color: var(--text-faint, #64748b); }
+
+/* A previa fica com o centro inteiro: e' ela que o operador confere. */
+.ped-janela-centro {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    padding: 14px;
+}
+
+.ped-janela-direita {
+    flex: 0 0 342px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0 14px 14px;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    overflow-y: auto;
+    max-height: 78vh;
+}
+
+/* ─── Os grupos de acao (jg = janela/grupo) ──────────────────────────────── */
+.jg {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+.jg-botao {
+    width: 100%;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: none; color: var(--text);
+    font-size: 0.82rem; font-weight: 700; text-align: left;
+    padding: 10px 12px; cursor: pointer;
+}
+.jg-botao > span:first-child { flex: 1; }
+.jg-botao:hover { background: rgba(255, 255, 255, 0.08); }
+.jg-seta { font-size: 0.6rem; color: var(--text-dim); }
+.jg-aberto > .jg-botao { background: rgba(59, 130, 246, 0.12); color: #bfdbfe; }
+.jg-corpo {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+}
+/* Selo de estado no proprio botao do grupo: ele precisa ser legivel com o
+   grupo FECHADO, senao esconder os controles esconderia junto o que vai sair
+   no papel. */
+.jg-selo {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #86efac;
+    background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35);
+    border-radius: 999px; padding: 1px 7px;
+}
+
+@media (max-width: 1500px) {
+    /* Tela estreita: a coluna das acoes desce para baixo da previa em vez de
+       espremer as duas. A previa e' a que nao pode encolher. */
+    .ped-janela-corpo { flex-wrap: wrap; }
+    .ped-janela-direita {
+        flex: 1 1 100%; max-height: none;
+        border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.07);
+        padding: 14px 0 0 0;
+    }
+}
+
+/* Recado de "estou montando" enquanto a previa do modelo novo nao fica pronta.
+   Existe porque o carregamento e' encadeado em 400/600/800 ms: sem ele, por
+   quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo
+   do nome do modelo novo. */
+.previa-montando {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 220px; color: var(--text-dim); font-size: 0.9rem;
+}
+.previa-montando .roda {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(99, 102, 241, 0.3); border-top-color: #6366f1;
+    animation: spin 0.8s linear infinite;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    PAINEL DO ACABAMENTO — a mesma forma, em marrom escuro
    ══════════════════════════════════════════════════════════════════════════
@@ -4259,48 +4433,4 @@ input[type=number] {
     background: var(--acab-realce-fraco);
     border-color: var(--acab-realce);
     color: var(--acab-realce-texto);
-}
-
-/* ─── Fila de modelos do Pedido: os dois estados de uma linha ────────────────
-
-   Eles dizem coisas DIFERENTES e por isso nao podem ter o mesmo desenho:
-
-   .marcada  = a caixinha esta marcada; o modelo entra na folha combinada.
-   .aberta   = a janela de visualizacao esta aberta logo abaixo desta linha.
-
-   Ate 28/08/2026 os dois usavam o mesmo contorno laranja, e so a caixinha os
-   distinguia. Agora a marcacao continua laranja (e' ela que decide o que sai
-   no papel) e o "aberto" ganha contorno azul — a mesma cor do nome do modelo
-   no cabecalho da janela, para o olho ligar uma coisa a outra.
-
-   Moram no CSS, e nao no style inline da linha, porque trocar de modelo aberto
-   passou a ser uma troca de CLASSE em duas linhas, sem redesenhar a fila: com
-   52 modelos o redesenho custa 160 ms e a troca de classe custa 3. */
-tr.fila-linha            { outline: 1px solid #918f8c; }
-tr.fila-linha.marcada    { outline: 2pt solid #f97316; }
-tr.fila-linha.aberta     { outline: 2pt solid #3b82f6; }
-tr.fila-linha.marcada.aberta {
-    outline: 2pt solid #f97316;
-    box-shadow: inset 5px 0 0 0 #3b82f6;
-}
-
-/* A linha que hospeda a janela de visualizacao dentro da caixa do produto.
-   Nao tem contorno nem fundo proprios: quem se apresenta e' a janela. E nao
-   apaga no hover, porque o hover da fila e' para escolher LINHA, e esta nao
-   e' uma linha para escolher. */
-tr.linha-da-janela > td  { padding: 0 0 10px 0; background: transparent; }
-tr.linha-da-janela:hover { opacity: 1 !important; }
-
-/* Recado de "estou montando" enquanto a previa do modelo novo nao fica pronta.
-   Existe porque o carregamento e' encadeado em 400/600/800 ms: sem ele, por
-   quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo
-   do nome do modelo novo. */
-.previa-montando {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    min-height: 220px; color: var(--text-dim); font-size: 0.9rem;
-}
-.previa-montando .roda {
-    width: 18px; height: 18px; border-radius: 50%;
-    border: 2px solid rgba(99, 102, 241, 0.3); border-top-color: #6366f1;
-    animation: spin 0.8s linear infinite;
 }
