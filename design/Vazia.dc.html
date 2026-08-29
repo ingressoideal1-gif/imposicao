@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    a { color: #3b82f6; } a:hover { color: #60a5fa; }
+  </style>
+</helmet>
+
+<!-- Como a tela abre. Importa mais do que parece: e' aqui que ela precisa
+     dizer o que faz, porque o operador chega com uma folha estragada na mao e
+     nao com a documentacao lida. -->
+<div style="width: 1000px; height: 620px; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px; background: #0a0f1e; background-image: radial-gradient(ellipse at 0% 0%, rgba(59,130,246,0.08) 0, transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(139,92,246,0.08) 0, transparent 55%); color: #e2e8f0; overflow: hidden;">
+
+  <div>
+    <h1 style="font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 5px;">Montagem</h1>
+    <p style="margin: 0; font-size: 0.86rem; color: #94a3b8; line-height: 1.4;">Junta numa folha só as células a refazer, mesmo que venham de pedidos diferentes.</p>
+  </div>
+
+  <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 240px;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Pedido</label>
+        <div style="background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #64748b;">
+          <span>Escolha ou digite o número…</span><span style="color: #475569; font-size: 0.7rem;">▼</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 0;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Modelo</label>
+        <div style="background: rgba(10,15,30,0.35); border: 1px solid rgba(148,163,184,0.14); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; color: #475569; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <span>—</span><span style="font-size: 0.7rem;">▼</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 170px;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Posições</label>
+        <div style="background: rgba(10,15,30,0.35); border: 1px solid rgba(148,163,184,0.14); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; color: #475569; font-family: ui-monospace, monospace;">Ex: 1,6,22</div>
+      </div>
+      <button style="display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; font-family: inherit; border: 1px solid rgba(148,163,184,0.14); cursor: default; background: rgba(255,255,255,0.03); color: #475569;">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+        Adicionar
+      </button>
+    </div>
+
+    <p style="margin: 0; font-size: 0.75rem; color: #64748b; line-height: 1.45;">
+      Os pedidos oferecidos são os <strong style="color: #94a3b8; font-weight: 600;">impressos nos últimos 30 dias</strong>. Para um mais antigo, digite o número.
+    </p>
+  </div>
+
+  <div style="flex: 1 1 auto; background: rgba(30,41,59,0.5); border: 1px dashed rgba(148,163,184,0.28); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px; text-align: center;">
+
+    <svg viewBox="0 0 48 48" width="52" height="52" aria-hidden="true">
+      <rect x="6" y="9" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
+      <rect x="6" y="19" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
+      <rect x="6" y="29" width="36" height="6" rx="1.5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="6" y="39" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2" stroke-dasharray="3 3"/>
+    </svg>
+
+    <div style="max-width: 500px;">
+      <h2 style="font-size: 1.06rem; font-weight: 700; margin: 0 0 8px; color: #e2e8f0;">Nenhuma célula na montagem ainda</h2>
+      <p style="margin: 0; font-size: 0.87rem; color: #94a3b8; line-height: 1.55;">
+        Escolha o pedido, o modelo e digite as posições que precisam sair de novo — o 1º, o 6º, o 22º item da tiragem daquele modelo. Repita para quantos pedidos quiser: <strong style="color: #cbd5e1; font-weight: 600;">a folha aceita células de pedidos diferentes</strong>, desde que sejam do mesmo formato, cor, saída e face.
+      </p>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 9px; padding: 10px 15px; border-radius: 8px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.28); font-size: 0.79rem; color: #86efac; line-height: 1.45; max-width: 560px; text-align: left;">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="flex-shrink: 0;"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.3 13.6-3.2-3.2 1.4-1.4 1.8 1.8 4.6-4.6 1.4 1.4-6 6z"/></svg>
+      <span>O código do ingresso refeito é <strong style="font-weight: 700;">o mesmo do original</strong> — a célula substitui, não duplica.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1000,"height":620}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",   "x": 0,    "y": 0,   "w": 1440, "h": 900, "title": "Montagem em uso" },
+    { "file": "Vazia.dc.html",  "x": 1560, "y": 0,   "w": 1000, "h": 620, "title": "Como a tela abre" },
+    { "file": "Recusa.dc.html", "x": 1560, "y": 760, "w": 1000, "h": 470, "title": "Quando não combina" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 460,
+      "text": "MONTAGEM\nRefazer células de pedidos diferentes numa folha só.\n\nRegras decididas em 29/08/2026:\n· combina por formato + cor + saída + face\n· escolhe pedido → modelo → posições, acumulando\n· pedidos dos últimos 30 dias, mais busca por número\n· sem senha da gerência"
+    },
+    {
+      "id": "motor",
+      "x": 1560,
+      "y": -190,
+      "w": 460,
+      "text": "O MOTOR JÁ FAZ ISTO\nDesde 18/08 o engine.py monta folha com modelos de pedidos diferentes (multi_artes): cada arte carrega o seu pedido, e item sem pedido levanta erro.\n\nE o código do QR Ideal é indice(pedido, modelo, item) — refazer a posição 6 dá o MESMO código. A célula substitui, não duplica."
+    },
+    {
+      "id": "sobra",
+      "x": 500,
+      "y": 960,
+      "w": 420,
+      "text": "O selo amarelo é o mesmo do Pedido, com a mesma regra de cor: verde quando a folha fecha certo, amarelo quando sobra célula. Amarelo só significa sobra."
+    },
+    {
+      "id": "saida",
+      "x": 1560,
+      "y": 1290,
+      "w": 420,
+      "text": "A recusa diz o que está diferente E o que fazer. Trava sem saída na tela é o que esta gráfica não aceita — o operador está de pé na frente da impressora."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

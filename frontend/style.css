@@ -4512,6 +4512,123 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 }
 
 
+/* ─── MONTAGEM ────────────────────────────────────────────────────────────────
+   A tela que junta celulas a refazer de pedidos diferentes numa folha so'
+   (29/08/2026). Ela reusa os componentes do painel — .card, .data-table,
+   .form-control, .btn, .selo-sobra — e o que esta aqui e' so' o que ela tem de
+   proprio: o compositor, a trava do formato, os ladrilhos da previa. */
+.mtg-compositor {
+    display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+}
+.mtg-campo { display: flex; flex-direction: column; gap: 6px; }
+.mtg-campo > label {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-faint);
+}
+.mtg-dica {
+    margin: 14px 0 0; font-size: 0.75rem; color: #64748b; line-height: 1.45;
+}
+.mtg-dica code {
+    font-family: ui-monospace, monospace; color: var(--text-dim);
+}
+
+/* A trava do formato. Nasce escondida e aparece com a PRIMEIRA celula: o
+   operador nao escolhe um formato num seletor, ele adiciona e a folha passa a
+   dizer o que aceita — um campo a menos para preencher, e o estado sai do que
+   ele ja fez em vez de uma declaracao previa. */
+.mtg-trava {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 14px; padding: 11px 14px; border-radius: var(--radius-sm);
+    background: rgba(59, 130, 246, 0.07);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+.mtg-trava-titulo {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #60a5fa;
+}
+.mtg-chip {
+    font-size: 0.82rem; padding: 3px 10px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+}
+
+/* A recusa. Diz o que esta' diferente E o que fazer: trava sem saida na tela e'
+   o que esta grafica nao aceita — o operador esta' de pe na frente da
+   impressora, com a folha estragada na mao. */
+.mtg-recusa {
+    display: flex; gap: 13px; margin-top: 14px;
+    padding: 14px 16px; border-radius: var(--radius-sm);
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.32);
+}
+
+.mtg-corpo { display: flex; gap: 20px; align-items: stretch; }
+.mtg-lista-card  { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.mtg-previa-card { flex: 0 0 380px; display: flex; flex-direction: column; }
+
+@media (max-width: 1280px) {
+    /* Tela estreita: a previa desce em vez de espremer a lista, que e' onde o
+       operador confere o que montou. */
+    .mtg-corpo { flex-wrap: wrap; }
+    .mtg-previa-card { flex: 1 1 100%; }
+}
+
+.mtg-posicoes { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.mtg-pos {
+    font-family: ui-monospace, monospace; font-size: 0.78rem;
+    padding: 2px 8px; border-radius: 5px;
+    background: rgba(59, 130, 246, 0.12); color: #93c5fd;
+}
+.mtg-tirar { color: var(--text-faint); cursor: pointer; font-size: 1.05rem; }
+.mtg-tirar:hover { color: var(--red); }
+
+/* O estado vazio. E' aqui que a tela precisa se explicar sozinha. */
+.mtg-vazio {
+    flex: 1 1 auto; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    padding: 34px 30px; text-align: center;
+    border: 1px dashed rgba(148, 163, 184, 0.28); border-radius: var(--radius);
+    background: rgba(30, 41, 59, 0.35);
+}
+.mtg-vazio h3 { font-size: 1.06rem; font-weight: 700; margin: 0; color: var(--text); }
+.mtg-vazio p  {
+    margin: 0; max-width: 520px; font-size: 0.87rem;
+    color: var(--text-dim); line-height: 1.55;
+}
+.mtg-garantia {
+    display: flex; align-items: center; gap: 9px; text-align: left;
+    max-width: 560px; padding: 10px 15px; border-radius: var(--radius-sm);
+    background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.28);
+    font-size: 0.79rem; color: #86efac; line-height: 1.45;
+}
+
+/* A previa da primeira folha. Fundo claro porque e' PAPEL: a folha montada nao
+   e' um painel escuro, e ver as celulas na cor do material e' o que deixa o
+   operador conferir o que vai sair. */
+.mtg-previa {
+    background: #f8fafc; border-radius: 6px; padding: 7px;
+    display: flex; flex-direction: column; gap: 3px;
+}
+.mtg-celula {
+    min-height: 22px; border-radius: 2px; border: 1px solid;
+    display: flex; align-items: center; padding: 0 8px;
+    font-size: 0.62rem; font-weight: 600;
+    font-family: ui-monospace, monospace;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.mtg-celula-vazia {
+    background: #f1f5f9; border-color: #cbd5e1; color: #94a3b8;
+    font-weight: 400; font-style: italic;
+}
+
+.mtg-acoes {
+    margin-top: auto; padding-top: 14px;
+    display: flex; flex-direction: column; gap: 9px;
+}
+.mtg-acoes .btn { width: 100%; justify-content: center; }
+
+
 /* ══════════════════════════════════════════════════════════════════════════
    PAINEL DO ACABAMENTO — a mesma forma, em marrom escuro
    ══════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    a { color: #3b82f6; } a:hover { color: #60a5fa; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; display: flex; overflow: hidden; background: #0a0f1e; background-image: radial-gradient(ellipse at 0% 0%, rgba(59,130,246,0.08) 0, transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(139,92,246,0.08) 0, transparent 55%); color: #e2e8f0;">
+
+  <!-- ── Sidebar: 240px, o mesmo do painel ─────────────────────────────── -->
+  <div style="width: 240px; flex: 0 0 240px; background: rgba(8,11,24,0.94); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; padding: 24px 14px; gap: 6px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 18px;">
+      <div style="width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 800;">II</div>
+      <span style="font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em;">Ideal Imposition</span>
+    </div>
+
+    <span style="font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #475569; padding: 8px 14px 4px;">Produção</span>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: 500;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">🖨️</span>Imposição
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: 500;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">📦</span>Pedido
+    </div>
+
+    <!-- Montagem entra AQUI: logo abaixo de Pedido, porque é a tela que
+         recolhe o que sobrou dele. -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; background: rgba(59,130,246,0.15); color: #e2e8f0; font-size: 0.9rem; font-weight: 600; box-shadow: inset 3px 0 0 0 #3b82f6;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">🧩</span>Montagem
+      <span style="margin-left: auto; font-size: 0.7rem; background: rgba(59,130,246,0.15); color: #3b82f6; border-radius: 20px; padding: 1px 7px; font-weight: 600;">14</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: 500;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">🧪</span>Amostras
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: 500;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">🖨️</span>Painel de Produção
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: 500;">
+      <span style="width: 22px; text-align: center; font-size: 1.1rem;">✂️</span>Painel do Acabamento
+    </div>
+  </div>
+
+  <!-- ── Corpo ─────────────────────────────────────────────────────────── -->
+  <div style="flex: 1 1 auto; min-width: 0; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px;">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;">
+      <div>
+        <h1 style="font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 5px;">Montagem</h1>
+        <p style="margin: 0; font-size: 0.86rem; color: #94a3b8; line-height: 1.4;">Junta numa folha só as células a refazer, mesmo que venham de pedidos diferentes.</p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.25); background: rgba(255,255,255,0.04); font-size: 0.78rem; color: #94a3b8;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6);"></span>
+        Estação <strong style="color: #e2e8f0; font-weight: 600;">LASER-04</strong>
+      </div>
+    </div>
+
+    <!-- ── O compositor ──────────────────────────────────────────────── -->
+    <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;">
+
+      <div style="display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 250px;">
+          <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Pedido</label>
+          <div style="background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span>21202 · VIVA+ FESTIVAL</span><span style="color: #475569; font-size: 0.7rem;">▼</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 300px; min-width: 0;">
+          <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Modelo</label>
+          <div style="background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">1000565 · 05/set CAMAROTE PRESIDENTE</span><span style="color: #475569; font-size: 0.7rem; flex-shrink: 0;">▼</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 200px;">
+          <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Posições</label>
+          <div style="background: rgba(10,15,30,0.6); border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; font-family: ui-monospace, 'SF Mono', Menlo, monospace; box-shadow: 0 0 0 3px rgba(59,130,246,0.12);">
+            1,6,22<span style="color: #3b82f6;">|</span>
+          </div>
+        </div>
+
+        <button style="display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; font-family: inherit; border: none; cursor: pointer; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+          Adicionar
+        </button>
+      </div>
+
+      <p style="margin: 0; font-size: 0.75rem; color: #64748b; line-height: 1.45;">
+        A posição é a do item <strong style="color: #94a3b8; font-weight: 600;">dentro do modelo</strong> — o 1º, o 6º, o 22º da tiragem, onde quer que ele tenha caído na folha. Faixas valem: <code style="font-family: ui-monospace, monospace; color: #94a3b8;">1-4</code>.
+      </p>
+
+      <!-- A trava: o primeiro item define o que a folha aceita daí em diante. -->
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 14px; border-radius: 8px; background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.25);">
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #60a5fa;">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2zm-8-2a3 3 0 0 1 6 0v2H9V7z"/></svg>
+          A folha aceita
+        </span>
+        <span style="font-size: 0.82rem; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(148,163,184,0.25);">Triband 245×20 mm</span>
+        <span style="font-size: 0.82rem; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(148,163,184,0.25); display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #7dd3fc;"></span>Azul Celeste</span>
+        <span style="font-size: 0.82rem; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(148,163,184,0.25);">Saída SRA3</span>
+        <span style="font-size: 0.82rem; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(148,163,184,0.25);">Só frente</span>
+        <span style="margin-left: auto; font-size: 0.75rem; color: #64748b;">definido pela primeira célula adicionada</span>
+      </div>
+    </div>
+
+    <!-- ── A lista e a prévia ────────────────────────────────────────── -->
+    <div style="display: flex; gap: 18px; flex: 1 1 auto; min-height: 0;">
+
+      <div style="flex: 1 1 auto; min-width: 0; background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <h2 style="font-size: 1.02rem; font-weight: 700; margin: 0;">Células na montagem</h2>
+          <span style="font-size: 0.78rem; color: #64748b;">3 pedidos · 4 modelos</span>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+          <tr>
+            <th style="text-align: left; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; border-bottom: 1px solid rgba(148,163,184,0.25); background: rgba(0,0,0,0.15);">Pedido</th>
+            <th style="text-align: left; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; border-bottom: 1px solid rgba(148,163,184,0.25); background: rgba(0,0,0,0.15);">Modelo</th>
+            <th style="text-align: left; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; border-bottom: 1px solid rgba(148,163,184,0.25); background: rgba(0,0,0,0.15);">Posições</th>
+            <th style="text-align: right; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; border-bottom: 1px solid rgba(148,163,184,0.25); background: rgba(0,0,0,0.15);">Células</th>
+            <th style="width: 40px; border-bottom: 1px solid rgba(148,163,184,0.25); background: rgba(0,0,0,0.15);"></th>
+          </tr>
+
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #e2e8f0; font-weight: 500;">21202</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8;"><span style="color: #e2e8f0;">1000565</span><br><span style="font-size: 0.78rem;">05/set CAMAROTE PRESIDENTE</span></td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08);">
+              <span style="display: inline-flex; gap: 5px; flex-wrap: wrap;">
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#1</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#6</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#22</span>
+              </span>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8; text-align: right;">3</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); text-align: right;"><span style="color: #475569; cursor: pointer; font-size: 1.05rem;">×</span></td>
+          </tr>
+
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #e2e8f0; font-weight: 500;">21202</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8;"><span style="color: #e2e8f0;">1000589</span><br><span style="font-size: 0.78rem;">11/set CAMAROTE PATROCINADORES</span></td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08);">
+              <span style="display: inline-flex; gap: 5px; flex-wrap: wrap;">
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#340</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#341</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#342</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#343</span>
+              </span>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8; text-align: right;">4</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); text-align: right;"><span style="color: #475569; cursor: pointer; font-size: 1.05rem;">×</span></td>
+          </tr>
+
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #e2e8f0; font-weight: 500;">21188</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8;"><span style="color: #e2e8f0;">1000412</span><br><span style="font-size: 0.78rem;">STAFF PALCO</span></td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08);">
+              <span style="display: inline-flex; gap: 5px; flex-wrap: wrap;">
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#7</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#12</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#88</span>
+              </span>
+            </td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); color: #94a3b8; text-align: right;">3</td>
+            <td style="padding: 12px; border-bottom: 1px solid rgba(99,120,180,0.08); text-align: right;"><span style="color: #475569; cursor: pointer; font-size: 1.05rem;">×</span></td>
+          </tr>
+
+          <tr>
+            <td style="padding: 12px; color: #e2e8f0; font-weight: 500;">20990</td>
+            <td style="padding: 12px; color: #94a3b8;"><span style="color: #e2e8f0;">1000203</span><br><span style="font-size: 0.78rem;">PULSEIRA CAMAROTE OURO</span></td>
+            <td style="padding: 12px;">
+              <span style="display: inline-flex; gap: 5px; flex-wrap: wrap;">
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#3</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#4</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#5</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; background: rgba(59,130,246,0.12); color: #93c5fd;">#6</span>
+              </span>
+            </td>
+            <td style="padding: 12px; color: #94a3b8; text-align: right;">4</td>
+            <td style="padding: 12px; text-align: right;"><span style="color: #475569; cursor: pointer; font-size: 1.05rem;">×</span></td>
+          </tr>
+        </table>
+
+        <!-- O selo: a mesma frase e o mesmo amarelo do selo de sobra do Pedido. -->
+        <div style="margin-top: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 1.05rem; font-weight: 700; line-height: 1.35; letter-spacing: 0.2px; border: 1px solid rgba(245,158,11,0.45); border-radius: 14px; background: rgba(245,158,11,0.09); color: #fbbf24; padding: 13px 16px;">
+          <span style="flex: 1 1 auto;">📄 2 folha(s) · 14 células · sobram 6 célula(s) (60% de uma folha)</span>
+        </div>
+      </div>
+
+      <!-- Prévia da folha montada -->
+      <div style="flex: 0 0 380px; background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <h2 style="font-size: 1.02rem; font-weight: 700; margin: 0;">Folha montada</h2>
+          <span style="font-size: 0.75rem; color: #64748b;">FOLHA 1 DE 2</span>
+        </div>
+
+        <div style="background: #f8fafc; border-radius: 6px; padding: 7px; display: flex; flex-direction: column; gap: 3px;">
+          <div style="height: 22px; border-radius: 2px; background: #dbeafe; border: 1px solid #93c5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #1e3a5f; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000565 · #1</div>
+          <div style="height: 22px; border-radius: 2px; background: #dbeafe; border: 1px solid #93c5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #1e3a5f; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000565 · #6</div>
+          <div style="height: 22px; border-radius: 2px; background: #dbeafe; border: 1px solid #93c5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #1e3a5f; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000565 · #22</div>
+          <div style="height: 22px; border-radius: 2px; background: #ede9fe; border: 1px solid #c4b5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #3b2a6b; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000589 · #340</div>
+          <div style="height: 22px; border-radius: 2px; background: #ede9fe; border: 1px solid #c4b5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #3b2a6b; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000589 · #341</div>
+          <div style="height: 22px; border-radius: 2px; background: #ede9fe; border: 1px solid #c4b5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #3b2a6b; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000589 · #342</div>
+          <div style="height: 22px; border-radius: 2px; background: #ede9fe; border: 1px solid #c4b5fd; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #3b2a6b; font-weight: 600; font-family: ui-monospace, monospace;">21202 · 1000589 · #343</div>
+          <div style="height: 22px; border-radius: 2px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #14532d; font-weight: 600; font-family: ui-monospace, monospace;">21188 · 1000412 · #7</div>
+          <div style="height: 22px; border-radius: 2px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #14532d; font-weight: 600; font-family: ui-monospace, monospace;">21188 · 1000412 · #12</div>
+          <div style="height: 22px; border-radius: 2px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; padding: 0 8px; font-size: 0.62rem; color: #14532d; font-weight: 600; font-family: ui-monospace, monospace;">21188 · 1000412 · #88</div>
+        </div>
+
+        <p style="margin: 0; font-size: 0.74rem; color: #64748b; line-height: 1.5;">
+          As células enchem a folha <strong style="color: #94a3b8; font-weight: 600;">na ordem, sem reservar folha por pedido</strong> — a cor muda no limite de cada modelo, então separar é olhar, não contar.
+        </p>
+
+        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 9px;">
+          <button style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; font-family: inherit; border: none; cursor: pointer; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;">
+            📄 Gerar PDF da montagem
+          </button>
+          <button style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; font-family: inherit; cursor: pointer; background: rgba(255,255,255,0.06); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25);">
+            🖨️ Imprimir na estação
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

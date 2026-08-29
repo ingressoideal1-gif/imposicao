@@ -30844,6 +30844,12 @@ window.showView = function(viewId) {
     if (viewId === 'view-fontes') {
         loadCatalogoFontes().then(() => renderCatFontesUI());
     }
+    // MONTAGEM (29/08/2026). A lista de pedidos e' dos IMPRESSOS nos ultimos 30
+    // dias, e ela muda enquanto a grafica trabalha — por isso e' refeita a cada
+    // abertura da tela, e nao uma vez no carregamento do painel.
+    if (viewId === 'view-montagem' && typeof abrirMontagem === 'function') {
+        abrirMontagem();
+    }
     if (viewId === 'view-ideal-control' && window.IdealControl) {
         // `iniciar()` é idempotente: liga os botões uma vez só e recarrega a
         // lista de pedidos a cada abertura. Abrir a mesma tela duas vezes não

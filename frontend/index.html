@@ -127,6 +127,15 @@
                 Pedido
             </button>
 
+            <!-- MONTAGEM (29/08/2026). Refaz celulas de pedidos DIFERENTES numa
+                 folha so'. Fica logo abaixo de Pedido porque e' a tela que recolhe
+                 o que sobrou dele: a celula que estragou volta por aqui. -->
+            <button class="nav-btn" data-view="view-montagem" id="nav-montagem">
+                <span class="nav-icon">&#129513;</span>
+                Montagem
+                <span class="nav-badge" id="badge-montagem" style="display:none;">0</span>
+            </button>
+
             <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
                 <span class="nav-icon">🧪</span>
                 Amostras
@@ -2950,6 +2959,117 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: IMPRESSORAS                                             -->
             <!-- ══════════════════════════════════════════════════════════════ -->
+
+            <!-- ═══ MONTAGEM ═══════════════════════════════════════════════
+                 Junta numa folha so' as celulas a refazer, mesmo vindas de
+                 pedidos diferentes.
+
+                 O motor NAO mudou: ele ja monta folha com modelos de pedidos
+                 diferentes (multi_artes, 18/08/2026), e o `refazer_celulas`
+                 dele indexa o multi_map, que carrega modelo, pedido e a linha
+                 do banco de cada item. Esta tela so' TRADUZ as posicoes que o
+                 operador pensa por modelo para as posicoes do fluxo combinado
+                 -- ver posicoesCombinadas() no montagem.js. -->
+            <section id="view-montagem" class="view-section" style="max-width: 100%;">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1>&#129513; Montagem</h1>
+                        <p>Junta numa folha s&oacute; as c&eacute;lulas a refazer, mesmo que venham de pedidos diferentes.</p>
+                    </div>
+                </div>
+
+                <!-- O compositor -->
+                <div class="card">
+                    <div class="mtg-compositor">
+                        <div class="mtg-campo" style="flex: 0 0 250px;">
+                            <label for="mtg-pedido">Pedido</label>
+                            <select id="mtg-pedido" class="form-control" onchange="onMontagemPedidoChange()">
+                                <option value="">Impressos nos &uacute;ltimos 30 dias&hellip;</option>
+                            </select>
+                        </div>
+
+                        <!-- A busca por numero. O seletor lista os IMPRESSOS RECENTES,
+                             que e o caso normal; este campo cobre o pedido antigo que
+                             voltou do cliente e nao esta naquela lista. Um <select> nao
+                             se digita, e prometer "ou digite o numero" nele seria uma
+                             promessa que a tela nao cumpre. -->
+                        <div class="mtg-campo" style="flex: 0 0 130px;">
+                            <label for="mtg-buscar">Ou o n&uacute;mero</label>
+                            <input type="text" id="mtg-buscar" class="form-control" placeholder="21202"
+                                   style="font-family: ui-monospace, monospace;"
+                                   onchange="buscarPedidoDaMontagem()"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPedidoDaMontagem();}">
+                        </div>
+
+                        <div class="mtg-campo" style="flex: 1 1 300px; min-width: 0;">
+                            <label for="mtg-modelo">Modelo</label>
+                            <select id="mtg-modelo" class="form-control" onchange="onMontagemModeloChange()" disabled>
+                                <option value="">&mdash;</option>
+                            </select>
+                        </div>
+
+                        <div class="mtg-campo" style="flex: 0 0 200px;">
+                            <label for="mtg-posicoes">Posi&ccedil;&otilde;es</label>
+                            <input type="text" id="mtg-posicoes" class="form-control" placeholder="Ex: 1,6,22"
+                                   style="font-family: ui-monospace, monospace;"
+                                   oninput="onMontagemPosicoesChange()"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarNaMontagem();}">
+                        </div>
+
+                        <button type="button" class="btn btn-primary" id="mtg-add" onclick="adicionarNaMontagem()" disabled>
+                            &#43; Adicionar
+                        </button>
+                    </div>
+
+                    <p class="mtg-dica" id="mtg-dica">
+                        A posi&ccedil;&atilde;o &eacute; a do item <strong>dentro do modelo</strong> &mdash; o 1&ordm;, o 6&ordm;, o 22&ordm; da tiragem, onde quer que ele tenha ca&iacute;do na folha. Faixas valem: <code>1-4</code>.
+                    </p>
+
+                    <!-- A trava: nasce escondida e aparece com a primeira celula. -->
+                    <div id="mtg-trava" class="mtg-trava" style="display:none;"></div>
+
+                    <!-- A recusa, quando o modelo escolhido nao cabe. -->
+                    <div id="mtg-recusa" class="mtg-recusa" style="display:none;"></div>
+                </div>
+
+                <div class="mtg-corpo">
+                    <!-- A lista -->
+                    <div class="card mtg-lista-card">
+                        <div class="card-header" style="margin-bottom: 14px;">
+                            <h2 style="font-size:1.02rem; font-weight:700; margin:0;">C&eacute;lulas na montagem</h2>
+                            <span id="mtg-resumo" style="font-size:0.78rem; color:var(--text-faint);"></span>
+                        </div>
+
+                        <div id="mtg-lista"></div>
+
+                        <div id="mtg-selo" class="selo-sobra" style="margin-top:14px;"></div>
+                    </div>
+
+                    <!-- A previa e as acoes -->
+                    <div class="card mtg-previa-card">
+                        <div class="card-header" style="margin-bottom: 14px;">
+                            <h2 style="font-size:1.02rem; font-weight:700; margin:0;">Folha montada</h2>
+                            <span id="mtg-folha-num" style="font-size:0.75rem; color:var(--text-faint);"></span>
+                        </div>
+
+                        <div id="mtg-previa" class="mtg-previa"></div>
+
+                        <p class="mtg-dica" style="margin-top:12px;">
+                            As c&eacute;lulas enchem a folha <strong>na ordem, sem reservar folha por pedido</strong> &mdash; a arte muda no limite de cada modelo, ent&atilde;o separar &eacute; olhar, n&atilde;o contar.
+                        </p>
+
+                        <div class="mtg-acoes">
+                            <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
+                                &#128196; Gerar PDF da montagem
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="mtg-btn-limpar" onclick="limparMontagem()" disabled>
+                                Limpar montagem
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section id="view-impressoras" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
@@ -3914,6 +4034,7 @@
     <script src="ideal-control.js?v=770"></script>
     <script src="criador-arte.js?v=770"></script>
     <script src="/pedido.js?v=770"></script>
+    <script src="montagem.js?v=770"></script>
     <script src="acabamento.js?v=770"></script>
     <script src="avisos.js?v=770"></script>
 

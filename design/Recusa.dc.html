@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    a { color: #3b82f6; } a:hover { color: #60a5fa; }
+  </style>
+</helmet>
+
+<!-- A regra que decidimos, vista funcionando. O operador tenta juntar uma
+     celula de mesmo FORMATO mas de outra COR: a folha e' de um material so'.
+     A recusa diz o que esta' diferente E o que fazer -- trava sem saida nao
+     serve para nada nesta grafica. -->
+<div style="width: 1000px; height: 470px; padding: 26px 28px; display: flex; flex-direction: column; gap: 16px; background: #0a0f1e; background-image: radial-gradient(ellipse at 0% 0%, rgba(59,130,246,0.08) 0, transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(139,92,246,0.08) 0, transparent 55%); color: #e2e8f0; overflow: hidden;">
+
+  <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;">
+
+    <div style="display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 210px;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Pedido</label>
+        <div style="background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <span>20877</span><span style="color: #475569; font-size: 0.7rem;">▼</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 0;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Modelo</label>
+        <div style="background: rgba(10,15,30,0.6); border: 1px solid #ef4444; border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; box-shadow: 0 0 0 3px rgba(239,68,68,0.12);">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">1000844 · PULSEIRA VIP DOURADA</span><span style="color: #475569; font-size: 0.7rem; flex-shrink: 0;">▼</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 0 0 170px;">
+        <label style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Posições</label>
+        <div style="background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; font-family: ui-monospace, monospace;">9,10</div>
+      </div>
+      <button style="display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; font-family: inherit; border: 1px solid rgba(148,163,184,0.14); cursor: default; background: rgba(255,255,255,0.03); color: #475569;">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+        Adicionar
+      </button>
+    </div>
+
+    <div style="display: flex; gap: 13px; padding: 14px 16px; border-radius: 8px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.32);">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" style="flex-shrink: 0; color: #f87171; margin-top: 1px;"><path fill="currentColor" d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg>
+      <div style="min-width: 0;">
+        <p style="margin: 0 0 7px; font-size: 0.9rem; font-weight: 700; color: #fca5a5; line-height: 1.4;">
+          Este modelo não cabe nesta montagem: <span style="text-decoration: underline; text-underline-offset: 3px;">a cor do material é outra</span>.
+        </p>
+        <p style="margin: 0 0 10px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.55;">
+          O formato bate (Triband 245×20 mm), mas a folha já está em <strong style="font-weight: 600;">Azul Celeste</strong> e este modelo é <strong style="font-weight: 600;">Dourado</strong>. Uma folha é de um material só — as duas cores não saem da mesma passagem pela impressora.
+        </p>
+
+        <div style="display: flex; gap: 22px; flex-wrap: wrap; font-size: 0.78rem;">
+          <div>
+            <div style="color: #475569; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.68rem; margin-bottom: 5px;">A folha aceita</div>
+            <div style="display: flex; flex-direction: column; gap: 3px; color: #94a3b8;">
+              <span>Triband 245×20 mm</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #7dd3fc;"></span>Azul Celeste</span>
+              <span>Saída SRA3 · Só frente</span>
+            </div>
+          </div>
+          <div>
+            <div style="color: #475569; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.68rem; margin-bottom: 5px;">Este modelo</div>
+            <div style="display: flex; flex-direction: column; gap: 3px; color: #94a3b8;">
+              <span>Triband 245×20 mm <span style="color: #22c55e;">✓</span></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; color: #fca5a5;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #fbbf24;"></span>Dourado ✗</span>
+              <span>Saída SRA3 · Só frente <span style="color: #22c55e;">✓</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- A saida. Toda trava desta aplicacao precisa dizer como sair dela. -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+          <button style="display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; font-family: inherit; border: none; cursor: pointer; background: rgba(255,255,255,0.09); color: #e2e8f0;">
+            Começar uma montagem em Dourado
+          </button>
+          <span style="font-size: 0.76rem; color: #64748b;">a montagem atual fica guardada</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin: 0; font-size: 0.76rem; color: #64748b; line-height: 1.5;">
+    Além da cor, a montagem recusa <strong style="color: #94a3b8; font-weight: 600;">formato</strong>, <strong style="color: #94a3b8; font-weight: 600;">saída</strong> e <strong style="color: #94a3b8; font-weight: 600;">face</strong> diferentes — as quatro são impossibilidades físicas da folha. Sequencial × Blocado <em>não</em> impede: a montagem compacta numa folha só, e não há pilha para cortar.
+  </p>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1000,"height":470}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

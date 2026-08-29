@@ -4,6 +4,119 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — Montagem: refazer células de pedidos diferentes numa folha só
+
+> *"vamos criar uma nova página/menu, vai se chamar Montagem, ela será utilizada
+> para refazer células de um mesmo produto (triband, Mobi, pvc, etc...) mesmo
+> quando elas são de pedidos diferentes"*
+
+O **Refazer Célula** da tela do Pedido já repõe o item que estragou: o operador
+digita `1,6,22` e o motor compacta numa folha, sem buraco. O limite é que a folha
+é de **um modelo de um pedido** — e a gráfica não estraga assim. Estraga uma
+célula de um pedido, duas de outro, todas do mesmo Triband, e paga uma folha
+inteira de PVC para repor três cartões.
+
+Tela inteira em [`docs/montagem.md`](montagem.md).
+
+### Nenhum Python mudou, e esse é o achado
+
+Duas coisas já existiam no motor, e a soma delas fez a Montagem ser só de tela:
+
+- **O motor já monta folha com pedidos diferentes** (18/08/2026, o `multi_artes`
+  do aproveitamento de folha). Cada arte carrega o seu `pedido`, e item que chega
+  sem saber de onde veio **levanta erro** em vez de sair com a coluna do pool de
+  outro pedido.
+- **O `refazer_celulas` indexa o `multi_map`** — a lista ordenada dos itens do
+  trabalho inteiro —, e cada entrada carrega `modelo`, `pedido`, `csv_row` e
+  `local_idx` do item **original**.
+
+**E é isso que torna a tela segura.** O código do QR Ideal é
+`indice(pedido, modelo, item)`, determinístico: refazer a posição 6 do modelo X
+do pedido Y devolve **exatamente o mesmo código** do original. A célula refeita
+substitui o ingresso perdido — não cria um segundo ingresso válido para a mesma
+entrada. Sem essa propriedade, esta tela seria uma fábrica de entradas
+duplicadas.
+
+Um teste falha se alguém mexer no `engine.py` por causa desta tela.
+
+### O que a tela faz: traduzir
+
+O operador pensa em *"a posição 6 do modelo 1000565"*; o motor espera posições no
+fluxo combinado, porque monta o `multi_map` arte por arte, cada uma com a **sua
+tiragem inteira**:
+
+```
+1000565  qtd 3000  #1 #6 #22   →  1, 6, 22
+1000589  qtd 1920  #340        →  3000 + 340 = 3340
+1000412  qtd  150  #7          →  4920 + 7   = 4927
+```
+
+> ⚠️ O deslocamento é a **tiragem** do modelo anterior, e não o número de células
+> pedidas dele. Somar 3 em vez de 3.000 imprimiria os itens errados, com os
+> códigos de QR de outros ingressos — descobertos na portaria, com a fila na
+> porta. É a função mais delicada do arquivo, e tem teste próprio.
+
+Pelo mesmo motivo, cada arte leva a **tiragem inteira** no payload: recortar o
+banco seria mais leve e embaralharia todos os índices.
+
+### As regras, decididas com o usuário
+
+Ele abriu o pedido dizendo que a única condição seria o mesmo **formato**.
+Apontado que três das seis conferências do `porQueNaoCombina` são
+**impossibilidade física** — cor (a folha é de um material só), saída (o tamanho
+da folha) e face (o verso existe ou não) —, ele decidiu manter quatro:
+
+| Impede | Não impede |
+|---|---|
+| formato, cor, saída, face | Sequencial × Blocado, modo PDF |
+
+Sequencial × Blocado ficou de fora **de propósito**: ali a ordem das células
+decide como a pilha é cortada, e aqui não há pilha — a montagem compacta numa
+folha, na ordem digitada. Recusar por isso barraria combinação legítima sem
+proteger nada.
+
+Mais três decisões dele: escolher por **pedido → modelo → posições, acumulando**
+(sozinho, "6" é ambíguo entre pedidos); oferecer os pedidos **impressos nos
+últimos 30 dias**, mais busca por número; e **sem senha da gerência** — é
+trabalho normal do operador.
+
+### A tela
+
+Abre **vazia**, e é aí que precisa se explicar: o operador chega com uma folha
+estragada na mão, não com a documentação lida. A **trava do formato nasce
+escondida** e aparece com a primeira célula — não há seletor de formato para
+preencher, a folha passa a dizer o que aceita a partir do que ele já fez. A
+**recusa aparece ao escolher o modelo**, não ao clicar em Adicionar, e diz o que
+fazer além do que está errado. O **selo é o mesmo do Pedido**, com a mesma regra
+de cor.
+
+Adicionar o mesmo modelo duas vezes **soma ao grupo** em vez de criar um segundo:
+duas artes iguais fariam o deslocamento contar aquela tiragem duas vezes.
+
+### Testes
+
+**80 verificações novas** — 42 no núcleo e 38 na tela, desenhada num Chrome de
+verdade.
+
+Vale registrar como método: dois dos testes da tela falharam na primeira
+execução por **erro de conta no próprio teste** — eu somei as bases errado, e o
+código estava certo. Foi o harness corrigindo quem o escreveu, que é exatamente
+para isso que ele serve.
+
+**E a suíte pegou o que faltava para a gráfica receber a tela.** O
+`test_painel_estacao.py` reprovou porque o `montagem.js` não estava na lista de
+sincronismo da estação (`security_config.py`): o `index.html` que a estação baixa
+já pedia o script, e sem o nome ali o menu novo abriria **em branco**, com um 404
+no console. A tela estava pronta e a gráfica não a receberia — mesmo caso do
+`acabamento.js` em 20/08 e do `avisos.js` em 23/08.
+
+**Uma promessa que a tela não cumpria também foi consertada antes de sair.** O
+seletor de pedido dizia *"escolha ou digite o número"*, e um `<select>` não se
+digita. A busca por número — que o usuário escolheu — virou um campo próprio ao
+lado.
+
+---
+
 ## [2026-08-29] — Acabamento da tela do Pedido, e um freio que faltava
 
 Continuação da reforma do dia anterior (v764 a v769), em duas sessões de

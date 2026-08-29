@@ -130,3 +130,8 @@ frontend/user_senha_correios
 
 # Provas visuais que os harness de teste geram ao rodar (nascem de novo a cada vez)
 tests/_*.png
+# A prancheta de desenho: as fontes (.dc.html + canvas.json) sao versionadas,
+# o arquivo montado nao — ele tem 2,4 MB de editor embutido e se refaz do zero
+# a partir das fontes a cada publicacao.
+design/*.html
+!design/*.dc.html

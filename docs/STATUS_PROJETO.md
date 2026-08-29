@@ -72,6 +72,7 @@ pelo esqueleto — **401 em todas**.
 | **O agente da estação** | [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md) |
 | **O banco: tabelas, permissões, regras** | [`REGRAS_BANCO.md`](REGRAS_BANCO.md) |
 | **Tela do Pedido** (escolher modelo, prévia, imprimir) | [`tela_do_pedido.md`](tela_do_pedido.md) |
+| **Montagem** (refazer células de pedidos diferentes) | [`montagem.md`](montagem.md) |
 | **Painel do Acabamento** | [`painel_do_acabamento.md`](painel_do_acabamento.md) |
 | **Lista de Arte / aprovação de arte** | [`lista_de_arte.md`](lista_de_arte.md), [`fluxo_aprovacao_arte.md`](fluxo_aprovacao_arte.md) |
 | **Numerações e o editor** | [`lista_de_numeracoes.md`](lista_de_numeracoes.md), [`editor_de_arte.md`](editor_de_arte.md) |
