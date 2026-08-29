@@ -94,6 +94,53 @@ def test_o_resumo_do_produto_diz_tres_numeros():
     )
 
 
+def test_a_regra_de_paginacao_sai_da_tela_mas_nao_do_documento():
+    """O usuario tirou o seletor da tela em 29/08/2026.
+
+    O ELEMENTO fica: quatorze pontos do pedido.js leem `ped-schema`, e cinco
+    deles sem se proteger -- inclusive dentro do caminho que monta o trabalho
+    para a impressora. Apagar o elemento nao esconderia um controle: quebraria o
+    imprimir. Escondido, o valor continua o de hoje (o padrao do Formato, ou
+    cut_stack quando o modelo tem blocos), entao o que sai no papel nao muda.
+    """
+    html = _ler("frontend/index.html")
+    assert 'id="ped-schema"' in html, (
+        "o seletor foi APAGADO: cinco leituras sem protecao no caminho da "
+        "impressao quebram junto"
+    )
+
+    i = html.index('id="ped-schema"')
+    # o elemento que o embrulha, logo antes
+    antes = html[:i]
+    j = antes.rindex("<div")
+    assert "display: none" in antes[j:], (
+        "a Regra de Paginacao voltou a aparecer na tela do Pedido"
+    )
+
+
+def test_o_formato_do_produto_saiu_do_cabecalho_da_caixa():
+    """Com formato padrao -- o caso normal -- ele nascia desabilitado.
+
+    Servia so' de rotulo: uma caixa cinza escrita "Triband" que ninguem podia
+    mexer. A REGRA continua: o formato do ERP e aplicado a cada modelo pelo
+    `formatoPadraoId`, no proprio renderPedOSQueue.
+    """
+    pedido = _ler("frontend/pedido.js")
+    corpo = pedido[pedido.index("function renderPedOSQueue()"):]
+    corpo = corpo[:corpo.index("\nfunction updatePedImprimirButtonsVisibility")]
+
+    assert "updateBoxFormato" not in corpo, (
+        "o seletor de Formato voltou ao cabecalho do produto"
+    )
+    assert "formatoPadraoId" in corpo, (
+        "a aplicacao do formato padrao do produto sumiu junto com a caixinha -- "
+        "era a caixinha que devia sair, nao a regra"
+    )
+    assert "filtrarFilaPorCor" in corpo, (
+        "o filtro por cor foi junto sem querer"
+    )
+
+
 def test_o_nome_da_tinta_e_legivel_sobre_a_propria_tinta():
     """Era preto fixo sobre a cor do modelo.
 

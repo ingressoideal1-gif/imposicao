@@ -162,6 +162,29 @@ if ($SemFreio) {
                 "Rode: .\venv\Scripts\python.exe -c ""import app, engine, db"" para ver o erro."
     }
     Write-Host "  Motor OK." -ForegroundColor Green
+
+    # 5. O PAINEL ABRE? Erro de sintaxe em qualquer .js do frontend derruba o
+    #    ARQUIVO INTEIRO: o navegador nao carrega nada dele, e a tela morre.
+    #
+    #    Este freio nasceu de um estrago real. Em 28/08/2026 a v765 foi ao ar com
+    #    um `}` a menos no `script.js` — uma edicao que tirava um toast levou
+    #    junto o fechamento de um bloco. O arquivo tem 41 mil linhas e nenhum dos
+    #    freios daqui o lia: rascunho, segredo e "o motor sobe?" olham outra
+    #    coisa, e os testes exercitam PEDACOS do script, nunca o arquivo todo.
+    #    O painel ficou fora do ar ate a v766, tres minutos depois.
+    #
+    #    Custa menos de um segundo e teria pegado aquele erro antes de publicar.
+    Write-Host "  Conferindo se o painel abre..." -ForegroundColor Gray
+    $jsQuebrados = @()
+    foreach ($js in (Get-ChildItem "$raiz\frontend" -Filter *.js -File)) {
+        & node --check $js.FullName 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { $jsQuebrados += $js.Name }
+    }
+    if ($jsQuebrados.Count -gt 0) {
+        Abortar "Erro de sintaxe no frontend: $($jsQuebrados -join ', ') — o arquivo inteiro nao carrega." `
+                "Rode: node --check frontend\$($jsQuebrados[0]) para ver a linha."
+    }
+    Write-Host "  Painel OK." -ForegroundColor Green
 }
 
 # ─── Versao ──────────────────────────────────────────────────────────────────

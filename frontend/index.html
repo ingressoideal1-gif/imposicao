@@ -1414,7 +1414,22 @@
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                                 <span class="card-title"><span class="icon">⚙️</span> Configuração do Pedido</span>
-                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <!-- A REGRA DE PAGINAÇÃO NÃO APARECE MAIS NESTA TELA
+                                     (29/08/2026, pedido do usuário).
+
+                                     O SELETOR CONTINUA AQUI, escondido, e isso não é
+                                     descuido: quatorze pontos do pedido.js leem
+                                     `ped-schema`, e cinco deles SEM se proteger —
+                                     inclusive dentro do caminho que monta o trabalho
+                                     para a impressora. Apagar o elemento não esconderia
+                                     um controle: quebraria o imprimir.
+
+                                     Escondido, o valor continua exatamente o mesmo de
+                                     hoje: o padrão do Formato, ou `cut_stack` quando o
+                                     modelo tem blocos — quem escreve nele é o
+                                     `enviarParaPedido`. O que sai no papel não muda; o
+                                     que sai da tela é a escolha manual. -->
+                                <div style="display: none;">
                                     <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Paginação:</span>
                                     <select class="form-control" id="ped-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updatePedSummary(); togglePedMultiArtes(); togglePedCutStackOptions();">
                                         <option value="sequential">Sequencial</option>

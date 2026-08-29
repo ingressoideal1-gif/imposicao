@@ -3395,12 +3395,32 @@ window.textoLegivelSobre = textoLegivelSobre;
    Isso importa porque a fila se redesenha a CADA clique num modelo, e o clique
    virou um interruptor que o operador usa mais vezes que antes.
 
-   A REDE DE SEGURANCA. Encher no `mousedown` e' a via rapida e funciona em
-   Chrome, Edge e Firefox, mas cada estacao da grafica usa um navegador
-   diferente e um seletor que nao enchesse deixaria o operador sem conseguir
-   trocar a cor — regressao seria. Entao, um segundo e meio depois de a tela
-   assentar, tudo o que ainda estiver vazio se enche sozinho, fora do caminho
-   do clique. A via rapida ganha tempo; a rede garante que nao se perde nada.
+   COMO A LISTA CHEGA, E POR QUE NAO EXISTE MAIS UMA "REDE" QUE ENCHE TUDO.
+
+   A primeira versao disto (28/08/2026) enchia, um segundo e meio depois de
+   cada redesenho, TODOS os seletores que ninguem tivesse aberto — uma rede de
+   seguranca para o caso de algum navegador da grafica nao disparar os eventos.
+   Medida na tela, ela desfazia a propria economia que este bloco existe para
+   fazer:
+
+       encher os 104 seletores de uma vez : 121 ms de interface travada
+       o redesenho SEGUINTE, ja com a fila cheia de novo : 158 ms (contra 44)
+
+   Ou seja: 1,5 s depois de cada clique a fila voltava a ter 8.533 elementos, e
+   o clique seguinte pagava a demolicao deles. O operador via a tela travar.
+
+   Agora a lista chega por CINCO caminhos, todos baratos e nenhum em lote:
+
+     - passar o mouse pela LINHA enche os dois seletores dela (~2 ms). O mouse
+       sempre passa pela linha antes de chegar ao seletor, entao na pratica ela
+       ja esta pronta quando o operador clica;
+     - `mousedown`, `focus`, `keydown` e `touchstart` no proprio seletor, que
+       cobrem teclado, toque e qualquer navegador que nao dispare os outros.
+
+   Encher no `mousedown` de um `<select>` funciona: o evento e' entregue ANTES
+   de o navegador desenhar a lista. E, mesmo que um navegador exotico nao o
+   disparasse, o `focus` chegaria — nenhum navegador abre um seletor sem
+   focar antes.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** As cores que valem para este formato — a mesma regra da linha e do filtro. */
@@ -3448,18 +3468,19 @@ function encherSeletorDaFila(sel) {
 }
 window.encherSeletorDaFila = encherSeletorDaFila;
 
-/** A rede de seguranca: enche o que sobrou, depois que a tela assentou. */
-let _redeDosSeletores = null;
-function encherSeletoresPendentes() {
-    document.querySelectorAll('#ped-os-queue-body select[data-lista]:not([data-cheio="1"])')
+/**
+ * Passar o mouse pela linha prepara os dois seletores dela.
+ *
+ * Custa uns 2 ms e acontece antes do clique — o mouse sempre atravessa a linha
+ * para chegar ao seletor. E' o que substituiu a rede que enchia a fila inteira
+ * em lote e travava a interface por 121 ms. Ver o bloco acima.
+ */
+function encherSeletoresDaLinha(linha) {
+    if (!linha) return;
+    linha.querySelectorAll('select[data-lista]:not([data-cheio="1"])')
         .forEach(encherSeletorDaFila);
 }
-function agendarRedeDosSeletores() {
-    clearTimeout(_redeDosSeletores);
-    // 1,5 s: mais do que a cascata de 400/600/800 ms que a tela usa para
-    // assentar ao abrir um modelo, para nao competir com ela.
-    _redeDosSeletores = setTimeout(encherSeletoresPendentes, 1500);
-}
+window.encherSeletoresDaLinha = encherSeletoresDaLinha;
 
 /** O Refazer (folhas ou celulas) esta ligado? */
 function refazerLigado() {
@@ -4306,10 +4327,11 @@ function renderPedOSQueue() {
     // NAO devolva estes numeros ao tamanho antigo sem devolver o zoom junto.
     const inputStyle = 'background:#030a00; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:6px 8px; font-size:0.96rem; width:100%;';
     const selectStyle = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; color: #ffffff; padding: 6px 9px; font-size: 0.92rem; width: 100%; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; cursor: pointer; text-align: center; text-align-last: center; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: all 0.2s ease;';
-    const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 6px 9px; font-size: 0.92rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600; opacity: 0.6;';
-
+    // Os dois estilos "Disabled" que moravam aqui sairam em 29/08/2026, junto
+    // com o unico controle que os usava: o seletor de Formato do produto, que
+    // nascia desabilitado sempre que o produto tinha formato padrao — o caso
+    // normal — e servia so' de rotulo.
     const selectHeaderStyle = 'background:#1e293b; border:1px solid #918f8c; border-radius:4px; color:#f1f5f9; padding:3px 7px; font-size:0.78rem; cursor:pointer;';
-    const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:3px 7px; font-size:0.78rem; cursor:not-allowed;';
 
     let html = '';
 
@@ -4438,14 +4460,6 @@ function renderPedOSQueue() {
                 return `<option value="${chave}" ${sel} style="${optStyle}">${escHtmlSimples(info.rotulo)} (${info.n})</option>`;
             }).join('');
 
-        const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
-        const fmtHeaderStyle = formatoPadraoId ? selectHeaderStyleDisabled : selectHeaderStyle;
-        
-        const formatosOptions = (state.formatos || []).map(f => {
-            const sel = String(f.id) === String(boxFmtSel) ? 'selected' : '';
-            return `<option value="${f.id}" ${sel}>${f.name}</option>`;
-        }).join('');
-        
         // Os botões "📄 PDF Sel." e "🖨️ Imp. Sel." moravam aqui e saíram em
         // 18/08/2026. Eles chamavam `runImposition` — a função da ABA IMPOSIÇÃO —
         // e pediam de volta um PDF que ela nunca devolve: o `returnBlob` só pula
@@ -4459,12 +4473,23 @@ function renderPedOSQueue() {
         // painel, em "Gerar PDF" e "Imprimir", pelo caminho que a gráfica usa
         // todo dia. Dois caminhos para a mesma coisa foi o que produziu o
         // defeito, e o segundo não tinha nada a mais.
+        // O SELETOR DE FORMATO DO PRODUTO SAIU DAQUI (29/08/2026, pedido do
+        // usuario). Ele so' era editavel quando o produto NAO tinha formato
+        // padrao; com formato padrao — o caso normal — nascia desabilitado e
+        // servia de rotulo, mostrando "Triband" numa caixa cinza que ninguem
+        // podia mexer. O formato continua vindo do ERP e continua sendo aplicado
+        // a cada modelo logo acima, no `formatoPadraoId`; o que saiu foi a
+        // caixinha, nao a regra.
+        //
+        // Os botões "📄 PDF Sel." e "🖨️ Imp. Sel." também moravam aqui e saíram
+        // em 18/08/2026. Eles chamavam `runImposition` — a função da ABA
+        // IMPOSIÇÃO — e pediam de volta um PDF que ela nunca devolve. Com "cada
+        // modelo em folha própria" o motor devolve VÁRIOS arquivos, e só o
+        // primeiro chegava ao operador: marcar dois modelos imprimia um. Não foi
+        // consertado, foi removido: as mesmas duas ações já existem em "Gerar
+        // PDF" e "Imprimir", pelo caminho que a gráfica usa todo dia.
         const headerDropdowns = `
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
-                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
-                    <option value="">— Formato —</option>
-                    ${formatosOptions}
-                </select>
                 <select style="${selectHeaderStyle}" onchange="filtrarFilaPorCor('${chaveDaCaixa}', this.value)" title="Mostrar só os modelos desta cor">
                     <option value="">— Todas as cores —</option>
                     ${coresFiltroOptions}
@@ -4545,7 +4570,7 @@ function renderPedOSQueue() {
                 statusBg = '#090b19'; // Impresso
             }
             if (isSelected || isActive) {
-                statusBg = '#4a26b0'; // Selecionado / Aberto
+                statusBg = '#2c1669'; // Selecionado / Aberto
             }
 
             // O contorno saiu do style inline e virou classe: `marcada` (entra na
@@ -4645,6 +4670,7 @@ function renderPedOSQueue() {
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="${classesDaLinha}" id="ped-queue-row-${item.id}"
                     data-cor-chave="${corDoItem.chave}"
                     data-impresso="${normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso' ? 'sim' : 'nao'}"
+                    onmouseenter="encherSeletoresDaLinha(this)"
                     onclick="alternarModeloAberto('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 6px; width: 34px; text-align: center;">
                         <input type="checkbox" style="width: 16px; height: 16px; cursor: pointer;"
@@ -4792,9 +4818,6 @@ function renderPedOSQueue() {
     // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
 
-    // A rede de seguranca dos seletores: o que o operador nao tiver aberto se
-    // enche sozinho depois que a tela assentar. Ver encherSeletoresPendentes().
-    agendarRedeDosSeletores();
 }
 
 function updatePedImprimirButtonsVisibility() {

@@ -4,6 +4,64 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — Acabamento da tela do Pedido, e um freio que faltava
+
+Continuação da reforma do dia anterior (v764 a v769), em duas sessões de
+trabalho.
+
+### O que mudou na tela
+
+- **Uma escala só, a 100%.** A fila tinha sido desenhada contando com o
+  `zoom: 0.8` que foi removido na véspera, então passou a desenhar 25% maior do
+  que sempre foi — enquanto a janela de visualização, que usa os tamanhos do
+  aplicativo, já estava certa. O usuário descreveu a distorção com precisão: *"ao
+  entrar na tela do pedido ela é melhor representada quando visualizada em 80%,
+  e ao clicar no modelo ele fica melhor representado em 100%"*. Cada medida da
+  fila foi multiplicada por 0,8.
+- **A largura foi repartida.** Qtd, N. inicial, N. final, Bloco e Cor a 65% do
+  que tinham; os 230 px liberados foram para o **nome do modelo** (150 → 380 px),
+  que é por onde o operador reconhece a peça.
+- **Cada modelo virou um quadro**: cantos arredondados e respiro entre um e outro.
+- **O que é daquele modelo desceu para a janela dele**: o selo da sobra ("20
+  folha(s) · 200 itens · a folha fecha certo") foi para o cabeçalho, e as
+  **Opções do modelo** (modo de impressão, imprimir o número) para a coluna
+  esquerda. As duas ficavam no topo da página, longe do modelo de que falavam. As
+  seis fichas de sumário saíram: o selo diz numa frase o que elas diziam em seis.
+- **Cores dos estados** revistas pelo usuário, e a janela passou a alinhar a
+  própria base com a base da tela ao abrir.
+
+### O freio que faltava no `publicar.ps1`
+
+A **v765 foi ao ar com erro de sintaxe no `script.js`** — uma edição que removia
+um *toast* levou junto o `}` de um bloco. Erro de sintaxe derruba o **arquivo
+inteiro**: 41 mil linhas que o navegador não carrega, e o painel morre. A v766
+consertou três minutos depois.
+
+Nenhum freio da publicação lia o frontend: rascunho, segredo e "o motor sobe?"
+olham outra coisa, e os harnesses exercitam **pedaços** do script, nunca o
+arquivo todo. Agora existe o **"Conferindo se o painel abre"** — um
+`node --check` em cada `.js` do frontend, que custa menos de um segundo e teria
+parado aquela publicação. Quatro testes novos travam o freio, e um quinto
+confere que o painel que está na pasta agora passa por ele.
+
+### A rede de segurança dos seletores desfazia a própria economia
+
+O usuário trouxe um INP do navegador: *"Event handlers on this element blocked UI
+updates for 368,6ms"*. Medido, o culpado era a rede que enchia **todos** os 104
+seletores 1,5 s depois de cada redesenho:
+
+| | antes | depois |
+|---|---|---|
+| encher tudo em lote | 121 ms de interface travada | não existe mais |
+| redesenho seguinte (fila já cheia) | 158 ms | 44 ms |
+
+Ela devolvia a fila a 8.533 elementos, e o clique seguinte pagava a demolição
+deles. Saiu. No lugar: **passar o mouse pela linha** prepara os dois seletores
+dela (~2 ms), mais os quatro eventos do próprio seletor (`mousedown`, `focus`,
+`keydown`, `touchstart`), que cobrem teclado, toque e qualquer navegador.
+
+---
+
 ## [2026-08-28] — A tela do Pedido: a janela abre abaixo do modelo
 
 Pedido do usuário: *"o ponto principal é que os modelos após selecionados ficam

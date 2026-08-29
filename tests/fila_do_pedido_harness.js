@@ -42,7 +42,7 @@ const REAIS = ['renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',
-               'encherSeletoresPendentes'];
+               'encherSeletoresDaLinha'];
 
 // ─── O pedido 21202: 52 modelos numa caixa so, o maior real ──────────────────
 function cenario(quantos, comCamarote) {
@@ -124,9 +124,8 @@ function cenario(quantos, comCamarote) {
             function globalFuzzyMatch() { return false; }
             // A rede de seguranca dos seletores nao entra sozinha aqui: cada
             // teste decide quando ela roda, para medir os dois estados.
-            function agendarRedeDosSeletores() {}
             window.encherSeletorDaFila = encherSeletorDaFila;
-            window.encherSeletoresPendentes = encherSeletoresPendentes;
+            window.encherSeletoresDaLinha = encherSeletoresDaLinha;
             renderPedOSQueue();
         `);
     }
@@ -225,6 +224,25 @@ function cenario(quantos, comCamarote) {
        'e ha respiro entre um modelo e o seguinte: as linhas sao quadros, nao uma grade colada',
        quadro);
 
+    // ── 1e. Os dois seletores que sairam da tela ────────────────────────────
+    //
+    // Pedido do usuario em 29/08/2026, com a tela na frente: a "Regra de
+    // Paginacao" e o "Formato" do produto nao aparecem mais aqui.
+    //
+    // O de Formato saiu de vez do desenho: com formato padrao — o caso normal —
+    // ele nascia desabilitado e servia so' de rotulo. A regra continua: o
+    // formato do ERP e' aplicado a cada modelo, no `formatoPadraoId`.
+    const saidos = await aba.evaluate(() => ({
+        formatoNoCabecalho: document.querySelectorAll(
+            '#ped-os-queue-body .card-header select[onchange*="updateBoxFormato"]').length,
+        filtroDeCor: document.querySelectorAll(
+            '#ped-os-queue-body .card-header select[onchange*="filtrarFilaPorCor"]').length,
+    }));
+    ok(saidos.formatoNoCabecalho === 0,
+       'o seletor de Formato saiu do cabecalho do produto', saidos);
+    ok(saidos.filtroDeCor === 1,
+       'e o filtro por cor, que o operador usa de verdade, continua la', saidos);
+
     // ── 2. O cabecalho de coluna existe, e os rotulos sairam das linhas ─────
     const cabecalho = await aba.evaluate(() => {
         const ths = Array.from(document.querySelectorAll('#ped-os-queue-body thead th')).map(t => t.textContent.trim());
@@ -321,18 +339,47 @@ function cenario(quantos, comCamarote) {
     ok(aberto.depois === aberto.antes, 'e a cor escolhida continua escolhida', aberto);
     ok(aberto.pintadas === 18, 'com cada opcao pintada com a propria tinta', aberto);
 
-    // ── 8. A rede de seguranca enche o que ninguem abriu ────────────────────
+    // ── 8. Passar o mouse pela linha ja prepara os seletores dela ───────────
     //
-    // Cada estacao da grafica usa um navegador diferente. Um seletor que nao
-    // enchesse deixaria o operador sem conseguir trocar a cor do modelo.
-    const rede = await aba.evaluate(() => {
-        encherSeletoresPendentes();
-        const vazios = Array.from(document.querySelectorAll('#ped-os-queue-body select[data-lista]'))
-            .filter(s => s.options.length <= 1).length;
-        return { vazios, opcoes: document.querySelectorAll('#ped-os-queue-body option').length };
+    // O mouse sempre atravessa a linha para chegar ao seletor, entao na pratica
+    // a lista ja esta pronta quando o operador clica — sem que nada tenha sido
+    // montado em lote.
+    const hover = await aba.evaluate(() => {
+        const filaAntes = document.querySelectorAll('#ped-os-queue-body option').length;
+        const linha = document.querySelectorAll('#ped-os-queue-body tbody tr.fila-linha')[5];
+        const antes = linha.querySelectorAll('option').length;
+        linha.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+        const depois = linha.querySelectorAll('option').length;
+        const filaDepois = document.querySelectorAll('#ped-os-queue-body option').length;
+        return { antes, depois, cresceuNaLinha: depois - antes, cresceuNaFila: filaDepois - filaAntes };
     });
-    ok(rede.vazios === 0, 'passado o tempo, nenhum seletor fica com a lista pela metade', rede);
-    ok(rede.opcoes > 6000, 'a lista inteira esta la quando o operador precisar dela', rede);
+    ok(hover.antes <= 6 && hover.depois > 120,
+       'passar o mouse pela linha enche os dois seletores dela', hover);
+    ok(hover.cresceuNaFila === hover.cresceuNaLinha,
+       'e SO os dela: nenhuma outra linha e montada de carona — a rede que enchia a fila inteira '
+       + 'travava a interface por 121 ms e devolvia o redesenho seguinte a 158 ms',
+       hover);
+
+    // ── 9. Cada caminho de abrir o seletor enche a lista ────────────────────
+    //
+    // Cada estacao da grafica usa um navegador diferente, e o operador tambem
+    // usa teclado e, no acabamento, toque. Um seletor que nao enchesse deixaria
+    // ele sem conseguir trocar a cor do modelo.
+    for (const [evento, Classe] of [['mousedown', 'MouseEvent'], ['focus', 'FocusEvent'],
+                                    ['keydown', 'KeyboardEvent'], ['touchstart', 'UIEvent']]) {
+        const cheio = await aba.evaluate((ev, cls) => {
+            // uma linha virgem a cada volta
+            const linhas = document.querySelectorAll('#ped-os-queue-body tbody tr.fila-linha');
+            const linha = Array.from(linhas).find(l =>
+                l.querySelectorAll('select[data-lista]:not([data-cheio="1"])').length === 2);
+            if (!linha) return { erro: 'acabaram as linhas virgens' };
+            const s = linha.querySelector('td[title="Numeração"] select');
+            const antes = s.options.length;
+            s.dispatchEvent(new window[cls](ev, { bubbles: true }));
+            return { antes, depois: s.options.length };
+        }, evento, Classe);
+        ok(cheio.depois > 100, `abrir o seletor por ${evento} traz a lista inteira`, cheio);
+    }
 
     await navegador.close();
 

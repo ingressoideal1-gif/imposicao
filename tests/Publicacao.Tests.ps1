@@ -313,6 +313,45 @@ Describe "Confirmacao do publicar.ps1" {
         $motor | Should Not Be -1
         ($motor -lt $conf) | Should Be $true
     }
+
+    It "confere a sintaxe do JavaScript do frontend" {
+        # Nasceu de um estrago real: a v765 (28/08/2026) foi ao ar com um `}` a
+        # menos no script.js e o painel inteiro parou de carregar. Nenhum freio
+        # daqui lia o frontend — os testes exercitam PEDACOS do script, nunca o
+        # arquivo todo.
+        $textoPub | Should Match 'node --check'
+        $textoPub | Should Match 'Conferindo se o painel abre'
+    }
+
+    It "o freio do frontend roda antes da confirmacao" {
+        $painel = $textoPub.IndexOf('Conferindo se o painel abre')
+        $conf   = $textoPub.IndexOf('Publicar? (s/n)')
+        $painel | Should Not Be -1
+        ($painel -lt $conf) | Should Be $true
+    }
+
+    It "o freio do frontend aborta, e nao apenas avisa" {
+        # Um freio que so imprime um aviso nao e freio: a publicacao seguiria.
+        $i = $textoPub.IndexOf('Conferindo se o painel abre')
+        $trecho = $textoPub.Substring($i, 900)
+        $trecho | Should Match 'Abortar'
+    }
+}
+
+Describe "O painel de verdade passa no freio do frontend" {
+    # Nao e' teste do script: e' teste do que esta na pasta AGORA. Se alguem
+    # quebrar um .js do frontend, este teste acusa antes de a publicacao ser
+    # tentada.
+    $raiz = Split-Path -Parent $PSScriptRoot
+
+    It "todo .js do frontend tem sintaxe valida" {
+        $quebrados = @()
+        foreach ($js in (Get-ChildItem "$raiz\frontend" -Filter *.js -File)) {
+            & node --check $js.FullName 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { $quebrados += $js.Name }
+        }
+        ($quebrados -join ', ') | Should Be ''
+    }
 }
 
 Describe "Select-ArquivosDaLeva" {
