@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=763">
-    <script src="pdf-lib.min.js?v=763"></script>
+    <link rel="stylesheet" href="/style.css?v=764">
+    <script src="pdf-lib.min.js?v=764"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -1426,43 +1426,20 @@
                                 </div>
                             </div>
 
-                            <!-- Opcoes que o modelo GUARDA para quando entra numa folha combinada.
-                                 Valem SO com dois ou mais modelos marcados: imprimir um modelo
-                                 sozinho continua decidido pela Regra de Paginacao acima, pelo
-                                 padrao do Formato e pelo campo `blocos` do ERP. Ver
-                                 docs/modelos_somados.md -->
-                            <div id="ped-opcoes-modelo" style="display: none; font-size: 0.82rem; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px 0;">
-                                <div style="font-weight: 600; color: var(--text); margin-bottom: 8px;">
-                                    &#129534; Opcoes do modelo <span id="ped-opcoes-modelo-nome" style="color: var(--blue);"></span>
-                                </div>
-                                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px;">
-                                    <span style="color: var(--text-dim);">Modo de impressao:</span>
-                                    <div style="display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
-                                        <button type="button" class="modo-btn" id="ped-modo-seq" aria-pressed="false" onclick="setModoImpressaoDoModelo('sequencial')" title="A folha enche na ordem, folha a folha. Nao ha pilha para cortar.">Sequencial</button>
-                                        <button type="button" class="modo-btn" id="ped-modo-bloc" aria-pressed="false" onclick="setModoImpressaoDoModelo('blocado')" title="Cut &amp; Stack: corta e empilha, com o tamanho de bloco do modelo.">Blocado</button>
-                                    </div>
-                                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text);">
-                                        <input type="checkbox" id="ped-imprimir-numero" onchange="setImprimirNumeroDoModelo(this.checked)">
-                                        Imprimir o numero do modelo em cada item
-                                    </label>
-                                </div>
-                                <div style="color: var(--text-dim); font-size: 0.76rem; margin-top: 8px;">
-                                    Valem ao imprimir este modelo junto com outros na mesma folha. Sozinho, ele segue a Regra de Paginacao acima.
-                                </div>
-                                <div id="ped-opcoes-modelo-nota" style="display: none; color: var(--amber, #f59e0b); font-size: 0.78rem; margin-top: 6px;"></div>
-                            </div>
+                            <!-- As "Opcoes do modelo" saíram daqui em 29/08/2026.
+                                 Elas falam de UM modelo — nomeavam-no, inclusive — e
+                                 ficavam no topo da página, longe dele, enquanto a janela
+                                 daquele mesmo modelo abre embaixo da linha dele. Foram
+                                 para a coluna esquerda da janela, junto do resto que é
+                                 daquele modelo. Ver docs/modelos_somados.md -->
 
-                            <!-- Quanto papel esta impressao vai deixar vazio.
-                                 FICA AQUI, e nao junto dos botoes de imposicao: na aba Pedido
-                                 aquele trecho inteiro vive dentro de um `display: none !important`
-                                 (a linha do "Upload Arte"), e o operador usa os botoes do
-                                 cabecalho da Pre-visualizacao. Um selo la dentro existe e nunca
-                                 aparece — foi o que aconteceu em 18/08/2026.
+                            <!-- O selo da sobra saiu daqui em 29/08/2026: ele foi para o
+                                 cabecalho da janela de visualizacao, que e' onde a conta
+                                 DESTE modelo pertence. Cuidado ao mexer: ele precisa estar
+                                 num lugar que APARECE. Em 18/08/2026 ele ficou dentro do
+                                 `display: none !important` do formulario antigo, existiu e
+                                 nunca chegou aos olhos de ninguem.
                                  Ver docs/aproveitamento_de_folha.md -->
-                            <div id="ped-sobra-selo" class="selo-sobra" style="margin:0 0 14px 0;">
-                                <span id="ped-sobra-texto" class="selo-sobra-texto"></span>
-                                <button type="button" id="ped-sobra-btn" class="btn btn-sm selo-sobra-btn" style="display:none;" onclick="verAproveitamento()">Ver aproveitamento</button>
-                            </div>
 
                                                         <!-- Modelos combinados: como aproveitar a folha.
                                  So aparece com dois ou mais modelos marcados na fila.
@@ -1625,13 +1602,43 @@
                                 </div>
                             </div>
 
-                            <!-- O Sumário (Formato, Grade, Total, Folhas, Células vazias,
-                                 Saída) saiu daqui em 28/08/2026. Ele estava escondido sem
-                                 querer: mora dentro deste `display:none !important` desde
-                                 que o formulário antigo saiu da tela, então os números da
-                                 imposição não chegavam ao operador. Foi INTEIRO, com os
-                                 mesmos ids, para o cabeçalho da janela de visualização —
-                                 quem escreve neles continua sendo o updatePedSummary. -->
+                            <!-- O SUMÁRIO NÃO APARECE, E ISSO É DE PROPÓSITO (29/08/2026).
+                                 Em 28/08 ele subiu para o cabeçalho da janela como seis
+                                 fichas; no dia seguinte o usuário mandou tirá-las, e com
+                                 razão: o selo da sobra, que ficou no lugar delas, diz numa
+                                 frase o que elas diziam em seis — quantas folhas, quantos
+                                 itens, e se a folha fecha certo.
+                                 ELE CONTINUA AQUI, e não pode ser apagado: o
+                                 `updatePedSummary` escreve nestes ids SEM checar se existem
+                                 (pedido.js), e o `atualizarSeloDeSobra` escreve no
+                                 `ped-sum-vazias`. Apagar o bloco quebra a função inteira, e
+                                 com ela o selo. Escondido, tudo continua calculando. -->
+                            <div class="summary-box" id="ped-summary" style="display:none">
+                                <div class="summary-item">
+                                    <span class="summary-label">Formato</span>
+                                    <span class="summary-value" id="ped-sum-formato">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Grade</span>
+                                    <span class="summary-value" id="ped-sum-grade">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Total de Itens</span>
+                                    <span class="summary-value" id="ped-sum-total">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Folhas Estimadas</span>
+                                    <span class="summary-value" id="ped-sum-folhas">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Celulas vazias</span>
+                                    <span class="summary-value" id="ped-sum-vazias">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Saída</span>
+                                    <span class="summary-value" id="ped-sum-saida">—</span>
+                                </div>
+                            </div>
 
 <!-- Upload Arte -->
                             <div class="file-drop" id="ped-drop-area">
@@ -1690,39 +1697,16 @@
                                     <span id="ped-preview-modelo" style="color: var(--blue);">&mdash;</span>
                                 </span>
 
-                                <!-- Os numeros da imposicao. Este bloco existia e estava
-                                     escondido sem querer: morava dentro de um
-                                     `display:none !important` desde que o formulario antigo
-                                     saiu da tela. O `updatePedSummary` continua sendo quem
-                                     escreve nele — por isso ele veio inteiro, com os mesmos
-                                     ids, em vez de virar um bloco novo. -->
-                                <div class="summary-box ped-janela-chips" id="ped-summary" style="display:none">
-                                    <div class="summary-item">
-                                        <span class="summary-label">Formato</span>
-                                        <span class="summary-value" id="ped-sum-formato">&mdash;</span>
-                                    </div>
-                                    <div class="summary-item">
-                                        <span class="summary-label">Grade</span>
-                                        <span class="summary-value" id="ped-sum-grade">&mdash;</span>
-                                    </div>
-                                    <div class="summary-item">
-                                        <span class="summary-label">Total de Itens</span>
-                                        <span class="summary-value" id="ped-sum-total">&mdash;</span>
-                                    </div>
-                                    <div class="summary-item">
-                                        <span class="summary-label">Folhas Estimadas</span>
-                                        <span class="summary-value" id="ped-sum-folhas">&mdash;</span>
-                                    </div>
-                                    <!-- Quanto papel esta tiragem deixa vazio.
-                                         Ver docs/aproveitamento_de_folha.md -->
-                                    <div class="summary-item">
-                                        <span class="summary-label">Celulas vazias</span>
-                                        <span class="summary-value" id="ped-sum-vazias">&mdash;</span>
-                                    </div>
-                                    <div class="summary-item">
-                                        <span class="summary-label">Sa&iacute;da</span>
-                                        <span class="summary-value" id="ped-sum-saida">&mdash;</span>
-                                    </div>
+                                <!-- QUANTO PAPEL ESTA TIRAGEM DEIXA VAZIO.
+                                     Morava no topo da pagina, acima da fila. Subiu para ca
+                                     em 29/08/2026 porque a conta e' DESTE modelo, e este e'
+                                     o cabecalho dele — e porque diz numa frase o que as seis
+                                     fichas de sumario diziam em seis: quantas folhas, quantos
+                                     itens, e se a folha fecha certo.
+                                     Ver docs/aproveitamento_de_folha.md -->
+                                <div id="ped-sobra-selo" class="selo-sobra" style="margin:0;">
+                                    <span id="ped-sobra-texto" class="selo-sobra-texto"></span>
+                                    <button type="button" id="ped-sobra-btn" class="btn btn-sm selo-sobra-btn" style="display:none;" onclick="verAproveitamento()">Ver aproveitamento</button>
                                 </div>
                             </div>
 
@@ -1783,6 +1767,38 @@
                                         &#127912; AMOSTRA
                                     </label>
                                     <div class="ped-janela-nota">A camada de cor e' so' da tela. Nunca vai ao papel.</div>
+
+                                    <!-- OPCOES DO MODELO — o que ele GUARDA para quando entra
+                                         numa folha combinada. Valem SO com dois ou mais modelos
+                                         marcados: imprimir um modelo sozinho continua decidido
+                                         pela Regra de Paginacao do pedido, pelo padrao do Formato
+                                         e pelo campo `blocos` do ERP. Ver docs/modelos_somados.md
+
+                                         Moravam no topo da pagina, longe do modelo de que
+                                         falavam. O nome do modelo saiu do titulo daqui: o
+                                         cabecalho da janela ja o diz, uma linha acima. -->
+                                    <div id="ped-opcoes-modelo" style="display:none; border-top:1px solid rgba(255,255,255,0.08); padding-top:12px; margin-top:2px;">
+                                        <div class="ped-janela-rotulo" style="margin-bottom:7px;">&#129534; Op&ccedil;&otilde;es do modelo</div>
+
+                                        <div class="ped-janela-controle" style="margin-bottom:9px;">
+                                            <label class="ped-janela-rotulo" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:0.72rem;">Modo de impress&atilde;o</label>
+                                            <div style="display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+                                                <button type="button" class="modo-btn" id="ped-modo-seq" aria-pressed="false" style="flex:1;" onclick="setModoImpressaoDoModelo('sequencial')" title="A folha enche na ordem, folha a folha. Nao ha pilha para cortar.">Sequencial</button>
+                                                <button type="button" class="modo-btn" id="ped-modo-bloc" aria-pressed="false" style="flex:1;" onclick="setModoImpressaoDoModelo('blocado')" title="Cut &amp; Stack: corta e empilha, com o tamanho de bloco do modelo.">Blocado</button>
+                                            </div>
+                                        </div>
+
+                                        <label style="display:flex; align-items:flex-start; gap:7px; cursor:pointer; color:var(--text); font-size:0.76rem; line-height:1.35;">
+                                            <input type="checkbox" id="ped-imprimir-numero" onchange="setImprimirNumeroDoModelo(this.checked)" style="margin-top:1px; flex:0 0 auto;">
+                                            <span>Imprimir o n&uacute;mero do modelo em cada item</span>
+                                        </label>
+
+                                        <div class="ped-janela-nota" style="margin-top:8px;">
+                                            Valem ao imprimir este modelo junto com outros na mesma folha.
+                                            Sozinho, ele segue a Regra de Pagina&ccedil;&atilde;o do pedido, no topo da tela.
+                                        </div>
+                                        <div id="ped-opcoes-modelo-nota" style="display:none; color:var(--amber, #f59e0b); font-size:0.72rem; line-height:1.35; margin-top:6px;"></div>
+                                    </div>
                                 </div>
 
                                 <!-- ── CENTRO: a previa, com o espaco inteiro ─────────────── -->
@@ -3792,44 +3808,44 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=763"></script>
-    <script src="/supabase-config.js?v=763"></script>
-    <script src="mapas.js?v=763"></script>
-    <script src="cor-numeracao-do-modelo.js?v=763"></script>
+    <script src="/banco-nao-responde.js?v=764"></script>
+    <script src="/supabase-config.js?v=764"></script>
+    <script src="mapas.js?v=764"></script>
+    <script src="cor-numeracao-do-modelo.js?v=764"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=763"></script>
-    <script src="logo-do-frete.js?v=763"></script>
+    <script src="banco-do-modelo.js?v=764"></script>
+    <script src="logo-do-frete.js?v=764"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=763"></script>
-    <script src="arte-de-impressao.js?v=763"></script>
-    <script src="qr-canvas.js?v=763"></script>
-    <script src="barcode-canvas.js?v=763"></script>
+    <script src="pagamento-do-pedido.js?v=764"></script>
+    <script src="arte-de-impressao.js?v=764"></script>
+    <script src="qr-canvas.js?v=764"></script>
+    <script src="barcode-canvas.js?v=764"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=763"></script>
-    <script src="fonte-canvas.js?v=763"></script>
+    <script src="numero-da-pagina.js?v=764"></script>
+    <script src="fonte-canvas.js?v=764"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=763"></script>
-    <script src="fonte-nome.js?v=763"></script>
-    <script src="qr-ideal-colunas.js?v=763"></script>
-    <script src="csv-editor.js?v=763"></script>
-    <script src="amostra-modal.js?v=763"></script>
-    <script src="texto-ajuste.js?v=763"></script>
-    <script src="foto-lib.js?v=763"></script>
-    <script src="gerenciador-fotos.js?v=763"></script>
-    <script src="editor-foto.js?v=763"></script>
-    <script src="script.js?v=763"></script>
-    <script src="ideal-control.js?v=763"></script>
-    <script src="criador-arte.js?v=763"></script>
-    <script src="/pedido.js?v=763"></script>
-    <script src="acabamento.js?v=763"></script>
-    <script src="avisos.js?v=763"></script>
+    <script src="fonte-glifos.js?v=764"></script>
+    <script src="fonte-nome.js?v=764"></script>
+    <script src="qr-ideal-colunas.js?v=764"></script>
+    <script src="csv-editor.js?v=764"></script>
+    <script src="amostra-modal.js?v=764"></script>
+    <script src="texto-ajuste.js?v=764"></script>
+    <script src="foto-lib.js?v=764"></script>
+    <script src="gerenciador-fotos.js?v=764"></script>
+    <script src="editor-foto.js?v=764"></script>
+    <script src="script.js?v=764"></script>
+    <script src="ideal-control.js?v=764"></script>
+    <script src="criador-arte.js?v=764"></script>
+    <script src="/pedido.js?v=764"></script>
+    <script src="acabamento.js?v=764"></script>
+    <script src="avisos.js?v=764"></script>
 
 
 

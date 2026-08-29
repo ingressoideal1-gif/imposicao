@@ -81,22 +81,56 @@ def test_o_refazer_devolve_o_imprimir_a_um_modelo_ja_impresso():
     )
 
 
-def test_os_numeros_da_imposicao_voltaram_a_aparecer():
-    """O sumario estava escondido sem querer.
+def test_o_que_e_daquele_modelo_mora_na_janela_dele():
+    """Duas caixas falavam de UM modelo e ficavam no topo da pagina.
 
-    Formato, Grade, Total, Folhas Estimadas, Celulas vazias e Saida moravam
-    dentro de um `display:none !important` desde que o formulario antigo saiu da
-    tela -- o `updatePedSummary` escrevia neles e ninguem via. Foram para o
-    cabecalho da janela, com os mesmos ids.
+    O selo da sobra ("20 folha(s), 200 itens, a folha fecha certo") e as
+    "Opcoes do modelo" -- que ate nomeavam a peca -- moravam acima da fila,
+    longe da linha clicada e do desenho que descrevem. Em 29/08/2026 desceram
+    para a janela daquele modelo, a pedido do usuario: o selo no cabecalho, as
+    opcoes na coluna esquerda.
     """
     html = _ler("frontend/index.html")
-    janela = html[html.index('id="ped-preview-card-container"'):html.index("</div><!-- /ped-preview-home -->")]
-    for campo in ("ped-sum-formato", "ped-sum-grade", "ped-sum-folhas",
-                  "ped-sum-vazias", "ped-sum-saida"):
-        assert 'id="' + campo + '"' in janela, campo + " nao esta na janela"
-    assert html.count('id="ped-summary"') == 1, (
-        "sobrou mais de um #ped-summary: o getElementById pegaria o errado"
+    i = html.index('id="ped-preview-card-container"')
+    janela = html[i:html.index("</div><!-- /ped-preview-home -->")]
+
+    for campo in ("ped-sobra-selo", "ped-sobra-texto", "ped-sobra-btn",
+                  "ped-opcoes-modelo", "ped-modo-seq", "ped-modo-bloc",
+                  "ped-imprimir-numero", "ped-opcoes-modelo-nota"):
+        assert 'id="' + campo + '"' in janela, campo + " nao esta na janela do modelo"
+        assert html.count('id="' + campo + '"') == 1, (
+            "sobrou mais de um #" + campo + ": o getElementById pegaria o errado"
+        )
+
+    assert 'id="ped-opcoes-modelo-nome"' not in html, (
+        "o nome do modelo voltou para dentro das Opcoes: o cabecalho da janela "
+        "ja o diz uma linha acima"
     )
+
+
+def test_o_sumario_continua_no_documento_mesmo_sem_aparecer():
+    """As seis fichas sairam da tela, mas NAO podem sair do documento.
+
+    O selo da sobra diz numa frase o que elas diziam em seis, e o usuario
+    mandou tira-las. Mas o `updatePedSummary` escreve nestes ids sem checar se
+    existem, e o `atualizarSeloDeSobra` escreve no `ped-sum-vazias`: apagar o
+    bloco quebra a funcao inteira -- e, com ela, o proprio selo que ficou no
+    lugar dela.
+    """
+    html = _ler("frontend/index.html")
+    assert html.count('id="ped-summary"') == 1, "o sumario sumiu do documento"
+
+    i = html.index('id="ped-preview-card-container"')
+    janela = html[i:html.index("</div><!-- /ped-preview-home -->")]
+    assert 'id="ped-summary"' not in janela, (
+        "as seis fichas voltaram para o cabecalho da janela"
+    )
+
+    for campo in ("ped-sum-formato", "ped-sum-grade", "ped-sum-total",
+                  "ped-sum-folhas", "ped-sum-vazias", "ped-sum-saida"):
+        assert 'id="' + campo + '"' in html, (
+            campo + " foi apagado: o updatePedSummary escreve nele sem se proteger"
+        )
 
 
 def test_o_cancelar_impressao_saiu_do_bloco_escondido():

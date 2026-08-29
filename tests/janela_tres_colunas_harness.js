@@ -77,9 +77,11 @@ const CONTROLES = [
     'ped-print-cor-upload', 'ped-print-cor-status', 'ped-cor-saturacao', 'ped-cor-brilho',
     'ped-cor-contraste', 'ped-cor-curva-canvas', 'ped-cor-previa-antes', 'ped-cor-previa-depois',
     'ped-cor-canal-master', 'ped-cor-canal-r', 'ped-cor-canal-g', 'ped-cor-canal-b',
-    // os numeros da imposicao, que estavam escondidos sem querer
-    'ped-summary', 'ped-sum-formato', 'ped-sum-grade', 'ped-sum-total',
-    'ped-sum-folhas', 'ped-sum-vazias', 'ped-sum-saida',
+    // quanto papel a tiragem deixa vazio, e o atalho para o aproveitamento
+    'ped-sobra-selo', 'ped-sobra-texto', 'ped-sobra-btn',
+    // as opcoes que o modelo guarda para a folha combinada
+    'ped-opcoes-modelo', 'ped-modo-seq', 'ped-modo-bloc', 'ped-imprimir-numero',
+    'ped-opcoes-modelo-nota',
 ];
 
 (async function () {
@@ -136,6 +138,34 @@ const CONTROLES = [
     });
     ok(cabecalho.altura < cabecalho.alturaTitulo * 2.4,
        'o cabecalho tem uma linha so — nao voltou a empilhar botoes e controles', cabecalho);
+
+    // ── 3b. O que e' DAQUELE modelo mora na janela dele ─────────────────────
+    //
+    // Duas caixas moravam no topo da pagina, acima da fila, falando de UM
+    // modelo — o selo da sobra e as "Opcoes do modelo", que ate nomeavam a
+    // peca. Ficavam longe da linha clicada e do desenho que descrevem.
+    const doModelo = await aba.evaluate(() => {
+        const dentro = (filho, pai) => {
+            const f = document.getElementById(filho);
+            const p = document.querySelector(pai);
+            return !!(f && p && p.contains(f));
+        };
+        return {
+            seloNoCabecalho: dentro('ped-sobra-selo', '.ped-janela-cabecalho'),
+            opcoesNaEsquerda: dentro('ped-opcoes-modelo', '.ped-janela-esquerda'),
+            // O cabecalho ja diz de que modelo se trata: repetir o nome dentro
+            // das Opcoes era a mesma informacao duas vezes na mesma caixa.
+            nomeUmaVezSo: document.querySelectorAll('#ped-opcoes-modelo-nome').length === 0,
+            // As seis fichas de sumario sairam: o selo diz numa frase o que elas
+            // diziam em seis. Mas nao podem ter sido APAGADAS do documento — o
+            // updatePedSummary escreve nelas sem checar se existem.
+            fichasForaDaJanela: !document.getElementById('ped-summary'),
+        };
+    });
+    ok(doModelo.seloNoCabecalho, 'o selo da sobra fica no cabecalho da janela do modelo', doModelo);
+    ok(doModelo.opcoesNaEsquerda, 'e as Opcoes do modelo, na coluna esquerda', doModelo);
+    ok(doModelo.nomeUmaVezSo, 'sem repetir o nome do modelo, que o cabecalho ja diz', doModelo);
+    ok(doModelo.fichasForaDaJanela, 'e as seis fichas de sumario sairam da janela', doModelo);
 
     // ── 4. Os quatro grupos, na ordem, e so o primeiro aberto ───────────────
     const grupos = await aba.evaluate(() =>

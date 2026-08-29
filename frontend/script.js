@@ -19261,6 +19261,11 @@ function atualizarOpcoesDoModelo() {
 
         if (!item) return;
 
+        // O `if` nao e' defensividade a toa: desde 29/08/2026 a caixa da tela de
+        // PEDIDO nao tem mais o `-nome`. Ela desceu para dentro da janela de
+        // visualizacao, cujo cabecalho ja diz de que modelo se trata, uma linha
+        // acima — repetir o nome ali era a mesma informacao duas vezes na mesma
+        // caixa. A da aba Imposicao continua com o dela.
         const elNome = document.getElementById(ids[1]);
 
         if (elNome) elNome.textContent = titulo;
