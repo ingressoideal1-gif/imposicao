@@ -39955,10 +39955,10 @@ function _aplicarEstadoHotFolder() {
     const hint = document.getElementById('ped-driver-hint');
     if (hint && ativo) hint.style.display = 'none';
 
-    // Sem impressora escolhida o botao de salvar fica escondido; no hot folder
-    // ele precisa aparecer, senao a pasta nunca e gravada para o produto.
-    const secaoSalvar = document.getElementById('ped-print-save-section');
-    if (secaoSalvar && ativo && _getActiveProductInfo()) secaoSalvar.style.display = 'block';
+    // O remendo que forcava o botao de salvar a aparecer no modo hot folder saiu
+    // em 29/08/2026: o SALVAR virou rodape fixo da coluna e nao se esconde mais,
+    // nem sem impressora nem sem pasta. Quem cuida do estado dele e' o
+    // _updateSaveButtonLabel().
 }
 
 // O navegador nao enxerga o disco da estacao: quem abre o seletor e o agente.
@@ -40384,18 +40384,34 @@ function _getActiveProductInfo() {
     return { prodId: String(prodId), prodNome };
 }
 
+/**
+ * O rodape do box da direita: o botao SALVAR e a nota que diz o que ele grava.
+ *
+ * O BOTAO NAO SE ESCONDE MAIS. Ate 29/08/2026 esta funcao apagava a secao
+ * inteira quando nao havia produto ativo, e a secao morava dentro do grupo
+ * "Configuracao de Impressao", que nasce fechado. Somando as duas coisas, o
+ * operador praticamente nunca via o botao — e a configuracao de impressao da
+ * estacao se perdia ao trocar de pedido, porque ninguem a gravava.
+ *
+ * Sem produto ativo ele fica na tela, DESABILITADO, com a nota dizendo o que
+ * falta. Toda trava desta aplicacao precisa mostrar a saida na propria tela.
+ */
 function _updateSaveButtonLabel() {
     const info = _getActiveProductInfo();
-    const label = document.getElementById('ped-print-save-label');
     const section = document.getElementById('ped-print-save-section');
-    if (!info || !label) {
-        if (section) section.style.display = 'none';
-        return;
-    }
-    // Truncar nome do produto se muito longo
-    const shortName = info.prodNome.length > 25 ? info.prodNome.substring(0, 22) + '...' : info.prodNome;
-    label.textContent = `Salvar para "${shortName}"`;
-    if (section) section.style.display = 'block';
+    const btn = document.getElementById('ped-print-save-btn');
+    const nota = document.getElementById('ped-print-save-nota');
+
+    if (section) section.style.display = 'flex';
+    if (btn) btn.disabled = !info;
+    if (!nota) return;
+
+    nota.innerHTML = info
+        ? `Guarda nesta esta&ccedil;&atilde;o, para <b style="color:#cbd5e1;">${escapeHtml(info.prodNome)}</b>, `
+          + 'a pasta observada, a configura&ccedil;&atilde;o de impress&atilde;o, a entrega por bloco '
+          + 'e o gerenciamento de cores.'
+        : 'Este modelo n&atilde;o tem produto do ERP, ent&atilde;o n&atilde;o h&aacute; a quem '
+          + 'atribuir a configura&ccedil;&atilde;o. Abra um modelo vindo do pedido para grav&aacute;-la.';
 }
 
 // URL do agente desta maquina. Sempre 127.0.0.1: a configuracao de impressao e
@@ -40434,6 +40450,16 @@ async function savePrintConfigForProduct() {
         print_mode: document.getElementById('ped-print-engine-mode')?.value || 'gdi',
         impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
         folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true,
+
+        // A ENTREGA POR BLOCO, que tambem mora nesta coluna.
+        //
+        // Ela ja se grava sozinha no MODELO (`pedidos_modelos.entregar_por_bloco`,
+        // ver onPedEntregarPorBlocoToggle no pedido.js), e continua sendo o modelo
+        // quem decide na hora de abrir. Aqui ela e' REGISTRO do que esta estacao
+        // usa para o produto — nunca uma segunda fonte que possa discordar do
+        // modelo, e por isso o _applyPrintConfig nao a aplica de volta na caixa.
+        entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true,
+
         updated_at: new Date().toISOString()
     };
 
@@ -40459,7 +40485,28 @@ async function savePrintConfigForProduct() {
         const data = await resp.json();
         if (!data.ok) throw new Error(data.detail || 'o agente recusou a gravação');
 
-        toast(`✅ Configuração salva nesta estação para "${info.prodNome}"`, 'success');
+        // 4. O GERENCIAMENTO DE CORES, que e' do mesmo box da direita.
+        //
+        //    Ele ja se grava a cada mexida nos controles, mas quem aperta SALVAR
+        //    espera que TUDO o que esta na coluna tenha sido gravado — e uma
+        //    gravacao anterior pode ter falhado com o agente fora do ar.
+        //
+        //    Vale por IMPRESSORA, e nao por produto: perfil .icm, intento e
+        //    curvas sao ajuste fisico do equipamento. Duplicar isso na config do
+        //    produto criaria duas fontes que discordam, e quem descobriria a
+        //    divergencia seria o operador, olhando o papel.
+        let recadoCor = '';
+        if (printerSel?.value) {
+            try {
+                await salvarCorImpressora();
+                recadoCor = ` Cores gravadas para a impressora "${printerSel.value}".`;
+            } catch (e) {
+                console.warn('[printConfig] cores nao gravadas:', e);
+                recadoCor = ' As cores desta impressora nao puderam ser gravadas.';
+            }
+        }
+
+        toast(`✅ Configuração salva nesta estação para "${info.prodNome}".${recadoCor}`, 'success');
     } catch (e) {
         // Falha aqui era engolida num console.warn e o operador via "salva
         // localmente", achando que tinha dado certo — some ao trocar de pedido.
@@ -40595,6 +40642,15 @@ async function _applyPrintConfig(config) {
 
                 const chkSheet = document.getElementById('ped-print-sheet-by-sheet');
                 if (chkSheet) chkSheet.checked = !!(config.folha_a_folha || config.sheet_by_sheet);
+
+                // O `config.entregar_por_bloco` E' LIDO DE PROPOSITO POR NINGUEM.
+                //
+                // O SALVAR o grava (e' um controle desta coluna, e quem aperta o
+                // botao espera que ele tenha sido gravado), mas quem decide a
+                // caixa ao abrir o modelo continua sendo `pedidos_modelos`, no
+                // carregarPedidoNaTela do pedido.js. Aplica-lo aqui poria duas
+                // fontes disputando a mesma caixa, com um setTimeout de 800 ms de
+                // cada lado decidindo quem escreve por ultimo.
 
                 // Mostrar indicador visual
                 const indicator = document.getElementById('ped-print-saved-indicator');

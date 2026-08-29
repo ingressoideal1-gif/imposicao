@@ -2016,16 +2016,12 @@
 
                                                 </div><!-- /ped-driver-options -->
 
-                                                <!-- Botao Salvar Config do Produto -->
-                                                <div id="ped-print-save-section" style="display:none;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
-                                                    <div id="ped-print-saved-indicator" style="display:none;padding:6px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);margin-bottom:8px;">
-                                                        <span style="font-size:0.72rem;color:#22c55e;">&#10003; Config carregada automaticamente</span>
-                                                    </div>
-                                                    <button id="ped-print-save-btn" onclick="savePrintConfigForProduct()" style="width:100%;padding:9px 14px;background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700;box-shadow:0 3px 10px rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;gap:6px;">
-                                                        <span>&#128190;</span>
-                                                        <span id="ped-print-save-label">Salvar Config</span>
-                                                    </button>
-                                                </div>
+                                                <!-- O botao SALVAR saiu daqui em 29/08/2026.
+                                                     Ele morava no fim DESTE grupo, que nasce fechado,
+                                                     e so' aparecia depois de escolher impressora: na
+                                                     pratica o operador nao o via, e a configuracao da
+                                                     estacao se perdia ao trocar de pedido. Virou o
+                                                     rodape do box inteiro, no fim da coluna. -->
 
                                                 <!-- Aviso quando nao ha impressora selecionada -->
                                                 <div id="ped-driver-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#475569;padding:10px;gap:8px;">
@@ -2186,6 +2182,33 @@
                                             <div id="ped-refazer-acoes" style="display:none;margin-top:10px;font-size:0.72rem;line-height:1.4;color:#fbbf24;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:6px 8px;">
                                                 Use <b>Gerar PDF</b> ou <b>Imprimir</b>, no grupo de cima: com o Refazer ligado, eles valem para a faixa escolhida aqui.
                                             </div>
+                                        </div>
+                                    </div>
+
+
+                                    <!-- ── O SALVAR DE TODO O BOX ──────────────────────────
+                                         Rodape da coluna: fica colado no fim dela, visivel com
+                                         todos os grupos FECHADOS — que e' como a janela abre.
+
+                                         Ele grava, para o PRODUTO e nesta estacao, o que os
+                                         grupos acima ajustam: a pasta observada, a configuracao
+                                         do driver, a entrega por bloco e o gerenciamento de
+                                         cores. Quem faz isso e' o savePrintConfigForProduct().
+
+                                         Nao se esconde mais. Sem produto ativo ele fica na
+                                         tela, apagado, e a nota abaixo diz o que falta: trava
+                                         sem saida ja custou caro nesta tela. -->
+                                    <div class="jg-rodape" id="ped-print-save-section">
+                                        <div id="ped-print-saved-indicator" style="display:none;padding:6px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);">
+                                            <span style="font-size:0.72rem;color:#22c55e;">&#10003; Config carregada automaticamente</span>
+                                        </div>
+                                        <button id="ped-print-save-btn" class="jg-salvar" onclick="savePrintConfigForProduct()" title="Grava nesta esta&ccedil;&atilde;o, para este produto, tudo o que est&aacute; ajustado nesta coluna.">
+                                            <span>&#128190;</span>
+                                            <span id="ped-print-save-label">SALVAR</span>
+                                        </button>
+                                        <div class="ped-janela-nota" id="ped-print-save-nota">
+                                            Guarda nesta esta&ccedil;&atilde;o a pasta observada, a configura&ccedil;&atilde;o de impress&atilde;o,
+                                            a entrega por bloco e o gerenciamento de cores.
                                         </div>
                                     </div>
 

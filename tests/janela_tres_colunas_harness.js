@@ -75,6 +75,7 @@ const CONTROLES = [
     'ped-print-paper', 'ped-print-duplex', 'ped-print-color',
     'ped-print-copies', 'ped-print-orientation',
     'ped-print-save-section', 'ped-print-save-btn', 'ped-print-saved-indicator',
+    'ped-print-save-label', 'ped-print-save-nota',
     // gerenciamento de cores
     'ped-print-cor-box', 'ped-print-cor-ativo', 'ped-print-cor-perfil', 'ped-print-cor-intento',
     'ped-print-cor-upload', 'ped-print-cor-status', 'ped-cor-saturacao', 'ped-cor-brilho',
@@ -209,6 +210,47 @@ const CONTROLES = [
     ok(selo.grupoFechado && selo.seloNaTela,
        'com o grupo de cores FECHADO, o selo que diz "ha conversao de cor ligada" continua na tela', selo);
 
+    // ── 6b. O SALVAR e' o rodape do box, e nao se esconde ───────────────────
+    //
+    // Ele morava DENTRO do grupo "Configuracao de Impressao" (que nasce
+    // fechado) e nascia com display:none, so' aparecendo depois de escolher
+    // impressora. Somando as duas coisas, o operador praticamente nunca o via
+    // — e a configuracao de impressao da estacao se perdia ao trocar de pedido.
+    //
+    // Este teste trava as tres coisas que o consertaram: ele esta FORA dos
+    // grupos, esta VISIVEL com todos eles fechados, e fica no FIM da coluna.
+    const salvar = await aba.evaluate(() => {
+        const sec = document.getElementById('ped-print-save-section');
+        const btn = document.getElementById('ped-print-save-btn');
+        const direita = document.querySelector('.ped-janela-direita');
+        const grupos = Array.from(document.querySelectorAll('.ped-janela-direita .jg'));
+        const r = btn.getBoundingClientRect();
+        const ultimo = grupos[grupos.length - 1].getBoundingClientRect();
+        return {
+            foraDosGrupos: !grupos.some(g => g.contains(sec)),
+            naColuna: direita.contains(sec),
+            visivel: r.height > 0 && r.width > 0,
+            abaixoDoUltimoGrupo: r.top >= ultimo.top,
+            gruposFechados: grupos.slice(1).every(g =>
+                document.getElementById(g.id + '-corpo').getBoundingClientRect().height === 0),
+            rotulo: (document.getElementById('ped-print-save-label').textContent || '').trim(),
+        };
+    });
+    ok(salvar.foraDosGrupos && salvar.naColuna,
+       'o SALVAR fica na coluna das acoes, fora dos grupos que abrem e fecham', salvar);
+    ok(salvar.gruposFechados && salvar.visivel,
+       'e continua na tela com todos os grupos fechados — que e como a janela abre', salvar);
+    ok(salvar.abaixoDoUltimoGrupo, 'no rodape da coluna, abaixo do ultimo grupo', salvar);
+    ok(salvar.rotulo === 'SALVAR', 'com o rotulo SALVAR', salvar);
+
+    // O rodape cobre os grupos que rolam por baixo dele: fundo transparente
+    // deixaria o texto de um grupo aparecer atras do botao.
+    const fundoRodape = await aba.evaluate(() => {
+        const bg = getComputedStyle(document.getElementById('ped-print-save-section')).backgroundColor;
+        const m = bg.match(/[\d.]+/g) || [];
+        return { bg, opaco: m.length < 4 || parseFloat(m[3]) === 1 };
+    });
+    ok(fundoRodape.opaco, 'o rodape tem fundo opaco — os grupos rolam por baixo dele', fundoRodape);
     // ── 7. Tela estreita: a previa nao encolhe, as acoes e que descem ───────
     await aba.setViewport({ width: 1280, height: 900 });
     await new Promise(r => setTimeout(r, 60));

@@ -4329,6 +4329,52 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     border-radius: 999px; padding: 1px 7px;
 }
 
+/* ─── O rodape do box: o SALVAR de tudo o que os grupos ajustam ──────────
+
+   Ele guarda, para o produto e nesta estacao, a configuracao FISICA da maquina
+   — impressora, bandeja, papel, pasta observada, perfil de cor. Ate 29/08/2026
+   morava no fim do grupo "Configuracao de Impressao", que nasce fechado: o
+   operador nao o via, e a configuracao se perdia ao trocar de pedido.
+
+   `sticky`, e nao um bloco comum no fim do fluxo, de proposito. A coluna rola
+   (`overflow-y: auto` com `max-height: 78vh`) e, com dois ou tres grupos
+   abertos, o fim dela sai da tela — um botao no fim do fluxo voltaria a ficar
+   escondido, so' que por outro motivo. Colado no rodape, ele esta sempre a um
+   clique.
+
+   O fundo e' opaco de proposito: os grupos rolam POR BAIXO dele. #1b2537 e' a
+   cor que o `var(--card)` translucido produz sobre o `var(--bg)` da pagina —
+   qualquer transparencia aqui deixaria o texto de um grupo aparecer atras do
+   botao. */
+.jg-rodape {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 0 4px;
+    background: #1b2537;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    z-index: 5;
+}
+.jg-salvar {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 14px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border: none; border-radius: 8px; color: #fff;
+    font-size: 0.9rem; font-weight: 800; letter-spacing: 0.06em;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(99, 102, 241, 0.35);
+    transition: filter var(--transition);
+}
+.jg-salvar:hover:not(:disabled) { filter: brightness(1.1); }
+/* Sem produto ativo nao ha o que gravar. O botao continua na tela, apagado, e a
+   nota abaixo dele diz o que falta — sumir com o controle foi justamente o que
+   fez o operador nunca encontrar este botao. */
+.jg-salvar:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
 @media (max-width: 1500px) {
     /* Tela estreita: a coluna das acoes desce para baixo da previa em vez de
        espremer as duas. A previa e' a que nao pode encolher. */
