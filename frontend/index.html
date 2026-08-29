@@ -62,131 +62,134 @@
                 </button>
             </div>
 
-            <span class="nav-group-label">Configuração</span>
+            <!-- ── MENU EM GRUPOS (29/08/2026) ───────────────────────────────────
+                 Antes eram vinte botoes num rolo so, mais alto do que qualquer tela da
+                 grafica: o menu rolava. Agora cada grupo abre e fecha, e quem decide
+                 qual fica aberto e a tela em que o operador esta -- nao a ultima que
+                 ele clicou. Quem faz isso e o bloco "MENU EM GRUPOS" do script.js.
 
-            <button class="nav-btn" data-view="view-formatos" id="nav-formatos">
-                <span class="nav-icon">📐</span>
-                Formatos
+                 As tres duplas editor+lista (Formatos, Numeracao e Cores) viraram uma
+                 entrada so, que abre a LISTA. O editor continua existindo e continua
+                 sendo alcancado pelo botao "+ Novo" de dentro da lista; e por isso que
+                 view-formatos, view-numeracao e view-cores nao tem mais botao proprio
+                 aqui, e acendem o botao da lista pelo NAV_DA_VIEW do script.js.
+
+                 A contagem ao lado do nome do grupo e escrita pelo JS a partir dos
+                 botoes VISIVEIS: quem nao tem permissao para uma tela nao pode ver o
+                 numero contando com ela. -->
+            <button type="button" class="nav-group" data-grupo="configuracao" aria-expanded="false">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.2h8.2M15.3 6.2h1.7M3 13.8h1.7M8.8 13.8H17"/><circle cx="13.2" cy="6.2" r="1.9"/><circle cx="6.7" cy="13.8" r="1.9"/></svg>
+                <span class="nav-group-nome">Configuração</span>
+                <span class="nav-group-conta"></span>
+                <svg class="nav-group-seta" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.8 5 12.8 10l-5 5"/></svg>
             </button>
+            <div class="nav-group-corpo" data-grupo-corpo="configuracao">
+                <button class="nav-btn" data-view="view-lista-formatos" id="nav-lista-formatos">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.8V3.4h3.4M17 6.8V3.4h-3.4M3 13.2v3.4h3.4M17 13.2v3.4h-3.4"/><rect x="6.6" y="6.6" width="6.8" height="6.8" rx="1"/></svg>
+                    Formatos
+                    <span class="nav-badge" id="badge-formatos">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-catalogo" id="nav-catalogo">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 3 6 17M14 3l-1.4 14M3.6 7.6h13.4M3 12.4h13.4"/></svg>
+                    Numerações
+                    <span class="nav-badge" id="badge-numeracao">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-mapas" id="nav-mapas">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.2 8.6V6.2a1.6 1.6 0 0 1 1.6-1.6h8.4a1.6 1.6 0 0 1 1.6 1.6v2.4"/><path d="M3.2 8.6h13.6a1 1 0 0 1 1 1v3.5H2.2V9.6a1 1 0 0 1 1-1Z"/><path d="M5 13.1v2.3M15 13.1v2.3"/></svg>
+                    Mapas de Teatro
+                    <span class="nav-badge" id="badge-mapas">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-saidas" id="nav-saidas">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.6 2.6h6l5 5v9.8H4.6Z"/><path d="M10.6 2.6v5h5"/><path d="M10 9.6v5.2M7.7 12.5 10 14.8l2.3-2.3"/></svg>
+                    Saídas
+                    <span class="nav-badge" id="badge-saidas">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-lista-cores" id="nav-lista-cores">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6s5.4 5.5 5.4 8.7a5.4 5.4 0 0 1-10.8 0C4.6 8.1 10 2.6 10 2.6Z"/><path d="M4.9 12.4h10.2" opacity=".6"/></svg>
+                    Cores
+                    <span class="nav-badge" id="badge-cores">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-fontes" id="nav-fontes">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.4V3.6h12v1.8"/><path d="M10 3.6v12.8"/><path d="M7.2 16.4h5.6"/></svg>
+                    Catálogo de Fontes
+                    <span class="nav-badge" id="badge-fontes">0</span>
+                </button>
+            </div>
 
-            <button class="nav-btn" data-view="view-lista-formatos" id="nav-lista-formatos">
-                <span class="nav-icon">📋</span>
-                Lista Formatos
-                <span class="nav-badge" id="badge-formatos">0</span>
+            <button type="button" class="nav-group open" data-grupo="producao" aria-expanded="true">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 17.4V8.2l5.2 3.1V8.2l5.2 3.1 .7-8h2.9l.8 14.1Z"/></svg>
+                <span class="nav-group-nome">Produção</span>
+                <span class="nav-group-conta"></span>
+                <svg class="nav-group-seta" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.8 5 12.8 10l-5 5"/></svg>
             </button>
+            <div class="nav-group-corpo open" data-grupo-corpo="producao">
+                <button class="nav-btn" data-view="view-imposicao" id="nav-imposicao">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="1.5"/><path d="M2.5 7.5h15M2.5 12.5h15M7.5 2.5v15M12.5 2.5v15"/></svg>
+                    Imposição
+                </button>
+                <button class="nav-btn" data-view="view-pedido" id="nav-pedido">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6 10 2.5 17.5 6v8L10 17.5 2.5 14V6Z"/><path d="M2.5 6 10 9.5 17.5 6"/><path d="M10 9.5v8"/></svg>
+                    Pedido
+                </button>
+                <!-- MONTAGEM (29/08/2026). Refaz celulas de pedidos DIFERENTES numa
+                     folha so'. Fica logo abaixo de Pedido porque e' a tela que recolhe
+                     o que sobrou dele: a celula que estragou volta por aqui. -->
+                <button class="nav-btn" data-view="view-montagem" id="nav-montagem">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" rx="1.5"/><path d="M2.5 7.5h15M2.5 12.5h15M7.5 2.5v15M12.5 2.5v15"/><rect x="7.9" y="7.9" width="4.2" height="4.2" fill="currentColor" stroke="none" opacity=".5"/></svg>
+                    Montagem
+                    <span class="nav-badge" id="badge-montagem" style="display:none;">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5h4"/><path d="M8.6 2.5v5L4.2 15.1A1.5 1.5 0 0 0 5.5 17.5h9A1.5 1.5 0 0 0 15.8 15.1L11.4 7.5v-5"/><path d="M6.4 12h7.2"/></svg>
+                    Amostras
+                </button>
+                <button class="nav-btn active" data-view="view-lista-impressao" id="nav-lista-impressao">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5h9M3 10h9M3 14.5h5"/><path d="M13.2 13.4l1.7 1.7 3.1-3.4"/></svg>
+                    Painel de Produção
+                    <span class="nav-badge" id="badge-impressao">0</span>
+                </button>
+                <!-- O setor que recebe o material depois da imposicao e da impressao.
+                     Fica logo abaixo da Producao porque e o passo seguinte dela. -->
+                <button class="nav-btn" data-view="view-acabamento" id="nav-acabamento">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="14.8" r="2.2"/><circle cx="5" cy="5.2" r="2.2"/><path d="M6.9 6.4 17 14.6M17 5.4 6.9 13.6"/></svg>
+                    Painel do Acabamento
+                    <span class="nav-badge" id="badge-acabamento">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-lista-arte" id="nav-lista-arte">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6a7.4 7.4 0 0 0 0 14.8c.9 0 1.6-.7 1.6-1.6 0-.4-.1-.8-.4-1.1-.2-.3-.4-.6-.4-1 0-.9.7-1.6 1.6-1.6h1.9a3.7 3.7 0 0 0 3.7-3.7c0-3.5-3.6-5.8-8-5.8Z"/><circle cx="6.5" cy="9.3" r="1"/><circle cx="9.4" cy="6.4" r="1"/><circle cx="13.2" cy="7.3" r="1"/></svg>
+                    Lista de Arte
+                    <span class="nav-badge" id="badge-arte">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-impressoras" id="nav-impressoras">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 7.5v-4h9v4"/><rect x="2.5" y="7.5" width="15" height="6.5" rx="1.5"/><path d="M5.5 12h9v5.5h-9Z"/></svg>
+                    Impressoras
+                    <span class="nav-badge" id="badge-impressoras" style="background:var(--success);display:none;">●</span>
+                </button>
+                <!-- O Ideal Control da grafica. So ADM e Atendimento: e decisao do
+                     usuario, e o backend confere o papel de novo -- esconder o botao
+                     nunca impediu ninguem de chamar a rota. -->
+                <button class="nav-btn equipe-only" data-view="view-ideal-control" id="nav-ideal-control" style="display:none;">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.4V5.4a1.2 1.2 0 0 1 1.2-1.2h12.6a1.2 1.2 0 0 1 1.2 1.2v2a2 2 0 0 0 0 5.2v2a1.2 1.2 0 0 1-1.2 1.2H3.7a1.2 1.2 0 0 1-1.2-1.2v-2a2 2 0 0 0 0-5.2Z"/><path d="M11.6 4.2v11.6" stroke-dasharray="2 2"/></svg>
+                    Ideal Control
+                </button>
+            </div>
 
-            <button class="nav-btn" data-view="view-numeracao" id="nav-numeracao">
-                <span class="nav-icon">🔢</span>
-                Numeração
+            <button type="button" class="nav-group admin-only" data-grupo="administracao" aria-expanded="false" style="display:none;">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6 3.8 5v5.1c0 3.6 2.6 6.4 6.2 7.3 3.6-.9 6.2-3.7 6.2-7.3V5Z"/></svg>
+                <span class="nav-group-nome">Administração</span>
+                <span class="nav-group-conta"></span>
+                <svg class="nav-group-seta" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.8 5 12.8 10l-5 5"/></svg>
             </button>
-
-            <button class="nav-btn" data-view="view-catalogo" id="nav-catalogo">
-                <span class="nav-icon">📚</span>
-                Lista de Numerações
-                <span class="nav-badge" id="badge-numeracao">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-mapas" id="nav-mapas">
-                <span class="nav-icon">🗺️</span>
-                Mapas de Teatro
-                <span class="nav-badge" id="badge-mapas">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-saidas" id="nav-saidas">
-                <span class="nav-icon">📄</span>
-                Saídas
-                <span class="nav-badge" id="badge-saidas">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-cores" id="nav-cores">
-                <span class="nav-icon">🎨</span>
-                Cores
-            </button>
-
-            <button class="nav-btn" data-view="view-lista-cores" id="nav-lista-cores">
-                <span class="nav-icon">📋</span>
-                Lista Cores
-                <span class="nav-badge" id="badge-cores">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-fontes" id="nav-fontes">
-                <span class="nav-icon">🔤</span>
-                Catálogo de Fontes
-                <span class="nav-badge" id="badge-fontes">0</span>
-            </button>
-
-            <span class="nav-group-label" style="margin-top:8px;">Produção</span>
-
-            <button class="nav-btn" data-view="view-imposicao" id="nav-imposicao">
-                <span class="nav-icon">🖨️</span>
-                Imposição
-            </button>
-
-            <button class="nav-btn" data-view="view-pedido" id="nav-pedido">
-                <span class="nav-icon">📦</span>
-                Pedido
-            </button>
-
-            <!-- MONTAGEM (29/08/2026). Refaz celulas de pedidos DIFERENTES numa
-                 folha so'. Fica logo abaixo de Pedido porque e' a tela que recolhe
-                 o que sobrou dele: a celula que estragou volta por aqui. -->
-            <button class="nav-btn" data-view="view-montagem" id="nav-montagem">
-                <span class="nav-icon">&#129513;</span>
-                Montagem
-                <span class="nav-badge" id="badge-montagem" style="display:none;">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
-                <span class="nav-icon">🧪</span>
-                Amostras
-            </button>
-
-            <button class="nav-btn active" data-view="view-lista-impressao" id="nav-lista-impressao">
-                <span class="nav-icon">🖨️</span>
-                Painel de Produção
-                <span class="nav-badge" id="badge-impressao">0</span>
-            </button>
-
-            <!-- O setor que recebe o material depois da imposição e da impressão.
-                 Fica logo abaixo da Produção porque é o passo seguinte dela. -->
-            <button class="nav-btn" data-view="view-acabamento" id="nav-acabamento">
-                <span class="nav-icon">✂️</span>
-                Painel do Acabamento
-                <span class="nav-badge" id="badge-acabamento">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-lista-arte" id="nav-lista-arte">
-                <span class="nav-icon">🎨</span>
-                Lista de Arte
-                <span class="nav-badge" id="badge-arte">0</span>
-            </button>
-
-            <button class="nav-btn" data-view="view-impressoras" id="nav-impressoras">
-                <span class="nav-icon">🖨️</span>
-                Impressoras
-                <span class="nav-badge" id="badge-impressoras" style="background:var(--success);display:none;">●</span>
-            </button>
-
-            <!-- O Ideal Control da gráfica. Só ADM e Atendimento: é decisão do
-                 usuário, e o backend confere o papel de novo — esconder o botão
-                 nunca impediu ninguém de chamar a rota. -->
-            <button class="nav-btn equipe-only" data-view="view-ideal-control"
-                    id="nav-ideal-control" style="display:none;">
-                <span class="nav-icon">🎟️</span>
-                Ideal Control
-            </button>
-
-            <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administração</span>
-
-            <button class="nav-btn admin-only" data-view="view-admin" id="nav-admin" style="display:none;">
-                <span class="nav-icon">🛡️</span>
-                Usuários
-            </button>
-
-            <button class="nav-btn admin-only" data-view="view-adm" id="nav-adm" style="display:none;">
-                <span class="nav-icon">⚙️</span>
-                ADM
-            </button>
+            <div class="nav-group-corpo" data-grupo-corpo="administracao">
+                <button class="nav-btn admin-only" data-view="view-admin" id="nav-admin" style="display:none;">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 17v-1.6a3.2 3.2 0 0 0-3.2-3.2H5.7a3.2 3.2 0 0 0-3.2 3.2V17"/><circle cx="7.9" cy="6.4" r="3"/><path d="M17.5 17v-1.6a3.2 3.2 0 0 0-2.4-3.1M12.9 3.6a3.2 3.2 0 0 1 0 5.6"/></svg>
+                    Usuários
+                </button>
+                <button class="nav-btn admin-only" data-view="view-adm" id="nav-adm" style="display:none;">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.2h8.2M15.3 6.2h1.7M3 13.8h1.7M8.8 13.8H17"/><circle cx="13.2" cy="6.2" r="1.9"/><circle cx="6.7" cy="13.8" r="1.9"/></svg>
+                    ADM
+                </button>
+            </div>
 
             <div style="flex-grow: 1;"></div>
             <div class="user-profile-bar" id="user-profile-bar" style="margin-top:auto; padding: 12px 0; border-top: 1px solid var(--border); display:none;">
@@ -405,6 +408,9 @@
                     <div class="page-header-text">
                         <h1>📋 Lista de Formatos</h1>
                         <p>Formatos cadastrados disponíveis para edição, exclusão ou duplicação.</p>
+                    </div>
+                    <div style="margin-left: auto;">
+                        <button class="btn btn-primary" onclick="showView('view-formatos'); cancelFmtEdit();">+ Novo Formato</button>
                     </div>
                 </div>
 
@@ -1085,7 +1091,7 @@
                         <p>Cores cadastradas no sistema organizadas por formato.</p>
                     </div>
                     <div style="margin-left: auto;">
-                        <button class="btn btn-primary" onclick="document.getElementById('nav-cores').click(); cancelCorEdit();">+ Nova Cor</button>
+                        <button class="btn btn-primary" onclick="showView('view-cores'); cancelCorEdit();">+ Nova Cor</button>
                     </div>
                 </div>
 

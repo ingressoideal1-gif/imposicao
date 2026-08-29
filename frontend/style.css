@@ -2566,6 +2566,118 @@ input[type=number] {
     }
 }
 
+/* ─── MENU EM GRUPOS (29/08/2026) ────────────────────────────────────────────
+   O menu lateral tinha vinte botoes num rolo so, ~1.280 px de altura: mais alto
+   do que qualquer monitor da grafica, entao ele rolava. Agora os tres grupos
+   abrem e fecham, e so o grupo da tela em que o operador esta fica aberto — sao
+   doze linhas a vista em vez de vinte.
+
+   Este bloco fica AQUI, logo depois do segundo `@media (min-width: 1024px)`,
+   por dois motivos que se apertam. As regras da barra encolhida (56 px, abre no
+   hover) estao duplicadas la em cima, nos dois `@media (min-width: 1024px)`, e
+   as daqui precisam vir depois das duas para nao ter de ser mantidas em dois
+   lugares. Mas o fim do arquivo tambem nao serve: la mora a paleta do
+   Acabamento, e o `test_a_paleta_do_acabamento_nao_repinta_o_painel_de_producao`
+   le dali ate o fim do arquivo exigindo que todo seletor esteja preso a
+   `#view-acabamento`. Qualquer regra escrita depois dela quebra esse teste.
+
+   Os icones deixaram de ser emoji e passaram a ser SVG desenhado: tres botoes
+   diferentes mostravam a mesma impressora, e dois mostravam a mesma paleta.
+   Sendo `stroke: currentColor`, eles agora acendem junto com o texto do botao. */
+
+.nav-btn svg.nav-icon,
+.nav-group svg.nav-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.nav-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-family: inherit;
+    text-align: left;
+    padding: 11px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+}
+
+.nav-group:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-dim);
+}
+
+.nav-group.open { color: var(--text-dim); }
+
+.nav-group-nome {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* Quantas telas o grupo guarda. Escrito pelo JS a partir dos botoes VISIVEIS:
+   e a unica pista do que ha ali dentro enquanto o grupo esta fechado. */
+.nav-group-conta {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-faint);
+}
+
+.nav-group-seta {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: transform var(--transition);
+}
+
+.nav-group.open .nav-group-seta { transform: rotate(90deg); }
+
+.nav-group-corpo {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-group-corpo.open { display: flex; }
+
+/* ── A barra encolhida da estacao ────────────────────────────────────────────
+   Com 56 px nao cabe nome nenhum: sobram os icones do grupo aberto e os tres
+   cabecalhos, que continuam clicaveis. Quem quer outro grupo passa o mouse — a
+   barra abre sozinha, como sempre fez — e clica no cabecalho. */
+@media (min-width: 1024px) {
+    .sidebar .nav-group {
+        justify-content: center;
+        padding: 11px 8px;
+    }
+
+    .sidebar .nav-group-nome,
+    .sidebar .nav-group-conta,
+    .sidebar .nav-group-seta {
+        display: none;
+    }
+
+    .sidebar:hover .nav-group {
+        justify-content: flex-start;
+        padding: 11px 14px;
+    }
+
+    .sidebar:hover .nav-group-nome,
+    .sidebar:hover .nav-group-conta,
+    .sidebar:hover .nav-group-seta {
+        display: block;
+    }
+}
+
 /* ===== Modo PDF Multi-Página ===== */
 .btn-pdf-active {
     background: var(--blue) !important;

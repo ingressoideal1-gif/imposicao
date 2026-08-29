@@ -814,6 +814,111 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 
+// ── MENU EM GRUPOS (29/08/2026) ───────────────────────────────────────────────
+//
+// O menu tinha vinte botoes num rolo so, ~1.280 px de altura: mais alto do que
+// qualquer monitor da grafica, entao ele rolava. Agora os tres grupos abrem e
+// fecham, e quem manda em qual fica aberto e a TELA EM QUE O OPERADOR ESTA — nao
+// o ultimo grupo que ele clicou. Sair de Pedido para Formatos fecha Producao e
+// abre Configuracao sozinho; e o mesmo espirito de
+// `menu-abre-na-pagina-inicial-da-tela`: o menu mostra onde a pessoa esta.
+//
+// Na estacao, com o menu encolhido em 56 px, so aparecem os icones — do grupo
+// aberto e dos tres cabecalhos. Quem quer outro grupo passa o mouse (a barra
+// abre sozinha, como sempre) e clica no cabecalho.
+
+/**
+ * Telas que nao tem botao proprio no menu, e de quem elas acendem o botao.
+ *
+ * As tres duplas editor+lista viraram uma entrada so, que abre a LISTA. O editor
+ * continua existindo e continua sendo alcancado pelo "+ Novo" de dentro da lista
+ * — mas, aberto, ele precisa deixar aceso o botao por onde se chega ate ele,
+ * senao o menu fica sem nenhum item marcado e o operador perde a referencia.
+ */
+const NAV_DA_VIEW = {
+    'view-formatos':  'nav-lista-formatos',
+    'view-numeracao': 'nav-catalogo',
+    'view-cores':     'nav-lista-cores',
+};
+
+function botaoDoMenuDaView(viewId) {
+    return document.querySelector(`.nav-btn[data-view="${viewId}"]`)
+        || (NAV_DA_VIEW[viewId] ? document.getElementById(NAV_DA_VIEW[viewId]) : null);
+}
+window.botaoDoMenuDaView = botaoDoMenuDaView;
+
+/** Abre UM grupo e fecha os outros. `null` fecha todos. */
+function abrirGrupoDoMenu(chave) {
+    document.querySelectorAll('.nav-group').forEach(g => {
+        const aberto = g.dataset.grupo === chave;
+        g.classList.toggle('open', aberto);
+        g.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    });
+    document.querySelectorAll('.nav-group-corpo').forEach(c => {
+        c.classList.toggle('open', c.dataset.grupoCorpo === chave);
+    });
+}
+window.abrirGrupoDoMenu = abrirGrupoDoMenu;
+
+/**
+ * Acende o botao do menu correspondente a tela, e abre o grupo em que ele mora.
+ *
+ * Usada pelo `showView` e pelos poucos pontos que trocam de tela na mao (salvar
+ * um formato, editar uma numeracao). Antes cada um deles fazia
+ * `getElementById('nav-...').classList.add('active')` sem guarda — o que
+ * quebrava assim que um botao saia do menu.
+ */
+function ativarBotaoDoMenu(viewId) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    const btn = botaoDoMenuDaView(viewId);
+    if (!btn) return;
+    btn.classList.add('active');
+    const corpo = btn.closest('.nav-group-corpo');
+    if (corpo) abrirGrupoDoMenu(corpo.dataset.grupoCorpo);
+}
+window.ativarBotaoDoMenu = ativarBotaoDoMenu;
+
+/**
+ * O numero ao lado do nome do grupo conta telas VISIVEIS, nao telas existentes.
+ *
+ * Quem nao tem permissao para Mapas nao pode ler "6" num grupo que so abre
+ * cinco coisas para ele. E grupo que ficou sem nenhuma tela some inteiro, em vez
+ * de virar um cabecalho que abre no vazio.
+ */
+function atualizarContagemDosGrupos() {
+    document.querySelectorAll('.nav-group').forEach(g => {
+        const corpo = document.querySelector(
+            `.nav-group-corpo[data-grupo-corpo="${g.dataset.grupo}"]`);
+        if (!corpo) return;
+        const visiveis = Array.from(corpo.querySelectorAll('.nav-btn'))
+            .filter(b => b.style.display !== 'none').length;
+        const conta = g.querySelector('.nav-group-conta');
+        if (conta) conta.textContent = visiveis ? String(visiveis) : '';
+        g.style.display = visiveis ? '' : 'none';
+        if (!visiveis) {
+            g.classList.remove('open');
+            corpo.classList.remove('open');
+        }
+    });
+}
+window.atualizarContagemDosGrupos = atualizarContagemDosGrupos;
+
+document.querySelectorAll('.nav-group').forEach(g => {
+    g.addEventListener('click', () => {
+        // Clicar no grupo aberto fecha ele: e o unico jeito de ver so os
+        // cabecalhos, que e o menu no seu tamanho minimo.
+        const jaAberto = g.classList.contains('open');
+        abrirGrupoDoMenu(jaAberto ? null : g.dataset.grupo);
+    });
+});
+
+// Uma primeira contagem ao abrir a pagina. As permissoes chamam de novo quando
+// chegam, mas na estacao — que entra pelo acesso local, sem sessao do Supabase —
+// elas podem nao chegar nunca, e sem isto o numero ao lado do nome do grupo
+// ficava em branco para o operador.
+atualizarContagemDosGrupos();
+
+
 
 // - API Helpers -
 
@@ -1905,7 +2010,7 @@ async function saveFmt() {
 
         document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
-        document.getElementById('nav-lista-formatos').classList.add('active');
+        ativarBotaoDoMenu('view-lista-formatos');
 
         document.getElementById('view-lista-formatos').classList.add('active');
 
@@ -1929,7 +2034,7 @@ function editFmt(id) {
 
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
-    document.getElementById('nav-formatos').classList.add('active');
+    ativarBotaoDoMenu('view-formatos');
 
     document.getElementById('view-formatos').classList.add('active');
 
@@ -2967,9 +3072,7 @@ async function saveCor() {
 
         // Redirecionar para a página Listar Cores após salvar
 
-        const navListaCores = document.getElementById('nav-lista-cores');
-
-        if (navListaCores) navListaCores.click();
+        window.showView('view-lista-cores');
 
     } catch (e) {
 
@@ -2993,9 +3096,7 @@ async function editCor(id) {
 
     // Redirecionar para a página Cores (de cadastro) ao editar
 
-    const navCores = document.getElementById('nav-cores');
-
-    if (navCores) navCores.click();
+    window.showView('view-cores');
 
 
 
@@ -3734,7 +3835,7 @@ window.novaNumeracao = function () {
 
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
-    document.getElementById('nav-numeracao').classList.add('active');
+    ativarBotaoDoMenu('view-numeracao');
 
     document.getElementById('view-numeracao').classList.add('active');
 
@@ -3769,7 +3870,7 @@ async function editNumeracao(id) {
 
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
-    document.getElementById('nav-numeracao').classList.add('active');
+    ativarBotaoDoMenu('view-numeracao');
 
     document.getElementById('view-numeracao').classList.add('active');
 
@@ -9514,7 +9615,7 @@ if (customState) {
 } else {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-    document.getElementById('nav-catalogo').classList.add('active');
+    ativarBotaoDoMenu('view-catalogo');
     document.getElementById('view-catalogo').classList.add('active');
 }
 
@@ -20841,11 +20942,11 @@ const ROLE_PADRAO_NOVO_USUARIO = 'visualizador';
 
 // Mapeamento: permissão _view → IDs de nav-btn na sidebar
 const PERM_NAV_MAP = {
-    perm_formatos_view:    ['nav-formatos', 'nav-lista-formatos'],
-    perm_numeracao_view:   ['nav-numeracao', 'nav-catalogo'],
+    perm_formatos_view:    ['nav-lista-formatos'],
+    perm_numeracao_view:   ['nav-catalogo'],
     perm_mapas_view:       ['nav-mapas'],
     perm_saidas_view:      ['nav-saidas'],
-    perm_cores_view:       ['nav-cores', 'nav-lista-cores'],
+    perm_cores_view:       ['nav-lista-cores'],
     perm_fontes_view:      ['nav-fontes'],
     perm_imposicao_view:   ['nav-imposicao'],
     perm_pedidos_view:     ['nav-pedido'],
@@ -21389,18 +21490,15 @@ function applyPermissions(perms) {
         }
     }
 
-    // Labels de grupo: esconder "Configuração" se nenhum módulo config visível
-    const configPerms = ['perm_formatos_view', 'perm_numeracao_view', 'perm_mapas_view', 'perm_saidas_view', 'perm_cores_view'];
-    const hasConfig = configPerms.some(p => perms[p] === true);
-    const configLabels = document.querySelectorAll('.nav-group-label');
-    if (configLabels[0]) configLabels[0].style.display = hasConfig ? '' : 'none';
-
-    // Admin label + buttons
-    const adminLabel = document.querySelector('.nav-group-label.admin-only');
-    if (adminLabel) adminLabel.style.display = perms.perm_admin_view ? '' : 'none';
     document.querySelectorAll('.nav-btn.admin-only').forEach(btn => {
         btn.style.display = perms.perm_admin_view ? '' : 'none';
     });
+
+    // Cabecalho de grupo some junto com o ultimo botao dele, e a contagem ao
+    // lado do nome conta so o que este usuario pode abrir.
+    atualizarContagemDosGrupos();
+    const telaAberta = document.querySelector('.view-section.active');
+    if (telaAberta) ativarBotaoDoMenu(telaAberta.id);
 }
 
 
@@ -22004,7 +22102,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (profileBar) profileBar.style.display = 'none';
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-btn').forEach(el => el.style.display = '');
-        document.querySelectorAll('.nav-group-label').forEach(el => el.style.display = '');
+        document.querySelectorAll('.nav-group').forEach(el => el.style.display = '');
+        atualizarContagemDosGrupos();
         // Quem entrar por cima disto (login local, sessão do site) sobrescreve
         // logo em seguida. Aqui é o estado sem ninguém logado.
         atualizarIdentidadeNoPainel(null);
@@ -30805,7 +30904,6 @@ window.showView = function(viewId) {
     localStorage.setItem('activeView', viewId);
 
     // Trocar a view ativa
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
     // Ativar a view destino
@@ -30821,9 +30919,8 @@ window.showView = function(viewId) {
         }
     }
 
-    // Ativar o nav-btn correspondente
-    const navBtn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
-    if (navBtn) navBtn.classList.add('active');
+    // Ativar o nav-btn correspondente, e abrir o grupo em que ele mora
+    ativarBotaoDoMenu(viewId);
 
     // Hooks: carregar dados ao abrir certas views
     if (viewId === 'view-lista-arte') {
