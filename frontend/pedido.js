@@ -387,8 +387,6 @@ async function loadPedArtFile(file) {
 
         }
 
-        toast('Arte carregada para preview!', 'success');
-
         updatePedSummary(); // Recalcular sumário e forçar redesenho do preview
 
     } catch (e) {
@@ -4532,7 +4530,7 @@ function renderPedOSQueue() {
                 <div style="flex:1 1 0; display:flex; justify-content:flex-end; min-width:0;">${headerDropdowns}</div>
             </div>
             <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue" style="padding: 0 3pt;">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.85rem; margin:0; width:100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 8pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.85rem; margin:0; width:100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 10pt;">
                     ${cabecalhoDaTabela}
                     <tbody>
         `;
@@ -4546,8 +4544,8 @@ function renderPedOSQueue() {
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#090b19'; // Impresso
             }
-            if (isSelected) {
-                statusBg = '#4a26b0'; // Selecionado
+            if (isSelected || isActive) {
+                statusBg = '#4a26b0'; // Selecionado / Aberto
             }
 
             // O contorno saiu do style inline e virou classe: `marcada` (entra na

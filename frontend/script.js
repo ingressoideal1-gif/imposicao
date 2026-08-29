@@ -9766,8 +9766,6 @@ async function loadImpArtFile(file) {
 
         }
 
-        toast('Arte carregada para preview!', 'success');
-
         updateImpSummary(); // Recalcular sumário e forçar redesenho do preview
 
     } catch (e) {
@@ -30222,7 +30220,7 @@ function renderImpOSQueue() {
                 ${headerDropdowns}
             </div>
             <div class="table-responsive" id="box-body-${prodId}-renderImpOSQueue" style="padding: 0 3pt;">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 6pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 10pt;">
                     <tbody>
         `;
 
