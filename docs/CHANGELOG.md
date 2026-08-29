@@ -4,6 +4,37 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — Montagem: o número do modelo no papel, e a tiragem na tela
+
+Dois pedidos do usuário sobre a tela nova.
+
+### Imprimir o número do modelo em cada item
+
+O mesmo conceito das *Opções do modelo* do Pedido, com a mesma mecânica: o motor
+imprime `arte["nome"]` deitado na borda de cada item, e **esse campo é o único**
+que decide se ele sai. Marcada a caixa, o payload leva o número; desmarcada, leva
+vazio. Nasce **desmarcada**.
+
+Numa folha que mistura pedidos, é por essa marca que se separa o material depois
+de cortar — ela serve mais aqui do que no Pedido.
+
+Duas diferenças, deliberadas: é **uma escolha para a montagem inteira** (a folha
+mistura modelos, e uma caixa por linha faria decidir o mesmo N vezes para o mesmo
+papel), e ela **não é gravada no modelo** — a Montagem é reposição avulsa, e
+marcar aqui não pode mudar como aquele modelo sai na próxima tiragem dele.
+
+### A tiragem de cada modelo, na lista
+
+Coluna nova, entre Modelo e Posições: quantos itens aquele modelo imprime ao
+todo. É contra esse número que a posição vale — `#340` só existe num modelo de
+1.920, e sem ele na tela o operador digita no escuro. Vem do **banco** quando há
+banco, e não da quantidade contratada.
+
+**Sete verificações novas** (38 → 45), inclusive a que importa: marcada, cada
+arte leva o número do **seu** modelo, e não um número só para a folha inteira.
+
+---
+
 ## [2026-08-29] — O banner "Atualizar Agora" apontava para um arquivo que não existe
 
 Relato do usuário: **"Erro ao atualizar agente: Failed to fetch"**.

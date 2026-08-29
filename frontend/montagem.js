@@ -354,6 +354,32 @@ function _mtgNumeracaoDoItem(item) {
     return num;
 }
 
+/**
+ * O número do modelo vai IMPRESSO em cada item?
+ *
+ * Mesmo conceito das "Opções do modelo" da tela do Pedido, e a mesma mecânica:
+ * o motor imprime `arte["nome"]` deitado na borda de cada item, e esse campo é
+ * o ÚNICO que decide se ele sai. Marcada a caixa, o payload leva o número;
+ * desmarcada, leva vazio.
+ *
+ * ── Duas diferenças em relação ao Pedido, e as duas são deliberadas ────────
+ *
+ * É UMA escolha para a montagem inteira, e não uma por modelo. No Pedido a
+ * opção mora em `pedidos_modelos` e vale para aquele modelo; aqui a folha
+ * mistura modelos de pedidos diferentes, e uma caixa por linha faria o operador
+ * decidir o mesmo N vezes para o mesmo papel.
+ *
+ * E ela NÃO é gravada no modelo. A Montagem é reposição avulsa: marcar aqui não
+ * pode mudar como aquele modelo sai na próxima tiragem inteira dele. A escolha
+ * que fica salva continua sendo a da tela do Pedido.
+ *
+ * Nasce DESMARCADA, como no Pedido: novidade que muda o que sai no papel entra
+ * desligada, e o operador liga quando quiser.
+ */
+function imprimirNumeroNaMontagem() {
+    return document.getElementById('mtg-imprimir-numero')?.checked === true;
+}
+
 /** Quantas células cabem na folha desta montagem. */
 function _mtgCelulasPorFolha(grupos) {
     // Vem da PECA resolvida, e nao de uma busca propria: duas resolucoes do
@@ -673,12 +699,13 @@ function renderMontagem() {
     } else {
         lista.innerHTML = `
             <table class="data-table">
-              <tr><th>Pedido</th><th>Modelo</th><th>Posições</th><th style="text-align:right;">Células</th><th style="width:40px;"></th></tr>
+              <tr><th>Pedido</th><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Posições</th><th style="text-align:right;">Células</th><th style="width:40px;"></th></tr>
               ${grupos.map((g, i) => `
                 <tr>
                   <td>${escapeHtml(String(g.pedidoNumero || g.osId))}</td>
                   <td><span style="color:var(--text);">${escapeHtml(String(g.itemId))}</span><br>
                       <span style="font-size:0.78rem;">${escapeHtml(String(g.nome).slice(0, 46))}</span></td>
+                  <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(g.qtd || 0).toLocaleString('pt-BR')}</td>
                   <td><span class="mtg-posicoes">${g.posicoes.map(p => `<span class="mtg-pos">#${p}</span>`).join('')}</span></td>
                   <td style="text-align:right;">${g.posicoes.length}</td>
                   <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem" onclick="removerDaMontagem(${i})">&times;</span></td>
@@ -833,7 +860,10 @@ function payloadDaMontagem(grupos) {
             pdf_url: it.arte_url || null,
             pdf_verso_url: it.arte_verso_url || null,
             pdf_name: g.nome,
-            nome: '',
+            // O que o motor IMPRIME deitado na borda do item. Vazio = não sai.
+            // O número do modelo é o `itemId`: `pedidos_modelos.id`, que é o que
+            // a gráfica lê para separar o material depois de cortar.
+            nome: imprimirNumeroNaMontagem() ? String(g.itemId) : '',
             nome_color: '#000000',
             num1_id: num ? num.id : null,
             num2_id: null,
@@ -882,6 +912,7 @@ if (typeof window !== 'undefined') {
     window.renderMontagem = renderMontagem;
     window.gerarPdfDaMontagem = gerarPdfDaMontagem;
     window.payloadDaMontagem = payloadDaMontagem;
+    window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;
 }
 
 /**

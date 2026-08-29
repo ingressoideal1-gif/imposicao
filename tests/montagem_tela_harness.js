@@ -48,6 +48,8 @@ const FUNCOES = [
     'removerDaMontagem', '_mtgHtmlDaRecusa', 'payloadDaMontagem', '_mtgNumeracaoDoItem',
     // A resolucao do formato: o caminho que faltava na primeira versao.
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
+    // O numero do modelo impresso em cada item (29/08/2026).
+    'imprimirNumeroNaMontagem',
 ];
 
 // Três pedidos, quatro modelos, todos do mesmo formato/cor/saída/face.
@@ -125,6 +127,7 @@ const PECAS = [
         "window.porQueNaoCabeNaMontagem = porQueNaoCabeNaMontagem;",
         "window.payloadDaMontagem = payloadDaMontagem;",
         "window.pecaDaMontagem = pecaDaMontagem;",
+        "window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;",
         "window.posicoesCombinadas = posicoesCombinadas;",
         // O ITEM como ele chega do banco: SEM formato_id. Quem resolve o
         // formato e' o `pecaDaMontagem`, pelo produto — que e' o caminho que
@@ -204,6 +207,51 @@ const PECAS = [
     ok(cheio.vazias === 0, 'e a primeira folha está cheia — a sobra cai na última', cheio);
     ok(/FOLHA 1 DE 2/.test(cheio.folhaNum), 'e diz de quantas folhas ela é', cheio);
     ok(!cheio.pdfTravado, 'com células, o Gerar PDF libera');
+
+    // ── 3b. A TIRAGEM de cada modelo aparece na lista ───────────────────────
+    //
+    // Pedido do usuário em 29/08/2026. É contra esse número que a posição vale:
+    // "#340" só existe num modelo de 1.920, e sem ele na tela o operador digita
+    // no escuro.
+    const tiragens = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const cab = Array.from(document.querySelectorAll('#mtg-lista th')).map(e => e.textContent.trim());
+        const linhas = Array.from(document.querySelectorAll('#mtg-lista .data-table tr')).slice(1);
+        return {
+            cabecalho: cab,
+            valores: linhas.map(tr => tr.children[2].textContent.trim()),
+            dica: linhas[0].children[2].getAttribute('title') || '',
+        };
+    }, PECAS);
+    ok(tiragens.cabecalho.indexOf('Tiragem') === 2,
+       'a coluna Tiragem vem depois do Modelo e antes das Posições', tiragens.cabecalho);
+    ok(tiragens.valores.join('|') === '3.000|1.920|150|800',
+       'e traz a tiragem de CADA modelo, com separador de milhar', tiragens.valores);
+    ok(/posição vale/.test(tiragens.dica),
+       'e a dica explica para que serve o número', tiragens.dica);
+
+    // ── 3c. O número do modelo impresso em cada item ────────────────────────
+    //
+    // Mesmo conceito das "Opções do modelo" do Pedido, e a mesma mecânica: o
+    // motor imprime `arte["nome"]`, e esse campo é o ÚNICO que decide se sai.
+    const numero = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const cx = document.getElementById('mtg-imprimir-numero');
+        const desmarcado = payloadDaMontagem(state.montagem.grupos).multi_artes.map(a => a.nome);
+        cx.checked = true;
+        const marcado = payloadDaMontagem(state.montagem.grupos).multi_artes.map(a => a.nome);
+        cx.checked = false;
+        return { nasceDesmarcada: cx.defaultChecked === false, desmarcado, marcado,
+                 rotulo: cx.closest('.mtg-opcao').textContent.replace(/\s+/g, ' ').trim() };
+    }, PECAS);
+    ok(numero.nasceDesmarcada,
+       'a caixa nasce DESMARCADA — novidade que muda o papel entra desligada', numero);
+    ok(numero.desmarcado.every(n => n === ''),
+       'desmarcada, o payload manda `nome` VAZIO: nada sai impresso', numero.desmarcado);
+    ok(numero.marcado.join(',') === '1000565,1000589,1000412,1000203',
+       'marcada, cada arte leva o NÚMERO DO SEU modelo — e não um número só para a folha', numero.marcado);
+    ok(/número do modelo em cada item/.test(numero.rotulo),
+       'e o rótulo é o mesmo do Pedido, para o operador reconhecer', numero.rotulo);
 
     // ── 4. A folha que fecha certo fica VERDE ───────────────────────────────
     const verde = await aba.evaluate(() => {

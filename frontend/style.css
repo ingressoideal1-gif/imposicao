@@ -4629,6 +4629,29 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-acoes .btn { width: 100%; justify-content: center; }
 
 
+/* A caixa "Imprimir o numero do modelo em cada item", na previa da Montagem.
+   Fica acima das acoes porque e' ali que o operador decide o que sai; a previa
+   ao lado ja mostra pedido/modelo/posicao em cada celula, e a caixa diz se
+   aquilo tambem vai para o PAPEL. */
+.mtg-opcao {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: auto; padding: 11px 13px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+}
+.mtg-opcao input { margin-top: 2px; flex: 0 0 auto; width: 15px; height: 15px; cursor: pointer; }
+.mtg-opcao > span { font-size: 0.79rem; color: var(--text); line-height: 1.35; }
+.mtg-opcao em {
+    display: block; margin-top: 4px;
+    font-size: 0.71rem; font-style: normal;
+    color: var(--text-faint); line-height: 1.4;
+}
+/* Com a opcao no meio, quem empurra as acoes para a base e' ela. */
+.mtg-previa-card .mtg-acoes { margin-top: 10px; }
+
+
 /* ══════════════════════════════════════════════════════════════════════════
    PAINEL DO ACABAMENTO — a mesma forma, em marrom escuro
    ══════════════════════════════════════════════════════════════════════════

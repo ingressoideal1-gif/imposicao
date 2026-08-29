@@ -156,6 +156,38 @@ tela não cumpria.
 > `test_painel_estacao.py` pegou exatamente isso — a tela estava pronta e a
 > gráfica não a receberia.
 
+### A tiragem de cada modelo, na lista
+
+A coluna **Tiragem** diz quantos itens aquele modelo imprime ao todo — e é contra
+esse número que a posição vale. `#340` só existe num modelo de 1.920; sem o
+número na tela o operador digita no escuro. Pedido do usuário em 29/08/2026.
+
+Ele vem do **banco** quando há banco, e não da quantidade contratada: os dois
+podem divergir, e quem manda é o que vira papel.
+
+### Imprimir o número do modelo em cada item
+
+Mesmo conceito das *Opções do modelo* da tela do Pedido, e a mesma mecânica: o
+motor imprime `arte["nome"]` deitado na borda de cada item, e **esse campo é o
+único** que decide se ele sai. Marcada a caixa, o payload leva o número do
+modelo; desmarcada, leva vazio.
+
+Numa folha que mistura pedidos é por ele que se separa o material depois de
+cortar — é aqui que a marca serve mais do que no Pedido.
+
+Duas diferenças em relação ao Pedido, as duas deliberadas:
+
+- **É uma escolha para a montagem inteira**, não uma por modelo. No Pedido a
+  opção mora em `pedidos_modelos` e vale para aquele modelo; aqui a folha mistura
+  modelos de pedidos diferentes, e uma caixa por linha faria o operador decidir o
+  mesmo N vezes para o mesmo papel.
+- **Ela não é gravada no modelo.** A Montagem é reposição avulsa: marcar aqui não
+  pode mudar como aquele modelo sai na próxima tiragem inteira dele. A escolha
+  que fica salva continua sendo a da tela do Pedido.
+
+Nasce **desmarcada**, como no Pedido — novidade que muda o que sai no papel entra
+desligada.
+
 ### Adicionar o mesmo modelo duas vezes SOMA ao grupo
 
 Não cria um segundo. Dois grupos do mesmo modelo dariam duas artes iguais no
@@ -222,7 +254,7 @@ Os dois harnesses ganharam o caso. O da tela passou a montar o item **sem
 | Harness | Verificações | O que trava |
 |---|---|---|
 | [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 62 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 38 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout e o payload |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 45 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout e o payload |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta o
 que só se lê no código-fonte — inclusive um teste que falha se alguém mexer no

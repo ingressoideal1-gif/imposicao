@@ -3058,6 +3058,14 @@
                             As c&eacute;lulas enchem a folha <strong>na ordem, sem reservar folha por pedido</strong> &mdash; a arte muda no limite de cada modelo, ent&atilde;o separar &eacute; olhar, n&atilde;o contar.
                         </p>
 
+                        <label class="mtg-opcao">
+                            <input type="checkbox" id="mtg-imprimir-numero" onchange="renderMontagem()">
+                            <span>
+                                Imprimir o n&uacute;mero do modelo em cada item
+                                <em>Sai deitado na borda de cada c&eacute;lula. Numa folha que mistura pedidos, &eacute; por ele que se separa o material depois de cortar.</em>
+                            </span>
+                        </label>
+
                         <div class="mtg-acoes">
                             <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
                                 &#128196; Gerar PDF da montagem
