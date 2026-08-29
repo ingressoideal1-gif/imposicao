@@ -5698,7 +5698,7 @@
             fecharVolumeAberto();
             renderDetalhe();
             avisar(`${nomeDoModelo(item)} saiu do volume ${v.numero}.`, 'success');
-            await atualizarPesoDoSetorPelosVolumes(v.setor);
+            await atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true });
         } catch (e) {
             console.error('[acabamento] erro ao tirar do volume:', e);
             avisar(`Não deu para tirar do volume: ${(e && e.message) ? e.message : e}`, 'error');
@@ -5812,7 +5812,7 @@
             // da pilha, e o número que a expedição lê tem de refletir isso. O
             // que NÃO se desfaz aqui é o Pronto dos modelos que aquele volume
             // fechou — desfazer decisão de gente é do botão Tirar, um a um.
-            await atualizarPesoDoSetorPelosVolumes(v.setor);
+            await atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true });
         } catch (e) {
             console.error('[acabamento] erro ao excluir o volume:', e);
             avisar(`Não deu para excluir o volume: ${(e && e.message) ? e.message : e}`, 'error');
@@ -5837,25 +5837,39 @@
      * cinco caixas prontas, comparar a soma delas com a tiragem inteira
      * acusaria divergência em cima de um trabalho perfeitamente certo.
      */
-    async function atualizarPesoDoSetorPelosVolumes(setor) {
+    async function atualizarPesoDoSetorPelosVolumes(setor, opcoes) {
         const alvo = normalizar(setor);
         if (!podeEditar() || !haComoGravarPeso()) return;
 
         const lista = volumesDoSetor(alvo);
         const soma = somaDosVolumes(lista);
-        // Sem volume nenhum não há o que copiar: gravar zero aqui apagaria um
-        // peso que alguém digitou à mão no box.
+
+        // Quando a soma é ZERO, "zero" pode querer dizer duas coisas opostas, e
+        // confundi-las custa caro nas duas direções:
         //
-        // COM volume e soma zero é outra coisa: o último registro acabou de
-        // sair, o peso do setor É zero, e deixar o número velho num campo que o
-        // operador não pode mais editar seria uma mentira que ele não tem como
-        // corrigir. Apagar é o que devolve a tela à verdade.
-        if (!lista.length) return;
+        //  - setor que NUNCA teve volume: o peso é digitado à mão e pesado no
+        //    fim. Gravar zero aqui apagaria o número do operador.
+        //  - setor que ACABOU de perder o conteúdo — o último registro saiu, ou
+        //    o último volume foi excluído: o peso do setor é zero de verdade, e
+        //    deixar o número velho na tela é uma mentira. Foi o que o usuário
+        //    viu no pedido 21074 em 29/08/2026: excluídos os volumes, o campo
+        //    continuava marcando 104 kg de uma soma que não existia mais.
+        //
+        // Quem sabe a diferença é o CHAMADOR, e não esta função: o estado final
+        // dos dois casos é idêntico. Por isso `saiuVolume` — quem acabou de
+        // tirar alguma coisa diz que o zero é de verdade.
+        const zeroEhZero = !!(opcoes && opcoes.saiuVolume) || lista.length > 0;
         if (!(soma > 0)) {
+            if (!zeroEhZero) return;
             const atualVazio = tela.pesos[alvo];
             const tinha = atualVazio && atualVazio.peso !== null && atualVazio.peso !== undefined
                 && Number(atualVazio.peso) > 0;
-            if (tinha) await gravarPeso(tela.volumesDoPedido, alvo, '');
+            if (tinha) {
+                await gravarPeso(tela.volumesDoPedido, alvo, '');
+                // O campo deixou de ser leitura e voltou a ser digitável — é
+                // outro elemento na tela, e só o redesenho o troca.
+                renderDetalhe();
+            }
             return;
         }
 
@@ -7002,7 +7016,7 @@
                         avisar(`Não deu para tirar do volume: ${(e && e.message) ? e.message : e}`, 'error');
                         return false;
                     }
-                    await atualizarPesoDoSetorPelosVolumes(item0.setor);
+                    await atualizarPesoDoSetorPelosVolumes(item0.setor, { saiuVolume: true });
                 }
             }
 

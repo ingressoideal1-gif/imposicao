@@ -775,8 +775,8 @@ def test_a_trava_do_peso_esta_na_unica_porta_do_status():
     assert "if (!await tirarModeloDosVolumes(item0)) return false;" in corpo, (
         "e cancelar a pergunta tem de cancelar a mudanca de estagio"
     )
-    assert "atualizarPesoDoSetorPelosVolumes(item0.setor)" in corpo, (
-        "e o peso do setor encolhe junto"
+    assert "atualizarPesoDoSetorPelosVolumes(item0.setor, { saiuVolume: true })" in corpo, (
+        "e o peso do setor encolhe junto -- ate zero, porque alguma coisa SAIU"
     )
 
     # A trava do volume: num pedido COM volume, o Pronto abre o registro em vez
@@ -1150,15 +1150,26 @@ def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
     assert "estimadoDoEmbalado(alvo)" in corpo, (
         "a regua compara com o que JA ESTA embalado, e nao com a tiragem inteira"
     )
-    assert "if (!lista.length) return;" in corpo, (
-        "setor SEM volume nao tem o que copiar -- gravar zero apagaria um peso "
-        "digitado a mao no box"
+    # Soma zero quer dizer duas coisas opostas, e o estado final das duas e
+    # identico: setor que NUNCA teve volume (peso digitado a mao, que nao pode
+    # ser apagado) e setor que ACABOU de perder o conteudo (peso e zero de
+    # verdade). Quem sabe a diferenca e o chamador -- dai o `saiuVolume`.
+    assert "const zeroEhZero = !!(opcoes && opcoes.saiuVolume) || lista.length > 0;" in corpo, (
+        "a funcao precisa saber se o zero e de verdade"
     )
-    # COM volume e soma zero e outra coisa: o ultimo registro saiu, o peso E
-    # zero, e o campo virou leitura -- o numero velho seria uma mentira que o
-    # operador nao tem como corrigir.
-    assert "if (tinha) await gravarPeso(tela.volumesDoPedido, alvo, '');" in corpo, (
-        "com volume e soma zero, o peso do setor se apaga"
+    assert "if (!zeroEhZero) return;" in corpo, (
+        "sem isso, gravar zero apagaria o peso digitado a mao num setor sem volume"
+    )
+    assert "if (tinha) {" in corpo and "gravarPeso(tela.volumesDoPedido, alvo, '');" in corpo, (
+        "e com o zero de verdade, o peso do setor se apaga"
+    )
+
+    # E os tres caminhos em que alguma coisa SAI do volume avisam isso.
+    for nome in ("async function excluirVolume(", "async function tirarDoVolume("):
+        i = js.index(nome)
+        assert "atualizarPesoDoSetorPelosVolumes(" in js[i:i + 2200], nome
+    assert js.count("atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true })") == 2, (
+        "excluir o volume e tirar um registro dizem que o zero e de verdade"
     )
     assert "!podeEditar()" in corpo, "quem so le nao dispara escrita nenhuma"
 

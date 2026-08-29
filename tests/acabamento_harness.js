@@ -3959,6 +3959,38 @@ async function oPesoDoVolumeVelhoNaoEChutado() {
        String(amb.banco._volumesDoBanco[0].peso_kg));
 }
 
+async function excluirOUltimoVolumeApagaOPesoDoSetor() {
+    // O que o usuario viu no pedido 21074 em 29/08/2026: excluidos os volumes,
+    // o campo do peso do setor continuava marcando a soma que nao existia mais.
+    //
+    // A trava que protege o peso digitado a mao ("setor sem volume nao tem o
+    // que copiar") estava pegando tambem o setor que ACABOU de perder o ultimo
+    // volume -- e os dois estados sao identicos depois do fato. Quem sabe a
+    // diferenca e quem excluiu.
+    const amb = ambienteDeVolumesComPeso();
+    amb.janela.confirm = () => true;
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const volumeId = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 26,
+       'o peso do setor era a soma do volume');
+
+    await amb.painel.excluirVolume(volumeId);
+
+    ok(amb.banco._volumesDoBanco.length === 0, 'o volume saiu');
+    ok(!amb.banco._setoresDoBanco[0].peso_real_kg,
+       'e o peso do setor foi apagado junto -- nao ha mais soma que o sustente',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(html.indexOf('input type="text" inputmode="decimal" id="acab-peso-LASER"') !== -1,
+       'e o campo volta a ser digitavel -- o pedido voltou ao fluxo de sempre');
+    ok(html.indexOf('data-somado') === -1, 'sem o rotulo de leitura');
+    ok(html.indexOf('1 volume único') !== -1 && html.indexOf('de 26,000 kg') === -1,
+       'e a faixa nao anuncia mais um peso que nao existe');
+}
+
 async function osProntosVaoParaOFimDaLista() {
     const amb = ambienteDeVolumesComPeso();
     const r = amb.painel._regras;
@@ -4033,6 +4065,7 @@ async function osProntosVaoParaOFimDaLista() {
     await cancelarASaidaDeProntoNaoMudaNada();
     await tirarUmModeloAtualizaOPesoDoVolume();
     await oPesoDoVolumeVelhoNaoEChutado();
+    await excluirOUltimoVolumeApagaOPesoDoSetor();
     await osProntosVaoParaOFimDaLista();
 })();
 

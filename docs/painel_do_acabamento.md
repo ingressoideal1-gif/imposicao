@@ -1237,10 +1237,22 @@ Pronto. O espelho `producao_volumes.peso_kg` é **recalculado do que sobrou**
 29/08/2026 o peso pode vir do `peso_kg` gravado em vez da soma dos registros, e
 a subtração partiria do número errado.
 
-E o peso do **setor** encolhe junto. Quando o último registro sai e a soma chega
-a zero, o peso do setor é **apagado** em vez de ficar no número velho: num pedido
-com volumes ele é campo de leitura, e um número velho ali seria uma mentira que o
-operador não tem como corrigir.
+E o peso do **setor** encolhe junto — inclusive até zero. Quando o último
+registro sai, ou quando o **último volume é excluído**, o peso do setor é
+**apagado** em vez de ficar no número velho.
+
+Isso deu trabalho, e vale saber por quê. Soma zero quer dizer duas coisas
+opostas, e o estado final das duas é idêntico:
+
+- setor que **nunca** teve volume — o peso é digitado à mão e pesado no fim.
+  Gravar zero ali apagaria o número do operador.
+- setor que **acabou de perder** o conteúdo — o peso é zero de verdade, e o
+  número velho é uma mentira.
+
+Quem sabe a diferença é o **chamador**, não a função: por isso
+`atualizarPesoDoSetorPelosVolumes` recebe `{ saiuVolume: true }` de quem acabou
+de tirar alguma coisa. Sem isso, o pedido 21074 mostrou 104 kg num setor cujos
+volumes já não existiam (29/08/2026).
 
 ### Tirar do volume desfaz as duas coisas
 
