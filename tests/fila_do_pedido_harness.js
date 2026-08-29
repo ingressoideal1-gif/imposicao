@@ -39,7 +39,10 @@ function extrair(nome) {
 // As funcoes de verdade que decidem o que a fila mostra. As outras (salvar
 // campo, redesenhar barra, mover a janela) sao dubles: nao mudam o desenho.
 const REAIS = ['renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
-               'modeloEhCamarote', 'textoLegivelSobre'];
+               'modeloEhCamarote', 'textoLegivelSobre',
+               'coresDoFormato', 'numeracoesDoFormato',
+               'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',
+               'encherSeletoresPendentes'];
 
 // ─── O pedido 21202: 52 modelos numa caixa so, o maior real ──────────────────
 function cenario(quantos, comCamarote) {
@@ -119,6 +122,11 @@ function cenario(quantos, comCamarote) {
             }
             function globalNormStr(s) { return String(s || '').trim().toLowerCase(); }
             function globalFuzzyMatch() { return false; }
+            // A rede de seguranca dos seletores nao entra sozinha aqui: cada
+            // teste decide quando ela roda, para medir os dois estados.
+            function agendarRedeDosSeletores() {}
+            window.encherSeletorDaFila = encherSeletorDaFila;
+            window.encherSeletoresPendentes = encherSeletoresPendentes;
             renderPedOSQueue();
         `);
     }
@@ -211,6 +219,53 @@ function cenario(quantos, comCamarote) {
     ok(!misturada.temCabecalho && misturada.temRotulo,
        'caixa que mistura Camarote e comum volta aos rotulos na linha, sem cabecalho que mentiria',
        misturada);
+
+    // ── 6. Os seletores nascem com a opcao escolhida, e so ──────────────────
+    //
+    // 124 opcoes por linha eram quase tres quartos dos elementos da tela, para
+    // o operador ver UMA linha de cada seletor. A fila se redesenha a cada
+    // clique num modelo.
+    await desenhar(cenario(52, false));
+    const enxuto = await aba.evaluate(() => ({
+        nos: document.querySelectorAll('#ped-os-queue-body *').length,
+        opcoes: document.querySelectorAll('#ped-os-queue-body option').length,
+        seletores: document.querySelectorAll('#ped-os-queue-body select[data-lista]').length,
+        // O valor escolhido tem de estar la desde o primeiro desenho: e' o que
+        // o operador LE sem abrir nada.
+        corLida: document.querySelector('#ped-os-queue-body td[title="Cor"] select').selectedOptions[0].textContent,
+        numLida: document.querySelector('#ped-os-queue-body td[title="Numeração"] select').selectedOptions[0].textContent,
+    }));
+    ok(enxuto.seletores === 104, 'os 52 modelos trazem os 104 seletores de Cor e Numeracao', enxuto);
+    ok(enxuto.opcoes < 400,
+       'que nascem com a opcao escolhida e nao com as 124 da lista inteira', enxuto);
+    ok(enxuto.nos < 3200, 'a fila cabe em menos de 3.200 elementos — eram 8.892', enxuto);
+    ok(/Cor de teste/.test(enxuto.corLida) && /Numeracao de teste/.test(enxuto.numLida),
+       'e o operador continua LENDO a cor e a numeracao do modelo sem abrir nada', enxuto);
+
+    // ── 7. Abrir o seletor traz a lista inteira, sem perder a escolha ───────
+    const aberto = await aba.evaluate(() => {
+        const s = document.querySelector('#ped-os-queue-body td[title="Cor"] select');
+        const antes = s.value;
+        s.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        return { antes, depois: s.value, opcoes: s.options.length,
+                 pintadas: Array.from(s.options).filter(o => o.style.backgroundColor).length };
+    });
+    ok(aberto.opcoes === 19, 'abrir o seletor de Cor traz as 18 cores do formato mais a opcao vazia', aberto);
+    ok(aberto.depois === aberto.antes, 'e a cor escolhida continua escolhida', aberto);
+    ok(aberto.pintadas === 18, 'com cada opcao pintada com a propria tinta', aberto);
+
+    // ── 8. A rede de seguranca enche o que ninguem abriu ────────────────────
+    //
+    // Cada estacao da grafica usa um navegador diferente. Um seletor que nao
+    // enchesse deixaria o operador sem conseguir trocar a cor do modelo.
+    const rede = await aba.evaluate(() => {
+        encherSeletoresPendentes();
+        const vazios = Array.from(document.querySelectorAll('#ped-os-queue-body select[data-lista]'))
+            .filter(s => s.options.length <= 1).length;
+        return { vazios, opcoes: document.querySelectorAll('#ped-os-queue-body option').length };
+    });
+    ok(rede.vazios === 0, 'passado o tempo, nenhum seletor fica com a lista pela metade', rede);
+    ok(rede.opcoes > 6000, 'a lista inteira esta la quando o operador precisar dela', rede);
 
     await navegador.close();
 

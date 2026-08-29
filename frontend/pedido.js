@@ -3378,6 +3378,91 @@ function textoLegivelSobre(hex) {
 }
 window.textoLegivelSobre = textoLegivelSobre;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   OS SELETORES DA FILA SE ENCHEM QUANDO O OPERADOR OS ABRE
+   ══════════════════════════════════════════════════════════════════════════
+
+   Cada linha da fila tem um seletor de Cor e um de Numeracao, e cada um nascia
+   com a lista INTEIRA dentro: no formato mais carregado do catalogo sao 18
+   cores e 106 numeracoes, 124 opcoes por linha. Num pedido de 52 modelos isso
+   e' 6.362 dos 8.892 elementos da tela — quase tres quartos dela — para o
+   operador ver, de cada seletor, UMA linha.
+
+   Medido num Chrome de verdade, redesenhando a fila do pedido 21202:
+
+       lista inteira em cada linha : 8.892 elementos, 160 ms (922 ms numa
+                                     estacao 4x mais lenta)
+       so a opcao escolhida        : 2.530 elementos,  40 ms (289 ms)
+
+   Isso importa porque a fila se redesenha a CADA clique num modelo, e o clique
+   virou um interruptor que o operador usa mais vezes que antes.
+
+   A REDE DE SEGURANCA. Encher no `mousedown` e' a via rapida e funciona em
+   Chrome, Edge e Firefox, mas cada estacao da grafica usa um navegador
+   diferente e um seletor que nao enchesse deixaria o operador sem conseguir
+   trocar a cor — regressao seria. Entao, um segundo e meio depois de a tela
+   assentar, tudo o que ainda estiver vazio se enche sozinho, fora do caminho
+   do clique. A via rapida ganha tempo; a rede garante que nao se perde nada.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** As cores que valem para este formato — a mesma regra da linha e do filtro. */
+function coresDoFormato(fmtId) {
+    return (state.cores || []).filter(c => !fmtId || !c.formato_id || String(c.formato_id) === String(fmtId));
+}
+
+/** As numeracoes que valem para este formato. */
+function numeracoesDoFormato(fmtId) {
+    return (state.numeracoes || []).filter(n => !fmtId || !n.formato_id || String(n.formato_id) === String(fmtId));
+}
+
+/** As <option> do seletor de Cor, pintadas com a tinta de cada uma. */
+function opcoesDeCorDaFila(fmtId, escolhida) {
+    return '<option value="">— Cor —</option>' + coresDoFormato(fmtId).map(c => {
+        const sel = escolhida && String(c.id) === String(escolhida) ? 'selected' : '';
+        const refHex = c.cor_referencia || c.hex || '';
+        const optStyle = refHex ? `background-color: ${refHex}; color: ${textoLegivelSobre(refHex)}; font-weight: bold;` : '';
+        return `<option value="${c.id}" ${sel} style="${optStyle}">${c.name}</option>`;
+    }).join('');
+}
+
+/** As <option> do seletor de Numeracao. */
+function opcoesDeNumeracaoDaFila(fmtId, escolhida) {
+    return '<option value="">— Numeração —</option>' + numeracoesDoFormato(fmtId).map(n => {
+        const sel = escolhida && String(n.id) === String(escolhida) ? 'selected' : '';
+        return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
+    }).join('');
+}
+
+/**
+ * Enche um seletor da fila com a lista inteira, uma vez so.
+ *
+ * Chamada quando o operador vai abrir o seletor, e tambem pela rede de
+ * seguranca logo abaixo. Preserva o que estava escolhido.
+ */
+function encherSeletorDaFila(sel) {
+    if (!sel || sel.dataset.cheio === '1') return;
+    sel.dataset.cheio = '1';
+    const escolhida = sel.value;
+    sel.innerHTML = sel.dataset.lista === 'cores'
+        ? opcoesDeCorDaFila(sel.dataset.fmt || '', escolhida)
+        : opcoesDeNumeracaoDaFila(sel.dataset.fmt || '', escolhida);
+    sel.value = escolhida;
+}
+window.encherSeletorDaFila = encherSeletorDaFila;
+
+/** A rede de seguranca: enche o que sobrou, depois que a tela assentou. */
+let _redeDosSeletores = null;
+function encherSeletoresPendentes() {
+    document.querySelectorAll('#ped-os-queue-body select[data-lista]:not([data-cheio="1"])')
+        .forEach(encherSeletorDaFila);
+}
+function agendarRedeDosSeletores() {
+    clearTimeout(_redeDosSeletores);
+    // 1,5 s: mais do que a cascata de 400/600/800 ms que a tela usa para
+    // assentar ao abrir um modelo, para nao competir com ela.
+    _redeDosSeletores = setTimeout(encherSeletoresPendentes, 1500);
+}
+
 /** O Refazer (folhas ou celulas) esta ligado? */
 function refazerLigado() {
     return (typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo())
@@ -4433,8 +4518,8 @@ function renderPedOSQueue() {
 
             let itemFmtId = boxFmtSel;
 
-            const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
-            const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
+            const coresItem = coresDoFormato(itemFmtId);
+            const numsItem  = numeracoesDoFormato(itemFmtId);
 
             // A cor já foi resolvida na volta que montou a conta do produto e a
             // lista do filtro — a bolinha da linha e o filtro do cabeçalho leem
@@ -4443,12 +4528,13 @@ function renderPedOSQueue() {
             const selectedCorId = corDoItem.selectedCorId;
             const corRefHex = corDoItem.corRefHex;
 
-            const coresOptions = coresItem.map(c => {
-                const sel = selectedCorId && String(c.id) === selectedCorId ? 'selected' : '';
-                const refHex = c.cor_referencia || c.hex || '';
-                const optStyle = refHex ? `background-color: ${refHex}; color: #000000; font-weight: bold;` : '';
-                return `<option value="${c.id}" ${sel} style="${optStyle}">${c.name}</option>`;
-            }).join('');
+            // SO A OPCAO ESCOLHIDA NASCE NO HTML. A lista inteira entra quando o
+            // operador for abrir o seletor — ou pela rede de seguranca, 1,5 s
+            // depois. Ver encherSeletorDaFila().
+            const corEscolhidaObj = selectedCorId ? coresItem.find(c => String(c.id) === selectedCorId) : null;
+            const coresOptions = corEscolhidaObj
+                ? `<option value="${corEscolhidaObj.id}" selected>${corEscolhidaObj.name}</option>`
+                : '';
 
             // O texto do seletor de Cor calcula claro ou escuro pela tinta. Ate
             // 28/08/2026 era preto fixo, e o nome de uma tinta escura sumia
@@ -4475,10 +4561,10 @@ function renderPedOSQueue() {
                     }
                 }
             }
-            const numsOptions = numsItem.map(n => {
-                const sel = selectedNumId && String(n.id) === selectedNumId ? 'selected' : '';
-                return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
-            }).join('');
+            const numEscolhidaObj = selectedNumId ? numsItem.find(n => String(n.id) === selectedNumId) : null;
+            const numsOptions = numEscolhidaObj
+                ? `<option value="${numEscolhidaObj.id}" selected>${numEscolhidaObj.name || numEscolhidaObj.tipo}</option>`
+                : '';
 
             const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
@@ -4603,18 +4689,22 @@ function renderPedOSQueue() {
                     <td style="padding: 8px; width: 190px; min-width: 190px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('COR')}
-                            <select style="${corSelectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">— Cor —</option>
-                                ${coresOptions}
+                            <select style="${corSelectStyle}" data-lista="cores" data-fmt="${itemFmtId || ''}"
+                                    onmousedown="encherSeletorDaFila(this)" onfocus="encherSeletorDaFila(this)"
+                                    onkeydown="encherSeletorDaFila(this)" ontouchstart="encherSeletorDaFila(this)"
+                                    onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                ${coresOptions || '<option value="">— Cor —</option>'}
                             </select>
                         </div>
                     </td>
                     <td style="padding: 8px; width: 200px; min-width: 200px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Núm.')}
-                            <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">— Numeração —</option>
-                                ${numsOptions}
+                            <select style="${selectStyle}" data-lista="nums" data-fmt="${itemFmtId || ''}"
+                                    onmousedown="encherSeletorDaFila(this)" onfocus="encherSeletorDaFila(this)"
+                                    onkeydown="encherSeletorDaFila(this)" ontouchstart="encherSeletorDaFila(this)"
+                                    onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                ${numsOptions || '<option value="">— Numeração —</option>'}
                             </select>
                         </div>
                     </td>
@@ -4659,6 +4749,10 @@ function renderPedOSQueue() {
     updatePedImprimirButtonsVisibility();
     // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
+
+    // A rede de seguranca dos seletores: o que o operador nao tiver aberto se
+    // enche sozinho depois que a tela assentar. Ver encherSeletoresPendentes().
+    agendarRedeDosSeletores();
 }
 
 function updatePedImprimirButtonsVisibility() {
