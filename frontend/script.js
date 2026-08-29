@@ -29911,6 +29911,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             }
             setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
             console.warn(`[OS→Imp] Nenhuma arte ou gabarito de cor encontrado para item ${item.id}`);
+        }
     }, 700);
 }
 
