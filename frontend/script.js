@@ -41797,12 +41797,24 @@ function showAgentUpdateWarning(baseUrl, latestVersion) {
         btn.textContent = 'Atualizando...';
         
         try {
-            const updateUrl = `https://ideal-imposition.vercel.app/app/ideal-imposition-agent.exe`;
-            const response = await fetch(`${baseUrl}/api/update`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ download_url: updateUrl })
-            });
+            const base = await _baseDoAgenteAgora(baseUrl);
+            if (!base) throw new Error('nenhum agente respondeu em 127.0.0.1:9000');
+
+            // SEM CORPO E SEM Content-Type, e as duas coisas importam.
+            //
+            // O corpo: ate 2026 o banner mandava um `download_url` apontando
+            // para `/app/ideal-imposition-agent.exe` na Vercel. Aquele arquivo
+            // NAO EXISTE MAIS (da 404), e o endpoint IGNORA o campo de
+            // proposito -- aceitar a origem do download vinda da requisicao
+            // transformava o /api/update numa porta de execucao remota, e isso
+            // foi fechado. Hoje a origem vem do manifesto de URL fixa compilada
+            // no binario, conferida por sha256.
+            //
+            // O cabecalho: `Content-Type: application/json` torna a requisicao
+            // NAO-SIMPLES e obriga um preflight OPTIONS. Sem ele o POST nao
+            // pode falhar por CORS -- um caminho a menos para dar
+            // "Failed to fetch" sem dizer por que.
+            const response = await fetch(`${base}/api/update`, { method: 'POST' });
             
             if (response.ok) {
                 toast('Atualização iniciada! O Agente Local irá reiniciar.', 'success');
@@ -41816,12 +41828,46 @@ function showAgentUpdateWarning(baseUrl, latestVersion) {
             }
         } catch (err) {
             console.error('Falha ao atualizar agente local:', err);
-            toast('Erro ao atualizar agente: ' + err.message, 'error');
+            // A MENSAGEM DIZ A SAIDA. "Failed to fetch" sozinho nao diz nada a
+            // quem esta na estacao, e o menu da bandeja sempre funciona --
+            // aquele caminho nao passa pelo navegador.
+            toast('Nao deu para pedir a atualizacao daqui (' + (err.message || err) + '). '
+                + 'Use o menu da bandeja do NewProd -> Atualizar agora.', 'error');
             btn.disabled = false;
             btn.textContent = 'Atualizar Agora';
         }
     };
 }
+
+/**
+ * O endereco do agente NO MOMENTO DO CLIQUE.
+ *
+ * O banner nasce com um `baseUrl` capturado quando ele foi criado, e esse
+ * endereco pode nao ser o do agente: o banner e' mostrado por DOIS caminhos, e
+ * um deles sonda uma lista que comeca pelo endereco da PROPRIA PAGINA. Pedir a
+ * atualizacao para a Vercel nao atualiza agente nenhum.
+ *
+ * So' aceita 127.0.0.1 e localhost, e so' quem responde `/api/status` dizendo
+ * que NAO e' a nuvem. Agente da nuvem nao se atualiza -- nem existe mais.
+ */
+async function _baseDoAgenteAgora(preferido) {
+    const bases = [preferido, 'http://127.0.0.1:9000', 'http://localhost:9000']
+        .filter(b => b && /^https?:\/\/(127\.0\.0\.1|localhost)[:\/]/.test(b));
+
+    for (const base of bases) {
+        try {
+            const ctrl = new AbortController();
+            const prazo = setTimeout(() => ctrl.abort(), 2500);
+            const r = await fetch(`${base}/api/status`, { mode: 'cors', signal: ctrl.signal });
+            clearTimeout(prazo);
+            if (!r.ok) continue;
+            const d = await r.json();
+            if (d && d.version && d.onde !== 'nuvem') return base;
+        } catch (_) { /* proxima base */ }
+    }
+    return null;
+}
+window._baseDoAgenteAgora = _baseDoAgenteAgora;
 
 window.showAgentUpdateWarning = showAgentUpdateWarning;
 

@@ -4,6 +4,54 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — O banner "Atualizar Agora" apontava para um arquivo que não existe
+
+Relato do usuário: **"Erro ao atualizar agente: Failed to fetch"**.
+
+### O que a investigação achou
+
+O banner do painel carregava **dois contratos mortos**, e os dois foram
+conferidos, não deduzidos:
+
+| O que ele fazia | O que é hoje |
+|---|---|
+| mandava `download_url` = `.../app/ideal-imposition-agent.exe` | esse endereço responde **404** — o agente virou MSI no Storage do Supabase |
+| mandava o campo no corpo da requisição | o `/api/update` **ignora** o corpo de propósito |
+
+A segunda é a que importa: aceitar a origem do download vinda da requisição
+transformava o endpoint numa **porta de execução remota** — qualquer site aberto
+no navegador do operador conseguia mandar o agente baixar e executar um binário.
+Isso foi fechado no agente; o painel é que continuou falando o contrato antigo.
+
+E o `/api/update` daqui responde **200**, com preflight e tudo — medido contra o
+agente 1.2.262 desta máquina. Ou seja: o "Failed to fetch" não vinha do endpoint,
+vinha de **para onde** o banner estava pedindo.
+
+### As três correções
+
+1. **O agente é procurado no momento do clique** (`_baseDoAgenteAgora`). O banner
+   nascia com um `baseUrl` capturado na criação, e ele é mostrado por **dois**
+   caminhos — um deles sonda uma lista que começa pelo endereço da **própria
+   página**. Pedir a atualização para a Vercel não atualiza agente nenhum, e
+   falha exatamente assim.
+2. **O POST virou requisição simples**: sem corpo e sem `Content-Type`. Cada
+   preflight é mais um jeito de dar "Failed to fetch" sem dizer por quê — e o
+   corpo que ele carregava nem era lido.
+3. **A falha diz a saída**: *"Use o menu da bandeja do NewProd → Atualizar
+   agora"*. Aquele caminho não passa pelo navegador e sempre funciona. Toda trava
+   desta aplicação precisa dizer como sair dela.
+
+**Cinco testes novos** (`tests/test_banner_de_atualizacao.py`), inclusive o que
+guarda a trava do lado do agente: o `/api/update` não pode voltar a **ler** a
+origem do download da requisição.
+
+> Nota de método, terceira vez hoje: o primeiro desses testes reprovou porque eu
+> procurei a **palavra** `download_url`, e ela está na docstring que explica a
+> remoção. Procurar a citação reprova a explicação junto com o defeito — a busca
+> tem de ser pela **leitura** do campo, não pelo nome dele.
+
+---
+
 ## [2026-08-29] — A Montagem não sabia o formato (v772)
 
 Relato do usuário logo depois da v771, ao gerar o PDF:
