@@ -3489,13 +3489,30 @@ function recolherJanelaParaCasa() {
 }
 
 /**
+ * Rola a tela suavemente para que a base da janela de visualização do modelo
+ * selecionado se alinhe com a base da tela (monitor / viewport).
+ */
+function rolarParaBaseDaJanela() {
+    setTimeout(() => {
+        const abrigo = document.getElementById('ped-linha-da-janela');
+        const janela = (abrigo && abrigo.style.display !== 'none') ? abrigo : document.getElementById('ped-preview-container');
+        if (!janela) return;
+        if (typeof janela.scrollIntoView === 'function') {
+            janela.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
+        }
+    }, 80);
+}
+window.rolarParaBaseDaJanela = rolarParaBaseDaJanela;
+
+/**
  * Leva a janela para uma linha-abrigo logo abaixo do modelo pedido.
  *
  * Devolve `true` se conseguiu. Falha em silencio (e devolve `false`) quando a
  * linha nao esta na tela — o modelo pode ter sido escondido por um filtro, ou
  * a fila pode ainda nao ter sido desenhada.
  */
-function moverJanelaParaModelo(itemId) {
+function moverJanelaParaModelo(itemId, opts = {}) {
+    const { rolar = false } = opts;
     const janela = janelaDeVisualizacao();
     if (!janela) return false;                    // producao.html nao tem a janela
     const linha = document.getElementById(`ped-queue-row-${itemId}`);
@@ -3513,6 +3530,10 @@ function moverJanelaParaModelo(itemId) {
     linha.parentNode.insertBefore(abrigo, linha.nextSibling);
     abrigo.firstElementChild.appendChild(janela);
     janela.style.display = 'block';
+
+    if (rolar && typeof rolarParaBaseDaJanela === 'function') {
+        rolarParaBaseDaJanela();
+    }
     return true;
 }
 
@@ -3641,7 +3662,7 @@ async function enviarParaPedido(itemId, osId) {
     // O realce da linha e' imediato: o operador ve o clique valer sem esperar
     // o carregamento. A janela vai junto, se a fila ja estiver desenhada.
     pintarLinhaAberta(item.id);
-    moverJanelaParaModelo(item.id);
+    moverJanelaParaModelo(item.id, { rolar: true });
 
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
     // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
@@ -4521,12 +4542,12 @@ function renderPedOSQueue() {
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
 
-            let statusBg = '#3b82f6'; // Aguardando
+            let statusBg = '#3143c3'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#090b19'; // Impresso
             }
             if (isSelected) {
-                statusBg = '#1a046d'; // Selecionado
+                statusBg = '#4a26b0'; // Selecionado
             }
 
             // O contorno saiu do style inline e virou classe: `marcada` (entra na

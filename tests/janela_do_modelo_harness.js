@@ -53,6 +53,7 @@ function extrair(nome) {
 }
 
 const NOMES = [
+    'rolarParaBaseDaJanela',
     'janelaDeVisualizacao', 'recolherJanelaParaCasa', 'moverJanelaParaModelo',
     'pintarLinhaAberta', 'limparPreviaEnquantoCarrega', 'previaFicouPronta',
     'fecharJanelaDoModelo', 'alternarModeloAberto',

@@ -30232,12 +30232,12 @@ function renderImpOSQueue() {
             
             const isSelected = (state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id))) || isActive;
             
-            let statusBg = '#3b82f6'; // Aguardando
+            let statusBg = '#3143c3'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#090b19'; // Impresso
             }
             if (isSelected) {
-                statusBg = '#1a046d'; // Selecionado
+                statusBg = '#4a26b0'; // Selecionado
             }
 
             const rowStroke = isActive ? 'outline: 2pt solid #f97316;' : 'outline: 1px solid #918f8c;';

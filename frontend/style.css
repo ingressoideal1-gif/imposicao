@@ -4184,11 +4184,11 @@ input[type=number] {
    quem de fato desenha os cantos da linha — com `border-collapse: separate`,
    o `<tr>` sozinho nao arredonda as extremidades. */
 tr.fila-linha            { outline: 1px solid #918f8c; border-radius: 10px; }
-tr.fila-linha.marcada    { outline: 2pt solid #f97316; background: #1a046d !important; }
+tr.fila-linha.marcada    { outline: 2pt solid #f97316; background: #4a26b0 !important; }
 tr.fila-linha.aberta     { outline: 2pt solid #3b82f6; }
 tr.fila-linha.marcada.aberta {
     outline: 2pt solid #f97316;
-    background: #1a046d !important;
+    background: #4a26b0 !important;
     box-shadow: inset 5px 0 0 0 #3b82f6;
 }
 tr.fila-linha > td:first-child {
