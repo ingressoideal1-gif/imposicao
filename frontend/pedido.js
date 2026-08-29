@@ -3897,15 +3897,6 @@ async function enviarParaPedido(itemId, osId) {
             setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
         }
     }, 700);
-
-    // --- TOAST ---
-    const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
-    const osNum = os ? os.numero : '';
-    const fmtSelect = document.getElementById('ped-formato');
-    const currentFmtId = fmtSelect ? fmtSelect.value : '';
-    const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(currentFmtId || item.formato_id)) : null;
-    const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato Não Definido');
-    toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na Imposição!`, 'info');
 }
 window.enviarParaPedido = enviarParaPedido;
 
@@ -4530,9 +4521,12 @@ function renderPedOSQueue() {
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
 
-            let statusBg = '#65625e'; // Aguardando
+            let statusBg = '#3b82f6'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
-                statusBg = '#162037'; // Impresso
+                statusBg = '#090b19'; // Impresso
+            }
+            if (isSelected) {
+                statusBg = '#1a046d'; // Selecionado
             }
 
             // O contorno saiu do style inline e virou classe: `marcada` (entra na

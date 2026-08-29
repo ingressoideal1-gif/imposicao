@@ -29911,14 +29911,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             }
             setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
             console.warn(`[OS→Imp] Nenhuma arte ou gabarito de cor encontrado para item ${item.id}`);
-        }
     }, 700);
-
-    const os = state.ordens.find(o => o.id === osId);
-    const osNum = os ? os.numero : '';
-    const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
-    const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato Não Definido');
-    toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na Imposição!`, 'info');
 }
 
 // -------------------------------------------------------------------------------
@@ -30236,9 +30229,14 @@ function renderImpOSQueue() {
             const isActive = !!activeItem && String(activeItem.itemId) === String(item.id);
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
             
-            let statusBg = '#65625e'; // Aguardando
+            const isSelected = (state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id))) || isActive;
+            
+            let statusBg = '#3b82f6'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
-                statusBg = '#162037'; // Impresso
+                statusBg = '#090b19'; // Impresso
+            }
+            if (isSelected) {
+                statusBg = '#1a046d'; // Selecionado
             }
 
             const rowStroke = isActive ? 'outline: 2pt solid #f97316;' : 'outline: 1px solid #918f8c;';
