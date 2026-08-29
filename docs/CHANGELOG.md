@@ -112,6 +112,104 @@ arquivo todo. Agora existe o **"Conferindo se o painel abre"** — um
 parado aquela publicação. Quatro testes novos travam o freio, e um quinto
 confere que o painel que está na pasta agora passa por ele.
 
+### O Hot Folder virou botao proprio, com ladrilhos de pasta
+
+> *"no painel de producao, ao editar o pedido, vamos tirar as opcoes de Hot
+> Folder de dentro das configuracoes de impressao, sera um botao a parte, ao
+> clicar e selecionar ele ja estara ativo e vai mostrar abaixo do botao icones de
+> pastas coloridas e com nomes das pastas, selecionalas escolhe o hot folder"*
+
+Ele era uma caixa de marcar dentro de *Configuracao de Impressao*, com o caminho
+da pasta num campo de texto. Agora e' o **segundo grupo da coluna direita**, antes
+da Configuracao — ele decide **para onde** o material vai, e o resto daquele grupo
+so' faz sentido depois dessa escolha.
+
+**A lista de pastas ja existia, e era invisivel.** O `hot_folders.json` da estacao
+guarda as pastas autorizadas desde sempre, mas nada a mostrava: cada trabalho
+recomecava do seletor nativo do Windows, e o operador tinha de reencontrar no
+disco uma pasta que a maquina ja conhecia. Faltava so' a casca HTTP —
+`GET /api/hotfolder/listar`.
+
+Cada pasta virou um **ladrilho**: icone de pasta colorido, o nome (o ultimo trecho
+do caminho), o caminho inteiro na dica, e um **x** que a tira da lista. Um
+ladrilho `+ Adicionar pasta...` abre o seletor nativo.
+
+**A cor sai do proprio caminho**, e nao de uma escolha: um hash decide entre 12
+matizes espacadas de 30 graus. Cor guardada seria mais um campo para alguem
+preencher, mais uma tela para edita-lo, e um valor a menos que a estacao responde
+sozinha. Derivada, a mesma pasta tem sempre a mesma cor — e e' isso que faz o
+operador reconhecer o ladrilho sem ler.
+
+**Nao ha mais caixa de "ativar": escolher a pasta E' ativar.** Antes eram dois
+estados guardados separados, e eles podiam discordar — caixa marcada sem pasta
+atravessava a tela inteira e so' era barrada no botao Imprimir. Clicar no ladrilho
+ja escolhido desliga; clicar em outro troca. O botao do grupo leva um **selo com o
+nome da pasta** enquanto esta ativo, porque o estado nao pode se esconder junto
+com os controles.
+
+Duas coisas que a lista visivel obrigou a criar:
+
+- **Pasta que a estacao nao acha** aparece tracejada, riscada, em vermelho. Se ela
+  so' falhasse na hora do envio, o operador descobriria com o material pronto e a
+  impressora parada.
+- **O x para tirar da lista** (`POST /api/hotfolder/esquecer`). Enquanto a lista
+  era invisivel, pasta velha nao incomodava ninguem; mostrada, ela vira entulho
+  que esconde a pasta certa.
+
+**O caminho da impressao nao mudou.** `_hotFolderAtivo()` e `_hotFolderPath()`
+ficaram com o mesmo nome e o mesmo contrato — o que mudou por dentro foi so' de
+onde vem o "ativo" —, e o `#ped-hotfolder-path` continua sendo o campo que as duas
+leem, agora escondido. Sao quatro pontos do envio que dependem delas, e e' o
+material da grafica que paga um engano ali.
+
+E a autorizacao continua de pe: o `/drop` exige que a pasta esteja registrada, e o
+registro continua saindo so' do seletor nativo ou da validacao explicita. Mostrar
+a lista nao afrouxou nada — sem ela, uma pagina aberta no navegador do operador
+poderia gravar arquivos na estacao.
+
+**48 verificacoes novas** no `hot_folder_ladrilhos_harness.js`, num Chrome de
+verdade. A que mais importa nao e' visual: um caminho como `C:\novo\tab\rip
+d'agua` entra dentro de um `onclick` entre aspas simples, e sem dobrar a
+contrabarra o `\n` vira quebra de linha dentro do JavaScript — o ladrilho
+nasceria morto, sem erro nenhum na tela.
+
+**O icone teve de virar SVG.** A primeira versao usava o emoji da pasta. Ele vem
+colorido pela fonte do sistema e **ignora `color`** — as tres pastas sairiam do
+mesmo amarelo, e "icones de pastas coloridas" viraria "icones de pastas iguais",
+sem erro nenhum na tela. O desenho passou a ser um SVG com `fill="currentColor"`,
+e o harness le a **cor do pixel que o Chrome de fato pintou**, em vez de conferir
+que a regra de CSS existe.
+
+**E o harness da entrega imediata pegou a mudanca de semantica.** Ele montava o
+caso "sem destino" desmarcando a caixa `ped-hotfolder-enabled` — que deixou de
+existir — enquanto o cenario-base deixava uma pasta no campo. Com a caixa fora,
+"desligar" passou a ser apagar a pasta, e o teste falhou dizendo exatamente isso.
+Foi corrigido para a regra nova, e ganhou o caso do outro lado: sem pasta e com
+impressora, a entrega nasce e vai para a impressora.
+
+**A rota que lista as pastas precisou de prazo.** `os.path.isdir` num caminho de
+rede cujo servidor nao responde **nao devolve `False` — ele trava**, ate o timeout
+do SMB. Medido com um IP inalcancavel: **26,64 s**. A tela espera essa rota ao
+abrir o modelo, e o operador esta de pe na frente da impressora. Agora as pastas
+sao conferidas em paralelo com prazo TOTAL de 1,5 s, e quem nao responde a tempo
+volta como `existe: null` — *"nao sei"*, que e' diferente de *"nao existe"*:
+acusar de sumida uma pasta que apenas demorou seria mentir.
+
+O prazo sozinho nao bastou, e essa foi a parte que quase escapou: com o pool num
+`with`, o `__exit__` chama `shutdown(wait=True)` e **espera todas as threads**,
+inclusive a travada. A resposta continuava saindo 26 s depois, com o `wait()` de
+1,5 s tendo retornado havia muito. Sem o `with`, e com `shutdown(wait=False)`:
+**1,52 s**.
+
+**E o nome da pasta divergia entre o agente e a tela.** Numa raiz de
+compartilhamento (`\\servidor\travada`) o Windows trata o caminho inteiro como
+raiz, e o `os.path.basename` devolve string vazia: o agente caia no caminho
+completo enquanto o `_nomeDaPasta` do frontend dizia *"travada"*. A mesma pasta
+com dois nomes, dependendo de onde a resposta veio. O agente passou a espelhar a
+regra do frontend — separar por barra e pegar o ultimo trecho nao vazio.
+
+> Esta leva **exige publicar o agente**: as duas rotas novas moram nele.
+
 ### O cabeçalho do CHANGELOG parou de ser escrito à mão
 
 O `CHANGELOG.md` da raiz abre com *"Versão atual: vNNN | Agente X.Y.Z"*. Escrito à

@@ -1864,6 +1864,93 @@ async def save_print_config_endpoint(request: Request):
 # Print): o PDF e gravado numa pasta e o RIP o importa, aplicando o preset
 # daquela pasta. Toda a logica esta em hotfolder.py; aqui so ha a casca HTTP.
 
+@app.get("/api/hotfolder/listar")
+def hotfolder_listar():
+    """As pastas ja autorizadas nesta estacao, para a tela desenhar os ladrilhos.
+
+    A lista existia desde sempre no hot_folders.json, mas so' era consultada por
+    dentro (para autorizar a gravacao). Sem esta rota, a tela nao tinha como
+    mostrar ao operador o que ele ja tinha escolhido antes: cada trabalho
+    recomecava do seletor nativo.
+
+    `existe` vai junto de proposito. Pasta que sumiu (a rede caiu, alguem
+    renomeou) precisa aparecer QUEBRADA na tela; se ela s'o falhasse na hora do
+    envio, o operador descobriria com o material pronto e a impressora parada.
+
+    COM PRAZO, e por um motivo que custa caro: `os.path.isdir` num caminho de
+    rede cujo servidor nao responde nao devolve "false" — ele TRAVA, ate o
+    timeout do SMB, que sao dezenas de segundos. Esta rota e' esperada pela
+    tela ao abrir o modelo; sem prazo, uma pasta de rede fora do ar seguraria a
+    janela inteira, e o operador esta de pe na frente da impressora.
+
+    Pasta que nao responde a tempo devolve `existe: null` -- "nao sei", que e'
+    diferente de "nao existe". A tela so' marca como quebrada quem responde
+    `false`: acusar de sumida uma pasta que apenas demorou seria mentir.
+
+    Nao expoe nada de novo: o /api/print-config/{produto_id} ja devolve o
+    hot_folder_path gravado, e o CORS do agente e' restrito as origens do painel.
+    """
+    import concurrent.futures
+
+    pastas = [p for p in db.list_hot_folders() if (p.get("path") or "").strip()]
+    caminhos = [(p.get("path") or "").strip() for p in pastas]
+
+    existe = {}
+    if caminhos:
+        # SEM `with`, de proposito. O __exit__ do ThreadPoolExecutor chama
+        # shutdown(wait=True) e espera TODAS as threads terminarem -- inclusive
+        # a que esta travada no SMB. Medido: com `with`, a resposta so' saia
+        # 26,6s depois, mesmo com o wait() de 1,5s ja tendo retornado. O prazo
+        # existia e nao servia para nada.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        try:
+            futuros = {pool.submit(os.path.isdir, c): c for c in caminhos}
+            # Prazo TOTAL, e nao por pasta: dez pastas travadas com 1,5s cada
+            # dariam quinze segundos de janela parada.
+            feitos, _ = concurrent.futures.wait(futuros, timeout=1.5)
+            for f in feitos:
+                try:
+                    existe[futuros[f]] = f.result()
+                except Exception:
+                    existe[futuros[f]] = None
+        finally:
+            # A thread presa termina sozinha quando o SMB desistir; ate la ela
+            # nao segura mais ninguem.
+            pool.shutdown(wait=False)
+
+    saida = [{
+        "path": c,
+        "nome": hotfolder.nome_curto(c),
+        "existe": existe.get(c),          # None = nao deu tempo de conferir
+        "registrada_em": p.get("registrada_em") or "",
+    } for p, c in zip(pastas, caminhos)]
+
+    saida.sort(key=lambda d: d["nome"].lower())
+    return {"ok": True, "pastas": saida}
+
+
+@app.post("/api/hotfolder/esquecer")
+async def hotfolder_esquecer(request: Request):
+    """Tira uma pasta da lista da estacao.
+
+    Nasceu junto com os ladrilhos: enquanto a lista era invisivel, pasta velha
+    nao incomodava ninguem. Mostrada na tela, ela vira entulho que o operador
+    precisa poder limpar — e uma lista que so' cresce acaba escondendo a pasta
+    certa no meio das antigas.
+
+    Esquecer tambem RETIRA a autorizacao de gravar ali, que e' o que a lista
+    guarda. Nada e' apagado do disco: a pasta continua onde estava.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    caminho = (data.get("path") or "").strip()
+    if not caminho:
+        return {"ok": False, "detail": "informe a pasta"}
+    return {"ok": db.esquecer_hot_folder(caminho)}
+
+
 @app.post("/api/hotfolder/escolher")
 def hotfolder_escolher(payload: dict | None = None):
     """Abre o seletor nativo de pasta NA ESTACAO e registra o que for escolhido.

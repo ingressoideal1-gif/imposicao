@@ -3311,6 +3311,14 @@ function alternarGrupoDaJanela(id) {
         if (typeof desenharCurvaCor === 'function') desenharCurvaCor();
         if (typeof desenharPreviaCor === 'function') desenharPreviaCor();
     }
+
+    // As pastas do hot folder sao do DISCO da estacao, e o disco muda por fora
+    // do painel: alguem cria uma pasta no RIP, a rede cai, um mapeamento some.
+    // Reler ao abrir custa uma requisicao ao agente local e evita o pior caso —
+    // o operador escolher um ladrilho de pasta que ja nao existe.
+    if (abrir && id === 'jg-hotfolder' && typeof carregarHotFolders === 'function') {
+        carregarHotFolders();
+    }
 }
 window.alternarGrupoDaJanela = alternarGrupoDaJanela;
 

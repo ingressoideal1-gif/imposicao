@@ -39092,6 +39092,12 @@ async function initPedPrintPanel() {
     const panel = document.getElementById('ped-print-driver-panel');
     if (!panel) return;
 
+    // As pastas do hot folder sao da estacao, como as impressoras, e a tela
+    // precisa delas ANTES de o produto ser aplicado: o _applyPrintConfig marca
+    // o ladrilho da pasta gravada, e sem a grade desenhada nao ha o que marcar.
+    // Nao segura o painel se o agente nao responder — a funcao trata sozinha.
+    await carregarHotFolders();
+
     // Popular select de impressoras
     await _loadPrinterListIfEmpty();
     const sel = document.getElementById('ped-print-printer');
@@ -39677,8 +39683,12 @@ async function onPedPrinterChange() {
 // aparece ali e aplica a ele o preset daquela pasta. Marcada a caixa, o material
 // imposto e gravado na pasta em vez de ir para a impressora.
 
+// O estado do hot folder e' UMA coisa so': ha' pasta escolhida, ou nao ha'.
+// Ate 29/08/2026 eram duas — uma caixa "ativar" e um caminho —, e elas podiam
+// discordar: caixa marcada sem pasta chegava ate o botao Imprimir para ser
+// barrada la'. Escolher a pasta E' ativar; tirar a escolha E' desligar.
 function _hotFolderAtivo() {
-    return document.getElementById('ped-hotfolder-enabled')?.checked === true;
+    return _hotFolderPath() !== '';
 }
 
 function _hotFolderPath() {
@@ -39702,6 +39712,211 @@ function _hotFolderStatus(html, tipo) {
     el.style.display = 'block';
 }
 
+// ── Os ladrilhos ────────────────────────────────────────────────────────────
+// A lista de pastas autorizadas sempre existiu na estacao (hot_folders.json),
+// mas era invisivel: cada trabalho recomecava do seletor nativo do Windows, e o
+// operador tinha de reencontrar no disco uma pasta que a maquina ja conhecia.
+// Agora ela vira ladrilho, com o nome da pasta e uma cor.
+
+let _hotFoldersDaEstacao = [];      // o que o agente respondeu
+let _hotFoldersCarregando = false;
+
+/** O nome curto: o ultimo trecho do caminho, que e' o que distingue as pastas. */
+function _nomeDaPasta(caminho) {
+    const c = String(caminho || '').trim().replace(/[\\/]+$/, '');
+    if (!c) return '';
+    const partes = c.split(/[\\/]/);
+    return partes[partes.length - 1] || c;
+}
+
+/**
+ * A cor do ladrilho, tirada do PROPRIO caminho.
+ *
+ * Deliberadamente derivada, e nao escolhida: cor guardada seria mais um campo
+ * para alguem preencher, mais uma tela para edita-lo, e um valor a menos que a
+ * estacao consegue responder sozinha. Derivada, a mesma pasta tem sempre a
+ * mesma cor — hoje, amanha e na estacao do lado — e e' isso que faz o operador
+ * reconhecer o ladrilho sem ler.
+ *
+ * As 12 matizes sao espacadas de 30 graus para nao nascerem duas cores que so
+ * um colorimetro distingue.
+ */
+function _corDaPasta(caminho) {
+    const c = String(caminho || '').toLowerCase();
+    let h = 0;
+    for (let i = 0; i < c.length; i++) h = ((h << 5) - h + c.charCodeAt(i)) | 0;
+    const matiz = (Math.abs(h) % 12) * 30;
+    return {
+        forte: `hsl(${matiz}, 70%, 58%)`,
+        fraca: `hsla(${matiz}, 70%, 58%, 0.14)`,
+        borda: `hsla(${matiz}, 70%, 58%, 0.45)`,
+    };
+}
+
+async function carregarHotFolders({ redesenhar = true } = {}) {
+    if (_hotFoldersCarregando) return _hotFoldersDaEstacao;
+    _hotFoldersCarregando = true;
+    try {
+        const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/listar`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        _hotFoldersDaEstacao = Array.isArray(data.pastas) ? data.pastas : [];
+    } catch (e) {
+        // Agente parado ou painel fora da estacao. Nao e' erro de tela: a lista
+        // fica vazia e o "cole o caminho" continua sendo a saida.
+        console.warn('[hotFolder] nao consegui listar as pastas da estacao:', e);
+        _hotFoldersDaEstacao = [];
+    } finally {
+        _hotFoldersCarregando = false;
+    }
+    if (redesenhar) desenharGradeHotFolders();
+    return _hotFoldersDaEstacao;
+}
+window.carregarHotFolders = carregarHotFolders;
+
+/**
+ * O desenho da pasta, em SVG.
+ *
+ * NAO e' o emoji 📁, e a diferenca e' o recurso inteiro: o emoji vem colorido
+ * pela fonte do sistema, ignora `color` e ignora `filter` — as pastas sairiam
+ * todas do mesmo amarelo, e "icones de pastas coloridas" viraria "icones de
+ * pastas iguais". O SVG pinta com `currentColor`, entao a cor do ladrilho
+ * chega mesmo ao desenho.
+ */
+function _svgDaPasta() {
+    return '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">'
+         + '<path fill="currentColor" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/>'
+         + '</svg>';
+}
+
+/** A mesma pasta, com um x — a que a estacao nao acha agora. */
+function _svgDaPastaSumida() {
+    return '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">'
+         + '<path fill="currentColor" opacity="0.55" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/>'
+         + '<path stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M9 11l6 6M15 11l-6 6"/>'
+         + '</svg>';
+}
+
+/** Dois caminhos apontam para a mesma pasta? Espelha hotfolder.normalizar(). */
+function _mesmaPasta(a, b) {
+    const n = s => String(s || '').trim().replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase();
+    const na = n(a);
+    return na !== '' && na === n(b);
+}
+
+/**
+ * Desenha os ladrilhos.
+ *
+ * A pasta gravada para o produto entra na grade mesmo que o agente nao a tenha
+ * listado (estacao trocada, agente parado): esconder o ladrilho da pasta que
+ * ESTA valendo faria a tela mentir sobre o que vai acontecer ao imprimir.
+ */
+function desenharGradeHotFolders() {
+    const grade = document.getElementById('ped-hotfolder-grade');
+    if (!grade) return;
+
+    const escolhida = _hotFolderPath();
+    const lista = _hotFoldersDaEstacao.slice();
+    if (escolhida && !lista.some(p => _mesmaPasta(p.path, escolhida))) {
+        lista.unshift({ path: escolhida, nome: _nomeDaPasta(escolhida), existe: true });
+    }
+
+    const esc = s => (typeof escapeHtml === 'function')
+        ? escapeHtml(String(s == null ? '' : s))
+        : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // O caminho vai para dentro de um atributo onclick com aspas simples: a
+    // contrabarra do Windows precisa ser dobrada, senao "C:\novo" vira quebra de
+    // linha dentro do JavaScript e o ladrilho nasce morto.
+    const arg = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    const partes = lista.map(p => {
+        const cor = _corDaPasta(p.path);
+        const sel = _mesmaPasta(p.path, escolhida);
+        const sumiu = p.existe === false;
+        const nome = esc(p.nome || _nomeDaPasta(p.path));
+        const dica = esc(p.path) + (sumiu ? ' — a pasta nao esta acessivel agora' : '');
+        const a = arg(p.path);
+        return `
+            <div class="hf-ladrilho${sel ? ' hf-sel' : ''}${sumiu ? ' hf-sumiu' : ''}"
+                 style="--hf-forte:${cor.forte};--hf-fraca:${cor.fraca};--hf-borda:${cor.borda};"
+                 title="${dica}" role="button" tabindex="0"
+                 onclick="escolherHotFolderDaGrade('${a}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();escolherHotFolderDaGrade('${a}');}">
+                <span class="hf-icone">${sumiu ? _svgDaPastaSumida() : _svgDaPasta()}</span>
+                <span class="hf-nome">${nome}</span>
+                <button type="button" class="hf-tirar" title="Tirar esta pasta da lista desta estacao"
+                        onclick="event.stopPropagation(); esquecerHotFolder('${a}')">&times;</button>
+            </div>`;
+    });
+
+    partes.push(`
+        <div class="hf-ladrilho hf-add" role="button" tabindex="0"
+             title="Abrir o seletor de pastas nesta estacao"
+             onclick="escolherHotFolder()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();escolherHotFolder();}">
+            <span class="hf-icone">&#43;</span>
+            <span class="hf-nome">Adicionar pasta&hellip;</span>
+        </div>`);
+
+    grade.innerHTML = partes.join('');
+}
+window.desenharGradeHotFolders = desenharGradeHotFolders;
+
+/**
+ * Clicar num ladrilho: escolhe aquela pasta — e escolher E' ativar.
+ * Clicar no ladrilho ja escolhido desfaz e devolve o trabalho a impressora.
+ */
+function escolherHotFolderDaGrade(caminho) {
+    const campo = document.getElementById('ped-hotfolder-path');
+    if (!campo) return;
+
+    if (_mesmaPasta(caminho, _hotFolderPath())) {
+        campo.value = '';
+        _hotFolderStatus('', null);
+    } else {
+        campo.value = caminho;
+        const p = _hotFoldersDaEstacao.find(x => _mesmaPasta(x.path, caminho));
+        const cam = (typeof escapeHtml === 'function') ? escapeHtml(caminho) : caminho;
+        if (p && p.existe === false) {
+            _hotFolderStatus(
+                `&#9888; A pasta <code>${cam}</code> nao esta acessivel agora. ` +
+                `O envio vai falhar enquanto ela nao voltar.`, 'erro');
+        } else {
+            _hotFolderStatus(`&#10003; Sai para <code>${cam}</code>`, 'ok');
+        }
+    }
+    _aplicarEstadoHotFolder();
+    desenharGradeHotFolders();
+}
+window.escolherHotFolderDaGrade = escolherHotFolderDaGrade;
+
+/** Tira a pasta da lista da estacao. Nada e' apagado do disco. */
+async function esquecerHotFolder(caminho) {
+    const pergunta = `Tirar "${_nomeDaPasta(caminho)}" da lista desta estacao?\n\n`
+        + `A pasta continua no disco — ela so deixa de aparecer aqui e perde a `
+        + `autorizacao de receber material.`;
+    if (!confirm(pergunta)) return;
+    try {
+        await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/esquecer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: caminho })
+        });
+    } catch (e) {
+        console.warn('[hotFolder] nao consegui esquecer a pasta:', e);
+    }
+    // Esquecida a pasta que estava escolhida, o trabalho volta para a impressora.
+    if (_mesmaPasta(caminho, _hotFolderPath())) {
+        const campo = document.getElementById('ped-hotfolder-path');
+        if (campo) campo.value = '';
+        _hotFolderStatus('', null);
+        _aplicarEstadoHotFolder();
+    }
+    await carregarHotFolders();
+}
+window.esquecerHotFolder = esquecerHotFolder;
+
 // Hot folder nao carrega DEVMODE: bandeja, papel, frente/verso, cor e copias sao
 // do preset da pasta no RIP — e numa impressora de rolo para sublimacao metade
 // desses conceitos nem existe. Deixar os campos ativos faria o operador marcar
@@ -39713,8 +39928,16 @@ function _hotFolderStatus(html, tipo) {
 function _aplicarEstadoHotFolder() {
     const ativo = _hotFolderAtivo();
 
-    const detalhes = document.getElementById('ped-hotfolder-detalhes');
-    if (detalhes) detalhes.style.display = ativo ? 'flex' : 'none';
+    // O ESTADO nao se esconde com os controles: fechado o grupo, o selo continua
+    // dizendo para onde o material vai. Mesma regra do Gerenciamento de Cores.
+    const selo = document.getElementById('ped-hotfolder-selo');
+    if (selo) {
+        selo.textContent = ativo ? _nomeDaPasta(_hotFolderPath()) : '';
+        selo.style.display = ativo ? 'inline-block' : 'none';
+    }
+
+    const aviso = document.getElementById('ped-hotfolder-aviso');
+    if (aviso) aviso.style.display = ativo ? 'block' : 'none';
 
     ['ped-printer-box', 'ped-driver-options'].forEach(id => {
         const el = document.getElementById(id);
@@ -39732,22 +39955,14 @@ function _aplicarEstadoHotFolder() {
     if (secaoSalvar && ativo && _getActiveProductInfo()) secaoSalvar.style.display = 'block';
 }
 
-function onPedHotFolderToggle() {
-    _aplicarEstadoHotFolder();
-    if (_hotFolderAtivo()) {
-        if (!_hotFolderPath()) escolherHotFolder();
-    } else {
-        _hotFolderStatus('', null);
-    }
-}
-
 // O navegador nao enxerga o disco da estacao: quem abre o seletor e o agente.
 // A resposta demora o tempo que o operador levar para escolher — e uma janela
 // modal do Windows, aberta na maquina, nao ha como ser diferente.
 async function escolherHotFolder() {
-    const btn = document.getElementById('ped-hotfolder-pick-btn');
-    const rotulo = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Escolha a pasta na janela que abriu…'; }
+    const grade = document.getElementById('ped-hotfolder-grade');
+    const add = grade ? grade.querySelector('.hf-add .hf-nome') : null;
+    const rotulo = add ? add.innerHTML : '';
+    if (add) add.innerHTML = 'Escolha na janela que abriu&hellip;';
     try {
         const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/escolher`, {
             method: 'POST',
@@ -39758,21 +39973,22 @@ async function escolherHotFolder() {
         const data = await resp.json();
         if (data.cancelado) { _hotFolderStatus('Nenhuma pasta escolhida.', 'aviso'); return; }
         if (!data.ok) throw new Error(data.detail || 'o agente recusou a pasta');
-        _definirHotFolder(data);
+        await _definirHotFolder(data);
     } catch (e) {
         console.error('[hotFolder] seletor indisponivel:', e);
         _hotFolderStatus(
             `Não foi possível abrir o seletor nesta estação (${e.message}).<br>` +
-            `Cole o caminho da pasta no campo acima — ele é conferido quando você sair do campo.`, 'erro');
+            `Cole o caminho da pasta no campo abaixo — ele é conferido quando você sair do campo.`, 'erro');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+        if (add) add.innerHTML = rotulo;
     }
 }
 
 // Plano B do seletor: o caminho digitado ou colado. Vale a mesma validacao —
-// so pasta que existe, e pasta e aceita escrita entra na lista da estacao.
-async function validarHotFolderDigitada() {
-    const caminho = _hotFolderPath();
+// so pasta que existe, e pasta que aceita escrita, entra na lista da estacao.
+async function adicionarHotFolderColada() {
+    const campo = document.getElementById('ped-hotfolder-colar');
+    const caminho = (campo?.value || '').trim();
     if (!caminho) { _hotFolderStatus('', null); return; }
     try {
         const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/validar`, {
@@ -39783,15 +39999,24 @@ async function validarHotFolderDigitada() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         if (!data.ok) { _hotFolderStatus(`✗ ${data.detail}`, 'erro'); return; }
-        _definirHotFolder(data);
+        if (campo) campo.value = '';
+        await _definirHotFolder(data);
     } catch (e) {
         _hotFolderStatus(`Não foi possível conferir a pasta: ${e.message}`, 'erro');
     }
 }
+window.adicionarHotFolderColada = adicionarHotFolderColada;
 
-function _definirHotFolder(data) {
+async function _definirHotFolder(data) {
     const campo = document.getElementById('ped-hotfolder-path');
     if (campo) campo.value = data.path;
+
+    // Registrada no agente, ela precisa aparecer como ladrilho JA escolhido: o
+    // operador acabou de apontar aquela pasta, e pedir um segundo clique para
+    // confirmar o que ele acabou de fazer nao ajuda ninguem.
+    _aplicarEstadoHotFolder();
+    await carregarHotFolders();
+
     if (data.aviso_unidade_mapeada) {
         // Letra mapeada pertence a sessao do usuario. Se o agente um dia rodar
         // como servico ou sob outra conta, "Z:" nao existe para ele e o envio
@@ -40290,14 +40515,17 @@ async function _applyPrintConfig(config) {
     // Hot folder vem antes da impressora, e fora do ramo dela de proposito: um
     // produto configurado so para hot folder nao tem printer_name para casar com
     // a lista da maquina, e o ramo abaixo nunca seria alcancado.
-    const chkHot = document.getElementById('ped-hotfolder-enabled');
-    if (chkHot) {
-        chkHot.checked = !!config.hot_folder;
-        const campoHot = document.getElementById('ped-hotfolder-path');
-        if (campoHot) campoHot.value = config.hot_folder_path || '';
+    const campoHot = document.getElementById('ped-hotfolder-path');
+    if (campoHot) {
+        // A PASTA e' o estado. O `hot_folder` do registro antigo era uma caixa
+        // separada que podia discordar do caminho; aqui ele so' decide se o
+        // caminho gravado vale, para nao ligar hot folder num produto que foi
+        // salvo com a caixa desmarcada e um caminho esquecido no campo.
+        campoHot.value = (config.hot_folder === false) ? '' : (config.hot_folder_path || '');
         _aplicarEstadoHotFolder();
-        if (config.hot_folder && config.hot_folder_path) {
-            _hotFolderStatus(`Pasta salva para este produto: <code>${config.hot_folder_path}</code>`, 'ok');
+        if (typeof desenharGradeHotFolders === 'function') desenharGradeHotFolders();
+        if (campoHot.value) {
+            _hotFolderStatus(`Pasta salva para este produto: <code>${campoHot.value}</code>`, 'ok');
             const indicador = document.getElementById('ped-print-saved-indicator');
             if (indicador) {
                 indicador.style.display = 'block';
@@ -40389,10 +40617,10 @@ window.getPedPrintOptions = getPedPrintOptions;
 window.processPrintQueueOptions = processPrintQueueOptions;
 window.sendPrintJobDirect = sendPrintJobDirect;
 
-// Hot folder — os onclick/onchange do index.html chamam por window.
-window.onPedHotFolderToggle = onPedHotFolderToggle;
+// Hot folder — os onclick/onkeydown do index.html chamam por window.
+// (onPedHotFolderToggle e validarHotFolderDigitada sairam em 29/08/2026 junto
+//  com a caixa de "ativar": escolher a pasta passou a ser o proprio ativar.)
 window.escolherHotFolder = escolherHotFolder;
-window.validarHotFolderDigitada = validarHotFolderDigitada;
 
 
 // Exportar funcoes globais (existentes)

@@ -63,8 +63,11 @@ const CONTROLES = [
     // refazer
     'ped-refazer-checkbox', 'ped-refazer-set', 'ped-refazer-de', 'ped-refazer-ate',
     'ped-refazer-total', 'ped-refazer-cel-checkbox', 'ped-refazer-cel', 'ped-refazer-cel-info',
+    // hot folder (grupo proprio desde 29/08/2026: a caixa de "ativar" e o botao
+    // "Escolher pasta" sairam -- escolher o ladrilho da pasta E' ativar)
+    'ped-hotfolder-path', 'ped-hotfolder-grade', 'ped-hotfolder-status',
+    'ped-hotfolder-selo', 'ped-hotfolder-colar',
     // configuracao de impressao
-    'ped-hotfolder-enabled', 'ped-hotfolder-path', 'ped-hotfolder-pick-btn', 'ped-hotfolder-status',
     'ped-print-printer', 'ped-print-reload-btn', 'ped-driver-status',
     'ped-print-reverse', 'ped-print-sheet-by-sheet', 'ped-entregar-por-bloco',
     'ped-driver-loading', 'ped-driver-options', 'ped-driver-hint',
@@ -167,18 +170,22 @@ const CONTROLES = [
     ok(doModelo.nomeUmaVezSo, 'sem repetir o nome do modelo, que o cabecalho ja diz', doModelo);
     ok(doModelo.fichasForaDaJanela, 'e as seis fichas de sumario sairam da janela', doModelo);
 
-    // ── 4. Os quatro grupos, na ordem, e so o primeiro aberto ───────────────
+    // ── 4. Os CINCO grupos, na ordem, e so o primeiro aberto ────────────────
+    //
+    // O Hot Folder virou grupo proprio em 29/08/2026 e entrou ANTES da
+    // Configuracao de Impressao de proposito: ele decide PARA ONDE o material
+    // vai, e o resto daquele grupo so' faz sentido depois dessa escolha.
     const grupos = await aba.evaluate(() =>
         Array.from(document.querySelectorAll('.ped-janela-direita .jg')).map(g => ({
             id: g.id,
             aberto: g.classList.contains('jg-aberto'),
             corpoVisivel: document.getElementById(g.id + '-corpo').getBoundingClientRect().height > 0,
         })));
-    ok(grupos.map(g => g.id).join(',') === 'jg-imprimir,jg-config,jg-cores,jg-refazer',
-       'os quatro grupos estao na ordem pedida', grupos);
+    ok(grupos.map(g => g.id).join(',') === 'jg-imprimir,jg-hotfolder,jg-config,jg-cores,jg-refazer',
+       'os cinco grupos estao na ordem pedida', grupos);
     ok(grupos[0].aberto && grupos[0].corpoVisivel, 'o grupo Imprimir e PDF nasce aberto', grupos);
     ok(!grupos.slice(1).some(g => g.aberto || g.corpoVisivel),
-       'e os outros tres nascem fechados — o que nao se usa a toda hora nao ocupa tela', grupos);
+       'e os outros quatro nascem fechados — o que nao se usa a toda hora nao ocupa tela', grupos);
 
     // ── 5. O grupo abre e fecha de verdade ──────────────────────────────────
     const config = await aba.evaluate(() => {

@@ -107,6 +107,31 @@ def normalizar(caminho: str) -> str:
     return os.path.normcase(os.path.abspath(os.path.normpath(caminho.strip())))
 
 
+def nome_curto(caminho: str) -> str:
+    r"""O nome que o operador reconhece: o ultimo trecho do caminho.
+
+    "C:\RIP\Epson\Sublimacao 160g" -> "Sublimacao 160g". A tela mostra o
+    ladrilho por este nome, e o caminho inteiro fica na dica do ladrilho: numa
+    coluna de 342 px, o caminho completo nao cabe e o nome e' o que distingue
+    uma pasta da outra num relance.
+
+    Raiz de unidade nao tem ultimo trecho ("D:\\" -> "D:"); ai o proprio caminho
+    e' o nome, porque um ladrilho sem rotulo nao serve para nada.
+
+    NAO usa os.path.basename, e isso importa: numa RAIZ DE COMPARTILHAMENTO
+    ("\\\\servidor\\travada") o Windows trata o caminho inteiro como raiz e o
+    basename devolve "". Cairiamos no caminho completo, enquanto o
+    `_nomeDaPasta` do frontend -- que atende a mesma pergunta quando a pasta nao
+    esta na lista -- devolveria "travada". Duas respostas para a mesma pasta e'
+    o tipo de divergencia que so' aparece na estacao, meses depois.
+    """
+    c = (caminho or "").strip().rstrip("\\/")
+    if not c:
+        return ""
+    trechos = [t for t in re.split(r"[\\/]+", c) if t]
+    return trechos[-1] if trechos else c
+
+
 def e_unidade_mapeada(caminho: str) -> bool:
     """O caminho comeca com letra de unidade em vez de UNC?
 

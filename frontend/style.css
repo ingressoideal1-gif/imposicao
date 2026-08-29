@@ -4402,6 +4402,116 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     animation: spin 0.8s linear infinite;
 }
 
+/* ─── Hot Folder: os ladrilhos das pastas ────────────────────────────────────
+   Ate 29/08/2026 o hot folder era uma caixa de marcar dentro da Configuracao de
+   Impressao, e a pasta so' aparecia como caminho digitado. A lista de pastas
+   autorizadas ja existia na estacao (hot_folders.json), mas invisivel: cada
+   trabalho recomecava do seletor nativo do Windows.
+
+   O ladrilho existe para o operador reconhecer a pasta SEM LER: a cor sai de um
+   hash do proprio caminho (ver _corDaPasta), entao a mesma pasta tem sempre a
+   mesma cor, e o nome e' o ultimo trecho do caminho, que e' o que a distingue.
+   O caminho inteiro nao caberia nos 342 px da coluna — ele fica na dica. */
+.hf-grade {
+    display: flex; flex-wrap: wrap; gap: 8px;
+}
+.hf-ladrilho {
+    position: relative;
+    flex: 0 0 auto;
+    width: 92px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 9px 6px 7px;
+    border-radius: 9px;
+    border: 1px solid var(--hf-borda, rgba(255, 255, 255, 0.12));
+    background: var(--hf-fraca, rgba(255, 255, 255, 0.04));
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+.hf-ladrilho:hover  { transform: translateY(-1px); }
+.hf-ladrilho:focus-visible {
+    outline: 2px solid var(--hf-forte, #60a5fa); outline-offset: 2px;
+}
+/* Altura FIXA, e nao natural: o icone de adicionar e' menor que o de pasta, e
+   nome de uma linha e' mais baixo que o de duas. Deixados ao natural, os
+   ladrilhos ficam desencontrados e a grade parece quebrada. */
+.hf-icone {
+    font-size: 1.7rem; line-height: 1; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    /* O desenho da pasta e' SVG com fill="currentColor" justamente para que
+       ESTA linha valha. Com o emoji, a cor vinha da fonte do sistema e as
+       pastas sairiam todas do mesmo amarelo. */
+    color: var(--hf-forte, #94a3b8);
+}
+.hf-icone svg { display: block; }
+.hf-nome {
+    font-size: 0.66rem; font-weight: 700; line-height: 1.2;
+    min-height: 2.4em;             /* duas linhas sempre reservadas */
+    text-align: center; color: var(--text);
+    /* Nome longo quebra em ate duas linhas e depois corta: ladrilho de altura
+       variavel embaralharia a grade a cada pasta nova. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-word;
+}
+
+/* A pasta escolhida — e escolhida quer dizer ATIVA, e' para onde o material vai.
+   Precisa gritar mais que o hover, porque e' ela que decide o destino. */
+.hf-ladrilho.hf-sel {
+    border-color: var(--hf-forte, #60a5fa);
+    background: var(--hf-fraca, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 0 0 2px var(--hf-forte, #60a5fa) inset;
+}
+.hf-ladrilho.hf-sel .hf-nome { color: #fff; }
+
+/* Pasta que o agente nao achou. Aparece assim de proposito: se ela so' falhasse
+   na hora do envio, o operador descobriria com o material pronto. */
+.hf-ladrilho.hf-sumiu {
+    border-style: dashed;
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.07);
+}
+.hf-ladrilho.hf-sumiu .hf-nome  { color: #fca5a5; text-decoration: line-through; }
+.hf-ladrilho.hf-sumiu .hf-icone { color: #f87171; }
+
+/* O x que tira a pasta da lista. Nasceu junto com os ladrilhos: enquanto a
+   lista era invisivel, pasta velha nao incomodava; mostrada, ela vira entulho
+   que esconde a pasta certa. So' aparece no hover para nao competir com o
+   gesto principal, que e' escolher. */
+.hf-tirar {
+    position: absolute; top: 2px; right: 3px;
+    width: 16px; height: 16px; padding: 0; line-height: 1;
+    display: none; align-items: center; justify-content: center;
+    border: none; border-radius: 999px;
+    background: rgba(0, 0, 0, 0.45); color: #cbd5e1;
+    font-size: 0.8rem; cursor: pointer;
+}
+.hf-ladrilho:hover .hf-tirar,
+.hf-ladrilho:focus-within .hf-tirar { display: flex; }
+.hf-tirar:hover { background: rgba(239, 68, 68, 0.85); color: #fff; }
+
+/* Adicionar pasta: mesmo tamanho dos outros, aparencia de vazio a preencher. */
+.hf-ladrilho.hf-add {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.02);
+}
+.hf-ladrilho.hf-add .hf-icone { font-size: 1.5rem; color: var(--text-dim); }
+.hf-ladrilho.hf-add .hf-nome  { color: var(--text-dim); font-weight: 600; }
+.hf-ladrilho.hf-add:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* O selo do grupo mostra o NOME da pasta, que pode ser longo — o selo generico
+   foi feito para a palavra "ativo". */
+#ped-hotfolder-selo {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
+    max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; text-transform: none; letter-spacing: 0;
+}
+
+
 /* ══════════════════════════════════════════════════════════════════════════
    PAINEL DO ACABAMENTO — a mesma forma, em marrom escuro
    ══════════════════════════════════════════════════════════════════════════

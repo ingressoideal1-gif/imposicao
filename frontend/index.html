@@ -1857,7 +1857,45 @@
                                         </div>
                                     </div>
 
-                                    <!-- 2) CONFIGURACAO DE IMPRESSAO -->
+                                    <!-- 2) HOT FOLDER — o destino do material.
+                                         Fica FORA da Configuracao de Impressao (onde morava ate
+                                         29/08/2026) porque ele decide PARA ONDE o PDF vai, e o
+                                         resto daquele grupo so' faz sentido depois dessa escolha:
+                                         com hot folder ligado, bandeja/papel/duplex/cor/copias vem
+                                         do preset da pasta no RIP, e o painel inteiro fica inerte.
+                                         Nao ha caixa de "ativar": escolher a pasta E' ativar. -->
+                                    <div class="jg" id="jg-hotfolder">
+                                        <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-hotfolder-corpo" onclick="alternarGrupoDaJanela('jg-hotfolder')">
+                                            <span>&#128193; Hot Folder</span>
+                                            <span id="ped-hotfolder-selo" class="jg-selo" style="display:none;"></span>
+                                            <span class="jg-seta">&#9660;</span>
+                                        </button>
+                                        <div class="jg-corpo" id="jg-hotfolder-corpo" style="display:none;">
+                                            <!-- A pasta escolhida. Campo escondido de proposito: ele e' a
+                                                 fonte unica que o envio, o salvar e o carregar ja liam
+                                                 (_hotFolderPath). Trocar isso por uma variavel obrigaria a
+                                                 mexer no caminho da impressao, que esta aprovado e rodando. -->
+                                            <input type="hidden" id="ped-hotfolder-path" value="">
+
+                                            <div id="ped-hotfolder-grade" class="hf-grade"></div>
+
+                                            <div id="ped-hotfolder-status" style="display:none;font-size:0.7rem;line-height:1.35;padding:5px 8px;border-radius:5px;"></div>
+
+                                            <!-- Saida para quando o seletor nativo nao abre (agente parado,
+                                                 painel servido pela nuvem). Sem ela, estacao sem agente
+                                                 ficaria sem nenhuma forma de apontar uma pasta. -->
+                                            <div style="display:flex;gap:6px;align-items:center;">
+                                                <input type="text" id="ped-hotfolder-colar" placeholder="ou cole o caminho da pasta&hellip;" onchange="adicionarHotFolderColada()" style="flex:1;min-width:0;background:#0f172a;border:1px solid rgba(245,158,11,0.25);border-radius:6px;color:#f1f5f9;padding:6px 9px;font-size:0.7rem;font-family:monospace;">
+                                            </div>
+
+                                            <div id="ped-hotfolder-aviso" style="display:none;font-size:0.7rem;line-height:1.4;color:#94a3b8;">
+                                                &#9888; Bandeja, papel, frente/verso, cor e c&oacute;pias v&ecirc;m do preset da pasta no RIP, n&atilde;o deste painel.
+                                                <strong style="color:#cbd5e1;">Impress&atilde;o reversa e Folha a Folha continuam valendo</strong> &mdash; elas s&atilde;o aplicadas ao PDF antes do envio.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 3) CONFIGURACAO DE IMPRESSAO -->
                                     <div class="jg" id="jg-config">
                                         <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-config-corpo" onclick="alternarGrupoDaJanela('jg-config')">
                                             <span>&#9881;&#65039; Configura&ccedil;&atilde;o de Impress&atilde;o</span>
@@ -1865,24 +1903,6 @@
                                         </button>
                                         <div class="jg-corpo" id="jg-config-corpo" style="display:none;">
                                             <div id="ped-print-driver-panel" style="display:flex; flex-direction:column; gap:14px;">
-
-                                                <!-- Hot Folder — impressora conduzida por pasta observada (RIP) -->
-                                                <div id="ped-hotfolder-box" style="padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);border-radius:8px;display:flex;flex-direction:column;gap:9px;">
-                                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#fbbf24;cursor:pointer;user-select:none;">
-                                                        <input type="checkbox" id="ped-hotfolder-enabled" onchange="onPedHotFolderToggle()" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;">
-                                                        <span>&#128193; HOT FOLDER</span>
-                                                    </label>
-
-                                                    <div id="ped-hotfolder-detalhes" style="display:none;flex-direction:column;gap:8px;">
-                                                        <input type="text" id="ped-hotfolder-path" placeholder="Nenhuma pasta escolhida" onchange="validarHotFolderDigitada()" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.75rem;font-family:monospace;">
-                                                        <button id="ped-hotfolder-pick-btn" onclick="escolherHotFolder()" style="width:100%;padding:7px 12px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#fbbf24;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;">&#128194; Escolher pasta&hellip;</button>
-                                                        <div id="ped-hotfolder-status" style="display:none;font-size:0.7rem;line-height:1.35;padding:5px 8px;border-radius:5px;"></div>
-                                                        <div style="font-size:0.7rem;line-height:1.4;color:#94a3b8;">
-                                                            &#9888; Bandeja, papel, frente/verso, cor e c&oacute;pias v&ecirc;m do preset da pasta no RIP, n&atilde;o deste painel.
-                                                            <strong style="color:#cbd5e1;">Impress&atilde;o reversa e Folha a Folha continuam valendo</strong> &mdash; elas s&atilde;o aplicadas ao PDF antes do envio.
-                                                        </div>
-                                                    </div>
-                                                </div>
 
                                                 <!-- Impressora -->
                                                 <div id="ped-printer-box">

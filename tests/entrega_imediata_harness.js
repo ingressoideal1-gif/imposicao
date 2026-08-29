@@ -47,8 +47,16 @@ const iFimSpool = SCRIPT.indexOf('\n}', iSpool) + 2;
 // decide impressora, hot folder, bandeja e as opcoes de reversa/folha a folha.
 const iOpcoes = SCRIPT.indexOf('function getPedPrintOptions() {');
 const iFimOpcoes = SCRIPT.indexOf('\n}', SCRIPT.indexOf('return { printerName, options };', iOpcoes)) + 2;
+// As DUAS funcoes do hot folder, cada uma pelo proprio nome. Desde 29/08/2026 o
+// "ativo" e' derivado da pasta escolhida (_hotFolderAtivo chama _hotFolderPath),
+// entao pegar uma so' deixaria a outra indefinida no cenario.
 const iAtivo = SCRIPT.indexOf('function _hotFolderAtivo() {');
-const iFimAtivo = SCRIPT.indexOf('\n}', SCRIPT.indexOf("return (document.getElementById('ped-hotfolder-path')", iAtivo)) + 2;
+const iFimAtivo = SCRIPT.indexOf('\n}', iAtivo) + 2;
+const iCaminho = SCRIPT.indexOf('function _hotFolderPath() {');
+const iFimCaminho = SCRIPT.indexOf('\n}', iCaminho) + 2;
+if (iAtivo < 0 || iCaminho < 0) {
+    throw new Error('nao achei _hotFolderAtivo / _hotFolderPath no script.js');
+}
 
 if (iCriar < 0 || iFimCriar < 0 || iEnviar < 0 || iSpool < 0) {
     throw new Error('nao achei criarEntregaDeImpressao / sendPrintJobDirect / nomeParaSpool no script.js');
@@ -58,6 +66,7 @@ const FONTE_ENTREGA = SCRIPT.slice(iCriar, iFimCriar)
     + '\n' + SCRIPT.slice(iEnviar, iFimEnviar)
     + '\n' + SCRIPT.slice(iSpool, iFimSpool)
     + '\n' + SCRIPT.slice(iOpcoes, iFimOpcoes)
+    + '\n' + SCRIPT.slice(iCaminho, iFimCaminho)
     + '\n' + SCRIPT.slice(iAtivo, iFimAtivo);
 
 // ─── O mundo de mentira em volta ───────────────────────────────────────────
@@ -66,7 +75,9 @@ function montarCenario(opcoes) {
     opcoes = opcoes || {};
     const campos = Object.assign({
         'ped-print-printer': { value: '' },
-        'ped-hotfolder-enabled': { checked: true },
+        // A pasta escolhida E' o hot folder ligado. Ate 29/08/2026 havia tambem
+        // uma caixa 'ped-hotfolder-enabled'; ela saiu, e com ela o estado
+        // impossivel de caixa marcada sem pasta.
         'ped-hotfolder-path': { value: 'C:\\HOT' },
         'ped-print-reverse': { checked: false },
         'ped-print-sheet-by-sheet': { checked: false },
@@ -135,8 +146,11 @@ function montarCenario(opcoes) {
 // ─── 1. O destino e conferido ANTES de o papel ser gerado ──────────────────
 
 (function semDestinoNaoComeca() {
+    // Nenhuma pasta escolhida e nenhuma impressora: o trabalho nao tem para
+    // onde ir. Desligar o hot folder hoje e' apagar a pasta, e nao desmarcar
+    // uma caixa -- a caixa saiu em 29/08/2026.
     const c = montarCenario({ campos: {
-        'ped-hotfolder-enabled': { checked: false },
+        'ped-hotfolder-path': { value: '' },
         'ped-print-printer': { value: '' },
     } });
     const e = c.criar.criarEntregaDeImpressao();
@@ -144,10 +158,17 @@ function montarCenario(opcoes) {
     ok(c.toasts.some(t => t.tipo === 'error'), 'e o operador ouve o porque', c.toasts);
 })();
 
-(function hotFolderMarcadoSemPasta() {
-    const c = montarCenario({ campos: { 'ped-hotfolder-path': { value: '' } } });
-    ok(c.criar.criarEntregaDeImpressao() === null,
-       'HOT FOLDER marcado sem pasta escolhida tambem nao passa');
+(function semPastaMasComImpressora() {
+    // O outro lado da mesma regra: apagada a pasta, a impressora volta a valer.
+    // Antes existia um terceiro estado -- caixa marcada, pasta vazia -- que
+    // atravessava a tela inteira para ser barrado so' aqui. Ele deixou de
+    // existir: sem pasta, nao ha hot folder ligado para barrar.
+    const c = montarCenario({ campos: {
+        'ped-hotfolder-path': { value: '' },
+        'ped-print-printer': { value: 'Epson na bancada' },
+    } });
+    ok(c.criar.criarEntregaDeImpressao() !== null,
+       'sem pasta mas com impressora, a entrega nasce e vai para a impressora');
 })();
 
 // ─── 2. Cada lote sai na hora, e a ordem do papel se mantem ────────────────

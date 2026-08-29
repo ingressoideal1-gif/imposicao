@@ -1644,6 +1644,27 @@ def registrar_hot_folder(caminho: str) -> bool:
         return False
 
 
+def esquecer_hot_folder(caminho: str) -> bool:
+    """Tira a pasta da lista — e com ela a autorizacao de gravar naquele lugar.
+
+    Nada e' apagado do disco. Idempotente: pasta que nao esta na lista devolve
+    True, porque o estado pedido ja e' o estado atual.
+    """
+    alvo = _chave_hot_folder(caminho)
+    if not alvo:
+        return False
+    try:
+        pastas = _carregar_hot_folders()
+        restantes = [p for p in pastas if _chave_hot_folder(p.get("path")) != alvo]
+        if len(restantes) != len(pastas):
+            _salvar_hot_folders(restantes)
+            print(f"[db] hot folder esquecida: {caminho}")
+        return True
+    except Exception as e:
+        print(f"[db] esquecer_hot_folder erro: {e}")
+        return False
+
+
 class BancoIndisponivel(RuntimeError):
     """Nao deu para perguntar ao banco. NAO significa 'nao existe'.
 
