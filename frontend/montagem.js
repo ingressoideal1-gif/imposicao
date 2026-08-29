@@ -768,14 +768,215 @@ async function abrirMontagem() {
     encherPedidosDaMontagem();
     onMontagemPosicoesChange();
     renderMontagem();
+    // As pastas da estacao entram DEPOIS, sem segurar a tela: a rota tem prazo
+    // de 1,5s para conferir cada pasta (pasta de rede fora do ar trava o
+    // os.path.isdir), e o operador nao precisa esperar por isso para digitar.
+    encherPastasDaMontagem();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ONDE O PDF VAI PARAR
+   ════════════════════════════════════════════════════════════════════════════
+
+   A primeira versao entregava o PDF com `window.open(blobUrl)`, e em producao
+   isso nao entregava nada. O navegador so' deixa abrir janela nova enquanto o
+   gesto do operador ainda vale -- o Chrome da' cinco segundos --, e uma folha
+   montada demora mais do que isso. O trabalho era gerado (o log do agente
+   registrou as tres tentativas de 29/08, todas com as duas artes) e sumia sem
+   erro nenhum na tela: o toast dizia "montagem gerada" e nao havia PDF.
+
+   Agora ha dois caminhos, e nenhum depende de janela nova:
+
+   - GRAVAR NA PASTA da estacao. Quem abre o seletor de pastas e quem escreve
+     no disco e' o agente, nao o navegador -- por isso funciona em qualquer
+     navegador da grafica, sem permissao e sem configuracao. E' a mesma lista
+     de pastas autorizadas, e o mesmo `soltar()`, que a tela do Pedido ja usa
+     para o hot folder do RIP: pasta so' entra na lista pelo seletor nativo, e
+     a estacao recusa gravar em pasta que nao esta nela.
+   - BAIXAR pelo navegador, quando nao ha pasta escolhida. Um `<a download>`
+     nao e' bloqueado por bloqueador de pop-up nenhum.
+
+   E, marcada a caixa, o PDF ainda ABRE NA TELA, na mesma janela do painel --
+   a lightbox que o anexo do pedido ja usa.
+*/
+
+/** A pasta escolhida, ou '' -- que quer dizer "baixar pelo navegador". */
+function pastaDaMontagem() {
+    const sel = document.getElementById('mtg-pasta');
+    return sel ? String(sel.value || '').trim() : '';
+}
+
+/** O PDF abre na tela ao terminar? */
+function abrirNaTelaDaMontagem() {
+    return document.getElementById('mtg-abrir')?.checked === true;
 }
 
 /**
- * Monta o payload e manda gerar.
+ * O nome do arquivo, com data E hora.
  *
- * O destino é SEMPRE a estação. Não há caminho para a nuvem, e não é por
+ * Com a hora porque duas montagens do mesmo dia sao a regra, nao a excecao --
+ * a gente refaz celula o dia inteiro. O `soltar()` da estacao ainda desvia
+ * para "nome (2).pdf" se houver colisao, mas um nome que ja nasce distinto e'
+ * o que o operador consegue reconhecer na pasta sem abrir.
+ */
+function nomeDoArquivoDaMontagem(quando) {
+    const d = quando || new Date();
+    const p = n => String(n).padStart(2, '0');
+    return 'montagem_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+        + '_' + p(d.getHours()) + p(d.getMinutes()) + '.pdf';
+}
+
+/** A dica embaixo do seletor diz o que vai acontecer com o arquivo. */
+function _mtgDicaDoDestino() {
+    const dica = document.getElementById('mtg-destino-dica');
+    if (!dica) return;
+    dica.textContent = pastaDaMontagem()
+        ? 'Quem grava é a estação, direto no disco. Se esta for a pasta que o RIP observa, '
+          + 'o material entra na fila de impressão assim que o arquivo chegar.'
+        : 'Sem pasta escolhida, o PDF desce pelos downloads do navegador desta máquina.';
+}
+
+/**
+ * Enche o seletor com as pastas que esta estacao ja autorizou.
+ *
+ * Falha em silencio de proposito: sem estacao no ar o seletor fica so' com
+ * "Baixar pelo navegador", que continua funcionando. Barrar a tela por causa
+ * da lista de pastas seria travar o operador por um detalhe do destino.
+ */
+async function encherPastasDaMontagem() {
+    const sel = document.getElementById('mtg-pasta');
+    if (!sel) return;
+
+    let lembrada = '';
+    try { lembrada = localStorage.getItem('montagem_pasta') || ''; } catch (_) {}
+    const anterior = pastaDaMontagem() || lembrada;
+
+    let pastas = [];
+    try {
+        const base = await _mtgEstacao();
+        if (base) {
+            const r = await fetch(base + '/api/hotfolder/listar', { signal: AbortSignal.timeout(6000) });
+            const d = r.ok ? await r.json() : null;
+            if (d && Array.isArray(d.pastas)) pastas = d.pastas;
+        }
+    } catch (e) {
+        console.warn('[montagem] nao consegui listar as pastas da estacao:', e);
+    }
+
+    // `existe === false` e' "conferi e nao achei"; `null` e' "nao deu tempo de
+    // conferir" -- pasta de rede lenta. Acusar de sumida quem so' demorou seria
+    // mentir, entao so' quem responde `false` sai marcado.
+    sel.innerHTML = '<option value="">Baixar pelo navegador</option>'
+        + pastas.map(p => '<option value="' + escapeHtml(p.path) + '">' + escapeHtml(p.nome)
+            + (p.existe === false ? ' (não encontrada)' : '') + '</option>').join('');
+
+    if (anterior && pastas.some(p => p.path === anterior)) sel.value = anterior;
+    _mtgDicaDoDestino();
+}
+
+/** Guarda a escolha para a proxima montagem desta maquina. */
+function onMontagemPastaChange() {
+    try { localStorage.setItem('montagem_pasta', pastaDaMontagem()); } catch (_) {}
+    _mtgDicaDoDestino();
+}
+
+/**
+ * Abre o seletor de pastas NA ESTACAO.
+ *
+ * A resposta demora o tempo que o operador levar para escolher: e' uma janela
+ * modal do Windows, aberta na maquina, e nao ha como ser diferente -- o
+ * navegador nao enxerga o disco de la.
+ */
+async function escolherPastaDaMontagem() {
+    const btn = document.getElementById('mtg-btn-pasta');
+    const rotulo = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Escolha na janela&hellip;'; }
+    try {
+        const base = await _mtgEstacao();
+        if (!base) {
+            throw new Error('nenhuma estação respondeu — abra o agente NewProd nesta máquina');
+        }
+        const r = await fetch(base + '/api/hotfolder/escolher', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inicial: pastaDaMontagem() }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        if (d.cancelado) return;
+        if (!d.ok) throw new Error(d.detail || 'a estação recusou a pasta');
+
+        await encherPastasDaMontagem();
+        const sel = document.getElementById('mtg-pasta');
+        if (sel) sel.value = d.path;
+        onMontagemPastaChange();
+        if (typeof toast === 'function') toast('O PDF será gravado em ' + d.path, 'success');
+    } catch (e) {
+        console.error('[montagem]', e);
+        if (typeof toast === 'function') {
+            toast('Não deu para abrir o seletor de pastas: ' + (e.message || e)
+                + '. Deixe em "Baixar pelo navegador" e o PDF desce pelos downloads.', 'error');
+        }
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+    }
+}
+
+/** Grava o PDF na pasta da estacao e devolve o caminho gravado. */
+async function gravarPdfNaEstacao(base, pasta, blob, nome) {
+    const fd = new FormData();
+    fd.append('file', blob, nome);
+    fd.append('folder', pasta);
+    const r = await fetch(base + '/api/hotfolder/drop', { method: 'POST', body: fd });
+    if (!r.ok) {
+        let motivo = 'HTTP ' + r.status;
+        try { motivo = (await r.json()).detail || motivo; } catch (_) {}
+        throw new Error(motivo);
+    }
+    const d = await r.json();
+    return d.path || pasta;
+}
+
+/** O caminho que sempre funciona: baixar pelo navegador. */
+function baixarPdfDaMontagem(blob, nome) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/**
+ * Abre o PDF na tela, na mesma janela do painel.
+ *
+ * O endereco do PDF anterior e' devolvido ao navegador ao abrir o proximo: sao
+ * dezenas de MB por montagem, e o operador faz varias por turno.
+ */
+function abrirPdfDaMontagemNaTela(blob, nome) {
+    if (window._mtgUrlAberta) {
+        try { URL.revokeObjectURL(window._mtgUrlAberta); } catch (_) {}
+    }
+    window._mtgUrlAberta = URL.createObjectURL(blob);
+    if (typeof openAnexoLightbox === 'function') {
+        openAnexoLightbox(window._mtgUrlAberta, nome, 'pdf');
+    }
+}
+
+/**
+ * Monta o payload, manda gerar e ENTREGA o arquivo.
+ *
+ * Quem gera é SEMPRE a estação. Não há caminho para a nuvem, e não é por
  * desempenho apenas: impressão só acontece pela estação da gráfica. Sem agente
  * respondendo, a resposta certa ao operador é que não dá — e não um plano B.
+ *
+ * A entrega tem três partes, e estão separadas de propósito: gravar na pasta
+ * pode falhar por motivo do DISCO (a pasta sumiu, a rede caiu) muito depois de
+ * a montagem ter dado certo. Nesse caso o PDF não se perde — ele desce pelo
+ * navegador, e o operador fica sabendo o que falhou. Ver o bloco "ONDE O PDF
+ * VAI PARAR" acima.
  */
 async function gerarPdfDaMontagem() {
     const grupos = state.montagem.grupos;
@@ -785,6 +986,9 @@ async function gerarPdfDaMontagem() {
     const rotulo = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Montando…'; }
 
+    const pasta = pastaDaMontagem();
+    const nome = nomeDoArquivoDaMontagem();
+
     try {
         const base = await _mtgEstacao();
         if (!base) {
@@ -793,6 +997,7 @@ async function gerarPdfDaMontagem() {
         }
 
         const payload = payloadDaMontagem(grupos);
+        payload.suggested_filename = nome;
         const fd = new FormData();
         fd.append('payload', JSON.stringify(payload));
 
@@ -805,12 +1010,30 @@ async function gerarPdfDaMontagem() {
         }
 
         const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        const celulas = totalDeCelulasDaMontagem(grupos);
+
+        let onde = '';
+        if (pasta) {
+            try {
+                onde = await gravarPdfNaEstacao(base, pasta, blob, nome);
+            } catch (e) {
+                console.error('[montagem] a estação não gravou na pasta:', e);
+                if (typeof toast === 'function') {
+                    toast('Não deu para gravar em ' + pasta + ': ' + (e.message || e)
+                        + '. O PDF está descendo pelos downloads do navegador.', 'warning');
+                }
+                baixarPdfDaMontagem(blob, nome);
+            }
+        } else {
+            baixarPdfDaMontagem(blob, nome);
+        }
+
+        if (abrirNaTelaDaMontagem()) abrirPdfDaMontagemNaTela(blob, nome);
 
         if (typeof toast === 'function') {
-            toast(`Montagem gerada: ${totalDeCelulasDaMontagem(grupos)} célula(s).`, 'success');
+            toast(onde
+                ? `Montagem gerada (${celulas} célula(s)) e gravada em ${onde}`
+                : `Montagem gerada: ${celulas} célula(s). O PDF desceu pelos downloads.`, 'success');
         }
     } catch (e) {
         console.error('[montagem]', e);
@@ -913,6 +1136,15 @@ if (typeof window !== 'undefined') {
     window.gerarPdfDaMontagem = gerarPdfDaMontagem;
     window.payloadDaMontagem = payloadDaMontagem;
     window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;
+    window.pastaDaMontagem = pastaDaMontagem;
+    window.abrirNaTelaDaMontagem = abrirNaTelaDaMontagem;
+    window.nomeDoArquivoDaMontagem = nomeDoArquivoDaMontagem;
+    window.encherPastasDaMontagem = encherPastasDaMontagem;
+    window.onMontagemPastaChange = onMontagemPastaChange;
+    window.escolherPastaDaMontagem = escolherPastaDaMontagem;
+    window.gravarPdfNaEstacao = gravarPdfNaEstacao;
+    window.baixarPdfDaMontagem = baixarPdfDaMontagem;
+    window.abrirPdfDaMontagemNaTela = abrirPdfDaMontagemNaTela;
 }
 
 /**

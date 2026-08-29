@@ -4723,7 +4723,10 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 
 .mtg-corpo { display: flex; gap: 20px; align-items: stretch; }
 .mtg-lista-card  { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.mtg-previa-card { flex: 0 0 380px; display: flex; flex-direction: column; }
+/* min-width:0 porque o padrao (`auto`) impede o card de ficar menor que o
+   min-content do que esta dentro -- e com o seletor de pasta no rodape isso
+   esticava a coluna de 380 para 397px, torcendo a folha ao lado. */
+.mtg-previa-card { flex: 0 0 380px; min-width: 0; display: flex; flex-direction: column; }
 
 @media (max-width: 1280px) {
     /* Tela estreita: a previa desce em vez de espremer a lista, que e' onde o
@@ -4780,6 +4783,41 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     font-weight: 400; font-style: italic;
 }
 
+/* O RODAPE DA PREVIA: destino, opcoes e acoes, empurrados juntos para a base.
+   Antes quem descia era a propria .mtg-opcao, com um margin-top:auto -- e isso
+   so' funciona enquanto ha UMA. Com o destino e a segunda caixa, o auto passa
+   para o bloco que as contem, e cada peca de dentro fica na ordem escrita. */
+.mtg-rodape {
+    margin-top: auto; padding-top: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ONDE GRAVAR O PDF. O seletor lista as pastas que a estacao ja autorizou, e o
+   botao ao lado abre o seletor nativo do Windows NA ESTACAO -- o navegador nao
+   enxerga o disco de la, e nenhuma estacao da grafica usa o mesmo navegador. */
+.mtg-destino { display: flex; flex-direction: column; gap: 7px; }
+.mtg-destino > label {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-faint);
+}
+.mtg-destino > .form-control { width: 100%; }
+/* O "Escolher..." e' texto, e nao um terceiro botao de bloco: a acao da tela e'
+   o Gerar PDF, e tres botoes empilhados fariam os tres pesarem igual. */
+.mtg-escolher-pasta {
+    align-self: flex-start;
+    background: none; border: none; padding: 0;
+    font-family: inherit; font-size: 0.73rem; font-weight: 600;
+    color: var(--blue); cursor: pointer; text-align: left;
+}
+.mtg-escolher-pasta:hover { text-decoration: underline; }
+.mtg-escolher-pasta:disabled {
+    color: var(--text-faint); cursor: default; text-decoration: none;
+}
+.mtg-destino > em {
+    font-size: 0.71rem; font-style: normal;
+    color: var(--text-faint); line-height: 1.4;
+}
+
 .mtg-acoes {
     margin-top: auto; padding-top: 14px;
     display: flex; flex-direction: column; gap: 9px;
@@ -4793,7 +4831,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    aquilo tambem vai para o PAPEL. */
 .mtg-opcao {
     display: flex; align-items: flex-start; gap: 8px;
-    margin-top: auto; padding: 11px 13px 12px;
+    padding: 11px 13px 12px;
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border);
@@ -4806,8 +4844,8 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     font-size: 0.71rem; font-style: normal;
     color: var(--text-faint); line-height: 1.4;
 }
-/* Com a opcao no meio, quem empurra as acoes para a base e' ela. */
-.mtg-previa-card .mtg-acoes { margin-top: 10px; }
+/* Quem empurra este rodape inteiro para a base do card e' o .mtg-rodape. */
+.mtg-rodape .mtg-acoes { margin-top: 0; padding-top: 4px; }
 
 
 /* ══════════════════════════════════════════════════════════════════════════

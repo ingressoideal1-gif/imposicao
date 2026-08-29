@@ -4,6 +4,60 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-29] — Montagem: o PDF parou de sumir, e agora tem para onde ir
+
+Relato do usuário: **"parou de gerar o pdf, deve ter a opção de escolher o folder
+onde será gerado o pdf, e a opção de abrir o pdf gerado na tela"**.
+
+### O PDF não parou de ser gerado — ele era jogado fora
+
+O log de diagnóstico do agente registrou as três tentativas, todas com as duas
+artes, e uma reprodução do mesmo payload contra a estação devolveu
+`HTTP 200 · application/pdf · 121 KB`. O motor gerava; o painel é que perdia o
+arquivo.
+
+A entrega era `window.open(blobUrl, '_blank')`. O navegador só deixa abrir janela
+nova enquanto o gesto do operador ainda vale — no Chrome, **cinco segundos** —, e
+uma folha montada demora mais. O bloqueio é **silencioso**, e o aviso seguinte
+ainda dizia *"Montagem gerada"*: a tela afirmava sucesso com o PDF no lixo.
+
+É um defeito que passa em qualquer teste rápido — trabalho pequeno termina dentro
+dos cinco segundos — e falha em produção.
+
+### Onde gravar o PDF
+
+Seletor novo no rodapé da prévia, com as pastas que **esta estação** já
+autorizou, e um botão que abre o **seletor nativo do Windows na estação**. Mesma
+lista, mesmo seletor e mesmo `soltar()` do hot folder do Pedido — e a estação
+recusa gravar em pasta que não esteja na lista.
+
+Quem abre o seletor e quem escreve no disco é o **agente**, nunca o navegador:
+cada estação da gráfica usa um navegador diferente, e nada aqui pode depender de
+permissão ou configuração feita nele. A escolha fica lembrada na máquina, e a
+dica embaixo do seletor diz o que vai acontecer com o arquivo **antes** de gerar.
+
+Sem pasta escolhida, o PDF desce pelos downloads do navegador — caminho que
+sempre funciona, e por isso ele é a primeira opção da lista. Se a gravação falhar
+por motivo do disco, o trabalho **não se perde**: desce pelo navegador e o aviso
+diz o que falhou.
+
+### Abrir o PDF na tela
+
+Caixa nova, **marcada por padrão**: ao terminar, o PDF abre sobre o painel, na
+mesma *lightbox* que o anexo do pedido já usa. A lightbox passou a aceitar o tipo
+**dito** — um `blob:` não tem o nome do arquivo dentro do endereço, e adivinhar
+mostraria o PDF como imagem quebrada.
+
+### Testes
+
+O harness da tela foi de 45 para 61 verificações, inclusive as três que importam:
+sem pasta o PDF desce pelo navegador; com pasta quem grava é a estação; e pasta
+que falha na hora de gravar **não perde o trabalho**. Mais dois testes de fonte,
+um deles pela ausência do `window.open` — com os comentários removidos antes da
+busca, porque a explicação no código **cita** a função.
+
+---
+
 ## [2026-08-29] — Montagem: o número do modelo no papel, e a tiragem na tela
 
 Dois pedidos do usuário sobre a tela nova.

@@ -3087,21 +3087,52 @@
                             As c&eacute;lulas enchem a folha <strong>na ordem, sem reservar folha por pedido</strong> &mdash; a arte muda no limite de cada modelo, ent&atilde;o separar &eacute; olhar, n&atilde;o contar.
                         </p>
 
-                        <label class="mtg-opcao">
-                            <input type="checkbox" id="mtg-imprimir-numero" onchange="renderMontagem()">
-                            <span>
-                                Imprimir o n&uacute;mero do modelo em cada item
-                                <em>Sai deitado na borda de cada c&eacute;lula. Numa folha que mistura pedidos, &eacute; por ele que se separa o material depois de cortar.</em>
-                            </span>
-                        </label>
+                        <div class="mtg-rodape">
+                            <!-- ONDE O ARQUIVO VAI PARAR. Quem abre o seletor de pastas e
+                                 quem escreve no disco e' a ESTACAO, nao o navegador: e por
+                                 isso que funciona em qualquer navegador da grafica, sem
+                                 permissao e sem configuracao. E a mesma lista de pastas
+                                 autorizadas que a tela do Pedido usa para o hot folder. -->
+                            <div class="mtg-destino">
+                                <label for="mtg-pasta">Onde gravar o PDF</label>
+                                <select id="mtg-pasta" class="form-control" onchange="onMontagemPastaChange()">
+                                    <option value="">Baixar pelo navegador</option>
+                                </select>
+                                <!-- Embaixo do seletor, e nao ao lado: o nome da pasta e a
+                                     op&ccedil;&atilde;o padr&atilde;o precisam da largura toda para caber sem
+                                     corte, e um terceiro bot&atilde;o de bloco competiria com o
+                                     Gerar PDF, que &eacute; a a&ccedil;&atilde;o da tela. -->
+                                <button type="button" class="mtg-escolher-pasta" id="mtg-btn-pasta"
+                                        onclick="escolherPastaDaMontagem()">
+                                    &#128193; Escolher uma pasta desta esta&ccedil;&atilde;o&hellip;
+                                </button>
+                                <em id="mtg-destino-dica"></em>
+                            </div>
 
-                        <div class="mtg-acoes">
-                            <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
-                                &#128196; Gerar PDF da montagem
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="mtg-btn-limpar" onclick="limparMontagem()" disabled>
-                                Limpar montagem
-                            </button>
+                            <label class="mtg-opcao">
+                                <input type="checkbox" id="mtg-imprimir-numero" onchange="renderMontagem()">
+                                <span>
+                                    Imprimir o n&uacute;mero do modelo em cada item
+                                    <em>Sai deitado na borda de cada c&eacute;lula. Numa folha que mistura pedidos, &eacute; por ele que se separa o material depois de cortar.</em>
+                                </span>
+                            </label>
+
+                            <label class="mtg-opcao">
+                                <input type="checkbox" id="mtg-abrir" checked>
+                                <span>
+                                    Abrir o PDF na tela ao terminar
+                                    <em>Abre aqui mesmo, sobre o painel &mdash; sem janela nova, que o navegador bloqueia.</em>
+                                </span>
+                            </label>
+
+                            <div class="mtg-acoes">
+                                <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
+                                    &#128196; Gerar PDF da montagem
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="mtg-btn-limpar" onclick="limparMontagem()" disabled>
+                                    Limpar montagem
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

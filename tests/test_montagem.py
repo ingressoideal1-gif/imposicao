@@ -16,6 +16,7 @@ so' apareceriam na portaria com a fila na porta.
 """
 import io
 import os
+import re
 import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -159,6 +160,54 @@ def test_a_montagem_resolve_o_formato_por_conta_propria():
     assert "if (!a.formato_id)" in conf and "if (!b.formato_id)" in conf, (
         "voltou a comparar formato vazio com formato vazio, e a regra inteira "
         "fica inerte de novo"
+    )
+
+
+def test_o_pdf_da_montagem_nao_depende_de_janela_nova():
+    """O defeito de 29/08/2026: o PDF era gerado e sumia.
+
+    A tela entregava com `window.open(blobUrl, '_blank')`. O navegador so' deixa
+    abrir janela nova enquanto o gesto do operador ainda vale — no Chrome, cinco
+    segundos —, e uma folha montada demora mais. O log do agente registrou as
+    tres tentativas do dia, todas com as duas artes: o motor devolveu o PDF, e o
+    painel o jogou fora sem dizer nada. O toast ainda dizia "montagem gerada".
+
+    Os tres caminhos que entraram no lugar nao dependem de janela nenhuma:
+    gravar na pasta da estacao, baixar por `<a download>`, e abrir na lightbox
+    do proprio painel.
+    """
+    # SEM OS COMENTARIOS: a explicacao do defeito, logo acima da funcao, CITA o
+    # `window.open`. Um teste que casa com a citacao em vez da chamada nao
+    # guarda nada — foi assim que um teste meu passou a esmo tres vezes hoje.
+    js = _ler("frontend/montagem.js")
+    codigo = re.sub(r"^\s*//.*$", "", re.sub(r"/\*.*?\*/", "", js, flags=re.S), flags=re.M)
+
+    assert "window.open(" not in codigo, (
+        "a Montagem voltou a entregar o PDF por janela nova; o navegador a "
+        "bloqueia e o trabalho some sem erro na tela"
+    )
+    assert "/api/hotfolder/drop" in js and "/api/hotfolder/escolher" in js, (
+        "a gravacao na pasta saiu: quem enxerga o disco da estacao e' o agente, "
+        "e nenhuma estacao da grafica usa o mesmo navegador"
+    )
+    assert "a.download = nome" in js, (
+        "o plano que sempre funciona saiu — sem pasta escolhida o PDF nao teria "
+        "para onde ir"
+    )
+
+
+def test_a_lightbox_aceita_o_tipo_dito():
+    """Um `blob:` nao tem o nome do arquivo dentro do endereco.
+
+    A lightbox dos anexos adivinhava o tipo pelo endereco (`.pdf`), o que
+    funciona para o anexo guardado no Storage e NAO funciona para o PDF recem
+    gerado da montagem: ele sairia como uma imagem quebrada. Quem sabe o tipo,
+    diz.
+    """
+    js = _ler("frontend/script.js")
+    assert "function openAnexoLightbox(url, name, tipo)" in js
+    assert "const isPdf = tipo ? (tipo === 'pdf') : url.toLowerCase().includes('.pdf')" in js, (
+        "a lightbox voltou a adivinhar o tipo so' pelo endereco"
     )
 
 

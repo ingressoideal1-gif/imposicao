@@ -188,6 +188,37 @@ Duas diferenças em relação ao Pedido, as duas deliberadas:
 Nasce **desmarcada**, como no Pedido — novidade que muda o que sai no papel entra
 desligada.
 
+### Onde o PDF vai parar
+
+Duas escolhas, no rodapé da prévia — ambas pedidas pelo usuário em 29/08/2026,
+depois que o PDF simplesmente não apareceu (ver §6).
+
+**A pasta.** O seletor lista as pastas que **esta estação** já autorizou, e o
+botão ao lado abre o **seletor nativo do Windows na estação**. É a mesma lista, o
+mesmo seletor e o mesmo `soltar()` que a tela do Pedido usa para o hot folder do
+RIP — e a estação recusa gravar em pasta que não esteja na lista.
+
+Quem abre o seletor e quem escreve no disco é o **agente**, nunca o navegador.
+Essa é a razão de ser da escolha: o navegador não enxerga o disco da estação, e
+**cada estação da gráfica usa um navegador diferente** — nada aqui pode depender
+de permissão, *flag* ou configuração feita no navegador.
+
+Sem pasta escolhida, o PDF desce pelos **downloads do navegador**. É o caminho
+que sempre funciona, e por isso ele é a primeira opção da lista: sem estação no
+ar, a tela continua entregando o arquivo.
+
+A escolha fica lembrada nesta máquina, e a dica embaixo do seletor diz o que vai
+acontecer com o arquivo **antes** de gerar — inclusive que uma pasta observada
+pelo RIP põe o material na fila de impressão assim que o arquivo chegar.
+
+**Abrir na tela.** Marcada — e ela nasce marcada —, o PDF abre sobre o painel, na
+mesma *lightbox* que o anexo do pedido já usa. Não é janela nova: janela nova é
+exatamente o que não funcionava.
+
+Se a gravação na pasta falhar por motivo do disco (a pasta sumiu, a rede caiu), o
+trabalho **não se perde**: o PDF desce pelo navegador e o aviso diz o que falhou.
+A montagem já tinha dado certo; quem falhou foi o destino.
+
 ### Adicionar o mesmo modelo duas vezes SOMA ao grupo
 
 Não cria um segundo. Dois grupos do mesmo modelo dariam duas artes iguais no
@@ -236,6 +267,38 @@ ninguém.
 Os dois harnesses ganharam o caso. O da tela passou a montar o item **sem
 `formato_id`**, como ele chega do banco, e a exercitar a resolução de verdade.
 
+### O segundo defeito: o PDF era gerado, e sumia
+
+No mesmo dia, com o formato já resolvido, o usuário relatou: **"parou de gerar o
+pdf"**.
+
+Ele não tinha parado. O log de diagnóstico do agente registrou as três
+tentativas, todas com as duas artes, e uma reprodução do mesmo payload contra a
+estação devolveu `HTTP 200 · application/pdf · 121 KB`. O motor gerava; o painel
+é que jogava o arquivo fora.
+
+**A causa:** a entrega era `window.open(blobUrl, '_blank')`. O navegador só
+deixa abrir janela nova enquanto o gesto do operador ainda vale — no Chrome,
+**cinco segundos** —, e uma folha montada demora mais do que isso. O bloqueio é
+**silencioso**: nenhuma exceção, nenhum aviso. Pior, o `toast` seguinte dizia
+*"Montagem gerada"*, então a tela afirmava sucesso enquanto o PDF ia para o
+lixo.
+
+Repare no formato do defeito: ele passa em qualquer teste rápido e falha em
+produção. Um trabalho de teste, pequeno, termina dentro dos cinco segundos e a
+janela abre. O trabalho de verdade não.
+
+**O conserto** foram três caminhos, e nenhum depende de janela nova: gravar na
+pasta da estação, baixar por `<a download>`, e abrir na *lightbox* do próprio
+painel. Os testes travam os três, e travam também a ausência do `window.open` —
+com os comentários removidos antes da busca, porque a explicação acima **cita** a
+função, e um teste que casa com a citação em vez da chamada não guarda nada.
+
+> **A lição:** entrega não é conclusão. O caminho crítico não termina quando o
+> servidor responde 200 — ele termina quando o arquivo está na mão do operador, e
+> o trecho entre uma coisa e outra roda no navegador, onde há regras que nenhum
+> teste de servidor alcança.
+
 ---
 
 ## 7. O que a Montagem não faz
@@ -254,7 +317,7 @@ Os dois harnesses ganharam o caso. O da tela passou a montar o item **sem
 | Harness | Verificações | O que trava |
 |---|---|---|
 | [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 62 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 45 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout e o payload |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 61 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout, o payload e **a entrega do arquivo** |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta o
 que só se lê no código-fonte — inclusive um teste que falha se alguém mexer no

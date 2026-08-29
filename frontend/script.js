@@ -36457,7 +36457,7 @@ async function loadBriefingBase(osId, osIntId) {
 /**
  * Lightbox para pré-visualização de imagem/PDF do anexo
  */
-function openAnexoLightbox(url, name) {
+function openAnexoLightbox(url, name, tipo) {
     let modal = document.getElementById('anexo-lightbox-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -36466,7 +36466,10 @@ function openAnexoLightbox(url, name) {
         document.body.appendChild(modal);
     }
 
-    const isPdf = url.toLowerCase().includes('.pdf');
+    // O tipo pode vir DITO. Adivinhar pelo endereco so' funciona enquanto o
+    // endereco tem o nome do arquivo dentro; um `blob:` nao tem, e o PDF da
+    // montagem sairia como uma imagem quebrada. Quem sabe o tipo, diz.
+    const isPdf = tipo ? (tipo === 'pdf') : url.toLowerCase().includes('.pdf');
 
     modal.innerHTML = `
         <div style="position:absolute;top:20px;right:25px;display:flex;gap:12px;align-items:center;z-index:100000;">

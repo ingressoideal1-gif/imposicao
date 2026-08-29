@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + Edge Functions | **v769** | 29/08/2026 |
-| Agente NewProd | **1.2.259** | 29/08/2026 |
+| Site + Edge Functions | **v775** | 29/08/2026 |
+| Agente NewProd | **1.2.265** | 29/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.

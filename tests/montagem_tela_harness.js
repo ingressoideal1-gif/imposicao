@@ -50,6 +50,12 @@ const FUNCOES = [
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     // O numero do modelo impresso em cada item (29/08/2026).
     'imprimirNumeroNaMontagem',
+    // ONDE O PDF VAI PARAR (29/08/2026): a pasta da estacao, o download e a
+    // lightbox — os tres caminhos que substituiram a janela nova bloqueada.
+    'pastaDaMontagem', 'abrirNaTelaDaMontagem', 'nomeDoArquivoDaMontagem',
+    '_mtgDicaDoDestino', 'onMontagemPastaChange', 'encherPastasDaMontagem',
+    'gravarPdfNaEstacao', 'baixarPdfDaMontagem', 'abrirPdfDaMontagemNaTela',
+    'gerarPdfDaMontagem',
 ];
 
 // Três pedidos, quatro modelos, todos do mesmo formato/cor/saída/face.
@@ -252,6 +258,119 @@ const PECAS = [
        'marcada, cada arte leva o NÚMERO DO SEU modelo — e não um número só para a folha', numero.marcado);
     ok(/número do modelo em cada item/.test(numero.rotulo),
        'e o rótulo é o mesmo do Pedido, para o operador reconhecer', numero.rotulo);
+
+    // ── 3d. ONDE O PDF VAI PARAR ─────────────────────────────────────
+    //
+    // Foi aqui que a tela falhou em producao, em 29/08/2026: ela entregava o
+    // PDF com `window.open(blobUrl)`, o navegador bloqueia janela nova depois
+    // que o gesto do clique vence (cinco segundos, no Chrome), e a montagem
+    // sumia sem erro nenhum -- o toast dizia "gerada" e nao havia arquivo.
+    // SEM OS COMENTARIOS: a explicacao do defeito CITA o `window.open`, e um
+    // teste que casa com a citacao em vez da chamada nao guarda nada.
+    const MTG_CODIGO = MTG.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    ok(!/window\.open\(/.test(MTG_CODIGO),
+       'a Montagem não entrega o PDF por janela nova — o navegador a bloqueia');
+    ok(/hotfolder\/drop/.test(MTG) && /hotfolder\/escolher/.test(MTG),
+       'quem escolhe a pasta e quem grava no disco é a ESTAÇÃO, não o navegador');
+    ok(/a\.download = nome/.test(MTG),
+       'e sem pasta escolhida o PDF desce por <a download>, que nada bloqueia');
+
+    const destino = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const feito = [];
+        const pdf = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
+
+        window._mtgEstacao = async () => 'http://127.0.0.1:9000';
+        window.toast = (m, tipo) => feito.push(tipo + ': ' + m);
+        window.baixarPdfDaMontagem = (b, n) => feito.push('baixou ' + n);
+        window.abrirPdfDaMontagemNaTela = (b, n) => feito.push('abriu ' + n);
+        window.gravarPdfNaEstacao = async (base, pasta) => {
+            feito.push('gravou em ' + pasta);
+            return pasta + '\\montagem.pdf';
+        };
+        window.fetch = async () => ({ ok: true, blob: async () => pdf });
+
+        const sel = document.getElementById('mtg-pasta');
+        const cx = document.getElementById('mtg-abrir');
+
+        return (async () => {
+            const r = { nasceMarcada: cx.defaultChecked === true };
+
+            sel.innerHTML = '<option value="">Baixar pelo navegador</option>'
+                          + '<option value="D:\\Hot">Hot</option>';
+
+            sel.value = ''; cx.checked = false; feito.length = 0;
+            await gerarPdfDaMontagem();
+            r.semPasta = feito.slice();
+
+            sel.value = 'D:\\Hot'; cx.checked = true; feito.length = 0;
+            await gerarPdfDaMontagem();
+            r.comPasta = feito.slice();
+
+            window.gravarPdfNaEstacao = async () => { throw new Error('a pasta sumiu'); };
+            feito.length = 0;
+            await gerarPdfDaMontagem();
+            r.pastaQuebrada = feito.slice();
+
+            r.nome = nomeDoArquivoDaMontagem(new Date(2026, 7, 29, 14, 5));
+            return r;
+        })();
+    }, PECAS);
+
+    ok(destino.nasceMarcada,
+       'a caixa "abrir na tela" nasce MARCADA: é ela que devolve o PDF que sumia', destino);
+    ok(destino.semPasta.some(l => /^baixou montagem_/.test(l))
+       && !destino.semPasta.some(l => /gravou/.test(l)),
+       'sem pasta escolhida, o PDF desce pelo navegador', destino.semPasta);
+    ok(!destino.semPasta.some(l => /^abriu /.test(l)),
+       'e com a caixa desmarcada ele não abre na tela', destino.semPasta);
+    ok(destino.comPasta.some(l => l === 'gravou em D:\\Hot')
+       && !destino.comPasta.some(l => /^baixou/.test(l)),
+       'com pasta escolhida, quem grava é a estação — e o navegador não baixa nada',
+       destino.comPasta);
+    ok(destino.comPasta.some(l => /^abriu montagem_/.test(l)),
+       'e marcada a caixa, o PDF abre na tela do painel', destino.comPasta);
+    ok(destino.comPasta.some(l => /success: .*D:\\Hot/.test(l)),
+       'o aviso diz ONDE o arquivo ficou — pasta não se procura no escuro', destino.comPasta);
+    ok(destino.pastaQuebrada.some(l => /^baixou montagem_/.test(l)),
+       'pasta que falha na hora de gravar NÃO perde o trabalho: o PDF desce pelo navegador',
+       destino.pastaQuebrada);
+    ok(destino.pastaQuebrada.some(l => /warning: .*a pasta sumiu/.test(l)),
+       'e o operador fica sabendo o que falhou, com o motivo do disco', destino.pastaQuebrada);
+    ok(destino.nome === 'montagem_2026-08-29_1405.pdf',
+       'o nome do arquivo leva data E hora: refazer célula acontece o dia inteiro', destino.nome);
+
+    // A lista de pastas vem da estacao, e pasta que sumiu aparece MARCADA.
+    const pastas = await aba.evaluate(() => {
+        window._mtgEstacao = async () => 'http://127.0.0.1:9000';
+        window.fetch = async () => ({ ok: true, json: async () => ({ ok: true, pastas: [
+            { path: 'D:\\Hot', nome: 'Hot', existe: true },
+            { path: 'Z:\\Sumida', nome: 'Sumida', existe: false },
+            { path: '\\\\rede\\lenta', nome: 'lenta', existe: null },
+        ] }) });
+        return encherPastasDaMontagem().then(() => {
+            const sel = document.getElementById('mtg-pasta');
+            const dica = document.getElementById('mtg-destino-dica');
+            sel.value = '';
+            onMontagemPastaChange();
+            const semPasta = dica.textContent;
+            sel.value = 'D:\\Hot';
+            onMontagemPastaChange();
+            return {
+                opcoes: Array.from(sel.options).map(o => o.textContent),
+                primeira: sel.options[0].value,
+                semPasta, comPasta: dica.textContent,
+            };
+        });
+    });
+    ok(pastas.primeira === '',
+       'a primeira opção é "baixar pelo navegador": sem estação a tela continua entregando');
+    ok(/Sumida \(não encontrada\)/.test(pastas.opcoes.join('|')),
+       'pasta que a estação conferiu e não achou aparece marcada', pastas.opcoes);
+    ok(!/lenta \(não encontrada\)/.test(pastas.opcoes.join('|')),
+       'mas pasta que só demorou a responder NÃO é acusada de sumida', pastas.opcoes);
+    ok(/downloads do navegador/.test(pastas.semPasta) && /a estação/.test(pastas.comPasta),
+       'e a dica diz o que vai acontecer com o arquivo, antes de gerar', pastas);
 
     // ── 4. A folha que fecha certo fica VERDE ───────────────────────────────
     const verde = await aba.evaluate(() => {
