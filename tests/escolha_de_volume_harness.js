@@ -296,6 +296,40 @@ function medir(texto, soNaBarra) {
         'de volta para dentro do detalhe, em 1024x768, o botao cai fora da janela',
         'topo em ' + controle.topo + ' de ' + controle.altura);
 
+    // ─── O balao do drop precisa ter cor de fundo ────────────────────────────
+    //
+    // Em 29/08/2026 o seletor do responsavel ficou `background: transparent`
+    // para nao desenhar moldura dentro da caixa. A caixa continuou igual, e a
+    // LISTA sumiu: no Windows o Chrome pinta o balao do `<select>` com a cor de
+    // fundo dele, e sem cor o balao sai branco -- com o texto em #ffffff, os
+    // nomes ficam brancos no branco. O usuario abriu o drop e viu um retangulo
+    // vazio.
+    //
+    // O balao nativo nao da para fotografar daqui, mas a cor COMPUTADA da.
+    await page.setViewport({ width: 1366, height: 768 });
+    await entrarNaEscolha(4, []);
+    const drop = await page.evaluate(() => {
+        const alvos = [...document.querySelectorAll('#acab-detalhe-corpo select, #acab-lateral-resumo select')];
+        return alvos.map(sel => {
+            const cs = getComputedStyle(sel);
+            const op = sel.options[sel.options.length - 1];
+            const co = op ? getComputedStyle(op) : null;
+            return {
+                selFundo: cs.backgroundColor,
+                opFundo: co ? co.backgroundColor : 'sem opcao',
+                opCor: co ? co.color : 'sem opcao',
+            };
+        });
+    });
+    const transparente = c => !c || c === 'rgba(0, 0, 0, 0)' || c === 'transparent';
+    ok(drop.length > 0, 'ha drops na tela do pedido', String(drop.length));
+    ok(drop.every(d => !transparente(d.selFundo)),
+        'nenhum select fica transparente -- o balao da lista sairia branco no Windows',
+        JSON.stringify(drop.find(d => transparente(d.selFundo)) || {}));
+    ok(drop.every(d => d.opFundo === 'sem opcao' || !transparente(d.opFundo)),
+        'e as opcoes tambem tem fundo proprio',
+        JSON.stringify(drop.find(d => d.opFundo !== 'sem opcao' && transparente(d.opFundo)) || {}));
+
     ok(erros.length === 0, 'a tela nao soltou erro nenhum', erros.join(' | '));
 
     await browser.close();

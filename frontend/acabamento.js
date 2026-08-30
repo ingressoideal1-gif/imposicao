@@ -1793,8 +1793,9 @@
         const nomes = doSetor.map(o => o.nome);
         if (atual && !nomes.some(n => n.toLowerCase() === atual.toLowerCase())) nomes.unshift(atual);
 
-        const opcoes = ['<option value="">— Responsável —</option>'].concat(
-            nomes.map(n => `<option value="${esc(n)}" ${n.toLowerCase() === atual.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
+        const opcoes = [`<option value="" style="${ESTILO_OPCAO}">— Responsável —</option>`].concat(
+            nomes.map(n => `<option value="${esc(n)}" style="${ESTILO_OPCAO}" `
+                + `${n.toLowerCase() === atual.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
         ).join('');
 
         // A saída da trava vai escrita na própria tela: sem isso o operador vê
@@ -1833,11 +1834,34 @@
     const SUBROTULO_DENTRO_DA_CAIXA = 'font-size: 0.62rem; font-weight: 800;'
         + ' text-transform: uppercase; letter-spacing: 0.05em; color: #7f93a8;'
         + ' white-space: nowrap; flex-shrink: 0;';
+    // ## O fundo do `<select>` NÃO pode ser `transparent`
+    //
+    // Em 29/08/2026 o seletor do responsável ficou sem moldura própria, dentro
+    // da caixa que desenha a borda — e para isso ele foi posto em
+    // `background: transparent`. A caixa continuou igual na tela, e a LISTA
+    // sumiu: no Windows o Chrome pinta o balão do `<select>` com a cor de fundo
+    // dele, e sem cor nenhuma o balão sai branco. Com o texto em `#ffffff`, os
+    // nomes ficaram brancos no branco — o operador abria o drop e via um
+    // retângulo vazio. Foi o que o usuário relatou no mesmo dia: "drops dos
+    // responsáveis não está trazendo os usuários".
+    //
+    // A cor aqui é a MESMA da caixa em volta (`ESTILO_CAIXA_DO_SELECT`), então
+    // o desenho fechado continua exatamente como ele pediu — quem muda é só o
+    // balão, que passa a ter onde se pintar. `ESTILO_OPCAO` repete a cor em
+    // cada `<option>`, porque nem todo navegador herda a do select.
     const ESTILO_SELECT = 'appearance: none; -webkit-appearance: none; -moz-appearance: none;'
-        + ' background: transparent; border: none; color: #ffffff;'
+        + ' background: #0d0e20; border: none; color: #ffffff;'
         + ' padding: 6px 0; font-size: 0.92rem; flex: 1 1 auto; min-width: 0;'
         + ' text-align: center; text-align-last: center; font-weight: 600; cursor: pointer;';
+    const ESTILO_OPCAO = 'background: #0d0e20; color: #ffffff;';
     const ESTILO_SELECT_TRAVADO = ' opacity: 0.55; cursor: not-allowed;';
+
+    // O mesmo seletor FORA de uma caixa — nas janelas, onde não há moldura em
+    // volta para desenhar a borda por ele.
+    const ESTILO_SELECT_SOLTO = ESTILO_SELECT
+        + ' border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;'
+        + ' padding: 8px 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); width: 100%;'
+        + ' box-sizing: border-box;';
 
     // ## As medidas da pilha de botões, num lugar só
     //
@@ -4504,13 +4528,16 @@
         const soma = somaDosVolumes(lista);
         const faltando = faltandoNoSetor(setor, itens);
 
-        // O que ainda não está em volume é a lista de trabalho do setor — e é a
-        // trava da expedição. Sem ela, o operador só descobriria o que faltava
-        // ao clicar em EXPEDIÇÃO e receber a recusa.
+        // A LISTA do que falta saiu daqui em 29/08/2026, a pedido do usuário:
+        // com nomes de modelo de verdade ("11/set CAMAROTE CORPORATIVO (DO 01
+        // AO 140) 25 UND CADA") ela virava um parágrafo dentro do card do
+        // setor, e não dizia nada que o card do modelo já não diga — cada um
+        // deles carrega o seu próprio "ainda sem volume".
+        //
+        // O que ficou é só a confirmação, que é curta e responde a pergunta que
+        // o operador faz antes de mandar para a expedição.
         const recado = faltando.length
-            ? `<div style="font-size: 0.72rem; color: #fbbf24;">⚠ ainda sem volume: `
-              + faltando.map(x => `${esc(nomeDoModelo(x.item))} (${numeroComPonto(x.falta)})`).join(' · ')
-              + '</div>'
+            ? ''
             : `<div style="font-size: 0.72rem; color: #22c55e;">✓ todo o setor está em volume — `
               + `o peso é a soma dos registros, ninguém digita.</div>`;
 
@@ -5403,15 +5430,15 @@
         if (escolhido && !nomes.some(n => n.toLowerCase() === escolhido.toLowerCase())) {
             nomes.unshift(escolhido);
         }
-        return [`<option value="">${esc(rotuloVazio)}</option>`].concat(
-            nomes.map(n => `<option value="${esc(n)}" `
+        return [`<option value="" style="${ESTILO_OPCAO}">${esc(rotuloVazio)}</option>`].concat(
+            nomes.map(n => `<option value="${esc(n)}" style="${ESTILO_OPCAO}" `
                 + `${n.toLowerCase() === escolhido.toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`)
         ).join('');
     }
 
     /** Quem fez sai da MESMA lista do responsável do card. */
     function selectDeQuemPesou(atual) {
-        return `<select id="acab-reg-responsavel" style="${ESTILO_SELECT} font-size: 0.95rem;">`
+        return `<select id="acab-reg-responsavel" style="${ESTILO_SELECT_SOLTO} font-size: 0.95rem;">`
             + opcoesDeOperador(atual, '— Quem fez —') + '</select>';
     }
 

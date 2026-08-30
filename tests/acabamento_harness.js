@@ -4047,6 +4047,55 @@ async function excluirOUltimoVolumeApagaOPesoDoSetor() {
        'e a faixa nao anuncia mais um peso que nao existe');
 }
 
+async function aFaixaDoSetorNaoListaOsModelosSemVolume() {
+    // Pedido do usuario em 29/08/2026: "retirar informacao dos ainda sem volume
+    // na lateral direita, nao e necessario". Com nomes de modelo de verdade
+    // ("11/set CAMAROTE CORPORATIVO (DO 01 AO 140) 25 UND CADA") a lista virava
+    // um paragrafo dentro do Resumo -- e o card de CADA modelo ja diz que ele
+    // esta sem volume.
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+
+    const lateral = amb.elementos['acab-lateral-resumo'].innerHTML;
+    ok(lateral.indexOf('ainda sem volume') === -1,
+       'a lateral nao lista mais os modelos que faltam');
+    ok(lateral.indexOf('Credencial Staff') === -1,
+       'e nao repete os nomes deles ali');
+
+    // O card do modelo continua dizendo -- e ali a informacao serve, porque
+    // esta ao lado do proprio modelo.
+    ok(amb.elementos['acab-detalhe-corpo'].innerHTML.indexOf('ainda sem volume') !== -1,
+       'o card de cada modelo continua dizendo que ele esta sem volume');
+
+    // E a confirmacao, quando tudo esta em volume, fica: ela e curta e responde
+    // a pergunta que se faz antes da expedicao.
+    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3004, peso: '0,52', responsavel: 'Cesar Almeida' });
+    ok(amb.elementos['acab-lateral-resumo'].innerHTML.indexOf('todo o setor está em volume') !== -1,
+       'com tudo em volume, a lateral confirma em uma linha');
+}
+
+async function oDropDoResponsavelTemFundoProprio() {
+    // O `<select>` transparente deixava o balao da lista branco no Windows, e o
+    // texto em #ffffff sumia dentro dele: "drops dos responsaveis nao esta
+    // trazendo os usuarios" (usuario, 29/08/2026).
+    const amb = ambienteDeVolumes();
+    await amb.painel.abrirPedido('os-200');
+    const html = telaDoPedido(amb);
+
+    const opcoes = html.match(/<option[^>]*>/g) || [];
+    ok(opcoes.length > 0, 'ha opcoes desenhadas nos drops', String(opcoes.length));
+    ok(opcoes.every(o => o.indexOf('background: #0d0e20') !== -1),
+       'e TODAS levam fundo proprio -- senao o balao sai branco no Windows',
+       (opcoes.find(o => o.indexOf('background: #0d0e20') === -1) || '').slice(0, 90));
+    ok(FONTE.indexOf('background: transparent; border: none; color: #ffffff') === -1,
+       'e o select nao volta a ser transparente com texto branco');
+    ok(FONTE.indexOf("const ESTILO_OPCAO = 'background: #0d0e20; color: #ffffff;'") !== -1,
+       'a cor da opcao mora num lugar so');
+}
+
 async function osProntosVaoParaOFimDaLista() {
     const amb = ambienteDeVolumesComPeso();
     const r = amb.painel._regras;
@@ -4122,6 +4171,8 @@ async function osProntosVaoParaOFimDaLista() {
     await tirarUmModeloAtualizaOPesoDoVolume();
     await oPesoDoVolumeVelhoNaoEChutado();
     await excluirOUltimoVolumeApagaOPesoDoSetor();
+    await aFaixaDoSetorNaoListaOsModelosSemVolume();
+    await oDropDoResponsavelTemFundoProprio();
     await osProntosVaoParaOFimDaLista();
 })();
 

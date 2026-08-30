@@ -1238,6 +1238,30 @@ pessoa só e com o **nome do setor** quando são várias. A janela avisa antes d
 gravar: *"⚠ um modelo entra em parte — ele continua em acabamento até o resto
 entrar noutro volume."*
 
+### Duas coisas que a tela aprendeu em 29/08/2026, à noite
+
+**O `<select>` do responsável não pode ter fundo transparente.** Quando ele
+perdeu a moldura própria para caber dentro da caixa, foi posto em
+`background: transparent` — a caixa continuou igual e a **lista sumiu**. No
+Windows o Chrome pinta o balão do `<select>` com a cor de fundo dele; sem cor, o
+balão sai branco, e com o texto em `#ffffff` os nomes ficam brancos no branco. O
+operador abria o drop e via um retângulo vazio: *"drops dos responsáveis não
+está trazendo os usuários"*.
+
+A cor de `ESTILO_SELECT` é a **mesma** de `ESTILO_CAIXA_DO_SELECT`, então o
+controle fechado continua idêntico ao desenho aprovado — quem muda é só o balão,
+que passa a ter onde se pintar. `ESTILO_OPCAO` repete a cor em cada `<option>`,
+porque nem todo navegador herda a do select, e `tests/escolha_de_volume_harness.js`
+mede a cor **computada** num Chrome de verdade: o harness de regra não alcança
+isso, porque o HTML estava certo o tempo todo.
+
+**A lista do que falta saiu do Resumo.** *"retirar informação dos ainda sem
+volume na lateral direita, não é necessário"* — com nomes de modelo de verdade
+(`11/set CAMAROTE CORPORATIVO (DO 01 AO 140) 25 UND CADA`) ela virava um
+parágrafo dentro da coluna estreita, e não dizia nada que o card do modelo já
+não diga: cada um carrega o seu próprio *"ainda sem volume"*. Ficou só a
+confirmação, que é curta e responde a pergunta que se faz antes da expedição.
+
 ### O modelo PRONTO já está alocado
 
 Regra do usuário em 29/08/2026, olhando a tela publicada:
