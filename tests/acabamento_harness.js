@@ -395,8 +395,24 @@ function montarAmbiente() {
                         return Promise.resolve({ error: null }).then(res, rej);
                     },
                 };
+                let payloadDoItem = null;
+                const escritaDoItem = {
+                    eq: (c, v) => { filtros[c] = v; return escritaDoItem; },
+                    in: (c, vs) => { filtros[c] = { dentro: (vs || []).map(String) }; return escritaDoItem; },
+                    then: (res, rej) => {
+                        self._itensDeVolume.forEach(i => {
+                            const alvo = filtros.id && filtros.id.dentro
+                                ? filtros.id.dentro.indexOf(String(i.id)) !== -1
+                                : (filtros.id !== undefined && String(i.id) === String(filtros.id));
+                            if (alvo) Object.assign(i, payloadDoItem);
+                        });
+                        self._volumesGravados.push({ tipo: 'mover', filtros: { ...filtros }, payload: payloadDoItem });
+                        return Promise.resolve({ error: null }).then(res, rej);
+                    },
+                };
                 return {
                     delete: () => remocao,
+                    update: (pl) => { payloadDoItem = pl; return escritaDoItem; },
                     insert: (linhas) => {
                         (linhas || []).forEach(l => self._itensDeVolume.push(Object.assign(
                             { id: 'reg-' + (self._proximoIdDeItem++),
@@ -3184,13 +3200,15 @@ async function registrar(amb, opcoes) {
     const r = amb.painel._tela.registroEmCurso;
     if (!r) return null;
 
-    if (opcoes.volumeId !== undefined) amb.painel.escolherVolume(opcoes.volumeId);
-
+    // As quantidades ANTES de escolher o volume: `escolherVolume` le o DOM para
+    // nao perder o que ja foi digitado, e no DOM de mentira os campos nascem
+    // vazios -- lidos assim, eles zerariam as linhas.
     const qtds = opcoes.qtds || {};
     r.linhas.forEach((l, i) => {
         const campo = amb.documento.getElementById('acab-reg-qtd-' + i);
         campo.value = String(qtds[l.modeloId] !== undefined ? qtds[l.modeloId] : l.qtd);
     });
+    if (opcoes.volumeId !== undefined) amb.painel.escolherVolume(opcoes.volumeId);
 
     if (opcoes.porModelo) {
         amb.painel.pesarPorModelo();
@@ -3265,7 +3283,8 @@ async function excluirOUltimoVolumeDevolveOFluxoDeSempre() {
     await amb.painel.novoVolume('LASER', 200);
     const id = amb.banco._volumesDoBanco[0].id;
 
-    await amb.painel.excluirVolume(id);
+    amb.painel.excluirDoVolume(id, '');
+    await amb.painel.excluirNaExclusao();
     ok(amb.banco._volumesDoBanco.length === 0, 'o volume vazio pode ser excluido');
     // A trava tem saida: criar um volume por engano nao tranca a tela.
     await amb.painel.mudarEstagio(3001, 'os-200', 'Pronto');
@@ -3525,7 +3544,8 @@ async function tirarDoVolumeDevolveOModelo() {
     const itens = amb.janela.state.osItens['os-200'];
     ok(itens[0].acabamento_status === 'Pronto', 'o modelo estava Pronto');
 
-    await amb.painel.tirarDoVolume(volumeId, alvo.id);
+    amb.painel.excluirDoVolume(volumeId, alvo.id);
+    await amb.painel.excluirNaExclusao();
 
     ok(registrosDoBanco(amb, volumeId).length === 1, 'o registro saiu do volume');
     ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 2.6,
@@ -3993,7 +4013,8 @@ async function tirarUmModeloAtualizaOPesoDoVolume() {
     await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
 
     const alvo = registrosDoBanco(amb, volumeId).find(r => Number(r.modelo_id) === 3002);
-    await amb.painel.tirarDoVolume(volumeId, alvo.id);
+    amb.painel.excluirDoVolume(volumeId, alvo.id);
+    await amb.painel.excluirNaExclusao();
 
     ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 26,
        'tirar um modelo desconta o peso dele do volume',
@@ -4019,7 +4040,8 @@ async function oPesoDoVolumeVelhoNaoEChutado() {
     ok(amb.painel._regras.volumesDoSetor('LASER')[0].peso === 9.5,
        'sem peso por registro, vale o que a balanca leu na epoca');
 
-    await amb.painel.tirarDoVolume('velho', 'r-velho-1');
+    amb.painel.excluirDoVolume('velho', 'r-velho-1');
+    await amb.painel.excluirNaExclusao();
     ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 0,
        'tirado o registro, o espelho vem do que sobrou -- e o que sobrou nao tem peso',
        String(amb.banco._volumesDoBanco[0].peso_kg));
@@ -4042,7 +4064,8 @@ async function excluirOUltimoVolumeApagaOPesoDoSetor() {
     ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 26,
        'o peso do setor era a soma do volume');
 
-    await amb.painel.excluirVolume(volumeId);
+    amb.painel.excluirDoVolume(volumeId, '');
+    await amb.painel.excluirNaExclusao();
 
     ok(amb.banco._volumesDoBanco.length === 0, 'o volume saiu');
     ok(!amb.banco._setoresDoBanco[0].peso_real_kg,
@@ -4104,6 +4127,154 @@ async function oDropDoResponsavelTemFundoProprio() {
        'e o select nao volta a ser transparente com texto branco');
     ok(FONTE.indexOf("const ESTILO_OPCAO = 'background: #0d0e20; color: #ffffff;'") !== -1,
        'a cor da opcao mora num lugar so');
+}
+
+// ─── 13. Excluir: mover o conteudo, ou tirar de vez (29/08/2026) ────────────
+//
+//   "ao clicar em 'Tirar' (mudar para excluir) o volume, perguntar se deseja
+//    mover o conteudo para outro volume (indicar o volume) ou excluir o volume
+//    e desmarcar a revisao (atualizando os pesos)"
+//
+// Vale para os DOIS botoes da janela do volume. A razao de ser e que excluir
+// era um caminho so, e destrutivo: material registrado no volume errado so
+// voltava refazendo tudo, inclusive a pesagem. Mover conserva o peso que ja foi
+// a balanca.
+
+/** Dois volumes no Laser, com um modelo em cada. */
+async function comDoisVolumes(amb) {
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const v1 = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await amb.painel.novoVolume('LASER', 200);
+    const v2 = amb.banco._volumesDoBanco[1].id;
+    await registrar(amb, { um: 3002, volumeId: v2, peso: '2,60', responsavel: 'Cesar Almeida' });
+    return { v1, v2 };
+}
+
+async function oExcluirPerguntaOQueFazerComOConteudo() {
+    const amb = ambienteDeVolumesComPeso();
+    const janelas = capturarJanelas(amb);
+    const { v1, v2 } = await comDoisVolumes(amb);
+
+    amb.painel.excluirDoVolume(v1, '');
+    const caixa = janelas.achar('acab-exclusao-janela');
+    ok(!!caixa, 'o Excluir abre uma janela, e nao um sim/nao');
+    const html = caixa ? caixa.innerHTML : '';
+    ok(html.indexOf('Mover para outro volume') !== -1, 'ela oferece mover');
+    ok(html.indexOf('Excluir e desmarcar a revisão') !== -1, 'e oferece excluir de vez');
+    ok(html.indexOf('26,000 kg') !== -1, 'dizendo quanto peso esta em jogo');
+    // O volume de ORIGEM nunca aparece como destino de si mesmo.
+    const destinos = (html.match(/escolherDestino\('([^']+)'\)/g) || []).join(' ');
+    ok(destinos.indexOf(String(v2)) !== -1, 'o outro volume do setor aparece como destino');
+    ok(destinos.indexOf(String(v1)) === -1, 'e o proprio volume nao');
+    // Nada foi feito ate aqui.
+    ok(amb.banco._volumesDoBanco.length === 2, 'e abrir a janela nao mexe em nada');
+}
+
+async function moverOConteudoDoVolumeParaOutro() {
+    const amb = ambienteDeVolumesComPeso();
+    const { v1, v2 } = await comDoisVolumes(amb);
+
+    amb.painel.excluirDoVolume(v1, '');
+    amb.painel.escolherDestino(v2);
+    await amb.painel.moverNaExclusao();
+
+    ok(registrosDoBanco(amb, v1).length === 0 && amb.banco._volumesDoBanco.length === 1,
+       'o volume de origem foi excluido depois de esvaziado');
+    ok(registrosDoBanco(amb, v2).length === 2,
+       'e os dois registros estao no destino', String(registrosDoBanco(amb, v2).length));
+    ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 28.6,
+       'o peso do destino somou o que chegou', String(amb.banco._volumesDoBanco[0].peso_kg));
+
+    // O material continua registrado: ninguem perde o Revisado nem a pesagem.
+    const status = amb.banco._gravacoes.filter(g => g.payload
+        && 'acabamento_status' in g.payload);
+    ok(!status.some(g => !g.payload.acabamento_status),
+       'e nenhum modelo deixou de estar revisado', JSON.stringify(status.map(g => g.payload.acabamento_status)));
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 28.6,
+       'o peso do setor nao muda -- o material continua nele',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function moverUmModeloParaOutroVolume() {
+    const amb = ambienteDeVolumesComPeso();
+    const { v1, v2 } = await comDoisVolumes(amb);
+    const alvo = registrosDoBanco(amb, v1)[0];
+
+    amb.painel.excluirDoVolume(v1, alvo.id);
+    amb.painel.escolherDestino(v2);
+    await amb.painel.moverNaExclusao();
+
+    ok(amb.banco._volumesDoBanco.length === 2,
+       'tirando UM modelo, o volume de origem continua existindo');
+    ok(registrosDoBanco(amb, v1).length === 0 && registrosDoBanco(amb, v2).length === 2,
+       'o registro mudou de volume');
+    const porId = {};
+    amb.banco._volumesDoBanco.forEach(v => { porId[v.id] = Number(v.peso_kg); });
+    ok(porId[v1] === 0 && porId[v2] === 28.6, 'e os DOIS pesos acompanharam',
+       JSON.stringify(porId));
+}
+
+async function semOutroVolumeAJanelaDizOQueFazer() {
+    const amb = ambienteDeVolumesComPeso();
+    const janelas = capturarJanelas(amb);
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const v1 = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+
+    amb.painel.excluirDoVolume(v1, '');
+    const html = janelas.achar('acab-exclusao-janela').innerHTML;
+    ok(html.indexOf('Não há outro volume neste setor') !== -1,
+       'sem destino, a janela diz por que nao da para mover');
+    ok(html.indexOf('+ Volume') !== -1,
+       'e diz o que fazer para poder -- a trava tem saida');
+    ok(html.indexOf('escolherDestino(') === -1, 'e nao oferece destino nenhum');
+}
+
+async function excluirOVolumeDesmarcaARevisaoDeTodos() {
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+    await amb.painel.novoVolume('LASER', 200);
+    const v1 = amb.banco._volumesDoBanco[0].id;
+    await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
+    const itens = amb.janela.state.osItens['os-200'];
+    ok(itens[0].acabamento_status === 'Pronto' && itens[1].acabamento_status === 'Pronto',
+       'os dois estavam revisados');
+
+    amb.painel.excluirDoVolume(v1, '');
+    await amb.painel.excluirNaExclusao();
+
+    ok(amb.banco._volumesDoBanco.length === 0, 'o volume saiu');
+    // `gravar` normaliza vazio para NULO, que e como a coluna fica no banco.
+    const limpos = amb.banco._gravacoes.filter(g => g.payload
+        && 'acabamento_status' in g.payload
+        && !g.payload.acabamento_status).map(g => String(g.valor));
+    ok(limpos.indexOf('3001') !== -1 && limpos.indexOf('3002') !== -1,
+       'e os DOIS modelos deixaram de estar revisados', JSON.stringify(limpos));
+    ok(!Number(amb.banco._setoresDoBanco[0].peso_real_kg),
+       'com o unico volume fora, o peso do setor se apaga',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+}
+
+async function oBotaoDaExpedicaoFicaNoTopoDoResumo() {
+    // Pedido do usuario em 29/08/2026: "deixar o botao Encaminhar a Expedicao no
+    // topo do painel". Embaixo, num Resumo comprido, era preciso rolar a coluna
+    // inteira para chegar nele.
+    const amb = ambienteDeVolumesComPeso();
+    await amb.painel.abrirPedido('os-200');
+    const lateral = amb.elementos['acab-lateral-resumo'].innerHTML;
+
+    const botao = lateral.indexOf('ENCAMINHAR À EXPEDIÇÃO');
+    const rola = lateral.indexOf('custom-scroll');
+    const peso = lateral.indexOf('Peso e volumes');
+    ok(botao !== -1, 'o botao esta no Resumo');
+    ok(botao < rola, 'e vem ANTES da area que rola -- ele nao sai da vista',
+       'botao em ' + botao + ', area em ' + rola);
+    ok(botao < peso, 'e antes do peso por setor');
+    ok(lateral.indexOf('Resumo do pedido') < botao,
+       'logo abaixo do titulo do painel');
 }
 
 async function osProntosVaoParaOFimDaLista() {
@@ -4183,6 +4354,14 @@ async function osProntosVaoParaOFimDaLista() {
     await excluirOUltimoVolumeApagaOPesoDoSetor();
     await aFaixaDoSetorNaoListaOsModelosSemVolume();
     await oDropDoResponsavelTemFundoProprio();
+
+    // Excluir: mover o conteudo, ou tirar de vez (29/08/2026)
+    await oExcluirPerguntaOQueFazerComOConteudo();
+    await moverOConteudoDoVolumeParaOutro();
+    await moverUmModeloParaOutroVolume();
+    await semOutroVolumeAJanelaDizOQueFazer();
+    await excluirOVolumeDesmarcaARevisaoDeTodos();
+    await oBotaoDaExpedicaoFicaNoTopoDoResumo();
     await osProntosVaoParaOFimDaLista();
 })();
 

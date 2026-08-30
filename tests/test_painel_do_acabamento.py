@@ -1207,12 +1207,13 @@ def test_o_peso_do_setor_acompanha_a_soma_das_caixas():
         "e com o zero de verdade, o peso do setor se apaga"
     )
 
-    # E os tres caminhos em que alguma coisa SAI do volume avisam isso.
-    for nome in ("async function excluirVolume(", "async function tirarDoVolume("):
+    # E os caminhos em que alguma coisa SAI do volume avisam isso: a janela do
+    # Excluir (mover e excluir) e o modelo que sai de Revisado.
+    for nome in ("async function moverNaExclusao(", "async function excluirNaExclusao("):
         i = js.index(nome)
-        assert "atualizarPesoDoSetorPelosVolumes(" in js[i:i + 2200], nome
-    assert js.count("atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true })") == 2, (
-        "excluir o volume e tirar um registro dizem que o zero e de verdade"
+        assert "atualizarPesoDoSetorPelosVolumes(e.setor, { saiuVolume: true })" in js[i:i + 2600], nome
+    assert js.count("{ saiuVolume: true }") >= 3, (
+        "mover, excluir e sair de Revisado dizem que o zero e de verdade"
     )
     assert "!podeEditar()" in corpo, "quem so le nao dispara escrita nenhuma"
 

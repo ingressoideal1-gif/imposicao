@@ -1314,6 +1314,40 @@ Quem sabe a diferença é o **chamador**, não a função: por isso
 de tirar alguma coisa. Sem isso, o pedido 21074 mostrou 104 kg num setor cujos
 volumes já não existiam (29/08/2026).
 
+### Excluir pergunta para onde vai o que está dentro
+
+Pedido do usuário em 29/08/2026, depois de usar a janela do volume:
+
+> "ao clicar em 'Tirar' (mudar para excluir) o volume, perguntar se deseja mover
+> o conteúdo para outro volume (indicar o volume) ou excluir o volume e
+> desmarcar a revisão (atualizando os pesos)"
+
+Vale para os **dois** botões da janela — o do volume inteiro e o de cada modelo
+da lista, que deixou de se chamar "Tirar". O que muda entre eles é o que se
+move: tudo, ou uma linha.
+
+A razão de ser é que excluir era um caminho só, e destrutivo: material
+registrado no volume errado só voltava desfazendo o registro e refazendo tudo,
+**inclusive a pesagem**, que é o trabalho de verdade. Mover conserva o peso que
+já foi à balança.
+
+| Caminho | O que acontece |
+|---|---|
+| **Mover para outro volume** | Os registros trocam de `volume_id`. O peso vai junto, os dois volumes se atualizam, e ninguém deixa de estar Revisado. No caso do volume inteiro, o de origem é excluído depois de esvaziado. |
+| **Excluir e desmarcar a revisão** | Os registros somem, o peso sai da soma do volume e do setor, e os modelos deixam de estar Revisados — a coluna é **limpa**, e o estágio volta a ser derivado da impressão. |
+
+Por isso não é um `confirm`: a janela precisa **mostrar** os volumes do setor
+para o operador escolher um, e `caixaConfirmar` só responde sim ou não. Sem
+outro volume no setor, a opção de mover diz por que não dá e o que fazer — criar
+um com **+ Volume** — como toda trava daqui.
+
+### O botão da expedição fica no topo do Resumo
+
+*"deixar o botão Encaminhar à Expedição no topo do painel"*. Embaixo, num Resumo
+comprido, era preciso rolar a coluna inteira para chegar nele. Ele fica logo
+abaixo do título e **fora** da área que rola, e continua não entrando no recorte
+por setor: a expedição é do pedido inteiro.
+
 ### Tirar do volume desfaz as duas coisas
 
 **Tirar** é a saída de quem registrou no volume errado, e ele desfaz o que o

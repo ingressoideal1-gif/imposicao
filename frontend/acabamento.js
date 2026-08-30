@@ -168,6 +168,7 @@
         volumesDoPedido: null,   // de qual pedido é o mapa acima
         marcados: {},            // { modeloId: true } — os modelos marcados para registrar em grupo
         registroEmCurso: null,   // o registro que a janela do Pronto está montando
+        exclusaoEmCurso: null,   // { volumeId, registroId, setor, destinoId } enquanto se decide
         temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
@@ -3291,6 +3292,8 @@
                     <strong style="font-size: 0.86rem; letter-spacing: 0.02em;">Resumo do pedido</strong>
                 </div>
 
+                ${rodapeDaExpedicao(itens, recortado)}
+
                 <div class="custom-scroll" style="flex: 1; min-height: 0; overflow-y: auto;
                             padding: 12px 14px; display: flex; flex-direction: column; gap: 14px;">
                     ${selo}
@@ -3324,8 +3327,6 @@
 
                     <div>${blocoDePesoNoResumo(itens, os ? os.numero : '')}</div>
                 </div>
-
-                ${rodapeDaExpedicao(itens, recortado)}
             </div>`;
     }
 
@@ -3345,7 +3346,11 @@
      * operador ficaria procurando um botão que a tela não mostra.
      */
     /**
-     * O RODAPÉ do Resumo: o botão de encaminhar à expedição, preso embaixo.
+     * O TOPO do Resumo: o botão de encaminhar à expedição, logo abaixo do
+     * título e fora da área que rola (pedido do usuário, 29/08/2026: "deixar o
+     * botão Encaminhar à Expedição no topo do painel"). Embaixo ele dividia a
+     * borda inferior com a barra da escolha, e num Resumo comprido o operador
+     * precisava rolar a coluna inteira para chegar nele.
      *
      * Ele NÃO fica escondido quando o pedido não está pronto, e isso é de
      * propósito: apagado e clicável, ele responde o que falta. Escondido, o
@@ -3410,7 +3415,7 @@
             </div>`;
     }
 
-    const ESTILO_RODAPE_DA_EXPEDICAO = 'padding: 12px 14px; border-top: 1px solid rgba(76,205,246,0.16);'
+    const ESTILO_RODAPE_DA_EXPEDICAO = 'padding: 12px 14px; border-bottom: 1px solid rgba(76,205,246,0.16);'
         + ' display: flex; flex-direction: column; gap: 6px; align-items: center;'
         + ' background: #0b1730; flex-shrink: 0;';
     const ESTILO_BOTAO_DA_EXPEDICAO = 'border-width: 1px; border-style: solid; border-radius: 8px;'
@@ -5816,11 +5821,11 @@
                         ${reg.responsavel ? esc(reg.responsavel) : 'sem nome'}
                     </span>
                     <span style="font-size: 0.74rem; color: var(--text-dim); min-width: 98px;">${esc(textoDoInstante(reg.registradoEm))}</span>
-                    ${pode ? `<button type="button" onclick="AcabamentoPainel.tirarDoVolume('${escJs(v.id)}', '${escJs(reg.id)}')"
-                            title="Tirar este modelo do volume — ele deixa de estar revisado e o peso sai da soma"
+                    ${pode ? `<button type="button" onclick="AcabamentoPainel.excluirDoVolume('${escJs(v.id)}', '${escJs(reg.id)}')"
+                            title="Tirar este modelo do volume — dá para movê-lo para outro volume ou excluir e desmarcar a revisão"
                             style="background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35);
                                    color: #f87171; border-radius: 6px; padding: 5px 10px; font-size: 0.74rem;
-                                   font-weight: 700; cursor: pointer; font-family: inherit;">Tirar</button>` : ''}
+                                   font-weight: 700; cursor: pointer; font-family: inherit;">Excluir</button>` : ''}
                 </div>`;
             }).join('')
             : `<div style="padding: 18px; text-align: center; color: var(--text-dim); font-size: 0.86rem;">
@@ -5877,7 +5882,8 @@
                             <span style="${ROTULO_DO_PASSO}">Modelos neste volume</span>
                             <span style="font-size: 0.74rem; color: var(--text-dim);">na ordem em que foram registrados</span>
                             ${pode ? `<button type="button" style="${ESTILO_BOTAO_VOLUME} margin-left: auto;"
-                                    onclick="AcabamentoPainel.excluirVolume('${escJs(v.id)}')">Excluir o volume</button>` : ''}
+                                    title="Dá para mover o conteúdo para outro volume ou excluir tudo e desmarcar a revisão"
+                                    onclick="AcabamentoPainel.excluirDoVolume('${escJs(v.id)}', '')">Excluir o volume</button>` : ''}
                         </div>
                         ${corpo}
                     </div>
@@ -5934,84 +5940,79 @@
     }
 
     /**
-     * Tira um registro do volume.
+     * Reescreve `producao_volumes.peso_kg` com a soma dos registros que o banco
+     * acabou de devolver. Chame DEPOIS de `carregarVolumes`.
      *
-     * É a saída de quem registrou no volume errado — e ela tem de desfazer as
-     * DUAS coisas que o registro fez: o material sai do volume (e o peso sai da
-     * soma), e o modelo volta para "Em acabamento". Deixar o Pronto de pé
-     * mostraria na tela um modelo concluído que não está em volume nenhum, que
-     * é exatamente o estado que a regra nova existe para impedir.
+     * "ao excluir modelos de um volume, peso do volume deve atualizar" — o
+     * usuário, 29/08/2026. A tela já lê a soma dos registros; o espelho no
+     * banco precisa acompanhar, porque é ele que a estação com o painel
+     * anterior lê e é ele que sobra para quem consultar a tabela por fora.
+     *
+     * A soma sai do que foi RELIDO, e não de uma conta feita na memória: num
+     * volume anterior à migração o peso pode vir do `peso_kg` gravado em vez da
+     * soma, e subtrair partiria do número errado. Volume que já não existe é
+     * pulado — não há espelho a escrever.
+     *
+     * O `pesoGravado` da memória anda junto com a escrita. Sem isso, um volume
+     * que ficou VAZIO continuaria mostrando o peso velho até a próxima leitura:
+     * sem registro nenhum, `pesoDosRegistros` cai justamente no valor gravado.
      */
-    async function tirarDoVolume(volumeId, registroId) {
-        if (!podeEditar()) return;
-        const v = todosOsVolumes().find(x => String(x.id) === String(volumeId));
-        const reg = v && (v.registros || []).find(r => String(r.id) === String(registroId));
-        if (!v || !reg) return;
-        const item = modelosDoPedidoAberto().find(m => String(m.id) === String(reg.modeloId));
-
-        const pergunta = `Tirar ${nomeDoModelo(item)} (${numeroComPonto(reg.qtd)} un) do volume ${v.numero}?`
-            + ((reg.peso !== null && reg.peso !== undefined) ? ` O peso de ${kgParaTexto(reg.peso)} kg sai da soma.` : '')
-            + (item && estagioDoModelo(item) === 'Pronto' ? ' O modelo deixa de estar revisado.' : '');
-        const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
-        const ok = (caixa && typeof caixa.perguntar === 'function')
-            ? await caixa.perguntar(pergunta, { rotulo: 'Tirar', perigo: true })
-            : window.confirm(pergunta);
-        if (!ok) return;
-
-        try {
-            if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-                throw new Error('esta tela está sem conexão com o banco');
-            }
-            const { error } = await supabaseClient
-                .from(TABELA_DE_ITENS_DO_VOLUME).delete().eq('id', registroId);
+    async function sincronizarPesoDosVolumes(ids) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+        for (const id of (ids || [])) {
+            const v = todosOsVolumes().find(x => String(x.id) === String(id));
+            if (!v) continue;
+            const gramas = (v.registros || []).reduce((s, r) => s
+                + Math.round(((r.peso === null || r.peso === undefined) ? 0 : r.peso) * 1000), 0);
+            if (Math.round(((v.pesoGravado === null || v.pesoGravado === undefined)
+                ? -1 : v.pesoGravado) * 1000) === gramas) continue;
+            const { error } = await supabaseClient.from(TABELA_DE_VOLUMES)
+                .update({ peso_kg: gramas / 1000 }).eq('id', id);
             if (error) throw error;
-
-            await atualizarPesoDoVolume(v, [registroId]);
-
-            if (item && estagioDoModelo(item) === 'Pronto') {
-                await gravar(item.id, tela.pedidoAberto, 'acabamento_status', '');
-            }
-            await carregarVolumes(tela.volumesDoPedido);
-            fecharVolumeAberto();
-            renderDetalhe();
-            avisar(`${nomeDoModelo(item)} saiu do volume ${v.numero}.`, 'success');
-            await atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true });
-        } catch (e) {
-            console.error('[acabamento] erro ao tirar do volume:', e);
-            avisar(`Não deu para tirar do volume: ${(e && e.message) ? e.message : e}`, 'error');
+            v.pesoGravado = gramas / 1000;
+            v.peso = pesoDosRegistros(v.registros, v.pesoGravado);
         }
     }
 
-    /**
-     * Reescreve `producao_volumes.peso_kg` com a soma dos registros que SOBRAM.
-     *
-     * "ao excluir modelos de um volume, peso do volume deve atualizar" — o
-     * usuário, 29/08/2026. A tela já lia a soma dos registros, mas o espelho no
-     * banco precisa acompanhar: é ele que a estação com o painel anterior lê, e
-     * é ele que sobra se alguém consultar a tabela por fora.
-     *
-     * Recalculado do que sobrou, e não subtraído do total: num volume anterior
-     * à migração o `peso` pode vir do `peso_kg` gravado em vez da soma, e aí a
-     * subtração partiria do número errado.
-     */
-    async function atualizarPesoDoVolume(volume, idsQueSairam) {
-        if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-        const fora = (idsQueSairam || []).map(String);
-        const gramas = (volume.registros || [])
-            .filter(r => fora.indexOf(String(r.id)) === -1)
-            .reduce((soma, r) => soma + Math.round(((r.peso === null || r.peso === undefined) ? 0 : r.peso) * 1000), 0);
-        const { error } = await supabaseClient.from(TABELA_DE_VOLUMES)
-            .update({ peso_kg: gramas / 1000 }).eq('id', volume.id);
+    /** Muda registros de volume. O material continua no setor, e no pedido. */
+    async function moverRegistros(ids, destinoId) {
+        if (!ids.length) return;
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+            throw new Error('esta tela está sem conexão com o banco');
+        }
+        const { error } = await supabaseClient.from(TABELA_DE_ITENS_DO_VOLUME)
+            .update({ volume_id: destinoId }).in('id', ids.map(String));
         if (error) throw error;
+    }
+
+    /**
+     * Desmarca o Revisado dos modelos que saíram do volume.
+     *
+     * Revisado quer dizer "está no volume". Tirado o material, o verde cai —
+     * deixá-lo de pé mostraria na tela um modelo concluído que não está em
+     * volume nenhum.
+     *
+     * A coluna é LIMPA, e não reescrita com "Em acabamento": desde 29/08/2026 o
+     * estágio de quem não está revisado é derivado da impressão, que é a
+     * verdade sobre o material. É o mesmo caminho do botão Revisado apagado.
+     */
+    async function desmarcarRevisaoDeModelos(modeloIds) {
+        const itens = modelosDoPedidoAberto();
+        for (const id of modeloIds) {
+            const item = itens.find(m => String(m.id) === String(id));
+            if (item && estagioDoModelo(item) === 'Pronto') {
+                await gravar(item.id, tela.pedidoAberto, 'acabamento_status', '');
+            }
+        }
     }
 
     /**
      * Tira TODOS os registros de um modelo dos volumes do setor dele.
      *
-     * É o que acontece quando o modelo sai de Pronto (regra do usuário,
-     * 29/08/2026): "ao sair de pronto sai do volume e atualiza peso do volume".
-     * Um modelo pode estar repartido em vários volumes, e todos eles precisam
-     * devolver o material e encolher o peso.
+     * É o que acontece quando o modelo sai de Pronto pelos botões de estágio
+     * (regra do usuário, 29/08/2026): "ao sair de pronto sai do volume e
+     * atualiza peso do volume". Um modelo pode estar repartido em vários
+     * volumes, e todos eles devolvem o material e encolhem o peso.
      *
      * Devolve `false` quando o operador cancela — e aí quem chamou não muda o
      * estágio tampouco, senão o modelo sairia de Pronto continuando no volume.
@@ -6025,7 +6026,7 @@
         const kg = meus.reduce((soma, x) => soma
             + Math.round(((x.registro.peso === null || x.registro.peso === undefined) ? 0 : x.registro.peso) * 1000), 0) / 1000;
         const quais = meus.map(x => 'V' + x.volume.numero).join(', ');
-        const pergunta = `Tirar ${nomeDoModelo(item)} de Pronto?`
+        const pergunta = `Tirar ${nomeDoModelo(item)} de Revisado?`
             + ` Ele sai ${meus.length === 1 ? 'do volume' : 'dos volumes'} ${quais}`
             + (kg > 0 ? `, e ${kgParaTexto(kg)} kg saem da soma.` : '.');
         const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
@@ -6042,13 +6043,10 @@
             .from(TABELA_DE_ITENS_DO_VOLUME).delete().in('id', ids);
         if (error) throw error;
 
-        // Um volume por vez: o modelo pode estar repartido, e cada um tem a sua
-        // soma para refazer.
         const tocados = [];
-        meus.forEach(x => { if (tocados.indexOf(x.volume) === -1) tocados.push(x.volume); });
-        for (const v of tocados) await atualizarPesoDoVolume(v, ids);
-
+        meus.forEach(x => { if (tocados.indexOf(String(x.volume.id)) === -1) tocados.push(String(x.volume.id)); });
         await carregarVolumes(tela.volumesDoPedido);
+        await sincronizarPesoDosVolumes(tocados);
         avisar(`${nomeDoModelo(item)} saiu ${tocados.length === 1 ? 'do volume' : 'dos volumes'} ${quais}.`, 'success');
         return true;
     }
@@ -6063,36 +6061,284 @@
         if (error) throw error;
     }
 
-    async function excluirVolume(volumeId) {
+    // ─── Excluir: para onde vai o que está dentro? ───────────────────────────
+    //
+    // Pedido do usuário em 29/08/2026, depois de usar a janela do volume:
+    //
+    //   "ao clicar em 'Tirar' (mudar para excluir) o volume, perguntar se
+    //    deseja mover o conteúdo para outro volume (indicar o volume) ou
+    //    excluir o volume e desmarcar a revisão (atualizando os pesos)"
+    //
+    // Vale para os DOIS botões da janela, que é o que ele confirmou: o do
+    // volume inteiro e o de cada modelo da lista. O que muda entre eles é o que
+    // se move — tudo, ou uma linha.
+    //
+    // A razão de ser é que excluir era um caminho só, e destrutivo: material
+    // registrado no volume errado só voltava desfazendo o registro e refazendo
+    // tudo — inclusive a pesagem, que é o trabalho de verdade. Mover conserva o
+    // peso que já foi à balança.
+    //
+    // Por isso esta janela não é um `confirm`: ela precisa MOSTRAR os volumes
+    // do setor para o operador escolher um. `caixaConfirmar` só responde sim ou
+    // não.
+
+    const ID_DA_JANELA_DE_EXCLUSAO = 'acab-exclusao-janela';
+
+    function fecharExclusao() {
+        const caixa = document.getElementById(ID_DA_JANELA_DE_EXCLUSAO);
+        if (caixa && caixa.parentNode) caixa.parentNode.removeChild(caixa);
+        tela.exclusaoEmCurso = null;
+    }
+
+    /** Os volumes do setor que podem RECEBER o que sai — nunca o de origem. */
+    function destinosDaExclusao() {
+        const e = tela.exclusaoEmCurso;
+        if (!e) return [];
+        return volumesDoSetor(e.setor).filter(v => String(v.id) !== String(e.volumeId));
+    }
+
+    /** O que está saindo: `{ registros, modeloIds, kg }`. */
+    function conteudoDaExclusao() {
+        const e = tela.exclusaoEmCurso;
+        if (!e) return { registros: [], modeloIds: [], kg: 0 };
+        const v = todosOsVolumes().find(x => String(x.id) === String(e.volumeId));
+        if (!v) return { registros: [], modeloIds: [], kg: 0 };
+        const registros = e.registroId
+            ? (v.registros || []).filter(r => String(r.id) === String(e.registroId))
+            : (v.registros || []);
+        const modeloIds = [];
+        registros.forEach(r => { if (modeloIds.indexOf(String(r.modeloId)) === -1) modeloIds.push(String(r.modeloId)); });
+        const gramas = registros.reduce((s, r) => s
+            + Math.round(((r.peso === null || r.peso === undefined) ? 0 : r.peso) * 1000), 0);
+        return { registros, modeloIds, kg: gramas / 1000 };
+    }
+
+    function escolherDestinoDaExclusao(destinoId) {
+        const e = tela.exclusaoEmCurso;
+        if (!e) return;
+        e.destinoId = destinoId || null;
+        const alvo = document.getElementById('acab-exclusao-destinos');
+        if (alvo) alvo.innerHTML = htmlDosDestinos();
+        const botao = document.getElementById('acab-exclusao-mover');
+        if (botao) {
+            botao.disabled = !e.destinoId;
+            botao.style.opacity = e.destinoId ? '1' : '0.5';
+            botao.style.cursor = e.destinoId ? 'pointer' : 'not-allowed';
+        }
+    }
+
+    function htmlDosDestinos() {
+        const e = tela.exclusaoEmCurso;
+        const destinos = destinosDaExclusao();
+        if (!destinos.length) {
+            return `<div style="font-size: 0.78rem; color: #fbbf24; line-height: 1.5;">
+                        Não há outro volume neste setor para receber o material. Feche esta janela e
+                        crie um com <strong>+ Volume</strong>, ou use a segunda opção.
+                    </div>`;
+        }
+        return destinos.map(v => {
+            const escolhido = String(v.id) === String(e.destinoId);
+            const temPeso = v.peso !== null && v.peso !== undefined && v.peso > 0;
+            return `
+            <button type="button" onclick="AcabamentoPainel.escolherDestino('${escJs(v.id)}')"
+                    aria-pressed="${escolhido ? 'true' : 'false'}"
+                    style="display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start;
+                           border-radius: 9px; padding: 9px 14px; min-width: 132px; cursor: pointer;
+                           font-family: inherit; text-align: left;
+                           ${escolhido
+                              ? 'background: rgba(76,200,240,0.16); border: 2px solid #4cc8f0;'
+                              : `background: ${AZUL.superficie}; border: 1px solid rgba(76,200,240,0.22);`}">
+                <strong style="font-size: 0.88rem; color: ${escolhido ? '#ffffff' : '#cfe6fb'};">
+                    V${esc(v.numero)}${v.nome ? ' · ' + esc(v.nome) : ''}${escolhido ? ' ✓' : ''}
+                </strong>
+                <span style="font-size: 0.76rem; font-family: monospace; color: ${temPeso ? '#cfe6fb' : '#fbbf24'};">
+                    ${temPeso ? esc(kgParaTexto(v.peso)) + ' kg' : 'vazio'} ·
+                    ${(v.registros || []).length} ${(v.registros || []).length === 1 ? 'modelo' : 'modelos'}
+                </span>
+            </button>`;
+        }).join('');
+    }
+
+    /**
+     * A janela do EXCLUIR, para o volume inteiro ou para um modelo dele.
+     *
+     * `registroId` nulo quer dizer o volume inteiro.
+     */
+    function abrirExclusao(volumeId, registroId) {
+        if (!podeEditar()) return;
         const v = todosOsVolumes().find(x => String(x.id) === String(volumeId));
         if (!v) return;
-        const quantos = (v.registros || []).length;
-        const pergunta = `Excluir o volume ${v.numero} do setor ${nomeDoSetor(v.setor)}?`
-            + (v.peso ? ` O peso de ${kgParaTexto(v.peso)} kg sai da soma.` : '')
-            + (quantos ? ` Os ${quantos} ${quantos === 1 ? 'modelo volta' : 'modelos voltam'} a ficar sem volume.` : '');
-        // A caixa da casa, e não o `confirm` do navegador: na estação o diálogo
-        // nativo depende de o navegador querer desenhá-lo, e este é um botão
-        // que apaga peso já conferido.
-        const caixa = (typeof window !== 'undefined') ? window.caixaConfirmar : null;
-        const ok = (caixa && typeof caixa.perguntar === 'function')
-            ? await caixa.perguntar(pergunta, { rotulo: 'Excluir', perigo: true })
-            : window.confirm(pergunta);
-        if (!ok) return;
+        // O fechar vem ANTES de montar o estado: `fecharExclusao` zera o
+        // `exclusaoEmCurso`, e chamá-lo depois apagaria o que acabou de nascer.
+        fecharExclusao();
+        tela.exclusaoEmCurso = {
+            volumeId: String(v.id), registroId: registroId ? String(registroId) : null,
+            setor: v.setor, destinoId: null,
+        };
+
+        const { registros, kg } = conteudoDaExclusao();
+        const itens = modelosDoPedidoAberto();
+        const oQue = registroId
+            ? nomeDoModelo(itens.find(m => String(m.id) === String((registros[0] || {}).modeloId)))
+            : `o volume ${v.numero}`;
+        const titulo = registroId
+            ? `Excluir ${oQue} do volume ${v.numero}`
+            : `Excluir o volume ${v.numero}${v.nome ? ' — ' + v.nome : ''}`;
+
+        const quantos = registros.length;
+        const resumo = quantos
+            ? `Saem ${quantos === 1 ? '1 registro' : quantos + ' registros'}`
+              + (kg > 0 ? `, somando ${kgParaTexto(kg)} kg.` : '.')
+            : 'Este volume está vazio — não há material a mover.';
+
+        const caixa = document.createElement('div');
+        caixa.id = ID_DA_JANELA_DE_EXCLUSAO;
+        caixa.style.cssText = 'position: fixed; inset: 0; z-index: 100006; display: flex;'
+            + ' align-items: center; justify-content: center; background: rgba(6,7,13,0.92); padding: 18px;';
+        caixa.innerHTML = `
+            <div style="width: min(680px, 96vw); max-height: 92vh; overflow: auto; background: ${AZUL.fundo};
+                        border: 1px solid rgba(76,200,240,0.28); border-radius: 12px;
+                        display: flex; flex-direction: column;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+                            background: #120a8f; border-bottom: 1px solid rgba(76,200,240,0.24);">
+                    <span style="font-size: 1.2rem;">📦</span>
+                    <strong style="font-size: 1.02rem; color: #ffffff;">${esc(titulo)}</strong>
+                    <button type="button" onclick="AcabamentoPainel.fecharExclusao()"
+                            style="margin-left: auto; background: rgba(6,7,13,0.6); border: 1px solid rgba(255,255,255,0.28);
+                                   color: #ffffff; border-radius: 8px; padding: 5px 12px; font-weight: 700;
+                                   cursor: pointer; font-family: inherit;">✕</button>
+                </div>
+
+                <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 16px;">
+                    <span style="font-size: 0.84rem; color: #cfe6fb;">${esc(resumo)}</span>
+
+                    <div style="display: flex; flex-direction: column; gap: 9px;
+                                border: 1px solid rgba(76,200,240,0.22); border-radius: 10px; padding: 13px 14px;">
+                        <span style="${ROTULO_DO_PASSO}">Mover para outro volume</span>
+                        <span style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.45;">
+                            O material continua registrado, com o peso que já foi à balança, e
+                            ${(registroId || quantos === 1) ? 'o modelo continua Revisado' : 'os modelos continuam Revisados'}.
+                            ${registroId ? '' : 'O volume ' + esc(String(v.numero)) + ' é excluído depois de esvaziado.'}
+                        </span>
+                        <div id="acab-exclusao-destinos" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            ${htmlDosDestinos()}
+                        </div>
+                        <button type="button" id="acab-exclusao-mover" disabled
+                                onclick="AcabamentoPainel.moverNaExclusao()"
+                                style="align-self: flex-start; background: linear-gradient(135deg, #4a61e8, #120a8f);
+                                       border: 1px solid #4cc8f0; color: #ffffff; border-radius: 8px;
+                                       padding: 10px 20px; font-weight: 800; letter-spacing: 0.04em;
+                                       font-size: 0.86rem; font-family: inherit; opacity: 0.5; cursor: not-allowed;">
+                            Mover${registroId ? '' : ' e excluir o volume'}
+                        </button>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 9px;
+                                border: 1px solid rgba(248,113,113,0.30); border-radius: 10px; padding: 13px 14px;">
+                        <span style="${ROTULO_DO_PASSO} color: #f87171;">Excluir e desmarcar a revisão</span>
+                        <span style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.45;">
+                            ${registroId || quantos === 1 ? 'O modelo deixa' : 'Os modelos deixam'}
+                            de estar <strong style="color: #cfe6fb;">Revisado</strong>${registroId || quantos === 1 ? '' : 's'},
+                            ${kg > 0 ? esc(kgParaTexto(kg)) + ' kg saem' : 'o peso sai'} da soma do volume e do setor,
+                            e a pesagem terá de ser refeita.
+                        </span>
+                        <button type="button" onclick="AcabamentoPainel.excluirNaExclusao()"
+                                style="align-self: flex-start; background: rgba(248,113,113,0.12);
+                                       border: 1px solid rgba(248,113,113,0.45); color: #f87171;
+                                       border-radius: 8px; padding: 10px 20px; font-weight: 800;
+                                       font-size: 0.86rem; font-family: inherit; cursor: pointer;">
+                            ${registroId ? 'Excluir o registro' : 'Excluir o volume'}
+                        </button>
+                    </div>
+
+                    <div id="acab-exclusao-erro" style="min-height: 1.2em; font-size: 0.82rem; color: #f87171;"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; padding: 12px 18px;
+                            border-top: 1px solid rgba(76,200,240,0.18);">
+                    <span style="font-size: 0.78rem; color: #7fa9d4;">Fechar não faz nada — nada foi alterado ainda.</span>
+                    <button type="button" onclick="AcabamentoPainel.fecharExclusao()"
+                            style="margin-left: auto; background: rgba(43,50,175,0.35); border: 1px solid rgba(76,200,240,0.22);
+                                   color: #cfe6fb; border-radius: 8px; padding: 10px 18px; font-weight: 700;
+                                   cursor: pointer; font-family: inherit;">Cancelar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(caixa);
+    }
+
+    function dizerNaExclusao(texto) {
+        const erro = document.getElementById('acab-exclusao-erro');
+        if (erro) erro.textContent = texto;
+    }
+
+    /** Mover: o material troca de volume, e o peso vai junto com ele. */
+    async function moverNaExclusao() {
+        const e = tela.exclusaoEmCurso;
+        if (!e || !e.destinoId) return;
+        const { registros } = conteudoDaExclusao();
+        const destino = todosOsVolumes().find(x => String(x.id) === String(e.destinoId));
+        if (!destino) return;
 
         try {
-            await apagarVolume(volumeId);
+            await moverRegistros(registros.map(r => String(r.id)), e.destinoId);
+            // O volume de ORIGEM só é excluído quando o operador pediu o volume
+            // inteiro. Tirando UM modelo, o volume continua com o resto dentro.
+            if (!e.registroId) await apagarVolume(e.volumeId);
+
             await carregarVolumes(tela.volumesDoPedido);
+            await sincronizarPesoDosVolumes([e.volumeId, e.destinoId]);
+            fecharExclusao();
             fecharVolumeAberto();
             renderDetalhe();
-            avisar(`Volume ${v.numero} excluído.`, 'success');
-            // O peso do setor acompanha a soma para BAIXO também: o volume saiu
-            // da pilha, e o número que a expedição lê tem de refletir isso. O
-            // que NÃO se desfaz aqui é o Pronto dos modelos que aquele volume
-            // fechou — desfazer decisão de gente é do botão Tirar, um a um.
-            await atualizarPesoDoSetorPelosVolumes(v.setor, { saiuVolume: true });
-        } catch (e) {
-            console.error('[acabamento] erro ao excluir o volume:', e);
-            avisar(`Não deu para excluir o volume: ${(e && e.message) ? e.message : e}`, 'error');
+            avisar(e.registroId
+                ? `Movido para o volume ${destino.numero}.`
+                : `Conteúdo movido para o volume ${destino.numero}, e o volume vazio foi excluído.`, 'success');
+            // O peso do SETOR não muda: o material continua no mesmo setor, só
+            // mudou de volume. Mas o do setor é a soma dos volumes, e um deles
+            // deixou de existir — vale reconferir.
+            await atualizarPesoDoSetorPelosVolumes(e.setor, { saiuVolume: true });
+        } catch (erro) {
+            console.error('[acabamento] erro ao mover o conteúdo:', erro);
+            dizerNaExclusao(`Não deu para mover: ${(erro && erro.message) ? erro.message : erro}`);
+        }
+    }
+
+    /** Excluir: o material sai, o peso sai da soma e a revisão é desmarcada. */
+    async function excluirNaExclusao() {
+        const e = tela.exclusaoEmCurso;
+        if (!e) return;
+        const { registros, modeloIds } = conteudoDaExclusao();
+        const v = todosOsVolumes().find(x => String(x.id) === String(e.volumeId));
+        const numero = v ? v.numero : '';
+
+        try {
+            if (e.registroId) {
+                if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                    throw new Error('esta tela está sem conexão com o banco');
+                }
+                const { error } = await supabaseClient.from(TABELA_DE_ITENS_DO_VOLUME)
+                    .delete().in('id', registros.map(r => String(r.id)));
+                if (error) throw error;
+            } else {
+                await apagarVolume(e.volumeId);   // os registros vão pelo cascade
+            }
+
+            await carregarVolumes(tela.volumesDoPedido);
+            await sincronizarPesoDosVolumes([e.volumeId]);
+            // A revisão DEPOIS do peso: `desmarcarRevisaoDeModelos` redesenha a
+            // tela a cada gravação, e a faixa precisa já mostrar a soma nova.
+            await desmarcarRevisaoDeModelos(modeloIds);
+
+            fecharExclusao();
+            fecharVolumeAberto();
+            renderDetalhe();
+            avisar(e.registroId
+                ? `Registro excluído do volume ${numero}.`
+                : `Volume ${numero} excluído.`, 'success');
+            await atualizarPesoDoSetorPelosVolumes(e.setor, { saiuVolume: true });
+        } catch (erro) {
+            console.error('[acabamento] erro ao excluir:', erro);
+            dizerNaExclusao(`Não deu para excluir: ${(erro && erro.message) ? erro.message : erro}`);
         }
     }
 
@@ -7283,6 +7529,7 @@
             fecharPopupDoPeso();
             fecharRegistro();
             fecharVolumeAberto();
+            fecharExclusao();
             mostrarLista();
             renderDetalhe();
             try {
@@ -7317,6 +7564,7 @@
             fecharPopupDoPeso();
             fecharRegistro();
             fecharVolumeAberto();
+            fecharExclusao();
             tela.marcados = {};
             tela.setoresNoPedido = [];
             tela.pedidoAberto = null;
@@ -7457,12 +7705,20 @@
          */
         fotografarVolume: abrirCameraDoVolume,
         fecharRegistro,
-        excluirVolume,
         /** Abre um volume para ler o que entrou nele. */
         abrirVolume,
         fecharVolumes: fecharVolumeAberto,
         renomearVolume,
-        tirarDoVolume,
+        /**
+         * O EXCLUIR da janela do volume (29/08/2026). Sem `registroId`, é o
+         * volume inteiro; com ele, um modelo só. Os dois abrem a mesma janela,
+         * que pergunta se o material vai para outro volume ou se sai de vez.
+         */
+        excluirDoVolume(volumeId, registroId) { abrirExclusao(volumeId, registroId || null); },
+        fecharExclusao,
+        escolherDestino: escolherDestinoDaExclusao,
+        moverNaExclusao,
+        excluirNaExclusao,
 
         mudarResponsavel(itemId, osId, valor) {
             return gravar(itemId, osId, 'acabamento_responsavel', valor);
@@ -7485,6 +7741,7 @@
             fecharPopupDoPeso();
             fecharRegistro();
             fecharVolumeAberto();
+            fecharExclusao();
             tela.marcados = {};
             tela.setoresNoPedido = [];
             tela.pedidoAberto = null;
