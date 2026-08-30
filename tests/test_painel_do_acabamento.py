@@ -1295,6 +1295,19 @@ def test_so_existe_o_conceito_de_volume():
     )
 
 
+def test_o_reparo_do_espelho_nao_zera_volume_antigo():
+    """Volume anterior a 29/08/2026 nao tem peso por registro: o peso dele MORA
+    no espelho. Zera-lo apagaria um peso de verdade."""
+    sql = _ler("sql/reparar_espelho_do_peso.sql").lower()
+
+    assert "update public.producao_volumes" in sql, "o reparo escreve no espelho"
+    assert "where exists (select 1 from public.producao_volume_itens" in sql, (
+        "e so nos volumes que TEM registro -- o antigo fica de fora"
+    )
+    assert "espelhos_fora" in sql, "e a conferencia do fim prova que fechou"
+    assert "delete" not in sql and "drop" not in sql, "reparo nao apaga nada"
+
+
 def test_a_leitura_dos_volumes_pede_o_peso_do_registro():
     """A coluna que sustenta a regra so serve se a CONSULTA a pedir.
 
