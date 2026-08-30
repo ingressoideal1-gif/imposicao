@@ -1295,6 +1295,33 @@ def test_so_existe_o_conceito_de_volume():
     )
 
 
+def test_a_leitura_dos_volumes_pede_o_peso_do_registro():
+    """A coluna que sustenta a regra so serve se a CONSULTA a pedir.
+
+    O `select` dos volumes ficou sem `peso_kg` e sem `registrado_em` do
+    registro: o `agruparVolumes` os lia, mas eles nunca chegavam. Todo registro
+    voltava sem peso, o `pesoDosRegistros` caia no espelho do volume, e mover
+    conteudo de um volume para outro deixava os pesos para tras (usuario,
+    29/08/2026).
+    """
+    js = _ler("frontend/acabamento.js")
+
+    i = js.index("async function carregarVolumes(")
+    corpo = js[i:i + 1800]
+    assert "TABELA_DE_ITENS_DO_VOLUME + '(id, modelo_id, qtd, peso_kg, responsavel, registrado_em)'" in corpo, (
+        "a consulta dos volumes precisa trazer o peso e a hora de cada registro"
+    )
+
+    # E tudo o que o `agruparVolumes` LE do registro tem de estar na consulta.
+    j = js.index("function agruparVolumes(")
+    leitura = js[j:js.index("const gravado =", j)]
+    for coluna in ("peso_kg", "registrado_em", "modelo_id", "qtd", "responsavel"):
+        assert coluna in leitura, coluna
+        assert coluna in corpo, (
+            "o agruparVolumes le `" + coluna + "` que a consulta nao pede"
+        )
+
+
 def test_o_sql_do_peso_por_registro_e_aditivo():
     """A coluna que sustenta a regra inteira. Nada e apagado: `producao_volumes.tipo`
     continua no banco com o que ja esta gravado, e so deixa de ser escrita."""

@@ -4459,8 +4459,14 @@
             if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
             const { data, error } = await supabaseClient
                 .from(TABELA_DE_VOLUMES)
+                // `peso_kg` e `registrado_em` do REGISTRO entram aqui desde
+                // 29/08/2026, e faltavam: o `agruparVolumes` os lia, mas a
+                // consulta não os pedia. Sem eles todo registro voltava sem
+                // peso, `pesoDosRegistros` caía no espelho do volume, e mover
+                // conteúdo de um volume para outro deixava os pesos para trás —
+                // foi o que o usuário viu ao mover um volume para outro.
                 .select('id, setor, numero, nome, tipo, peso_kg, responsavel, observacao, foto_url, criado_em, '
-                      + TABELA_DE_ITENS_DO_VOLUME + '(id, modelo_id, qtd, responsavel)')
+                      + TABELA_DE_ITENS_DO_VOLUME + '(id, modelo_id, qtd, peso_kg, responsavel, registrado_em)')
                 .eq('id_int', idInt);
             if (error) throw error;
             // O pedido pode ter sido trocado enquanto a leitura voava; o

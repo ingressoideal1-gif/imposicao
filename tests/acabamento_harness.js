@@ -297,22 +297,37 @@ function montarAmbiente() {
                     (filtros.id_int === undefined || String(l.id_int) === String(filtros.id_int)) &&
                     (filtros.id === undefined || String(l.id) === String(filtros.id)));
 
+                // O `select` do PostgREST e uma PROJECAO: coluna que nao esta na
+                // lista NAO volta. O banco de mentira honra isso desde
+                // 29/08/2026 -- ate ali ele devolvia tudo, e por isso deixou
+                // passar um `select` que esquecia o `peso_kg` do registro. Em
+                // producao aquilo fazia todo registro voltar sem peso, o
+                // `pesoDosRegistros` caia no espelho do volume, e mover conteudo
+                // de um volume para outro deixava os pesos para tras.
+                let pedidas = null;        // as colunas do volume
+                let pedidasDoItem = null;  // as colunas do registro embutido
+                const recortar = (cheio, colunas) => {
+                    if (!colunas) return cheio;
+                    const r = {};
+                    colunas.forEach(c => { if (c in cheio) r[c] = cheio[c]; });
+                    return r;
+                };
                 const leitura = {
                     eq: (c, v) => { filtros[c] = v; return leitura; },
                     then: (res, rej) => Promise.resolve({
                         // O recurso embutido do PostgREST: cada volume ja vem
                         // com os itens dele, que e como a tela pede.
-                        data: achar().map(v => Object.assign({}, v, {
+                        data: achar().map(v => Object.assign(recortar(v, pedidas), {
                             producao_volume_itens: self._itensDeVolume
                                 .filter(i => String(i.volume_id) === String(v.id))
-                                .map((i, n) => ({
+                                .map((i, n) => recortar({
                                     id: i.id || ('reg-' + v.id + '-' + n),
                                     modelo_id: i.modelo_id,
                                     qtd: i.qtd,
                                     peso_kg: (i.peso_kg === undefined) ? null : i.peso_kg,
                                     responsavel: i.responsavel || null,
                                     registrado_em: i.registrado_em || '',
-                                })),
+                                }, pedidasDoItem)),
                         })),
                         error: null,
                     }).then(res, rej),
@@ -341,7 +356,16 @@ function montarAmbiente() {
                 };
 
                 return {
-                    select: () => leitura,
+                    select: (campos) => {
+                        const texto = String(campos || '');
+                        const emb = /producao_volume_itens\s*\(([^)]*)\)/.exec(texto);
+                        pedidasDoItem = emb
+                            ? emb[1].split(',').map(c => c.trim()).filter(Boolean) : null;
+                        const fora = texto.replace(/producao_volume_itens\s*\([^)]*\)/, '');
+                        const lista = fora.split(',').map(c => c.trim()).filter(Boolean);
+                        pedidas = lista.length ? lista : null;
+                        return leitura;
+                    },
                     update: (p) => { payload = p; return escrita; },
                     delete: () => remocao,
                     insert: (linha) => {
@@ -4216,6 +4240,41 @@ async function moverUmModeloParaOutroVolume() {
        JSON.stringify(porId));
 }
 
+async function moverLevaOPesoJunto() {
+    // "ao tentar mover um volume para outro esta dando divergencia nos pesos,
+    // se os 2 ja foram pesados, ao mover o conteudo deve mover os pesos
+    // tambem" -- o usuario, 29/08/2026.
+    //
+    // A causa nao estava no mover: estava na LEITURA. O `select` dos volumes
+    // nao pedia o `peso_kg` do registro, entao todo registro voltava sem peso e
+    // o `pesoDosRegistros` caia no espelho do volume. Movido o conteudo, o peso
+    // ficava para tras -- ele nunca tinha saido do espelho.
+    const amb = ambienteDeVolumesComPeso();
+    const { v1, v2 } = await comDoisVolumes(amb);
+    const antesDoSetor = Number(amb.banco._setoresDoBanco[0].peso_real_kg);
+    ok(antesDoSetor === 28.6, 'os dois volumes ja estavam pesados', String(antesDoSetor));
+
+    // O peso tem de vir do REGISTRO, e nao do espelho: sem isso, nada abaixo
+    // prova coisa nenhuma.
+    const daTela = amb.painel._regras.volumesDoSetor('LASER');
+    ok(daTela[0].registros.every(r => r.peso !== null && r.peso !== undefined),
+       'cada registro chega a tela com o SEU peso',
+       JSON.stringify(daTela[0].registros.map(r => r.peso)));
+
+    amb.painel.excluirDoVolume(v1, '');
+    amb.painel.escolherDestino(v2);
+    await amb.painel.moverNaExclusao();
+
+    const destino = amb.banco._volumesDoBanco.find(v => String(v.id) === String(v2));
+    ok(Number(destino.peso_kg) === 28.6,
+       'o destino somou o peso que chegou junto com o material', String(destino.peso_kg));
+    ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === antesDoSetor,
+       'e o peso do setor NAO muda -- o material so trocou de volume',
+       String(amb.banco._setoresDoBanco[0].peso_real_kg));
+    ok(!amb.painel._tela.liberacaoPendente,
+       'nenhuma divergencia foi levantada');
+}
+
 async function semOutroVolumeAJanelaDizOQueFazer() {
     const amb = ambienteDeVolumesComPeso();
     const janelas = capturarJanelas(amb);
@@ -4359,6 +4418,7 @@ async function osProntosVaoParaOFimDaLista() {
     await oExcluirPerguntaOQueFazerComOConteudo();
     await moverOConteudoDoVolumeParaOutro();
     await moverUmModeloParaOutroVolume();
+    await moverLevaOPesoJunto();
     await semOutroVolumeAJanelaDizOQueFazer();
     await excluirOVolumeDesmarcaARevisaoDeTodos();
     await oBotaoDaExpedicaoFicaNoTopoDoResumo();

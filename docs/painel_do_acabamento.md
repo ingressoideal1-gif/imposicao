@@ -1434,6 +1434,17 @@ e não passam pelo agente.
   inteira disponível, e o operador registraria o dobro sem a tela dizer nada.
 - **O registro é ACRÉSCIMO, e não substituição.** Um volume recebe modelos ao
   longo do dia; reescrever a lista a cada gravação apagaria o que já estava lá.
+- **Tudo o que o `agruparVolumes` lê tem de estar no `select`.** O `select` do
+  PostgREST é uma projeção: coluna que não está na lista não volta, e não há
+  erro nenhum — o campo chega `undefined`. Foi assim que `peso_kg` e
+  `registrado_em` do registro ficaram fora por quatro versões: o código os lia,
+  a consulta não os pedia, e `pesoDosRegistros` caía no espelho do volume sem
+  ninguém notar. O buraco só apareceu ao **mover** conteúdo entre volumes, onde
+  o peso precisa viajar com o material.
+
+  O banco de mentira do harness passou a **honrar a projeção** por causa disso:
+  até então ele devolvia todas as colunas, e por isso deixou o defeito passar.
+  Com o `select` errado, oito verificações falham.
 
 ## Como a tela se pendura no que já existe
 
