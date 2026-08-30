@@ -2157,8 +2157,18 @@ async function semResponsavelOStatusNaoSeMexe() {
     // verdade agora. Seta que aponta para o lugar errado e pior do que seta
     // nenhuma -- foi por isso que ela mudou de lado em 26/08, e por isso que
     // agora ela nao existe.
-    ok(do3002.indexOf('<b>Responsável</b> ao lado') !== -1,
-       'e aponta para onde o responsavel ficou agora');
+    ok(do3002.indexOf('ao lado') !== -1,
+       'e aponta para onde o nome se escolhe');
+    // A palavra "Responsável" aparece UMA vez na linha do modelo, e e a do
+    // proprio drop (pedido do usuario, 29/08/2026: "deixar a palavra
+    // Responsavel apenas uma vez, dentro do drop"). O rotulo dentro da caixa e
+    // a mencao no recado sairam.
+    // So o TEXTO VISIVEL: `mudarResponsavel` e o `title` do seletor tambem
+    // trazem a palavra, e nenhum dos dois aparece na tela.
+    const visivel3002 = do3002.replace(/<[^>]*>/g, ' ');
+    const quantas = (visivel3002.match(/[Rr]espons[aá]vel/g) || []).length;
+    ok(quantas === 1, 'e a palavra "Responsável" aparece uma vez so na linha',
+       String(quantas) + ' | ' + visivel3002.replace(/\s+/g, ' ').slice(0, 200));
     ok(do3002.indexOf('⬆️') === -1 && do3002.indexOf('⬇️') === -1,
        'sem seta: o seletor esta na mesma linha do botao');
     // ...mas o estagio continua LEGIVEL: travar nao e esconder.

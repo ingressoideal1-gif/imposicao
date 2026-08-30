@@ -1734,7 +1734,7 @@
     function recadoDoResponsavel(item) {
         if (!podeEditar() || responsavelDoModelo(item)) return '';
         return `<span style="font-size:0.7rem; color:#fcd34d; width: 100%; text-align: right;">`
-             + `Escolha o <b>Responsável</b> ao lado para liberar o Revisado.</span>`;
+             + `Escolha <b>quem fez</b> este modelo, ao lado, para liberar o Revisado.</span>`;
     }
 
     /**
@@ -1809,15 +1809,22 @@
                     ? `<span style="font-size:0.7rem; color:var(--text-dim);">Nenhum operador com o perfil <b>✂️ Acabamento</b>. Em <b>Usuários → Acesso Local — NewProd</b>, escolha esse perfil para quem trabalha no setor, e volte aqui em <b>ATUALIZAR</b>.</span>`
                     : ''));
 
-        // A palavra "Responsável" vai DENTRO da caixa, na mesma linha do nome
-        // (pedido do usuário em 29/08/2026: "drop do responsável pode ser menor
-        // e sem legenda, legenda pode ficar dentro do próprio box"). O rótulo
-        // ao lado custava uma linha de altura em cada modelo, e a tela precisa
-        // de espaço vertical. O <select> continua sendo um <select> de verdade:
-        // ele fica transparente dentro da caixa, que é quem desenha a moldura.
+        // A palavra "Responsável" aparece UMA vez, e é a do próprio drop — o
+        // "— Responsável —" que ele mostra enquanto ninguém foi escolhido.
+        //
+        // Ela já esteve em três lugares ao mesmo tempo: um rótulo fora da
+        // caixa, depois um rótulo DENTRO dela (29/08/2026: "drop do responsável
+        // pode ser menor e sem legenda, legenda pode ficar dentro do próprio
+        // box") e a opção vazia. No mesmo dia o usuário viu as duas juntas e
+        // pediu o que está aqui: "deixar a palavra Responsável apenas uma vez,
+        // dentro do drop". Escolhido um nome, a palavra some — o nome é o que
+        // importa, e é o que o operador procura de relance.
+        //
+        // O <select> continua sendo um <select> de verdade; a caixa em volta é
+        // quem desenha a moldura, e o fundo dele repete a cor dela para o balão
+        // da lista não sair branco (ver ESTILO_SELECT).
         return `
             <div style="${ESTILO_CAIXA_DO_SELECT}${podeEditar ? '' : ESTILO_SELECT_TRAVADO}">
-                <span style="${SUBROTULO_DENTRO_DA_CAIXA}">Responsável</span>
                 <select ${podeEditar ? '' : 'disabled'} style="${ESTILO_SELECT}"
                         onchange="AcabamentoPainel.mudarResponsavel('${escJs(item.id)}', '${escJs(osId)}', this.value)"
                         title="Quem é o responsável pelo acabamento deste modelo">
@@ -1831,9 +1838,6 @@
         + ' background: #0d0e20; border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;'
         + ' padding: 0 10px; width: 100%; min-width: 0;'
         + ' box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
-    const SUBROTULO_DENTRO_DA_CAIXA = 'font-size: 0.62rem; font-weight: 800;'
-        + ' text-transform: uppercase; letter-spacing: 0.05em; color: #7f93a8;'
-        + ' white-space: nowrap; flex-shrink: 0;';
     // ## O fundo do `<select>` NÃO pode ser `transparent`
     //
     // Em 29/08/2026 o seletor do responsável ficou sem moldura própria, dentro
