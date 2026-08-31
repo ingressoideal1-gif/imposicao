@@ -257,31 +257,73 @@ function montarLote(mundo) {
 
 // ─── 7. O Gerar Link espera a arte ANTES de existir link para copiar ─────────
 
-(function oGerarLinkEsperaAArteAntesDeQualquerCoisa() {
+(function oPreparoEsperaAArteAntesDeCriarOLink() {
+    // Em 31/08/2026 este trabalho saiu de dentro do `gerarLinkCliente` e virou o
+    // `prepararLinkDaArtePronta`, porque o designer passou a percorrer o mesmo
+    // caminho ao devolver o pedido ao atendimento. A GARANTIA nao mudou de
+    // sentido, so de lugar: a arte de aprovacao e esperada ANTES de existir link.
+    const i = SCRIPT.indexOf('async function prepararLinkDaArtePronta');
+    ok(i > 0, 'o prepararLinkDaArtePronta existe');
+    const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+
+    const posRegenera = trecho.indexOf('await forceRegenerateSnapshots(osId)');
+    const posSaida = trecho.indexOf('return { ok: false', trecho.indexOf('await forceRegenerateSnapshots(osId)'));
+    const posLink = trecho.indexOf('await getOrCreateLinkCliente');
+
+    ok(posRegenera > 0, 'ele espera a regeneracao');
+    ok(posSaida > posRegenera, 'e desiste ali mesmo se a arte falhar', { posRegenera, posSaida });
+    ok(posLink > posSaida, 'so DEPOIS cria o link', { posSaida, posLink });
+
+    // Zerar a marca de "o cliente olhou" e o que impede o pedido que voltou de
+    // uma alteracao de saltar para "Aguard. Aprovacao" com a abertura da versao
+    // ANTERIOR -- o cliente nunca teria visto a arte corrigida.
+    ok(/cliente_abriu_em: null/.test(trecho),
+        'e zera a marca de que o cliente olhou, porque a arte e outra');
+    ok(/arte_pronta_em:/.test(trecho), 'carimbando a versao nova da arte');
+})();
+
+(function oGerarLinkEsperaOPreparoAntesDeCopiar() {
     const i = SCRIPT.indexOf('async function gerarLinkCliente');
     ok(i > 0, 'o gerarLinkCliente continua existindo');
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
 
-    const posRegenera = trecho.indexOf('await forceRegenerateSnapshots(osId)');
-    const posLink = trecho.indexOf('await getOrCreateLinkCliente');
+    const posPreparo = trecho.indexOf('await prepararLinkDaArtePronta(osId, numero)');
     const posCopia = trecho.indexOf('navigator.clipboard.writeText');
-    const posStatus = trecho.indexOf('gravarStatusOverride(osId, novoStatus)');
+    const posStatus = trecho.indexOf('gravarStatusOverride(osId,');
 
-    ok(posRegenera > 0, 'ele espera a regeneracao');
-    ok(posLink > posRegenera, 'e so DEPOIS cria o link', { posRegenera, posLink });
-    ok(posCopia > posRegenera, 'e so depois copia', { posRegenera, posCopia });
-    // Antes do passo 1 de proposito: dali em diante o status ja foi mexido, e
-    // desistir no meio deixaria a tela contando uma coisa e o banco outra.
-    ok(posStatus > posRegenera, 'e antes de mexer no status do pedido', { posRegenera, posStatus });
+    ok(posPreparo > 0, 'ele espera o preparo da arte e do link');
+    ok(posCopia > posPreparo, 'e so depois copia', { posPreparo, posCopia });
+    // O status so e mexido depois: desistir no meio deixaria a tela contando
+    // uma coisa e o banco outra.
+    ok(posStatus > posPreparo, 'e so depois mexe no status do pedido', { posPreparo, posStatus });
+
+    // E o status NAO salta mais para "Aguard. Aprovacao": quem move o pedido e
+    // o cliente, quando olha. Copiar o link de novo nao prova que alguem viu.
+    ok(!/gravarStatusOverride\(osId, 'Aguard/.test(trecho),
+        'copiar o link nao marca mais o pedido como "Aguard. Aprovacao"');
 })();
 
 (function seAArteNaoAtualizarOLinkNaoSai() {
     const i = SCRIPT.indexOf('async function gerarLinkCliente');
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
-    const bloco = trecho.slice(trecho.indexOf('regeneracao.falhas'), trecho.indexOf('regeneracao.falhas') + 700);
+    const bloco = trecho.slice(trecho.indexOf('!preparo.ok'), trecho.indexOf('!preparo.ok') + 700);
     ok(/return;/.test(bloco), 'falha na arte interrompe o Gerar Link', bloco.slice(0, 160));
-    ok(/N[ÃA]O foi gerado/.test(bloco), 'e o aviso diz que o link nao saiu');
+    ok(/N[ÃA]O foi (gerado|atualizado)/.test(bloco), 'e o aviso diz que o link nao saiu');
     ok(/arte anterior/.test(bloco), 'e diz por que isso importa');
+})();
+
+(function oDesignerTambemEAvisadoQuandoAArteFalha() {
+    // O link passou a nascer no `voltarParaAtendimento`. Se a arte de aprovacao
+    // falhar ali, o designer tem de saber QUAL modelo falhou -- senao o
+    // atendente descobre no meio do envio.
+    const i = SCRIPT.indexOf('async function voltarParaAtendimento');
+    ok(i > 0, 'o voltarParaAtendimento existe');
+    const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
+    ok(/await prepararLinkDaArtePronta\(osId, os\.numero\)/.test(trecho),
+        'ele prepara o link junto com a arte pronta');
+    const bloco = trecho.slice(trecho.indexOf('!preparo.ok'), trecho.indexOf('!preparo.ok') + 700);
+    ok(/\.map\(f => f\.nome\)/.test(bloco),
+        'e o aviso nomeia os modelos que falharam', bloco.slice(0, 160));
 })();
 
 (function oDisparoEmSegundoPlanoDoFimSumiu() {

@@ -1019,6 +1019,66 @@ function checkClienteRoute() {
     return false;
 }
 
+/**
+ * Carimba, uma única vez, que uma PESSOA olhou esta arte.
+ *
+ * ## Por que não basta o contador de acessos
+ *
+ * `pedidos_links_cliente.acessos` conta carregamento de página, de quem for.
+ * Três coisas somam nele sem o cliente ter visto nada:
+ *
+ *   1. o atendente ou o designer abrindo o link para conferir;
+ *   2. a PRÉVIA DO WHATSAPP, que busca a URL sozinha para montar o cartão da
+ *      mensagem — isso conta um acesso no instante do envio;
+ *   3. qualquer robô que siga o link.
+ *
+ * Desde 31/08/2026 é este carimbo que move o pedido de "Enviar Arte" para
+ * "Aguard. Aprovação" na Lista de Arte. Se ele subisse com o contador, o pedido
+ * mudaria de estágio sozinho no momento em que o atendente colasse o link no
+ * WhatsApp — antes de o cliente tocar em qualquer coisa.
+ *
+ * Decisão do usuário: vale o **primeiro gesto na tela**. Robô de prévia não
+ * rola a página, não toca e não digita.
+ *
+ * ## Detalhes que o tornam confiável
+ *
+ * - `once: true` em cada ouvinte, e uma trava própria: o cliente rola dez vezes
+ *   e o banco é escrito uma. A função do banco também é idempotente, então nem
+ *   uma corrida entre dois gestos escreve duas vezes.
+ * - `passive: true` no scroll e no touch, para não segurar a rolagem no celular
+ *   — esta página é feita para o telefone primeiro.
+ * - Falha em silêncio de propósito: se a marca não subir, o cliente ainda tem de
+ *   conseguir aprovar a arte. O pior caso é o pedido continuar em "Enviar Arte",
+ *   e não uma tela quebrada na frente de quem vai aprovar.
+ */
+let _marcaDeVistoJaEnviada = false;
+
+function armarMarcaDeQueOClienteOlhou() {
+    if (_marcaDeVistoJaEnviada) return;
+
+    const gestos = [
+        ['scroll',      { once: true, passive: true }],
+        ['pointerdown', { once: true, passive: true }],
+        ['touchstart',  { once: true, passive: true }],
+        ['keydown',     { once: true }]
+    ];
+
+    const marcar = async () => {
+        if (_marcaDeVistoJaEnviada) return;
+        _marcaDeVistoJaEnviada = true;
+        try {
+            await supabaseClient.rpc('link_cliente_visto', {
+                p_numero: clienteState.numero,
+                p_token: clienteState.token
+            });
+        } catch (e) {
+            console.warn('[Cliente] Nao consegui marcar a visualizacao:', e && e.message || e);
+        }
+    };
+
+    gestos.forEach(([evento, opcoes]) => window.addEventListener(evento, marcar, opcoes));
+}
+
 let clienteState = {
     numero: null,
     token: null,
@@ -1409,6 +1469,9 @@ async function initClientePage(numero, token) {
 
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
+
+        // A arte está na tela: a partir daqui, o primeiro gesto do cliente conta.
+        armarMarcaDeQueOClienteOlhou();
 
         // O selo da entrega vem junto na carga do portal -- era mais uma
         // consulta direta a `pedidos_artes` com a chave anônima.

@@ -65,6 +65,54 @@ Antes dessa revisão a lista tinha só produção, impressão e finalizada — e
 isso pedido já em trânsito ou no acabamento continuava ocupando a tela do
 designer.
 
+### O link nasce com a arte pronta, e quem move o pedido é o cliente (31/08/2026)
+
+Pedido do usuário: *"quando o designer marcar a arte pronta e voltar o pedido para o
+atendente, o status deve permanecer como Enviar arte, mas o link já deverá ser gerado
+neste momento, sem precisar ser gerado pelo atendimento; o status deverá mudar para
+Aguard. Aprovação quando for verificado que o cliente abriu o link"*.
+
+O que mudou:
+
+| Antes | Agora |
+|---|---|
+| O atendente clicava **Gerar Link** | O link nasce no `voltarParaAtendimento`, junto com a arte pronta |
+| Gerar o link já marcava "Aguard. Aprovação" | O status fica em **Enviar Arte** até o cliente olhar |
+| A classificação perguntava "tem link?" (`temLinkGerado`) | Pergunta "o cliente olhou?" (`cliente_abriu_em`) |
+| O botão da linha dizia "Enviar Link" | Diz **Copiar Link** |
+
+> [!WARNING]
+> A troca de `temLinkGerado` por `cliente_abriu_em` **não é opcional**. Com o link
+> nascendo junto com a arte pronta, a pergunta antiga marcaria como "Aguard. Aprovação"
+> todo pedido que o designer terminasse — o mesmo defeito da palavra `AGUARDANDO`,
+> entrando por outra porta.
+
+**Por que não serve o contador `acessos`.** Ele conta carregamento de página, de quem
+for: o atendente conferindo o link, um robô, e principalmente a **prévia do WhatsApp**,
+que busca a URL sozinha para montar o cartão da mensagem — isso somaria um acesso no
+instante do envio, e o pedido mudaria de estágio antes de o cliente tocar em nada. Por
+isso o sinal é o **primeiro gesto na tela** (`armarMarcaDeQueOClienteOlhou`, em
+`frontend/cliente.js`), que robô de prévia não produz.
+
+**Refazer a arte zera a marca.** `prepararLinkDaArtePronta` grava `cliente_abriu_em: null`
+junto com `arte_pronta_em`. Sem isso, o pedido que voltou de uma alteração saltaria para
+"Aguard. Aprovação" com a abertura da versão anterior — o cliente nunca teria visto a arte
+corrigida, e a tela diria que sim.
+
+**O ganho que não estava no pedido.** Antes, "Enviar Arte" de um pedido `vibe_` sem link
+era gravado em `pedidos_links_cliente` — que não tinha linha — e o UPDATE não acertava
+nada. O que sobrava era o `gravarStatusOverride`, que é **localStorage**: o designer
+marcava pronto na máquina dele e o atendente, em outra, podia não ver. Criando a linha do
+link nesse momento, o estágio passa a morar no banco.
+
+**Uma borda que continua.** O `sincronizarPedidosProntosParaEnvio` — a varredura que marca
+"Enviar Arte" quando todos os modelos estão PRONTO no banco — **não** cria link. Ela roda
+sobre a lista inteira a cada carga, e criar links ali significaria regenerar a arte de
+aprovação de dezenas de pedidos de uma vez. Para esses, o botão **Gerar Link** continua
+sendo a saída.
+
+Colunas e função no banco: `sql/link_marca_quando_o_cliente_abre.sql`.
+
 ### As duas palavras "AGUARDANDO" (31/08/2026)
 
 `pedidos_artes.status` tem duas palavras parecidas e de sentido **oposto**, e

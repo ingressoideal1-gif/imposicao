@@ -95,12 +95,24 @@ const VAZIO = { ordens: [], todasArtes: [], modelosGlobais: {}, osItens: {}, lin
         'depois que o cliente leva, tambem nao volta');
 })();
 
-(function oPedidoComLinkGeradoSaiDeEmArte() {
-    // Gerar o link para o cliente move o pedido para a Fila de Aprovacao mesmo
-    // sem o status ter mudado -- e por isso ele deixa de contar para o designer.
-    const api = classificador(Object.assign({}, VAZIO, { linksCliente: { 'os-9': 'abc' } }));
-    ok(api.classificarPedidoNaArte({ id: 'os-9', numero: 9, status: 'EM ARTE' }).fila === 'aprovacao',
-        'pedido com link gerado esta esperando o cliente');
+(function oQueTiraOPedidoDeEmArteEOClienteOlhar() {
+    // Ate 31/08/2026 bastava o link existir: ele so nascia quando o atendente
+    // decidia mandar, entao existir significava "saiu para o cliente". Nesse dia
+    // o link passou a nascer junto com a arte pronta, e a pergunta virou outra --
+    // `cliente_abriu_em`, carimbado pelo banco no primeiro gesto do cliente.
+    const soLink = classificador(Object.assign({}, VAZIO, {
+        linksCliente: { 'os-9': 'abc' },
+        linksClienteData: { 'os-9': { cliente_abriu_em: null } }
+    }));
+    ok(soLink.classificarPedidoNaArte({ id: 'os-9', numero: 9, status: 'EM ARTE' }).fila === 'fila',
+        'link gerado e cliente sem olhar: o pedido continua com o designer');
+
+    const olhou = classificador(Object.assign({}, VAZIO, {
+        linksCliente: { 'os-9': 'abc' },
+        linksClienteData: { 'os-9': { cliente_abriu_em: '2026-08-31T18:00:00Z' } }
+    }));
+    ok(olhou.classificarPedidoNaArte({ id: 'os-9', numero: 9, status: 'EM ARTE' }).fila === 'aprovacao',
+        'cliente olhou: ai sim sai de Em Arte e vai esperar a resposta dele');
 })();
 
 // ─── 2. A caixa "Designers Ideal" conta so o card Em Arte ────────────────────

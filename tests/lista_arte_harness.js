@@ -394,7 +394,10 @@ function classificarComArte(statusDaArte, extra) {
     estadoArte.todasArtes = [{ id_int: 900, status: statusDaArte, entrega_dados: extra.entrega || null }];
     estadoArte.modelosGlobais = {};
     estadoArte.osItens = {};
-    estadoArte.linksCliente = extra.link ? { 'os-900': { token: 'x' } } : {};
+    estadoArte.linksCliente = extra.link ? { 'os-900': 'https://exemplo/cliente/900-x' } : {};
+    estadoArte.linksClienteData = extra.link
+        ? { 'os-900': { token: 'x', cliente_abriu_em: extra.abriu || null } }
+        : {};
     const os = Object.assign({ id: 'os-900', numero: '900', status: '' }, extra.os || {});
     return classificarPedidoNaArte(os);
 }
@@ -421,11 +424,58 @@ function classificarComArte(statusDaArte, extra) {
     ok(d.fila === 'aprovacao', 'a forma com acento tambem', d);
 })();
 
-(function oLinkGeradoAindaMandaMaisQueAPalavra() {
-    // Se alguem gerou o link, a arte SAIU para o cliente, mesmo que a palavra do
-    // ERP nao tenha acompanhado. Por isso o ramo do designer vem depois deste.
+(function oLinkExistirNaoMoveMaisOPedido() {
+    // Ate 31/08/2026 a existencia do link significava "a arte saiu para o
+    // cliente", porque o link so nascia quando o atendente decidia mandar. Nesse
+    // dia o link passou a nascer junto com a arte pronta -- entao ele existe
+    // para todo pedido que o designer terminou, e nao prova nada.
     const c = classificarComArte('AGUARDANDO', { link: true });
-    ok(c.fila === 'aprovacao', 'AGUARDANDO com link do cliente vai para a Fila de Aprovacao', c);
+    ok(c.fila === 'fila', 'link gerado, cliente nao olhou: fica em "Em Arte"', c);
+    ok(c.statusCalculado === 'Em Arte', 'e o badge continua "Em Arte"', c);
+})();
+
+(function quemMoveOPedidoEOClienteOlhar() {
+    // `cliente_abriu_em` e' carimbado pelo banco no primeiro gesto do cliente na
+    // tela do link. E' o unico sinal que significa "uma pessoa olhou".
+    const c = classificarComArte('AGUARDANDO', { link: true, abriu: '2026-08-31T18:00:00Z' });
+    ok(c.fila === 'aprovacao', 'cliente olhou: vai para a Fila de Aprovacao', c);
+    ok(c.statusCalculado === 'Aguard. Aprovação', 'e o badge diz "Aguard. Aprovacao"', c);
+
+    // Refazer a arte zera a marca. Sem isso, o pedido que voltou de uma
+    // alteracao saltaria para "Aguard. Aprovacao" com a abertura da versao
+    // ANTERIOR -- o cliente nunca teria visto a arte corrigida.
+    const d = classificarComArte('AGUARDANDO', { link: true, abriu: null });
+    ok(d.fila === 'fila', 'marca zerada depois de refazer a arte: volta para "Em Arte"', d);
+})();
+
+(function oClienteOlharVenceAPalavraENVIARARTE() {
+    // O `os.status` vem do adiantamento local (5 min) e da coluna do link, e os
+    // dois ainda dizem ENVIAR ARTE no instante em que o cliente abre -- que e' o
+    // caso comum, porque ele abre logo depois de receber. Sem esta regra o badge
+    // ficaria presa em "Enviar Arte" com o cliente ja olhando a arte.
+    const c = classificarComArte('ENVIAR ARTE', { link: true, abriu: '2026-08-31T18:00:00Z' });
+    ok(c.statusCalculado === 'Aguard. Aprovação', 'cliente olhou vence a palavra ENVIAR ARTE', c);
+
+    // Mas a arte aprovada continua vencendo os dois: e' a pergunta anterior.
+    const d = classificarComArte('APROVADO', { link: true, abriu: '2026-08-31T18:00:00Z' });
+    ok(d.statusCalculado === 'Aprovada', 'e a arte aprovada continua vencendo tudo', d);
+})();
+
+(function aArteProntaContinuaNaFilaDeAprovacao() {
+    // O estagio 2 nao muda: arte pronta e' trabalho do atendente, e a linha dele
+    // e' onde esta o botao de copiar o link.
+    const c = classificarComArte('ENVIAR ARTE', { link: true });
+    ok(c.statusCalculado === 'Enviar Arte', 'ENVIAR ARTE continua com o badge "Enviar Arte"', c);
+    ok(c.fila === 'aprovacao', 'e continua na Fila de Aprovacao', c);
+})();
+
+(function aRegraAntigaNaoPodeVoltar() {
+    // `temLinkGerado` era a variavel que fazia a existencia do link mover o
+    // pedido. Ela sumiu; se voltar, todo pedido pronto vira "Aguard. Aprovacao".
+    ok(!/temLinkGerado/.test(SCRIPT),
+        'a variavel temLinkGerado nao existe mais no script.js');
+    ok(/const clienteAbriuOLink = !!\(dadosDoLink && dadosDoLink\.cliente_abriu_em\);/.test(SCRIPT),
+        'quem responde agora e a marca cliente_abriu_em');
 })();
 
 (function oRestoDaClassificacaoNaoMudou() {

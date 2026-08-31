@@ -99,6 +99,34 @@ Documentado em `docs/DOCUMENTACAO.md`, seção 11.
 
 ---
 
+## [2026-08-31] — O link do cliente nasce com a arte pronta
+
+Pedido do usuário: *"quando o designer marcar a arte pronta e voltar o pedido para o
+atendente, o status deve permanecer como Enviar arte, mas o link já deverá ser gerado
+neste momento, sem precisar ser gerado pelo atendimento; o status deverá mudar para
+Aguard. Aprovação quando for verificado que o cliente abriu o link"*.
+
+- **O link é criado no `voltarParaAtendimento`**, junto com a arte de aprovação
+  regenerada. O atendente não precisa mais gerá-lo; o botão da linha virou **Copiar Link**.
+- **`temLinkGerado` saiu da classificação.** Com o link nascendo com a arte pronta, ele
+  marcaria como "Aguard. Aprovação" todo pedido que o designer terminasse. Quem responde
+  agora é `cliente_abriu_em`.
+- **Duas colunas novas** em `pedidos_links_cliente`: `arte_pronta_em` e `cliente_abriu_em`
+  (`sql/link_marca_quando_o_cliente_abre.sql`).
+- **O carimbo é do banco**, na função `link_cliente_visto`, chamada pela página do cliente
+  no primeiro gesto dele na tela. O contador `acessos` não serve: a prévia do WhatsApp
+  busca a URL sozinha e somaria um acesso no instante do envio.
+- **Refazer a arte zera `cliente_abriu_em`**, senão o pedido que voltou de uma alteração
+  saltaria para "Aguard. Aprovação" com a abertura da versão anterior.
+- **O ERP passa a ver os dois estágios**: `ENVIAR ARTE` e `AGUARDANDO_APROVACAO` são
+  gravados em `pedidos_artes.status`, sem nunca andar para trás sobre uma arte aprovada.
+- Efeito colateral que conserta um defeito antigo: "Enviar Arte" de um pedido `vibe_` sem
+  link só existia no **localStorage** do navegador que marcou. Agora mora no banco.
+
+Documentado em `docs/lista_de_arte.md` e em `docs/status_da_arte_para_o_erp.md`.
+
+---
+
 ## [2026-08-31] — Lista de Arte: pedido novo volta a nascer em "Em Arte"
 
 Relato do usuário, no pedido 21413: **"o status real dele é em_arte, deveria estar

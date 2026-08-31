@@ -25223,7 +25223,7 @@ async function carregarLinksExistentes() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_links_cliente')
-            .select('os_id, numero_pedido, token, status_arte')
+            .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
             .eq('ativo', true);
         if (error) {
             if (error.code === '42P01') return; // tabela ainda não existe
@@ -27825,16 +27825,41 @@ function classificarPedidoNaArte(os) {
     const isApprovedCalculado = ARTE_APROVADOS.includes(osStatus) || ARTE_APROVADOS.includes(globalStatus) || todosModelosAprovados;
     const isEmAlteracaoCalculado = (ARTE_REPROVADOS.includes(osStatus) || ARTE_REPROVADOS.includes(globalStatus) || temItemReprovado) && !todosModelosAprovados;
     const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
-    const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
+    // O que move o pedido para a Fila de Aprovação é o CLIENTE TER OLHADO — e
+    // não a existência do link.
+    //
+    // Até 31/08/2026 a pergunta aqui era "tem link?", e ela funcionava porque o
+    // link só nascia quando o atendente decidia mandar. Nesse dia o link passou
+    // a nascer junto com a arte pronta (ver `prepararLinkDaArtePronta`), e a
+    // pergunta antiga marcaria como "Aguard. Aprovação" todo pedido que o
+    // designer terminasse — o mesmo defeito da palavra `AGUARDANDO`, que
+    // corrigimos de manhã, entrando por outra porta.
+    //
+    // `cliente_abriu_em` é carimbado pelo BANCO, no primeiro gesto do cliente na
+    // tela do link, e zerado quando a arte é refeita. O contador `acessos` não
+    // serve: a prévia do WhatsApp busca a URL sozinha para montar o cartão da
+    // mensagem, e isso somaria um acesso no instante do envio.
+    // Ver `sql/link_marca_quando_o_cliente_abre.sql`.
+    const dadosDoLink = (state.linksClienteData && state.linksClienteData[os.id]) || null;
+    const clienteAbriuOLink = !!(dadosDoLink && dadosDoLink.cliente_abriu_em);
 
     let statusCalculado;
     if (isApprovedCalculado) {
         statusCalculado = 'Aprovada';
-    } else if (isEnviarArteCalculado) {
+    } else if (isEnviarArteCalculado && !clienteAbriuOLink) {
+        // `&& !clienteAbriuOLink`: o cliente ter olhado vence a palavra.
+        //
+        // Sem isso o badge ficaria preso em "Enviar Arte" depois de o cliente
+        // abrir: o `os.status` vem do adiantamento local (`vibe_status_overrides`,
+        // que vale 5 minutos) e da coluna `status_arte` do link, e os dois podem
+        // ainda dizer ENVIAR ARTE no instante em que o cliente abre — o que é
+        // justamente o caso comum, porque ele abre logo depois de receber.
+        //
+        // A arte aprovada continua vencendo os dois: ela é a pergunta anterior.
         statusCalculado = 'Enviar Arte';
     } else if (isEmAlteracaoCalculado) {
         statusCalculado = 'Em Alteração';
-    } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
+    } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || clienteAbriuOLink || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
         statusCalculado = 'Aguard. Aprovação';
     } else if (ARTE_COM_O_DESIGNER.includes(osStatus) || ARTE_COM_O_DESIGNER.includes(globalStatus)) {
         // Depois do ramo de aprovação de propósito: se alguém gerou o link do
@@ -28921,7 +28946,11 @@ function renderOrdens() {
                                 // 1) Botão de link
                                 if (isArtePronta) {
                                     // Arte pronta para envio: Gerar (1ª vez) ou Reenviar (se já tem link)
-                                    const labelLink = linkSalvo ? '🔗 Enviar Link' : '🔗 Gerar Link';
+                                    // "Copiar", e não "Enviar": desde 31/08/2026 o link já nasce
+                    // com a arte pronta, então o que resta ao atendente é levá-lo
+                    // ao cliente. "Gerar" sobrevive para o pedido antigo, que
+                    // ficou sem link porque foi marcado pronto antes da mudança.
+                    const labelLink = linkSalvo ? '🔗 Copiar Link' : '🔗 Gerar Link';
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
                                 } else if (isAlterado) {
                                     // Arte alterada/corrigida: sempre mostrar opção de reenviar com nova imagem
@@ -32846,8 +32875,27 @@ async function voltarParaAtendimento() {
             // Portanto, não reescrevemos o status dos modelos aqui para evitar sobrescrever modelos Aprovados.
         }
 
-        if (todasProntas) {
-            toast(`Pedido #${os ? os.numero : ''} marcado como "Enviar Arte". Use o botão de link na lista para compartilhar com o cliente.`, 'success');
+        if (todasProntas && os) {
+            // O link nasce AGORA, junto com a arte pronta — o atendente não
+            // precisa mais lembrar de gerá-lo. Pedido do usuário em 31/08/2026.
+            //
+            // O status continua "Enviar Arte": quem o move para
+            // "Aguard. Aprovação" é o cliente, quando olha a arte.
+            toast('⏳ Atualizando a arte de aprovação e gerando o link...', 'info');
+            const preparo = await prepararLinkDaArtePronta(osId, os.numero);
+            if (!preparo.ok) {
+                // O pedido segue marcado como pronto — o que falhou foi a arte
+                // de aprovação. Dizer QUAL modelo falhou e o que fazer, porque
+                // sem isso o atendente descobre no meio do envio.
+                const nomes = (preparo.falhas || []).map(f => f.nome).join(', ');
+                toast('Pedido #' + os.numero + ' marcado como "Enviar Arte", mas não consegui '
+                    + 'atualizar a arte de aprovação de: ' + nomes + '. O link ainda NÃO está '
+                    + 'pronto para enviar — use o botão de link na lista para tentar de novo.', 'error');
+            } else {
+                toast(`Pedido #${os.numero} pronto — o link do cliente já foi gerado. Copie na lista para enviar.`, 'success');
+            }
+        } else if (todasProntas) {
+            toast('Pedido marcado como "Enviar Arte". Use o botão de link na lista para compartilhar com o cliente.', 'success');
         } else {
             toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
         }
@@ -38175,57 +38223,158 @@ window.gerarLinkClienteBanner = gerarLinkClienteBanner;
  * Gera (ou recupera) o link do cliente, copia para a área de transferência
  * e exibe o modal de e-mail instantaneamente.
  */
+/**
+ * Os estágios que "a arte ficou pronta" pode substituir em `pedidos_artes.status`.
+ *
+ * Tudo menos os aprovados. Uma arte já aprovada pelo cliente não volta para
+ * "Enviar Arte" porque alguém reabriu a tela; já uma arte reprovada volta, sim —
+ * é exatamente o caminho do designer que refez o trabalho e devolve ao
+ * atendimento.
+ */
+const ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI = [
+    'AGUARDANDO', 'EM ARTE', 'ARTE_EM_ANDAMENTO', 'ENVIAR ARTE', 'ARTE PRONTA',
+    'AGUARDANDO_APROVACAO', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO',
+    'REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE',
+    'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'
+];
+
+/**
+ * Grava o estágio da arte no campo que o ERP parceiro lê: `pedidos_artes.status`.
+ *
+ * Sem isto, tudo o que acontece aqui fica dentro do painel — o parceiro continua
+ * vendo `AGUARDANDO` num pedido cuja arte já está pronta. O vocabulário aceito
+ * está em `docs/status_da_arte_para_o_erp.md`, e é o combinado de 31/08/2026.
+ *
+ * A marca não anda para trás: ver `ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI`. É a
+ * mesma trava que a função `link_cliente_visto` faz do lado do banco.
+ */
+async function marcarEstagioDaArteNoErp(numero, palavra) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    const n = parseInt(numero, 10);
+    if (isNaN(n)) return;
+    try {
+        const { data } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id, status')
+            .eq('id_int', n)
+            .maybeSingle();
+        // Sem linha ainda não é erro: quem a cria é o `garantirLinhaDePedidoArte`,
+        // chamado dentro do `getOrCreateLinkCliente` logo antes daqui.
+        if (!data) return;
+        const atual = (data.status || '').trim().toUpperCase();
+        if (atual && !ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI.includes(atual)) return;
+        await supabaseClient.from('pedidos_artes').update({ status: palavra }).eq('id', data.id);
+    } catch (e) {
+        console.warn('[Arte] Não consegui gravar o estágio no ERP:', e.message || e);
+    }
+}
+
+/**
+ * A arte ficou pronta: atualiza a arte de aprovação, garante o link e carimba a
+ * versão.
+ *
+ * Chamado em dois lugares, e é o mesmo trabalho nos dois: quando o designer
+ * devolve o pedido ao atendimento (`voltarParaAtendimento`) e quando se reenvia
+ * depois de uma alteração (`gerarLinkCliente`).
+ *
+ * ## Por que o link nasce aqui, e não na hora de enviar (31/08/2026)
+ *
+ * Pedido do usuário: *"quando o designer marcar a arte pronta e voltar o pedido
+ * para o atendente, o status deve permanecer como Enviar arte, mas o link já
+ * deverá ser gerado neste momento"*.
+ *
+ * O ganho que não estava no pedido: até aqui, "Enviar Arte" de um pedido `vibe_`
+ * sem link era gravado em `pedidos_links_cliente` — que não tinha linha — e o
+ * UPDATE não acertava nada. O que sobrava era o `gravarStatusOverride`, que é
+ * **localStorage**. O designer marcava pronto na máquina dele e o atendente, em
+ * outra, podia não ver. Criando a linha aqui, o estágio passa a morar no banco.
+ *
+ * ## O zeramento é a parte que não pode faltar
+ *
+ * `cliente_abriu_em: null` é o que impede o pedido que voltou de uma alteração
+ * de saltar para "Aguard. Aprovação" com a abertura da versão ANTERIOR — o
+ * cliente nunca teria visto a arte corrigida, e a tela diria que sim.
+ */
+async function prepararLinkDaArtePronta(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        return { ok: false, link: null, falhas: [{ nome: 'Supabase', motivo: 'nao configurado' }] };
+    }
+
+    // A arte de aprovação vem primeiro e é esperada até o fim. Se ela falhar, o
+    // link não é tocado: o cliente continua com a versão que já tinha, em vez de
+    // receber um link que promete a arte nova e mostra a velha.
+    const regeneracao = await forceRegenerateSnapshots(osId);
+    if (regeneracao && regeneracao.falhas && regeneracao.falhas.length) {
+        return { ok: false, link: null, falhas: regeneracao.falhas };
+    }
+
+    const link = await getOrCreateLinkCliente(osId, numero);
+
+    const { error } = await supabaseClient
+        .from('pedidos_links_cliente')
+        .update({
+            arte_pronta_em: new Date().toISOString(),
+            cliente_abriu_em: null,
+            status_arte: 'Enviar Arte'
+        })
+        .eq('os_id', osId);
+    if (error) {
+        console.warn('[Arte] Nao consegui carimbar a versao da arte no link:', error.message || error);
+    }
+
+    // O estado em memória acompanha, senão a linha da tela continuaria dizendo
+    // "Aguard. Aprovação" pela abertura da versão anterior até o próximo F5.
+    if (state.linksClienteData && state.linksClienteData[osId]) {
+        state.linksClienteData[osId].cliente_abriu_em = null;
+        state.linksClienteData[osId].status_arte = 'Enviar Arte';
+    }
+
+    await marcarEstagioDaArteNoErp(numero, 'ENVIAR ARTE');
+
+    return { ok: true, link: link, falhas: [] };
+}
+
 async function gerarLinkCliente(osId, numero) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
         toast('Supabase não configurado. Não é possível gerar o link.', 'error');
         return;
     }
     try {
-        // 0. A ARTE DE APROVAÇÃO VEM PRIMEIRO, e é esperada até o fim.
+        // A ARTE DE APROVAÇÃO VEM PRIMEIRO, e é esperada até o fim.
         //
         // Ela era regerada no FIM desta função, disparada em segundo plano — ou
         // seja, depois de o link já estar na área de transferência. O atendente
-        // podia colar o link no WhatsApp enquanto a imagem nova ainda subia, e
-        // o cliente aprovava a arte anterior à correção, sem nada dizendo isso.
+        // podia colar o link no WhatsApp enquanto a imagem nova ainda subia, e o
+        // cliente aprovava a arte anterior à correção, sem nada dizendo isso.
         //
-        // Antes do passo 1 de propósito: dali em diante o status do pedido já
-        // foi mexido, e desistir no meio deixaria a tela contando uma coisa e o
-        // banco outra.
+        // Desde 31/08/2026 quem faz esse trabalho é o `prepararLinkDaArtePronta`,
+        // o mesmo caminho que o designer percorre ao devolver o pedido ao
+        // atendimento. Aqui ele serve ao REENVIO: a arte foi corrigida, e a
+        // versão nova precisa zerar a abertura anterior do cliente.
         toast('⏳ Atualizando a arte de aprovação...', 'info');
-        const regeneracao = await forceRegenerateSnapshots(osId);
-        if (regeneracao && regeneracao.falhas && regeneracao.falhas.length) {
-            const nomes = regeneracao.falhas.map(f => f.nome).join(', ');
+        const preparo = await prepararLinkDaArtePronta(osId, numero);
+        if (!preparo.ok) {
+            const nomes = (preparo.falhas || []).map(f => f.nome).join(', ');
             toast('Não consegui atualizar a arte de aprovação de: ' + nomes
-                + '. O link NÃO foi gerado, porque o cliente veria a arte anterior. '
+                + '. O link NÃO foi atualizado, porque o cliente veria a arte anterior. '
                 + 'Tente de novo; se insistir, avise o suporte.', 'error');
             return;
         }
 
-        const novoStatus = 'Aguard. Aprovação';
-
-        // 1. Atualizar overrides e estado local primeiro
-        gravarStatusOverride(osId, novoStatus);
-
+        // O status NÃO vira "Aguard. Aprovação" aqui.
+        //
+        // Até 31/08/2026 virava, e era a única marca de que a arte tinha saído.
+        // Agora quem move o pedido é o cliente, quando olha: copiar o link de
+        // novo não prova que alguém viu alguma coisa. Ver `classificarPedidoNaArte`.
         const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
         if (os) {
-            os.status = novoStatus;
-            os.status_calculado = novoStatus;
+            os.status = 'Enviar Arte';
+            os.status_calculado = 'Enviar Arte';
         }
+        gravarStatusOverride(osId, 'Enviar Arte');
 
-        // 2. Obter/Criar o link oficial registrado no banco
-        toast('⏳ Gerando link...', 'info');
-        const linkUrl = await getOrCreateLinkCliente(osId, numero);
         const host = window.location.origin;
-        const finalUrl = linkUrl || `${host}/cliente/${numero}`;
-
-        // 3. Atualizar no Supabase em segundo plano
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (osId.startsWith('vibe_')) {
-                supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId).then(() => {});
-            } else {
-                supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId).then(() => {});
-            }
-        }
+        const finalUrl = preparo.link || `${host}/cliente/${numero}`;
 
         // 4. Copiar link para clipboard
         try {

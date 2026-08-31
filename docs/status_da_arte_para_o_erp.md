@@ -4,12 +4,32 @@
 > fluxo de arte de um pedido, em que campo cada uma é gravada, e em qual card da Lista
 > de Arte o pedido aparece por causa delas.
 >
-> Conferido em 31/08/2026, na versão **v781**. A regra mora em
+> Conferido em 31/08/2026, na versão **v782**. A regra mora em
 > `frontend/script.js`, na função `classificarPedidoNaArte` — ela é a única dona do
 > critério, e as listas citadas aqui são as dela.
 
 **A comparação ignora maiúsculas/minúsculas e espaços nas pontas, mas o acento conta.**
 Por isso `EM ALTERAÇÃO` e `EM ALTERACAO` precisam estar as duas na lista, e estão.
+
+---
+
+## Mudança de 31/08/2026: o Imposition passou a escrever também
+
+Até esta data, `pedidos_artes.status` era escrito **só pelo ERP**. A partir dela, o
+Ideal Imposition grava dois estágios nesse mesmo campo, porque são estágios que só ele
+sabe que aconteceram:
+
+| Palavra | Quem grava | Quando |
+|---|---|---|
+| `ENVIAR ARTE` | **Ideal Imposition** | o designer terminou a arte e devolveu o pedido ao atendimento |
+| `AGUARDANDO_APROVACAO` | **Ideal Imposition** | o cliente abriu o link e olhou a arte |
+
+O ERP continua dono do resto. **A marca nunca anda para trás:** arte já aprovada não
+volta para um estágio anterior por causa dessas gravações.
+
+O que mudou no fluxo, em uma linha: **o link de aprovação passa a nascer junto com a arte
+pronta**, e não mais quando o atendimento decide gerá-lo. Por isso o estágio 3 deixou de
+significar "o link existe" e passou a significar "o cliente olhou".
 
 ---
 
@@ -43,15 +63,20 @@ nada foi enviado a ninguém. É o valor com que a linha da arte nasce.
 
 **`ENVIAR ARTE`** · `ARTE PRONTA`
 
-A arte ficou pronta e espera ser mandada ao cliente. É este estágio que faz aparecer o
-botão **Gerar Link** na linha do pedido.
+A arte ficou pronta e espera ser mandada ao cliente. **O link de aprovação já existe
+neste momento** — ele é criado junto com a arte pronta, e a linha do pedido traz o botão
+**Copiar Link**. O pedido permanece neste estágio até o cliente abrir o link.
 
 ### 3 · ⏳ Aguard. Aprovação — card "Fila de Aprovação"
 
 **`AGUARDANDO_APROVACAO`** · `AGUARD. APROVAÇÃO` · `AGUARD. APROVACAO` · `AGUARD. APROVAÇAO`
 
-A arte foi ao cliente e espera a resposta dele. **Não confundir com `AGUARDANDO` do
-estágio 1** — as duas palavras se parecem e dizem o contrário uma da outra.
+A arte foi ao cliente **e ele já a abriu**. Desde 31/08/2026 quem grava esta palavra é o
+próprio Ideal Imposition, no instante em que o cliente faz o primeiro gesto na tela do
+link — rolar, tocar ou clicar.
+
+**Não confundir com `AGUARDANDO` do estágio 1** — as duas palavras se parecem e dizem o
+contrário uma da outra.
 
 ### 4 · ⚠️ Em Alteração — card "Em Arte", volta ao designer
 
@@ -88,9 +113,10 @@ comportamento certo para um modelo que ainda não passou pelo cliente.
 
 ## Duas coisas que mandam mais que a palavra
 
-**1. Link do cliente já gerado.** Se o link de aprovação existe, a arte **saiu** para o
-cliente. O pedido vai para a Fila de Aprovação mesmo que a palavra ainda diga
-`AGUARDANDO`.
+**1. O cliente abriu o link.** Registrado no primeiro gesto dele na tela. O pedido vai
+para a Fila de Aprovação mesmo que a palavra ainda diga `AGUARDANDO`. O link **existir**
+não conta — desde 31/08/2026 ele nasce junto com a arte pronta, e refazer a arte apaga o
+registro da abertura anterior.
 
 **2. `propostas.status_interno` com palavra de produção.** Ela tira o pedido da Lista de
 Arte inteira: ele passa a ser trabalho da Lista de Impressão e conta só em **Pedidos
