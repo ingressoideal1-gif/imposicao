@@ -41,6 +41,7 @@ function classificador(state) {
         recortarConst('ARTE_REPROVADOS'),
         recortarConst('ARTE_APROVADOS'),
         recortarConst('ARTE_EM_APROVACAO'),
+        recortarConst('ARTE_COM_O_DESIGNER'),
         recortar('pedidoSaiuDaArte'),
         recortar('classificarPedidoNaArte'),
         recortar('pedidoEstaEmArte'),

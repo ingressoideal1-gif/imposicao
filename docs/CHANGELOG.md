@@ -4,6 +4,40 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-31] — Lista de Arte: pedido novo volta a nascer em "Em Arte"
+
+Relato do usuário, no pedido 21413: **"o status real dele é em_arte, deveria estar
+em arte, não em aguardando"** e, logo depois, **"está acontecendo com todos os
+pedidos, estão indo para status Aguardando, mesmo sem ter sido marcada arte como
+pronto ou encaminhada ao atendimento"**.
+
+O ERP cria a linha de `pedidos_artes` com `status = 'AGUARDANDO'`, que quer dizer
+que a arte espera **o designer**. Essa palavra estava dentro da lista
+`ARTE_EM_APROVACAO` do `script.js`, ao lado de `AGUARDANDO_APROVACAO`, que quer
+dizer o **contrário** — a arte já foi ao cliente e espera a resposta dele.
+
+O efeito: todo pedido novo nascia classificado como "Aguard. Aprovação" e caía na
+Fila de Aprovação. A fila do designer aparecia vazia enquanto o trabalho se
+acumulava fora dela.
+
+O banco confirmava a leitura do usuário sem ambiguidade: dos pedidos com
+`AGUARDANDO`, **nenhum** tinha link do cliente gerado — ou seja, nada tinha sido
+enviado a ninguém — e todos tinham `propostas.em_arte = true`.
+
+- `AGUARDANDO` saiu de `ARTE_EM_APROVACAO` e entrou na lista nova
+  `ARTE_COM_O_DESIGNER`, junto com `EM ARTE` e `ARTE_EM_ANDAMENTO`.
+- O ramo novo é consultado **depois** do de aprovação: link do cliente gerado
+  continua mandando mais do que a palavra do ERP.
+- O mapa do filtro de status passou a mandar `AGUARDANDO` para "Em Arte", para o
+  filtro concordar com o badge.
+- 16 verificações novas no `tests/lista_arte_harness.js`, incluindo uma que
+  proíbe a palavra crua de voltar à lista de aprovação — o erro se refaz com uma
+  vírgula.
+
+Documentado em `docs/lista_de_arte.md`, na seção "As duas palavras AGUARDANDO".
+
+---
+
 ## [2026-08-29] — Montagem: a linha da lista volta ao modelo
 
 Pedido do usuário: **"depois de ter modelos carregados na montagem, ao selecionar

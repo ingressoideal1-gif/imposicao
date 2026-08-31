@@ -65,6 +65,35 @@ Antes dessa revisão a lista tinha só produção, impressão e finalizada — e
 isso pedido já em trânsito ou no acabamento continuava ocupando a tela do
 designer.
 
+### As duas palavras "AGUARDANDO" (31/08/2026)
+
+`pedidos_artes.status` tem duas palavras parecidas e de sentido **oposto**, e
+confundi-las custa a fila inteira do designer:
+
+| Palavra | Quem está esperando | Card |
+|---|---|---|
+| `AGUARDANDO` | **o designer** — é o valor com que o ERP cria a linha da arte | 🎨 Em Arte |
+| `AGUARDANDO_APROVACAO` · `AGUARD. APROVAÇÃO` | **o cliente** — a arte já foi enviada | ⏳ Fila de Aprovação |
+
+Enquanto `AGUARDANDO` esteve dentro de `ARTE_EM_APROVACAO`, **todo pedido novo do
+ERP nascia na Fila de Aprovação**, sem a arte ter sido marcada como pronta nem
+encaminhada ao atendimento — relatado pelo usuário no pedido 21413. A fila do
+designer aparecia vazia enquanto o trabalho se acumulava fora dela.
+
+O banco separa as duas sem ambiguidade, e é assim que se confere de novo se a
+dúvida voltar: dos pedidos em `AGUARDANDO`, **nenhum** tem link do cliente gerado
+(a prova material de que a arte saiu) e **todos** têm `propostas.em_arte = true`.
+
+A lista que responde por elas é `ARTE_COM_O_DESIGNER` — `AGUARDANDO`, `EM ARTE` e
+`ARTE_EM_ANDAMENTO` (este último é o que o próprio `loadOrdens` grava quando a OS
+vem `ARTE` ou `NOVO`). Ela é consultada **depois** do ramo de aprovação de
+propósito: se alguém gerou o link do cliente, a arte saiu daqui mesmo que a
+palavra do ERP não tenha acompanhado.
+
+O mapa do filtro de status (`statusNormMap`) manda `AGUARDANDO` para "Em Arte"
+pelo mesmo motivo — filtro e badge que discordam escondem justamente os pedidos
+que se está procurando.
+
 > [!IMPORTANT]
 > Essa função é a **única** dona da regra. Ela nasceu como um trecho solto dentro
 > do `renderOrdens`, e por isso só existia enquanto a tabela era desenhada — a

@@ -27742,7 +27742,31 @@ window.pedidoEntraNoPainel = pedidoEntraNoPainel;
 
 const ARTE_REPROVADOS = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
 const ARTE_APROVADOS = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
-const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO', 'AGUARD. APROVAÇAO'];
+// `AGUARDANDO` NAO entra aqui, e a diferenca custa a fila inteira do designer.
+//
+// Sao duas palavras parecidas e opostas, e as duas existem em
+// `pedidos_artes.status`:
+//
+//   AGUARDANDO_APROVACAO  → a arte foi ao cliente e espera a resposta dele
+//   AGUARDANDO            → a arte espera o DESIGNER; ninguem enviou nada
+//
+// `AGUARDANDO` e o valor com que o ERP cria a linha da arte. Enquanto ele
+// esteve nesta lista, TODO pedido novo nascia classificado como
+// "Aguard. Aprovacao" e ia direto para a Fila de Aprovacao, sem a arte ter sido
+// marcada como pronta nem encaminhada ao atendimento — foi o que o usuario
+// relatou em 31/08/2026, no pedido 21413 e em todos os outros.
+//
+// O banco separa as duas sem ambiguidade: dos pedidos em `AGUARDANDO`,
+// **nenhum** tem link do cliente gerado (ou seja, nada foi enviado) e todos tem
+// `propostas.em_arte = true`. Ver `ARTE_COM_O_DESIGNER`, logo abaixo.
+const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARD. APROVAÇAO'];
+
+// A arte ainda esta com o designer: o card certo e "Em Arte".
+//
+// `ARTE_EM_ANDAMENTO` entra porque e o que o proprio `loadOrdens` grava quando
+// o status da OS vem 'ARTE' ou 'NOVO'. Sem esta lista, o pedido cairia no
+// `os.status` cru e o badge mostraria "AGUARDANDO" com o icone de desconhecido.
+const ARTE_COM_O_DESIGNER = ['AGUARDANDO', 'EM ARTE', 'ARTE_EM_ANDAMENTO'];
 
 /**
  * Devolve `{ statusCalculado, fila }` para um pedido.
@@ -27796,6 +27820,11 @@ function classificarPedidoNaArte(os) {
         statusCalculado = 'Em Alteração';
     } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
         statusCalculado = 'Aguard. Aprovação';
+    } else if (ARTE_COM_O_DESIGNER.includes(osStatus) || ARTE_COM_O_DESIGNER.includes(globalStatus)) {
+        // Depois do ramo de aprovação de propósito: se alguém gerou o link do
+        // cliente, a arte saiu daqui, mesmo que a palavra do ERP não tenha
+        // acompanhado. Sem link, `AGUARDANDO` é trabalho do designer.
+        statusCalculado = 'Em Arte';
     } else {
         statusCalculado = os.status || 'Em Arte';
     }
@@ -28548,7 +28577,12 @@ function renderOrdens() {
                 'ENVIAR ARTE': 'Enviar Arte',
                 'ARTE PRONTA': 'Enviar Arte',
                 'AGUARD. APROVACAO': 'Aguard. Aprovação',
-                'AGUARDANDO': 'Aguard. Aprovação',
+                // `AGUARDANDO` é a arte esperando o DESIGNER, e não o cliente —
+                // ver `ARTE_COM_O_DESIGNER`. O filtro tem de concordar com o
+                // badge, senão filtrar por "Em Arte" esconde justamente os
+                // pedidos que estão em arte.
+                'AGUARDANDO': 'Em Arte',
+                'ARTE_EM_ANDAMENTO': 'Em Arte',
                 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
                 'APROVADA': 'Aprovada',
                 'APROVADO': 'Aprovada'

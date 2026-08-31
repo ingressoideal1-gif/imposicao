@@ -364,6 +364,100 @@ const { pedidoCancelado } = new Function(
         'no link do cliente a trava nao aparece: ele nao tem como consertar a numeracao');
 })();
 
+// --- AGUARDANDO e' arte com o designer, nao com o cliente (31/08/2026) ------
+//
+// O ERP cria a linha de `pedidos_artes` com status 'AGUARDANDO'. Enquanto essa
+// palavra esteve na lista `ARTE_EM_APROVACAO`, TODO pedido novo nascia
+// classificado como "Aguard. Aprovacao" e caia na Fila de Aprovacao -- sem a
+// arte ter sido marcada como pronta nem encaminhada ao atendimento. Foi o que o
+// usuario relatou no pedido 21413.
+//
+// A palavra que significa o contrario e' `AGUARDANDO_APROVACAO`, e ela fica.
+
+const estadoArte = {};
+const { classificarPedidoNaArte } = new Function('state',
+    extrairConst('SINAIS_SAIU_DA_ARTE') + '\n'
+    + extrairConst('SINAIS_CANCELADO') + '\n'
+    + extrairConst('ARTE_REPROVADOS') + '\n'
+    + extrairConst('ARTE_APROVADOS') + '\n'
+    + extrairConst('ARTE_EM_APROVACAO') + '\n'
+    + extrairConst('ARTE_COM_O_DESIGNER') + '\n'
+    + extrair('pedidoSaiuDaArte') + '\n'
+    + extrair('pedidoCancelado') + '\n'
+    + extrair('classificarPedidoNaArte')
+    + '\nreturn { classificarPedidoNaArte };')(estadoArte);
+
+// Monta o pedido do jeito que o `loadOrdens` monta: a arte do ERP em
+// `state.todasArtes`, o link do cliente em `state.linksCliente`.
+function classificarComArte(statusDaArte, extra) {
+    extra = extra || {};
+    estadoArte.todasArtes = [{ id_int: 900, status: statusDaArte, entrega_dados: extra.entrega || null }];
+    estadoArte.modelosGlobais = {};
+    estadoArte.osItens = {};
+    estadoArte.linksCliente = extra.link ? { 'os-900': { token: 'x' } } : {};
+    const os = Object.assign({ id: 'os-900', numero: '900', status: '' }, extra.os || {});
+    return classificarPedidoNaArte(os);
+}
+
+(function aArteQueEsperaODesignerFicaEmArte() {
+    const c = classificarComArte('AGUARDANDO');
+    ok(c.fila === 'fila', 'AGUARDANDO fica no card "Em Arte"', c);
+    ok(c.statusCalculado === 'Em Arte', 'e o badge dele diz "Em Arte"', c);
+
+    const d = classificarComArte('EM ARTE');
+    ok(d.fila === 'fila' && d.statusCalculado === 'Em Arte', 'EM ARTE tambem', d);
+
+    // O que o proprio loadOrdens grava quando a OS vem 'ARTE' ou 'NOVO'.
+    const e = classificarComArte('AGUARDANDO', { os: { status: 'ARTE_EM_ANDAMENTO' } });
+    ok(e.fila === 'fila' && e.statusCalculado === 'Em Arte', 'ARTE_EM_ANDAMENTO tambem', e);
+})();
+
+(function aPalavraOPOSTAContinuaValendo() {
+    const c = classificarComArte('AGUARDANDO_APROVACAO');
+    ok(c.fila === 'aprovacao', 'AGUARDANDO_APROVACAO vai para a Fila de Aprovacao', c);
+    ok(c.statusCalculado === 'Aguard. Aprovação', 'e o badge diz "Aguard. Aprovacao"', c);
+
+    const d = classificarComArte('AGUARD. APROVAÇÃO');
+    ok(d.fila === 'aprovacao', 'a forma com acento tambem', d);
+})();
+
+(function oLinkGeradoAindaMandaMaisQueAPalavra() {
+    // Se alguem gerou o link, a arte SAIU para o cliente, mesmo que a palavra do
+    // ERP nao tenha acompanhado. Por isso o ramo do designer vem depois deste.
+    const c = classificarComArte('AGUARDANDO', { link: true });
+    ok(c.fila === 'aprovacao', 'AGUARDANDO com link do cliente vai para a Fila de Aprovacao', c);
+})();
+
+(function oRestoDaClassificacaoNaoMudou() {
+    const aprovado = classificarComArte('APROVADO', { entrega: 'APROVADO' });
+    ok(aprovado.fila === 'aprovados', 'arte e entrega aprovadas continuam em "Aprovados"', aprovado);
+
+    const emProducao = classificarComArte('AGUARDANDO', { os: { status_interno: 'EM PRODUCAO' } });
+    ok(emProducao.fila === 'concluidos', 'quem saiu para a producao continua em "Concluidos"', emProducao);
+
+    const cancelado = classificarComArte('AGUARDANDO', { os: { status_interno: 'CANCELADO' } });
+    ok(cancelado.fila === 'concluidos', 'o cancelado continua em "Concluidos"', cancelado);
+
+    const alterada = classificarComArte('REPROVADO');
+    ok(alterada.statusCalculado === 'Em Alteração', 'a reprovada continua "Em Alteracao"', alterada);
+})();
+
+(function aListaDeAprovacaoNaoPodeVoltarACarregarAPalavra() {
+    // O erro se refaz com uma virgula. A trava e' sobre a lista, nao sobre o caso.
+    ok(!/'AGUARDANDO'/.test(extrairConst('ARTE_EM_APROVACAO')),
+        'ARTE_EM_APROVACAO nao contem a palavra crua AGUARDANDO');
+    ok(/'AGUARDANDO_APROVACAO'/.test(extrairConst('ARTE_EM_APROVACAO')),
+        'mas continua contendo AGUARDANDO_APROVACAO');
+    ok(/'AGUARDANDO'/.test(extrairConst('ARTE_COM_O_DESIGNER')),
+        'e AGUARDANDO esta em ARTE_COM_O_DESIGNER');
+})();
+
+(function oFiltroDeStatusConcordaComOBadge() {
+    // Filtrar por "Em Arte" tem de trazer justamente os pedidos em arte.
+    ok(/'AGUARDANDO': 'Em Arte',/.test(SCRIPT),
+        'o mapa do filtro manda AGUARDANDO para "Em Arte"');
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
     process.exit(1);
