@@ -1,9 +1,11 @@
-// A ESCALA DA CAMADA DE ARTE, NA JANELA DO MODO PDF MULTI-PAGINA (31/08/2026).
+// A ESCALA DA CAMADA DE ARTE, NA JANELA DO CARD (31/08/2026).
 //
 // Pedido do usuario: dois campos, % horizontal e % vertical, que esticam SO a
-// arte e a mantem centralizada na celula — na tela e no papel. O papel ja tem
-// medicao propria em `tests/test_escala_da_arte.py`, que impoe de verdade e mede
-// a tinta. Este harness cuida do outro lado: a JANELA.
+// arte e a mantem centralizada na celula — na tela e no papel. Nasceu no modo
+// PDF Multi-Pagina e, no mesmo dia, ele pediu a mesma regua para "artes feitas
+// pelo upload normal" — que e a mesma coisa para o motor: uma arte colada na
+// celula. O papel ja tem medicao propria em `tests/test_escala_da_arte.py`, que
+// impoe de verdade e mede a tinta. Este harness cuida do outro lado: a JANELA.
 //
 // Ele recorta as funcoes do proprio script.js e as executa com um DOM de
 // mentira. Nada aqui e copia da regra — se alguem mudar a conta no script.js
@@ -66,7 +68,10 @@ function domFalso() {
     return {
         elementos, criar,
         getElementById: (id) => elementos[id] || null,
-        querySelector: () => null,
+        // O seletor de verdade resolve '#id' -- e assim que
+        // `atualizarCaixaDeEscalaDaArte` procura a caixa quando nao recebe um
+        // container. Devolver null sempre daria um teste que passa por engano.
+        querySelector: (sel) => (sel && sel[0] === '#' ? (elementos[sel.slice(1)] || null) : null),
         activeElement: null,
     };
 }
@@ -109,6 +114,7 @@ function montarJanela({ formatos, item, num }) {
         'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
         + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
         + recortar(SCRIPT, 'function formatoDoModelo(', 'formatoDoModelo')
+        + recortar(SCRIPT, 'function atualizarCaixaDeEscalaDaArte(', 'atualizarCaixaDeEscalaDaArte')
         + recortar(SCRIPT, 'async function renderPdfViewerPage(', 'renderPdfViewerPage')
         + '\nreturn renderPdfViewerPage;';
 
@@ -116,11 +122,13 @@ function montarJanela({ formatos, item, num }) {
     const fn = new Function(
         'state', 'document', 'pdfViewerState', 'console', 'window',
         'precarregarArtesDosElementos', 'drawNumeracaoElementsOverCanvas', 'linhasDaPagina',
+        'itemTemArte',
         corpo)(
         state, doc, pdfViewerState, { warn() {}, error(...a) { console.error('[janela]', ...a); } }, janela,
         async () => {},
         (ctx, n, it, pg, w, h) => carimbos.push({ w, h }),
-        () => []);
+        () => [],
+        (it, face) => !!(face === 'verso' ? it.verso_arte_url : it.arte_url));
 
     return { fn, doc, pagina, carimbos, state };
 }
@@ -141,9 +149,9 @@ function itemBase(extra) {
         const j = montarJanela({ formatos: [FORMATO], item: itemBase(), num: NUM });
         const canvas = j.doc.criar('amostra-pdf-canvas-0');
         j.doc.criar('amostra-pdf-nav-0');
-        j.doc.criar('amostra-pdf-escala-0');
-        j.doc.criar('amostra-pdf-escala-h-0');
-        j.doc.criar('amostra-pdf-escala-v-0');
+        j.doc.criar('amostra-escala-0');
+        j.doc.criar('amostra-escala-h-0');
+        j.doc.criar('amostra-escala-v-0');
         j.doc.criar('amostra-pdf-page-info-0');
         j.doc.criar('amostra-item-empty-0');
 
@@ -170,7 +178,7 @@ function itemBase(extra) {
             'a numeracao e carimbada sobre a CELULA, e nao sobre a arte',
             JSON.stringify(j.carimbos));
 
-        ok(j.doc.getElementById('amostra-pdf-escala-0').style.display === 'flex',
+        ok(j.doc.getElementById('amostra-escala-0').style.display === 'flex',
             'os campos de escala aparecem quando o PDF entra na tela');
     }
 
@@ -179,9 +187,9 @@ function itemBase(extra) {
         const j = montarJanela({ formatos: [FORMATO], item: itemBase({ arte_escala_h: 50, arte_escala_v: 120 }), num: NUM });
         const canvas = j.doc.criar('amostra-pdf-canvas-0');
         j.doc.criar('amostra-pdf-nav-0');
-        j.doc.criar('amostra-pdf-escala-0');
-        j.doc.criar('amostra-pdf-escala-h-0');
-        j.doc.criar('amostra-pdf-escala-v-0');
+        j.doc.criar('amostra-escala-0');
+        j.doc.criar('amostra-escala-h-0');
+        j.doc.criar('amostra-escala-v-0');
 
         await j.fn('os-1_0', 1, 0);
 
@@ -200,8 +208,8 @@ function itemBase(extra) {
         ok(perto(canvas.width, FORMATO.width_mm * MM * escalaTela, 1),
             'a celula NAO muda de tamanho quando a arte muda');
 
-        ok(j.doc.getElementById('amostra-pdf-escala-h-0').value === 50
-            && j.doc.getElementById('amostra-pdf-escala-v-0').value === 120,
+        ok(j.doc.getElementById('amostra-escala-h-0').value === 50
+            && j.doc.getElementById('amostra-escala-v-0').value === 120,
             'os campos mostram a escala gravada ao redesenhar');
     }
 
@@ -235,8 +243,8 @@ function itemBase(extra) {
     {
         const gravado = [];
         const doc = domFalso();
-        const campoH = doc.criar('amostra-pdf-escala-h-0');
-        const campoV = doc.criar('amostra-pdf-escala-v-0');
+        const campoH = doc.criar('amostra-escala-h-0');
+        const campoV = doc.criar('amostra-escala-v-0');
         campoH.value = '  95,5 ';   // virgula e espaco, como o operador digita
         campoV.value = '900';       // acima do maximo
 
@@ -246,17 +254,26 @@ function itemBase(extra) {
         const corpo =
             recortar(SCRIPT, 'async function salvarEscalaDaArte(', 'salvarEscalaDaArte')
             + '\nreturn salvarEscalaDaArte;';
+        const redesenhos = [];
         const salvar = new Function(
             'state', 'document', 'pdfViewerState', 'console', 'window',
-            'saveAmostraToDB', 'toast', 'renderPdfViewerPage',
+            'saveAmostraToDB', 'toast', 'renderPdfViewerPage', 'renderItemAmostraCombinada',
             'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
             + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
             + corpo)(
             state, doc, pdfViewerState, { error() {} }, {},
             async (itemId, osId, dados) => { gravado.push({ itemId, osId, dados }); },
-            () => {}, async () => {});
+            () => {},
+            async () => { redesenhos.push('leitor de pdf'); },
+            async () => { redesenhos.push('card'); });
 
         await salvar(0, 'os-1', 'it-0');
+
+        // Arte comum (sem modo_pdf): quem redesenha e o card, e nao o leitor de
+        // PDF -- que nem existe para este modelo.
+        ok(redesenhos.length === 1 && redesenhos[0] === 'card',
+            'na arte comum, salvar a escala redesenha o card',
+            JSON.stringify(redesenhos));
 
         ok(gravado.length === 1, 'gravou uma vez', JSON.stringify(gravado));
         const dados = gravado[0] ? gravado[0].dados : {};
@@ -270,6 +287,52 @@ function itemBase(extra) {
         // De novo, sem mudar nada: nao pode gravar outra vez.
         await salvar(0, 'os-1', 'it-0');
         ok(gravado.length === 1, 'digitar o mesmo valor nao gera gravacao nova');
+    }
+
+    // ─── 5b. A mesma regua para a arte do upload comum ───────────────────────
+    //
+    // 31/08/2026: "utilizar mesma regra para escalar o pdf multi-pagina para
+    // escalar artes feitas pelo upload normal". Os campos passaram a aparecer
+    // sempre que houver arte, e nao so no modo PDF.
+    {
+        const mostrar = (item) => {
+            const doc = domFalso();
+            const caixa = doc.criar('amostra-escala-0');
+            const campoH = doc.criar('amostra-escala-h-0');
+            const campoV = doc.criar('amostra-escala-v-0');
+            const fn = new Function('document', 'window', 'itemTemArte',
+                'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
+                + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
+                + recortar(SCRIPT, 'function atualizarCaixaDeEscalaDaArte(', 'atualizarCaixaDeEscalaDaArte')
+                + '\nreturn atualizarCaixaDeEscalaDaArte;')(
+                doc, {},
+                (it, face) => !!(face === 'verso' ? it.verso_arte_url : it.arte_url));
+            fn(0, item, null);
+            return { caixa, campoH, campoV };
+        };
+
+        ok(mostrar({ id: 'a', arte_url: 'arte.pdf' }).caixa.style.display === 'flex',
+            'a arte do upload comum tambem ganha os campos de escala');
+        ok(mostrar({ id: 'a', verso_arte_url: 'verso.pdf' }).caixa.style.display === 'flex',
+            'arte so no verso tambem mostra os campos');
+        ok(mostrar({ id: 'a' }).caixa.style.display === 'none',
+            'sem arte nenhuma, os campos continuam escondidos');
+        const comValor = mostrar({ id: 'a', arte_url: 'x.pdf', arte_escala_h: 80, arte_escala_v: 90 });
+        ok(comValor.campoH.value === 80 && comValor.campoV.value === 90,
+            'os campos abrem com a escala gravada do modelo');
+
+        // O desenho do card: as duas camadas de arte (PDF e imagem) multiplicam
+        // pela escala. Sem isto os campos apareceriam e a arte na tela nao mudaria.
+        const face = SCRIPT.slice(SCRIPT.indexOf('\nasync function drawAmostraFace('));
+        const camada = face.slice(face.indexOf('CAMADA 2: ARTE'), face.indexOf('CAMADA 3'));
+        ok(/scaledViewport\.width \* fx/.test(camada) && /scaledViewport\.height \* fy/.test(camada),
+            'a arte em PDF do card comum entra com a escala do modelo');
+        ok(/transform: \[fx, 0, 0, fy, 0, 0\]/.test(camada),
+            'a arte em PDF e desenhada ja na medida final, e nao ampliada depois');
+        ok(/dw \*= escI\.h \/ 100/.test(camada) && /dh \*= escI\.v \/ 100/.test(camada),
+            'a arte em imagem tambem entra com a escala do modelo');
+        ok(/ddx = \(finalWidth - dw\) \/ 2/.test(camada),
+            'a arte em imagem escalada volta ao centro da peca');
     }
 
     // ─── 6. A escala chega ao motor pelos dois caminhos ──────────────────────

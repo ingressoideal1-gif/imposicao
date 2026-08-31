@@ -648,7 +648,10 @@ Cada modelo guarda `arte_escala_h` e `arte_escala_v` (em %, padrão 100) em
 `pedidos_modelos`. **100/100 é o tamanho natural do arquivo** — o comportamento
 histórico do motor —, então nenhum trabalho antigo muda.
 
-- O operador ajusta na **janela do modo PDF Multi-Página**, no card do pedido.
+- O operador ajusta **no card do pedido, embaixo da prévia**. Vale para toda arte
+  do modelo: a do **modo PDF Multi-Página** e a do **upload comum** (PDF ou
+  imagem). É a mesma régua porque, para o motor, as duas são a mesma coisa — uma
+  arte colada na célula. Os campos aparecem quando há arte na tela.
 - A escala estica **só a camada de arte**, cada eixo por conta própria, sempre em
   torno do centro da célula. A numeração não muda de tamanho nem de lugar.
 - Passando de 100%, a arte é aparada no maior entre **a célula mais metade do vão
@@ -675,6 +678,13 @@ Na janela do modo PDF o canvas **é a célula** (as medidas do formato), e a art
 desenhada dentro dela com o `transform` do PDF.js — `[sx, 0, 0, sy, x, y]` —, o
 que mantém a página nítida em qualquer escala. Sem formato cadastrado, o canvas
 volta a ser a própria página da arte.
+
+No card comum, o canvas sempre foi a célula, e a escala entra nas duas camadas de
+arte de `drawAmostraFace()`: a de **PDF**, que multiplica a escala do tamanho
+real e desenha com o mesmo `transform`; e a de **imagem**, que multiplica o
+encaixe proporcional (o mesmo que o motor faz em `_load_base_as_pdf`) e
+recentraliza. Nos dois casos o que passa da peça é aparado pelo canvas do grupo —
+no papel, pela célula.
 
 ---
 

@@ -4,6 +4,43 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-31] — A escala da arte vale também para o upload comum
+
+Pedido do usuário, logo depois de a escala entrar no modo PDF Multi-Página:
+**"utilizar mesma regra para escalar o pdf multi-pagina para escalar artes feitas
+pelo upload normal"**.
+
+Os dois campos **H** e **V** deixaram de morar só na janela do modo PDF: agora
+ficam embaixo da prévia de qualquer modelo, e **aparecem sempre que houver arte na
+tela** — PDF ou imagem, subida pelo botão 🖼️ Arte ou pelo modo multi-página.
+
+**No motor não mudou uma linha**, e é esse o ponto: a régua já era a mesma. O
+`_arte_na_celula()` não sabe de onde veio o arquivo — ele centraliza, escala e
+recorta a arte que estiver colada na célula. O que estava preso ao modo PDF era só
+a interface.
+
+Na tela, a escala entrou nas duas camadas de arte do `drawAmostraFace()`:
+
+- **Arte em PDF**: multiplica a escala do tamanho real e desenha já na medida
+  final, com o `transform` do PDF.js — nada é ampliado depois, então a arte
+  continua nítida em qualquer escala.
+- **Arte em imagem**: multiplica o encaixe proporcional que já existia (o mesmo
+  que o motor faz em `_load_base_as_pdf`) e recentraliza na peça.
+
+A caixa de campos passou a ser escrita uma vez e usada nos três desenhos do card
+(modo PDF, arte comum, arte com verso), e quem decide se ela aparece é
+`atualizarCaixaDeEscalaDaArte()` — uma regra só, em um lugar só. Salvar redesenha
+pelo caminho daquele card: o leitor de páginas no modo PDF, a composição das
+camadas na arte comum.
+
+Medido no navegador com uma arte de 180 × 50 mm numa célula de 200 × 60: a 100% a
+tinta sai 1063 px de largura, a 50% sai 531, e a célula continua 1181 px nas duas
+— só a arte muda, e o centro não se move.
+
+O harness subiu de 37 para 48 conferências.
+
+---
+
 ## [2026-08-31] — Modo PDF Multi-Página: escala da arte, em % por eixo
 
 Pedido do usuário: **"quando a arte for feita upload pelo modo 'PDF Multi-Página',
