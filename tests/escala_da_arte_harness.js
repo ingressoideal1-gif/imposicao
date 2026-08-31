@@ -281,6 +281,16 @@ function itemBase(extra) {
             ok(/escala_h: arte\._escalaH/.test(fonte),
                 'cada arte da folha combinada leva a PROPRIA escala no ' + nome);
         }
+        // A previa da imposicao do Pedido: o usuario escolheu esta janela como o
+        // terceiro lugar onde a escala tem de aparecer. Sem a multiplicacao, ela
+        // mostraria a arte num tamanho e a impressora faria outro.
+        const PREVIA = PEDIDO.slice(PEDIDO.indexOf('const fitScale = Math.min('));
+        ok(/dw \*= \(parseFloat\(_escArte\.h\)/.test(PREVIA)
+            && /dh \*= \(parseFloat\(_escArte\.v\)/.test(PREVIA),
+            'a previa da imposicao do Pedido aplica a escala na camada de arte');
+        ok(PREVIA.indexOf('_escArte') < PREVIA.indexOf('gctx.drawImage(cachedPage'),
+            'a escala e aplicada ANTES de a arte ser desenhada na celula');
+
         const APP = fs.readFileSync(path.join(RAIZ, 'app.py'), 'utf8');
         ok(/arte_escala_h=data\.get\("arte_escala_h"/.test(APP),
             'o app.py repassa a escala ao ImpositionConfig');
