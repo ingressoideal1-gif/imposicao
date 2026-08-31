@@ -494,6 +494,116 @@ def _folga_de_sangria(cfg) -> tuple[float, float]:
     return cfg.item_w, cfg.item_h
 
 
+def _escala_da_arte(cfg, arte_data=None) -> tuple[float, float]:
+    """A escala da camada de arte deste modelo, em fracao (1.0 = 100%).
+
+    Numa folha de UM modelo ela vem do trabalho (`cfg`). Numa folha que combina
+    modelos, cada arte carrega a sua — o modelo A pode estar a 98% e o B a 100%
+    na mesma folha —, e o `cfg` fica de reserva para a arte que nao trouxe nada.
+    """
+    def _ler(valor, reserva):
+        try:
+            v = float(valor)
+        except (TypeError, ValueError):
+            return reserva
+        # Escala zero ou negativa nao existe: seria arte invisivel, ou virada do
+        # avesso, sem ninguem ter pedido. Nesse caso vale o tamanho natural.
+        return v / 100.0 if v > 0 else reserva
+
+    sx = getattr(cfg, "arte_sx", 1.0)
+    sy = getattr(cfg, "arte_sy", 1.0)
+    if arte_data:
+        sx = _ler(arte_data.get("escala_h"), sx)
+        sy = _ler(arte_data.get("escala_v"), sy)
+    return sx, sy
+
+
+def _arte_na_celula(cfg, x0_celula, y0_celula, base_w, base_h, src_rect, sx, sy):
+    """Onde a arte entra na celula e que pedaco dela aparece.
+
+    Devolve `(rect_destino, clip_na_origem)`, prontos para o `show_pdf_page`, ou
+    `(None, None)` quando nao sobra nada visivel.
+
+    ## A 100% nada muda
+
+    Com `sx == sy == 1.0` esta funcao devolve exatamente o retangulo que o motor
+    sempre montou — a arte no tamanho natural do arquivo, centralizada na celula,
+    mais o deslocamento do formato — e a pagina inteira como clip. E o mesmo
+    desenho de antes, byte a byte: os milhares de trabalhos que ja passaram por
+    aqui nao mudam por causa desta funcao.
+
+    ## O que a escala faz
+
+    Estica a arte em torno do CENTRO da celula, cada eixo por conta propria — foi
+    o pedido: "% horizontal e % vertical", "mantem centralizado a celula". O
+    centro nao se move, entao aumentar sobra dos dois lados iguais e diminuir
+    encolhe para dentro pelos quatro lados.
+
+    NADA E RASTERIZADO. Esticar um PDF colado por `show_pdf_page` e trocar o
+    retangulo de destino: o conteudo continua vetor, o texto continua texto, e
+    quem decide a resolucao continua sendo o RIP da impressora.
+    `keep_proportion=False` e obrigatorio no chamador — com `True` o PyMuPDF
+    recusaria esticar em eixos diferentes e encaixaria a arte proporcionalmente,
+    ignorando em silencio metade do que o operador digitou.
+
+    ## Ate onde a arte pode crescer
+
+    Regra dada pelo usuario em 31/08/2026: recorta na celula mais a sangria,
+    nenhum ingresso invade o vizinho. Aqui isso vira o maior entre dois limites:
+
+    · A celula mais METADE do vao ate a celula ao lado (`gap_h`/`gap_v`). E o
+      espaco fisico que existe na folha antes de encostar na arte da vizinha, e e
+      exatamente onde a sangria deve morar. Com vao zero, o limite e o corte.
+
+    · O espaco que a arte JA ocupava a 100%. Sem isto, uma arte que hoje nasce
+      maior que a celula — e que hoje passa por cima da vizinha, porque o motor
+      nunca a aparou — encolheria de repente ao receber 100,1%, e o operador
+      veria a escala CORTAR ao mandar aumentar.
+
+    O recorte e feito no CLIP DA ORIGEM, e nao com uma mascara por cima: o
+    pedaco que nao cabe simplesmente nao e colado. Isso mantem o arquivo limpo e
+    o resultado igual no papel e na tela.
+    """
+    largura = base_w * sx
+    altura = base_h * sy
+    x0 = x0_celula + (cfg.item_w - largura) / 2 + cfg.offset_h
+    y0 = y0_celula + (cfg.item_h - altura) / 2 - cfg.offset_v
+    destino = fitz.Rect(x0, y0, x0 + largura, y0 + altura)
+
+    if sx == 1.0 and sy == 1.0:
+        return destino, src_rect
+
+    folga_x = max(cfg.gap_h / 2.0, (base_w - cfg.item_w) / 2.0, 0.0)
+    folga_y = max(cfg.gap_v / 2.0, (base_h - cfg.item_h) / 2.0, 0.0)
+    limite = fitz.Rect(
+        x0_celula - folga_x + cfg.offset_h,
+        y0_celula - folga_y - cfg.offset_v,
+        x0_celula + cfg.item_w + folga_x + cfg.offset_h,
+        y0_celula + cfg.item_h + folga_y - cfg.offset_v,
+    )
+
+    visivel = destino & limite
+    if visivel.is_empty or destino.width <= 0 or destino.height <= 0:
+        return None, None
+    if visivel.x0 <= destino.x0 and visivel.y0 <= destino.y0 \
+            and visivel.x1 >= destino.x1 and visivel.y1 >= destino.y1:
+        return destino, src_rect
+
+    # De volta as coordenadas da pagina de origem: a mesma proporcao, porque
+    # `keep_proportion=False` faz o mapeamento ser linear nos dois eixos.
+    fx0 = (visivel.x0 - destino.x0) / destino.width
+    fx1 = (visivel.x1 - destino.x0) / destino.width
+    fy0 = (visivel.y0 - destino.y0) / destino.height
+    fy1 = (visivel.y1 - destino.y0) / destino.height
+    clip = fitz.Rect(
+        src_rect.x0 + fx0 * src_rect.width,
+        src_rect.y0 + fy0 * src_rect.height,
+        src_rect.x0 + fx1 * src_rect.width,
+        src_rect.y0 + fy1 * src_rect.height,
+    )
+    return visivel, clip
+
+
 def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
     """Cola a primeira pagina de `doc_origem` em `rect`, com opacidade.
 
@@ -857,7 +967,9 @@ class ImpositionConfig:
                  pedido=None,
                  modelo=None,
                  pool_qr=None,
-                 entregar_por_bloco: bool = False):
+                 entregar_por_bloco: bool = False,
+                 arte_escala_h: float = 100.0,
+                 arte_escala_v: float = 100.0):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -910,6 +1022,26 @@ class ImpositionConfig:
         # Deslocamentos e rotações
         self.offset_h = formato.get("offset_h_mm", 0) * MM2PT
         self.offset_v = formato.get("offset_v_mm", 0) * MM2PT
+
+        # ESCALA DA CAMADA DE ARTE (31/08/2026).
+        #
+        # Vem do MODELO, e nao do formato: quem ajusta e o operador, no card do
+        # pedido, e o ajuste vale para aquele arquivo — nao para todos os
+        # trabalhos que usam o mesmo formato. Por isso ela entra por parametro,
+        # ao lado de c_ini/q_cam/l_cam, e nao pelo dicionario `formato`.
+        #
+        # Guardadas em fracao para o desenho nao repetir a divisao por 100 em
+        # sete lugares. O padrao 100/100 e o tamanho natural do arquivo, que e o
+        # que o motor sempre fez. Ver `_arte_na_celula`.
+        def _fracao(v):
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return 1.0
+            return f / 100.0 if f > 0 else 1.0
+
+        self.arte_sx = _fracao(arte_escala_h)
+        self.arte_sy = _fracao(arte_escala_v)
         self.rotations = formato.get("rotations", {})  # Dicionário de rotações de células (ex: {"0": 90})
 
         # Folha de saída
@@ -2568,6 +2700,12 @@ class ImpositionEngine:
                         "q_cam": int(art.get("q_cam", cfg.q_cam if hasattr(cfg, "q_cam") else 0)),
                         "num_tipo": art_num_tipo,
                         "ticket_qtd": art_ticket_qtd,
+                        # A escala da camada de arte DESTE modelo (31/08/2026).
+                        # Numa folha combinada o modelo A pode estar a 98% e o B
+                        # a 100%; sem estas duas chaves aqui, todos cairiam na
+                        # escala do trabalho. Ver `_escala_da_arte`.
+                        "escala_h": art.get("escala_h", 100),
+                        "escala_v": art.get("escala_v", 100),
                         # A linha do banco deste item, e o aviso de que esta arte
                         # tem banco proprio. Ver _linha_do_banco().
                         "csv_proprio": bool(art_csv),
@@ -2985,13 +3123,14 @@ class ImpositionEngine:
                         # Arte é referenciada diretamente do doc_base = 1 XObject compartilhado
                         # Save não precisa deduplicar 1000 XObjects separados
                         if current_doc_base:
-                            art_out_x0 = cell_x0 + (cfg.item_w - base_w) / 2 + cfg.offset_h
-                            art_out_y0 = cell_y0 + (cfg.item_h - base_h) / 2 - cfg.offset_v
-                            out_page_front.show_pdf_page(
-                                fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w, art_out_y0 + base_h),
-                                current_doc_base, page_idx_front,
-                                keep_proportion=False, clip=page_base.rect
-                            )
+                            _sx, _sy = _escala_da_arte(cfg, arte_data)
+                            _rect_arte, _clip_arte = _arte_na_celula(
+                                cfg, cell_x0, cell_y0, base_w, base_h, page_base.rect, _sx, _sy)
+                            if _rect_arte is not None:
+                                out_page_front.show_pdf_page(
+                                    _rect_arte, current_doc_base, page_idx_front,
+                                    keep_proportion=False, clip=_clip_arte
+                                )
                         else:
                             if cfg.layout_schema == "multi_artes":
                                 err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
@@ -3033,14 +3172,22 @@ class ImpositionEngine:
                         temp_page = temp_doc.new_page(
                             width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
-                        art_temp_x0 = _fx + (cfg.item_w - base_w) / 2 + cfg.offset_h
-                        art_temp_y0 = _fy + (cfg.item_h - base_h) / 2 - cfg.offset_v
-                        art_temp_x1 = art_temp_x0 + base_w
-                        art_temp_y1 = art_temp_y0 + base_h
-                        rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+                        # A pagina temporaria tem a celula no meio, com uma folga
+                        # de cada lado: por isso a origem aqui e (_fx, _fy) e nao
+                        # o canto da celula na folha.
+                        rect_art_temp = fitz.Rect(
+                            _fx + (cfg.item_w - base_w) / 2 + cfg.offset_h,
+                            _fy + (cfg.item_h - base_h) / 2 - cfg.offset_v,
+                            _fx + (cfg.item_w + base_w) / 2 + cfg.offset_h,
+                            _fy + (cfg.item_h + base_h) / 2 - cfg.offset_v)
 
                         if current_doc_base:
-                            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base.rect)
+                            _sx, _sy = _escala_da_arte(cfg, arte_data)
+                            _rect_arte, _clip_arte = _arte_na_celula(
+                                cfg, _fx, _fy, base_w, base_h, page_base.rect, _sx, _sy)
+                            if _rect_arte is not None:
+                                temp_page.show_pdf_page(_rect_arte, current_doc_base, page_idx_front,
+                                                        keep_proportion=False, clip=_clip_arte)
                         else:
                             if cfg.layout_schema == "multi_artes":
                                 err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
@@ -3222,15 +3369,19 @@ class ImpositionEngine:
                             base_w_verso = page_base_v.rect.width
                             base_h_verso = page_base_v.rect.height
 
-                            # Centralizar e aplicar offset no plano da célula temporária
-                            art_temp_x0 = _fx + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-                            art_temp_y0 = _fy + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
-                            art_temp_x1 = art_temp_x0 + base_w_verso
-                            art_temp_y1 = art_temp_y0 + base_h_verso
-                            rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+                            # Centralizar, escalar e aplicar offset no plano da
+                            # célula temporária. O verso usa a MESMA escala da
+                            # frente (regra do usuário, 31/08/2026): é um arquivo
+                            # só, e as duas faces têm de bater no corte.
+                            _sx, _sy = _escala_da_arte(cfg, arte_data)
+                            rect_art_temp, _clip_arte = _arte_na_celula(
+                                cfg, _fx, _fy, base_w_verso, base_h_verso,
+                                page_base_v.rect, _sx, _sy)
 
                             # Inserir arte na página temporária
-                            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
+                            if rect_art_temp is not None:
+                                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back,
+                                                        keep_proportion=False, clip=_clip_arte)
 
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
 
@@ -3528,13 +3679,15 @@ class ImpositionEngine:
 
         if cell_rotation == 0 and not arte_nome:
             if current_doc_base:
-                art_out_x0 = cell_x0 + (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
-                art_out_y0 = cell_y0 + (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
-                out_page_front.show_pdf_page(
-                    fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w_frente, art_out_y0 + base_h_frente),
-                    current_doc_base, page_idx_front,
-                    keep_proportion=False, clip=page_base_f.rect
-                )
+                _sx, _sy = _escala_da_arte(cfg, item_data)
+                _rect_arte, _clip_arte = _arte_na_celula(
+                    cfg, cell_x0, cell_y0, base_w_frente, base_h_frente,
+                    page_base_f.rect, _sx, _sy)
+                if _rect_arte is not None:
+                    out_page_front.show_pdf_page(
+                        _rect_arte, current_doc_base, page_idx_front,
+                        keep_proportion=False, clip=_clip_arte
+                    )
             for el in current_elements:
                 if el.get("face", "both") == "back":
                     continue
@@ -3574,12 +3727,13 @@ class ImpositionEngine:
                 width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
             if current_doc_base:
-                art_temp_x0 = _fx + (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
-                art_temp_y0 = _fy + (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
-                art_temp_x1 = art_temp_x0 + base_w_frente
-                art_temp_y1 = art_temp_y0 + base_h_frente
-                rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
-                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base_f.rect)
+                _sx, _sy = _escala_da_arte(cfg, item_data)
+                rect_art_temp, _clip_arte = _arte_na_celula(
+                    cfg, _fx, _fy, base_w_frente, base_h_frente,
+                    page_base_f.rect, _sx, _sy)
+                if rect_art_temp is not None:
+                    temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front,
+                                            keep_proportion=False, clip=_clip_arte)
 
             for el in current_elements:
                 if el.get("face", "both") == "back":
@@ -3698,13 +3852,15 @@ class ImpositionEngine:
 
         if cell_rotation == 0 and not arte_nome:
             if page_idx_back is not None and current_doc_base:
-                art_out_x0 = cell_x0 + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-                art_out_y0 = cell_y0 + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
-                out_page_back.show_pdf_page(
-                    fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w_verso, art_out_y0 + base_h_verso),
-                    current_doc_base, page_idx_back,
-                    keep_proportion=False, clip=page_base_v.rect
-                )
+                _sx, _sy = _escala_da_arte(cfg, item_data)
+                _rect_arte, _clip_arte = _arte_na_celula(
+                    cfg, cell_x0, cell_y0, base_w_verso, base_h_verso,
+                    page_base_v.rect, _sx, _sy)
+                if _rect_arte is not None:
+                    out_page_back.show_pdf_page(
+                        _rect_arte, current_doc_base, page_idx_back,
+                        keep_proportion=False, clip=_clip_arte
+                    )
             for el in current_elements:
                 if el.get("face", "both") == "front":
                     continue
@@ -3744,12 +3900,13 @@ class ImpositionEngine:
                 width=cfg.item_w + 2 * _fx, height=cfg.item_h + 2 * _fy)
 
             if page_idx_back is not None and current_doc_base:
-                art_temp_x0 = _fx + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-                art_temp_y0 = _fy + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
-                art_temp_x1 = art_temp_x0 + base_w_verso
-                art_temp_y1 = art_temp_y0 + base_h_verso
-                rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
-                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
+                _sx, _sy = _escala_da_arte(cfg, item_data)
+                rect_art_temp, _clip_arte = _arte_na_celula(
+                    cfg, _fx, _fy, base_w_verso, base_h_verso,
+                    page_base_v.rect, _sx, _sy)
+                if rect_art_temp is not None:
+                    temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back,
+                                            keep_proportion=False, clip=_clip_arte)
 
             for el in current_elements:
                 if el.get("face", "both") == "front":

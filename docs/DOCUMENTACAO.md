@@ -622,18 +622,45 @@ PDFs exportados de CorelDraw, Illustrator e InDesign frequentemente têm origem 
 
 ### Solução no backend (PyMuPDF)
 
+As **sete** colagens de arte do motor (frente e verso, com e sem giro, folha de um
+modelo ou folha combinada) passam por uma função só, `_arte_na_celula()`:
+
 ```python
 # Dimensões reais da arte = rect da página (post-CropBox)
 base_w = page_base.rect.width
 base_h = page_base.rect.height
 
-# Centralizar na célula temporária
-art_temp_x0 = (cfg.item_w - base_w) / 2 + cfg.offset_h
-art_temp_y0 = (cfg.item_h - base_h) / 2 - cfg.offset_v
-
-# CRÍTICO: clip=page_base.rect mapeia as coordenadas absolutas do CropBox
-temp_page.show_pdf_page(rect_art_temp, doc_base, page_idx, clip=page_base.rect)
+# Centraliza na célula, aplica a escala do modelo e devolve também o pedaço da
+# origem que aparece (o recorte). clip mapeia as coordenadas absolutas do CropBox.
+rect_arte, clip_arte = _arte_na_celula(
+    cfg, cell_x0, cell_y0, base_w, base_h, page_base.rect, sx, sy)
+if rect_arte is not None:
+    page.show_pdf_page(rect_arte, doc_base, page_idx,
+                       keep_proportion=False, clip=clip_arte)
 ```
+
+`keep_proportion=False` é obrigatório: com `True` o PyMuPDF encaixaria a arte
+proporcionalmente e a escala de um eixo só seria ignorada em silêncio.
+
+### Escala da camada de arte (31/08/2026)
+
+Cada modelo guarda `arte_escala_h` e `arte_escala_v` (em %, padrão 100) em
+`pedidos_modelos`. **100/100 é o tamanho natural do arquivo** — o comportamento
+histórico do motor —, então nenhum trabalho antigo muda.
+
+- O operador ajusta na **janela do modo PDF Multi-Página**, no card do pedido.
+- A escala estica **só a camada de arte**, cada eixo por conta própria, sempre em
+  torno do centro da célula. A numeração não muda de tamanho nem de lugar.
+- Passando de 100%, a arte é aparada no maior entre **a célula mais metade do vão
+  até a vizinha** e **o espaço que ela já ocupava a 100%** — assim ela pode usar o
+  vão como sangria sem invadir o ingresso ao lado, e uma arte que já nascia
+  sangrada não encolhe ao receber 101%.
+- Chega ao motor por `arte_escala_h`/`arte_escala_v` no payload e, numa folha
+  combinada, por `multi_artes[].escala_h`/`escala_v` (cada modelo com a sua).
+- Nada é rasterizado: esticar é trocar o retângulo de destino do `show_pdf_page`.
+
+Medido em `tests/test_escala_da_arte.py` (impõe de verdade e lê a tinta) e
+`tests/escala_da_arte_harness.js` (a janela).
 
 ### Solução no frontend (PDF.js)
 
@@ -643,6 +670,11 @@ O `viewport` do PDF.js já normaliza a origem para `(0,0)`, portanto `viewport.w
 const drawX = (canvasWidth - drawW) / 2;
 const drawY = (canvasHeight - drawH) / 2;
 ```
+
+Na janela do modo PDF o canvas **é a célula** (as medidas do formato), e a arte é
+desenhada dentro dela com o `transform` do PDF.js — `[sx, 0, 0, sy, x, y]` —, o
+que mantém a página nítida em qualquer escala. Sem formato cadastrado, o canvas
+volta a ser a própria página da arte.
 
 ---
 

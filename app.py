@@ -1515,7 +1515,13 @@ async def impose_file(
             # cada lote que o motor grava dispara o `on_file_gen` logo abaixo, e
             # de la vai para a resposta em streaming e para o hotfolder ou a
             # impressora, sem esperar o trabalho terminar.
-            entregar_por_bloco=bool(data.get("entregar_por_bloco", False))
+            entregar_por_bloco=bool(data.get("entregar_por_bloco", False)),
+            # ESCALA DA CAMADA DE ARTE (31/08/2026). Vem do modelo, em %, e o
+            # padrao 100 e o tamanho natural do arquivo — o que o motor sempre
+            # fez. Numa folha que combina modelos, cada arte traz a sua em
+            # `multi_artes[].escala_h/_v`, e esta aqui e a reserva.
+            arte_escala_h=data.get("arte_escala_h", 100),
+            arte_escala_v=data.get("arte_escala_v", 100)
         )
 
         wants_stream = data.get("stream", False)

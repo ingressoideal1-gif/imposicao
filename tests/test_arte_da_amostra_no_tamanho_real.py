@@ -82,11 +82,38 @@ def test_o_criador_de_arte_usa_a_mesma_regra_do_card():
 
 
 def test_o_motor_continua_pondo_a_arte_no_tamanho_da_propria_pagina():
-    """Se o motor mudar de regra, a tela tem de mudar junto — e este teste avisa."""
+    """Se o motor mudar de regra, a tela tem de mudar junto — e este teste avisa.
+
+    Desde 31/08/2026 a conta mora em `_arte_na_celula()`, que aceita uma escala
+    por eixo (a do modo PDF Multi-Pagina). A regra guardada aqui e a do PADRAO,
+    100%: a arte entra com o rect do tamanho da PROPRIA PAGINA, centrada, sem
+    encolher para caber — e e essa que a amostra na tela copia.
+    """
+    import fitz
+    from engine import _arte_na_celula
+
     fonte = _ler("engine.py")
     assert "base_w = page_base.rect.width" in fonte
     assert "base_h = page_base.rect.height" in fonte
-    assert "art_out_x0 + base_w, art_out_y0 + base_h" in fonte, (
-        "engine.py nao poe mais a arte com o rect do tamanho da propria pagina. "
+
+    class _Cfg:
+        item_w, item_h = 100.0, 50.0
+        offset_h = offset_v = 0.0
+        gap_h = gap_v = 0.0
+
+    # Arte MAIOR que a celula num eixo: e o caso que separa "tamanho real" de
+    # "encolhe ate caber".
+    origem = fitz.Rect(0, 0, 120.0, 40.0)
+    rect, clip = _arte_na_celula(_Cfg(), 10.0, 20.0, 120.0, 40.0, origem, 1.0, 1.0)
+
+    assert rect.width == pytest.approx(120.0), (
+        "engine.py nao poe mais a arte com a largura da propria pagina. "
         "A amostra na tela copia essa regra e precisa ser revista junto."
     )
+    assert rect.height == pytest.approx(40.0), (
+        "engine.py nao poe mais a arte com a altura da propria pagina. "
+        "A amostra na tela copia essa regra e precisa ser revista junto."
+    )
+    assert rect.x0 == pytest.approx(10.0 + (100.0 - 120.0) / 2), "a arte saiu do centro da celula"
+    assert rect.y0 == pytest.approx(20.0 + (50.0 - 40.0) / 2), "a arte saiu do centro da celula"
+    assert clip == origem, "a 100% a pagina inteira da arte tem de ser colada"

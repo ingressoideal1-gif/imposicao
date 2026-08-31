@@ -1402,6 +1402,27 @@ function drawPedPreview() {
                     dh *= cScale;
                     offH = (parseFloat(fmt.cover_offset_x) || 0) * MM2PT * scale;
                     offV = -(parseFloat(fmt.cover_offset_y) || 0) * MM2PT * scale;
+                } else {
+                    // A ESCALA DA CAMADA DE ARTE (31/08/2026), a mesma que vai ao
+                    // motor. Estica só a arte, cada eixo por conta própria, em
+                    // torno do centro da célula — o `offH/offV` continua sendo o
+                    // deslocamento do formato, e a numeração não anda com ela.
+                    //
+                    // Não vale para capa e contracapa: aquelas têm a escala
+                    // própria do formato (`cover_scale`), que é outra coisa.
+                    //
+                    // O recorte na célula já existe: o `gctx` foi clipado no
+                    // retângulo da célula logo acima, então o que passar do corte
+                    // não aparece — como no papel. O motor ainda deixa a arte
+                    // usar metade do vão até a célula vizinha como sangria; aqui
+                    // a janela mostra a peça já aparada, que é o que sai do
+                    // corte.
+                    const _escArte = (multiArteItem && multiArteItem._escalaH !== undefined)
+                        ? { h: multiArteItem._escalaH, v: multiArteItem._escalaV }
+                        : ((typeof escalaDaArteDoTrabalho === 'function')
+                            ? escalaDaArteDoTrabalho() : { h: 100, v: 100 });
+                    dw *= (parseFloat(_escArte.h) || 100) / 100;
+                    dh *= (parseFloat(_escArte.v) || 100) / 100;
                 }
 
 
@@ -5423,6 +5444,13 @@ window.runPedImposition = async function (mode, isRefazer) {
                 _imprimirNumero: (typeof imprimeNumeroDoModelo === 'function')
                     ? imprimeNumeroDoModelo(sItem)
                     : false,
+                // A escala da arte é DE CADA MODELO: numa folha combinada o A
+                // pode estar a 98% e o B a 100%. Ver `_escala_da_arte` no
+                // engine.py, que lê estes dois campos por arte.
+                _escalaH: (typeof escalaDaArteDoModelo === 'function')
+                    ? escalaDaArteDoModelo(sItem).h : 100,
+                _escalaV: (typeof escalaDaArteDoModelo === 'function')
+                    ? escalaDaArteDoModelo(sItem).v : 100,
                 // O pedido DESTE modelo, que entra na coluna do pool e no
                 // conteudo do QR Ideal. Ver numeroDoPedidoDoItem() no script.js.
                 _pedido: (typeof numeroDoPedidoDoItem === 'function')
@@ -5671,6 +5699,11 @@ window.runPedImposition = async function (mode, isRefazer) {
 
                 nome_color: arte.nome_color || '#000000',
 
+                // A escala da arte DESTE modelo. Sem ela, o motor cairia na do
+                // trabalho e todos os modelos da folha sairiam no mesmo tamanho.
+                escala_h: arte._escalaH ?? 100,
+                escala_v: arte._escalaV ?? 100,
+
                 num1_id: arte.num1_id,
 
                 num2_id: arte.num2_id,
@@ -5830,7 +5863,15 @@ window.runPedImposition = async function (mode, isRefazer) {
         refazer_de: refazer.refazer_de,
         refazer_ate: refazer.refazer_ate,
         refazer_set: refazer.refazer_set,
-        refazer_celulas: refazer.refazer_celulas
+        refazer_celulas: refazer.refazer_celulas,
+
+        // A escala da camada de arte do modelo (31/08/2026). 100/100 é o
+        // tamanho natural do arquivo — o que o motor sempre fez. Ver
+        // `_arte_na_celula` no engine.py.
+        arte_escala_h: (typeof escalaDaArteDoTrabalho === 'function')
+            ? escalaDaArteDoTrabalho().h : 100,
+        arte_escala_v: (typeof escalaDaArteDoTrabalho === 'function')
+            ? escalaDaArteDoTrabalho().v : 100
     };
 
 

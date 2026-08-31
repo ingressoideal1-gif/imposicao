@@ -4,6 +4,64 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-31] — Modo PDF Multi-Página: escala da arte, em % por eixo
+
+Pedido do usuário: **"quando a arte for feita upload pelo modo 'PDF Multi-Página',
+além de trazer o pdf a janela de visualização, vamos adicionar 2 inputs de escala
+para o pdf, % horizontal e % vertical, vai escalar apenas o pdf, apenas a camada
+da arte (pdf) e vai utilizar mesma escala para arte no motor de impressão,
+imposição, gerar pdf"** — e, sobre o ponto de apoio: **"ao escalar o pdf
+multi-páginas vai manter centralizado a célula de impressão e visualização"**.
+
+Dois campos, **H** e **V**, embaixo da navegação de páginas da janela do modo PDF.
+Eles esticam **só a camada de arte**, cada eixo por conta própria, sempre em torno
+do centro da célula. A numeração não muda de tamanho nem de lugar.
+
+**100% é o tamanho natural do arquivo** — exatamente o que o motor sempre fez —,
+então nenhum pedido que já existe muda de comportamento.
+
+Decisões que o usuário tomou junto com o pedido:
+
+- **A escala é do modelo**, e fica gravada: colunas `arte_escala_h` e
+  `arte_escala_v` em `pedidos_modelos` (`sql/arte_escala_do_modelo.sql`). Reabrir
+  o pedido, reimprimir ou refazer uma célula semana que vem sai igual.
+- **Passando de 100%, a arte é aparada** na célula mais metade do vão até a
+  vizinha — dá para usar o vão como sangria, e nenhum ingresso invade o outro. O
+  limite nunca é menor do que o espaço que a arte já ocupava a 100%, senão uma
+  arte que já nascia sangrada encolheria ao receber 101%.
+- **Frente e verso usam a mesma escala**: é um arquivo só, e as duas faces têm de
+  bater no corte.
+- Vale na janela do modo PDF, na **prévia da imposição** do Pedido e no motor
+  (imposição, impressão e o Gerar PDF).
+
+No motor, as **sete** colagens de arte — frente e verso, com e sem giro, folha de
+um modelo ou folha combinada — passaram a usar uma função só,
+`_arte_na_celula()`, que centraliza, escala e devolve o recorte. Numa folha
+combinada cada arte leva a sua escala (`multi_artes[].escala_h`/`escala_v`), então
+o modelo A pode sair a 98% ao lado do B a 100%.
+
+**Nada é rasterizado**: esticar é trocar o retângulo de destino do
+`show_pdf_page`. O `keep_proportion=False` é o que faz os dois eixos valerem —
+com `True` o PyMuPDF encaixaria a arte proporcionalmente e ignoraria metade do que
+o operador digitou.
+
+Na janela, o canvas passou a ser a **célula**, com a arte desenhada dentro. Antes
+ele era a própria página da arte, e por isso escalar não teria como aparecer: a
+moldura crescia junto com o desenho.
+
+- `tests/test_escala_da_arte.py`: oito medições que impõem de verdade e leem a
+  tinta da folha — centralização, eixos independentes, recorte, pose girada.
+- `tests/escala_da_arte_harness.js`: 37 conferências da janela, do valor digitado
+  e da fiação até o motor.
+
+Documentado em `docs/DOCUMENTACAO.md`, seção 11.
+
+> [!NOTE]
+> A tela do cliente (link de aprovação) desenha o PDF por conta própria e continua
+> mostrando a arte no tamanho natural. Combinado com o usuário na hora do pedido.
+
+---
+
 ## [2026-08-31] — Lista de Arte: pedido novo volta a nascer em "Em Arte"
 
 Relato do usuário, no pedido 21413: **"o status real dele é em_arte, deveria estar

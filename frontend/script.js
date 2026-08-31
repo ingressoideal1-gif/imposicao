@@ -12210,6 +12210,11 @@ window.runImposition = async function (mode, returnBlob = false) {
                 // porque `nome` também alimenta as mensagens da tela ("o modelo
                 // X não possui arte"), e essas continuam precisando do número.
                 _imprimirNumero: imprimeNumeroDoModelo(sItem),
+                // A escala da arte é DE CADA MODELO: numa folha combinada o A
+                // pode estar a 98% e o B a 100%. Ver `_escala_da_arte` no
+                // engine.py, que lê estes dois campos por arte.
+                _escalaH: escalaDaArteDoModelo(sItem).h,
+                _escalaV: escalaDaArteDoModelo(sItem).v,
                 // O pedido DESTE modelo. Ver numeroDoPedidoDoItem().
                 _pedido: numeroDoPedidoDoItem(s.osId),
                 _itemId: s.itemId,
@@ -12489,6 +12494,11 @@ window.runImposition = async function (mode, returnBlob = false) {
 
                 nome_color: arte.nome_color || '#000000',
 
+                // A escala da arte DESTE modelo. Sem ela, o motor cairia na do
+                // trabalho e todos os modelos da folha sairiam no mesmo tamanho.
+                escala_h: arte._escalaH ?? 100,
+                escala_v: arte._escalaV ?? 100,
+
                 num1_id: arte.num1_id,
 
                 num2_id: arte.num2_id,
@@ -12652,6 +12662,12 @@ window.runImposition = async function (mode, returnBlob = false) {
         refazer_ate: 0,
         refazer_set: 1,
         refazer_celulas: [],
+
+        // A escala da camada de arte do modelo (31/08/2026). 100/100 é o
+        // tamanho natural do arquivo — o que o motor sempre fez. Ver
+        // `_arte_na_celula` no engine.py.
+        arte_escala_h: escalaDaArteDoTrabalho().h,
+        arte_escala_v: escalaDaArteDoTrabalho().v,
 
         is_color_template: state.isColorTemplate || false
 
@@ -31666,6 +31682,9 @@ function renderAmostrasOSItens(osId) {
     const itemsHtml = itens.map((item, idx) => {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
+        // A escala da camada de arte deste modelo (31/08/2026). Sem nada
+        // gravado, 100/100 — o tamanho natural do arquivo.
+        const escArte = escalaDaArteDoModelo(item);
         
         let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADO</span>';
@@ -32146,6 +32165,36 @@ function renderAmostrasOSItens(osId) {
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                            <!-- A ESCALA DA ARTE (31/08/2026). Nasce escondida e
+                                 aparece junto com a navegação, quando o PDF já
+                                 está na tela: antes do upload não há o que
+                                 escalar, e um par de campos mudos ao lado do
+                                 "faça upload" só faria pergunta.
+
+                                 Ela estica SÓ a camada de arte, sempre a partir
+                                 do centro da célula — a numeração não anda com
+                                 ela. Sem a marca data-libera-aprovado, de
+                                 propósito: num modelo já aprovado pelo cliente
+                                 estes campos nascem travados como o resto do
+                                 card. CRASE aqui dentro fecharia o template
+                                 literal do card. -->
+                            <div id="amostra-pdf-escala-${idx}" style="display:none; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:10px; padding:8px 12px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <span style="font-size:0.78rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Escala da arte</span>
+                                <label style="display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; color:var(--text-dim); margin:0;" title="Largura da arte, em % do tamanho do arquivo. A numeração não muda.">
+                                    H
+                                    <input type="number" id="amostra-pdf-escala-h-${idx}" value="${escArte.h}" min="${ESCALA_ARTE_MIN}" max="${ESCALA_ARTE_MAX}" step="0.1"
+                                           style="width:74px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;"
+                                           onchange="salvarEscalaDaArte(${idx}, '${osId}', '${item.id}')">%
+                                </label>
+                                <label style="display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; color:var(--text-dim); margin:0;" title="Altura da arte, em % do tamanho do arquivo. A numeração não muda.">
+                                    V
+                                    <input type="number" id="amostra-pdf-escala-v-${idx}" value="${escArte.v}" min="${ESCALA_ARTE_MIN}" max="${ESCALA_ARTE_MAX}" step="0.1"
+                                           style="width:74px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;"
+                                           onchange="salvarEscalaDaArte(${idx}, '${osId}', '${item.id}')">%
+                                </label>
+                                <button class="btn btn-sm btn-secondary" onclick="zerarEscalaDaArte(${idx}, '${osId}', '${item.id}')" title="Voltar a arte ao tamanho original do arquivo" style="font-size:0.75rem; padding:4px 10px;">↺ 100%</button>
+                                <span style="font-size:0.74rem; color:var(--text-dim); width:100%; text-align:center;">Vale para a impressão e a imposição. A arte fica centralizada na célula; a numeração não muda de tamanho.</span>
                             </div>
                             <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                                  <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
@@ -34015,6 +34064,141 @@ async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
     }
 }
 
+/* ═══ A ESCALA DA CAMADA DE ARTE (31/08/2026) ═══════════════════════════════
+ *
+ * Pedido do usuário: no modo PDF Multi-Página, dois campos — % horizontal e %
+ * vertical — que esticam SÓ a arte, mantendo-a centralizada na célula, e que
+ * valem igual na tela e no papel ("mesma escala para arte no motor de
+ * impressão, imposição, gerar pdf").
+ *
+ * 100/100 é o tamanho natural do arquivo, que é o que o motor sempre fez: por
+ * isso todo modelo que já existe nasce com esse par e nada muda para ele.
+ *
+ * Onde ela é lida, além daqui: no payload da imposição (`runImposition`, e o
+ * gêmeo do pedido.js), na prévia da imposição (pedido.js) e no `engine.py`, na
+ * função `_arte_na_celula`. Quem grava é `salvarEscalaDaArte`, nas colunas
+ * `arte_escala_h` / `arte_escala_v` de `pedidos_modelos`.
+ */
+const ESCALA_ARTE_MIN = 1;
+const ESCALA_ARTE_MAX = 400;
+
+/** A escala da arte deste modelo, em %. Sem nada gravado, 100 e 100. */
+function escalaDaArteDoModelo(item) {
+    const ler = (v) => {
+        const n = parseFloat(v);
+        if (!isFinite(n) || n <= 0) return 100;
+        return Math.min(ESCALA_ARTE_MAX, Math.max(ESCALA_ARTE_MIN, n));
+    };
+    return { h: ler(item?.arte_escala_h), v: ler(item?.arte_escala_v) };
+}
+window.escalaDaArteDoModelo = escalaDaArteDoModelo;
+
+/** A escala está no padrão? Então nenhum desenho precisa mudar de caminho. */
+function escalaDaArteEhPadrao(esc) {
+    return !esc || (esc.h === 100 && esc.v === 100);
+}
+window.escalaDaArteEhPadrao = escalaDaArteEhPadrao;
+
+/**
+ * A escala da arte do modelo que está sendo imposto ou impresso agora.
+ *
+ * Numa folha que combina modelos ela não serve: ali cada arte leva a sua em
+ * `multi_artes[].escala_h/_v`, e esta vira só a reserva do motor.
+ */
+function escalaDaArteDoTrabalho() {
+    const alvo = state.activeOSItem;
+    if (!alvo || !state.osItens || !state.osItens[alvo.osId]) return { h: 100, v: 100 };
+    const item = state.osItens[alvo.osId].find(i => String(i.id) === String(alvo.itemId));
+    return escalaDaArteDoModelo(item);
+}
+window.escalaDaArteDoTrabalho = escalaDaArteDoTrabalho;
+
+/**
+ * O formato cadastrado deste modelo, ou null.
+ *
+ * Devolve null de propósito quando não acha: quem precisa de um palpite decide
+ * qual — a prévia do card usa o primeiro do catálogo há muito tempo, e a janela
+ * do modo PDF prefere continuar usando a própria página da arte a inventar uma
+ * célula de outro trabalho.
+ */
+function formatoDoModelo(item, cor, num) {
+    if (!state.formatos || !state.formatos.length) return null;
+    if (cor && cor.formato_id) {
+        const f = state.formatos.find(x => String(x.id) === String(cor.formato_id));
+        if (f) return f;
+    }
+    if (num && num.formato_id) {
+        const f = state.formatos.find(x => String(x.id) === String(num.formato_id));
+        if (f) return f;
+    }
+    return null;
+}
+window.formatoDoModelo = formatoDoModelo;
+
+/**
+ * Grava a escala digitada e redesenha a janela.
+ *
+ * A gravação passa pelo `saveAmostraToDB` de sempre, e é ele quem recusa a
+ * escrita num modelo já aprovado pelo cliente — a mesma trava do resto do card,
+ * com a mesma mensagem.
+ */
+async function salvarEscalaDaArte(idx, osId, itemId) {
+    const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+    if (!item) return;
+
+    const campoH = document.getElementById(`amostra-pdf-escala-h-${idx}`);
+    const campoV = document.getElementById(`amostra-pdf-escala-v-${idx}`);
+    if (!campoH || !campoV) return;
+
+    // Uma casa decimal basta para o ajuste fino e evita o 99,99999 do float.
+    const limpar = (campo) => {
+        const n = parseFloat(String(campo.value).replace(',', '.'));
+        if (!isFinite(n) || n <= 0) return 100;
+        return Math.round(Math.min(ESCALA_ARTE_MAX, Math.max(ESCALA_ARTE_MIN, n)) * 10) / 10;
+    };
+    const h = limpar(campoH);
+    const v = limpar(campoV);
+    // O campo volta a mostrar o valor já aparado: digitar 900 e ver 900 na tela
+    // enquanto o papel sai a 400 seria mentir para o operador.
+    campoH.value = h;
+    campoV.value = v;
+
+    if (h === parseFloat(item.arte_escala_h ?? 100) && v === parseFloat(item.arte_escala_v ?? 100)) {
+        return;
+    }
+
+    item.arte_escala_h = h;
+    item.arte_escala_v = v;
+    // A arte de aprovação do cliente é refeita no MARCAR PRONTO; marcar aqui faz
+    // a prévia guardada acompanhar quem já estava pronto antes da mudança.
+    item._needsSnapshot = true;
+
+    try {
+        await saveAmostraToDB(itemId, osId, { arte_escala_h: h, arte_escala_v: v });
+    } catch (e) {
+        console.error('[Escala da arte] Erro ao salvar:', e);
+        toast('Não consegui salvar a escala da arte: ' + (e.message || e), 'error');
+        return;
+    }
+
+    const key = `${osId}_${idx}`;
+    const vs = pdfViewerState[key] || pdfViewerState[idx];
+    if (vs && vs.pdf) await renderPdfViewerPage(key in pdfViewerState ? key : idx, vs.currentPage || 1, idx);
+
+    toast(`Escala da arte: ${h}% na horizontal, ${v}% na vertical.`, 'success');
+}
+window.salvarEscalaDaArte = salvarEscalaDaArte;
+
+/** Volta a arte ao tamanho natural do arquivo. */
+async function zerarEscalaDaArte(idx, osId, itemId) {
+    const campoH = document.getElementById(`amostra-pdf-escala-h-${idx}`);
+    const campoV = document.getElementById(`amostra-pdf-escala-v-${idx}`);
+    if (campoH) campoH.value = 100;
+    if (campoV) campoV.value = 100;
+    await salvarEscalaDaArte(idx, osId, itemId);
+}
+window.zerarEscalaDaArte = zerarEscalaDaArte;
+
 async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
     if (!pdfUrl) return;
     
@@ -34292,21 +34476,15 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         const page = await viewerState.pdf.getPage(pageNum);
         const scale = 2.0;
         const viewport = page.getViewport({ scale });
-        
+
         const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
         if (!canvas) {
             console.warn(`[PDF Viewer] Canvas #amostra-pdf-canvas-${idx} não encontrado no DOM (keyOrIdx=${keyOrIdx}).`);
             return;
         }
-        
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-        // Estampar numeração cadastrada sobre a página do PDF se houver numeração selecionada
+        // Quem é este modelo e qual a numeração dele — resolvido ANTES de medir
+        // o canvas, porque é daí que saem a escala da arte e o tamanho da célula.
         const containerId = state.amostrasContainerId || 'amostras-itens-container';
         const container = document.getElementById(containerId);
         const numSelect = container ? container.querySelector(`#amostra-item-num-${idx}`) : null;
@@ -34318,18 +34496,64 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         let num = null;
         if (numId && state.numeracoes) {
             const numIdStr = String(numId).trim().toLowerCase();
-            num = state.numeracoes.find(n => 
-                String(n.id) === String(numId) || 
-                String(n.name).trim().toLowerCase() === numIdStr || 
+            num = state.numeracoes.find(n =>
+                String(n.id) === String(numId) ||
+                String(n.name).trim().toLowerCase() === numIdStr ||
                 String(n.tipo).trim().toLowerCase() === numIdStr
             );
         }
+
+        // O CANVAS É A CÉLULA, E NÃO A PÁGINA DA ARTE (31/08/2026).
+        //
+        // Enquanto o canvas era a própria página do PDF, escalar a arte não teria
+        // como aparecer: a moldura crescia junto e a peça continuava parecendo
+        // cheia. Medindo a célula, a arte a 80% aparece menor DENTRO dela, com o
+        // papel em volta — que é o que a impressora vai fazer.
+        //
+        // O formato preferido é o da NUMERAÇÃO porque é dele que o
+        // `drawNumeracaoElementsOverCanvas` tira os milímetros logo abaixo; usar
+        // outro aqui poria os elementos fora do lugar. Sem formato nenhum, o
+        // canvas continua sendo a página da arte, exatamente como antes.
+        const cor = (item && item.amostra_cor_id && state.cores)
+            ? state.cores.find(c => String(c.id) === String(item.amostra_cor_id)) : null;
+        const fmt = formatoDoModelo(item, null, num) || formatoDoModelo(item, cor, null);
+        const MM_EM_PT = 2.8346;
+        const larguraCelula = (fmt && fmt.width_mm) ? fmt.width_mm * MM_EM_PT * scale : viewport.width;
+        const alturaCelula = (fmt && fmt.height_mm) ? fmt.height_mm * MM_EM_PT * scale : viewport.height;
+
+        const esc = escalaDaArteDoModelo(item);
+        const larguraArte = viewport.width * esc.h / 100;
+        const alturaArte = viewport.height * esc.v / 100;
+        const arteX = (larguraCelula - larguraArte) / 2;
+        const arteY = (alturaCelula - alturaArte) / 2;
+
+        canvas.width = Math.max(1, Math.round(larguraCelula));
+        canvas.height = Math.max(1, Math.round(alturaCelula));
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // O papel por baixo: sem ele, a arte menor que a célula deixaria o vazio
+        // transparente, e o operador veria o fundo da tela onde vai haver papel.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // A arte, esticada em cada eixo e centralizada. O `transform` do pdf.js
+        // desenha na resolução final — nada é ampliado depois, então a página
+        // continua nítida em qualquer escala. O que passa da borda do canvas é
+        // aparado pelo próprio canvas, como o motor apara na célula.
+        await page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+            transform: [esc.h / 100, 0, 0, esc.v / 100, arteX, arteY],
+        }).promise;
 
         if (num && num.elements && num.elements.length > 0) {
             // Ver o comentario em renderImageModeInPdfViewer: a arte dos elementos
             // SVG/PDF e aguardada aqui, antes de desenhar.
             await precarregarArtesDosElementos(num.elements, linhasDaPagina(num, item, pageNum));
-            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
+            // A numeração é carimbada sobre a CÉLULA, e não sobre a arte: ela
+            // não anda nem estica junto com a escala — a arte é a única camada
+            // que muda de tamanho. Por isso as medidas vêm do canvas.
+            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvas.width, canvas.height);
         }
 
         canvas.style.display = 'block';
@@ -34337,7 +34561,20 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         // Update navigation
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';
-        
+
+        // Os campos de escala aparecem junto com a navegação: agora existe uma
+        // arte na tela para escalar. Ver o comentário no HTML do card.
+        const caixaEscala = document.getElementById(`amostra-pdf-escala-${idx}`);
+        if (caixaEscala) {
+            caixaEscala.style.display = 'flex';
+            const campoH = document.getElementById(`amostra-pdf-escala-h-${idx}`);
+            const campoV = document.getElementById(`amostra-pdf-escala-v-${idx}`);
+            // Redesenho do card devolve os campos ao que está gravado: sem isto,
+            // trocar de página deixaria na tela o valor de antes da gravação.
+            if (campoH && document.activeElement !== campoH) campoH.value = esc.h;
+            if (campoV && document.activeElement !== campoV) campoV.value = esc.v;
+        }
+
         const pageInfo = document.getElementById(`amostra-pdf-page-info-${idx}`);
         if (pageInfo) pageInfo.textContent = `Página ${pageNum} / ${viewerState.totalPages}`;
         
