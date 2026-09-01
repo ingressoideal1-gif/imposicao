@@ -21,7 +21,7 @@ deles troca a tabela de baixo e o título dela.
 | 🎨 Em Arte | `fila` | O trabalho do designer ainda está aberto |
 | ⏳ Fila de Aprovação | `aprovacao` | Foi para o cliente e aguarda resposta |
 | ✅ Fila de Aprovados | `aprovados` | Arte **e** dados de entrega aprovados |
-| 🏆 Pedidos Concluídos | `concluidos` | Já saiu da arte para a produção |
+| 🏆 Pedidos Concluídos | `concluidos` | Já saiu da arte para a produção — ou foi cancelado. É o **arquivo**, e o único card paginado |
 
 Quem decide em qual card cada pedido cai é **`classificarPedidoNaArte(os)`**,
 que devolve `{ statusCalculado, fila }`. Ela lê quatro fontes — `propostas`,
@@ -54,9 +54,12 @@ contando o que existe de verdade nas 8.268 propostas:
 > terços do ERP inteiro — o pedido mais recente do dia costuma estar em
 > `LIBERADO`. Pôr qualquer um dos dois na lista esvaziaria a Lista de Arte.
 >
-> `CANCELADO` (32) também fica de fora, mas por outro motivo: pedido cancelado
-> não *saiu* da arte, ele deixou de existir, e "Pedidos Concluídos" é card de
-> trabalho feito.
+> `CANCELADO` (32) também fica de fora **desta lista** — mas cai no card
+> Concluídos por outro caminho, o `pedidoCancelado`, por regra do usuário em
+> 28/08/2026. Fora daqui porque esta lista faz duas coisas: diz em que card o
+> pedido cai **e** abre a porta dos painéis (`pedidosJaNaGrafica`). Pôr
+> `CANCELADO` aqui mandaria para a Fila de Arte, a de Produção e o Acabamento
+> todos os cancelados do ERP, inclusive os que a gráfica nunca viu.
 >
 > `IMPRESSO` e `ENTREGUE` entram sem existir ainda em `status_interno`: são
 > inequívocas, e são as palavras que o operador espera que funcionem.
@@ -315,6 +318,63 @@ empatado. Pedido sem número vai para o fim, em vez de virar zero e encabeçar.
 A regra está presa à **base** dos concluídos (`listaEhDosConcluidos`), e não ao
 card aceso: com um filtro de estágio ligado o card continua aceso mas a lista já
 é outra, e ali vale a ordem da fila de trabalho.
+
+---
+
+## O histórico não é recortado (01/09/2026)
+
+Começou com uma pergunta do usuário: *"na lista de arte, no card Pedidos
+Concluídos, por que não aparece o pedido 21347?"*. Ele estava no banco, em
+`EXPEDICAO`, com arte lançada — e não aparecia em painel nenhum. A resposta dele
+ao diagnóstico abriu a mudança inteira: **todos os pedidos que já tiveram arte
+devem aparecer no card**, o card deve ser **paginado de 30 em 30**, e **toda
+arte já feita tem de estar disponível na pesquisa**.
+
+### Por que o 21347 sumia
+
+A `state.ordens` era montada percorrendo `produtos_proposta`. Um pedido sem
+nenhuma linha ali jamais era construído — e como as três telas desenham a mesma
+`state.ordens`, ele desaparecia das três de uma vez.
+
+A porta (`pedidoEntraNoPainel`) já o aceitava desde 24/08/2026; o que faltava era
+alguém montá-lo. Pior: a própria porta estava fechada por dentro, porque
+`pedidosJaNaGrafica` é montado a partir das propostas lidas, e essas eram
+buscadas pelos números que apareciam em `produtos_proposta`.
+
+Hoje o `loadOrdensFromVibecode` lê as propostas de **três origens** unidas por
+`id_int` — quem tem produto, quem tem arte (`pedidos_artes`) e quem já está na
+gráfica pela palavra do ERP (uma consulta por `status_interno`, e não por lista
+de números: é a única que descobre o pedido que as outras duas não conhecem).
+Depois de agrupar os produtos, as propostas que sobraram viram pedido pela mesma
+`criarOS`, com zero itens.
+
+> [!NOTE]
+> Pedido com **zero itens** na coluna Itens é a verdade do que o ERP tem, e é
+> melhor do que a ausência dele — a mesma escolha de 24/08/2026. Eram dois
+> pedidos assim em 01/09/2026: o 21347 e o 21085, os dois em expedição.
+
+### A paginação
+
+Só o card Concluídos é paginado, de **30 em 30** (`CONCLUIDOS_POR_PAGINA`). Os
+outros três são fila de trabalho: o designer precisa ver de uma vez tudo o que
+tem pela frente, e são poucas dezenas. Concluídos é arquivo, cresce para sempre
+e nunca volta a diminuir.
+
+O rodapé (`desenharPaginacaoArte`, no `#paginacao-arte` das duas páginas) repete
+o desenho que o Ideal Control já usa nos ingressos de um setor — "← Anteriores |
+Página N de M | Próximos →" —, com o total de pedidos ao lado.
+
+> [!IMPORTANT]
+> **O recorte é o último passo: filtrar, ordenar, só então cortar.** Por isso o
+> contador do topo continua dizendo quantos pedidos a busca achou no histórico
+> inteiro, e por isso a pesquisa alcança toda arte já feita, mesmo a que está na
+> página 12. Subir o `slice` para antes do filtro faria a busca enxergar apenas
+> a página aberta — o mesmo defeito que esta mudança veio consertar, de outro
+> jeito. O harness `tests/historico_de_artes_harness.js` trava essa ordem.
+
+Trocar qualquer filtro volta para a primeira página. A comparação é feita por uma
+**assinatura** dos filtros dentro do `renderOrdens`, e não em cada botão: um
+filtro novo amanhã já nasce zerando a página sem ninguém precisar lembrar disso.
 
 ---
 

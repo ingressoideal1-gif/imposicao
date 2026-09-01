@@ -431,7 +431,45 @@ precisam da mesma função.
 
 ---
 
-## 6. O que foi retirado da tela
+## 6. O box "Últimos Pedidos do Cliente"
+
+A coluna da direita do Pedido tem um box com o histórico do cliente: cada cartão
+é um pedido dele, com o número, a data e o nome do evento, e clicar num cartão
+troca a tela para aquele pedido (`selecionarPedidoDoCliente`). O pedido aberto
+fica marcado com o selo **ATUAL**, para haver caminho de volta.
+
+Ele mostrava **os 6 últimos e parava ali**. Pedido do usuário em 01/09/2026, na
+mesma conversa que tirou o recorte do card "Pedidos Concluídos": *"o box
+'Últimos Pedidos do Cliente' deve ter todos os pedidos do cliente disponíveis
+para consulta e visualização"*.
+
+Hoje o histórico inteiro vem numa consulta só e fica na memória do box
+(`state.historicoCliente[osId]`); **página e busca são recorte de desenho**. São
+duas colunas por linha, e o maior cliente da casa tem 326 pedidos: cabe de
+sobra, e evita uma ida ao banco a cada clique em "Próximos".
+
+| Controle | O que faz |
+|---|---|
+| Campo de busca | Procura por **número do pedido** ou **nome do evento**, em todos os pedidos do cliente — não só na página aberta. Casa sem acento: `sao joao` acha `São João` |
+| ← Anteriores / Próximos → | 6 por página (`ULTIMOS_PEDIDOS_POR_PAGINA`), com `N/M · X pedidos` no meio |
+
+### Quem é "o cliente"
+
+Pelo **número** do cliente no ERP (`id_cliente` e `id_faturado`) **e** pelo
+nome, unidos. Só pelo nome erraria nos dois sentidos: `ilike '%Silva%'` traz o
+pedido de outro Silva, e perde o pedido do mesmo cliente cadastrado com o nome
+escrito de outro jeito. Só pelo número perderia a proposta antiga, gravada antes
+de o parceiro preencher `id_cliente`. A união é o que responde "todos" sem
+mentir.
+
+> [!NOTE]
+> A barra de busca é desenhada **uma vez**, e só a lista embaixo dela se
+> redesenha (`desenharUltimosPedidos`). Refazer o container inteiro a cada
+> página tiraria o cursor de dentro do campo no meio da digitação.
+
+---
+
+## 7. O que foi retirado da tela
 
 - **Regra de Paginação** (o seletor no topo) e o **Formato do produto** — o
   usuário circulou os dois numa captura e disse: *"esses 2 drops não devem
@@ -448,7 +486,7 @@ precisam da mesma função.
 
 ---
 
-## 7. Testes que travam esta tela
+## 8. Testes que travam esta tela
 
 | Harness (Chrome de verdade) | Verificações | O que trava |
 |---|---|---|
@@ -467,7 +505,7 @@ Todos os harnesses **extraem as funções do arquivo de verdade pelo nome**
 
 ---
 
-## 8. Armadilha conhecida: um dado com dois nomes
+## 9. Armadilha conhecida: um dado com dois nomes
 
 `state.pedidoAberto` (o pedido) e `activeOSItem` (o modelo aberto) são coisas
 diferentes e foram confundidas uma vez. O `renderPedOSQueue()` lê
@@ -476,7 +514,7 @@ está aberto, que é exatamente o estado inicial da tela depois da reforma.
 
 ---
 
-## 9. O que ficou em aberto
+## 10. O que ficou em aberto
 
 **Um INP de 2.105 ms num clique de `span`.** O usuário capturou no DevTools da
 estação: `span click 2.105,3ms · render 52,2ms · total 2.157,9ms`. Investigação

@@ -25589,18 +25589,62 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         if (!produtos || produtos.length === 0) return false;
 
         // Buscar propostas (tabela pai) se existir e for acessível
+        //
+        // ## Por que a leitura não se limita aos pedidos que têm produto
+        //
+        // Até 01/09/2026 esta consulta perguntava só pelos `id_int` que
+        // apareciam em `produtos_proposta`, e isso deixava a porta dos painéis
+        // fechada por dentro: `pedidosJaNaGrafica` é montado a partir DESTAS
+        // linhas, então um pedido sem produto nunca chegava aqui, nunca entrava
+        // no conjunto "já está na gráfica" e nunca era desenhado — mesmo com o
+        // ERP dizendo EXPEDIÇÃO.
+        //
+        // Foi o caso do pedido 21347, levantado pelo usuário: proposta em
+        // EXPEDIÇÃO, com arte lançada, e invisível em todos os três painéis.
+        //
+        // São três origens, unidas por `id_int`:
+        //   1. quem tem produto     — a consulta de sempre;
+        //   2. quem tem arte        — `pedidos_artes`, que é o que "já teve arte
+        //      feita" quer dizer neste projeto (`state.todasArtes`);
+        //   3. quem já está na gráfica — pela palavra do ERP, sem depender de
+        //      produto nem de arte (`SINAIS_SAIU_DA_ARTE`).
+        //
+        // A terceira é consulta por STATUS, e não por lista de números: é
+        // justamente a que descobre pedido que nenhuma das outras duas conhece.
         let propostas = [];
+        const COLUNAS_PROPOSTA = 'id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado, frete_escolhido';
         try {
-            const uniqueIdInts = [...new Set(produtos.map(p => p.id_int).filter(Boolean))];
+            const idsComProduto = produtos.map(p => p.id_int).filter(Boolean);
+            const idsComArte = (state.todasArtes || []).map(a => a.id_int).filter(Boolean);
+            const uniqueIdInts = [...new Set([...idsComProduto, ...idsComArte])];
+
+            const porNumero = new Map();
+            const guardar = (linhas) => (linhas || []).forEach(l => {
+                if (l && l.id_int != null) porNumero.set(String(l.id_int), l);
+            });
+
             if (uniqueIdInts.length > 0) {
                 const { data: propData, error: propError } = await vibeClient
                     .from('propostas')
-                    .select('id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado, frete_escolhido')
+                    .select(COLUNAS_PROPOSTA)
                     .in('id_int', uniqueIdInts);
-                if (!propError && propData) {
-                    propostas = propData;
-                }
+                if (!propError) guardar(propData);
             }
+
+            // Quem o ERP já mandou para a gráfica, tendo produto ou não.
+            //
+            // Do maior número para o menor de propósito: o PostgREST corta a
+            // resposta num teto de linhas, e se um dia esta consulta encostar
+            // nele o que fica de fora tem de ser o pedido mais antigo — não o
+            // que a gráfica está fabricando hoje. São 82 pedidos em 01/09/2026.
+            const { data: naGraficaData, error: naGraficaErr } = await vibeClient
+                .from('propostas')
+                .select(COLUNAS_PROPOSTA)
+                .in('status_interno', SINAIS_SAIU_DA_ARTE)
+                .order('id_int', { ascending: false });
+            if (!naGraficaErr) guardar(naGraficaData);
+
+            propostas = [...porNumero.values()];
         } catch (pe) {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
@@ -25633,7 +25677,14 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // abre com milhares de pedidos.
         let rastreioPorPedido = {};
         try {
-            const idsParaPrazo = [...new Set(produtos.map(p => p.id_int).filter(Boolean))];
+            // Os mesmos pedidos da consulta de propostas acima — inclusive os
+            // que não têm produto. Sem isso o pedido sem produto entraria na
+            // lista sem prazo e sem código de rastreio, que é justamente a
+            // informação que a expedição procura nele.
+            const idsParaPrazo = [...new Set([
+                ...produtos.map(p => p.id_int),
+                ...propostas.map(pr => pr.id_int),
+            ].filter(Boolean))];
             if (idsParaPrazo.length > 0) {
                 const { data: osData, error: osError } = await vibeClient
                     .from('propostas_os')
@@ -25660,6 +25711,66 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
+
+        // Monta a OS a partir da PROPOSTA. O produto entra só como data de
+        // criação, porque é o único campo dele que a OS usa — e é por isso que
+        // um pedido sem produto nenhum consegue nascer aqui do mesmo jeito,
+        // com a data da própria proposta no lugar.
+        const criarOS = (key, createdAt) => {
+            const osId = `vibe_${key}`;
+            const dbStatusArte = state.linksClienteData && state.linksClienteData[osId] && state.linksClienteData[osId].status_arte;
+            const savedStatus = lerStatusOverride(osId) || dbStatusArte;
+
+            // Buscar dados reais da proposta
+            const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
+
+            // Buscar dados do pedido comercial
+            const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
+
+            // Mapear campos com fallbacks determinísticos
+            const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || '';
+            const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
+            const nascimento = createdAt || propReal?.created_at || null;
+            const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || nascimento;
+            const prazoEntrega = prazosPorPedido[String(key)] || null;
+
+            // Dados comerciais reais
+            const dataPedido = pedidoReal?.data_pedido || null;
+            const valorTotal = pedidoReal?.valor_total || null;
+
+            return {
+                id: osId,
+                numero: key,
+                status: savedStatus || 'Em Arte',
+                status_arte: pedidoReal?.status_arte || null,
+                status_interno: propReal?.status_interno || null,
+                cliente: cliente,
+                vendedor: vendedor,
+                id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
+                // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
+                // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
+                // existe, porque serve para buscar dados de faturamento e para casar as
+                // numerações do cliente. Os dois quase sempre coincidem, mas divergem
+                // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                numero_cliente: propReal?.id_cliente ?? null,
+                data_liberacao: dataLiberacao,
+                data_pedido: dataPedido,
+                valor_total: valorTotal,
+                prazo_entrega: prazoEntrega,
+                // O número do conhecimento, quando o pedido já foi postado.
+                // Quem o mostra é a coluna Frete do Painel do Acabamento.
+                codigo_rastreamento: rastreioPorPedido[String(key)] || null,
+                frete_escolhido: propReal?.frete_escolhido || null,
+                observacoes: `Proposta #${key} -- Vibecode`,
+                criado_por: null,
+                created_at: nascimento,
+                updated_at: nascimento,
+                _itens_count: 0,
+                _source: 'vibecode',
+                _itens_raw: []
+            };
+        };
+
         produtos.forEach(p => {
             const key = p.id_int;
 
@@ -25670,60 +25781,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 }
             }
 
-            if (!grouped[key]) {
-                const osId = `vibe_${key}`;
-                const dbStatusArte = state.linksClienteData && state.linksClienteData[osId] && state.linksClienteData[osId].status_arte;
-                const savedStatus = lerStatusOverride(osId) || dbStatusArte;
-
-
-                // Buscar dados reais da proposta
-                const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
-                
-                // Buscar dados do pedido comercial
-                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
-
-                // Mapear campos com fallbacks determinísticos
-                const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || '';
-                const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
-                const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
-                const prazoEntrega = prazosPorPedido[String(key)] || null;
-
-                // Dados comerciais reais
-                const dataPedido = pedidoReal?.data_pedido || null;
-                const valorTotal = pedidoReal?.valor_total || null;
-
-                grouped[key] = {
-                    id: osId,
-                    numero: key,
-                    status: savedStatus || 'Em Arte',
-                    status_arte: pedidoReal?.status_arte || null,
-                    status_interno: propReal?.status_interno || null,
-                    cliente: cliente,
-                    vendedor: vendedor,
-                    id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
-                    // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
-                    // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
-                    // existe, porque serve para buscar dados de faturamento e para casar as
-                    // numerações do cliente. Os dois quase sempre coincidem, mas divergem
-                    // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
-                    numero_cliente: propReal?.id_cliente ?? null,
-                    data_liberacao: dataLiberacao,
-                    data_pedido: dataPedido,
-                    valor_total: valorTotal,
-                    prazo_entrega: prazoEntrega,
-                    // O número do conhecimento, quando o pedido já foi postado.
-                    // Quem o mostra é a coluna Frete do Painel do Acabamento.
-                    codigo_rastreamento: rastreioPorPedido[String(key)] || null,
-                    frete_escolhido: propReal?.frete_escolhido || null,
-                    observacoes: `Proposta #${key} -- Vibecode`,
-                    criado_por: null,
-                    created_at: p.created_at,
-                    updated_at: p.updated_at || p.created_at,
-                    _itens_count: 0,
-                    _source: 'vibecode',
-                    _itens_raw: []
-                };
-            }
+            if (!grouped[key]) grouped[key] = criarOS(key, p.created_at);
             grouped[key]._itens_count++;
             grouped[key]._itens_raw.push(p);
 
@@ -25731,6 +25789,25 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             if (p.updated_at && p.updated_at > grouped[key].updated_at) {
                 grouped[key].updated_at = p.updated_at;
             }
+        });
+
+        // ── O pedido que passa na porta mas não tem produto ─────────────────
+        //
+        // O laço acima percorre PRODUTOS, então quem não tem nenhum jamais era
+        // montado — e some das três telas por inteiro, mesmo com arte lançada e
+        // com o ERP dizendo que o material é da gráfica. A porta
+        // (`pedidoEntraNoPainel`) já o aceitava desde 24/08/2026; o que faltava
+        // era alguém construí-lo.
+        //
+        // Ele entra com zero itens, que é a verdade do que o ERP tem: a coluna
+        // Itens mostra 0 e a linha abre normalmente. Preferir a linha com zero
+        // itens à ausência dela é a mesma escolha de 24/08 — pedido fabricado e
+        // invisível é pior do que pedido visível e incompleto.
+        (propostas || []).forEach(pr => {
+            const key = pr.id_int;
+            if (!key || grouped[key]) return;
+            if (!pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) return;
+            grouped[key] = criarOS(key, pr.created_at);
         });
 
         // Converter para array ordenado por número (desc)
@@ -28203,6 +28280,60 @@ function ordenarConcluidosDoMaisNovo(lista) {
 }
 window.ordenarConcluidosDoMaisNovo = ordenarConcluidosDoMaisNovo;
 
+// ──── Rodapé de páginas do card "Pedidos Concluídos" ──────────────────────
+//
+// O mesmo desenho da paginação que o Ideal Control já usa nos ingressos de um
+// setor ("← Anteriores | Página N | Próximos →"): duas telas do mesmo sistema
+// não devem virar páginas de dois jeitos diferentes.
+//
+// A diferença é que aqui o total é conhecido — a lista inteira está na memória,
+// e o recorte é só de desenho —, então dá para dizer "Página 2 de 4" e quantos
+// pedidos o filtro achou. Quem pagina no servidor não sabe o total e por isso
+// só consegue dizer se há mais.
+
+/** Desenha (ou esconde) o rodapé de páginas embaixo da tabela de arte. */
+function desenharPaginacaoArte(visivel, pagina, totalPaginas, totalPedidos) {
+    const caixa = document.getElementById('paginacao-arte');
+    if (!caixa) return;
+
+    // Uma página só não é paginação: o rodapé sumiria de qualquer jeito, e
+    // mostrá-lo vazio só ocuparia espaço embaixo da lista.
+    if (!visivel || totalPaginas <= 1) {
+        caixa.innerHTML = '';
+        caixa.style.display = 'none';
+        return;
+    }
+
+    caixa.style.display = 'flex';
+    const anterior = pagina > 1
+        ? `<button class="btn btn-sm btn-ghost" id="arte-pagina-anterior" onclick="irParaPaginaConcluidos(${pagina - 1})">← Anteriores</button>`
+        : '';
+    const proxima = pagina < totalPaginas
+        ? `<button class="btn btn-sm btn-ghost" id="arte-pagina-proxima" onclick="irParaPaginaConcluidos(${pagina + 1})">Próximos →</button>`
+        : '';
+
+    caixa.innerHTML = `
+        ${anterior}
+        <span style="font-size: 0.85rem; color: var(--text-dim);">
+            Página <strong>${pagina}</strong> de <strong>${totalPaginas}</strong>
+            · ${totalPedidos} ${totalPedidos === 1 ? 'pedido' : 'pedidos'} no histórico
+        </span>
+        ${proxima}
+    `;
+}
+window.desenharPaginacaoArte = desenharPaginacaoArte;
+
+/** Vai para a página pedida do card "Pedidos Concluídos" e redesenha a lista. */
+function irParaPaginaConcluidos(pagina) {
+    state.paginaConcluidos = Math.max(1, parseInt(pagina) || 1);
+    renderOrdens();
+    // A lista fica acima do rodapé: sem isto, clicar em "Próximos" deixaria o
+    // operador olhando para o fim da página nova em vez do começo dela.
+    const tabela = document.getElementById('table-arte');
+    if (tabela && tabela.scrollIntoView) tabela.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.irParaPaginaConcluidos = irParaPaginaConcluidos;
+
 /** "01:05". Passando de um dia continua em horas ("26:30"), sem virar "2d 2h". */
 function formatarTempoNoCard(segundos) {
     const s = Math.max(0, Math.floor(segundos || 0));
@@ -28797,6 +28928,52 @@ function renderOrdens() {
     const countArte = document.getElementById('os-arte-count-badge');
     if (countArte) countArte.textContent = `${filteredArte.length} ${filteredArte.length === 1 ? 'Pedido' : 'Pedidos'}`;
 
+    // ── Paginação do card "Pedidos Concluídos" ──────────────────────────────
+    //
+    // Só este card é paginado, e de propósito: os outros três são fila de
+    // trabalho — o designer precisa ver de uma vez tudo o que tem pela frente,
+    // e são poucas dezenas. Concluídos é o arquivo, cresce para sempre e nunca
+    // volta a diminuir.
+    //
+    // O recorte é o ÚLTIMO passo, depois de filtrar e ordenar. Por isso o
+    // contador acima segue mostrando quantos pedidos a busca achou no histórico
+    // inteiro, e não quantos couberam na página — e por isso a pesquisa alcança
+    // toda arte já feita, mesmo a que está na página 12.
+    const CONCLUIDOS_POR_PAGINA = 30;
+    let arteNaTela = filteredArte;
+    let totalPaginasArte = 1;
+
+    if (listaEhDosConcluidos) {
+        // Trocar de filtro tem de voltar para a primeira página: continuar na
+        // página 7 depois de uma busca nova mostraria uma tela vazia com
+        // resultados existindo atrás dela. A assinatura é comparada aqui, e não
+        // em cada botão de filtro, para que um filtro novo amanhã já nasça
+        // zerando a página sem ninguém precisar lembrar disso.
+        const assinatura = JSON.stringify([
+            activeFilaTipo,
+            searchArte,
+            filterDesigner,
+            document.getElementById('os-filter-atendente')?.value || '',
+            state.filtroSetorArte || '',
+            state.filtroStatusArte || '',
+        ]);
+        if (state._assinaturaPaginaArte !== assinatura) {
+            state._assinaturaPaginaArte = assinatura;
+            state.paginaConcluidos = 1;
+        }
+
+        totalPaginasArte = Math.max(1, Math.ceil(filteredArte.length / CONCLUIDOS_POR_PAGINA));
+        // Preso à faixa válida: a lista encolhe sozinha quando um pedido muda de
+        // card, e a página guardada pode ter deixado de existir.
+        const pagina = Math.min(Math.max(1, parseInt(state.paginaConcluidos) || 1), totalPaginasArte);
+        state.paginaConcluidos = pagina;
+
+        const inicio = (pagina - 1) * CONCLUIDOS_POR_PAGINA;
+        arteNaTela = filteredArte.slice(inicio, inicio + CONCLUIDOS_POR_PAGINA);
+    }
+
+    desenharPaginacaoArte(listaEhDosConcluidos, state.paginaConcluidos || 1, totalPaginasArte, filteredArte.length);
+
     // Filtros já foram populados no início de renderOrdens() para consistência do filterDesigner.
 
 
@@ -28912,7 +29089,7 @@ function renderOrdens() {
         const emptyArte = document.getElementById('empty-arte');
         const tableArte = document.getElementById('table-arte');
 
-        if (!filteredArte.length) {
+        if (!arteNaTela.length) {
             tbodyArte.innerHTML = '';
             // A frase segue a fila escolhida. "Nenhum pedido em fase de arte"
             // debaixo do card de Concluídos diria a coisa errada sobre a coisa
@@ -28933,7 +29110,7 @@ function renderOrdens() {
             // A regra "todos os modelos prontos -> Enviar Arte" ficava aqui e gravava no
             // banco de dentro da renderização. Mudou para sincronizarPedidosProntosParaEnvio(),
             // que roda no carregamento: renderOrdens() agora só desenha.
-            tbodyArte.innerHTML = filteredArte.map(os => {
+            tbodyArte.innerHTML = arteNaTela.map(os => {
                 const itensReais = (state.modelosGlobais && state.modelosGlobais[os.numero]) ? state.modelosGlobais[os.numero] : [];
                 // Se ainda não houver modelos criados no bd para essa OS, ele cai para o número de produtos
                 const itensCount = itensReais.length > 0 ? itensReais.length : (os._itens_count || 0);
@@ -37557,129 +37734,285 @@ async function selecionarPedidoDoCliente(targetNum, clienteNome) {
 }
 window.selecionarPedidoDoCliente = selecionarPedidoDoCliente;
 
+// ──── Histórico de pedidos do cliente, no box do Pedido ───────────────────
+//
+// O box mostrava os 6 últimos do cliente e parava ali. Pedido do usuário em
+// 01/09/2026: TODOS os pedidos do cliente têm de estar disponíveis para
+// consulta e visualização — o mesmo princípio que nesse dia tirou o recorte do
+// card "Pedidos Concluídos".
+//
+// O histórico inteiro vem numa consulta só e fica na memória do box; página e
+// busca são recorte de desenho. São duas colunas por linha e o maior cliente da
+// casa tem 326 pedidos: cabe de sobra, e evita uma ida ao banco a cada clique
+// em "Próximos".
+//
+// ## Quem é "o cliente"
+//
+// Pelo NÚMERO do cliente no ERP **e** pelo nome, unidos. Só pelo nome erraria
+// nos dois sentidos: `ilike '%Silva%'` traz o pedido de outro Silva, e perde o
+// pedido do mesmo cliente cadastrado com o nome escrito de outro jeito. Só pelo
+// número perderia a proposta antiga, gravada antes de o parceiro preencher
+// `id_cliente`. A união é o que responde "todos" sem mentir.
+//
+// `id_faturado` entra junto porque os dois divergem de verdade — ver o
+// comentário do `numero_cliente` em `loadOrdensFromVibecode`.
+
+const ULTIMOS_PEDIDOS_POR_PAGINA = 6;
+
 async function loadUltimosPedidos(osId, clienteNome) {
     const currentOS = state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(osId) || String(o.id_int) === String(osId)) : null;
     const currentNumInt = currentOS ? parseInt(currentOS.numero || currentOS.id_int || osId) : parseInt(osId);
 
-    // Se clienteNome estiver ausente ou for 'Cliente', buscar nome real na tabela de propostas no banco
-    if ((!clienteNome || clienteNome.trim().toLowerCase() === 'cliente') && currentNumInt && typeof supabaseClient !== 'undefined') {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    // O nome e o número do cliente saem da própria proposta do pedido aberto.
+    // A consulta acontece quando falta qualquer um dos dois: o número não vinha
+    // de lugar nenhum antes desta mudança.
+    let numeroCliente = currentOS ? (currentOS.numero_cliente ?? currentOS.id_cliente ?? null) : null;
+    let idFaturado = currentOS ? (currentOS.id_cliente ?? null) : null;
+    const nomeVazio = !clienteNome || clienteNome.trim().toLowerCase() === 'cliente';
+
+    if ((nomeVazio || numeroCliente == null) && currentNumInt && !isNaN(currentNumInt)) {
         try {
             const { data: pProp } = await supabaseClient
                 .from('propostas')
-                .select('cliente')
+                .select('cliente, id_cliente, id_faturado')
                 .eq('id_int', currentNumInt)
                 .maybeSingle();
-            if (pProp && pProp.cliente) {
-                clienteNome = pProp.cliente;
-                if (currentOS) currentOS.cliente = pProp.cliente;
+            if (pProp) {
+                if (pProp.cliente && nomeVazio) {
+                    clienteNome = pProp.cliente;
+                    if (currentOS) currentOS.cliente = pProp.cliente;
+                }
+                if (numeroCliente == null) numeroCliente = pProp.id_cliente ?? null;
+                if (idFaturado == null) idFaturado = pProp.id_faturado ?? null;
             }
         } catch (e) {}
     }
 
-    if (!clienteNome || typeof supabaseClient === 'undefined') return;
-    
+    const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+    if (!container) return;
+
+    if (!clienteNome && numeroCliente == null && idFaturado == null) {
+        container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px;">Não foi possível identificar o cliente deste pedido.</div>`;
+        return;
+    }
+
     try {
-        console.log("Buscando histórico para o cliente:", clienteNome);
+        console.log('Buscando histórico para o cliente:', clienteNome, '(nº', numeroCliente, ')');
 
-        // 1. Buscar os últimos pedidos em propostas para este cliente
-        const { data: propostasData, error: errProp } = await supabaseClient
-            .from('propostas')
-            .select('id_int, created_at')
-            .ilike('cliente', `%${clienteNome.trim()}%`)
-            .order('created_at', { ascending: false })
-            .limit(6);
-            
-        if (errProp) throw errProp;
-        let propostas = propostasData || [];
+        const porNumeroDoPedido = new Map();
+        const guardar = (linhas) => (linhas || []).forEach(l => {
+            if (l && l.id_int != null) porNumeroDoPedido.set(String(l.id_int), l);
+        });
 
-        // Garantir que o pedido atual esteja presente na listagem para permitir retornar a ele
-        if (currentNumInt && !isNaN(currentNumInt) && !propostas.some(p => p.id_int === currentNumInt)) {
-            propostas.unshift({
+        // 1a. Pelo número do cliente no ERP (inclui o de faturamento).
+        const idsDoCliente = [...new Set([numeroCliente, idFaturado].filter(v => v != null))];
+        if (idsDoCliente.length) {
+            const filtro = idsDoCliente
+                .map(id => `id_cliente.eq.${id},id_faturado.eq.${id}`)
+                .join(',');
+            const { data, error } = await supabaseClient
+                .from('propostas')
+                .select('id_int, created_at, cliente')
+                .or(filtro)
+                .order('created_at', { ascending: false })
+                .limit(1000);
+            if (!error) guardar(data);
+        }
+
+        // 1b. E pelo nome, para não perder a proposta antiga sem número.
+        if (clienteNome && clienteNome.trim()) {
+            const { data, error } = await supabaseClient
+                .from('propostas')
+                .select('id_int, created_at, cliente')
+                .ilike('cliente', `%${clienteNome.trim()}%`)
+                .order('created_at', { ascending: false })
+                .limit(1000);
+            if (!error) guardar(data);
+        }
+
+        let pedidos = [...porNumeroDoPedido.values()]
+            .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+
+        // O pedido aberto tem de estar na lista, sempre: é por ele que se
+        // volta depois de espiar outro.
+        if (currentNumInt && !isNaN(currentNumInt) && !pedidos.some(p => p.id_int === currentNumInt)) {
+            pedidos.unshift({
                 id_int: currentNumInt,
-                created_at: currentOS?.created_at || new Date().toISOString()
+                created_at: currentOS?.created_at || new Date().toISOString(),
+                cliente: clienteNome || '',
             });
         }
-        
-        if (!propostas || propostas.length === 0) {
-            const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
-            if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px;">Nenhum pedido anterior encontrado para<br><strong>${clienteNome}</strong></div>`;
-            return;
-        }
-        
-        const idInts = propostas.map(p => p.id_int);
-        
-        // 2. Buscar dados dos eventos na tabela pedidos_artes
-        const { data: artes, error: errArtes } = await supabaseClient
-            .from('pedidos_artes')
-            .select('id_int, nome_evento, data_evento')
-            .in('id_int', idInts);
-            
-        if (errArtes && errArtes.code !== '42P01') throw errArtes;
-        
+
+        // 2. O nome do evento de cada pedido, para a busca e para o cartão.
+        //    Em blocos: a lista de números pode passar de trezentos.
         const eventoMap = {};
-        if (artes) {
-            artes.forEach(a => {
-                if (a.nome_evento || a.data_evento) {
-                    if (!eventoMap[a.id_int]) eventoMap[a.id_int] = a;
-                }
+        const numeros = pedidos.map(p => p.id_int).filter(Boolean);
+        for (let i = 0; i < numeros.length; i += 200) {
+            const bloco = numeros.slice(i, i + 200);
+            const { data: artes, error: errArtes } = await supabaseClient
+                .from('pedidos_artes')
+                .select('id_int, nome_evento, data_evento')
+                .in('id_int', bloco);
+            if (errArtes) {
+                if (errArtes.code === '42P01') break;  // tabela não existe
+                throw errArtes;
+            }
+            (artes || []).forEach(a => {
+                if ((a.nome_evento || a.data_evento) && !eventoMap[a.id_int]) eventoMap[a.id_int] = a;
             });
         }
-        
-        const safeClienteName = clienteNome.replace(/'/g, "\\'");
 
-        // 3. Montar HTML de exibição interativo com clique e destaque do pedido atual
-        const html = propostas.map(p => {
-            const ev = eventoMap[p.id_int] || {};
-            const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
-            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.82rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
-            let dataCriacao = '';
-            if (p.created_at) {
-                const d = new Date(p.created_at);
-                dataCriacao = d.toLocaleDateString('pt-BR');
-            }
+        if (!state.historicoCliente) state.historicoCliente = {};
+        state.historicoCliente[osId] = {
+            pedidos,
+            eventoMap,
+            clienteNome: clienteNome || '',
+            currentNumInt,
+            pagina: 1,
+            busca: '',
+        };
 
-            const isCurrent = (p.id_int === currentNumInt || String(p.id_int) === String(osId));
+        // A barra de busca é desenhada UMA vez, e a lista embaixo dela é que se
+        // redesenha. Refazer o container inteiro a cada página tiraria o cursor
+        // de dentro do campo no meio da digitação.
+        container.innerHTML = `
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="text" id="ultimos-pedidos-busca-${osId}"
+                       placeholder="Procurar por nº do pedido ou evento"
+                       onkeydown="if (event.key === 'Enter') { event.preventDefault(); buscarUltimosPedidos('${osId}'); }"
+                       style="flex: 1; min-width: 0; padding: 7px 10px; font-size: 0.82rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text);">
+                <button class="btn btn-sm btn-outline" onclick="buscarUltimosPedidos('${osId}')"
+                        style="font-size: 0.78rem; white-space: nowrap;">Procurar</button>
+            </div>
+            <div id="ultimos-pedidos-lista-${osId}" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        `;
+        desenharUltimosPedidos(osId);
 
-            const borderStyle = isCurrent 
-                ? '2px solid #14b8a6' 
-                : '1px solid var(--border)';
-            const bgStyle = isCurrent 
-                ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.14), rgba(6, 182, 212, 0.2))' 
-                : 'rgba(0,0,0,0.015)';
-            const shadowStyle = isCurrent 
-                ? '0 2px 10px rgba(20, 184, 166, 0.25)' 
-                : 'none';
-
-            return `
-                <div onclick="selecionarPedidoDoCliente(${p.id_int}, '${safeClienteName}')" 
-                     title="${isCurrent ? 'Pedido Atual Exibido' : 'Clique para alternar para o Pedido #' + p.id_int}"
-                     style="padding: 12px; border: ${borderStyle}; border-radius: 8px; background: ${bgStyle}; box-shadow: ${shadowStyle}; cursor: pointer; transition: all 0.2s ease;"
-                     onmouseover="${!isCurrent ? "this.style.borderColor='#14b8a6'; this.style.transform='translateY(-2px)';" : ''}"
-                     onmouseout="${!isCurrent ? "this.style.borderColor='var(--border)'; this.style.transform='none';" : ''}">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-weight: 800; font-size: 0.95rem; color: ${isCurrent ? '#14b8a6' : 'var(--primary)'};">
-                            #${p.id_int}
-                            ${isCurrent ? `<span style="font-size: 0.65rem; background: #14b8a6; color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; margin-left: 6px;">📍 ATUAL</span>` : ''}
-                        </span>
-                        <span style="font-size: 0.8rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px;">${dataCriacao}</span>
-                    </div>
-                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
-                        ${nome}
-                    </div>
-                    ${dataEv}
-                </div>
-            `;
-        }).join('');
-        
-        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
-        if (container) container.innerHTML = html;
-        
     } catch (e) {
-        console.error("Erro ao carregar últimos pedidos:", e);
-        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
-        if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--red); text-align: center;">Erro ao carregar histórico.</div>`;
+        console.error('Erro ao carregar últimos pedidos:', e);
+        container.innerHTML = `<div style="font-size: 0.8rem; color: var(--red); text-align: center;">Erro ao carregar histórico.</div>`;
     }
 }
+
+/** Sem acento e em minúsculas, para a busca do box casar "São" com "sao". */
+function normalizarBuscaPedido(texto) {
+    return (texto === null || texto === undefined ? '' : String(texto))
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/** Desenha a página atual da lista de pedidos do cliente. */
+function desenharUltimosPedidos(osId) {
+    const dados = state.historicoCliente && state.historicoCliente[osId];
+    const lista = document.getElementById(`ultimos-pedidos-lista-${osId}`);
+    if (!dados || !lista) return;
+
+    const termo = normalizarBuscaPedido(dados.busca).trim();
+    const achados = !termo ? dados.pedidos : dados.pedidos.filter(p => {
+        const ev = dados.eventoMap[p.id_int] || {};
+        return String(p.id_int).includes(termo)
+            || normalizarBuscaPedido(ev.nome_evento).includes(termo);
+    });
+
+    if (!achados.length) {
+        const aviso = termo
+            ? 'Nenhum pedido deste cliente com <strong>' + escapeHtml(dados.busca) + '</strong>.'
+            : 'Nenhum pedido anterior encontrado para<br><strong>' + escapeHtml(dados.clienteNome) + '</strong>';
+        lista.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px;">${aviso}</div>`;
+        return;
+    }
+
+    const totalPaginas = Math.max(1, Math.ceil(achados.length / ULTIMOS_PEDIDOS_POR_PAGINA));
+    const pagina = Math.min(Math.max(1, parseInt(dados.pagina) || 1), totalPaginas);
+    dados.pagina = pagina;
+    const inicio = (pagina - 1) * ULTIMOS_PEDIDOS_POR_PAGINA;
+    const naTela = achados.slice(inicio, inicio + ULTIMOS_PEDIDOS_POR_PAGINA);
+
+    const safeClienteName = (dados.clienteNome || '').replace(/'/g, "\\'");
+
+    const cartoes = naTela.map(p => {
+        const ev = dados.eventoMap[p.id_int] || {};
+        const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
+        const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.82rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${escapeHtml(ev.data_evento)}</div>` : '';
+        let dataCriacao = '';
+        if (p.created_at) {
+            const d = new Date(p.created_at);
+            dataCriacao = d.toLocaleDateString('pt-BR');
+        }
+
+        const isCurrent = (p.id_int === dados.currentNumInt || String(p.id_int) === String(osId));
+
+        const borderStyle = isCurrent
+            ? '2px solid #14b8a6'
+            : '1px solid var(--border)';
+        const bgStyle = isCurrent
+            ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.14), rgba(6, 182, 212, 0.2))'
+            : 'rgba(0,0,0,0.015)';
+        const shadowStyle = isCurrent
+            ? '0 2px 10px rgba(20, 184, 166, 0.25)'
+            : 'none';
+
+        return `
+            <div onclick="selecionarPedidoDoCliente(${p.id_int}, '${safeClienteName}')"
+                 title="${isCurrent ? 'Pedido Atual Exibido' : 'Clique para alternar para o Pedido #' + p.id_int}"
+                 style="padding: 12px; border: ${borderStyle}; border-radius: 8px; background: ${bgStyle}; box-shadow: ${shadowStyle}; cursor: pointer; transition: all 0.2s ease;"
+                 onmouseover="${!isCurrent ? "this.style.borderColor='#14b8a6'; this.style.transform='translateY(-2px)';" : ''}"
+                 onmouseout="${!isCurrent ? "this.style.borderColor='var(--border)'; this.style.transform='none';" : ''}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-weight: 800; font-size: 0.95rem; color: ${isCurrent ? '#14b8a6' : 'var(--primary)'};">
+                        #${p.id_int}
+                        ${isCurrent ? `<span style="font-size: 0.65rem; background: #14b8a6; color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; margin-left: 6px;">📍 ATUAL</span>` : ''}
+                    </span>
+                    <span style="font-size: 0.8rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px;">${dataCriacao}</span>
+                </div>
+                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
+                    ${escapeHtml(nome)}
+                </div>
+                ${dataEv}
+            </div>
+        `;
+    }).join('');
+
+    // O rodapé some quando tudo cabe numa página só — o mesmo critério do
+    // rodapé da Lista de Arte.
+    const rodape = totalPaginas <= 1 ? '' : `
+        <div class="ic-paginacao" style="justify-content: space-between; margin-top: 2px;">
+            ${pagina > 1
+                ? `<button class="btn btn-sm btn-ghost" onclick="irParaPaginaUltimosPedidos('${osId}', ${pagina - 1})" style="font-size: 0.75rem;">← Anteriores</button>`
+                : '<span></span>'}
+            <span style="font-size: 0.75rem; color: var(--text-dim); text-align: center;">
+                ${pagina}/${totalPaginas} · ${achados.length} ${achados.length === 1 ? 'pedido' : 'pedidos'}
+            </span>
+            ${pagina < totalPaginas
+                ? `<button class="btn btn-sm btn-ghost" onclick="irParaPaginaUltimosPedidos('${osId}', ${pagina + 1})" style="font-size: 0.75rem;">Próximos →</button>`
+                : '<span></span>'}
+        </div>
+    `;
+
+    lista.innerHTML = cartoes + rodape;
+}
+window.desenharUltimosPedidos = desenharUltimosPedidos;
+
+/** Aplica o que está escrito no campo de busca do box e volta à 1ª página. */
+function buscarUltimosPedidos(osId) {
+    const dados = state.historicoCliente && state.historicoCliente[osId];
+    if (!dados) return;
+    const campo = document.getElementById(`ultimos-pedidos-busca-${osId}`);
+    dados.busca = campo ? campo.value : '';
+    dados.pagina = 1;
+    desenharUltimosPedidos(osId);
+}
+window.buscarUltimosPedidos = buscarUltimosPedidos;
+
+/** Troca a página do box de pedidos do cliente. */
+function irParaPaginaUltimosPedidos(osId, pagina) {
+    const dados = state.historicoCliente && state.historicoCliente[osId];
+    if (!dados) return;
+    dados.pagina = Math.max(1, parseInt(pagina) || 1);
+    desenharUltimosPedidos(osId);
+}
+window.irParaPaginaUltimosPedidos = irParaPaginaUltimosPedidos;
 
 function updateBriefingUI(osId, osIntId) {
     if (!state.pedidosArtesData) state.pedidosArtesData = {};

@@ -4,6 +4,69 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-01] — O histórico de artes deixa de ser recortado
+
+Começou com uma pergunta: **"na lista de arte, no card 'Pedidos Concluídos', por
+que não aparece o pedido 21347?"**. Ele estava no banco, em `EXPEDICAO`, com arte
+lançada — e não aparecia em painel nenhum.
+
+### Por que ele sumia
+
+A `state.ordens` era montada percorrendo `produtos_proposta`, e o 21347 não tem
+nenhuma linha ali. Um pedido sem produto jamais era construído; como a Fila de
+Arte, a de Produção e o Acabamento desenham a mesma `state.ordens`, ele
+desaparecia das três de uma vez.
+
+A porta (`pedidoEntraNoPainel`) já o aceitava desde 24/08/2026 — mas estava
+fechada por dentro: `pedidosJaNaGrafica` é montado a partir das propostas lidas,
+e essas eram buscadas justamente pelos números que apareciam em
+`produtos_proposta`. Eram dois pedidos assim no banco: o 21347 e o 21085.
+
+### O que o usuário pediu a partir daí
+
+**"Todos os pedidos que já foram realizadas artes devem aparecer no card 'Pedidos
+Concluídos'. Este card deverá ser paginado, mostrando as últimas 30 artes. Mas
+todas as artes já feitas devem estar disponíveis na pesquisa. Assim como na lista
+de itens na edição do pedido, o box 'Últimos Pedidos do Cliente' deve ter todos
+os pedidos do cliente disponíveis para consulta e visualização."**
+
+Duas decisões dele fecharam o desenho: o card reúne quem teve arte e **não está
+mais em nenhuma fila de trabalho** (os quatro cards continuam sem repetir
+pedido), e o box do cliente pagina **dentro do próprio box**.
+
+### O que mudou
+
+1. **A montagem.** As propostas passam a ser lidas de três origens unidas por
+   `id_int`: quem tem produto, quem tem arte (`pedidos_artes`) e quem já está na
+   gráfica pela palavra do ERP — esta última uma consulta por `status_interno`,
+   e não por lista de números, porque é a única que descobre o pedido que as
+   outras duas não conhecem. Depois de agrupar os produtos, as propostas que
+   sobraram viram pedido pela mesma `criarOS`, com zero itens.
+2. **O card Concluídos pagina de 30 em 30**, com o rodapé "← Anteriores | Página
+   N de M | Próximos →" — o mesmo desenho que o Ideal Control já usa nos
+   ingressos de um setor. Só ele: as filas de trabalho continuam inteiras, porque
+   o designer precisa ver de uma vez tudo o que tem pela frente.
+3. **O box "Últimos Pedidos do Cliente"** deixou de buscar só 6. O histórico
+   inteiro vem numa consulta e fica na memória; são 6 por página, com busca por
+   número do pedido ou nome do evento. O cliente é identificado pelo **número**
+   do ERP (`id_cliente` e `id_faturado`) **e** pelo nome, unidos — só pelo nome
+   traria o pedido de outro Silva e perderia o pedido do mesmo cliente escrito de
+   outro jeito.
+
+### A armadilha desta mudança
+
+**O recorte é o último passo: filtrar, ordenar, só então cortar.** Subir o
+`slice` para antes do filtro faria a pesquisa enxergar apenas a página aberta —
+o mesmo defeito de esconder histórico, entrando por outra porta. O contador do
+topo é calculado antes do recorte de propósito, para continuar dizendo quantos
+pedidos a busca achou no histórico inteiro.
+
+`tests/historico_de_artes_harness.js` (37 casos) trava essa ordem, a paginação, a
+busca do box e a presença do rodapé nas **duas** páginas que desenham a Lista de
+Arte — esquecer a `producao.html` deixaria metade das estações sem paginação.
+
+---
+
 ## [2026-08-31] — FxVersoUnico: a frente pagina, o verso é um só
 
 Pedido do usuário: **"na lista de numeração, vamos criar mais um tipo de Modo de
