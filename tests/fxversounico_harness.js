@@ -42,7 +42,8 @@ const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8')
 const INDEX = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 
 function extrairFuncao(src, nome) {
-    const i = src.indexOf('\nfunction ' + nome + '(');
+    let i = src.indexOf('\nfunction ' + nome + '(');
+    if (i < 0) i = src.indexOf('\nasync function ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome);
     const fim = src.indexOf('\n}', i);
     if (fim < 0) throw new Error('nao achei o fim da funcao ' + nome);
@@ -178,7 +179,62 @@ const api = new Function('state', 'window',
     }
 })();
 
-// ─── 7. O inventario das comparacoes cruas ───────────────────────────────────
+// ─── 7. As setas do PDF no card de um modelo com verso ───────────────────────
+
+(function asSetasDoPdfComVerso() {
+    // O DEFEITO (relatado em 31/08/2026, modelo 1000739 do pedido 21408):
+    // "ao utilizar o modo pdf multi-paginas e FxVersoUnico, nao esta mostrando
+    // as setas do seletor de paginas".
+    //
+    // A causa: o card escolhia `item.verso ? (frente e verso) : (modo PDF ? ...)`.
+    // Um modelo que fosse as DUAS coisas caia na primeira, e o
+    // `#amostra-pdf-canvas-N` e o `#amostra-pdf-nav-N` nunca entravam no DOM --
+    // o `renderPdfViewerPage` desistia no canvas que nao existe, e as setas
+    // nunca apareciam. No FxVersoUnico ser as duas coisas e a REGRA: a frente e
+    // um PDF paginado e o verso e um arquivo de uma pagina so.
+    const bloco = new Function('item', 'idx', 'osId', 'escalaArteHtml',
+        extrairFuncao(SCRIPT, 'blocoDeArteDoModelo')
+        + '\nreturn blocoDeArteDoModelo(item, idx, osId, escalaArteHtml);');
+
+    const html = (item) => bloco(item, 0, 'os-1', '');
+
+    const comVersoEPdf = html({ verso: true, verso_tipo: 'FxVerso', modo_pdf: true, arte_url: 'x.pdf' });
+    ok(comVersoEPdf.includes('id="amostra-pdf-nav-0"'),
+        'modelo com verso EM modo PDF ganha a barra das setas');
+    ok(comVersoEPdf.includes('id="amostra-pdf-canvas-0"'),
+        'modelo com verso EM modo PDF ganha o canvas do visualizador');
+    ok(comVersoEPdf.includes('pdfViewerPrevPage(0)') && comVersoEPdf.includes('pdfViewerNextPage(0)'),
+        'as duas setas estao ligadas ao folheador de paginas');
+    // O verso NAO pode sumir junto: e a outra face que o operador aprova, e no
+    // FxVersoUnico ela vem de um arquivo proprio.
+    ok(comVersoEPdf.includes('id="amostra-item-canvas-verso-0"'),
+        'a tela do verso continua no card do modelo em modo PDF');
+
+    const comVersoSemPdf = html({ verso: true, verso_tipo: 'FxVerso', modo_pdf: false });
+    ok(!comVersoSemPdf.includes('id="amostra-pdf-nav-0"'),
+        'modelo com verso FORA do modo PDF nao ganha setas -- nao ha paginas a folhear');
+    ok(comVersoSemPdf.includes('id="amostra-item-canvas-0"')
+        && comVersoSemPdf.includes('id="amostra-item-canvas-verso-0"'),
+        'modelo com verso fora do modo PDF continua com as duas telas de sempre');
+
+    const semVersoComPdf = html({ verso: false, modo_pdf: true, arte_url: 'x.pdf' });
+    ok(semVersoComPdf.includes('id="amostra-pdf-nav-0"'),
+        'modelo so de frente em modo PDF continua com as setas, como sempre teve');
+
+    const semVersoSemPdf = html({ verso: false, modo_pdf: false });
+    ok(!semVersoSemPdf.includes('id="amostra-pdf-nav-0"')
+        && semVersoSemPdf.includes('id="amostra-item-canvas-0"'),
+        'modelo comum continua com a tela unica de sempre');
+
+    // E o outro lado da mesma correcao: a face `back` de um modelo com verso
+    // NAO pode ser mandada ao visualizador da frente -- as duas disputariam o
+    // mesmo canvas e a ultima a desenhar apagaria a outra.
+    const desenho = extrairFuncao(SCRIPT, 'drawAmostraFace');
+    ok(/&& !\(face === 'back' && itemForPdf\.verso\)/.test(desenho),
+        'a face do verso continua fora do visualizador paginado da frente');
+})();
+
+// ─── 8. O inventario das comparacoes cruas ───────────────────────────────────
 
 (function oInventario() {
     // Toda comparacao `printMode === 'duplex'` que sobreviveu no codigo tem de

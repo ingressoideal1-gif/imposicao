@@ -31716,6 +31716,116 @@ window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDad
  * Renderiza os cards de itens do pedido na página de Amostras
  * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
  */
+/**
+ * O bloco de arte do card do modelo: o que aparece embaixo do cabecalho.
+ *
+ * Existe como funcao propria -- e nao solto dentro do template de mil linhas do
+ * `renderAmostrasOSItens` -- pelo mesmo motivo do `blocoDeArteDoCliente` no
+ * `cliente.js`: e a peca que decide QUAIS elementos entram no DOM, e sem poder
+ * chama-la sozinha nao havia como testar essa decisao.
+ *
+ * ## As setas do PDF sumiam quando o modelo tinha verso (31/08/2026)
+ *
+ * A escolha era `item.verso ? (frente e verso) : (modo PDF ? visualizador : tela)`.
+ * Um modelo que fosse as DUAS coisas caia na primeira, e entao o
+ * `#amostra-pdf-canvas-N` e o `#amostra-pdf-nav-N` nunca entravam no DOM: o
+ * `renderPdfViewerPage` desistia no canvas que nao existe e as setas nunca
+ * apareciam. O `cliente.js` sempre acertou isto -- la o modo PDF fica DENTRO da
+ * metade da frente. Aqui passou a ficar tambem.
+ *
+ * Relatado no modelo 1000739 do pedido 21408, um FxVersoUnico -- modo em que ser
+ * as duas coisas ao mesmo tempo e a REGRA, e nao a excecao: a frente e um PDF
+ * paginado e o verso e um arquivo de uma pagina so.
+ */
+function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml) {
+    return (item.verso ? `
+                        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
+                                ${item.modo_pdf ? `
+                                <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                        <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                    </div>
+                                </div>
+                                ` : `
+                                <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                                `}
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.modo_pdf && item.arte_url ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">${item.modo_pdf ? 'PDF Multi-Página — envie a arte da frente' : 'Sem Frente'}</p>
+                                </div>
+                            </div>
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
+                                <canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
+                                </div>
+                            </div>
+
+                            <!-- Navegacao das linhas do CSV. Um seletor so comanda
+                                 as duas faces: frente e verso mostram sempre a
+                                 MESMA linha. Escondida ate a numeracao ter elemento
+                                 de banco de dados; quem mostra e preenche e o
+                                 atualizarNavCsvDaAmostra(). -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:4px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>
+                            ${escalaArteHtml}
+                        </div>
+                        ` : `
+                        ${item.modo_pdf ? `
+                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                            ${escalaArteHtml}
+                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                 <p style="font-size: 0.95rem; font-weight: 600;">Modo PDF Multi-Página</p>
+                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Faça upload de um PDF e navegue pelas páginas.</p>
+                            </div>
+                        </div>
+                        ` : `
+                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+
+                            <!-- Navegacao das linhas do CSV. Fica escondida ate
+                                 a numeracao ter elemento de banco de dados; quem
+                                 mostra e preenche e atualizarNavCsvDaAmostra(). -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:12px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>
+                            ${escalaArteHtml}
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                             <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
+                        </div>
+                        `}
+                        `);
+}
+window.blocoDeArteDoModelo = blocoDeArteDoModelo;
+
 function renderAmostrasOSItens(osId) {
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
     const targetOSId = os ? os.id : osId;
@@ -32334,80 +32444,7 @@ function renderAmostrasOSItens(osId) {
                         `}
                         `)
                     :
-                        (item.verso ? `
-                        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
-                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
-                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
-                                <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
-                                </div>
-                            </div>
-                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
-                                <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                <canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
-                                </div>
-                            </div>
-
-                            <!-- Navegacao das linhas do CSV. Um seletor so comanda
-                                 as duas faces: frente e verso mostram sempre a
-                                 MESMA linha. Escondida ate a numeracao ter elemento
-                                 de banco de dados; quem mostra e preenche e o
-                                 atualizarNavCsvDaAmostra(). -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:4px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
-                                </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
-                            </div>
-                            ${escalaArteHtml}
-                        </div>
-                        ` : `
-                        ${item.modo_pdf ? `
-                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
-                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
-                            </div>
-                            ${escalaArteHtml}
-                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
-                                 <p style="font-size: 0.95rem; font-weight: 600;">Modo PDF Multi-Página</p>
-                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Faça upload de um PDF e navegue pelas páginas.</p>
-                            </div>
-                        </div>
-                        ` : `
-                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-
-                            <!-- Navegacao das linhas do CSV. Fica escondida ate
-                                 a numeracao ter elemento de banco de dados; quem
-                                 mostra e preenche e atualizarNavCsvDaAmostra(). -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:12px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
-                                </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
-                            </div>
-                            ${escalaArteHtml}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
-                             <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
-                             <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
-                        </div>
-                        `}
-                        `)
+                        blocoDeArteDoModelo(item, idx, osId, escalaArteHtml)
                     }
                 </div>
             </div>
@@ -35044,8 +35081,16 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
     if (!canvas && !(itemForPdf && itemForPdf.modo_pdf)) return;
 
+    // O visualizador paginado é da FRENTE. Num modelo com verso, o verso tem
+    // tela própria (`amostra-item-canvas-verso-N`) e se compõe como sempre:
+    // no FxVersoUnico ele é OUTRO arquivo, de uma página só, e mandar a face
+    // `back` para o visualizador faria as duas faces disputarem o mesmo canvas
+    // — a última a desenhar apagaria a outra (31/08/2026).
+    const usaVisualizadorPaginado = !!(itemForPdf && itemForPdf.modo_pdf)
+        && !(face === 'back' && itemForPdf.verso);
+
     // Se modo PDF ativo, não compor multicamada — usar PDF viewer dedicado
-    if (itemForPdf && itemForPdf.modo_pdf) {
+    if (usaVisualizadorPaginado) {
         if (canvas) canvas.style.display = 'none';
         
         // Pega a URL do PDF (com busca em 4 níveis)

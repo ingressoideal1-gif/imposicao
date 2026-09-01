@@ -91,6 +91,38 @@ mandava `pdf_verso_url` por arte e não mudou.
 Nada aqui rasteriza a arte do cliente: o verso entra por `insert_pdf` e sai por
 `show_pdf_page`, vetorial, igual à frente.
 
+### As setas do seletor de páginas, no mesmo dia
+
+Relato do usuário logo depois: **"ao utilizar o modo pdf multi-páginas e
+FxVersoUnico, não está mostrando as setas do seletor de páginas, verificar modelo
+1000739 do pedido 21408"**.
+
+O card do modelo escolhia assim: `item.verso ? (frente e verso) : (modo PDF ?
+visualizador : tela)`. Um modelo que fosse as **duas** coisas caía na primeira, e
+então o `#amostra-pdf-canvas-N` e o `#amostra-pdf-nav-N` nunca entravam no DOM —
+o `renderPdfViewerPage` desistia no canvas que não existe, com um aviso no
+console, e as setas nunca apareciam. Medido no navegador: com verso, o card não
+tinha **nem** o canvas do PDF **nem** a barra das setas.
+
+O defeito é antigo — vale para qualquer FxVerso em modo PDF —, mas ficou
+invisível porque essa combinação era rara. No FxVersoUnico ela é a regra: a
+frente é um PDF paginado e o verso é um arquivo à parte.
+
+O `cliente.js` sempre acertou isso: lá o modo PDF fica **dentro** da metade da
+frente, e a metade do verso continua ao lado. O painel interno passou a fazer
+igual. De quebra, o bloco de arte do card virou uma função própria,
+`blocoDeArteDoModelo` — irmã da `blocoDeArteDoCliente` —, porque solto dentro de
+um template de mil linhas não havia como testar qual elemento entra no DOM.
+
+Duas coisas andaram juntas: a face `back` de um modelo com verso deixou de ser
+mandada ao visualizador da frente. As duas disputavam o mesmo canvas, e a última
+a desenhar apagava a outra; agora o verso se compõe na tela dele, lendo o
+`verso_arte_url` como sempre fez.
+
+Conferido no navegador (canvas do PDF, barra das setas e tela do verso, os três
+presentes) e por quatro casos no `fxversounico_harness.js`, que reprovam se a
+escolha voltar a ser a de antes.
+
 ### Conferido por
 
 `tests/test_pdf_duplex_unico.py` monta 9 páginas de frente e 1 de verso num
