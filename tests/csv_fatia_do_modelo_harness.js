@@ -355,6 +355,9 @@ function extrairFuncao(src, nome) {
                    'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
                    'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
+                   // Os tres Modos de Impressao (31/08/2026): a divergencia
+                   // nomeia o modo, e agora ha um terceiro nome a dizer.
+                   'temVerso', 'versoUnico', 'rotuloDoModoDeImpressao',
                    'celulasGeradasDoModelo', 'divergenciaDeCelulasDoModelo', 'textoDaDivergenciaDeCelulas',
                    'primeiraLinhaDoModelo', 'conferenciaDeDadosDoPedido', 'textoDaConferencia',
                    // Ver a nota no bloco acima: a conferencia conta so as colunas

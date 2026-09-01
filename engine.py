@@ -938,6 +938,32 @@ def _salvar_pdf(doc, out_name):
     doc.save(out_name, garbage=4, deflate=True)
 
 
+# UMA PERGUNTA QUE VIROU DUAS (31/08/2026).
+#
+# Ate o FxVersoUnico, `print_mode == "duplex"` respondia sozinho a DUAS
+# perguntas diferentes:
+#
+#   1. "este trabalho tem verso?"    -> agora e `tem_verso(...)`
+#   2. "como o arquivo e paginado?"  -> so aqui os dois duplex diferem
+#
+# So a SEGUNDA distingue os modos: no `duplex` classico frente e verso sao
+# paginas consecutivas do mesmo arquivo (i*2 e i*2+1); no `duplex_unico` a
+# frente anda 1 a 1 e o verso e sempre a mesma pagina anexada.
+#
+# Um `== "duplex"` do PRIMEIRO tipo deixado para tras faz a tela mostrar uma
+# coisa e o papel sair outra: a face `back` da numeracao vira `front` no
+# parse_elements e o QR do verso some da folha, sem erro nenhum no log.
+
+def tem_verso(print_mode) -> bool:
+    """Este trabalho imprime dos dois lados? (`duplex` ou `duplex_unico`)"""
+    return str(print_mode or "front").strip().lower() in ("duplex", "duplex_unico")
+
+
+def verso_unico(print_mode) -> bool:
+    """O verso e um arquivo de UMA pagina, repetido em todas as pecas?"""
+    return str(print_mode or "front").strip().lower() == "duplex_unico"
+
+
 class ImpositionConfig:
     def __init__(self,
                  base_file: str,
@@ -969,9 +995,17 @@ class ImpositionConfig:
                  pool_qr=None,
                  entregar_por_bloco: bool = False,
                  arte_escala_h: float = 100.0,
-                 arte_escala_v: float = 100.0):
+                 arte_escala_v: float = 100.0,
+                 base_file_verso: str = None):
 
         self.base_file = base_file
+        # FxVersoUnico: o verso vem em ARQUIVO SEPARADO, de uma pagina so, e e
+        # anexado ao fim do documento da frente no `_load_base_as_pdf`.
+        # `verso_page_idx` guarda em que pagina ele foi parar -- a mesma para
+        # todas as pecas. Fica None enquanto o arquivo nao foi carregado, e
+        # tambem quando nao ha verso nenhum.
+        self.base_file_verso = base_file_verso
+        self.verso_page_idx = None
         self.out_pdf = out_pdf
         self.saida = saida
         self.layout_schema = layout_schema
@@ -1100,6 +1134,11 @@ class ImpositionConfig:
                     temp_doc = fitz.open(base_file)
                     total_pages = len(temp_doc)
                     temp_doc.close()
+                    # `tem_verso` NAO serve aqui, de proposito: quem divide por
+                    # 2 e so o `duplex` classico, que consome as paginas aos
+                    # pares. No `duplex_unico` cada pagina do arquivo e uma peca
+                    # inteira -- 9 paginas = 9 pecas -- porque o verso mora em
+                    # outro arquivo e nao ocupa pagina da frente.
                     if self.print_mode == "duplex":
                         self.total_items = math.ceil(total_pages / 2)
                     else:
@@ -1163,8 +1202,8 @@ class ImpositionConfig:
                 if "width_mm" in e and e["type"] == "BARCODE":
                     e["_w"] = e["width_mm"] * MM2PT
                     e["_h"] = e.get("height_mm", 10) * MM2PT
-                if self.print_mode == "duplex":
-                    if num_print_mode == "duplex":
+                if tem_verso(self.print_mode):
+                    if tem_verso(num_print_mode):
                         e["face"] = el.get("face", "both")
                     else:
                         e["face"] = "front"
@@ -1195,8 +1234,8 @@ class ImpositionConfig:
                 if "width_mm" in e and e["type"] == "BARCODE":
                     e["_w"] = e["width_mm"] * MM2PT
                     e["_h"] = e.get("height_mm", 10) * MM2PT
-                if self.print_mode == "duplex":
-                    if num_print_mode_2 == "duplex":
+                if tem_verso(self.print_mode):
+                    if tem_verso(num_print_mode_2):
                         e["face"] = el.get("face", "both")
                     else:
                         e["face"] = "back"
@@ -1426,39 +1465,99 @@ class ImpositionEngine:
         except Exception:
             pass
 
-    def _load_base_as_pdf(self) -> fitz.Document:
-        """Abre o arquivo base (PDF, JPG, PNG) como documento fitz com dimensões físicas precisas."""
-        if not self.cfg.base_file:
-            return None
-        f = self.cfg.base_file.lower()
-        if f.endswith(".pdf"):
-            return fitz.open(self.cfg.base_file)
-        else:
-            # Imagem → converter para PDF temporário em memória ajustando ao tamanho do item
-            img = Image.open(self.cfg.base_file)
-            img_w, img_h = img.size
-            img.close()
-            
-            doc = fitz.open()
-            w_pt = self.cfg.item_w
-            h_pt = self.cfg.item_h
-            page = doc.new_page(width=w_pt, height=h_pt)
-            
-            # Calcular dimensões para ajustar proporcionalmente e centralizar (equivalente ao frontend)
-            scale = min(w_pt / img_w, h_pt / img_h)
-            draw_w = img_w * scale
-            draw_h = img_h * scale
-            draw_x = (w_pt - draw_w) / 2
-            draw_y = (h_pt - draw_h) / 2
-            
-            rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
-            page.insert_image(rect, filename=self.cfg.base_file)
-            
-            pdf_bytes = doc.write()
-            doc.close()
-            
-            return fitz.open(stream=pdf_bytes, filetype="pdf")
+    def _abrir_arquivo_como_pdf(self, caminho: str) -> fitz.Document:
+        """Abre UM arquivo (PDF, JPG, PNG) como documento fitz com dimensões físicas precisas.
 
+        Separado do `_load_base_as_pdf` porque o FxVersoUnico carrega dois
+        arquivos pelo mesmo caminho — a frente e o verso — e o verso pode chegar
+        em imagem tanto quanto a frente.
+        """
+        if not caminho:
+            return None
+        if caminho.lower().endswith(".pdf"):
+            return fitz.open(caminho)
+
+        # Imagem → converter para PDF temporário em memória ajustando ao tamanho do item
+        img = Image.open(caminho)
+        img_w, img_h = img.size
+        img.close()
+
+        doc = fitz.open()
+        w_pt = self.cfg.item_w
+        h_pt = self.cfg.item_h
+        page = doc.new_page(width=w_pt, height=h_pt)
+
+        # Calcular dimensões para ajustar proporcionalmente e centralizar (equivalente ao frontend)
+        scale = min(w_pt / img_w, h_pt / img_h)
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+        draw_x = (w_pt - draw_w) / 2
+        draw_y = (h_pt - draw_h) / 2
+
+        rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
+        page.insert_image(rect, filename=caminho)
+
+        pdf_bytes = doc.write()
+        doc.close()
+
+        return fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    def _load_base_as_pdf(self) -> fitz.Document:
+        """O documento da arte: a frente e, no FxVersoUnico, o verso anexado ao fim.
+
+        No `duplex_unico` frente e verso chegam em arquivos SEPARADOS — a frente
+        paginada (uma página por peça), o verso de uma página só. Anexar o verso
+        ao fim do documento da frente deixa o resto do motor com UM documento,
+        como sempre teve; o que muda é só o índice de página, e quem o resolve é
+        `_pagina_do_verso_unico`.
+
+        Nada aqui rasteriza a arte do cliente: o verso entra por `insert_pdf` e
+        sai por `show_pdf_page`, vetorial, igual à frente.
+        """
+        doc = self._abrir_arquivo_como_pdf(self.cfg.base_file)
+        if doc is None:
+            return None
+
+        verso_path = getattr(self.cfg, "base_file_verso", None)
+        if verso_path and verso_unico(self.cfg.print_mode):
+            verso_doc = None
+            try:
+                verso_doc = self._abrir_arquivo_como_pdf(verso_path)
+                if verso_doc:
+                    if len(verso_doc) > 1:
+                        print(f"[engine] FxVersoUnico: o arquivo de verso tem "
+                              f"{len(verso_doc)} paginas; so a primeira sera usada.")
+                    # O índice é o total de páginas da frente ANTES do anexo: é
+                    # exatamente onde o insert_pdf vai colar a página.
+                    self.cfg.verso_page_idx = len(doc)
+                    doc.insert_pdf(verso_doc, from_page=0, to_page=0)
+            except Exception as ex:
+                # Sem verso, a célula de verso sai vazia — melhor que derrubar o
+                # trabalho inteiro da frente por causa do arquivo de trás.
+                self.cfg.verso_page_idx = None
+                print(f"[engine] FxVersoUnico: falha ao anexar o verso ({verso_path}): {ex}")
+            finally:
+                if verso_doc is not None:
+                    verso_doc.close()
+
+        return doc
+
+    def _pagina_do_verso_unico(self, arte_data, cfg, doc_base):
+        """A página do verso no FxVersoUnico: FIXA, a mesma para todas as peças.
+
+        Vem memorizada por arte no `multi_map` — numa folha que soma modelos cada
+        arte tem o seu verso, anexado ao próprio documento — e, fora dela, do
+        `cfg.verso_page_idx` gravado ao carregar o arquivo único.
+
+        Sem verso nenhum devolve None, e a célula de verso sai vazia: é o mesmo
+        que já acontecia quando o PDF não tinha a página par.
+        """
+        idx = arte_data.get("verso_page_idx") if arte_data else None
+        if idx is None:
+            idx = getattr(cfg, "verso_page_idx", None)
+        if idx is None or not doc_base or idx >= len(doc_base):
+            return None
+        return idx
 
     def _resolve_camarote_val(self, el: dict, item_index: int, base_val: int, l_cam: int = None, c_ini: int = None, seq_start: int = None) -> int:
         """Calcula o valor correto para elementos CAMAROTE_* com base no item_index.
@@ -2469,7 +2568,7 @@ class ImpositionEngine:
 
         set_idx_current = -1
         
-        is_duplex = (cfg.print_mode == "duplex")
+        is_duplex = tem_verso(cfg.print_mode)
         if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
             if any(art.get("pdf_verso_url") for art in cfg.multi_artes):
                 is_duplex = True
@@ -2477,6 +2576,16 @@ class ImpositionEngine:
         # Preparar mapa de Multi-Artes
         multi_map = []
         pdf_cache = {}
+        # ANEXAR O VERSO SEM ANEXAR DUAS VEZES (31/08/2026).
+        #
+        # `_load_art_as_pdf` guarda o documento POR URL em `pdf_cache`, e o
+        # `insert_pdf` altera o documento guardado. Dois modelos que usam o mesmo
+        # arquivo de frente recebem o MESMO objeto: sem esta memória, o segundo
+        # anexaria o verso outra vez e a peça sairia com a página errada no
+        # papel. A chave é o PAR (frente, verso), porque dois modelos podem
+        # dividir a frente e ter versos diferentes — nesse caso são dois anexos
+        # legítimos, cada um com o seu índice.
+        versos_mesclados = {}
 
         is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
         if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0) or is_strict_assembly:
@@ -2532,8 +2641,8 @@ class ImpositionEngine:
                         if "width_mm" in e and e["type"] == "SVG":
                             e["width_mm"] = e["width_mm"]
                             e["height_mm"] = e.get("height_mm", 20)
-                        if cfg.print_mode == "duplex":
-                            if num_print_mode == "duplex":
+                        if tem_verso(cfg.print_mode):
+                            if tem_verso(num_print_mode):
                                 e["face"] = el.get("face", "both")
                             else:
                                 e["face"] = "front" if source_id == 1 else "back"
@@ -2666,19 +2775,46 @@ class ImpositionEngine:
                 pdf_verso_url = art.get("pdf_verso_url")
                 local_path = art.get("local_path")
                 art_doc = None
-                
+                # Em que página desta arte mora o verso do FxVersoUnico. Vai
+                # para cada item do `multi_map`: é o que `_pagina_do_verso_unico`
+                # lê na hora de desenhar a célula de verso.
+                art_verso_page_idx = None
+
                 try:
                     if not cfg.multi_artes and doc_base:
                         art_doc = doc_base
+                        # Arquivo único: o verso já foi anexado lá no
+                        # `_load_base_as_pdf`, e o índice está no cfg.
+                        art_verso_page_idx = getattr(cfg, "verso_page_idx", None)
                     elif local_path and os.path.exists(local_path):
                         art_doc = _load_art_as_pdf(local_path, is_url=False)
                     elif pdf_url:
                         art_doc = _load_art_as_pdf(pdf_url, is_url=True)
                         if pdf_verso_url and art_doc:
-                            if len(art_doc) < 2:
+                            chave_verso = (pdf_url, pdf_verso_url)
+                            if chave_verso in versos_mesclados:
+                                # Este par já foi mesclado por outro modelo:
+                                # reusar o documento e o índice, nunca anexar de
+                                # novo. Ver `versos_mesclados`, acima.
+                                art_doc, art_verso_page_idx = versos_mesclados[chave_verso]
+                            elif len(art_doc) < 2 or verso_unico(cfg.print_mode):
+                                # `len(art_doc) < 2` é o FxVerso de sempre: a
+                                # frente de uma página só, e o verso vem do
+                                # arquivo separado. O FxVersoUnico anexa
+                                # SEMPRE, qualquer que seja o número de páginas
+                                # da frente — é justamente o caso das 9 páginas.
                                 verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
                                 if verso_doc:
-                                    art_doc.insert_pdf(verso_doc)
+                                    art_verso_page_idx = len(art_doc)
+                                    if verso_unico(cfg.print_mode):
+                                        if len(verso_doc) > 1:
+                                            print(f"[engine] FxVersoUnico: o arquivo de verso "
+                                                  f"tem {len(verso_doc)} paginas; so a primeira "
+                                                  f"sera usada.")
+                                        art_doc.insert_pdf(verso_doc, from_page=0, to_page=0)
+                                    else:
+                                        art_doc.insert_pdf(verso_doc)
+                                    versos_mesclados[chave_verso] = (art_doc, art_verso_page_idx)
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
@@ -2692,6 +2828,10 @@ class ImpositionEngine:
                         "global_idx": len(multi_map),
                         "local_path": local_path,
                         "pdf_url": pdf_url,
+                        # FxVersoUnico: a página do verso DESTA arte. Todos os
+                        # itens da arte apontam para ela — é a mesma arte de
+                        # verso em todas as peças; só a numeração muda.
+                        "verso_page_idx": art_verso_page_idx,
                         "nome": art.get("nome", ""),
                         "nome_color": art.get("nome_color", "#000000"),
                         "model_idx": model_idx,
@@ -3093,7 +3233,11 @@ class ImpositionEngine:
                         # arte_nome = arte_data.get("nome", "") # Nome was removed from multi_artes!
 
                     if cfg.layout_schema == "pdf_multiple":
-                        if is_duplex:
+                        # No FxVersoUnico a frente anda 1 a 1, igual ao simplex:
+                        # cada página do arquivo é uma peça, e o verso está em
+                        # outro arquivo. Só o `duplex` clássico salta de dois em
+                        # dois, porque ali as páginas ímpares são o verso.
+                        if is_duplex and not verso_unico(cfg.print_mode):
                             page_idx_front = (item_index * 2) if current_doc_base and (item_index * 2) < len(current_doc_base) else 0
                         else:
                             page_idx_front = item_index if current_doc_base and item_index < len(current_doc_base) else 0
@@ -3344,7 +3488,13 @@ class ImpositionEngine:
                             item_local_idx = int(item_index)
 
                         # Determinar a página base de verso no PDF de entrada
-                        if cfg.layout_schema == "pdf_multiple":
+                        if verso_unico(cfg.print_mode):
+                            # FxVersoUnico: uma página só, anexada ao fim, e as N
+                            # peças dividem a MESMA origem. A numeração de face
+                            # `back` continua variando: o que se repete é a arte,
+                            # não o VDP desenhado por cima dela.
+                            page_idx_back = self._pagina_do_verso_unico(arte_data, cfg, current_doc_base)
+                        elif cfg.layout_schema == "pdf_multiple":
                             page_idx_back = (item_index * 2 + 1) if current_doc_base and (item_index * 2 + 1) < len(current_doc_base) else None
                         else:
                             page_idx_back = 1 if current_doc_base and len(current_doc_base) >= 2 else None
@@ -3662,7 +3812,12 @@ class ImpositionEngine:
         local_idx = item_data["local_idx"]
 
         if cfg.layout_schema == "pdf_multiple":
-            page_idx_front = local_idx * 2 if current_doc_base and (local_idx * 2) < len(current_doc_base) else 0
+            # FxVersoUnico: uma página por peça, sem o salto de dois em dois — o
+            # verso não ocupa página neste arquivo.
+            if verso_unico(cfg.print_mode):
+                page_idx_front = local_idx if current_doc_base and local_idx < len(current_doc_base) else 0
+            else:
+                page_idx_front = local_idx * 2 if current_doc_base and (local_idx * 2) < len(current_doc_base) else 0
         else:
             page_idx_front = 0
 
@@ -3834,7 +3989,10 @@ class ImpositionEngine:
         val2 = item_data["val2"]
         local_idx = item_data["local_idx"]
 
-        if cfg.layout_schema == "pdf_multiple":
+        if verso_unico(cfg.print_mode):
+            # FxVersoUnico: índice fixo, o mesmo para todas as peças desta arte.
+            page_idx_back = self._pagina_do_verso_unico(item_data, cfg, current_doc_base)
+        elif cfg.layout_schema == "pdf_multiple":
             page_idx_back = (local_idx * 2 + 1) if current_doc_base and (local_idx * 2 + 1) < len(current_doc_base) else None
         else:
             page_idx_back = 1 if current_doc_base and len(current_doc_base) >= 2 else None

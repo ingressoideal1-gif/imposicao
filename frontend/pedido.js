@@ -23,6 +23,50 @@ function arteParaImpor(url) {
     return (url && String(url).indexOf('amostras_renderizadas') === -1) ? url : null;
 }
 
+/**
+ * O Modo de Impressão, repetido aqui pelo mesmo motivo do `arteParaImpor`.
+ *
+ * O `script.js` define estes três e a `index.html` o carrega antes deste
+ * arquivo — mas a `cliente.html` e a `controle.html` carregam o `pedido.js`
+ * SEM o `script.js`. Um `temVerso` indefinido ali não daria erro visível: daria
+ * uma folha sem verso, descoberta no papel. Melhor duplicar três linhas.
+ *
+ * São três valores desde 31/08/2026: 'front', 'duplex' (FxVerso) e
+ * 'duplex_unico' (FxVersoUnico). `temVerso` responde "tem verso?" — verdadeiro
+ * nos dois modos duplex. `versoUnico` responde "como pagina?" — só o
+ * FxVersoUnico anda a frente de 1 em 1 e repete uma página só no verso.
+ */
+function temVerso(printMode) {
+    const m = String(printMode || 'front').trim().toLowerCase();
+    return m === 'duplex' || m === 'duplex_unico';
+}
+window.temVerso = temVerso;
+
+function versoUnico(printMode) {
+    return String(printMode || 'front').trim().toLowerCase() === 'duplex_unico';
+}
+window.versoUnico = versoUnico;
+
+/**
+ * Qual dos três Modos de Impressão vale para um modelo do pedido.
+ *
+ * O nome diz VERSO e não IMPRESSÃO porque `modoDeImpressaoDoModelo` já existe
+ * no script.js desde antes, e responde outra coisa: sequencial ou blocado.
+ *
+ * O FxVersoUnico vive só na numeração (`producao_numeracoes.print_mode`, tabela
+ * nossa): a coluna `verso_tipo` é do ERP parceiro e não conhece esse texto. Por
+ * isso a numeração só é consultada para ACRESCENTAR o terceiro modo — fora dele
+ * a regra continua a de antes, o `verso` do item.
+ */
+function modoDeVersoDoModelo(item) {
+    const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
+    const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
+    if (versoUnico(num && num.print_mode)) return 'duplex_unico';
+    const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
+    return temVersoNoErp ? 'duplex' : 'front';
+}
+window.modoDeVersoDoModelo = modoDeVersoDoModelo;
+
 function applyPedFormatoDefaults() {
     const fmtSel = document.getElementById('ped-formato');
     if (!fmtSel) return;
@@ -602,8 +646,7 @@ function drawPedPreview() {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            const wantsDuplex = (item.verso_tipo === 'FxVerso' || item.verso === true);
-            state.printMode = wantsDuplex ? 'duplex' : 'front';
+            state.printMode = modoDeVersoDoModelo(item);
         }
     }
 
@@ -699,7 +742,7 @@ function drawPedPreview() {
     const previewPartEl = document.getElementById('ped-preview-part-input');
     let previewPart = 'miolo';
     if (previewPartEl) {
-        const isDuplex = state.printMode === 'duplex';
+        const isDuplex = temVerso(state.printMode);
         if (fmt.has_cover || isDuplex) {
             mostrarControleDaPrevia(previewPartEl, true);
 
@@ -1437,7 +1480,28 @@ function drawPedPreview() {
 
                         if (schema === "pdf_multiple") {
 
-                            if (state.printMode === "duplex") {
+                            if (versoUnico(state.printMode)) {
+
+                                // A frente anda 1 a 1, como no simplex. O verso
+                                // sai de OUTRO arquivo, sempre da pagina 1: e a
+                                // mesma para todas as pecas. Sem arquivo de
+                                // verso a celula fica vazia de proposito --
+                                // desenhar a pagina 1 da frente ali seria a tela
+                                // mentindo sobre o que vai sair no papel.
+
+                                if (isBack) {
+
+                                    activePdfDoc = state.pedArtVersoPdfDoc || null;
+
+                                    pageNum = activePdfDoc ? 1 : 0;
+
+                                } else {
+
+                                    pageNum = item_index + 1;
+
+                                }
+
+                            } else if (state.printMode === "duplex") {
 
                                 pageNum = isBack ? (item_index * 2 + 2) : (item_index * 2 + 1);
 
@@ -1455,7 +1519,8 @@ function drawPedPreview() {
 
 
 
-                        if (pageNum <= activePdfDoc.numPages) {
+                        // `>= 1` e a guarda do caso acima: `getPage(0)` estoura.
+                        if (activePdfDoc && pageNum >= 1 && pageNum <= activePdfDoc.numPages) {
 
                             let pagesCache = activePdfDoc.pagesCache;
 
@@ -1825,8 +1890,8 @@ function drawPedPreview() {
 
                     let effectiveFace = el.face || 'both';
 
-                    if (printMode === 'duplex') {
-                        if (numPrintMode === 'duplex') {
+                    if (temVerso(printMode)) {
+                        if (temVerso(numPrintMode)) {
                             effectiveFace = el.face || 'both';
                         } else {
                             effectiveFace = source_id === 1 ? 'front' : 'back';
@@ -2218,6 +2283,9 @@ function drawPedPreview() {
             pagina: (schema === 'pdf_multiple')
                 ? (state.printMode === 'duplex' ? item_index * 2 + 1 : item_index + 1)
                 : null,
+            // A frente do FxVersoUnico anda 1 a 1, e por isso cai no ramo de
+            // cima junto com o simplex — o `=== 'duplex'` aqui é a pergunta
+            // "como pagina?", que só o FxVerso clássico responde aos pares.
             elementos: vdpDesenhados,
         });
 
@@ -2238,6 +2306,10 @@ function drawPedPreview() {
             if (totalPaginas && pFrente > totalPaginas) {
                 // O engine recua para a primeira página quando a página pedida não existe
                 rotulo = 'p. 1 (repetida)';
+            } else if (versoUnico(state.printMode)) {
+                // O `V` diz que aquele verso é o mesmo em todas as células — sem
+                // ele, oito versos idênticos parecem uma paginação quebrada.
+                rotulo = state.pedArtVersoPdfDoc ? `p. ${pFrente} / V` : `p. ${pFrente} (sem verso)`;
             } else if (state.printMode === 'duplex') {
                 const pVerso = pFrente + 1;
                 rotulo = (totalPaginas && pVerso > totalPaginas) ? `p. ${pFrente}` : `p. ${pFrente} / ${pVerso}`;
@@ -2731,7 +2803,7 @@ function updatePedSummary() {
 
     if (lblNum1Text && lblNum2Text) {
 
-        if (printMode === 'duplex') {
+        if (temVerso(printMode)) {
 
             lblNum1Text.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
 
@@ -2942,7 +3014,7 @@ function updatePedSummary() {
 
     if (faceContainer) {
 
-        if (state.printMode === 'duplex') {
+        if (temVerso(state.printMode)) {
 
             faceContainer.style.display = 'flex';
 
@@ -3977,8 +4049,7 @@ async function enviarParaPedido(itemId, osId) {
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
-            const wantsDuplex = (item.verso_tipo === 'FxVerso' || item.verso === true);
-            printMode.value = wantsDuplex ? 'duplex' : 'front';
+            printMode.value = modoDeVersoDoModelo(item);
             if (typeof updatePedSummary === 'function') {
                 updatePedSummary();
             }
@@ -4080,6 +4151,7 @@ async function enviarParaPedido(itemId, osId) {
                 
             // Carregar Verso se houver
             state.pedArtVersoPdfDoc = null;
+            state.pedArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
                 fetch(item.verso_arte_url)
@@ -4089,6 +4161,11 @@ async function enviarParaPedido(itemId, osId) {
                     })
                     .then(({ blob, ct }) => {
                         const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
+                        // O ARQUIVO, e nao so o documento da previa: um modelo
+                        // sozinho nao passa por `multi_artes` e manda a arte como
+                        // upload. Sem guardar o arquivo aqui, o FxVersoUnico
+                        // chegaria ao motor sem verso nenhum (31/08/2026).
+                        state.pedArtVersoFile = new File([blob], filenameV, { type: ct || 'application/pdf' });
                         if (isPdf && typeof pdfjsLib !== 'undefined') {
                             blob.arrayBuffer().then(arrayBuffer => {
                                 pdfjsLib.getDocument({ data: arrayBuffer }).promise.then(pdfV => {
@@ -4115,11 +4192,19 @@ async function enviarParaPedido(itemId, osId) {
                 
                 // Carregar Verso da Cor se for Duplex
                 state.pedArtVersoPdfDoc = null;
+                state.pedArtVersoFile = null;
                 if (corObj.frente_verso && corObj.pdf_verso_base64) {
                     const base64DataV = corObj.pdf_verso_base64.includes('base64,') ? corObj.pdf_verso_base64.split('base64,')[1] : corObj.pdf_verso_base64;
                     const binStrV = atob(base64DataV);
                     const bytesV = new Uint8Array(binStrV.length);
                     for (let i = 0; i < binStrV.length; i++) bytesV[i] = binStrV.charCodeAt(i);
+                    // Mesma razao do ramo da arte do item: o FxVersoUnico precisa
+                    // do ARQUIVO do verso, nao so do documento da previa.
+                    state.pedArtVersoFile = new File(
+                        [new Blob([bytesV], { type: 'application/pdf' })],
+                        corObj.pdf_verso_filename || `${corObj.name}_verso.pdf`,
+                        { type: 'application/pdf' }
+                    );
                     pdfjsLib.getDocument({ data: bytesV }).promise.then(pdfV => {
                         state.pedArtVersoPdfDoc = pdfV;
                         setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
@@ -4140,6 +4225,7 @@ async function enviarParaPedido(itemId, osId) {
             state.pedArtFile = null;
             state.pedArtPdfDoc = null;
             state.pedArtVersoPdfDoc = null;
+            state.pedArtVersoFile = null;
             state.pedArtImage = null;
             const pedInfo = document.getElementById('ped-file-info');
             if (pedInfo) pedInfo.style.display = 'none';
@@ -5902,6 +5988,15 @@ window.runPedImposition = async function (mode, isRefazer) {
         formData.append('file', selectedFile);
     }
 
+    // O arquivo do verso do FxVersoUnico (31/08/2026). Um modelo sozinho nao
+    // passa por `multi_artes` -- manda a arte como upload --, entao o verso
+    // precisa de um campo proprio. Nos outros modos o motor ignora este arquivo:
+    // ali o verso sai das paginas do proprio arquivo da frente.
+    if (versoUnico(payload.print_mode)) {
+        const versoFile = state.pedArtVersoFile || state.impArtVersoFile;
+        if (versoFile) formData.append('file_verso', versoFile);
+    }
+
     if (state.csvFile) {
 
         formData.append('csv_file', state.csvFile);
@@ -6685,7 +6780,7 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
         autoSaveOSItemField(itemId, osId, 'tipo_numeracao', item.tipo_numeracao);
 
         // Atualizar verso_tipo baseado no print_mode da numeração (fonte de verdade: producao_numeracoes)
-        const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : (num.print_mode === 'duplex');
+        const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : temVerso(num.print_mode);
         const novoVersoTipo = isDuplex ? 'FxVerso' : 'Frente';
         item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
@@ -6788,8 +6883,11 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             item.verso = (value === 'FxVerso');
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
-                const wantsDuplex = (value === 'FxVerso');
-                printMode.value = wantsDuplex ? 'duplex' : 'front';
+                // O `verso_tipo` do ERP só diz se TEM verso; qual dos dois modos
+                // de verso vale é a numeração que sabe. Sem passar por aqui,
+                // salvar qualquer campo do modelo rebaixava um FxVersoUnico a
+                // FxVerso e a folha voltava a consumir o arquivo aos pares.
+                printMode.value = (value === 'FxVerso') ? modoDeVersoDoModelo(item) : 'front';
                 if (typeof updatePedSummary === 'function') {
                     updatePedSummary();
                 }

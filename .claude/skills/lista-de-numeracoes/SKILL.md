@@ -1,12 +1,12 @@
 ---
 name: lista-de-numeracoes
-description: Leia ANTES de qualquer alteração na Lista de Numerações (o Catálogo de Numerações) — a view #view-catalogo em frontend/index.html, a função renderNumeracoes() em frontend/script.js, os filtros de busca/formato/tipo, o badge do menu, ou as ações de duplicar e excluir numeração. Cobre as quatro armadilhas da tela e os campos que a duplicação copia por lista explícita.
+description: Leia ANTES de qualquer alteração na Lista de Numerações (o Catálogo de Numerações) — a view #view-catalogo em frontend/index.html, a função renderNumeracoes() em frontend/script.js, os filtros de busca/formato/tipo, o badge do menu, ou as ações de duplicar e excluir numeração. Cobre as seis armadilhas da tela, os três Modos de Impressão e os campos que a duplicação copia por lista explícita.
 ---
 
 # Antes de mexer na Lista de Numerações
 
 Leia **`docs/lista_de_numeracoes.md`** por inteiro antes de escrever código. A tela
-parece uma tabela simples, e é por isso mesmo que ela engana: quatro comportamentos
+parece uma tabela simples, e é por isso mesmo que ela engana: seis comportamentos
 deliberados fazem qualquer um concluir que "está bugada" quando está fazendo o que
 foi programada para fazer.
 
@@ -31,7 +31,17 @@ foi programada para fazer.
    Frente. Corrigido — mas ao acrescentar coluna nova em `producao_numeracoes`,
    decida conscientemente se ela entra em `duplicateCatalogNumeracao()`.
 
-5. **O nome decide a quem a numeração exclusiva pertence.** Nome ainda igual ao
+5. **O Modo de Impressão tem TRÊS valores desde 31/08/2026**, não dois:
+   `front` (Frente), `duplex` (FxVerso) e `duplex_unico` (FxVersoUnico). Só o
+   `duplex` clássico consome o arquivo da arte aos pares; o FxVersoUnico usa uma
+   página por peça na frente e um arquivo separado, de uma página, no verso.
+   Pergunte "tem verso?" com `temVerso()` e "como pagina?" com `versoUnico()` —
+   um `=== 'duplex'` do primeiro tipo deixado para trás some com o verso sem
+   quebrar nada na tela. E note que `modoDeImpressaoDoModelo` **já existia** e
+   responde outra coisa (sequencial ou blocado): o do verso é
+   `modoDeVersoDoModelo`.
+
+6. **O nome decide a quem a numeração exclusiva pertence.** Nome ainda igual ao
    `os_item_id` = exclusiva daquele modelo; renomeada = do cliente inteiro,
    compartilhada entre os modelos dele (regra do usuário, 26/08/2026). Daí
    `numeracaoEhCompartilhadaDoCliente` e `comoEditarNumeracaoDoModelo`, que decidem

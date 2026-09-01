@@ -47,6 +47,9 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
                'numeracaoDoModelo',
                'quantidadeDoModelo', 'itemAtivoDoPedido', 'itensDaImposicao',
                'rotuloDoModelo', 'porQueNaoCombina', 'modoDeImpressaoDoModelo',
+               // Os tres Modos de Impressao (31/08/2026): o porQueNaoCombina
+               // separa FxVerso de FxVersoUnico, que o `face()` dele nao ve.
+               'temVerso', 'versoUnico', 'modoDeVersoDoModelo',
                'limiarPadraoDeSobra', 'limiarDoProduto', 'limiarDeSobra',
                'sobraDaImposicao', 'sobraMereceAviso', 'textoDaSobra',
                'modeloLiberadoParaImprimir', 'itensJaNaFolha', 'osDaImposicao',

@@ -111,6 +111,21 @@ sobre a lista inteira a cada carga, e criar links ali significaria regenerar a a
 aprovação de dezenas de pedidos de uma vez. Para esses, o botão **Gerar Link** continua
 sendo a saída.
 
+**A URL pronta para o ERP.** A coluna `pedidos_links_cliente.link` traz o endereço
+completo, e é **gerada** pelo banco a partir de `numero_pedido` e `token`
+(`sql/link_pronto_para_o_erp.sql`). Coluna comum precisaria de alguém para preencher em
+todos os caminhos que criam ou mexem num link, e um caminho esquecido daria link vazio —
+ou o link de outro pedido depois de uma troca de token. Link errado não falha em teste
+nenhum: falha na mão do cliente.
+
+> [!CAUTION]
+> O formato da URL mora agora em **quatro** arquivos: `frontend/script.js` (monta para o
+> atendente copiar), `sql/link_pronto_para_o_erp.sql` (monta a coluna), `frontend/cliente.js`
+> (aceita a rota, e é quem diz o que vale) e `security_config.py` (o domínio canônico, em
+> `PAINEL_BASE_URL`). O `tests/lista_arte_harness.js` compara os quatro — inclusive o
+> domínio, porque se ele mudar só num lugar o painel continua funcionando e ninguém
+> descobre, enquanto o ERP distribui link para um endereço que não existe.
+
 Colunas e função no banco: `sql/link_marca_quando_o_cliente_abre.sql`.
 
 ### As duas palavras "AGUARDANDO" (31/08/2026)

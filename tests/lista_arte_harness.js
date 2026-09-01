@@ -508,6 +508,52 @@ function classificarComArte(statusDaArte, extra) {
         'o mapa do filtro manda AGUARDANDO para "Em Arte"');
 })();
 
+// --- O formato do link mora em QUATRO arquivos, e eles tem de concordar ------
+//
+// Em 31/08/2026 o usuario pediu a coluna `link` no banco, pronta para o ERP
+// parceiro ler. Isso criou um segundo lugar que sabe montar a URL -- e formato
+// de link que diverge nao falha em teste nenhum: falha na mao do cliente, que
+// abre um endereco quebrado e nao consegue aprovar a arte.
+//
+// Os quatro:
+//   1. frontend/script.js              monta a URL para o atendente copiar
+//   2. sql/link_pronto_para_o_erp.sql  monta a coluna `link`
+//   3. frontend/cliente.js             ACEITA a rota, e e quem diz o que vale
+//   4. security_config.py              guarda o dominio canonico
+
+const SQL_LINK = fs.readFileSync(path.join(RAIZ, 'sql', 'link_pronto_para_o_erp.sql'), 'utf8');
+const CLIENTE_JS = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
+const SEGURANCA = fs.readFileSync(path.join(RAIZ, 'security_config.py'), 'utf8');
+
+(function osQuatroLugaresConcordamNoFormato() {
+    ok(SCRIPT.indexOf('/cliente/${row.numero_pedido}-${row.token}') > 0,
+        'o painel monta /cliente/<numero>-<token>');
+
+    ok(SQL_LINK.indexOf("/cliente/' || numero_pedido || '-' || token") > 0,
+        'a coluna gerada monta o mesmo /cliente/<numero>-<token>');
+
+    ok(CLIENTE_JS.indexOf('\\/cliente\\/(\\d+)-([a-z0-9]+)$') > 0,
+        'e a pagina do cliente aceita exatamente essa rota');
+})();
+
+(function oDominioDaColunaEODominioCanonico() {
+    // Se um deles mudar sozinho, o ERP passa a distribuir link para um endereco
+    // que nao existe -- e o painel continua funcionando, entao ninguem descobre.
+    const doSql = (SQL_LINK.match(/'(https:\/\/[^\/']+)\/cliente\//) || [])[1];
+    const doPy = (SEGURANCA.match(/PAINEL_BASE_URL = "([^"]+)"/) || [])[1];
+    ok(!!doSql, 'a coluna gerada traz um dominio', doSql);
+    ok(doSql === doPy, 'e ele e o mesmo do PAINEL_BASE_URL', { doSql: doSql, doPy: doPy });
+})();
+
+(function aColunaEGeradaEnaoPreenchidaAMao() {
+    // Coluna comum precisaria de alguem para preencher, em todos os caminhos que
+    // criam ou mexem num link. Um caminho esquecido = link vazio, ou o link de
+    // outro pedido depois de uma troca de token. E link errado so falha na mao
+    // do cliente.
+    ok(/GENERATED ALWAYS AS/.test(SQL_LINK), 'a coluna link e gerada pelo banco');
+    ok(/STORED/.test(SQL_LINK), 'e STORED, entao vale tambem para as linhas que ja existem');
+})();
+
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
     process.exit(1);

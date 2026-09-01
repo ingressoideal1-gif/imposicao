@@ -266,7 +266,8 @@ Classe de configuração que recebe todos os parâmetros e realiza a conversão 
 | `seq_increment` | `int` | Incremento da sequência (padrão: 1) |
 | `layout_schema` | `str` | Esquema de distribuição |
 | `csv_data` | `list[dict]\|None` | Dados do CSV para VDP |
-| `print_mode` | `str` | `"front"`, `"duplex"` |
+| `print_mode` | `str` | `"front"`, `"duplex"`, `"duplex_unico"` |
+| `base_file_verso` | `str\|None` | Arquivo de verso do `duplex_unico`: uma página só, repetida em todas as peças |
 | `rotate_page` | `bool` | Rotaciona a página de saída 90° |
 | `multi_artes` | `list[dict]` | Lista de artes para o esquema multi_artes |
 
@@ -603,6 +604,27 @@ Ao selecionar `print_mode = "duplex"`, para cada folha lógica são geradas **2 
 - Elementos com `face = "back"` ou `"both"`.
 - **Rotação invertida:** `cell_rotation = (360 - cell_rotation_frente) % 360`.
 - Página base do PDF de entrada: página de índice `page_idx_back` (segunda página do PDF ou `item_index * 2 + 1` em pdf_multiple).
+
+### O terceiro modo: `duplex_unico` (FxVersoUnico, 31/08/2026)
+
+Mesma folha de verso, mesmo espelhamento, mesma rotação invertida — muda só de
+onde sai a **arte** de cada face:
+
+| | `duplex` (FxVerso) | `duplex_unico` (FxVersoUnico) |
+|---|---|---|
+| Arquivo | um só, frente e verso intercalados | dois: a frente multipáginas e o verso de uma página |
+| Frente da peça *i* | página `i * 2` | página `i` |
+| Verso da peça *i* | página `i * 2 + 1` | sempre a **mesma** página anexada |
+| 9 peças exigem | 18 páginas | 9 páginas + 1 de verso |
+| `total_items` em pdf_multiple | `ceil(páginas / 2)` | `páginas` |
+
+A numeração **continua variando no verso**: a arte é a mesma nas nove células,
+mas os elementos de face `back` são desenhados peça a peça, como no FxVerso.
+
+Um modelo sozinho não passa por `multi_artes` — ele manda a arte como upload —,
+então o painel envia o verso num campo próprio, `file_verso`, que o agente
+grava e entrega em `base_file_verso`. No `multi_artes` o verso já viajava como
+`pdf_verso_url` por arte.
 
 ### Agrupamento de elementos por face
 

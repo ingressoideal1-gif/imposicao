@@ -294,6 +294,46 @@ original. Hoje isso é inofensivo, porque o save só reenvia o arquivo de um ele
 quando o conteúdo ainda não é URL — trocar o arquivo na cópia gera um objeto novo e
 não toca no do original.
 
+## O Modo de Impressão tem TRÊS valores (31/08/2026)
+
+A coluna `producao_numeracoes.print_mode` é `TEXT DEFAULT 'front'`, sem `CHECK`, e
+guarda um de três:
+
+| Valor | Rótulo na tela | O que significa |
+|---|---|---|
+| `front` | Frente | Só a frente. |
+| `duplex` | FxVerso | Frente e verso saem do **mesmo** arquivo, aos pares: a frente da peça *i* é a página `i×2`, o verso é a `i×2+1`. Nove peças exigem 18 páginas. |
+| `duplex_unico` | FxVersoUnico | A frente é um PDF multipáginas — **uma página por peça** — e o verso é um arquivo de **uma página só**, repetido em todas. Nove peças são 9 páginas mais um verso. |
+
+Na lista, o modo aparece como selo ao lado do Tipo, e só quando **não** é Frente:
+sem ele, duas numerações que consomem o arquivo da arte de jeitos diferentes ficam
+visualmente idênticas na tabela.
+
+### A armadilha ao mexer nisso
+
+Até essa data o código perguntava `print_mode === 'duplex'` para responder a **duas**
+coisas diferentes, e com três valores elas se separam:
+
+* **"este trabalho tem verso?"** → `temVerso(...)`, verdadeira nos dois modos duplex;
+* **"como o arquivo é paginado?"** → só aqui `duplex` e `duplex_unico` diferem.
+
+Um `=== 'duplex'` do primeiro tipo deixado para trás não quebra nada na tela: ele
+some com o verso, e quem descobre é o operador, no papel.
+`tests/fxversounico_harness.js` mantém o inventário das comparações cruas que
+sobraram e reprova quando aparece uma nova sem classificação.
+
+**Cuidado com o nome.** `modoDeImpressaoDoModelo` já existia no `script.js` e
+responde outra coisa — sequencial ou blocado. Quem devolve Frente / FxVerso /
+FxVersoUnico de um modelo do pedido é `modoDeVersoDoModelo`.
+
+**O `verso_tipo` do ERP não conhece o terceiro modo.** Ele é coluna do parceiro Vibe
+e continua recebendo `Frente` / `FxVerso`, por decisão do usuário: quem guarda o
+FxVersoUnico é o `print_mode` da numeração, que é tabela nossa. Por isso a numeração
+só é consultada para **acrescentar** o terceiro modo — um modelo que o ERP marca como
+frente e verso continua com verso mesmo que a numeração dele diga `front`. Fazer a
+numeração mandar em tudo apagaria o verso de quase todo o cadastro: o levantamento de
+25/08/2026 não achou **nenhuma** numeração com `print_mode = 'duplex'` entre 86.
+
 ## `elements` nunca contém `METADATA` na leitura
 
 `api()` remove o elemento de tipo `METADATA` de toda numeração assim que ela chega

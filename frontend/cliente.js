@@ -1355,7 +1355,7 @@ async function initClientePage(numero, token) {
 
                     const resolvedNumId = idsDoBanco.numId || (prop ? prop.amostra_num_id : null);
                     const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
-                    const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && (matchedNum.print_mode === 'duplex' || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
+                    const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && ((typeof temVerso === 'function' ? temVerso(matchedNum.print_mode) : matchedNum.print_mode === 'duplex') || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
                     // 'Frente' faltava nesta lista: o operador grava exatamente esse
                     // valor ao trocar para uma numeração só frente, e sem ele o
                     // cliente continuava vendo o bloco de verso.

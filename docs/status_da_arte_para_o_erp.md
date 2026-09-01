@@ -33,6 +33,41 @@ significar "o link existe" e passou a significar "o cliente olhou".
 
 ---
 
+## O link de aprovação, pronto para usar
+
+`pedidos_links_cliente.**link**` traz a URL completa, pronta para abrir ou mandar ao
+cliente:
+
+```
+https://ideal-imposition.vercel.app/cliente/21415-71ep4v
+```
+
+É uma **coluna gerada** pelo banco a partir de `numero_pedido` e `token` — ela nunca fica
+desatualizada e não aceita escrita direta. Casa com o pedido pela coluna `id_int`.
+
+```sql
+select id_int, link, status_arte, arte_pronta_em, cliente_abriu_em
+  from pedidos_links_cliente
+ where ativo is true;
+```
+
+> [!IMPORTANT]
+> **Filtre sempre por `ativo is true`.** Link revogado não abre.
+>
+> **O token dentro da URL é uma senha.** Quem tem o link aprova a arte, e aprovar arte é
+> autorizar a impressão. Ele não pode ir para log, para query string, nem para tela que
+> outra pessoa veja.
+
+As colunas irmãs, úteis no mesmo select:
+
+| Coluna | O que diz |
+|---|---|
+| `arte_pronta_em` | quando esta versão da arte ficou pronta e o link passou a valer |
+| `cliente_abriu_em` | quando o cliente olhou a arte — vazio enquanto ele não abriu |
+| `status_arte` | o estágio, na grafia do painel |
+
+---
+
 ## Onde cada palavra é gravada
 
 | Campo | Responde | Efeito na Lista de Arte |

@@ -227,6 +227,10 @@ async def submit_print_job(
 async def impose_file(
     request: Request,
     file: UploadFile | None = File(None),
+    # FxVersoUnico: a arte do verso, um arquivo de UMA pagina que se repete em
+    # todas as pecas. Opcional -- so o `duplex_unico` de um modelo sozinho o
+    # manda; a multi-selecao ja manda o verso por arte, em `pdf_verso_url`.
+    file_verso: UploadFile | None = File(None),
     csv_file: UploadFile | None = File(None),
     multi_artes_files: list[UploadFile] = File(default=[]),
     payload: str = Form(...),
@@ -271,6 +275,19 @@ async def impose_file(
         elif data.get("schema") != "multi_artes" and not data.get("multi_artes"):
             raise HTTPException(status_code=400, detail="Arquivo principal nao enviado.")
 
+        # A arte do verso vai para um temporario proprio, apagado no fim junto
+        # com os das multi_artes. Nao entra no cache de artes porque e um
+        # arquivo pequeno e de vida curta -- o cache existe para a frente, que e
+        # pesada e costuma repetir entre trabalhos.
+        base_file_verso_path = None
+        if file_verso is not None and getattr(file_verso, "filename", None):
+            ext_v = os.path.splitext(file_verso.filename)[1].lower() or ".pdf"
+            if ext_v not in [".pdf", ".jpg", ".jpeg", ".png"]:
+                raise HTTPException(status_code=400, detail=f"Formato de verso nao suportado: {ext_v}")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext_v) as tmp_v:
+                tmp_v.write(await file_verso.read())
+                base_file_verso_path = tmp_v.name
+
         # Saída: arquivo temp para o engine escrever
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
             out_pdf_path = tmp_out.name
@@ -313,14 +330,20 @@ async def impose_file(
             _pn = _ma.get("pdf_name"); _lp = _ma.get("local_path")
             print(f"[multi_artes:agent] Arte pdf_name={_pn!r} -> local_path={_lp is not None}")
 
-        # Forçar print_mode para duplex se qualquer item em multi_artes tiver verso
+        # Forçar print_mode para duplex se qualquer item em multi_artes tiver verso.
+        #
+        # So quando o valor atual e `front`: `duplex_unico` JA diz que ha verso,
+        # e rebaixa-lo para `duplex` faria o motor consumir as paginas aos pares
+        # -- 9 pecas viravam 5, com a frente saltando de duas em duas. Ver
+        # `tem_verso`/`verso_unico` no engine.py.
         print_mode_val = data.get("print_mode", "front")
         if data.get("schema") == "multi_artes" or len(multi_artes_list) > 0:
-            if any(ma.get("pdf_verso_url") for ma in multi_artes_list):
+            if print_mode_val == "front" and any(ma.get("pdf_verso_url") for ma in multi_artes_list):
                 print_mode_val = "duplex"
 
         config = ImpositionConfig(
             base_file=base_file_path,
+            base_file_verso=base_file_verso_path,
             out_pdf=out_pdf_path,
             formato=formato,
             numeracao=numeracao,
@@ -356,6 +379,8 @@ async def impose_file(
             for temp_path in temp_paths_ma:
                 if os.path.exists(temp_path):
                     background_tasks.add_task(os.remove, temp_path)
+            if base_file_verso_path and os.path.exists(base_file_verso_path):
+                background_tasks.add_task(os.remove, base_file_verso_path)
             if os.path.exists(out_pdf_path):
                 background_tasks.add_task(os.remove, out_pdf_path)
 

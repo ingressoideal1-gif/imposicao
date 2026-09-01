@@ -4,6 +4,107 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-31] — FxVersoUnico: a frente pagina, o verso é um só
+
+Pedido do usuário: **"na lista de numeração, vamos criar mais um tipo de Modo de
+Impressão, já temos Frente, FxVerso, e agora teremos FxVersoUnico. Neste modo de
+impressão teremos a frente sendo um pdf Multi-páginas e o verso uma página única
+que deverá ser repetida para todas as frentes. Exemplo: Pdf multipáginas com 9
+páginas + verso de uma página, este verso deverá ocupar 9 células pares."**
+
+### Por que não saía
+
+O Pdf Paginado em FxVerso consome as páginas **aos pares**: a frente da peça *i*
+é a página `i×2` e o verso é a `i×2+1`. Um trabalho de 9 ingressos exigia, ali,
+um arquivo de **18 páginas intercaladas** — e `total_items` dividia o número de
+páginas por dois para achar a quantidade.
+
+O caminho do arquivo separado de verso já existia, mas estava fechado dos dois
+lados. No card do pedido, a linha de upload "🖼️ Verso" **sumia** no modo PDF,
+justamente porque ali o verso saía das páginas pares. No motor, o `pdf_verso_url`
+de uma arte só era anexado **quando a frente tinha menos de duas páginas** — com
+9 páginas na frente, o verso era ignorado em silêncio.
+
+### As três decisões do usuário
+
+1. **A página do verso vem do campo Verso do modelo**, o mesmo botão que já
+   existe no card — não da última página do arquivo da frente.
+2. **A numeração continua variando no verso.** A arte é a mesma nas nove
+   células; número, QR e código de barras da face verso mudam peça a peça.
+3. **O modo se escolhe só nas telas nossas** — a numeração e a janela de
+   Imposição/Pedido. A coluna `pedidos_modelos.verso_tipo` é do ERP parceiro e
+   continua recebendo `Frente` / `FxVerso`: quem guarda o terceiro modo é o
+   `print_mode` da numeração, que é tabela nossa. Nenhum texto novo entra na
+   tabela do parceiro, e nenhum SQL foi preciso — a coluna é `TEXT` sem `CHECK`.
+
+### A armadilha que deu o trabalho
+
+`print_mode === 'duplex'` respondia sozinho a **duas** perguntas diferentes:
+
+* **"este trabalho tem verso?"** — verdadeira nos dois modos duplex;
+* **"como o arquivo é paginado?"** — só aqui os dois diferem.
+
+Um `=== 'duplex'` do primeiro tipo deixado para trás não quebra nada na tela: a
+face `back` da numeração vira `front`, o QR do verso some da folha, e quem
+descobre é o operador no papel. Por isso o trabalho começou por um **inventário**
+dos 46 pontos do painel e 11 do motor, classificando cada um antes de mexer. Os
+que sobraram como `=== 'duplex'` são todos da segunda pergunta, e
+`tests/fxversounico_harness.js` os mantém numa lista fechada — uma comparação
+nova sem classificação reprova a suíte.
+
+**Uma colisão de nome no caminho:** `modoDeImpressaoDoModelo` já existia no
+`script.js` e responde outra coisa — sequencial ou blocado. A função nova chama-se
+`modoDeVersoDoModelo`. Fossem as duas com o mesmo nome, a última declarada
+venceria no navegador e todas as chamadas do verso receberiam a resposta da
+paginação.
+
+### O que mudou, ponta a ponta
+
+**Na numeração:** o seletor ganhou a terceira opção, a face do verso do editor
+abre nos dois modos duplex, e a lista passou a mostrar um selo com o modo ao lado
+do Tipo — sem ele, duas numerações que consomem o arquivo de jeitos diferentes
+ficavam visualmente idênticas na tabela.
+
+**No card do pedido:** a linha "🖼️ Verso" volta a aparecer quando o modo é
+FxVersoUnico. É por ali que entra o PDF de uma página.
+
+**Na prévia:** o rótulo da célula deixa de ser `p. 11 / 12` e passa a `p. 6 / V` —
+o `V` diz que aquele verso é o mesmo em todas. Sem arquivo de verso a célula sai
+vazia e o rótulo diz `(sem verso)`, em vez de desenhar a frente da peça 1 no
+lugar do verso.
+
+**Na conta:** 9 páginas são 9 peças. Só o FxVerso clássico divide por dois.
+
+**No motor:** `_load_base_as_pdf` anexa a página de verso ao fim do documento da
+frente e guarda o índice em `cfg.verso_page_idx`; a frente anda `local_idx` e o
+verso fica **parado** nesse índice. No `multi_artes` o anexo passou a valer com
+qualquer número de páginas na frente, com uma memória do par (frente, verso) para
+não anexar duas vezes quando dois modelos dividem o mesmo arquivo — o
+`_load_art_as_pdf` guarda o documento por URL, e o `insert_pdf` altera o objeto
+guardado.
+
+**No transporte:** um modelo sozinho não passa por `multi_artes` — manda a arte
+como upload —, então o painel envia o verso num campo próprio, `file_verso`, que
+o agente grava num temporário e entrega em `base_file_verso`. A multi-seleção já
+mandava `pdf_verso_url` por arte e não mudou.
+
+Nada aqui rasteriza a arte do cliente: o verso entra por `insert_pdf` e sai por
+`show_pdf_page`, vetorial, igual à frente.
+
+### Conferido por
+
+`tests/test_pdf_duplex_unico.py` monta 9 páginas de frente e 1 de verso num
+formato de 4 células e prova as quatro coisas: `total_items` é 9 e não 5, as
+células de verso usam todas a mesma página de origem, as de frente usam páginas
+distintas na ordem, e a numeração de face `back` muda de célula para célula. O
+`test_pdf_duplex.py` continua **intacto** e passando — o FxVerso de hoje não pode
+mudar de comportamento.
+
+Do lado do painel, `tests/fxversounico_harness.js` (46 conferências) e
+`tests/test_fxversounico_painel.py`.
+
+---
+
 ## [2026-08-31] — A escala da arte vale também para o upload comum
 
 Pedido do usuário, logo depois de a escala entrar no modo PDF Multi-Página:
@@ -96,6 +197,27 @@ Documentado em `docs/DOCUMENTACAO.md`, seção 11.
 > [!NOTE]
 > A tela do cliente (link de aprovação) desenha o PDF por conta própria e continua
 > mostrando a arte no tamanho natural. Combinado com o usuário na hora do pedido.
+
+---
+
+## [2026-08-31] — A coluna `link`: a URL de aprovação pronta para o ERP
+
+Pedido do usuário: *"vamos criar a coluna na tabela e salvar o link já pronto para uso"*,
+depois de perguntar em que tabela e coluna o ERP parceiro acharia o link.
+
+Até aqui a URL não existia em lugar nenhum — era montada pelo frontend a partir de
+`numero_pedido` e `token`. Agora `pedidos_links_cliente.link` traz o endereço completo.
+
+- **Coluna GERADA (`GENERATED ALWAYS ... STORED`)**, e não preenchida pelo painel. Coluna
+  comum precisaria de alguém para preencher em todos os caminhos que criam ou mexem num
+  link; um caminho esquecido daria link vazio, ou o link de outro pedido depois de uma
+  troca de token. Link errado só falha na mão do cliente.
+- As 73 linhas existentes foram preenchidas na hora do `ALTER TABLE`, todas no formato
+  certo.
+- **O formato passou a morar em quatro arquivos**, e há teste comparando os quatro —
+  inclusive o domínio contra `PAINEL_BASE_URL`, do `security_config.py`.
+
+`sql/link_pronto_para_o_erp.sql`. Documentado em `docs/status_da_arte_para_o_erp.md`.
 
 ---
 

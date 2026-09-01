@@ -47,6 +47,10 @@ function desenhar(state, filtros) {
     };
     const fonte = [recortar('escapeHtml'), recortar('escapeJsAttr'),
                    recortar('numeracaoEhCompartilhadaDoCliente'),
+                   // O selo do Modo de Impressao (31/08/2026): a linha da tabela
+                   // pergunta se a numeracao tem verso e qual dos dois modos e.
+                   recortar('temVerso'), recortar('versoUnico'),
+                   recortar('rotuloDoModoDeImpressao'),
                    recortar('renderNumeracoes')].join('\n');
     new Function('state', 'document', fonte + '\nrenderNumeracoes();')(state, document);
     return { html: container.innerHTML, vazio: vazio.style.display, recado: recado.textContent };
