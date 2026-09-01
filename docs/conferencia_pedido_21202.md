@@ -100,6 +100,12 @@ todas as colunas.
 
 Consulta em [`sql/consultas/conferir_contratado_x_banco.sql`](../sql/consultas/conferir_contratado_x_banco.sql).
 
+> **Nota de 01/09/2026:** essa consulta foi reescrita para cobrir também o banco
+> que mora no PEDIDO (`pedidos_bancos` + `csv_mapa`), porque na forma antiga ela
+> devolvia *zero linhas* nos pedidos do desenho novo — silêncio que se lê como
+> "tudo certo". O resultado do 21202 não mudou; ver
+> [`conferencia_pedido_21460.md`](conferencia_pedido_21460.md), seção 5.
+
 **Os 51 modelos batem: `contratada = imprime`, `falta = 0` em todos.**
 
 Um único modelo tem banco maior do que imprime, e é legítimo:

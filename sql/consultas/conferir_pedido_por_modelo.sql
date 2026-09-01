@@ -1,18 +1,29 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_pedido_por_modelo.sql
--- Documentado em docs/conferencia_pedido_21202.md
+-- Documentado em docs/conferencia_pedido_21202.md e docs/conferencia_pedido_21460.md
 --
 -- Tres perguntas sobre cada modelo do pedido:
 --   1. o banco entrega a quantidade contratada?
 --   2. o DIA do nome do modelo bate com o dia no nome da numeracao?
 --   3. ha' banco compartilhado sem recorte?
 --
--- ATENCAO — a armadilha: a pergunta 1 NAO se responde com
+-- ATENCAO 1 — a armadilha original: a pergunta 1 NAO se responde com
 -- `jsonb_array_length(csv_data)`. Esse e' o banco CRU, e o produto aplica o corte
 -- de `linhasComDadoDaNumeracao` antes de decidir o que o modelo imprime: linha
 -- sem dado em nenhuma das colunas que ESTA numeracao le nao e' celula deste
 -- modelo. Ver o cabecalho de conferir_contratado_x_banco.sql para o alarme falso
 -- que a versao ingenua produziu em 29/08/2026.
+--
+-- ATENCAO 2 — o banco pode nao estar dentro da numeracao. Desde 27/08/2026 ele
+-- e' um registro do PEDIDO (`pedidos_bancos`), e a coluna de cada elemento vem
+-- do modelo (`pedidos_modelos_banco.csv_mapa`, chave `el:<id>`). Sem isso a
+-- conferencia dava "numeracao sem banco" em modelo que tem banco — foi o que
+-- teria acontecido com os cinco modelos do 21460.
+--
+-- ATENCAO 3 — "banco compartilhado sem recorte" (achado 5) so' vale para o
+-- caminho legado. Com banco do pedido, compartilhar e' o normal: cada modelo le
+-- a SUA coluna do mesmo banco-mestre, e nao ha o que recortar. Por isso o achado
+-- 5 nao dispara quando os modelos leem colunas diferentes.
 --
 -- O gabarito_operacional do ERP NAO entra na conferencia: ele diverge da
 -- numeracao em casos onde a numeracao esta certa (o modelo 1000602 e' de 12/set,
@@ -26,20 +37,31 @@ with m as (
          pm.csv_selecao is not null                      as tem_recorte,
          n.id                                            as num_id,
          n.name                                          as numeracao_ligada,
-         n.csv_data::jsonb                               as banco,
+         coalesce(b.csv_data::jsonb, n.csv_data::jsonb)  as banco,
+         case when b.id is null then 'na numeracao' else 'do pedido: ' || b.nome end as origem_do_banco,
          coalesce(n.elements::jsonb, '[]'::jsonb)        as elems,
+         coalesce(v.csv_mapa::jsonb, '{}'::jsonb)        as mapa,
          count(*) over (partition by n.id)               as modelos_na_mesma,
          substring(pm.nome_modelo from '^([0-9]{2})/')   as dia_do_modelo,
          substring(n.name from '([0-9]{2})$')            as dia_da_numeracao
   from pedidos_modelos pm
   left join producao_numeracoes n on n.id::text = pm.amostra_num_id::text
-  where pm.id_int = 21202  /* <<< TROQUE AQUI o numero do pedido */
+  left join pedidos_modelos_banco v on v.modelo_id = pm.id::text
+  left join pedidos_bancos b on b.id = v.banco_id
+  where pm.id_int = 21460  /* <<< TROQUE AQUI o numero do pedido */
 ),
+-- Espelho de `BancoDoModelo.colunaDoElemento`: a chave por elemento (`el:<id>`)
+-- vence sempre; sem ela vale o `csv_column` da peca, passado pelo mapa por nome.
 cols as (
   select m.id,
          array_remove(array_agg(distinct case
-             when e->>'source' = 'database' and btrim(coalesce(e->>'csv_column','')) <> ''
-             then e->>'csv_column' end), null) as colunas
+             when e->>'source' = 'database' then
+               coalesce(
+                 nullif(btrim(coalesce(m.mapa->>('el:' || coalesce(e->>'id','')), '')), ''),
+                 nullif(btrim(coalesce(m.mapa->>(e->>'csv_column'), '')), ''),
+                 nullif(btrim(coalesce(e->>'csv_column','')), '')
+               )
+             end), null) as colunas
   from m left join lateral jsonb_array_elements(m.elems) e on true
   group by m.id
 ),
@@ -51,26 +73,32 @@ conta as (
                 and (coalesce(array_length(c.colunas,1),0) = 0
                      or exists (select 1 from unnest(c.colunas) k
                                  where btrim(coalesce(r->>k,'')) <> '')))
-         end as imprime
+         end as imprime,
+         -- Quantos modelos deste pedido leem EXATAMENTE as mesmas colunas desta
+         -- numeracao. E' isso que caracteriza banco compartilhado de verdade;
+         -- ler colunas diferentes do mesmo banco-mestre e' o desenho normal.
+         count(*) over (partition by m.num_id, c.colunas)  as modelos_nas_mesmas_colunas
   from m join cols c on c.id = m.id
 )
 select id,
        contratada,
        imprime,
        case
-         when numeracao_ligada is null                 then '1. SEM NUMERACAO LIGADA'
-         when imprime is null                          then '2. numeracao sem banco'
-         when contratada <> imprime                    then '3. O QUE IMPRIME NAO BATE COM O CONTRATADO'
+         when numeracao_ligada is null                        then '1. SEM NUMERACAO LIGADA'
+         when imprime is null                                 then '2. numeracao sem banco'
+         when contratada <> imprime                           then '3. O QUE IMPRIME NAO BATE COM O CONTRATADO'
          when dia_do_modelo is not null
           and dia_da_numeracao is not null
-          and dia_do_modelo <> dia_da_numeracao        then '4. DIA DIFERENTE'
-         when modelos_na_mesma > 1 and not tem_recorte then '5. banco compartilhado sem recorte'
+          and dia_do_modelo <> dia_da_numeracao               then '4. DIA DIFERENTE'
+         when modelos_nas_mesmas_colunas > 1 and not tem_recorte
+                                                              then '5. banco compartilhado sem recorte'
          else 'ok'
-       end                                             as achado,
-       jsonb_array_length(banco)                       as linhas_brutas,
+       end                                                    as achado,
+       case when banco is null then null else jsonb_array_length(banco) end as linhas_brutas,
        array_to_string(colunas, ' + ')                 as colunas_lidas,
+       origem_do_banco,
        dia_do_modelo, dia_da_numeracao,
-       modelos_na_mesma, tem_recorte,
+       modelos_na_mesma, modelos_nas_mesmas_colunas, tem_recorte,
        numeracao_ligada,
        gabarito_do_erp,
        nome_modelo
@@ -82,7 +110,7 @@ order by
       when contratada <> imprime then 3
       when dia_do_modelo is not null and dia_da_numeracao is not null
            and dia_do_modelo <> dia_da_numeracao then 4
-      when modelos_na_mesma > 1 and not tem_recorte then 5
+      when modelos_nas_mesmas_colunas > 1 and not tem_recorte then 5
       else 9
     end,
     id;

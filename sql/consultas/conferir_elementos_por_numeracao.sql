@@ -1,7 +1,7 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_elementos_por_numeracao.sql
 -- Documentado em docs/conferencia_pedido_21202.md
--- Somente leitura: o que cada numeracao do pedido 21202 manda DESENHAR em cada
+-- Somente leitura: o que cada numeracao do pedido manda DESENHAR em cada
 -- item. QR e codigo de barras sao os caros: sao gerados por item, na CPU.
 select
     n.name,
@@ -15,7 +15,7 @@ left join lateral jsonb_array_elements(coalesce(n.elements::jsonb, '[]'::jsonb))
 where n.id::text in (
     select distinct pm.amostra_num_id::text
     from pedidos_modelos pm
-    where pm.id_int = 21202  /* <<< TROQUE AQUI o numero do pedido */ and pm.amostra_num_id is not null
+    where pm.id_int = 21460  /* <<< TROQUE AQUI o numero do pedido */ and pm.amostra_num_id is not null
 )
 group by n.id, n.name, n.elements
 order by qr desc, barras desc, n.name

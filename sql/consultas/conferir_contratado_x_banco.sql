@@ -1,20 +1,25 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_contratado_x_banco.sql
--- Documentado em docs/conferencia_pedido_21202.md
+-- Documentado em docs/conferencia_pedido_21202.md e docs/conferencia_pedido_21460.md
 --
 -- A quantidade contratada bate com o que o modelo REALMENTE imprime?
 --
--- ATENCAO — a armadilha que esta consulta existe para evitar:
+-- ATENCAO 1 — a armadilha original (29/08/2026):
 -- contar `jsonb_array_length(csv_data)` NAO responde a pergunta. Esse e' o banco
--- CRU. O `fatiaCsvDoItem` do frontend aplica dois cortes antes de decidir o que
--- o modelo imprime:
---   1. o recorte do modelo (csv_selecao), quando existe;
---   2. `linhasComDadoDaNumeracao` — linha sem dado em NENHUMA das colunas que
---      ESTA numeracao le nao e' celula deste modelo.
--- Em 29/08/2026 a versao ingenua desta consulta acusou o modelo 1000565 de ter
--- 3.000 contratadas contra 12.806 linhas. Era banco-mestre: so 3.000 linhas
--- tinham a coluna `Codigo` preenchida, e o material ja tinha saido certo.
--- Alarme falso em conferencia e' pior do que conferencia nenhuma.
+-- CRU. O produto aplica `linhasComDadoDaNumeracao` antes de decidir o que o
+-- modelo imprime: linha sem dado em NENHUMA das colunas que ESTA numeracao le
+-- nao e' celula deste modelo. A versao ingenua acusou o modelo 1000565 de ter
+-- 3.000 contratadas contra 12.806 linhas; era banco-mestre, e o material ja
+-- tinha saido certo.
+--
+-- ATENCAO 2 — a armadilha nova (01/09/2026):
+-- desde 27/08/2026 o banco pode NAO estar dentro da numeracao. Ele e' um
+-- registro do PEDIDO (`pedidos_bancos`), e o modelo diz a qual se liga e qual
+-- coluna alimenta cada elemento (`pedidos_modelos_banco.csv_mapa`, chave
+-- `el:<id>`). A versao anterior desta consulta exigia `n.csv_data is not null` e
+-- por isso devolvia ZERO LINHAS no pedido 21460 — cinco modelos conferidos por
+-- uma consulta que nao olhou nenhum, sem nada na tela dizendo isso. Silencio em
+-- conferencia se le como "tudo certo", e e' pior que alarme falso.
 --
 -- O corte por csv_selecao NAO e' reproduzido aqui (a semantica dele mora no
 -- CsvEditor.fatiaDoModelo). A coluna `tem_recorte` avisa quando ele existe: nesse
@@ -22,44 +27,58 @@
 with m as (
   select pm.id,
          pm.nome_modelo,
-         pm.quantidade                             as contratada,
-         pm.csv_selecao is not null                as tem_recorte,
-         n.name                                    as numeracao,
-         n.csv_data::jsonb                         as banco,
-         coalesce(n.elements::jsonb, '[]'::jsonb)  as elems
+         pm.quantidade                                   as contratada,
+         pm.csv_selecao is not null                      as tem_recorte,
+         n.name                                          as numeracao,
+         -- De onde este modelo bebe: o banco do pedido, quando ha vinculo, ou o
+         -- CSV de dentro da numeracao. E' o `BancoDoModelo.numeracaoResolvida`.
+         coalesce(b.csv_data::jsonb, n.csv_data::jsonb)  as banco,
+         case when b.id is null then 'na numeracao' else 'do pedido: ' || b.nome end as origem_do_banco,
+         coalesce(n.elements::jsonb, '[]'::jsonb)        as elems,
+         coalesce(v.csv_mapa::jsonb, '{}'::jsonb)        as mapa
   from pedidos_modelos pm
   join producao_numeracoes n on n.id::text = pm.amostra_num_id::text
-  where pm.id_int = 21202  /* <<< TROQUE AQUI o numero do pedido */
-    and n.csv_data is not null
+  left join pedidos_modelos_banco v on v.modelo_id = pm.id::text
+  left join pedidos_bancos b on b.id = v.banco_id
+  where pm.id_int = 21460  /* <<< TROQUE AQUI o numero do pedido */
 ),
--- As colunas que a numeracao le do banco: elemento com source='database'.
--- E' a mesma lista de `colunasDoBancoDaNumeracao` no frontend.
+-- A coluna que cada elemento le NESTE modelo. Espelho de
+-- `BancoDoModelo.colunaDoElemento`: a chave por elemento (`el:<id>`) vence
+-- sempre; sem ela vale o `csv_column` da peca, ainda passado pelo mapa por
+-- nome — e e' assim que toda numeracao antiga continua funcionando.
 cols as (
   select m.id,
          array_remove(array_agg(distinct case
-             when e->>'source' = 'database' and btrim(coalesce(e->>'csv_column','')) <> ''
-             then e->>'csv_column' end), null) as colunas
+             when e->>'source' = 'database' then
+               coalesce(
+                 nullif(btrim(coalesce(m.mapa->>('el:' || coalesce(e->>'id','')), '')), ''),
+                 nullif(btrim(coalesce(m.mapa->>(e->>'csv_column'), '')), ''),
+                 nullif(btrim(coalesce(e->>'csv_column','')), '')
+               )
+             end), null) as colunas
   from m left join lateral jsonb_array_elements(m.elems) e on true
   group by m.id
 ),
 conta as (
   select m.*, c.colunas,
-         (select count(*) from jsonb_array_elements(m.banco) r
-            where coalesce(r->>'__ativo','true') <> 'false'
-              and (coalesce(array_length(c.colunas,1),0) = 0
-                   or exists (select 1 from unnest(c.colunas) k
-                               where btrim(coalesce(r->>k,'')) <> ''))
-         ) as imprime
+         case when m.banco is null then null else
+           (select count(*) from jsonb_array_elements(m.banco) r
+              where coalesce(r->>'__ativo','true') <> 'false'
+                and (coalesce(array_length(c.colunas,1),0) = 0
+                     or exists (select 1 from unnest(c.colunas) k
+                                 where btrim(coalesce(r->>k,'')) <> '')))
+         end as imprime
   from m join cols c on c.id = m.id
 )
 select id,
        contratada,
-       jsonb_array_length(banco)          as linhas_brutas,
+       case when banco is null then null else jsonb_array_length(banco) end as linhas_brutas,
        imprime,
        contratada - imprime               as falta,
        tem_recorte,
        array_to_string(colunas, ' + ')    as colunas_lidas,
+       origem_do_banco,
        numeracao,
        nome_modelo
 from conta
-order by abs(contratada - imprime) desc, id;
+order by abs(coalesce(contratada - imprime, 999999)) desc, id;
