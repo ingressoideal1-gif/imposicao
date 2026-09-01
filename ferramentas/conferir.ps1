@@ -7,7 +7,7 @@
     rodar a qualquer momento, quantas vezes quiser.
 
     Existe para que a vigilancia nao dependa de alguem lembrar os comandos
-    certos. Sete perguntas, sempre as mesmas:
+    certos. Oito perguntas, sempre as mesmas:
 
       1. Ha commits feitos que ainda nao foram publicados?
       2. Ha trabalho pendente na pasta?
@@ -16,6 +16,7 @@
       5. Ha algum segredo em arquivo versionado?
       6. Os testes passam?
       7. A CLI do Supabase esta ligada ao projeto certo?
+      8. O link do cliente abre para quem nao tem sessao?
 
 .EXAMPLE
     .\ferramentas\conferir.ps1
@@ -188,6 +189,89 @@ if (-not (Test-Path "$raiz\supabase")) {
     } else {
         Write-Host "     $problema" -ForegroundColor Red
         Alerta "Projeto Supabase: $problema"
+    }
+}
+
+# ─── 8. O link do cliente abre para quem nao tem sessao? ─────────────────
+#
+# POR QUE ESTA PERGUNTA EXISTE
+#
+# Em 01/09/2026 o Portal do Pedido parou de abrir no celular dos clientes, e
+# continuou abrindo no computador da grafica. A diferenca nao era o aparelho: no
+# computador o navegador ja tem sessao do painel, entao a chamada sai como
+# `authenticated`; no celular do cliente nao ha sessao nenhuma, e ela sai como
+# `anon`. As quatro funcoes do link tinham perdido o EXECUTE para `anon` --
+# levadas junto por uma faxina de privilegios do lado do ERP parceiro, que fechou
+# um lote de funcoes internas dele.
+#
+# Nada aqui teria pego isso: o site estava no ar, o agente em dia, os testes
+# passando, e a tela do cliente dizia "link invalido ou expirado" -- que e como o
+# `cliente.js` traduz a recusa do banco. Fica esta pergunta para que a proxima vez
+# apareca aqui, e nao pela reclamacao de um cliente.
+#
+# A conferencia usa um numero de pedido que nao existe, de proposito: com token
+# invalido as funcoes nao leem, nao escrevem e nao contam acesso nenhum. O que se
+# mede e so o direito de chamar -- HTTP 200 (chamou e nao achou) contra HTTP 401
+# (nem pode chamar).
+Titulo "8. Link do cliente (sem sessao, como o celular do cliente)"
+
+$anonUrl = ''
+$anonKey = ''
+$cfg = Get-Content -Raw -Encoding UTF8 -ErrorAction SilentlyContinue "$raiz\frontend\supabase-config.js"
+if ($cfg -match 'VIBECODE_SUPABASE_URL\s*=\s*"([^"]+)"') { $anonUrl = $Matches[1] }
+if ($cfg -match 'VIBECODE_ANON_KEY\s*=\s*"([^"]+)"')     { $anonKey = $Matches[1] }
+
+if (-not $anonUrl -or -not $anonKey) {
+    Write-Host "     nao achei a chave publica em frontend/supabase-config.js" -ForegroundColor Gray
+} else {
+    $funcoesDoLink = [ordered]@{
+        'link_cliente_abrir'  = @{ p_numero = '0'; p_token = 'conferencia' }
+        'link_cliente_pedido' = @{ p_numero = '0'; p_token = 'conferencia' }
+        'link_cliente_visto'  = @{ p_numero = '0'; p_token = 'conferencia' }
+        'link_cliente_status' = @{ p_numero = '0'; p_token = 'conferencia'; p_status = 'APROVADO' }
+    }
+    # SEM RESPOSTA NAO E "FECHADA".
+    #
+    # A distincao e o que faz esta pergunta valer alguma coisa: um alarme que
+    # dispara quando a internet oscila ensina o usuario a ignorar o alarme. Por
+    # isso HTTP 401/403 (o banco respondeu "voce nao pode") vira alerta, e a
+    # falta de resposta vira so um aviso cinza -- ninguem foi acusado de nada.
+    $fechadas = @()
+    $semResposta = @()
+    foreach ($nomeDaFuncao in @($funcoesDoLink.Keys)) {
+        $corpo = $funcoesDoLink[$nomeDaFuncao] | ConvertTo-Json -Compress
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($corpo)
+        $codigo = 0
+        # Duas tentativas: rede oscila mais vezes do que privilegio some, e
+        # privilegio nao volta sozinho entre uma tentativa e a outra.
+        foreach ($tentativa in 1..2) {
+            try {
+                $resp = Invoke-WebRequest -Method Post -Uri "$anonUrl/rest/v1/rpc/$nomeDaFuncao" `
+                    -Body $bytes -ContentType 'application/json; charset=utf-8' `
+                    -Headers @{ apikey = $anonKey; Authorization = "Bearer $anonKey" } `
+                    -UseBasicParsing -TimeoutSec 20
+                $codigo = [int]$resp.StatusCode
+            } catch {
+                $codigo = 0
+                if ($_.Exception.Response) { $codigo = [int]$_.Exception.Response.StatusCode }
+            }
+            if ($codigo -ne 0) { break }
+        }
+
+        if ($codigo -eq 200) { continue }
+        if ($codigo -eq 0)   { $semResposta += $nomeDaFuncao; continue }
+        $fechadas += "$nomeDaFuncao (HTTP $codigo)"
+    }
+
+    if ($fechadas.Count -gt 0) {
+        foreach ($f in $fechadas) { Write-Host "     FECHADA: $f" -ForegroundColor Red }
+        Write-Host "     o cliente ve 'link invalido ou expirado' no celular" -ForegroundColor Red
+        Alerta "Link do cliente fechado a chave publica. Rode: .\ferramentas\rodar_sql.ps1 sql\link_cliente_devolver_o_anon.sql"
+    } elseif ($semResposta.Count -gt 0) {
+        Write-Host "     sem resposta do banco agora — nao deu para conferir" -ForegroundColor Gray
+        Write-Host "     ($($semResposta -join ', '))" -ForegroundColor DarkGray
+    } else {
+        Write-Host "     as 4 funcoes do link abrem para a chave publica" -ForegroundColor Green
     }
 }
 

@@ -124,3 +124,40 @@ def test_o_arquivo_sql_nao_fecha_nada():
     sql = _sem_comentarios(_ler(SQL)).upper()
     for perigoso in ("REVOKE", "DROP TABLE", "ALTER TABLE", "ENABLE ROW LEVEL SECURITY"):
         assert perigoso not in sql, perigoso
+
+
+def test_a_conferencia_pergunta_se_o_link_abre_sem_sessao():
+    """O privilegio some sem aviso, e o site continua no ar quando some.
+
+    Em 01/09/2026 as quatro funcoes do link perderam o EXECUTE da chave anonima
+    -- levadas junto por uma faxina de privilegios do ERP parceiro, que fechou um
+    lote de funcoes internas dele. O efeito: o Portal abria no computador da
+    grafica (onde o navegador tem sessao do painel, e a chamada sai como
+    `authenticated`) e nao abria no celular do cliente (sem sessao nenhuma, a
+    chamada sai como `anon`). A tela dizia "link invalido ou expirado", porque e
+    assim que o `cliente.js` traduz a recusa do banco.
+
+    Nada apontava para isso: commits publicados, agente em dia, testes passando.
+    Quem descobriu foi um cliente. A pergunta 8 do `conferir.ps1` existe para que
+    a proxima vez apareca na conferencia, e este teste existe para que a pergunta
+    nao seja apagada sem que alguem note.
+    """
+    conferir = _ler(os.path.join(RAIZ, "ferramentas", "conferir.ps1"))
+    for funcao in ("link_cliente_abrir", "link_cliente_pedido",
+                   "link_cliente_status", "link_cliente_visto"):
+        assert funcao in conferir, funcao
+    # Com a chave PUBLICA, que e a que o celular do cliente usa. Conferir com a
+    # chave de servico responderia 200 sempre e nao mediria nada.
+    assert "VIBECODE_ANON_KEY" in conferir
+    # E o conserto vai escrito ao lado do alarme: trava sem saida nao serve.
+    assert "link_cliente_devolver_o_anon.sql" in conferir
+
+
+def test_o_arquivo_que_devolve_o_anon_e_so_grant():
+    """Ele repoe privilegio, e nao pode aproveitar a viagem para mexer em mais
+    nada -- e tem de continuar podendo rodar duas vezes sem estrago."""
+    sql = _sem_comentarios(_ler(os.path.join(
+        RAIZ, "sql", "link_cliente_devolver_o_anon.sql"))).upper()
+    assert sql.count("GRANT EXECUTE ON FUNCTION") == 4
+    for perigoso in ("REVOKE", "DROP", "ALTER TABLE", "UPDATE ", "DELETE "):
+        assert perigoso not in sql, perigoso
