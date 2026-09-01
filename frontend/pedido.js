@@ -5369,6 +5369,24 @@ window.runPedImposition = async function (mode, isRefazer) {
         await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('ped-numeracao'));
     }
 
+    // E os bancos que sao do PEDIDO (01/09/2026). Esta era a tela do defeito do
+    // 21460: ate aqui so a de Amostras os carregava, entao quem abrisse o pedido
+    // e clicasse em Gerar PDF ou Imprimir mandava ao motor uma numeracao sem
+    // linha nenhuma -- e o QR saia com o numero sequencial no lugar do codigo.
+    // Ver `garantirBancosDoTrabalho` no script.js.
+    if (typeof garantirBancosDoTrabalho === 'function' && typeof osIdsDoTrabalho === 'function') {
+        await garantirBancosDoTrabalho(osIdsDoTrabalho());
+        const semSaberDoBanco = typeof modelosComBancoNaoConferido === 'function'
+            ? modelosComBancoNaoConferido() : [];
+        if (semSaberDoBanco.length) {
+            toast('Não consegui ler os bancos de dados deste pedido para: '
+                + semSaberDoBanco.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+                + '. Imprimir agora sairia com número sequencial no lugar do código. '
+                + 'Confira a conexão da estação e clique de novo.', 'error');
+            return;
+        }
+    }
+
     // A mesma trava, do lado do banco que e do PEDIDO (27/08/2026): vinculo cujo
     // banco nao chegou imprimiria numero no lugar do nome, sem avisar.
     if (typeof modelosSemBancoDoTrabalho === 'function') {

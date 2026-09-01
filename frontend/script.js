@@ -1182,14 +1182,28 @@ window.carregarBancosDoPedidoNovo = carregarBancosDoPedidoNovo;
  * multipla e o modelo aberto.
  */
 function modelosSemBancoDoTrabalho() {
-    const osIds = new Set();
-    (state.selectedOSItems || []).forEach(sel => { if (sel && sel.osId) osIds.add(sel.osId); });
-    if (state.activeOSItem && state.activeOSItem.osId) osIds.add(state.activeOSItem.osId);
     let fora = [];
-    osIds.forEach(osId => { fora = fora.concat(modelosComBancoNaoBaixado(osId)); });
+    osIdsDoTrabalho().forEach(osId => { fora = fora.concat(modelosComBancoNaoBaixado(osId)); });
     return fora;
 }
 window.modelosSemBancoDoTrabalho = modelosSemBancoDoTrabalho;
+
+/**
+ * De quais PEDIDOS sai o trabalho da tela atual: a selecao multipla e o modelo
+ * aberto. Os mesmos que o `idsDeNumeracaoDoTrabalho` olha.
+ *
+ * Estava escrito tres vezes, quase igual. Vale uma definicao so pelo motivo de
+ * sempre neste projeto: duas definicoes de "quais pedidos" divergem no dia em
+ * que uma delas mudar, e o sintoma seria a trava conferindo um pedido enquanto
+ * a carga busca outro -- uma ponta esperando o que a outra nunca manda.
+ */
+function osIdsDoTrabalho() {
+    const osIds = new Set();
+    (state.selectedOSItems || []).forEach(sel => { if (sel && sel.osId) osIds.add(sel.osId); });
+    if (state.activeOSItem && state.activeOSItem.osId) osIds.add(state.activeOSItem.osId);
+    return Array.from(osIds);
+}
+window.osIdsDoTrabalho = osIdsDoTrabalho;
 
 function modelosComBancoNaoBaixado(osId) {
     const itens = (state.osItens && state.osItens[osId]) || [];
@@ -1214,11 +1228,8 @@ window.modelosComBancoNaoBaixado = modelosComBancoNaoBaixado;
  */
 function modelosComElementoSemColuna() {
     if (!window.BancoDoModelo) return [];
-    const osIds = new Set();
-    (state.selectedOSItems || []).forEach(sel => { if (sel && sel.osId) osIds.add(sel.osId); });
-    if (state.activeOSItem && state.activeOSItem.osId) osIds.add(state.activeOSItem.osId);
     const fora = [];
-    osIds.forEach(osId => {
+    osIdsDoTrabalho().forEach(osId => {
         ((state.osItens && state.osItens[osId]) || []).forEach(it => {
             const v = vinculoDeBancoDoModelo(it);
             if (!v) return;
@@ -1452,6 +1463,109 @@ async function garantirCsvDoTrabalho(ids) {
     }
 }
 window.garantirCsvDoTrabalho = garantirCsvDoTrabalho;
+
+/**
+ * Os bancos do PEDIDO na mao antes de o payload ser montado.
+ *
+ * ## O defeito que isto conserta (01/09/2026)
+ *
+ * O `garantirCsvDoTrabalho` acima cobre o banco que mora DENTRO da numeracao.
+ * O banco que e do pedido (`pedidos_bancos` + `pedidos_modelos_banco`, desde
+ * 27/08/2026) nao tinha o equivalente: ele so era carregado pela tela de
+ * Amostras, dentro do `renderAmostrasOSItens`, sob a condicao
+ * `containerId === 'amostras-itens-container'`.
+ *
+ * Quem abrisse a tela do Pedido e mandasse imprimir sem passar por Amostras
+ * tinha `bancosDoPedido` e `vinculosDeBanco` vazios. Sem vinculo, o
+ * `resolverNumeracaoParaModelo` devolve a peca CRUA -- `csv_data` nulo e o
+ * `csv_column` do elemento vazio --, o motor recebe zero linhas e o ramo final
+ * do `_render_element` imprime o NUMERO SEQUENCIAL dentro do QR. Foi o que o
+ * usuario viu no pedido 21460, nos tres botoes: imposicao, impressao e PDF.
+ *
+ * A trava que devia impedir isso estava cega pelo mesmo motivo: ela parte do
+ * `vinculoDeBancoDoModelo`, que le o mesmo `state.vinculosDeBanco` que nunca
+ * foi carregado. "Nunca olhei" e "nao tem banco" davam a mesma resposta.
+ *
+ * Nunca lanca: quem recusa o trabalho e o `pedidosComBancoDesconhecido` logo
+ * abaixo, que sabe dizer ao operador o que fazer.
+ */
+async function garantirBancosDoTrabalho(osIds) {
+    state._bancosConsultados = state._bancosConsultados || {};
+    for (const osId of Array.from(new Set((osIds || []).filter(Boolean).map(String)))) {
+        if (state._bancosConsultados[osId]) continue;
+        // A tela de Amostras ja pode ter carregado este pedido: nao vale uma
+        // segunda consulta so para chegar ao mesmo lugar.
+        if (String(state._bancosPedidoDe) === osId) { state._bancosConsultados[osId] = true; continue; }
+        const idInt = idIntDoPedido(osId);
+        // Sem o numero da OS nao ha o que consultar -- e nao ha o que travar:
+        // os itens chegam depois do primeiro desenho, e isso acontece de verdade.
+        if (!idInt) continue;
+        // Sem cliente nao ha A QUEM perguntar (modo offline, `?local=true`, a
+        // marca em localStorage). Marcar como consultado aqui recriaria o
+        // defeito calado: o `carregarBancosDoPedidoNovo` devolve 0 nesse caso,
+        // que e indistinguivel de "este pedido nao tem banco".
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) continue;
+        try {
+            await carregarBancosDoPedidoNovo(osId, idInt);
+            state._bancosConsultados[osId] = true;
+            state._bancosPedidoDe = osId;
+        } catch (e) {
+            // Fica sem a marca de proposito: e ela que separa "consultei e nao
+            // ha bancos" de "nao consegui consultar".
+        }
+    }
+}
+window.garantirBancosDoTrabalho = garantirBancosDoTrabalho;
+
+/**
+ * Os pedidos do trabalho cujos vinculos de banco NAO se sabe se existem.
+ *
+ * Lista vazia depois do `garantirBancosDoTrabalho` significa "consultei todos":
+ * dai em diante, pedido sem vinculo e pedido que realmente nao tem banco, e as
+ * travas seguintes voltam a enxergar. Com a consulta falhada a lista vem cheia,
+ * e a impressao para -- porque imprimir ali sairia com numero sequencial no
+ * lugar do codigo, calado, que e o pior desfecho possivel.
+ */
+function pedidosComBancoDesconhecido(osIds) {
+    const consultados = state._bancosConsultados || {};
+    return Array.from(new Set((osIds || []).filter(Boolean).map(String)))
+        .filter(osId => idIntDoPedido(osId) && !consultados[osId]);
+}
+window.pedidosComBancoDesconhecido = pedidosComBancoDesconhecido;
+
+/**
+ * Os modelos que DEPENDEM de um banco que nao se conseguiu consultar.
+ *
+ * A recusa nao pode ser "este pedido tem banco desconhecido", porque numa
+ * estacao em modo offline isso seria TODO pedido -- e a gráfica pararia de
+ * imprimir o que sempre imprimiu. Fica sendo, entao, so' o modelo que nao tem
+ * como sair certo:
+ *
+ *   · a peca dele pede banco (`source: 'database'` em algum elemento), E
+ *   · a propria peca nao traz linha nenhuma.
+ *
+ * Nesse cruzamento o dado so' pode vir do banco do pedido. Sem ter conseguido
+ * perguntar, imprimir ali sai com numero sequencial dentro do QR, calado --
+ * exatamente o 21460. Fora dele, nada muda: numeracao sem campo de banco e
+ * numeracao com o CSV dentro dela seguem imprimindo offline como sempre.
+ */
+function modelosComBancoNaoConferido() {
+    const desconhecidos = new Set(pedidosComBancoDesconhecido(osIdsDoTrabalho()).map(String));
+    if (!desconhecidos.size) return [];
+    const fora = [];
+    osIdsDoTrabalho().forEach(osId => {
+        if (!desconhecidos.has(String(osId))) return;
+        ((state.osItens && state.osItens[osId]) || []).forEach(it => {
+            const num = typeof pecaDoModelo === 'function' ? pecaDoModelo(it) : null;
+            if (!num) return;
+            const pedeBanco = (num.elements || []).some(el => el && el.source === 'database');
+            const temLinhaPropria = !!(num.csv_data && num.csv_data.length);
+            if (pedeBanco && !temLinhaPropria) fora.push(it);
+        });
+    });
+    return fora;
+}
+window.modelosComBancoNaoConferido = modelosComBancoNaoConferido;
 
 /** Os ids de numeracao que o trabalho da tela atual pode usar. */
 function idsDeNumeracaoDoTrabalho(idDoSelect) {
@@ -12218,6 +12332,19 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Ver `garantirCsvDoTrabalho`: sem esta linha, uma numeracao com banco que
     // ainda nao desceu imprime numero sequencial no lugar dos nomes.
     await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('imp-numeracao'));
+
+    // E os bancos que sao do PEDIDO, pelo mesmo motivo (01/09/2026). Ate aqui
+    // so a tela de Amostras os carregava: quem viesse direto para ca imprimia
+    // com numero sequencial dentro do QR. Ver `garantirBancosDoTrabalho`.
+    await garantirBancosDoTrabalho(osIdsDoTrabalho());
+    const semSaberDoBanco = modelosComBancoNaoConferido();
+    if (semSaberDoBanco.length) {
+        toast('Não consegui ler os bancos de dados deste pedido para: '
+            + semSaberDoBanco.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+            + '. Imprimir agora sairia com número sequencial no lugar do código. '
+            + 'Confira a conexão da estação e clique de novo.', 'error');
+        return;
+    }
 
     // A mesma trava, do lado do banco que e do PEDIDO. Ver
     // `modelosComBancoNaoBaixado`: sem isto, um vinculo cujo banco nao chegou
