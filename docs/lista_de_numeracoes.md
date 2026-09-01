@@ -334,6 +334,56 @@ frente e verso continua com verso mesmo que a numeração dele diga `front`. Faz
 numeração mandar em tudo apagaria o verso de quase todo o cadastro: o levantamento de
 25/08/2026 não achou **nenhuma** numeração com `print_mode = 'duplex'` entre 86.
 
+## O padrão é sempre Frente (01/09/2026)
+
+Duas regras do usuário, que são a mesma coisa vista de dois lugares:
+
+1. **Todo elemento novo nasce com Face = "Apenas Frente"** — qualquer tipo
+   (Numeração, QR, QR Ideal, Barcode, Texto Fixo, Foto, Picote, PDF, SVG, Teatro,
+   Camarote) e qualquer Modo de Impressão. `window.addElement` grava
+   `face: 'front'` fixo.
+2. **O formulário em branco abre em "Frente"** — `cancelNumEdit()` devolve o
+   `#num-print-mode` para `front` e chama `onNumPrintModeChange()`, que fecha o
+   canvas do verso.
+
+Se o editor sempre abre em Frente, o elemento nascer "Apenas Frente" é o elemento
+nascer onde a pessoa está olhando. Qualquer outro padrão põe conteúdo numa face
+que ninguém escolheu.
+
+### O que havia antes, e por que ninguém percebia
+
+A face do elemento novo tinha **dois** padrões, escolhidos pelo Modo de Impressão:
+
+* No modo **Frente** ele nascia `both`. Nada denunciava isso na tela — não há
+  verso para olhar. A conta chegava depois: no dia em que aquela numeração
+  virasse FxVerso, todo elemento desenhado na frente aparecia também no verso de
+  uma vez só, e alguém teria de descobrir um por um quais tirar.
+* No **FxVerso** ele seguia `state.lastActiveFace`, a última face clicada — que
+  nunca era zerada entre numerações. Um clique no verso da numeração A fazia o
+  primeiro elemento da numeração B nascer no verso. `state.lastActiveFace` foi
+  removido; nada mais o lê.
+
+E o Modo de Impressão era o **único** campo do formulário que sobrevivia à
+limpeza. Quem editasse uma FxVerso e clicasse em "+ Nova Numeração" começava a
+numeração nova em FxVerso, com o segundo canvas aberto — e o modo mora num
+`select` lá em cima, longe do desenho: dava para criar a numeração inteira sem
+reparar.
+
+### Onde a regra NÃO se aplica
+
+"Criar" aqui é o **formulário em branco**, não toda entrada no editor. Dois
+caminhos continuam trazendo o modo de outro lugar, e têm de continuar:
+
+* **Abrir uma numeração gravada** (`editNumeracao`) escreve o `print_mode` dela.
+  Forçar Frente aqui esconderia o canvas do verso e o save seguinte gravaria uma
+  numeração sem verso.
+* **A numeração exclusiva de um modelo** (`editCustomNumeracao`) nasce de uma
+  base, carregada pelo `editNumeracao` — ela herda o modo da base.
+
+Quem quiser um elemento no verso troca a Face no cartão do elemento, que fica ao
+lado do X e da Cor. `tests/face_frente_por_padrao_harness.js` executa as duas
+funções recortadas do `script.js` e cobre os quinze tipos nos três modos.
+
 ## `elements` nunca contém `METADATA` na leitura
 
 `api()` remove o elemento de tipo `METADATA` de toda numeração assim que ela chega

@@ -4650,6 +4650,26 @@ function cancelNumEdit() {
     state.numPdfFilename = "";
     renderBoxArquivos();
 
+    // Formulario vazio volta SEMPRE para "Frente" (regra do usuario, 01/09/2026).
+    //
+    // O Modo de Impressao era o unico campo que sobrevivia a limpeza. Quem
+    // editasse uma FxVerso e depois clicasse em "+ Nova Numeracao" comecava a
+    // numeracao nova em FxVerso, com a segunda tela de canvas aberta, sem ter
+    // escolhido isso -- e o modo mora num `select` la em cima, longe do desenho.
+    // Da para criar uma numeracao inteira sem reparar.
+    //
+    // O `onNumPrintModeChange()` vai junto porque e ele quem esconde o canvas do
+    // verso; mudar so o `value` deixaria a tela mostrando um verso que o modo nao
+    // tem mais. E ele fica no FIM da funcao de proposito: aqui `state.numFormato`
+    // e `state.numElements` ja estao zerados, entao `initCanvas`/`drawCanvas`
+    // desistem em vez de redesenhar a numeracao anterior antes de ela sumir.
+    //
+    // Quem ABRE uma numeracao existente nao passa por aqui: o `editNumeracao`
+    // escreve o `print_mode` gravado. E a numeracao de um modelo, criada a partir
+    // de uma base, tambem nao -- ela herda o modo da base, como deve.
+    document.getElementById('num-print-mode').value = 'front';
+    if (window.onNumPrintModeChange) window.onNumPrintModeChange();
+
 }
 
 window.cancelNumEdit = cancelNumEdit;
@@ -6040,7 +6060,6 @@ function onCanvasMouseDown(e) {
     const { x, y } = getCanvasPos(canvas, e);
 
     const face = canvas.id === 'numeracao-canvas-verso' ? 'back' : 'front';
-    state.lastActiveFace = face;
 
 
     // Verificar hit em sentido inverso (último = mais ao topo)
@@ -7399,7 +7418,26 @@ window.addElement = function (type, extras) {
 
         color: type === 'PICOTE' ? '#ef4444' : '#000000', 
 
-        face: temVerso(document.getElementById('num-print-mode')?.value) ? (state.lastActiveFace || 'front') : 'both',
+        // Face: SEMPRE "Apenas Frente", qualquer que seja o tipo do elemento e
+        // qualquer que seja o Modo de Impressao (regra do usuario, 01/09/2026).
+        //
+        // Antes havia dois padroes, e os dois surpreendiam:
+        //
+        //  - no modo Frente o elemento nascia 'both'. Nada mudava na tela, porque
+        //    nao ha verso para olhar -- ate o dia em que a numeracao virasse
+        //    FxVerso: ai TODO elemento desenhado na frente aparecia tambem no
+        //    verso de uma vez so, sem ninguem ter pedido.
+        //
+        //  - no FxVerso o elemento seguia a ultima face clicada
+        //    (`state.lastActiveFace`), que nao era zerada entre numeracoes. Um
+        //    clique no verso da numeracao A fazia o primeiro elemento da
+        //    numeracao B nascer no verso.
+        //
+        // 'front' e o unico padrao previsivel: o elemento nasce onde a pessoa
+        // esta olhando (o editor abre em Frente -- ver `cancelNumEdit`), e quem
+        // quiser o verso troca a Face no cartao do elemento, que fica a um
+        // clique de distancia.
+        face: 'front',
 
         _centerAnchor: type !== 'PICOTE',
 

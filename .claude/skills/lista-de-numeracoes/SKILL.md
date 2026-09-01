@@ -49,6 +49,15 @@ foi programada para fazer.
    sempre "cria outro", e era assim que renomear gerava uma numeração nova e deixava
    a antiga órfã.
 
+7. **O padrão é sempre Frente** (regra do usuário, 01/09/2026). Todo elemento novo
+   nasce com Face = "Apenas Frente", em qualquer tipo e em qualquer Modo de
+   Impressão, e o formulário em branco volta para "Frente" no `cancelNumEdit()`.
+   Antes o elemento nascia `both` no modo Frente — invisível até a numeração virar
+   FxVerso, quando tudo aparecia no verso de uma vez — e seguia a última face
+   clicada no FxVerso, lembrada até de uma numeração para a outra. Isso vale para o
+   formulário **em branco**: abrir uma numeração gravada traz o `print_mode` dela, e
+   a exclusiva de um modelo herda o modo da base.
+
 O documento traz ainda: por que `elements` nunca contém `METADATA` na leitura, como
 funciona a **coluna Preview** (a miniatura entre Nome e Tipo, que sai do
 `preview_jpg` e amplia no clique) e as três decisões dela — a caixa tem a forma do
