@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 29 de agosto de 2026**
+**Última atualização: 31 de agosto de 2026**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + Edge Functions | **v775** | 29/08/2026 |
-| Agente NewProd | **1.2.265** | 29/08/2026 |
+| Site + Edge Functions | **v785** | 31/08/2026 |
+| Agente NewProd | **1.2.275** | 31/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -81,6 +81,67 @@ pelo esqueleto — **401 em todas**.
 | **Motor de imposição, elementos VDP, duplex** | [`DOCUMENTACAO.md`](DOCUMENTACAO.md) (com ressalva no topo), [`regra_centralizacao.md`](regra_centralizacao.md), [`aproveitamento_de_folha.md`](aproveitamento_de_folha.md), [`modelos_somados.md`](modelos_somados.md) |
 | **Tela × papel: por que o que se vê é o que sai** | [`fidelidade_tela_papel.md`](fidelidade_tela_papel.md), [`fluxo_elementos_pdf_svg.md`](fluxo_elementos_pdf_svg.md) |
 | **Conferência de um pedido no banco** | [`conferencia_pedido_21202.md`](conferencia_pedido_21202.md) + as consultas em [`../sql/consultas/`](../sql/consultas/) |
+
+---
+
+## Onde parou: o fluxo de aprovação da arte (31/08)
+
+O dia inteiro na Lista de Arte e no link do cliente — **v781 a v785**, agente 1.2.271 a
+1.2.275. Três coisas, nesta ordem.
+
+### 1. Todo pedido novo nascia na fila errada (v781)
+
+O ERP cria a linha de `pedidos_artes` com `status = 'AGUARDANDO'`, que quer dizer que a
+arte espera **o designer**. Essa palavra estava na lista `ARTE_EM_APROVACAO` do
+`script.js`, ao lado de `AGUARDANDO_APROVACAO`, que quer dizer o **contrário**.
+
+Efeito: todo pedido novo caía em "Aguard. Aprovação", e a fila do designer aparecia vazia
+enquanto o trabalho se acumulava fora dela. Relatado pelo usuário no pedido 21413.
+
+O banco confirmava sem ambiguidade: dos pedidos em `AGUARDANDO`, **nenhum** tinha link do
+cliente gerado, e todos tinham `propostas.em_arte = true`.
+
+### 2. O link nasce com a arte pronta, e quem move o pedido é o cliente (v784)
+
+Pedido do usuário. O designer marca a arte pronta e devolve ao atendimento: o link **já é
+gerado ali**, e o status fica em "Enviar Arte". Ele só vira "Aguard. Aprovação" quando o
+cliente **olha** a arte.
+
+Quatro armadilhas do caminho, todas fechadas e com teste:
+
+1. **`temLinkGerado` teve de sair da classificação.** Com o link nascendo junto com a arte
+   pronta, "tem link?" marcaria como "Aguard. Aprovação" todo pedido que o designer
+   terminasse — o mesmo defeito do item 1, por outra porta.
+2. **O contador `acessos` não serve** para dizer que o cliente olhou: a prévia do WhatsApp
+   busca a URL sozinha para montar o cartão da mensagem, e somaria um acesso no instante do
+   envio. O sinal é o **primeiro gesto na tela**, que robô de prévia não produz.
+3. **Refazer a arte zera a marca**, senão o pedido que voltou de uma alteração saltaria
+   para "Aguard. Aprovação" com a abertura da versão anterior.
+4. **O adiantamento local vencia a verdade.** `os.status` vem do localStorage (5 min) e da
+   coluna do link, e os dois ainda dizem "ENVIAR ARTE" no instante em que o cliente abre —
+   que é o caso comum. O cliente ter olhado passou a vencer a palavra.
+
+Ganho que não estava no pedido: até aqui "Enviar Arte" de um pedido `vibe_` sem link só
+existia no **localStorage** de quem marcou — o UPDATE ia para uma linha que não existia. O
+designer marcava pronto na máquina dele e o atendente, em outra, podia não ver.
+
+### 3. O ERP passou a enxergar, e a ter o link pronto (v784 e v785)
+
+- **`pedidos_artes.status`** deixou de ser escrito só pelo parceiro: o Imposition grava
+  `ENVIAR ARTE` e `AGUARDANDO_APROVACAO`, sem nunca andar para trás sobre arte aprovada.
+- **`pedidos_links_cliente.link`** traz a URL completa, pronta para usar. É **coluna
+  gerada** de `numero_pedido` + `token`: não aceita escrita direta e não fica desatualizada.
+
+O vocabulário inteiro, para mandar ao parceiro, está em
+[`status_da_arte_para_o_erp.md`](status_da_arte_para_o_erp.md). O fluxo e as armadilhas, em
+[`lista_de_arte.md`](lista_de_arte.md).
+
+> [!CAUTION]
+> O formato da URL mora agora em **quatro** arquivos: `frontend/script.js`,
+> `sql/link_pronto_para_o_erp.sql`, `frontend/cliente.js` e `security_config.py`
+> (`PAINEL_BASE_URL`). O `tests/lista_arte_harness.js` compara os quatro, inclusive o
+> domínio — se ele mudar só num lugar o painel continua funcionando e ninguém descobre,
+> enquanto o ERP distribui link para um endereço que não existe.
 
 ---
 
@@ -632,6 +693,22 @@ mas a restrição não faz o que o nome promete.
 
 **A migração `sql/schema_acesso_02` é opcional.** Ela só remove um índice redundante. Sem
 ela, nada quebra.
+
+**O token do link tem 6 caracteres.** São 2,2 bilhões de combinações, e o número do
+pedido é sequencial — ou seja, adivinhável. Quem acerta o par aprova a arte, e aprovar arte
+é autorizar a impressão. Dá para aumentar o token dos links **novos** sem quebrar nenhum
+dos que já estão com clientes: a rota da página aceita qualquer comprimento. Não foi feito.
+
+**A varredura não gera link.** O `sincronizarPedidosProntosParaEnvio` marca "Enviar Arte"
+quando todos os modelos ficam PRONTO no banco, sem passar pelo botão "Voltar para
+Atendimento" — e para esses pedidos o link **não** nasce. Foi decisão deliberada: a
+varredura roda sobre a lista inteira a cada carga, e criar links ali significaria regenerar
+a arte de aprovação de dezenas de pedidos no carregamento da tela. O botão **Gerar Link**
+continua sendo a saída. Se for para automatizar, que seja sob demanda, num botão.
+
+**`APROVADO PARCIAL` não é reconhecido.** O ERP grava essa palavra em `pedidos_artes.status`
+(3 pedidos em 31/08). Nenhuma lista do painel a conhece, então ela cai em "Em Arte" por
+omissão, e não por regra. Não quebra nada; falta decidir se merece tratamento próprio.
 
 **O log do agente é apagado a cada abertura.** O `agent_tray.py` abre o `agent_log.txt` em
 modo `"w"`, que trunca. Como a auto-atualização reinicia o agente, **toda atualização joga
