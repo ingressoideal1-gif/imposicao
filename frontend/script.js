@@ -28280,20 +28280,40 @@ function ordenarConcluidosDoMaisNovo(lista) {
 }
 window.ordenarConcluidosDoMaisNovo = ordenarConcluidosDoMaisNovo;
 
-// ──── Rodapé de páginas do card "Pedidos Concluídos" ──────────────────────
+// ──── Paginação das listas de histórico ───────────────────────────────────
 //
-// O mesmo desenho da paginação que o Ideal Control já usa nos ingressos de um
-// setor ("← Anteriores | Página N | Próximos →"): duas telas do mesmo sistema
-// não devem virar páginas de dois jeitos diferentes.
+// Três listas deste sistema são ARQUIVO, e não fila de trabalho: o card
+// "Pedidos Concluídos" da Lista de Arte, o botão "Impresso" do Painel de
+// Produção e o botão "Expedição" do Painel do Acabamento. As três crescem para
+// sempre e nunca voltam a diminuir, e por isso as três saem de 30 em 30.
 //
-// A diferença é que aqui o total é conhecido — a lista inteira está na memória,
-// e o recorte é só de desenho —, então dá para dizer "Página 2 de 4" e quantos
-// pedidos o filtro achou. Quem pagina no servidor não sabe o total e por isso
-// só consegue dizer se há mais.
+// As filas de trabalho continuam inteiras: o operador precisa ver de uma vez
+// tudo o que tem pela frente, e são poucas dezenas.
+//
+// O desenho é o mesmo que o Ideal Control já usa nos ingressos de um setor
+// ("← Anteriores | Página N | Próximos →"). Aqui o total é conhecido — a lista
+// inteira está na memória e o recorte é só de desenho —, então dá para dizer
+// "Página 2 de 4" e quantos pedidos o filtro achou; quem pagina no servidor não
+// sabe o total e só consegue dizer se há mais.
+//
+// A REGRA QUE NÃO PODE SER QUEBRADA: recortar é o ÚLTIMO passo — filtrar,
+// ordenar, só então cortar. Subir o recorte para antes do filtro faz a pesquisa
+// enxergar apenas a página aberta, que é o mesmo defeito de esconder histórico
+// entrando por outra porta.
 
-/** Desenha (ou esconde) o rodapé de páginas embaixo da tabela de arte. */
-function desenharPaginacaoArte(visivel, pagina, totalPaginas, totalPedidos) {
-    const caixa = document.getElementById('paginacao-arte');
+const HISTORICO_POR_PAGINA = 30;
+// Exportado porque o `acabamento.js` pagina com o MESMO número: três telas do
+// mesmo sistema não devem ter três tamanhos de página.
+window.HISTORICO_POR_PAGINA = HISTORICO_POR_PAGINA;
+
+/**
+ * Desenha (ou esconde) um rodapé de páginas.
+ *
+ * `funcaoDeTroca` é o nome da função global que o botão chama com o número da
+ * página. `sufixo` completa a contagem ("no histórico", "já impressos").
+ */
+function desenharRodapeDePaginas(idDoElemento, visivel, pagina, totalPaginas, totalPedidos, funcaoDeTroca, sufixo) {
+    const caixa = document.getElementById(idDoElemento);
     if (!caixa) return;
 
     // Uma página só não é paginação: o rodapé sumiria de qualquer jeito, e
@@ -28306,20 +28326,67 @@ function desenharPaginacaoArte(visivel, pagina, totalPaginas, totalPedidos) {
 
     caixa.style.display = 'flex';
     const anterior = pagina > 1
-        ? `<button class="btn btn-sm btn-ghost" id="arte-pagina-anterior" onclick="irParaPaginaConcluidos(${pagina - 1})">← Anteriores</button>`
+        ? `<button class="btn btn-sm btn-ghost" onclick="${funcaoDeTroca}(${pagina - 1})">← Anteriores</button>`
         : '';
     const proxima = pagina < totalPaginas
-        ? `<button class="btn btn-sm btn-ghost" id="arte-pagina-proxima" onclick="irParaPaginaConcluidos(${pagina + 1})">Próximos →</button>`
+        ? `<button class="btn btn-sm btn-ghost" onclick="${funcaoDeTroca}(${pagina + 1})">Próximos →</button>`
         : '';
 
     caixa.innerHTML = `
         ${anterior}
         <span style="font-size: 0.85rem; color: var(--text-dim);">
             Página <strong>${pagina}</strong> de <strong>${totalPaginas}</strong>
-            · ${totalPedidos} ${totalPedidos === 1 ? 'pedido' : 'pedidos'} no histórico
+            · ${totalPedidos} ${totalPedidos === 1 ? 'pedido' : 'pedidos'} ${sufixo || 'no histórico'}
         </span>
         ${proxima}
     `;
+}
+window.desenharRodapeDePaginas = desenharRodapeDePaginas;
+
+/**
+ * Volta para a primeira página quando o recorte da lista mudou.
+ *
+ * A comparação é por ASSINATURA dos filtros, feita no desenho, e não em cada
+ * botão: um filtro novo amanhã já nasce zerando a página sem ninguém precisar
+ * lembrar disso. Continuar na página 7 depois de uma busca nova mostraria uma
+ * tela vazia com resultados existindo atrás dela.
+ */
+function zerarPaginaSeMudou(chaveDaPagina, assinatura) {
+    if (!state._assinaturasDePagina) state._assinaturasDePagina = {};
+    if (state._assinaturasDePagina[chaveDaPagina] === assinatura) return;
+    state._assinaturasDePagina[chaveDaPagina] = assinatura;
+    state[chaveDaPagina] = 1;
+}
+window.zerarPaginaSeMudou = zerarPaginaSeMudou;
+
+/**
+ * Recorta a página atual de uma lista já filtrada e ordenada.
+ *
+ * A página é presa à faixa válida: a lista encolhe sozinha quando um pedido
+ * muda de estado, e a página guardada pode ter deixado de existir.
+ */
+function recortarPaginaDoHistorico(lista, chaveDaPagina) {
+    const totalPaginas = Math.max(1, Math.ceil(lista.length / HISTORICO_POR_PAGINA));
+    const pagina = Math.min(Math.max(1, parseInt(state[chaveDaPagina]) || 1), totalPaginas);
+    state[chaveDaPagina] = pagina;
+    const inicio = (pagina - 1) * HISTORICO_POR_PAGINA;
+    return { itens: lista.slice(inicio, inicio + HISTORICO_POR_PAGINA), pagina, totalPaginas };
+}
+window.recortarPaginaDoHistorico = recortarPaginaDoHistorico;
+
+/** Sobe até o começo da tabela depois de trocar de página. */
+function subirParaATabela(idDaTabela) {
+    // Sem isto, clicar em "Próximos" deixaria o operador olhando para o fim da
+    // página nova em vez do começo dela.
+    const tabela = document.getElementById(idDaTabela);
+    if (tabela && tabela.scrollIntoView) tabela.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.subirParaATabela = subirParaATabela;
+
+/** Desenha (ou esconde) o rodapé de páginas embaixo da tabela de arte. */
+function desenharPaginacaoArte(visivel, pagina, totalPaginas, totalPedidos) {
+    desenharRodapeDePaginas('paginacao-arte', visivel, pagina, totalPaginas, totalPedidos,
+                            'irParaPaginaConcluidos', 'no histórico');
 }
 window.desenharPaginacaoArte = desenharPaginacaoArte;
 
@@ -28327,12 +28394,24 @@ window.desenharPaginacaoArte = desenharPaginacaoArte;
 function irParaPaginaConcluidos(pagina) {
     state.paginaConcluidos = Math.max(1, parseInt(pagina) || 1);
     renderOrdens();
-    // A lista fica acima do rodapé: sem isto, clicar em "Próximos" deixaria o
-    // operador olhando para o fim da página nova em vez do começo dela.
-    const tabela = document.getElementById('table-arte');
-    if (tabela && tabela.scrollIntoView) tabela.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    subirParaATabela('table-arte');
 }
 window.irParaPaginaConcluidos = irParaPaginaConcluidos;
+
+/** Desenha (ou esconde) o rodapé de páginas do botão "Impresso" da Produção. */
+function desenharPaginacaoImpressos(visivel, pagina, totalPaginas, totalPedidos) {
+    desenharRodapeDePaginas('paginacao-impressao', visivel, pagina, totalPaginas, totalPedidos,
+                            'irParaPaginaImpressos', 'já impressos');
+}
+window.desenharPaginacaoImpressos = desenharPaginacaoImpressos;
+
+/** Vai para a página pedida do botão "Impresso" e redesenha a lista. */
+function irParaPaginaImpressos(pagina) {
+    state.paginaImpressos = Math.max(1, parseInt(pagina) || 1);
+    renderOrdens();
+    subirParaATabela('table-impressao');
+}
+window.irParaPaginaImpressos = irParaPaginaImpressos;
 
 /** "01:05". Passando de um dia continua em horas ("26:30"), sem virar "2d 2h". */
 function formatarTempoNoCard(segundos) {
@@ -28627,10 +28706,30 @@ function renderOrdens() {
     const statPedidosConcluidosEl = document.getElementById('stat-pedidos-concluidos');
     if (statPedidosConcluidosEl) statPedidosConcluidosEl.textContent = totalPedidosConcluidos;
 
+    // ── A BASE DO BOTÃO "IMPRESSO" É OUTRA ──────────────────────────────────
+    //
+    // Pedido do usuário em 01/09/2026: *"no painel de produção no botão
+    // 'IMPRESSO' também devem aparecer todos os pedidos já impressos"*.
+    //
+    // O `ordensImpressao` acima é a FILA: ele exige `status_interno` em
+    // produção e tira quem já passou da gráfica. Enquanto ele era a base do
+    // botão, o pedido sumia da lista de impressos assim que o ERP o mandava
+    // para o acabamento, a expedição ou a entrega — ou seja, o histórico de
+    // impressão se apagava justamente quando o trabalho terminava.
+    //
+    // No botão "Impresso" a base passa a ser `state.ordens` inteira, recortada
+    // pelo único critério que importa ali: todos os modelos impressos. As
+    // outras três telas de prazo (Geral, Para Hoje, Atrasados) continuam saindo
+    // da fila, porque são trabalho a fazer.
+    const listaEhDosImpressos = (state.filtroPrazo || 'geral') === 'impressos';
+    const baseImpressao = listaEhDosImpressos
+        ? state.ordens.filter(os => pedidoTotalmenteImpresso(os))
+        : ordensImpressao;
+
     // --- Aplicar Filtros (Busca, Setor e Status) ---
     // O eixo de prazo fica de fora aqui de propósito: precisamos saber se existe
     // pedido atrasado no recorte atual mesmo quando a lista está em "Para Hoje".
-    const filteredImpressaoSemPrazo = ordensImpressao.filter(os => {
+    const filteredImpressaoSemPrazo = baseImpressao.filter(os => {
         const itens = state.osItens[os.id] || [];
 
         // 1. Busca textual
@@ -28939,37 +29038,22 @@ function renderOrdens() {
     // contador acima segue mostrando quantos pedidos a busca achou no histórico
     // inteiro, e não quantos couberam na página — e por isso a pesquisa alcança
     // toda arte já feita, mesmo a que está na página 12.
-    const CONCLUIDOS_POR_PAGINA = 30;
     let arteNaTela = filteredArte;
     let totalPaginasArte = 1;
 
     if (listaEhDosConcluidos) {
-        // Trocar de filtro tem de voltar para a primeira página: continuar na
-        // página 7 depois de uma busca nova mostraria uma tela vazia com
-        // resultados existindo atrás dela. A assinatura é comparada aqui, e não
-        // em cada botão de filtro, para que um filtro novo amanhã já nasça
-        // zerando a página sem ninguém precisar lembrar disso.
-        const assinatura = JSON.stringify([
+        zerarPaginaSeMudou('paginaConcluidos', JSON.stringify([
             activeFilaTipo,
             searchArte,
             filterDesigner,
             document.getElementById('os-filter-atendente')?.value || '',
             state.filtroSetorArte || '',
             state.filtroStatusArte || '',
-        ]);
-        if (state._assinaturaPaginaArte !== assinatura) {
-            state._assinaturaPaginaArte = assinatura;
-            state.paginaConcluidos = 1;
-        }
+        ]));
 
-        totalPaginasArte = Math.max(1, Math.ceil(filteredArte.length / CONCLUIDOS_POR_PAGINA));
-        // Preso à faixa válida: a lista encolhe sozinha quando um pedido muda de
-        // card, e a página guardada pode ter deixado de existir.
-        const pagina = Math.min(Math.max(1, parseInt(state.paginaConcluidos) || 1), totalPaginasArte);
-        state.paginaConcluidos = pagina;
-
-        const inicio = (pagina - 1) * CONCLUIDOS_POR_PAGINA;
-        arteNaTela = filteredArte.slice(inicio, inicio + CONCLUIDOS_POR_PAGINA);
+        const pagina = recortarPaginaDoHistorico(filteredArte, 'paginaConcluidos');
+        arteNaTela = pagina.itens;
+        totalPaginasArte = pagina.totalPaginas;
     }
 
     desenharPaginacaoArte(listaEhDosConcluidos, state.paginaConcluidos || 1, totalPaginasArte, filteredArte.length);
@@ -28997,7 +29081,34 @@ function renderOrdens() {
         updateProdSortHeaders();
         updateFiltroPrazoBotoes();
 
-        if (!filteredImpressao.length) {
+        // O recorte de páginas, só no botão "Impresso" — e por último, depois
+        // de filtrar e ordenar. O contador do topo já foi escrito com o total,
+        // então ele continua dizendo quantos pedidos a busca achou no histórico
+        // inteiro, e não quantos couberam nesta página.
+        let impressaoNaTela = filteredImpressao;
+        let totalPaginasImpressao = 1;
+
+        if (listaEhDosImpressos) {
+            zerarPaginaSeMudou('paginaImpressos', JSON.stringify([
+                // O próprio botão entra na assinatura: sair do IMPRESSO e
+                // voltar tem de recomeçar na primeira página, como acontece ao
+                // trocar de card na Lista de Arte.
+                state.filtroPrazo || 'geral',
+                searchImpressao,
+                (state.filtroSetores || []).join('|'),
+                state.filtroStatus || '',
+                JSON.stringify(state.prodSort || null),
+            ]));
+
+            const pagina = recortarPaginaDoHistorico(filteredImpressao, 'paginaImpressos');
+            impressaoNaTela = pagina.itens;
+            totalPaginasImpressao = pagina.totalPaginas;
+        }
+
+        desenharPaginacaoImpressos(listaEhDosImpressos, state.paginaImpressos || 1,
+                                   totalPaginasImpressao, filteredImpressao.length);
+
+        if (!impressaoNaTela.length) {
             tbodyImpressao.innerHTML = '';
             if (emptyImpressao) emptyImpressao.style.display = 'block';
             if (tableImpressao) tableImpressao.style.display = 'none';
@@ -29005,7 +29116,7 @@ function renderOrdens() {
             if (emptyImpressao) emptyImpressao.style.display = 'none';
             if (tableImpressao) tableImpressao.style.display = '';
 
-            tbodyImpressao.innerHTML = filteredImpressao.map(os => {
+            tbodyImpressao.innerHTML = impressaoNaTela.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
                 const osItensList = state.osItens[os.id] || [];
                 const numOs = parseInt(os.numero);

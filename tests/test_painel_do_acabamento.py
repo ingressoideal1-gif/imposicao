@@ -494,8 +494,24 @@ def test_so_o_envio_a_expedicao_tira_o_pedido_da_lista():
     secao = html[html.index('id="view-acabamento"'):]
     secao = secao[:secao.index("</section>")]
 
-    assert "if (tela.prazo === 'expedicao') return ehExpedido(os);" in js, (
-        "o recorte dos despachados tem de perguntar ao `ehExpedido`"
+    # O que a regra de 24/08 garante e que o pedido so sai da lista de trabalho
+    # quando alguem clica em ENVIAR PARA A EXPEDICAO -- nunca pelo estagio. Esta
+    # e a linha que garante isso, e ela nao mudou:
+    assert "if (ehExpedido(os)) return false;" in js, (
+        "o despachado tem de sair das telas de trabalho; sem esta linha o "
+        "pedido enviado a expedicao voltaria para a fila do operador"
+    )
+
+    # Ja a regua do BOTAO Expedicao alargou em 01/09/2026, a pedido do usuario:
+    # ela era `ehExpedido` (so `status_interno = EXPEDICAO`), e bastava a
+    # expedicao embarcar para o ERP trocar por EM TRANSITO e o comprovante da
+    # bancada sumir. Agora vale o `jaPassouDaGrafica` inteiro. Isso nao afrouxa a
+    # regra de 27/08: os tres status continuam fora da TELA INICIAL, e o
+    # `acabamento_harness.js` trava as duas metades.
+    assert "if (tela.prazo === 'expedicao') return jaPassouDaGrafica(os);" in js, (
+        "o botao Expedicao tem de listar tudo o que a bancada ja entregou "
+        "(EXPEDICAO, EM TRANSITO, ENTREGUE) -- voltar ao `ehExpedido` faz o "
+        "pedido sumir de la assim que o ERP embarca o material"
     )
     assert "pedidoTotalmentePronto" not in js, (
         "o `pedidoTotalmentePronto` decidia quem saia da lista e nao existe "

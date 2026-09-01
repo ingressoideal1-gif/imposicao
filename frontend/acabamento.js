@@ -172,6 +172,12 @@
         temSessao: null,    // null = ainda não perguntei ao Supabase
         estagio: '',
         sort: null,           // { campo, dir }
+
+        // A pagina do botao "Expedicao", que e a unica lista paginada desta
+        // tela (01/09/2026). `assinaturaDaPagina` guarda o recorte que a
+        // produziu: mudou o filtro ou a busca, a pagina volta para a primeira.
+        paginaExpedicao: 1,
+        assinaturaDaPagina: null,
         pedidoAberto: null,   // osId do pedido em detalhe
         temAtrasados: false,
         operadores: null,     // null = ainda não buscado
@@ -312,14 +318,32 @@
     }
 
     function pedidosDoPainel() {
-        return (estado().ordens || [])
-            // Pedido despachado, em trânsito ou entregue não é mais trabalho
-            // desta bancada. O `ehExpedido` logo abaixo é a única exceção, e ela
-            // vive só no botão "Expedição": o `passaNoPrazo` tira o expedido de
-            // toda tela inicial (Geral, Para Hoje, Atrasados).
-            .filter(os => !jaPassouDaGrafica(os) || ehExpedido(os))
-            .filter(os => ehDeProducao(os) || ehExpedido(os))
+        const todos = (estado().ordens || [])
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
+
+        // ── O botão "Expedição" é ARQUIVO, e vê tudo o que já saiu ───────────
+        //
+        // Pedido do usuário em 01/09/2026: *"o botão EXPEDIÇÃO deve mostrar os
+        // 30 últimos mas deve disponibilizar todos os pedidos quando
+        // pesquisado"*, no mesmo espírito do card "Pedidos Concluídos" da Lista
+        // de Arte e do botão "Impresso" da Produção.
+        //
+        // Até aqui essa lista era só o `ehExpedido` — `status_interno` igual a
+        // EXPEDICAO, e nada mais. Bastava a expedição embarcar o material para
+        // o ERP trocar por EM TRANSITO e o pedido sumir daqui: o comprovante do
+        // trabalho desta bancada se apagava justamente quando ele terminava.
+        //
+        // Agora vale o `jaPassouDaGrafica` inteiro (EXPEDICAO, EM TRANSITO,
+        // ENTREGUE): é a lista do que esta bancada já entregou, e ela não
+        // encolhe mais.
+        if (tela.prazo === 'expedicao') return todos.filter(jaPassouDaGrafica);
+
+        // Nas telas de trabalho, pedido despachado não é mais desta bancada. O
+        // `ehExpedido` é a única exceção — o operador precisa reencontrar o que
+        // acabou de enviar, com o selo PRONTO, até o ERP embarcar.
+        return todos
+            .filter(os => !jaPassouDaGrafica(os) || ehExpedido(os))
+            .filter(os => ehDeProducao(os) || ehExpedido(os));
     }
 
     /**
@@ -749,7 +773,10 @@
      * pedido despachado.
      */
     function passaNoPrazo(os) {
-        if (tela.prazo === 'expedicao') return ehExpedido(os);
+        // `jaPassouDaGrafica`, e não `ehExpedido`: ver `pedidosDoPainel`. O
+        // pedido que a expedição já embarcou continua sendo trabalho que esta
+        // bancada entregou, e some da lista se a régua for só EXPEDICAO.
+        if (tela.prazo === 'expedicao') return jaPassouDaGrafica(os);
         if (ehExpedido(os)) return false;
         if (tela.prazo === 'geral') return true;
         if (tela.prazo === 'atrasados') return estaAtrasado(os);
@@ -965,6 +992,65 @@
             </div>`;
     }
 
+    // ─── A paginação do botão "Expedição" ───────────────────────────────────
+    //
+    // O tamanho da página e o desenho do rodapé vêm do `script.js`, e não de
+    // uma cópia daqui: a Lista de Arte, o Painel de Produção e esta tela têm de
+    // paginar do mesmo jeito e com o mesmo número. Se o `script.js` ainda não
+    // carregou, o 30 local segura a barra — nunca esconder a lista por causa
+    // disso.
+
+    function porPagina() {
+        return parseInt(window.HISTORICO_POR_PAGINA) || 30;
+    }
+
+    /**
+     * Recorta a página atual da lista já filtrada e ordenada.
+     *
+     * A página é presa à faixa válida: a lista muda de tamanho conforme o ERP
+     * embarca pedidos, e a página guardada pode ter deixado de existir.
+     */
+    function recortarPagina(lista) {
+        const assinatura = JSON.stringify([
+            tela.prazo,
+            (document.getElementById('os-search-acabamento') || {}).value || '',
+            tela.setores.slice().sort(),
+            tela.estagio || '',
+            tela.sort || null,
+        ]);
+        if (tela.assinaturaDaPagina !== assinatura) {
+            tela.assinaturaDaPagina = assinatura;
+            tela.paginaExpedicao = 1;
+        }
+
+        const tamanho = porPagina();
+        const totalPaginas = Math.max(1, Math.ceil(lista.length / tamanho));
+        tela.paginaExpedicao = Math.min(Math.max(1, parseInt(tela.paginaExpedicao) || 1), totalPaginas);
+        const inicio = (tela.paginaExpedicao - 1) * tamanho;
+        return lista.slice(inicio, inicio + tamanho);
+    }
+
+    function desenharRodapeDaExpedicao(visivel, total) {
+        const desenhar = fn('desenharRodapeDePaginas');
+        const caixa = document.getElementById('paginacao-acabamento');
+        if (!desenhar) {
+            if (caixa) { caixa.innerHTML = ''; caixa.style.display = 'none'; }
+            return;
+        }
+        const totalPaginas = Math.max(1, Math.ceil(total / porPagina()));
+        desenhar('paginacao-acabamento', visivel, tela.paginaExpedicao, totalPaginas, total,
+                 'irParaPaginaExpedicao', 'na expedição');
+    }
+
+    /** Troca a página do botão "Expedição" e redesenha a lista. */
+    function irParaPaginaExpedicao(pagina) {
+        tela.paginaExpedicao = Math.max(1, parseInt(pagina) || 1);
+        render();
+        const subir = fn('subirParaATabela');
+        if (subir) subir('table-acabamento');
+    }
+    window.irParaPaginaExpedicao = irParaPaginaExpedicao;
+
     function render() {
         const tbody = document.getElementById('tbody-acabamento');
         if (!tbody) return;
@@ -1019,10 +1105,23 @@
         const contador = document.getElementById('os-acabamento-count-badge');
         if (contador) contador.textContent = `${lista.length} ${lista.length === 1 ? 'Pedido' : 'Pedidos'}`;
 
+        // ── O recorte de páginas, só no botão "Expedição" ───────────────────
+        //
+        // Por último, depois de filtrar e ordenar: o contador acima já foi
+        // escrito com o total, então ele continua dizendo quantos pedidos a
+        // busca achou na expedição inteira, e a pesquisa alcança o pedido que
+        // está na página 8. Cortar antes de filtrar faria a busca enxergar só a
+        // página aberta — o mesmo defeito de esconder histórico, por outra
+        // porta. As telas de trabalho (Geral, Para Hoje, Atrasados) continuam
+        // inteiras.
+        const naExpedicao = tela.prazo === 'expedicao';
+        const naTela = naExpedicao ? recortarPagina(lista) : lista;
+        desenharRodapeDaExpedicao(naExpedicao, lista.length);
+
         const vazio = document.getElementById('empty-acabamento');
         const tabela = document.getElementById('table-acabamento');
 
-        if (!lista.length) {
+        if (!naTela.length) {
             tbody.innerHTML = '';
             // Lista vazia com card de setor aceso tem de dizer QUE card a
             // esvaziou, e como sair dali. Modelo cujo produto não tem setor no
@@ -1046,7 +1145,7 @@
         const badgePrazo = fn('formatPrazoBadge');
         const previewArte = fn('previewDaArteDoPedidoHtml');
 
-        tbody.innerHTML = lista.map(os => {
+        tbody.innerHTML = naTela.map(os => {
             // Daqui para baixo a linha fala do RECORTE. Sem card de setor aceso
             // ele é o pedido inteiro, e nada muda.
             const modelos = modelosDoRecorte(os);

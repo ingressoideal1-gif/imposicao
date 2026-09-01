@@ -4,7 +4,7 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
-## [2026-09-01] — O histórico de artes deixa de ser recortado
+## [2026-09-01] — O histórico deixa de ser recortado, nas três telas
 
 Começou com uma pergunta: **"na lista de arte, no card 'Pedidos Concluídos', por
 que não aparece o pedido 21347?"**. Ele estava no banco, em `EXPEDICAO`, com arte
@@ -61,9 +61,46 @@ o mesmo defeito de esconder histórico, entrando por outra porta. O contador do
 topo é calculado antes do recorte de propósito, para continuar dizendo quantos
 pedidos a busca achou no histórico inteiro.
 
-`tests/historico_de_artes_harness.js` (37 casos) trava essa ordem, a paginação, a
-busca do box e a presença do rodapé nas **duas** páginas que desenham a Lista de
-Arte — esquecer a `producao.html` deixaria metade das estações sem paginação.
+`tests/historico_de_artes_harness.js` (65 casos) trava essa ordem, a paginação, a
+busca do box e a presença do rodapé em **todas** as páginas que desenham cada
+lista — esquecer a `producao.html` deixaria metade das estações sem paginação.
+O `tests/acabamento_harness.js` ganhou dez verificações próprias para a página da
+Expedição.
+
+### Depois: as outras duas listas de arquivo (mesmo dia)
+
+Vendo o card da arte funcionar, o usuário estendeu a regra:
+
+> "no painel de produção no botão 'IMPRESSO' também devem aparecer todos os
+> pedidos já impressos, mostrar os últimos 30 mas deixar todos disponíveis para
+> pesquisa. Mesmo tratamento para o painel de acabamento, o botão EXPEDIÇÃO deve
+> mostrar os 30 últimos mas deve disponibilizar todos os pedidos quando
+> pesquisado."
+
+As duas tinham o **mesmo defeito de fundo**, cada uma à sua maneira: a lista de
+arquivo saía da régua da fila de trabalho, e por isso se apagava quando o
+trabalho terminava.
+
+* **Botão IMPRESSO (Produção)** — saía de `ordensImpressao`, que exige
+  `status_interno` em produção. O pedido sumia do histórico de impressão assim
+  que o ERP o mandava para o acabamento ou a expedição. Agora a base é
+  `state.ordens` inteira, recortada por `pedidoTotalmenteImpresso`. As métricas
+  do topo e o alerta de atraso continuam olhando a fila — pedido entregue não
+  pode acender alarme de atraso.
+* **Botão EXPEDIÇÃO (Acabamento)** — a régua era `status_interno = EXPEDICAO` e
+  nada mais. Bastava a expedição embarcar para o ERP trocar por `EM TRANSITO` e o
+  comprovante da bancada sumir. Agora vale `jaPassouDaGrafica` inteiro
+  (EXPEDICAO, EM TRANSITO, ENTREGUE).
+
+Isso **não** afrouxa a regra de 27/08/2026: as palavras dela são *"devem sair da
+**tela inicial** dos painéis"*, e os três status continuam fora de Geral, Para
+Hoje e Atrasados. O botão de arquivo nunca foi a tela inicial — o harness do
+Acabamento passou a travar as duas metades dessa distinção.
+
+A paginação virou uma só para as três telas: `HISTORICO_POR_PAGINA` (30) e
+`desenharRodapeDePaginas` moram no `script.js`, e o `acabamento.js` os lê de lá.
+Três telas do mesmo sistema com três tamanhos de página seria pior do que não
+paginar.
 
 ---
 

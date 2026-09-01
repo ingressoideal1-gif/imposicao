@@ -446,6 +446,46 @@ Esconder por engano é o erro caro: o pedido some da tela de quem trabalha nele.
 Nas outras telas — Painel de Produção e Lista de Arte — esses pedidos continuam
 aparecendo. O recorte é só daqui.
 
+## O botão "Expedição" é o arquivo desta bancada (01/09/2026)
+
+Ele é a lista do que **esta bancada já entregou**, e não uma tela de trabalho.
+Duas coisas mudaram nele no mesmo dia, a pedido do usuário: *"o botão EXPEDIÇÃO
+deve mostrar os 30 últimos mas deve disponibilizar todos os pedidos quando
+pesquisado"*.
+
+### Ele vê também o que já embarcou
+
+Até aqui a régua era `ehExpedido` — `status_interno` igual a `EXPEDICAO`, e nada
+mais. Bastava a expedição embarcar o material para o ERP trocar por `EM TRANSITO`
+e o pedido sumir daqui: **o comprovante do trabalho se apagava justamente quando
+o trabalho terminava**.
+
+Agora vale o `jaPassouDaGrafica` inteiro — `EXPEDICAO`, `EM TRANSITO` e
+`ENTREGUE`.
+
+> [!IMPORTANT]
+> Isso **não** afrouxa a regra de 27/08/2026. As palavras dela são *"devem sair
+> da **tela inicial** dos painéis"*, e a tela inicial é Geral, Para Hoje e
+> Atrasados — de onde os três status continuam saindo, e onde o harness continua
+> travando isso. O botão "Expedição" é uma tela que o operador abre de
+> propósito para procurar o que despachou; nunca foi a tela inicial.
+
+### E pagina de 30 em 30
+
+Como o card "Pedidos Concluídos" da Lista de Arte e o botão "Impresso" da
+Produção — as três listas de arquivo do sistema. O tamanho da página e o desenho
+do rodapé vêm do `script.js` (`HISTORICO_POR_PAGINA` e `desenharRodapeDePaginas`),
+e não de uma cópia aqui: três telas do mesmo sistema com três tamanhos de página
+seria pior do que não paginar.
+
+**O recorte é o último passo** — filtrar, ordenar, só então cortar. Por isso o
+contador do topo continua dizendo quantos pedidos a busca achou na expedição
+inteira, e a pesquisa alcança o pedido que está na página 8. Trocar a busca ou um
+card de setor volta para a primeira página.
+
+As telas de trabalho continuam inteiras: o operador precisa ver de uma vez tudo
+o que tem pela frente.
+
 ## Os cards de setor somam
 
 Clicar num card de setor **liga ou desliga** aquele setor, e a lista mostra a

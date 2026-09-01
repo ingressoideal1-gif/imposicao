@@ -355,7 +355,9 @@ Depois de agrupar os produtos, as propostas que sobraram viram pedido pela mesma
 
 ### A paginação
 
-Só o card Concluídos é paginado, de **30 em 30** (`CONCLUIDOS_POR_PAGINA`). Os
+Só o card Concluídos é paginado, de **30 em 30** (`HISTORICO_POR_PAGINA` — a
+mesma constante que o botão "Impresso" do Painel de Produção e o botão
+"Expedição" do Painel do Acabamento usam, porque as três são a mesma ideia). Os
 outros três são fila de trabalho: o designer precisa ver de uma vez tudo o que
 tem pela frente, e são poucas dezenas. Concluídos é arquivo, cresce para sempre
 e nunca volta a diminuir.

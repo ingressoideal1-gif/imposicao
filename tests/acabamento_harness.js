@@ -694,9 +694,26 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
 // ENTREGUE) devem sair da tela inicial dos paineis"*.
 //
 // EXPEDICAO ja saia da tela inicial pelo `passaNoPrazo` -- ele vai para o botao
-// Expedicao, que e o comprovante do que esta bancada despachou. EM TRANSITO e
-// ENTREGUE nao podem aparecer em lugar NENHUM daqui: o material ja saiu do
-// predio.
+// Expedicao, que e o comprovante do que esta bancada despachou.
+//
+// ## O botao Expedicao nao e a tela inicial (01/09/2026)
+//
+// Ate esta data EM TRANSITO e ENTREGUE nao apareciam em lugar NENHUM daqui,
+// nem no botao Expedicao. Isso era mais estrito do que a regra dele diz: ela
+// fala em sair da *tela inicial*, e o botao Expedicao e uma tela que o operador
+// abre de proposito para procurar o que ja despachou.
+//
+// O efeito pratico do exagero: bastava a expedicao embarcar o material para o
+// ERP trocar EXPEDICAO por EM TRANSITO, e o comprovante do trabalho desta
+// bancada se apagava -- justamente quando o trabalho terminava. O usuario
+// pediu o conserto em 01/09/2026, junto com a paginacao: *"o botao EXPEDIÇÃO
+// deve mostrar os 30 ultimos mas deve disponibilizar todos os pedidos quando
+// pesquisado"*, com o mesmo tratamento do botao "Impresso" da Producao, onde
+// ele escreveu *"tambem devem aparecer todos os pedidos ja impressos"*.
+//
+// A regra de 27/08 continua de pe e continua testada abaixo: os tres status
+// saem da tela inicial (Geral, Para Hoje, Atrasados). O que mudou e so o botao
+// de arquivo.
 (function statusPosteriorSaiDaTela() {
     const amb = ambienteComPedidos([pedido(120)], {
         120: [{ id: 12, acabamento_status: 'Pronto', quantidade: 10 }],
@@ -725,13 +742,76 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
         amb.janela.state.ordens[0].status_interno = status;
         amb.painel.render();
         ok(!naLista(), status + ' sai da tela inicial');
-        ok(!noBotaoExpedicao(), status + ' tambem NAO aparece no botao Expedicao');
+        ok(noBotaoExpedicao(),
+           status + ' aparece no botao Expedicao: a bancada despachou aquele '
+           + 'pedido, e o comprovante nao pode sumir quando o ERP embarca');
     }
 
     // E volta quando o ERP volta atras: a regra le o status, nao um carimbo nosso.
     amb.janela.state.ordens[0].status_interno = 'EM PRODUCAO';
     amb.painel.render();
     ok(naLista(), 'de volta a EM PRODUCAO, o pedido reaparece');
+})();
+
+// O botao Expedicao pagina de 30 em 30, e a busca alcanca todas as paginas
+// (01/09/2026). *"O botao EXPEDIÇÃO deve mostrar os 30 ultimos mas deve
+// disponibilizar todos os pedidos quando pesquisado"*.
+//
+// A ordem importa mais do que o numero: filtrar, ordenar, so entao cortar. Se o
+// corte subisse para antes da busca, procurar um pedido acharia so o que esta
+// na pagina aberta -- que e o mesmo defeito de esconder historico, por outra
+// porta.
+(function oBotaoExpedicaoPagina() {
+    const pedidos = [];
+    const modelos = {};
+    for (let i = 0; i < 96; i++) {
+        const n = 30000 + i;   // fora da faixa dos outros casos
+        pedidos.push(pedido(n, null, { status_interno: 'ENTREGUE' }));
+        modelos[n] = [{ id: n, acabamento_status: 'Pronto', quantidade: 10 }];
+    }
+    const amb = ambienteComPedidos(pedidos, modelos);
+    const corpo = () => amb.elementos['tbody-acabamento'].innerHTML;
+    const linhas = () => (corpo().match(/<tr/g) || []).length;
+    const contador = () => amb.elementos['os-acabamento-count-badge'].textContent;
+
+    amb.painel.setFiltroPrazo('expedicao');
+    amb.painel.render();
+    ok(linhas() === 30, 'a primeira pagina da Expedicao mostra 30 pedidos', linhas());
+    ok(String(contador()).indexOf('96') === 0,
+       'o contador do topo diz o total encontrado, e nao quantos couberam na pagina',
+       contador());
+
+    const naPrimeira = corpo();
+    amb.janela.irParaPaginaExpedicao(2);
+    ok(linhas() === 30, 'a segunda pagina tambem tem 30');
+    ok(corpo() !== naPrimeira, 'e mostra outros pedidos');
+
+    amb.janela.irParaPaginaExpedicao(4);
+    ok(linhas() === 6, 'a ultima pagina traz o resto', linhas());
+
+    // A BUSCA ALCANCA QUEM NAO ESTA NA PAGINA ABERTA.
+    amb.janela.irParaPaginaExpedicao(1);
+    amb.painel.render();
+    const escondido = '>30090<';
+    ok(corpo().indexOf(escondido) === -1, 'o pedido 30090 nao esta na pagina 1');
+    amb.elementos['os-search-acabamento'].value = '30090';
+    amb.painel.render();
+    ok(corpo().indexOf(escondido) !== -1,
+       'mas a busca o encontra: a pesquisa varre a expedicao inteira');
+    ok(linhas() === 1, 'e mostra so ele');
+
+    // Buscar volta para a primeira pagina: continuar na pagina 4 depois de uma
+    // busca nova mostraria uma tela vazia com resultado existindo atras dela.
+    amb.elementos['os-search-acabamento'].value = '';
+    amb.painel.render();
+    ok(linhas() === 30, 'limpando a busca, a lista volta paginada da primeira pagina');
+
+    // A tela de trabalho continua inteira.
+    amb.elementos['os-search-acabamento'].value = '';
+    amb.painel.setFiltroPrazo('geral');
+    amb.painel.render();
+    ok(linhas() === 0,
+       'e os entregues nao voltam para a tela inicial -- a regra de 27/08 continua de pe');
 })();
 
 // A regra e a MESMA nos dois paineis, escrita uma vez so.

@@ -123,3 +123,48 @@ modelos impressos. Ordenar por ela poria no topo o pedido que alguém abriu por
   ela era nula), justamente para essa fila não existir.
 
 Testes: `tests/ordem_dos_impressos_harness.js` e `tests/test_ordem_dos_impressos.py`.
+
+## O botão IMPRESSO mostra TODOS os impressos, paginado (01/09/2026)
+
+Pedido do usuário: *"no painel de produção no botão 'IMPRESSO' também devem
+aparecer todos os pedidos já impressos, mostrar os últimos 30 mas deixar todos
+disponíveis para pesquisa"*.
+
+### O que estava errado
+
+A lista dos quatro botões saía toda de `ordensImpressao`, que é a **fila**: ela
+exige `status_interno` em produção e tira quem já passou da gráfica. Enquanto ela
+foi a base do botão IMPRESSO, o pedido sumia do histórico de impressão assim que
+o ERP o mandava para o acabamento, a expedição ou a entrega — ou seja, o registro
+do que a impressora produziu se apagava exatamente quando o trabalho terminava.
+
+### Como ficou
+
+No botão IMPRESSO a base passa a ser `state.ordens` inteira, recortada pelo
+único critério que importa ali: **todos os modelos impressos**
+(`pedidoTotalmenteImpresso`). Geral, Para Hoje e Atrasados continuam saindo da
+fila, porque são trabalho a fazer.
+
+O que **não** mudou de base: as métricas do topo e o alerta vermelho de
+"Atrasados" continuam olhando `ordensImpressao`. Pedido já impresso e entregue
+não pode acender o alarme de atraso nem contar como fila.
+
+### E pagina de 30 em 30
+
+Como o card "Pedidos Concluídos" da Lista de Arte e o botão "Expedição" do
+Acabamento — as três listas de arquivo do sistema, com o mesmo rodapé
+("← Anteriores | Página N de M | Próximos →") e o mesmo número
+(`HISTORICO_POR_PAGINA`, no `script.js`).
+
+> [!IMPORTANT]
+> **O recorte é o último passo: filtrar, ordenar, só então cortar.** Por isso o
+> contador do topo continua dizendo quantos pedidos a busca achou no histórico
+> inteiro, e por isso a pesquisa alcança o pedido que está na página 4. Subir o
+> `slice` para antes do filtro faria a busca enxergar apenas a página aberta —
+> o mesmo defeito de esconder histórico, entrando por outra porta.
+
+O rodapé vive no `#paginacao-impressao`, que existe no `index.html` **e** na
+`producao.html`: as duas desenham esta tela, e esquecer uma deixaria metade das
+estações sem paginação.
+
+Testes: `tests/historico_de_artes_harness.js` e `tests/test_historico_de_artes.py`.
