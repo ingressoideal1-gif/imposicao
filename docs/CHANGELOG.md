@@ -77,6 +77,82 @@ node) com os arquivos que o motor gera.
 
 ---
 
+## [2026-09-02] — A janela da imposição encolhia a arte em PDF; o motor imprimia certo
+
+Relato do usuário sobre o pedido 21408, já no Painel de Produção: *"visualização
+da imposição dos modelos 1000739 e 1000740 mostra errada, tamanho errada na
+janela de visualização, mas ATENÇÃO, imposição e impressão, motor, gera
+CORRETAMENTE, apenas a janela de visualização mostra errado"*.
+
+### A causa
+
+A prévia da folha tinha esta conta, com um comentário que a explicava errado:
+
+```js
+// O backend (engine.py) sempre ajusta proporcionalmente a arte base (JPG ou PDF)
+// para caber na caixa de dimensões item_w x item_h. Replicamos o mesmo aqui:
+const fitScale = Math.min(item_w / art_orig_w, item_h / art_orig_h);
+```
+
+O motor faz isso **só com arte em IMAGEM**: o `_load_base_as_pdf()` converte a
+imagem numa página do tamanho do item e a encaixa dentro. Arte em **PDF** ele não
+toca — cola com o rect da própria página (`base_w`/`base_h`), centrada na célula,
+e o que passa a faca corta.
+
+Enquanto a arte tem exatamente o tamanho da peça, as duas contas dão o mesmo
+número e ninguém percebe. No 21408, célula de 105 × 148 mm:
+
+| modelo | arte | a prévia mostrava | o motor imprime |
+|---|---|---|---|
+| 1000739 | 104,35 × 158,35 mm | 97,53 × 148,00 (93,5%) | 104,35 × 158,35 |
+| 1000740 frente | 110,70 × 164,70 mm | 99,48 × 148,00 (89,9%) | 110,70 × 164,70 |
+| 1000740 verso | 104,35 × 158,35 mm | 97,53 × 148,00 (93,5%) | 104,35 × 158,35 |
+
+É o **mesmo defeito** que o card do modelo teve até 18/08/2026 — e que o
+`drawAmostraFace` e o Criador de Arte consertaram naquele dia. A prévia da folha
+era a terceira tela com a regra, e a única que ficou para trás.
+
+### O verso pode ter outro tamanho que a frente
+
+No 1000740 a frente tem 110,70 mm de largura e o verso 104,35 — o cliente
+exportou as duas faces com sangrias diferentes. O motor lê o rect de **cada**
+página (`base_w_verso`); a prévia tinha uma medida só, a da frente. Agora as duas
+telas de imposição guardam o tamanho da página do verso junto com o documento
+dele (`guardarPdfDoVersoDaPrevia` / `guardarPdfDoVersoDaImposicao`).
+
+### Medido na tela depois do conserto
+
+Dirigindo a tela de verdade com as artes do 21408 e interceptando o `drawImage`
+da prévia:
+
+| face | a prévia manda desenhar | o motor imprime |
+|---|---|---|
+| frente | 110,70 × 164,71 mm | 110,70 × 164,70 mm |
+| verso | 104,35 × 158,35 mm | 104,35 × 158,35 mm |
+
+### A folha combinada tinha o mesmo defeito, por outro caminho
+
+Somar modelos numa folha só é o único caso em que a prévia não passa pelo
+`loadPedArtFile`: cada arte é baixada dentro do próprio `drawPedPreview`, pela
+URL, e ninguém anotava de que tamanho ela era — `art_orig_w` caía no `item_w` de
+reserva e **toda** arte da folha combinada saía desenhada do tamanho da célula.
+Medido com as duas artes do 21408 na mesma folha, antes e depois:
+
+| | v799 (publicado) | com o conserto | o arquivo |
+|---|---|---|---|
+| arte do 1000739 | 105,00 × 148,00 mm | 104,35 × 158,35 mm | 104,35 × 158,35 mm |
+
+A medida agora é tirada quando o PDF chega (`medirArteDaFolhaCombinada`) e fica
+guardada pela URL, porque a lista de artes é remontada a cada desenho. O
+`runPedImposition` **não** foi tocado: ele monta o payload que vai ao motor, e o
+motor lê o tamanho do arquivo sozinho.
+
+Nada mudou no que sai no papel: o motor não foi tocado. Guardado por
+`tests/test_arte_da_amostra_no_tamanho_real.py`, que passou a cobrir também as
+duas prévias de imposição e a folha combinada.
+
+---
+
 ## [2026-09-02] — "Corrigir Arte": a produção devolve um modelo ao designer
 
 Pedido do usuário: *"No painel da produção, na edição do modelo, vamos adicionar

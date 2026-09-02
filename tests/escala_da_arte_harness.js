@@ -347,7 +347,11 @@ function itemBase(extra) {
         // A previa da imposicao do Pedido: o usuario escolheu esta janela como o
         // terceiro lugar onde a escala tem de aparecer. Sem a multiplicacao, ela
         // mostraria a arte num tamanho e a impressora faria outro.
-        const PREVIA = PEDIDO.slice(PEDIDO.indexOf('const fitScale = Math.min('));
+        // A ancora mudou em 02/09/2026: a previa passou a separar arte em PDF
+        // (tamanho real) de arte em imagem (encaixada), entao o `fitScale`
+        // deixou de ser um `Math.min` seco. Ver
+        // `test_arte_da_amostra_no_tamanho_real.py`.
+        const PREVIA = PEDIDO.slice(PEDIDO.indexOf('const fitScale = arteEhPdf'));
         ok(/dw \*= \(parseFloat\(_escArte\.h\)/.test(PREVIA)
             && /dh \*= \(parseFloat\(_escArte\.v\)/.test(PREVIA),
             'a previa da imposicao do Pedido aplica a escala na camada de arte');

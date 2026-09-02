@@ -300,6 +300,66 @@ function aplicarTravaModoPdf(ativo) {
 }
 window.aplicarTravaModoPdf = aplicarTravaModoPdf;
 
+/**
+ * Guarda o PDF do VERSO da prévia e, junto, o tamanho da página dele.
+ *
+ * O tamanho mora ao lado do documento porque a prévia precisa dele ANTES de
+ * escolher a página: é ele que decide o retângulo da arte dentro da célula.
+ *
+ * Frente e verso podem ser arquivos de tamanhos diferentes — no modelo 1000740
+ * do pedido 21408 a frente tem 110,70 mm de largura e o verso 104,35 — e o
+ * motor lê o rect de CADA um (`base_w_verso` no engine.py). Sem guardar esta
+ * medida, o verso saía desenhado com a da frente.
+ *
+ * Chamar com `null` limpa os dois, e limpa de forma síncrona: as três primeiras
+ * linhas rodam antes de qualquer `await`, então quem só quer zerar não precisa
+ * esperar a promessa.
+ */
+async function guardarPdfDoVersoDaPrevia(pdfV) {
+    state.pedArtVersoPdfDoc = pdfV || null;
+    state.pedArtVersoWidth = 0;
+    state.pedArtVersoHeight = 0;
+    if (!pdfV) return;
+    try {
+        const vp = (await pdfV.getPage(1)).getViewport({ scale: 1 });
+        state.pedArtVersoWidth = vp.width;    // em pt
+        state.pedArtVersoHeight = vp.height;  // em pt
+    } catch (e) {
+        console.warn('[Previa] Nao consegui medir a pagina do verso:', e);
+    }
+}
+window.guardarPdfDoVersoDaPrevia = guardarPdfDoVersoDaPrevia;
+
+/**
+ * Mede a página de uma arte da folha COMBINADA e guarda o tamanho pela URL.
+ *
+ * Somar modelos numa folha só é o único caminho em que a prévia não passa pelo
+ * `loadPedArtFile` — cada arte é baixada aqui mesmo, pela URL, e nunca ninguém
+ * anotou de que tamanho ela era. Sem esta medida, `art_orig_w` caía no
+ * `item_w` de reserva e toda arte da folha combinada era desenhada do tamanho
+ * da célula, enquanto o motor a cola no tamanho do arquivo (`base_w`).
+ *
+ * A medida é a da PÁGINA 1. Nos arquivos desta gráfica todas as páginas de um
+ * mesmo PDF têm o mesmo tamanho — conferido nos cinco arquivos do pedido 21408
+ * —, e o motor lê o rect de cada página. Um arquivo com páginas de tamanhos
+ * diferentes sairia certo no papel e aproximado nesta janela.
+ *
+ * Guardado por URL, e não no objeto da arte: a lista de artes é remontada a
+ * cada desenho da prévia, e o que morasse nela se perderia junto.
+ */
+async function medirArteDaFolhaCombinada(url, doc) {
+    if (!url || !doc) return;
+    if (!state.multiArtesPdfTamanho) state.multiArtesPdfTamanho = {};
+    if (state.multiArtesPdfTamanho[url]) return;
+    try {
+        const vp = (await doc.getPage(1)).getViewport({ scale: 1 });
+        state.multiArtesPdfTamanho[url] = { w: vp.width, h: vp.height };   // em pt
+    } catch (e) {
+        console.warn('[Previa] Nao consegui medir a arte da folha combinada:', e);
+    }
+}
+window.medirArteDaFolhaCombinada = medirArteDaFolhaCombinada;
+
 async function loadPedArtFile(file) {
     state.pedArtFile = file;
 
@@ -553,6 +613,7 @@ function drawPedPreview() {
 
     if (!state.multiArtesPdfCache) state.multiArtesPdfCache = {};
     if (!state.multiArtesPdfLoading) state.multiArtesPdfLoading = {};
+    if (!state.multiArtesPdfTamanho) state.multiArtesPdfTamanho = {};
 
     if (state.selectedOSItems && state.selectedOSItems.length > 1) {
         isMultiSelected = true;
@@ -590,6 +651,8 @@ function drawPedPreview() {
                     return pdfjsLib.getDocument({ data: buf }).promise;
                 }).then(doc => {
                     state.multiArtesPdfCache[itemArteUrl] = doc;
+                    return medirArteDaFolhaCombinada(itemArteUrl, doc);
+                }).then(() => {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF for multi arte preview:', e);
@@ -608,6 +671,8 @@ function drawPedPreview() {
                     return pdfjsLib.getDocument({ data: buf }).promise;
                 }).then(doc => {
                     state.multiArtesPdfCache[itemArteVersoUrl] = doc;
+                    return medirArteDaFolhaCombinada(itemArteVersoUrl, doc);
+                }).then(() => {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF VERSO for multi arte preview:', e);
@@ -631,6 +696,12 @@ function drawPedPreview() {
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
                 pdfVersoDoc: pdfVersoDoc,
+                // O tamanho da PAGINA de cada arte, em pontos. E o que faz a
+                // folha combinada desenhar a arte no tamanho do arquivo, como o
+                // motor faz, em vez de esticada ate a celula. Ver
+                // `medirArteDaFolhaCombinada`.
+                artWidth: (state.multiArtesPdfTamanho[itemArteUrl] || {}).w,
+                artHeight: (state.multiArtesPdfTamanho[itemArteUrl] || {}).h,
                 bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
                 // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
                 // coluna do pool por modelo; sem isto o motor recusa a folha.
@@ -1431,9 +1502,38 @@ function drawPedPreview() {
                 let offH = fmt_off_h * scale;
                 let offV = -fmt_off_v * scale;
                 
-                // O backend (engine.py) sempre ajusta proporcionalmente a arte base (JPG ou PDF) 
-                // para caber na caixa de dimensões item_w x item_h. Replicamos o mesmo comportamento aqui:
-                const fitScale = Math.min(item_w / art_orig_w, item_h / art_orig_h);
+                // A ARTE EM PDF ENTRA NO TAMANHO REAL (02/09/2026).
+                //
+                // O comentário que estava aqui dizia que "o backend sempre ajusta
+                // proporcionalmente a arte base (JPG ou PDF) para caber na caixa
+                // item_w x item_h". Isso vale só para IMAGEM: o `_load_base_as_pdf`
+                // do motor converte a imagem numa página do tamanho do item e a
+                // encaixa dentro. Arte em PDF ele não toca — usa o rect da PRÓPRIA
+                // página (`base_w`/`base_h`) e a centraliza na célula, deixando o
+                // que passa para a faca cortar.
+                //
+                // Enquanto a arte tinha o tamanho exato da peça, a diferença não
+                // aparecia. Medido no pedido 21408, célula de 105 x 148 mm: o
+                // modelo 1000739 (arte 104,35 x 158,35 mm) aparecia a 93,5% do
+                // tamanho e o 1000740 (arte 110,70 x 164,70 mm) a 89,9% — com uma
+                // faixa branca em volta que o papel não tem. O motor imprimia
+                // certo nos dois; era só esta janela.
+                //
+                // É o mesmo conserto que o card do modelo recebeu em 18/08/2026
+                // (`drawAmostraFace`) e o Criador de Arte junto. Esta era a
+                // terceira tela com a regra, e a única que ficou para trás.
+                //
+                // O VERSO PODE TER OUTRO TAMANHO. No FxVersoUnico ele é um arquivo
+                // separado — no 1000740, 104,35 mm contra os 110,70 da frente — e o
+                // motor lê o rect de cada página (`base_w_verso`). Desenhar o verso
+                // com a medida da frente o mostraria 6% maior do que sai no papel.
+                if (isBack && !isMultiArtePdf
+                        && state.pedArtVersoPdfDoc && state.pedArtVersoWidth) {
+                    art_orig_w = state.pedArtVersoWidth;
+                    art_orig_h = state.pedArtVersoHeight;
+                }
+                const arteEhPdf = !!activePdfDoc;
+                const fitScale = arteEhPdf ? 1 : Math.min(item_w / art_orig_w, item_h / art_orig_h);
                 let dw = art_orig_w * fitScale * scale;
                 let dh = art_orig_h * fitScale * scale;
 
@@ -4150,7 +4250,7 @@ async function enviarParaPedido(itemId, osId) {
                 .catch(err => console.warn('[OS→Ped] Erro ao baixar arte via URL:', err));
                 
             // Carregar Verso se houver
-            state.pedArtVersoPdfDoc = null;
+            guardarPdfDoVersoDaPrevia(null);   // zera o doc e a medida da pagina
             state.pedArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
@@ -4168,8 +4268,9 @@ async function enviarParaPedido(itemId, osId) {
                         state.pedArtVersoFile = new File([blob], filenameV, { type: ct || 'application/pdf' });
                         if (isPdf && typeof pdfjsLib !== 'undefined') {
                             blob.arrayBuffer().then(arrayBuffer => {
-                                pdfjsLib.getDocument({ data: arrayBuffer }).promise.then(pdfV => {
-                                    state.pedArtVersoPdfDoc = pdfV;
+                                pdfjsLib.getDocument({ data: arrayBuffer }).promise
+                                    .then(pdfV => guardarPdfDoVersoDaPrevia(pdfV))
+                                    .then(() => {
                                     setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
                                 }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da arte:', e));
                             });
@@ -4191,7 +4292,7 @@ async function enviarParaPedido(itemId, osId) {
                 loadPedArtFile(file);
                 
                 // Carregar Verso da Cor se for Duplex
-                state.pedArtVersoPdfDoc = null;
+                guardarPdfDoVersoDaPrevia(null);   // zera o doc e a medida da pagina
                 state.pedArtVersoFile = null;
                 if (corObj.frente_verso && corObj.pdf_verso_base64) {
                     const base64DataV = corObj.pdf_verso_base64.includes('base64,') ? corObj.pdf_verso_base64.split('base64,')[1] : corObj.pdf_verso_base64;
@@ -4205,8 +4306,9 @@ async function enviarParaPedido(itemId, osId) {
                         corObj.pdf_verso_filename || `${corObj.name}_verso.pdf`,
                         { type: 'application/pdf' }
                     );
-                    pdfjsLib.getDocument({ data: bytesV }).promise.then(pdfV => {
-                        state.pedArtVersoPdfDoc = pdfV;
+                    pdfjsLib.getDocument({ data: bytesV }).promise
+                        .then(pdfV => guardarPdfDoVersoDaPrevia(pdfV))
+                        .then(() => {
                         setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
                     }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da cor:', e));
                 }
@@ -4224,7 +4326,7 @@ async function enviarParaPedido(itemId, osId) {
             state.isColorTemplate = false;
             state.pedArtFile = null;
             state.pedArtPdfDoc = null;
-            state.pedArtVersoPdfDoc = null;
+            guardarPdfDoVersoDaPrevia(null);   // zera o doc e a medida da pagina
             state.pedArtVersoFile = null;
             state.pedArtImage = null;
             const pedInfo = document.getElementById('ped-file-info');

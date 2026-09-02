@@ -10054,6 +10054,28 @@ async function getDpi(file) {
 
 // - IMPOSIÇÃO -
 
+/**
+ * Guarda o PDF do VERSO da previa da Imposicao e o tamanho da pagina dele.
+ *
+ * A gemea de `guardarPdfDoVersoDaPrevia` no pedido.js, onde a razao esta
+ * escrita por inteiro: frente e verso podem ser arquivos de tamanhos
+ * diferentes, e o motor le o rect de cada um.
+ */
+async function guardarPdfDoVersoDaImposicao(pdfV) {
+    state.impArtVersoPdfDoc = pdfV || null;
+    state.impArtVersoWidth = 0;
+    state.impArtVersoHeight = 0;
+    if (!pdfV) return;
+    try {
+        const vp = (await pdfV.getPage(1)).getViewport({ scale: 1 });
+        state.impArtVersoWidth = vp.width;    // em pt
+        state.impArtVersoHeight = vp.height;  // em pt
+    } catch (e) {
+        console.warn('[Previa] Nao consegui medir a pagina do verso:', e);
+    }
+}
+window.guardarPdfDoVersoDaImposicao = guardarPdfDoVersoDaImposicao;
+
 async function loadImpArtFile(file) {
     state.impArtFile = file;
 
@@ -10684,9 +10706,23 @@ function drawPreview() {
                 let offH = fmt_off_h * scale;
                 let offV = -fmt_off_v * scale;
                 
-                // O backend (engine.py) sempre ajusta proporcionalmente a arte base (JPG ou PDF) 
-                // para caber na caixa de dimensões item_w x item_h. Replicamos o mesmo comportamento aqui:
-                const fitScale = Math.min(item_w / art_orig_w, item_h / art_orig_h);
+                // A ARTE EM PDF ENTRA NO TAMANHO REAL (02/09/2026).
+                //
+                // A gêmea da regra do `drawPedPreview` no pedido.js, onde ela está
+                // explicada por inteiro. Em resumo: o motor só encaixa arte em
+                // IMAGEM (o `_load_base_as_pdf` a converte numa página do tamanho
+                // do item); arte em PDF ele cola com o rect da PRÓPRIA página,
+                // centrada na célula, e o que passa a faca corta.
+                //
+                // As duas telas de imposição precisam da mesma conta: divergir
+                // faria a mesma arte aparecer de um tamanho aqui e de outro lá.
+                if (isBack && !isMultiArtePdf
+                        && state.impArtVersoPdfDoc && state.impArtVersoWidth) {
+                    art_orig_w = state.impArtVersoWidth;
+                    art_orig_h = state.impArtVersoHeight;
+                }
+                const arteEhPdf = !!activePdfDoc;
+                const fitScale = arteEhPdf ? 1 : Math.min(item_w / art_orig_w, item_h / art_orig_h);
                 let dw = art_orig_w * fitScale * scale;
                 let dh = art_orig_h * fitScale * scale;
 
@@ -31090,7 +31126,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                 .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
                 
             // Carregar Verso se houver
-            state.impArtVersoPdfDoc = null;
+            guardarPdfDoVersoDaImposicao(null);   // zera o doc e a medida da pagina
             state.impArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
@@ -31108,8 +31144,9 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                         state.impArtVersoFile = new File([blob], filenameV, { type: ct || 'application/pdf' });
                         if (isPdf && typeof pdfjsLib !== 'undefined') {
                             blob.arrayBuffer().then(arrayBuffer => {
-                                pdfjsLib.getDocument({ data: arrayBuffer }).promise.then(pdfV => {
-                                    state.impArtVersoPdfDoc = pdfV;
+                                pdfjsLib.getDocument({ data: arrayBuffer }).promise
+                                    .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
+                                    .then(() => {
                                     setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
                                 }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da arte:', e));
                             });
@@ -31133,7 +31170,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                 loadImpArtFile(file);
                 
                 // Carregar Verso da Cor se for Duplex
-                state.impArtVersoPdfDoc = null;
+                guardarPdfDoVersoDaImposicao(null);   // zera o doc e a medida da pagina
                 state.impArtVersoFile = null;
                 if (corObj.frente_verso && corObj.pdf_verso_base64) {
                     const base64DataV = corObj.pdf_verso_base64.includes('base64,') ? corObj.pdf_verso_base64.split('base64,')[1] : corObj.pdf_verso_base64;
@@ -31149,8 +31186,9 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                         corObj.pdf_verso_filename || `${corObj.name}_verso.pdf`,
                         { type: 'application/pdf' }
                     );
-                    pdfjsLib.getDocument({ data: bytesV }).promise.then(pdfV => {
-                        state.impArtVersoPdfDoc = pdfV;
+                    pdfjsLib.getDocument({ data: bytesV }).promise
+                        .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
+                        .then(() => {
                         setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
                     }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da cor:', e));
                 }
@@ -31170,7 +31208,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             // Limpar arte de imposição anterior se não houver arte definida neste item
             state.impArtFile = null;
             state.impArtPdfDoc = null;
-            state.impArtVersoPdfDoc = null;
+            guardarPdfDoVersoDaImposicao(null);   // zera o doc e a medida da pagina
             state.impArtVersoFile = null;
             state.impArtImage = null;
             const impInfo = document.getElementById('imp-file-info');
