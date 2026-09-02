@@ -95,7 +95,10 @@ function estadoSemBancos(comoCarrega) {
     };
     state.__carregar = async () => {
         state.__chamadas++;
-        if (comoCarrega === 'falha') throw new Error('sem rede');
+        // O sandbox recebe esta funcao por VALOR: trocar `state.__carregar`
+        // depois de montado nao troca nada. Quem quiser derrubar a rede no meio
+        // do caso liga `state.__falharAgora`.
+        if (comoCarrega === 'falha' || state.__falharAgora) throw new Error('sem rede');
         if (comoCarrega === 'vazio') return 0;
         state.bancosDoPedido = [JSON.parse(JSON.stringify(BANCO))];
         state.vinculosDeBanco = { '1000781': JSON.parse(JSON.stringify(VINCULO)) };
@@ -241,6 +244,60 @@ casos.push(async function vinculoSemBancoContinuaBloqueando() {
     await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
     ok(f.modelosSemBancoDoTrabalho().length === 1,
        'vinculo apontando para banco que nao chegou continua parando a impressao');
+});
+
+// ── 7. A recaida do 21460: a marca nao pode sobreviver ao que ela certifica ──
+//
+// Medido no navegador, contra o banco de verdade, em 02/09/2026:
+//
+//     passo 1 (imprime o 21460)      3.000 linhas · coluna EXPOSITOR
+//     passo 2 (abre outro pedido)        0 linhas · coluna vazia
+//     passo 3 (volta e imprime)          0 linhas · coluna vazia  <- o defeito
+//
+// O passo 2 e a tela de Amostras fazendo o que deve: ao trocar de pedido ela
+// esvazia `bancosDoPedido`/`vinculosDeBanco`, porque manter os do anterior
+// ofereceria, no card do novo, um banco que nao e daquele trabalho. O que
+// estava errado era a marca `_bancosConsultados`, que continuava dizendo "ja
+// perguntei por este pedido" depois de a resposta ter sido jogada fora.
+
+casos.push(async function trocarDePedidoEVoltarRecarregaOBanco() {
+    const state = estadoSemBancos();
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+
+    await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
+    ok((f.resolverNumeracaoParaModelo(state.numeracoes[0], state.osItens['os-1'][0]).csv_data || []).length === 2,
+       'passo 1: o pedido imprime com as linhas do banco');
+
+    // Passo 2: a tela de Amostras troca de pedido -- exatamente o que o
+    // `renderAmostrasOSItens` faz no ramo `trocouDePedido`.
+    state.bancosDoPedido = []; state.vinculosDeBanco = {};
+    state._bancosPedidoDe = 'os-outro';
+
+    // Passo 3: o operador volta ao pedido e manda imprimir de novo.
+    await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
+    const depois = f.resolverNumeracaoParaModelo(state.numeracoes[0], state.osItens['os-1'][0]);
+    ok((depois.csv_data || []).length === 2,
+       'passo 3: voltar ao pedido recarrega o banco, em vez de imprimir sequencial',
+       { linhas: (depois.csv_data || []).length, chamadas: state.__chamadas });
+    ok(state.__chamadas === 2, 'e a recarga acontece uma vez so', { chamadas: state.__chamadas });
+});
+
+// ── 7b. E uma recarga que falha nao herda o "pode imprimir" da anterior ──────
+
+casos.push(async function recargaQueFalhaNaoHerdaAMarcaAntiga() {
+    const state = estadoSemBancos();
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
+
+    state.bancosDoPedido = []; state.vinculosDeBanco = {};
+    state._bancosPedidoDe = 'os-outro';
+    state.__falharAgora = true;
+
+    await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
+    ok(f.pedidosComBancoDesconhecido(f.osIdsDoTrabalho()).length === 1,
+       'a marca de meia hora atras nao pode responder pela consulta que acabou de falhar');
+    ok(f.modelosComBancoNaoConferido().length === 1,
+       'e o modelo volta a ser recusado, em vez de sair sequencial');
 });
 
 (async () => {

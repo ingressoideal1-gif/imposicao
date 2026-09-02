@@ -173,15 +173,59 @@ def test_cada_item_recebe_a_linha_da_sua_propria_arte(tmp_path):
     assert len(todos) == 16, "algum item repetiu o nome de outro"
 
 
-def test_arte_sem_banco_convive_com_artes_com_banco(tmp_path):
-    """Um modelo sem CSV no meio do pedido nao pode derrubar o trabalho nem
-    puxar a linha do vizinho."""
+def test_arte_com_campo_de_banco_e_sem_banco_para_a_folha(tmp_path):
+    """Campo que le do banco, num modelo sem banco, PARA o trabalho (02/09/2026).
+
+    Este teste dizia o contrario ate hoje: que a arte sem banco "sai com o campo
+    vazio, nao com o nome de outro". A metade sobre o vizinho estava certa e
+    continua valendo. A outra metade nunca foi verdade — o que saia era o NUMERO
+    DO ITEM no lugar do nome. Medido no PDF gerado por este mesmo cenario, com o
+    motor de antes:
+
+        folha 0 : ['A1', '3', 'A4', 'C3']
+        folha 1 : ['A2', 'C1', '1', 'C4']
+        folha 2 : ['A3', 'C2', '2', 'C5']
+
+    O `3`, o `1` e o `2` sao as tres credenciais da arte X, com o contador
+    sequencial impresso onde devia estar o nome da pessoa. A afirmacao passava
+    porque o filtro `_NOME` (`^[A-Z]\\d+$`) so enxerga nomes do banco: os numeros
+    soltos eram invisiveis para ele, e ninguem tinha olhado a folha.
+
+    No pedido 21460 o mesmo ramo poe o contador dentro do QR de uma credencial de
+    evento — 0001, 0002, 0003 no lugar do codigo de 12 digitos do cliente —, e o
+    erro so aparece na portaria. Por isso o motor passou a recusar: preferir o
+    trabalho parado ao trabalho errado. Ver
+    `tests/test_engine_banco_nunca_vira_sequencial.py`.
+    """
     artes = [_arte("A", 4), _arte("X", 3, com_banco=False), _arte("C", 5)]
+    with pytest.raises(ValueError) as erro:
+        _impor(tmp_path, artes)
+    assert "e1" in str(erro.value), "a recusa precisa dizer qual campo parou a folha"
+
+
+def test_arte_sem_campo_de_banco_convive_com_artes_com_banco(tmp_path):
+    """A convivencia que importa de verdade: modelo puramente sequencial.
+
+    Ele nao pede nada ao banco, entao nao ha o que faltar — e nao pode ser
+    parado pela recusa acima nem puxar a linha do vizinho. E o trabalho de todo
+    dia da grafica somado a um modelo com dados variaveis.
+    """
+    contador = dict(ELEMENTO_NOME)
+    contador.pop("source")
+    contador.pop("csv_column")
+    contador["prefix"] = "X"
+
+    sequencial = _arte("X", 3, com_banco=False)
+    sequencial["numeracao"]["elements"] = [contador]
+
+    artes = [_arte("A", 4), sequencial, _arte("C", 5)]
     _, caminho = _impor(tmp_path, artes)
     todos = [n for folha in _nomes_por_folha(caminho) for n in folha]
     assert sorted(todos) == sorted(
-        [f"A{i}" for i in range(1, 5)] + [f"C{i}" for i in range(1, 6)]
-    ), "a arte sem banco deveria sair com o campo vazio, nao com o nome de outro"
+        [f"A{i}" for i in range(1, 5)]
+        + [f"X{i}" for i in range(1, 4)]
+        + [f"C{i}" for i in range(1, 6)]
+    ), "o modelo sequencial tem de sair com o proprio contador, e ninguem com o nome de outro"
 
 
 def test_linha_desmarcada_da_arte_nao_entra(tmp_path):

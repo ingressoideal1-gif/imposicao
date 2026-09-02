@@ -1488,14 +1488,43 @@ window.garantirCsvDoTrabalho = garantirCsvDoTrabalho;
  *
  * Nunca lanca: quem recusa o trabalho e o `pedidosComBancoDesconhecido` logo
  * abaixo, que sabe dizer ao operador o que fazer.
+ *
+ * ## A recaida, e o que faltava (02/09/2026)
+ *
+ * O 21460 voltou a sair com numero sequencial no QR, com o conserto acima ja no
+ * ar. A marca `_bancosConsultados` dizia "ja perguntei por este pedido", e isso
+ * bastava para pular a carga -- mas ela sobrevivia ao que certificava:
+ *
+ *   1. o operador imprime o 21460: a carga roda, os bancos entram no state;
+ *   2. ele abre OUTRO pedido na tela de Amostras. O `renderAmostrasOSItens`
+ *      esvazia `bancosDoPedido` e `vinculosDeBanco` de proposito -- manter os
+ *      do anterior ofereceria, no card do novo, um banco que nao e do trabalho;
+ *   3. ele volta ao 21460 e manda imprimir. A marca continua la, a carga e
+ *      pulada, e o payload sai sem uma linha sequer.
+ *
+ * Medido no navegador, contra o banco de verdade: passo 1 devolve 3.000 linhas
+ * e a coluna EXPOSITOR; passo 3, ZERO linhas e coluna vazia -- e as travas
+ * deixavam passar, porque para elas o pedido estava "consultado".
+ *
+ * A licao e sobre a marca, nao sobre a carga: memoria de "ja perguntei" so vale
+ * enquanto a RESPOSTA continua na mao. Quem sabe disso e o `_bancosPedidoDe`,
+ * que a propria tela de Amostras mantem apontando para o pedido cujos bancos
+ * estao carregados. Ele passou a ser a unica autorizacao para pular, e a marca
+ * antiga e apagada antes de cada nova tentativa -- senao uma carga que falhasse
+ * herdaria o "pode imprimir" da carga bem-sucedida de meia hora atras.
  */
 async function garantirBancosDoTrabalho(osIds) {
     state._bancosConsultados = state._bancosConsultados || {};
     for (const osId of Array.from(new Set((osIds || []).filter(Boolean).map(String)))) {
-        if (state._bancosConsultados[osId]) continue;
-        // A tela de Amostras ja pode ter carregado este pedido: nao vale uma
-        // segunda consulta so para chegar ao mesmo lugar.
+        // A UNICA autorizacao para pular a carga: os bancos deste pedido estao
+        // carregados agora. Vale tanto para o que a tela de Amostras baixou
+        // quanto para o que esta funcao baixou da ultima vez -- e para de valer
+        // no instante em que outro pedido toma o lugar.
         if (String(state._bancosPedidoDe) === osId) { state._bancosConsultados[osId] = true; continue; }
+        // Daqui para baixo o pedido volta a ser "nao sei" ate a carga terminar.
+        // Sem isto, a marca de uma carga antiga faria a trava responder "pode
+        // imprimir" sobre um state que ja foi esvaziado.
+        delete state._bancosConsultados[osId];
         const idInt = idIntDoPedido(osId);
         // Sem o numero da OS nao ha o que consultar -- e nao ha o que travar:
         // os itens chegam depois do primeiro desenho, e isso acontece de verdade.

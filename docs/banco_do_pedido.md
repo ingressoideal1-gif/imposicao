@@ -157,6 +157,23 @@ pronto, sem alarme falso e sem cegueira para o choque de verdade.
 
 ## As travas
 
+- **Campo do banco nunca vira contador** (02/09/2026, no motor). Um elemento com
+  `source: 'database'` que chega ao `_render_element` **sem linha** para o item
+  faz o trabalho **parar**, com o nome do campo e o que conferir. Até esta data
+  ele escorregava para o ramo final e imprimia o **número do item** — com
+  prefixo, sufixo e zeros, idêntico a uma numeração sequencial comum. Ninguém vê:
+  sai um QR bonito, legível, com o conteúdo errado, e quem descobre é a portaria
+  do evento. Esta é a única trava que nenhum caminho de tela pode contornar, e é
+  por isso que ela existe além das de baixo. (`FOTO` fica de fora: nasce sempre
+  com `source: 'database'` e já tem tratamento próprio.)
+- **A carga dos bancos é conferida a cada impressão, não memorizada para sempre**
+  (02/09/2026). O `garantirBancosDoTrabalho` pula a consulta apenas enquanto
+  `state._bancosPedidoDe` aponta para aquele pedido — ou seja, enquanto os bancos
+  dele ainda estão no state. A tela de Amostras esvazia `bancosDoPedido` e
+  `vinculosDeBanco` ao trocar de pedido, de propósito; a marca antiga de "já
+  consultei" sobrevivia a essa limpeza e mandava imprimir sobre estado vazio.
+  Sintoma: imprimir o pedido, abrir outro, voltar e imprimir de novo — a segunda
+  saía sequencial.
 - **Banco que não desceu** — vínculo apontando para banco ausente **recusa a
   impressão**, nas duas telas (`modelosSemBancoDoTrabalho`, em `script.js` e
   `pedido.js`). Motivo: o motor decide entre banco e numeração sequencial pelo

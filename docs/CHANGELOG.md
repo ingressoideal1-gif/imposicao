@@ -4,6 +4,85 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — O QR do 21460 voltou a sair sequencial: a marca sobreviveu ao dado
+
+Relato do usuário: **"pedido 21460 a numeração do QR deveria ter origem no banco
+de dados, ao fazer a imposição e geração do pdf O QR ESTA GERANDO SEQUENCIAL"**.
+
+É o mesmo sintoma de 01/09, com o conserto daquele dia já publicado. Conferido
+antes de tocar em código: o banco do pedido está inteiro e certo — os cinco
+modelos ligados ao `codigos_por_setor`, 3.000 linhas, `csv_mapa` apontando a
+coluna de cada um — e o painel publicado resolve tudo isso quando carrega. O
+defeito estava em **quando** ele carrega.
+
+### A causa: memória de "já perguntei" que sobreviveu à resposta
+
+O conserto da v791 passou a carregar os bancos do pedido antes de montar o
+payload, e a guardar uma marca (`_bancosConsultados`) para não repetir a
+consulta a cada clique. A marca dizia "já perguntei por este pedido" — e
+continuava dizendo isso depois de a resposta ter sido jogada fora:
+
+1. o operador imprime o 21460 → a carga roda, os bancos entram no state;
+2. ele abre **outro** pedido na tela de Amostras. O `renderAmostrasOSItens`
+   esvazia `bancosDoPedido` e `vinculosDeBanco` de propósito — manter os do
+   anterior ofereceria, no card do novo, um banco que não é daquele trabalho;
+3. ele volta ao 21460 e manda imprimir. A marca continua lá, a carga é pulada, o
+   payload sai sem uma linha sequer — e o QR imprime o contador.
+
+Medido no navegador, contra o banco de verdade:
+
+| | linhas no payload | coluna do QR | as travas |
+|---|---|---|---|
+| passo 1 — imprime o 21460 | 3.000 | `EXPOSITOR` | deixam passar (certo) |
+| passo 3 — volta e imprime | **0** | **vazia** | **deixam passar** (errado) |
+
+As travas não viam nada porque partem da mesma marca: para elas o pedido estava
+"consultado".
+
+### Os dois consertos
+
+**1. A marca passou a valer só enquanto a resposta está na mão.** A única
+autorização para pular a carga é o `_bancosPedidoDe` — o mesmo marcador que a
+tela de Amostras mantém apontando para o pedido cujos bancos estão carregados. E
+a marca antiga é apagada antes de cada nova tentativa: sem isso, uma carga que
+falhasse herdaria o "pode imprimir" da carga bem-sucedida de meia hora atrás.
+
+**2. O motor deixou de inventar valor.** Esta é a correção que fecha a *classe*,
+e não mais um caminho. O `_render_element` montava o valor assim:
+
+```python
+elif el.get("source") == "database" and csv_row is not None:
+    ...
+else:
+    val_str = f"{prefix}{str(val).zfill(pad)}{suffix}"
+```
+
+Sem linha, o campo escorregava para o `else` e imprimia o **número do item**,
+com prefixo, sufixo e zeros — igualzinho a uma numeração sequencial comum.
+Ninguém vê nada: sai um QR bonito, legível, com o conteúdo errado, e quem
+descobre é a portaria do evento com a fila na porta. Agora o trabalho **para**,
+dizendo qual campo parou e o que conferir. É a mesma regra que o QR Ideal já
+seguia, e pelo mesmo motivo.
+
+`FOTO` fica de fora, porque nasce sempre com `source: 'database'` (foto que não
+varia por linha é arte de fundo, não foto variável) e já tem tratamento próprio:
+sem linha ela desiste de pintar, e quem recusa a impressão de verdade é o
+`_conferir_e_aquecer_fotos`, com a lista inteira das pendências.
+
+### Um teste que afirmava o contrário
+
+`test_arte_sem_banco_convive_com_artes_com_banco` dizia que o modelo sem banco
+"sai com o campo vazio, não com o nome de outro". A metade sobre o vizinho
+estava certa. A outra nunca foi verdade — medido no PDF gerado por aquele mesmo
+cenário, o que saía era `3`, `1`, `2` no lugar do nome da pessoa. A afirmação
+passava porque o filtro do teste (`^[A-Z]\d+$`) só enxerga nomes do banco: os
+números soltos eram invisíveis, e ninguém tinha olhado a folha. O teste agora
+exige a recusa, e ganhou um irmão que garante o que de fato importa — modelo
+puramente sequencial continua convivendo com modelos de dados variáveis na mesma
+folha.
+
+---
+
 ## [2026-09-01] — O link do cliente mostrava o VERSO no lugar da frente
 
 Relato do usuário, no pedido 21408: **"o link do cliente para este pedido não

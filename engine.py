@@ -1856,9 +1856,46 @@ class ImpositionEngine:
         # Montar valor string
         if el.get("fixed", False):
             val_str = str(el.get("fixed_value", ""))
-        elif el.get("source") == "database" and csv_row is not None:
+        elif el.get("source") == "database":
+            # ── Origem "banco de dados" NUNCA vira contador sequencial ──────
+            #
+            # Ate 02/09/2026 esta condicao era `and csv_row is not None`. Sem
+            # linha, o elemento escorregava para o `else` la embaixo e imprimia
+            # o NUMERO DO ITEM — com prefixo, sufixo e zeros, como se fosse uma
+            # numeracao sequencial comum. Ninguem via nada: sai um QR bonito,
+            # legivel, com o conteudo errado.
+            #
+            # Foi o pedido 21460 (Expointer, 6.950 credenciais). O painel nao
+            # tinha carregado os bancos do pedido, o motor recebeu zero linhas e
+            # o QR saiu com 0001, 0002, 0003... no lugar dos codigos de 12
+            # digitos que o cliente mandou. O conserto do painel (v791) tapou o
+            # caminho conhecido; esta linha tapa a CLASSE — qualquer caminho que
+            # chegue aqui sem linha para o trabalho em vez de inventar um valor.
+            #
+            # E a mesma regra do QR Ideal, e pelo mesmo motivo: o erro nao
+            # aparece na tela nem no papel. Aparece na portaria do evento, com a
+            # fila na porta, quando ja nao ha o que consertar. Preferir o
+            # trabalho parado ao trabalho errado.
+            #
+            # FOTO fica de fora porque ela ja tem tratamento proprio: nasce
+            # SEMPRE com `source: 'database'` (uma foto que nao varia por linha
+            # e arte de fundo, nao foto variavel), e sem linha ela desiste de
+            # pintar mais abaixo — que e o caso da previa da numeracao sem
+            # banco. Quem recusa a impressao de verdade dela e o
+            # `_conferir_e_aquecer_fotos`, com a lista inteira das pendencias.
+            if csv_row is None and t != "FOTO":
+                raise ValueError(
+                    f"O elemento '{el.get('id', '?')}' ({t}) le do banco de dados, "
+                    f"e o item {val} deste trabalho chegou sem linha. O trabalho "
+                    "nao pode ser impresso: sair daqui poria o numero sequencial "
+                    "no lugar do dado, e o erro so apareceria no material pronto. "
+                    "Abra o pedido e confira as tres coisas: se o banco de dados "
+                    "esta anexado ao modelo, se cada campo tem a sua coluna "
+                    "escolhida, e se o banco tem uma linha para cada peca da "
+                    "tiragem. Depois mande imprimir de novo."
+                )
             col_name = el.get("csv_column", "")
-            val_str = str(csv_row.get(col_name, ""))
+            val_str = str((csv_row or {}).get(col_name, ""))
         elif t == "TEATRO_FILA":
             fila = str(csv_row.get("Fila", "A")) if csv_row else "A"
             prefix = str(el.get("prefix", "") or "")
