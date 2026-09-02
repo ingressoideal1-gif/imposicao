@@ -4,6 +4,72 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-01] — O link do cliente mostrava o VERSO no lugar da frente
+
+Relato do usuário, no pedido 21408: **"o link do cliente para este pedido não
+mostra a paginação, setas para visualizar as páginas quando estão no modo
+multipáginas"**.
+
+A paginação sumida era o sintoma leve. O grave: no bloco escrito **FRENTE**, o
+cliente via o **verso** — o texto do regulamento no lugar da credencial que ele
+estava sendo convidado a aprovar.
+
+### A causa
+
+`drawAmostraFace` é chamada duas vezes num modelo com verso, uma por face, e as
+duas escreviam no mesmo `pdfViewerState[idx]`. Em PDF Paginado com FxVersoUnico a
+frente é um arquivo de N páginas e o verso é outro, de uma página só: a chamada
+da face `back` chegava depois, tomava o estado do folheador e redesenhava o
+canvas da frente com o verso. O `totalPages` caía de 25 para 1, o rodapé virava
+"Página 1 / 1" e as setas paravam de andar.
+
+O painel tinha a guarda desde 31/08/2026, posta junto com o FxVersoUnico
+(`usaVisualizadorPaginado`, no `script.js`). As duas cópias de `cliente.js`
+ficaram para trás, e nada apontava a divergência.
+
+### O conserto
+
+A mesma guarda em `frontend/cliente.js` e `painel/cliente.js`, com uma diferença
+que a página do cliente exige: ali a face `back` sai da função inteira, porque o
+verso já tem imagem própria (`amostra-item-img-verso-N`) e não há canvas para a
+composição multicamada — descer até ela estouraria num `canvas` nulo.
+
+Medido na página de verdade, no link do 21408, num navegador de celular:
+
+| | antes | depois |
+|---|---|---|
+| PERSONALIZADAS (25 peças) | "Página 1 / 1", setas mortas, verso na frente | "Página 1 / 25", ▶ leva à 4 / 25 |
+| CREDENCIAMENTO ESPECIAL (20) | "Página 1 / 1" | "Página 1 / 20" |
+
+Preso por `tests/test_cliente_pdf_paginado.py` e pelo harness em node, que lê a
+função de dentro do `cliente.js` e roda as duas faces na ordem da tela. Um dos
+testes trava também a igualdade entre as duas cópias: consertar uma e esquecer a
+outra deixaria a gráfica com uma versão e o cliente com outra.
+
+---
+
+## [2026-09-01] — A conferência de pedido passa a enxergar o PDF Paginado
+
+Na revisão do pedido 21408, as três consultas de `sql/consultas/` acusaram os
+dois modelos de "2. numeracao sem banco". Alarme falso: modelo em PDF Paginado
+não tem banco — o motor gasta uma página do arquivo da frente por peça.
+
+O que estava por trás era pior: a pergunta que importa — *25 credenciais
+contratadas, o arquivo tem 25 páginas?* — não estava sendo feita por ninguém,
+porque SQL não abre PDF, e nenhuma consulta dizia que não podia responder.
+
+- **`ferramentas/conferir_paginas_pdf.py`** (novo) conta as páginas de cada arte
+  do pedido, acha página repetida, página em branco e tamanho misturado dentro do
+  mesmo arquivo, e confere o verso contra o `duplex_unico`.
+- As três consultas reconhecem `modo_pdf` e apontam para ela.
+- Regressão medida: 21202 (52 modelos) e 21460 (5 modelos) dão exatamente o
+  mesmo resultado de antes. No sistema todo, 4 modelos mudam de veredito — todos
+  os que estavam recebendo o rótulo errado.
+
+Conferência completa em `docs/conferencia_pedido_21408.md`.
+
+---
+
 ## [2026-09-01] — O histórico deixa de ser recortado, nas três telas
 
 Começou com uma pergunta: **"na lista de arte, no card 'Pedidos Concluídos', por

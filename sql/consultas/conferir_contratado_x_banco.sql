@@ -1,6 +1,7 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_contratado_x_banco.sql
--- Documentado em docs/conferencia_pedido_21202.md e docs/conferencia_pedido_21460.md
+-- Documentado em docs/conferencia_pedido_21202.md, docs/conferencia_pedido_21460.md
+-- e docs/conferencia_pedido_21408.md (o modo PDF Paginado).
 --
 -- A quantidade contratada bate com o que o modelo REALMENTE imprime?
 --
@@ -21,6 +22,12 @@
 -- uma consulta que nao olhou nenhum, sem nada na tela dizendo isso. Silencio em
 -- conferencia se le como "tudo certo", e e' pior que alarme falso.
 --
+-- ATENCAO 3 — MODO PDF PAGINADO (01/09/2026, pedido 21408): modelo com
+-- `modo_pdf` nao le banco. Uma pagina do arquivo da frente por peca, e a
+-- pergunta "contratada bate?" so' se responde contando as paginas, o que SQL
+-- nao faz. A coluna `modo_pdf` marca esses modelos e `falta` sai nulo neles de
+-- proposito; quem responde e' `ferramentas/conferir_paginas_pdf.py`.
+--
 -- O corte por csv_selecao NAO e' reproduzido aqui (a semantica dele mora no
 -- CsvEditor.fatiaDoModelo). A coluna `tem_recorte` avisa quando ele existe: nesse
 -- caso `imprime` e' um teto, e quem manda e' a tela.
@@ -28,6 +35,7 @@ with m as (
   select pm.id,
          pm.nome_modelo,
          pm.quantidade                                   as contratada,
+         coalesce(pm.modo_pdf, false)                    as modo_pdf,
          pm.csv_selecao is not null                      as tem_recorte,
          n.name                                          as numeracao,
          -- De onde este modelo bebe: o banco do pedido, quando ha vinculo, ou o
@@ -75,10 +83,13 @@ select id,
        case when banco is null then null else jsonb_array_length(banco) end as linhas_brutas,
        imprime,
        contratada - imprime               as falta,
+       modo_pdf,
        tem_recorte,
        array_to_string(colunas, ' + ')    as colunas_lidas,
        origem_do_banco,
        numeracao,
        nome_modelo
 from conta
-order by abs(coalesce(contratada - imprime, 999999)) desc, id;
+-- Modelo em PDF Paginado nao e' divergencia: vai para o fim, e nao para o topo
+-- como o `coalesce(..., 999999)` faria com o `falta` nulo dele.
+order by modo_pdf, abs(coalesce(contratada - imprime, 999999)) desc, id;

@@ -1,6 +1,7 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_numeracoes_do_pedido.sql
--- Documentado em docs/conferencia_pedido_21202.md e docs/conferencia_pedido_21460.md
+-- Documentado em docs/conferencia_pedido_21202.md, docs/conferencia_pedido_21460.md
+-- e docs/conferencia_pedido_21408.md (o modo PDF Paginado).
 --
 -- De onde cada modelo do pedido tira o dado, e quantas linhas aquele poco tem.
 --
@@ -19,6 +20,7 @@
 -- compartilhamento que ainda merece um olhar).
 with m as (
   select pm.id, pm.id_int, pm.nome_modelo, pm.quantidade,
+         coalesce(pm.modo_pdf, false)                    as modo_pdf,
          pm.csv_selecao is not null                      as tem_recorte,
          n.id                                            as num_id,
          n.name                                          as numeracao,
@@ -62,6 +64,9 @@ select
                 or exists (select 1 from unnest(c.colunas) k
                             where btrim(coalesce(r->>k,'')) <> ''))) end)  as linhas_com_dado,
     count(*) filter (where m.tem_recorte)                    as com_recorte,
+    -- PDF Paginado nao bebe de banco: uma pagina do arquivo por peca. Ver
+    -- ferramentas/conferir_paginas_pdf.py.
+    count(*) filter (where m.modo_pdf)                       as em_pdf_paginado,
     string_agg(m.id::text || ':' || m.quantidade, ', ' order by m.id) as modelos_e_qtds
 from m join cols c on c.id = m.id
 group by m.num_id, m.numeracao, m.banco_nome, c.colunas

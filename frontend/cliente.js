@@ -2736,10 +2736,30 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
-    if (!canvas && !(itemForPdf && itemForPdf.modo_pdf)) return;
+
+    // O folheador de páginas é da FRENTE, e só dela.
+    //
+    // Num modelo com verso, esta função é chamada duas vezes — uma por face — e
+    // as duas escreviam no MESMO `pdfViewerState[idx]`. No FxVersoUnico o verso
+    // é OUTRO arquivo, de uma página só: a chamada da face `back` chegava
+    // depois, trocava o estado do folheador pelo verso e redesenhava o canvas
+    // da frente com ele. O `totalPages` caía de 25 para 1, o rodapé virava
+    // "Página 1 / 1" e as setas paravam de andar — o cliente ficava sem como
+    // conferir as outras 24 peças antes de aprovar (pedido 21408, 01/09/2026).
+    //
+    // Aqui o verso nem precisa do folheador: nesta página ele já tem imagem
+    // própria (`amostra-item-img-verso-N`, alimentada por
+    // `verso_amostra_arte_base64`). Por isso a face `back` sai antes de encostar
+    // no visualizador — e, como em modo PDF ela chega sem canvas, sai da função
+    // inteira, sem cair na composição multicamada, que estouraria no `canvas`
+    // nulo. O painel ganhou esta mesma guarda em 31/08/2026; esta cópia não.
+    const usaVisualizadorPaginado = !!(itemForPdf && itemForPdf.modo_pdf)
+        && !(face === 'back' && itemForPdf.verso);
+
+    if (!canvas && !usaVisualizadorPaginado) return;
 
     // Se modo PDF ativo, usar PDF viewer dedicado em vez de composição canvas
-    if (itemForPdf && itemForPdf.modo_pdf) {
+    if (usaVisualizadorPaginado) {
         if (canvas) canvas.style.display = 'none';
         
         const pdfUrl = face === 'back' ? (itemForPdf.verso_arte_url || null) : (itemForPdf.arte_url || null);

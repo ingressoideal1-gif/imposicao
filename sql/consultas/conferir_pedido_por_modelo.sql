@@ -1,6 +1,7 @@
 -- SOMENTE LEITURA. Nenhuma linha e' escrita.
 -- Rodar com: .\ferramentas\rodar_sql.ps1 sql\consultas\conferir_pedido_por_modelo.sql
--- Documentado em docs/conferencia_pedido_21202.md e docs/conferencia_pedido_21460.md
+-- Documentado em docs/conferencia_pedido_21202.md, docs/conferencia_pedido_21460.md
+-- e docs/conferencia_pedido_21408.md (o modo PDF Paginado).
 --
 -- Tres perguntas sobre cada modelo do pedido:
 --   1. o banco entrega a quantidade contratada?
@@ -20,7 +21,17 @@
 -- conferencia dava "numeracao sem banco" em modelo que tem banco — foi o que
 -- teria acontecido com os cinco modelos do 21460.
 --
--- ATENCAO 3 — "banco compartilhado sem recorte" (achado 5) so' vale para o
+-- ATENCAO 3 — MODO PDF PAGINADO (01/09/2026, pedido 21408). Modelo com
+-- `modo_pdf` nao tira a quantidade de banco nenhum: o frontend forca o schema
+-- `pdf_multiple` e o motor gasta UMA PAGINA do arquivo da frente por peca (ver
+-- `page_idx_front` no engine.py). Banco vazio ali e' o normal, e a versao
+-- anterior desta consulta acusava "2. numeracao sem banco" nos dois modelos do
+-- 21408 — alarme falso, e pior, escondia que a pergunta certa (o arquivo tem
+-- tantas paginas quanto a quantidade contratada?) nao estava sendo feita por
+-- ninguem. SQL nao conta pagina de PDF; quem conta e'
+-- `ferramentas/conferir_paginas_pdf.py`, e e' para la que o achado aponta.
+--
+-- ATENCAO 4 — "banco compartilhado sem recorte" (achado 5) so' vale para o
 -- caminho legado. Com banco do pedido, compartilhar e' o normal: cada modelo le
 -- a SUA coluna do mesmo banco-mestre, e nao ha o que recortar. Por isso o achado
 -- 5 nao dispara quando os modelos leem colunas diferentes.
@@ -33,6 +44,7 @@ with m as (
   select pm.id,
          pm.nome_modelo,
          pm.quantidade                                   as contratada,
+         coalesce(pm.modo_pdf, false)                    as modo_pdf,
          pm.gabarito_operacional                         as gabarito_do_erp,
          pm.csv_selecao is not null                      as tem_recorte,
          n.id                                            as num_id,
@@ -85,6 +97,7 @@ select id,
        imprime,
        case
          when numeracao_ligada is null                        then '1. SEM NUMERACAO LIGADA'
+         when modo_pdf                                        then '6. PDF Paginado: conferir as paginas do arquivo'
          when imprime is null                                 then '2. numeracao sem banco'
          when contratada <> imprime                           then '3. O QUE IMPRIME NAO BATE COM O CONTRATADO'
          when dia_do_modelo is not null
@@ -96,6 +109,7 @@ select id,
        end                                                    as achado,
        case when banco is null then null else jsonb_array_length(banco) end as linhas_brutas,
        array_to_string(colunas, ' + ')                 as colunas_lidas,
+       modo_pdf,
        origem_do_banco,
        dia_do_modelo, dia_da_numeracao,
        modelos_na_mesma, modelos_nas_mesmas_colunas, tem_recorte,
@@ -106,6 +120,7 @@ from conta
 order by
     case
       when numeracao_ligada is null then 1
+      when modo_pdf then 6
       when imprime is null then 2
       when contratada <> imprime then 3
       when dia_do_modelo is not null and dia_da_numeracao is not null
