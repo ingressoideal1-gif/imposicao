@@ -111,6 +111,9 @@ function estadoSemBancos(comoCarrega) {
 }
 
 const FUNCOES = ['bancoVazioNoPayload', 'recadoDeBancoVazio',
+                 'linhasDoModeloNoPayload', 'recadoDeLinhasDeMenos', 'modeloComLinhasDeMenos',
+                 'quantidadeContratada', 'numeracaoDoModelo', 'fatiaCsvDoItem', 'linhasAtivasCsv',
+                 'linhasComDadoDaNumeracao', 'colunasDoBancoDaNumeracao', 'rotuloDoModelo',
                  'idIntDoPedido', 'vinculoDeBancoDoModelo', 'resolverNumeracaoParaModelo',
                  'osIdsDoTrabalho', 'garantirBancosDoTrabalho', 'pedidosComBancoDesconhecido',
                  'modelosComBancoNaoConferido', 'pecaDoModelo', 'numeracaoIdDoItem',
@@ -354,6 +357,90 @@ casos.push(async function numeracaoSequencialNaoEBarrada() {
     ok(f.bancoVazioNoPayload(soContador, []).length === 0,
        'numeracao puramente sequencial imprime como sempre imprimiu');
     ok(f.bancoVazioNoPayload(null, []).length === 0, 'e trabalho sem numeracao nenhuma tambem');
+});
+
+// ── 9. Um modelo SOZINHO leva a fatia dele, limitada a quantidade ───────────
+//
+// O quarto relato do 21460 (02/09/2026), decodificado nos PDFs gerados pelo
+// operador: o EXPOSITOR SIMERS, de 500 pecas, saiu com 3.000 -- as 500
+// primeiras com o codigo e 2.500 com o QR EM BRANCO. O modelo sozinho levava o
+// banco inteiro; no formato largo a coluna dele so tem 500 celulas; e o motor
+// imprime uma peca por linha, ignorando o "1 a N" da tela. Marcar os cinco
+// modelos saia certo, porque la a quantidade de cada arte limita as linhas.
+//
+// A regra que fecha isso para QUALQUER pedido: ao motor vai a fatia do modelo
+// (as linhas com dado nas colunas que ele le), limitada a quantidade do
+// pedido; linhas de MENOS recusam a impressao, com a saida no recado.
+
+/** O banco largo do 21460 em miniatura: EXPOSITOR cheia em 4 de 6 linhas. */
+function estadoFormatoLargo(quantidade) {
+    const state = estadoSemBancos();
+    state.osItens['os-1'][0].quantidade = quantidade;
+    state.bancosDoPedido = [{
+        id: 'banco-1', id_int: 21460, nome: 'codigos_por_setor',
+        csv_headers: ['EXPOSITOR', 'PEDESTRE / DIARIA'],
+        csv_data: [1, 2, 3, 4, 5, 6].map(i => ({
+            __id: i,
+            EXPOSITOR: i <= 4 ? '30101353697' + i : '',
+            'PEDESTRE / DIARIA': '30401345582' + i,
+        })),
+    }];
+    state.vinculosDeBanco = { '1000781': JSON.parse(JSON.stringify(VINCULO)) };
+    state._bancosPedidoDe = 'os-1';
+    return state;
+}
+
+casos.push(async function modeloSozinhoLevaAFatiaENaoOBancoInteiro() {
+    const state = estadoFormatoLargo(4);
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const item = state.osItens['os-1'][0];
+    const resolvida = f.resolverNumeracaoParaModelo(state.numeracoes[0], item);
+    ok((resolvida.csv_data || []).length === 6,
+       'resolvida pelo modelo, a peca traz o banco inteiro (6 linhas)');
+    const linhas = f.linhasDoModeloNoPayload(item, resolvida);
+    ok(linhas.length === 4,
+       'ao motor vao so as linhas com dado na coluna deste modelo', { linhas: linhas.length });
+    ok(linhas.every(r => r.EXPOSITOR),
+       'e nenhuma delas sairia com o QR em branco');
+    ok(f.recadoDeLinhasDeMenos([item]) === null,
+       'linhas iguais a quantidade: nada trava');
+});
+
+// ── 9b. Linhas de MAIS: a quantidade limita, como o multi_artes sempre fez ──
+
+casos.push(async function linhasDeMaisSaoLimitadasPelaQuantidade() {
+    const state = estadoFormatoLargo(3);
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const item = state.osItens['os-1'][0];
+    const resolvida = f.resolverNumeracaoParaModelo(state.numeracoes[0], item);
+    ok(f.linhasDoModeloNoPayload(item, resolvida).length === 3,
+       'quantidade 3 com 4 linhas: saem 3 -- a quantidade do pedido manda');
+    ok(f.recadoDeLinhasDeMenos([item]) === null, 'linhas de mais nao travam');
+});
+
+// ── 9c. Linhas de MENOS: recusa, com a saida na frase ───────────────────────
+
+casos.push(async function linhasDeMenosRecusamComASaida() {
+    const state = estadoFormatoLargo(5);
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const item = state.osItens['os-1'][0];
+    const recado = f.recadoDeLinhasDeMenos([item]);
+    ok(!!recado, 'quantidade 5 com 4 linhas com dado: a impressao e recusada');
+    ok(recado && recado.indexOf('EXPOSITOR') !== -1
+       && recado.indexOf('5 peças') !== -1 && recado.indexOf('4 linhas') !== -1,
+       'o recado nomeia o modelo, a quantidade e as linhas', { recado });
+    ok(recado && recado.indexOf('Gerenciamento de Bancos') !== -1, 'e diz por onde sair');
+});
+
+// ── 9d. Sem vinculo com banco do pedido, a regra nem e consultada ───────────
+
+casos.push(async function semVinculoARegraNaoSeAplica() {
+    const state = estadoFormatoLargo(5);
+    state.vinculosDeBanco = {};
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const item = state.osItens['os-1'][0];
+    ok(f.modeloComLinhasDeMenos(item) === null,
+       'modelo sem banco do pedido segue o caminho de sempre, sem esta trava');
 });
 
 (async () => {

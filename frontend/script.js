@@ -12617,6 +12617,12 @@ window.runImposition = async function (mode, returnBlob = false) {
     const _semLinhas = recadoDeFatiaVazia(itensDaImposicao(isMultiSelected));
     if (_semLinhas) return toast(_semLinhas, 'error');
 
+    // Linhas de MENOS que a quantidade do pedido (02/09/2026): sozinho, o
+    // modelo sairia curto, calado; combinado, o motor pararia no meio. Ver
+    // `recadoDeLinhasDeMenos`.
+    const _linhasDeMenos = recadoDeLinhasDeMenos(itensDaImposicao(isMultiSelected));
+    if (_linhasDeMenos) return toast(_linhasDeMenos, 'error');
+
     if (isMultiSelected) {
         // Multi-seleção: schema e cut_stack_mode já foram definidos acima como hardcode
         // Apenas pegar saiId do formato se não existir
@@ -12762,6 +12768,14 @@ window.runImposition = async function (mode, returnBlob = false) {
         const itemAtivo = itemAtivoDoPedido();
         if (itemAtivo && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
             numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);
+            // A fatia DESTE modelo, limitada a quantidade -- e nao o banco
+            // inteiro (02/09/2026). Sozinho, o modelo de 500 saia com 3.000, e
+            // 2.500 delas com o QR em branco. Ver `linhasDoModeloNoPayload`.
+            if (numeracao && vinculoDeBancoDoModelo(itemAtivo)
+                && numeracao.csv_data && numeracao.csv_data.length) {
+                numeracao = Object.assign({}, numeracao,
+                    { csv_data: linhasDoModeloNoPayload(itemAtivo, numeracao) });
+            }
         }
     }
 
@@ -12812,6 +12826,12 @@ window.runImposition = async function (mode, returnBlob = false) {
                     // a CSV, quantos itens saem E quantas linhas ele leva.
                     qtdArte = numArte.csv_data.length;
 
+                } else if (itArte && vinculoDeBancoDoModelo(itArte)) {
+                    // Sem distribuicao, o modelo com banco do PEDIDO leva a fatia
+                    // por coluna, limitada a quantidade (02/09/2026) -- nao o banco
+                    // inteiro. Ver `linhasDoModeloNoPayload`.
+                    numArte = Object.assign({}, numArte,
+                        { csv_data: linhasDoModeloNoPayload(itArte, numArte) });
                 }
 
             }
@@ -18254,6 +18274,83 @@ function recadoDeFatiaVazia(itens) {
 
 }
 window.recadoDeFatiaVazia = recadoDeFatiaVazia;
+
+/** A quantidade do pedido, como veio do ERP. Le-se; nunca se altera aqui. */
+function quantidadeContratada(item) {
+    if (!item) return 0;
+    return parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+}
+window.quantidadeContratada = quantidadeContratada;
+
+/**
+ * As linhas que ESTE modelo leva ao motor quando le um banco do PEDIDO
+ * (02/09/2026): a fatia dele, limitada a quantidade do pedido.
+ *
+ * ## O defeito que isto conserta
+ *
+ * Um modelo impresso SOZINHO recebia o banco inteiro. O motor imprime uma
+ * peca por linha e ignora o "1 a N" da tela quando ha linhas (engine.py,
+ * `total_items = len(csv_data)`). Entao o EXPOSITOR SIMERS do 21460, de 500
+ * pecas, saiu com 3.000: as 500 primeiras com o codigo e 2.500 com o QR EM
+ * BRANCO, porque no formato largo a coluna dele so tem 500 celulas.
+ * Decodificado nos PDFs gerados em 02/09/2026: 50 QRs com codigo e 150
+ * vazios em cada folha, misturados pelo Cut & Stack -- nem separar dava.
+ * Marcar os cinco modelos saia certo, porque la a quantidade de cada arte
+ * limita as linhas no motor.
+ *
+ * A fatia e a mesma que o card e o 🧩 Linhas ja usam (`fatiaCsvDoItem`): a
+ * distribuicao, quando ha, e o corte por coluna -- linha sem nada nas colunas
+ * que este modelo le nao e peca dele. O limite pela quantidade e a regra que
+ * o multi_artes sempre aplicou no motor, trazida para o modelo sozinho.
+ * Linhas de MENOS nao chegam aqui: `recadoDeLinhasDeMenos` recusa antes.
+ *
+ * So vale para modelo com vinculo de banco do pedido. O CSV de dentro da
+ * numeracao segue o caminho de sempre, intocado.
+ */
+function linhasDoModeloNoPayload(item, num) {
+    const fatia = fatiaCsvDoItem(item, num);
+    const qtd = quantidadeContratada(item);
+    return (qtd > 0 && fatia.length > qtd) ? fatia.slice(0, qtd) : fatia;
+}
+window.linhasDoModeloNoPayload = linhasDoModeloNoPayload;
+
+/**
+ * O modelo tem MENOS linhas com dado do que a quantidade do pedido? Devolve
+ * o que ha para dizer, ou null.
+ *
+ * So para modelo que le banco do PEDIDO. Sem esta trava, o modelo sozinho
+ * sairia com menos pecas, calado; na folha combinada, o motor pararia no meio
+ * da geracao com a recusa dele, que fala de `el_1` e de `csv_row`.
+ *
+ * Linhas de MAIS nao travam: a quantidade limita, como sempre limitou no
+ * multi_artes -- e e assim que modelos que leem o banco inteiro continuam
+ * imprimindo a sua quantidade.
+ */
+function modeloComLinhasDeMenos(item) {
+    if (!item || !vinculoDeBancoDoModelo(item)) return null;
+    const num = numeracaoDoModelo(item);
+    if (!num || !num.csv_data || !num.csv_data.length) return null;   // banco nao baixado: trava propria
+    const qtd = quantidadeContratada(item);
+    if (!qtd) return null;
+    const linhas = fatiaCsvDoItem(item, num).length;
+    if (!linhas || linhas >= qtd) return null;                        // fatia vazia: recado proprio
+    return { nome: rotuloDoModelo(item, 0), qtd, linhas, colunas: colunasDoBancoDaNumeracao(num) };
+}
+window.modeloComLinhasDeMenos = modeloComLinhasDeMenos;
+
+/** O recado que trava a imposicao por linhas de menos, ou null. Diz a saida. */
+function recadoDeLinhasDeMenos(itens) {
+    const faltas = (itens || []).map(modeloComLinhasDeMenos).filter(Boolean);
+    if (!faltas.length) return null;
+    const cada = faltas.map(f => {
+        const onde = f.colunas.length ? 'a coluna ' + f.colunas.join(' / ') : 'o banco';
+        return `${f.nome} pede ${f.qtd} peças e ${onde} tem ${f.linhas} linhas com dado`;
+    });
+    return 'O banco de dados tem menos linhas do que a quantidade do pedido: ' + cada.join('; ')
+        + '. Imprimir agora sairia com menos peças ou com QR em branco. Complete o banco no '
+        + '🗂️ Gerenciamento de Bancos de Dados, ou reparta as linhas no 🧩 Linhas, e mande imprimir de novo.';
+}
+window.recadoDeLinhasDeMenos = recadoDeLinhasDeMenos;
 
 
 

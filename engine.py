@@ -1896,6 +1896,21 @@ class ImpositionEngine:
                 )
             col_name = el.get("csv_column", "")
             val_str = str((csv_row or {}).get(col_name, ""))
+            # Um QR do banco com a celula VAZIA e' da mesma familia do caso
+            # acima: o papel sai com um QR "de nada", legivel, que nao abre porta
+            # nenhuma. Foi o quarto relato do 21460 — o painel mandava o banco
+            # inteiro (3.000 linhas) para um modelo de 200, e as 2.800 pecas
+            # alem da tiragem tinham a coluna dele em branco. O BARCODE ja
+            # recusa o vazio ha tempos; o QR passa a recusar tambem. Texto
+            # continua podendo ser vazio: um "complemento" em branco e' normal.
+            if t == "QR" and not val_str.strip():
+                raise ValueError(
+                    f"O QR '{el.get('id', '?')}' le a coluna '{col_name}' do banco "
+                    f"de dados, e no item {val} deste trabalho essa celula esta "
+                    "vazia. O trabalho nao pode ser impresso: sairia um QR sem "
+                    "conteudo. Confira se a tiragem do modelo nao passa das "
+                    "linhas que tem codigo nessa coluna, e mande imprimir de novo."
+                )
         elif t == "TEATRO_FILA":
             fila = str(csv_row.get("Fila", "A")) if csv_row else "A"
             prefix = str(el.get("prefix", "") or "")

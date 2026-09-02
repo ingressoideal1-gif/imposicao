@@ -157,6 +157,18 @@ pronto, sem alarme falso e sem cegueira para o choque de verdade.
 
 ## As travas
 
+- **Um modelo leva a fatia dele, limitada à quantidade do pedido** (02/09/2026).
+  Impresso sozinho, o modelo com banco do pedido recebia o banco **inteiro**, e o
+  motor imprime uma peça por linha, ignorando o "1 a N" da tela. No 21460 o
+  EXPOSITOR SIMERS, de 500 peças, saiu com 3.000: 500 com o código e 2.500 com
+  o QR **em branco**, porque no formato largo a coluna dele só tem 500 células —
+  medido decodificando os PDFs gerados. Agora vai `fatiaCsvDoItem` (distribuição
+  do 🧩 e corte por coluna) limitada à quantidade, nas duas telas e também em
+  cada arte do multi_artes sem distribuição (`linhasDoModeloNoPayload`).
+- **Linhas de menos que a quantidade recusam a impressão** (02/09/2026).
+  `recadoDeLinhasDeMenos`, ao lado da trava de fatia vazia: sozinho, o modelo
+  sairia curto, calado; combinado, o motor pararia no meio. Linhas de **mais**
+  não travam — a quantidade limita, como o multi_artes sempre fez.
 - **Campo do banco nunca vira contador** (02/09/2026, no motor). Um elemento com
   `source: 'database'` que chega ao `_render_element` **sem linha** para o item
   faz o trabalho **parar**, com o nome do campo e o que conferir. Até esta data

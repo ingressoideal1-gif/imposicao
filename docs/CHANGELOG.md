@@ -4,6 +4,56 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — O QR "errado" do 21460 era um QR VAZIO: o modelo sozinho levava o banco inteiro
+
+Quarto relato do dia, com uma foto: um QR e o número `01851` embaixo, *"esta
+gerando errados os QR"*. O `01851` é o texto sequencial (`el_2`, 5 dígitos),
+normal. O errado estava **dentro** do QR — e não era o sequencial.
+
+### O que saiu no papel
+
+No caminho de **um modelo**, a numeração resolvida pelo banco do pedido levava
+ao motor o banco-mestre **inteiro** (3.000 linhas, uma coluna por modelo). E o
+motor, nesse caminho, imprime uma peça por linha (`total_items = len(csv_data)`),
+ignorando o "1 a N" da tela. Medido na tela real, modelo a modelo:
+
+| modelo | contratado | ia ao motor | com código na coluna dele |
+|---|---|---|---|
+| 1000780 VEÍC.EXPOSITOR | 200 | **3.000** | 200 |
+| 1000782 EXPOSITOR SIMERS | 500 | **3.000** | 500 |
+| 1000783 VEÍC.SERVIÇO | 250 | **3.000** | 250 |
+| 1000781 EXPOSITOR | 3.000 | 3.000 | 3.000 |
+| 1000784 PEDESTRE | 3.000 | 3.000 | 3.000 |
+
+Os três modelos pequenos saíam com 3.000 peças: as primeiras com o código, o
+resto com a célula vazia na coluna deles — um **QR sem conteúdo**, legível, que
+não abre porta nenhuma. Decodificado nos PDFs gerados no dia: 50 QRs com código
+e 150 vazios por folha, misturados pelo Cut & Stack. Marcar os cinco modelos
+saía certo, porque no multi-artes a quantidade de cada arte limita as linhas.
+
+### Os consertos (duas sessões, uma leva)
+
+**No painel (sessão bb):** o modelo sozinho passa a levar **a fatia dele,
+limitada à quantidade contratada** — `linhasDoModeloNoPayload(item, num)` =
+`fatiaCsvDoItem` cortada em `qtd`, aplicada ao modelo único e a cada arte do
+multi-artes sem `csv_selecao`, sempre em cópia rasa (a peça é compartilhada) e
+só com vínculo de banco do pedido. E `recadoDeLinhasDeMenos`: modelo com menos
+linhas com código do que a quantidade é recusado na tela, com o recado — antes
+saía com menos peças, calado. Verificado no app real: P16 sozinho vai com 200
+linhas, todas com código; os cinco marcados, cada arte com linhas = qtd; qtd 250
+com 200 códigos → recusa.
+
+**No motor:** um QR que lê do banco e encontra a célula **vazia** para o
+trabalho, como o código de barras já fazia. Texto vazio continua permitido —
+um "complemento" em branco é normal. É a rede de segurança para esta classe:
+qualquer caminho que mande linhas de mais volta a parar em vez de imprimir um
+QR de nada.
+
+Se algum dos três modelos pequenos foi impresso sozinho antes desta versão, o
+material é refugo — reimprimir.
+
+---
+
 ## [2026-09-02] — Imprimir UM modelo procurava o modelo ativo por um `idx` que nenhuma tela grava
 
 Terceiro relato do 21460 no mesmo dia, já com a carga dos bancos consertada

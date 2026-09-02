@@ -196,3 +196,43 @@ def test_o_modelo_ativo_e_achado_pelo_itemId_e_nao_por_um_idx_que_nao_existe():
         assert "itemAtivoDoPedido()" in trecho, (
             f"em {arquivo} a resolucao do modelo unico nao usa `itemAtivoDoPedido()`"
         )
+
+
+def test_as_duas_telas_levam_a_fatia_do_modelo_e_nao_o_banco_inteiro():
+    """Um modelo com banco do PEDIDO leva ao motor a fatia dele (02/09/2026).
+
+    O quarto relato do 21460, decodificado nos PDFs gerados: o modelo de 500
+    saiu com 3.000 pecas, 2.500 delas com o QR em branco, porque o modelo
+    sozinho levava o banco inteiro e o motor imprime uma peca por linha. Vale
+    para o modelo unico E para cada arte do multi_artes sem distribuicao.
+    """
+    for arquivo in ("frontend/script.js", "frontend/pedido.js"):
+        fonte = _ler(arquivo)
+        i = fonte.index("numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);")
+        assert "linhasDoModeloNoPayload(itemAtivo, numeracao)" in fonte[i:i + 900], (
+            f"em {arquivo} o modelo unico ainda leva o banco inteiro ao motor"
+        )
+        j = fonte.index("qtdArte = numArte.csv_data.length;")
+        assert "linhasDoModeloNoPayload(itArte, numArte)" in fonte[j:j + 900], (
+            f"em {arquivo} a arte sem distribuicao ainda leva o banco inteiro ao motor"
+        )
+
+
+def test_as_duas_telas_recusam_linhas_de_menos_que_a_quantidade():
+    """Banco com menos linhas que a quantidade do pedido nao imprime (02/09/2026).
+
+    Sozinho, o modelo sairia curto, calado; combinado, o motor pararia no meio
+    da geracao com a recusa dele. A trava fica ao lado da de fatia vazia, nas
+    duas telas, e o recado diz por onde sair.
+    """
+    for arquivo in ("frontend/script.js", "frontend/pedido.js"):
+        fonte = _ler(arquivo)
+        i = fonte.index("recadoDeFatiaVazia(itensDaImposicao(isMultiSelected))")
+        assert "recadoDeLinhasDeMenos(itensDaImposicao(isMultiSelected))" in fonte[i:i + 700], (
+            f"em {arquivo} a imposicao nao recusa banco com linhas de menos"
+        )
+    corpo = _ler("frontend/script.js")
+    k = corpo.index("function recadoDeLinhasDeMenos(")
+    trecho = corpo[k:corpo.index(chr(10) + "}", k)]
+    assert "Gerenciamento de Bancos" in trecho and "Linhas" in trecho, "o recado nao diz por onde sair"
+

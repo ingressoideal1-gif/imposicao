@@ -5612,6 +5612,13 @@ window.runPedImposition = async function (mode, isRefazer) {
         if (_semLinhas) return desistir(_semLinhas);
     }
 
+    // Linhas de MENOS que a quantidade do pedido (02/09/2026). Ver
+    // `recadoDeLinhasDeMenos` no script.js.
+    if (typeof recadoDeLinhasDeMenos === 'function') {
+        const _linhasDeMenos = recadoDeLinhasDeMenos(itensDaImposicao(isMultiSelected));
+        if (_linhasDeMenos) return desistir(_linhasDeMenos);
+    }
+
 
 
     if (schema === 'multi_artes' || isMultiSelected) {
@@ -5741,6 +5748,16 @@ window.runPedImposition = async function (mode, isRefazer) {
         if (itemAtivo && typeof numeracaoIdDoItem === 'function'
             && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
             numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);
+            // A fatia DESTE modelo, limitada a quantidade -- e nao o banco
+            // inteiro (02/09/2026). Foi o quarto relato do 21460: o modelo de
+            // 500 saiu com 3.000, e 2.500 delas com o QR em branco. Ver
+            // `linhasDoModeloNoPayload` no script.js.
+            if (numeracao && typeof linhasDoModeloNoPayload === 'function'
+                && typeof vinculoDeBancoDoModelo === 'function' && vinculoDeBancoDoModelo(itemAtivo)
+                && numeracao.csv_data && numeracao.csv_data.length) {
+                numeracao = Object.assign({}, numeracao,
+                    { csv_data: linhasDoModeloNoPayload(itemAtivo, numeracao) });
+            }
         }
     }
 
@@ -5789,6 +5806,14 @@ window.runPedImposition = async function (mode, isRefazer) {
                     // a CSV, quantos itens saem E quantas linhas ele leva.
                     qtdArte = numArte.csv_data.length;
 
+                } else if (itArte && typeof vinculoDeBancoDoModelo === 'function'
+                           && typeof linhasDoModeloNoPayload === 'function'
+                           && vinculoDeBancoDoModelo(itArte)) {
+                    // Sem distribuicao, o modelo com banco do PEDIDO leva a fatia
+                    // por coluna, limitada a quantidade (02/09/2026). Espelha o
+                    // script.js; ver `linhasDoModeloNoPayload` la.
+                    numArte = Object.assign({}, numArte,
+                        { csv_data: linhasDoModeloNoPayload(itArte, numArte) });
                 }
 
             }

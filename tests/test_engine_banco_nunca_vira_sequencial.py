@@ -144,3 +144,23 @@ def test_foto_sem_linha_continua_desistindo_em_silencio():
         None,
     )
     assert not page.get_images(), "a previa sem linha nao pinta foto nenhuma"
+
+
+# ── A celula vazia (quarto relato do 21460, 02/09/2026) ─────────────────────
+
+def test_qr_do_banco_com_celula_vazia_para_o_trabalho():
+    """O painel mandava o banco inteiro (3.000 linhas) para um modelo de 200:
+    as 2.800 pecas alem da tiragem tinham a coluna do modelo em branco, e cada
+    uma saia com um QR "de nada" — legivel, e que nao abre porta nenhuma."""
+    with pytest.raises(ValueError) as erro:
+        _desenhar(_qr(id="el_1", csv_column="VEICULO"), {"VEICULO": "   ", "EXPOSITOR": "301013536972"}, val=201)
+    frase = str(erro.value)
+    assert "el_1" in frase and "VEICULO" in frase and "201" in frase,         "a recusa precisa dizer qual QR, qual coluna e qual item"
+    assert "tiragem" in frase, "a recusa precisa apontar a causa provavel: tiragem maior que o banco"
+
+
+def test_texto_do_banco_com_celula_vazia_continua_imprimindo_vazio():
+    """A regra e' do QR. Um campo de texto em branco e' normal ('complemento',
+    'observacao'), e fazer o trabalho parar por ele seria regressao."""
+    doc, page = _desenhar(_texto(id="el_obs", csv_column="OBS"), {"OBS": ""}, val=3)
+    assert page.get_text().strip() == "", "texto vazio sai vazio, sem erro"
