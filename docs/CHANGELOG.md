@@ -4,6 +4,42 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — A fila dos dois painéis sai em ordem de prazo de entrega
+
+Pedido do usuário: **"no painel de produção, a lista dos pedidos deve estar em
+ordem de prazo de entrega, do menor para o maior"**, e na mensagem seguinte
+**"assim como no painel de acabamento"**.
+
+### O que era
+
+As duas listas saíam na ordem em que `state.ordens` nasce: número do pedido, do
+maior para o menor. O pedido mais NOVO ficava na frente — o contrário do que a
+gráfica precisa. Nas 35 linhas do acabamento, o pedido que vencia em 02/07 estava
+perdido no meio da lista, e o que entrou ontem encabeçava.
+
+### O que passou a ser
+
+`ordenarPorPrazoDeEntrega` (no `script.js`) ordena a fila pelo
+`propostas_os.data_termino`, do menor para o maior, com a mesma leitura de data
+dos botões "Para Hoje" e "Atrasados" (`_prazoDoPedido`). O Painel do Acabamento
+**chama a mesma função**, em vez de repetir a conta: duas cópias divergiriam no
+primeiro ajuste, e as telas mostrariam filas diferentes do mesmo dia.
+
+- Pedido **sem prazo** vai para o fim, e não para o topo (onde um `null` tratado
+  como zero o poria numa ordem crescente). `propostas_os` ainda está sendo
+  preenchida pelo parceiro.
+- **Empate** no mesmo dia desempata pelo número menor, o pedido que entrou antes.
+- **Clicar num cabeçalho continua vencendo**, como já valia para os impressos.
+- Os **históricos** ficam de fora e mantêm a ordem que tinham: IMPRESSO do mais
+  recente ao mais antigo (22/08/2026), EXPEDIÇÃO com o pedido mais novo no topo.
+
+Testes: `tests/ordem_por_prazo_de_entrega_harness.js` (13 verificações) e
+`tests/test_ordem_por_prazo_de_entrega.py` (a ligação nas duas telas, e a ordem
+antes do recorte de páginas). Conferido na tela real, com os pedidos do dia:
+9 linhas na Produção e 35 no Acabamento, todas crescentes, sem prazo no fim.
+
+---
+
 ## [2026-09-02] — Refazer Folhas: o "set" que a tela oferece não era o set que o motor procurava
 
 Relato do usuário, no 21460: **"ao tentar utilizar o Refazer Folhas aparece a

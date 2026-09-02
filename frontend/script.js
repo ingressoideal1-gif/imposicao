@@ -27701,6 +27701,52 @@ function ordenarImpressosPorData(lista) {
     });
 }
 
+/**
+ * A fila de trabalho, do prazo mais CURTO para o mais longo.
+ *
+ * Pedido do usuário em 02/09/2026: *"no painel de produção, a lista dos pedidos
+ * deve estar em ordem de prazo de entrega, do menor para o maior"* — e, na
+ * mensagem seguinte, *"assim como no painel de acabamento"*.
+ *
+ * Até aqui a lista saía na ordem em que `state.ordens` nasce: número do pedido,
+ * do maior para o menor. Isso põe o pedido mais NOVO na frente, que é o
+ * contrário do que a gráfica precisa — quem vence antes tem de sair da
+ * impressora antes. Numa fila de dezenas de pedidos, o que vencia hoje podia
+ * estar no fim da tela.
+ *
+ * O prazo é `propostas_os.data_termino`, lido pelo mesmo `_prazoDoPedido` dos
+ * botões "Para Hoje" e "Atrasados" — uma segunda conta de data aqui divergiria
+ * da de lá no primeiro ajuste.
+ *
+ * Pedido SEM prazo vai para o FIM. `propostas_os` ainda está sendo preenchida
+ * pelo parceiro, e pedido sem data não pode encabeçar a fila como se vencesse
+ * hoje (que é onde um `null` tratado como zero o poria). Empate no mesmo dia:
+ * o número MENOR primeiro, que é o pedido que entrou antes.
+ *
+ * Vale para as listas de TRABALHO (Geral, Para Hoje, Atrasados) do Painel de
+ * Produção e do Painel do Acabamento — o acabamento chama esta mesma função.
+ * Não vale para os históricos: o botão "Impresso" sai do mais recente ao mais
+ * antigo (`ordenarImpressosPorData`, 22/08/2026) e o botão "Expedição" continua
+ * do pedido mais novo, porque neles não há nada a fazer e o que interessa é o
+ * que acabou de sair. Clicar num cabeçalho vence qualquer uma das duas.
+ */
+function ordenarPorPrazoDeEntrega(lista) {
+    return (lista || []).slice().sort((a, b) => {
+        const pa = _prazoDoPedido(a);
+        const pb = _prazoDoPedido(b);
+        const ta = pa ? pa.getTime() : null;
+        const tb = pb ? pb.getTime() : null;
+        const numA = parseInt(a && a.numero) || 0;
+        const numB = parseInt(b && b.numero) || 0;
+        if (ta === null && tb === null) return numA - numB;
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        if (ta !== tb) return ta - tb;
+        return numA - numB;
+    });
+}
+window.ordenarPorPrazoDeEntrega = ordenarPorPrazoDeEntrega;
+
 /** Decide se o pedido entra na lista conforme o filtro de prazo escolhido. */
 function pedidoPassaFiltroPrazo(os) {
     const filtro = state.filtroPrazo || 'geral';
@@ -29650,8 +29696,16 @@ function renderOrdens() {
         // antigo pela data do status Impresso — pedido do usuário em
         // 22/08/2026. Só nesse botão: os outros filtros são fila de trabalho,
         // e ali quem vem na frente é quem precisa sair primeiro.
+        //
+        // E "quem precisa sair primeiro" passou a ter uma ordem explícita em
+        // 02/09/2026: o PRAZO DE ENTREGA, do menor para o maior. Antes a fila
+        // saía por número do pedido, do maior para o menor — o mais novo na
+        // frente, o contrário do que a gráfica precisa. Ver
+        // `ordenarPorPrazoDeEntrega`.
         if ((state.filtroPrazo || 'geral') === 'impressos') {
             filteredImpressao = ordenarImpressosPorData(filteredImpressao);
+        } else {
+            filteredImpressao = ordenarPorPrazoDeEntrega(filteredImpressao);
         }
 
         // Ordenação escolhida nos cabeçalhos (não altera filtros nem contadores).

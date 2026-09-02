@@ -216,6 +216,16 @@ Duas miúdezas do degradê que custaram tempo e valem para quem for mexer:
   reescreve também o `background-clip`, e o título vira uma barra branca sólida
   em vez de texto pintado.
 
+**A ordem da lista é o PRAZO DE ENTREGA, do menor para o maior** (pedido do
+usuário em 02/09/2026, para os dois painéis). O acabamento é fila de trabalho:
+quem vence antes tem de ser embalado antes. Pedido sem prazo vai para o fim,
+empate no mesmo dia desempata pelo número menor, e clicar num cabeçalho vence a
+ordem padrão. A conta é a do Painel de Produção, chamada de lá
+(`ordenarPorPrazoDeEntrega`) — uma segunda cópia da regra de data divergiria da
+de lá no primeiro ajuste. O botão **Expedição** fica de fora: ali não há trabalho
+a fazer, é o comprovante do que esta bancada já entregou, e nele o pedido mais
+novo continua no topo. Ver [`PRODUCAO-MODULO-GERAL.md`](PRODUCAO-MODULO-GERAL.md).
+
 A ordem não é casual: quem trabalha no acabamento tem na mão o material de um
 **evento**, não de um cliente — é por ele e pelo número que se confere, de
 relance, que o que está na mesa é o deste pedido. O nome do evento vem de

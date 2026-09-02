@@ -747,6 +747,23 @@
     }
 
     /**
+     * A fila desta bancada, do prazo mais CURTO para o mais longo.
+     *
+     * Pedido do usuário em 02/09/2026, para os dois painéis: *"a lista dos
+     * pedidos deve estar em ordem de prazo de entrega, do menor para o maior"*.
+     * Aqui vale o mesmo motivo da impressão: o acabamento é fila de trabalho, e
+     * quem vence antes tem de ser embalado antes.
+     *
+     * A conta é a do Painel de Produção, chamada de lá — como o atraso e o para
+     * hoje logo acima. Sem ela (script.js ausente), a lista fica na ordem em que
+     * chegou, em vez de sair embaralhada por uma segunda regra de data.
+     */
+    function ordenarPorPrazo(lista) {
+        const f = fn('ordenarPorPrazoDeEntrega');
+        return f ? f(lista) : (lista || []);
+    }
+
+    /**
      * O pedido passa no recorte de prazo que está ligado?
      *
      * ## Quem sai da lista de trabalho é quem FOI PARA A EXPEDIÇÃO
@@ -1095,6 +1112,14 @@
         // o operador precisa reencontrar o pedido que acabou de enviar, mas ele
         // não é mais trabalho na fila. Ver `pedidosDoPainel`.
         let lista = filtrar(pedidosDoPainel()).filter(passaNoPrazo);
+
+        // A ordem da bancada é o PRAZO DE ENTREGA, do menor para o maior
+        // (02/09/2026), como no Painel de Produção. O botão "Expedição" fica de
+        // fora: ali não há trabalho a fazer, é o comprovante do que esta bancada
+        // já entregou, e nele o pedido mais novo continua no topo.
+        if (tela.prazo !== 'expedicao') lista = ordenarPorPrazo(lista);
+
+        // Depois, porque clicar num cabeçalho é escolha explícita do operador.
         lista = aplicarSort(lista);
 
         pintarCabecalhos();

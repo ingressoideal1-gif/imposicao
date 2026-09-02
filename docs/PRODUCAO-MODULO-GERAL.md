@@ -87,6 +87,47 @@ Os status controlam o andamento do item na fábrica:
 
 ---
 
+## A ordem da fila: prazo de entrega, do menor para o maior (02/09/2026)
+
+Pedido do usuário: *"no painel de produção, a lista dos pedidos deve estar em
+ordem de prazo de entrega, do menor para o maior"* — e, em seguida, *"assim como
+no painel de acabamento"*.
+
+Até aqui as duas listas saíam na ordem em que `state.ordens` nasce: **número do
+pedido, do maior para o menor**. Isso põe o pedido mais NOVO na frente, que é o
+contrário do que a gráfica precisa — quem vence antes tem de sair da impressora
+antes. Numa fila de dezenas de pedidos, o que vencia hoje podia estar no fim da
+tela.
+
+A função é uma só, `ordenarPorPrazoDeEntrega` (no `script.js`), e o Painel do
+Acabamento a **chama de lá** em vez de repetir a conta — como já fazia com o
+atraso e o para-hoje. Duas cópias da regra de data divergiriam no primeiro
+ajuste, e as duas telas passariam a mostrar filas diferentes do mesmo dia.
+
+**O prazo é `propostas_os.data_termino`**, lido pelo mesmo `_prazoDoPedido` dos
+botões "Para Hoje" e "Atrasados".
+
+**Três regras que vêm junto:**
+
+- **Pedido sem prazo vai para o fim.** `propostas_os` ainda está sendo
+  preenchida pelo parceiro, e pedido sem data não pode encabeçar a fila como se
+  vencesse hoje — que é onde um `null` tratado como zero o poria numa ordem
+  crescente.
+- **Empate no mesmo dia desempata pelo número MENOR**, o pedido que entrou
+  antes; sem isso a lista "dança" entre desenhos.
+- **Clicar num cabeçalho continua vencendo.** A ordem por prazo é aplicada antes
+  do `aplicarProdSort`, como a dos impressos.
+
+**Os históricos ficam de fora**, e cada um mantém a ordem que já tinha: o botão
+IMPRESSO sai do mais recente ao mais antigo (seção abaixo) e o botão EXPEDIÇÃO
+do Acabamento continua com o pedido mais novo no topo. Neles não há trabalho a
+fazer, e o que interessa é o que acabou de sair.
+
+Testes: `tests/ordem_por_prazo_de_entrega_harness.js` e
+`tests/test_ordem_por_prazo_de_entrega.py`. Conferido também na tela real, com os
+pedidos do dia: 9 linhas na Produção e 35 no Acabamento, todas em ordem
+crescente e com os sem prazo no fim.
+
 ## A ordem da lista no botão IMPRESSO
 
 O Painel de Produção tem quatro filtros: **Geral**, **Para Hoje**, **Atrasados** e
