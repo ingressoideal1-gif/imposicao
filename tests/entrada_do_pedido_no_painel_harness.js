@@ -41,16 +41,17 @@ const regras = new Function('window', `
     ${recortarConst('SINAIS_SAIU_DA_ARTE')}
     ${recortar('pedidoSaiuDaArte')}
     ${recortar('pedidosJaNaGrafica')}
+    ${recortar('arteFoiLancada')}
     ${recortar('pedidoEntraNoPainel')}
-    return { pedidoSaiuDaArte, pedidosJaNaGrafica, pedidoEntraNoPainel };
+    return { pedidoSaiuDaArte, pedidosJaNaGrafica, arteFoiLancada, pedidoEntraNoPainel };
 `)({});
 
-const { pedidosJaNaGrafica, pedidoEntraNoPainel } = regras;
+const { pedidosJaNaGrafica, arteFoiLancada, pedidoEntraNoPainel } = regras;
 
 // ─── 1. As duas portas antigas continuam abrindo ────────────────────────────
 
 (function asPortasAntigasContinuamAbrindo() {
-    const artes = [{ id_int: 21030 }];
+    const artes = [{ id_int: 21030, status: 'EM ARTE', nome_evento: 'Show' }];
     const comercial = [{ id_int: 999 }];
     const vazio = new Set();
 
@@ -63,8 +64,65 @@ const { pedidosJaNaGrafica, pedidoEntraNoPainel } = regras;
 
     // O numero chega ora texto, ora numero -- do `p.id_int` e do `parseInt`.
     ok(pedidoEntraNoPainel('21030', [], artes, vazio), 'o numero como texto tambem casa');
-    ok(pedidoEntraNoPainel(21030, [], [{ id_int: '21030' }], vazio),
+    ok(pedidoEntraNoPainel(21030, [], [{ id_int: '21030', status: 'EM ARTE' }], vazio),
        'e a arte gravada como texto tambem');
+})();
+
+// ─── 1b. A linha de arte VAZIA nao abre a porta (01/09/2026) ────────────────
+//
+// Pergunta do usuario: "por que o pedido 18915 aparece em arte?". Era um
+// orcamento avulso de julho, LIBERADO, sem produto nenhum, com uma linha em
+// `pedidos_artes` que o ERP criou sete minutos depois da proposta e nunca
+// preencheu -- status vazio, evento vazio, sem designer, sem arquivo. Ele
+// entrava so por a linha existir, e como status vazio nao casa com nenhum ramo
+// da classificacao, caia no padrao: Em Arte. O designer via na fila um pedido
+// em que nao havia nada a fazer.
+//
+// A regua e frouxa de proposito: basta UM campo com conteudo. No banco inteiro
+// ela tirou UM pedido -- das 74 linhas de `pedidos_artes`, 73 tem status, nome
+// de evento E designer.
+
+(function aLinhaDeArteVaziaNaoAbreAPorta() {
+    const vazio = new Set();
+
+    // Exatamente como o 18915 esta no banco.
+    const fantasma = [{
+        id_int: 18915, status: '', nome_evento: '',
+        designer_nome: null, designer_uid: null, entrega_dados: null,
+    }];
+    ok(!arteFoiLancada(fantasma[0]), 'a linha vazia nao conta como arte lancada');
+    ok(!pedidoEntraNoPainel(18915, [], fantasma, vazio),
+       'e por isso o 18915 nao entra mais nos paineis');
+
+    // So `id_int`, sem mais nada: e o mesmo fantasma, escrito curto.
+    ok(!pedidoEntraNoPainel(18915, [], [{ id_int: 18915 }], vazio),
+       'linha com so o numero tambem nao abre');
+
+    // Espaco em branco nao e conteudo.
+    ok(!arteFoiLancada({ id_int: 1, status: '   ', nome_evento: '\t' }),
+       'espaco em branco nao vale como preenchido');
+    ok(!arteFoiLancada(null), 'linha nula nao explode e nao abre');
+    ok(!arteFoiLancada(undefined), 'nem indefinida');
+
+    // Qualquer UM dos campos basta -- ninguem que trabalhou some da fila.
+    const bastaUm = [
+        { id_int: 7, status: 'EM ARTE' },
+        { id_int: 7, nome_evento: 'Rock in Rio 2026' },
+        { id_int: 7, designer_nome: 'Cesar' },
+        { id_int: 7, designer_uid: 'abc-123' },
+        { id_int: 7, entrega_dados: 'APROVADO' },
+    ];
+    bastaUm.forEach(a => {
+        const campo = Object.keys(a).filter(k => k !== 'id_int')[0];
+        ok(arteFoiLancada(a), 'so `' + campo + '` preenchido ja conta como arte lancada');
+        ok(pedidoEntraNoPainel(7, [], [a], vazio),
+           'e o pedido entra so com `' + campo + '`');
+    });
+
+    // O pedido do 21347 continua de pe: arte vazia, mas o ERP diz EXPEDICAO.
+    const naGrafica = pedidosJaNaGrafica([{ id_int: 21347, status_interno: 'EXPEDICAO' }]);
+    ok(pedidoEntraNoPainel(21347, [], [{ id_int: 21347 }], naGrafica),
+       'linha de arte vazia nao tira quem o ERP ja mandou para a grafica');
 })();
 
 // ─── 2. A terceira porta: o que o ERP ja mandou para a grafica ──────────────
@@ -157,6 +215,27 @@ const { pedidosJaNaGrafica, pedidoEntraNoPainel } = regras;
 
     ok(recortar('pedidosJaNaGrafica').indexOf('pedidoSaiuDaArte') !== -1,
        'e ela pergunta ao `pedidoSaiuDaArte`, em vez de repetir a lista');
+})();
+
+// ─── 6. "Tem arte?" tambem se pergunta num lugar so ─────────────────────────
+//
+// Sao TRES lugares no script.js que decidem se uma linha de `pedidos_artes`
+// conta: a porta (`pedidoEntraNoPainel`), a lista de ids que vai buscar as
+// propostas (`idsComArte`) e o filtro do modo local (`temNasArtes`). Se um
+// deles voltar a olhar so o `id_int`, o pedido fantasma reaparece por ali --
+// que foi exatamente como o 18915 entrou.
+
+(function osTresLugaresUsamAMesmaRegua() {
+    ok(recortar('pedidoEntraNoPainel').indexOf('arteFoiLancada') !== -1,
+       'a porta dos paineis pergunta ao `arteFoiLancada`');
+
+    const idsComArte = SCRIPT.match(/const idsComArte = .*/);
+    ok(idsComArte && idsComArte[0].indexOf('arteFoiLancada') !== -1,
+       'a lista `idsComArte` filtra pelo `arteFoiLancada`', idsComArte && idsComArte[0]);
+
+    const temNasArtes = SCRIPT.match(/const temNasArtes = .*/);
+    ok(temNasArtes && temNasArtes[0].indexOf('arteFoiLancada') !== -1,
+       'o `temNasArtes` do modo local tambem', temNasArtes && temNasArtes[0]);
 })();
 
 if (falhas) {

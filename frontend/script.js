@@ -25486,7 +25486,9 @@ async function loadOrdens() {
                     state.ordens = mappedLocalData.filter(os => {
                         const osNumeroInt = parseInt(os.numero);
                         const temNoComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
-                        const temNasArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(osNumeroInt));
+                        // `arteFoiLancada`: a mesma régua da porta dos painéis —
+                        // linha de arte vazia não conta como arte lançada.
+                        const temNasArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(osNumeroInt) && arteFoiLancada(a));
                         return temNoComercial || temNasArtes;
                     });
                 } else {
@@ -25811,7 +25813,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // São três origens, unidas por `id_int`:
         //   1. quem tem produto     — a consulta de sempre;
         //   2. quem tem arte        — `pedidos_artes`, que é o que "já teve arte
-        //      feita" quer dizer neste projeto (`state.todasArtes`);
+        //      feita" quer dizer neste projeto (`state.todasArtes`). Linha
+        //      criada pelo ERP e nunca preenchida não conta: é `arteFoiLancada`
+        //      quem responde, a mesma régua da porta dos painéis;
         //   3. quem já está na gráfica — pela palavra do ERP, sem depender de
         //      produto nem de arte (`SINAIS_SAIU_DA_ARTE`).
         //
@@ -25821,7 +25825,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         const COLUNAS_PROPOSTA = 'id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado, frete_escolhido';
         try {
             const idsComProduto = produtos.map(p => p.id_int).filter(Boolean);
-            const idsComArte = (state.todasArtes || []).map(a => a.id_int).filter(Boolean);
+            const idsComArte = (state.todasArtes || []).filter(arteFoiLancada).map(a => a.id_int).filter(Boolean);
             const uniqueIdInts = [...new Set([...idsComProduto, ...idsComArte])];
 
             const porNumero = new Map();
@@ -28108,6 +28112,51 @@ function pedidosJaNaGrafica(propostas) {
 window.pedidosJaNaGrafica = pedidosJaNaGrafica;
 
 /**
+ * A linha de `pedidos_artes` tem arte de verdade dentro dela?
+ *
+ * Ter linha na tabela não é a mesma coisa que ter arte lançada. O ERP cria a
+ * linha sozinho, minutos depois da proposta nascer, e às vezes nunca põe nada
+ * nela: fica com `status` vazio, `nome_evento` vazio, sem designer, sem
+ * arquivo. Para o painel, essa linha é um fantasma — ela abre a porta de um
+ * pedido em que ninguém nunca trabalhou.
+ *
+ * ## O pedido 18915 (01/09/2026)
+ *
+ * O usuário perguntou por que ele aparecia na Lista de Arte. É um orçamento
+ * avulso de julho, `LIBERADO`, sem produto nenhum, com uma linha de arte criada
+ * em 09/07/2026 às 18:39 — sete minutos depois da proposta — e vazia em todos
+ * os campos. Ele passava pela porta só por ela existir, e como nenhum ramo da
+ * classificação casava com status vazio, caía no padrão: **Em Arte**. O
+ * designer via na fila um pedido em que não havia nada a fazer.
+ *
+ * Ele só apareceu naquele dia porque de manhã a lista passou a montar também o
+ * pedido SEM produto (o resgate do 21347). Antes disso a falta de produto o
+ * escondia por acidente — a linha fantasma já estava lá desde julho.
+ *
+ * ## Por que estes campos, e não uma lista maior
+ *
+ * São exatamente os que `carregarArtesGlobais` já traz, e eles bastam: das 74
+ * linhas de `pedidos_artes` no dia, 73 têm status, nome de evento E designer.
+ * As 32 que têm arquivo têm status junto — `arquivos` nunca vem sozinho. E
+ * `nome_arquivo`/`storage_path` estão em ZERO linhas: o arquivo mora no
+ * `arquivos`, então pedir essas duas colunas ao banco não protegeria nada.
+ *
+ * A régua é deliberadamente frouxa — basta UM campo com conteúdo. Quem tem
+ * qualquer sinal de trabalho continua entrando; some só quem não tem nenhum.
+ * Aplicada ao banco inteiro, ela tira um pedido: o 18915.
+ */
+function arteFoiLancada(arte) {
+    if (!arte) return false;
+    const temConteudo = (v) => String(v === null || v === undefined ? '' : v).trim() !== '';
+    return temConteudo(arte.status)
+        || temConteudo(arte.nome_evento)
+        || temConteudo(arte.designer_nome)
+        || temConteudo(arte.designer_uid)
+        || temConteudo(arte.entrega_dados);
+}
+window.arteFoiLancada = arteFoiLancada;
+
+/**
  * Este pedido entra nos painéis?
  *
  * É a porta de entrada de TUDO: Fila de Arte, Fila de Produção e Painel do
@@ -28138,11 +28187,14 @@ window.pedidosJaNaGrafica = pedidosJaNaGrafica;
  * pedidos do banco. A porta abriu para 17 pedidos, não para todos.
  *
  * `naGrafica` é o Set do `pedidosJaNaGrafica`.
+ *
+ * A segunda condição pergunta por arte LANÇADA, e não por linha existente —
+ * ver `arteFoiLancada`, logo acima, e o pedido 18915.
  */
 function pedidoEntraNoPainel(numero, comercial, artes, naGrafica) {
     const n = String(numero);
     if ((comercial || []).some(ped => String(ped.id_int) === n)) return true;
-    if ((artes || []).some(a => String(a.id_int) === n)) return true;
+    if ((artes || []).some(a => String(a.id_int) === n && arteFoiLancada(a))) return true;
     return !!(naGrafica && naGrafica.has(n));
 }
 window.pedidoEntraNoPainel = pedidoEntraNoPainel;
