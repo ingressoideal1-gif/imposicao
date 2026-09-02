@@ -10370,7 +10370,22 @@ function drawPreview() {
         schema = document.getElementById('imp-schema')?.value || fmt.default_schema || 'sequential';
         saiId = document.getElementById('imp-saida')?.value || fmt.default_saida_id || saiId;
     }
-    
+
+    // COM VÁRIOS MODELOS, QUEM DECIDE É A MESMA REGRA DO PAYLOAD (02/09/2026).
+    //
+    // A gêmea da linha do `drawPedPreview`, onde a razão está por inteiro. Em
+    // resumo: o seletor de Regra de Paginação vale para um modelo; na seleção
+    // combinada ninguém o atualiza quando a barra "somar folha" muda, e o
+    // `runImposition` decide por `esquemaDaSelecaoCombinada()`.
+    const combinandoModelos = !!(state.selectedOSItems && state.selectedOSItems.length > 1);
+    if (combinandoModelos && typeof esquemaDaSelecaoCombinada === 'function') {
+        schema = esquemaDaSelecaoCombinada();
+    }
+
+    // Publicado como o `state.contaDaTela`: é assim que se confere se a tela e a
+    // máquina estão desenhando o mesmo trabalho.
+    state.esquemaDaPrevia = schema;
+
     const previewPartEl = document.getElementById('preview-part-input');
     let previewPart = 'miolo';
     if (previewPartEl) {

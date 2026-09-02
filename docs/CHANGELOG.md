@@ -77,6 +77,180 @@ node) com os arquivos que o motor gera.
 
 ---
 
+## [2026-09-02] — Uma arte que falhava ao baixar ficava fora da folha até o F5
+
+Na folha combinada cada arte é baixada pela URL dentro do próprio desenho da
+prévia. Para o mesmo download não disparar várias vezes, o código marcava a URL
+em `state.multiArtesPdfLoading[url]` antes de começar — e **nunca apagava a
+marca**, nem no sucesso nem no erro.
+
+No sucesso não aparecia: a arte passa a estar no cache, e essa pergunta vem
+antes. No erro, não. A arte não entra no cache, a marca bloqueia qualquer nova
+tentativa, e aquele modelo fica ausente da folha **pelo resto da sessão** —
+recarregar a página era a única saída, e nada na tela dizia isso.
+
+### Reproduzido antes de consertar
+
+Num Chrome, com a rede falhando **uma** vez ao baixar a segunda arte:
+
+    tentativas de baixar a arte 2: 1   (nunca tentou de novo)
+    seis redesenhos em 12 segundos:   "A A" em todos
+    arte2NoCache: false | arte2MarcadaCarregando: true
+
+Basta a rede oscilar um instante — ou o Storage demorar — para o operador montar
+uma folha faltando um modelo, sem aviso nenhum.
+
+### O conserto
+
+`finally`, no molde que o próprio arquivo já usa para as páginas do PDF
+(`finally { delete pagesRendering[cacheKey]; }`): terminada a tentativa, com
+sucesso ou sem, a marca sai. No sucesso o cache assume; no erro, o próximo
+desenho tenta de novo e a arte aparece sozinha quando a rede volta.
+
+São **quatro** pontos que marcam — frente e verso, na prévia e no caminho de
+impressão — e todos escrevem no mesmo objeto: um só que ficasse para trás
+travaria a arte para os outros três.
+
+O redesenho continua acontecendo **só no caminho de sucesso**. Chamado no
+`catch`, cada falha dispararia outra tentativa, em laço.
+
+### A mesma reprodução, depois
+
+    tentativas de baixar a arte 2: 2   (tentou de novo e conseguiu)
+    da segunda passada em diante:      "A B A B"
+    as duas artes no cache, nenhuma marca presa
+
+Guardado por `tests/test_arte_travada_apos_falha.py`, que conta os pontos que
+marcam e os que apagam — se alguém acrescentar um carregamento novo sem o
+`finally`, a contagem denuncia.
+
+---
+
+## [2026-09-02] — A janela desenhava um esquema de imposição e a máquina imprimia outro
+
+Achado ao revisar a folha somada, e maior do que ela: não era só qual peça cai em
+qual pose — era o **esquema inteiro**.
+
+Com vários modelos marcados, quem decide é `esquemaDaSelecaoCombinada()`: o modo
+salvo nos modelos manda primeiro (Sequencial enche a folha na ordem) e, dentro de
+Blocado, a barra **somar folha** escolhe entre folha própria (`cut_stack`) e
+aproveitar a folha (`multi_artes`).
+
+O payload já lia dali. As duas prévias liam o seletor de **Regra de Paginação**
+(`ped-schema` / `imp-schema`) — e ninguém o atualiza quando a seleção ou a barra
+mudam: os únicos que escrevem nele são o padrão do formato e a regra
+`blocos !== 'N'`. Medido com dois modelos blocados num formato de regra
+`sequential`:
+
+| barra | ia para a máquina | a janela desenhava |
+|---|---|---|
+| folha própria | `cut_stack` | `sequential` |
+| aproveitar a folha | `multi_artes` | `sequential` |
+| folha própria | `cut_stack` | `sequential` |
+
+A janela nunca mudava, e nunca batia. **Clicar em "aproveitar a folha" trocava o
+que a impressora faz e não mexia na tela.**
+
+### O conserto
+
+O seletor continua valendo para **um** modelo — é o controle de quem imprime um
+modelo sozinho. Com vários, a regra da seleção combinada vem depois e vence, nas
+duas prévias, chamando a mesma função que os dois caminhos de impressão já
+chamavam. Uma conta só para as quatro pontas.
+
+Cada prévia passou a publicar o que decidiu em `state.esquemaDaPrevia`, no molde
+do `state.contaDaTela`: sem isso não há como conferir — nem num teste, nem no
+console — se a tela e a máquina estão desenhando o mesmo trabalho.
+
+### Medido depois, nas duas telas
+
+| barra | máquina | janela do Pedido | janela da Imposição |
+|---|---|---|---|
+| folha própria | cut_stack | cut_stack | cut_stack |
+| aproveitar a folha | multi_artes | multi_artes | multi_artes |
+
+O seletor na tela continua marcando `sequential` nesse cenário — e é isso que
+prova que a janela deixou de lê-lo na seleção combinada.
+
+Nada mudou no papel: o motor não foi tocado. Guardado por
+`tests/test_esquema_da_janela_igual_ao_payload.py` e
+`tests/esquema_da_previa_harness.js`, que roda a regra de verdade nos três
+estados da barra.
+
+---
+
+## [2026-09-02] — A folha somada da janela do Pedido não era a folha que a máquina faz
+
+Achado ao investigar a janela da imposição. Somar modelos numa folha só é o
+esquema `multi_artes`, e o motor o trata como esquema **próprio**: enfileira as
+peças de todos os modelos e as distribui coluna a coluna, misturando modelos na
+mesma folha — que é a regra do usuário para somar (*"total de células ÷ células
+do formato, empilhado, preenchendo na ordem, sem reservar folha por modelo"*).
+
+A prévia do Pedido mandava `multi_artes` para o **plano de montagem**
+(`buildStrictAssemblySets`), que reserva uma pilha por modelo. Medido com as
+artes do 21408:
+
+| cenário | a janela mostrava | o motor imprime |
+|---|---|---|
+| 2 modelos × 2 peças, 4 poses | 2 sets, 1 folha cada, **metade das poses vazia** | 1 folha, 4 poses |
+| 1000739 (25) + 1000740 (20) | Set 1 com 7 folhas só do primeiro, Set 2 com 5 só do segundo | 12 folhas, a primeira já misturada |
+
+No segundo caso o TOTAL de folhas coincide (7 + 5 = 12), e é por isso que
+passava despercebido: o que diferia era o conteúdo de cada folha.
+
+### Onde estava
+
+Na tela ([pedido.js](../frontend/pedido.js)):
+
+```js
+if (schema === "multi_artes" || cutstackMode === 'strict' || ...) { is_strict_mode = true;
+    if (cutstackMode === 'strict_assembly' || schema === "multi_artes") { ...plano... }
+```
+
+No motor ([engine.py](../engine.py)):
+
+```python
+is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
+```
+
+O `|| schema === "multi_artes"` da tela não existe no motor. E a prévia **já
+tinha** o ramo correto escrito, igual ao do motor — ele era inalcançável, porque
+o ramo do plano o interceptava antes.
+
+A prévia da **Imposição** nunca teve o problema: lá o modo estrito só liga com
+`cutstackMode === 'strict'`. As duas prévias do projeto discordavam entre si, e a
+do Pedido era a que estava fora.
+
+### O conserto
+
+`multi_artes` saiu do caminho estrito nas **duas** condições — tirar só a de
+dentro faria o somado cair no ramo `strict`, com `total_sheets = sets_needed ×
+stack_size`: 50 folhas na tela no lugar das 12 do 21408. E o ramo do esquema
+passou a decidir **antes** das perguntas de cut stack, como no motor, para que
+um formato com 'strict' salvo não leve a folha somada para o mapeamento de pilha.
+
+Junto, uma armadilha vizinha: `window.currentAssemblySets` **nunca era limpo**.
+Ficava pendurado no navegador e um trabalho seguinte podia ser desenhado com o
+plano do anterior — a mesma armadilha já documentada para o `state.impMultiArtes`.
+Agora ele é zerado no começo de cada desenho.
+
+### Medido depois, pose a pose
+
+| folha | a janela desenha | o motor imprime |
+|---|---|---|
+| 2×2 peças, folha 1 | A B A B | A B A B |
+| 25+20, folha 1 | A A A B | A A A B |
+| 25+20, folha 2 | A B A B | A B A B |
+| 25+20, folha 12 | A B A | A B A |
+
+O seletor de **Set** passou a oferecer um conjunto só no modo somado (eram dois),
+que é o que a máquina produz. Nada mudou no papel: o motor não foi tocado.
+Guardado por `tests/test_folha_combinada_igual_ao_motor.py`, que roda o motor de
+verdade e confere a forma das duas telas.
+
+---
+
 ## [2026-09-02] — A janela da imposição encolhia a arte em PDF; o motor imprimia certo
 
 Relato do usuário sobre o pedido 21408, já no Painel de Produção: *"visualização

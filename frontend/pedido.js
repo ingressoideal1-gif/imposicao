@@ -643,6 +643,20 @@ function drawPedPreview() {
             if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {
                 pdfDoc = state.multiArtesPdfCache[itemArteUrl];
             } else if (itemArteUrl && !state.multiArtesPdfLoading[itemArteUrl]) {
+                // A MARCA DE "CARREGANDO" SAI QUANDO A TENTATIVA TERMINA (02/09/2026).
+                //
+                // Ela existe para o mesmo download nao disparar varias vezes, e
+                // nunca era apagada. No sucesso isso nao aparecia -- o cache
+                // acima responde antes. No ERRO, a arte nao entrava no cache, a
+                // marca bloqueava qualquer nova tentativa, e aquela arte ficava
+                // fora da folha pelo resto da sessao, sem aviso nenhum.
+                //
+                // Reproduzido com a rede falhando UMA vez: seis redesenhos em 12
+                // segundos, e a segunda arte nunca voltou. So o F5 destravava.
+                //
+                // `finally`, no molde que este arquivo ja usa para as paginas do
+                // PDF. O redesenho continua so no caminho de sucesso: chamado no
+                // `catch`, cada falha dispararia outra tentativa, em laco.
                 state.multiArtesPdfLoading[itemArteUrl] = true;
                 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
                     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -656,7 +670,7 @@ function drawPedPreview() {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF for multi arte preview:', e);
-                });
+                }).finally(() => { delete state.multiArtesPdfLoading[itemArteUrl]; });
             }
 
             let pdfVersoDoc = null;
@@ -676,7 +690,7 @@ function drawPedPreview() {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF VERSO for multi arte preview:', e);
-                });
+                }).finally(() => { delete state.multiArtesPdfLoading[itemArteVersoUrl]; });
             }
 
             return {
@@ -807,6 +821,30 @@ function drawPedPreview() {
     // e continua mandando na saída, que não faz parte desta escolha.
     schema = document.getElementById('ped-schema')?.value || fmt.default_schema;
     saiId = fmt.default_saida_id;
+
+    // COM VÁRIOS MODELOS, QUEM DECIDE É A MESMA REGRA DO PAYLOAD (02/09/2026).
+    //
+    // O seletor de Regra de Paginação acima continua valendo para UM modelo. Com
+    // a seleção combinada ele não serve: ninguém o atualiza quando a seleção ou a
+    // barra "somar folha" mudam — só o padrão do formato escreve nele —, enquanto
+    // o `runPedImposition` decide por `esquemaDaSelecaoCombinada()`.
+    //
+    // Medido antes deste conserto, com dois modelos blocados num formato de
+    // regra `sequential`:
+    //
+    //   barra em "folha própria"      → máquina: cut_stack    | janela: sequential
+    //   barra em "aproveitar a folha"  → máquina: multi_artes  | janela: sequential
+    //
+    // A janela nunca mudava, e nunca batia. Clicar na barra trocava o que a
+    // impressora faz e não mexia na tela.
+    if (isMultiSelected && typeof esquemaDaSelecaoCombinada === 'function') {
+        schema = esquemaDaSelecaoCombinada();
+    }
+
+    // O que a janela decidiu, publicado como o `state.contaDaTela` faz: sem
+    // isto não há como conferir — nem num teste, nem no console — se a tela e a
+    // máquina estão desenhando o mesmo trabalho.
+    state.esquemaDaPrevia = schema;
 
 
     
@@ -1001,12 +1039,39 @@ function drawPedPreview() {
     let is_strict_mode = false;
     let stack_size = 50;
     let sets_needed = 1;
+    // O PLANO DE MONTAGEM É ZERADO ANTES DE QUALQUER DECISÃO (02/09/2026).
+    //
+    // Ele é um global (`window.currentAssemblySets`) e nunca era limpo: aberto
+    // um trabalho que o construía, ele ficava pendurado no navegador e o
+    // trabalho SEGUINTE — que podia não ter plano nenhum — era desenhado com o
+    // plano do anterior. As três leituras dele (as folhas visíveis, a conta do
+    // `S` e o mapeamento das poses) perguntam só se ele existe.
+    //
+    // É a mesma armadilha já documentada aqui para o `state.impMultiArtes`.
+    // Zerando no começo, ou ele é construído para ESTE trabalho, ou não existe.
+    window.currentAssemblySets = null;
+
     if (schema === "cut_stack" || schema === "multi_artes") {
         const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
         stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
-        if (schema === "multi_artes" || cutstackMode === 'strict' || cutstackMode === 'strict_assembly') {
+        // A FOLHA SOMADA NÃO É PILHA (02/09/2026).
+        //
+        // `multi_artes` saiu daqui. O motor o trata como esquema próprio, sem
+        // olhar o modo de cut stack (`is_strict_assembly` no engine.py exige
+        // `layout_schema == "cut_stack"`), e enfileira as peças de todos os
+        // modelos coluna a coluna — que é a regra do usuário para somar: total
+        // de células ÷ células do formato, sem reservar folha por modelo.
+        //
+        // Enquanto ele entrava aqui, a janela montava uma pilha por modelo e
+        // prometia outra folha: no pedido 21408, Set 1 com 7 folhas só do
+        // 1000739 e Set 2 com 5 só do 1000740, enquanto a máquina faz 12 folhas
+        // com os dois misturados desde a primeira. O papel sempre saiu certo.
+        //
+        // A condição de fora ficou: é dela que sai o `stack_size`, que o Refazer
+        // e as contas de pilha continuam usando.
+        if (schema === "cut_stack" && (cutstackMode === 'strict' || cutstackMode === 'strict_assembly')) {
             is_strict_mode = true;
-            if (cutstackMode === 'strict_assembly' || schema === "multi_artes") {
+            if (cutstackMode === 'strict_assembly') {
                 if (typeof buildStrictAssemblySets === 'function') {
                     window.currentAssemblySets = buildStrictAssemblySets(artesMultiAtivas, isMultiSelected, total_items, stack_size, poses_per_sheet);
                     sets_needed = window.currentAssemblySets.length;
@@ -1198,12 +1263,27 @@ function drawPedPreview() {
                 origemDaCelula = fonte;
             } else if (schema === "cut_stack" || schema === "multi_artes") {
                 const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
-                if (cutstackMode === 'strict' && !window.currentAssemblySets) {
+                // O ESQUEMA DECIDE ANTES DO MODO DE CUT STACK (02/09/2026).
+                //
+                // É a ordem do motor: lá o `multi_artes` é um caso próprio do
+                // `layout_schema`, resolvido sem olhar o `cut_stack_mode`. Aqui
+                // ele vinha depois, e por isso duas coisas davam errado: o ramo
+                // do plano de montagem o interceptava (era o defeito), e uma
+                // máquina com 'strict' salvo no formato levaria a folha somada
+                // para o mapeamento de pilha.
+                //
+                // Esta conta é a mesma das outras duas pontas — a prévia da
+                // Imposição e o `engine.py`. Ela já estava escrita logo abaixo;
+                // só nunca chegava a rodar.
+                if (schema === "multi_artes") {
+                    const P_col_first = col * rows + row;
+                    item_index = (P_col_first * total_sheets) + S;
+                } else if (cutstackMode === 'strict' && !window.currentAssemblySets) {
                     const full_sets = Math.floor(total_sheets / stack_size);
                     const set_index = Math.floor(S / stack_size);
                     const sheet_within_set = S % stack_size;
                     item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set;
-                } else if ((cutstackMode === 'strict_assembly' || schema === "multi_artes") && window.currentAssemblySets) {
+                } else if (cutstackMode === 'strict_assembly' && window.currentAssemblySets) {
                     let set_def = window.currentAssemblySets[currentSet - 1];
                     if (set_def && set_def.cell_allocations[P] && set_def.cell_allocations[P][local_S]) {
                         let item_data = set_def.cell_allocations[P][local_S];
@@ -1215,9 +1295,6 @@ function drawPedPreview() {
                         item_local_index = undefined;
                         item_arte_index = undefined;
                     }
-                } else if (schema === "multi_artes") {
-                    const P_col_first = col * rows + row;
-                    item_index = (P_col_first * total_sheets) + S;
                 } else if (cutstackMode === 'strict_assembly') {
                     const full_sets = Math.floor(total_sheets / stack_size);
                     if (S < full_sets * stack_size) {
@@ -5643,7 +5720,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF for multi arte preview:', e);
-                });
+                }).finally(() => { delete state.multiArtesPdfLoading[itemArteUrl]; });
             }
 
             let pdfVersoDoc = null;
@@ -5661,7 +5738,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     if (typeof drawPedPreview === 'function') drawPedPreview();
                 }).catch(e => {
                     console.error('Error fetching PDF VERSO for multi arte preview:', e);
-                });
+                }).finally(() => { delete state.multiArtesPdfLoading[itemArteVersoUrl]; });
             }
 
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
