@@ -1547,6 +1547,59 @@ async function garantirBancosDoTrabalho(osIds) {
 window.garantirBancosDoTrabalho = garantirBancosDoTrabalho;
 
 /**
+ * A ultima conferencia, sobre o payload PRONTO: o que vai sair com campo de
+ * banco vazio (02/09/2026).
+ *
+ * As travas de cima olham o `state` -- quais pedidos foram consultados, quais
+ * vinculos existem. Esta olha o que esta REALMENTE indo ao motor, e por isso
+ * pega o que elas nao alcancam: a aba Imposicao, onde o operador escolhe uma
+ * numeracao na lista e monta a folha sem modelo nenhum.
+ *
+ * E o caso do 21460. A peca "Expointer 2026" nao guarda dado nenhum
+ * (`csv_data` nulo, `csv_column` vazio de proposito): o banco e do PEDIDO, e
+ * quem diz qual coluna cada campo le e o MODELO, pelo `csv_mapa`. Cinco modelos
+ * compartilham essa mesma peca, cada um com a sua coluna. Fora do pedido nao ha
+ * o que resolver -- e adivinhar seria pior que parar: imprimiria a credencial de
+ * um setor com o codigo de outro.
+ *
+ * Antes disto o trabalho seguia ate o motor e voltava com a recusa dele, que
+ * fala de `el_1` e de `csv_row`. Aqui a recusa e na tela, com o nome da
+ * numeracao e a saida.
+ */
+function bancoVazioNoPayload(numeracaoUnica, artes) {
+    const fora = [];
+    const olhar = (num, rotulo) => {
+        if (!num) return;
+        const pedeBanco = (num.elements || []).some(el => el && el.source === 'database');
+        if (!pedeBanco) return;
+        if ((num.csv_data || []).length) return;
+        const nome = String(rotulo || num.name || 'numeração').trim();
+        if (fora.indexOf(nome) === -1) fora.push(nome);
+    };
+    olhar(numeracaoUnica, null);
+    (artes || []).forEach(a => olhar(a && a.numeracao, a && a.nome));
+    return fora;
+}
+window.bancoVazioNoPayload = bancoVazioNoPayload;
+
+/**
+ * O recado de quem foi barrado pelo `bancoVazioNoPayload`.
+ *
+ * Diz a saída, que é sempre a mesma: imprimir a partir do MODELO. Não há como
+ * esta tela adivinhar a coluna — no 21460 são cinco modelos na mesma peça, cada
+ * um lendo a sua —, e chutar imprimiria a credencial de um setor com o código de
+ * outro.
+ */
+function recadoDeBancoVazio(nomes) {
+    return 'A numeração ' + nomes.map(n => '"' + n + '"').join(', ')
+        + ' lê os dados de um banco do pedido, e este trabalho chegou sem nenhuma linha. '
+        + 'Ela só imprime a partir do modelo: abra o pedido, escolha o modelo e mande '
+        + 'imprimir por lá — é o modelo que diz qual coluna do banco cada campo lê. '
+        + 'Imprimir daqui sairia com número sequencial no lugar do código.';
+}
+window.recadoDeBancoVazio = recadoDeBancoVazio;
+
+/**
  * Os pedidos do trabalho cujos vinculos de banco NAO se sabe se existem.
  *
  * Lista vazia depois do `garantirBancosDoTrabalho` significa "consultei todos":
@@ -12814,6 +12867,15 @@ window.runImposition = async function (mode, returnBlob = false) {
     let payloadNumeracao = numeracao ? JSON.parse(JSON.stringify(numeracao)) : null;
     if (payloadNumeracao && state.csvData) {
         payloadNumeracao.csv_data = state.csvData;
+    }
+
+    // A ultima conferencia, sobre o payload pronto. Ver `bancoVazioNoPayload`:
+    // esta e a tela onde o operador escolhe a numeracao na lista, sem modelo — e
+    // uma peca cujo banco e do PEDIDO nao tem como ser resolvida aqui.
+    const semBancoNoPayload = bancoVazioNoPayload(payloadNumeracao, payloadMultiArtes);
+    if (semBancoNoPayload.length) {
+        toast(recadoDeBancoVazio(semBancoNoPayload), 'error');
+        return;
     }
 
     // Injetar arquivo_url (URL TTF) nos elementos de numeração para que o engine

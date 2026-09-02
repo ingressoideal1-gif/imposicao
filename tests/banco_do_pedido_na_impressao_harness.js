@@ -107,7 +107,8 @@ function estadoSemBancos(comoCarrega) {
     return state;
 }
 
-const FUNCOES = ['idIntDoPedido', 'vinculoDeBancoDoModelo', 'resolverNumeracaoParaModelo',
+const FUNCOES = ['bancoVazioNoPayload', 'recadoDeBancoVazio',
+                 'idIntDoPedido', 'vinculoDeBancoDoModelo', 'resolverNumeracaoParaModelo',
                  'osIdsDoTrabalho', 'garantirBancosDoTrabalho', 'pedidosComBancoDesconhecido',
                  'modelosComBancoNaoConferido', 'pecaDoModelo', 'numeracaoIdDoItem',
                  'modelosComBancoNaoBaixado', 'modelosSemBancoDoTrabalho'];
@@ -298,6 +299,58 @@ casos.push(async function recargaQueFalhaNaoHerdaAMarcaAntiga() {
        'a marca de meia hora atras nao pode responder pela consulta que acabou de falhar');
     ok(f.modelosComBancoNaoConferido().length === 1,
        'e o modelo volta a ser recusado, em vez de sair sequencial');
+});
+
+// ── 8. A aba Imposicao: numeracao escolhida na lista, sem modelo ────────────
+//
+// O segundo relato do 21460 (02/09/2026), depois de as duas telas do pedido ja
+// carregarem os bancos. A peca "Expointer 2026" nao guarda dado nenhum -- o
+// banco e do PEDIDO, e quem diz qual coluna cada campo le e o MODELO. Escolhida
+// direto na lista da aba Imposicao, nao ha modelo, nao ha o que resolver, e o
+// trabalho ia ao motor com zero linhas.
+//
+// Adivinhar seria pior que parar: cinco modelos compartilham essa peca, cada um
+// com a sua coluna, e o chute imprimiria a credencial de um setor com o codigo
+// de outro. Entao a tela recusa, e diz por onde imprimir.
+
+casos.push(async function pecaSemModeloNaAbaImposicaoNaoVaiAoMotor() {
+    const state = estadoSemBancos();
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const peca = state.numeracoes[0];              // a peca CRUA, como a lista a oferece
+
+    const barrados = f.bancoVazioNoPayload(peca, []);
+    ok(barrados.length === 1 && barrados[0] === 'Expointer 2026',
+       'peca que le banco e chega sem linha e barrada pelo nome', { barrados });
+
+    const recado = f.recadoDeBancoVazio(barrados);
+    ok(recado.indexOf('Expointer 2026') !== -1, 'o recado nomeia a numeracao');
+    ok(recado.indexOf('a partir do modelo') !== -1, 'e diz por onde imprimir');
+    ok(recado.indexOf('sequencial') !== -1, 'e o que sairia errado se seguisse');
+});
+
+// ── 8b. E a mesma peca, resolvida pelo modelo, passa ────────────────────────
+
+casos.push(async function aMesmaPecaResolvidaPeloModeloPassa() {
+    const state = estadoSemBancos();
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    await f.garantirBancosDoTrabalho(f.osIdsDoTrabalho());
+    const resolvida = f.resolverNumeracaoParaModelo(state.numeracoes[0], state.osItens['os-1'][0]);
+    ok(f.bancoVazioNoPayload(resolvida, []).length === 0,
+       'resolvida pelo modelo, a mesma peca passa');
+    ok(f.bancoVazioNoPayload(null, [{ nome: 'EXPOSITOR', numeracao: resolvida }]).length === 0,
+       'e passa tambem como arte do multi_artes');
+});
+
+// ── 8c. Quem nunca leu banco nao pode ser barrado ───────────────────────────
+
+casos.push(async function numeracaoSequencialNaoEBarrada() {
+    const state = estadoSemBancos();
+    const f = sandbox(state, FUNCOES, DEVOLVE);
+    const soContador = { name: 'Ingresso 2026', csv_data: null,
+                         elements: [{ id: 'el_1', type: 'TEXT', pad: 5 }] };
+    ok(f.bancoVazioNoPayload(soContador, []).length === 0,
+       'numeracao puramente sequencial imprime como sempre imprimiu');
+    ok(f.bancoVazioNoPayload(null, []).length === 0, 'e trabalho sem numeracao nenhuma tambem');
 });
 
 (async () => {

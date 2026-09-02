@@ -114,3 +114,54 @@ def test_uma_definicao_so_de_quais_pedidos_sao_do_trabalho():
         assert "osIdsDoTrabalho()" in corpo, (
             f"{quem} voltou a montar o conjunto de pedidos por conta propria"
         )
+
+
+def test_as_duas_telas_conferem_o_payload_antes_de_mandar():
+    """A ultima trava olha o que VAI, nao o que o state diz (02/09/2026).
+
+    As travas anteriores partem do `state`: quais pedidos foram consultados,
+    quais vinculos existem. Elas nao alcancam a aba Imposicao, onde o operador
+    escolhe uma numeracao na lista e monta a folha sem modelo nenhum -- e uma
+    peca cujo banco e do PEDIDO chega ali crua, com zero linhas.
+
+    Foi o segundo relato do 21460, ja com as duas telas do pedido carregando os
+    bancos. O motor recusava (certo), mas falando de `el_1` e de `csv_row`.
+    """
+    for arquivo in ("frontend/script.js", "frontend/pedido.js"):
+        fonte = _ler(arquivo)
+        i = fonte.index("let payloadNumeracao =")
+        trecho = fonte[i:i + 1200]
+        assert "bancoVazioNoPayload" in trecho, (
+            f"em {arquivo} o payload sai sem a conferencia final: numeracao que le "
+            "banco e chega sem linha iria ao motor e voltaria com a recusa dele"
+        )
+
+
+def test_a_recusa_do_payload_diz_por_onde_imprimir():
+    """Trava que impede de seguir tem de oferecer a saida na propria frase.
+
+    E a saida aqui e' uma so: imprimir a partir do MODELO. Nao ha como a tela
+    adivinhar a coluna — no 21460 sao cinco modelos na mesma peca, cada um lendo
+    a sua —, e chutar imprimiria a credencial de um setor com o codigo de outro.
+    """
+    fonte = _ler("frontend/script.js")
+    i = fonte.index("function recadoDeBancoVazio(")
+    corpo = fonte[i:fonte.index(chr(10) + "}", i)]
+    assert "a partir do modelo" in corpo, "a recusa nao diz por onde imprimir"
+    assert "sequencial" in corpo, "a recusa nao diz o que sairia errado"
+
+
+def test_o_pedido_desiste_pela_funcao_que_devolve_a_tela():
+    """No `pedido.js` a recusa vem ANTES do try/finally.
+
+    Sair dali com um `return` cru deixa `isImposing = true` e os botoes
+    escondidos para sempre — so um F5 destrava. O proprio arquivo registra esse
+    defeito na definicao do `desistir`.
+    """
+    fonte = _ler("frontend/pedido.js")
+    i = fonte.index("bancoVazioNoPayload(payloadNumeracao")
+    trecho = fonte[i:i + 300]
+    assert "desistir(" in trecho, (
+        "a recusa do payload no pedido.js precisa sair por `desistir`, senao a "
+        "tela fica travada com os botoes escondidos"
+    )

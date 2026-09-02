@@ -4,6 +4,41 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — A trava do motor pegou o 21460 na aba Imposição; a tela passa a dizer por onde imprimir
+
+Depois da v794, o usuário mandou gerar de novo e recebeu a recusa nova do motor:
+*"O elemento 'el_1' (QR) le do banco de dados, e o item 1 deste trabalho chegou
+sem linha"*. Certo — parou em vez de imprimir errado. Mas continuava sem sair.
+
+### Onde estava
+
+Medido na tela de verdade, com o 21460 carregado do banco, **com** sessão e
+**sem** sessão (como a estação): a tela do Pedido entrega 3.000 linhas e a
+coluna certa, tanto com um modelo aberto quanto com os cinco marcados. O que
+não entrega é a **aba Imposição**: lá o operador escolhe a numeração na lista,
+sem modelo nenhum — e a peça "Expointer 2026" não guarda dado (`csv_data` nulo,
+`csv_column` vazio de propósito). O banco é do **pedido**, e quem diz qual
+coluna cada campo lê é o **modelo**, pelo `csv_mapa`. Fora do pedido não há o
+que resolver.
+
+Adivinhar seria pior que parar: cinco modelos compartilham essa peça, cada um
+com a sua coluna, e o chute imprimiria a credencial de um setor com o código de
+outro.
+
+### O conserto
+
+Uma conferência final sobre o **payload pronto** (`bancoVazioNoPayload`), nas
+duas telas, antes de mandar ao motor: numeração que lê banco e chega sem linha
+é barrada pelo nome, com a saída na frase — *"abra o pedido, escolha o modelo e
+mande imprimir por lá"*. As travas anteriores olham o `state`; esta olha o que
+vai, e por isso alcança a aba Imposição. No `pedido.js` ela sai por `desistir`,
+porque fica antes do `try/finally` que devolve a tela ao normal.
+
+Nada muda para quem imprime pelo pedido: conferido contra o dado real, a mesma
+peça resolvida pelo modelo passa com as 3.000 linhas.
+
+---
+
 ## [2026-09-02] — O QR do 21460 voltou a sair sequencial: a marca sobreviveu ao dado
 
 Relato do usuário: **"pedido 21460 a numeração do QR deveria ter origem no banco

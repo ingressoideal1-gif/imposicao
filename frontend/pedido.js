@@ -5848,6 +5848,17 @@ window.runPedImposition = async function (mode, isRefazer) {
         payloadNumeracao.csv_data = state.csvData;
     }
 
+    // A mesma conferencia final do script.js, sobre o payload pronto. Aqui o
+    // modelo quase sempre e conhecido e ela nao dispara; ela existe para o caso
+    // em que a resolucao nao aconteceu — numeracao escolhida na lista que nao e
+    // a do modelo aberto, por exemplo. Ver `bancoVazioNoPayload`.
+    // Sai por `desistir` — estamos ANTES do try/finally que devolve a tela ao
+    // normal, e um `return` cru deixaria os botões escondidos para sempre.
+    if (typeof bancoVazioNoPayload === 'function') {
+        const semBancoNoPayload = bancoVazioNoPayload(payloadNumeracao, payloadMultiArtes);
+        if (semBancoNoPayload.length) return desistir(recadoDeBancoVazio(semBancoNoPayload));
+    }
+
     // Tirar do payload os elementos marcados como Layout — mesma razão da versão
     // do script.js: o engine.py também os ignora, mas o NewProd.exe carrega uma
     // cópia congelada dele. `numeracaoSemElementosDeLayout` devolve cópia rasa, o
