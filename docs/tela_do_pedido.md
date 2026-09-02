@@ -94,6 +94,12 @@ a escrever uma exceção que antes se resolvia sozinha: modelo já impresso perd
 botão Imprimir, mas **com o Refazer ligado ele volta** — reimprimir uma faixa só
 faz sentido depois que a tiragem já saiu.
 
+No Refazer Folhas, o **Set** é o que a prévia mostra e o que o nome do arquivo
+diz: na montagem estrita, cada camada de um set é um set para o operador
+(`_set1_01`, `_set1_02`, `_set1_03` são os Sets 1, 2 e 3), e **De/Até** contam
+folhas dentro dele. O motor conta do mesmo jeito desde 02/09/2026 — antes ele
+tratava as três camadas como um set só, e "Set 3, folha 10" não existia.
+
 O selo da sobra e as Opções do modelo ficavam no **topo da página**, longe do
 modelo de que falavam; foram para dentro da janela por pedido do usuário. As seis
 fichas de sumário que havia no topo (Formato, Grade, Total de Itens, Folhas

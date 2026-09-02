@@ -1257,6 +1257,25 @@ class TriggerList(list):
             except Exception as e:
                 print(f"[TriggerList] Erro no callback: {e}")
 
+def _folhas_por_set_da_tela(set_definitions, bloco):
+    """Quantas folhas tem cada set COMO A TELA CONTA (02/09/2026).
+
+    A tela (`buildStrictAssemblySets`, no pedido.js) mostra cada CAMADA de um
+    set estrito como um set, e a sobra de cada modelo como outro -- e o nome do
+    arquivo diz o mesmo: `_set1_01`, `_set1_02`, `_set2`. E essa a numeracao
+    que o operador ve na previa e digita no Refazer Folhas. Aqui dentro, um set
+    estrito de profundidade 3 e UM set de 600 folhas; para quem segura a pilha,
+    sao tres de 200.
+    """
+    saida = []
+    for s in set_definitions or []:
+        n = int(s.get("num_sheets", 0) or 0)
+        depth = max(1, int(s.get("depth", 1) or 1))
+        for camada in range(depth):
+            saida.append(max(0, min(int(bloco), n - camada * int(bloco))))
+    return saida
+
+
 class ImpositionEngine:
     def __init__(self, config: ImpositionConfig, on_file_generated=None):
         self.cfg = config
@@ -3076,13 +3095,24 @@ class ImpositionEngine:
                 print(f"[engine] strict_assembly: Gerado com sucesso (compactado).")
                 return
 
+            # ── O "set" do Refazer Folhas e a CAMADA, como a tela conta ──────
+            # (02/09/2026, pedido 21460). Um set estrito de profundidade 3 e,
+            # para quem segura a pilha, tres sets de um bloco cada -- e e assim
+            # que a tela (`buildStrictAssemblySets`) e o nome do arquivo
+            # (`_set1_03`) contam. Aqui se contava o set inteiro (600 folhas) e
+            # a sobra como set 2: "Set 3, folha 10" nao existia, e "Set 2,
+            # folha 10" reimprimia em silencio a folha 10 da SOBRA, outra pilha.
+            # Ver `_folhas_por_set_da_tela` e tests/test_engine_refazer_strict_assembly.py.
+            folhas_por_set = _folhas_por_set_da_tela(set_definitions, cfg.sheets_per_block)
+            set_da_tela = 0
             for set_idx, set_def in enumerate(set_definitions):
-                if r_de > 0 and (set_idx + 1) != r_set:
-                    continue
                 depth = set_def.get("depth", 1)
                 stack_size = cfg.sheets_per_block
 
                 for layer_idx in range(depth):
+                    set_da_tela += 1
+                    if r_de > 0 and set_da_tela != r_set:
+                        continue
                     doc_out = fitz.open()
                     
                     # 1. Gerar capa para o layer (chunk)
@@ -3094,8 +3124,9 @@ class ImpositionEngine:
                     end_sheet = min((layer_idx + 1) * stack_size, set_def["num_sheets"])
                     
                     for sheet_within_set in range(start_sheet, end_sheet):
-                        # Se for refazer, filtrar ativamente por faixa de folhas do set
-                        sheet_num_in_set = sheet_within_set + 1
+                        # Refazer: a folha conta DENTRO DA CAMADA (1..bloco), que e
+                        # o que a tela mostra e o que o nome do arquivo diz.
+                        sheet_num_in_set = sheet_within_set - start_sheet + 1
                         if r_de > 0 and (sheet_num_in_set < r_de or sheet_num_in_set > r_ate):
                             continue
                             
@@ -3145,7 +3176,7 @@ class ImpositionEngine:
                 if doc:
                     doc.close()
             
-            self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
+            self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels, folhas_por_set)
             print(f"[engine] strict_assembly: Gerado com sucesso.")
             return
 
@@ -3677,7 +3708,11 @@ class ImpositionEngine:
                 _salvar_pdf(doc_out, cfg.out_pdf)
                 self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
         
-        self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
+        self._avisar_refazer_vazio(
+            refazendo, r_de, r_ate, r_set, r_cels,
+            folhas_por_set=([min(stack_size, total_sheets - i * stack_size)
+                             for i in range(math.ceil(total_sheets / stack_size))]
+                            if stack_size else None))
         print(f"[engine] save done elapsed={_time.monotonic()-_t0:.1f}s")
         if doc_base:
             doc_base.close()
@@ -4333,7 +4368,7 @@ class ImpositionEngine:
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
-    def _avisar_refazer_vazio(self, refazendo, r_de, r_ate, r_set, r_cels):
+    def _avisar_refazer_vazio(self, refazendo, r_de, r_ate, r_set, r_cels, folhas_por_set=None):
         """Recusa um refazer que não casou com folha nenhuma.
 
         Substitui o antigo `_apply_refazer_filter`, que era um `return` puro
@@ -4350,7 +4385,17 @@ class ImpositionEngine:
             alvo.append(f"folhas {r_de}-{r_ate} do set {r_set}")
         if r_cels:
             alvo.append("posicoes " + ",".join(str(c) for c in r_cels))
+        # A trava diz a saida (02/09/2026): quais sets este trabalho tem e
+        # quantas folhas cada um. Foi o "set 3" do 21460 -- o operador escolheu
+        # o que a tela oferecia, e a recusa nao dizia o que existia.
+        existentes = ""
+        if r_de > 0 and folhas_por_set:
+            existentes = (
+                f" Este trabalho tem {len(folhas_por_set)} set(s): "
+                + ", ".join(f"set {i + 1} com {n} folha(s)" for i, n in enumerate(folhas_por_set))
+                + "."
+            )
         raise ValueError(
-            "Refazer: nada corresponde a " + " e ".join(alvo)
-            + ". Confira a faixa de folhas e as posicoes pedidas."
+            "Refazer: nada corresponde a " + " e ".join(alvo) + "." + existentes
+            + " Confira a faixa de folhas e as posicoes pedidas."
         )

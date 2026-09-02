@@ -4,6 +4,43 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — Refazer Folhas: o "set" que a tela oferece não era o set que o motor procurava
+
+Relato do usuário, no 21460: **"ao tentar utilizar o Refazer Folhas aparece a
+mensagem: Refazer: nada corresponde a folhas 10-10 do set 3"**.
+
+### A causa
+
+Na montagem estrita do Cut & Stack, a tela e o motor contavam os sets de jeitos
+diferentes. Para 3.000 peças com bloco de 200 (15 blocos, 4 poses):
+
+| | sets |
+|---|---|
+| tela (`buildStrictAssemblySets`) | 4: 200, 200, 200 e 150 folhas |
+| motor (`set_definitions`) | 2: um de 600 folhas em 3 camadas, e a sobra de 150 |
+
+A tela mostra cada **camada** de um set estrito como um set — e o nome do
+arquivo diz o mesmo: `_set1_01`, `_set1_02`, `_set1_03`, `_set2`. O operador,
+com a pilha "set1_03" na mão, escolhia "Set 3, folha 10", como a tela oferece.
+O motor procurava um set 3 entre os seus dois e recusava. Pior: "Set 2, folha
+10" reimprimia **em silêncio** a folha 10 da sobra, que é outra pilha.
+
+### O conserto
+
+O motor passou a contar como a tela: cada camada é um set, e a folha conta
+dentro da camada (1 até o tamanho do bloco). Na primeira camada as duas
+contagens sempre coincidiram, então nada muda para quem só refazia ali. A
+recusa passou a dizer a saída: *"Este trabalho tem 4 set(s): set 1 com 200
+folha(s), …"*. O caminho não estrito já contava por bloco e ganhou a mesma
+frase.
+
+Teste novo, `tests/test_engine_refazer_strict_assembly.py`: 40 itens, bloco de
+5, 2 camadas — "Set 2, folha 3" reimprime a folha 3 do arquivo `_set1_02`, com os
+mesmos números; e o teste compara a conta da tela (rodando o `pedido.js` em
+node) com os arquivos que o motor gera.
+
+---
+
 ## [2026-09-02] — "Corrigir Arte": a produção devolve um modelo ao designer
 
 Pedido do usuário: *"No painel da produção, na edição do modelo, vamos adicionar
