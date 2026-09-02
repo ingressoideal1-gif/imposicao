@@ -6,7 +6,7 @@ em compilar_msi.ps1: o MSI usa aquele campo para decidir se o upgrade se
 aplica, e o auto-update compara este valor com o do manifesto.
 """
 
-AGENT_VERSION = "1.2.286"
+AGENT_VERSION = "1.2.287"
 
 
 def como_tupla(texto: str) -> tuple:
