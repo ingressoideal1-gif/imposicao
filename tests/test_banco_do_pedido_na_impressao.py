@@ -165,3 +165,34 @@ def test_o_pedido_desiste_pela_funcao_que_devolve_a_tela():
         "a recusa do payload no pedido.js precisa sair por `desistir`, senao a "
         "tela fica travada com os botoes escondidos"
     )
+
+
+def test_o_modelo_ativo_e_achado_pelo_itemId_e_nao_por_um_idx_que_nao_existe():
+    """O terceiro relato do 21460 (02/09/2026): imprimir UM modelo.
+
+    `enviarParaPedido` e `enviarParaImposicao` gravam o modelo ativo como
+    `{ itemId, osId }` -- e nada mais. As duas telas de imposicao, no caminho de
+    um modelo so, faziam `state.osItens[osId][state.activeOSItem.idx]`: `idx` e
+    `undefined`, o item nao e achado, a resolucao pelo banco do pedido e pulada
+    e a peca vai CRUA ao motor, com zero linhas. Marcar varios modelos
+    funcionava (o multi_artes acha cada arte pelo `itemId`); abrir um modelo e
+    mandar imprimir, nao.
+
+    Medido na tela de verdade, com o 21460 carregado do banco e o modelo ativo
+    na forma real: `itemAtivoPeloIdx = null`, `resolvida.linhas = 0`. O mesmo
+    estado, achando o item pelo `itemId`: 3.000 linhas, coluna EXPOSITOR.
+
+    O ajudante certo ja existia (`itemAtivoDoPedido`, que procura pelo
+    `itemId`) e era usado em toda a tela -- menos aqui.
+    """
+    for arquivo in ("frontend/script.js", "frontend/pedido.js"):
+        fonte = _ler(arquivo)
+        assert "activeOSItem.idx" not in fonte, (
+            f"{arquivo} volta a procurar o modelo ativo por um `idx` que nenhuma "
+            "tela grava: a impressao de um modelo iria ao motor com a peca crua"
+        )
+        i = fonte.index("let numeracao = numId ? state.numeracoes.find")
+        trecho = fonte[i:i + 1600]
+        assert "itemAtivoDoPedido()" in trecho, (
+            f"em {arquivo} a resolucao do modelo unico nao usa `itemAtivoDoPedido()`"
+        )

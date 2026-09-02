@@ -5726,9 +5726,18 @@ window.runPedImposition = async function (mode, isRefazer) {
     // Um modelo so tambem le o banco do PEDIDO (28/08/2026), como no script.js:
     // sem resolver, a impressao de um modelo com vinculo sairia com a peca
     // crua. O multi_artes abaixo ja resolve arte a arte.
+    //
+    // O modelo ativo se acha pelo `itemId` (02/09/2026). `enviarParaPedido`
+    // grava `{ itemId, osId }` e nada mais; ate hoje esta linha lia
+    // o campo `idx` do modelo ativo, que e `undefined`: o item nunca era achado, a
+    // resolucao era pulada e a peca ia CRUA ao motor -- zero linhas. Foi o
+    // terceiro relato do 21460, ja com a carga dos bancos consertada: marcar os
+    // cinco modelos funcionava, abrir um e mandar imprimir nao. Ver o gemeo no
+    // script.js e `test_o_modelo_ativo_e_achado_pelo_itemId...`.
     if (numeracao && typeof resolverNumeracaoParaModelo === 'function'
+        && typeof itemAtivoDoPedido === 'function'
         && state.activeOSItem && state.activeOSItem.osId !== undefined) {
-        const itemAtivo = (state.osItens[state.activeOSItem.osId] || [])[state.activeOSItem.idx];
+        const itemAtivo = itemAtivoDoPedido();
         if (itemAtivo && typeof numeracaoIdDoItem === 'function'
             && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
             numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);

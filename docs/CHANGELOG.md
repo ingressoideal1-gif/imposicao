@@ -4,6 +4,43 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — Imprimir UM modelo procurava o modelo ativo por um `idx` que nenhuma tela grava
+
+Terceiro relato do 21460 no mesmo dia, já com a carga dos bancos consertada
+(v794) e a trava da tela no ar (v795): a mesma recusa do motor, *"o item 1
+deste trabalho chegou sem linha"*.
+
+### Onde estava — e por que eu não tinha visto
+
+`enviarParaPedido` e `enviarParaImposicao` gravam o modelo ativo como
+`{ itemId, osId }` — e nada mais. As duas telas de imposição, no caminho de
+**um modelo só**, faziam `state.osItens[osId][state.activeOSItem.idx]`. O `idx`
+é `undefined`, o item nunca é achado, a resolução pelo banco do pedido é pulada
+e a peça vai **crua** ao motor, com zero linhas. Marcar os cinco modelos
+funcionava, porque o `multi_artes` acha cada arte pelo `itemId`; abrir um e
+mandar imprimir, não.
+
+As minhas duas medições anteriores "provaram" que a tela do Pedido funcionava
+porque **eu** tinha semeado `idx: 1` no modelo ativo — um campo que a tela
+nunca põe. Medido de novo com a forma real:
+
+| modelo ativo | item achado | linhas no trabalho |
+|---|---|---|
+| `{ osId, idx: 1, itemId }` (o que eu semeei) | 1000781 | 3.000 |
+| `{ itemId, osId }` (o que a tela grava) | **nenhum** | **0** |
+
+O ajudante certo já existia — `itemAtivoDoPedido()`, que procura pelo `itemId`
+— e era usado em toda a tela, menos nesses dois pontos.
+
+### O conserto
+
+Os dois pontos passam a achar o modelo por `itemAtivoDoPedido()`. O harness
+passou a montar o modelo ativo na forma real, e um teste impede `activeOSItem.idx`
+de voltar. Medido na tela de verdade depois do conserto: 3.000 linhas, coluna
+`EXPOSITOR`.
+
+---
+
 ## [2026-09-02] — A trava do motor pegou o 21460 na aba Imposição; a tela passa a dizer por onde imprimir
 
 Depois da v794, o usuário mandou gerar de novo e recebeu a recusa nova do motor:

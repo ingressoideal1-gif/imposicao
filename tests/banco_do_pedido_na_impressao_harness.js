@@ -87,7 +87,10 @@ function estadoSemBancos(comoCarrega) {
     const state = {
         numeracoes: [JSON.parse(JSON.stringify(NUMERACAO))],
         osItens: { 'os-1': [JSON.parse(JSON.stringify(ITEM))] },
-        activeOSItem: { osId: 'os-1', idx: 0, itemId: '1000781' },
+        // A forma REAL, como `enviarParaPedido` e `enviarParaImposicao` gravam:
+        // { itemId, osId } -- e nada mais. Ate 02/09/2026 este harness punha um
+        // `idx` aqui que a tela nunca poe, e por isso nao viu o defeito abaixo.
+        activeOSItem: { itemId: '1000781', osId: 'os-1' },
         selectedOSItems: [],
         bancosDoPedido: [], vinculosDeBanco: {},
         _bancosPedidoDe: undefined,

@@ -12750,8 +12750,16 @@ window.runImposition = async function (mode, returnBlob = false) {
     // a impressao de um modelo com vinculo sairia com a peca crua — numero
     // sequencial ou campo vazio no lugar do dado. O multi_artes ja resolvia
     // arte a arte; este e o caminho de UM modelo.
+    //
+    // O modelo ativo se acha pelo `itemId` (02/09/2026). `enviarParaImposicao`
+    // grava `{ itemId, osId }` e nada mais; ate hoje esta linha lia
+    // o campo `idx` do modelo ativo, que e `undefined`, o item nunca era achado e a
+    // peca ia CRUA ao motor -- zero linhas, numero sequencial dentro do QR.
+    // Marcar varios modelos funcionava (o multi_artes acha cada arte pelo
+    // `itemId`); abrir UM modelo e mandar imprimir, nao. Foi o terceiro relato
+    // do 21460. `itemAtivoDoPedido` e o ajudante que o resto da tela ja usa.
     if (numeracao && state.activeOSItem && state.activeOSItem.osId !== undefined) {
-        const itemAtivo = (state.osItens[state.activeOSItem.osId] || [])[state.activeOSItem.idx];
+        const itemAtivo = itemAtivoDoPedido();
         if (itemAtivo && String(numeracaoIdDoItem(itemAtivo)) === String(numId)) {
             numeracao = resolverNumeracaoParaModelo(numeracao, itemAtivo);
         }

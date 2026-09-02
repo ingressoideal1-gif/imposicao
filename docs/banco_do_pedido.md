@@ -190,6 +190,18 @@ pronto, sem alarme falso e sem cegueira para o choque de verdade.
 
 ## Duas pedras já encontradas
 
+**O modelo ativo é `{ itemId, osId }` — e nada mais** (02/09/2026). É assim que
+`enviarParaPedido` e `enviarParaImposicao` o gravam. Quem precisar do item usa
+`itemAtivoDoPedido()`, que procura pelo `itemId`. Os dois pontos de resolução do
+modelo único nas telas de imposição liam um `idx` que ninguém grava: o item não
+era achado, a resolução pelo banco do pedido era pulada e a peça ia crua ao
+motor — o terceiro relato do 21460, em que marcar os cinco modelos funcionava e
+abrir um só não. Um teste (`test_o_modelo_ativo_e_achado_pelo_itemId...`) impede
+o `idx` de voltar. A lição de método: eu tinha "provado" duas vezes que o caminho
+funcionava semeando `idx: 1` no estado — um campo que a tela nunca põe. Medir o
+caminho do operador é medir com o estado **que a tela grava**.
+
+
 **O id do modelo não é UUID.** A `pedidos_modelos_banco.modelo_id` nasceu `UUID`,
 por analogia com as tabelas nossas. Mas `pedidos_modelos` é do parceiro Vibe e o id
 dela é um **número** (`1000409`): toda tentativa de ligar um modelo morria com
