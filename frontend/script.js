@@ -32494,7 +32494,17 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml) {
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
                                 ${item.modo_pdf ? `
                                 <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                                    <!-- 450px, o MESMO teto do canvas do verso logo abaixo (02/09/2026).
+                                         Enquanto a frente parava em 400px e o verso em 450px, as duas
+                                         faces mostravam a MESMA celula em tamanhos diferentes: a frente
+                                         saia 12,5% menor na tela (283x400 contra 319x450 medidos no
+                                         pedido 21408), e parecia que a arte da frente era menor. Nada a
+                                         ver com o papel -- os dois canvas sempre tiveram a mesma medida
+                                         por dentro; era so o teto de altura do CSS. So vale aqui, no
+                                         cartao de frente e verso: no modelo de uma face so nao ha com o
+                                         que comparar, e la o 400px continua, deixando espaco para as
+                                         setas do folheador. -->
+                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                                     <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
                                         <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
                                         <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
