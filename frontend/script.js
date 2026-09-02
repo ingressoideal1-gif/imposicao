@@ -25261,18 +25261,28 @@ async function sincronizarPedidosProntosParaEnvio() {
             modelosPorPedido[m.id_int].push(m.status_arte || '');
         });
 
+        // O pedido do Vibe grava em `pedidos_links_cliente`, que o `anon` não
+        // alcança. Sem sessão, a gravação seria recusada — e o `localStorage`
+        // logo abaixo ficaria dizendo "Enviar Arte" numa máquina só, divergindo
+        // do banco até alguém abrir o site. Então, sem sessão, ele fica como
+        // está. O site, que tem sessão, faz esta mesma sincronização.
+        const temSessao = await temSessaoDoSupabase();
+
         const gravacoes = [];
         for (const os of osParaVerificar) {
             const statusItens = modelosPorPedido[parseInt(os.numero)] || [];
             if (statusItens.length === 0) continue;
             if (!statusItens.every(s => PRONTOS.includes((s || '').toUpperCase()))) continue;
 
+            const ehDoVibe = os.id.startsWith('vibe_');
+            if (ehDoVibe && !temSessao) continue;
+
             console.log('[AUTO-SYNC-DB] Pedido #' + os.numero + ': todos modelos PRONTO no banco -> Enviar Arte');
             os.status = 'Enviar Arte';
             gravarStatusOverride(os.id, 'Enviar Arte');
 
             gravacoes.push(
-                os.id.startsWith('vibe_')
+                ehDoVibe
                     ? supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id)
                     : supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id)
             );
@@ -25497,11 +25507,42 @@ async function loadOrdens() {
 }
 
 /**
+ * Há sessão do Supabase nesta aba?
+ *
+ * A estação da gráfica é servida pelo agente local na porta 9000 e roda este
+ * mesmo arquivo. Lá o operador entra pelo código local (`iniciarAcessoLocal`),
+ * SEM sessão do Supabase — por projeto. Ou seja: toda chamada dela sai como
+ * `anon`, e as tabelas fechadas para o `anon` recusam com 401.
+ *
+ * Quem responde é o próprio supabase-js, lendo o que está guardado no
+ * navegador: nenhuma ida à rede, e nenhuma contabilidade nossa
+ * (`window._currentUser`) para desencontrar quando a sessão expira sozinha.
+ */
+async function temSessaoDoSupabase() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return false;
+    try {
+        const { data } = await supabaseClient.auth.getSession();
+        return !!(data && data.session && data.session.user);
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
  * Busca todos os links ativos no banco e popula state.linksCliente
  * para que a Fila de Arte exiba os links já existentes ao carregar.
+ *
+ * Sem sessão, nem pede. `pedidos_links_cliente` guarda o TOKEN do link de cada
+ * cliente e foi fechada para a chave pública em 16/08/2026 — de propósito, e
+ * continua fechada. O `sql/link_cliente_fechar_a_chave_publica.sql` supôs que
+ * "a estação não consome esta tabela", o que vale para a TELA (a Fila de Arte
+ * não aparece lá) mas não valia para este carregador, que roda em todo
+ * `loadOrdens()`: em 01/09/2026 eram 143 recusas em 26h, todas com
+ * `referer: http://127.0.0.1:9000/`.
  */
 async function carregarLinksExistentes() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (!await temSessaoDoSupabase()) return;
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_links_cliente')
@@ -28285,10 +28326,18 @@ const TEMPO_VERMELHO_SEG = 3 * 3600;
 // devolve o cronômetro de onde parou.
 const TEMPO_VOLTA_SEM_PERDER_SEG = 60 * 60;
 
-/** Lê a memória dos relógios. Sem a tabela, a coluna degrada para "--". */
+/**
+ * Lê a memória dos relógios. Sem a tabela, a coluna degrada para "--".
+ *
+ * Sem sessão também: `imposition_tempo_no_card` não libera nada para o `anon`,
+ * então na estação isto era 44 recusas por dia. Desligar `temposNoCardAtivo` é
+ * o mesmo caminho de degradação de quando a tabela não existe — e ele segura
+ * também as ESCRITAS de troca de card, no `anotarTempoNoCard`.
+ */
 async function carregarTemposNoCard() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     if (!state.temposNoCard) state.temposNoCard = {};
+    if (!await temSessaoDoSupabase()) { state.temposNoCardAtivo = false; return; }
     try {
         const { data, error } = await supabaseClient
             .from('imposition_tempo_no_card')
