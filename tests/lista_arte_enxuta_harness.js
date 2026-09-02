@@ -31,6 +31,13 @@ function recortarConst(nome) {
     return SCRIPT.slice(i, SCRIPT.indexOf('];', i) + 2);
 }
 
+/** A const de uma linha so -- uma palavra, e nao uma lista. */
+function recortarPalavra(nome) {
+    const i = SCRIPT.indexOf('const ' + nome + ' = ');
+    if (i < 0) throw new Error('nao achei a const ' + nome);
+    return SCRIPT.slice(i, SCRIPT.indexOf(';', i) + 1);
+}
+
 // ─── 1. Em que fila cada pedido cai ──────────────────────────────────────────
 
 function classificador(state) {
@@ -38,6 +45,12 @@ function classificador(state) {
         recortarConst('SINAIS_SAIU_DA_ARTE'),
         recortarConst('SINAIS_CANCELADO'),
         recortar('pedidoCancelado'),
+        // O `classificarPedidoNaArte` passou a perguntar se algum modelo esta
+        // em "Corrigir Arte" (02/09/2026) -- sem estas tres, a caixa de areia
+        // estoura em ReferenceError. Ver `corrigir_arte_harness.js`.
+        recortarPalavra('STATUS_CORRIGIR_ARTE'),
+        recortar('normalizarStatusImpressao'),
+        recortar('modeloEmCorrecaoDeArte'),
         recortarConst('ARTE_REPROVADOS'),
         recortarConst('ARTE_APROVADOS'),
         recortarConst('ARTE_EM_APROVACAO'),

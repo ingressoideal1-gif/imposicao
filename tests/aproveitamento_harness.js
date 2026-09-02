@@ -52,13 +52,25 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
                'temVerso', 'versoUnico', 'modoDeVersoDoModelo',
                'limiarPadraoDeSobra', 'limiarDoProduto', 'limiarDeSobra',
                'sobraDaImposicao', 'sobraMereceAviso', 'textoDaSobra',
+               // O `modeloLiberadoParaImprimir` passou a recusar tambem o
+               // modelo devolvido ao designer (02/09/2026) -- sem estas duas, a
+               // caixa de areia morre em ReferenceError antes da primeira conta.
+               'normalizarStatusImpressao', 'modeloEmCorrecaoDeArte',
                'modeloLiberadoParaImprimir', 'itensJaNaFolha', 'osDaImposicao',
                'candidatosDoPedido', 'melhorComposicao', 'produtoLiberadoParaCombinar',
                'problemaNaSelecao'];
 
+/** A const de uma linha so -- o `modeloEmCorrecaoDeArte` depende dela. */
+function extrairPalavra(nome) {
+    const i = SCRIPT.indexOf('const ' + nome + ' = ');
+    if (i < 0) throw new Error('nao achei a const ' + nome);
+    return SCRIPT.slice(i, SCRIPT.indexOf(';', i) + 1);
+}
+
 function api(st) {
     return new Function('state', 'window',
-        NOMES.map(n => extrairFuncao(SCRIPT, n)).join('\n')
+        extrairPalavra('STATUS_CORRIGIR_ARTE') + '\n'
+        + NOMES.map(n => extrairFuncao(SCRIPT, n)).join('\n')
         + '\nreturn { ' + NOMES.join(', ') + ' };')(st, global.window);
 }
 

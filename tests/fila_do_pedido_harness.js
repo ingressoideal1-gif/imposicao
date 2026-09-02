@@ -369,7 +369,11 @@ function cenario(quantos, comCamarote) {
         const filaDepois = document.querySelectorAll('#ped-os-queue-body option').length;
         return { antes, depois, cresceuNaLinha: depois - antes, cresceuNaFila: filaDepois - filaAntes };
     });
-    ok(hover.antes <= 6 && hover.depois > 120,
+    // O teto era 6 e virou 7 em 02/09/2026: o seletor de Status ganhou a
+    // terceira opcao, "Corrigir Arte". O que o numero guarda nao e ele mesmo --
+    // e que as listas PESADAS (Cor e Numeracao, dezenas de opcoes cada) so
+    // sejam montadas quando o mouse chega na linha.
+    ok(hover.antes <= 7 && hover.depois > 120,
        'passar o mouse pela linha enche os dois seletores dela', hover);
     ok(hover.cresceuNaFila === hover.cresceuNaLinha,
        'e SO os dela: nenhuma outra linha e montada de carona — a rede que enchia a fila inteira '

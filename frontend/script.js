@@ -1189,6 +1189,20 @@ function modelosSemBancoDoTrabalho() {
 window.modelosSemBancoDoTrabalho = modelosSemBancoDoTrabalho;
 
 /**
+ * Os modelos DESTA imposição parados em "Corrigir Arte".
+ *
+ * Só os que vão para o papel agora — `itensDaImposicao` — e não o pedido
+ * inteiro: a decisão do usuário em 02/09/2026 foi que a marca trava aquele
+ * modelo e deixa os outros do mesmo pedido imprimindo. Um pedido de credenciais
+ * com dez modelos não pode parar inteiro porque um deles tem a arte errada.
+ */
+function modelosEmCorrecaoDeArte() {
+    return itensDaImposicao((state.selectedOSItems || []).length > 1)
+        .filter(it => modeloEmCorrecaoDeArte(it));
+}
+window.modelosEmCorrecaoDeArte = modelosEmCorrecaoDeArte;
+
+/**
  * De quais PEDIDOS sai o trabalho da tela atual: a selecao multipla e o modelo
  * aberto. Os mesmos que o `idsDeNumeracaoDoTrabalho` olha.
  *
@@ -12489,6 +12503,20 @@ window.runImposition = async function (mode, returnBlob = false) {
         return;
     }
 
+    // A arte deste modelo voltou para o designer (02/09/2026). Só o IMPRIMIR
+    // para: gerar o PDF continua liberado, porque é assim que se confere o que
+    // está errado sem gastar papel. Ver `STATUS_CORRIGIR_ARTE`.
+    if (mode === 'print') {
+        const emCorrecao = modelosEmCorrecaoDeArte();
+        if (emCorrecao.length) {
+            toast('Impressão travada — a arte está em correção em: '
+                + emCorrecao.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+                + '. O pedido está no card "Em Arte" esperando o designer; quando ele '
+                + 'marcar o modelo como PRONTO, a impressão libera sozinha.', 'error');
+            return;
+        }
+    }
+
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     let isMultiSelected = false;
@@ -20157,6 +20185,14 @@ function modeloLiberadoParaImprimir(item) {
 
     if (!item) return false;
 
+    // Arte devolvida ao designer nao entra na folha de aproveitamento
+    // (02/09/2026). Pelo mesmo motivo do "ja impresso" logo abaixo: o
+    // aproveitamento nao pode antecipar o que a producao parou. Sem esta
+    // linha, a busca de companhia sugeriria justamente o modelo cuja arte
+    // esta errada -- e a trava do imprimir so apareceria no fim, com a folha
+    // ja montada. Ver `STATUS_CORRIGIR_ARTE`.
+    if (modeloEmCorrecaoDeArte(item)) return false;
+
     const impressao = String(item.status_impressao || item.impressao || '').toUpperCase();
 
     if (impressao.indexOf('IMPRESSO') >= 0) return false;
@@ -26742,6 +26778,9 @@ function getStatusBadge(status) {
         // ── Status oficiais do fluxo de arte ──────────────────────
         'Em Arte':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
         'Em Alteração':        { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
+        // A produção achou erro na arte de um modelo e devolveu ao designer,
+        // mesmo com o pedido já rodando. Ver `STATUS_CORRIGIR_ARTE`.
+        'Corrigir Arte':       { icon: '🎨', bg: '#f59e0b', label: 'Corrigir Arte' },
         'Arte Pronta':         { icon: '✅', bg: '#8b5cf6', label: 'Arte Pronta' },
         'Enviar Arte':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
         'Aguard. Aprovação':   { icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
@@ -26780,9 +26819,60 @@ function getStatusBadge(status) {
 
 
 /**
- * Normaliza o status de impressão para as DUAS opções do painel: Aguardando e
- * Impresso (redução de 28/08/2026 — antes havia também Parcial e Revisão, que
- * nunca foram usados: zero ocorrências no banco).
+ * O modelo parou porque a ARTE está errada e precisa voltar para o designer.
+ *
+ * Pedido do usuário em 02/09/2026. Antes disso, quando a produção descobria um
+ * erro de arte num pedido que já tinha saído da mesa do designer, não havia o
+ * que apertar: o pedido estava em "Pedidos Concluídos" na Lista de Arte — o
+ * único card em que um pedido na produção aparece — e o designer não tinha como
+ * saber que havia trabalho novo ali. O recado ia por fora do sistema.
+ *
+ * Este é o terceiro valor do seletor **Status** da linha do modelo, ao lado de
+ * Aguardando e Impresso. Ele faz três coisas ao mesmo tempo:
+ *
+ *   1. trava a impressão DAQUELE modelo (os outros do pedido seguem);
+ *   2. traz o pedido de volta para o card **Em Arte**, vencendo o
+ *      `pedidoSaiuDaArte` — ver `classificarPedidoNaArte`;
+ *   3. sai sozinho quando o designer marca aquele modelo 🎨 PRONTO, e o modelo
+ *      volta para **Aguardando** — nunca para Impresso, porque a arte mudou e o
+ *      que estava impresso não serve mais (decisão do usuário, 02/09/2026).
+ *
+ * Mora em `pedidos_modelos.status_impressao`, a mesma coluna dos outros dois,
+ * porque é o mesmo seletor: um modelo está numa situação de cada vez.
+ */
+const STATUS_CORRIGIR_ARTE = 'Corrigir Arte';
+
+/**
+ * O recado de tela de quem acabou de marcar (ou desmarcar) "Corrigir Arte".
+ *
+ * Existe porque a marca faz coisas em telas que quem marcou não está vendo: o
+ * pedido muda de card na Lista de Arte e a impressora para para aquele modelo.
+ * Sem dizer isso aqui, o operador marcaria e não veria efeito nenhum.
+ */
+function avisarCorrecaoDeArte(novoStatus) {
+    if (normalizarStatusImpressao(novoStatus) !== STATUS_CORRIGIR_ARTE) return false;
+    toast('Modelo devolvido para o designer — o pedido foi para o card "Em Arte" '
+        + 'e a impressão deste modelo está travada até ele marcar PRONTO.', 'warning');
+    return true;
+}
+window.avisarCorrecaoDeArte = avisarCorrecaoDeArte;
+
+/** Este modelo está parado esperando o designer corrigir a arte? */
+function modeloEmCorrecaoDeArte(item) {
+    if (!item) return false;
+    return normalizarStatusImpressao(item.status_impressao || item.impressao) === STATUS_CORRIGIR_ARTE;
+}
+window.modeloEmCorrecaoDeArte = modeloEmCorrecaoDeArte;
+window.STATUS_CORRIGIR_ARTE = STATUS_CORRIGIR_ARTE;
+
+/**
+ * Normaliza o status de impressão para as TRÊS opções do painel: Aguardando,
+ * Impresso e Corrigir Arte.
+ *
+ * Eram duas até 02/09/2026 (a redução de 28/08 tirou Parcial e Revisão, que
+ * nunca foram usados: zero ocorrências no banco). "Corrigir Arte" entrou depois,
+ * e é de outra natureza — não descreve o que a impressora fez, e sim por que ela
+ * não vai fazer nada até a arte voltar do designer. Ver `STATUS_CORRIGIR_ARTE`.
  *
  * Valor antigo gravado à mão cai em Aguardando, a mesma leitura que o
  * Acabamento sempre fez: meia impressão ou problema é material que ainda não
@@ -26793,6 +26883,10 @@ function normalizarStatusImpressao(status) {
     const s = status.toString().trim().toUpperCase();
     if (s === 'IMPRESSO') return 'Impresso';
     if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
+    // Sem acento e com sublinhado também: o valor viaja em URL, em CSV de
+    // conferência e na mão de quem edita o banco, e um "CORRIGIR_ARTE" lido como
+    // desconhecido destravaria a impressão em silêncio — o oposto do que ele diz.
+    if (s === 'CORRIGIR ARTE' || s === 'CORRIGIR_ARTE' || s === 'CORRIGIR-ARTE') return STATUS_CORRIGIR_ARTE;
     // Legado: Parcial, Revisão e Erro não existem mais como escolha.
     if (s === 'PARCIAL' || s === 'ERRO' || s === 'REVISAO' || s === 'REVISÃO') return 'Aguardando';
     return status;
@@ -26816,7 +26910,10 @@ function calcularStatusImpressaoPedido(modelos) {
 function getStatusImpressaoBadge(status) {
     const map = {
         'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
-        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' }
+        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' },
+        // Âmbar, e não vermelho: não é erro da impressora, é trabalho que voltou
+        // para o designer. Ver `STATUS_CORRIGIR_ARTE`.
+        'Corrigir Arte': { icon: '🎨', cls: 'badge-amber', label: 'Corrigir Arte' }
     };
     const s = map[status] || { icon: '❓', cls: '', label: status };
     return `<span class="badge ${s.cls}">${s.icon} ${s.label}</span>`;
@@ -28534,6 +28631,24 @@ function classificarPedidoNaArte(os) {
         return { statusCalculado: 'CANCELADA', fila: 'concluidos' };
     }
 
+    // "CORRIGIR ARTE" VENCE O `pedidoSaiuDaArte` (02/09/2026).
+    //
+    // É a razão de o status existir. Um pedido que já foi para a produção conta
+    // só no card "Pedidos Concluídos" — é a regra do `pedidoSaiuDaArte`, e ela
+    // está certa para o caso normal. Mas quando a produção descobre que a arte
+    // de um modelo está errada, o trabalho volta a ser do designer, e ele
+    // precisa achar o pedido onde procura trabalho: em **Em Arte**.
+    //
+    // Depois do cancelado de propósito: pedido morto não volta para a fila de
+    // ninguém, nem com modelo marcado. E antes de todo o resto porque a marca é
+    // um recado direto da produção — nenhuma palavra do ERP a substitui.
+    //
+    // Só em Em Arte, e não nos dois cards (decisão do usuário): a conta dos
+    // cards não pode contar o mesmo pedido duas vezes.
+    if (modelosGlobaisOS.some(m => modeloEmCorrecaoDeArte(m))) {
+        return { statusCalculado: 'Corrigir Arte', fila: 'fila' };
+    }
+
     let fila;
     if (pedidoSaiuDaArte(os)) fila = 'concluidos';
     else if (isTotalmenteAprovado) fila = 'aprovados';
@@ -29433,6 +29548,9 @@ function renderOrdens() {
                 // pedidos que estão em arte.
                 'AGUARDANDO': 'Em Arte',
                 'ARTE_EM_ANDAMENTO': 'Em Arte',
+                // Ver `STATUS_CORRIGIR_ARTE`: é um estágio próprio, e não "Em
+                // Arte", senão filtrar por ele não acharia nada.
+                'CORRIGIR ARTE': 'Corrigir Arte',
                 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
                 'APROVADA': 'Aprovada',
                 'APROVADO': 'Aprovada'
@@ -29965,6 +30083,7 @@ function renderOSItens(osId) {
                     <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                         <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                         <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
+                        <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
                     </select>
                 </td>
             </tr>
@@ -29999,6 +30118,7 @@ function renderOSItens(osId) {
                 <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                     <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
+                    <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
                 </select>
             </td>
             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -30197,7 +30317,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             }
         }
 
-        toast(`Impressão atualizada: ${novoStatus}`, 'success');
+        if (!avisarCorrecaoDeArte(novoStatus)) toast(`Impressão atualizada: ${novoStatus}`, 'success');
         renderOrdens();
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
@@ -31525,7 +31645,7 @@ function renderImpOSQueue() {
                             onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
                             📄 PDF
                         </button>
-                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; ${rawStatus.includes('IMPRESSO') ? 'display:none;' : ''}" title="Imprimir este modelo"
+                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; ${rawStatus.includes('IMPRESSO') || modeloEmCorrecaoDeArte(item) ? 'display:none;' : ''}" title="Imprimir este modelo"
                             onclick="event.stopPropagation(); impQueueImprimir('${jsItemId}', '${jsOsId}')">
                             🖨️ Imp.
                         </button>
@@ -31536,6 +31656,7 @@ function renderImpOSQueue() {
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
+                                <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
                             </select>
                         </div>
                     </td>
@@ -31797,6 +31918,12 @@ function impQueueUpdateField(itemId, osId, field, value) {
             }
         }
         renderImpOSQueue();
+        if (avisarCorrecaoDeArte(value)) {
+            // A Lista de Arte reconta os cards e o pedido aparece em "Em Arte"
+            // agora, sem F5 — é o efeito que o operador acabou de ser avisado
+            // que aconteceu.
+            renderOrdens();
+        }
     }
 }
 
@@ -32951,6 +33078,20 @@ function renderAmostrasOSItens(osId) {
                     Abra a numeração no <b>✏️</b> e troque a fonte do elemento por uma que tenha esses caracteres — o seletor de fontes avisa quais não servem para este banco.</span>
                 </div>` : '';
 
+        // A produção devolveu este modelo para corrigir a arte (02/09/2026).
+        // Sem esta faixa o designer abriria o pedido sem saber QUAL modelo
+        // olhar — o card "Em Arte" mostra o pedido, não o modelo. A anotação
+        // do operador, quando existe, está logo acima, no campo de
+        // Observações de Alteração.
+        const faixaCorrigirArte = modeloEmCorrecaoDeArte(item) ? `
+                <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); color: #fbbf24; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 1rem;">🎨</span>
+                    <span>A produção devolveu este modelo para <b>corrigir a arte</b> — a impressão dele está travada.<br>
+                    ${modeloTravado
+                        ? 'Ele está <b>aprovado pelo cliente</b>, então nada aqui muda enquanto isso: primeiro coloque-o em <b>❌ EM ALTERAÇÃO</b> (atendimento, gerência ou administração), corrija a arte e então marque <b>🎨 PRONTO</b>.'
+                        : 'Corrija a arte e clique em <b>🎨 MARCAR PRONTO</b>: o modelo volta para <b>Aguardando</b> na fila da produção e a impressão libera sozinha.'}</span>
+                </div>` : '';
+
         const faixaCelulasRepetidas = repetidas ? `
                 <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.40); color: #fbbf24; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
                     <span style="font-size: 1rem;">⚠️</span>
@@ -32976,6 +33117,7 @@ function renderAmostrasOSItens(osId) {
                             <textarea id="amostra-obs-${item.id}" class="form-control" rows="2" data-libera-aprovado="1" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
+                        ${faixaCorrigirArte}
                         ${faixaModeloTravado}
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
@@ -37468,7 +37610,48 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     }
     
     try {
-        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
+        const gravar = { amostra_status: status, amostra_obs: obs };
+
+        // O PRONTO DO DESIGNER LIBERA A IMPRESSÃO (02/09/2026).
+        //
+        // A outra ponta do "Corrigir Arte": a produção devolveu o modelo, o
+        // designer arrumou a arte e marcou PRONTO — a partir daqui a impressora
+        // pode voltar a trabalhar, sem ninguém ter de lembrar de mexer no
+        // seletor de status na outra tela.
+        //
+        // Volta para **Aguardando**, e nunca para o que era antes: se estava
+        // Impresso, o que saiu era da arte velha e não serve. Decisão do
+        // usuário no dia — por isso não guardamos o status anterior em lugar
+        // nenhum, e o seletor não tem memória a restaurar.
+        //
+        // Só o PRONTO do painel: o APROVAR do link do cliente também chega
+        // aqui, e o cliente não é quem destrava a impressora.
+        const itemParaLiberar = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+        const liberaImpressao = status === 'PRONTO'
+            && state.amostrasContainerId !== 'cliente-amostras-itens-container'
+            && modeloEmCorrecaoDeArte(itemParaLiberar);
+        if (liberaImpressao) gravar.status_impressao = 'Aguardando';
+
+        await saveAmostraToDB(itemId, osId, gravar);
+
+        if (liberaImpressao) {
+            // Os DOIS nomes do mesmo dado, e nos dois lugares em que ele mora:
+            // a linha da fila lê `status_impressao`, o card do pedido lê
+            // `impressao`, e a Lista de Arte lê `state.modelosGlobais`. Deixar
+            // um para trás faria a tela continuar dizendo "Corrigir Arte" até
+            // o próximo F5 — e o pedido continuaria no card errado.
+            if (itemParaLiberar) {
+                itemParaLiberar.status_impressao = 'Aguardando';
+                itemParaLiberar.impressao = 'Aguardando';
+            }
+            const numOs = parseInt(String(osId).replace('vibe_', ''));
+            const globais = (state.modelosGlobais && state.modelosGlobais[numOs]) || [];
+            const globalDoModelo = globais.find(m => String(m.id) === String(itemId));
+            if (globalDoModelo) {
+                globalDoModelo.status_impressao = 'Aguardando';
+                globalDoModelo.impressao = 'Aguardando';
+            }
+        }
         
         // Se for na página do cliente, vamos notificar no chat do pedido!
         const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');

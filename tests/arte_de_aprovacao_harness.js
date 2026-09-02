@@ -199,7 +199,10 @@ const ESTADO = {
     // `await`, e nao disparo em segundo plano: e a espera que garante que a
     // imagem nova subiu ANTES de o modelo virar pronto.
     const pos = trecho.indexOf('await regenerarAmostraDoModelo');
-    const posSalvar = trecho.indexOf('saveAmostraToDB(itemId, osId, { amostra_status: status');
+    // O payload virou a variavel `gravar` em 02/09/2026, para o PRONTO poder
+    // devolver junto o `status_impressao` de um modelo que estava em "Corrigir
+    // Arte". A REGRA guardada aqui e a mesma: regerar antes de gravar.
+    const posSalvar = trecho.indexOf('await saveAmostraToDB(itemId, osId, gravar)');
     ok(pos > 0 && posSalvar > pos, 'e regera ANTES de gravar o status', { pos, posSalvar });
 })();
 

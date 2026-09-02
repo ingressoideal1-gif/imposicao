@@ -1,14 +1,23 @@
-// O Painel de Producao tem so DOIS status de impressao: Aguardando e Impresso.
+// O Painel de Producao tem so DOIS status de IMPRESSAO: Aguardando e Impresso.
 //
 // Pedido do usuario em 28/08/2026, depois da verificacao de consequencias:
 // Parcial e Revisao nunca foram usados (zero ocorrencias no banco) e nada
 // reagia a eles. O meio-caminho de um pedido quem conta e a coluna Progresso.
 //
+// ## O terceiro valor do seletor, que nao e um status de impressao (02/09/2026)
+//
+// O seletor passou a ter tres opcoes: entrou "Corrigir Arte". Ela nao descreve
+// o que a impressora fez -- descreve por que a impressora NAO vai fazer nada
+// ate a arte voltar do designer. O que este arquivo guarda continua sendo o
+// par Aguardando/Impresso: que Parcial e Revisao nao voltem, e que o pedido nao
+// ganhe estado intermediario de impressao. A regra do "Corrigir Arte" tem casa
+// propria em `corrigir_arte_harness.js`.
+//
 // O que estes testes protegem, em uma frase cada:
 //
-//   1. o normalizador so devolve Aguardando ou Impresso -- e os valores
-//      legados (Parcial, Revisao, Erro) caem em Aguardando, a mesma leitura
-//      que o Acabamento sempre fez;
+//   1. o normalizador so devolve Aguardando ou Impresso para o que e status de
+//      impressao -- e os valores legados (Parcial, Revisao, Erro) caem em
+//      Aguardando, a mesma leitura que o Acabamento sempre fez;
 //   2. o status do PEDIDO e Impresso quando TODOS os modelos estao impressos,
 //      e Aguardando no resto -- sem estado intermediario;
 //   3. nenhum seletor de status volta a oferecer Parcial ou Revisao;
@@ -83,7 +92,7 @@ const api = new Function(CODIGO
 
 // --- 3. Nenhum seletor volta a oferecer os status mortos ---------------------
 
-(function seletoresSoComDuasOpcoes() {
+(function seletoresSemOsStatusMortos() {
     const fonte = SCRIPT + PEDIDO;
     ok((fonte.match(/value="Parcial"/g) || []).length === 0,
         'nenhuma <option value="Parcial"> sobrou');

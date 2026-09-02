@@ -5110,6 +5110,11 @@ function renderPedOSQueue() {
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
+                                <!-- O terceiro status (02/09/2026): a produção achou erro na
+                                     arte e devolve o modelo ao designer. Trava a impressão
+                                     DESTE modelo e traz o pedido de volta para o card "Em
+                                     Arte". Ver STATUS_CORRIGIR_ARTE no script.js. -->
+                                <option value="Corrigir Arte" ${typeof modeloEmCorrecaoDeArte === 'function' && modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
                             </select>
                         </div>
                     </td>
@@ -5141,6 +5146,7 @@ function renderPedOSQueue() {
 
 function updatePedImprimirButtonsVisibility() {
     let activeIsImpresso = false;
+    let activeEmCorrecaoDeArte = false;
     if (state.activeOSItem) {
         const itens = state.osItens[state.activeOSItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
@@ -5149,6 +5155,8 @@ function updatePedImprimirButtonsVisibility() {
             if (st.includes('IMPRESSO')) {
                 activeIsImpresso = true;
             }
+            activeEmCorrecaoDeArte = typeof modeloEmCorrecaoDeArte === 'function'
+                && modeloEmCorrecaoDeArte(item);
         }
     }
 
@@ -5163,7 +5171,14 @@ function updatePedImprimirButtonsVisibility() {
     // Enquanto o Refazer tinha botao proprio isso se resolvia sozinho; agora
     // que existe UM par so, e' aqui que a excecao precisa morar, senao a
     // reimpressao ficaria inalcancavel justamente quando serve.
-    const escondeImprimir = activeIsImpresso && !(typeof refazerLigado === 'function' && refazerLigado());
+    //
+    // "CORRIGIR ARTE" NAO TEM EXCECAO DE REFAZER (02/09/2026): o Refazer serve a
+    // folha amassada, em que a arte esta certa. Aqui a arte esta ERRADA, e
+    // reimprimir a faixa sairia com o mesmo erro. Por isso ele soma DEPOIS do
+    // refazer, e nao antes. A trava do `runPedImposition` e' a ultima palavra;
+    // esta so poupa o operador de descobrir clicando.
+    const escondeImprimir = (activeIsImpresso && !(typeof refazerLigado === 'function' && refazerLigado()))
+        || activeEmCorrecaoDeArte;
 
     if (btnImposePrint) {
         btnImposePrint.style.display = escondeImprimir ? 'none' : 'flex';
@@ -5409,6 +5424,20 @@ window.runPedImposition = async function (mode, isRefazer) {
                 + semColuna.map((it, i) => rotuloDoModelo(it, i)).join(', ')
                 + '. Abra o 🔤 Colunas de cada um e aponte a coluna — imprimir agora '
                 + 'sairia com o campo em branco.', 'error');
+            return;
+        }
+    }
+
+    // A gemea da trava de "Corrigir Arte" do runImposition (02/09/2026). Esta e
+    // a tela por onde a gráfica imprime todo dia, entao ela precisa da trava
+    // tanto quanto a outra. So o IMPRIMIR para; o PDF segue liberado.
+    if (mode === 'print' && typeof modelosEmCorrecaoDeArte === 'function') {
+        const emCorrecao = modelosEmCorrecaoDeArte();
+        if (emCorrecao.length) {
+            toast('Impressão travada — a arte está em correção em: '
+                + emCorrecao.map((it, i) => rotuloDoModelo(it, i)).join(', ')
+                + '. O pedido está no card "Em Arte" esperando o designer; quando ele '
+                + 'marcar o modelo como PRONTO, a impressão libera sozinha.', 'error');
             return;
         }
     }
@@ -6972,6 +7001,11 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         }
         renderPedOSQueue();
         updatePedImprimirButtonsVisibility();
+        if (typeof avisarCorrecaoDeArte === 'function' && avisarCorrecaoDeArte(value)) {
+            // A Lista de Arte reconta os cards agora: o pedido aparece em "Em
+            // Arte" sem F5, que é o efeito que o aviso acabou de prometer.
+            if (typeof renderOrdens === 'function') renderOrdens();
+        }
     }
 }
 

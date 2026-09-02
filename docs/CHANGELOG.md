@@ -4,6 +4,76 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-02] — "Corrigir Arte": a produção devolve um modelo ao designer
+
+Pedido do usuário: *"No painel da produção, na edição do modelo, vamos adicionar
+o status 'Corrigir Arte'. Ao selecionar esse status para um modelo, o pedido deve
+listar no painel de arte, card Em Arte, para ser editado pelo designer."* E, logo
+depois: *"Quando o designer marcar pronto e voltar o pedido para o atendimento, o
+pedido deve retornar para o status original, E liberar a impressão no painel da
+produção."*
+
+### O buraco que ele fecha
+
+Um pedido que já saiu para a produção conta **só** no card "Pedidos Concluídos"
+da Lista de Arte — é a regra do `pedidoSaiuDaArte`, e ela está certa para o caso
+normal: o designer não deve ter na frente dele pedido que já é trabalho da
+impressora. O efeito colateral era que, quando a produção descobria um erro de
+arte, não havia o que apertar. O recado ia por fora do sistema, de boca, e o
+designer não tinha como saber que havia trabalho novo naquele pedido.
+
+### Como funciona
+
+O seletor **Status** da linha do modelo ganhou uma terceira opção, ao lado de
+Aguardando e Impresso: **🎨 Corrigir Arte**. Marcada, ela faz três coisas de uma
+vez:
+
+1. **trava a impressão daquele modelo** — o botão IMPRIMIR some da linha e da
+   prévia, e as duas telas de imposição recusam o `print` com a frase que diz
+   como sair da trava. Gerar o **PDF continua liberado**: é assim que se confere
+   o que está errado sem gastar papel;
+2. **traz o pedido de volta para o card "Em Arte"**, vencendo o
+   `pedidoSaiuDaArte`. No card do modelo, uma faixa âmbar diz ao designer que a
+   produção devolveu aquele modelo — o card mostra o pedido, e sem a faixa ele
+   teria de adivinhar qual dos modelos olhar;
+3. **sai sozinha** quando o designer marca aquele modelo **🎨 PRONTO**: o modelo
+   volta para *Aguardando* na fila da produção e a impressão libera, sem ninguém
+   ter de lembrar de mexer no seletor na outra tela.
+
+### As quatro decisões do usuário
+
+Perguntadas e respondidas antes de escrever qualquer linha:
+
+| pergunta | decisão |
+|---|---|
+| o que libera a impressão de volta | o PRONTO **daquele** modelo — cada um se resolve sozinho |
+| o que a marca trava | **só aquele** modelo; os outros do pedido seguem imprimindo |
+| para onde o modelo volta | **Aguardando**, nunca Impresso: a arte mudou, o que saiu não serve |
+| em que card o pedido aparece | **só** em "Em Arte" — a conta dos cards não conta duas vezes |
+
+A terceira é a que dispensa uma coluna nova: como a volta é sempre para
+Aguardando, não há status anterior a guardar. O valor mora em
+`pedidos_modelos.status_impressao`, a mesma coluna dos outros dois, porque é o
+mesmo seletor — um modelo está numa situação de cada vez. A coluna é `text` e
+não tem CHECK; nenhuma migração foi necessária.
+
+### Onde a regra mora
+
+Em `STATUS_CORRIGIR_ARTE`, `modeloEmCorrecaoDeArte` e `modelosEmCorrecaoDeArte`,
+no `script.js`, uma vez só — o `pedido.js` os consulta pelo `window`. Duas
+definições de "este modelo está em correção?" divergiriam no primeiro ajuste, e
+o sintoma seria a tela liberando o botão que a trava recusa.
+
+**Os quatro seletores de status ganharam a opção**, e não só o da tela onde ela é
+marcada: quando um `<select>` não tem opção para o valor guardado, o navegador
+mostra a primeira — o modelo apareceria como "Aguardando" nas outras telas, e a
+impressão pareceria liberada.
+
+Guardado por `tests/corrigir_arte_harness.js` (51 verificações) e
+`tests/test_corrigir_arte.py`.
+
+---
+
 ## [2026-09-02] — O QR "errado" do 21460 era um QR VAZIO: o modelo sozinho levava o banco inteiro
 
 Quarto relato do dia, com uma foto: um QR e o número `01851` embaixo, *"esta
