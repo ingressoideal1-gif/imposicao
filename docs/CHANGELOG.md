@@ -4,6 +4,48 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — Numeração sem elementos volta a imprimir: a folha sai só com a arte
+
+Relato do usuário sobre o pedido **21411**, recusado pelo motor com erro 400:
+**"já existe uma numeração selecionada, apesar de ela não ter elementos de
+numeração, isso é bem comum, nem toda imposição terá elementos de numeração"**.
+
+### O que era
+
+Desde 15/08/2026 (commit `5e1e80e`, presente em todo agente a partir do 1.2.100)
+o `/api/impose` recusava o trabalho sempre que `numeracao_id` vinha preenchido e
+a numeração não tinha **nenhum elemento para desenhar**. A guarda nasceu do
+pedido 20508 — três folhas sem número e sem QR, 62 ingressos perdidos —, mas
+cobria dois casos diferentes com a mesma recusa:
+
+- o objeto da numeração **não chegar** ao motor (defeito de verdade: o painel
+  pede uma numeração e o motor não recebe nenhuma);
+- o objeto **chegar com a lista de elementos vazia** — que é produção legítima.
+
+O segundo travava o operador sem ter o que consertar. A mensagem mandava
+"reabrir o modelo e escolher a numeração no seletor", e ela já estava escolhida:
+uma trava sem saída.
+
+### O que passou a ser
+
+A recusa ficou restrita ao objeto **nulo**. Numeração escolhida com zero
+elementos **segue**, e a folha sai só com a arte — o resultado correto, porque
+nem todo trabalho leva número ou QR.
+
+A contagem de elementos não saiu do código: ela agora produz um **aviso no log**
+(`[impose] numeracao <id> nao tem nenhum elemento: a folha sai so com a arte…`).
+Sem isso, o silêncio que fez a investigação de 15/08 durar seis horas voltaria
+pela outra porta — a diferença é que agora ele é uma linha que aparece, não uma
+linha que falta.
+
+Testes: `tests/test_numeracao_sem_elementos.py` (a folha sai, com a arte colada
+nas quatro peças, e sai **idêntica** à de um trabalho sem numeração nenhuma — o
+que se mede é a tinta, não a árvore de objetos) e
+`tests/test_numeracao_pedida_e_ausente.py`, reescrito para cobrar as duas metades
+da regra: recusar o objeto nulo, e **não** recusar a lista vazia.
+
+---
+
 ## [2026-09-02] — A fila dos dois painéis sai em ordem de prazo de entrega
 
 Pedido do usuário: **"no painel de produção, a lista dos pedidos deve estar em

@@ -230,13 +230,23 @@ que fazer.
    qual dos três falta, em vez de falhar no meio da montagem das páginas com uma
    mensagem que manda procurar no lugar errado.
 3. **Numeração pedida e ausente.** O `/api/impose` recusa o trabalho que traz
-   `numeracao_id` preenchido e **nenhum elemento para desenhar**. Antes ele
+   `numeracao_id` preenchido e o objeto da numeração **nulo**. Antes ele
    desenhava só a arte e não dizia nada: na noite de 14 para 15/08/2026 o pedido
    20508 saiu da impressora três vezes sem número e sem QR, com a prévia
    mostrando os dois — 62 ingressos perdidos. O log passou a registrar
    `[impose] numeracao_id=… objeto=… elements=N`, para a próxima investigação
    começar com um dado na mão em vez de com a ausência de uma linha.
    (`tests/test_numeracao_pedida_e_ausente.py`)
+
+   **O que esta recusa NÃO cobre, por decisão de 03/09/2026:** a numeração que
+   chega com a lista de elementos **vazia**. A guarda tinha sido alargada para
+   isso e travou o pedido 21411, que estava certo — numeração escolhida no
+   seletor sem nenhum elemento é caso comum, porque nem todo trabalho leva
+   número ou QR, e nesse caso a folha sair só com a arte é o resultado correto.
+   Pior, a mensagem mandava o operador escolher a numeração que já estava
+   escolhida: trava sem saída. Hoje esse caso **segue**, e a contagem de
+   elementos só produz um aviso no log.
+   (`tests/test_numeracao_sem_elementos.py`)
 4. **Reimpressão parcial.** Refazer a célula 7 imprime o código do **item 7**,
    mesmo que ele caia na primeira pose da folha compactada. O código segue o
    número do item, nunca a posição na folha.

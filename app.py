@@ -1235,25 +1235,41 @@ async def impose_file(
         #
         # O `numeracao_id` no log é o que faz a PRÓXIMA investigação começar com
         # o dado na mão, em vez de começar pela falta de uma linha.
-        # Duas formas de chegar inútil, e as duas dão a mesma folha em branco:
-        # o objeto não vir, ou vir sem `elements`. A segunda é mais traiçoeira,
-        # porque o diagnóstico abaixo só imprime quando há `elements` — então
-        # ela produzia o MESMO silêncio no log.
+        # Duas formas de chegar, e só UMA é defeito: o objeto não vir, ou vir
+        # com `elements` vazio.
+        #
+        # 03/09/2026, pedido 21411: a recusa cobria as duas, e travou um
+        # trabalho que estava certo. O usuário fechou a questão — uma numeração
+        # escolhida no seletor que não tem nenhum elemento é comum, porque nem
+        # todo trabalho leva número ou QR, e nesse caso a folha sair só com a
+        # arte é o resultado CORRETO, não um acidente. Não havia nada para o
+        # operador consertar: a mensagem o mandava reabrir o modelo e escolher
+        # a numeração que já estava escolhida.
+        #
+        # O que continua parando o trabalho é o objeto nulo — o caso do 20508,
+        # em que o painel pede uma numeração e o motor não recebe nenhuma.
         _n_els = len((numeracao or {}).get("elements") or [])
         print(f"[impose] numeracao_id={data.get('numeracao_id')!r} "
               f"objeto={'veio' if numeracao else 'NAO VEIO'} elements={_n_els} | "
               f"numeracao_2_id={data.get('numeracao_2_id')!r} "
               f"objeto={'veio' if numeracao_2 else 'nao veio'}", flush=True)
 
-        if data.get("numeracao_id") and not _n_els:
-            _falta = "nao chegou" if not numeracao else "chegou SEM elementos"
+        # A numeração vazia não para o trabalho, mas fica DITA no log: se algum
+        # dia uma folha voltar em branco por causa dela, a investigação começa
+        # aqui, em vez de começar pela ausência de uma linha.
+        if data.get("numeracao_id") and numeracao and not _n_els:
+            print(f"[impose] numeracao {data.get('numeracao_id')!r} nao tem nenhum "
+                  "elemento: a folha sai so com a arte, sem numero e sem QR. "
+                  "Isto e permitido — nem todo trabalho leva numeracao.", flush=True)
+
+        if data.get("numeracao_id") and not numeracao:
             raise ValueError(
-                f"Este trabalho pede numeracao, mas ela {_falta} ao motor: o "
-                f"painel mandou numeracao_id={data.get('numeracao_id')!r}. A folha "
-                "sairia so com a arte, sem numero e sem QR — e um ingresso sem "
-                "codigo so falha na portaria do evento, quando ja nao da para "
-                "consertar. Reabra o modelo, escolha a numeracao no seletor e "
-                "gere de novo."
+                "Este trabalho pede numeracao, mas ela nao chegou ao motor: o "
+                f"painel mandou numeracao_id={data.get('numeracao_id')!r} e o "
+                "objeto veio nulo. A folha sairia so com a arte, sem numero e "
+                "sem QR — e um ingresso sem codigo so falha na portaria do "
+                "evento, quando ja nao da para consertar. Reabra o modelo, "
+                "escolha a numeracao no seletor e gere de novo."
             )
 
         # Diagnóstico de elementos na numeração (font, color, posição)
