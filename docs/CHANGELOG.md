@@ -4,6 +4,53 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — A bandeja dupla (capa/miolo) volta a aparecer na tela de Pedido
+
+Relato do usuário: **"em layouts anteriores ao carregar o drive da impressora
+habilitava a opção de escolha de 2 ou mais bandejas... analisar pq perdemos as
+bandejas"**. Capa e contracapa usam bandeja e papel diferentes do miolo, e sem
+a bandeja dupla o operador não tinha como configurar as duas.
+
+### A causa: uma corrida, não um dado perdido
+
+`formatos.has_cover` — a marca "Gerar Capa e Contracapa por Conjunto" — sempre
+esteve certa no banco. O que sumiu foi A HORA em que a tela perguntava por
+ela.
+
+Ao abrir um modelo, `enviarParaPedido` dispara `initPedPrintPanel()` **sem
+esperar**, e só depois aguarda `enviarParaImposicao()`, que é quem de fato põe
+o formato certo em `#ped-formato`. `initPedPrintPanel` faz duas idas à rede
+(hot folders, lista de impressoras) antes de perguntar pela bandeja dupla — e
+por isso, na maioria das vezes, ele perguntava **antes** de
+`enviarParaImposicao` responder, lendo o formato do **modelo anterior** (ou
+nenhum). A bandeja dupla só aparecia quando a rede estava lenta o bastante
+para a corrida virar a favor do lado certo — daí parecer que "funcionava antes
+e parou", sem nenhuma mudança de código ter causado isso.
+
+### O que passou a ser
+
+A pergunta "este formato tem capa?" virou uma função própria,
+`atualizarBandejaCapaMiolo` (script.js), chamada de três lugares em vez de
+uma leitura só, no momento que por acaso estivesse certo:
+
+1. Ao trocar de impressora (`onPedPrinterChange`, como antes).
+2. Ao trocar de formato (`applyPedFormatoDefaults`, no pedido.js) — e é aqui
+   que a corrida se resolve: `enviarParaImposicao` já disparava
+   `dispatchEvent('change')` em `#ped-formato` ao definir o formato do modelo;
+   agora esse evento também reavalia a bandeja, com o valor definitivo.
+3. Como reforço, logo depois do `await enviarParaImposicao(...)` dentro de
+   `enviarParaPedido`, para o caso de o modelo abrir antes de o listener de
+   `change` estar ligado.
+
+Testes: `tests/bandeja_capa_miolo_harness.js` — executa as duas funções de
+verdade contra um DOM fake, incluindo o cenário exato do relato (o painel de
+impressão pergunta primeiro, com o formato errado; o `enviarParaImposicao`
+corrige depois). Confirmado também ao vivo, num navegador de verdade: sem a
+correção, o painel mostra a bandeja simples; com ela, a bandeja dupla aparece
+assim que o formato com capa é resolvido.
+
+---
+
 ## [2026-09-03] — GDI avisa quando falta o win32ui, em vez de estourar traceback
 
 No pedido 21524, ao mandar imprimir, o operador viu um erro cru: **"Erro na

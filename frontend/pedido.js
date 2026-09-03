@@ -124,6 +124,14 @@ function applyPedFormatoDefaults() {
         rotateCb.value = String(rotVal);
         state.rotatePage = rotVal;
     }
+
+    // A bandeja dupla (capa/miolo) depende do MESMO `has_cover` deste
+    // formato — ver `atualizarBandejaCapaMiolo` (script.js). Trocar o
+    // formato sem trocar de impressora não reavaliava isso antes; e é esta
+    // chamada, disparada pelo `dispatchEvent('change')` que o
+    // `enviarParaImposicao` dá em `#ped-formato`, quem corrige a corrida com
+    // `initPedPrintPanel()` descrita lá.
+    atualizarBandejaCapaMiolo();
 }
 window.applyPedFormatoDefaults = applyPedFormatoDefaults;
 
@@ -4198,6 +4206,16 @@ async function enviarParaPedido(itemId, osId) {
     if (typeof enviarParaImposicao === 'function') {
         await enviarParaImposicao(item.id, osId, false);
     }
+
+    // O formato do modelo só está CERTO em #ped-formato a partir daqui — é o
+    // `enviarParaImposicao` quem o resolve. `initPedPrintPanel()`, logo
+    // acima, roda em paralelo sem esperar por isto, e pode já ter perguntado
+    // pela bandeja dupla (capa/miolo) com o formato do modelo ANTERIOR. O
+    // `dispatchEvent('change')` que o `enviarParaImposicao` dá em
+    // `#ped-formato` já corrige isso via `applyPedFormatoDefaults`; esta
+    // chamada é o reforço, para o caso de o listener de `change` não estar
+    // ligado ainda quando o modelo abre pela primeira vez.
+    if (typeof atualizarBandejaCapaMiolo === 'function') atualizarBandejaCapaMiolo();
 
     // --- PREENCHER FAIXA DE NUMERAÇÃO (ped-start / ped-end) ---
     setTimeout(() => {

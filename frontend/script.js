@@ -41718,6 +41718,42 @@ function agendarSalvarAjustesCor() {
     _corSaveTimer = setTimeout(() => salvarCorImpressora(), 400);
 }
 
+/**
+ * Mostra a bandeja simples ou as duas bandejas (capa/miolo), conforme o
+ * formato do modelo aberto tiver "Gerar Capa e Contracapa por Conjunto"
+ * marcado (`has_cover`) — capa e contracapa usam bandeja e papel diferentes
+ * do miolo.
+ *
+ * Extraída de dentro do `onPedPrinterChange` em 03/09/2026, com o usuário
+ * relatando que a bandeja dupla tinha sumido da tela. A causa não era o dado
+ * — `has_cover` continuava certo no formato — e sim A HORA em que esta
+ * pergunta era feita: `onPedPrinterChange` roda dentro de
+ * `initPedPrintPanel()`, que o `enviarParaPedido` (pedido.js) dispara SEM
+ * esperar, antes de `enviarParaImposicao()`, que é quem de fato põe o valor
+ * em `#ped-formato`. Ganhando a corrida — o normal, já que
+ * `initPedPrintPanel` faz duas idas à rede antes de chegar aqui —, esta
+ * pergunta lia o formato do MODELO ANTERIOR (ou nenhum), e a bandeja dupla só
+ * aparecia quando a rede estava devagar o bastante para perder a corrida.
+ *
+ * Por isso ela agora é chamada de TRÊS lugares — ao trocar de impressora (
+ * aqui), ao trocar de formato (`applyPedFormatoDefaults`, no pedido.js), e de
+ * novo logo depois que `enviarParaImposicao` termina de resolver o formato do
+ * modelo (`enviarParaPedido`, também no pedido.js) — em vez de confiar numa
+ * única leitura no momento em que ela por acaso calhasse de estar certa.
+ */
+function atualizarBandejaCapaMiolo() {
+    const fmtId = document.getElementById('ped-formato')?.value;
+    const fmtObj = fmtId ? (state.formatos || []).find(f => String(f.id) === String(fmtId)) : null;
+    const hasCover = fmtObj?.has_cover === true;
+
+    const traySingle = document.getElementById('ped-tray-single');
+    const trayDual = document.getElementById('ped-tray-dual');
+    if (traySingle) traySingle.style.display = hasCover ? 'none' : 'block';
+    if (trayDual) trayDual.style.display = hasCover ? 'block' : 'none';
+    return hasCover;
+}
+window.atualizarBandejaCapaMiolo = atualizarBandejaCapaMiolo;
+
 // Ao mudar impressora no painel lateral → carregar opções do driver
 async function onPedPrinterChange() {
     const sel = document.getElementById('ped-print-printer');
@@ -41793,15 +41829,8 @@ async function onPedPrinterChange() {
     const defaultColor = caps.defaults?.color ?? 2;
     const defaultCopies = caps.defaults?.copies ?? 1;
 
-    // Detectar se o formato ativo tem "Gerar Capa e Contracapa"
-    const fmtId = document.getElementById('ped-formato')?.value;
-    const fmtObj = fmtId ? (state.formatos || []).find(f => String(f.id) === String(fmtId)) : null;
-    const hasCover = fmtObj?.has_cover === true;
-
-    const traySingle = document.getElementById('ped-tray-single');
-    const trayDual = document.getElementById('ped-tray-dual');
-    if (traySingle) traySingle.style.display = hasCover ? 'none' : 'block';
-    if (trayDual) trayDual.style.display = hasCover ? 'block' : 'none';
+    // Bandeja simples ou dupla (capa/miolo): ver `atualizarBandejaCapaMiolo`.
+    atualizarBandejaCapaMiolo();
 
     const trayOptionsHtml = (caps.trays?.length
         ? caps.trays.map(t => `<option value="${t.id}" ${t.id === defaultTray ? 'selected' : ''}>${t.name}</option>`)
