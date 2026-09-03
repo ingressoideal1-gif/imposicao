@@ -35400,6 +35400,42 @@ window.atualizarCaixaDeEscalaDaArte = atualizarCaixaDeEscalaDaArte;
  * do modo PDF prefere continuar usando a própria página da arte a inventar uma
  * célula de outro trabalho.
  */
+/**
+ * O aviso de que o modelo está sem formato, escrito no lugar da peça.
+ *
+ * Regra do usuário (02/09/2026): *"todo modelo exige obrigatoriamente um formato
+ * vinculado"*. Quando nenhum dos três caminhos do `formatoDoModelo` responde, a
+ * tela não inventa medida — diz o que falta e o que fazer, que é a regra de toda
+ * trava deste projeto.
+ *
+ * Escreve em todos os canvas da peça (frente, verso e o do modo PDF), porque
+ * qualquer um deles que ficasse desenhado com a medida anterior continuaria
+ * mentindo na tela.
+ */
+function avisarModeloSemFormato(container, idx, temVerso) {
+    const alvos = [`#amostra-item-canvas-${idx}`, `#amostra-pdf-canvas-${idx}`];
+    if (temVerso) alvos.push(`#amostra-item-canvas-verso-${idx}`);
+    alvos.forEach(sel => {
+        const canvas = container ? container.querySelector(sel) : null;
+        if (!canvas) return;
+        canvas.width = 300;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#b45309';
+        ctx.font = '13px Inter, sans-serif';
+        ctx.fillText('Sem formato para este modelo.', 150, 92);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.fillText('Escolha a Cor ou a Numeração acima —', 150, 116);
+        ctx.fillText('é delas que sai o tamanho da peça.', 150, 134);
+        canvas.style.display = 'block';
+    });
+}
+window.avisarModeloSemFormato = avisarModeloSemFormato;
+
 function formatoDoModelo(item, cor, num) {
     if (!state.formatos || !state.formatos.length) return null;
     if (cor && cor.formato_id) {
@@ -35408,6 +35444,28 @@ function formatoDoModelo(item, cor, num) {
     }
     if (num && num.formato_id) {
         const f = state.formatos.find(x => String(x.id) === String(num.formato_id));
+        if (f) return f;
+    }
+    // O FORMATO DO PRÓPRIO MODELO, POR ÚLTIMO (02/09/2026).
+    //
+    // Regra do usuário: *"todo modelo exige obrigatoriamente um formato
+    // vinculado"*. `pedidos_modelos` não tem coluna de formato — ele chega ao
+    // modelo por três caminhos, e esta função só olhava dois. O terceiro é o
+    // `item.formato_id`, preenchido em memória a partir do produto do ERP (ver
+    // `formatoPadraoId`).
+    //
+    // Sem esta linha, um modelo que ainda não tem cor nem numeração era tratado
+    // como "sem formato", e quem chama caía num palpite: a moldura do
+    // visualizador virava a PÁGINA DA ARTE e mudava junto com o arquivo. Medido
+    // com um modelo de célula 105 x 148: a arte de 104,35 x 158,35 desenhava a
+    // moldura em 104,42 x 158,40, e a de 110,70 x 164,70 em 110,77 x 164,75.
+    //
+    // Por ÚLTIMO de propósito: a cor e a numeração são a escolha explícita do
+    // operador para aquele card, e a célula tem de ser a que elas implicam. O
+    // formato do produto vale enquanto ninguém escolheu — com cor ou numeração
+    // presentes, nada muda.
+    if (item && item.formato_id) {
+        const f = state.formatos.find(x => String(x.id) === String(item.formato_id));
         if (f) return f;
     }
     return null;
@@ -35805,8 +35863,36 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
             ? state.cores.find(c => String(c.id) === String(item.amostra_cor_id)) : null;
         const fmt = formatoDoModelo(item, null, num) || formatoDoModelo(item, cor, null);
         const MM_EM_PT = 2.8346;
-        const larguraCelula = (fmt && fmt.width_mm) ? fmt.width_mm * MM_EM_PT * scale : viewport.width;
-        const alturaCelula = (fmt && fmt.height_mm) ? fmt.height_mm * MM_EM_PT * scale : viewport.height;
+        // A MOLDURA É O FORMATO, NUNCA A ARTE (02/09/2026).
+        //
+        // Aqui havia um plano B: sem formato, a célula virava `viewport.width` —
+        // a página do arquivo. A moldura passava a mudar de tamanho conforme a
+        // arte carregada, e duas faces com arquivos diferentes apareciam em
+        // molduras diferentes. Regra do usuário: o que define o tamanho da janela
+        // é o formato, não a arte, e todo modelo tem um formato vinculado.
+        //
+        // O `formatoDoModelo` agora enxerga também o formato do próprio modelo,
+        // então o caso "não achei formato" ficou restrito a catálogo não
+        // carregado. Nesse caso a janela não desenha: mostrar uma peça de medida
+        // inventada é pior do que dizer que falta — e a frase diz o que fazer.
+        if (!fmt || !fmt.width_mm || !fmt.height_mm) {
+            const ctxAviso = canvas.getContext('2d');
+            canvas.width = 300; canvas.height = 200;
+            ctxAviso.fillStyle = '#f8fafc';
+            ctxAviso.fillRect(0, 0, 300, 200);
+            ctxAviso.fillStyle = '#b45309';
+            ctxAviso.font = '13px Inter, sans-serif';
+            ctxAviso.textAlign = 'center';
+            ctxAviso.fillText('Sem formato para este modelo.', 150, 92);
+            ctxAviso.fillStyle = '#64748b';
+            ctxAviso.font = '12px Inter, sans-serif';
+            ctxAviso.fillText('Escolha a Cor ou a Numeração acima —', 150, 116);
+            ctxAviso.fillText('é delas que sai o tamanho da peça.', 150, 134);
+            canvas.style.display = 'block';
+            return;
+        }
+        const larguraCelula = fmt.width_mm * MM_EM_PT * scale;
+        const alturaCelula = fmt.height_mm * MM_EM_PT * scale;
 
         const esc = escalaDaArteDoModelo(item);
         const larguraArte = viewport.width * esc.h / 100;
@@ -36802,18 +36888,19 @@ async function renderItemAmostraCombinada(idx, osId) {
         preloadAmostraItemPdfElements(num, idx, osId, item);
     }
 
-    let fmt = null;
-    if (cor && cor.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-    }
-    if (!fmt && num && num.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-    }
-    if (!fmt && state.formatos.length > 0) {
-        fmt = state.formatos[0];
-    }
-    if (!fmt) {
-        fmt = { width_mm: 180, height_mm: 50 };
+    // A MESMA CADEIA DO `formatoDoModelo` (02/09/2026): cor, numeração e, por
+    // último, o formato do próprio modelo. Antes o card parava nos dois
+    // primeiros e caía no PRIMEIRO FORMATO DO CATÁLOGO — um formato qualquer, de
+    // outro produto, com outra medida —, o que dava à peça um tamanho que a
+    // impressora nunca faria. Ver `formatoDoModelo`, onde a ordem é explicada.
+    const fmt = formatoDoModelo(item, cor, num);
+    if (!fmt || !fmt.width_mm || !fmt.height_mm) {
+        // Nenhum dos três caminhos deu formato. Antes o card caía no primeiro do
+        // catálogo, e desenhava a peça com a medida de OUTRO produto — o mesmo
+        // tipo de palpite que fazia a janela mostrar um tamanho que a impressora
+        // nunca ia produzir. Melhor dizer que falta, com a saída na frase.
+        avisarModeloSemFormato(container, idx, !!item.verso);
+        return;
     }
 
     const S = 150 / 25.4;

@@ -77,6 +77,63 @@ node) com os arquivos que o motor gera.
 
 ---
 
+## [2026-09-02] — A moldura da janela seguia a arte quando o modelo "não tinha formato"
+
+Regra dada pelo usuário, ao ouvir que havia um caminho de reserva para o caso de
+não haver formato:
+
+> "Todo modelo exige obrigatoriamente um formato vinculado"
+
+E, antes disso, na mesma conversa: *"o que define o tamanho da janela de
+visualização é o formato"* — *"não a arte"*.
+
+### O que a medição mostrou
+
+`pedidos_modelos` **não tem coluna de formato**. Ele chega ao modelo por três
+caminhos, e o `formatoDoModelo()` olhava só dois — a cor e a numeração. O
+terceiro, `item.formato_id`, vem do produto do ERP (ver `formatoPadraoId`) e era
+ignorado. Um modelo que ainda não tem cor nem numeração era tratado como "sem
+formato", e quem chamava caía num palpite.
+
+Medido num Chrome, com um modelo de célula 105 × 148 mm, sem cor e sem
+numeração, em modo PDF:
+
+| arte carregada | moldura desenhada | deveria ser |
+|---|---|---|
+| 104,35 × 158,35 mm | 104,42 × 158,40 mm | 105,00 × 148,00 |
+| 110,70 × 164,70 mm | 110,77 × 164,75 mm | 105,00 × 148,00 |
+
+A moldura seguia o **arquivo** e mudava junto com ele — duas faces com artes de
+tamanhos diferentes apareceriam em molduras diferentes, que é exatamente o que a
+regra proíbe. O outro palpite, no card do modelo, caía no **primeiro formato do
+catálogo**: um formato qualquer, de outro produto.
+
+No banco, 144 dos 467 modelos dos últimos 120 dias não têm cor nem numeração —
+quase todos ainda não configurados (141 sem arte nenhuma). Não é violação da
+regra; é o estado de quem ainda vai ser trabalhado. Mas é gente suficiente para
+o palpite aparecer.
+
+### O conserto
+
+`formatoDoModelo()` passou a olhar também o `item.formato_id`, **por último**: a
+cor e a numeração são a escolha explícita do operador para aquele card, e a
+célula tem de ser a que elas implicam. Com cor ou numeração presentes — 323 dos
+467 — nada muda.
+
+Os dois palpites saíram. Sem formato resolvido, as telas agora **dizem que
+falta**, com a saída na própria frase ("Escolha a Cor ou a Numeração acima — é
+delas que sai o tamanho da peça"), em vez de desenhar uma peça com medida
+inventada.
+
+### Medido depois
+
+Com as duas artes de tamanhos diferentes, a moldura ficou em 104,95 × 147,99 mm
+nas duas — o formato do modelo, sem se mexer com o arquivo.
+
+Guardado por `tests/test_todo_modelo_tem_formato.py`.
+
+---
+
 ## [2026-09-02] — Uma arte que falhava ao baixar ficava fora da folha até o F5
 
 Na folha combinada cada arte é baixada pela URL dentro do próprio desenho da

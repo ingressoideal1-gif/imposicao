@@ -213,14 +213,27 @@ function itemBase(extra) {
             'os campos mostram a escala gravada ao redesenhar');
     }
 
-    // ─── 3. Sem formato cadastrado, a janela volta a ser a pagina da arte ────
+    // ─── 3. Sem formato, a janela DIZ que falta -- nao adivinha ──────────────
+    //
+    // Ate 02/09/2026 esta conferencia travava o contrario: "sem formato, o canvas
+    // continua sendo a pagina da arte (como antes)". O usuario deu a regra que a
+    // derruba -- *"todo modelo exige obrigatoriamente um formato vinculado"*, e
+    // *"o que define o tamanho da janela e o formato, nao a arte"*.
+    //
+    // Com a moldura seguindo o arquivo, duas faces de tamanhos diferentes
+    // apareciam em molduras diferentes. Medido antes: num modelo de celula
+    // 105 x 148, a arte de 104,35 desenhava 104,42 e a de 110,70 desenhava
+    // 110,77. Agora a tela recusa desenhar e diz o que fazer.
     {
         const j = montarJanela({ formatos: [], item: itemBase(), num: null });
         const canvas = j.doc.criar('amostra-pdf-canvas-0');
         await j.fn('os-1_0', 1, 0);
-        ok(perto(canvas.width, ARTE_W_MM * MM * 2.0, 1),
-            'sem formato, o canvas continua sendo a pagina da arte (como antes)',
+        ok(!perto(canvas.width, ARTE_W_MM * MM * 2.0, 1),
+            'sem formato, o canvas NAO vira a pagina da arte',
             'canvas.width=' + canvas.width);
+        ok(canvas.width === 300 && canvas.height === 200,
+            'sem formato, a janela mostra o aviso no lugar da peca',
+            canvas.width + 'x' + canvas.height);
     }
 
     // ─── 4. Valores impossiveis nao chegam ao papel ──────────────────────────
