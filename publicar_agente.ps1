@@ -103,15 +103,31 @@ function Get-LimiteDoBucket {
         [Parameter(Mandatory)][AllowEmptyString()][string]$Chave
     )
     if ([string]::IsNullOrWhiteSpace($Chave)) { return 0 }
-    try {
-        $b = Invoke-RestMethod -Uri "$Projeto/storage/v1/bucket/agent-releases" `
-                               -Headers @{ Authorization = "Bearer $Chave"; apikey = $Chave } `
-                               -TimeoutSec 30
-        if ($b.file_size_limit) { return [int64]$b.file_size_limit }
-        return 0
-    } catch {
-        return 0
+
+    # TRES TENTATIVAS, e nao uma.
+    #
+    # Esta consulta e barata (350 ms num dia normal) e roda DEPOIS de compilar o
+    # executavel e gerar o MSI -- uns dois minutos de trabalho. Com uma tentativa
+    # so, um piscar de rede fazia a funcao devolver 0, o chamador caia no piso
+    # conservador de 50 MB e o release inteiro abortava com "o MSI tem 68 MB e o
+    # teto do bucket e 50 MB" -- uma mensagem que manda mexer no painel do
+    # Supabase quando o teto de la esta em 200 MB e nunca esteve errado.
+    #
+    # Aconteceu em 03/09/2026, num dia de conexao ruim, e o custo foi refazer o
+    # build. O piso continua existindo para o caso de a consulta REALMENTE nao
+    # responder: e melhor recusar do que subir algo que o bucket rejeitaria.
+    for ($tentativa = 1; $tentativa -le 3; $tentativa++) {
+        try {
+            $b = Invoke-RestMethod -Uri "$Projeto/storage/v1/bucket/agent-releases" `
+                                   -Headers @{ Authorization = "Bearer $Chave"; apikey = $Chave } `
+                                   -TimeoutSec 30
+            if ($b.file_size_limit) { return [int64]$b.file_size_limit }
+            return 0
+        } catch {
+            if ($tentativa -lt 3) { Start-Sleep -Seconds 3 }
+        }
     }
+    return 0
 }
 
 function Restore-Versao {
@@ -306,14 +322,53 @@ $nomeObjeto = "NewProd_Setup_v$Versao.msi"
 $urlPublica = "$baseUrl$nomeObjeto"
 $urlUpload  = $urlPublica -replace '/object/public/', '/object/'
 
+# O ENVIO NAO PODE MORRER NO RELOGIO.
+#
+# Ate 03/09/2026 esta linha era um `Invoke-RestMethod -InFile`. Ele funciona
+# enquanto a subida esta rapida, e para de funcionar exatamente quando ela nao
+# esta: por baixo ele usa o `HttpWebRequest`, cujo `ReadWriteTimeout` e de 300
+# segundos e NAO e exposto por parametro nenhum do cmdlet -- `-TimeoutSec` mexe
+# em outro relogio. Num dia de subida a 0,1 MB/s, os 68 MB deste pacote levam
+# uns onze minutos, e a conexao era cortada no meio com "A conexao subjacente
+# estava fechada: Erro inesperado em um envio". Aconteceu duas vezes seguidas
+# em 03/09/2026, e a mensagem nao diz que o problema e tempo -- parece rede
+# caindo, e a tentacao e culpar o Supabase.
+#
+# O `HttpClient` resolve porque tem UM relogio, ajustavel, para a requisicao
+# inteira. Uma hora e folga de sobra para 68 MB ate na pior subida ja vista
+# aqui, e continua sendo um teto: envio travado nao fica pendurado para sempre.
+#
+# O arquivo vai como STREAM, e nao lido para a memoria: `[IO.File]::OpenRead`
+# mais `StreamContent`. Ler 68 MB para um array de bytes funcionaria, mas e
+# desperdicio numa maquina que esta compilando MSI ao mesmo tempo.
 Write-Host "  Enviando o MSI ($mb MB)..." -ForegroundColor Cyan
+Add-Type -AssemblyName System.Net.Http
+$http = $null
+$conteudo = $null
+$fluxo = $null
 try {
-    Invoke-RestMethod -Method Post -Uri $urlUpload `
-        -Headers @{ Authorization = "Bearer $chave"; "Content-Type" = "application/octet-stream" } `
-        -InFile $msi | Out-Null
+    $http = [System.Net.Http.HttpClient]::new()
+    $http.Timeout = [TimeSpan]::FromHours(1)
+    $http.DefaultRequestHeaders.Authorization =
+        [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $chave)
+
+    $fluxo = [System.IO.File]::OpenRead($msi)
+    $conteudo = [System.Net.Http.StreamContent]::new($fluxo)
+    $conteudo.Headers.ContentType =
+        [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/octet-stream')
+
+    $resposta = $http.PostAsync($urlUpload, $conteudo).GetAwaiter().GetResult()
+    if (-not $resposta.IsSuccessStatusCode) {
+        $corpo = $resposta.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        throw "$([int]$resposta.StatusCode) $($resposta.ReasonPhrase) - $corpo"
+    }
 } catch {
     Abortar "O envio do MSI falhou: $($_.Exception.Message)" `
             "Se disser que o objeto ja existe, NAO sobrescreva — suba a versao. O CDN continuaria servindo o binario antigo."
+} finally {
+    if ($conteudo) { $conteudo.Dispose() }
+    if ($fluxo)    { $fluxo.Dispose() }
+    if ($http)     { $http.Dispose() }
 }
 
 # ─── 7. Conferir baixando pela URL publica ───────────────────────────────────
@@ -324,7 +379,10 @@ try {
 Write-Host "  Baixando de volta para conferir o sha256..." -ForegroundColor Cyan
 $baixado = Join-Path $env:TEMP "conferencia_$nomeObjeto"
 try {
-    Invoke-WebRequest -Uri $urlPublica -OutFile $baixado -UseBasicParsing
+    # `-TimeoutSec` alto pelo mesmo motivo do envio acima, com a diferenca de
+    # que aqui uma falha custa o numero da versao: o MSI ja esta no bucket, e o
+    # nome nunca se reaproveita.
+    Invoke-WebRequest -Uri $urlPublica -OutFile $baixado -UseBasicParsing -TimeoutSec 3600
 } catch {
     Abortar "Nao consegui baixar o MSI recem-enviado: $($_.Exception.Message)" `
             "NAO publique o manifesto. Ele apontaria para um arquivo inacessivel."

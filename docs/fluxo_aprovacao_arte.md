@@ -17,16 +17,28 @@ flowchart TD
     E --> F["Link do cliente é gerado automaticamente"]
     F --> G["Operador envia link ao cliente"]
     G --> H["Cliente acessa o link"]
-    H --> I{"Status do pedido?"}
-    I -- "Enviar ARTE" --> J["Exibe janelas de aprovação com artes"]
-    I -- Outros --> K["Exibe mensagem informativa"]
+    H --> I{"A arte já foi decidida?"}
+    I -- Não --> J["Abre na aba ARTE, com os cartões de aprovação"]
+    I -- Sim --> Q["Abre na primeira aba PENDENTE (Entrega ou Nota)"]
     J --> L{"Decisão do cliente"}
-    L -- Aprovar --> M["Status: ARTE_APROVADA"]
-    L -- Alterar --> N["Status: ARTE_EM_CORRECAO"]
-    M --> O["Operador vê aprovação no painel"]
+    L -- Aprovar --> M["Artes APROVADAS + vai para a aba Entrega"]
+    L -- Alterar --> N["Status: Em Alteração"]
     N --> P["Operador corrige artes e reenvia"]
     P --> E
+    M --> R{"Conferiu entrega e nota?"}
+    Q --> R
+    R -- Não --> S["Cartão âmbar na Arte, sinal nas abas,
+    e marcador para a gráfica no painel"]
+    S --> R
+    R -- Sim --> T["FINALIZAR: entrega_dados = APROVADO
+    e o chat do parceiro diz PEDIDO COMPLETO"]
+    T --> O["Operador vê o pedido fechado no painel"]
 ```
+
+> [!IMPORTANT]
+> **Aprovar a arte NÃO fecha o pedido.** Faltam as duas conferências, e elas são
+> a parte que o cliente mais deixa pelo caminho — ver
+> *"O cliente que aprova a arte e some"*, mais abaixo.
 
 ---
 
@@ -161,8 +173,19 @@ etapas. Cada etapa é um **botão que abre a aba dela**, com o piso de toque de 
 | estado da etapa | quando |
 |---|---|
 | **concluída** (verde, visto) | a arte por `artesJaAprovadas()`; entrega e nota quando a decisão não é `null` |
-| **agora** (azul) | é a aba aberta |
-| **pendente** (cinza) | o resto |
+| **pendente** (âmbar, relógio) | o resto |
+| *(contorno)* | a aba aberta — some o azul, fica só o `box-shadow` de `.portal-passo-aqui` |
+
+> **Âmbar desde 03/09/2026, e antes era cinza.** Duas mudanças na mesma linha:
+> a cor passou a ser a MESMA do ponto de pendência na barra de abas (eram duas
+> línguas para o mesmo estado, na mesma tela), e o azul de "você está aqui"
+> saiu — ele vencia o cinza justamente na etapa aberta, que é a que mais precisa
+> pedir ação. Onde o cliente está, a barra de abas já diz.
+
+> **Cada etapa também traz o VERBO**, embaixo do nome: *"Entrega / Conferir"*,
+> *"Nota / Conferir"*, *"Arte / Aprovada"* (`acao` e `pronto` em
+> `etapasDoPedido`). "Entrega" sozinho diz de que a etapa trata, não que ela
+> espera alguém.
 
 > **Pedir alteração também conta como decidir.** `false` em `portalConfirmacoes` é
 > uma decisão: o pedido do cliente já está registrado e vai ao atendimento. Só
@@ -589,6 +612,70 @@ Dois detalhes que só aparecem na tela:
 
 A pausa de 1,2 s é de propósito: o card acabou de ficar verde, e trocar a tela no
 mesmo instante faria o cliente perder de vista a própria ação.
+
+---
+
+## O cliente que aprova a arte e some (03/09/2026)
+
+Medido no banco em 03/09/2026, nos 88 links ativos:
+
+| | |
+|---|---|
+| pedidos com a arte já decidida e a conferência de dados **nunca feita** | **17** |
+| desses, que abriram o link **2 vezes ou mais** | **14** (um deles 50 vezes) |
+| taxa desde que o Portal existe | **6 de 14 — 43%** |
+| links que já pediram correção de dados (`entrega_dados = CORRIGIR`) | **0 de 88** |
+
+Não foi falta de oportunidade. O motivo estava na tela:
+
+- **O link abria sempre na aba da Arte.** `montarPortal` só respeitava um `#hash`,
+  e o link colado no WhatsApp não tem hash.
+- **A primeira dobra dava tranquilidade.** Para quem já aprovou, o cartão maior
+  dizia *"Pedido em produção — suas artes já estão na impressora"*. O que pedia
+  ação eram dois chips cinza e dois pontos âmbar de 9px no rodapé.
+- **A saída era uma frase, não um botão.** *"Confira o prazo e o endereço na aba
+  Entrega"* não tem alvo de toque.
+
+Endereço errado é frete de volta; CNPJ errado é nota refeita. Os dois só se
+descobrem depois de o material estar impresso.
+
+### O que mudou
+
+| # | onde | o quê |
+|---|---|---|
+| 1 | `cartaoDoQueFaltaNaArte` (`cliente.js`) | cartão **âmbar** no topo da aba da Arte, ACIMA do cartão de status, com o botão até a aba pendente |
+| 2 | `secaoDeAbertura` (`cliente-shell.js`) | o link abre na primeira aba pendente, e a página **avisa** que abriu sozinha, com *"Ver minha arte"* ao lado |
+| 3 | `desenharTrilha` + `.portal-passo-pendente` | pendente em âmbar, com o verbo da etapa |
+| 4 | `botaoDeContinuarNaArte` | *"Continuar: conferir entrega"* no FIM da aba da Arte |
+| 5 | `mensagemDaAprovacaoDeArte` | o chat do parceiro para de dizer "PEDIDO COMPLETO" quando só a arte foi aprovada |
+| 6 | `avisoDeDadosNaoConferidosHtml` (`script.js`) | marcador para a gráfica no Painel de Produção e na Lista de Arte |
+| 7 | `.cliente-header` / `.portal-trilha` | cabeçalho apertado de 178px para 163px |
+
+> [!CAUTION]
+> **A abertura automática decide pelo STATUS, nunca pela contagem de modelos.**
+> É a mesma armadilha que o `seguirSozinhoSeAprovouTudo` documenta logo acima:
+> existem pedidos com todos os modelos em `APROVADA` cujo status continua em
+> `Aguard. Aprovação`, e decidir pela contagem levaria o cliente para longe da
+> arte antes de ele tê-la visto. A regra aqui é mais estreita do que a de lá —
+> só `chave === 'aprovado' || chave === 'producao'`.
+>
+> A diferença que torna isto seguro: **trocar de aba não aprova nada**. O salto
+> automático de `seguirSozinhoSeAprovouTudo` grava; este só muda o que está
+> visível.
+
+> **O marcador do painel não acende sem link do cliente.** Sem linha em
+> `pedidos_artes` nunca houve link, é pedido que a gráfica tocou por dentro, e
+> cobrar dele uma conferência que ninguém pediu seria alarme falso na tela
+> inteira. Quem cria a linha é o painel, ao gerar o link
+> (`garantirLinhaDePedidoArte`).
+
+> **`.portal-pendencia`, e não `.portal-falta`.** A segunda já existe e pertence
+> ao cartão EM LINHA da aba de Entrega (`display: flex`). O cartão novo chegou a
+> nascer com ela e saiu com título, texto e botão lado a lado, cada um numa
+> coluna estreita. Está travado em `tests/test_portal_pendencia.py`.
+
+Os testes estão em `tests/portal_pendencia_harness.js` (44 verificações, lendo o
+código de produção) e `tests/test_portal_pendencia.py`.
 
 ---
 
