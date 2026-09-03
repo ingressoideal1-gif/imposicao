@@ -990,6 +990,7 @@ class ImpositionConfig:
                  refazer_ate: int = 0,
                  refazer_set: int = 1,
                  refazer_celulas: list = None,
+                 refazer_repetir: bool = False,
                  pedido=None,
                  modelo=None,
                  pool_qr=None,
@@ -1123,9 +1124,17 @@ class ImpositionConfig:
         # compactada na ordem da lista, e ordenar aqui trocaria de lugar o que o
         # operador viu na prévia enquanto digitava. `dict.fromkeys` tira as
         # repetidas preservando a ordem de entrada.
-        self.refazer_celulas = list(dict.fromkeys(
+        #
+        # REPETIR DE PROPÓSITO (03/09/2026). A Montagem duplica uma célula — a
+        # mesma peça impressa duas vezes, lado a lado — e para isso liga
+        # `refazer_repetir`: a lista entra como veio, repetições incluídas. O
+        # Pedido não manda a chave e continua deduplicando, porque lá o campo
+        # é digitado às pressas e um "1,1,6" é engano, não pedido.
+        validas = [
             int(c) for c in (refazer_celulas or []) if str(c).strip().isdigit() and int(c) >= 1
-        ))
+        ]
+        self.refazer_repetir = bool(refazer_repetir)
+        self.refazer_celulas = validas if self.refazer_repetir else list(dict.fromkeys(validas))
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas

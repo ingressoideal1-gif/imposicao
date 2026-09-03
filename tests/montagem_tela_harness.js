@@ -2,8 +2,9 @@
 //
 // O harness do núcleo (montagem_harness.js) cobra a tradução das posições, que
 // é onde mora a correção. Este cobra o que só aparece DESENHANDO: se a lista, o
-// selo, a trava e a prévia saem, se cabem na tela, e se o estado vazio explica
-// a tela para quem chega com uma folha estragada na mão.
+// selo, a trava e a folha saem, se cabem na tela, se o estado vazio explica a
+// tela para quem chega com uma folha estragada na mão — e, desde 03/09/2026,
+// se os três gestos do kanban (arrastar, repetir, tirar) fazem o que dizem.
 //
 // Usa a view DE VERDADE, recortada do index.html, o style.css de verdade e as
 // funções de verdade do montagem.js. Nada sai desta máquina.
@@ -41,11 +42,22 @@ function extrair(nome) {
     return MTG.slice(i, fim + 2);
 }
 
+// As cores das células são uma constante do arquivo, não uma função.
+function extrairConst(nome) {
+    const i = MTG.indexOf('\nconst ' + nome + ' ');
+    if (i < 0) throw new Error('nao achei a constante ' + nome);
+    const fim = MTG.indexOf(';\n', i);
+    return MTG.slice(i, fim + 2);
+}
+
 const FUNCOES = [
     'posicoesDaMontagem', 'totalDeItensDoModelo', 'porQueNaoCabeNaMontagem',
+    'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo', 'modelosComCelula',
     'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
-    'grupoDaMontagem', '_mtgCelulasPorFolha', 'renderMontagem', 'limparMontagem',
-    'removerDaMontagem', '_mtgHtmlDaRecusa', 'payloadDaMontagem', '_mtgNumeracaoDoItem',
+    'duplicarCelula', 'tirarCelula', 'moverCelula', 'celulasForaDaTiragem',
+    'modoDaFolhaDaMontagem', '_mtgCelulasPorFolha', '_mtgNumeroDoPedido',
+    'renderMontagem', 'limparMontagem', 'removerDaMontagem', '_mtgHtmlDaRecusa',
+    '_mtgHtmlDaCelula', 'payloadDaMontagem', '_mtgNumeracaoDoItem',
     // A resolucao do formato: o caminho que faltava na primeira versao.
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     // O numero do modelo impresso em cada item (29/08/2026).
@@ -58,6 +70,9 @@ const FUNCOES = [
     'gerarPdfDaMontagem',
     // A linha da lista como caminho de volta ao modelo (29/08/2026).
     '_mtgLinhaAtiva', 'retomarDaMontagem', 'onMontagemModeloChange',
+    // O kanban (03/09/2026).
+    'duplicarCelulaDaMontagem', 'removerCelulaDaMontagem', 'moverCelulaDaMontagem',
+    '_mtgLigarArrasto',
 ];
 
 // Três pedidos, quatro modelos, todos do mesmo formato/cor/saída/face.
@@ -92,7 +107,10 @@ const PECAS = [
 
     await aba.setContent(
         `<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head>` +
-        `<body><div class="main-content" style="padding:24px;">${recortarView()}</div></body></html>`,
+        // O badge do menu mora fora da view (na barra lateral); entra aqui como um
+        // elemento so', para a contagem de celulas dele ser cobrada tambem.
+        `<body><span id="badge-montagem" style="display:none;">0</span>`
+        + `<div class="main-content" style="padding:24px;">${recortarView()}</div></body></html>`,
         { waitUntil: 'load' });
 
     await aba.evaluate(() => {
@@ -107,12 +125,12 @@ const PECAS = [
     // do Chrome, longe da causa.
     const PRELUDIO = [
         "const state = {",
-        "  montagem: { grupos: [], pedidoSel: null, modeloSel: null },",
+        "  montagem: { celulas: [], modelos: [], pedidoSel: null, modeloSel: null },",
         // O catalogo que a resolucao do formato consulta. O produto 501 e' o
         // caminho de verdade: `formato_id` nao existe em pedidos_modelos, e a
         // Montagem resolve pelo produto do ERP.
         "  formatos: [{ id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm',",
-        "               cols: 1, rows: 10, default_saida_id: 'S1' }],",
+        "               cols: 1, rows: 10, default_saida_id: 'S1', default_rotate_page: true }],",
         "  produtosGlobais: [{ id_produto: 501, id_formato: 77 }],",
         "  saidas:   [{ id: 'S1', nome: 'SRA3' }],",
         "  numeracoes: [], osItens: {}, ordens: [],",
@@ -121,9 +139,12 @@ const PECAS = [
         "  return String(s == null ? '' : s).replace(/[&<>\"']/g, function (c) {",
         "    return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; });",
         "}",
-        "function fatiaCsvDoItem() { return null; }",
+        "function fatiaCsvDoItem(i, n) { return n.csv_data; }",
         "function resolverNumeracaoParaModelo(n) { return n; }",
         "function numeracaoIdDoItem(i) { return i.amostra_num_id; }",
+        "function numeroDoPedidoDoItem(osId) { return ({ a: '21202', b: '21188', c: '20990' })[osId] || null; }",
+        "function modoDeVersoDoModelo(it) { return (it && it.verso_tipo && it.verso_tipo !== 'Frente') ? 'duplex' : 'front'; }",
+        "function rotacaoDaFolhaDoFormato(f) { return f && f.default_rotate_page ? 90 : 0; }",
         "function onMontagemPosicoesChange() {}",
         // O de verdade consulta o banco (loadOSItens). Aqui ele so' faz o que a
         // tela ve': guarda o pedido escolhido e enche o seletor de modelos.
@@ -150,6 +171,11 @@ const PECAS = [
         "window.pecaDaMontagem = pecaDaMontagem;",
         "window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;",
         "window.posicoesCombinadas = posicoesCombinadas;",
+        "window.duplicarCelulaDaMontagem = duplicarCelulaDaMontagem;",
+        "window.removerCelulaDaMontagem = removerCelulaDaMontagem;",
+        "window.moverCelulaDaMontagem = moverCelulaDaMontagem;",
+        "window.celulasDoModelo = celulasDoModelo;",
+        "_mtgLigarArrasto();",
         // O ITEM como ele chega do banco: SEM formato_id. Quem resolve o
         // formato e' o `pecaDaMontagem`, pelo produto — que e' o caminho que
         // faltava e derrubou a primeira versao em producao.
@@ -159,15 +185,22 @@ const PECAS = [
         "  amostra_num_id: null, arte_url: 'x.pdf', num_inicial: 1 }; };",
         "window.__itensPorPedido = { a: ['1000565', '1000589'], b: ['1000412'], c: ['1000203'] };",
         "window.__montar = function (pecas) {",
-        "  state.montagem.grupos = pecas.map(function (p) { return {",
+        "  state.montagem.modelos = pecas.map(function (p) { return {",
         "    osId: p.osId, itemId: p.id, pedidoNumero: p.pedido, nome: p.nome,",
-        "    qtd: p.qtd, posicoes: p.pos.slice(),",
-        "    peca: pecaDaMontagem(window.__item(p)) }; });",
+        "    qtd: p.qtd, peca: pecaDaMontagem(window.__item(p)) }; });",
+        "  state.montagem.celulas = [];",
+        "  pecas.forEach(function (p) { p.pos.forEach(function (pos) {",
+        "    state.montagem.celulas.push({ osId: p.osId, itemId: p.id, pos: pos }); }); });",
         "  renderMontagem();",
         "};",
+        // As artes 'prontas' de mentira, alinhadas com os modelos.
+        "window.__artes = function () { return state.montagem.modelos.map(function (m) {",
+        "  return { qtd: m.qtd, _tiragem: m.qtd, modelo: m.itemId, pedido: m.pedidoNumero, nome: '' }; }); };",
+        "window.__rotulos = function () { return Array.from(document.querySelectorAll('.mtg-celula-rotulo'))",
+        "  .map(function (e) { return e.textContent.trim(); }); };",
     ].join('\n');
 
-    await aba.evaluate(PRELUDIO + '\n' + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
+    await aba.evaluate(PRELUDIO + '\n' + extrairConst('_MTG_TONS') + '\n' + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
 
     // ── 2. O estado vazio se explica ────────────────────────────────────────
     await aba.evaluate(() => renderMontagem());
@@ -179,8 +212,6 @@ const PECAS = [
             temGarantia: !!document.querySelector('.mtg-garantia'),
             travaEscondida: document.getElementById('mtg-trava').style.display === 'none',
             pdfTravado: document.getElementById('mtg-btn-pdf').disabled,
-            badgeEscondido: (document.getElementById('badge-montagem') || {}).style === undefined
-                ? true : true,
         };
     });
     ok(vazio.existe, 'a tela vazia mostra o convite, e não uma tabela sem linha', vazio);
@@ -208,9 +239,14 @@ const PECAS = [
             travaTexto: trava.textContent.replace(/\s+/g, ' ').trim(),
             resumo: document.getElementById('mtg-resumo').textContent,
             celulas: document.querySelectorAll('.mtg-celula').length,
+            arrastaveis: document.querySelectorAll('.mtg-celula[draggable="true"]').length,
             vazias: document.querySelectorAll('.mtg-celula-vazia').length,
+            folhas: Array.from(document.querySelectorAll('.mtg-folha-titulo')).map(e => e.textContent.trim()),
             folhaNum: document.getElementById('mtg-folha-num').textContent,
             pdfTravado: document.getElementById('mtg-btn-pdf').disabled,
+            badge: document.getElementById('badge-montagem').textContent,
+            repetir: document.querySelectorAll('.mtg-celula-btn:not(.mtg-celula-tirar)').length,
+            tirar: document.querySelectorAll('.mtg-celula-tirar').length,
         };
     });
     ok(cheio.linhas === 4, 'quatro modelos, quatro linhas', cheio);
@@ -225,10 +261,83 @@ const PECAS = [
     ok(/Triband/.test(cheio.travaTexto) && /Azul Celeste/.test(cheio.travaTexto)
         && /SRA3/.test(cheio.travaTexto) && /Só frente/.test(cheio.travaTexto),
        'e diz as QUATRO coisas que a folha aceita', cheio.travaTexto);
-    ok(cheio.celulas === 10, 'a prévia desenha uma folha inteira do formato (10 células)', cheio);
-    ok(cheio.vazias === 0, 'e a primeira folha está cheia — a sobra cai na última', cheio);
-    ok(/FOLHA 1 DE 2/.test(cheio.folhaNum), 'e diz de quantas folhas ela é', cheio);
+    // TODAS as células, folha a folha: é aqui que o operador mexe nelas, e uma
+    // célula da segunda folha que não aparecesse seria uma célula sem alcance.
+    ok(cheio.arrastaveis === 14, 'a folha desenha TODAS as 14 células, arrastáveis', cheio);
+    ok(cheio.vazias === 6 && cheio.celulas === 20, 'e as 6 vazias, só na última folha', cheio);
+    ok(cheio.folhas.join('|') === 'Folha 1 de 2|Folha 2 de 2', 'cada folha tem o seu título', cheio.folhas);
+    ok(/2 FOLHAS · 14 CÉLULAS/.test(cheio.folhaNum), 'e o cabeçalho diz folhas e células', cheio.folhaNum);
+    ok(cheio.repetir === 14 && cheio.tirar === 14, 'cada célula tem o seu ⧉ e o seu ×', cheio);
     ok(!cheio.pdfTravado, 'com células, o Gerar PDF libera');
+    ok(cheio.badge === '14', 'o badge do menu conta as células', cheio.badge);
+
+    // ── 3a. O KANBAN: repetir, tirar, arrastar (03/09/2026) ─────────────────
+    const kanban = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const r = {};
+        // ⧉ na primeira célula (21202 · 1000565 · #1).
+        document.querySelector('.mtg-celula-btn:not(.mtg-celula-tirar)').click();
+        r.depoisDeRepetir = window.__rotulos().slice(0, 3);
+        r.chipRepetido = Array.from(document.querySelectorAll('.mtg-pos')).map(e => e.textContent.trim())[0];
+        r.celulasDaLinha = document.querySelectorAll('#mtg-lista .data-table tr')[1].children[4].textContent.trim();
+        r.badge = document.getElementById('badge-montagem').textContent;
+        r.combinadas = posicoesCombinadas(state.montagem.celulas, state.montagem.modelos).slice(0, 3).join(',');
+        // × na cópia.
+        document.querySelectorAll('.mtg-celula-tirar')[1].click();
+        r.depoisDeTirar = window.__rotulos().slice(0, 3);
+        r.linhasDepoisDeTirar = document.querySelectorAll('#mtg-lista .data-table tr').length - 1;
+        // × em TODAS as células do STAFF PALCO (pedido b): a linha dele some.
+        const antes = state.montagem.celulas.length;
+        for (let k = 0; k < 3; k++) {
+            const i = state.montagem.celulas.findIndex(c => c.osId === 'b');
+            removerCelulaDaMontagem(i);
+        }
+        r.tiradas = antes - state.montagem.celulas.length;
+        r.linhasSemB = document.querySelectorAll('#mtg-lista .data-table tr').length - 1;
+        r.modelosSemB = state.montagem.modelos.map(m => m.osId).join('');
+        return r;
+    }, PECAS);
+    ok(kanban.depoisDeRepetir.join('|') === '21202 · 1000565 · #1|21202 · 1000565 · #1|21202 · 1000565 · #6',
+       '⧉ repete a célula LOGO ABAIXO dela, igual', kanban.depoisDeRepetir);
+    ok(kanban.chipRepetido === '#1 ×2', 'e a lista diz que a posição sai duas vezes', kanban.chipRepetido);
+    ok(kanban.celulasDaLinha === '4' && kanban.badge === '15', 'a célula repetida conta na linha e no badge', kanban);
+    ok(kanban.combinadas === '1,1,6', 'e vai duas vezes ao motor, com o mesmo índice', kanban.combinadas);
+    ok(kanban.depoisDeTirar.join('|') === '21202 · 1000565 · #1|21202 · 1000565 · #6|21202 · 1000565 · #22',
+       '× tira SÓ aquela célula — as outras do modelo ficam', kanban.depoisDeTirar);
+    ok(kanban.linhasDepoisDeTirar === 4, 'e o modelo continua na lista enquanto tem célula', kanban);
+    ok(kanban.tiradas === 3 && kanban.linhasSemB === 3 && kanban.modelosSemB === 'aac',
+       'tirar a última célula de um modelo tira o modelo da lista — e do deslocamento', kanban);
+
+    // O arrasto, com os eventos de verdade do HTML5 no container.
+    const arrasto = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const antes = window.__rotulos().slice(0, 4);
+        const cels = () => document.querySelectorAll('.mtg-celula[draggable="true"]');
+        const disparar = (el, tipo) => el.dispatchEvent(new Event(tipo, { bubbles: true, cancelable: true }));
+        disparar(cels()[0], 'dragstart');
+        const marcadaNaOrigem = cels()[0].classList.contains('mtg-celula-arrastando');
+        disparar(cels()[3], 'dragover');
+        const marcadaNoAlvo = cels()[3].classList.contains('mtg-celula-alvo');
+        disparar(cels()[3], 'drop');
+        const depois = window.__rotulos().slice(0, 4);
+        const combinadas = posicoesCombinadas(state.montagem.celulas, state.montagem.modelos).slice(0, 3).join(',');
+        // Soltar numa célula VAZIA manda para o fim: a que está em primeiro
+        // (agora a #6) vai para a última posição da folha.
+        const movida = window.__rotulos()[0];
+        disparar(cels()[0], 'dragstart');
+        disparar(document.querySelector('.mtg-celula-vazia'), 'drop');
+        const ultimo = window.__rotulos().slice(-1)[0];
+        const sobrou = document.querySelectorAll('.mtg-celula-arrastando, .mtg-celula-alvo').length;
+        return { antes, depois, marcadaNaOrigem, marcadaNoAlvo, movida, ultimo, sobrou, combinadas };
+    }, PECAS);
+    ok(arrasto.marcadaNaOrigem && arrasto.marcadaNoAlvo,
+       'enquanto arrasta, a origem e o alvo ficam marcados — o operador vê onde vai cair', arrasto);
+    ok(arrasto.depois.join('|') === [arrasto.antes[1], arrasto.antes[2], arrasto.antes[3], arrasto.antes[0]].join('|'),
+       'soltar a 1ª célula sobre a 4ª a põe em quarto lugar', arrasto);
+    ok(arrasto.combinadas === '6,22,3340', 'e a ordem nova é a que vai ao motor — cada célula com o seu índice', arrasto.combinadas);
+    ok(arrasto.ultimo === arrasto.movida && /1000565 · #6$/.test(arrasto.ultimo),
+       'soltar numa célula vazia manda a célula para o fim da folha', { movida: arrasto.movida, ultimo: arrasto.ultimo });
+    ok(arrasto.sobrou === 0, 'e nenhuma marca de arrasto fica na tela depois');
 
     // ── 3b. A TIRAGEM de cada modelo aparece na lista ───────────────────────
     //
@@ -254,32 +363,27 @@ const PECAS = [
 
     // ── 3c. O número do modelo impresso em cada item ────────────────────────
     //
-    // Mesmo conceito das "Opções do modelo" do Pedido, e a mesma mecânica: o
-    // motor imprime `arte["nome"]`, e esse campo é o ÚNICO que decide se sai.
-    const numero = await aba.evaluate(pecas => {
-        window.__montar(pecas);
+    // Mesmo conceito das "Opções do modelo" do Pedido. Desde 03/09/2026 quem
+    // escreve o `nome` de cada arte é o construtor da tela do Pedido
+    // (`arteParaOMotor`), a partir de `_imprimirNumero` — e quem preenche
+    // `_imprimirNumero` com a caixa desta tela é o `prepararArtesDaMontagem`
+    // (coberto no harness do núcleo). Aqui fica o que é da tela.
+    const numero = await aba.evaluate(() => {
         const cx = document.getElementById('mtg-imprimir-numero');
-        const desmarcado = payloadDaMontagem(state.montagem.grupos).multi_artes.map(a => a.nome);
+        const desmarcada = imprimirNumeroNaMontagem();
         cx.checked = true;
-        const marcado = payloadDaMontagem(state.montagem.grupos).multi_artes.map(a => a.nome);
+        const marcada = imprimirNumeroNaMontagem();
         cx.checked = false;
-        return { nasceDesmarcada: cx.defaultChecked === false, desmarcado, marcado,
+        return { nasceDesmarcada: cx.defaultChecked === false, desmarcada, marcada,
                  rotulo: cx.closest('.mtg-opcao').textContent.replace(/\s+/g, ' ').trim() };
-    }, PECAS);
+    });
     ok(numero.nasceDesmarcada,
        'a caixa nasce DESMARCADA — novidade que muda o papel entra desligada', numero);
-    ok(numero.desmarcado.every(n => n === ''),
-       'desmarcada, o payload manda `nome` VAZIO: nada sai impresso', numero.desmarcado);
-    ok(numero.marcado.join(',') === '1000565,1000589,1000412,1000203',
-       'marcada, cada arte leva o NÚMERO DO SEU modelo — e não um número só para a folha', numero.marcado);
+    ok(numero.desmarcada === false && numero.marcada === true, 'e a tela lê a caixa', numero);
     ok(/número do modelo em cada item/.test(numero.rotulo),
        'e o rótulo é o mesmo do Pedido, para o operador reconhecer', numero.rotulo);
 
     // ── 3d. A LINHA DA LISTA VOLTA AO MODELO ────────────────────────
-    //
-    // Refazer célula é trabalho de descoberta: o operador acha mais uma pulseira
-    // estragada depois de já ter montado a folha. A linha já sabe de qual pedido
-    // e de qual modelo se trata — ela é o caminho mais curto de volta.
     const voltar = await aba.evaluate(pecas => {
         window.__montar(pecas);
         return retomarDaMontagem(2).then(() => ({
@@ -304,8 +408,7 @@ const PECAS = [
     ok(/Clique numa linha/.test(voltar.convite),
        'e a tela DIZ que a linha leva de volta — clique escondido não existe', voltar.convite);
 
-    // O X continua tirando o modelo, e NAO leva de volta a ele: o clique no
-    // botao nao pode virar clique na linha.
+    // O × da LINHA continua tirando o modelo inteiro, e NAO leva de volta a ele.
     const tirar = await aba.evaluate(pecas => {
         window.__montar(pecas);
         document.getElementById('mtg-pedido').value = '';
@@ -314,21 +417,15 @@ const PECAS = [
         document.querySelectorAll('.mtg-tirar')[1].click();
         return {
             linhas: document.querySelectorAll('#mtg-lista .data-table tr').length - 1,
+            celulas: state.montagem.celulas.length,
             pedidoSel: state.montagem.pedidoSel,
         };
     }, PECAS);
-    ok(tirar.linhas === 3, 'o × continua tirando o modelo da montagem', tirar);
+    ok(tirar.linhas === 3 && tirar.celulas === 10, 'o × da linha tira o modelo e as células dele', tirar);
     ok(tirar.pedidoSel === null,
        'e não dispara a volta ao modelo que acabou de sair da lista', tirar);
 
     // ── 3e. ONDE O PDF VAI PARAR ─────────────────────────────────────
-    //
-    // Foi aqui que a tela falhou em producao, em 29/08/2026: ela entregava o
-    // PDF com `window.open(blobUrl)`, o navegador bloqueia janela nova depois
-    // que o gesto do clique vence (cinco segundos, no Chrome), e a montagem
-    // sumia sem erro nenhum -- o toast dizia "gerada" e nao havia arquivo.
-    // SEM OS COMENTARIOS: a explicacao do defeito CITA o `window.open`, e um
-    // teste que casa com a citacao em vez da chamada nao guarda nada.
     const MTG_CODIGO = MTG.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     ok(!/window\.open\(/.test(MTG_CODIGO),
        'a Montagem não entrega o PDF por janela nova — o navegador a bloqueia');
@@ -343,6 +440,9 @@ const PECAS = [
         const pdf = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
 
         window._mtgEstacao = async () => 'http://127.0.0.1:9000';
+        // As artes prontas vem de fora: o construtor da tela do Pedido nao
+        // esta nesta pagina, e o que se testa aqui e' a ENTREGA.
+        window.prepararArtesDaMontagem = async () => window.__artes();
         window.toast = (m, tipo) => feito.push(tipo + ': ' + m);
         window.baixarPdfDaMontagem = (b, n) => feito.push('baixou ' + n);
         window.abrirPdfDaMontagemNaTela = (b, n) => feito.push('abriu ' + n);
@@ -350,7 +450,11 @@ const PECAS = [
             feito.push('gravou em ' + pasta);
             return pasta + '\\montagem.pdf';
         };
-        window.fetch = async () => ({ ok: true, blob: async () => pdf });
+        let ultimoPayload = null;
+        window.fetch = async (url, opts) => {
+            if (opts && opts.body && opts.body.get) ultimoPayload = JSON.parse(opts.body.get('payload'));
+            return { ok: true, blob: async () => pdf };
+        };
 
         const sel = document.getElementById('mtg-pasta');
         const cx = document.getElementById('mtg-abrir');
@@ -364,6 +468,7 @@ const PECAS = [
             sel.value = ''; cx.checked = false; feito.length = 0;
             await gerarPdfDaMontagem();
             r.semPasta = feito.slice();
+            r.payload = ultimoPayload;
 
             sel.value = 'D:\\Hot'; cx.checked = true; feito.length = 0;
             await gerarPdfDaMontagem();
@@ -374,13 +479,27 @@ const PECAS = [
             await gerarPdfDaMontagem();
             r.pastaQuebrada = feito.slice();
 
+            // O preparo que recusa (banco que nao chegou) para ANTES do motor.
+            window.prepararArtesDaMontagem = async () => { throw new Error('Não consegui ler os bancos'); };
+            ultimoPayload = null; feito.length = 0;
+            await gerarPdfDaMontagem();
+            r.preparoRecusou = feito.slice();
+            r.foiAoMotor = ultimoPayload !== null;
+
+            // E a posicao que deixou de existir tambem.
+            window.prepararArtesDaMontagem = async () => window.__artes().map(a => Object.assign(a, { _tiragem: 5 }));
+            ultimoPayload = null; feito.length = 0;
+            await gerarPdfDaMontagem();
+            r.foraDaTiragem = feito.slice();
+            r.foiAoMotor2 = ultimoPayload !== null;
+
             r.nome = nomeDoArquivoDaMontagem(new Date(2026, 7, 29, 14, 5));
             return r;
         })();
     }, PECAS);
 
     ok(destino.nasceMarcada,
-       'a caixa "abrir na tela" nasce MARCADA: é ela que devolve o PDF que sumia', destino);
+       'a caixa "abrir na tela" nasce MARCADA: é ela que devolve o PDF que sumia', destino);
     ok(destino.semPasta.some(l => /^baixou montagem_/.test(l))
        && !destino.semPasta.some(l => /gravou/.test(l)),
        'sem pasta escolhida, o PDF desce pelo navegador', destino.semPasta);
@@ -401,6 +520,24 @@ const PECAS = [
        'e o operador fica sabendo o que falhou, com o motivo do disco', destino.pastaQuebrada);
     ok(destino.nome === 'montagem_2026-08-29_1405.pdf',
        'o nome do arquivo leva data E hora: refazer célula acontece o dia inteiro', destino.nome);
+
+    // O payload que foi ao motor, como o app.py o le.
+    const pl = destino.payload;
+    ok(pl && pl.schema === 'multi_artes' && pl.refazer_repetir === true,
+       'o payload vai com `schema` e com `refazer_repetir`', pl && { schema: pl.schema, repetir: pl.refazer_repetir });
+    ok(pl && pl.multi_artes.length === 4 && pl.multi_artes.every(a => a.pedido && a.modelo),
+       'uma arte por modelo, cada uma com o SEU pedido e o SEU modelo');
+    // As bases são 0, 3000, 4920 (3000+1920) e 5070 (4920+150).
+    ok(pl && pl.refazer_celulas.join(',') === '1,6,22,3340,3341,3342,3343,4927,4932,5008,5073,5074,5075,5076',
+       'e as posições vão traduzidas para o fluxo combinado', pl && pl.refazer_celulas);
+    ok(pl && pl.print_mode === 'front' && pl.rotate_page === 90,
+       'o modo de impressão vem dos modelos e a rotação vem do formato', pl && { pm: pl.print_mode, rot: pl.rotate_page });
+    ok(pl && pl.refazer_de === 0 && pl.refazer_ate === 0,
+       'a faixa de folhas fica zerada: com células, ela não se aplica');
+    ok(destino.preparoRecusou.some(l => /error: Não consegui ler os bancos/.test(l)) && !destino.foiAoMotor,
+       'preparo que recusa para ANTES do motor, com o recado na tela', destino.preparoRecusou);
+    ok(destino.foraDaTiragem.some(l => /error: Posição que não existe mais/.test(l)) && !destino.foiAoMotor2,
+       'posição que deixou de existir também para antes do motor', destino.foraDaTiragem);
 
     // A lista de pastas vem da estacao, e pasta que sumiu aparece MARCADA.
     const pastas = await aba.evaluate(() => {
@@ -439,10 +576,13 @@ const PECAS = [
         window.__montar([{ id: 'x', osId: 'a', pedido: '1', nome: 'n', qtd: 99,
                            pos: [1,2,3,4,5,6,7,8,9,10] }]);
         const selo = document.getElementById('mtg-selo');
-        return { classe: selo.className, texto: selo.textContent.replace(/\s+/g, ' ').trim() };
+        return { classe: selo.className, texto: selo.textContent.replace(/\s+/g, ' ').trim(),
+                 folhas: document.querySelectorAll('.mtg-folha-titulo').length,
+                 folhaNum: document.getElementById('mtg-folha-num').textContent };
     });
     ok(/fecha-certo/.test(verde.classe), 'sem sobra o selo fica VERDE', verde);
     ok(/sem sobra/.test(verde.texto), 'e diz que a folha fecha certo', verde.texto);
+    ok(verde.folhas === 0 && /1 FOLHA/.test(verde.folhaNum), 'uma folha só não ganha título de folha', verde);
 
     // ── 5. Tirar um modelo ──────────────────────────────────────────────────
     const depois = await aba.evaluate(pecas => {
@@ -451,7 +591,7 @@ const PECAS = [
         return {
             linhas: document.querySelectorAll('#mtg-lista .data-table tr').length - 1,
             posicoes: document.querySelectorAll('.mtg-pos').length,
-            combinadas: posicoesCombinadas(state.montagem.grupos).join(','),
+            combinadas: posicoesCombinadas(state.montagem.celulas, state.montagem.modelos).join(','),
         };
     }, PECAS);
     ok(depois.linhas === 3 && depois.posicoes === 10, 'tirar um modelo tira as células dele', depois);
@@ -459,23 +599,13 @@ const PECAS = [
     ok(depois.combinadas === '1,6,22,3007,3012,3088,3153,3154,3155,3156',
        'e as posições combinadas se REFAZEM: o deslocamento some junto com o modelo', depois);
 
-    // ── 6. O payload ────────────────────────────────────────────────────────
-    const payload = await aba.evaluate(pecas => {
-        window.__montar(pecas);
-        return payloadDaMontagem(state.montagem.grupos);
-    }, PECAS);
-    ok(payload.layout_schema === 'multi_artes',
-       'o payload usa multi_artes — o caminho que o motor já valida para pedidos diferentes', payload.layout_schema);
-    ok(payload.multi_artes.length === 4, 'uma arte por modelo', payload.multi_artes.length);
-    ok(payload.multi_artes.every(a => a.pedido && a.modelo),
-       'e cada arte declara o SEU pedido e o SEU modelo — sem isso o motor recusa a folha');
-    ok(payload.multi_artes.map(a => a.qtd).join(',') === '3000,1920,150,800',
-       'cada arte leva a TIRAGEM INTEIRA, não as células pedidas', payload.multi_artes.map(a => a.qtd));
-    // As bases são 0, 3000, 4920 (3000+1920) e 5070 (4920+150).
-    ok(payload.refazer_celulas.join(',') === '1,6,22,3340,3341,3342,3343,4927,4932,5008,5073,5074,5075,5076',
-       'e as posições vão traduzidas para o fluxo combinado', payload.refazer_celulas);
-    ok(payload.refazer_de === 0 && payload.refazer_ate === 0,
-       'a faixa de folhas fica zerada: com células, ela não se aplica');
+    // ── 6. A dica da folha diz os três gestos ───────────────────────────────
+    const dica = await aba.evaluate(() => {
+        const ps = Array.from(document.querySelectorAll('.mtg-previa-card .mtg-dica')).map(p => p.textContent.replace(/\s+/g, ' ').trim());
+        return ps.join(' ');
+    });
+    ok(/Arraste/.test(dica) && /repete/.test(dica) && /tira só ela/.test(dica),
+       'a dica da folha explica arrastar, repetir e tirar — ícone sem texto não vale', dica);
 
     // ── 7. Cabe na tela ─────────────────────────────────────────────────────
     const layout = await aba.evaluate(pecas => {
@@ -490,6 +620,8 @@ const PECAS = [
             vazando: Math.round(r.right) > document.documentElement.clientWidth + 1,
             alturasCelula: Array.from(document.querySelectorAll('.mtg-celula'))
                 .map(e => Math.round(e.getBoundingClientRect().height)),
+            rotulosCortados: Array.from(document.querySelectorAll('.mtg-celula-rotulo'))
+                .filter(e => e.scrollWidth > e.clientWidth + 1).length,
         };
     }, PECAS);
     ok(layout.umaLinha, 'em 1600px a lista e a prévia ficam lado a lado', layout);
@@ -497,6 +629,8 @@ const PECAS = [
     ok(!layout.vazando, 'e nada vaza da tela', layout);
     ok(new Set(layout.alturasCelula).size === 1,
        'todas as células da folha têm a mesma altura', layout);
+    ok(layout.rotulosCortados === 0,
+       'o rótulo pedido · modelo · #posição cabe inteiro ao lado do ⧉ e do ×', layout.rotulosCortados);
 
     if (FOTO) {
         await aba.evaluate(pecas => window.__montar(pecas), PECAS);

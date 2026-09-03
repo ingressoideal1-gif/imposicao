@@ -288,6 +288,54 @@ def test_os_itens_entram_na_ordem_digitada(tmp_path):
     assert _impor_para_ordem(tmp_path, refazer_celulas=[12, 1, 7]) == [[12, 1, 7]]
 
 
+def test_a_montagem_pode_repetir_uma_celula(tmp_path):
+    """
+    A Montagem duplica uma celula de proposito: a mesma peca impressa duas
+    vezes, lado a lado. Com `refazer_repetir` a lista entra como veio — "3,1,3"
+    sao tres poses, e a terceira repete o N3. A ordem continua sendo a digitada.
+    """
+    paginas = _impor_para_ordem(tmp_path, refazer_celulas=[3, 1, 3], refazer_repetir=True)
+    assert paginas == [[3, 1, 3]]
+
+
+def test_a_repeticao_conta_para_o_transbordo(tmp_path):
+    """
+    Cinco copias do mesmo item num formato de quatro poses sao cinco poses, nao
+    uma: a primeira folha enche e a quinta copia vai para a segunda.
+    """
+    paginas = impor(tmp_path, refazer_celulas=[1, 1, 1, 1, 1], refazer_repetir=True)
+    assert paginas == [[1, 1, 1, 1], [1]]
+
+
+def test_sem_pedir_repeticao_o_pedido_continua_deduplicando(tmp_path):
+    """
+    O padrao nao muda: o campo do Pedido e digitado as pressas, e um "3,1,3" la
+    e engano. Desligado, o comportamento e o de sempre — uma vez so, e na ordem
+    da primeira ocorrencia.
+    """
+    assert _impor_para_ordem(tmp_path, refazer_celulas=[3, 1, 3]) == [[3, 1]]
+    paginas = _impor_para_ordem(tmp_path, refazer_celulas=[3, 1, 3], refazer_repetir=False)
+    assert paginas == [[3, 1]]
+
+
+def test_o_config_guarda_a_opcao_de_repetir():
+    """
+    Repetir nao afrouxa o filtro: o que nao e inteiro >= 1 continua caindo, e
+    o que sobra fica na ordem recebida. Sem a chave, o padrao e desligado.
+    """
+    comum = dict(
+        base_file="base_ticket.pdf", out_pdf="ignorado.pdf", formato=FORMATO,
+        numeracao=NUMERACAO, saida=SAIDA, seq_start=1, seq_end=4,
+    )
+    cfg = ImpositionConfig(refazer_celulas=["3", "x", "1", 0, "3"], refazer_repetir=True, **comum)
+    assert cfg.refazer_repetir is True
+    assert cfg.refazer_celulas == [3, 1, 3]
+
+    cfg = ImpositionConfig(refazer_celulas=["3", "x", "1", 0, "3"], **comum)
+    assert cfg.refazer_repetir is False
+    assert cfg.refazer_celulas == [3, 1]
+
+
 def test_sem_refazer_a_lista_de_celulas_fica_vazia():
     cfg = ImpositionConfig(
         base_file="base_ticket.pdf",

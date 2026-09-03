@@ -1,12 +1,17 @@
 # Montagem
 
 A tela que junta numa folha só as células a refazer, **mesmo que venham de
-pedidos diferentes**. No ar desde 29/08/2026.
+pedidos diferentes**. No ar desde 29/08/2026; reescrita em 03/09/2026 para
+montar cada arte pelas mesmas funções da tela do Pedido e para a folha virar um
+kanban de células (arrastar, repetir, tirar).
 
 Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (a tela inteira),
+[`frontend/pedido.js`](../frontend/pedido.js) (`arteDoModeloParaFolha` e
+`arteParaOMotor`, o construtor de arte que as duas telas dividem),
+[`frontend/script.js`](../frontend/script.js) (`rotacaoDaFolhaDoFormato`),
 [`frontend/index.html`](../frontend/index.html) (o menu e a view),
-[`frontend/style.css`](../frontend/style.css) (bloco `MONTAGEM`).
-**Nada de Python mudou** — a seção 2 explica por quê.
+[`frontend/style.css`](../frontend/style.css) (bloco `MONTAGEM`). No Python,
+só a chave `refazer_repetir` — a seção 2 explica.
 
 ---
 
@@ -25,10 +30,10 @@ Triband — e paga uma folha inteira de PVC para repor três cartões.
 
 ---
 
-## 2. Por que nenhum Python mudou
+## 2. O que o motor já fazia — e a única chave que entrou
 
-Duas coisas já existiam no motor, e é a soma delas que faz esta tela ser só de
-frontend.
+Duas coisas já existiam no motor, e é a soma delas que faz esta tela ser quase
+só de frontend.
 
 **O motor já monta folha com pedidos diferentes.** Desde 18/08/2026, no
 `multi_artes` do aproveitamento de folha, cada arte carrega o seu `pedido`; o
@@ -61,6 +66,18 @@ do original. A célula refeita **substitui** o ingresso perdido; ela não cria u
 segundo ingresso válido para a mesma entrada. Sem isso, esta tela seria uma
 fábrica de entradas duplicadas.
 
+### `refazer_repetir` (03/09/2026)
+
+O construtor do `ImpositionConfig` tirava posição repetida de `refazer_celulas`
+(`dict.fromkeys`), e isso continua sendo o padrão: no Refazer Célula do Pedido,
+"1,1,6" é engano de dedo. O botão ⧉ da Montagem precisa do contrário — a mesma
+peça impressa duas vezes, lado a lado —, então entrou a chave
+`refazer_repetir`, que nasce desligada. Com ela, a lista mantém as repetições
+na ordem recebida; o `app.py` a repassa do payload. Os dois consumidores da
+lista (`fontes[k]` no caminho principal e `multi_map[c - 1]` no
+strict_assembly) já lidavam com repetição sem mudar nada. Testes em
+[`tests/test_engine_refazer.py`](../tests/test_engine_refazer.py).
+
 ---
 
 ## 3. O que a tela faz: traduzir
@@ -69,11 +86,20 @@ O operador pensa em *"a posição 6 do modelo 1000565"*. O motor espera posiçõ
 no **fluxo combinado**, porque é assim que ele monta o `multi_map`: arte por
 arte, cada uma com a sua tiragem inteira.
 
+A tela guarda duas listas, separadas de propósito:
+
+- **`modelos`** — um registro por par (pedido, modelo), na ordem em que entrou.
+  É a ordem do `multi_artes`, e portanto quem decide o **deslocamento**.
+- **`celulas`** — uma entrada por célula, na ordem em que vão sair **no papel**.
+  É a lista que o operador arrasta, repete e tira.
+
 ```
-grupos                         →  posições combinadas
-1000565  qtd 3000  #1 #6 #22   →  1, 6, 22
-1000589  qtd 1920  #340        →  3000 + 340  = 3340
-1000412  qtd  150  #7 #12      →  4920 + 7    = 4927 …
+modelos (deslocamento)              celulas (ordem da folha)   →  refazer_celulas
+1000565  qtd 3000  base 0           1000412 #7                 →  4920 + 7    = 4927
+1000589  qtd 1920  base 3000        1000565 #1                 →  0 + 1       = 1
+1000412  qtd  150  base 4920        1000565 #6                 →  6
+                                    1000565 #6  (⧉)            →  6
+                                    1000589 #340               →  3000 + 340  = 3340
 ```
 
 > ⚠️ **O deslocamento é a TIRAGEM do modelo anterior, não o número de células
@@ -81,6 +107,15 @@ grupos                         →  posições combinadas
 > errados — com os códigos de QR de outros ingressos, descobertos na portaria.
 > `posicoesCombinadas()` é a função mais delicada do arquivo, e
 > `test_a_traducao_das_posicoes_desloca_pela_tiragem` existe só para isso.
+
+**A ordem das células não mexe no deslocamento.** Arrastar a célula do pedido b
+para o começo da folha troca a ordem da saída; o índice dela continua sendo o
+do modelo dela. É isso que faz o kanban ser seguro.
+
+**A tiragem que vale para o deslocamento é a da arte pronta** (`artes[j].qtd`),
+e não a guardada na lista na hora de adicionar: o banco pode ter mudado entre
+uma coisa e outra. Célula cuja posição passou da tiragem da arte pronta é
+recusada na hora de gerar, dizendo qual.
 
 **Cada arte leva a tiragem inteira no payload.** Recortar o banco seria mais
 leve e estaria errado pelo mesmo motivo: o índice do item é o que decide o
@@ -108,17 +143,20 @@ Três dessas não são preferência: são impossibilidade física.
 
 - **Sequencial × Blocado.** O `porQueNaoCombina` da tela do Pedido recusa, e ali
   está certo — a ordem das células decide como a pilha é cortada. Aqui não há
-  pilha: a montagem compacta numa folha, na ordem digitada.
+  pilha: a montagem compacta numa folha, na ordem da lista.
 - **Modo PDF.** Ele decide de onde a arte vem para a tiragem inteira, e cada
   célula da montagem já traz a arte do seu próprio modelo.
 
-### As outras três decisões (29/08/2026)
+### As outras decisões
 
-| | Escolhido |
-|---|---|
-| Como escolher a célula | pedido → modelo → posições, **acumulando uma lista** |
-| Quais pedidos a tela oferece | os **impressos nos últimos 30 dias**, mais busca por número |
-| Senha da gerência | **não** — é trabalho normal do operador |
+| | Escolhido | Quando |
+|---|---|---|
+| Como escolher a célula | pedido → modelo → posições, **acumulando** | 29/08 |
+| Quais pedidos a tela oferece | os **impressos nos últimos 30 dias**, mais busca por número | 29/08 |
+| Senha da gerência | **não** — é trabalho normal do operador | 29/08 |
+| Repetir célula (⧉) | a **mesma peça**, impressa duas vezes, logo abaixo | 03/09 |
+| Tirar célula (×) | só aquela; as outras do modelo ficam | 03/09 |
+| Ordem da folha | **kanban**: arrastar a célula muda a sequência | 03/09 |
 
 ---
 
@@ -148,7 +186,8 @@ voltou do cliente.
 
 São dois campos porque um `<select>` não se digita: a primeira versão prometia
 *"escolha ou digite o número"* dentro do seletor, e essa era uma promessa que a
-tela não cumpria.
+tela não cumpria. (O rótulo do seletor voltou a prometer isso numa versão
+seguinte, por descuido; desde 03/09 ele diz "Impressos nos últimos 30 dias…".)
 
 > ⚠️ **O `montagem.js` precisa estar na lista de sincronismo da estação**
 > (`security_config.py`). O `index.html` que a estação baixa já pede o script;
@@ -156,177 +195,197 @@ tela não cumpria.
 > `test_painel_estacao.py` pegou exatamente isso — a tela estava pronta e a
 > gráfica não a receberia.
 
+### Ao escolher o pedido, os bancos dele descem
+
+`onMontagemPedidoChange` carrega os modelos (`loadOSItens`) **e** os bancos do
+pedido (`garantirBancosDoTrabalho`) **e** o CSV de cada numeração
+(`garantirCsvDoTrabalho`) — o mesmo que a `runPedImposition` faz antes de
+montar o payload. Sem isso a tiragem da lista saía errada para quem nunca
+tivesse aberto o pedido na tela do Pedido nesta sessão.
+
 ### A tiragem de cada modelo, na lista
 
 A coluna **Tiragem** diz quantos itens aquele modelo imprime ao todo — e é contra
 esse número que a posição vale. `#340` só existe num modelo de 1.920; sem o
 número na tela o operador digita no escuro. Pedido do usuário em 29/08/2026.
 
-Ele vem do **banco** quando há banco, e não da quantidade contratada: os dois
-podem divergir, e quem manda é o que vira papel.
+É a **mesma conta que o motor faz** com a arte da tela do Pedido: a quantidade
+contratada é quantos itens ele cria; o banco, quantos têm dado. Vale o menor.
+Com distribuição do banco (`csv_selecao`) vale a fatia, e só ela.
 
 ### Imprimir o número do modelo em cada item
 
 Mesmo conceito das *Opções do modelo* da tela do Pedido, e a mesma mecânica: o
-motor imprime `arte["nome"]` deitado na borda de cada item, e **esse campo é o
-único** que decide se ele sai. Marcada a caixa, o payload leva o número do
-modelo; desmarcada, leva vazio.
+motor imprime `arte["nome"]` deitado na borda de cada item. Desde 03/09 quem
+escreve o `nome` é o construtor do Pedido (`arteParaOMotor`), a partir de
+`_imprimirNumero` — e o `prepararArtesDaMontagem` preenche `_imprimirNumero`
+com a caixa desta tela, para todos os modelos.
 
 Numa folha que mistura pedidos é por ele que se separa o material depois de
 cortar — é aqui que a marca serve mais do que no Pedido.
 
 Duas diferenças em relação ao Pedido, as duas deliberadas:
 
-- **É uma escolha para a montagem inteira**, não uma por modelo. No Pedido a
-  opção mora em `pedidos_modelos` e vale para aquele modelo; aqui a folha mistura
-  modelos de pedidos diferentes, e uma caixa por linha faria o operador decidir o
-  mesmo N vezes para o mesmo papel.
-- **Ela não é gravada no modelo.** A Montagem é reposição avulsa: marcar aqui não
-  pode mudar como aquele modelo sai na próxima tiragem inteira dele. A escolha
-  que fica salva continua sendo a da tela do Pedido.
+- **É uma escolha para a montagem inteira**, não uma por modelo.
+- **Ela não é gravada no modelo.** A Montagem é reposição avulsa.
 
 Nasce **desmarcada**, como no Pedido — novidade que muda o que sai no papel entra
 desligada.
 
-### Onde o PDF vai parar
+### A folha montada é um kanban (03/09/2026)
 
-Duas escolhas, no rodapé da prévia — ambas pedidas pelo usuário em 29/08/2026,
-depois que o PDF simplesmente não apareceu (ver §6).
+Pedido do usuário: *"adicionar opção de duplicar célula (ícone que duplica o
+modelo na próxima célula), incluir o excluir célula (x na célula que exclui ela
+do gabarito) e deixar as células em modo kanban para movê-las manualmente
+alterando a sequência"*.
 
-**A pasta.** O seletor lista as pastas que **esta estação** já autorizou, e o
-botão ao lado abre o **seletor nativo do Windows na estação**. É a mesma lista, o
-mesmo seletor e o mesmo `soltar()` que a tela do Pedido usa para o hot folder do
-RIP — e a estação recusa gravar em pasta que não esteja na lista.
+A folha desenha **todas** as células, folha a folha ("Folha 1 de 2", "Folha 2
+de 2"), com as vazias só na última. Cada célula é um cartão com a alça ⋮⋮, o
+rótulo `pedido · modelo · #posição` na cor do modelo, o **⧉** e o **×**:
 
-Quem abre o seletor e quem escreve no disco é o **agente**, nunca o navegador.
-Essa é a razão de ser da escolha: o navegador não enxerga o disco da estação, e
-**cada estação da gráfica usa um navegador diferente** — nada aqui pode depender
-de permissão, *flag* ou configuração feita no navegador.
+- **⧉** repete a célula **logo abaixo** dela — a mesma peça (mesmo pedido,
+  modelo e posição, e por isso o mesmo código de QR), impressa duas vezes. Na
+  lista o chip diz `#6 ×2`. É o único jeito de repetir: posição repetida na
+  digitação continua entrando uma vez, porque "6,6" é engano de dedo.
+- **×** tira **só aquela** célula. As outras do mesmo modelo ficam. Modelo que
+  ficou sem célula nenhuma sai da lista — e do deslocamento.
+- **Arrastar** (HTML5 drag-and-drop nativo, sem biblioteca — cada estação usa um
+  navegador diferente) muda a ordem da folha. Enquanto arrasta, a origem apaga e
+  o alvo ganha a linha. Soltar numa célula vazia manda para o fim. Os ouvintes
+  ficam no container, por delegação: a prévia é redesenhada a cada mudança.
 
-Sem pasta escolhida, o PDF desce pelos **downloads do navegador**. É o caminho
-que sempre funciona, e por isso ele é a primeira opção da lista: sem estação no
-ar, a tela continua entregando o arquivo.
+A dica embaixo da folha diz os três gestos em texto. Ícone sem rótulo é o que
+esta gráfica não aceita.
 
-A escolha fica lembrada nesta máquina, e a dica embaixo do seletor diz o que vai
-acontecer com o arquivo **antes** de gerar — inclusive que uma pasta observada
-pelo RIP põe o material na fila de impressão assim que o arquivo chegar.
-
-**Abrir na tela.** Marcada — e ela nasce marcada —, o PDF abre sobre o painel, na
-mesma *lightbox* que o anexo do pedido já usa. Não é janela nova: janela nova é
-exatamente o que não funcionava.
-
-Se a gravação na pasta falhar por motivo do disco (a pasta sumiu, a rede caiu), o
-trabalho **não se perde**: o PDF desce pelo navegador e o aviso diz o que falhou.
-A montagem já tinha dado certo; quem falhou foi o destino.
+O × e o ⧉ moram **dentro** da célula arrastável e param a propagação: sem isso,
+clicar no × começaria um arrasto.
 
 ### A linha da lista é o caminho de volta ao modelo
 
 Clicar numa linha devolve **aquele pedido e aquele modelo** ao compositor, com o
-cursor já no campo de posições. Pedido do usuário em 29/08/2026.
+cursor já no campo de posições. Pedido do usuário em 29/08/2026. O campo fica
+**vazio**: ele vem acrescentar. O × da linha continua tirando o modelo inteiro,
+com todas as células dele, e não leva de volta a ele.
 
-Refazer célula é trabalho de **descoberta**: o operador acha mais uma pulseira
-estragada depois de já ter montado a folha. Sem isso ele teria de reescolher o
-pedido no seletor, esperar o `loadOSItens`, reescolher o modelo na lista e só
-então digitar — quatro gestos para dizer uma coisa que a linha já sabe.
+### Onde o PDF vai parar
 
-O campo de posições fica **vazio**, e não preenchido com o que já foi pedido: ele
-vem acrescentar, e ver a lista antiga no campo faria parecer que precisa apagá-la
-primeiro. O `adicionarNaMontagem` soma ao grupo que existe.
+Duas escolhas, no rodapé da prévia — ambas pedidas pelo usuário em 29/08/2026,
+depois que o PDF simplesmente não apareceu (ver §7).
 
-Duas coisas são travadas por teste:
+**A pasta.** O seletor lista as pastas que **esta estação** já autorizou, e o
+botão ao lado abre o **seletor nativo do Windows na estação**. Quem abre o
+seletor e quem escreve no disco é o **agente**, nunca o navegador. Sem pasta
+escolhida, o PDF desce pelos **downloads do navegador**.
 
-- **o × continua sendo o ×.** Ele mora dentro da linha, e sem parar a propagação
-  tirar um modelo também levaria o compositor de volta a ele — para um modelo que
-  acabou de sair da lista;
-- **a linha ativa é derivada** do que o compositor mostra, e não um índice
-  guardado à parte. Um segundo estado ficaria mentindo assim que o operador
-  escolhesse o modelo pelos seletores, ou assim que a lista perdesse um grupo —
-  e digitar posições achando que são de outro modelo é erro que só aparece no
-  papel.
+**Abrir na tela.** Marcada — e ela nasce marcada —, o PDF abre sobre o painel, na
+mesma *lightbox* que o anexo do pedido já usa.
 
-### Adicionar o mesmo modelo duas vezes SOMA ao grupo
-
-Não cria um segundo. Dois grupos do mesmo modelo dariam duas artes iguais no
-`multi_artes`, e o deslocamento contaria a tiragem daquele modelo duas vezes —
-todas as posições dos modelos seguintes sairiam erradas.
+Se a gravação na pasta falhar por motivo do disco, o trabalho **não se perde**:
+o PDF desce pelo navegador e o aviso diz o que falhou.
 
 ---
 
-## 6. O defeito de estreia, e o que ele ensinou
+## 6. As artes vêm da tela do Pedido (03/09/2026)
 
-A primeira versão foi ao ar na **v771** e o operador viu, ao gerar o PDF:
+A análise da tela em 03/09 achou **sete divergências** entre a arte que a
+Montagem montava e a que a `runPedImposition` monta para o mesmo modelo — cada
+uma delas uma célula refeita diferente da original:
 
-```
-Erro 500: 400: Formato não encontrado.
-```
+| # | O que a Montagem fazia | O que a tela do Pedido faz |
+|---|---|---|
+| 1 | lia `arte_verso_url` (campo que não existe) e mandava `print_mode: 'simplex'` (valor que o motor não conhece) — **o verso nunca saía** | `verso_arte_url` / `url_arquivo_arte_verso` pelo `arteParaImpor`, e `modoDeVersoDoModelo` |
+| 2 | mandava `it.arte_url` cru — a **amostra de aprovação** podia ir ao papel | `arteParaImpor`, que barra `amostras_renderizadas` |
+| 3 | não garantia os **bancos do pedido** nem o CSV antes do payload | `garantirBancosDoTrabalho` + `garantirCsvDoTrabalho` |
+| 4 | mandava o `csv_data` **inteiro** — a posição N apontava para outra linha | a fatia do modelo e o limite pela quantidade (`linhasDoModeloNoPayload`) |
+| 5 | escala da arte em 100% | `escala_h/escala_v` de cada modelo |
+| 6 | `rotate_page: 0` | a rotação do formato |
+| 7 | elementos de Layout iam junto | `numeracaoSemElementosDeLayout` |
 
-**A causa:** `formato_id` **não existe** em `pedidos_modelos`. Quem o preenche na
-memória é o **desenho da fila do Pedido** (`renderPedOSQueue`), a partir do
-produto do ERP. A Montagem carrega os modelos com o `loadOSItens` e nunca desenha
-aquela fila — então os itens chegavam **sem formato**.
+O conserto **não foi copiar as sete regras** — cópia é o que divergiu. Foi
+extrair da `runPedImposition` o corpo do `tempMultiArtes` e do
+`payloadMultiArtes` para duas funções de nível superior do `pedido.js`,
+**verbatim**:
 
-**E a segunda falha era pior que a primeira.** O erro do motor ao menos aparece
-na tela. Mas o `porQueNaoCabeNaMontagem` comparava `'' !== ''`, que é falso em
-todas as quatro conferências — e devolvia *"cabe"* **sempre**. A regra de
-compatibilidade que o usuário decidiu estava **inerte**: uma folha com dois
-materiais diferentes teria passado sem um aviso, e a descoberta seria na
-impressora.
+- `arteDoModeloParaFolha(s, numIdReserva, opcoes)` — a arte de um modelo, como
+  a folha combinada do Pedido a monta. `opcoes.comPrevia === false` pula o
+  carregamento do PDF para a prévia, que só a tela do Pedido desenha.
+- `arteParaOMotor(arte, isMultiSelected)` — a arte como o motor a recebe.
 
-**O conserto:** a Montagem resolve o formato pela **mesma regra** do desenho da
-fila — produto do item → `id_formato` do produto → o formato cujo
-`id_formato_num` casa —, guarda o resultado numa **peça normalizada**
-(`pecaDaMontagem`) que a conferência e o payload leem, e **recusa** a célula cujo
-formato ela não consegue resolver, dizendo o que fazer.
+A `runPedImposition` passou a chamar as duas (`state.selectedOSItems.map(s =>
+arteDoModeloParaFolha(s, numId))` e `artesList.map(arte =>
+arteParaOMotor(arte, isMultiSelected))`), sem mudar uma linha do que faz. A
+Montagem chama as mesmas, em `prepararArtesDaMontagem`.
 
-Ela **não grava** o resultado: o desenho da fila escreve de volta com
-`autoSaveOSItemField`, mas a Montagem é tela de leitura e não carimba o pedido de
-ninguém.
+A rotação da folha (`page_rotate` do formato, ou 90 com `default_rotate_page`)
+estava escrita duas vezes — no `applyFormatoDefaults` do script.js e no gêmeo
+do pedido.js. Virou `rotacaoDaFolhaDoFormato(fmt)`, no script.js, lida pelas
+três telas.
 
-> **A lição, que vale além desta tela:** um campo que parece vir do banco pode
-> ser preenchido pelo *desenho* de outra tela. Tela nova que lê modelos não pode
-> supor que outra tela já rodou — e a conferência que compara campos vazios não
-> falha, ela **passa**, que é a forma mais silenciosa de uma regra morrer. Foi o
-> mesmo formato de defeito da trava da gerência em 28/08 e da trava do Hot Folder
-> em 29/08: nasceram inertes.
+### Pedido a pedido, em série
 
-Os dois harnesses ganharam o caso. O da tela passou a montar o item **sem
-`formato_id`**, como ele chega do banco, e a exercitar a resolução de verdade.
+`state.bancosDoPedido` e `state.vinculosDeBanco` guardam os bancos de **um**
+pedido por vez — é assim que a tela de Amostras e a do Pedido trabalham, e o
+`resolverNumeracaoParaModelo` lê dali. Carregar os bancos do pedido B antes de
+montar as artes do pedido A deixaria as artes de A sem o banco delas — número
+no lugar do nome, calado. Então `prepararArtesDaMontagem` agrupa os modelos
+por pedido e faz, para cada um: carrega os bancos, garante o CSV, monta as
+artes daquele pedido; só então passa ao próximo. As artes saem na ordem dos
+**modelos** (a do `multi_artes`), não na dos pedidos.
 
-### O segundo defeito: o PDF era gerado, e sumia
+Antes de ir ao motor, três recusas com a saída na frase: banco que não se
+conseguiu ler (`pedidosComBancoDesconhecido`), numeração que pede banco e
+chegou sem linha (`bancoVazioNoPayload`), e célula cuja posição passou da
+tiragem da arte pronta (`celulasForaDaTiragem`).
 
-No mesmo dia, com o formato já resolvido, o usuário relatou: **"parou de gerar o
-pdf"**.
+### Uma nota sobre fontes
 
-Ele não tinha parado. O log de diagnóstico do agente registrou as três
-tentativas, todas com as duas artes, e uma reprodução do mesmo payload contra a
-estação devolveu `HTTP 200 · application/pdf · 121 KB`. O motor gerava; o painel
-é que jogava o arquivo fora.
-
-**A causa:** a entrega era `window.open(blobUrl, '_blank')`. O navegador só
-deixa abrir janela nova enquanto o gesto do operador ainda vale — no Chrome,
-**cinco segundos** —, e uma folha montada demora mais do que isso. O bloqueio é
-**silencioso**: nenhuma exceção, nenhum aviso. Pior, o `toast` seguinte dizia
-*"Montagem gerada"*, então a tela afirmava sucesso enquanto o PDF ia para o
-lixo.
-
-Repare no formato do defeito: ele passa em qualquer teste rápido e falha em
-produção. Um trabalho de teste, pequeno, termina dentro dos cinco segundos e a
-janela abre. O trabalho de verdade não.
-
-**O conserto** foram três caminhos, e nenhum depende de janela nova: gravar na
-pasta da estação, baixar por `<a download>`, e abrir na *lightbox* do próprio
-painel. Os testes travam os três, e travam também a ausência do `window.open` —
-com os comentários removidos antes da busca, porque a explicação acima **cita** a
-função, e um teste que casa com a citação em vez da chamada não guarda nada.
-
-> **A lição:** entrega não é conclusão. O caminho crítico não termina quando o
-> servidor responde 200 — ele termina quando o arquivo está na mão do operador, e
-> o trecho entre uma coisa e outra roda no navegador, onde há regras que nenhum
-> teste de servidor alcança.
+A análise listou "fontes web sem `arquivo_url`" como sétima divergência, com
+base no `runImposition` do **script.js** (a tela Imposição), que injeta a URL
+da fonte em cada elemento. A `runPedImposition` — a que a gráfica usa para
+imprimir modelos — **não injeta**: as fontes se resolvem na estação (o
+`_embed_system_fonts` do app.py embute as instaladas). A Montagem faz
+exatamente o que a `runPedImposition` faz. O item 7 da tabela acima é o que de
+fato faltava nesse ponto: os elementos de Layout.
 
 ---
 
-## 7. O que a Montagem não faz
+## 7. Os defeitos de estreia, e o que ensinaram
+
+### O formato não chegava (29/08, v771)
+
+`formato_id` **não existe** em `pedidos_modelos`. Quem o preenche na memória é o
+**desenho da fila do Pedido**, e a Montagem nunca desenha aquela fila. Pior: o
+`porQueNaoCabeNaMontagem` comparava `'' !== ''` e devolvia *"cabe"* **sempre** —
+a regra de compatibilidade estava **inerte**. O conserto foi resolver o formato
+pela **mesma regra** do desenho da fila (produto → `id_formato` →
+`id_formato_num`) numa peça normalizada (`pecaDaMontagem`), e recusar a célula
+cujo formato não se resolve.
+
+> **A lição:** um campo que parece vir do banco pode ser preenchido pelo
+> *desenho* de outra tela. E a conferência que compara campos vazios não falha,
+> ela **passa**, que é a forma mais silenciosa de uma regra morrer.
+
+### O PDF era gerado, e sumia (29/08)
+
+A entrega era `window.open(blobUrl, '_blank')`. O navegador só deixa abrir
+janela nova enquanto o gesto do operador ainda vale — no Chrome, cinco
+segundos —, e uma folha montada demora mais. O bloqueio é silencioso, e o
+`toast` seguinte dizia *"Montagem gerada"*. O conserto foram três caminhos sem
+janela nova: gravar na pasta da estação, baixar por `<a download>`, abrir na
+*lightbox*.
+
+> **A lição:** entrega não é conclusão. O caminho crítico termina quando o
+> arquivo está na mão do operador.
+
+### A arte era outra (03/09)
+
+Ver §6. A lição é a mesma da clonagem `script.js` → `pedido.js` que este
+projeto já sofreu: **regra copiada diverge**. A única defesa é uma função só,
+chamada dos dois lados, e um teste que cobra os dois lados.
+
+---
+
+## 8. O que a Montagem não faz
 
 - **Não muda status nem quantidade.** É reposição: o modelo já está impresso, a
   quantidade contratada é do ERP e não se escreve de volta.
@@ -334,20 +393,25 @@ função, e um teste que casa com a citação em vez da chamada não guarda nada
   da gráfica. Sem agente respondendo, a resposta ao operador é que não dá.
 - **Não sabe sozinha o que estragou.** Quem viu o papel foi o operador; a tela é
   onde ele diz.
+- **Não tem permissão própria no menu.** `nav-montagem` não está em
+  `PERM_NAV_MAP`, e por isso aparece para todo perfil logado no site. Apontado
+  na análise de 03/09; fora do escopo do que foi pedido naquele dia.
 
 ---
 
-## 8. Testes
+## 9. Testes
 
 | Harness | Verificações | O que trava |
 |---|---|---|
-| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 62 | o núcleo: posições digitadas, compatibilidade, e a **tradução das posições** |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 69 | a tela desenhada num Chrome de verdade: lista, selo, trava, prévia, layout, o payload e **a entrega do arquivo** |
+| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 112 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o preparo das artes **pedido a pedido**, o payload |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 87 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha com todas as células, ⧉, ×, o arrasto com os eventos nativos, layout, **a entrega do arquivo** |
 
-[`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta o
-que só se lê no código-fonte — inclusive um teste que falha se alguém mexer no
-`engine.py` por causa desta tela.
+[`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta
+o que só se lê no código-fonte: que a Montagem chama o construtor do Pedido e
+não escreve regra própria de arte, que a `runPedImposition` continua chamando o
+mesmo construtor, que a rotação vem de uma função só, que o motor só mudou para
+aceitar `refazer_repetir`.
 
-> Nota de método: dois dos testes da tela falharam na primeira execução por
-> **erro de conta no próprio teste**, não no código — eu somei as bases errado.
-> Foi o harness corrigindo quem o escreveu, que é para isso que ele serve.
+[`tests/test_engine_refazer.py`](../tests/test_engine_refazer.py) cobre a chave
+no motor: com ela `[3,1,3]` imprime três células na ordem; sem ela continua
+entrando uma vez só.

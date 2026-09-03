@@ -1541,6 +1541,10 @@ async def impose_file(
             refazer_ate=int(data.get("refazer_ate", 0) or 0),
             refazer_set=int(data.get("refazer_set", 1) or 1),
             refazer_celulas=data.get("refazer_celulas") or [],
+            # A Montagem duplica celula de proposito e manda esta chave; o
+            # Pedido nao manda, e segue deduplicando. Ver `refazer_repetir`
+            # no ImpositionConfig.
+            refazer_repetir=bool(data.get("refazer_repetir")),
             # QR Ideal: `pedido` e `pedidos_modelos.id_int`, `modelo` e
             # `pedidos_modelos.id`. Chegam do frontend porque so ele sabe de que
             # pedido o trabalho veio; o motor so calcula.

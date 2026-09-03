@@ -115,14 +115,10 @@ function applyPedFormatoDefaults() {
         if (depthInp) depthInp.value = fmt.default_block_depth;
     }
     
-    // Rotate
-    const fRot = fmt.rotations || {};
-    let rotVal = 0;
-    if (fRot.page_rotate !== undefined) {
-        rotVal = parseInt(fRot.page_rotate) || 0;
-    } else {
-        rotVal = fmt.default_rotate_page ? 90 : 0;
-    }
+    // Rotate — a regra mora em `rotacaoDaFolhaDoFormato` (script.js), que a
+    // Montagem tambem le: e' o que impede a folha refeita de sair sem a
+    // rotacao que o formato pede.
+    let rotVal = rotacaoDaFolhaDoFormato(fmt);
     const rotateCb = document.getElementById('ped-rotate-page');
     if (rotateCb) {
         rotateCb.value = String(rotVal);
@@ -5554,6 +5550,243 @@ window.editPedidoCustomNumeracao = async function(fieldId) {
 // e 🖨️ Imprimir) chamam sem ele e por isso sempre produzem o pedido inteiro.
 // Antes, o payload lia os checkboxes diretamente, e uma caixa esquecida marcada
 // fazia o botão principal imprimir só um pedaço da tiragem sem avisar ninguém.
+/**
+ * A ARTE DE UM MODELO, como a folha combinada da tela do Pedido a monta.
+ *
+ * Era o corpo do `tempMultiArtes` dentro da `runPedImposition`, e saiu de la
+ * em 03/09/2026 sem mudar uma linha do que faz: a Montagem precisava montar a
+ * MESMA arte para o mesmo modelo, e montava a sua propria — sem verso, sem o
+ * filtro da amostra, sem a escala, sem a fatia do banco. Sete divergencias,
+ * cada uma delas uma celula refeita diferente da original. Uma funcao so,
+ * chamada pelas duas telas, e' o que impede a lista de crescer de novo.
+ *
+ * `s` e' `{ osId, itemId }`. `numIdReserva` e' a numeracao do seletor da tela,
+ * que so' vale quando o modelo nao tem a sua. `opcoes.comPrevia === false`
+ * pula o carregamento do PDF para a previa, que so' a tela do Pedido desenha.
+ */
+function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
+    const comPrevia = !opcoes || opcoes.comPrevia !== false;
+    if (!state.multiArtesPdfCache) state.multiArtesPdfCache = {};
+    if (!state.multiArtesPdfLoading) state.multiArtesPdfLoading = {};
+    const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
+    const qt = sItem ? (parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0))) : 0;
+
+    const corObj = sItem && sItem.amostra_cor_id
+        ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
+        : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
+    // So arte de verdade vai ao motor. A amostra de aprovacao e a Cor
+    // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
+    // trabalho sai so com numeracao, que e o correto e o que sempre foi.
+    //
+    // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
+    // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
+    // no papel — se exibisse a amostra, prometeria o que nao sai.
+    const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
+
+    const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
+    const itemArteVersoUrl = (sItem && wantsDuplex)
+        ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+        : null;
+
+    let pdfDoc = null;
+    if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {
+        pdfDoc = state.multiArtesPdfCache[itemArteUrl];
+    } else if (comPrevia && itemArteUrl && !state.multiArtesPdfLoading[itemArteUrl]) {
+        state.multiArtesPdfLoading[itemArteUrl] = true;
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        fetch(itemArteUrl).then(r => r.arrayBuffer()).then(buf => {
+            return pdfjsLib.getDocument({ data: buf }).promise;
+        }).then(doc => {
+            state.multiArtesPdfCache[itemArteUrl] = doc;
+            if (typeof drawPedPreview === 'function') drawPedPreview();
+        }).catch(e => {
+            console.error('Error fetching PDF for multi arte preview:', e);
+        }).finally(() => { delete state.multiArtesPdfLoading[itemArteUrl]; });
+    }
+
+    let pdfVersoDoc = null;
+    if (itemArteVersoUrl && state.multiArtesPdfCache[itemArteVersoUrl]) {
+        pdfVersoDoc = state.multiArtesPdfCache[itemArteVersoUrl];
+    } else if (comPrevia && itemArteVersoUrl && !state.multiArtesPdfLoading[itemArteVersoUrl]) {
+        state.multiArtesPdfLoading[itemArteVersoUrl] = true;
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        fetch(itemArteVersoUrl).then(r => r.arrayBuffer()).then(buf => {
+            return pdfjsLib.getDocument({ data: buf }).promise;
+        }).then(doc => {
+            state.multiArtesPdfCache[itemArteVersoUrl] = doc;
+            if (typeof drawPedPreview === 'function') drawPedPreview();
+        }).catch(e => {
+            console.error('Error fetching PDF VERSO for multi arte preview:', e);
+        }).finally(() => { delete state.multiArtesPdfLoading[itemArteVersoUrl]; });
+    }
+
+    const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
+        ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
+        : null;
+    const itemPdfName = filenameFromUrl || (sItem ? sItem.nome_arquivo_arte : null)
+        || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
+
+    return {
+        qtd: qt,
+        nome: sItem ? sItem.modelo : '',
+        // Se este número chega ao papel ou não. Fica separado de `nome`
+        // porque `nome` também alimenta as mensagens da tela ("o modelo
+        // X não possui arte"), e essas continuam precisando do número.
+        _imprimirNumero: (typeof imprimeNumeroDoModelo === 'function')
+            ? imprimeNumeroDoModelo(sItem)
+            : false,
+        // A escala da arte é DE CADA MODELO: numa folha combinada o A
+        // pode estar a 98% e o B a 100%. Ver `_escala_da_arte` no
+        // engine.py, que lê estes dois campos por arte.
+        _escalaH: (typeof escalaDaArteDoModelo === 'function')
+            ? escalaDaArteDoModelo(sItem).h : 100,
+        _escalaV: (typeof escalaDaArteDoModelo === 'function')
+            ? escalaDaArteDoModelo(sItem).v : 100,
+        // O pedido DESTE modelo, que entra na coluna do pool e no
+        // conteudo do QR Ideal. Ver numeroDoPedidoDoItem() no script.js.
+        _pedido: (typeof numeroDoPedidoDoItem === 'function')
+            ? numeroDoPedidoDoItem(s.osId)
+            : null,
+        // Por onde a fatia do CSV chega ao payload. Ver o bloco que monta
+        // `payloadMultiArtes`, mais abaixo.
+        _itemId: s.itemId,
+        _osId: s.osId,
+        num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numIdReserva) : numIdReserva,
+        num2_id: null,
+        start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+        has_raw_file: false,
+        is_selected: true,
+        amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
+        // O endereço da arte, que é o que o payload lê. Sem isto a folha
+        // saía com a numeração e SEM arte nenhuma: o objeto trazia só o
+        // `pdfDoc`, que serve à prévia e não ao motor. O gêmeo no
+        // script.js sempre teve os três.
+        pdf_url: itemArteUrl,
+        pdf_verso_url: itemArteVersoUrl,
+        pdf_name: itemPdfName,
+        rawFile: null,
+        nome_color: '#000000',
+        pdfDoc: pdfDoc,
+        pdfVersoDoc: pdfVersoDoc,
+        bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
+        // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
+        // coluna do pool por modelo; sem isto o motor recusa a folha.
+        modelo: s.itemId || (sItem ? sItem.id : null)
+    };
+}
+window.arteDoModeloParaFolha = arteDoModeloParaFolha;
+
+/**
+ * A arte como o MOTOR a recebe: numeracao resolvida pelo banco do pedido, a
+ * fatia do modelo, a escala, o verso, o modelo e o pedido de cada arte.
+ *
+ * Era o corpo do `payloadMultiArtes` da `runPedImposition`; ver
+ * `arteDoModeloParaFolha` logo acima para o motivo de ter saido de la.
+ */
+function arteParaOMotor(arte, isMultiSelected) {
+
+    // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
+    // do banco. Sem isto, os oito modelos receberiam as mesmas linhas.
+    // Espelha runImposition no script.js.
+    const itArte = arte._itemId
+        ? (state.osItens[arte._osId] || []).find(i => String(i.id) === String(arte._itemId))
+        : null;
+
+    // A ESCOLHA da numeracao continua pelo `num1_id` da arte; o que
+    // entra e so a resolucao do banco do pedido (27/08/2026), que
+    // devolve a propria numeracao quando o modelo nao tem vinculo.
+    let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
+
+    if (typeof resolverNumeracaoParaModelo === 'function') {
+        numArte = resolverNumeracaoParaModelo(numArte, itArte);
+    }
+
+    let qtdArte = arte.qtd;
+
+    if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId
+        && typeof fatiaCsvDoItem === 'function') {
+
+        if (itArte && itArte.csv_selecao) {
+
+            numArte = JSON.parse(JSON.stringify(numArte));
+
+            numArte.csv_data = fatiaCsvDoItem(itArte, numArte);
+
+            // So mexe na quantidade quando ha fatia: para o modelo movido
+            // a CSV, quantos itens saem E quantas linhas ele leva.
+            qtdArte = numArte.csv_data.length;
+
+        } else if (itArte && typeof vinculoDeBancoDoModelo === 'function'
+                   && typeof linhasDoModeloNoPayload === 'function'
+                   && vinculoDeBancoDoModelo(itArte)) {
+            // Sem distribuicao, o modelo com banco do PEDIDO leva a fatia
+            // por coluna, limitada a quantidade (02/09/2026). Espelha o
+            // script.js; ver `linhasDoModeloNoPayload` la.
+            numArte = Object.assign({}, numArte,
+                { csv_data: linhasDoModeloNoPayload(itArte, numArte) });
+        }
+
+    }
+
+    return {
+
+        qtd: qtdArte,
+
+        pdf_url: arte.pdf_url,
+
+        pdf_verso_url: arte.pdf_verso_url || null,
+
+        pdf_name: arte.pdf_name,
+
+        // O motor imprime este texto deitado na borda de cada item, e é
+        // o único campo que decide se ele sai. Ao combinar modelos do
+        // pedido quem manda é a opção do modelo, desmarcada por padrão.
+        // Na Lista de Imposição (não é multi-seleção) o nome é digitado
+        // à mão e continua valendo como sempre.
+        nome: (isMultiSelected && !arte._imprimirNumero) ? '' : (arte.nome || ''),
+
+        nome_color: arte.nome_color || '#000000',
+
+        // A escala da arte DESTE modelo. Sem ela, o motor cairia na do
+        // trabalho e todos os modelos da folha sairiam no mesmo tamanho.
+        escala_h: arte._escalaH ?? 100,
+        escala_v: arte._escalaV ?? 100,
+
+        num1_id: arte.num1_id,
+
+        num2_id: arte.num2_id,
+
+        start: arte.start,
+
+        numeracao: numArte,
+
+        numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
+
+        has_raw_file: !!arte.rawFile,
+
+        q_cam: arte.q_cam || 0,
+
+        l_cam: arte.l_cam || 1,
+
+        // O modelo de CADA arte. Numa folha multi-artes o QR Ideal tira
+        // uma coluna diferente do pool por modelo, então o motor precisa
+        // saber de qual arte veio cada item. Sem isto ele recusa o
+        // trabalho inteiro — e por isto o QR Ideal nunca imprimiu.
+        modelo: arte.modelo || null,
+
+        // E o pedido desta arte, pelo mesmo motivo: ele entra na coluna
+        // do pool E no conteúdo do QR. Nulo significa "o pedido do
+        // trabalho", que é o caso de toda folha de um pedido só.
+        pedido: arte._pedido || null
+
+    };
+}
+window.arteParaOMotor = arteParaOMotor;
+
 window.runPedImposition = async function (mode, isRefazer) {
 
     // A gemea da linha que abre o `runImposition` no script.js. Sao duas telas
@@ -5684,117 +5917,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         schema = (typeof esquemaDaSelecaoCombinada === 'function')
             ? esquemaDaSelecaoCombinada()
             : 'cut_stack';
-        tempMultiArtes = state.selectedOSItems.map(s => {
-            const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
-            const qt = sItem ? (parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0))) : 0;
-            
-            const corObj = sItem && sItem.amostra_cor_id
-                ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
-                : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
-            // So arte de verdade vai ao motor. A amostra de aprovacao e a Cor
-            // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
-            // trabalho sai so com numeracao, que e o correto e o que sempre foi.
-            //
-            // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
-            // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
-            // no papel — se exibisse a amostra, prometeria o que nao sai.
-            const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
-
-            const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
-            const itemArteVersoUrl = (sItem && wantsDuplex)
-                ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
-                : null;
-
-            let pdfDoc = null;
-            if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {
-                pdfDoc = state.multiArtesPdfCache[itemArteUrl];
-            } else if (itemArteUrl && !state.multiArtesPdfLoading[itemArteUrl]) {
-                state.multiArtesPdfLoading[itemArteUrl] = true;
-                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                }
-                fetch(itemArteUrl).then(r => r.arrayBuffer()).then(buf => {
-                    return pdfjsLib.getDocument({ data: buf }).promise;
-                }).then(doc => {
-                    state.multiArtesPdfCache[itemArteUrl] = doc;
-                    if (typeof drawPedPreview === 'function') drawPedPreview();
-                }).catch(e => {
-                    console.error('Error fetching PDF for multi arte preview:', e);
-                }).finally(() => { delete state.multiArtesPdfLoading[itemArteUrl]; });
-            }
-
-            let pdfVersoDoc = null;
-            if (itemArteVersoUrl && state.multiArtesPdfCache[itemArteVersoUrl]) {
-                pdfVersoDoc = state.multiArtesPdfCache[itemArteVersoUrl];
-            } else if (itemArteVersoUrl && !state.multiArtesPdfLoading[itemArteVersoUrl]) {
-                state.multiArtesPdfLoading[itemArteVersoUrl] = true;
-                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                }
-                fetch(itemArteVersoUrl).then(r => r.arrayBuffer()).then(buf => {
-                    return pdfjsLib.getDocument({ data: buf }).promise;
-                }).then(doc => {
-                    state.multiArtesPdfCache[itemArteVersoUrl] = doc;
-                    if (typeof drawPedPreview === 'function') drawPedPreview();
-                }).catch(e => {
-                    console.error('Error fetching PDF VERSO for multi arte preview:', e);
-                }).finally(() => { delete state.multiArtesPdfLoading[itemArteVersoUrl]; });
-            }
-
-            const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
-                ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
-                : null;
-            const itemPdfName = filenameFromUrl || (sItem ? sItem.nome_arquivo_arte : null)
-                || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
-
-            return {
-                qtd: qt,
-                nome: sItem ? sItem.modelo : '',
-                // Se este número chega ao papel ou não. Fica separado de `nome`
-                // porque `nome` também alimenta as mensagens da tela ("o modelo
-                // X não possui arte"), e essas continuam precisando do número.
-                _imprimirNumero: (typeof imprimeNumeroDoModelo === 'function')
-                    ? imprimeNumeroDoModelo(sItem)
-                    : false,
-                // A escala da arte é DE CADA MODELO: numa folha combinada o A
-                // pode estar a 98% e o B a 100%. Ver `_escala_da_arte` no
-                // engine.py, que lê estes dois campos por arte.
-                _escalaH: (typeof escalaDaArteDoModelo === 'function')
-                    ? escalaDaArteDoModelo(sItem).h : 100,
-                _escalaV: (typeof escalaDaArteDoModelo === 'function')
-                    ? escalaDaArteDoModelo(sItem).v : 100,
-                // O pedido DESTE modelo, que entra na coluna do pool e no
-                // conteudo do QR Ideal. Ver numeroDoPedidoDoItem() no script.js.
-                _pedido: (typeof numeroDoPedidoDoItem === 'function')
-                    ? numeroDoPedidoDoItem(s.osId)
-                    : null,
-                // Por onde a fatia do CSV chega ao payload. Ver o bloco que monta
-                // `payloadMultiArtes`, mais abaixo.
-                _itemId: s.itemId,
-                _osId: s.osId,
-                num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
-                num2_id: null,
-                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
-                has_raw_file: false,
-                is_selected: true,
-                amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
-                // O endereço da arte, que é o que o payload lê. Sem isto a folha
-                // saía com a numeração e SEM arte nenhuma: o objeto trazia só o
-                // `pdfDoc`, que serve à prévia e não ao motor. O gêmeo no
-                // script.js sempre teve os três.
-                pdf_url: itemArteUrl,
-                pdf_verso_url: itemArteVersoUrl,
-                pdf_name: itemPdfName,
-                rawFile: null,
-                nome_color: '#000000',
-                pdfDoc: pdfDoc,
-                pdfVersoDoc: pdfVersoDoc,
-                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
-                // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
-                // coluna do pool por modelo; sem isto o motor recusa a folha.
-                modelo: s.itemId || (sItem ? sItem.id : null)
-            };
-        });
+        tempMultiArtes = state.selectedOSItems.map(s => arteDoModeloParaFolha(s, numId));
     }
 
     const rotateEl = document.getElementById('ped-rotate-page');
@@ -5981,105 +6104,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
 
-        payloadMultiArtes = artesList.map(arte => {
-
-            // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
-            // do banco. Sem isto, os oito modelos receberiam as mesmas linhas.
-            // Espelha runImposition no script.js.
-            const itArte = arte._itemId
-                ? (state.osItens[arte._osId] || []).find(i => String(i.id) === String(arte._itemId))
-                : null;
-
-            // A ESCOLHA da numeracao continua pelo `num1_id` da arte; o que
-            // entra e so a resolucao do banco do pedido (27/08/2026), que
-            // devolve a propria numeracao quando o modelo nao tem vinculo.
-            let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
-
-            if (typeof resolverNumeracaoParaModelo === 'function') {
-                numArte = resolverNumeracaoParaModelo(numArte, itArte);
-            }
-
-            let qtdArte = arte.qtd;
-
-            if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId
-                && typeof fatiaCsvDoItem === 'function') {
-
-                if (itArte && itArte.csv_selecao) {
-
-                    numArte = JSON.parse(JSON.stringify(numArte));
-
-                    numArte.csv_data = fatiaCsvDoItem(itArte, numArte);
-
-                    // So mexe na quantidade quando ha fatia: para o modelo movido
-                    // a CSV, quantos itens saem E quantas linhas ele leva.
-                    qtdArte = numArte.csv_data.length;
-
-                } else if (itArte && typeof vinculoDeBancoDoModelo === 'function'
-                           && typeof linhasDoModeloNoPayload === 'function'
-                           && vinculoDeBancoDoModelo(itArte)) {
-                    // Sem distribuicao, o modelo com banco do PEDIDO leva a fatia
-                    // por coluna, limitada a quantidade (02/09/2026). Espelha o
-                    // script.js; ver `linhasDoModeloNoPayload` la.
-                    numArte = Object.assign({}, numArte,
-                        { csv_data: linhasDoModeloNoPayload(itArte, numArte) });
-                }
-
-            }
-
-            return {
-
-                qtd: qtdArte,
-
-                pdf_url: arte.pdf_url,
-
-                pdf_verso_url: arte.pdf_verso_url || null,
-
-                pdf_name: arte.pdf_name,
-
-                // O motor imprime este texto deitado na borda de cada item, e é
-                // o único campo que decide se ele sai. Ao combinar modelos do
-                // pedido quem manda é a opção do modelo, desmarcada por padrão.
-                // Na Lista de Imposição (não é multi-seleção) o nome é digitado
-                // à mão e continua valendo como sempre.
-                nome: (isMultiSelected && !arte._imprimirNumero) ? '' : (arte.nome || ''),
-
-                nome_color: arte.nome_color || '#000000',
-
-                // A escala da arte DESTE modelo. Sem ela, o motor cairia na do
-                // trabalho e todos os modelos da folha sairiam no mesmo tamanho.
-                escala_h: arte._escalaH ?? 100,
-                escala_v: arte._escalaV ?? 100,
-
-                num1_id: arte.num1_id,
-
-                num2_id: arte.num2_id,
-
-                start: arte.start,
-
-                numeracao: numArte,
-
-                numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
-
-                has_raw_file: !!arte.rawFile,
-
-                q_cam: arte.q_cam || 0,
-
-                l_cam: arte.l_cam || 1,
-
-                // O modelo de CADA arte. Numa folha multi-artes o QR Ideal tira
-                // uma coluna diferente do pool por modelo, então o motor precisa
-                // saber de qual arte veio cada item. Sem isto ele recusa o
-                // trabalho inteiro — e por isto o QR Ideal nunca imprimiu.
-                modelo: arte.modelo || null,
-
-                // E o pedido desta arte, pelo mesmo motivo: ele entra na coluna
-                // do pool E no conteúdo do QR. Nulo significa "o pedido do
-                // trabalho", que é o caso de toda folha de um pedido só.
-                pedido: arte._pedido || null
-
-            };
-
-        });
+        payloadMultiArtes = artesList.map(arte => arteParaOMotor(arte, isMultiSelected));
 
     }
 

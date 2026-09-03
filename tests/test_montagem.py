@@ -46,19 +46,31 @@ def test_o_harness_da_tela_passa():
     _rodar("montagem_tela_harness.js")
 
 
-def test_o_motor_nao_foi_tocado():
-    """A Montagem NAO mudou o Python, e isso e' o ponto.
+def test_o_motor_so_mudou_para_repetir_celula():
+    """O que a Montagem precisa do motor ja existia — menos uma chave.
 
     O motor ja monta folha com modelos de pedidos diferentes desde 18/08/2026
     (o `multi_artes` do aproveitamento de folha), e o `refazer_celulas` dele ja
     indexa o `multi_map` — a lista ordenada dos itens do trabalho inteiro, em
     que cada entrada carrega o seu modelo, o seu pedido e a sua linha do banco.
 
-    A tela so' TRADUZ. Se algum dia este teste falhar, alguem mexeu no caminho
-    de impressao por causa da Montagem, e ai vale reler por que ele nao precisou
-    mudar antes de aceitar que precisa agora.
+    A unica coisa que entrou POR CAUSA desta tela (03/09/2026) foi
+    `refazer_repetir`: com ela, posicao repetida imprime duas vezes — e' o ⧉ da
+    celula. Sem ela o motor continua tirando repetidas, que e' o certo para o
+    Refazer Celula do Pedido, onde "1,1,6" e' engano de dedo. Ver
+    tests/test_engine_refazer.py.
     """
     engine = _ler("engine.py")
+    app = _ler("app.py")
+
+    assert "refazer_repetir: bool = False" in engine, (
+        "a chave que faz o motor aceitar celula repetida sumiu, ou deixou de "
+        "nascer desligada"
+    )
+    assert 'refazer_repetir=bool(data.get("refazer_repetir"))' in app, (
+        "o app.py deixou de repassar a chave ao motor — o ⧉ da Montagem "
+        "imprimiria uma vez so', calado"
+    )
 
     # As tres pecas de que a Montagem depende, e que ja existiam.
     assert "def _pedido_do_item(" in engine, (
@@ -86,15 +98,20 @@ def test_a_traducao_das_posicoes_desloca_pela_tiragem():
     so' se descobre na portaria.
     """
     js = _ler("frontend/montagem.js")
-    corpo = js[js.index("function posicoesCombinadas(grupos) {"):]
+    corpo = js[js.index("function posicoesCombinadas(celulas, modelos) {"):]
     corpo = corpo[:corpo.index("\n}") + 2]
 
-    assert "base += parseInt(g.qtd)" in corpo, (
+    assert "base += parseInt(m.qtd)" in corpo, (
         "o deslocamento deixou de ser a TIRAGEM do modelo anterior"
     )
-    assert "g.posicoes.length" not in corpo, (
-        "o deslocamento passou a usar o numero de celulas pedidas — e' o erro "
-        "que este teste existe para impedir"
+    assert ".length" not in corpo, (
+        "o deslocamento passou a contar celulas — e' o erro que este teste "
+        "existe para impedir"
+    )
+    # Desde o kanban (03/09/2026) o deslocamento vem dos MODELOS e a ordem da
+    # saida vem das CELULAS. Arrastar celula nao pode mexer no indice de ninguem.
+    assert "deslocamento[chaveDoModelo(c)]" in corpo, (
+        "cada celula deixou de levar o deslocamento do SEU modelo"
     )
 
 
@@ -107,15 +124,27 @@ def test_a_arte_leva_a_tiragem_inteira_no_payload():
     ingresso.
     """
     js = _ler("frontend/montagem.js")
-    corpo = js[js.index("function payloadDaMontagem(grupos) {"):]
+    corpo = js[js.index("function payloadDaMontagem(celulas, modelos, artes) {"):]
     corpo = corpo[:corpo.index("\n}\n") + 3]
 
-    assert "qtd: g.qtd" in corpo, "a arte deixou de levar a tiragem inteira"
-    assert "layout_schema: 'multi_artes'" in corpo
-    assert "refazer_celulas: posicoesCombinadas(grupos)" in corpo
-    assert "modelo: g.itemId" in corpo and "pedido: g.pedidoNumero" in corpo, (
-        "a arte parou de declarar o seu modelo ou o seu pedido — sem os dois o "
-        "motor recusa a folha, e com razao"
+    assert "multi_artes: artes" in corpo, "o payload deixou de mandar as artes prontas"
+    assert "schema: 'multi_artes'" in corpo, (
+        "o payload deixou de mandar `schema` — e' a chave que o app.py le; "
+        "`layout_schema` ele ignora"
+    )
+    assert "refazer_celulas: posicoesCombinadas(celulas, comTiragemDoMotor)" in corpo, (
+        "o deslocamento deixou de usar a qtd da ARTE PRONTA — a tiragem "
+        "guardada na lista pode ter envelhecido"
+    )
+    assert "refazer_repetir: true" in corpo, "o ⧉ deixou de chegar ao motor"
+
+    # E a arte de cada modelo vem das funcoes da tela do Pedido: e' assim que
+    # ela leva a tiragem inteira, o modelo e o pedido — como sempre levou la.
+    prep = js[js.index("async function prepararArtesDaMontagem(modelos) {"):]
+    prep = prep[:prep.index("\n}\n") + 3]
+    assert "arteDoModeloParaFolha({ osId: m.osId, itemId: m.itemId }, null, { comPrevia: false })" in prep
+    assert "arteParaOMotor(arte, true)" in prep, (
+        "a arte deixou de passar pelo construtor do Pedido como folha combinada"
     )
 
 
@@ -201,7 +230,7 @@ def test_a_linha_da_lista_volta_ao_modelo():
         "de volta ao modelo que acabou de sair da lista"
     )
 
-    ativa = js[js.index("function _mtgLinhaAtiva(g) {"):]
+    ativa = js[js.index("function _mtgLinhaAtiva(m) {"):]
     ativa = ativa[:ativa.index("\n}") + 2]
     assert "state.montagem.pedidoSel" in ativa and "state.montagem.modeloSel" in ativa, (
         "a linha ativa deixou de ser derivada do que o compositor mostra"
@@ -297,3 +326,101 @@ def test_a_regra_de_compatibilidade_e_a_decidida():
         "a grafia 'SÓ FRENTE' saiu: modelos que a usam seriam recusados contra "
         "os que usam 'Frente', sendo a mesma coisa"
     )
+
+
+def test_a_montagem_monta_a_arte_pelas_funcoes_do_pedido():
+    """As sete divergencias de 03/09/2026, travadas de uma vez.
+
+    A primeira versao montava a sua propria arte, e uma celula refeita saia
+    diferente da original em sete coisas: sem o verso (lia `arte_verso_url`,
+    campo que nao existe, e mandava `print_mode: 'simplex'`, valor que o motor
+    nao conhece), com a amostra de aprovacao no lugar da arte (sem o filtro
+    `arteParaImpor`), sem os bancos do pedido, com o `csv_data` inteiro em vez
+    da fatia do modelo, sem a escala da arte, sem a rotacao da folha e com os
+    elementos de Layout.
+
+    O conserto nao foi copiar as sete regras: foi extrair da `runPedImposition`
+    o construtor de arte (`arteDoModeloParaFolha` + `arteParaOMotor`) e fazer as
+    duas telas chamarem o MESMO. Este teste cobra os dois lados.
+    """
+    js = _ler("frontend/montagem.js")
+    pedido = _ler("frontend/pedido.js")
+
+    # O lado do Pedido: as funcoes existem e a runPedImposition as usa.
+    assert "function arteDoModeloParaFolha(s, numIdReserva, opcoes) {" in pedido
+    assert "function arteParaOMotor(arte, isMultiSelected) {" in pedido
+    assert "tempMultiArtes = state.selectedOSItems.map(s => arteDoModeloParaFolha(s, numId));" in pedido, (
+        "a runPedImposition voltou a montar a arte por conta propria — as duas "
+        "telas divergiriam de novo"
+    )
+    assert "payloadMultiArtes = artesList.map(arte => arteParaOMotor(arte, isMultiSelected));" in pedido
+
+    # O lado da Montagem: nada de regra propria.
+    codigo = re.sub(r"^\s*//.*$", "", re.sub(r"/\*.*?\*/", "", js, flags=re.S), flags=re.M)
+    assert "arte_verso_url" not in codigo, "voltou a ler um campo de verso que nao existe"
+    assert "'simplex'" not in codigo, "voltou a mandar um modo de impressao que o motor nao conhece"
+    assert "it.arte_url" not in codigo and "item.arte_url" not in codigo, (
+        "voltou a mandar a arte crua, sem o filtro da amostra de aprovacao"
+    )
+    # `arte_escala_h` (a reserva do trabalho, 100) e' legitima; o que nao pode
+    # existir aqui e' a escala POR ARTE, que e' do construtor do Pedido.
+    so_da_arte = codigo.replace("arte_escala_h", "").replace("arte_escala_v", "")
+    assert "pdf_verso_url:" not in so_da_arte and "escala_h:" not in so_da_arte, (
+        "a Montagem voltou a escrever campos da arte que sao do construtor do Pedido"
+    )
+    for chamada in ("garantirBancosDoTrabalho([osId])", "garantirCsvDoTrabalho(ids)",
+                    "pedidosComBancoDesconhecido([osId])", "bancoVazioNoPayload(null, artes)",
+                    "numeracaoSemElementosDeLayout(pronta.numeracao)",
+                    "rotacaoDaFolhaDoFormato(fmt)", "print_mode: modoDaFolhaDaMontagem(modelos)"):
+        assert chamada in js, "sumiu da Montagem: " + chamada
+
+
+def test_a_rotacao_da_folha_vem_de_uma_funcao_so():
+    """`rotacaoDaFolhaDoFormato` (script.js) e' lida pelas tres telas.
+
+    Antes, a regra (page_rotate do formato, ou 90 se `default_rotate_page`)
+    estava escrita duas vezes — no applyFormatoDefaults e no gemeo do
+    pedido.js — e a Montagem mandava 0 fixo. Um formato que gira a folha
+    chegava ao RIP deitado.
+    """
+    script = _ler("frontend/script.js")
+    pedido = _ler("frontend/pedido.js")
+    assert "function rotacaoDaFolhaDoFormato(fmt) {" in script
+    assert script.count("fmt.default_rotate_page ? 90 : 0") == 1, (
+        "a regra da rotacao voltou a ser escrita mais de uma vez no script.js"
+    )
+    assert "default_rotate_page ? 90 : 0" not in pedido, (
+        "o pedido.js voltou a repetir a regra em vez de chamar a funcao"
+    )
+    assert "let rotVal = rotacaoDaFolhaDoFormato(fmt);" in script
+    assert "let rotVal = rotacaoDaFolhaDoFormato(fmt);" in pedido
+
+
+def test_o_kanban_tem_os_tres_gestos():
+    """Pedido do usuario em 03/09/2026: repetir, tirar e arrastar a celula.
+
+    O ⧉ e o × moram DENTRO da celula arrastavel, e por isso param a
+    propagacao — sem isso, clicar no × comecaria um arrasto. E a dica da folha
+    diz os tres gestos em texto: icone sem rotulo e' o que esta grafica nao
+    aceita.
+    """
+    js = _ler("frontend/montagem.js")
+    html = _ler("frontend/index.html")
+
+    assert 'draggable="true"' in js, "a celula deixou de ser arrastavel"
+    assert "function _mtgLigarArrasto() {" in js
+    assert "event.stopPropagation(); duplicarCelulaDaMontagem(" in js
+    assert "event.stopPropagation(); removerCelulaDaMontagem(" in js
+    assert "'dragstart'" in js and "'dragover'" in js and "'drop'" in js, (
+        "o arrasto deixou de usar os eventos nativos do HTML5 — e' o que "
+        "funciona em todos os navegadores da grafica sem instalar nada"
+    )
+
+    dica = html[html.index('id="mtg-previa"'):]
+    dica = dica[:dica.index('class="mtg-rodape"')]
+    assert "Arraste" in dica and "repete" in dica and "tira s&oacute; ela" in dica, (
+        "a dica da folha deixou de explicar os tres gestos"
+    )
+
+    # O motor imprime a repetida SO' quando a tela pede.
+    assert "refazer_repetir: true" in js

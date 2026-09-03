@@ -3591,6 +3591,22 @@ function populateSelects() {
 
 
 // - Aplica os padrões do formato na tela de imposição -
+/**
+ * A rotacao da folha que o FORMATO pede, em graus (0, 90, 180, 270).
+ *
+ * E' o que as telas de Imposicao e de Pedido poem no seletor "girar folha" ao
+ * escolher o formato — e, desde 03/09/2026, o que a Montagem manda ao motor
+ * para a folha refeita sair na mesma orientacao da original. Antes ela mandava
+ * 0 fixo: um formato que gira a folha 90 graus chegava ao RIP deitado.
+ */
+function rotacaoDaFolhaDoFormato(fmt) {
+    if (!fmt) return 0;
+    const fRot = fmt.rotations || {};
+    if (fRot.page_rotate !== undefined) return parseInt(fRot.page_rotate) || 0;
+    return fmt.default_rotate_page ? 90 : 0;
+}
+window.rotacaoDaFolhaDoFormato = rotacaoDaFolhaDoFormato;
+
 function applyFormatoDefaults() {
     const fmtSel = document.getElementById('imp-formato');
     if (!fmtSel) return;
@@ -3639,14 +3655,8 @@ function applyFormatoDefaults() {
         if (depthInp) depthInp.value = fmt.default_block_depth;
     }
     
-    // Rotate
-    const fRot = fmt.rotations || {};
-    let rotVal = 0;
-    if (fRot.page_rotate !== undefined) {
-        rotVal = parseInt(fRot.page_rotate) || 0;
-    } else {
-        rotVal = fmt.default_rotate_page ? 90 : 0;
-    }
+    // Rotate — ver `rotacaoDaFolhaDoFormato`.
+    let rotVal = rotacaoDaFolhaDoFormato(fmt);
     const rotateCb = document.getElementById('imp-rotate-page');
     if (rotateCb) {
         rotateCb.value = String(rotVal);

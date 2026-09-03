@@ -10,7 +10,7 @@
 
    Esta tela junta essas células. Pedido do usuário em 29/08/2026.
 
-   ── O QUE JÁ EXISTIA, E POR ISSO NENHUM PYTHON MUDOU ─────────────────────
+   ── O QUE O MOTOR JÁ FAZIA ───────────────────────────────────────────────
 
    O motor já monta folha com modelos de pedidos DIFERENTES desde 18/08/2026
    (o `multi_artes` do aproveitamento de folha): cada arte carrega o seu
@@ -28,20 +28,41 @@
    célula refeita SUBSTITUI o ingresso perdido; ela não cria um segundo
    ingresso válido para a mesma entrada.
 
+   A única coisa que o motor ganhou POR CAUSA desta tela (03/09/2026) foi a
+   chave `refazer_repetir`: com ela, posição repetida em `refazer_celulas`
+   imprime duas vezes. É o que o botão ⧉ de cada célula pede. Sem a chave, o
+   motor continua tirando repetidas — e é assim que a tela do Pedido manda.
+
    ── O QUE ESTA TELA FAZ ──────────────────────────────────────────────────
 
    Traduz. O operador pensa em "a posição 6 do modelo 1000565"; o motor espera
    posições no fluxo combinado. `posicoesCombinadas()` faz a conta, e ela é a
    função mais delicada do arquivo — ver o comentário lá.
+
+   E monta cada arte EXATAMENTE como a tela do Pedido monta — pelas mesmas
+   funções (`arteDoModeloParaFolha` e `arteParaOMotor`, do pedido.js). A
+   primeira versão montava a sua própria arte, e uma célula refeita aqui saía
+   diferente da original em sete coisas: sem o verso, com a amostra de
+   aprovação no lugar da arte, sem o banco do pedido, com as linhas do banco
+   fora de lugar, sem a escala do modelo, sem a rotação da folha. Ver
+   `prepararArtesDaMontagem()`.
    ══════════════════════════════════════════════════════════════════════════ */
 
 // ─── O estado da tela ───────────────────────────────────────────────────────
 //
-// `grupos` é a montagem: um por (pedido, modelo), na ordem em que o operador
-// adicionou. A ordem importa — é ela que decide qual célula ocupa qual posição
-// na folha, e é a mesma ordem que o motor recebe em `multi_artes`.
-if (typeof state !== 'undefined' && state && !state.montagem) {
-    state.montagem = { grupos: [], pedidoSel: null, modeloSel: null };
+// Duas listas, de propósito separadas:
+//
+// `celulas` é a folha: uma entrada por célula, NA ORDEM EM QUE VÃO SAIR NO
+// PAPEL. É a lista que o operador arrasta, duplica e tira, célula a célula.
+// Cada entrada é `{ osId, itemId, pos }` — a posição do item dentro do modelo.
+//
+// `modelos` é o registro de cada par (pedido, modelo) que entrou, na ordem em
+// que entrou. É a ordem do `multi_artes` do motor, e portanto é ela que decide
+// o deslocamento de cada posição (ver `posicoesCombinadas`). Ela NÃO precisa
+// bater com a ordem das células: o operador pode pôr a célula do segundo
+// modelo antes da do primeiro, e o motor recebe a folha nessa ordem.
+if (typeof state !== 'undefined' && state && (!state.montagem || !state.montagem.celulas)) {
+    state.montagem = { celulas: [], modelos: [], pedidoSel: null, modeloSel: null };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -61,6 +82,9 @@ if (typeof state !== 'undefined' && state && !state.montagem) {
  *
  * A ORDEM DIGITADA É PRESERVADA. É ela que decide qual célula ocupa qual
  * posição na folha compactada; ordenar aqui mudaria o papel sem ninguém pedir.
+ *
+ * Posição repetida na digitação entra UMA vez: "6,6" é engano de dedo. Quem
+ * quer a mesma célula duas vezes usa o ⧉ dela na folha — um gesto explícito.
  */
 function posicoesDaMontagem(texto, total) {
     const vistas = [];
@@ -101,21 +125,30 @@ function posicoesDaMontagem(texto, total) {
 /**
  * Quantos itens este modelo imprime — o total contra o qual a posição vale.
  *
- * É o mesmo número que a prévia do Pedido mostra, e vem do BANCO quando há
- * banco: a quantidade contratada e o que o modelo de fato imprime podem
- * divergir (ver docs/conferencia_pedido_21202.md), e quem manda é o que vira
- * papel. Sem banco, a faixa numérica.
+ * É a MESMA conta que o motor vai fazer com a arte que a tela do Pedido monta
+ * (`arteParaOMotor`): a quantidade contratada é quantos itens o motor cria; o
+ * banco, quando há banco, é quantos deles têm dado. Quem manda é o menor dos
+ * dois — item além do banco sairia com número no lugar do nome, e posição
+ * além da quantidade o motor recusa.
+ *
+ * Com distribuição do banco (`csv_selecao`) vale a fatia, e só ela: é o que o
+ * modelo imprime, e a quantidade contratada deixa de ser o limite.
  */
 function totalDeItensDoModelo(item, num) {
     if (!item) return 0;
 
+    const contratada = parseInt(item.qtd !== undefined && item.qtd !== null
+        ? item.qtd : item.quantidade) || 0;
+
     if (num && num.csv_data && num.csv_data.length) {
-        if (typeof fatiaCsvDoItem === 'function') {
-            const fatia = fatiaCsvDoItem(item, num);
-            if (fatia && fatia.length) return fatia.length;
-        }
-        return num.csv_data.length;
+        const fatia = (typeof fatiaCsvDoItem === 'function')
+            ? (fatiaCsvDoItem(item, num) || [])
+            : num.csv_data;
+        if (item.csv_selecao) return fatia.length;
+        return contratada > 0 ? Math.min(contratada, fatia.length) : fatia.length;
     }
+
+    if (contratada > 0) return contratada;
 
     const ini = parseInt(item.num_inicial !== undefined && item.num_inicial !== null
         ? item.num_inicial : (item.numeracao_inicio || 0)) || 0;
@@ -123,9 +156,7 @@ function totalDeItensDoModelo(item, num) {
         ? item.num_final : (item.numeracao_fim || 0)) || 0;
     if (ini > 0 && fim >= ini) return fim - ini + 1;
 
-    const q = parseInt(item.quantidade !== undefined && item.quantidade !== null
-        ? item.quantidade : item.qtd);
-    return isNaN(q) ? 0 : q;
+    return 0;
 }
 
 /**
@@ -255,6 +286,37 @@ function porQueNaoCabeNaMontagem(a, b) {
     return null;
 }
 
+/** A chave de um par (pedido, modelo) — serve para célula e para modelo. */
+function chaveDoModelo(x) {
+    return String(x.osId) + '|' + String(x.itemId);
+}
+
+/**
+ * O modelo já registrado na montagem para este par (pedido, modelo), se houver.
+ *
+ * Adicionar o mesmo modelo duas vezes tem de reaproveitar o registro, e não
+ * criar um segundo: dois registros do mesmo modelo dariam duas artes iguais no
+ * `multi_artes`, e o deslocamento do `posicoesCombinadas` passaria a contar a
+ * tiragem daquele modelo duas vezes — todas as posições dos modelos seguintes
+ * sairiam erradas.
+ */
+function modeloDaMontagem(modelos, osId, itemId) {
+    return (modelos || []).find(m =>
+        String(m.osId) === String(osId) && String(m.itemId) === String(itemId)) || null;
+}
+
+/** As posições das células deste modelo, na ordem da folha — com repetição. */
+function celulasDoModelo(celulas, modelo) {
+    const k = chaveDoModelo(modelo);
+    return (celulas || []).filter(c => chaveDoModelo(c) === k).map(c => c.pos);
+}
+
+/** Os modelos que ainda têm ao menos uma célula na folha, na ordem do registro. */
+function modelosComCelula(celulas, modelos) {
+    const usadas = new Set((celulas || []).map(chaveDoModelo));
+    return (modelos || []).filter(m => usadas.has(chaveDoModelo(m)));
+}
+
 /**
  * As posições por modelo viram posições no fluxo COMBINADO.
  *
@@ -271,62 +333,139 @@ function porQueNaoCabeNaMontagem(a, b) {
  * para evitar: pedir três células do primeiro modelo e somar 3 em vez de 3.000
  * faria o segundo modelo imprimir os itens errados — com os códigos de QR
  * errados, descobertos na portaria.
+ *
+ * A ordem da SAÍDA é a ordem das células, que é a ordem da folha. A ordem dos
+ * MODELOS só decide o deslocamento. As duas são independentes de propósito: o
+ * operador arrasta células, e o `multi_artes` não muda por isso.
  */
-function posicoesCombinadas(grupos) {
-    const saida = [];
+function posicoesCombinadas(celulas, modelos) {
+    const deslocamento = {};
     let base = 0;
-
-    for (const g of (grupos || [])) {
-        for (const p of (g.posicoes || [])) {
-            saida.push(base + p);
-        }
-        base += parseInt(g.qtd) || 0;
+    for (const m of (modelos || [])) {
+        deslocamento[chaveDoModelo(m)] = base;
+        base += parseInt(m.qtd) || 0;
     }
 
-    return saida;
+    return (celulas || []).map(c => (deslocamento[chaveDoModelo(c)] || 0) + c.pos);
 }
 
-/** Quantas células a montagem tem hoje. */
-function totalDeCelulasDaMontagem(grupos) {
-    return (grupos || []).reduce((s, g) => s + ((g.posicoes || []).length), 0);
+/** Quantas células a montagem tem hoje — com as repetidas. */
+function totalDeCelulasDaMontagem(celulas) {
+    return (celulas || []).length;
 }
 
 /**
  * Folhas e sobra da montagem, pela mesma conta do aproveitamento de folha:
  * total de células ÷ células do formato, e a sobra é o RESTO.
  */
-function contaDaMontagem(grupos, porFolha) {
-    const celulas = totalDeCelulasDaMontagem(grupos);
+function contaDaMontagem(celulas, porFolha) {
+    const total = totalDeCelulasDaMontagem(celulas);
     const p = parseInt(porFolha) || 0;
-    if (!p) return { celulas, folhas: 0, vazias: 0, porFolha: 0 };
+    if (!p) return { celulas: total, folhas: 0, vazias: 0, porFolha: 0 };
 
-    const folhas = Math.ceil(celulas / p);
-    const resto = celulas % p;
-    return { celulas, folhas, vazias: resto === 0 ? 0 : p - resto, porFolha: p };
+    const folhas = Math.ceil(total / p);
+    const resto = total % p;
+    return { celulas: total, folhas, vazias: resto === 0 ? 0 : p - resto, porFolha: p };
 }
 
 /**
- * O grupo que já está na montagem para este par (pedido, modelo), se houver.
+ * Repete a célula `i` logo depois dela — a mesma peça, impressa duas vezes.
  *
- * Adicionar o mesmo modelo duas vezes tem de SOMAR as posições ao grupo que já
- * existe, e não criar um segundo: dois grupos do mesmo modelo dariam duas
- * artes iguais no `multi_artes`, e o deslocamento do `posicoesCombinadas`
- * passaria a contar a tiragem daquele modelo duas vezes — todas as posições
- * dos modelos seguintes sairiam erradas.
+ * Pedido do usuário em 03/09/2026: "ícone que duplica o modelo na próxima
+ * célula". A cópia é IGUAL: mesmo pedido, mesmo modelo, mesma posição — e por
+ * isso o mesmo código de QR. Não é a posição seguinte do modelo: para essa, o
+ * operador digita.
  */
-function grupoDaMontagem(grupos, osId, itemId) {
-    return (grupos || []).find(g =>
-        String(g.osId) === String(osId) && String(g.itemId) === String(itemId)) || null;
+function duplicarCelula(celulas, i) {
+    if (!celulas || i < 0 || i >= celulas.length) return celulas;
+    const c = celulas[i];
+    celulas.splice(i + 1, 0, { osId: c.osId, itemId: c.itemId, pos: c.pos });
+    return celulas;
+}
+
+/** Tira SÓ a célula `i` da folha. As outras do mesmo modelo ficam. */
+function tirarCelula(celulas, i) {
+    if (!celulas || i < 0 || i >= celulas.length) return celulas;
+    celulas.splice(i, 1);
+    return celulas;
+}
+
+/**
+ * Move a célula `de` para a posição `para` da folha.
+ *
+ * `para` é o índice em que ela FICA depois do movimento: mover a célula 0
+ * para 3 a deixa em quarto lugar. Soltar sobre uma célula vazia, na tela,
+ * manda para o fim.
+ */
+function moverCelula(celulas, de, para) {
+    if (!celulas) return celulas;
+    const n = celulas.length;
+    if (de < 0 || de >= n || para < 0 || para >= n || de === para) return celulas;
+    const [c] = celulas.splice(de, 1);
+    celulas.splice(para, 0, c);
+    return celulas;
+}
+
+/**
+ * As células cuja posição passou da tiragem que o motor vai criar.
+ *
+ * `artes[j]` é a arte pronta do `modelos[j]`, com `_tiragem` — quantos itens
+ * daquele modelo têm como sair certo (ver `prepararArtesDaMontagem`). O banco
+ * pode ter mudado entre o operador adicionar a célula e mandar gerar, e a
+ * posição que existia pode não existir mais.
+ */
+function celulasForaDaTiragem(celulas, modelos, artes) {
+    const tiragem = {};
+    (modelos || []).forEach((m, j) => {
+        const a = artes && artes[j];
+        tiragem[chaveDoModelo(m)] = a && a._tiragem > 0 ? a._tiragem : 0;
+    });
+    return (celulas || []).filter(c => {
+        const t = tiragem[chaveDoModelo(c)];
+        return t > 0 && c.pos > t;
+    });
+}
+
+/**
+ * O modo de impressão da folha: `front`, `duplex` ou `duplex_unico` — os três
+ * valores que o motor conhece (`tem_verso` / `verso_unico` no engine.py).
+ *
+ * Vem de `modoDeVersoDoModelo`, a mesma regra que a tela do Pedido aplica ao
+ * modelo ativo. A trava da montagem já garante que todos os modelos têm a
+ * mesma face; o que pode variar entre eles é só o verso comum × verso único,
+ * e o único vence porque é o único que diz ao motor como ler as páginas.
+ *
+ * A primeira versão mandava `'simplex'`, valor que o motor não conhece e trata
+ * como frente — o verso nunca saía.
+ */
+function modoDaFolhaDaMontagem(modelos) {
+    let modo = 'front';
+    for (const m of (modelos || [])) {
+        const it = m.peca && m.peca._item;
+        const dele = (typeof modoDeVersoDoModelo === 'function' && it)
+            ? modoDeVersoDoModelo(it) : 'front';
+        if (dele === 'duplex_unico') return 'duplex_unico';
+        if (dele === 'duplex') modo = 'duplex';
+    }
+    return modo;
 }
 
 if (typeof window !== 'undefined') {
     window.posicoesDaMontagem = posicoesDaMontagem;
     window.totalDeItensDoModelo = totalDeItensDoModelo;
     window.porQueNaoCabeNaMontagem = porQueNaoCabeNaMontagem;
+    window.chaveDoModelo = chaveDoModelo;
+    window.modeloDaMontagem = modeloDaMontagem;
+    window.celulasDoModelo = celulasDoModelo;
+    window.modelosComCelula = modelosComCelula;
     window.posicoesCombinadas = posicoesCombinadas;
     window.totalDeCelulasDaMontagem = totalDeCelulasDaMontagem;
     window.contaDaMontagem = contaDaMontagem;
-    window.grupoDaMontagem = grupoDaMontagem;
+    window.duplicarCelula = duplicarCelula;
+    window.tirarCelula = tirarCelula;
+    window.moverCelula = moverCelula;
+    window.celulasForaDaTiragem = celulasForaDaTiragem;
+    window.modoDaFolhaDaMontagem = modoDaFolhaDaMontagem;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -381,11 +520,17 @@ function imprimirNumeroNaMontagem() {
 }
 
 /** Quantas células cabem na folha desta montagem. */
-function _mtgCelulasPorFolha(grupos) {
+function _mtgCelulasPorFolha(modelos) {
     // Vem da PECA resolvida, e nao de uma busca propria: duas resolucoes do
     // mesmo formato podem discordar, e ai a conta da folha diria uma coisa e o
     // papel sairia outra.
-    return (grupos && grupos.length) ? (grupos[0].peca.celulas_por_folha || 0) : 0;
+    return (modelos && modelos.length) ? (modelos[0].peca.celulas_por_folha || 0) : 0;
+}
+
+/** O número do pedido, para as mensagens — ou o id, quando não se sabe. */
+function _mtgNumeroDoPedido(osId) {
+    const n = (typeof numeroDoPedidoDoItem === 'function') ? numeroDoPedidoDoItem(osId) : null;
+    return n || String(osId);
 }
 
 /**
@@ -393,7 +538,7 @@ function _mtgCelulasPorFolha(grupos) {
  *
  * Refazer célula é sempre sobre material que JÁ SAIU — oferecer a fila inteira
  * encheria o seletor de pedidos que não têm célula nenhuma para repor. Pedido
- * mais antigo entra pelo número, digitado no mesmo campo.
+ * mais antigo entra pelo número, no campo ao lado.
  */
 function pedidosParaMontagem(dias) {
     const limite = Date.now() - ((parseInt(dias) || 30) * 24 * 60 * 60 * 1000);
@@ -420,7 +565,10 @@ function encherPedidosDaMontagem() {
     const atual = sel.value;
     const lista = pedidosParaMontagem(30);
 
-    sel.innerHTML = '<option value="">Escolha ou digite o número…</option>'
+    // "Impressos nos últimos 30 dias", e não "escolha ou digite": um <select>
+    // não se digita, e o campo do número fica ao lado. Prometer aqui o que a
+    // tela cumpre em outro lugar só confunde.
+    sel.innerHTML = '<option value="">Impressos nos últimos 30 dias…</option>'
         + lista.map(os => {
             const num = escapeHtml(String(os.numero || os.id));
             const nome = escapeHtml(String(os.cliente_nome || os.titulo || '').slice(0, 40));
@@ -428,6 +576,38 @@ function encherPedidosDaMontagem() {
         }).join('');
 
     if (atual) sel.value = atual;
+}
+
+/**
+ * Os bancos e o CSV de cada numeração deste pedido, na mão.
+ *
+ * É o que a tela do Pedido faz antes de montar o payload
+ * (`garantirCsvDoTrabalho` e `garantirBancosDoTrabalho`, na `runPedImposition`).
+ * A primeira versão da Montagem não fazia: quem nunca tivesse aberto o pedido
+ * na tela do Pedido nesta sessão via a tiragem errada na lista, e o motor
+ * recebia a numeração sem uma linha do banco — imprimindo número sequencial no
+ * lugar do nome, sem erro nenhum.
+ *
+ * Nunca lança: aqui é o compositor, e falhar a carga não pode travar a
+ * digitação. Quem recusa o trabalho é o `prepararArtesDaMontagem`, na hora de
+ * gerar, com a mensagem do que fazer.
+ */
+async function _mtgGarantirBancosDoPedido(osId) {
+    const itens = state.osItens[osId] || [];
+    try {
+        if (typeof garantirBancosDoTrabalho === 'function') {
+            await garantirBancosDoTrabalho([osId]);
+        }
+        const ids = itens
+            .map(it => (typeof numeracaoIdDoItem === 'function')
+                ? numeracaoIdDoItem(it) : (it.amostra_num_id || it.numeracao_id))
+            .filter(Boolean);
+        if (typeof garantirCsvDoTrabalho === 'function') {
+            await garantirCsvDoTrabalho(ids);
+        }
+    } catch (e) {
+        console.warn('[montagem] nao consegui garantir os bancos do pedido', osId, e);
+    }
 }
 
 async function onMontagemPedidoChange() {
@@ -456,6 +636,8 @@ async function onMontagemPedidoChange() {
     if (typeof loadOSItens === 'function') {
         try { await loadOSItens(osId); } catch (e) { console.warn('[montagem]', e); }
     }
+    // E os bancos deste pedido, para a tiragem da lista sair certa.
+    await _mtgGarantirBancosDoPedido(osId);
 
     const itens = state.osItens[osId] || [];
     selMod.innerHTML = '<option value="">Escolha o modelo…</option>'
@@ -495,19 +677,19 @@ function onMontagemPosicoesChange() {
 
     if (item) {
         const peca = pecaDaMontagem(item);
-        const grupos = state.montagem.grupos;
+        const modelos = state.montagem.modelos;
         if (!peca.formato_id) {
             // Sem formato nao da para conferir nem para impor: melhor dizer
             // aqui do que deixar o motor recusar com o material ja esperando.
             recusa = 'não dá para saber o formato deste modelo — abra o pedido na tela do Pedido uma vez e volte aqui';
-        } else if (grupos.length) {
-            recusa = porQueNaoCabeNaMontagem(grupos[0].peca, peca);
+        } else if (modelos.length) {
+            recusa = porQueNaoCabeNaMontagem(modelos[0].peca, peca);
         }
     }
 
     if (caixaRecusa) {
         if (recusa && item) {
-            const daFolha = state.montagem.grupos.length ? state.montagem.grupos[0].peca : null;
+            const daFolha = state.montagem.modelos.length ? state.montagem.modelos[0].peca : null;
             caixaRecusa.innerHTML = _mtgHtmlDaRecusa(recusa, daFolha, pecaDaMontagem(item));
             caixaRecusa.style.display = 'flex';
         } else {
@@ -565,7 +747,7 @@ function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
         </div>`;
 }
 
-/** Junta as posições digitadas ao grupo daquele modelo, ou cria o grupo. */
+/** Junta as posições digitadas à folha, registrando o modelo se for novo. */
 function adicionarNaMontagem() {
     const item = _mtgItemEscolhido();
     if (!item) return;
@@ -576,37 +758,38 @@ function adicionarNaMontagem() {
     // incompativel, nao entra.
     if (!peca.formato_id) return;
 
-    const grupos = state.montagem.grupos;
-    if (grupos.length && porQueNaoCabeNaMontagem(grupos[0].peca, peca)) return;
+    const { celulas, modelos } = state.montagem;
+    if (modelos.length && porQueNaoCabeNaMontagem(modelos[0].peca, peca)) return;
 
     const num = _mtgNumeracaoDoItem(item);
     const total = totalDeItensDoModelo(item, num);
     const campo = document.getElementById('mtg-posicoes');
-    void num;
     const { posicoes } = posicoesDaMontagem(campo ? campo.value : '', total);
     if (!posicoes.length) return;
 
     const osId = state.montagem.pedidoSel;
-    // Somar ao grupo que existe, nunca criar um segundo do mesmo modelo: duas
-    // artes iguais no multi_artes fariam o deslocamento contar a tiragem duas
-    // vezes, e todas as posições seguintes sairiam erradas.
-    let g = grupoDaMontagem(grupos, osId, item.id);
-    if (!g) {
-        g = {
+    // Reaproveitar o registro que existe, nunca criar um segundo do mesmo
+    // modelo: duas artes iguais no multi_artes fariam o deslocamento contar a
+    // tiragem duas vezes, e todas as posições seguintes sairiam erradas.
+    let m = modeloDaMontagem(modelos, osId, item.id);
+    if (!m) {
+        m = {
             osId: osId,
             itemId: item.id,
-            pedidoNumero: (typeof numeroDoPedidoDoItem === 'function')
-                ? numeroDoPedidoDoItem(osId) : osId,
+            pedidoNumero: _mtgNumeroDoPedido(osId),
             nome: item.nome_modelo || item.produto || 'modelo',
             qtd: total,
             posicoes: [],
             peca: peca,
         };
-        grupos.push(g);
+        modelos.push(m);
     }
 
+    // Posição que já está na folha não entra de novo pela digitação; para
+    // repetir de propósito existe o ⧉ da célula.
+    const jaTem = celulasDoModelo(celulas, m);
     for (const p of posicoes) {
-        if (g.posicoes.indexOf(p) === -1) g.posicoes.push(p);
+        if (jaTem.indexOf(p) === -1) celulas.push({ osId: osId, itemId: item.id, pos: p });
     }
 
     if (campo) campo.value = '';
@@ -615,16 +798,16 @@ function adicionarNaMontagem() {
 }
 
 /**
- * Este grupo é o que o compositor está mostrando agora?
+ * Este modelo é o que o compositor está mostrando agora?
  *
  * Derivado, e não um "índice selecionado" guardado à parte: a marca continua
  * certa quando o operador escolhe o modelo pelos seletores em vez de clicar na
  * linha, e não há um segundo estado para manter em dia quando a lista muda de
- * ordem ou perde um grupo.
+ * ordem ou perde um modelo.
  */
-function _mtgLinhaAtiva(g) {
-    return String(g.osId) === String(state.montagem.pedidoSel)
-        && String(g.itemId) === String(state.montagem.modeloSel);
+function _mtgLinhaAtiva(m) {
+    return String(m.osId) === String(state.montagem.pedidoSel)
+        && String(m.itemId) === String(state.montagem.modeloSel);
 }
 
 /**
@@ -638,24 +821,24 @@ function _mtgLinhaAtiva(g) {
  *
  * O campo de posições fica VAZIO, e não preenchido com o que já foi pedido: o
  * operador vem acrescentar, e ver a lista antiga no campo faria parecer que ele
- * precisa apagá-la primeiro. O `adicionarNaMontagem` soma ao grupo que existe.
+ * precisa apagá-la primeiro. O `adicionarNaMontagem` soma às células que existem.
  */
 async function retomarDaMontagem(indice) {
-    const g = state.montagem.grupos[indice];
-    if (!g) return;
+    const m = state.montagem.modelos[indice];
+    if (!m) return;
 
     const sel = document.getElementById('mtg-pedido');
     if (sel) {
         // O pedido pode não estar na lista dos 30 dias — foi buscado pelo número,
         // ou o seletor foi redesenhado depois. Sem a opção, o `value` não pega e
         // o clique não faria nada.
-        if (!Array.from(sel.options).some(o => o.value === String(g.osId))) {
+        if (!Array.from(sel.options).some(o => o.value === String(m.osId))) {
             const opt = document.createElement('option');
-            opt.value = String(g.osId);
-            opt.textContent = String(g.pedidoNumero || g.osId) + ' · na montagem';
+            opt.value = String(m.osId);
+            opt.textContent = String(m.pedidoNumero || m.osId) + ' · na montagem';
             sel.appendChild(opt);
         }
-        sel.value = String(g.osId);
+        sel.value = String(m.osId);
     }
 
     // Recarrega os modelos daquele pedido, que é o que enche o segundo seletor.
@@ -663,7 +846,7 @@ async function retomarDaMontagem(indice) {
 
     const selMod = document.getElementById('mtg-modelo');
     if (selMod) {
-        selMod.value = String(g.itemId);
+        selMod.value = String(m.itemId);
         onMontagemModeloChange();
     }
 
@@ -671,22 +854,130 @@ async function retomarDaMontagem(indice) {
     if (campo) { campo.value = ''; campo.focus(); }
 }
 
+/** Tira o modelo `indice` da montagem — e todas as células dele da folha. */
 function removerDaMontagem(indice) {
-    const grupos = state.montagem.grupos;
-    if (indice >= 0 && indice < grupos.length) grupos.splice(indice, 1);
+    const { celulas, modelos } = state.montagem;
+    const m = modelos[indice];
+    if (!m) return;
+    const k = chaveDoModelo(m);
+    state.montagem.celulas = celulas.filter(c => chaveDoModelo(c) !== k);
+    modelos.splice(indice, 1);
     onMontagemPosicoesChange();
     renderMontagem();
+}
+
+/** O ⧉ da célula: a mesma peça, repetida logo abaixo. */
+function duplicarCelulaDaMontagem(i) {
+    duplicarCelula(state.montagem.celulas, i);
+    renderMontagem();
+}
+
+/**
+ * O × da célula: tira só ela. Modelo que ficou sem célula sai do registro
+ * — uma arte sem célula nenhuma no `multi_artes` não imprime nada, mas
+ * continuaria na lista e no deslocamento, confundindo quem confere.
+ */
+function removerCelulaDaMontagem(i) {
+    tirarCelula(state.montagem.celulas, i);
+    state.montagem.modelos = modelosComCelula(state.montagem.celulas, state.montagem.modelos);
+    onMontagemPosicoesChange();
+    renderMontagem();
+}
+
+/** O arrasto: a célula `de` passa a ocupar a posição `para` da folha. */
+function moverCelulaDaMontagem(de, para) {
+    moverCelula(state.montagem.celulas, de, para);
+    renderMontagem();
+}
+
+/**
+ * Liga o arrasto das células, uma vez só, por delegação no container.
+ *
+ * Por delegação porque a prévia é redesenhada a cada mudança — ouvintes
+ * presos a cada célula morreriam junto com o HTML. E HTML5 drag-and-drop, e
+ * não uma biblioteca: cada estação da gráfica usa um navegador diferente, e
+ * isto funciona em todos eles sem instalar nada.
+ */
+function _mtgLigarArrasto() {
+    const previa = document.getElementById('mtg-previa');
+    if (!previa || previa._mtgArrastoLigado) return;
+    previa._mtgArrastoLigado = true;
+
+    let de = null;
+    const celulaDe = ev => (ev.target && ev.target.closest) ? ev.target.closest('.mtg-celula') : null;
+    const limpar = () => previa.querySelectorAll('.mtg-celula-arrastando, .mtg-celula-alvo')
+        .forEach(e => e.classList.remove('mtg-celula-arrastando', 'mtg-celula-alvo'));
+
+    previa.addEventListener('dragstart', ev => {
+        const el = celulaDe(ev);
+        if (!el || !el.hasAttribute('draggable')) return;
+        de = parseInt(el.dataset.i);
+        el.classList.add('mtg-celula-arrastando');
+        try {
+            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.setData('text/plain', String(de));
+        } catch (_) {}
+    });
+
+    previa.addEventListener('dragover', ev => {
+        const el = celulaDe(ev);
+        if (de === null || !el) return;
+        ev.preventDefault();
+        try { ev.dataTransfer.dropEffect = 'move'; } catch (_) {}
+        previa.querySelectorAll('.mtg-celula-alvo').forEach(e => e.classList.remove('mtg-celula-alvo'));
+        el.classList.add('mtg-celula-alvo');
+    });
+
+    previa.addEventListener('drop', ev => {
+        const el = celulaDe(ev);
+        if (de === null || !el) return;
+        ev.preventDefault();
+        const origem = de;
+        de = null;
+        limpar();
+        // Soltar numa célula vazia é mandar para o fim da folha.
+        const para = el.classList.contains('mtg-celula-vazia')
+            ? state.montagem.celulas.length - 1
+            : parseInt(el.dataset.i);
+        if (!isNaN(para)) moverCelulaDaMontagem(origem, para);
+    });
+
+    previa.addEventListener('dragend', () => { de = null; limpar(); });
 }
 
 function limparMontagem() {
-    state.montagem.grupos = [];
+    state.montagem.celulas = [];
+    state.montagem.modelos = [];
     onMontagemPosicoesChange();
     renderMontagem();
 }
 
-/** Desenha a lista, o selo, a trava e a prévia. */
+// As cores das células, uma por modelo. Fundo claro, borda e texto escuros:
+// a folha é PAPEL, e a cor é para o olho separar os modelos de relance.
+const _MTG_TONS = ['#dbeafe|#93c5fd|#1e3a5f', '#ede9fe|#c4b5fd|#3b2a6b',
+                   '#dcfce7|#86efac|#14532d', '#fef3c7|#fcd34d|#713f12',
+                   '#fce7f3|#f9a8d4|#701a45'];
+
+/** Uma célula da folha, com a alça de arrasto, o ⧉ e o ×. */
+function _mtgHtmlDaCelula(c, i, modelos) {
+    const k = chaveDoModelo(c);
+    let j = modelos.findIndex(m => chaveDoModelo(m) === k);
+    if (j < 0) j = 0;
+    const m = modelos[j] || {};
+    const [bg, br, fg] = _MTG_TONS[j % _MTG_TONS.length].split('|');
+    const rotulo = `${escapeHtml(String(m.pedidoNumero || c.osId))} · ${escapeHtml(String(c.itemId))} · #${c.pos}`;
+    return `<div class="mtg-celula" draggable="true" data-i="${i}" style="background:${bg};border-color:${br};color:${fg};" title="Arraste para mudar a ordem na folha">`
+        + `<span class="mtg-celula-alca" aria-hidden="true">⋮⋮</span>`
+        + `<span class="mtg-celula-rotulo">${rotulo}</span>`
+        + `<button type="button" class="mtg-celula-btn" title="Repetir esta célula logo abaixo — a mesma peça, impressa duas vezes" onclick="event.stopPropagation(); duplicarCelulaDaMontagem(${i})">&#10697;</button>`
+        + `<button type="button" class="mtg-celula-btn mtg-celula-tirar" title="Tirar só esta célula da folha" onclick="event.stopPropagation(); removerCelulaDaMontagem(${i})">&times;</button>`
+        + `</div>`;
+}
+
+/** Desenha a lista, o selo, a trava e a folha. */
 function renderMontagem() {
-    const grupos = state.montagem.grupos;
+    const celulas = state.montagem.celulas;
+    const modelos = state.montagem.modelos;
     const lista = document.getElementById('mtg-lista');
     const selo = document.getElementById('mtg-selo');
     const trava = document.getElementById('mtg-trava');
@@ -697,25 +988,25 @@ function renderMontagem() {
     const badge = document.getElementById('badge-montagem');
     if (!lista) return;
 
-    const celulas = totalDeCelulasDaMontagem(grupos);
-    const porFolha = _mtgCelulasPorFolha(grupos);
-    const conta = contaDaMontagem(grupos, porFolha);
+    const total = totalDeCelulasDaMontagem(celulas);
+    const porFolha = _mtgCelulasPorFolha(modelos);
+    const conta = contaDaMontagem(celulas, porFolha);
 
-    if (btnPdf) btnPdf.disabled = celulas === 0;
-    if (btnLimpar) btnLimpar.disabled = grupos.length === 0;
+    if (btnPdf) btnPdf.disabled = total === 0;
+    if (btnLimpar) btnLimpar.disabled = modelos.length === 0 && total === 0;
     if (badge) {
-        badge.textContent = String(celulas);
-        badge.style.display = celulas ? '' : 'none';
+        badge.textContent = String(total);
+        badge.style.display = total ? '' : 'none';
     }
 
     // ── A trava ────────────────────────────────────────────────────────────
     // Nasce escondida e aparece com a primeira célula: o operador não escolhe
     // um formato num seletor, ele adiciona e a folha passa a dizer o que aceita.
     if (trava) {
-        if (!grupos.length) {
+        if (!modelos.length) {
             trava.style.display = 'none';
         } else {
-            const p = grupos[0].peca;
+            const p = modelos[0].peca;
             const sai = (state.saidas || []).find(s => String(s.id) === String(p.saida_id));
             const face = (p.verso_tipo && p.verso_tipo !== 'Frente' && p.verso_tipo !== 'SÓ FRENTE')
                 ? 'Frente e verso' : 'Só frente';
@@ -734,13 +1025,13 @@ function renderMontagem() {
     }
 
     if (resumo) {
-        const pedidos = new Set(grupos.map(g => String(g.osId)));
-        resumo.textContent = grupos.length
-            ? `${pedidos.size} pedido(s) · ${grupos.length} modelo(s)` : '';
+        const pedidos = new Set(modelos.map(m => String(m.osId)));
+        resumo.textContent = modelos.length
+            ? `${pedidos.size} pedido(s) · ${modelos.length} modelo(s)` : '';
     }
 
-    // ── A lista ────────────────────────────────────────────────────────────
-    if (!grupos.length) {
+    // ── A lista, por modelo ────────────────────────────────────────────────
+    if (!modelos.length) {
         lista.innerHTML = `
             <div class="mtg-vazio">
               <svg viewBox="0 0 48 48" width="52" height="52" aria-hidden="true">
@@ -760,18 +1051,30 @@ function renderMontagem() {
         lista.innerHTML = `
             <table class="data-table">
               <tr><th>Pedido</th><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Posições</th><th style="text-align:right;">Células</th><th style="width:40px;"></th></tr>
-              ${grupos.map((g, i) => `
-                <tr class="mtg-linha${_mtgLinhaAtiva(g) ? ' mtg-linha-ativa' : ''}"
-                    onclick="retomarDaMontagem(${i})"
+              ${modelos.map((m, j) => {
+                  // As posições deste modelo, com a repetição dita: "#6 ×2".
+                  const vezes = {};
+                  const ordem = [];
+                  for (const p of celulasDoModelo(celulas, m)) {
+                      if (!vezes[p]) { vezes[p] = 0; ordem.push(p); }
+                      vezes[p]++;
+                  }
+                  const chips = ordem.map(p =>
+                      `<span class="mtg-pos">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
+                  const quantas = celulasDoModelo(celulas, m).length;
+                  return `
+                <tr class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}"
+                    onclick="retomarDaMontagem(${j})"
                     title="Voltar a este modelo para acrescentar posições">
-                  <td>${escapeHtml(String(g.pedidoNumero || g.osId))}</td>
-                  <td><span style="color:var(--text);">${escapeHtml(String(g.itemId))}</span><br>
-                      <span style="font-size:0.78rem;">${escapeHtml(String(g.nome).slice(0, 46))}</span></td>
-                  <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(g.qtd || 0).toLocaleString('pt-BR')}</td>
-                  <td><span class="mtg-posicoes">${g.posicoes.map(p => `<span class="mtg-pos">#${p}</span>`).join('')}</span></td>
-                  <td style="text-align:right;">${g.posicoes.length}</td>
-                  <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem" onclick="event.stopPropagation(); removerDaMontagem(${i})">&times;</span></td>
-                </tr>`).join('')}
+                  <td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
+                  <td><span style="color:var(--text);">${escapeHtml(String(m.itemId))}</span><br>
+                      <span style="font-size:0.78rem;">${escapeHtml(String(m.nome).slice(0, 46))}</span></td>
+                  <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(m.qtd || 0).toLocaleString('pt-BR')}</td>
+                  <td><span class="mtg-posicoes">${chips}</span></td>
+                  <td style="text-align:right;">${quantas}</td>
+                  <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</span></td>
+                </tr>`;
+              }).join('')}
             </table>
             <p class="mtg-dica" style="margin-top:10px;">
               Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições — elas se somam às que já estão lá.
@@ -784,53 +1087,63 @@ function renderMontagem() {
     // é reservado à sobra — pintar "fecha certo" de amarelo faria o amarelo
     // deixar de significar atenção.
     if (selo) {
-        if (!celulas) {
+        if (!total) {
             selo.style.display = 'none';
         } else if (!porFolha) {
             selo.className = 'selo-sobra';
             selo.style.display = 'flex';
-            selo.innerHTML = `<span class="selo-sobra-texto">📄 ${celulas} célula(s) · não sei quantas cabem na folha deste formato</span>`;
+            selo.innerHTML = `<span class="selo-sobra-texto">📄 ${total} célula(s) · não sei quantas cabem na folha deste formato</span>`;
         } else {
             selo.className = 'selo-sobra ' + (conta.vazias === 0 ? 'fecha-certo' : 'tem-sobra');
             selo.style.display = 'flex';
             const fim = conta.vazias === 0
                 ? 'a folha fecha certo, sem sobra'
                 : `sobram ${conta.vazias} célula(s) (${Math.round(conta.vazias / porFolha * 100)}% de uma folha)`;
-            selo.innerHTML = `<span class="selo-sobra-texto">📄 ${conta.folhas} folha(s) · ${celulas} célula(s) · ${fim}</span>`;
+            selo.innerHTML = `<span class="selo-sobra-texto">📄 ${conta.folhas} folha(s) · ${total} célula(s) · ${fim}</span>`;
         }
     }
 
-    // ── A prévia da primeira folha ─────────────────────────────────────────
+    // ── A folha montada: todas as células, na ordem, folha a folha ─────────
+    //
+    // TODAS, e não só a primeira folha: é aqui que o operador arrasta, repete
+    // e tira célula, e uma célula que estivesse na segunda folha sem aparecer
+    // seria uma célula que ele não consegue mexer. As vazias só aparecem na
+    // última folha, que é a única que pode ter sobra.
     if (previa) {
         const numFolha = document.getElementById('mtg-folha-num');
-        if (!celulas || !porFolha) {
+        if (!total || !porFolha) {
             previa.innerHTML = '';
             if (numFolha) numFolha.textContent = '';
         } else {
-            const tons = ['#dbeafe|#93c5fd|#1e3a5f', '#ede9fe|#c4b5fd|#3b2a6b',
-                          '#dcfce7|#86efac|#14532d', '#fef3c7|#fcd34d|#713f12',
-                          '#fce7f3|#f9a8d4|#701a45'];
-            const linhas = [];
-            grupos.forEach((g, gi) => {
-                const [bg, br, fg] = tons[gi % tons.length].split('|');
-                for (const p of g.posicoes) {
-                    if (linhas.length >= porFolha) return;
-                    linhas.push(`<div class="mtg-celula" style="background:${bg};border-color:${br};color:${fg};">${escapeHtml(String(g.pedidoNumero || g.osId))} · ${escapeHtml(String(g.itemId))} · #${p}</div>`);
+            const html = [];
+            for (let f = 0; f < conta.folhas; f++) {
+                if (conta.folhas > 1) {
+                    html.push(`<div class="mtg-folha-titulo">Folha ${f + 1} de ${conta.folhas}</div>`);
                 }
-            });
-            while (linhas.length < porFolha) {
-                linhas.push('<div class="mtg-celula mtg-celula-vazia">vazia</div>');
+                for (let p = 0; p < porFolha; p++) {
+                    const i = f * porFolha + p;
+                    html.push(i < total
+                        ? _mtgHtmlDaCelula(celulas[i], i, modelos)
+                        : '<div class="mtg-celula mtg-celula-vazia">vazia</div>');
+                }
             }
-            previa.innerHTML = linhas.join('');
-            if (numFolha) numFolha.textContent = `FOLHA 1 DE ${conta.folhas}`;
+            previa.innerHTML = html.join('');
+            if (numFolha) {
+                numFolha.textContent = conta.folhas > 1
+                    ? `${conta.folhas} FOLHAS · ${total} CÉLULAS`
+                    : `1 FOLHA · ${total} CÉLULA(S)`;
+            }
         }
     }
 }
 
 /** Chamada ao entrar na tela. */
 async function abrirMontagem() {
-    if (!state.montagem) state.montagem = { grupos: [], pedidoSel: null, modeloSel: null };
+    if (!state.montagem || !state.montagem.celulas) {
+        state.montagem = { celulas: [], modelos: [], pedidoSel: null, modeloSel: null };
+    }
     encherPedidosDaMontagem();
+    _mtgLigarArrasto();
     onMontagemPosicoesChange();
     renderMontagem();
     // As pastas da estacao entram DEPOIS, sem segurar a tela: a rota tem prazo
@@ -1030,6 +1343,202 @@ function abrirPdfDaMontagemNaTela(blob, nome) {
     }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   AS ARTES — montadas pelas MESMAS funções da tela do Pedido
+   ════════════════════════════════════════════════════════════════════════════
+
+   `arteDoModeloParaFolha` e `arteParaOMotor` (pedido.js) são o corpo da
+   `runPedImposition`, extraído em 03/09/2026 para que esta tela e a do Pedido
+   montem a mesma arte para o mesmo modelo. A primeira versão da Montagem
+   montava a sua, e divergia em sete pontos — cada um deles uma célula refeita
+   diferente da original:
+
+     1. o verso: lia `arte_verso_url`, campo que não existe, e mandava
+        `print_mode: 'simplex'`, que o motor não conhece — o verso nunca saía;
+     2. a arte da frente ia sem o filtro `arteParaImpor`, que barra a amostra
+        de aprovação (JPEG a 150 dpi, com a logo no QR);
+     3. os bancos do pedido e o CSV não eram garantidos antes do payload;
+     4. o `csv_data` ia inteiro, sem a fatia do modelo e sem o limite da
+        quantidade, e a posição N apontava para outra linha do banco;
+     5. a escala da arte de cada modelo (`arte_escala_h/v`) ficava em 100%;
+     6. a rotação da folha ia 0 fixo, ignorando o formato;
+     7. os elementos marcados como Layout iam junto (o motor de hoje os ignora;
+        um agente antigo, não).
+
+   Nada disso é regra desta tela. É regra da tela do Pedido, e por isso mora
+   lá — aqui só se chama.
+*/
+
+/**
+ * Uma arte pronta para o motor por modelo da montagem, na ordem de `modelos`.
+ *
+ * Pedido a pedido, em série, porque `state.bancosDoPedido` e
+ * `state.vinculosDeBanco` guardam os bancos de UM pedido por vez — é assim que
+ * a tela de Amostras e a do Pedido trabalham, e o `resolverNumeracaoParaModelo`
+ * lê dali. Carregar os bancos do pedido B antes de montar as artes do pedido A
+ * deixaria as artes de A sem o banco delas. Então: carrega A, monta as artes
+ * de A; carrega B, monta as de B.
+ *
+ * Cada arte sai com `_tiragem`: quantos itens daquele modelo têm como sair
+ * certo (ver `totalDeItensDoModelo`). É contra ela que as posições da folha
+ * são conferidas na hora de gerar.
+ *
+ * Lança com a mensagem para o operador quando não há como montar certo — e
+ * nunca deixa passar uma arte cuja numeração pede banco e chegou sem linha
+ * nenhuma, que é o defeito mais silencioso deste sistema: sai número
+ * sequencial no lugar do nome, sem erro em tela.
+ */
+async function prepararArtesDaMontagem(modelos) {
+    if (typeof arteDoModeloParaFolha !== 'function' || typeof arteParaOMotor !== 'function') {
+        throw new Error('O painel desta estação está desatualizado: falta o construtor de arte '
+            + 'da tela do Pedido (pedido.js). Atualize o agente NewProd e tente de novo.');
+    }
+
+    const artes = new Array((modelos || []).length).fill(null);
+    const ordemDosPedidos = [];
+    const indicesPorPedido = {};
+    (modelos || []).forEach((m, j) => {
+        const k = String(m.osId);
+        if (!indicesPorPedido[k]) { indicesPorPedido[k] = []; ordemDosPedidos.push(k); }
+        indicesPorPedido[k].push(j);
+    });
+
+    for (const osId of ordemDosPedidos) {
+        if (!(state.osItens[osId] || []).length && typeof loadOSItens === 'function') {
+            try { await loadOSItens(osId); } catch (e) { console.warn('[montagem]', e); }
+        }
+        const itens = state.osItens[osId] || [];
+
+        // Os bancos do PEDIDO, e a certeza de que foram lidos.
+        if (typeof garantirBancosDoTrabalho === 'function') {
+            await garantirBancosDoTrabalho([osId]);
+        }
+        if (typeof pedidosComBancoDesconhecido === 'function'
+            && pedidosComBancoDesconhecido([osId]).length) {
+            throw new Error('Não consegui ler os bancos de dados do pedido ' + _mtgNumeroDoPedido(osId)
+                + '. Gerar agora sairia com número sequencial no lugar do código. '
+                + 'Confira a conexão da estação e clique de novo.');
+        }
+
+        // E o CSV de cada numeração que estes modelos usam.
+        const ids = indicesPorPedido[osId].map(j => {
+            const it = itens.find(i => String(i.id) === String(modelos[j].itemId));
+            if (!it) return null;
+            return (typeof numeracaoIdDoItem === 'function')
+                ? numeracaoIdDoItem(it) : (it.amostra_num_id || it.numeracao_id);
+        }).filter(Boolean);
+        if (typeof garantirCsvDoTrabalho === 'function') {
+            await garantirCsvDoTrabalho(ids);
+        }
+
+        for (const j of indicesPorPedido[osId]) {
+            const m = modelos[j];
+            const it = itens.find(i => String(i.id) === String(m.itemId));
+            if (!it) {
+                throw new Error('O modelo ' + m.itemId + ' do pedido ' + _mtgNumeroDoPedido(osId)
+                    + ' não está mais no pedido. Tire-o da montagem e gere de novo.');
+            }
+
+            const arte = arteDoModeloParaFolha({ osId: m.osId, itemId: m.itemId }, null, { comPrevia: false });
+            // Uma caixa para a montagem inteira, e não a opção salva em cada
+            // modelo — ver `imprimirNumeroNaMontagem`.
+            arte._imprimirNumero = imprimirNumeroNaMontagem();
+
+            const pronta = arteParaOMotor(arte, true);
+            if (typeof numeracaoSemElementosDeLayout === 'function') {
+                if (pronta.numeracao) pronta.numeracao = numeracaoSemElementosDeLayout(pronta.numeracao);
+                if (pronta.numeracao_2) pronta.numeracao_2 = numeracaoSemElementosDeLayout(pronta.numeracao_2);
+            }
+            pronta._tiragem = totalDeItensDoModelo(it, pronta.numeracao);
+            artes[j] = pronta;
+        }
+    }
+
+    // A última conferência, sobre as artes PRONTAS: numeração que lê banco e
+    // chegou sem linha nenhuma não vai ao motor. Ver `bancoVazioNoPayload`.
+    if (typeof bancoVazioNoPayload === 'function') {
+        const semBanco = bancoVazioNoPayload(null, artes);
+        if (semBanco.length) {
+            throw new Error((typeof recadoDeBancoVazio === 'function')
+                ? recadoDeBancoVazio(semBanco)
+                : 'A numeração ' + semBanco.join(', ') + ' lê um banco do pedido e chegou sem linhas.');
+        }
+    }
+
+    return artes;
+}
+
+/**
+ * O payload da montagem.
+ *
+ * Uma arte por (pedido, modelo), com a TIRAGEM INTEIRA de cada um — é sobre ela
+ * que o motor monta o `multi_map`, e é o `multi_map` que dá a cada item o seu
+ * modelo, o seu pedido e a sua linha do banco. As posições combinadas então
+ * indexam esse mapa.
+ *
+ * Mandar a tiragem recortada seria mais leve e estaria ERRADO: o índice do item
+ * é o que decide o código do QR Ideal, e recortar embaralharia todos.
+ *
+ * `artes[j]` é a arte pronta de `modelos[j]` (ver `prepararArtesDaMontagem`).
+ * O deslocamento das posições usa a `qtd` da ARTE, que é o que o motor conta —
+ * e não a tiragem guardada na lista, que é a mesma conta feita mais cedo e
+ * pode ter envelhecido.
+ */
+function payloadDaMontagem(celulas, modelos, artes) {
+    const primeiro = modelos[0].peca;
+    // O formato e a saida vem da PECA — resolvidos uma vez, no `pecaDaMontagem`.
+    // Buscar de novo aqui abriria espaco para a tela e o payload discordarem,
+    // que foi o defeito de 29/08/2026.
+    const fmt = (state.formatos || []).find(f => String(f.id) === String(primeiro.formato_id)) || null;
+    const sai = (state.saidas || []).find(s => String(s.id) === String(primeiro.saida_id)) || null;
+
+    const comTiragemDoMotor = modelos.map((m, j) =>
+        Object.assign({}, m, { qtd: (artes[j] && artes[j].qtd) || m.qtd }));
+
+    return {
+        // Sem pedido e sem modelo "do trabalho": cada arte carrega os seus, e
+        // numa folha que mistura pedidos o do trabalho seria o de um deles.
+        pedido: null,
+        modelo: null,
+        formato_id: primeiro.formato_id,
+        saida_id: primeiro.saida_id,
+        formato: fmt,
+        saida: sai,
+        numeracao_id: null,
+        numeracao: null,
+        numeracao_2_id: null,
+        numeracao_2: null,
+        // `schema`, que e' a chave que o app.py le. A primeira versao mandava
+        // `layout_schema`, que ele ignora.
+        schema: 'multi_artes',
+        multi_artes: artes,
+        suggested_filename: 'montagem_' + new Date().toISOString().slice(0, 10) + '.pdf',
+        stream: false,
+        print_mode: modoDaFolhaDaMontagem(modelos),
+        rotate_page: (typeof rotacaoDaFolhaDoFormato === 'function') ? rotacaoDaFolhaDoFormato(fmt) : 0,
+        seq_start: 1,
+        seq_increment: 1,
+        cut_stack_mode: 'independent',
+        sheets_per_block: 50,
+        block_depth: 1,
+        c_ini: 1,
+        q_cam: 0,
+        l_cam: 1,
+        // Aqui está a tradução. Ver posicoesCombinadas().
+        refazer_de: 0,
+        refazer_ate: 0,
+        refazer_set: 1,
+        refazer_celulas: posicoesCombinadas(celulas, comTiragemDoMotor),
+        // O ⧉: célula repetida imprime duas vezes. Sem esta chave o motor tira
+        // as repetidas, que é o certo para o Refazer Célula do Pedido.
+        refazer_repetir: true,
+        // A escala vai POR ARTE (ver `arteParaOMotor`); a do trabalho é a reserva.
+        arte_escala_h: 100,
+        arte_escala_v: 100,
+        entregar_por_bloco: false,
+    };
+}
+
 /**
  * Monta o payload, manda gerar e ENTREGA o arquivo.
  *
@@ -1044,8 +1553,9 @@ function abrirPdfDaMontagemNaTela(blob, nome) {
  * VAI PARAR" acima.
  */
 async function gerarPdfDaMontagem() {
-    const grupos = state.montagem.grupos;
-    if (!grupos.length) return;
+    const celulas = state.montagem.celulas;
+    const modelos = state.montagem.modelos;
+    if (!celulas.length || !modelos.length) return;
 
     const btn = document.getElementById('mtg-btn-pdf');
     const rotulo = btn ? btn.innerHTML : '';
@@ -1061,7 +1571,20 @@ async function gerarPdfDaMontagem() {
                 + 'abra o agente NewProd nesta máquina e tente de novo.');
         }
 
-        const payload = payloadDaMontagem(grupos);
+        // As artes, pelas funções da tela do Pedido — com os bancos na mão.
+        const artes = await prepararArtesDaMontagem(modelos);
+
+        // O banco pode ter mudado desde que a célula entrou na folha.
+        const fora = celulasForaDaTiragem(celulas, modelos, artes);
+        if (fora.length) {
+            const lista = fora.slice(0, 6).map(c => `#${c.pos} do modelo ${c.itemId}`).join(', ');
+            throw new Error('Posição que não existe mais: ' + lista
+                + (fora.length > 6 ? ' e mais ' + (fora.length - 6) : '')
+                + '. O banco do modelo mudou desde que a célula entrou. Tire-a da folha '
+                + 'e confira a tiragem na lista.');
+        }
+
+        const payload = payloadDaMontagem(celulas, modelos, artes);
         payload.suggested_filename = nome;
         const fd = new FormData();
         fd.append('payload', JSON.stringify(payload));
@@ -1075,7 +1598,7 @@ async function gerarPdfDaMontagem() {
         }
 
         const blob = await resp.blob();
-        const celulas = totalDeCelulasDaMontagem(grupos);
+        const total = totalDeCelulasDaMontagem(celulas);
 
         let onde = '';
         if (pasta) {
@@ -1097,8 +1620,8 @@ async function gerarPdfDaMontagem() {
 
         if (typeof toast === 'function') {
             toast(onde
-                ? `Montagem gerada (${celulas} célula(s)) e gravada em ${onde}`
-                : `Montagem gerada: ${celulas} célula(s). O PDF desceu pelos downloads.`, 'success');
+                ? `Montagem gerada (${total} célula(s)) e gravada em ${onde}`
+                : `Montagem gerada: ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
         }
     } catch (e) {
         console.error('[montagem]', e);
@@ -1121,72 +1644,6 @@ async function _mtgEstacao() {
     return null;
 }
 
-/**
- * O payload da montagem.
- *
- * Uma arte por (pedido, modelo), com a TIRAGEM INTEIRA de cada um — é sobre ela
- * que o motor monta o `multi_map`, e é o `multi_map` que dá a cada item o seu
- * modelo, o seu pedido e a sua linha do banco. As posições combinadas então
- * indexam esse mapa.
- *
- * Mandar a tiragem recortada seria mais leve e estaria ERRADO: o índice do item
- * é o que decide o código do QR Ideal, e recortar embaralharia todos.
- */
-function payloadDaMontagem(grupos) {
-    const primeiro = grupos[0].peca;
-    // O formato e a saida vem da PECA — resolvidos uma vez, no `pecaDaMontagem`.
-    // Buscar de novo aqui abriria espaco para a tela e o payload discordarem,
-    // que foi o defeito de 29/08/2026.
-    const fmt = (state.formatos || []).find(f => String(f.id) === String(primeiro.formato_id)) || null;
-    const sai = (state.saidas || []).find(s => String(s.id) === String(primeiro.saida_id)) || null;
-
-    const artes = grupos.map(g => {
-        const it = g.peca._item || {};
-        const num = _mtgNumeracaoDoItem(it);
-        return {
-            qtd: g.qtd,
-            pdf_url: it.arte_url || null,
-            pdf_verso_url: it.arte_verso_url || null,
-            pdf_name: g.nome,
-            // O que o motor IMPRIME deitado na borda do item. Vazio = não sai.
-            // O número do modelo é o `itemId`: `pedidos_modelos.id`, que é o que
-            // a gráfica lê para separar o material depois de cortar.
-            nome: imprimirNumeroNaMontagem() ? String(g.itemId) : '',
-            nome_color: '#000000',
-            num1_id: num ? num.id : null,
-            num2_id: null,
-            start: parseInt(it.num_inicial || it.numeracao_inicio || 1) || 1,
-            numeracao: num,
-            numeracao_2: null,
-            has_raw_file: false,
-            q_cam: parseInt(it.q_cam) || 0,
-            l_cam: parseInt(it.l_cam) || 1,
-            modelo: g.itemId,
-            pedido: g.pedidoNumero || null,
-        };
-    });
-
-    return {
-        formato_id: primeiro.formato_id,
-        saida_id: primeiro.saida_id,
-        formato: fmt,
-        saida: sai,
-        layout_schema: 'multi_artes',
-        multi_artes: artes,
-        suggested_filename: 'montagem_' + new Date().toISOString().slice(0, 10) + '.pdf',
-        stream: false,
-        print_mode: 'simplex',
-        rotate_page: 0,
-        seq_start: 1,
-        seq_increment: 1,
-        // Aqui está a tradução. Ver posicoesCombinadas().
-        refazer_de: 0,
-        refazer_ate: 0,
-        refazer_set: 1,
-        refazer_celulas: posicoesCombinadas(grupos),
-    };
-}
-
 if (typeof window !== 'undefined') {
     window.abrirMontagem = abrirMontagem;
     window.pedidosParaMontagem = pedidosParaMontagem;
@@ -1197,8 +1654,12 @@ if (typeof window !== 'undefined') {
     window.adicionarNaMontagem = adicionarNaMontagem;
     window.removerDaMontagem = removerDaMontagem;
     window.retomarDaMontagem = retomarDaMontagem;
+    window.duplicarCelulaDaMontagem = duplicarCelulaDaMontagem;
+    window.removerCelulaDaMontagem = removerCelulaDaMontagem;
+    window.moverCelulaDaMontagem = moverCelulaDaMontagem;
     window.limparMontagem = limparMontagem;
     window.renderMontagem = renderMontagem;
+    window.prepararArtesDaMontagem = prepararArtesDaMontagem;
     window.gerarPdfDaMontagem = gerarPdfDaMontagem;
     window.payloadDaMontagem = payloadDaMontagem;
     window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;

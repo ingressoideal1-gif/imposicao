@@ -4873,16 +4873,49 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     background: #f8fafc; border-radius: 6px; padding: 7px;
     display: flex; flex-direction: column; gap: 3px;
 }
+/* A CÉLULA É UM CARTÃO DE KANBAN (03/09/2026): tem alça para arrastar, o ⧉
+   que a repete logo abaixo e o × que tira só ela. Pedido do usuário. O rótulo
+   continua sendo pedido · modelo · #posição, na cor do modelo. */
 .mtg-celula {
-    min-height: 22px; border-radius: 2px; border: 1px solid;
-    display: flex; align-items: center; padding: 0 8px;
+    min-height: 26px; border-radius: 3px; border: 1px solid;
+    display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px;
     font-size: 0.62rem; font-weight: 600;
     font-family: ui-monospace, monospace;
-    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    white-space: nowrap;
 }
+.mtg-celula[draggable] { cursor: grab; }
+.mtg-celula[draggable]:active { cursor: grabbing; }
+.mtg-celula-alca {
+    flex: 0 0 auto; letter-spacing: -2px; opacity: 0.45; font-size: 0.7rem;
+    user-select: none;
+}
+.mtg-celula-rotulo {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+.mtg-celula-btn {
+    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 4px;
+    border: 1px solid transparent; background: rgba(255, 255, 255, 0.55);
+    color: inherit; font-size: 0.8rem; line-height: 1; cursor: pointer;
+    padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    opacity: 0.75;
+}
+.mtg-celula-btn:hover { opacity: 1; border-color: currentColor; }
+.mtg-celula-tirar:hover { color: #b91c1c; }
+/* Enquanto arrasta: a de origem apaga, e a que vai receber ganha a linha. */
+.mtg-celula-arrastando { opacity: 0.35; }
+.mtg-celula-alvo { box-shadow: 0 -2px 0 0 #2563eb; }
 .mtg-celula-vazia {
     background: #f1f5f9; border-color: #cbd5e1; color: #94a3b8;
-    font-weight: 400; font-style: italic;
+    font-weight: 400; font-style: italic; padding-left: 8px;
+}
+/* O título de cada folha, quando há mais de uma: é aqui que a segunda folha
+   passa a existir para o operador, com as células dela ao alcance. */
+.mtg-folha-titulo {
+    font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: #64748b; padding: 5px 2px 2px;
+}
+.mtg-folha-titulo:not(:first-child) {
+    margin-top: 6px; border-top: 1px dashed #cbd5e1;
 }
 
 /* A LINHA DA LISTA E' O CAMINHO DE VOLTA ao modelo (29/08/2026): clicar nela
