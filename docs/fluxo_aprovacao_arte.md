@@ -28,7 +28,7 @@ flowchart TD
     M --> R{"Conferiu entrega e nota?"}
     Q --> R
     R -- Não --> S["Cartão âmbar na Arte, sinal nas abas,
-    e marcador para a gráfica no painel"]
+    e NÃO CONFERIDO na Lista de Arte"]
     S --> R
     R -- Sim --> T["FINALIZAR: entrega_dados = APROVADO
     e o chat do parceiro diz PEDIDO COMPLETO"]
@@ -648,7 +648,7 @@ descobrem depois de o material estar impresso.
 | 3 | `desenharTrilha` + `.portal-passo-pendente` | pendente em âmbar, com o verbo da etapa |
 | 4 | `botaoDeContinuarNaArte` | *"Continuar: conferir entrega"* no FIM da aba da Arte |
 | 5 | `mensagemDaAprovacaoDeArte` | o chat do parceiro para de dizer "PEDIDO COMPLETO" quando só a arte foi aprovada |
-| 6 | `avisoDeDadosNaoConferidosHtml` (`script.js`) | marcador para a gráfica no Painel de Produção e na Lista de Arte |
+| 6 | coluna Entrega/Faturamento da Lista de Arte (`script.js`) | o `----` de um pedido com a arte **já decidida** vira ⚠️ NÃO CONFERIDO |
 | 7 | `.cliente-header` / `.portal-trilha` | cabeçalho apertado de 178px para 163px |
 
 > [!CAUTION]
@@ -663,18 +663,32 @@ descobrem depois de o material estar impresso.
 > automático de `seguirSozinhoSeAprovouTudo` grava; este só muda o que está
 > visível.
 
-> **O marcador do painel não acende sem link do cliente.** Sem linha em
-> `pedidos_artes` nunca houve link, é pedido que a gráfica tocou por dentro, e
-> cobrar dele uma conferência que ninguém pediu seria alarme falso na tela
-> inteira. Quem cria a linha é o painel, ao gerar o link
-> (`garantirLinhaDePedidoArte`).
+> **O alarme não acende sem link do cliente.** Sem linha em `pedidos_artes`
+> nunca houve link, é pedido que a gráfica tocou por dentro, e cobrar dele uma
+> conferência que ninguém pediu seria alarme falso na tela inteira. Quem cria a
+> linha é o painel, ao gerar o link (`garantirLinhaDePedidoArte`).
+
+> [!IMPORTANT]
+> **Ele mora na Lista de Arte, e em lugar nenhum além dela.** Um marcador igual
+> chegou a entrar na linha do Painel de Produção em 03/09/2026 e saiu no mesmo
+> dia, a pedido do usuário. Dois motivos, e o segundo é o que decide: ali ele
+> era **só leitura**, empilhado como terceira linha embaixo do nome do cliente
+> numa tabela que já é larga; na Lista de Arte o mesmo selo **se clica** para
+> mudar de estado, ao lado do `----`, do APROVADO e do CORRIGIR, que já viviam
+> naquela coluna. Aviso que não pode ser resolvido onde aparece vira ruído — é
+> a mesma régua de `trava-precisa-ter-saida`.
+>
+> O Painel do Acabamento nunca teve o marcador. A verificação negativa está no
+> `portal_pendencia_harness.js`: é o tipo de aviso que parece óbvio de
+> re-adicionar meses depois, olhando só para os 17 pedidos que foram para a
+> produção sem conferência.
 
 > **`.portal-pendencia`, e não `.portal-falta`.** A segunda já existe e pertence
 > ao cartão EM LINHA da aba de Entrega (`display: flex`). O cartão novo chegou a
 > nascer com ela e saiu com título, texto e botão lado a lado, cada um numa
 > coluna estreita. Está travado em `tests/test_portal_pendencia.py`.
 
-Os testes estão em `tests/portal_pendencia_harness.js` (44 verificações, lendo o
+Os testes estão em `tests/portal_pendencia_harness.js` (45 verificações, lendo o
 código de produção) e `tests/test_portal_pendencia.py`.
 
 ---

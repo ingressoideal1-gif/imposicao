@@ -205,14 +205,29 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
 // ─── 5. O painel da grafica enxerga a pendencia ──────────────────────────────
 
 (function aGraficaVeOPedidoQueOClienteNaoConferiu() {
-    ok(/function avisoDeDadosNaoConferidosHtml\(numeroPedido\)/.test(PAINEL),
-        'existe o marcador de dados nao conferidos');
-    ok(/\$\{avisoDeDadosNaoConferidosHtml\(os\.numero\)\}/.test(PAINEL),
-        'e ele esta na linha do Painel de Producao, que e onde o pedido vive depois da arte');
-    ok(/if \(!arte\) return '';/.test(PAINEL),
-        'sem linha em pedidos_artes nao houve link do cliente -- e nao ha o que cobrar');
+    // O alarme mora na COLUNA Entrega/Faturamento da Lista de Arte, e em lugar
+    // nenhum alem dela.
+    //
+    // Ele chegou a entrar tambem na linha do Painel de Producao, em 03/09/2026,
+    // e saiu no mesmo dia a pedido do usuario: ali era so leitura, empilhado
+    // como terceira linha embaixo do nome do cliente, numa tabela que ja e
+    // larga. Na Lista de Arte o mesmo selo se CLICA para mudar de estado -- e
+    // essa coluna existe desde antes, com o `----`, o APROVADO e o CORRIGIR.
+    //
+    // A verificacao negativa fica: e o tipo de aviso que parece obvio de
+    // re-adicionar seis meses depois, olhando so para os 17 pedidos que foram
+    // para a producao sem conferencia.
+    ok(!/avisoDeDadosNaoConferidosHtml/.test(PAINEL),
+        'o Painel de Producao NAO carrega marcador de dados nao conferidos');
+
     ok(/const arteJaDecidida = pedidoSaiuDaArte\(os\)/.test(PAINEL),
         'na Lista de Arte o alarme so acende depois de a arte estar decidida');
+    ok(/const temLinkDoCliente = !!arteGlobal;/.test(PAINEL),
+        'e so quando houve link do cliente -- sem linha em pedidos_artes nao ha o que cobrar');
+    ok(/N\\u00c3O CONFERIDO<\/span>/.test(PAINEL),
+        'com o selo escrito na coluna Entrega/Faturamento');
+    ok(/alterarEntregaDadosStatus\('\$\{os\.numero\}', '\$\{entregaStatus\}'\)[\s\S]{0,600}N\\u00c3O CONFERIDO/.test(PAINEL),
+        'e clicavel, como os outros estados daquela coluna');
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

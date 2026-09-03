@@ -28370,57 +28370,6 @@ function abrirPedidoDoLinkDireto() {
 
 window.abrirPedidoDoLinkDireto = abrirPedidoDoLinkDireto;
 
-/**
- * O aviso de que o CLIENTE nunca conferiu os dados de entrega e de nota.
- *
- * ## Por que ele existe
- *
- * Medido no banco em 03/09/2026: **17 pedidos** foram para a produção com a
- * arte aprovada e a conferência de entrega e nota **nunca feita** — 6 dos 14
- * pedidos decididos desde que o Portal do Pedido existe. Nenhum dos 88 links
- * ativos jamais pediu correção de dados.
- *
- * O Portal ganhou no mesmo dia três empurrões para o cliente não passar batido
- * (o cartão âmbar no alto da aba da arte, a abertura direto na aba pendente e o
- * botão de continuar no fim da rolagem). Nada disso é garantia: o cliente pode
- * fechar o WhatsApp no meio. Este aviso é a segunda linha — a gráfica vê a
- * pendência ONDE ELA TRABALHA e cobra antes de despachar.
- *
- * A Lista de Arte já mostrava o selo numa coluna própria, mas o pedido que sai
- * da arte deixa aquela tela: ele passa a viver no Painel de Produção, onde a
- * conferência do cliente não aparecia em lugar nenhum. Endereço errado é frete
- * de volta; CNPJ errado é nota refeita — e os dois só se descobrem depois de o
- * material estar impresso.
- *
- * ## Quando ele NÃO aparece
- *
- * Sem linha em `pedidos_artes` não houve link do cliente: é pedido que a
- * gráfica tocou por dentro, e cobrar dele uma conferência que nunca foi pedida
- * seria alarme falso na tela inteira. Quem cria a linha é o próprio painel, ao
- * gerar o link (`garantirLinhaDePedidoArte`).
- */
-function avisoDeDadosNaoConferidosHtml(numeroPedido) {
-    const arte = (state.todasArtes || []).find(a => String(a.id_int) === String(numeroPedido));
-    if (!arte) return '';
-
-    const selo = String(arte.entrega_dados || '').trim().toUpperCase();
-    if (selo === 'APROVADO') return '';
-
-    const forma = 'display: inline-block; margin-top: 3px; font-size: 0.72rem; font-weight: 800; '
-                + 'padding: 1px 7px; border-radius: 5px;';
-
-    if (selo === 'CORRIGIR') {
-        return '<br><span style="' + forma + ' background: rgba(249,115,22,0.16); color: #fb923c; '
-             + 'border: 1px solid rgba(249,115,22,0.4);" '
-             + 'title="O cliente conferiu e pediu correcao nos dados de entrega ou da nota.">'
-             + '\u26a0\ufe0f CLIENTE PEDIU CORRE\u00c7\u00c3O NOS DADOS</span>';
-    }
-
-    return '<br><span style="' + forma + ' background: rgba(245,158,11,0.16); color: #fbbf24; '
-         + 'border: 1px solid rgba(245,158,11,0.4);" '
-         + 'title="O cliente aprovou a arte mas nunca conferiu o endereco de entrega nem os dados da nota fiscal.">'
-         + '\u26a0\ufe0f DADOS N\u00c3O CONFERIDOS PELO CLIENTE</span>';
-}
 
 function pedidoSaiuDaArte(os) {
     if (!os) return false;
@@ -29917,7 +29866,14 @@ function renderOrdens() {
                         <td>
                             <strong>${escapeHtml(rotuloDoCliente(os)) || '--'}</strong>
                             ${nomeEventoHtml}
-                            ${avisoDeDadosNaoConferidosHtml(os.numero)}
+                            <!-- O selo "DADOS NAO CONFERIDOS PELO CLIENTE" saiu
+                                 daqui em 03/09/2026, a pedido do usuario, no mesmo
+                                 dia em que entrou. O lugar dele e a COLUNA
+                                 Entrega/Faturamento da Lista de Arte, que ja
+                                 existia, e onde o selo tambem se clica para
+                                 mudar de estado -- aqui era so leitura, e
+                                 empilhava um terceiro aviso embaixo do nome do
+                                 cliente numa tabela que ja e larga. -->
                         </td>
                         <td>${progressBarHtml}</td>
                         <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
