@@ -1778,15 +1778,21 @@ body.not-logged-in .app-shell {
    cliente, selo — e o selo, que é a resposta a "como está meu pedido?", nascia
    por último. Em duas faixas o cliente lê marca e situação de uma vez, e a
    arte, que é o que ele veio ver, começa mais acima na tela. */
+/* Apertado em 03/09/2026. O cabeçalho gastava 178px de uma tela de 844 antes de
+   a trilha começar — e no navegador embutido do WhatsApp, que é por onde este
+   link é aberto, ainda sai a barra do próprio aplicativo em cima disso. O que
+   encolheu foram folgas e margens; a logo continua nos 47px que foram
+   escolhidos olhando um aparelho de verdade (ver `.cliente-logo`), porque esse
+   número não se muda no escuro. */
 .cliente-header {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 20px;
+    gap: 9px;
+    padding: 14px 16px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    margin-bottom: 14px;
+    margin-bottom: 11px;
 }
 
 .cliente-header-faixa {
@@ -1798,16 +1804,16 @@ body.not-logged-in .app-shell {
 }
 
 .cliente-title {
-    font-size: 1.4rem;
+    font-size: 1.28rem;
     font-weight: 700;
     color: var(--text);
     margin: 0;
 }
 
 .cliente-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.86rem;
     color: var(--text-dim);
-    margin: 4px 0 0;
+    margin: 2px 0 0;
 }
 
 .cliente-section {
@@ -1935,15 +1941,15 @@ body.not-logged-in .app-shell {
        centraliza: com a logo à esquerda e o selo à direita, o texto do pedido
        alinhado à esquerda embaixo é uma coluna de leitura só. */
     .cliente-header {
-        padding: 14px 14px 15px;
-        gap: 10px;
+        padding: 11px 12px 12px;
+        gap: 8px;
     }
     /* O aperto da logo e do selo NÃO mora aqui: `.cliente-logo` e `.portal-selo`
        são redefinidos mais abaixo, no bloco do Portal, e regra escrita depois
        vence regra de mesma especificidade — media query não muda isso. Os dois
        estão no `@media` do fim do bloco do Portal. */
     .cliente-title {
-        font-size: 1.15rem;
+        font-size: 1.08rem;
     }
     .cliente-actions {
         flex-direction: column;
@@ -3624,7 +3630,9 @@ input[type=number] {
     flex-shrink: 0;
 }
 
-#cliente-os-itens-count { margin-top: 6px; display: inline-block; }
+/* O badge "N MODELOS" na MESMA linha do nome do cliente, e não numa quarta
+   linha só dele: ele é qualificação do pedido, não um bloco de informação. */
+#cliente-os-itens-count { margin-top: 3px; display: inline-block; }
 #cliente-os-itens-count:empty { display: none; }
 
 /* ─── As seções ───────────────────────────────────────────────────────────── */
@@ -3729,7 +3737,71 @@ input[type=number] {
     box-shadow: 0 4px 15px rgba(34, 197, 94, 0.35);
 }
 .portal-botao.atencao { background: #f97316; border-color: #f97316; color: #fff; }
+/* ÂMBAR, e não verde: nesta página verde quer dizer "aprovado", e este botão
+   não aprova nada — ele leva o cliente para a conferência que falta. */
+.portal-botao.pendencia {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #1a1200;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
+}
 .portal-botao[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── O que falta, no alto da aba da arte ─────────────────────────────────
+   Medido em 03/09/2026: 17 pedidos foram para a produção com a arte aprovada e
+   a conferência de entrega e nota nunca feita. Para quem já tinha aprovado, o
+   cartão mais forte da primeira dobra era o "Pedido em produção" — uma
+   mensagem de tranquilidade —, e o que pedia ação eram dois chips e dois
+   pontos de 9px. Este cartão inverte isso: quem fala mais alto é o que falta.
+
+   `pendencia`, e não `falta`: `.portal-falta` já existe mais abaixo, e é o
+   cartão em LINHA que a aba de Entrega usa para campo faltando no cadastro.
+   Reusar o nome punha este cartão em `flex-direction: row` — título, texto e
+   botão lado a lado, cada um numa coluna estreita — e ainda vazava a margem
+   daqui para dentro do outro. Visto na tela em 03/09/2026, antes de publicar. */
+.portal-pendencia {
+    border-color: rgba(245, 158, 11, 0.55);
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.05));
+}
+.portal-pendencia-titulo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--amber);
+    margin-bottom: 8px;
+}
+.portal-pendencia-texto {
+    margin: 0 0 14px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--text);
+}
+
+/* ─── "Abrimos direto no que falta" ───────────────────────────────────────
+   O recado de que a página escolheu sozinha a aba — com o caminho de volta à
+   arte no mesmo cartão. Verde porque a notícia dele é boa: a arte está
+   aprovada. */
+.portal-abertura {
+    border-color: rgba(34, 197, 94, 0.38);
+    background: rgba(34, 197, 94, 0.07);
+}
+.portal-abertura-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: var(--green);
+    margin-bottom: 6px;
+}
+.portal-abertura-texto {
+    margin: 0 0 12px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--text-dim);
+}
 
 .portal-par-de-botoes { display: flex; gap: 10px; margin-top: 14px; }
 .portal-par-de-botoes .portal-botao { flex: 1; }
@@ -3816,8 +3888,8 @@ input[type=number] {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 12px 14px 13px;
-    margin-bottom: 14px;
+    padding: 10px 12px 11px;
+    margin-bottom: 11px;
 }
 .portal-trilha[hidden] { display: none; }
 
@@ -3836,6 +3908,8 @@ input[type=number] {
     color: var(--text-dim);
 }
 .portal-trilha-conta { font-size: 0.74rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+/* Enquanto falta alguma coisa, a conta é âmbar como o resto do que espera. */
+.portal-trilha-conta.falta { color: var(--amber); }
 
 .portal-trilha-barra {
     height: 4px;
@@ -3878,16 +3952,44 @@ input[type=number] {
     transition: border-color var(--transition), color var(--transition), background var(--transition);
 }
 .portal-passo .icone-cliente { flex-shrink: 0; }
+
+/* O nome da etapa e, embaixo, o VERBO dela.
+
+   "Entrega" sozinho diz de que a etapa trata, não que ela espera alguém.
+   Duas linhas cabem nos 44px que o chip já tinha, e a segunda é o que
+   transforma um rótulo em pedido. */
+.portal-passo-texto {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    line-height: 1.12;
+}
+.portal-passo-texto b { font-size: 0.74rem; font-weight: 700; }
+.portal-passo-texto i { font-style: normal; font-size: 0.62rem; font-weight: 600; opacity: 0.85; }
+
 .portal-passo-feito {
     border-color: rgba(34, 197, 94, 0.5);
     background: rgba(34, 197, 94, 0.1);
     color: var(--green);
 }
-.portal-passo-agora {
-    border-color: rgba(59, 130, 246, 0.6);
-    background: rgba(59, 130, 246, 0.12);
-    color: #60a5fa;
+
+/* ÂMBAR para o que falta — a MESMA cor do ponto de pendência na barra de abas.
+
+   Até 03/09/2026 pendente era cinza aqui e âmbar lá embaixo: duas línguas para
+   o mesmo estado, na mesma tela. O cinza também deixava a etapa pendente com
+   menos peso visual que a concluída, que é o contrário do que ela precisa ter.
+
+   O `-agora` azul saiu junto. Ele pintava de azul justamente a etapa aberta —
+   e quando a etapa aberta era uma pendência, o "você está aqui" cobria o
+   "falta você". Onde o cliente está, a barra de abas já diz; aqui só interessa
+   o que falta. O contorno de `-aqui` mantém a referência sem trocar a cor. */
+.portal-passo-pendente {
+    border-color: rgba(245, 158, 11, 0.55);
+    background: rgba(245, 158, 11, 0.10);
+    color: var(--amber);
 }
+.portal-passo-aqui { box-shadow: inset 0 0 0 1.5px currentColor; }
 
 
 /* ── Onde o cliente está na lista de modelos ─────────────────────────────────

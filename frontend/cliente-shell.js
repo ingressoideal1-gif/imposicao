@@ -223,11 +223,86 @@ function etapasDoPedido() {
     // decisão — o pedido dele já está registrado e vai para o atendimento.
     const decidiu = v => v === true || v === false;
 
+    // `acao` e `pronto` sao o VERBO da etapa, e nao o nome dela.
+    //
+    // "Entrega" e substantivo: diz de que a etapa trata, nao que ela espera
+    // alguem. Medido no banco em 03/09/2026: 17 pedidos foram para a producao
+    // com a arte aprovada e a conferencia de entrega e nota NUNCA feita -- e 14
+    // deles tinham aberto o link duas vezes ou mais. Nenhum dos 88 links ativos
+    // jamais pediu correcao de dados. O cliente chegava a ver a trilha; o que
+    // ela nao dizia e que aquilo esperava por ele.
     return [
-        { secao: 'arte',        nome: 'Arte',    feito: arteFeita },
-        { secao: 'entrega',     nome: 'Entrega', feito: decidiu(c.entrega) },
-        { secao: 'faturamento', nome: 'Nota',    feito: decidiu(c.faturamento) }
+        { secao: 'arte',        nome: 'Arte',    feito: arteFeita,              acao: 'Aprovar',  pronto: 'Aprovada'  },
+        { secao: 'entrega',     nome: 'Entrega', feito: decidiu(c.entrega),     acao: 'Conferir', pronto: 'Conferida' },
+        { secao: 'faturamento', nome: 'Nota',    feito: decidiu(c.faturamento), acao: 'Conferir', pronto: 'Conferida' }
     ];
+}
+
+/**
+ * A proxima etapa que ainda espera o cliente -- ou `null`, se nao falta nada.
+ *
+ * Uma so fonte para as tres coisas que precisam saber disso: a aba em que o
+ * link abre, o cartao ambar no alto da aba da arte e o botao que leva adiante
+ * no fim dela. Tres contas paralelas sobre "o que falta" acabariam divergindo.
+ */
+function proximaEtapaPendente() {
+    return etapasDoPedido().find(e => !e.feito) || null;
+}
+
+/**
+ * Em que aba o link ABRE.
+ *
+ * Ate 03/09/2026 era sempre a Arte: `montarPortal` so respeitava um `#hash`, e
+ * o link que o cliente guardou no WhatsApp nao tem hash. Para quem ja aprovou,
+ * isso significava cair numa aba onde nao ha nada a fazer e cujo cartao maior
+ * diz "Pedido em producao" -- uma mensagem de tranquilidade ocupando a primeira
+ * tela, enquanto o que falta aparecia como dois pontinhos de 9px no rodape.
+ *
+ * ## Por que isto NAO repete o erro que `seguirSozinhoSeAprovouTudo` evita
+ *
+ * Aquela funcao documenta que o avanco nunca pode ser decidido pelo ESTADO na
+ * carga da pagina, e a razao e real: existem pedidos com todos os modelos em
+ * `APROVADA` cujo status continua em `Aguard. Aprovacao`, e decidir por estado
+ * levaria o cliente a APROVAR sem ter visto a arte.
+ *
+ * Trocar de aba nao aprova nada. Por isso a regra aqui e mais estreita do que
+ * la: so quando o STATUS do pedido diz que a arte ja foi decidida
+ * (`aprovado`/`producao`) -- e nunca a partir da contagem dos modelos, que e
+ * justamente o dado que engana. Se a arte ainda espera decisao, abre na Arte.
+ *
+ * E a pagina AVISA que abriu sozinha, com o caminho de volta ao lado: o que o
+ * sistema faz por conta propria precisa se anunciar.
+ */
+function secaoDeAbertura(statusArte) {
+    const chave = seloDoStatus(statusArte).chave;
+    if (chave !== 'aprovado' && chave !== 'producao') return 'arte';
+
+    const proxima = proximaEtapaPendente();
+    if (!proxima || proxima.secao === 'arte') return 'arte';
+    return proxima.secao;
+}
+
+/**
+ * O recado de que a pagina abriu sozinha numa aba que nao e a da Arte.
+ *
+ * Vai DENTRO da secao aberta, no topo, e traz o botao de volta a arte. Sem ele
+ * o cliente que veio rever o ingresso acha que a arte sumiu -- que e justamente
+ * o defeito que o Portal existe para nao ter.
+ */
+function anunciarAberturaAutomatica(secao) {
+    const el = document.getElementById('secao-' + secao);
+    if (!el) return;
+    const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
+
+    el.insertAdjacentHTML('afterbegin',
+        '<div class="portal-cartao portal-abertura">'
+        + '<div class="portal-abertura-titulo">' + icone('check', 17, '#22c55e')
+        + 'Sua arte já está aprovada</div>'
+        + '<p class="portal-abertura-texto">Abrimos direto no que ainda falta você conferir. '
+        + 'A sua arte continua aqui, na aba <b>Arte</b>.</p>'
+        + '<button type="button" class="portal-botao" onclick="abrirSecao(\'arte\')">'
+        + icone('arte', 17) + 'Ver minha arte</button>'
+        + '</div>');
 }
 
 /** Desenha a trilha. Chamada em toda abertura de aba e a cada decisão. */
@@ -239,19 +314,31 @@ function desenharTrilha() {
     const feitas = etapas.filter(e => e.feito).length;
     const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
 
+    // AMBAR para o que falta, verde para o que foi feito -- e a aba aberta e
+    // apenas contornada, em vez de pintada de azul.
+    //
+    // Ate 03/09/2026 pendente era CINZA aqui e AMBAR na barra de abas: duas
+    // linguas para o mesmo estado, na mesma tela. Pior, o azul de "voce esta
+    // aqui" vencia o cinza de "falta voce" justamente na etapa aberta, que e a
+    // que mais precisa pedir acao. Onde o cliente esta, a barra de abas ja diz.
     const passos = etapas.map(e => {
-        const estado = e.feito ? 'feito' : (e.secao === secaoAtual ? 'agora' : 'pendente');
-        return '<button type="button" class="portal-passo portal-passo-' + estado + '" '
+        const estado = e.feito ? 'feito' : 'pendente';
+        const aqui = e.secao === secaoAtual ? ' portal-passo-aqui' : '';
+        return '<button type="button" class="portal-passo portal-passo-' + estado + aqui + '" '
              + 'data-abre="' + e.secao + '">'
              + icone(e.feito ? 'check' : 'relogio', 15)
-             + '<span>' + e.nome + '</span>'
+             + '<span class="portal-passo-texto">'
+             + '<b>' + e.nome + '</b>'
+             + '<i>' + (e.feito ? e.pronto : e.acao) + '</i>'
+             + '</span>'
              + '</button>';
     }).join('');
 
     caixa.innerHTML =
         '<div class="portal-trilha-topo">'
         + '<span class="portal-trilha-rotulo">Para fechar o pedido</span>'
-        + '<span class="portal-trilha-conta">' + feitas + ' de 3 concluídas</span>'
+        + '<span class="portal-trilha-conta' + (feitas < etapas.length ? ' falta' : '') + '">'
+        + feitas + ' de 3 concluídas</span>'
         + '</div>'
         + '<div class="portal-trilha-barra">'
         + '<div class="portal-trilha-fill" style="width: ' + Math.round((feitas / 3) * 100) + '%;"></div>'
@@ -351,8 +438,14 @@ function montarPortal(statusArte) {
         botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
     });
 
+    // O hash manda quando existe: e por ele que o cliente recarrega sem voltar
+    // ao comeco, e que o atendente manda o link ja na aba que interessa. Sem
+    // hash -- o caso do link colado no WhatsApp --, quem decide e
+    // `secaoDeAbertura`.
     const doHash = (window.location.hash || '').replace('#', '');
-    abrirSecao(secaoValida(doHash) ? doHash : 'arte');
+    const abertura = secaoValida(doHash) ? doHash : secaoDeAbertura(statusArte);
+    abrirSecao(abertura);
+    if (!secaoValida(doHash) && abertura !== 'arte') anunciarAberturaAutomatica(abertura);
 
     const barra = document.getElementById('portal-abas');
     if (barra) barra.hidden = false;
@@ -366,6 +459,8 @@ window.abrirSecao = abrirSecao;
 window.redesenharSecao = redesenharSecao;
 window.montarPortal = montarPortal;
 window.etapasDoPedido = etapasDoPedido;
+window.proximaEtapaPendente = proximaEtapaPendente;
+window.secaoDeAbertura = secaoDeAbertura;
 window.desenharTrilha = desenharTrilha;
 window.atualizarSinaisDasAbas = atualizarSinaisDasAbas;
 window.atualizarPainelDoPedido = atualizarPainelDoPedido;

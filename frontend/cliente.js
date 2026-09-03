@@ -1563,7 +1563,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                     tipo: 'PRODUCAO',
                     setor: 'Cliente',
                     visivel_externo: true,
-                    mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
+                    mensagem: mensagemDaAprovacaoDeArte(),
                     autor_nome: 'Cliente (aprovação online)',
                 });
             } catch (e) { console.error('Erro log chat:', e); }
@@ -1979,6 +1979,12 @@ function atualizarBarraFinalCliente(osId) {
     // Pedido já decidido: a aba da arte agora continua existindo depois da
     // aprovação, e sem esta guarda o botão de finalizar reapareceria embaixo
     // das artes que o cliente só voltou para conferir.
+    //
+    // Quem leva o cliente adiante nesse caso e o cartao de
+    // `botaoDeContinuarNaArte`, no FIM da secao -- e nao esta barra. A barra e
+    // `sticky` e passa por cima do conteudo: com o botao de continuar dentro
+    // dela, ele cobria justamente o cartao de status da arte. Visto na tela em
+    // 03/09/2026, antes de publicar.
     if (state.arteSomenteLeitura === true) {
         containerActions.style.display = 'none';
         return;
@@ -3886,6 +3892,10 @@ function desenharSecaoArte(osId) {
         const acoes = document.querySelector('.cliente-actions');
         if (acoes) acoes.style.display = '';
         renderAmostrasOSItens(osId);
+        // A arte ainda espera decisão: ela é a pendência desta aba, e o botão
+        // verde já está ali. Um segundo cartão âmbar mandando conferir outra
+        // coisa competiria justamente com o que o cliente veio fazer.
+        cartaoDoQueFaltaNaArte(false);
         return;
     }
 
@@ -3896,18 +3906,12 @@ function desenharSecaoArte(osId) {
         avisoDaArte('check', '#22c55e', 'Artes aprovadas',
             'Você já aprovou estas artes. Elas estão abaixo, como foram aprovadas — '
             + 'toque em qualquer uma para ampliar. Em breve seu pedido entra em produção.', true);
-        return;
-    }
-
-    if (chave === 'producao') {
+    } else if (chave === 'producao') {
         renderAmostrasOSItens(osId);
         avisoDaArte('impressora', '#38bdf8', 'Pedido em produção',
             'Suas artes já estão na impressora. Confira o prazo e o endereço na aba '
             + '<b>Entrega</b>.', true);
-        return;
-    }
-
-    if (chave === 'correcao') {
+    } else if (chave === 'correcao') {
         renderAmostrasOSItens(osId);
         const pedidos = pedidosDeAlteracaoDoCliente(osId);
         let texto = 'Recebemos seu pedido de alteração e nossa equipe está refazendo a arte. '
@@ -3919,14 +3923,160 @@ function desenharSecaoArte(osId) {
             });
         }
         avisoDaArte('lapis', '#f97316', 'Alteração solicitada', texto, true);
+    } else {
+        // `preparando`, e qualquer status que o ERP invente amanhã.
+        avisoDaArte('arte', '#94a3b8', 'Arte em preparação',
+            'Nossa equipe está preparando sua arte. Quando ela estiver pronta, você recebe '
+            + 'um aviso e ela aparece aqui, nesta mesma página. Enquanto isso, confira seus '
+            + 'dados nas outras abas.', false);
+    }
+
+    // DEPOIS do `avisoDaArte`, e de propósito: ele insere o cartão de status
+    // como primeiro filho da seção, e este entra por cima dele. O que falta vem
+    // antes do que já está resolvido.
+    cartaoDoQueFaltaNaArte(true);
+}
+
+/**
+ * As etapas que ainda esperam o cliente, TIRANDO a arte.
+ *
+ * A arte fica de fora porque quem pergunta isto é a própria aba da arte: ali,
+ * "falta a arte" é o botão verde que já está na tela.
+ */
+function pendenciasForaDaArte() {
+    if (typeof etapasDoPedido !== 'function') return [];
+    return etapasDoPedido().filter(e => !e.feito && e.secao !== 'arte');
+}
+
+/**
+ * O cartão ÂMBAR no alto da aba da arte: o que ainda falta, e o botão até lá.
+ *
+ * ## Por que ele existe
+ *
+ * Medido no banco em 03/09/2026: **17 pedidos** foram para a produção com a
+ * arte aprovada e a conferência de entrega e nota **nunca feita** — 6 dos 14
+ * pedidos decididos desde que o Portal existe, 43%. E **14 desses 17 abriram o
+ * link duas vezes ou mais**, um deles 50 vezes. Não foi falta de oportunidade.
+ *
+ * O motivo estava na tela: para quem já aprovou, o cartão maior da primeira
+ * dobra dizia *"Pedido em produção — suas artes já estão na impressora"*. O
+ * elemento mais forte da página dava tranquilidade, e o que pedia ação eram
+ * dois chips cinza na trilha e dois pontos de 9px no rodapé.
+ *
+ * Endereço errado é frete de volta; CNPJ errado é nota refeita. Os dois custam
+ * dinheiro da gráfica depois que o material já está impresso.
+ *
+ * `ativo` em `false` apenas LIMPA o cartão — é o caso da aba em modo de
+ * aprovação, em que a pendência é a própria arte.
+ */
+function cartaoDoQueFaltaNaArte(ativo) {
+    const secao = document.getElementById('secao-arte');
+    if (!secao) return;
+
+    const antigo = document.getElementById('portal-pendencia-arte');
+    if (antigo) antigo.remove();
+
+    const faltam = ativo ? pendenciasForaDaArte() : [];
+    if (!faltam.length) {
+        botaoDeContinuarNaArte();
         return;
     }
 
-    // `preparando`, e qualquer status que o ERP invente amanhã.
-    avisoDaArte('arte', '#94a3b8', 'Arte em preparação',
-        'Nossa equipe está preparando sua arte. Quando ela estiver pronta, você recebe '
-        + 'um aviso e ela aparece aqui, nesta mesma página. Enquanto isso, confira seus '
-        + 'dados nas outras abas.', false);
+    const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
+    const nomes = faltam.map(e => '<b>' + escapeHtml(e.nome.toLowerCase()) + '</b>');
+    const lista = nomes.length === 1
+        ? nomes[0]
+        : nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
+    const alvo = faltam[0];
+
+    const cartao = document.createElement('div');
+    cartao.id = 'portal-pendencia-arte';
+    cartao.className = 'portal-cartao portal-pendencia';
+    cartao.innerHTML =
+        '<div class="portal-pendencia-titulo">' + icone('alerta', 19, '#f59e0b')
+        + 'Falta você conferir</div>'
+        + '<p class="portal-pendencia-texto">A arte está resolvida, mas o pedido só fecha depois '
+        + 'que você conferir os dados de ' + lista + '. É rápido, e é o que garante que o '
+        + 'material chegue no endereço certo e a nota saia com os dados certos.</p>'
+        + '<button type="button" class="portal-botao pendencia" '
+        + 'onclick="abrirSecao(\'' + alvo.secao + '\')">'
+        + icone(alvo.secao === 'entrega' ? 'entrega' : 'nota', 18)
+        + 'Conferir ' + escapeHtml(alvo.nome.toLowerCase()) + '</button>';
+
+    secao.insertBefore(cartao, secao.firstChild);
+    botaoDeContinuarNaArte();
+}
+
+/**
+ * O botão de continuar no FIM da aba da arte, quando ela é só leitura.
+ *
+ * O mesmo caminho do cartão do topo, no outro extremo da rolagem. Num pedido de
+ * sete modelos, quem desce conferindo as artes termina longe do topo, e voltar
+ * até lá para achar a saída é exatamente o que ninguém faz.
+ *
+ * ## Por que um cartão, e não a barra grudada
+ *
+ * A `.cliente-actions` é `sticky` e o conteúdo passa por baixo dela: é o preço
+ * aceito para o botão de APROVAR estar sempre ao alcance do polegar, porque ali
+ * o cliente tem uma decisão a tomar. Aqui ele não tem — a arte já está
+ * decidida, e o cartão âmbar do topo já disse o que falta. Posto na barra, este
+ * botão cobria o próprio cartão de status da arte, o tempo todo, em troca de
+ * nada. Visto na tela em 03/09/2026, antes de publicar.
+ */
+function botaoDeContinuarNaArte() {
+    const secao = document.getElementById('secao-arte');
+    if (!secao) return;
+
+    const antigo = document.getElementById('portal-continuar-arte');
+    if (antigo) antigo.remove();
+
+    // Em modo de aprovação quem leva adiante é o botão verde da barra.
+    if (state.arteSomenteLeitura !== true) return;
+
+    const faltam = pendenciasForaDaArte();
+    if (!faltam.length) return;
+
+    const alvo = faltam[0];
+    const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
+
+    const cartao = document.createElement('div');
+    cartao.id = 'portal-continuar-arte';
+    cartao.className = 'portal-cartao portal-pendencia';
+    cartao.innerHTML =
+        '<p class="portal-pendencia-texto" style="margin-bottom: 12px;">'
+        + 'Falta pouco: confira os dados e o pedido fica fechado.</p>'
+        + '<button type="button" class="portal-botao pendencia" '
+        + 'onclick="abrirSecao(\'' + alvo.secao + '\')">'
+        + icone('direita', 18) + 'Continuar: conferir ' + escapeHtml(alvo.nome.toLowerCase())
+        + '</button>';
+
+    secao.appendChild(cartao);
+}
+
+/**
+ * O que o chat do parceiro recebe quando o cliente aprova as artes.
+ *
+ * Até 03/09/2026 era sempre *"PEDIDO COMPLETO APROVADO PELO CLIENTE"* — mesmo
+ * quando só a arte tinha sido aprovada e a conferência de entrega e nota nunca
+ * tinha acontecido. O atendimento lia "completo", tocava a produção, e ninguém
+ * ficava sabendo que faltavam endereço e CNPJ conferidos. Foi por esse buraco
+ * que 17 pedidos passaram.
+ *
+ * Agora são duas mensagens diferentes, e a que fala de pendência diz o que
+ * falta.
+ */
+function mensagemDaAprovacaoDeArte() {
+    const faltam = pendenciasForaDaArte();
+    if (!faltam.length) {
+        return '✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.';
+    }
+    const nomes = faltam.map(e => e.nome.toUpperCase()).join(' e ');
+    return '✅ ARTES APROVADAS PELO CLIENTE via link de aprovação online.'
+         + '\n\n⚠️ O pedido AINDA NÃO ESTÁ COMPLETO: falta o cliente conferir '
+         + nomes + '. Enquanto ele não conferir, o endereço de entrega e os dados da '
+         + 'nota fiscal não foram validados por ele.';
 }
 
 window.desenharSecaoArte = desenharSecaoArte;
+window.cartaoDoQueFaltaNaArte = cartaoDoQueFaltaNaArte;
+window.botaoDeContinuarNaArte = botaoDeContinuarNaArte;
