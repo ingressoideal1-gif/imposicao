@@ -51,7 +51,14 @@ As tabelas focadas na Imposição gráfica usam o prefixo `producao_`.  A integr
 Os status controlam o andamento do item na fábrica:
 
 - **Status de OS**: `PRODUÇÃO`
-- **Status de Item (Impressão)**: `AGUARD.` ➔ `PARCIAL` ➔ `IMPRESSO` ➔ `ERRO`
+- **Status de Item (Impressão)**: `Aguardando` · `Impresso` · `Corrigir Arte`
+
+  Eram quatro (`AGUARD.`, `PARCIAL`, `IMPRESSO`, `ERRO`) até 28/08/2026, quando
+  *Parcial* e *Erro* saíram por decisão do usuário — nunca tinham sido usados
+  (zero ocorrências no banco), e o meio-caminho de um pedido quem conta é a
+  coluna Progresso. Valores legados ainda podem existir em linhas antigas e
+  **leem como `Aguardando`**. *Corrigir Arte* entrou em 02/09/2026; ver a seção
+  própria mais abaixo.
 - **Status de Lote de Impressão**:
   - `AGUARDANDO_IMPOSICAO`
   - `EM_IMPOSICAO`
@@ -127,6 +134,65 @@ Testes: `tests/ordem_por_prazo_de_entrega_harness.js` e
 `tests/test_ordem_por_prazo_de_entrega.py`. Conferido também na tela real, com os
 pedidos do dia: 9 linhas na Produção e 35 no Acabamento, todas em ordem
 crescente e com os sem prazo no fim.
+
+## O status "Corrigir Arte" (02/09/2026)
+
+Pedido do usuário: *"no painel da produção, na edição do modelo, vamos adicionar
+o status 'Corrigir Arte'. Ao selecionar esse status para um modelo, o pedido deve
+listar no painel de arte, card Em Arte, para ser editado pelo designer"*.
+
+### O buraco que ele fecha
+
+Um pedido que já saiu para a produção conta **só** no card "Pedidos Concluídos" da
+Lista de Arte — é a regra do `pedidoSaiuDaArte`, e ela está certa para o caso
+normal: o designer não deve ter na frente dele pedido que já é trabalho da
+impressora. O efeito colateral era que, quando a produção descobria um erro de
+arte, não havia o que apertar. O recado ia por fora do sistema.
+
+### O que a marca faz
+
+É o terceiro valor do seletor **Status** da linha do modelo, e faz três coisas de
+uma vez:
+
+1. **trava a impressão daquele modelo** — e só daquele; os outros do mesmo pedido
+   seguem imprimindo. O botão de imprimir some da linha e da prévia, e as duas
+   telas de imposição recusam o `print`. **Gerar o PDF continua liberado**: é
+   assim que se confere o erro sem gastar papel;
+2. **traz o pedido de volta para o card "Em Arte"**, vencendo o `pedidoSaiuDaArte`.
+   No card do modelo, uma faixa âmbar diz ao designer qual modelo a produção
+   devolveu — o card mostra o pedido, não o modelo;
+3. **sai sozinha** quando o designer marca aquele modelo 🎨 PRONTO: ele volta para
+   *Aguardando* e a impressão libera.
+
+### As quatro decisões do usuário
+
+| pergunta | decisão |
+|---|---|
+| o que libera a impressão de volta | o PRONTO **daquele** modelo |
+| o que a marca trava | **só aquele** modelo |
+| para onde o modelo volta | **Aguardando**, nunca Impresso: a arte mudou |
+| em que card o pedido aparece | **só** em "Em Arte" |
+
+A terceira é a que dispensa coluna nova: como a volta é sempre para *Aguardando*,
+não há status anterior a guardar. O valor mora em
+`pedidos_modelos.status_impressao`, a mesma coluna dos outros dois — um modelo
+está numa situação de cada vez.
+
+### Onde a regra mora
+
+`STATUS_CORRIGIR_ARTE`, `modeloEmCorrecaoDeArte` e `modelosEmCorrecaoDeArte`, no
+`frontend/script.js`, uma vez só; o `pedido.js` os consulta pelo `window`. Os
+**quatro** seletores de status oferecem a opção, e não só o da tela onde ela é
+marcada: um `<select>` sem opção para o valor guardado mostra a primeira, e o
+modelo apareceria como *Aguardando* nas outras telas.
+
+Pedido cancelado não volta: a marca é conferida depois do `pedidoCancelado`.
+Num modelo já aprovado pelo cliente o botão PRONTO nasce desabilitado, e a faixa
+manda passar antes por **❌ EM ALTERAÇÃO**.
+
+Guardado por `tests/corrigir_arte_harness.js` e `tests/test_corrigir_arte.py`.
+
+---
 
 ## A ordem da lista no botão IMPRESSO
 

@@ -16,6 +16,21 @@ Uma conta só: **total de itens ÷ células do formato**, arredondado para cima.
 Modo **empilhado**, células preenchidas **na ordem**. É a regra que o usuário
 ditou, e ela vale para qualquer pedido — nada de calcular por modelo e somar.
 
+> **A janela do Pedido não seguia esta regra até 02/09/2026.** Ela mandava o
+> `multi_artes` para o plano de montagem (`buildStrictAssemblySets`), que reserva
+> uma pilha por modelo — exatamente o "calcular por modelo e somar" que a regra
+> proíbe. O motor sempre esteve certo; era a tela. Com dois modelos de 2 peças
+> numa folha de 4 poses, a janela mostrava 2 sets de 1 folha com metade das poses
+> vazia, e a máquina fazia 1 folha cheia. Com as quantidades do pedido 21408
+> (25 + 20), a janela mostrava Set 1 com 7 folhas só do primeiro modelo e Set 2
+> com 5 só do segundo, enquanto a máquina faz 12 folhas com os dois misturados
+> desde a primeira — o total coincidia, e por isso passava despercebido.
+>
+> O plano de montagem continua valendo para o `cut_stack`, que é onde o motor
+> também o usa (`is_strict_assembly` no `engine.py` exige
+> `layout_schema == "cut_stack"`). Guardado por
+> `tests/test_folha_combinada_igual_ao_motor.py`, que roda o motor de verdade.
+
 No pedido 20495 (nove modelos de credencial PVC, 4 células por folha A4):
 
 | | Folhas | Células vazias |

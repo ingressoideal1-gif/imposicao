@@ -1062,11 +1062,13 @@ Derivar **não é gravar**. Desenhar a tela não escreve no banco — é a regra
 A coluna continua nula até alguém escolher; a partir daí, a escolha vence o
 derivado, inclusive quando a escolha é voltar para *Aguardando*.
 
-Só `'Impresso'` conta como impresso. Desde 28/08/2026 a impressão só tem dois
-status (Aguardando e Impresso), mas valores legados gravados antes disso
-(*Parcial*, *Revisão*) ainda podem existir no banco — e derivam para
-*Aguardando*, que é a verdade do ponto de vista desta tela: meia impressão ou
-problema não chegou ao acabamento.
+Só `'Impresso'` conta como impresso. De 28/08/2026 a 01/09/2026 a impressão teve
+apenas dois status (Aguardando e Impresso); em **02/09/2026 entrou um terceiro,
+*Corrigir Arte***, que a produção marca para devolver o modelo ao designer — ver
+`docs/PRODUCAO-MODULO-GERAL.md`. Para esta tela ele lê como *Aguardando*, junto
+com os valores legados (*Parcial*, *Revisão*) que ainda possam existir no banco:
+material que ainda não saiu inteiro da impressora não chegou ao acabamento, e um
+modelo parado esperando arte nova menos ainda.
 
 ### Por que a coluna é separada da impressão
 
