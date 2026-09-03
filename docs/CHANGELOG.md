@@ -4,6 +4,59 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — GDI avisa quando falta o win32ui, em vez de estourar traceback
+
+No pedido 21524, ao mandar imprimir, o operador viu um erro cru: **"Erro na
+impressao GDI: DLL load failed while importing win32ui: Não foi possível
+encontrar o módulo especificado"**, com um traceback em inglês dentro da
+resposta HTTP.
+
+### A causa
+
+`win32print` e `win32ui` são módulos diferentes do pywin32, com dependências
+nativas próprias. `win32print` mora em `site-packages/win32/` e é o único
+testado pela bandeira `HAS_WIN32`; `win32ui` mora em
+`site-packages/pythonwin/`, só é importável porque o instalador do pywin32
+acrescenta essa pasta ao `sys.path`, e carrega uma DLL nativa própria que o
+`win32print` não usa. Uma estação pode ter `win32print` funcionando — o
+catálogo de impressoras aparece normal, o painel abre — e `win32ui` falhando
+só na hora de imprimir de verdade, porque é só o `_send_gdi_raster` (o
+**fallback que a Produção usa por padrão**, já que ela nunca manda
+`print_mode`) quem o usa. Sem uma bandeira própria, o `ImportError` caía no
+`except Exception` genérico da função e virava o traceback que o operador viu.
+
+O `agent_tray.spec` (o executável NewProd) também tinha a mesma lacuna que já
+tinha custado caro duas vezes antes, com `PIL.ImageCms` e
+`serial.serialwin32`: `win32print` está em `hiddenimports`, mas `win32ui`,
+`win32gui` e `win32con` não estavam — o agente compila normalmente e só falha
+na estação, no clique do operador.
+
+### O que passou a ser
+
+- `print_service.py` ganhou `HAS_WIN32UI`, calculada uma vez no import do
+  módulo, independente de `HAS_WIN32`. Sem ela, `_send_gdi_raster` devolve
+  `(False, mensagem)` — nunca uma exceção — dizendo o que fazer: reiniciar o
+  NewProd, reinstalar, ou instalar o Visual C++ Redistributável (x64) da
+  Microsoft, e avisar o suporte.
+- `agent_tray.spec` ganhou `win32ui`, `win32gui` e `win32con` em
+  `hiddenimports`, ao lado do comentário que já explicava o mesmo padrão para
+  os dois incidentes anteriores.
+
+Testes: `tests/test_gdi_sem_win32ui.py` — com `HAS_WIN32UI` forçada a `False`,
+`send_print_job_windows` devolve aviso acionável e nunca lança; com ela em
+`True` (o normal), nada muda no caminho mock já existente.
+
+### O que ainda depende da estação
+
+Se a causa real na máquina do 21524 for a falta de um componente do Windows
+(o candidato mais comum para esta mensagem exata é o Visual C++
+Redistributável, do qual o `win32ui.pyd` depende e que o `win32print.pyd` não
+precisa), nenhum ajuste de empacotamento resolve sozinho — só reinstalar esse
+componente na estação, ou reinstalar o NewProd ali. O conserto aqui garante
+que, dali para frente, a estação **avisa** em vez de travar sem explicação.
+
+---
+
 ## [2026-09-03] — O pedido devolvido pela expedição volta para os dois painéis
 
 Pergunta do usuário: **"o que aconteceu com o pedido 21594? sumiu dos painéis"**.

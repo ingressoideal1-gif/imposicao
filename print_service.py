@@ -14,6 +14,35 @@ try:
 except ImportError:
     HAS_WIN32 = False
 
+# win32ui e' MODULO DIFERENTE de win32print, com dependencia nativa propria.
+#
+# `win32print` mora em `site-packages/win32/`; `win32ui` mora em
+# `site-packages/pythonwin/`, so e' importavel porque o instalador do pywin32
+# acrescenta essa pasta ao `sys.path`, e o `.pyd` carrega uma DLL propria que o
+# `win32print` nao usa. Uma estacao pode ter `win32print` funcionando -- o
+# catalogo de impressoras aparece normal, o painel abre -- e `win32ui` falhando
+# so na hora de imprimir de verdade, porque e' so' o `_send_gdi_raster` (o
+# FALLBACK que a Producao usa por padrao, ja que ela nunca manda `print_mode`)
+# quem o usa.
+#
+# Sem uma bandeira propria, o ImportError vazava cru ate o operador: foi o que
+# aconteceu no pedido 21524 em 03/09/2026 -- "DLL load failed while importing
+# win32ui: Nao foi possivel encontrar o modulo especificado", como traceback
+# dentro do erro HTTP, em vez de um recado que ele pudesse agir.
+#
+# Importar aqui, no topo do modulo, e nao dentro de `_send_gdi_raster`, tem uma
+# segunda razao: import de nivel de modulo e' o que o PyInstaller enxerga com
+# mais confianca ao decidir o que empacotar no executavel. Foi exatamente a
+# falta disso, duas vezes antes -- `PIL.ImageCms` e `serial.serialwin32` --
+# que fez este projeto aprender a declarar esses modulos explicitamente em
+# `agent_tray.spec`; win32ui, win32gui e win32con estao la agora pelo mesmo
+# motivo.
+try:
+    import win32gui, win32ui, win32con
+    HAS_WIN32UI = True
+except ImportError:
+    HAS_WIN32UI = False
+
 PPD_DIR = "ppds"
 os.makedirs(PPD_DIR, exist_ok=True)
 PRINTER_PPD_MAP_FILE = "printer_ppd_map.json"
@@ -580,8 +609,19 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
         print(f"[print][GDI][MOCK] Job: {job_title} | Printer: {printer_name}")
         return True, "[MOCK] GDI raster simulado com sucesso."
 
+    if not HAS_WIN32UI:
+        # O caso do pedido 21524 (03/09/2026): sem isto, o ImportError caia no
+        # `except Exception` la embaixo e o operador via um traceback em ingles
+        # dentro do erro HTTP. Aqui ele ve o que falta e o que fazer.
+        msg = ("Esta estação não consegue imprimir no modo GDI: falta o "
+               "componente win32ui do Windows (pywin32) nesta máquina. "
+               "Reinicie o NewProd; se persistir, reinstale o NewProd ou "
+               "instale o \"Microsoft Visual C++ Redistributável (x64)\" da "
+               "Microsoft nesta estação, e avise o suporte.")
+        print(f"[print][GDI] {msg}")
+        return False, msg
+
     try:
-        import win32gui, win32ui, win32con
         from PIL import Image, ImageWin
         import io as _io
 

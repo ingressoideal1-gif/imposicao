@@ -110,6 +110,20 @@ a = Analysis(
         'barcode.codex',
         'barcode.ean',
         'win32print',
+        # win32ui, win32gui e win32con: o pedido 21524 (03/09/2026) foi quem
+        # descobriu a falta. Diferente de 'win32print' (mora em
+        # site-packages/win32/), 'win32ui' mora em site-packages/pythonwin/ e
+        # carrega uma DLL nativa propria -- o mesmo padrao de 'PIL.ImageCms' e
+        # de 'serial.serialwin32' logo abaixo: o agente COMPILA sem estas
+        # linhas, e so falha na estacao, no clique do operador, com um
+        # ImportError cru ("DLL load failed while importing win32ui") em vez
+        # de qualquer coisa que explique o que fazer. `print_service.py` tem
+        # a bandeira `HAS_WIN32UI` para o dia em que a estacao realmente nao
+        # tiver o componente -- esta lista aqui e' para o executavel sair
+        # COM ele sempre que a maquina que compila o tiver.
+        'win32ui',
+        'win32gui',
+        'win32con',
         'winreg',
         'anyio',
         'anyio._backends._asyncio',
