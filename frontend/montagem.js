@@ -28,10 +28,11 @@
    célula refeita SUBSTITUI o ingresso perdido; ela não cria um segundo
    ingresso válido para a mesma entrada.
 
-   A única coisa que o motor ganhou POR CAUSA desta tela (03/09/2026) foi a
-   chave `refazer_repetir`: com ela, posição repetida em `refazer_celulas`
-   imprime duas vezes. É o que o botão ⧉ de cada célula pede. Sem a chave, o
-   motor continua tirando repetidas — e é assim que a tela do Pedido manda.
+   O motor ganhou duas coisas por causa desta tela:
+   `refazer_repetir` (03/09/2026) faz posição repetida imprimir duas vezes —
+   é o ⧉ de cada célula; e `nome_size` / `nome_pos` / `nome_rot` tornam
+   configurável o número do modelo que ele imprime na borda do item, que até
+   então só aceitava a cor.
 
    ── O QUE ESTA TELA FAZ ──────────────────────────────────────────────────
 
@@ -42,10 +43,36 @@
    E monta cada arte EXATAMENTE como a tela do Pedido monta — pelas mesmas
    funções (`arteDoModeloParaFolha` e `arteParaOMotor`, do pedido.js). A
    primeira versão montava a sua própria arte, e uma célula refeita aqui saía
-   diferente da original em sete coisas: sem o verso, com a amostra de
-   aprovação no lugar da arte, sem o banco do pedido, com as linhas do banco
-   fora de lugar, sem a escala do modelo, sem a rotação da folha. Ver
-   `prepararArtesDaMontagem()`.
+   diferente da original em sete coisas. Ver `prepararArtesDaMontagem()`.
+
+   ── O REDESENHO DE 03/09/2026 ────────────────────────────────────────────
+
+   Pedido do usuário: *"rever usabilidade geral, precisamos a janela de
+   visualização da Folha Montada maior com melhor nível de detalhamento e
+   posição privilegiada, também precisamos montar na visualização o número do
+   modelo, com opção de alterar posição, rotação, tamanho da fonte e cor na
+   impressão, maior controle sobre as ações"*.
+
+   O que mudou, e por quê:
+
+   · A FOLHA TROCOU DE LUGAR. Ela vivia numa coluna fixa de 380 px na direita
+     enquanto a tabela de modelos tomava a largura toda. Mas o trabalho do
+     operador acontece na folha — é lá que ele arrasta, repete e tira. A folha
+     foi para a esquerda, a tabela virou referência compacta ao lado.
+
+   · A FOLHA É UMA FOLHA, não uma lista. Até aqui a prévia empilhava as células
+     verticalmente, sempre. Isso só está certo para o Triband, que é 1 coluna
+     por 10 linhas; numa credencial PVC (2 × 2) a tela mostrava quatro linhas
+     empilhadas e o papel saía em quadrado — a prévia mentia sobre a posição.
+     Agora ela desenha a GRADE do formato, na proporção real, pela mesma
+     geometria que o motor usa (ver `geometriaDaFolha`).
+
+   · O NÚMERO DO MODELO APARECE NA CÉLULA, na posição, rotação, tamanho e cor
+     que vão para o papel. Conferir isso antes de gerar era impossível.
+
+   · DESFAZER E REFAZER. Era a falta mais grave: um × no lugar errado apagava
+     a célula sem volta, e o operador tinha de reescolher o pedido, esperar o
+     carregamento e redigitar.
    ══════════════════════════════════════════════════════════════════════════ */
 
 // ─── O estado da tela ───────────────────────────────────────────────────────
@@ -61,13 +88,50 @@
 // o deslocamento de cada posição (ver `posicoesCombinadas`). Ela NÃO precisa
 // bater com a ordem das células: o operador pode pôr a célula do segundo
 // modelo antes da do primeiro, e o motor recebe a folha nessa ordem.
+function montagemVazia() {
+    return {
+        celulas: [],
+        modelos: [],
+        pedidoSel: null,
+        modeloSel: null,
+        // Os índices das células selecionadas. Repetir, tirar e mover passam a
+        // valer para todas de uma vez — repor doze células custava doze cliques.
+        selecao: [],
+        zoom: 'peca',
+        numero: numeroPadraoDaMontagem(),
+        // Instantâneos para o desfazer. Ver `guardarNaHistoria`.
+        historia: [],
+        futuro: [],
+    };
+}
+
 if (typeof state !== 'undefined' && state && (!state.montagem || !state.montagem.celulas)) {
-    state.montagem = { celulas: [], modelos: [], pedidoSel: null, modeloSel: null };
+    state.montagem = montagemVazia();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
    O NÚCLEO — funções puras, que o harness roda sem tela nenhuma
    ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Como o número do modelo sai impresso, antes de o operador mexer.
+ *
+ * Os quatro valores reproduzem EXATAMENTE o que o motor sempre fez, e é por
+ * isso que ligar a caixa hoje imprime o mesmo de ontem: 14 pt, na borda
+ * esquerda, girado 90 graus, preto. Novidade que muda o papel entra no padrão
+ * de hoje, e o operador escolhe sair dele.
+ *
+ * `imprimir` nasce DESLIGADO, como a caixa equivalente da tela do Pedido.
+ */
+function numeroPadraoDaMontagem() {
+    return { imprimir: false, pos: 'esquerda', rot: 90, size: 14, cor: '#000000' };
+}
+
+/** Os quatro valores que o motor aceita em cada campo. */
+const MTG_POSICOES_DO_NUMERO = ['esquerda', 'direita', 'topo', 'base'];
+const MTG_ROTACOES_DO_NUMERO = [0, 90, 180, 270];
+const MTG_TAMANHO_MIN = 6;
+const MTG_TAMANHO_MAX = 24;
 
 /**
  * As posições digitadas viram uma lista de inteiros.
@@ -216,19 +280,31 @@ function saidaIdDoItem(item, fmt) {
 }
 
 /**
- * A peça normalizada: o que a conferência compara e o que o payload usa.
+ * A peça normalizada: o que a conferência compara, o que o payload usa e o que
+ * a folha desenha.
  *
- * Existe para os dois lerem a MESMA coisa. Enquanto a conferência olhava
+ * Existe para os três lerem a MESMA coisa. Enquanto a conferência olhava
  * `item.formato_id` cru e o payload resolvia por outro caminho, dava para a
  * tela aceitar uma célula que o motor recusaria — que foi exatamente o que
  * aconteceu.
+ *
+ * As medidas em milímetros entraram em 03/09/2026, para a folha ser desenhada
+ * na grade e na proporção reais em vez de uma pilha vertical.
  */
 function pecaDaMontagem(item) {
     const fmt = formatoDoItem(item);
+    const cols = fmt ? (parseInt(fmt.cols) || 0) : 0;
+    const rows = fmt ? (parseInt(fmt.rows) || 0) : 0;
     return {
         formato_id: fmt ? String(fmt.id) : '',
         formato_nome: fmt ? (fmt.nome || '') : '',
-        celulas_por_folha: fmt ? ((parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0)) : 0,
+        cols: cols,
+        rows: rows,
+        celulas_por_folha: cols * rows,
+        item_w_mm: fmt ? (parseFloat(fmt.width_mm) || 0) : 0,
+        item_h_mm: fmt ? (parseFloat(fmt.height_mm) || 0) : 0,
+        gap_h_mm: fmt ? (parseFloat(fmt.gap_h_mm) || 0) : 0,
+        gap_v_mm: fmt ? (parseFloat(fmt.gap_v_mm) || 0) : 0,
         saida_id: saidaIdDoItem(item, fmt),
         cor: item ? (item.cor || item.padrao || '') : '',
         verso_tipo: item ? item.verso_tipo : null,
@@ -369,11 +445,98 @@ function contaDaMontagem(celulas, porFolha) {
 }
 
 /**
+ * ONDE a célula `i` cai na folha: em que folha, linha e coluna.
+ *
+ * Esta é a conta do MOTOR, e não uma escolha de desenho. No caminho compactado
+ * do `engine.py` (`if empacotando:`) a célula é consumida assim:
+ *
+ *     k = S * poses_per_sheet + P,  com  P = row * cols + col
+ *
+ * Ou seja: LINHA primeiro, da esquerda para a direita, de cima para baixo. A
+ * prévia antiga empilhava tudo numa coluna, o que só coincide com a verdade
+ * quando o formato tem uma coluna só — o Triband. Numa credencial PVC (2 × 2)
+ * a tela mostrava quatro linhas e o papel saía em quadrado.
+ */
+function lugarDaCelulaNaFolha(i, cols, rows) {
+    const c = parseInt(cols) || 1;
+    const r = parseInt(rows) || 1;
+    const porFolha = c * r;
+    const p = i % porFolha;
+    return {
+        folha: Math.floor(i / porFolha),
+        linha: Math.floor(p / c),
+        coluna: p % c,
+    };
+}
+
+/**
+ * As medidas da folha em MILÍMETROS, pela mesma geometria do motor.
+ *
+ * O `engine.py` calcula, com tudo em pontos:
+ *
+ *     used_w  = cols * item_w + (cols - 1) * gap_h
+ *     start_x = (sheet_w - used_w) / 2
+ *
+ * Aqui é a mesma conta em mm, e é ela que faz a prévia coincidir com o papel.
+ * `null` quando não dá para saber (peça sem formato, saída não encontrada) —
+ * quem chama desenha a lista simples nesse caso, em vez de inventar medida.
+ */
+function geometriaDaFolha(peca, saida) {
+    if (!peca || !peca.cols || !peca.rows || !peca.item_w_mm || !peca.item_h_mm) return null;
+
+    const sheetW = saida ? (parseFloat(saida.width_mm) || 0) : 0;
+    const sheetH = saida ? (parseFloat(saida.height_mm) || 0) : 0;
+
+    const usedW = peca.cols * peca.item_w_mm + (peca.cols - 1) * peca.gap_h_mm;
+    const usedH = peca.rows * peca.item_h_mm + (peca.rows - 1) * peca.gap_v_mm;
+
+    return {
+        cols: peca.cols,
+        rows: peca.rows,
+        itemW: peca.item_w_mm,
+        itemH: peca.item_h_mm,
+        gapH: peca.gap_h_mm,
+        gapV: peca.gap_v_mm,
+        usedW: usedW,
+        usedH: usedH,
+        sheetW: sheetW || usedW,
+        sheetH: sheetH || usedH,
+        startX: sheetW ? (sheetW - usedW) / 2 : 0,
+        startY: sheetH ? (sheetH - usedH) / 2 : 0,
+        // Sem saída conhecida a folha é a própria área imposta: melhor desenhar
+        // a grade certa sem o papel em volta do que inventar um papel.
+        temPapel: !!(sheetW && sheetH),
+    };
+}
+
+/**
+ * Quantos píxeis vale um milímetro, no modo de zoom escolhido.
+ *
+ *   · `peca`  — as células enchem a largura. É o modo de trabalho: conferir o
+ *               conteúdo de cada uma, que é o que o operador faz aqui.
+ *   · `folha` — a folha inteira cabe na área. É onde a SOBRA aparece pelo
+ *               tamanho, e não só por um número no selo.
+ *   · `100`   — tamanho real, a 96 dpi. Para conferir corpo de fonte.
+ */
+function escalaDaFolhaDaMontagem(zoom, geo, largura, altura) {
+    if (!geo) return 0;
+    if (zoom === '100') return 96 / 25.4;
+    if (zoom === 'folha') {
+        const w = geo.sheetW > 0 ? (largura / geo.sheetW) : 0;
+        const h = geo.sheetH > 0 ? (altura / geo.sheetH) : 0;
+        return Math.max(0.1, Math.min(w, h));
+    }
+    return geo.usedW > 0 ? Math.max(0.1, largura / geo.usedW) : 0;
+}
+
+/**
  * Repete a célula `i` logo depois dela — a mesma peça, impressa duas vezes.
  *
  * Pedido do usuário em 03/09/2026: "ícone que duplica o modelo na próxima
- * célula". A cópia é IGUAL: mesmo pedido, mesmo modelo, mesma posição — e por
- * isso o mesmo código de QR. Não é a posição seguinte do modelo: para essa, o
+ * célula", e ele confirmou o comportamento: *"duplicar deve ocupar a próxima
+ * célula da imposição movendo todas as outras para a célula subsequente"*.
+ * A cópia é IGUAL: mesmo pedido, mesmo modelo, mesma posição — e por isso o
+ * mesmo código de QR. Não é a posição seguinte do modelo: para essa, o
  * operador digita.
  */
 function duplicarCelula(celulas, i) {
@@ -404,6 +567,85 @@ function moverCelula(celulas, de, para) {
     const [c] = celulas.splice(de, 1);
     celulas.splice(para, 0, c);
     return celulas;
+}
+
+/**
+ * Repete as células que já estão na folha até fechá-la, sem sobra.
+ *
+ * A sobra é papel pago igual: uma folha de PVC com duas células vazias custa o
+ * mesmo que uma cheia. Isto percorre as células na ordem, em voltas, repetindo
+ * cada uma logo depois da sua cópia anterior — assim o material sai agrupado,
+ * que é o que facilita separar depois de cortar.
+ *
+ * Devolve o que FOI feito, para a tela poder dizer antes de fazer: nenhuma
+ * decisão de papel deste projeto acontece calada.
+ */
+function completarAFolha(celulas, porFolha) {
+    const p = parseInt(porFolha) || 0;
+    const n = (celulas || []).length;
+    if (!p || !n) return { celulas: celulas, entraram: 0 };
+
+    const resto = n % p;
+    if (resto === 0) return { celulas: celulas, entraram: 0 };
+
+    const faltam = p - resto;
+    // Da ÚLTIMA para a primeira, inserindo cada cópia logo depois da original:
+    // percorrer do fim evita que uma inserção mova o índice das que ainda não
+    // foram copiadas.
+    const originais = celulas.slice();
+    let entraram = 0;
+    let volta = 0;
+    while (entraram < faltam) {
+        const alvo = originais[entraram % originais.length];
+        // Cada volta acrescenta a cópia depois da última cópia daquela célula.
+        const chave = chaveDoModelo(alvo) + '|' + alvo.pos;
+        let ultima = -1;
+        for (let k = 0; k < celulas.length; k++) {
+            if (chaveDoModelo(celulas[k]) + '|' + celulas[k].pos === chave) ultima = k;
+        }
+        celulas.splice(ultima + 1, 0, { osId: alvo.osId, itemId: alvo.itemId, pos: alvo.pos });
+        entraram++;
+        volta++;
+        if (volta > faltam + originais.length + 10) break;   // trava de segurança
+    }
+
+    return { celulas: celulas, entraram: entraram };
+}
+
+/**
+ * Reordena as células da folha.
+ *
+ * `modelo` agrupa tudo do mesmo modelo junto, na ordem do registro (que é a do
+ * `multi_artes`); `pedido` agrupa por pedido. Dentro de cada grupo a ordem
+ * relativa que o operador montou é preservada — reordenar não pode embaralhar
+ * o que ele já arrastou de propósito.
+ *
+ * Isso NÃO muda o código de ingresso nenhum: cada célula continua levando o
+ * deslocamento do seu modelo (ver `posicoesCombinadas`). Muda só onde ela cai
+ * no papel.
+ */
+function ordenarCelulas(celulas, modelos, criterio) {
+    const lista = (celulas || []).slice();
+    if (criterio !== 'modelo' && criterio !== 'pedido') return lista;
+
+    const ordemDoModelo = {};
+    (modelos || []).forEach((m, j) => { ordemDoModelo[chaveDoModelo(m)] = j; });
+
+    const ordemDoPedido = [];
+    (modelos || []).forEach(m => {
+        if (ordemDoPedido.indexOf(String(m.osId)) === -1) ordemDoPedido.push(String(m.osId));
+    });
+
+    const grupoDe = c => criterio === 'modelo'
+        ? (ordemDoModelo[chaveDoModelo(c)] ?? 9999)
+        : (ordemDoPedido.indexOf(String(c.osId)) < 0 ? 9999 : ordemDoPedido.indexOf(String(c.osId)));
+
+    // Ordenação ESTÁVEL pelo índice original: `Array.prototype.sort` é estável
+    // em todo navegador atual, mas o desempate explícito documenta a intenção.
+    return lista
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => (grupoDe(a.c) - grupoDe(b.c)) || (a.i - b.i))
+        .map(x => x.c);
 }
 
 /**
@@ -450,7 +692,33 @@ function modoDaFolhaDaMontagem(modelos) {
     return modo;
 }
 
+/**
+ * Os valores do número do modelo, saneados como o MOTOR os saneia.
+ *
+ * A tela e o motor precisam concordar sobre o que é um valor válido, senão a
+ * prévia mostra uma coisa e o papel sai outra — que é o defeito que este
+ * projeto mais repete. Valor fora da lista cai no padrão, dos dois lados.
+ */
+function numeroDaMontagemSaneado(n) {
+    const p = numeroPadraoDaMontagem();
+    if (!n) return p;
+
+    const size = parseFloat(n.size);
+    const rot = parseInt(n.rot);
+
+    return {
+        imprimir: n.imprimir === true,
+        pos: MTG_POSICOES_DO_NUMERO.indexOf(n.pos) >= 0 ? n.pos : p.pos,
+        rot: MTG_ROTACOES_DO_NUMERO.indexOf(rot) >= 0 ? rot : p.rot,
+        size: (isFinite(size) && size >= MTG_TAMANHO_MIN && size <= MTG_TAMANHO_MAX)
+            ? size : p.size,
+        cor: /^#[0-9a-fA-F]{6}$/.test(String(n.cor || '')) ? String(n.cor) : p.cor,
+    };
+}
+
 if (typeof window !== 'undefined') {
+    window.montagemVazia = montagemVazia;
+    window.numeroPadraoDaMontagem = numeroPadraoDaMontagem;
     window.posicoesDaMontagem = posicoesDaMontagem;
     window.totalDeItensDoModelo = totalDeItensDoModelo;
     window.porQueNaoCabeNaMontagem = porQueNaoCabeNaMontagem;
@@ -461,11 +729,84 @@ if (typeof window !== 'undefined') {
     window.posicoesCombinadas = posicoesCombinadas;
     window.totalDeCelulasDaMontagem = totalDeCelulasDaMontagem;
     window.contaDaMontagem = contaDaMontagem;
+    window.lugarDaCelulaNaFolha = lugarDaCelulaNaFolha;
+    window.geometriaDaFolha = geometriaDaFolha;
+    window.escalaDaFolhaDaMontagem = escalaDaFolhaDaMontagem;
     window.duplicarCelula = duplicarCelula;
     window.tirarCelula = tirarCelula;
     window.moverCelula = moverCelula;
+    window.completarAFolha = completarAFolha;
+    window.ordenarCelulas = ordenarCelulas;
     window.celulasForaDaTiragem = celulasForaDaTiragem;
     window.modoDaFolhaDaMontagem = modoDaFolhaDaMontagem;
+    window.numeroDaMontagemSaneado = numeroDaMontagemSaneado;
+    window.textoDoNumeroDoModelo = textoDoNumeroDoModelo;
+    window._mtgEspacoDoNumero = _mtgEspacoDoNumero;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   O HISTÓRICO — desfazer e refazer
+   ══════════════════════════════════════════════════════════════════════════
+
+   Era a falta mais grave da tela: um × no lugar errado apagava a célula sem
+   volta, e repor custava reescolher o pedido, esperar o `loadOSItens`,
+   reescolher o modelo e redigitar as posições.
+
+   O instantâneo é barato porque a folha é feita de dados planos: as células
+   são `{osId, itemId, pos}` e se clonam com espalhamento; os modelos são
+   guardados POR REFERÊNCIA (um `slice`), porque o objeto de modelo não muda
+   depois de criado — clonar levaria junto o `peca._item`, que é o item vivo do
+   `state.osItens` e não pode ser duplicado.
+*/
+
+const MTG_HISTORIA_MAX = 60;
+
+/** Guarda o estado atual antes de mexer nele. Chame ANTES da mudança. */
+function guardarNaHistoria() {
+    const m = state.montagem;
+    m.historia.push({
+        celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
+        modelos: m.modelos.slice(),
+        selecao: m.selecao.slice(),
+    });
+    if (m.historia.length > MTG_HISTORIA_MAX) m.historia.shift();
+    // Mexer depois de desfazer apaga o futuro: é o comportamento que todo
+    // editor tem, e o contrário confundiria mais do que ajudaria.
+    m.futuro = [];
+}
+
+function _mtgAplicar(instantaneo) {
+    const m = state.montagem;
+    m.celulas = instantaneo.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos }));
+    m.modelos = instantaneo.modelos.slice();
+    m.selecao = (instantaneo.selecao || []).slice();
+}
+
+function _mtgInstantaneoAtual() {
+    const m = state.montagem;
+    return {
+        celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
+        modelos: m.modelos.slice(),
+        selecao: m.selecao.slice(),
+    };
+}
+
+function desfazerMontagem() {
+    const m = state.montagem;
+    if (!m.historia.length) return;
+    m.futuro.push(_mtgInstantaneoAtual());
+    _mtgAplicar(m.historia.pop());
+    onMontagemPosicoesChange();
+    renderMontagem();
+}
+
+function refazerMontagem() {
+    const m = state.montagem;
+    if (!m.futuro.length) return;
+    m.historia.push(_mtgInstantaneoAtual());
+    _mtgAplicar(m.futuro.pop());
+    onMontagemPosicoesChange();
+    renderMontagem();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -497,9 +838,8 @@ function _mtgNumeracaoDoItem(item) {
  * O número do modelo vai IMPRESSO em cada item?
  *
  * Mesmo conceito das "Opções do modelo" da tela do Pedido, e a mesma mecânica:
- * o motor imprime `arte["nome"]` deitado na borda de cada item, e esse campo é
- * o ÚNICO que decide se ele sai. Marcada a caixa, o payload leva o número;
- * desmarcada, leva vazio.
+ * o motor imprime `arte["nome"]` na borda de cada item, e esse campo é o ÚNICO
+ * que decide se ele sai. Ligado, o payload leva o número; desligado, vazio.
  *
  * ── Duas diferenças em relação ao Pedido, e as duas são deliberadas ────────
  *
@@ -508,15 +848,12 @@ function _mtgNumeracaoDoItem(item) {
  * mistura modelos de pedidos diferentes, e uma caixa por linha faria o operador
  * decidir o mesmo N vezes para o mesmo papel.
  *
- * E ela NÃO é gravada no modelo. A Montagem é reposição avulsa: marcar aqui não
- * pode mudar como aquele modelo sai na próxima tiragem inteira dele. A escolha
- * que fica salva continua sendo a da tela do Pedido.
- *
- * Nasce DESMARCADA, como no Pedido: novidade que muda o que sai no papel entra
- * desligada, e o operador liga quando quiser.
+ * E ela NÃO é gravada no modelo. A Montagem é reposição avulsa: escolher aqui
+ * não pode mudar como aquele modelo sai na próxima tiragem inteira dele. O que
+ * fica salvo continua sendo a escolha da tela do Pedido.
  */
 function imprimirNumeroNaMontagem() {
-    return document.getElementById('mtg-imprimir-numero')?.checked === true;
+    return state.montagem.numero.imprimir === true;
 }
 
 /** Quantas células cabem na folha desta montagem. */
@@ -525,6 +862,12 @@ function _mtgCelulasPorFolha(modelos) {
     // mesmo formato podem discordar, e ai a conta da folha diria uma coisa e o
     // papel sairia outra.
     return (modelos && modelos.length) ? (modelos[0].peca.celulas_por_folha || 0) : 0;
+}
+
+/** A saída desta montagem, do catálogo. */
+function _mtgSaidaDaFolha(modelos) {
+    if (!modelos || !modelos.length) return null;
+    return (state.saidas || []).find(s => String(s.id) === String(modelos[0].peca.saida_id)) || null;
 }
 
 /** O número do pedido, para as mensagens — ou o id, quando não se sabe. */
@@ -664,16 +1007,22 @@ function onMontagemModeloChange() {
  *
  * A recusa aparece AQUI, e não no clique em Adicionar: descobrir que a cor não
  * bate depois de digitar quinze posições é fazer o operador trabalhar à toa.
+ *
+ * O rótulo do campo passou a carregar a TIRAGEM (03/09/2026). Ela só aparecia
+ * na tabela, depois de adicionar — e é contra ela que a posição vale, então o
+ * operador digitava no escuro até errar.
  */
 function onMontagemPosicoesChange() {
     const item = _mtgItemEscolhido();
     const campo = document.getElementById('mtg-posicoes');
     const botao = document.getElementById('mtg-add');
     const dica = document.getElementById('mtg-dica');
+    const rotulo = document.getElementById('mtg-label-posicoes');
     const caixaRecusa = document.getElementById('mtg-recusa');
 
     let podeAdicionar = false;
     let recusa = null;
+    let total = 0;
 
     if (item) {
         const peca = pecaDaMontagem(item);
@@ -699,7 +1048,7 @@ function onMontagemPosicoesChange() {
 
     if (item && !recusa) {
         const num = _mtgNumeracaoDoItem(item);
-        const total = totalDeItensDoModelo(item, num);
+        total = totalDeItensDoModelo(item, num);
         const { posicoes, invalidos } = posicoesDaMontagem(campo ? campo.value : '', total);
 
         podeAdicionar = posicoes.length > 0;
@@ -709,13 +1058,21 @@ function onMontagemPosicoesChange() {
                 dica.innerHTML = `<span style="color:var(--red);">Fora da tiragem ou inválido: <strong>${escapeHtml(invalidos.join(', '))}</strong></span>`
                     + ` — este modelo tem <strong>${total.toLocaleString('pt-BR')}</strong> item(ns).`;
             } else if (posicoes.length) {
-                dica.innerHTML = `<strong>${posicoes.length}</strong> célula(s) deste modelo, de <strong>${total.toLocaleString('pt-BR')}</strong>.`;
+                dica.innerHTML = `<strong>${posicoes.length}</strong> célula(s) deste modelo entram na folha.`;
             } else {
-                dica.innerHTML = `Este modelo tem <strong>${total.toLocaleString('pt-BR')}</strong> item(ns). A posição é a do item <strong>dentro do modelo</strong>. Faixas valem: <code>1-4</code>.`;
+                dica.innerHTML = 'A posição é a do item <strong>dentro do modelo</strong> — o 1º, o 6º, o 22º da tiragem, onde quer que ele tenha caído na folha. Faixas valem: <code>1-4</code>.';
             }
         }
     } else if (dica && !recusa) {
         dica.innerHTML = 'A posição é a do item <strong>dentro do modelo</strong> — o 1º, o 6º, o 22º da tiragem, onde quer que ele tenha caído na folha. Faixas valem: <code>1-4</code>.';
+    }
+
+    // A TIRAGEM NO RÓTULO: é contra este número que a posição vale, e sem ele
+    // à vista o operador digita no escuro.
+    if (rotulo) {
+        rotulo.innerHTML = total
+            ? `Posições <span style="color:var(--text-dim);text-transform:none;letter-spacing:0;">· de ${total.toLocaleString('pt-BR')}</span>`
+            : 'Posições';
     }
 
     if (botao) botao.disabled = !podeAdicionar;
@@ -767,6 +1124,8 @@ function adicionarNaMontagem() {
     const { posicoes } = posicoesDaMontagem(campo ? campo.value : '', total);
     if (!posicoes.length) return;
 
+    guardarNaHistoria();
+
     const osId = state.montagem.pedidoSel;
     // Reaproveitar o registro que existe, nunca criar um segundo do mesmo
     // modelo: duas artes iguais no multi_artes fariam o deslocamento contar a
@@ -779,7 +1138,6 @@ function adicionarNaMontagem() {
             pedidoNumero: _mtgNumeroDoPedido(osId),
             nome: item.nome_modelo || item.produto || 'modelo',
             qtd: total,
-            posicoes: [],
             peca: peca,
         };
         modelos.push(m);
@@ -821,7 +1179,7 @@ function _mtgLinhaAtiva(m) {
  *
  * O campo de posições fica VAZIO, e não preenchido com o que já foi pedido: o
  * operador vem acrescentar, e ver a lista antiga no campo faria parecer que ele
- * precisa apagá-la primeiro. O `adicionarNaMontagem` soma às células que existem.
+ * precisa apagá-la primeiro.
  */
 async function retomarDaMontagem(indice) {
     const m = state.montagem.modelos[indice];
@@ -859,16 +1217,36 @@ function removerDaMontagem(indice) {
     const { celulas, modelos } = state.montagem;
     const m = modelos[indice];
     if (!m) return;
+    guardarNaHistoria();
     const k = chaveDoModelo(m);
     state.montagem.celulas = celulas.filter(c => chaveDoModelo(c) !== k);
     modelos.splice(indice, 1);
+    state.montagem.selecao = [];
     onMontagemPosicoesChange();
     renderMontagem();
 }
 
+/* ── Os gestos sobre as células ──────────────────────────────────────────── */
+
+/**
+ * As células em que o gesto vai valer: a seleção, ou a célula clicada.
+ *
+ * Selecionar várias e clicar no ⧉ de uma delas repete TODAS — é isso que faz
+ * repor doze células custar um clique em vez de doze.
+ */
+function _mtgAlvosDoGesto(i) {
+    const sel = state.montagem.selecao;
+    return (sel.length > 1 && sel.indexOf(i) >= 0) ? sel.slice().sort((a, b) => a - b) : [i];
+}
+
 /** O ⧉ da célula: a mesma peça, repetida logo abaixo. */
 function duplicarCelulaDaMontagem(i) {
-    duplicarCelula(state.montagem.celulas, i);
+    const alvos = _mtgAlvosDoGesto(i);
+    guardarNaHistoria();
+    // Do fim para o começo: cada inserção empurra os índices seguintes, e
+    // percorrer ao contrário mantém os alvos ainda não tratados no lugar.
+    for (let k = alvos.length - 1; k >= 0; k--) duplicarCelula(state.montagem.celulas, alvos[k]);
+    state.montagem.selecao = [];
     renderMontagem();
 }
 
@@ -878,37 +1256,428 @@ function duplicarCelulaDaMontagem(i) {
  * continuaria na lista e no deslocamento, confundindo quem confere.
  */
 function removerCelulaDaMontagem(i) {
-    tirarCelula(state.montagem.celulas, i);
+    const alvos = _mtgAlvosDoGesto(i);
+    guardarNaHistoria();
+    for (let k = alvos.length - 1; k >= 0; k--) tirarCelula(state.montagem.celulas, alvos[k]);
     state.montagem.modelos = modelosComCelula(state.montagem.celulas, state.montagem.modelos);
+    state.montagem.selecao = [];
     onMontagemPosicoesChange();
     renderMontagem();
 }
 
 /** O arrasto: a célula `de` passa a ocupar a posição `para` da folha. */
 function moverCelulaDaMontagem(de, para) {
+    guardarNaHistoria();
     moverCelula(state.montagem.celulas, de, para);
+    state.montagem.selecao = [];
     renderMontagem();
+}
+
+/**
+ * Clicar numa célula seleciona; Shift estende; Ctrl (ou Cmd) alterna.
+ *
+ * A seleção não é enfeite: com ela, repetir e tirar valem para todas de uma
+ * vez. Repor doze células estragadas custava doze cliques em doze botões
+ * diferentes.
+ */
+function selecionarCelulaDaMontagem(i, ev) {
+    const m = state.montagem;
+    const multi = ev && (ev.ctrlKey || ev.metaKey);
+    const faixa = ev && ev.shiftKey;
+
+    if (faixa && m.selecao.length) {
+        const ancora = m.selecao[m.selecao.length - 1];
+        const de = Math.min(ancora, i);
+        const ate = Math.max(ancora, i);
+        const nova = [];
+        for (let k = de; k <= ate; k++) nova.push(k);
+        m.selecao = nova;
+    } else if (multi) {
+        const j = m.selecao.indexOf(i);
+        if (j >= 0) m.selecao.splice(j, 1); else m.selecao.push(i);
+    } else {
+        m.selecao = (m.selecao.length === 1 && m.selecao[0] === i) ? [] : [i];
+    }
+    renderMontagem();
+}
+
+/** Completa a folha repetindo as células que já estão nela. */
+function completarAFolhaDaMontagem() {
+    const m = state.montagem;
+    const porFolha = _mtgCelulasPorFolha(m.modelos);
+    const conta = contaDaMontagem(m.celulas, porFolha);
+    if (!porFolha || !m.celulas.length || conta.vazias === 0) return;
+
+    guardarNaHistoria();
+    const r = completarAFolha(m.celulas, porFolha);
+    m.selecao = [];
+    renderMontagem();
+    if (typeof toast === 'function' && r.entraram) {
+        toast(`${r.entraram} célula(s) repetida(s) — a folha fecha certo agora.`, 'success');
+    }
+}
+
+/** Reordena a folha e diz o que fez. */
+function ordenarMontagem(criterio) {
+    const m = state.montagem;
+    if (!m.celulas.length) return;
+    guardarNaHistoria();
+    m.celulas = ordenarCelulas(m.celulas, m.modelos, criterio);
+    m.selecao = [];
+    renderMontagem();
+    if (typeof toast === 'function') {
+        toast(criterio === 'modelo'
+            ? 'Células agrupadas por modelo. O código de cada uma não mudou — só a ordem no papel.'
+            : 'Células agrupadas por pedido. O código de cada uma não mudou — só a ordem no papel.', 'success');
+    }
+}
+
+/** Troca o zoom da folha. */
+function zoomDaMontagem(qual) {
+    state.montagem.zoom = qual;
+    renderMontagem();
+}
+
+function limparMontagem() {
+    guardarNaHistoria();
+    state.montagem.celulas = [];
+    state.montagem.modelos = [];
+    state.montagem.selecao = [];
+    onMontagemPosicoesChange();
+    renderMontagem();
+}
+
+/* ── O número do modelo no papel ─────────────────────────────────────────── */
+
+function alternarNumeroDaMontagem() {
+    const n = state.montagem.numero;
+    n.imprimir = !n.imprimir;
+    renderMontagem();
+}
+
+function mudarNumeroDaMontagem(campo, valor) {
+    const n = state.montagem.numero;
+    if (campo === 'size') n.size = parseFloat(valor);
+    else if (campo === 'rot') n.rot = parseInt(valor);
+    else n[campo] = valor;
+    state.montagem.numero = Object.assign(numeroDaMontagemSaneado(n), { imprimir: n.imprimir });
+    renderMontagem();
+}
+
+/**
+ * O texto do número, como o motor o escreve.
+ *
+ * O motor faz `str(arte_nome).zfill(6)`: preenche com zeros à ESQUERDA até
+ * seis casas, e deixa passar inteiro o que já tem mais. Os ids de
+ * `pedidos_modelos` da gráfica têm sete dígitos (1000565), então na prática
+ * quase nada é preenchido — mas o modelo de id 4200 sai "004200", e a prévia
+ * tem de mostrar isso.
+ */
+function textoDoNumeroDoModelo(itemId) {
+    return String(itemId == null ? '' : itemId).padStart(6, '0');
+}
+
+/**
+ * Quanto o número ocupa na célula, em px, na direção perpendicular à borda.
+ *
+ * O rótulo da célula (pedido · modelo · #posição) tem de recuar essa medida,
+ * senão o número fica POR CIMA dele — foi o que a primeira foto da tela nova
+ * mostrou: "21202" virava "02" atrás do número desenhado.
+ */
+function _mtgEspacoDoNumero(num, escala, texto) {
+    if (!num || !num.imprimir) return { esquerda: 0, direita: 0 };
+    const px = Math.max(4, (num.size / (72 / 25.4)) * escala);
+    const recuo = Math.max(2, px * 0.35);
+    const deitado = (num.rot === 90 || num.rot === 270);
+    const espessura = deitado ? px : (String(texto || '000000').length * px * 0.46);
+    const total = Math.round(recuo + espessura + 4);
+    if (num.pos === 'esquerda') return { esquerda: total, direita: 0 };
+    if (num.pos === 'direita') return { esquerda: 0, direita: total };
+    return { esquerda: 0, direita: 0 };
+}
+
+/**
+ * O estilo do número desenhado dentro de uma célula da prévia.
+ *
+ * Reproduz o que o motor faz: o texto encostado na borda escolhida,
+ * centralizado ao longo dela, girado. `escala` é px por milímetro; o corpo da
+ * fonte vem em PONTOS (como no motor) e se converte por 72 pt = 25,4 mm.
+ *
+ * ── Por que posiciona pelo CENTRO, e não pela borda ──────────────────────
+ *
+ * Girar um texto muda a caixa que ele ocupa: a 90° a ALTURA visual passa a ser
+ * a largura do texto. Encostar `top: recuo` num texto girado põe a borda de
+ * cima da caixa NÃO-girada ali, e metade do texto vaza para fora da célula —
+ * onde o `overflow: hidden` o decepa. Foi o que a revisão do desenho pegou:
+ * com Topo ou Base mais 90°, que é o padrão, o número saía cortado.
+ *
+ * Então o cálculo é: descobrir a espessura do texto na direção perpendicular à
+ * borda, e pôr o CENTRO dele a meia espessura da borda. A largura do texto é
+ * estimada (0,46 do corpo por caractere, que é a proporção da Impact, uma
+ * condensada) — é prévia, e o motor mede a de verdade com a fonte na mão.
+ */
+function _mtgEstiloDoNumero(num, escala, texto) {
+    const mm = num.size / (72 / 25.4);            // pt -> mm
+    const px = Math.max(4, mm * escala);
+    const recuo = Math.max(2, px * 0.35);
+    const largura = String(texto || '000000').length * px * 0.46;
+    const deitado = (num.rot === 90 || num.rot === 270);
+
+    // A espessura que o texto ocupa em cada eixo, já girado.
+    const espessuraX = deitado ? px : largura;
+    const espessuraY = deitado ? largura : px;
+
+    const base = 'position:absolute;white-space:nowrap;line-height:1;'
+        // Aspas SIMPLES na familia com espaco: este texto vai dentro de um
+        // atributo `style="..."`, e uma aspa dupla aqui fecharia o atributo no
+        // meio — o numero saia sem cor, sem tamanho e sem giro. O harness da
+        // tela pegou isso desenhando num Chrome de verdade.
+        + "font-family:Impact,Haettenschweiler,'Arial Narrow',sans-serif;letter-spacing:0.04em;"
+        + 'font-size:' + px.toFixed(1) + 'px;color:' + num.cor + ';pointer-events:none;'
+        + 'transform-origin:center;';
+    const centro = `transform:translate(-50%,-50%) rotate(-${num.rot}deg);`;
+
+    if (num.pos === 'direita') return base + `right:${(recuo + espessuraX / 2).toFixed(1)}px;top:50%;` + centro.replace('translate(-50%,-50%)', 'translate(50%,-50%)');
+    if (num.pos === 'topo')    return base + `left:50%;top:${(recuo + espessuraY / 2).toFixed(1)}px;` + centro;
+    if (num.pos === 'base')    return base + `left:50%;bottom:${(recuo + espessuraY / 2).toFixed(1)}px;` + centro.replace('translate(-50%,-50%)', 'translate(-50%,50%)');
+    return base + `left:${(recuo + espessuraX / 2).toFixed(1)}px;top:50%;` + centro;
+}
+
+/** Desenha o painel do número do modelo. */
+function _mtgRenderNumero() {
+    const caixa = document.getElementById('mtg-numero');
+    if (!caixa) return;
+    const n = state.montagem.numero;
+
+    const botao = (campo, valor, rotulo, ligado) =>
+        `<button type="button" class="mtg-num-op${ligado ? ' ativo' : ''}"
+                 onclick="mudarNumeroDaMontagem('${campo}', '${valor}')">${rotulo}</button>`;
+
+    const swatch = hex =>
+        `<span class="mtg-num-cor${n.cor === hex ? ' ativa' : ''}" title="${hex}"
+               style="background:${hex};" onclick="mudarNumeroDaMontagem('cor', '${hex}')"></span>`;
+
+    const pct = Math.round(((n.size - MTG_TAMANHO_MIN) / (MTG_TAMANHO_MAX - MTG_TAMANHO_MIN)) * 100);
+
+    caixa.innerHTML = `
+      <div class="mtg-num-cabecalho">
+        <h2>Número do modelo no papel</h2>
+        <label class="mtg-num-liga" title="Sai deitado na borda de cada item">
+          <input type="checkbox" id="mtg-num-imprimir" ${n.imprimir ? 'checked' : ''}
+                 onchange="alternarNumeroDaMontagem()">
+          <span>Imprimir</span>
+        </label>
+      </div>
+      <p class="mtg-dica" style="margin:0 0 12px;">Numa folha que mistura pedidos, é por ele que se separa o material depois de cortar.</p>
+
+      <div class="mtg-num-grade${n.imprimir ? '' : ' desligado'}">
+        <div class="mtg-num-campo">
+          <span class="mtg-num-rotulo">Posição</span>
+          <div class="mtg-num-linha">
+            ${botao('pos', 'esquerda', 'Esquerda', n.pos === 'esquerda')}
+            ${botao('pos', 'direita', 'Direita', n.pos === 'direita')}
+            ${botao('pos', 'topo', 'Topo', n.pos === 'topo')}
+            ${botao('pos', 'base', 'Base', n.pos === 'base')}
+          </div>
+        </div>
+
+        <div class="mtg-num-campo">
+          <span class="mtg-num-rotulo">Rotação</span>
+          <div class="mtg-num-linha">
+            ${MTG_ROTACOES_DO_NUMERO.map(g => botao('rot', g, g + '°', n.rot === g)).join('')}
+          </div>
+        </div>
+
+        <div class="mtg-num-campo">
+          <span class="mtg-num-rotulo">Tamanho <strong>${n.size} pt</strong></span>
+          <div class="mtg-num-faixa">
+            <input type="range" id="mtg-num-size" min="${MTG_TAMANHO_MIN}" max="${MTG_TAMANHO_MAX}" step="1"
+                   value="${n.size}" oninput="mudarNumeroDaMontagem('size', this.value)"
+                   style="--pct:${pct}%;">
+          </div>
+        </div>
+
+        <div class="mtg-num-campo">
+          <span class="mtg-num-rotulo">Cor</span>
+          <div class="mtg-num-linha" style="gap:7px;">
+            ${['#000000', '#ffffff', '#ef4444', '#3b82f6', '#22c55e'].map(swatch).join('')}
+            <input type="color" id="mtg-num-cor" value="${n.cor}"
+                   onchange="mudarNumeroDaMontagem('cor', this.value)" title="Outra cor">
+          </div>
+        </div>
+      </div>
+
+      <p class="mtg-dica" style="margin:11px 0 0;">${n.imprimir
+        ? 'A folha ao lado mostra como sai, na posição e no corpo que vão para o papel.'
+        : 'Desligado: o papel sai sem o número, como em toda tiragem normal.'}</p>`;
+}
+
+/* ── A folha ─────────────────────────────────────────────────────────────── */
+
+// As cores das células, uma por modelo. Fundo claro, borda e texto escuros: a
+// folha é PAPEL, e a cor é para o olho separar os modelos de relance.
+const _MTG_TONS = ['#dbeafe|#93c5fd|#1e3a5f', '#ede9fe|#c4b5fd|#3b2a6b',
+                   '#dcfce7|#86efac|#14532d', '#fef3c7|#fcd34d|#713f12',
+                   '#fce7f3|#f9a8d4|#701a45'];
+
+/** O índice do modelo de uma célula, para escolher o tom. */
+function _mtgIndiceDoModelo(c, modelos) {
+    const k = chaveDoModelo(c);
+    const j = modelos.findIndex(m => chaveDoModelo(m) === k);
+    return j < 0 ? 0 : j;
+}
+
+/**
+ * Desenha a folha: a grade real do formato, na proporção real, folha a folha.
+ *
+ * TODAS as células aparecem, e não só as da primeira folha: é aqui que o
+ * operador arrasta, repete e tira, e uma célula da segunda folha que não
+ * aparecesse seria uma célula sem alcance. As vazias só existem na última
+ * folha, que é a única que pode ter sobra.
+ */
+function _mtgRenderFolha() {
+    const alvo = document.getElementById('mtg-folha');
+    const numFolha = document.getElementById('mtg-folha-num');
+    if (!alvo) return;
+
+    const { celulas, modelos, selecao, zoom, numero } = state.montagem;
+    const porFolha = _mtgCelulasPorFolha(modelos);
+    const total = celulas.length;
+
+    if (!total || !porFolha) {
+        alvo.innerHTML = '';
+        alvo.className = 'mtg-folha vazia';
+        if (numFolha) numFolha.textContent = '';
+        return;
+    }
+
+    const geo = geometriaDaFolha(modelos[0].peca, _mtgSaidaDaFolha(modelos));
+    const conta = contaDaMontagem(celulas, porFolha);
+
+    if (!geo) {
+        // Sem medidas não dá para desenhar uma folha honesta. Melhor uma lista
+        // simples do que um papel inventado — e o operador precisa saber.
+        alvo.className = 'mtg-folha sem-medida';
+        alvo.innerHTML = '<p class="mtg-dica" style="padding:14px;">'
+            + 'Não sei as medidas deste formato, então não desenho a folha. As células estão na lista ao lado, na ordem em que vão sair.</p>';
+        if (numFolha) numFolha.textContent = `${total} célula(s)`;
+        return;
+    }
+
+    // A área disponível decide a escala. `clientWidth` é o que sobra depois do
+    // padding do container — medir aqui, e não chutar, é o que faz a folha
+    // caber em qualquer largura de tela da gráfica.
+    const larg = Math.max(240, (alvo.clientWidth || 700) - 24);
+    const alt = Math.max(240, (alvo.clientHeight || 520) - 24);
+    const escala = escalaDaFolhaDaMontagem(zoom, geo, larg, alt);
+    const px = mm => (mm * escala);
+
+    const mostraPapel = geo.temPapel && zoom !== 'peca';
+    const larguraDesenho = mostraPapel ? geo.sheetW : geo.usedW;
+    const alturaDesenho = mostraPapel ? geo.sheetH : geo.usedH;
+    const deslocX = mostraPapel ? geo.startX : 0;
+    const deslocY = mostraPapel ? geo.startY : 0;
+
+    const alturaCelulaPx = px(geo.itemH);
+    const larguraCelulaPx = px(geo.itemW);
+    // Abaixo de certo tamanho o rótulo não cabe e vira borrão: some, e ficam a
+    // cor do modelo e o número. Melhor uma célula limpa do que texto ilegível.
+    const cabeRotulo = alturaCelulaPx >= 26 && larguraCelulaPx >= 96;
+    const cabemBotoes = alturaCelulaPx >= 34 && larguraCelulaPx >= 150;
+
+    const html = [];
+    for (let f = 0; f < conta.folhas; f++) {
+        const celulasDaFolha = [];
+
+        for (let p = 0; p < porFolha; p++) {
+            const i = f * porFolha + p;
+            const lugar = lugarDaCelulaNaFolha(i, geo.cols, geo.rows);
+            const x = deslocX + lugar.coluna * (geo.itemW + geo.gapH);
+            const y = deslocY + lugar.linha * (geo.itemH + geo.gapV);
+            const caixa = `left:${px(x).toFixed(1)}px;top:${px(y).toFixed(1)}px;`
+                + `width:${larguraCelulaPx.toFixed(1)}px;height:${alturaCelulaPx.toFixed(1)}px;`;
+
+            if (i >= total) {
+                celulasDaFolha.push(
+                    `<div class="mtg-celula mtg-celula-vazia" style="${caixa}" data-i="${i}">`
+                    + (cabeRotulo ? '<span class="mtg-celula-rotulo">vazia</span>' : '')
+                    + '</div>');
+                continue;
+            }
+
+            const c = celulas[i];
+            const j = _mtgIndiceDoModelo(c, modelos);
+            const m = modelos[j] || {};
+            const [bg, br, fg] = _MTG_TONS[j % _MTG_TONS.length].split('|');
+            const repetida = celulas.findIndex(o =>
+                chaveDoModelo(o) === chaveDoModelo(c) && o.pos === c.pos) !== i;
+            const marcada = selecao.indexOf(i) >= 0;
+
+            const rotulo = cabeRotulo
+                ? `<span class="mtg-celula-rotulo">${escapeHtml(String(m.pedidoNumero || c.osId))} · ${escapeHtml(String(c.itemId))} · #${c.pos}`
+                  + (repetida ? ' <em>repetida</em>' : '') + '</span>'
+                : '';
+            const botoes = cabemBotoes ? `
+                <button type="button" class="mtg-celula-btn" title="Repetir esta célula na próxima, empurrando as outras"
+                        onclick="event.stopPropagation(); duplicarCelulaDaMontagem(${i})">&#10697;</button>
+                <button type="button" class="mtg-celula-btn mtg-celula-tirar" title="Tirar só esta célula da folha"
+                        onclick="event.stopPropagation(); removerCelulaDaMontagem(${i})">&times;</button>` : '';
+            const textoNum = textoDoNumeroDoModelo(c.itemId);
+            const numeroHtml = numero.imprimir
+                ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
+                : '';
+            // O rótulo recua o que o número ocupa: sem isto ele fica por baixo.
+            const espaco = _mtgEspacoDoNumero(numero, escala, textoNum);
+            const recuo = (espaco.esquerda || espaco.direita)
+                ? `padding-left:${7 + espaco.esquerda}px;padding-right:${4 + espaco.direita}px;` : '';
+
+            celulasDaFolha.push(
+                `<div class="mtg-celula${marcada ? ' marcada' : ''}${repetida ? ' repetida' : ''}"
+                      draggable="true" data-i="${i}"
+                      style="${caixa}${recuo}background:${bg};border-color:${br};color:${fg};"
+                      onclick="selecionarCelulaDaMontagem(${i}, event)"
+                      title="${escapeHtml(String(m.nome || ''))} — clique para selecionar, arraste para mudar a ordem">
+                   ${numeroHtml}${rotulo}${botoes}
+                 </div>`);
+        }
+
+        html.push(
+            (conta.folhas > 1 ? `<div class="mtg-folha-titulo">Folha ${f + 1} de ${conta.folhas}</div>` : '')
+            + `<div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
+            + `style="width:${px(larguraDesenho).toFixed(1)}px;height:${px(alturaDesenho).toFixed(1)}px;">`
+            + celulasDaFolha.join('') + '</div>');
+    }
+
+    alvo.className = 'mtg-folha';
+    alvo.innerHTML = html.join('');
+
+    if (numFolha) {
+        const medida = geo.temPapel
+            ? `${Math.round(geo.sheetW)}×${Math.round(geo.sheetH)} mm`
+            : `${geo.cols}×${geo.rows}`;
+        numFolha.textContent = `${conta.folhas} folha(s) · ${total} célula(s) · ${medida}`;
+    }
 }
 
 /**
  * Liga o arrasto das células, uma vez só, por delegação no container.
  *
- * Por delegação porque a prévia é redesenhada a cada mudança — ouvintes
- * presos a cada célula morreriam junto com o HTML. E HTML5 drag-and-drop, e
- * não uma biblioteca: cada estação da gráfica usa um navegador diferente, e
- * isto funciona em todos eles sem instalar nada.
+ * Por delegação porque a folha é redesenhada a cada mudança — ouvintes presos
+ * a cada célula morreriam junto com o HTML. E HTML5 drag-and-drop, e não uma
+ * biblioteca: cada estação da gráfica usa um navegador diferente, e isto
+ * funciona em todos eles sem instalar nada.
  */
 function _mtgLigarArrasto() {
-    const previa = document.getElementById('mtg-previa');
-    if (!previa || previa._mtgArrastoLigado) return;
-    previa._mtgArrastoLigado = true;
+    const folha = document.getElementById('mtg-folha');
+    if (!folha || folha._mtgArrastoLigado) return;
+    folha._mtgArrastoLigado = true;
 
     let de = null;
     const celulaDe = ev => (ev.target && ev.target.closest) ? ev.target.closest('.mtg-celula') : null;
-    const limpar = () => previa.querySelectorAll('.mtg-celula-arrastando, .mtg-celula-alvo')
+    const limpar = () => folha.querySelectorAll('.mtg-celula-arrastando, .mtg-celula-alvo')
         .forEach(e => e.classList.remove('mtg-celula-arrastando', 'mtg-celula-alvo'));
 
-    previa.addEventListener('dragstart', ev => {
+    folha.addEventListener('dragstart', ev => {
         const el = celulaDe(ev);
         if (!el || !el.hasAttribute('draggable')) return;
         de = parseInt(el.dataset.i);
@@ -919,16 +1688,16 @@ function _mtgLigarArrasto() {
         } catch (_) {}
     });
 
-    previa.addEventListener('dragover', ev => {
+    folha.addEventListener('dragover', ev => {
         const el = celulaDe(ev);
         if (de === null || !el) return;
         ev.preventDefault();
         try { ev.dataTransfer.dropEffect = 'move'; } catch (_) {}
-        previa.querySelectorAll('.mtg-celula-alvo').forEach(e => e.classList.remove('mtg-celula-alvo'));
+        folha.querySelectorAll('.mtg-celula-alvo').forEach(e => e.classList.remove('mtg-celula-alvo'));
         el.classList.add('mtg-celula-alvo');
     });
 
-    previa.addEventListener('drop', ev => {
+    folha.addEventListener('drop', ev => {
         const el = celulaDe(ev);
         if (de === null || !el) return;
         ev.preventDefault();
@@ -942,47 +1711,71 @@ function _mtgLigarArrasto() {
         if (!isNaN(para)) moverCelulaDaMontagem(origem, para);
     });
 
-    previa.addEventListener('dragend', () => { de = null; limpar(); });
+    folha.addEventListener('dragend', () => { de = null; limpar(); });
 }
 
-function limparMontagem() {
-    state.montagem.celulas = [];
-    state.montagem.modelos = [];
-    onMontagemPosicoesChange();
-    renderMontagem();
+/**
+ * O teclado sobre a folha.
+ *
+ * Setas movem a célula selecionada, Del tira, Ctrl+D repete, Ctrl+Z desfaz.
+ * Arrastar com o mouse continua sendo o caminho principal; isto é para quem
+ * repete o gesto o dia inteiro.
+ *
+ * Só age quando a tela da Montagem está aberta e o foco NÃO está num campo de
+ * digitação — senão Delete apagaria a folha enquanto o operador corrige uma
+ * posição no compositor.
+ */
+function _mtgLigarTeclado() {
+    if (window._mtgTecladoLigado) return;
+    window._mtgTecladoLigado = true;
+
+    document.addEventListener('keydown', ev => {
+        const view = document.getElementById('view-montagem');
+        if (!view || !view.classList.contains('active')) return;
+
+        const alvo = ev.target;
+        const digitando = alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA'
+            || alvo.tagName === 'SELECT' || alvo.isContentEditable);
+
+        const m = state.montagem;
+        const ctrl = ev.ctrlKey || ev.metaKey;
+
+        if (ctrl && (ev.key === 'z' || ev.key === 'Z')) {
+            ev.preventDefault();
+            if (ev.shiftKey) refazerMontagem(); else desfazerMontagem();
+            return;
+        }
+        if (ctrl && (ev.key === 'y' || ev.key === 'Y')) { ev.preventDefault(); refazerMontagem(); return; }
+
+        if (digitando || !m.selecao.length) return;
+
+        const i = m.selecao[0];
+        if (ctrl && (ev.key === 'd' || ev.key === 'D')) {
+            ev.preventDefault(); duplicarCelulaDaMontagem(i); return;
+        }
+        if (ev.key === 'Delete' || ev.key === 'Backspace') {
+            ev.preventDefault(); removerCelulaDaMontagem(i); return;
+        }
+        if (ev.key === 'Escape') { ev.preventDefault(); m.selecao = []; renderMontagem(); return; }
+
+        const passo = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[ev.key];
+        if (passo === undefined || m.selecao.length !== 1) return;
+        const destino = i + passo;
+        if (destino < 0 || destino >= m.celulas.length) return;
+        ev.preventDefault();
+        moverCelula(m.celulas, i, destino);
+        m.selecao = [destino];
+        renderMontagem();
+    });
 }
 
-// As cores das células, uma por modelo. Fundo claro, borda e texto escuros:
-// a folha é PAPEL, e a cor é para o olho separar os modelos de relance.
-const _MTG_TONS = ['#dbeafe|#93c5fd|#1e3a5f', '#ede9fe|#c4b5fd|#3b2a6b',
-                   '#dcfce7|#86efac|#14532d', '#fef3c7|#fcd34d|#713f12',
-                   '#fce7f3|#f9a8d4|#701a45'];
-
-/** Uma célula da folha, com a alça de arrasto, o ⧉ e o ×. */
-function _mtgHtmlDaCelula(c, i, modelos) {
-    const k = chaveDoModelo(c);
-    let j = modelos.findIndex(m => chaveDoModelo(m) === k);
-    if (j < 0) j = 0;
-    const m = modelos[j] || {};
-    const [bg, br, fg] = _MTG_TONS[j % _MTG_TONS.length].split('|');
-    const rotulo = `${escapeHtml(String(m.pedidoNumero || c.osId))} · ${escapeHtml(String(c.itemId))} · #${c.pos}`;
-    return `<div class="mtg-celula" draggable="true" data-i="${i}" style="background:${bg};border-color:${br};color:${fg};" title="Arraste para mudar a ordem na folha">`
-        + `<span class="mtg-celula-alca" aria-hidden="true">⋮⋮</span>`
-        + `<span class="mtg-celula-rotulo">${rotulo}</span>`
-        + `<button type="button" class="mtg-celula-btn" title="Repetir esta célula logo abaixo — a mesma peça, impressa duas vezes" onclick="event.stopPropagation(); duplicarCelulaDaMontagem(${i})">&#10697;</button>`
-        + `<button type="button" class="mtg-celula-btn mtg-celula-tirar" title="Tirar só esta célula da folha" onclick="event.stopPropagation(); removerCelulaDaMontagem(${i})">&times;</button>`
-        + `</div>`;
-}
-
-/** Desenha a lista, o selo, a trava e a folha. */
+/** Desenha a lista, o selo, a trava, a folha e o painel do número. */
 function renderMontagem() {
-    const celulas = state.montagem.celulas;
-    const modelos = state.montagem.modelos;
+    const { celulas, modelos, selecao } = state.montagem;
     const lista = document.getElementById('mtg-lista');
     const selo = document.getElementById('mtg-selo');
     const trava = document.getElementById('mtg-trava');
     const resumo = document.getElementById('mtg-resumo');
-    const previa = document.getElementById('mtg-previa');
     const btnPdf = document.getElementById('mtg-btn-pdf');
     const btnLimpar = document.getElementById('mtg-btn-limpar');
     const badge = document.getElementById('badge-montagem');
@@ -999,6 +1792,36 @@ function renderMontagem() {
         badge.style.display = total ? '' : 'none';
     }
 
+    // ── As ações que dependem do que há na folha ───────────────────────────
+    const ligar = (id, ativo, titulo) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = !ativo;
+        if (titulo) el.title = titulo;
+    };
+    ligar('mtg-desfazer', state.montagem.historia.length > 0,
+          state.montagem.historia.length ? 'Desfazer o último gesto (Ctrl+Z)' : 'Nada a desfazer');
+    ligar('mtg-refazer', state.montagem.futuro.length > 0,
+          state.montagem.futuro.length ? 'Refazer (Ctrl+Shift+Z)' : 'Nada a refazer');
+    ligar('mtg-completar', total > 0 && porFolha > 0 && conta.vazias > 0,
+          conta.vazias > 0 ? `Repetir células até fechar a folha — entram ${conta.vazias}`
+                           : 'A folha já fecha certo');
+    ligar('mtg-ordenar', total > 1, 'Agrupar as células por modelo ou por pedido');
+
+    const barraSel = document.getElementById('mtg-selecao');
+    if (barraSel) {
+        if (selecao.length > 1) {
+            barraSel.style.display = 'flex';
+            barraSel.innerHTML = `
+              <span><strong>${selecao.length}</strong> células selecionadas</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="duplicarCelulaDaMontagem(${selecao[0]})">&#10697; Repetir todas</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="removerCelulaDaMontagem(${selecao[0]})">&times; Tirar todas</button>
+              <button type="button" class="mtg-escolher-pasta" style="margin-left:auto;" onclick="state.montagem.selecao=[];renderMontagem();">Limpar seleção</button>`;
+        } else {
+            barraSel.style.display = 'none';
+        }
+    }
+
     // ── A trava ────────────────────────────────────────────────────────────
     // Nasce escondida e aparece com a primeira célula: o operador não escolhe
     // um formato num seletor, ele adiciona e a folha passa a dizer o que aceita.
@@ -1007,7 +1830,7 @@ function renderMontagem() {
             trava.style.display = 'none';
         } else {
             const p = modelos[0].peca;
-            const sai = (state.saidas || []).find(s => String(s.id) === String(p.saida_id));
+            const sai = _mtgSaidaDaFolha(modelos);
             const face = (p.verso_tipo && p.verso_tipo !== 'Frente' && p.verso_tipo !== 'SÓ FRENTE')
                 ? 'Frente e verso' : 'Só frente';
             trava.innerHTML = `
@@ -1034,7 +1857,7 @@ function renderMontagem() {
     if (!modelos.length) {
         lista.innerHTML = `
             <div class="mtg-vazio">
-              <svg viewBox="0 0 48 48" width="52" height="52" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
                 <rect x="6" y="9"  width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
                 <rect x="6" y="19" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
                 <rect x="6" y="29" width="36" height="6" rx="1.5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
@@ -1050,34 +1873,39 @@ function renderMontagem() {
     } else {
         lista.innerHTML = `
             <table class="data-table">
-              <tr><th>Pedido</th><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Posições</th><th style="text-align:right;">Células</th><th style="width:40px;"></th></tr>
+              <tr><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Na folha</th><th style="width:32px;"></th></tr>
               ${modelos.map((m, j) => {
-                  // As posições deste modelo, com a repetição dita: "#6 ×2".
                   const vezes = {};
                   const ordem = [];
                   for (const p of celulasDoModelo(celulas, m)) {
                       if (!vezes[p]) { vezes[p] = 0; ordem.push(p); }
                       vezes[p]++;
                   }
+                  const [bg] = _MTG_TONS[j % _MTG_TONS.length].split('|');
                   const chips = ordem.map(p =>
-                      `<span class="mtg-pos">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
+                      `<span class="mtg-pos${vezes[p] > 1 ? ' repetida' : ''}">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
                   const quantas = celulasDoModelo(celulas, m).length;
                   return `
                 <tr class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}"
                     onclick="retomarDaMontagem(${j})"
                     title="Voltar a este modelo para acrescentar posições">
-                  <td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
-                  <td><span style="color:var(--text);">${escapeHtml(String(m.itemId))}</span><br>
-                      <span style="font-size:0.78rem;">${escapeHtml(String(m.nome).slice(0, 46))}</span></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:7px;">
+                      <span class="mtg-tom" style="background:${bg};"></span>
+                      <div style="min-width:0;">
+                        <div style="color:var(--text);font-weight:600;">${escapeHtml(String(m.pedidoNumero || m.osId))} · ${escapeHtml(String(m.itemId))}</div>
+                        <div style="font-size:0.75rem;">${escapeHtml(String(m.nome).slice(0, 40))}</div>
+                      </div>
+                    </div>
+                  </td>
                   <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(m.qtd || 0).toLocaleString('pt-BR')}</td>
-                  <td><span class="mtg-posicoes">${chips}</span></td>
-                  <td style="text-align:right;">${quantas}</td>
+                  <td><span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></td>
                   <td style="text-align:right;"><span class="mtg-tirar" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</span></td>
                 </tr>`;
               }).join('')}
             </table>
             <p class="mtg-dica" style="margin-top:10px;">
-              Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições — elas se somam às que já estão lá.
+              Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições.
             </p>`;
     }
 
@@ -1103,49 +1931,37 @@ function renderMontagem() {
         }
     }
 
-    // ── A folha montada: todas as células, na ordem, folha a folha ─────────
-    //
-    // TODAS, e não só a primeira folha: é aqui que o operador arrasta, repete
-    // e tira célula, e uma célula que estivesse na segunda folha sem aparecer
-    // seria uma célula que ele não consegue mexer. As vazias só aparecem na
-    // última folha, que é a única que pode ter sobra.
-    if (previa) {
-        const numFolha = document.getElementById('mtg-folha-num');
-        if (!total || !porFolha) {
-            previa.innerHTML = '';
-            if (numFolha) numFolha.textContent = '';
-        } else {
-            const html = [];
-            for (let f = 0; f < conta.folhas; f++) {
-                if (conta.folhas > 1) {
-                    html.push(`<div class="mtg-folha-titulo">Folha ${f + 1} de ${conta.folhas}</div>`);
-                }
-                for (let p = 0; p < porFolha; p++) {
-                    const i = f * porFolha + p;
-                    html.push(i < total
-                        ? _mtgHtmlDaCelula(celulas[i], i, modelos)
-                        : '<div class="mtg-celula mtg-celula-vazia">vazia</div>');
-                }
-            }
-            previa.innerHTML = html.join('');
-            if (numFolha) {
-                numFolha.textContent = conta.folhas > 1
-                    ? `${conta.folhas} FOLHAS · ${total} CÉLULAS`
-                    : `1 FOLHA · ${total} CÉLULA(S)`;
-            }
-        }
-    }
+    // ── O zoom marcado ─────────────────────────────────────────────────────
+    ['peca', 'folha', '100'].forEach(z => {
+        const b = document.getElementById('mtg-zoom-' + z);
+        if (b) b.classList.toggle('ativo', state.montagem.zoom === z);
+    });
+
+    _mtgRenderNumero();
+    _mtgRenderFolha();
 }
 
 /** Chamada ao entrar na tela. */
 async function abrirMontagem() {
-    if (!state.montagem || !state.montagem.celulas) {
-        state.montagem = { celulas: [], modelos: [], pedidoSel: null, modeloSel: null };
-    }
+    if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
     encherPedidosDaMontagem();
     _mtgLigarArrasto();
+    _mtgLigarTeclado();
     onMontagemPosicoesChange();
     renderMontagem();
+    // A folha se redesenha quando a janela muda de tamanho: a escala vem da
+    // largura medida, e sem isto ela ficaria com a escala da abertura.
+    if (!window._mtgRedesenhoLigado) {
+        window._mtgRedesenhoLigado = true;
+        let t = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(t);
+            t = setTimeout(() => {
+                const v = document.getElementById('view-montagem');
+                if (v && v.classList.contains('active')) _mtgRenderFolha();
+            }, 150);
+        });
+    }
     // As pastas da estacao entram DEPOIS, sem segurar a tela: a rota tem prazo
     // de 1,5s para conferir cada pasta (pasta de rede fora do ar trava o
     // os.path.isdir), e o operador nao precisa esperar por isso para digitar.
@@ -1394,6 +2210,7 @@ async function prepararArtesDaMontagem(modelos) {
             + 'da tela do Pedido (pedido.js). Atualize o agente NewProd e tente de novo.');
     }
 
+    const numero = numeroDaMontagemSaneado(state.montagem.numero);
     const artes = new Array((modelos || []).length).fill(null);
     const ordemDosPedidos = [];
     const indicesPorPedido = {};
@@ -1440,11 +2257,21 @@ async function prepararArtesDaMontagem(modelos) {
             }
 
             const arte = arteDoModeloParaFolha({ osId: m.osId, itemId: m.itemId }, null, { comPrevia: false });
-            // Uma caixa para a montagem inteira, e não a opção salva em cada
+            // Uma escolha para a montagem inteira, e não a opção salva em cada
             // modelo — ver `imprimirNumeroNaMontagem`.
-            arte._imprimirNumero = imprimirNumeroNaMontagem();
+            arte._imprimirNumero = numero.imprimir;
 
             const pronta = arteParaOMotor(arte, true);
+
+            // COMO o número sai no papel. O motor tem os quatro campos desde
+            // 03/09/2026; antes disso só a cor passava, e os outros três eram
+            // constantes no `engine.py`. Agente velho ignora os campos novos e
+            // imprime como sempre — que é exatamente o padrão desta tela.
+            pronta.nome_color = numero.cor;
+            pronta.nome_size = numero.size;
+            pronta.nome_pos = numero.pos;
+            pronta.nome_rot = numero.rot;
+
             if (typeof numeracaoSemElementosDeLayout === 'function') {
                 if (pronta.numeracao) pronta.numeracao = numeracaoSemElementosDeLayout(pronta.numeracao);
                 if (pronta.numeracao_2) pronta.numeracao_2 = numeracaoSemElementosDeLayout(pronta.numeracao_2);
@@ -1644,36 +2471,6 @@ async function _mtgEstacao() {
     return null;
 }
 
-if (typeof window !== 'undefined') {
-    window.abrirMontagem = abrirMontagem;
-    window.pedidosParaMontagem = pedidosParaMontagem;
-    window.encherPedidosDaMontagem = encherPedidosDaMontagem;
-    window.onMontagemPedidoChange = onMontagemPedidoChange;
-    window.onMontagemModeloChange = onMontagemModeloChange;
-    window.onMontagemPosicoesChange = onMontagemPosicoesChange;
-    window.adicionarNaMontagem = adicionarNaMontagem;
-    window.removerDaMontagem = removerDaMontagem;
-    window.retomarDaMontagem = retomarDaMontagem;
-    window.duplicarCelulaDaMontagem = duplicarCelulaDaMontagem;
-    window.removerCelulaDaMontagem = removerCelulaDaMontagem;
-    window.moverCelulaDaMontagem = moverCelulaDaMontagem;
-    window.limparMontagem = limparMontagem;
-    window.renderMontagem = renderMontagem;
-    window.prepararArtesDaMontagem = prepararArtesDaMontagem;
-    window.gerarPdfDaMontagem = gerarPdfDaMontagem;
-    window.payloadDaMontagem = payloadDaMontagem;
-    window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;
-    window.pastaDaMontagem = pastaDaMontagem;
-    window.abrirNaTelaDaMontagem = abrirNaTelaDaMontagem;
-    window.nomeDoArquivoDaMontagem = nomeDoArquivoDaMontagem;
-    window.encherPastasDaMontagem = encherPastasDaMontagem;
-    window.onMontagemPastaChange = onMontagemPastaChange;
-    window.escolherPastaDaMontagem = escolherPastaDaMontagem;
-    window.gravarPdfNaEstacao = gravarPdfNaEstacao;
-    window.baixarPdfDaMontagem = baixarPdfDaMontagem;
-    window.abrirPdfDaMontagemNaTela = abrirPdfDaMontagemNaTela;
-}
-
 /**
  * Busca o pedido pelo número e o escolhe.
  *
@@ -1719,5 +2516,41 @@ function buscarPedidoDaMontagem() {
 }
 
 if (typeof window !== 'undefined') {
+    window.abrirMontagem = abrirMontagem;
+    window.pedidosParaMontagem = pedidosParaMontagem;
+    window.encherPedidosDaMontagem = encherPedidosDaMontagem;
+    window.onMontagemPedidoChange = onMontagemPedidoChange;
+    window.onMontagemModeloChange = onMontagemModeloChange;
+    window.onMontagemPosicoesChange = onMontagemPosicoesChange;
+    window.adicionarNaMontagem = adicionarNaMontagem;
+    window.removerDaMontagem = removerDaMontagem;
+    window.retomarDaMontagem = retomarDaMontagem;
+    window.duplicarCelulaDaMontagem = duplicarCelulaDaMontagem;
+    window.removerCelulaDaMontagem = removerCelulaDaMontagem;
+    window.moverCelulaDaMontagem = moverCelulaDaMontagem;
+    window.selecionarCelulaDaMontagem = selecionarCelulaDaMontagem;
+    window.completarAFolhaDaMontagem = completarAFolhaDaMontagem;
+    window.ordenarMontagem = ordenarMontagem;
+    window.zoomDaMontagem = zoomDaMontagem;
+    window.desfazerMontagem = desfazerMontagem;
+    window.refazerMontagem = refazerMontagem;
+    window.guardarNaHistoria = guardarNaHistoria;
+    window.alternarNumeroDaMontagem = alternarNumeroDaMontagem;
+    window.mudarNumeroDaMontagem = mudarNumeroDaMontagem;
+    window.limparMontagem = limparMontagem;
+    window.renderMontagem = renderMontagem;
+    window.prepararArtesDaMontagem = prepararArtesDaMontagem;
+    window.gerarPdfDaMontagem = gerarPdfDaMontagem;
+    window.payloadDaMontagem = payloadDaMontagem;
+    window.imprimirNumeroNaMontagem = imprimirNumeroNaMontagem;
+    window.pastaDaMontagem = pastaDaMontagem;
+    window.abrirNaTelaDaMontagem = abrirNaTelaDaMontagem;
+    window.nomeDoArquivoDaMontagem = nomeDoArquivoDaMontagem;
+    window.encherPastasDaMontagem = encherPastasDaMontagem;
+    window.onMontagemPastaChange = onMontagemPastaChange;
+    window.escolherPastaDaMontagem = escolherPastaDaMontagem;
+    window.gravarPdfNaEstacao = gravarPdfNaEstacao;
+    window.baixarPdfDaMontagem = baixarPdfDaMontagem;
+    window.abrirPdfDaMontagemNaTela = abrirPdfDaMontagemNaTela;
     window.buscarPedidoDaMontagem = buscarPedidoDaMontagem;
 }

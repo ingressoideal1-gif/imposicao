@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { color: #60a5fa; }
+    * { box-sizing: border-box; }
+    .op { padding: 8px 0; text-align: center; border-radius: 7px; font-size: 0.78rem;
+          font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.15s ease; }
+    .op-off { border: 1px solid rgba(148,163,184,0.25); background: rgba(10,15,30,0.6); color: #94a3b8; }
+    .op-off:hover { border-color: rgba(148,163,184,0.5); color: #e2e8f0; }
+    .op-on { border: 1px solid #3b82f6; background: rgba(59,130,246,0.2); color: #93c5fd; }
+    .sw { width: 27px; height: 27px; border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+  </style>
+</helmet>
+
+<div style="width: 520px; padding: 22px; background: #0a0f1e; display: flex; flex-direction: column; gap: 16px;">
+
+  <div>
+    <h2 style="margin: 0; font-size: 1.06rem; font-weight: 700;">N&uacute;mero do modelo no papel</h2>
+    <p style="margin: 5px 0 0; font-size: 0.78rem; color: #94a3b8; line-height: 1.5;">Numa folha que mistura pedidos, &eacute; por ele que se separa o material depois de cortar. Mexa nos controles: a pe&ccedil;a acompanha.</p>
+  </div>
+
+  <div style="background: #f1f5f9; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+    <div style="position: relative; width: 400px; height: 160px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; overflow: hidden;">
+      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+        <span style="font-size: 0.78rem; color: #64748b;">arte do modelo</span>
+      </div>
+      <span style="{{ numStyle }}">{{ numTexto }}</span>
+    </div>
+    <span style="font-size: 0.7rem; color: #64748b;">exemplo de pe&ccedil;a &mdash; o n&uacute;mero sai sempre com 6 d&iacute;gitos</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Posi&ccedil;&atilde;o na pe&ccedil;a</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+      <sc-for list="{{ posicoes }}" as="p" hint-placeholder-count="4">
+        <div class="{{ p.classe }}" onClick="{{ p.escolher }}">{{ p.rotulo }}</div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Rota&ccedil;&atilde;o</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+      <sc-for list="{{ rotacoes }}" as="r" hint-placeholder-count="4">
+        <div class="{{ r.classe }}" onClick="{{ r.escolher }}">{{ r.rotulo }}</div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 7px;">
+    <div style="display: flex; align-items: baseline; gap: 8px;">
+      <span style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Tamanho da fonte</span>
+      <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 0.8rem; font-weight: 700; color: #e2e8f0;">{{ tamanho }} pt</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div class="op op-off" style="width: 34px; padding: 5px 0;" onClick="{{ menor }}">&minus;</div>
+      <div style="flex: 1 1 auto; height: 5px; border-radius: 999px; background: rgba(10,15,30,0.8); position: relative;">
+        <span style="position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: #3b82f6; width: {{ tamanhoPct }};"></span>
+      </div>
+      <div class="op op-off" style="width: 34px; padding: 5px 0;" onClick="{{ maior }}">+</div>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.66rem; color: #475569;"><span>6 pt</span><span>24 pt</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #475569;">Cor</span>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <sc-for list="{{ cores }}" as="c" hint-placeholder-count="5">
+        <span class="sw" style="{{ c.estilo }}" onClick="{{ c.escolher }}"></span>
+      </sc-for>
+      <div style="flex: 1 1 auto; min-width: 0; background: rgba(10,15,30,0.6); border: 1px solid rgba(148,163,184,0.25); border-radius: 7px; padding: 6px 10px; font-family: ui-monospace, monospace; font-size: 0.78rem; color: #94a3b8;">{{ cor }}</div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-radius: 8px; background: rgba(245,158,11,0.09); border: 1px solid rgba(245,158,11,0.28);">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg>
+    <span style="font-size: 0.74rem; color: #fbbf24; line-height: 1.5;">Hoje o motor s&oacute; aceita a <strong>cor</strong>. Tamanho (14&nbsp;pt), posi&ccedil;&atilde;o (borda esquerda) e rota&ccedil;&atilde;o (90&deg;) est&atilde;o fixos no c&oacute;digo &mdash; os outros tr&ecirc;s controles pedem uma mudan&ccedil;a no <strong>engine.py</strong> e sa&iacute;da do agente.</span>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":520,"height":760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { pos: 'esquerda', rot: 90, tam: 14, cor: '#000000' };
+  }
+
+  estiloDoNumero() {
+    const { pos, rot, tam, cor } = this.state;
+    const base = 'position: absolute; white-space: nowrap; font-family: Impact, Haettenschweiler, sans-serif; '
+      + 'letter-spacing: 0.06em; line-height: 1; font-size: ' + tam + 'px; color: ' + cor + '; ';
+    const gira = 'rotate(-' + rot + 'deg)';
+    if (pos === 'esquerda')  return base + 'left: 10px; top: 50%; transform: translateY(-50%) ' + gira + ';';
+    if (pos === 'direita')   return base + 'right: 10px; top: 50%; transform: translateY(-50%) ' + gira + ';';
+    if (pos === 'topo')      return base + 'top: 10px; left: 50%; transform: translateX(-50%) ' + gira + ';';
+    return base + 'bottom: 10px; left: 50%; transform: translateX(-50%) ' + gira + ';';
+  }
+
+  renderVals() {
+    const st = this.state;
+    const classe = (ligado) => 'op ' + (ligado ? 'op-on' : 'op-off');
+
+    return {
+      numTexto: '1000565',
+      numStyle: this.estiloDoNumero(),
+      tamanho: st.tam,
+      tamanhoPct: Math.round(((st.tam - 6) / 18) * 100) + '%',
+      cor: st.cor,
+
+      posicoes: [
+        { id: 'esquerda', rotulo: 'Esquerda' },
+        { id: 'direita',  rotulo: 'Direita' },
+        { id: 'topo',     rotulo: 'Topo' },
+        { id: 'base',     rotulo: 'Base' },
+      ].map((p) => ({
+        rotulo: p.rotulo,
+        classe: classe(st.pos === p.id),
+        escolher: () => this.setState({ pos: p.id }),
+      })),
+
+      rotacoes: [0, 90, 180, 270].map((g) => ({
+        rotulo: g + '°',
+        classe: classe(st.rot === g),
+        escolher: () => this.setState({ rot: g }),
+      })),
+
+      menor: () => this.setState({ tam: Math.max(6, st.tam - 1) }),
+      maior: () => this.setState({ tam: Math.min(24, st.tam + 1) }),
+
+      cores: ['#000000', '#ffffff', '#ef4444', '#3b82f6', '#22c55e'].map((hex) => ({
+        estilo: 'background: ' + hex + '; border: '
+          + (st.cor === hex ? '2px solid #3b82f6' : '1px solid rgba(148,163,184,0.4)') + ';',
+        escolher: () => this.setState({ cor: hex }),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",          "x": 0,    "y": 0,    "w": 1440, "h": 1020, "title": "Montagem — tela redesenhada" },
+    { "file": "NumeroNoPapel.dc.html", "x": 1560, "y": 0,    "w": 520,  "h": 800,  "title": "Número do modelo — controles" },
+    { "file": "Melhorias.dc.html",     "x": 0,    "y": 1140, "w": 1000, "h": 1620, "title": "O que muda, e o que custa" }
+  ],
+  "annotations": [
+    { "id": "nota-folha", "x": 1560, "y": 900, "w": 520,
+      "text": "A folha passou para a esquerda e ganhou quase o dobro da largura. Era a coluna de 380px na direita.\n\nCada célula tem 61px de altura (eram 26) e mostra o número do modelo desenhado como sai no papel." },
+    { "id": "nota-controles", "x": 1560, "y": 1140, "w": 520,
+      "text": "Mexa nos controles deste artboard: posição, rotação, tamanho e cor mudam a peça ao lado ao vivo.\n\nDos quatro, só a COR funciona no motor hoje. Os outros três estão fixos no engine.py." }
+  ],
+  "launch": { "view": "canvas" }
+}

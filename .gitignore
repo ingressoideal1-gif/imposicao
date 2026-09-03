@@ -135,3 +135,5 @@ tests/_*.png
 # a partir das fontes a cada publicacao.
 design/*.html
 !design/*.dc.html
+design-montagem/*.html
+!design-montagem/*.dc.html

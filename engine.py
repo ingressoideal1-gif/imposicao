@@ -830,6 +830,159 @@ def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     return r / 255.0, g / 255.0, b / 255.0
 
 
+# ---------------------------------------------------------------------------
+# O numero do modelo na borda do item
+# ---------------------------------------------------------------------------
+# Os padroes abaixo reproduzem, ponto por ponto, o que o motor imprimia antes de
+# 03/09/2026: corpo 14, na borda esquerda, deitado. Ate essa data so a COR era
+# configuravel — tamanho, posicao e giro estavam escritos no meio do motor, em
+# tres copias. Mexer nestes padroes muda o papel de trabalhos que a grafica ja
+# aprovou: eles existem justamente para NAO mudar nada.
+_NOME_CORPO_PADRAO = 14.0
+_NOME_CORPO_MIN = 6.0
+_NOME_CORPO_MAX = 24.0
+_NOME_POSICAO_PADRAO = "esquerda"
+_NOME_POSICOES = ("esquerda", "direita", "topo", "base")
+_NOME_GIRO_PADRAO = 90
+_NOME_GIROS = (0, 90, 180, 270)
+
+# Impact e a fonte deste numero desde sempre; `hebo` (Helvetica Bold) e a
+# reserva de quem nao a tem instalada — o Linux, por exemplo.
+_NOME_IMPACT_CANDIDATOS = (
+    "C:/Windows/Fonts/impact.ttf",
+    "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
+    "/usr/share/fonts/impact/impact.ttf",
+)
+
+# Para onde o texto corre na pagina, por giro. Medido com o `morph` de -giro que
+# esta funcao monta: 0 corre para a direita, 90 para CIMA, 180 para a esquerda e
+# 270 para baixo.
+_NOME_DIRECAO = {0: (1.0, 0.0), 90: (0.0, -1.0), 180: (-1.0, 0.0), 270: (0.0, 1.0)}
+
+
+def _numero_do_modelo_corpo(item: dict) -> float:
+    """O corpo da fonte pedido em `nome_size`, ou o de sempre.
+
+    Fora da faixa, vazio ou nao numerico cai no padrao calado. Quem preenche
+    isto e a tela, e uma folha que nao sai custa mais a grafica do que um numero
+    de conferencia no corpo de sempre.
+    """
+    try:
+        corpo = float(item.get("nome_size", _NOME_CORPO_PADRAO))
+    except (TypeError, ValueError):
+        return _NOME_CORPO_PADRAO
+    # `nan` nao passa em comparacao nenhuma, entao cai aqui tambem.
+    if not (_NOME_CORPO_MIN <= corpo <= _NOME_CORPO_MAX):
+        return _NOME_CORPO_PADRAO
+    return corpo
+
+
+def _numero_do_modelo_posicao(item: dict) -> str:
+    """A borda pedida em `nome_pos`, ou a esquerda de sempre."""
+    posicao = str(item.get("nome_pos", _NOME_POSICAO_PADRAO) or "").strip().lower()
+    return posicao if posicao in _NOME_POSICOES else _NOME_POSICAO_PADRAO
+
+
+def _numero_do_modelo_giro(item: dict) -> int:
+    """O giro pedido em `nome_rot`, ou os 90 graus de sempre."""
+    try:
+        giro = int(float(item.get("nome_rot", _NOME_GIRO_PADRAO)))
+    except (TypeError, ValueError):
+        return _NOME_GIRO_PADRAO
+    return giro if giro in _NOME_GIROS else _NOME_GIRO_PADRAO
+
+
+def _desenhar_numero_do_modelo(page, item: dict, fx: float, fy: float, cfg) -> None:
+    """Escreve o numero do modelo na borda da celula, na pagina temporaria.
+
+    ## Por que existe
+
+    Este desenho era o MESMO codigo copiado em tres pontos do motor: o ramo de
+    reserva do laco principal, o `_render_item_front` e o `_render_item_back`.
+    Os tres tinham de concordar e nada os obrigava — mexer num e esquecer os
+    outros faz o verso sair diferente da frente, e a folha combinada diferente
+    das duas. E o tipo de divergencia que so aparece no papel.
+
+    ## A geometria
+
+    O texto fica ENCOSTADO na borda escolhida e CENTRALIZADO ao longo dela. O
+    recuo da borda e o proprio corpo da fonte, medido ate a LINHA DE BASE — e o
+    que o motor sempre fez no unico caso que existia (`esquerda` + `90`), e
+    passar a medir ate a caixa do glifo moveria o que a grafica ja aprovou.
+
+    `esquerda` + `90` continua dando, exatamente:
+
+        x = fx + corpo
+        y = fy + (item_h + largura_do_texto) / 2
+
+    As outras combinacoes saem da mesma regra. Quando o texto corre PARALELO a
+    borda (`topo` + `0`), centralizar ao longo dela e obvio. Quando ele corre
+    PERPENDICULAR a ela (`esquerda` + `0`, o texto entrando na celula), encostar
+    vale para a PONTA: a extremidade mais proxima da borda e que fica no recuo, e
+    o resto do texto entra na celula. Centralizar o MEIO do texto sobre a linha
+    do recuo jogaria metade dele para fora do papel.
+    """
+    nome = item.get("nome", "")
+    if not nome:
+        return
+
+    texto = str(nome).zfill(6)
+    corpo = _numero_do_modelo_corpo(item)
+    posicao = _numero_do_modelo_posicao(item)
+    giro = _numero_do_modelo_giro(item)
+    cor = _hex_to_rgb(item.get("nome_color", "#000000"))
+
+    arquivo_impact = next(
+        (caminho for caminho in _NOME_IMPACT_CANDIDATOS if os.path.exists(caminho)),
+        None)
+    fonte_para_medir = "Impact" if arquivo_impact else "hebo"
+    # A mesma regua do resto do motor. Ate 17/08/2026 isto era
+    # `get_text_length(..., fontfile=...)`, que levanta TypeError — a funcao nao
+    # aceita esse argumento. O `except` de entao engolia, entao a largura era
+    # SEMPRE o chute, com Impact ou sem ela.
+    largura = _largura_do_texto(texto, arquivo_impact, fonte_para_medir, corpo)
+
+    dx, dy = _NOME_DIRECAO[giro]
+    # Quanto o texto avanca para cada lado da origem, em cada eixo da pagina. Um
+    # dos dois pares e sempre (0, 0): o texto corre num eixo so.
+    avanco_x = (min(0.0, largura * dx), max(0.0, largura * dx))
+    avanco_y = (min(0.0, largura * dy), max(0.0, largura * dy))
+    recuo = corpo
+
+    # A conta do centro fica como `(medida - avanco) / 2` de proposito, e nao
+    # como `medida / 2 - avanco / 2`: assim o caso `esquerda` + `90` recai na
+    # expressao literal que o motor sempre teve, `fy + (item_h + largura) / 2`,
+    # e sai BIT A BIT igual. Reassociar mudaria a ultima casa do float e a
+    # regressao passaria despercebida.
+    if posicao in ("esquerda", "direita"):
+        if posicao == "esquerda":
+            x = fx + recuo - avanco_x[0]
+        else:
+            x = fx + cfg.item_w - recuo - avanco_x[1]
+        y = fy + (cfg.item_h - (avanco_y[0] + avanco_y[1])) / 2.0
+    else:
+        x = fx + (cfg.item_w - (avanco_x[0] + avanco_x[1])) / 2.0
+        if posicao == "topo":
+            y = fy + recuo - avanco_y[0]
+        else:
+            y = fy + cfg.item_h - recuo - avanco_y[1]
+
+    pivo = fitz.Point(x, y)
+    radianos = math.radians(-giro)
+    argumentos = dict(
+        fontsize=corpo,
+        color=cor,
+        morph=(pivo, fitz.Matrix(math.cos(radianos), -math.sin(radianos),
+                                 math.sin(radianos),  math.cos(radianos), 0, 0))
+    )
+    if arquivo_impact:
+        argumentos["fontname"] = "Impact"
+        argumentos["fontfile"] = arquivo_impact
+    else:
+        argumentos["fontname"] = "hebo"
+    page.insert_text(pivo, texto, **argumentos)
+
+
 def _generate_qr(data: str, color_hex: str = "#000000") -> bytes:
     """Gera QR Code PNG em bytes."""
     fill_r, fill_g, fill_b = [int(x * 255) for x in _hex_to_rgb(color_hex)]
@@ -2914,6 +3067,14 @@ class ImpositionEngine:
                         "verso_page_idx": art_verso_page_idx,
                         "nome": art.get("nome", ""),
                         "nome_color": art.get("nome_color", "#000000"),
+                        # Corpo, borda e giro do numero do modelo (03/09/2026).
+                        # Vao crus, como vieram do payload: quem confere faixa e
+                        # valor aceito e o `_desenhar_numero_do_modelo`, num
+                        # lugar so, para a folha combinada nao ganhar regra
+                        # propria.
+                        "nome_size": art.get("nome_size"),
+                        "nome_pos": art.get("nome_pos"),
+                        "nome_rot": art.get("nome_rot"),
                         "model_idx": model_idx,
                         "start_base": n1,
                         "l_cam": int(art.get("l_cam", cfg.l_cam if hasattr(cfg, "l_cam") else 1)),
@@ -3458,43 +3619,7 @@ class ImpositionEngine:
                             self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
                             self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
-                        if arte_nome:
-                            nome_str = str(arte_nome).zfill(6)
-                            nome_color_hex = arte_data.get("nome_color", "#000000")
-                            nome_rgb = _hex_to_rgb(nome_color_hex)
-                            nome_font_size = 14
-                            nome_x = _fx + nome_font_size
-                            import os as _os
-                            _impact_candidates = [
-                                "C:/Windows/Fonts/impact.ttf",
-                                "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
-                                "/usr/share/fonts/impact/impact.ttf",
-                            ]
-                            _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
-                            _font_name_calc = "Impact" if _impact_file else "hebo"
-                            _font_file_calc = _impact_file
-                            # A mesma régua do resto do motor. Até 17/08/2026
-                            # isto era `get_text_length(..., fontfile=...)`, que
-                            # levanta TypeError — a função não aceita esse
-                            # argumento. O `except` logo abaixo engolia, então a
-                            # largura era SEMPRE o chute, com Impact ou sem ela.
-                            text_width = _largura_do_texto(nome_str, _font_file_calc,
-                                                           _font_name_calc, nome_font_size)
-                            nome_y = _fy + (cfg.item_h + text_width) / 2
-                            origin = fitz.Point(nome_x, nome_y)
-                            pivot  = fitz.Point(nome_x, nome_y)
-                            _nome_insert_kwargs = dict(
-                                fontsize=nome_font_size,
-                                color=nome_rgb,
-                                morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
-                                                          math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
-                            )
-                            if _impact_file:
-                                _nome_insert_kwargs["fontname"] = "Impact"
-                                _nome_insert_kwargs["fontfile"] = _impact_file
-                            else:
-                                _nome_insert_kwargs["fontname"] = "hebo"
-                            temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
+                        _desenhar_numero_do_modelo(temp_page, arte_data, _fx, _fy, cfg)
 
                         _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
                         temp_doc.close()
@@ -4019,40 +4144,7 @@ class ImpositionEngine:
                 self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
-            if arte_nome:
-                nome_str = str(arte_nome).zfill(6)
-                nome_color_hex = item_data.get("nome_color", "#000000")
-                nome_rgb = _hex_to_rgb(nome_color_hex)
-                nome_font_size = 14
-                nome_x = _fx + nome_font_size
-                import os as _os
-                _impact_candidates = [
-                    "C:/Windows/Fonts/impact.ttf",
-                    "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
-                    "/usr/share/fonts/impact/impact.ttf",
-                ]
-                _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
-                _font_name_calc = "Impact" if _impact_file else "hebo"
-                _font_file_calc = _impact_file
-                # A mesma régua do resto do motor — ver o comentário no outro
-                # ponto que desenha este nome: o `fontfile=` levantava TypeError
-                # e a largura era sempre o chute.
-                text_width = _largura_do_texto(nome_str, _font_file_calc,
-                                               _font_name_calc, nome_font_size)
-                nome_y = _fy + (cfg.item_h + text_width) / 2
-                pivot = fitz.Point(nome_x, nome_y)
-                _nome_insert_kwargs = dict(
-                    fontsize=nome_font_size,
-                    color=nome_rgb,
-                    morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
-                                              math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
-                )
-                if _impact_file:
-                    _nome_insert_kwargs["fontname"] = "Impact"
-                    _nome_insert_kwargs["fontfile"] = _impact_file
-                else:
-                    _nome_insert_kwargs["fontname"] = "hebo"
-                temp_page.insert_text(pivot, nome_str, **_nome_insert_kwargs)
+            _desenhar_numero_do_modelo(temp_page, item_data, _fx, _fy, cfg)
 
             _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
             temp_doc.close()
@@ -4195,40 +4287,7 @@ class ImpositionEngine:
                 self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
-            if arte_nome:
-                nome_str = str(arte_nome).zfill(6)
-                nome_color_hex = item_data.get("nome_color", "#000000")
-                nome_rgb = _hex_to_rgb(nome_color_hex)
-                nome_font_size = 14
-                nome_x = _fx + nome_font_size
-                import os as _os
-                _impact_candidates = [
-                    "C:/Windows/Fonts/impact.ttf",
-                    "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
-                    "/usr/share/fonts/impact/impact.ttf",
-                ]
-                _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
-                _font_name_calc = "Impact" if _impact_file else "hebo"
-                _font_file_calc = _impact_file
-                # A mesma régua do resto do motor — ver o comentário no outro
-                # ponto que desenha este nome: o `fontfile=` levantava TypeError
-                # e a largura era sempre o chute.
-                text_width = _largura_do_texto(nome_str, _font_file_calc,
-                                               _font_name_calc, nome_font_size)
-                nome_y = _fy + (cfg.item_h + text_width) / 2
-                pivot = fitz.Point(nome_x, nome_y)
-                _nome_insert_kwargs = dict(
-                    fontsize=nome_font_size,
-                    color=nome_rgb,
-                    morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
-                                              math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
-                )
-                if _impact_file:
-                    _nome_insert_kwargs["fontname"] = "Impact"
-                    _nome_insert_kwargs["fontfile"] = _impact_file
-                else:
-                    _nome_insert_kwargs["fontname"] = "hebo"
-                temp_page.insert_text(pivot, nome_str, **_nome_insert_kwargs)
+            _desenhar_numero_do_modelo(temp_page, item_data, _fx, _fy, cfg)
 
             _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
             temp_doc.close()

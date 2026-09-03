@@ -4,6 +4,111 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — Montagem redesenhada: a folha no lugar nobre, na grade de verdade, com o número do modelo configurável
+
+Pedido do usuário: **"ajustar a página Montagem, rever usabilidade geral,
+precisamos a janela de visualização da Folha Montada maior, com melhor nível de
+detalhamento e posição privilegiada; também precisamos montar na visualização o
+número do modelo, com opção de alterar posição, rotação, tamanho da fonte e cor
+na impressão; sugerir melhorias gerais nesta página, maior controle sobre as
+ações para os usuários"**.
+
+### A prévia mentia sobre o papel
+
+Este era o defeito de fundo, e ele não aparecia no Triband: a folha empilhava as
+células **numa coluna**, sempre. Isso só coincide com a verdade num formato de
+uma coluna. Numa credencial PVC, que é 2 × 2, a tela mostrava quatro linhas
+empilhadas e o papel saía em quadrado.
+
+A prévia passou a desenhar a **grade de verdade**, pela conta do próprio motor:
+
+```python
+k = S * poses_per_sheet + P,  com  P = row * cols + col
+```
+
+Linha primeiro, da esquerda para a direita (`lugarDaCelulaNaFolha`). E a
+geometria do papel vem da mesma fórmula do `engine.py`, em milímetros
+(`geometriaDaFolha`): `used_w = cols*item_w + (cols-1)*gap_h`, com a área
+imposta centralizada na folha. Três zooms — **Peça** (trabalhar), **Folha** (ver
+a sobra pelo tamanho) e **100%** (conferir corpo de fonte).
+
+### A folha tomou o lugar nobre
+
+Ela vivia numa coluna fixa de 380 px na direita, enquanto a tabela de modelos
+tomava a largura toda — invertido, porque o trabalho do operador acontece **na
+folha**. Agora a folha é a coluna elástica à esquerda (`.mtg-folha-card`) e o
+apoio é uma faixa de 440 px à direita (`.mtg-lado`). A folha rola dentro do
+próprio card, para uma montagem de várias folhas não empurrar a página e
+esconder os controles.
+
+### O número do modelo: quatro controles, e o motor com uma função só
+
+Dos quatro pedidos, só a **cor** existia (`nome_color`). Tamanho, posição e giro
+estavam escritos no meio do `engine.py`, em **três cópias** do mesmo bloco (o
+ramo de reserva do laço principal, o `_render_item_front` e o
+`_render_item_back`). As três tinham de concordar e nada as obrigava.
+
+As três viraram `_desenhar_numero_do_modelo`, que lê do item:
+
+| Controle | Campo | Valores | Padrão |
+|---|---|---|---|
+| Posição | `nome_pos` | esquerda, direita, topo, base | esquerda |
+| Rotação | `nome_rot` | 0°, 90°, 180°, 270° | 90 |
+| Tamanho | `nome_size` | 6 a 24 pt | 14 |
+| Cor | `nome_color` | livre | preto |
+
+**O padrão é o que o motor sempre fez.** O combinado `esquerda` + `90` recai
+**bit a bit** na expressão literal antiga — a conta do centro ficou como
+`(medida - avanço) / 2` de propósito, porque reassociar mudaria a última casa do
+float e a regressão passaria despercebida. A caixa nasce **desmarcada**, e
+agente velho ignora os campos novos e imprime como sempre. O `app.py` não mudou:
+ele repassa o `multi_artes` inteiro, e um teste tranca isso.
+
+A folha na tela desenha o número **onde e como ele vai sair**, no corpo e na cor
+escolhidos.
+
+### Maior controle sobre as ações
+
+Era a falta mais grave: um × no lugar errado apagava a célula sem volta.
+
+- **Desfazer e refazer** (`Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y`, e dois botões) —
+  todo gesto que mexe na folha guarda um instantâneo antes, até 60 passos.
+- **Seleção** com `Ctrl` e `Shift`; com uma célula selecionada, `Ctrl+D` repete,
+  `Delete` tira e as setas movem. O teclado ignora campos de digitação.
+- **Completar folha** — repete em rodízio as células que já estão nela até a
+  folha fechar certo, em vez de o operador clicar no ⧉ uma vez por vaga.
+- **Ordenar por modelo ou por pedido**, com ordenação estável: o que ele
+  arrastou de propósito não é embaralhado.
+
+> Nenhuma dessas ações muda o código de ingresso nenhum. Elas mexem só em onde a
+> célula cai no papel; o índice continua vindo do deslocamento do modelo dela.
+
+### Uma aspa que fechou o atributo
+
+O estilo do número na prévia entra em `style="${...}"`, e a pilha de fontes
+trazia `"Arial Narrow"` com **aspas duplas** — a primeira delas fechou o
+atributo no meio, e tamanho, cor e rotação viravam lixo de marcação. Nada
+quebra: o HTML é aceito e nada aparece no console. Quem pegou foi o harness de
+tela, num Chrome de verdade, **medindo o elemento desenhado**; uma verificação
+de código-fonte teria lido a mesma string e concordado com ela.
+
+Duas outras só a captura de tela mostrou: o número desenhado por cima do rótulo
+da célula (`21202` virava `02`), consertado com recuo dinâmico
+(`_mtgEspacoDoNumero`); e a folha crescendo sem limite, consertada com
+`max-height`.
+
+### Testes
+
+`tests/montagem_harness.js` 112 → **175** verificações;
+`tests/montagem_tela_harness.js` 87 → **132**; quatro testes novos em
+`tests/test_montagem.py`; e `tests/test_numero_do_modelo.py`, com **36** testes,
+cujo primeiro compara o código novo com uma **cópia literal do antigo** e exige
+igualdade exata. Suíte inteira: **2241 passando**.
+
+Documentação: [`docs/montagem.md`](montagem.md).
+
+---
+
 ## [2026-09-03] — A bandeja dupla (capa/miolo) volta a aparecer na tela de Pedido
 
 Relato do usuário: **"em layouts anteriores ao carregar o drive da impressora

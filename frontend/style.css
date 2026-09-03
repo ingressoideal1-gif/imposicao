@@ -4774,9 +4774,22 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 
 /* ─── MONTAGEM ────────────────────────────────────────────────────────────────
    A tela que junta celulas a refazer de pedidos diferentes numa folha so'
-   (29/08/2026). Ela reusa os componentes do painel — .card, .data-table,
-   .form-control, .btn, .selo-sobra — e o que esta aqui e' so' o que ela tem de
-   proprio: o compositor, a trava do formato, os ladrilhos da previa. */
+   (29/08/2026), redesenhada em 03/09/2026 a pedido do usuario.
+
+   Ela reusa os componentes do painel — .card, .data-table, .form-control,
+   .btn, .selo-sobra — e o que esta aqui e' so' o que ela tem de proprio: o
+   compositor, a trava do formato, a FOLHA e o painel do numero do modelo.
+
+   O que mudou no redesenho: a folha saiu da coluna de 380px na direita e
+   passou a ocupar a esquerda, larga. O trabalho do operador acontece nela. */
+
+.mtg-acoes-topo { display: flex; align-items: center; gap: 8px; }
+.mtg-acoes-topo .btn:disabled { opacity: 0.45; cursor: default; }
+.mtg-btn-limpar { border-color: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; }
+.mtg-btn-limpar:disabled { color: var(--text-faint) !important; border-color: var(--border) !important; }
+
+.mtg-card-compositor { padding: 20px 22px; margin-bottom: 16px; }
+
 .mtg-compositor {
     display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
 }
@@ -4790,6 +4803,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 }
 .mtg-dica code {
     font-family: ui-monospace, monospace; color: var(--text-dim);
+    background: rgba(10, 15, 30, 0.6); padding: 1px 5px; border-radius: 4px;
 }
 
 /* A trava do formato. Nasce escondida e aparece com a PRIMEIRA celula: o
@@ -4823,99 +4837,211 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     border: 1px solid rgba(239, 68, 68, 0.32);
 }
 
-.mtg-corpo { display: flex; gap: 20px; align-items: stretch; }
-.mtg-lista-card  { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+/* ── O CORPO: a folha manda ────────────────────────────────────────────────
+   Ate 03/09/2026 era o contrario — a lista tinha `flex: 1` e a folha uma
+   coluna fixa de 380px. Trocar os dois e' a mudanca central do redesenho. */
+.mtg-corpo { display: flex; gap: 18px; align-items: stretch; }
+.mtg-folha-card {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; flex-direction: column;
+    padding: 18px 20px 16px; margin-bottom: 0;
+}
 /* min-width:0 porque o padrao (`auto`) impede o card de ficar menor que o
-   min-content do que esta dentro -- e com o seletor de pasta no rodape isso
-   esticava a coluna de 380 para 397px, torcendo a folha ao lado. */
-.mtg-previa-card { flex: 0 0 380px; min-width: 0; display: flex; flex-direction: column; }
+   min-content do que esta dentro — e uma folha larga esticaria a coluna. */
+.mtg-lado {
+    flex: 0 0 440px; min-width: 0;
+    display: flex; flex-direction: column; gap: 16px;
+}
+.mtg-lado > .card { margin-bottom: 0; padding: 18px 20px; }
 
-@media (max-width: 1280px) {
-    /* Tela estreita: a previa desce em vez de espremer a lista, que e' onde o
-       operador confere o que montou. */
+@media (max-width: 1400px) {
+    /* Tela estreita: a coluna de apoio desce em vez de espremer a folha, que e'
+       onde o operador trabalha. */
     .mtg-corpo { flex-wrap: wrap; }
-    .mtg-previa-card { flex: 1 1 100%; }
+    .mtg-lado { flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; }
+    .mtg-lado > .card { flex: 1 1 320px; }
 }
 
-.mtg-posicoes { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+/* ── A barra da folha: titulo, medida e acoes ───────────────────────────── */
+.mtg-folha-barra {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.mtg-folha-barra h2 { font-size: 1.02rem; font-weight: 700; margin: 0; }
+.mtg-folha-medida { font-size: 0.75rem; color: var(--text-faint); }
+.mtg-folha-acoes { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mtg-folha-acoes .btn:disabled { opacity: 0.45; cursor: default; }
+
+/* O ZOOM. Tres modos, e cada um responde a uma pergunta diferente: `Peca` —
+   o que tem em cada celula; `Folha` — quanto papel sobra; `100%` — o corpo
+   real da fonte. */
+.mtg-zoom {
+    display: flex; align-items: center; overflow: hidden;
+    background: rgba(10, 15, 30, 0.6);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.mtg-zoom button {
+    padding: 7px 12px; font-size: 0.78rem; font-weight: 600;
+    font-family: 'Inter', sans-serif; border: none; background: transparent;
+    color: var(--text-dim); cursor: pointer; transition: all var(--transition);
+}
+.mtg-zoom button:hover { color: var(--text); }
+.mtg-zoom button.ativo { background: var(--blue-dim); color: #93c5fd; }
+
+/* O menu do Ordenar: abre no hover, como todo menu deste painel. */
+.mtg-menu { position: relative; }
+.mtg-menu-lista {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+    min-width: 190px; padding: 5px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.mtg-menu:hover .mtg-menu-lista { display: block; }
+.mtg-menu-lista button {
+    display: block; width: 100%; text-align: left;
+    padding: 8px 11px; border: none; background: none; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-size: 0.82rem; color: var(--text);
+    border-radius: 6px;
+}
+.mtg-menu-lista button:hover { background: var(--blue-dim); color: #93c5fd; }
+
+.mtg-btn-completar {
+    background: rgba(34, 197, 94, 0.1); color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+.mtg-btn-completar:hover:not(:disabled) { background: rgba(34, 197, 94, 0.18); }
+.mtg-btn-completar:disabled {
+    background: rgba(10, 15, 30, 0.6); color: var(--text-faint);
+    border-color: var(--border);
+}
+
+/* A barra da selecao multipla. So' aparece com duas ou mais marcadas: com uma
+   so', os botoes da propria celula ja resolvem, e uma barra permanente seria
+   ruido. */
+.mtg-selecao {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px; padding: 8px 13px;
+    border-radius: var(--radius-sm);
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    font-size: 0.82rem; color: var(--text);
+}
+
+/* ── A FOLHA ───────────────────────────────────────────────────────────────
+   Fundo claro porque e' PAPEL: a folha montada nao e' um painel escuro, e ver
+   as celulas na cor do material e' o que deixa o operador conferir o que sai. */
+.mtg-folha {
+    flex: 1 1 auto; min-height: 380px;
+    /* A folha ROLA DENTRO do card, e nao empurra a pagina: assim a coluna de
+       apoio (o numero no papel, o destino do arquivo) continua a vista enquanto
+       o operador percorre as celulas. Sem o teto, vinte celulas de 74px faziam
+       a pagina inteira rolar e os controles saiam da tela. */
+    max-height: calc(100vh - 340px);
+    background: #f1f5f9; border-radius: var(--radius-sm);
+    padding: 12px; overflow: auto;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.mtg-folha.vazia { min-height: 380px; }
+.mtg-folha.sem-medida { align-items: stretch; justify-content: flex-start; }
+
+/* O PAPEL de cada folha. `position: relative` porque as celulas sao
+   posicionadas em cima dele pelas coordenadas em mm — a mesma geometria do
+   motor (ver geometriaDaFolha no montagem.js). */
+.mtg-papel {
+    position: relative; flex: 0 0 auto;
+    background: #ffffff; border: 1px solid #cbd5e1; border-radius: 2px;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.12);
+}
+/* No modo `Peca` nao ha papel em volta: so' a area imposta, ampliada. */
+.mtg-papel.sem-papel { background: transparent; border: none; box-shadow: none; }
+
+.mtg-folha-titulo {
+    flex: 0 0 auto; align-self: flex-start;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: #64748b; padding: 2px 2px 0;
+}
+
+/* A CELULA E' UM CARTAO DE KANBAN (03/09/2026): tem alca para arrastar, o ⧉
+   que a repete na proxima e o × que tira so' ela. O rotulo e os botoes somem
+   quando a celula fica pequena demais — texto ilegivel e' pior que nenhum. */
+.mtg-celula {
+    position: absolute; overflow: hidden;
+    border-radius: 2px; border: 1px solid;
+    display: flex; align-items: center; gap: 5px;
+    padding: 0 4px 0 7px;
+    font-size: 0.66rem; font-weight: 600;
+    font-family: ui-monospace, monospace;
+    white-space: nowrap; cursor: pointer;
+    transition: box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.mtg-celula[draggable]:active { cursor: grabbing; }
+.mtg-celula-rotulo {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    position: relative; z-index: 1;
+}
+.mtg-celula-rotulo em {
+    font-style: normal; font-size: 0.9em; opacity: 0.75;
+    padding: 0 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.5);
+}
+.mtg-celula-btn {
+    flex: 0 0 auto; width: 19px; height: 19px; border-radius: 4px;
+    border: 1px solid transparent; background: rgba(255, 255, 255, 0.6);
+    color: inherit; font-size: 0.76rem; line-height: 1; cursor: pointer;
+    padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    opacity: 0.7; position: relative; z-index: 1;
+}
+.mtg-celula-btn:hover { opacity: 1; border-color: currentColor; }
+.mtg-celula-tirar:hover { color: #b91c1c; }
+/* A celula MARCADA precisa ser obvia: com ela marcada, o ⧉ e o × valem para
+   todas as marcadas de uma vez. */
+.mtg-celula.marcada { box-shadow: 0 0 0 2px #2563eb, 0 2px 8px rgba(37, 99, 235, 0.3); }
+.mtg-celula.repetida { border-style: dashed; }
+/* Enquanto arrasta: a de origem apaga, e a que vai receber ganha a linha. */
+.mtg-celula-arrastando { opacity: 0.35; }
+.mtg-celula-alvo { box-shadow: inset 0 3px 0 0 #2563eb; }
+.mtg-celula-vazia {
+    background: #f8fafc; border-color: #cbd5e1; color: #94a3b8;
+    font-weight: 400; font-style: italic; cursor: default;
+    border-style: dashed;
+}
+
+.mtg-atalhos { color: var(--text-faint); }
+
+/* ── A LISTA DE MODELOS, agora a coluna de apoio ────────────────────────── */
+.mtg-lista-card .data-table th { font-size: 0.7rem; padding: 8px 10px; }
+.mtg-lista-card .data-table td { padding: 10px; font-size: 0.82rem; }
+.mtg-tom { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+.mtg-posicoes { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .mtg-pos {
-    font-family: ui-monospace, monospace; font-size: 0.78rem;
-    padding: 2px 8px; border-radius: 5px;
+    font-family: ui-monospace, monospace; font-size: 0.74rem;
+    padding: 2px 7px; border-radius: 5px;
     background: rgba(59, 130, 246, 0.12); color: #93c5fd;
 }
+/* A posicao que sai MAIS DE UMA VEZ tem cor propria: repetir e' decisao do
+   operador, e ele precisa reconhecer na lista o que fez na folha. */
+.mtg-pos.repetida { background: rgba(139, 92, 246, 0.18); color: #c4b5fd; }
 .mtg-tirar { color: var(--text-faint); cursor: pointer; font-size: 1.05rem; }
 .mtg-tirar:hover { color: var(--red); }
 
 /* O estado vazio. E' aqui que a tela precisa se explicar sozinha. */
 .mtg-vazio {
     flex: 1 1 auto; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 16px;
-    padding: 34px 30px; text-align: center;
+    align-items: center; justify-content: center; gap: 14px;
+    padding: 26px 22px; text-align: center;
     border: 1px dashed rgba(148, 163, 184, 0.28); border-radius: var(--radius);
     background: rgba(30, 41, 59, 0.35);
 }
-.mtg-vazio h3 { font-size: 1.06rem; font-weight: 700; margin: 0; color: var(--text); }
+.mtg-vazio h3 { font-size: 1rem; font-weight: 700; margin: 0; color: var(--text); }
 .mtg-vazio p  {
-    margin: 0; max-width: 520px; font-size: 0.87rem;
+    margin: 0; max-width: 520px; font-size: 0.84rem;
     color: var(--text-dim); line-height: 1.55;
 }
 .mtg-garantia {
     display: flex; align-items: center; gap: 9px; text-align: left;
-    max-width: 560px; padding: 10px 15px; border-radius: var(--radius-sm);
+    padding: 10px 14px; border-radius: var(--radius-sm);
     background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.28);
-    font-size: 0.79rem; color: #86efac; line-height: 1.45;
-}
-
-/* A previa da primeira folha. Fundo claro porque e' PAPEL: a folha montada nao
-   e' um painel escuro, e ver as celulas na cor do material e' o que deixa o
-   operador conferir o que vai sair. */
-.mtg-previa {
-    background: #f8fafc; border-radius: 6px; padding: 7px;
-    display: flex; flex-direction: column; gap: 3px;
-}
-/* A CÉLULA É UM CARTÃO DE KANBAN (03/09/2026): tem alça para arrastar, o ⧉
-   que a repete logo abaixo e o × que tira só ela. Pedido do usuário. O rótulo
-   continua sendo pedido · modelo · #posição, na cor do modelo. */
-.mtg-celula {
-    min-height: 26px; border-radius: 3px; border: 1px solid;
-    display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px;
-    font-size: 0.62rem; font-weight: 600;
-    font-family: ui-monospace, monospace;
-    white-space: nowrap;
-}
-.mtg-celula[draggable] { cursor: grab; }
-.mtg-celula[draggable]:active { cursor: grabbing; }
-.mtg-celula-alca {
-    flex: 0 0 auto; letter-spacing: -2px; opacity: 0.45; font-size: 0.7rem;
-    user-select: none;
-}
-.mtg-celula-rotulo {
-    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-}
-.mtg-celula-btn {
-    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 4px;
-    border: 1px solid transparent; background: rgba(255, 255, 255, 0.55);
-    color: inherit; font-size: 0.8rem; line-height: 1; cursor: pointer;
-    padding: 0; display: inline-flex; align-items: center; justify-content: center;
-    opacity: 0.75;
-}
-.mtg-celula-btn:hover { opacity: 1; border-color: currentColor; }
-.mtg-celula-tirar:hover { color: #b91c1c; }
-/* Enquanto arrasta: a de origem apaga, e a que vai receber ganha a linha. */
-.mtg-celula-arrastando { opacity: 0.35; }
-.mtg-celula-alvo { box-shadow: 0 -2px 0 0 #2563eb; }
-.mtg-celula-vazia {
-    background: #f1f5f9; border-color: #cbd5e1; color: #94a3b8;
-    font-weight: 400; font-style: italic; padding-left: 8px;
-}
-/* O título de cada folha, quando há mais de uma: é aqui que a segunda folha
-   passa a existir para o operador, com as células dela ao alcance. */
-.mtg-folha-titulo {
-    font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
-    text-transform: uppercase; color: #64748b; padding: 5px 2px 2px;
-}
-.mtg-folha-titulo:not(:first-child) {
-    margin-top: 6px; border-top: 1px dashed #cbd5e1;
+    font-size: 0.78rem; color: #86efac; line-height: 1.45;
 }
 
 /* A LINHA DA LISTA E' O CAMINHO DE VOLTA ao modelo (29/08/2026): clicar nela
@@ -4930,21 +5056,83 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 }
 .mtg-linha-ativa > td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
 
-/* O RODAPE DA PREVIA: destino, opcoes e acoes, empurrados juntos para a base.
-   Antes quem descia era a propria .mtg-opcao, com um margin-top:auto -- e isso
-   so' funciona enquanto ha UMA. Com o destino e a segunda caixa, o auto passa
-   para o bloco que as contem, e cada peca de dentro fica na ordem escrita. */
-.mtg-rodape {
-    margin-top: auto; padding-top: 14px;
-    display: flex; flex-direction: column; gap: 10px;
+/* ── O NUMERO DO MODELO NO PAPEL (03/09/2026) ──────────────────────────────
+   O motor imprime o `nome` da arte deitado na borda de cada item. Ate esta
+   versao so' a COR passava pelo payload; tamanho, posicao e rotacao eram
+   constantes no engine.py. Agora sao quatro controles, e a folha ao lado
+   mostra o resultado antes de gerar. */
+.mtg-num-cabecalho { display: flex; align-items: center; gap: 10px; }
+.mtg-num-cabecalho h2 { font-size: 0.98rem; font-weight: 700; margin: 0; }
+.mtg-num-liga {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+    cursor: pointer; user-select: none;
+    font-size: 0.82rem; font-weight: 600; color: var(--text);
+}
+.mtg-num-liga input { width: 15px; height: 15px; cursor: pointer; }
+
+.mtg-num-grade { display: flex; flex-direction: column; gap: 13px; }
+/* Desligado, os controles continuam a vista mas apagados: escondê-los faria o
+   operador procurar onde eles foram parar. */
+.mtg-num-grade.desligado { opacity: 0.4; pointer-events: none; }
+
+.mtg-num-campo { display: flex; flex-direction: column; gap: 6px; }
+.mtg-num-rotulo {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-faint);
+}
+.mtg-num-rotulo strong {
+    font-family: ui-monospace, monospace; color: var(--text);
+    text-transform: none; letter-spacing: 0; margin-left: 5px;
+}
+.mtg-num-linha { display: flex; align-items: center; gap: 5px; }
+.mtg-num-op {
+    flex: 1 1 0; min-width: 0;
+    padding: 8px 4px; border-radius: var(--radius-sm);
+    font-size: 0.78rem; font-weight: 600; font-family: 'Inter', sans-serif;
+    cursor: pointer; transition: all var(--transition);
+    border: 1px solid var(--border); background: rgba(10, 15, 30, 0.6);
+    color: var(--text-dim);
+}
+.mtg-num-op:hover { border-color: rgba(148, 163, 184, 0.5); color: var(--text); }
+.mtg-num-op.ativo { border-color: var(--blue); background: var(--blue-dim); color: #93c5fd; }
+
+.mtg-num-faixa { display: flex; align-items: center; }
+.mtg-num-faixa input[type="range"] {
+    width: 100%; height: 5px; border-radius: 999px; appearance: none;
+    -webkit-appearance: none; cursor: pointer;
+    background: linear-gradient(to right, var(--blue) 0 var(--pct), rgba(10,15,30,0.8) var(--pct) 100%);
+}
+.mtg-num-faixa input[type="range"]::-webkit-slider-thumb {
+    appearance: none; -webkit-appearance: none;
+    width: 15px; height: 15px; border-radius: 999px; background: #fff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5); cursor: pointer;
+}
+.mtg-num-faixa input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border: none; border-radius: 999px; background: #fff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5); cursor: pointer;
 }
 
-/* ONDE GRAVAR O PDF. O seletor lista as pastas que a estacao ja autorizou, e o
-   botao ao lado abre o seletor nativo do Windows NA ESTACAO -- o navegador nao
-   enxerga o disco de la, e nenhuma estacao da grafica usa o mesmo navegador. */
+.mtg-num-cor {
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+    flex-shrink: 0; border: 1px solid rgba(148, 163, 184, 0.4);
+    transition: all var(--transition);
+}
+.mtg-num-cor:hover { transform: scale(1.08); }
+.mtg-num-cor.ativa { border: 2px solid var(--blue); box-shadow: 0 0 0 2px var(--blue-glow); }
+.mtg-numero-card input[type="color"] {
+    width: 32px; height: 26px; padding: 0; cursor: pointer;
+    background: rgba(10, 15, 30, 0.6);
+    border: 1px solid var(--border); border-radius: 6px;
+}
+
+/* ── A SAIDA ───────────────────────────────────────────────────────────────
+   O seletor lista as pastas que a estacao ja autorizou, e o botao ao lado abre
+   o seletor nativo do Windows NA ESTACAO -- o navegador nao enxerga o disco de
+   la, e nenhuma estacao da grafica usa o mesmo navegador. */
+.mtg-saida-card { display: flex; flex-direction: column; gap: 12px; }
 .mtg-destino { display: flex; flex-direction: column; gap: 7px; }
 .mtg-destino > label {
-    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em;
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em;
     text-transform: uppercase; color: var(--text-faint);
 }
 .mtg-destino > .form-control { width: 100%; }
@@ -4953,7 +5141,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-escolher-pasta {
     align-self: flex-start;
     background: none; border: none; padding: 0;
-    font-family: inherit; font-size: 0.73rem; font-weight: 600;
+    font-family: inherit; font-size: 0.75rem; font-weight: 600;
     color: var(--blue); cursor: pointer; text-align: left;
 }
 .mtg-escolher-pasta:hover { text-decoration: underline; }
@@ -4961,21 +5149,10 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     color: var(--text-faint); cursor: default; text-decoration: none;
 }
 .mtg-destino > em {
-    font-size: 0.71rem; font-style: normal;
+    font-size: 0.72rem; font-style: normal;
     color: var(--text-faint); line-height: 1.4;
 }
 
-.mtg-acoes {
-    margin-top: auto; padding-top: 14px;
-    display: flex; flex-direction: column; gap: 9px;
-}
-.mtg-acoes .btn { width: 100%; justify-content: center; }
-
-
-/* A caixa "Imprimir o numero do modelo em cada item", na previa da Montagem.
-   Fica acima das acoes porque e' ali que o operador decide o que sai; a previa
-   ao lado ja mostra pedido/modelo/posicao em cada celula, e a caixa diz se
-   aquilo tambem vai para o PAPEL. */
 .mtg-opcao {
     display: flex; align-items: flex-start; gap: 8px;
     padding: 11px 13px 12px;
@@ -4985,14 +5162,14 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     cursor: pointer; user-select: none;
 }
 .mtg-opcao input { margin-top: 2px; flex: 0 0 auto; width: 15px; height: 15px; cursor: pointer; }
-.mtg-opcao > span { font-size: 0.79rem; color: var(--text); line-height: 1.35; }
+.mtg-opcao > span { font-size: 0.8rem; color: var(--text); line-height: 1.35; }
 .mtg-opcao em {
     display: block; margin-top: 4px;
-    font-size: 0.71rem; font-style: normal;
+    font-size: 0.72rem; font-style: normal;
     color: var(--text-faint); line-height: 1.4;
 }
-/* Quem empurra este rodape inteiro para a base do card e' o .mtg-rodape. */
-.mtg-rodape .mtg-acoes { margin-top: 0; padding-top: 4px; }
+
+.mtg-saida-card .btn-primary { width: 100%; justify-content: center; padding: 12px 18px; }
 
 
 /* ══════════════════════════════════════════════════════════════════════════

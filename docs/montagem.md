@@ -1,9 +1,12 @@
 # Montagem
 
 A tela que junta numa folha só as células a refazer, **mesmo que venham de
-pedidos diferentes**. No ar desde 29/08/2026; reescrita em 03/09/2026 para
-montar cada arte pelas mesmas funções da tela do Pedido e para a folha virar um
-kanban de células (arrastar, repetir, tirar).
+pedidos diferentes**. No ar desde 29/08/2026 e reescrita em 03/09/2026, em três
+frentes do mesmo dia: as artes passaram a ser montadas pelas **mesmas funções da
+tela do Pedido** (§6), a folha virou um **kanban de células** (arrastar, repetir,
+tirar) e a tela inteira foi **redesenhada** — a folha montada tomou o lugar
+nobre, passou a ser desenhada na grade de verdade do formato, e o número do
+modelo ganhou controle de posição, rotação, tamanho e cor (§5).
 
 Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (a tela inteira),
 [`frontend/pedido.js`](../frontend/pedido.js) (`arteDoModeloParaFolha` e
@@ -11,7 +14,8 @@ Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (a tela inteira),
 [`frontend/script.js`](../frontend/script.js) (`rotacaoDaFolhaDoFormato`),
 [`frontend/index.html`](../frontend/index.html) (o menu e a view),
 [`frontend/style.css`](../frontend/style.css) (bloco `MONTAGEM`). No Python,
-só a chave `refazer_repetir` — a seção 2 explica.
+duas coisas: a chave `refazer_repetir` (§2) e o desenho do número do modelo,
+que virou uma função só (`_desenhar_numero_do_modelo`, §5).
 
 ---
 
@@ -177,6 +181,67 @@ que a cor não bate depois de digitar quinze posições é fazer o operador trab
 **O selo é o mesmo do Pedido**, com a mesma regra de cor: verde quando a folha
 fecha certo, amarelo quando sobra célula. O amarelo é reservado à sobra.
 
+### O redesenho de 03/09/2026: a folha no lugar nobre
+
+Pedido do usuário: *"rever usabilidade geral, precisamos a janela de visualização
+da Folha Montada maior, com melhor nível de detalhamento e posição privilegiada;
+montar na visualização o número do modelo, com opção de alterar posição,
+rotação, tamanho da fonte e cor na impressão; maior controle sobre as ações para
+os usuários"*.
+
+Até aqui a folha vivia numa coluna fixa de 380 px na direita, e a tabela de
+modelos tomava a largura toda. Isso estava invertido: **o trabalho do operador
+acontece na folha** — é nela que ele arrasta, repete e tira célula. A tabela é
+só o registro do que ele já fez.
+
+A tela passou a ter duas colunas:
+
+- **`.mtg-folha-card`, à esquerda, elástica** (`flex: 1 1 auto`) — a folha
+  montada, o zoom, a ordenação, o *Completar folha* e o desfazer.
+- **`.mtg-lado`, à direita, fixa em 440 px** (`flex: 0 0 440px`) — o compositor
+  (pedido → modelo → posições), o selo, a lista de modelos, o painel do número
+  e o destino do PDF.
+
+A folha rola **dentro** do card (`max-height: calc(100vh - 340px)`): sem isso
+uma montagem de várias folhas empurrava a página inteira para baixo e escondia
+os controles do lado — defeito visto na primeira revisão em tela.
+
+### A folha é desenhada na grade de verdade do formato
+
+Este era o pior defeito do desenho antigo, e ele **mentia sobre o papel**: a
+prévia empilhava as células numa coluna, sempre. Isso só coincide com a verdade
+num formato de uma coluna — o Triband. Numa credencial PVC, que é 2 × 2, a tela
+mostrava quatro linhas empilhadas e o papel saía em quadrado.
+
+A conta de onde cada célula cai **é a do motor**, e não uma escolha de desenho.
+No caminho compactado do `engine.py`:
+
+```python
+k = S * poses_per_sheet + P,  com  P = row * cols + col
+```
+
+Linha primeiro, da esquerda para a direita, de cima para baixo. É o que
+`lugarDaCelulaNaFolha(i, cols, rows)` reproduz. A geometria da folha vem da
+mesma fórmula, em milímetros (`geometriaDaFolha`):
+
+```
+used_w  = cols * item_w + (cols - 1) * gap_h
+start_x = (sheet_w - used_w) / 2
+```
+
+As células são posicionadas em milímetros convertidos para píxel, e a área
+imposta aparece centralizada dentro do papel. Sem saída conhecida a folha vira a
+própria área imposta — melhor desenhar a grade certa sem o papel em volta do que
+inventar um papel.
+
+**Três zooms**, porque cada um responde uma pergunta diferente:
+
+| Zoom | Para quê |
+|---|---|
+| **Peça** | as células enchem a largura — é o modo de trabalho, conferir o conteúdo de cada uma |
+| **Folha** | o papel inteiro cabe na área — é onde a **sobra** aparece pelo tamanho, e não só por um número no selo |
+| **100%** | tamanho real a 96 dpi — para conferir corpo de fonte |
+
 ### Dois campos para escolher o pedido, e não um
 
 O seletor lista os **impressos nos últimos 30 dias** — refazer célula é sobre
@@ -213,13 +278,13 @@ número na tela o operador digita no escuro. Pedido do usuário em 29/08/2026.
 contratada é quantos itens ele cria; o banco, quantos têm dado. Vale o menor.
 Com distribuição do banco (`csv_selecao`) vale a fatia, e só ela.
 
-### Imprimir o número do modelo em cada item
+### O número do modelo no papel
 
 Mesmo conceito das *Opções do modelo* da tela do Pedido, e a mesma mecânica: o
-motor imprime `arte["nome"]` deitado na borda de cada item. Desde 03/09 quem
-escreve o `nome` é o construtor do Pedido (`arteParaOMotor`), a partir de
-`_imprimirNumero` — e o `prepararArtesDaMontagem` preenche `_imprimirNumero`
-com a caixa desta tela, para todos os modelos.
+motor imprime `arte["nome"]` — o id do modelo com seis dígitos — na borda de
+cada item. Desde 03/09 quem escreve o `nome` é o construtor do Pedido
+(`arteParaOMotor`), a partir de `_imprimirNumero`; o `prepararArtesDaMontagem`
+preenche `_imprimirNumero` com a caixa desta tela, para todos os modelos.
 
 Numa folha que mistura pedidos é por ele que se separa o material depois de
 cortar — é aqui que a marca serve mais do que no Pedido.
@@ -231,6 +296,54 @@ Duas diferenças em relação ao Pedido, as duas deliberadas:
 
 Nasce **desmarcada**, como no Pedido — novidade que muda o que sai no papel entra
 desligada.
+
+#### Os quatro controles (03/09/2026)
+
+Pedido do usuário: *"montar na visualização o número do modelo, com opção de
+alterar posição, rotação, tamanho da fonte e cor na impressão"*. Dos quatro, só
+a **cor** existia (`nome_color`); os outros três estavam escritos no meio do
+`engine.py`, em **três cópias**.
+
+| Controle | Campo no payload | Valores | Padrão |
+|---|---|---|---|
+| Posição | `nome_pos` | `esquerda`, `direita`, `topo`, `base` | `esquerda` |
+| Rotação | `nome_rot` | 0°, 90°, 180°, 270° | 90 |
+| Tamanho | `nome_size` | 6 a 24 pt | 14 |
+| Cor | `nome_color` | cinco atalhos + seletor livre | `#000000` |
+
+> **O padrão é exatamente o que o motor sempre fez.** 14 pt, borda esquerda,
+> deitado, preto. Ligar a caixa não pode mudar o papel de quem nunca pediu
+> nada — e o combinado `esquerda` + `90` recai, **bit a bit**, na expressão
+> literal que o motor tinha antes.
+
+**A tela e o motor saneiam os mesmos valores.** `numeroDaMontagemSaneado` recusa
+o que não estiver na lista e devolve o padrão; do outro lado,
+`_numero_do_modelo_corpo/posicao/giro` fazem o mesmo, calados. Se um dos dois
+afrouxasse sozinho, a prévia mostraria uma coisa e o papel sairia outra.
+
+**A folha desenha o número onde ele vai sair**, no corpo e na cor escolhidos, e
+a célula ganha um recuo do tamanho do rótulo para os dois não se sobreporem.
+
+#### O desenho do número virou uma função só, no motor
+
+O mesmo bloco `if arte_nome:` estava copiado em **três** pontos do `engine.py`:
+o ramo de reserva do laço principal, o `_render_item_front` e o
+`_render_item_back`. Os três tinham de concordar e nada os obrigava — mexer num
+e esquecer os outros faz o verso sair diferente da frente, e a folha combinada
+diferente das duas. É o tipo de divergência que só aparece no papel.
+
+Virou `_desenhar_numero_do_modelo(page, item, fx, fy, cfg)`. A geometria: o
+texto fica **encostado** na borda escolhida, com recuo igual ao próprio corpo da
+fonte medido até a **linha de base**, e **centralizado** ao longo dela. Quando o
+texto corre perpendicular à borda, é a **ponta** dele que fica no recuo — o
+resto entra na célula; centralizar o meio jogaria metade para fora do papel.
+
+> Um quarto bloco parecido, o `insert_textbox` centralizado no verso, **não foi
+> tocado**: é outro recurso, com outra finalidade.
+
+O `app.py` não precisou mudar — ele repassa o `multi_artes` inteiro, e um teste
+tranca isso. **Agente velho ignora os campos novos e imprime como sempre**, que
+é exatamente o padrão desta tela.
 
 ### A folha montada é um kanban (03/09/2026)
 
@@ -259,6 +372,44 @@ esta gráfica não aceita.
 
 O × e o ⧉ moram **dentro** da célula arrastável e param a propagação: sem isso,
 clicar no × começaria um arrasto.
+
+### Maior controle sobre as ações (03/09/2026)
+
+Era a falta mais grave da tela: um × no lugar errado apagava a célula **sem
+volta**, e repor custava reescolher o pedido, esperar o `loadOSItens`,
+reescolher o modelo e redigitar as posições.
+
+**Desfazer e refazer.** Todo gesto que mexe na folha guarda um instantâneo antes
+(`guardarNaHistoria`, até 60 passos): adicionar, tirar o modelo, ⧉, ×, arrastar,
+limpar, completar e ordenar. `Ctrl+Z` desfaz, `Ctrl+Shift+Z` e `Ctrl+Y` refazem,
+e há os dois botões no topo da folha.
+
+> No instantâneo as **células são clonadas** e os **modelos vão por
+> referência**. Clonar os modelos levaria junto o `peca._item`, que é o item
+> vivo do `state.osItens` — duplicá-lo criaria uma segunda cópia do pedido
+> dentro da montagem.
+
+**Seleção.** Clicar numa célula a seleciona; `Ctrl` soma, `Shift` pega a faixa,
+`Esc` limpa. Com uma célula selecionada, o teclado age sobre ela: `Ctrl+D`
+repete, `Delete` tira, as **setas** movem na folha.
+
+> O teclado ignora `INPUT`, `TEXTAREA`, `SELECT` e campo editável. Sem isso,
+> `Delete` apagaria a célula enquanto o operador corrige uma posição digitada.
+
+**Completar folha.** Quando sobram vazias, o botão repete as células que já estão
+na folha — em rodízio, cada cópia logo depois da última cópia da mesma célula —
+até a folha fechar certo. Papel é custo de produção, e a alternativa era o
+operador clicar no ⧉ uma vez por vaga.
+
+**Ordenar.** *Por modelo* agrupa tudo do mesmo modelo; *por pedido* agrupa por
+pedido. Dentro de cada grupo a ordem que o operador montou é preservada
+(ordenação estável) — reordenar não pode embaralhar o que ele arrastou de
+propósito.
+
+> ⚠️ Nenhuma dessas ações muda o código de ingresso nenhum. Ordenar, arrastar e
+> completar mexem **só em onde a célula cai no papel**; o índice dela continua
+> vindo do deslocamento do modelo dela (§3). Os avisos da tela dizem isso em
+> texto, porque é a dúvida que o operador teria.
 
 ### A linha da lista é o caminho de volta ao modelo
 
@@ -383,6 +534,35 @@ Ver §6. A lição é a mesma da clonagem `script.js` → `pedido.js` que este
 projeto já sofreu: **regra copiada diverge**. A única defesa é uma função só,
 chamada dos dois lados, e um teste que cobra os dois lados.
 
+### Uma aspa fechou o atributo, e o número saiu sem nada (03/09)
+
+O estilo do número na prévia é montado numa string e colocado em
+`style="${...}"`. A pilha de fontes trazia `"Arial Narrow"` com **aspas
+duplas** — e a primeira delas **fechou o atributo no meio**. O que vinha depois
+(tamanho, cor, rotação, posicionamento) virou lixo de marcação: o número
+aparecia, no corpo herdado da página, sem cor e sem giro.
+
+Nada disso quebra. Não há erro no console, o HTML é aceito, e a medida que eu
+tinha tirado antes (101 px de largura) estava errada por causa disso — e me
+levou a escrever um teste afirmando que o número **não cabia** na tira do
+Triband. Com o estilo consertado (aspas simples), ele mede 71 px numa célula de
+74: cabe.
+
+> **A lição:** foi o harness de tela — Chrome de verdade, medindo o elemento
+> desenhado — que pegou. Uma verificação de código-fonte teria lido a mesma
+> string e concordado com ela.
+
+### O número por cima do rótulo, e a folha sem fim (03/09)
+
+Duas coisas que só a captura de tela mostrou, na revisão do redesenho:
+
+- O número era desenhado **por cima** do rótulo da célula: `21202` aparecia como
+  `02`. Conserto: `_mtgEspacoDoNumero` calcula quantos píxeis o rótulo precisa
+  recuar, e o recuo da célula passou a ser dinâmico.
+- A folha crescia sem limite e empurrava a página inteira, escondendo a coluna
+  de apoio. Conserto: `max-height: calc(100vh - 340px)`, e a folha rola dentro
+  do card.
+
 ---
 
 ## 8. O que a Montagem não faz
@@ -403,8 +583,8 @@ chamada dos dois lados, e um teste que cobra os dois lados.
 
 | Harness | Verificações | O que trava |
 |---|---|---|
-| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 112 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o preparo das artes **pedido a pedido**, o payload |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 87 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha com todas as células, ⧉, ×, o arrasto com os eventos nativos, layout, **a entrega do arquivo** |
+| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 175 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o lugar da célula na folha, a geometria e os zooms, o desfazer, completar e ordenar, o saneamento do número, o preparo das artes **pedido a pedido**, o payload |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 132 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha na **grade do formato**, ⧉, ×, o arrasto com os eventos nativos, a seleção e o teclado, **o número medido no elemento desenhado**, layout, **a entrega do arquivo** |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta
 o que só se lê no código-fonte: que a Montagem chama o construtor do Pedido e
@@ -415,3 +595,11 @@ aceitar `refazer_repetir`.
 [`tests/test_engine_refazer.py`](../tests/test_engine_refazer.py) cobre a chave
 no motor: com ela `[3,1,3]` imprime três células na ordem; sem ela continua
 entrando uma vez só.
+
+[`tests/test_numero_do_modelo.py`](../tests/test_numero_do_modelo.py) — 36
+testes — cobre o desenho do número no motor. O primeiro deles compara o código
+novo com uma **cópia literal do código antigo** e exige igualdade exata: é o que
+garante que juntar as três cópias numa função não moveu um décimo de ponto do
+que a gráfica já aprovou. Os outros cobrem as dezesseis combinações de posição e
+giro, o saneamento de valor inválido, e a fonte Impact com a reserva de quem não
+a tem instalada.

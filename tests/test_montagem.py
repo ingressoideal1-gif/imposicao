@@ -72,6 +72,15 @@ def test_o_motor_so_mudou_para_repetir_celula():
         "imprimiria uma vez so', calado"
     )
 
+    # E os tres campos do NUMERO DO MODELO (03/09/2026). Ate aqui so' a cor
+    # (`nome_color`) passava pelo payload; tamanho, posicao e rotacao eram
+    # constantes no proprio motor. Ver tests/test_numero_do_modelo.py.
+    for chave in ('nome_size', 'nome_pos', 'nome_rot'):
+        assert 'art.get("' + chave + '"' in engine, (
+            "o multi_map deixou de levar " + chave + " — a escolha do operador "
+            "nao chegaria ao item, e o numero sairia no padrao, calado"
+        )
+
     # As tres pecas de que a Montagem depende, e que ja existiam.
     assert "def _pedido_do_item(" in engine, (
         "o motor deixou de saber o pedido de cada item — numa folha que junta "
@@ -416,11 +425,190 @@ def test_o_kanban_tem_os_tres_gestos():
         "funciona em todos os navegadores da grafica sem instalar nada"
     )
 
-    dica = html[html.index('id="mtg-previa"'):]
-    dica = dica[:dica.index('class="mtg-rodape"')]
+    # O texto dos gestos mora no rodape da folha (o `.mtg-atalhos`), que o
+    # redesenho de 03/09/2026 pos no lugar da antiga dica da previa.
+    view = html[html.index('id="view-montagem"'):html.index('id="view-impressoras"')]
+    dica = view[view.index('mtg-atalhos'):]
+    dica = dica[:dica.index('</p>')]
     assert "Arraste" in dica and "repete" in dica and "tira s&oacute; ela" in dica, (
         "a dica da folha deixou de explicar os tres gestos"
     )
 
     # O motor imprime a repetida SO' quando a tela pede.
     assert "refazer_repetir: true" in js
+
+
+def test_a_folha_e_desenhada_na_grade_do_formato():
+    """A previa deixou de ser uma pilha vertical (03/09/2026).
+
+    Ate aqui ela empilhava as celulas numa coluna, sempre. Isso so' esta' certo
+    num formato de UMA coluna — o Triband. Numa credencial PVC, que e' 2 x 2, a
+    tela mostrava quatro linhas empilhadas e o papel saia em quadrado: a previa
+    mentia sobre a posicao da peca.
+
+    A conta de onde cada celula cai e' a do MOTOR, e nao uma escolha de desenho.
+    No caminho compactado do engine.py:
+
+        k = S * poses_per_sheet + P,  com  P = row * cols + col
+
+    Linha primeiro, da esquerda para a direita. E a geometria da folha e' a
+    mesma: `used_w = cols*item_w + (cols-1)*gap_h`, area centralizada no papel.
+    """
+    js = _ler("frontend/montagem.js")
+    engine = _ler("engine.py")
+
+    assert "function lugarDaCelulaNaFolha(" in js, "a conta de onde a celula cai sumiu"
+    corpo = js[js.index("function lugarDaCelulaNaFolha(i, cols, rows) {"):]
+    corpo = corpo[:corpo.index("\n}") + 2]
+    assert "Math.floor(p / c)" in corpo and "p % c" in corpo, (
+        "a conta deixou de ser linha-primeiro; a previa voltaria a mentir sobre "
+        "onde a peca cai num formato de mais de uma coluna"
+    )
+
+    # A conta do motor, do outro lado, continua sendo a que esta tela reproduz.
+    assert "P = row * cols + col" in engine, (
+        "o motor mudou a ordem em que consome as celulas da folha compactada; a "
+        "previa passou a desenhar outra coisa"
+    )
+
+    geo = js[js.index("function geometriaDaFolha(peca, saida) {"):]
+    geo = geo[:geo.index("\n}") + 2]
+    assert "peca.cols * peca.item_w_mm + (peca.cols - 1) * peca.gap_h_mm" in geo, (
+        "a largura usada deixou de seguir a formula do motor"
+    )
+    assert "(sheetW - usedW) / 2" in geo, "a area imposta deixou de ser centralizada na folha"
+
+    # A peca carrega as medidas: sem elas nao ha folha para desenhar.
+    peca = js[js.index("function pecaDaMontagem(item) {"):]
+    peca = peca[:peca.index("\n}") + 2]
+    for campo in ("cols", "rows", "item_w_mm", "item_h_mm", "gap_h_mm", "gap_v_mm"):
+        assert campo in peca, "a peca perdeu " + campo + ", que a folha desenha"
+
+
+def test_o_numero_do_modelo_tem_os_quatro_controles():
+    """Pedido do usuario em 03/09/2026: posicao, rotacao, tamanho e cor.
+
+    Dos quatro, so' a COR existia — o campo `nome_color`, que a Montagem
+    mandava fixo em preto. Os outros tres eram constantes no engine.py.
+
+    O que trava aqui e' o contrato entre a tela e o motor: os dois precisam
+    sanear os mesmos valores, senao a previa mostra uma coisa e o papel sai
+    outra. E o PADRAO tem de ser exatamente o que o motor sempre fez, senao
+    ligar a caixa mudaria o papel de quem nunca pediu nada.
+    """
+    js = _ler("frontend/montagem.js")
+    engine = _ler("engine.py")
+
+    padrao = js[js.index("function numeroPadraoDaMontagem() {"):]
+    padrao = padrao[:padrao.index("\n}") + 2]
+    assert "imprimir: false" in padrao, (
+        "o numero deixou de nascer desligado; novidade que muda o papel entra "
+        "desligada"
+    )
+    assert "pos: 'esquerda'" in padrao and "rot: 90" in padrao \
+        and "size: 14" in padrao and "cor: '#000000'" in padrao, (
+        "o padrao deixou de ser o que o motor sempre fez (14 pt, borda esquerda, "
+        "90 graus, preto) — ligar a caixa passaria a mudar o papel"
+    )
+
+    # O MESMO padrao do lado do motor. Se um dos dois mudar sozinho, a previa e
+    # o papel divergem.
+    assert "_NOME_CORPO_PADRAO = 14" in engine, "o corpo padrao do motor mudou"
+    assert '_NOME_POSICOES' in engine and '_NOME_GIROS' in engine, (
+        "o motor deixou de ter a lista de valores validos"
+    )
+
+    san = js[js.index("function numeroDaMontagemSaneado(n) {"):]
+    san = san[:san.index("\n}") + 2]
+    assert "MTG_POSICOES_DO_NUMERO.indexOf" in san and "MTG_ROTACOES_DO_NUMERO.indexOf" in san, (
+        "a tela deixou de recusar valor fora da lista; ele iria ao motor e "
+        "cairia no padrao la, sem a tela saber"
+    )
+
+    # E os quatro campos viajam na ARTE, que e' onde o motor os le.
+    prep = js[js.index("async function prepararArtesDaMontagem(modelos) {"):]
+    prep = prep[:prep.index("\n}\n") + 3]
+    for campo in ("nome_color", "nome_size", "nome_pos", "nome_rot"):
+        assert "pronta." + campo + " =" in prep, (
+            campo + " deixou de ir no payload; o motor imprimiria o padrao, calado"
+        )
+    assert "numeroDaMontagemSaneado(state.montagem.numero)" in prep, (
+        "o payload deixou de sanear os valores antes de mandar"
+    )
+
+
+def test_o_operador_tem_como_desfazer():
+    """Era a falta mais grave da tela (03/09/2026).
+
+    Um x no lugar errado apagava a celula sem volta, e repor custava reescolher
+    o pedido, esperar o `loadOSItens`, reescolher o modelo e redigitar as
+    posicoes. Todo gesto que mexe na folha passa a guardar um instantaneo antes.
+    """
+    js = _ler("frontend/montagem.js")
+
+    assert "function guardarNaHistoria()" in js
+    assert "function desfazerMontagem()" in js and "function refazerMontagem()" in js
+
+    # Todo gesto que muda a folha guarda antes. Sem isto, o desfazer pula um
+    # passo e o operador perde a confianca nele — que e' pior do que nao ter.
+    for gesto in ("function adicionarNaMontagem()", "function removerDaMontagem(indice)",
+                  "function duplicarCelulaDaMontagem(i)", "function removerCelulaDaMontagem(i)",
+                  "function moverCelulaDaMontagem(de, para)", "function limparMontagem()",
+                  "function completarAFolhaDaMontagem()", "function ordenarMontagem(criterio)"):
+        corpo = js[js.index(gesto):]
+        corpo = corpo[:corpo.index("\n}") + 2]
+        assert "guardarNaHistoria()" in corpo, (
+            gesto.split("(")[0].replace("function ", "") + " mexe na folha sem "
+            "guardar o estado anterior — o desfazer pularia esse passo"
+        )
+
+    # Os modelos vao por REFERENCIA no instantaneo: cloná-los levaria junto o
+    # `peca._item`, que e' o item vivo do state.osItens.
+    inst = js[js.index("function _mtgInstantaneoAtual() {"):]
+    inst = inst[:inst.index("\n}") + 2]
+    assert "m.modelos.slice()" in inst, (
+        "o instantaneo passou a clonar os modelos; isso duplicaria o item vivo "
+        "do pedido dentro da peca"
+    )
+
+    # E o teclado nao pode agir enquanto o operador digita no compositor.
+    tecl = js[js.index("function _mtgLigarTeclado() {"):]
+    tecl = tecl[:tecl.index("\n}\n") + 3]
+    assert "digitando" in tecl and "INPUT" in tecl, (
+        "o teclado da folha deixou de ignorar os campos de digitacao; Delete "
+        "apagaria a folha enquanto o operador corrige uma posicao"
+    )
+
+
+def test_a_folha_ocupa_o_lugar_nobre():
+    """O redesenho de 03/09/2026, do lado do layout.
+
+    A folha vivia numa coluna fixa de 380px na direita enquanto a tabela de
+    modelos tomava a largura toda. Mas o trabalho do operador acontece NA
+    FOLHA — e' la que ele arrasta, repete e tira celula.
+    """
+    css = _ler("frontend/style.css")
+    html = _ler("frontend/index.html")
+
+    bloco = css[css.index("/* ─── MONTAGEM"):css.index("   PAINEL DO ACABAMENTO")]
+    assert ".mtg-folha-card" in bloco and "flex: 1 1 auto" in bloco, (
+        "a folha deixou de ser a coluna elastica"
+    )
+    assert ".mtg-lado" in bloco, "a coluna de apoio sumiu"
+    assert "flex: 0 0 380px" not in bloco, (
+        "a folha voltou para a coluna fixa de 380px, que e' o que o redesenho "
+        "desfez"
+    )
+
+    # A ordem no HTML: a folha vem antes da coluna de apoio.
+    view = html[html.index('id="view-montagem"'):html.index('id="view-impressoras"')]
+    assert view.index("mtg-folha-card") < view.index("mtg-lado"), (
+        "a coluna de apoio passou a vir antes da folha"
+    )
+
+    # E os tres gestos estao escritos em TEXTO: icone sem rotulo nao vale nesta
+    # grafica (ver interface-precisa-se-explicar-sozinha).
+    atalhos = view[view.index("mtg-atalhos"):]
+    atalhos = atalhos[:atalhos.index("</p>")]
+    for palavra in ("Arraste", "repete", "tira s&oacute; ela", "Ctrl+Z"):
+        assert palavra in atalhos, "o texto dos gestos perdeu: " + palavra

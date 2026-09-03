@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { color: #60a5fa; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 1000px; padding: 26px 28px 30px; background: #0a0f1e; display: flex; flex-direction: column; gap: 20px;">
+
+  <div>
+    <h1 style="margin: 0; font-size: 1.32rem; font-weight: 800; letter-spacing: -0.01em;">O que muda na Montagem</h1>
+    <p style="margin: 5px 0 0; font-size: 0.85rem; color: #94a3b8; line-height: 1.5;">Onze mudan&ccedil;as, agrupadas por assunto. A etiqueta na direita de cada uma diz o que ela custa: <strong style="color: #86efac;">tela</strong> &eacute; frontend s&oacute;; <strong style="color: #fbbf24;">tela + motor</strong> mexe no <span style="font-family: ui-monospace, monospace;">engine.py</span> e exige publicar o agente junto.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <span style="width: 3px; height: 18px; border-radius: 2px; background: #3b82f6;"></span>
+      <h2 style="margin: 0; font-size: 0.96rem; font-weight: 700;">A folha em primeiro plano</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px;">
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">A folha ocupa o lugar nobre</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Hoje a folha vive numa coluna fixa de 380&nbsp;px na direita, e a tabela de modelos toma a largura toda. Mas o trabalho do operador acontece <strong style="color: #e2e8f0;">na folha</strong> &mdash; &eacute; l&aacute; que ele arrasta, repete e tira. A folha passa para a esquerda com quase o dobro da largura; a tabela vira refer&ecirc;ncia compacta ao lado.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">C&eacute;lula com o dobro da altura</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">De 26&nbsp;px para 61&nbsp;px. Cabe o nome do modelo, a ordem na folha (1&ordf;, 2&ordf;, 3&ordf;&hellip;), a marca de repetida e o n&uacute;mero como sai impresso. Hoje a c&eacute;lula &eacute; uma linha de texto cortada.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Zoom: pe&ccedil;a, folha ou 100%</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;"><strong style="color: #e2e8f0;">Pe&ccedil;a</strong> enche a largura com as c&eacute;lulas, para conferir o conte&uacute;do. <strong style="color: #e2e8f0;">Folha</strong> mostra a SRA3 inteira na propor&ccedil;&atilde;o real &mdash; a&iacute; a sobra de papel aparece pelo tamanho, e n&atilde;o s&oacute; por um n&uacute;mero.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">A grade real do formato</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Hoje a folha desenha uma <strong style="color: #e2e8f0;">pilha vertical</strong>, sempre. Isso s&oacute; est&aacute; certo para o Triband (1 coluna &times; 10). Num formato 2&times;2 como a credencial PVC, a tela mostra quatro linhas empilhadas e o papel sai em quadrado &mdash; a prev&iacute;a mente sobre a posi&ccedil;&atilde;o. Passa a desenhar <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">cols &times; rows</span>.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <span style="width: 3px; height: 18px; border-radius: 2px; background: #22c55e;"></span>
+      <h2 style="margin: 0; font-size: 0.96rem; font-weight: 700;">Mais controle sobre as a&ccedil;&otilde;es</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px;">
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Desfazer e refazer</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">A falta mais grave de hoje. Um &times; no lugar errado apaga a c&eacute;lula sem volta, e o operador tem de reescolher o pedido, esperar o carregamento e redigitar. Com hist&oacute;rico, ele desfaz e continua.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Completar a folha</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">A sobra &eacute; papel pago igual. Um clique repete as c&eacute;lulas que j&aacute; est&atilde;o na folha at&eacute; fechar &mdash; e diz antes quantas c&oacute;pias v&atilde;o entrar de cada uma, para o operador aceitar ou n&atilde;o.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Selecionar v&aacute;rias c&eacute;lulas</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Clique com Shift pega um intervalo; com Ctrl, avulsas. A&iacute; repetir, tirar ou mover vale para todas de uma vez. Repor doze c&eacute;lulas hoje custa doze cliques em doze bot&otilde;es diferentes.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Teclado na folha</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Setas movem a c&eacute;lula selecionada, <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">Del</span> tira, <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">Ctrl+D</span> repete, <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">Ctrl+Z</span> desfaz. Arrastar com o mouse continua sendo o caminho principal; o teclado &eacute; para quem repete o gesto o dia inteiro.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">Ordenar num clique</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Agrupar por modelo, por pedido, ou pela ordem em que foram adicionadas. Facilita separar o material depois de cortar &mdash; e n&atilde;o muda c&oacute;digo nenhum, s&oacute; a ordem na folha.</p>
+      </div>
+
+      <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <h3 style="margin: 0; font-size: 0.88rem; font-weight: 700; flex: 1 1 auto;">A tiragem no r&oacute;tulo do campo</h3>
+          <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.14); color: #86efac;">TELA</span>
+        </div>
+        <p style="margin: 0; font-size: 0.79rem; color: #94a3b8; line-height: 1.55;">Hoje a tiragem s&oacute; aparece na tabela, depois de adicionar. O r&oacute;tulo passa a dizer <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">Posi&ccedil;&otilde;es &middot; de 3.000</span> enquanto o operador digita &mdash; &eacute; contra esse n&uacute;mero que a posi&ccedil;&atilde;o vale.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <span style="width: 3px; height: 18px; border-radius: 2px; background: #f59e0b;"></span>
+      <h2 style="margin: 0; font-size: 0.96rem; font-weight: 700;">O n&uacute;mero do modelo no papel</h2>
+    </div>
+
+    <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(245,158,11,0.3); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <h3 style="margin: 0; font-size: 0.9rem; font-weight: 700; flex: 1 1 auto;">Posi&ccedil;&atilde;o, rota&ccedil;&atilde;o, tamanho e cor</h3>
+        <span style="flex: 0 0 auto; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; background: rgba(245,158,11,0.16); color: #fbbf24;">TELA + MOTOR + AGENTE</span>
+      </div>
+
+      <p style="margin: 0; font-size: 0.82rem; color: #94a3b8; line-height: 1.6;">Conferi no <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">engine.py</span>: dos quatro controles pedidos, <strong style="color: #e2e8f0;">s&oacute; a cor existe hoje</strong> (o campo <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">nome_color</span>, que a Montagem manda fixo em preto). Os outros tr&ecirc;s est&atilde;o escritos direto no c&oacute;digo do motor, sem passar pelo payload:</p>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px;">
+        <div style="background: rgba(10,15,30,0.5); border: 1px solid rgba(148,163,184,0.2); border-radius: 9px; padding: 11px 13px;">
+          <div style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #475569; margin-bottom: 5px;">Tamanho</div>
+          <div style="font-family: ui-monospace, monospace; font-size: 0.8rem; color: #fca5a5;">14 fixo</div>
+          <div style="font-size: 0.71rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">vira um campo por arte</div>
+        </div>
+        <div style="background: rgba(10,15,30,0.5); border: 1px solid rgba(148,163,184,0.2); border-radius: 9px; padding: 11px 13px;">
+          <div style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #475569; margin-bottom: 5px;">Posi&ccedil;&atilde;o</div>
+          <div style="font-family: ui-monospace, monospace; font-size: 0.8rem; color: #fca5a5;">borda esquerda</div>
+          <div style="font-size: 0.71rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">quatro bordas &agrave; escolha</div>
+        </div>
+        <div style="background: rgba(10,15,30,0.5); border: 1px solid rgba(148,163,184,0.2); border-radius: 9px; padding: 11px 13px;">
+          <div style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #475569; margin-bottom: 5px;">Rota&ccedil;&atilde;o</div>
+          <div style="font-family: ui-monospace, monospace; font-size: 0.8rem; color: #fca5a5;">&minus;90&deg; fixo</div>
+          <div style="font-size: 0.71rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">0, 90, 180, 270</div>
+        </div>
+        <div style="background: rgba(10,15,30,0.5); border: 1px solid rgba(34,197,94,0.3); border-radius: 9px; padding: 11px 13px;">
+          <div style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #475569; margin-bottom: 5px;">Cor</div>
+          <div style="font-family: ui-monospace, monospace; font-size: 0.8rem; color: #86efac;">j&aacute; existe</div>
+          <div style="font-size: 0.71rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">s&oacute; falta a tela</div>
+        </div>
+      </div>
+
+      <p style="margin: 0; font-size: 0.82rem; color: #94a3b8; line-height: 1.6;">O caminho &eacute; o mesmo que <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">nome_color</span> j&aacute; percorre: tr&ecirc;s campos novos por arte no <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">multi_artes</span>, lidos no <span style="font-family: ui-monospace, monospace; color: #cbd5e1;">multi_map</span> e aplicados onde o motor hoje escreve os n&uacute;meros fixos. Vale nos <strong style="color: #e2e8f0;">tr&ecirc;s lugares</strong> em que ele desenha esse texto (frente, verso e o caminho da folha combinada), sen&atilde;o o verso sai diferente da frente.</p>
+
+      <div style="display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-radius: 8px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.28);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="#ef4444" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg>
+        <span style="font-size: 0.78rem; color: #fca5a5; line-height: 1.55;">Como muda o que sai impresso, isso entra pelo caminho de sempre: <strong>o padr&atilde;o continua exatamente o de hoje</strong> (14&nbsp;pt, borda esquerda, 90&deg;, preto), a escolha do operador n&atilde;o &eacute; gravada no modelo, e o agente sai junto na mesma publica&ccedil;&atilde;o &mdash; sen&atilde;o a esta&ccedil;&atilde;o ignora os tr&ecirc;s campos em sil&ecirc;ncio.</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <span style="width: 3px; height: 18px; border-radius: 2px; background: #8b5cf6;"></span>
+      <h2 style="margin: 0; font-size: 0.96rem; font-weight: 700;">Uma coisa que n&atilde;o entrou, e por qu&ecirc;</h2>
+    </div>
+
+    <div style="background: rgba(30,41,59,0.85); border: 1px solid rgba(148,163,184,0.25); border-radius: 12px; padding: 15px 17px;">
+      <p style="margin: 0; font-size: 0.8rem; color: #94a3b8; line-height: 1.6;">Pensei em <strong style="color: #e2e8f0;">guardar a montagem</strong> para retomar depois &mdash; a folha vive s&oacute; na mem&oacute;ria da aba, e um F5 perde tudo. Mas isso &eacute; uma tabela nova no banco e uma decis&atilde;o sua, n&atilde;o minha: deixei de fora e trago se voc&ecirc; quiser. O mesmo vale para <strong style="color: #e2e8f0;">imprimir direto</strong> da Montagem, sem passar pelo PDF.</p>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -11,10 +11,12 @@
 // Ideal é `indice(pedido, modelo, item)`. Errar a posição por um faz sair o
 // código de OUTRO ingresso, e isso só aparece na portaria, com a fila na porta.
 //
-// Desde 03/09/2026 a folha é uma lista de CÉLULAS soltas (arrastar, repetir,
-// tirar), e as artes saem das funções da tela do Pedido. As duas coisas estão
-// cobradas aqui: a ordem das células não mexe no deslocamento, e as artes são
-// montadas pedido a pedido, com os bancos de cada um na mão.
+// Desde o redesenho de 03/09/2026 há mais três coisas cobradas aqui, e as três
+// decidem o que sai no papel: a conta de ONDE cada célula cai na folha (a
+// mesma do motor, e não uma pilha vertical), a geometria da folha em
+// milímetros, e o saneamento dos quatro campos do número do modelo — que a
+// tela e o motor precisam fazer igual, senão a prévia mostra uma coisa e o
+// papel sai outra.
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.dirname(__dirname);
@@ -40,31 +42,54 @@ function extrair(nome) {
     return FONTE.slice(i, fim + 2);
 }
 
+function extrairConst(nome) {
+    const i = FONTE.indexOf('\nconst ' + nome + ' ');
+    if (i < 0) throw new Error('nao achei a constante ' + nome);
+    const fim = FONTE.indexOf(';\n', i);
+    return FONTE.slice(i, fim + 2);
+}
+
+const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
+                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX'];
+
 const NOMES = [
-    'posicoesDaMontagem', 'totalDeItensDoModelo', 'porQueNaoCabeNaMontagem',
-    'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo', 'modelosComCelula',
-    'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
-    'duplicarCelula', 'tirarCelula', 'moverCelula', 'celulasForaDaTiragem',
-    'modoDaFolhaDaMontagem', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
+    'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
+    'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem',
+    'celulasDoModelo', 'modelosComCelula', 'posicoesCombinadas',
+    'totalDeCelulasDaMontagem', 'contaDaMontagem', 'lugarDaCelulaNaFolha',
+    'geometriaDaFolha', 'escalaDaFolhaDaMontagem', 'duplicarCelula', 'tirarCelula',
+    'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
+    'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo',
+    'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
-    '_mtgNumeroDoPedido',
+    '_mtgNumeroDoPedido', '_mtgEstiloDoNumero',
 ];
 
 // O `state` do painel, com o catálogo que a resolução do formato consulta.
+// O Triband é 1 coluna × 10 linhas; a credencial PVC é 2 × 2 — e é ela que
+// prova que a folha não é uma pilha vertical.
 function novoState() {
     return {
         formatos: [
-            { id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm', cols: 1, rows: 10, default_saida_id: 'S1', default_rotate_page: true },
-            { id: 'F2', id_formato_num: 88, nome: 'PVC credencial',    cols: 2, rows: 2,  default_saida_id: 'S2' },
+            { id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm',
+              cols: 1, rows: 10, width_mm: 245, height_mm: 20, gap_h_mm: 0, gap_v_mm: 2,
+              default_saida_id: 'S1', default_rotate_page: true },
+            { id: 'F2', id_formato_num: 88, nome: 'PVC credencial',
+              cols: 2, rows: 2, width_mm: 86, height_mm: 54, gap_h_mm: 4, gap_v_mm: 4,
+              default_saida_id: 'S2' },
         ],
-        saidas: [{ id: 'S1', nome: 'SRA3' }, { id: 'S2', nome: 'A4' }],
+        saidas: [
+            { id: 'S1', nome: 'SRA3', width_mm: 320, height_mm: 450 },
+            { id: 'S2', nome: 'A4', width_mm: 210, height_mm: 297 },
+        ],
         produtosGlobais: [
             { id_produto: 501, id_formato: 77 },
             { id_produto: 502, id_formato: 88 },
             { id_produto: 503, id_formato: 999 },   // aponta para formato que nao existe
         ],
         osItens: {},
-        montagem: { celulas: [], modelos: [], pedidoSel: null, modeloSel: null },
+        montagem: { celulas: [], modelos: [], pedidoSel: null, modeloSel: null,
+                    selecao: [], zoom: 'peca', numero: null, historia: [], futuro: [] },
     };
 }
 
@@ -77,7 +102,8 @@ const GLOBAIS = [
     'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
 const fabrica = new Function(...GLOBAIS,
-    NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
+    CONSTANTES.map(extrairConst).join('\n') + '\n'
+    + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
 function montarApi(stubs) {
     const s = Object.assign({ state: novoState() }, stubs || {});
     return fabrica(...GLOBAIS.map(n => s[n]));
@@ -85,6 +111,7 @@ function montarApi(stubs) {
 
 const state = novoState();
 const api = montarApi({ state });
+state.montagem.numero = api.numeroPadraoDaMontagem();
 
 // ── 1. As posições digitadas ────────────────────────────────────────────────
 {
@@ -118,8 +145,6 @@ const api = montarApi({ state });
     const vazio = api.posicoesDaMontagem('', 100);
     ok(vazio.posicoes.length === 0 && vazio.invalidos.length === 0, 'texto vazio não é erro', vazio);
 
-    // Sem total conhecido (modelo ainda carregando) o limite não se aplica —
-    // recusar tudo seria pior do que aceitar e conferir depois.
     const semTotal = api.posicoesDaMontagem('1,9999', 0);
     ok(semTotal.posicoes.join(',') === '1,9999', 'sem total conhecido, nada é recusado por tamanho', semTotal);
 }
@@ -147,18 +172,14 @@ const api = montarApi({ state });
     ok(api.porQueNaoCabeNaMontagem(base, outraFace) === 'um imprime frente e verso e o outro só frente',
        'FACE diferente é recusada: o verso existe ou não existe');
 
-    // As duas grafias convivem no banco — o pedido 20495 tem as duas.
     const soFrente = igual(); soFrente.verso_tipo = 'SÓ FRENTE';
     ok(api.porQueNaoCabeNaMontagem(base, soFrente) === null,
        '"Frente" e "SÓ FRENTE" são a mesma coisa, e as duas grafias existem no banco');
 
-    // A cor pode chegar em `cor` ou em `padrao`, e com caixa diferente.
     const porPadrao = { formato_id: 'F1', padrao: 'azul celeste', saida_id: 'S1', verso_tipo: 'Frente' };
     ok(api.porQueNaoCabeNaMontagem(base, porPadrao) === null,
        'a cor vale por `cor` ou por `padrao`, e a caixa não separa duas iguais');
 
-    // O que a montagem NÃO recusa, e de propósito: aqui não há pilha para
-    // cortar, então a ordem das células não é decidida pelo modo do modelo.
     const outroModo = igual(); outroModo.modo_impressao = 'blocado';
     ok(api.porQueNaoCabeNaMontagem(base, outroModo) === null,
        'Sequencial × Blocado NÃO impede a montagem — não há pilha para cortar');
@@ -171,9 +192,6 @@ const api = montarApi({ state });
 // ── 3. A tradução das posições ──────────────────────────────────────────────
 //
 // O teste que mais importa do arquivo.
-//
-// Os MODELOS dão o deslocamento (a ordem do multi_artes). As CÉLULAS dão a
-// ordem da folha. As duas listas são independentes de propósito.
 const MODELOS = [
     { osId: 'a', itemId: '1000565', qtd: 3000 },
     { osId: 'a', itemId: '1000589', qtd: 1920 },
@@ -191,9 +209,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(c.join(',') === '1,6,22,3340,4927,4932',
        'a posição do 2º modelo desloca pela TIRAGEM do 1º (3000), não pelas células pedidas (3)', c);
 
-    // A armadilha, escrita como teste: somar as células pedidas em vez da
-    // tiragem daria 4,9,25... e o motor imprimiria os itens errados, com os
-    // códigos de QR de outros ingressos.
     const errado = [1, 6, 22, 3 + 340, 4 + 7, 4 + 12];
     ok(c.join(',') !== errado.join(','), 'e NÃO desloca pelo número de células pedidas', { c, errado });
 
@@ -202,8 +217,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     const um = api.posicoesCombinadas([cel('x', '1', 3)], [{ osId: 'x', itemId: '1', qtd: 500 }]);
     ok(um.join(',') === '3', 'com um modelo só, a posição não se desloca');
 
-    // Modelo registrado sem célula ainda desloca os seguintes: ele existe no
-    // multi_artes.
     const comVazio = api.posicoesCombinadas([cel('x', '2', 1)], [
         { osId: 'x', itemId: '1', qtd: 100 },
         { osId: 'x', itemId: '2', qtd: 50 },
@@ -211,8 +224,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(comVazio.join(',') === '101',
        'modelo sem célula pedida AINDA desloca — a arte dele entra no multi_artes de qualquer jeito', comVazio);
 
-    // A ordem dos MODELOS é a ordem do multi_artes. Trocar os modelos muda as
-    // posições, e tem de mudar: é a mesma troca que o motor vai ver.
     const trocado = api.posicoesCombinadas(celulas, [MODELOS[1], MODELOS[0], MODELOS[2]]);
     ok(trocado.join(',') === '1921,1926,1942,340,4927,4932',
        'trocar a ordem dos modelos troca o deslocamento, como no motor', trocado);
@@ -224,7 +235,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(arrastado.join(',') === '4927,1,3340,6',
        'arrastar células troca a ORDEM da saída, e cada uma leva o seu deslocamento', arrastado);
 
-    // Célula repetida (o ⧉) sai duas vezes, com a MESMA posição combinada.
     const repetida = api.posicoesCombinadas([celulas[1], celulas[1], celulas[3]], MODELOS);
     ok(repetida.join(',') === '6,6,3340', 'célula repetida vai duas vezes, com o mesmo índice', repetida);
 }
@@ -242,8 +252,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     const fecha = api.contaDaMontagem(catorze.slice(0, 5), 5);
     ok(fecha.folhas === 1 && fecha.vazias === 0, 'cinco células num formato de 5 fecham certo', fecha);
 
-    // A sobra é o RESTO, e não folhas×células − total: no formato de 4, oito
-    // células dão duas folhas cheias e sobra ZERO.
     const oito = api.contaDaMontagem(catorze.slice(0, 8), 4);
     ok(oito.vazias === 0, 'a sobra é o resto — oito num formato de 4 não sobra nada', oito);
 
@@ -253,16 +261,86 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     const semFormato = api.contaDaMontagem(catorze, 0);
     ok(semFormato.folhas === 0, 'sem células por folha conhecidas, não inventa a conta', semFormato);
 
-    // As repetidas CONTAM: são células de papel como as outras.
     const comRepetida = api.contaDaMontagem([cel('a', '1', 6), cel('a', '1', 6)], 10);
     ok(comRepetida.celulas === 2, 'a célula repetida conta como célula', comRepetida);
 }
 
-// ── 5. O mesmo modelo, adicionado duas vezes ────────────────────────────────
+// ── 5. ONDE cada célula cai na folha ────────────────────────────────────────
 //
-// Tem de reaproveitar o registro que existe. Dois registros do mesmo modelo
-// dariam duas artes iguais no multi_artes, e o deslocamento contaria a tiragem
-// daquele modelo duas vezes — todas as posições seguintes sairiam erradas.
+// A conta do MOTOR, e não uma escolha de desenho. No caminho compactado do
+// engine.py: `k = S * poses_per_sheet + P`, com `P = row * cols + col` — linha
+// primeiro. A prévia antiga empilhava tudo numa coluna, o que só coincide com
+// a verdade num formato de uma coluna. Numa credencial PVC (2 × 2) a tela
+// mostrava quatro linhas e o papel saía em quadrado.
+{
+    // Triband: 1 coluna, 10 linhas. A pilha vertical de antes está certa AQUI.
+    const t = i => api.lugarDaCelulaNaFolha(i, 1, 10);
+    ok(t(0).folha === 0 && t(0).linha === 0 && t(0).coluna === 0, 'Triband: a 1ª célula é a 1ª linha');
+    ok(t(9).folha === 0 && t(9).linha === 9, 'a 10ª ainda é a primeira folha', t(9));
+    ok(t(10).folha === 1 && t(10).linha === 0, 'a 11ª abre a segunda folha', t(10));
+
+    // Credencial 2 × 2: LINHA primeiro, da esquerda para a direita.
+    const p = i => api.lugarDaCelulaNaFolha(i, 2, 2);
+    ok(p(0).linha === 0 && p(0).coluna === 0, 'PVC: a 1ª vai para cima à esquerda', p(0));
+    ok(p(1).linha === 0 && p(1).coluna === 1, 'a 2ª vai para cima à DIREITA — não para baixo', p(1));
+    ok(p(2).linha === 1 && p(2).coluna === 0, 'a 3ª desce para a segunda linha', p(2));
+    ok(p(3).linha === 1 && p(3).coluna === 1, 'e a 4ª fecha a folha', p(3));
+    ok(p(4).folha === 1 && p(4).linha === 0 && p(4).coluna === 0, 'a 5ª abre a folha seguinte', p(4));
+
+    // A armadilha, escrita como teste: uma pilha vertical daria coluna 0 sempre.
+    ok(p(1).coluna !== 0, 'a folha NÃO é uma pilha vertical num formato de duas colunas');
+}
+
+// ── 6. A geometria da folha, em milímetros ──────────────────────────────────
+//
+// A mesma conta do motor: `used_w = cols*item_w + (cols-1)*gap_h`, e a área
+// imposta é centralizada na folha.
+{
+    const pecaTri = api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501 });
+    const g = api.geometriaDaFolha(pecaTri, state.saidas[0]);
+    ok(g !== null, 'a geometria sai do formato e da saída');
+    ok(g.usedW === 245, 'a largura usada é uma coluna de 245 mm', g.usedW);
+    // 10 linhas de 20 mm mais 9 vãos de 2 mm.
+    ok(g.usedH === 218, 'e a altura é 10×20 + 9×2 = 218 mm', g.usedH);
+    ok(g.startX === (320 - 245) / 2, 'a área é centralizada na folha, como no motor', g.startX);
+    ok(g.startY === (450 - 218) / 2, 'nos dois eixos', g.startY);
+    ok(g.temPapel === true, 'e a folha tem papel conhecido');
+
+    const pecaPvc = api.pecaDaMontagem({ id: '2', _vibe_id_produto: 502 });
+    const gp = api.geometriaDaFolha(pecaPvc, state.saidas[1]);
+    ok(gp.usedW === 2 * 86 + 4, 'PVC: duas colunas de 86 mm com um vão de 4', gp.usedW);
+    ok(gp.usedH === 2 * 54 + 4, 'e duas linhas de 54 com um vão de 4', gp.usedH);
+
+    // Sem saída conhecida a folha é a própria área imposta: melhor desenhar a
+    // grade certa sem papel do que inventar um papel.
+    const semSaida = api.geometriaDaFolha(pecaTri, null);
+    ok(semSaida.temPapel === false && semSaida.sheetW === semSaida.usedW,
+       'sem saída, a folha é a área imposta e a tela sabe que não há papel', semSaida);
+    ok(semSaida.startX === 0 && semSaida.startY === 0, 'e não há margem para centralizar');
+
+    ok(api.geometriaDaFolha(api.pecaDaMontagem({ id: '9' }), state.saidas[0]) === null,
+       'peça sem formato não produz geometria — e quem chama desenha a lista simples');
+}
+
+// ── 7. O zoom ──────────────────────────────────────────────────────────────
+{
+    const g = api.geometriaDaFolha(api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501 }), state.saidas[0]);
+
+    const peca = api.escalaDaFolhaDaMontagem('peca', g, 700, 500);
+    ok(Math.abs(peca - 700 / 245) < 1e-9, 'no modo Peça as células enchem a largura', peca);
+
+    const folha = api.escalaDaFolhaDaMontagem('folha', g, 700, 500);
+    ok(Math.abs(folha - 500 / 450) < 1e-9,
+       'no modo Folha o papel inteiro cabe — aqui limitado pela altura', folha);
+    ok(folha < peca, 'e por isso ele é mais afastado que o modo Peça', { folha, peca });
+
+    const cem = api.escalaDaFolhaDaMontagem('100', g, 700, 500);
+    ok(Math.abs(cem - 96 / 25.4) < 1e-9, '100% é tamanho real a 96 dpi', cem);
+
+    ok(api.escalaDaFolhaDaMontagem('peca', null, 700, 500) === 0, 'sem geometria, escala zero');
+}
+
+// ── 8. O mesmo modelo, adicionado duas vezes ────────────────────────────────
 {
     const modelos = [
         { osId: '21202', itemId: '1000565', qtd: 3000 },
@@ -286,7 +364,6 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(api.celulasDoModelo(celulas, modelos[0]).join(',') === '6,6',
        'as células de um modelo saem na ordem da folha, com repetição', api.celulasDoModelo(celulas, modelos[0]));
 
-    // O registro se poda pelas células: modelo que ficou sem célula sai.
     const vivos = api.modelosComCelula([cel('21188', '1000412', 1)], modelos);
     ok(vivos.length === 1 && vivos[0].itemId === '1000412',
        'modelo sem célula nenhuma sai do registro', vivos);
@@ -294,11 +371,7 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'e os que ficam mantêm a ordem do registro — que é a do multi_artes');
 }
 
-// ── 6. O total de itens do modelo ───────────────────────────────────────────
-//
-// É contra ele que a posição digitada vale — e é a MESMA conta que o motor vai
-// fazer com a arte da tela do Pedido: a quantidade contratada é quantos itens
-// ele cria; o banco, quantos têm dado. Vale o menor.
+// ── 9. O total de itens do modelo ───────────────────────────────────────────
 {
     const semBanco = { quantidade: 150, num_inicial: 1, num_final: 150 };
     ok(api.totalDeItensDoModelo(semBanco, null) === 150, 'sem banco, vale a quantidade');
@@ -308,47 +381,30 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(api.totalDeItensDoModelo(comBanco, num) === 2800,
        'com banco MENOR que a quantidade, vale o banco — item além dele sairia sem dado');
 
-    const bancoMaior = { quantidade: 3000 };
     const numMaior = { csv_data: new Array(3200).fill({ Codigo: 'x' }) };
-    ok(api.totalDeItensDoModelo(bancoMaior, numMaior) === 3000,
+    ok(api.totalDeItensDoModelo({ quantidade: 3000 }, numMaior) === 3000,
        'com banco MAIOR que a quantidade, vale a quantidade — o motor só cria a contratada');
 
-    const soQtd = { quantidade: 42 };
-    ok(api.totalDeItensDoModelo(soQtd, null) === 42, 'sem faixa e sem banco, vale a quantidade');
-
+    ok(api.totalDeItensDoModelo({ quantidade: 42 }, null) === 42, 'sem faixa e sem banco, vale a quantidade');
     ok(api.totalDeItensDoModelo(null, null) === 0, 'sem modelo, zero — e não NaN');
+    ok(api.totalDeItensDoModelo({ qtd: 17 }, null) === 17, 'a quantidade vale por `quantidade` ou por `qtd`');
+    ok(api.totalDeItensDoModelo({ num_inicial: 1, num_final: 80 }, null) === 80, 'sem quantidade, vale a faixa');
 
-    const qtdAlternativa = { qtd: 17 };
-    ok(api.totalDeItensDoModelo(qtdAlternativa, null) === 17, 'a quantidade vale por `quantidade` ou por `qtd`');
-
-    const soFaixa = { num_inicial: 1, num_final: 80 };
-    ok(api.totalDeItensDoModelo(soFaixa, null) === 80, 'sem quantidade, vale a faixa numérica');
-
-    // Com distribuição do banco (`csv_selecao`) vale a FATIA, e a quantidade
-    // contratada deixa de limitar: é o que o modelo imprime.
     const apiFatia = montarApi({
         state,
         fatiaCsvDoItem: (item, n) => item.csv_selecao ? n.csv_data.slice(0, 5) : n.csv_data,
     });
-    const distribuido = { quantidade: 3000, csv_selecao: { ids: [1, 2, 3, 4, 5] } };
-    ok(apiFatia.totalDeItensDoModelo(distribuido, num) === 5,
+    ok(apiFatia.totalDeItensDoModelo({ quantidade: 3000, csv_selecao: { ids: [1] } }, num) === 5,
        'com distribuição do banco vale a fatia do modelo, e só ela');
     ok(apiFatia.totalDeItensDoModelo(comBanco, num) === 2800,
        'sem distribuição, a fatia inteira limitada pela quantidade');
 }
 
-// ── 7. O FORMATO, resolvido pela própria tela ───────────────────────────────
-//
-// `formato_id` NÃO existe em `pedidos_modelos` — quem o preenche na memória é
-// o DESENHO da fila do Pedido. A Montagem carrega os modelos e nunca desenha
-// aquela fila, então os itens chegavam SEM FORMATO (defeito de 29/08/2026).
+// ── 10. O FORMATO, resolvido pela própria tela ──────────────────────────────
 {
-    const item = { id: '1', _vibe_id_produto: 501 };
-    const f = api.formatoDoItem(item);
+    const f = api.formatoDoItem({ id: '1', _vibe_id_produto: 501 });
     ok(f && f.id === 'F1', 'o formato sai do PRODUTO do item, como no desenho da fila', f);
-
-    const outro = api.formatoDoItem({ id: '2', _vibe_id_produto: 502 });
-    ok(outro && outro.id === 'F2', 'produto diferente, formato diferente', outro);
+    ok(api.formatoDoItem({ id: '2', _vibe_id_produto: 502 }).id === 'F2', 'produto diferente, formato diferente');
 
     const orfao = api.formatoDoItem({ id: '3', _vibe_id_produto: 503, formato_id: 'F2' });
     ok(orfao && orfao.id === 'F2', 'produto sem formato casado cai no formato_id do item', orfao);
@@ -365,70 +421,138 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     const p = api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' });
     ok(p.formato_id === 'F1', 'a peca leva o formato resolvido', p);
     ok(p.celulas_por_folha === 10, 'e quantas celulas cabem na folha — cols x rows', p);
+    ok(p.cols === 1 && p.rows === 10, 'e a GRADE, que a folha desenha', p);
+    ok(p.item_w_mm === 245 && p.item_h_mm === 20, 'e as medidas da peça em mm', p);
+    ok(p.gap_v_mm === 2, 'e os vãos entre as células', p);
     ok(p.saida_id === 'S1', 'e a saida', p);
     ok(p.formato_nome === 'Triband 245x20 mm', 'e o nome, para a trava mostrar', p);
     ok(p._item && p._item.id === '1', 'e guarda o item, que o payload usa para a arte', !!p._item);
 
     const semFmt = api.pecaDaMontagem({ id: '9' });
     ok(semFmt.formato_id === '', 'item sem formato produz peca sem formato');
+    ok(semFmt.cols === 0 && semFmt.item_w_mm === 0, 'e sem medida nenhuma — nada de chute');
 
     const boa = api.pecaDaMontagem({ id: '1', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' });
     ok(api.porQueNaoCabeNaMontagem(semFmt, semFmt) !== null,
        'DUAS pecas sem formato NAO cabem juntas — era isso que passava, e era a regra inteira inerte');
-    ok(api.porQueNaoCabeNaMontagem(boa, semFmt) !== null,
-       'e uma peca sem formato nao entra numa montagem que tem formato');
     ok(/tela do Pedido/.test(api.porQueNaoCabeNaMontagem(boa, semFmt)),
-       'e a recusa diz o que fazer: abrir o pedido na tela do Pedido uma vez',
-       api.porQueNaoCabeNaMontagem(boa, semFmt));
+       'e a recusa diz o que fazer: abrir o pedido na tela do Pedido uma vez');
 
     const outraF = api.pecaDaMontagem({ id: '2', _vibe_id_produto: 502, cor: 'Azul', verso_tipo: 'Frente' });
     ok(api.porQueNaoCabeNaMontagem(boa, outraF) === 'o formato é outro',
        'formatos diferentes continuam recusados, e pelo motivo certo');
-
     ok(api.porQueNaoCabeNaMontagem(boa, api.pecaDaMontagem(
         { id: '7', _vibe_id_produto: 501, cor: 'Azul', verso_tipo: 'Frente' })) === null,
        'e duas pecas do mesmo produto e da mesma cor cabem, como sempre');
 }
 
-// ── 8. O KANBAN: repetir, tirar e mover uma célula (03/09/2026) ─────────────
+// ── 11. O KANBAN: repetir, tirar e mover uma célula ─────────────────────────
 //
-// Pedido do usuário: "ícone que duplica o modelo na próxima célula", "x na
-// célula que exclui ela do gabarito", e "deixar as células em modo kanban para
-// movê-las manualmente alterando a sequência".
+// Pedido do usuário em 03/09/2026, e ele confirmou o comportamento do repetir:
+// "duplicar deve ocupar a próxima célula da imposição movendo todas as outras
+// para a célula subsequente".
 {
     const A = cel('a', '1', 1), B = cel('a', '1', 2), C = cel('b', '2', 7), D = cel('c', '3', 4);
     const lista = () => [A, B, C, D];
     const nomes = l => l.map(c => c.osId + c.pos).join(',');
 
-    // ⧉ — a cópia entra LOGO DEPOIS, igual, e é outro objeto.
     const dup = api.duplicarCelula(lista(), 0);
-    ok(nomes(dup) === 'a1,a1,a2,b7,c4', 'repetir a célula 0 põe a cópia logo abaixo dela', nomes(dup));
+    ok(nomes(dup) === 'a1,a1,a2,b7,c4',
+       'repetir a célula 0 põe a cópia NA PRÓXIMA e empurra as outras', nomes(dup));
     ok(dup[1] !== dup[0] && dup[1].pos === dup[0].pos && dup[1].itemId === dup[0].itemId,
        'a cópia é a MESMA peça (mesmo pedido, modelo e posição), num objeto próprio');
     ok(nomes(api.duplicarCelula(lista(), 3)) === 'a1,a2,b7,c4,c4', 'repetir a última põe a cópia no fim');
     ok(nomes(api.duplicarCelula(lista(), 9)) === 'a1,a2,b7,c4', 'índice fora da folha não faz nada');
 
-    // × — tira SÓ aquela célula.
     ok(nomes(api.tirarCelula(lista(), 1)) === 'a1,b7,c4', 'tirar a célula 1 deixa as outras do mesmo modelo');
     ok(nomes(api.tirarCelula(lista(), 9)) === 'a1,a2,b7,c4', 'índice fora da folha não tira nada');
 
-    // Arrastar — `para` é onde a célula FICA.
     ok(nomes(api.moverCelula(lista(), 0, 3)) === 'a2,b7,c4,a1', 'mover a 1ª para o fim');
     ok(nomes(api.moverCelula(lista(), 3, 0)) === 'c4,a1,a2,b7', 'mover a última para o começo');
     ok(nomes(api.moverCelula(lista(), 1, 2)) === 'a1,b7,a2,c4', 'trocar duas vizinhas');
     ok(nomes(api.moverCelula(lista(), 2, 2)) === 'a1,a2,b7,c4', 'mover para o mesmo lugar não muda nada');
     ok(nomes(api.moverCelula(lista(), 0, 9)) === 'a1,a2,b7,c4', 'destino fora da folha não move');
 
-    // E nenhum dos três gestos mexe no deslocamento: as células levam o seu.
     const modelos = [{ osId: 'a', itemId: '1', qtd: 100 }, { osId: 'b', itemId: '2', qtd: 50 }, { osId: 'c', itemId: '3', qtd: 10 }];
     ok(api.posicoesCombinadas(api.moverCelula(lista(), 3, 0), modelos).join(',') === '154,1,2,107',
        'a célula movida para o começo continua com o índice do SEU modelo');
 }
 
-// ── 9. Posição que deixou de existir ────────────────────────────────────────
+// ── 12. Completar a folha ───────────────────────────────────────────────────
 //
-// O banco pode ter mudado entre adicionar a célula e mandar gerar. `_tiragem`
-// é o que a arte pronta diz que existe; posição além disso não vai ao motor.
+// A sobra é papel pago igual: uma folha de PVC com duas células vazias custa o
+// mesmo que uma cheia.
+{
+    const nomes = l => l.map(c => c.osId + c.pos).join(',');
+
+    const tres = [cel('a', '1', 1), cel('a', '1', 2), cel('b', '2', 7)];
+    const r = api.completarAFolha(tres, 5);
+    ok(r.entraram === 2, 'faltando duas para fechar a folha de 5, entram duas', r.entraram);
+    ok(tres.length === 5, 'e a folha fica cheia', tres.length);
+    // Cada cópia entra logo depois da última cópia da sua célula: o material
+    // sai agrupado, que é o que facilita separar depois de cortar.
+    ok(nomes(tres) === 'a1,a1,a2,a2,b7', 'e as cópias ficam junto das originais', nomes(tres));
+
+    const cheia = [cel('a', '1', 1), cel('a', '1', 2)];
+    const r2 = api.completarAFolha(cheia, 2);
+    ok(r2.entraram === 0 && cheia.length === 2, 'folha que já fecha certo não ganha nada');
+
+    const uma = [cel('a', '1', 1)];
+    api.completarAFolha(uma, 4);
+    ok(uma.length === 4 && nomes(uma) === 'a1,a1,a1,a1',
+       'com uma célula só, ela se repete até encher', nomes(uma));
+
+    // Duas folhas e meia: completa só a ÚLTIMA, que é a única com sobra.
+    const seis = [];
+    for (let i = 1; i <= 6; i++) seis.push(cel('a', '1', i));
+    const r3 = api.completarAFolha(seis, 4);
+    ok(r3.entraram === 2 && seis.length === 8, 'com 6 numa folha de 4, entram 2 para fechar a segunda', r3);
+
+    ok(api.completarAFolha([], 10).entraram === 0, 'folha vazia não completa nada');
+    ok(api.completarAFolha([cel('a', '1', 1)], 0).entraram === 0, 'sem saber quantas cabem, não inventa');
+}
+
+// ── 13. Ordenar ─────────────────────────────────────────────────────────────
+//
+// Isso NÃO muda o código de ingresso nenhum: cada célula continua levando o
+// deslocamento do seu modelo. Muda só onde ela cai no papel.
+{
+    const modelos = [
+        { osId: 'a', itemId: '1', qtd: 100 },
+        { osId: 'b', itemId: '2', qtd: 50 },
+        { osId: 'a', itemId: '3', qtd: 10 },
+    ];
+    const misturado = [
+        cel('b', '2', 1), cel('a', '1', 5), cel('a', '3', 2),
+        cel('b', '2', 9), cel('a', '1', 8),
+    ];
+    const nomes = l => l.map(c => c.itemId + '#' + c.pos).join(',');
+
+    const porModelo = api.ordenarCelulas(misturado, modelos, 'modelo');
+    ok(nomes(porModelo) === '1#5,1#8,2#1,2#9,3#2',
+       'agrupa por modelo, na ordem do registro — que é a do multi_artes', nomes(porModelo));
+
+    const porPedido = api.ordenarCelulas(misturado, modelos, 'pedido');
+    ok(nomes(porPedido) === '1#5,3#2,1#8,2#1,2#9',
+       'agrupa por pedido, preservando a ordem que o operador montou dentro do grupo', nomes(porPedido));
+
+    ok(nomes(api.ordenarCelulas(misturado, modelos, 'nada')) === nomes(misturado),
+       'critério desconhecido não mexe na folha');
+
+    // O que importa: nenhum código muda. As posições combinadas de cada célula
+    // são as mesmas, só em outra ordem.
+    const antes = api.posicoesCombinadas(misturado, modelos).slice().sort((a, b) => a - b);
+    const depois = api.posicoesCombinadas(porModelo, modelos).slice().sort((a, b) => a - b);
+    ok(antes.join(',') === depois.join(','),
+       'ordenar NÃO muda o código de ingresso nenhum — o conjunto de posições é o mesmo', { antes, depois });
+
+    // Estabilidade: as repetidas ficam juntas e na ordem.
+    const comRepetida = [cel('a', '1', 5), cel('b', '2', 1), cel('a', '1', 5)];
+    ok(nomes(api.ordenarCelulas(comRepetida, modelos, 'modelo')) === '1#5,1#5,2#1',
+       'as repetidas se agrupam junto da original');
+}
+
+// ── 14. Posição que deixou de existir ───────────────────────────────────────
 {
     const modelos = [{ osId: 'a', itemId: '1', qtd: 100 }, { osId: 'b', itemId: '2', qtd: 50 }];
     const artes = [{ qtd: 100, _tiragem: 100 }, { qtd: 50, _tiragem: 30 }];
@@ -440,13 +564,9 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'arte sem tiragem conhecida não recusa ninguém — o motor confere de novo');
 }
 
-// ── 10. O modo de impressão da folha ────────────────────────────────────────
-//
-// Os três valores que o motor conhece: front, duplex, duplex_unico. A primeira
-// versão mandava 'simplex', que o motor trata como frente — o verso nunca saía.
+// ── 15. O modo de impressão da folha ────────────────────────────────────────
 {
-    const modo = it => it.modo;
-    const apiVerso = montarApi({ state, modoDeVersoDoModelo: modo });
+    const apiVerso = montarApi({ state, modoDeVersoDoModelo: it => it.modo });
     const m = modoNome => ({ peca: { _item: { modo: modoNome } } });
     ok(apiVerso.modoDaFolhaDaMontagem([m('front'), m('front')]) === 'front', 'só frente é front');
     ok(apiVerso.modoDaFolhaDaMontagem([m('front'), m('duplex')]) === 'duplex', 'um verso comum faz a folha duplex');
@@ -457,13 +577,57 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'sem a função da tela do Pedido (estação velha), frente — nunca um valor que o motor não conhece');
 }
 
-// ── 11. As artes saem das funções da tela do Pedido, pedido a pedido ────────
+// ── 16. O número do modelo: os quatro campos ────────────────────────────────
+//
+// A tela e o motor precisam sanear igual, senão a prévia mostra uma coisa e o
+// papel sai outra — que é o defeito que este projeto mais repete. O motor tem
+// a mesma tabela em `_numero_do_modelo_corpo/posicao/giro`; ver
+// tests/test_numero_do_modelo.py.
+{
+    const p = api.numeroPadraoDaMontagem();
+    ok(p.imprimir === false, 'o número nasce DESLIGADO — novidade que muda o papel entra desligada');
+    ok(p.pos === 'esquerda' && p.rot === 90 && p.size === 14 && p.cor === '#000000',
+       'e os quatro valores reproduzem o que o motor sempre fez', p);
+
+    const san = api.numeroDaMontagemSaneado;
+    ok(san({ imprimir: true, pos: 'topo', rot: 270, size: 9, cor: '#ff0000' }).pos === 'topo',
+       'valor válido passa');
+    ok(san({ pos: 'diagonal' }).pos === 'esquerda', 'posição desconhecida cai no padrão');
+    ok(san({ rot: 45 }).rot === 90, 'rotação fora dos quatro ângulos cai no padrão');
+    ok(san({ rot: '180' }).rot === 180, 'rotação em texto é aceita — vem de um atributo HTML');
+    ok(san({ size: 999 }).size === 14, 'tamanho fora da faixa cai no padrão');
+    ok(san({ size: 2 }).size === 14, 'e abaixo do mínimo também');
+    ok(san({ size: 'abc' }).size === 14, 'tamanho não numérico cai no padrão');
+    ok(san({ size: '18' }).size === 18, 'tamanho em texto é aceito — vem de um input range');
+    ok(san({ cor: 'vermelho' }).cor === '#000000', 'cor que não é hex de 6 casas cai no padrão');
+    ok(san({ cor: '#ABCDEF' }).cor === '#ABCDEF', 'hex maiúsculo é aceito');
+    ok(san(null).size === 14, 'sem nada, o padrão inteiro');
+    ok(san({ imprimir: 'sim' }).imprimir === false, 'só o booleano true liga a impressão');
+
+    // O texto: o motor faz `zfill(6)` — preenche ATÉ seis, e deixa passar o
+    // que já tem mais. Os ids da gráfica têm sete dígitos.
+    ok(api.textoDoNumeroDoModelo('1000565') === '1000565', 'id de 7 dígitos passa inteiro');
+    ok(api.textoDoNumeroDoModelo('4200') === '004200', 'id curto ganha zeros à esquerda, como no zfill(6)');
+    ok(api.textoDoNumeroDoModelo(4200) === '004200', 'e vale para número, não só texto');
+    ok(api.textoDoNumeroDoModelo(null) === '000000', 'sem id, seis zeros — e não "null"');
+
+    // O estilo da prévia: o texto girado tem de ficar DENTRO da célula. Sem
+    // posicionar pelo centro, Topo mais 90° saía decepado.
+    const est = api._mtgEstiloDoNumero({ pos: 'topo', rot: 90, size: 14, cor: '#000' }, 3, '1000565');
+    ok(/translate\(-50%,-50%\)/.test(est), 'no topo, o texto é posicionado pelo CENTRO');
+    ok(/rotate\(-90deg\)/.test(est), 'e girado pelo ângulo escolhido, como o motor faz', est);
+    const esq = api._mtgEstiloDoNumero({ pos: 'esquerda', rot: 90, size: 14, cor: '#000' }, 3, '1000565');
+    ok(/left:/.test(esq) && /top:50%/.test(esq), 'na esquerda, encostado à esquerda e centrado na altura', esq);
+}
+
+// ── 17. As artes saem das funções da tela do Pedido, pedido a pedido ────────
 //
 // `state.bancosDoPedido` e `state.vinculosDeBanco` guardam os bancos de UM
 // pedido por vez. Montar as artes do pedido A depois de carregar os bancos de B
 // daria a A a numeração sem o banco dela — número no lugar do nome, calado.
 async function testarPreparo() {
     const st = novoState();
+    st.montagem.numero = { imprimir: true, pos: 'base', rot: 180, size: 20, cor: '#ff0000' };
     st.osItens = {
         a: [{ id: '1', quantidade: 100, amostra_num_id: 'N1' }, { id: '2', quantidade: 30, amostra_num_id: 'N2' }],
         b: [{ id: '9', quantidade: 50, amostra_num_id: 'N1' }],
@@ -476,7 +640,6 @@ async function testarPreparo() {
     const log = [];
     const base = {
         state: st,
-        document: { getElementById: () => ({ checked: true }) },
         numeracaoIdDoItem: it => it.amostra_num_id,
         numeracaoSemElementosDeLayout: n => n,
         numeroDoPedidoDoItem: osId => ({ a: '21202', b: '21188' })[osId] || null,
@@ -487,7 +650,7 @@ async function testarPreparo() {
         recadoDeBancoVazio: nomes => 'sem banco: ' + nomes.join(),
         arteDoModeloParaFolha: (s, numId, op) => {
             log.push('arte ' + s.osId + '/' + s.itemId + ' bancos=' + st._bancosPedidoDe);
-            return { qtd: 999, _osId: s.osId, _itemId: s.itemId, _comPrevia: op ? op.comPrevia : undefined, _numId: numId };
+            return { qtd: 999, _osId: s.osId, _itemId: s.itemId, _comPrevia: op ? op.comPrevia : undefined };
         },
         arteParaOMotor: (arte, multi) => ({
             qtd: arte.qtd, modelo: arte._itemId, pedido: arte._osId,
@@ -502,13 +665,25 @@ async function testarPreparo() {
        'as artes saem NA ORDEM DOS MODELOS, e não na ordem dos pedidos — é a ordem do multi_artes', artes.map(a => a.modelo));
     ok(artes.every(a => a._multi === true), 'cada arte passa por arteParaOMotor como folha combinada');
     ok(artes.every(a => a.nome === String(a.modelo)),
-       'com a caixa marcada, o número do modelo vai em cada arte — a caixa da montagem, não a opção salva no modelo');
+       'com o número ligado, ele vai em cada arte — a escolha da montagem, não a salva no modelo');
     ok(artes.map(a => a._tiragem).join(',') === '100,50,30',
-       'cada arte diz quantos itens têm como sair certo (a quantidade, sem banco)', artes.map(a => a._tiragem));
-    ok(base.arteDoModeloParaFolha({ osId: 'a', itemId: '1' }, null, { comPrevia: false })._comPrevia === false,
-       'o construtor é chamado sem a prévia: a Montagem não desenha a folha do Pedido');
+       'cada arte diz quantos itens têm como sair certo', artes.map(a => a._tiragem));
 
-    // Sem a certeza de que os bancos foram lidos, não vai.
+    // OS QUATRO CAMPOS DO NÚMERO viajam em CADA arte.
+    ok(artes.every(a => a.nome_color === '#ff0000' && a.nome_size === 20
+                     && a.nome_pos === 'base' && a.nome_rot === 180),
+       'e leva os quatro campos de COMO o número sai no papel', artes[0]);
+
+    // Valor inválido no state não chega ao motor.
+    const stRuim = Object.assign({}, base);
+    stRuim.state = novoState();
+    stRuim.state.osItens = st.osItens;
+    stRuim.state.montagem.numero = { imprimir: true, pos: 'diagonal', rot: 45, size: 999, cor: 'azul' };
+    const artesRuins = await montarApi(stRuim).prepararArtesDaMontagem(modelos);
+    ok(artesRuins.every(a => a.nome_pos === 'esquerda' && a.nome_rot === 90
+                          && a.nome_size === 14 && a.nome_color === '#000000'),
+       'valor inválido é saneado ANTES de ir ao motor, e cai no padrão de hoje', artesRuins[0]);
+
     let erro = null;
     try {
         await montarApi(Object.assign({}, base, { pedidosComBancoDesconhecido: () => ['a'] })).prepararArtesDaMontagem(modelos);
@@ -516,21 +691,18 @@ async function testarPreparo() {
     ok(/bancos de dados do pedido 21202/.test(erro || ''),
        'banco que não se conseguiu ler recusa a montagem, dizendo o pedido', erro);
 
-    // Numeração que pede banco e chegou vazia também não.
     erro = null;
     try {
         await montarApi(Object.assign({}, base, { bancoVazioNoPayload: () => ['Expointer 2026'] })).prepararArtesDaMontagem(modelos);
     } catch (e) { erro = e.message; }
     ok(/Expointer 2026/.test(erro || ''), 'numeração com banco vazio recusa a montagem pelo nome', erro);
 
-    // Estação com painel velho, sem o construtor do Pedido: diz o que fazer.
     erro = null;
     try {
         await montarApi(Object.assign({}, base, { arteDoModeloParaFolha: undefined })).prepararArtesDaMontagem(modelos);
     } catch (e) { erro = e.message; }
     ok(/desatualizad/.test(erro || ''), 'sem o construtor da tela do Pedido a recusa manda atualizar o agente', erro);
 
-    // Modelo que sumiu do pedido.
     erro = null;
     try {
         await montarApi(base).prepararArtesDaMontagem([{ osId: 'a', itemId: '77', peca: {} }]);
@@ -538,9 +710,10 @@ async function testarPreparo() {
     ok(/não está mais no pedido/.test(erro || ''), 'modelo que saiu do pedido é recusado com o que fazer', erro);
 }
 
-// ── 12. O payload ───────────────────────────────────────────────────────────
+// ── 18. O payload ───────────────────────────────────────────────────────────
 {
     const st = novoState();
+    st.montagem.numero = api.numeroPadraoDaMontagem();
     const apiP = montarApi({
         state: st,
         modoDeVersoDoModelo: it => it.modo || 'front',

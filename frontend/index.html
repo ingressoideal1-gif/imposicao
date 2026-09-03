@@ -3031,28 +3031,53 @@
             <!-- VIEW: IMPRESSORAS                                             -->
             <!-- ══════════════════════════════════════════════════════════════ -->
 
-            <!-- ═══ MONTAGEM ═══════════════════════════════════════════════
+            <!-- MONTAGEM ==================================================
                  Junta numa folha so' as celulas a refazer, mesmo vindas de
                  pedidos diferentes.
 
-                 O motor NAO mudou: ele ja monta folha com modelos de pedidos
-                 diferentes (multi_artes, 18/08/2026), e o `refazer_celulas`
-                 dele indexa o multi_map, que carrega modelo, pedido e a linha
-                 do banco de cada item. Esta tela so' TRADUZ as posicoes que o
-                 operador pensa por modelo para as posicoes do fluxo combinado
-                 -- ver posicoesCombinadas() no montagem.js. -->
+                 O motor ja montava folha com modelos de pedidos diferentes
+                 (multi_artes, 18/08/2026), e o `refazer_celulas` dele indexa o
+                 multi_map, que carrega modelo, pedido e a linha do banco de
+                 cada item. Esta tela TRADUZ as posicoes que o operador pensa
+                 por modelo para as posicoes do fluxo combinado -- ver
+                 posicoesCombinadas() no montagem.js.
+
+                 REDESENHO DE 03/09/2026 (pedido do usuario): a folha saiu da
+                 coluna de 380px na direita e passou a ocupar a esquerda, larga,
+                 desenhada na GRADE e na proporcao reais do formato. O trabalho
+                 do operador acontece nela; a tabela de modelos e' referencia. -->
             <section id="view-montagem" class="view-section" style="max-width: 100%;">
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>&#129513; Montagem</h1>
                         <p>Junta numa folha s&oacute; as c&eacute;lulas a refazer, mesmo que venham de pedidos diferentes.</p>
                     </div>
+                    <!-- DESFAZER E REFAZER (03/09/2026). Era a falta mais grave:
+                         um x no lugar errado apagava a celula sem volta, e repor
+                         custava reescolher o pedido, esperar o carregamento e
+                         redigitar. Ctrl+Z e Ctrl+Shift+Z fazem o mesmo. -->
+                    <div class="mtg-acoes-topo">
+                        <button type="button" class="btn btn-secondary btn-sm" id="mtg-desfazer"
+                                onclick="desfazerMontagem()" disabled>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+                            Desfazer
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="mtg-refazer"
+                                onclick="refazerMontagem()" disabled>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 8"/></svg>
+                            Refazer
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm mtg-btn-limpar" id="mtg-btn-limpar"
+                                onclick="limparMontagem()" disabled>
+                            Limpar a folha
+                        </button>
+                    </div>
                 </div>
 
                 <!-- O compositor -->
-                <div class="card">
+                <div class="card mtg-card-compositor">
                     <div class="mtg-compositor">
-                        <div class="mtg-campo" style="flex: 0 0 250px;">
+                        <div class="mtg-campo" style="flex: 0 0 230px;">
                             <label for="mtg-pedido">Pedido</label>
                             <select id="mtg-pedido" class="form-control" onchange="onMontagemPedidoChange()">
                                 <option value="">Impressos nos &uacute;ltimos 30 dias&hellip;</option>
@@ -3061,12 +3086,12 @@
 
                         <!-- A busca por numero. O seletor lista os IMPRESSOS RECENTES,
                              que e o caso normal; este campo cobre o pedido antigo que
-                             voltou do cliente e nao esta naquela lista. Um <select> nao
+                             voltou do cliente e nao esta naquela lista. Um select nao
                              se digita, e prometer "ou digite o numero" nele seria uma
                              promessa que a tela nao cumpre. -->
-                        <div class="mtg-campo" style="flex: 0 0 130px;">
+                        <div class="mtg-campo" style="flex: 0 0 124px;">
                             <label for="mtg-buscar">Ou o n&uacute;mero</label>
-                            <input type="text" id="mtg-buscar" class="form-control" placeholder="21202"
+                            <input type="text" id="mtg-buscar" class="form-control" placeholder="21346"
                                    style="font-family: ui-monospace, monospace;"
                                    onchange="buscarPedidoDaMontagem()"
                                    onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPedidoDaMontagem();}">
@@ -3079,8 +3104,11 @@
                             </select>
                         </div>
 
+                        <!-- A TIRAGEM VIVE NO ROTULO (03/09/2026). Ela so' aparecia
+                             na tabela, depois de adicionar -- e e' contra ela que a
+                             posicao vale, entao o operador digitava no escuro. -->
                         <div class="mtg-campo" style="flex: 0 0 200px;">
-                            <label for="mtg-posicoes">Posi&ccedil;&otilde;es</label>
+                            <label for="mtg-posicoes" id="mtg-label-posicoes">Posi&ccedil;&otilde;es</label>
                             <input type="text" id="mtg-posicoes" class="form-control" placeholder="Ex: 1,6,22"
                                    style="font-family: ui-monospace, monospace;"
                                    oninput="onMontagemPosicoesChange()"
@@ -3104,37 +3132,79 @@
                 </div>
 
                 <div class="mtg-corpo">
-                    <!-- A lista -->
-                    <div class="card mtg-lista-card">
-                        <div class="card-header" style="margin-bottom: 14px;">
-                            <h2 style="font-size:1.02rem; font-weight:700; margin:0;">C&eacute;lulas na montagem</h2>
-                            <span id="mtg-resumo" style="font-size:0.78rem; color:var(--text-faint);"></span>
+                    <!-- A FOLHA, no lugar nobre. Ela era uma coluna de 380px na
+                         direita enquanto a tabela tomava a largura toda; mas e' aqui
+                         que o operador arrasta, repete e tira celula. -->
+                    <div class="card mtg-folha-card">
+                        <div class="mtg-folha-barra">
+                            <h2>Folha montada</h2>
+                            <span id="mtg-folha-num" class="mtg-folha-medida"></span>
+
+                            <div class="mtg-folha-acoes">
+                                <!-- ZOOM. `Peca` enche a largura com as celulas, para
+                                     conferir o conteudo; `Folha` mostra o papel inteiro
+                                     na proporcao real, e ai a SOBRA aparece pelo tamanho
+                                     e nao so' por um numero; `100%` e' tamanho real. -->
+                                <div class="mtg-zoom">
+                                    <button type="button" id="mtg-zoom-peca" class="ativo" onclick="zoomDaMontagem('peca')" title="As c&eacute;lulas enchem a largura">Pe&ccedil;a</button>
+                                    <button type="button" id="mtg-zoom-folha" onclick="zoomDaMontagem('folha')" title="A folha inteira, na propor&ccedil;&atilde;o real">Folha</button>
+                                    <button type="button" id="mtg-zoom-100" onclick="zoomDaMontagem('100')" title="Tamanho real">100%</button>
+                                </div>
+
+                                <div class="mtg-menu">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="mtg-ordenar" disabled>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h12M3 18h6"/></svg>
+                                        Ordenar
+                                    </button>
+                                    <div class="mtg-menu-lista">
+                                        <button type="button" onclick="ordenarMontagem('modelo')">Agrupar por modelo</button>
+                                        <button type="button" onclick="ordenarMontagem('pedido')">Agrupar por pedido</button>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn btn-sm mtg-btn-completar" id="mtg-completar"
+                                        onclick="completarAFolhaDaMontagem()" disabled>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12h6M12 9v6"/></svg>
+                                    Completar a folha
+                                </button>
+                            </div>
                         </div>
 
-                        <div id="mtg-lista"></div>
+                        <!-- A barra da selecao multipla: aparece com duas ou mais
+                             celulas marcadas, e e' ela que faz repor doze celulas
+                             custar um clique em vez de doze. -->
+                        <div class="mtg-selecao" id="mtg-selecao" style="display:none;"></div>
 
-                        <div id="mtg-selo" class="selo-sobra" style="margin-top:14px;"></div>
+                        <div id="mtg-folha" class="mtg-folha vazia"></div>
+
+                        <div id="mtg-selo" class="selo-sobra" style="margin-top:12px;"></div>
+
+                        <p class="mtg-dica mtg-atalhos">
+                            <strong>Arraste</strong> uma c&eacute;lula para mudar a ordem. <strong>&#10697;</strong> repete a c&eacute;lula na pr&oacute;xima, empurrando as outras; <strong>&times;</strong> tira s&oacute; ela.
+                            Clique para selecionar (<code>Shift</code> pega um intervalo, <code>Ctrl</code> avulsas) e o gesto vale para todas.
+                            No teclado: <code>setas</code> movem, <code>Del</code> tira, <code>Ctrl+D</code> repete, <code>Ctrl+Z</code> desfaz.
+                        </p>
                     </div>
 
-                    <!-- A previa e as acoes -->
-                    <div class="card mtg-previa-card">
-                        <div class="card-header" style="margin-bottom: 14px;">
-                            <h2 style="font-size:1.02rem; font-weight:700; margin:0;">Folha montada</h2>
-                            <span id="mtg-folha-num" style="font-size:0.75rem; color:var(--text-faint);"></span>
+                    <!-- A coluna de apoio: quem sao os modelos, como o numero sai
+                         no papel, e para onde vai o arquivo. -->
+                    <div class="mtg-lado">
+                        <div class="card mtg-lista-card">
+                            <div class="card-header" style="margin-bottom: 12px;">
+                                <h2 style="font-size:0.98rem; font-weight:700; margin:0;">Modelos na montagem</h2>
+                                <span id="mtg-resumo" style="font-size:0.76rem; color:var(--text-faint);"></span>
+                            </div>
+                            <div id="mtg-lista"></div>
                         </div>
 
-                        <div id="mtg-previa" class="mtg-previa"></div>
+                        <!-- O NUMERO DO MODELO NO PAPEL (03/09/2026). O motor imprime
+                             o `nome` da arte na borda de cada item; ate esta versao so'
+                             a COR passava pelo payload, e tamanho, posicao e rotacao
+                             eram constantes no engine.py. O painel inteiro e' desenhado
+                             pelo montagem.js -- ver _mtgRenderNumero(). -->
+                        <div class="card mtg-numero-card" id="mtg-numero"></div>
 
-                        <!-- O KANBAN (03/09/2026): a folha e' a lista de celulas, na
-                             ordem do papel. Arrastar muda a ordem; o ⧉ repete a celula
-                             logo abaixo; o × tira so' ela. A dica diz os tres gestos,
-                             porque icone sem texto e' o que esta grafica nao aceita. -->
-                        <p class="mtg-dica" style="margin-top:12px;">
-                            As c&eacute;lulas enchem a folha <strong>na ordem em que aparecem aqui</strong>, sem reservar folha por pedido.
-                            <strong>Arraste</strong> uma c&eacute;lula para mudar a ordem; <strong>&#10697;</strong> repete a c&eacute;lula logo abaixo (a mesma pe&ccedil;a, impressa duas vezes); <strong>&times;</strong> tira s&oacute; ela.
-                        </p>
-
-                        <div class="mtg-rodape">
+                        <div class="card mtg-saida-card">
                             <!-- ONDE O ARQUIVO VAI PARAR. Quem abre o seletor de pastas e
                                  quem escreve no disco e' a ESTACAO, nao o navegador: e por
                                  isso que funciona em qualquer navegador da grafica, sem
@@ -3145,24 +3215,12 @@
                                 <select id="mtg-pasta" class="form-control" onchange="onMontagemPastaChange()">
                                     <option value="">Baixar pelo navegador</option>
                                 </select>
-                                <!-- Embaixo do seletor, e nao ao lado: o nome da pasta e a
-                                     op&ccedil;&atilde;o padr&atilde;o precisam da largura toda para caber sem
-                                     corte, e um terceiro bot&atilde;o de bloco competiria com o
-                                     Gerar PDF, que &eacute; a a&ccedil;&atilde;o da tela. -->
                                 <button type="button" class="mtg-escolher-pasta" id="mtg-btn-pasta"
                                         onclick="escolherPastaDaMontagem()">
                                     &#128193; Escolher uma pasta desta esta&ccedil;&atilde;o&hellip;
                                 </button>
                                 <em id="mtg-destino-dica"></em>
                             </div>
-
-                            <label class="mtg-opcao">
-                                <input type="checkbox" id="mtg-imprimir-numero" onchange="renderMontagem()">
-                                <span>
-                                    Imprimir o n&uacute;mero do modelo em cada item
-                                    <em>Sai deitado na borda de cada c&eacute;lula. Numa folha que mistura pedidos, &eacute; por ele que se separa o material depois de cortar.</em>
-                                </span>
-                            </label>
 
                             <label class="mtg-opcao">
                                 <input type="checkbox" id="mtg-abrir" checked>
@@ -3172,14 +3230,9 @@
                                 </span>
                             </label>
 
-                            <div class="mtg-acoes">
-                                <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
-                                    &#128196; Gerar PDF da montagem
-                                </button>
-                                <button type="button" class="btn btn-secondary" id="mtg-btn-limpar" onclick="limparMontagem()" disabled>
-                                    Limpar montagem
-                                </button>
-                            </div>
+                            <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
+                                &#128196; Gerar o PDF da montagem
+                            </button>
                         </div>
                     </div>
                 </div>
