@@ -319,6 +319,10 @@ const linhasDoEnvio = new Function(
     + 'function escapeHtml(v) { return String(v == null ? "" : v); }\n'
     // A logo vem do seu proprio arquivo, e tem harness proprio
     // (`logo_do_frete_harness.js`). Aqui ela e so uma dependencia.
+    // `normalizarFrete` antes de quem o chama: desde 03/09/2026 o
+    // `logoDoFrete` compara sem acento, para `EXPRESSO SAO MIGUEL S/A`
+    // achar a chave `SAO MIGUEL`.
+    + recortar(LOGO, 'normalizarFrete') + '\n'
     + recortar(LOGO, 'logoDoFrete') + '\n'
     + recortar(LOGO, 'logoDoFreteHtml') + '\n'
     + extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'

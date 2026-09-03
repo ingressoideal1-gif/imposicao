@@ -13,15 +13,38 @@
 //
 // ## O que o campo `frete_escolhido` traz de verdade
 //
-// Texto livre, escrito pelo ERP. As grafias que já apareceram: `SEDEX`,
-// `MOTOBOY`, `RETIRADA`, `RETIRAR`, `Retirada Local`, `VEPPO`, `veppo`, `Veppo`,
-// `VEPPO-RS`, `TRANSPORTADORA SÃO MIGUEL`, `SÃO MIGUEL`. Por isso a busca é em
-// maiúsculas e, não achando exato, tenta por trecho — é assim que `VEPPO-RS` cai
-// na logo da Veppo e `SAO MIGUEL` na da São Miguel.
+// Texto livre, escrito pelo ERP por gente diferente ao longo de anos. Medido no
+// banco em 03/09/2026, só para as transportadoras que têm logo: `SEDEX` (588),
+// `sedex`, `Sedex`, `RETIRADA` (105), `RETIRA`, `Retira`, `Retirada Local`,
+// `Motoboy` (53), `MOTOBOY`, `VEPPO` (21), `veppo`, `Veppo`, `VEPPO-RS`,
+// `Transportadora São Miguel` (17), `SÃO MIGUEL` (12), `EXPRESSO SAO MIGUEL S/A`
+// (3), `EXPRESSO SÃO MIGUEL`, `Expresso São Miguel`, `BRASPRESS` (3),
+// `Braspress`.
+//
+// Daí as três regras da busca, nesta ordem: caixa alta, sem acento, e — não
+// achando exato — por trecho, nos dois sentidos. É assim que `VEPPO-RS` cai na
+// Veppo e que as SEIS grafias da São Miguel caem na mesma logo.
+//
+// ## Por que sem acento, e não só em maiúsculas
+//
+// Até 03/09/2026 a chave era `TRANSPORTADORA SÃO MIGUEL`, escrita com til, e a
+// comparação era letra a letra. `EXPRESSO SAO MIGUEL S/A` — que é como o ERP
+// escreve em cinco pedidos, sem o til — não continha aquela chave nem estava
+// contido nela, e saía sem logo nenhuma, aparecendo pelo nome. O comentário
+// desta seção chegou a AFIRMAR que `SAO MIGUEL` achava a logo; não achava, e
+// ninguém tinha como notar porque a tela não quebra: ela mostra o nome.
+//
+// Por isso a chave agora é `SAO MIGUEL`, sem acento e sem a palavra
+// `TRANSPORTADORA`, e os dois lados da comparação passam pelo `normalizarFrete`.
 
 const LOGO_DO_FRETE = {
     'SEDEX': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
-    'TRANSPORTADORA SÃO MIGUEL': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293565_Sao-Miguel.png',
+    // O endereço anterior desta logo (`1785678293565_Sao-Miguel.png`) respondia
+    // 400 em 03/09/2026: o arquivo tinha saído do bucket, e a coluna do painel
+    // vinha mostrando o texto de reserva no lugar da imagem. A URL abaixo foi
+    // mandada pelo usuário nesse dia, junto com a da Braspress.
+    'SAO MIGUEL': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788452516270_Sao-Miguel.png',
+    'BRASPRESS': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788452527708_Braspress.png',
     'MOTOBOY': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293109_Motoboy.png',
     'RETIRADA LOCAL': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
     'RETIRAR': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
@@ -33,22 +56,43 @@ const LOGO_DO_FRETE = {
 };
 
 /**
+ * Caixa alta e sem acento — a forma em que as chaves acima estão escritas.
+ *
+ * O `São` do português é o motivo desta função existir: o mesmo transportador
+ * aparece no banco como `São Miguel` e como `SAO MIGUEL`, e comparar letra a
+ * letra deixa a segunda grafia sem logo. Ver o cabeçalho do arquivo.
+ */
+function normalizarFrete(texto) {
+    return String(texto === null || texto === undefined ? '' : texto)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
+/**
  * O endereço da logo daquela forma de envio, ou `null`.
  *
  * `null` é resposta legítima: transportadora sem logo cadastrada tem de aparecer
  * pelo nome, e não como uma imagem quebrada.
  */
 function logoDoFrete(nome) {
-    const bruto = nome ? String(nome).trim() : '';
-    if (!bruto) return null;
+    const chave = normalizarFrete(nome);
+    if (!chave) return null;
 
-    const chave = bruto.toUpperCase();
     if (LOGO_DO_FRETE[chave]) return LOGO_DO_FRETE[chave];
 
-    // Correspondência parcial, nos dois sentidos: "SAO MIGUEL" acha
-    // "TRANSPORTADORA SÃO MIGUEL", e "VEPPO-RS" acha "VEPPO".
+    // Correspondência parcial, nos dois sentidos: "EXPRESSO SAO MIGUEL S/A"
+    // CONTÉM a chave "SAO MIGUEL", e "RETIRA" ESTÁ CONTIDA na "RETIRADA".
+    //
+    // A chave mais longa vence. Sem essa ordem, quem decidia era a ordem de
+    // escrita do objeto: "RETIRADA LOCAL" casaria com "RETIRADA" ou com
+    // "RETIRADA LOCAL" conforme qual aparecesse primeiro. Hoje as duas apontam
+    // para o mesmo arquivo e o empate não se vê — no dia em que apontarem para
+    // arquivos diferentes, veria-se na tela do operador.
     const parcial = Object.keys(LOGO_DO_FRETE)
-        .find(k => chave.indexOf(k) >= 0 || k.indexOf(chave) >= 0);
+        .filter(k => chave.indexOf(k) >= 0 || k.indexOf(chave) >= 0)
+        .sort((a, b) => b.length - a.length)[0];
     return parcial ? LOGO_DO_FRETE[parcial] : null;
 }
 
@@ -122,6 +166,7 @@ function rastreioHtml(codigo, opcoes) {
 }
 
 window.LOGO_DO_FRETE = LOGO_DO_FRETE;
+window.normalizarFrete = normalizarFrete;
 window.logoDoFrete = logoDoFrete;
 window.logoDoFreteHtml = logoDoFreteHtml;
 window.linkDeRastreio = linkDeRastreio;

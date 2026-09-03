@@ -54,6 +54,10 @@ function extrairTabela(fonte, nome) {
 const passar = s => String(s === undefined || s === null ? '' : s);
 
 const MOTOR = extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
+    // `normalizarFrete` entra junto porque o `logoDoFrete` o chama desde
+    // 03/09/2026 -- e o que faz `EXPRESSO SAO MIGUEL S/A`, sem til, achar a
+    // chave `SAO MIGUEL`.
+    + recortar(LOGO, 'normalizarFrete') + '\n'
     + recortar(LOGO, 'logoDoFrete') + '\n'
     + recortar(LOGO, 'logoDoFreteHtml');
 
@@ -109,13 +113,20 @@ const VEPPO = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public
 // A busca parcial casa por pedaco de texto, entao chave nova pode sequestrar
 // frete alheio. Estes sao os valores reais do banco, com a contagem de hoje.
 
+// A contagem foi remedida no banco em 03/09/2026, e o arquivo da Sao Miguel
+// mudou nesse dia: o anterior (`1785678293565_Sao-Miguel.png`) tinha saido do
+// bucket e respondia 400 -- a coluna vinha mostrando o texto de reserva no lugar
+// da imagem, sem ninguem notar, porque a tela nao quebra quando isso acontece.
 [
-    ['SEDEX', '1785678293785_Sedex.png', 53],
-    ['Transportadora São Miguel', '1785678293565_Sao-Miguel.png', 1],
-    ['SÃO MIGUEL', '1785678293565_Sao-Miguel.png', 1],
-    ['Motoboy', '1785678293109_Motoboy.png', 6],
-    ['MOTOBOY', '1785678293109_Motoboy.png', 2],
-    ['RETIRADA', '1785678293377_Retira.png', 13],
+    ['SEDEX', '1785678293785_Sedex.png', 588],
+    ['Transportadora São Miguel', '1788452516270_Sao-Miguel.png', 17],
+    ['SÃO MIGUEL', '1788452516270_Sao-Miguel.png', 12],
+    ['EXPRESSO SAO MIGUEL S/A', '1788452516270_Sao-Miguel.png', 3],
+    ['BRASPRESS', '1788452527708_Braspress.png', 3],
+    ['Braspress', '1788452527708_Braspress.png', 2],
+    ['Motoboy', '1785678293109_Motoboy.png', 53],
+    ['MOTOBOY', '1785678293109_Motoboy.png', 29],
+    ['RETIRADA', '1785678293377_Retira.png', 105],
 ].forEach(([valor, arquivo, quantos]) => {
     const r = frete(valor);
     ok(String(r.freteImgUrl).indexOf(arquivo) > 0,

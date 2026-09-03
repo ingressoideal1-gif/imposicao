@@ -55,10 +55,12 @@ const ESCAPA = 'function escapeHtml(v) { return String(v === null || v === undef
 
 const logoDoFrete = new Function(
     extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
+    + recortar(LOGO, 'normalizarFrete') + '\n'
     + recortar(LOGO, 'logoDoFrete') + '\nreturn logoDoFrete;')();
 
 const logoDoFreteHtml = new Function(
     ESCAPA + '\n' + extrairTabela(LOGO, 'LOGO_DO_FRETE') + '\n'
+    + recortar(LOGO, 'normalizarFrete') + '\n'
     + recortar(LOGO, 'logoDoFrete') + '\n'
     + recortar(LOGO, 'logoDoFreteHtml') + '\nreturn logoDoFreteHtml;')();
 
@@ -81,11 +83,40 @@ const logoDoFreteHtml = new Function(
 })();
 
 (function aBuscaPorTrechoSalvaOsNomesCompostos() {
-    // Sem ela, `VEPPO-RS` e `SAO MIGUEL` ficariam sem logo.
+    // Sem ela, `VEPPO-RS` e os nomes compostos ficariam sem logo.
     ok(logoDoFrete('VEPPO-RS') === logoDoFrete('VEPPO'), 'VEPPO-RS acha a Veppo');
-    ok(/Sao-Miguel/.test(logoDoFrete('SÃO MIGUEL')), 'SAO MIGUEL acha a Sao Miguel',
-        logoDoFrete('SÃO MIGUEL'));
-    ok(/Sao-Miguel/.test(logoDoFrete('TRANSPORTADORA SÃO MIGUEL')), 'o nome inteiro tambem');
+    ok(/Sao-Miguel/.test(logoDoFrete('TRANSPORTADORA SÃO MIGUEL')), 'o nome inteiro');
+})();
+
+(function asSeisGrafiasDaSaoMiguelCaemNaMesmaLogo() {
+    // Todas medidas no banco em 03/09/2026. As tres ultimas -- 5 pedidos --
+    // ficavam SEM LOGO ate aquele dia: a chave tinha til e a comparacao era
+    // letra a letra, entao `SAO` nunca encontrava `SÃO`.
+    const esperada = logoDoFrete('TRANSPORTADORA SÃO MIGUEL');
+    ok(/Sao-Miguel/.test(esperada), 'a logo da Sao Miguel existe', esperada);
+    [
+        'Transportadora São Miguel',
+        'SÃO MIGUEL',
+        'São Miguel',
+        'EXPRESSO SAO MIGUEL S/A',
+        'EXPRESSO SÃO MIGUEL',
+        'Expresso São Miguel'
+    ].forEach(g => ok(logoDoFrete(g) === esperada, 'grafia: ' + g, logoDoFrete(g)));
+})();
+
+(function aBraspressTemLogo() {
+    // Mandada pelo usuario em 03/09/2026, com as duas grafias que o ERP escreve.
+    const esperada = logoDoFrete('BRASPRESS');
+    ok(/Braspress/.test(esperada), 'BRASPRESS', esperada);
+    ok(logoDoFrete('Braspress') === esperada, 'Braspress');
+})();
+
+(function aChaveMaisLongaVence() {
+    // Duas chaves podem casar com o mesmo texto por trecho. Quem decide e o
+    // COMPRIMENTO, e nao a ordem em que foram escritas no objeto -- ordem de
+    // escrita e uma decisao que ninguem tomou de proposito.
+    ok(logoDoFrete('RETIRADA LOCAL') === logoDoFrete('RETIRADA'),
+        'RETIRADA LOCAL e RETIRADA apontam para a mesma logo hoje');
 })();
 
 (function semLogoDevolveNulo() {
