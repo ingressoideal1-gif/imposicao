@@ -1,0 +1,108 @@
+{
+  // ---------------------------------------------------------------------------
+  // Depuracao (F5) — Ideal Imposition
+  //
+  // ATENCAO A PORTA. O NewProd.exe instalado nesta maquina escuta em
+  // 127.0.0.1:9000 e serve uma COPIA do frontend embutida no executavel. Se voce
+  // subir o app em 9000 para desenvolver, o agente vence o seu servidor e voce
+  // fica olhando codigo antigo achando que sua alteracao nao funcionou.
+  // Por isso o alvo de desenvolvimento usa a porta 9123.
+  //
+  // E nao mate o NewProd.exe para "liberar" a 9000: ele e o agente de producao.
+  // ---------------------------------------------------------------------------
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // O alvo do dia a dia. Sobe o FastAPI com recarga automatica: salvou um
+      // arquivo .py, o servidor reinicia sozinho.
+      // Depois de subir, abra http://127.0.0.1:9123/app/index.html
+      "name": "App local (porta 9123)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app:app",
+        "--host", "127.0.0.1",
+        "--port", "9123",
+        "--reload"
+      ],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Mesmo alvo, sem recarga automatica. Use quando o --reload atrapalhar o
+      // breakpoint (a recarga reinicia o processo e derruba a sessao de debug).
+      "name": "App local (sem recarga, para breakpoint)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app:app",
+        "--host", "127.0.0.1",
+        "--port", "9123"
+      ],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // O motor de imposicao pela linha de comando, sem passar pela tela.
+      // E o caminho mais curto para depurar o engine.py: gera um PDF e para.
+      "name": "Motor de imposicao (main.py)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}\\main.py",
+      "args": [
+        "--base", "base_ticket.pdf",
+        "--out", "saida_debug.pdf",
+        "--start", "1",
+        "--end", "100"
+      ],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // O agente de impressao rodando pelo codigo-fonte, em vez do .exe.
+      // Antes de usar, ENCERRE o NewProd.exe pela bandeja do Windows — os dois
+      // disputam a mesma porta e a mesma fila de impressao.
+      "name": "Agente local (codigo-fonte, nao o .exe)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}\\local_print_agent.py",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Depura o arquivo de teste que estiver aberto no editor.
+      // "-n 0" desliga o paralelismo: sem isso o breakpoint nunca e alcancado,
+      // porque o teste roda em outro processo.
+      "name": "Teste do arquivo aberto",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-n", "0", "-v"],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Depura o script Python que estiver aberto — util para ferramentas/.
+      "name": "Arquivo Python aberto",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

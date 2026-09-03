@@ -1,0 +1,151 @@
+{
+  // ---------------------------------------------------------------------------
+  // Tarefas — Ideal Imposition
+  //
+  // Abrir com  Ctrl+Shift+P  ->  "Tarefas: Executar Tarefa"
+  // (ou Ctrl+Shift+B para a tarefa de compilacao padrao)
+  //
+  // Nenhuma tarefa aqui contorna freio nenhum. As de publicar chamam exatamente
+  // os mesmos scripts que voce ja roda no terminal, e as perguntas de confirmacao
+  // deles continuam aparecendo. "-SemFreio" nao aparece em lugar nenhum, de
+  // proposito: ele so existe para emergencia e nao deve virar um botao.
+  // ---------------------------------------------------------------------------
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // A conferencia de seguranca. So consulta, nao altera nada. Responde:
+      // ha commit nao publicado? ha segredo versionado? o agente esta em dia
+      // nas estacoes? os testes passam?
+      "label": "Conferencia de seguranca",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\ferramentas\\conferir.ps1"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // Ciclo curto do dia a dia: roda so os testes cujo nome casar com o que
+      // voce digitar. Ex.: digitar "qr_ideal" roda os testes do QR Ideal.
+      "label": "Testes: so os que interessam agora",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["-m", "pytest", "tests", "-k", "${input:filtroDeTeste}", "-q"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // O arquivo de teste aberto no editor, em serie e com saida detalhada.
+      "label": "Testes: arquivo aberto",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["-m", "pytest", "${file}", "-n", "0", "-v"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // A suite inteira, em 8 processos. E o passo de antes de publicar.
+      "label": "Testes: suite completa (antes de publicar)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["-m", "pytest", "tests", "-q"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // Os testes em PowerShell (Pester), que cobrem os scripts de publicacao.
+      // Sintaxe do Pester 3, que e o instalado nesta maquina — o "-Output" do
+      // Pester 5 falha aqui com "nome de parametro ambiguo". E a mesma chamada
+      // que o ferramentas\conferir.ps1 usa, sem o "-Quiet" para a saida aparecer.
+      "label": "Testes: scripts de publicacao (Pester)",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Invoke-Pester -Path '${workspaceFolder}\\tests'"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // Compila o NewProd.exe. Precisa do venv e das Ferramentas de Build do
+      // Visual Studio (que ja estao instaladas nesta maquina).
+      "label": "Compilar o agente (NewProd.exe)",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\build_agent.ps1"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // Gera o instalador que vai para as estacoes.
+      "label": "Compilar o instalador",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\compilar_instalador.ps1"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // PUBLICA DE VERDADE: commita, da push e faz o deploy. Os freios do script
+      // (rascunho, segredo, o motor sobe?) rodam antes de qualquer escrita, e a
+      // pergunta final "Publicar? (s/n)" continua aparecendo no terminal.
+      "label": "PUBLICAR o site",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\publicar.ps1", "${input:mensagemDoCommit}"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // PUBLICA O AGENTE. O numero da versao tem de ser NOVO — republicar um
+      // numero antigo e ignorado em silencio por todas as estacoes.
+      "label": "PUBLICAR o agente",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\publicar_agente.ps1", "${input:versaoDoAgente}"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      // Volta o site para a versao anterior em segundos. E o freio de emergencia.
+      "label": "VOLTAR o site (emergencia)",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\voltar.ps1", "-Agora"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "filtroDeTeste",
+      "type": "promptString",
+      "description": "Rodar os testes cujo nome contenha... (ex.: qr_ideal, acabamento, foto)",
+      "default": "acabamento"
+    },
+    {
+      "id": "mensagemDoCommit",
+      "type": "promptString",
+      "description": "Mensagem do commit (aparece no historico e no CHANGELOG)"
+    },
+    {
+      "id": "versaoDoAgente",
+      "type": "promptString",
+      "description": "Versao NOVA do agente (ex.: 1.2.298) — numero repetido e ignorado pelas estacoes"
+    }
+  ]
+}

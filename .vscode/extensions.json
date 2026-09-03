@@ -1,0 +1,32 @@
+{
+  // ---------------------------------------------------------------------------
+  // Extensoes recomendadas — Ideal Imposition
+  //
+  // Ao abrir a pasta, o VS Code oferece instalar estas. Nenhuma delas exige login
+  // no GitHub nem manda codigo para fora: sao suporte de linguagem, e so.
+  // ---------------------------------------------------------------------------
+  "recommendations": [
+    // Python: realce, ir para a definicao, painel de testes, depurador.
+    // Sem ela o F5 nao funciona e o editor nao enxerga o venv.
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+
+    // PowerShell: publicar.ps1, voltar.ps1, build_agent.ps1 e os testes Pester.
+    "ms-vscode.powershell",
+
+    // Deno: as Edge Functions do Supabase em supabase/functions/ rodam em Deno,
+    // nao em Node. Sem isso o editor marca erro em import que esta certo.
+    "denoland.vscode-deno"
+  ],
+
+  // Formatadores que reescrevem arquivo inteiro ao salvar. Este codigo esta
+  // rodando numa grafica: uma reformatacao geral esconderia a alteracao de
+  // verdade no meio de milhares de linhas mexidas, e o "voltar.ps1" perderia a
+  // utilidade porque ninguem conseguiria ler o diff.
+  "unwantedRecommendations": [
+    "ms-python.black-formatter",
+    "ms-python.autopep8",
+    "esbenp.prettier-vscode"
+  ]
+}

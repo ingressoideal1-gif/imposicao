@@ -1,0 +1,121 @@
+{
+  // ---------------------------------------------------------------------------
+  // Ideal Imposition — configuracao do VS Code
+  //
+  // Este arquivo NAO contem segredo nenhum e vai para o git de proposito: assim
+  // qualquer maquina que clonar o repositorio ja abre com o ambiente certo.
+  // Preferencia pessoal (tema, fonte, tamanho de letra) NAO entra aqui — essa
+  // vai nas Configuracoes do Usuario, que sao suas e nao do projeto.
+  // ---------------------------------------------------------------------------
+
+  // === Python: usar o venv do projeto, nunca o Python global ===================
+  // O build_agent.ps1 compila com .\venv\Scripts\python.exe. Se o editor apontar
+  // para outro Python, o que voce testa na tela nao e o que vai para o agente.
+  "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true,
+
+  // === Testes ================================================================
+  // O pytest.ini roda a suite com "-n 8" (8 processos em paralelo). Isso e otimo
+  // no terminal, mas o painel de Testes do VS Code nao consegue depurar um teste
+  // que roda em outro processo. Por isso aqui vai "-n 0": serie, com breakpoint
+  // funcionando. A suite rapida continua sendo a tarefa "Testes rapidos".
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests", "-n", "0"],
+
+  // === Codificacao e quebra de linha ==========================================
+  // Duas travas que evitam estragos que so aparecem depois, no papel ou no diff.
+  //
+  // 1. autoGuessEncoding desligado. Os .js do frontend nao tem BOM. Se o editor
+  //    "adivinhar" cp1252 num arquivo UTF-8 e voce salvar, todo acento vira
+  //    mojibake (SaAda, a-¼). Ja aconteceu neste projeto: o pedido.js carregou
+  //    isso da v420 ate a v554.
+  //
+  // 2. eol = LF. O repositorio inteiro usa LF, inclusive no Windows. O padrao do
+  //    VS Code aqui seria CRLF, e ai o primeiro arquivo salvo vira um diff de
+  //    milhares de linhas que esconde a alteracao de verdade.
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "files.eol": "\n",
+
+  // O PowerShell 5.1 do Windows le script SEM BOM como ANSI. Arquivo novo com
+  // acento precisa de BOM, senao o texto sai errado na tela do operador.
+  "[powershell]": {
+    "files.encoding": "utf8bom"
+  },
+
+  // === Formatacao: DESLIGADA de proposito =====================================
+  // Este codigo esta rodando numa grafica de verdade. Um formatador automatico
+  // reescreveria arquivos inteiros no primeiro Ctrl+S, e a alteracao real ficaria
+  // perdida no meio. Formatar so quando voce mandar, em arquivo escolhido.
+  "editor.formatOnSave": false,
+  "editor.formatOnPaste": false,
+  "files.trimTrailingWhitespace": false,
+  "files.insertFinalNewline": false,
+
+  // === O que sumir do explorador ==============================================
+  // Nao apaga nada — so tira da vista o que e gerado e o que e segredo.
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "venv": true,
+    "node_modules": true,
+    ".vercel": true
+  },
+
+  // === O que nao entrar na busca ==============================================
+  // "Ideal Control/" guarda o pool do QR Ideal: e o segredo mestre do controle de
+  // acesso. Fora da busca para nao aparecer por acidente numa tela compartilhada.
+  "search.exclude": {
+    "**/__pycache__": true,
+    "venv": true,
+    "node_modules": true,
+    "dist": true,
+    "build": true,
+    "Ideal Control": true,
+    "**/*.bin": true,
+    "**/*.xlsx": true,
+    ".env.local": true
+  },
+
+  // Vigiar venv e node_modules gasta memoria a toa e deixa o editor lento.
+  "files.watcherExclude": {
+    "**/venv/**": true,
+    "**/node_modules/**": true,
+    "**/__pycache__/**": true,
+    "**/dist/**": true,
+    "**/build/**": true
+  },
+
+  // === Terminal ==============================================================
+  // Todo script de publicacao e de build deste projeto e PowerShell.
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.cwd": "${workspaceFolder}",
+
+  // === Git ===================================================================
+  // O fluxo aqui e direto na main, com publicar.ps1 fazendo commit e push juntos.
+  // Autofetch mostra quando outra sessao ja mandou coisa; postCommitCommand fica
+  // em "none" para o editor nunca dar push sozinho pelas suas costas.
+  "git.autofetch": true,
+  "git.postCommitCommand": "none",
+  "git.confirmSync": true,
+  "git.enableSmartCommit": false,
+
+  // === Deno: SO nas Edge Functions ===========================================
+  // As 8 funcoes em supabase/functions/ rodam em Deno; o resto do frontend e
+  // JavaScript de navegador comum. Se a extensao do Deno ficar ligada na pasta
+  // inteira, ela assume TODO arquivo .js do frontend e passa a acusar erro em
+  // codigo que esta certo (import de CDN, globals do navegador). Ligada so no
+  // caminho certo, cada lado e analisado pela regra que vale para ele.
+  "deno.enable": false,
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.lint": true,
+
+  // === Associacoes de arquivo ================================================
+  "files.associations": {
+    "*.psm1": "powershell",
+    "*.spec": "python",
+    "*.wxs": "xml",
+    "*.iss": "ini"
+  }
+}
