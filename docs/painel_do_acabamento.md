@@ -908,6 +908,44 @@ reencontrá-lo.
 `EXPEDICAO`, todos dos últimos quatro dias, contra 7 em `EM TRANSITO` e 4 em
 `ENTREGUE` — a bandeja se esvazia sozinha.
 
+### O pedido devolvido pela expedição volta para a bancada (03/09/2026)
+
+> "o que aconteceu com o pedido 21594? sumiu dos painéis" — usuário, 03/09/2026
+
+A tela de Expedição do ERP tem, desde 20/08/2026, a ação **Retorno**. Usada num
+pedido em `EXPEDICAO`, ela grava **`EM ACABAMENTO`** em `propostas.status_interno`
+(a auditoria registra `tipo_transicao = RETORNO`, `origem = EXPEDICAO_UI`). Foi o
+que aconteceu com o 21594: a bancada marcou os quatro modelos como Pronto e
+enviou às 10:05; às 15:53 a expedição devolveu.
+
+Até aí `EM ACABAMENTO` não passava no `ehDeProducao` — nem na Fila de Produção —
+e o pedido sumia das duas telas. Ele entrava na memória do painel pela porta de
+entrada (`SINAIS_SAIU_DA_ARTE`) e lista nenhuma o desenhava. Decisão do usuário:
+**tratar** — o pedido devolvido é trabalho da bancada.
+
+**Onde a regra mora.** O `ehDeProducao` deixou de ter lista própria: ele
+consulta `pedidoNaGrafica` do `script.js` pelo `window`, como já fazia com
+`pedidoJaPassouDaGrafica`. `SINAIS_NA_GRAFICA` é `EM PRODUCAO`, `EM IMPRESSAO` e
+`EM ACABAMENTO`, com e sem acento, e a Fila de Produção lê a mesma lista. Eram
+quatro cópias; o harness dizia "EM ACABAMENTO é trabalho daqui" e as cópias
+diziam o contrário.
+
+**O que a tela mostra.** O pedido volta para a Geral, a Para Hoje e a Atrasados
+com os modelos **exatamente como a bancada os deixou** — o retorno não apaga o
+Pronto de ninguém, de propósito. Por isso ele reaparece com o selo REVISADO, e
+embaixo do número a marca **↩ VOLTOU DA EXPEDIÇÃO**, com o porquê no título:
+*a expedição devolveu este pedido para a bancada; confira o material e envie de
+novo*. Sem a marca, um pedido pronto reaparecendo na lista seria um mistério.
+
+**Aberto**, o botão ENVIAR PARA A EXPEDIÇÃO está de volta: conferido o material,
+despacha-se outra vez, pelo mesmo caminho. No botão **Expedição** ele não
+aparece — não é mais um pedido despachado —, e conta em PEDIDOS EM FILA como
+qualquer `EM PRODUCAO`.
+
+**Sem recarregar.** A releitura do `status_interno` a cada minuto
+(`ressincronizarStatusInterno`, do `script.js`) já tirava da tela o pedido
+expedido; agora também o traz de volta quando o ERP o devolve.
+
 ### O CONCLUIDO de cada setor, que não depende do botão
 
 Assim que o **último modelo de um setor** fica "Pronto", a linha daquele setor

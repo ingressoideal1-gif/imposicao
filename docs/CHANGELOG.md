@@ -4,6 +4,108 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — O pedido devolvido pela expedição volta para os dois painéis
+
+Pergunta do usuário: **"o que aconteceu com o pedido 21594? sumiu dos painéis"**.
+
+### O que era
+
+A auditoria do banco contou a história do dia. Às 10:05 a bancada marcou os
+quatro modelos como Pronto e mandou o pedido para a expedição (`EXPEDICAO`,
+pelo botão da tela). Às 15:53 a expedição, na tela do ERP, usou a ação
+**Retorno** e devolveu o pedido: `status_interno` virou **`EM ACABAMENTO`**,
+tipo de transição `RETORNO`, origem `EXPEDICAO_UI`. A ação existe no ERP desde
+20/08, e o retorno para `EM ACABAMENTO` já tinha acontecido cinco vezes antes
+(21074, 21110 e 21503, quase sempre em teste; o 21074 de verdade, em 25/08).
+
+Não era defeito nosso, e o código dos filtros não tinha mudado: as duas telas
+sempre aceitaram só `EM PRODUCAO` e `EM IMPRESSAO`. `EM ACABAMENTO` estava
+apenas na porta de entrada dos painéis (`SINAIS_SAIU_DA_ARTE`), então o pedido
+entrava em `state.ordens` e **lista nenhuma o desenhava**. Ficava visível só na
+Lista de Arte, em Pedidos Concluídos — onde ninguém da bancada procura.
+
+Decisão do usuário, entre tratar o status aqui ou pedir ao ERP que devolvesse
+para `EM PRODUCAO`: **"1 tratar"**.
+
+### O que passou a ser
+
+`EM ACABAMENTO` é chão de fábrica. O pedido devolvido pela expedição aparece de
+novo nos dois painéis, como estava antes de sair:
+
+- **A regra mora uma vez só**, em `SINAIS_NA_GRAFICA` / `pedidoNaGrafica` no
+  `script.js`, ao lado da irmã de 27/08 (`SINAIS_DEPOIS_DA_GRAFICA`). Até aqui
+  a lista existia em **quatro cópias** — o filtro da Fila de Produção, o
+  `toggleOSDetail`, o `renderOSItens` e o `ehDeProducao` do acabamento.js —, e
+  o harness do acabamento já dizia "EM ACABAMENTO é trabalho daqui" enquanto as
+  quatro diziam o contrário. As quatro agora consultam a regra; o
+  `acabamento.js` o faz pelo `window`, como já fazia com a irmã.
+- **Os modelos ficam como a bancada os deixou.** O retorno não apaga o Pronto
+  de ninguém: o pedido reaparece com o selo REVISADO e o botão de enviar para a
+  expedição de volta. Confere-se o material e despacha-se de novo.
+- **A linha diz por quê.** Embaixo do número, **↩ VOLTOU DA EXPEDIÇÃO** — o que
+  o sistema faz sozinho precisa se anunciar, e um pedido PRONTO reaparecendo
+  sem explicação é um operador procurando o que houve.
+- O botão **Expedição** não o lista: ele não é mais um pedido despachado.
+
+A releitura do `status_interno` a cada minuto, que já existia para tirar da
+tela o pedido expedido, agora também o **traz de volta** quando o ERP o devolve
+— sem recarregar a página.
+
+Testes: `tests/na_grafica_harness.js` (executa a regra e o filtro **reais** da
+Fila de Produção lidos do `script.js`, e prova que os dois conjuntos não se
+cruzam), `tests/test_em_acabamento_e_trabalho_da_grafica.py` (trava que a
+regra mora num lugar só e que ninguém voltou a comparar a palavra à mão) e
+`tests/acabamento_harness.js` (`oPedidoDevolvidoPelaExpedicaoVoltaParaABancada`:
+o devolvido está na Geral com a marca, conta na fila, não está no botão
+Expedição, e aberto oferece enviar de novo).
+
+---
+
+## [2026-09-03] — Montagem: a arte vem da tela do Pedido, e a folha vira um kanban
+
+Análise da tela Montagem pedida pelo usuário, seguida de: **"executar do 1 ao
+7, vamos adicionar opção de duplicar célula (ícone que duplica o modelo na
+próxima célula), vamos incluir o excluir célula (x na célula que exclui ela do
+gabarito) e vamos deixar as células em modo 'kanban' para movê-las manualmente
+alterando a sequência"**.
+
+### O que era
+
+A Montagem montava a sua própria arte por modelo, e ela divergia da que a
+`runPedImposition` monta para o mesmo modelo em sete pontos: o verso nunca saía
+(lia `arte_verso_url`, campo inexistente, e mandava `print_mode: 'simplex'`,
+valor que o motor não conhece); a arte ia crua, sem o filtro que barra a
+amostra de aprovação; os bancos do pedido e o CSV não eram garantidos; o
+`csv_data` ia inteiro, sem a fatia do modelo; a escala da arte ficava em 100%;
+a rotação da folha ia 0; os elementos de Layout iam junto. Uma célula refeita
+podia sair diferente da original.
+
+### O que passou a ser
+
+- O corpo do `tempMultiArtes` e do `payloadMultiArtes` da `runPedImposition`
+  saiu para `arteDoModeloParaFolha` e `arteParaOMotor` (pedido.js), verbatim.
+  A tela do Pedido chama as duas; a Montagem chama as mesmas, pedido a pedido,
+  com os bancos de cada um na mão (`prepararArtesDaMontagem`).
+- A rotação da folha virou `rotacaoDaFolhaDoFormato` (script.js), lida pelas
+  três telas em vez de escrita em duas.
+- A folha montada é um **kanban**: todas as células, folha a folha, cada uma
+  com **⧉** (repete a mesma peça logo abaixo), **×** (tira só ela) e arrasto
+  nativo do HTML5 para mudar a ordem. O deslocamento das posições continua
+  vindo dos modelos; a ordem da saída, das células.
+- O motor ganhou `refazer_repetir` (desligada por padrão): com ela, posição
+  repetida em `refazer_celulas` imprime duas vezes. O Refazer Célula do Pedido
+  continua deduplicando.
+- O seletor de pedidos voltou a dizer "Impressos nos últimos 30 dias…" em vez
+  de prometer digitação num `<select>`.
+
+Fora do escopo pedido e registrado em `docs/montagem.md`: o menu Montagem não
+tem permissão própria (`PERM_NAV_MAP`).
+
+Testes: 112 verificações no harness do núcleo, 87 no da tela, 14 em
+`test_montagem.py`, 23 em `test_engine_refazer.py`.
+
+---
+
 ## [2026-09-03] — Numeração sem elementos volta a imprimir: a folha sai só com a arte
 
 Relato do usuário sobre o pedido **21411**, recusado pelo motor com erro 400:

@@ -264,11 +264,40 @@
         return {};
     }
 
-    /** O pedido está em produção? Mesmo recorte da Fila de Produção. */
+    /**
+     * O pedido está na gráfica? Mesmo recorte da Fila de Produção.
+     *
+     * A regra mora no `script.js` (`SINAIS_NA_GRAFICA`/`pedidoNaGrafica`), uma
+     * vez só, como a irmã `pedidoJaPassouDaGrafica`. Até 03/09/2026 esta função
+     * tinha a própria lista — EM PRODUCAO e EM IMPRESSAO —, e foi assim que o
+     * pedido 21594, devolvido pela expedição com `EM ACABAMENTO`, sumiu desta
+     * tela e da Produção ao mesmo tempo. Ver `ehDeVoltaDaExpedicao`.
+     *
+     * Sem o `script.js` não há `state.ordens` para desenhar, então a resposta
+     * `false` não esconde nada que existisse.
+     */
     function ehDeProducao(os) {
-        const st = (os.status_interno || '').toUpperCase();
-        return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO'
-            || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
+        const f = fn('pedidoNaGrafica');
+        return f ? !!f(os) : false;
+    }
+
+    /**
+     * O pedido voltou da expedição para a bancada.
+     *
+     * `EM ACABAMENTO` no `status_interno` é a palavra que a ação **Retorno** da
+     * tela de Expedição do ERP grava (auditoria de 25/08 a 03/09/2026: seis
+     * retornos, todos de EXPEDICAO para EM ACABAMENTO). A bancada nunca a
+     * escreve — o que ela escreve é EXPEDICAO, no botão de enviar.
+     *
+     * A marca existe porque o pedido reaparece na lista com todos os modelos
+     * PRONTO, e sem ela o operador não saberia por quê. O retorno não apaga o
+     * Pronto de ninguém, de propósito: o que a bancada registrou continua
+     * valendo até ela mesma mudar — o que muda é só que o botão de enviar para
+     * a expedição volta a existir.
+     */
+    function ehDeVoltaDaExpedicao(os) {
+        const st = ((os && os.status_interno) || '').trim().toUpperCase();
+        return st === 'EM ACABAMENTO';
     }
 
     /**
@@ -1221,6 +1250,10 @@
                         <span title="Este pedido já foi entregue à expedição. Ele sai daqui quando a expedição embarcá-lo."
                               style="display: block; margin-top: 4px; font-size: 0.66rem; font-weight: 800;
                                      letter-spacing: 0.04em; color: #4cc8f0;">📦 NA EXPEDIÇÃO</span>` : ''}
+                        ${ehDeVoltaDaExpedicao(os) ? `
+                        <span title="A expedição devolveu este pedido para a bancada (ação Retorno do ERP). Os modelos continuam como estavam: confira o material e envie de novo."
+                              style="display: block; margin-top: 4px; font-size: 0.66rem; font-weight: 800;
+                                     letter-spacing: 0.04em; color: #f59e0b;">↩ VOLTOU DA EXPEDIÇÃO</span>` : ''}
                     </td>
                     <td>
                         <strong>${esc(rotulo ? rotulo(os) : (os.cliente || '')) || '--'}</strong>
@@ -7891,6 +7924,7 @@
         _regras: {
             ehDeProducao,
             ehExpedido,
+            ehDeVoltaDaExpedicao,
             jaPassouDaGrafica,
             pedidosDoPainel,
             setoresDoPedido,

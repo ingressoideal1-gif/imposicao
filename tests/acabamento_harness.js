@@ -33,6 +33,20 @@ const pedidoJaPassouDaGraficaReal = (() => {
     return new Function(lista + corpo + NL + 'return pedidoJaPassouDaGrafica;')();
 })();
 
+// A regra irma: "este pedido esta NA grafica?" (EM PRODUCAO, EM IMPRESSAO e,
+// desde 03/09/2026, EM ACABAMENTO -- o pedido que a expedicao devolveu para a
+// bancada). Tambem mora no `script.js`, e tambem e lida de la.
+const pedidoNaGraficaReal = (() => {
+    const NL = String.fromCharCode(10);
+    const iLista = SCRIPT.indexOf('const SINAIS_NA_GRAFICA = [');
+    if (iLista < 0) throw new Error('nao achei SINAIS_NA_GRAFICA no script.js');
+    const lista = SCRIPT.slice(iLista, SCRIPT.indexOf('];', iLista) + 2);
+    const iFn = SCRIPT.indexOf(NL + 'function pedidoNaGrafica(');
+    if (iFn < 0) throw new Error('nao achei pedidoNaGrafica no script.js');
+    const corpo = SCRIPT.slice(iFn, SCRIPT.indexOf(NL + '}', iFn) + 2);
+    return new Function(lista + corpo + NL + 'return pedidoNaGrafica;')();
+})();
+
 let total = 0, falhas = 0;
 /**
  * A tela do pedido aberto, nos dois pedacos em que ela mora.
@@ -134,6 +148,8 @@ function montarAmbiente() {
         toast: () => {},
         // A regra de 27/08/2026, vinda do `script.js` de verdade.
         pedidoJaPassouDaGrafica: pedidoJaPassouDaGraficaReal,
+        // E a regra irma, de 03/09/2026: quem esta NA grafica.
+        pedidoNaGrafica: pedidoNaGraficaReal,
         state: { ordens: [], osItens: {}, modelosGlobais: {}, cores: [], numeracoes: [], produtosGlobais: [], todasArtes: [] },
         _currentPerms: null,
     };
@@ -523,6 +539,8 @@ function montarAmbiente() {
     ok(ehDeProducao({ status_interno: 'EM PRODUÇÃO' }), 'com cedilha e til tambem');
     ok(ehDeProducao({ status_interno: 'em producao' }), 'em caixa baixa tambem');
     ok(ehDeProducao({ status_interno: 'EM IMPRESSAO' }), 'EM IMPRESSAO entra -- e o mesmo recorte da Producao');
+    ok(ehDeProducao({ status_interno: 'EM ACABAMENTO' }),
+       'EM ACABAMENTO entra (03/09/2026): e o pedido que a expedicao devolveu para a bancada');
     ok(!ehDeProducao({ status_interno: 'LIBERADO' }), 'LIBERADO nao entra: e estado comercial');
     ok(!ehDeProducao({ status_interno: 'EM ARTE' }), 'pedido em arte nao entra');
     ok(!ehDeProducao({}), 'pedido sem status_interno nao entra');
@@ -4643,11 +4661,57 @@ async function mandarParaExpedicaoNaoFazOPedidoSumir() {
        avisos.map(a => a.texto).join(' | '));
 }
 
+// -- O pedido devolvido pela expedicao volta para a bancada (03/09/2026) --------
+//
+// O pedido 21594: a bancada marcou os quatro modelos como Pronto e mandou para
+// a expedicao as 10:05; as 15:53 a expedicao, na tela do ERP, usou a acao
+// Retorno e o `status_interno` virou EM ACABAMENTO. Ate entao esse status nao
+// estava em lista nenhuma das duas telas, e o pedido sumia dos dois paineis.
+//
+// Decisao do usuario: "tratar". EM ACABAMENTO e trabalho da bancada. Os modelos
+// ficam como ela os deixou -- o retorno nao apaga o Pronto de ninguem --, e a
+// linha ganha a marca que explica por que um pedido PRONTO reapareceu.
+async function oPedidoDevolvidoPelaExpedicaoVoltaParaABancada() {
+    const amb = ambienteDeExpedicao('EM ACABAMENTO');
+
+    const geral = listaDo(amb, 'geral');
+    ok(geral.indexOf('>200<') !== -1, 'o pedido devolvido esta na lista GERAL');
+    ok(geral.indexOf('VOLTOU DA EXPEDIÇÃO') !== -1,
+       'com a marca que diz por que ele reapareceu');
+    ok(geral.indexOf('NA EXPEDIÇÃO') === -1, 'e sem a marca de expedido: ele nao esta mais la');
+    ok(geral.indexOf('Revisado') !== -1,
+       'os modelos continuam como a bancada os deixou: o selo e REVISADO');
+
+    ok(listaDo(amb, 'expedicao').indexOf('>200<') === -1,
+       'no botao EXPEDICAO ele nao esta: nao e mais um pedido despachado');
+
+    // Conta na fila como qualquer pedido EM PRODUCAO.
+    const ref = ambienteDeExpedicao('EM PRODUCAO');
+    listaDo(ref, 'geral');
+    listaDo(amb, 'geral');
+    ok(amb.elementos['stat-acab-pedidos-fila'].textContent === ref.elementos['stat-acab-pedidos-fila'].textContent,
+       'e conta em PEDIDOS EM FILA como um EM PRODUCAO',
+       amb.elementos['stat-acab-pedidos-fila'].textContent + ' vs ' + ref.elementos['stat-acab-pedidos-fila'].textContent);
+
+    // Aberto, o botao de enviar para a expedicao esta la de novo: o material
+    // voltou, a bancada confere e despacha outra vez.
+    await amb.painel.abrirPedido('os-200');
+    const tela = telaDoPedido(amb);
+    ok(tela.indexOf('AcabamentoPainel.expedir(') !== -1,
+       'o botao ENVIAR PARA A EXPEDICAO esta de volta');
+    ok(tela.indexOf('já entregue') === -1, 'sem o comprovante de entregue');
+
+    // E ele nao foi a lugar nenhum sem a bancada mandar.
+    ok(amb.janela.state.ordens[0].status_interno === 'EM ACABAMENTO',
+       'desenhar a tela nao mexe no status do parceiro');
+}
+
 async function asContasDoRecorteDaListaSaoPuras() {
     const r = ambienteDeVolumes().painel._regras;
 
     ok(r.ehDeProducao({ status_interno: 'EM PRODUCAO' }), 'EM PRODUCAO e fila');
     ok(r.ehDeProducao({ status_interno: 'EM IMPRESSÃO' }), 'EM IMPRESSAO tambem, com acento');
+    ok(r.ehDeProducao({ status_interno: 'EM ACABAMENTO' }), 'EM ACABAMENTO tambem: voltou da expedicao, e fila');
     ok(!r.ehDeProducao({ status_interno: 'EXPEDICAO' }), 'EXPEDICAO nao e fila');
 
     ok(r.ehExpedido({ status_interno: 'EXPEDICAO' }), 'EXPEDICAO e expedido');
@@ -4848,6 +4912,7 @@ async function semAColunaNoBancoNaoFicaPerguntandoParaSempre() {
     await oExpedidoNaoContaComoFila();
     await oPedidoJaExpedidoNaoOferecerEnviarDeNovo();
     await mandarParaExpedicaoNaoFazOPedidoSumir();
+    await oPedidoDevolvidoPelaExpedicaoVoltaParaABancada();
     await asContasDoRecorteDaListaSaoPuras();
     await oEstagioDoExpedidoVemDoBancoComoODosOutros();
     await oRecorteDescobreOSetorPeloProdutoDeOrigem();

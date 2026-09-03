@@ -28379,6 +28379,62 @@ function pedidoSaiuDaArte(os) {
 }
 
 /**
+ * Os status em que o pedido está NA gráfica — o chão de fábrica.
+ *
+ * É a lista positiva que a Fila de Produção e o Painel do Acabamento usam para
+ * decidir o que desenhar. Até 03/09/2026 ela existia em quatro cópias (o filtro
+ * da Fila, o `toggleOSDetail`, o `renderOSItens` e o `ehDeProducao` do
+ * acabamento.js), todas com `EM PRODUCAO` e `EM IMPRESSAO` e nada mais.
+ *
+ * ## O pedido 21594 (03/09/2026)
+ *
+ * O usuário perguntou por que ele tinha sumido dos painéis. A auditoria do
+ * banco respondeu: às 10:05 a bancada marcou os quatro modelos como Pronto e
+ * mandou o pedido para a expedição; às 15:53 a expedição, na tela do ERP, usou
+ * a ação **Retorno** e devolveu o pedido — `status_interno` virou
+ * `EM ACABAMENTO`. Era a sexta vez que o ERP fazia isso desde 25/08, quase
+ * sempre em teste, uma vez de verdade (o 21074, mandado por engano).
+ *
+ * `EM ACABAMENTO` estava só na porta de entrada (`SINAIS_SAIU_DA_ARTE`): o
+ * pedido entrava em `state.ordens` e lista nenhuma o desenhava. Ficava visível
+ * apenas na Lista de Arte, em Concluídos — onde ninguém da bancada procura.
+ *
+ * Decisão do usuário: **"tratar"**. O pedido que a expedição devolve é trabalho
+ * da gráfica de novo, nos dois painéis, como era antes de sair.
+ *
+ * ## Por que uma lista só, e no script.js
+ *
+ * Pelo mesmo motivo de `SINAIS_DEPOIS_DA_GRAFICA`, logo abaixo: o harness do
+ * acabamento já dizia "EM ACABAMENTO é trabalho daqui" enquanto as quatro
+ * cópias diziam o contrário. O `acabamento.js` consulta esta regra pelo
+ * `window`, como faz com a irmã.
+ *
+ * O que NÃO entra: `REVISAO PRODUCAO` vem antes (é a conferência que libera),
+ * `EXPEDICAO`/`EM TRANSITO`/`ENTREGUE` vêm depois (regra de 27/08/2026), e
+ * `A RETIRAR` é balcão. Os dois conjuntos não se cruzam, e há teste para isso
+ * (`tests/na_grafica_harness.js`).
+ */
+const SINAIS_NA_GRAFICA = [
+    'EM PRODUCAO', 'EM PRODUÇÃO',
+    'EM IMPRESSAO', 'EM IMPRESSÃO',
+    'EM ACABAMENTO',
+];
+
+/**
+ * O pedido está na gráfica agora?
+ *
+ * Lê `status_interno`, como a irmã `pedidoJaPassouDaGrafica`: é o campo do ERP
+ * que de fato anda com o pedido.
+ */
+function pedidoNaGrafica(os) {
+    if (!os) return false;
+    const si = (os.status_interno || '').trim().toUpperCase();
+    return SINAIS_NA_GRAFICA.includes(si);
+}
+window.pedidoNaGrafica = pedidoNaGrafica;
+window.SINAIS_NA_GRAFICA = SINAIS_NA_GRAFICA;
+
+/**
  * Os status que ficam DEPOIS do trabalho da gráfica.
  *
  * Regra do usuário, 27/08/2026: *"quando um pedido constar com Status posterior
@@ -29330,16 +29386,17 @@ function renderOrdens() {
 
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
-    // Fila 1: Impressão (status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO')
+    // Fila 1: quem está na gráfica — `pedidoNaGrafica` (EM PRODUCAO, EM
+    // IMPRESSAO e, desde 03/09/2026, EM ACABAMENTO: o pedido que a expedição
+    // devolveu para a bancada, caso do 21594).
     //
-    // O `pedidoJaPassouDaGrafica` é redundância de propósito: a lista acima já
-    // é positiva, mas a regra de 27/08/2026 — EXPEDICAO, EM TRANSITO e ENTREGUE
+    // O `pedidoJaPassouDaGrafica` é redundância de propósito: a lista é
+    // positiva, mas a regra de 27/08/2026 — EXPEDICAO, EM TRANSITO e ENTREGUE
     // saem da tela inicial — fica dita aqui, e não dependendo de ninguém
-    // lembrar dela ao acrescentar um status novo à lista de cima.
+    // lembrar dela ao acrescentar um status novo à lista.
     let ordensImpressao = state.ordens.filter(os => {
         if (pedidoJaPassouDaGrafica(os)) return false;
-        const st = (os.status_interno || '').toUpperCase();
-        return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO' || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
+        return pedidoNaGrafica(os);
     });
 
     // --- Calcular Estatísticas Dinâmicas ---
@@ -30132,9 +30189,9 @@ async function toggleOSDetail(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
-    const siUpper = (os.status_interno || '').toUpperCase();
-    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || siUpper === 'EM IMPRESSAO' || siUpper === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
+    // OSs na fila de impressão são as que estão na gráfica (`pedidoNaGrafica`,
+    // pelo status_interno vindo do Vibecode) — a mesma pergunta da Fila 1.
+    const isImpressao = pedidoNaGrafica(os) || os.status === 'EM IMPRESSÃO';
     const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
     const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
 
@@ -30176,9 +30233,9 @@ function renderOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
-    const siUpperR = (os.status_interno || '').toUpperCase();
-    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || siUpperR === 'EM IMPRESSAO' || siUpperR === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
+    // OSs na fila de impressão são as que estão na gráfica (`pedidoNaGrafica`,
+    // pelo status_interno vindo do Vibecode) — a mesma pergunta da Fila 1.
+    const isImpressao = pedidoNaGrafica(os) || os.status === 'EM IMPRESSÃO';
     const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
     if (!tbody) return;
 
