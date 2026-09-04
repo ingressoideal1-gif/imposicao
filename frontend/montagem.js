@@ -73,6 +73,43 @@
    · DESFAZER E REFAZER. Era a falta mais grave: um × no lugar errado apagava
      a célula sem volta, e o operador tinha de reescolher o pedido, esperar o
      carregamento e redigitar.
+
+   ── A JANELA SEM ROLAGEM, DE 04/09/2026 ──────────────────────────────────
+
+   Pedido do usuário: *"trazer a janela de visualização de forma que não
+   precise utilizar o scroll, abrindo a janela no tamanho do formato. Como já
+   funciona no painel de produção na edição do pedido/MODELO"*.
+
+   O que ele encontrava: a tela abria no modo `Peça`, que amplia as células até
+   encherem a largura. Numa tira Triband isso dava uma folha de 3.389 px de
+   altura numa área de 740 px — quatro telas e meia de rolagem —, e as folhas
+   ainda vinham empilhadas uma embaixo da outra.
+
+   Três mudanças, e as três copiam a janela do Pedido:
+
+   · A TELA ABRE NO MODO `Folha`, que é o que cabe: a escala vem da largura E
+     da altura da janela, então o papel inteiro aparece. `Peça` e `100%`
+     continuam ali para ampliar — aí a janela rola, mas por escolha do
+     operador, não porque ele abriu a tela.
+
+   · UMA FOLHA POR VEZ, com o seletor `Folha ‹ 1 › de 2` na barra — o mesmo
+     par de setas do seletor de páginas da janela do Pedido. Duas folhas
+     empilhadas nunca caberiam na tela.
+
+   · A ALTURA É MEDIDA, e não escrita num `calc()` do CSS. Ver
+     `alturaDaJanelaDaMontagem` e `_mtgAjustarAlturaDaJanela`.
+
+   O que a mudança tirou, e por onde voltou:
+
+   · O arrasto de uma célula para OUTRA folha, que existia porque as duas
+     estavam na tela. Voltou como gesto: soltar a célula sobre a seta a manda
+     para a folha vizinha (ver `_mtgLigarArrasto`). Pelo teclado, as setas já
+     atravessavam a fronteira, e agora a janela vai junto.
+
+   · O ⧉ e o × DENTRO da célula, que numa tira de 21 px não cabem. Voltaram
+     pela barra da seleção, que passou a aparecer com UMA célula marcada — até
+     aqui ela só aparecia com duas ou mais, justamente porque "com uma só, os
+     botões da própria célula já resolvem".
    ══════════════════════════════════════════════════════════════════════════ */
 
 // ─── O estado da tela ───────────────────────────────────────────────────────
@@ -97,7 +134,10 @@ function montagemVazia() {
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
         // valer para todas de uma vez — repor doze células custava doze cliques.
         selecao: [],
-        zoom: 'peca',
+        // A JANELA MOSTRA UMA FOLHA POR VEZ, no tamanho do formato. Ver
+        // `folhaVisivelDaMontagem` e `_mtgRenderFolha`.
+        zoom: 'folha',
+        folha: 0,
         numero: numeroPadraoDaMontagem(),
         // Instantâneos para o desfazer. Ver `guardarNaHistoria`.
         historia: [],
@@ -527,6 +567,45 @@ function escalaDaFolhaDaMontagem(zoom, geo, largura, altura) {
         return Math.max(0.1, Math.min(w, h));
     }
     return geo.usedW > 0 ? Math.max(0.1, largura / geo.usedW) : 0;
+}
+
+/**
+ * Qual folha a janela mostra, presa entre a primeira e a última que existem.
+ *
+ * A janela mostra UMA folha por vez — pedido do usuário em 04/09/2026:
+ * *"trazer a janela de visualização de forma que não precise utilizar o
+ * scroll, abrindo a janela no tamanho do formato. Como já funciona no painel
+ * de produção na edição do pedido/MODELO"*. Empilhadas, duas folhas nunca
+ * caberiam na tela; uma de cada vez cabe, e as outras ficam a uma seta de
+ * distância, como na janela do Pedido.
+ *
+ * O prendedor não é enfeite: tirar as células da última folha some com ela, e
+ * sem isto a janela ficaria apontando para uma folha que não existe mais.
+ */
+function folhaVisivelDaMontagem(folha, folhas) {
+    const n = parseInt(folha);
+    if (!folhas || folhas < 1) return 0;
+    if (isNaN(n) || n < 0) return 0;
+    return Math.min(n, folhas - 1);
+}
+
+/**
+ * A altura da janela: o que sobra da tela para ela, depois de todo o resto.
+ *
+ * Medida, e não chutada num `calc()` do CSS. O que vem acima muda de altura
+ * sozinho — o compositor quebra em duas linhas em tela estreita, a trava e a
+ * recusa aparecem quando o modelo não cabe, a barra da seleção múltipla
+ * aparece com duas células marcadas — e uma constante no CSS erraria em todos
+ * esses casos. `restoDoCard` é o que divide o card com ela: a barra do título,
+ * o selo da sobra, a linha dos atalhos e os paddings.
+ *
+ * O piso de 380 px é o ponto em que a folha ainda diz alguma coisa. Numa tela
+ * baixa a conta desce abaixo disso, e aí é melhor a página rolar um pouco do
+ * que a folha virar uma tarja — o que o operador precisa ver é a folha.
+ */
+function alturaDaJanelaDaMontagem(topoDoCard, alturaDaTela, restoDoCard) {
+    const sobra = (alturaDaTela || 0) - (topoDoCard || 0) - (restoDoCard || 0) - 24;
+    return Math.max(380, Math.round(sobra));
 }
 
 /**
@@ -1393,9 +1472,16 @@ function adicionarNaMontagem() {
     // Posição que já está na folha não entra de novo pela digitação; para
     // repetir de propósito existe o ⧉ da célula.
     const jaTem = celulasDoModelo(celulas, m);
+    let primeiraNova = -1;
     for (const p of posicoes) {
-        if (jaTem.indexOf(p) === -1) celulas.push({ osId: osId, itemId: item.id, pos: p });
+        if (jaTem.indexOf(p) === -1) {
+            if (primeiraNova < 0) primeiraNova = celulas.length;
+            celulas.push({ osId: osId, itemId: item.id, pos: p });
+        }
     }
+    // A janela acompanha o que acabou de entrar: acrescentar seis células numa
+    // folha cheia abre a folha seguinte, e o operador precisa vê-las.
+    if (primeiraNova >= 0) _mtgSeguirCelula(primeiraNova);
 
     if (campo) campo.value = '';
     onMontagemPosicoesChange();
@@ -1517,6 +1603,7 @@ function moverCelulaDaMontagem(de, para) {
     guardarNaHistoria();
     moverCelula(state.montagem.celulas, de, para);
     state.montagem.selecao = [];
+    _mtgSeguirCelula(para);
     renderMontagem();
 }
 
@@ -1949,6 +2036,10 @@ function _mtgRenderFolha() {
         alvo.innerHTML = '';
         alvo.className = 'mtg-folha vazia';
         if (numFolha) numFolha.textContent = '';
+        // A folha limpa devolve o card à altura natural e recolhe o seletor:
+        // sem isto, o card ficaria do tamanho da montagem que acabou de sair.
+        _mtgSoltarAlturaDaJanela(alvo);
+        _mtgRenderSeletorDeFolha(0, 0);
         return;
     }
 
@@ -1962,8 +2053,15 @@ function _mtgRenderFolha() {
         alvo.innerHTML = '<p class="mtg-dica" style="padding:14px;">'
             + 'Não sei as medidas deste formato, então não desenho a folha. As células estão na lista ao lado, na ordem em que vão sair.</p>';
         if (numFolha) numFolha.textContent = `${total} célula(s)`;
+        _mtgSoltarAlturaDaJanela(alvo);
+        _mtgRenderSeletorDeFolha(0, 0);
         return;
     }
+
+    // A janela ganha a altura que sobra na tela ANTES de a escala ser
+    // calculada: a escala do modo Folha vem da altura medida, e medir depois
+    // de desenhar daria a escala da janela antiga.
+    _mtgAjustarAlturaDaJanela(alvo);
 
     // A área disponível decide a escala. `clientWidth` é o que sobra depois do
     // padding do container — medir aqui, e não chutar, é o que faz a folha
@@ -1983,11 +2081,24 @@ function _mtgRenderFolha() {
     const larguraCelulaPx = px(geo.itemW);
     // Abaixo de certo tamanho o rótulo não cabe e vira borrão: some, e ficam a
     // cor do modelo e o número. Melhor uma célula limpa do que texto ilegível.
-    const cabeRotulo = alturaCelulaPx >= 26 && larguraCelulaPx >= 96;
-    const cabemBotoes = alturaCelulaPx >= 34 && larguraCelulaPx >= 150;
+    //
+    // Os limites baixaram em 04/09/2026, quando a janela passou a abrir com a
+    // folha inteira: numa tira Triband a célula fica com 21 px de altura, e os
+    // números antigos (26 e 34) apagavam rótulo e botões logo no modo padrão.
+    // A fonte da célula tem 10,5 px, então 16 px de caixa a comportam; o botão
+    // mede 19 px, e por isso o limite dele é maior — um botão que não cabe na
+    // célula vaza para a vizinha.
+    const cabeRotulo = alturaCelulaPx >= 16 && larguraCelulaPx >= 96;
+    const cabemBotoes = alturaCelulaPx >= 23 && larguraCelulaPx >= 110;
+
+    // UMA FOLHA POR VEZ. Empilhadas, a segunda folha empurrava a primeira para
+    // fora da tela e o operador rolava para tudo; agora a folha visível cabe
+    // inteira e as outras ficam nas setas da barra.
+    const visivel = folhaVisivelDaMontagem(state.montagem.folha, conta.folhas);
+    state.montagem.folha = visivel;
 
     const html = [];
-    for (let f = 0; f < conta.folhas; f++) {
+    for (let f = visivel; f <= visivel; f++) {
         const celulasDaFolha = [];
 
         for (let p = 0; p < porFolha; p++) {
@@ -2043,8 +2154,7 @@ function _mtgRenderFolha() {
         }
 
         html.push(
-            (conta.folhas > 1 ? `<div class="mtg-folha-titulo">Folha ${f + 1} de ${conta.folhas}</div>` : '')
-            + `<div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
+            `<div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
             + `style="width:${px(larguraDesenho).toFixed(1)}px;height:${px(alturaDesenho).toFixed(1)}px;">`
             + celulasDaFolha.join('') + '</div>');
     }
@@ -2058,6 +2168,93 @@ function _mtgRenderFolha() {
             : `${geo.cols}×${geo.rows}`;
         numFolha.textContent = `${conta.folhas} folha(s) · ${total} célula(s) · ${medida}`;
     }
+
+    _mtgRenderSeletorDeFolha(conta.folhas, visivel);
+}
+
+/**
+ * A altura da janela, medida na tela e aplicada nela.
+ *
+ * Fica separada do desenho porque é o único ponto do arquivo que toca a
+ * geometria da PÁGINA, e não a do papel.
+ */
+function _mtgAjustarAlturaDaJanela(alvo) {
+    if (!alvo || typeof window === 'undefined' || !alvo.closest) return;
+    const card = alvo.closest('.mtg-folha-card');
+    if (!card) return;
+    // A medida vai no CARD, e não na janela. A janela é `flex: 1` dentro dele:
+    // dar altura a ela não adianta nada, porque o flex a estica de volta para
+    // o tamanho do card — foi o que a primeira versão desta função fez, e a
+    // folha continuou passando da tela.
+    const resto = Math.max(0, card.offsetHeight - alvo.offsetHeight);
+    const altura = alturaDaJanelaDaMontagem(
+        card.getBoundingClientRect().top, window.innerHeight, resto);
+    card.style.height = (altura + resto) + 'px';
+}
+
+/** Devolve o card à altura natural — sem folha desenhada, não há o que medir. */
+function _mtgSoltarAlturaDaJanela(alvo) {
+    if (!alvo || !alvo.closest) return;
+    const card = alvo.closest('.mtg-folha-card');
+    if (card) card.style.height = '';
+}
+
+/** O seletor `Folha ‹ 1 › de 3` da barra: espelha o da janela do Pedido. */
+function _mtgRenderSeletorDeFolha(folhas, visivel) {
+    const caixa = document.getElementById('mtg-folha-pag');
+    if (!caixa) return;
+    // Com uma folha só o seletor não tem o que oferecer, e uma caixa morta na
+    // barra é ruído — a montagem de um retoque costuma caber numa folha.
+    caixa.style.display = (folhas > 1) ? 'flex' : 'none';
+    const campo = document.getElementById('mtg-folha-input');
+    if (campo) {
+        campo.max = String(folhas);
+        campo.value = String(visivel + 1);
+    }
+    const de = document.getElementById('mtg-folha-de');
+    if (de) de.textContent = 'de ' + folhas;
+    const ant = document.getElementById('mtg-folha-ant');
+    if (ant) ant.disabled = visivel <= 0;
+    const prox = document.getElementById('mtg-folha-prox');
+    if (prox) prox.disabled = visivel >= folhas - 1;
+}
+
+/** Vira a janela para a folha `n` (contada de 0). */
+function irParaFolhaDaMontagem(n) {
+    const porFolha = _mtgCelulasPorFolha(state.montagem.modelos);
+    const conta = contaDaMontagem(state.montagem.celulas, porFolha);
+    const nova = folhaVisivelDaMontagem(n, conta.folhas);
+    if (nova === state.montagem.folha) {
+        // Mesmo sem mudar, o seletor volta ao valor válido: o operador pode
+        // ter digitado 9 numa montagem de 2 folhas.
+        _mtgRenderSeletorDeFolha(conta.folhas, nova);
+        return;
+    }
+    state.montagem.folha = nova;
+    _mtgRenderFolha();
+}
+
+/**
+ * Leva a janela até a folha onde a célula `i` está.
+ *
+ * Sem isto, com uma folha por vez, a célula que o operador acabou de mover ou
+ * de acrescentar podia cair na folha seguinte e simplesmente sumir da tela —
+ * ele teria de descobrir sozinho que precisava virar a folha.
+ */
+function _mtgSeguirCelula(i) {
+    const porFolha = _mtgCelulasPorFolha(state.montagem.modelos);
+    if (!porFolha || i === undefined || i === null || i < 0) return;
+    state.montagem.folha = Math.floor(i / porFolha);
+}
+
+/** A folha anterior. */
+function folhaAnteriorDaMontagem() {
+    irParaFolhaDaMontagem((state.montagem.folha || 0) - 1);
+}
+
+/** A próxima folha. */
+function proximaFolhaDaMontagem() {
+    irParaFolhaDaMontagem((state.montagem.folha || 0) + 1);
 }
 
 /**
@@ -2113,6 +2310,39 @@ function _mtgLigarArrasto() {
     });
 
     folha.addEventListener('dragend', () => { de = null; limpar(); });
+
+    // ARRASTAR ENTRE FOLHAS. Com uma folha por vez, a folha de destino não
+    // está na tela — soltar a célula SOBRE A SETA a manda para a folha
+    // vizinha, e a janela vira junto para mostrar onde ela caiu. Sem isto, o
+    // arrasto perderia o alcance que tinha quando as folhas ficavam
+    // empilhadas.
+    [['mtg-folha-ant', -1], ['mtg-folha-prox', 1]].forEach(([id, passo]) => {
+        const seta = document.getElementById(id);
+        if (!seta) return;
+        seta.addEventListener('dragover', ev => {
+            if (de === null) return;
+            ev.preventDefault();
+            seta.classList.add('mtg-seta-alvo');
+        });
+        seta.addEventListener('dragleave', () => seta.classList.remove('mtg-seta-alvo'));
+        seta.addEventListener('drop', ev => {
+            if (de === null) return;
+            ev.preventDefault();
+            seta.classList.remove('mtg-seta-alvo');
+            const origem = de;
+            de = null;
+            limpar();
+            const porFolha = _mtgCelulasPorFolha(state.montagem.modelos);
+            if (!porFolha) return;
+            const conta = contaDaMontagem(state.montagem.celulas, porFolha);
+            const alvoFolha = folhaVisivelDaMontagem((state.montagem.folha || 0) + passo, conta.folhas);
+            if (alvoFolha === state.montagem.folha) return;
+            // Entra na primeira vaga da folha de destino, que é o lugar que o
+            // operador vê primeiro ao chegar nela.
+            const destino = Math.min(alvoFolha * porFolha, state.montagem.celulas.length - 1);
+            moverCelulaDaMontagem(origem, destino);
+        });
+    });
 }
 
 /**
@@ -2166,6 +2396,9 @@ function _mtgLigarTeclado() {
         ev.preventDefault();
         moverCelula(m.celulas, i, destino);
         m.selecao = [destino];
+        // As setas atravessam a fronteira da folha — é assim que se leva uma
+        // célula da folha 1 para a 2 agora que só uma aparece por vez.
+        _mtgSeguirCelula(destino);
         renderMontagem();
     });
 }
@@ -2209,14 +2442,21 @@ function renderMontagem() {
                            : 'A folha já fecha certo');
     ligar('mtg-ordenar', total > 1, 'Agrupar as células por modelo ou por pedido');
 
+    // A barra da seleção. Até 04/09/2026 ela só aparecia com DUAS células ou
+    // mais, porque "com uma só, os botões da própria célula já resolvem". Isso
+    // deixou de ser verdade quando a janela passou a abrir com a folha inteira:
+    // numa célula de 21 px o ⧉ e o × não cabem, e sem a barra o operador
+    // ficaria só com o teclado. Agora ela aparece com uma célula marcada
+    // também — e é ela que dá os dois gestos com o rótulo escrito.
     const barraSel = document.getElementById('mtg-selecao');
     if (barraSel) {
-        if (selecao.length > 1) {
+        if (selecao.length >= 1) {
+            const varias = selecao.length > 1;
             barraSel.style.display = 'flex';
             barraSel.innerHTML = `
-              <span><strong>${selecao.length}</strong> células selecionadas</span>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="duplicarCelulaDaMontagem(${selecao[0]})">&#10697; Repetir todas</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="removerCelulaDaMontagem(${selecao[0]})">&times; Tirar todas</button>
+              <span><strong>${selecao.length}</strong> célula${varias ? 's' : ''} selecionada${varias ? 's' : ''}</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="duplicarCelulaDaMontagem(${selecao[0]})">&#10697; Repetir ${varias ? 'todas' : 'na próxima'}</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="removerCelulaDaMontagem(${selecao[0]})">&times; Tirar ${varias ? 'todas' : 'da folha'}</button>
               <button type="button" class="mtg-escolher-pasta" style="margin-left:auto;" onclick="state.montagem.selecao=[];renderMontagem();">Limpar seleção</button>`;
         } else {
             barraSel.style.display = 'none';
@@ -2934,6 +3174,9 @@ if (typeof window !== 'undefined') {
     window.completarAFolhaDaMontagem = completarAFolhaDaMontagem;
     window.ordenarMontagem = ordenarMontagem;
     window.zoomDaMontagem = zoomDaMontagem;
+    window.irParaFolhaDaMontagem = irParaFolhaDaMontagem;
+    window.folhaAnteriorDaMontagem = folhaAnteriorDaMontagem;
+    window.proximaFolhaDaMontagem = proximaFolhaDaMontagem;
     window.desfazerMontagem = desfazerMontagem;
     window.refazerMontagem = refazerMontagem;
     window.guardarNaHistoria = guardarNaHistoria;

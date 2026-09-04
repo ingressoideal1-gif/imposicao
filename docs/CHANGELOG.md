@@ -4,6 +4,62 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Montagem: a janela abre com a folha inteira, sem rolagem
+
+Pedido do usuário: **"no menu montagem, trazer a janela de visualização de forma
+que não precise utilizar o scroll, abrindo a janela no tamanho do formato. Como
+já funciona no painel de produção na edição do pedido/MODELO"**.
+
+### O que ele encontrava
+
+A tela abria no modo **Peça**, que amplia as células até encherem a largura. Numa
+tira Triband isso dava uma folha de **3.389 px de altura numa área de 740 px** —
+quatro telas e meia de rolagem. E as folhas vinham **empilhadas**: a segunda
+empurrava a primeira para fora da tela.
+
+### O que mudou — as três coisas copiam a janela do Pedido
+
+| | Antes | Agora |
+|---|---|---|
+| Modo ao abrir | `Peça` (amplia, rola) | **`Folha`** — o papel inteiro cabe |
+| Folhas na tela | todas, empilhadas | **uma por vez**, com `Folha ‹ 1 › de 2` na barra |
+| Altura da janela | `calc(100vh − 340px)` no CSS | **medida** na tela a cada desenho |
+
+A altura é medida porque o que vem acima da janela muda de altura sozinho — o
+compositor quebra em duas linhas em tela estreita, a trava e a recusa aparecem
+quando o modelo não cabe, a barra da seleção aparece com célula marcada. A
+medida vai no **card**, e não na janela: a janela é `flex: 1` dentro dele e o
+flex a esticaria de volta.
+
+Medido num Chrome de verdade, em 1920 × 1080 e em 1366 × 768: a janela não rola
+em nenhum eixo, e o papel sai na proporção da folha de saída (320 × 450 mm).
+
+### O que a mudança tirou, e por onde voltou
+
+- **Arrastar uma célula para outra folha** existia porque as duas estavam na
+  tela. Voltou como gesto: **soltar a célula sobre a seta** a manda para a folha
+  vizinha, e a janela vira junto. Pelo teclado, as setas já atravessavam a
+  fronteira — agora a janela acompanha, em vez de a célula sumir.
+- **O ⧉ e o × dentro da célula** não cabem numa tira de 21 px. Voltaram pela
+  barra da seleção, que passou a aparecer com **uma** célula marcada; até aqui
+  ela só aparecia com duas ou mais, justamente porque "com uma só, os botões da
+  própria célula já resolvem".
+- Os limites em que o rótulo e os botões somem baixaram (26 → 16 px de altura
+  para o rótulo, 34 → 23 para os botões): a fonte da célula tem 10,5 px e o
+  botão mede 19, então os números antigos apagavam a informação cedo demais no
+  modo que agora é o padrão.
+
+`Peça` e `100%` continuam ali para ampliar. Aí a janela rola — mas por escolha do
+operador, não porque ele abriu a tela.
+
+Testes: `tests/montagem_tela_harness.js` 165 → **182** verificações (a janela não
+rola, o papel na proporção da folha, o seletor e as setas travadas nos extremos,
+a janela seguindo a célula que se move ou entra, o arrasto sobre a seta, a
+limpeza devolvendo o card à altura natural); `tests/montagem_harness.js` 241 →
+**249** (`folhaVisivelDaMontagem` e `alturaDaJanelaDaMontagem`).
+
+---
+
 ## [2026-09-03] — Montagem: a folha se divide sozinha entre os modelos, gastando o mínimo de papel
 
 Pedido do usuário: **"ao carregar 2 modelos ou mais, ao analisar a quantidade de

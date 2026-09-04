@@ -3141,13 +3141,30 @@
                             <span id="mtg-folha-num" class="mtg-folha-medida"></span>
 
                             <div class="mtg-folha-acoes">
+                                <!-- O SELETOR DE FOLHA. A janela mostra UMA folha por
+                                     vez, no tamanho do formato, para caber inteira sem
+                                     rolagem -- o mesmo que a janela de visualizacao do
+                                     Pedido faz. So' aparece com duas folhas ou mais.
+                                     Soltar uma celula sobre a seta a manda para a folha
+                                     vizinha. -->
+                                <div class="mtg-folha-pag" id="mtg-folha-pag" style="display:none;">
+                                    <label for="mtg-folha-input">Folha</label>
+                                    <button type="button" id="mtg-folha-ant" onclick="folhaAnteriorDaMontagem()"
+                                            title="Folha anterior &mdash; ou solte uma c&eacute;lula aqui para mand&aacute;-la para ela"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                                    <input type="number" id="mtg-folha-input" min="1" value="1"
+                                           onchange="irParaFolhaDaMontagem(this.value - 1)">
+                                    <button type="button" id="mtg-folha-prox" onclick="proximaFolhaDaMontagem()"
+                                            title="Pr&oacute;xima folha &mdash; ou solte uma c&eacute;lula aqui para mand&aacute;-la para ela"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+                                    <span id="mtg-folha-de"></span>
+                                </div>
+
                                 <!-- ZOOM. `Peca` enche a largura com as celulas, para
                                      conferir o conteudo; `Folha` mostra o papel inteiro
                                      na proporcao real, e ai a SOBRA aparece pelo tamanho
                                      e nao so' por um numero; `100%` e' tamanho real. -->
                                 <div class="mtg-zoom">
-                                    <button type="button" id="mtg-zoom-peca" class="ativo" onclick="zoomDaMontagem('peca')" title="As c&eacute;lulas enchem a largura">Pe&ccedil;a</button>
-                                    <button type="button" id="mtg-zoom-folha" onclick="zoomDaMontagem('folha')" title="A folha inteira, na propor&ccedil;&atilde;o real">Folha</button>
+                                    <button type="button" id="mtg-zoom-peca" onclick="zoomDaMontagem('peca')" title="As c&eacute;lulas enchem a largura &mdash; amplia, e a&iacute; a janela rola">Pe&ccedil;a</button>
+                                    <button type="button" id="mtg-zoom-folha" class="ativo" onclick="zoomDaMontagem('folha')" title="A folha inteira, na propor&ccedil;&atilde;o real &mdash; cabe sem rolar">Folha</button>
                                     <button type="button" id="mtg-zoom-100" onclick="zoomDaMontagem('100')" title="Tamanho real">100%</button>
                                 </div>
 
@@ -3183,6 +3200,7 @@
                             <strong>Arraste</strong> uma c&eacute;lula para mudar a ordem. <strong>&#10697;</strong> repete a c&eacute;lula na pr&oacute;xima, empurrando as outras; <strong>&times;</strong> tira s&oacute; ela.
                             Clique para selecionar (<code>Shift</code> pega um intervalo, <code>Ctrl</code> avulsas) e o gesto vale para todas.
                             No teclado: <code>setas</code> movem, <code>Del</code> tira, <code>Ctrl+D</code> repete, <code>Ctrl+Z</code> desfaz.
+                            Com mais de uma folha, a janela mostra <strong>uma por vez</strong>: use <strong>Folha &lsaquo; &rsaquo;</strong> na barra, ou solte a c&eacute;lula sobre a seta para mand&aacute;-la para a folha vizinha.
                         </p>
                     </div>
 

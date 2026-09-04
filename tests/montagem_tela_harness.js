@@ -59,6 +59,10 @@ const FUNCOES = [
     'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo',
     'modelosComCelula', 'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
     'lugarDaCelulaNaFolha', 'geometriaDaFolha', 'escalaDaFolhaDaMontagem',
+    // A janela de uma folha por vez (04/09/2026).
+    'folhaVisivelDaMontagem', 'alturaDaJanelaDaMontagem', '_mtgAjustarAlturaDaJanela',
+    '_mtgRenderSeletorDeFolha', '_mtgSoltarAlturaDaJanela', '_mtgSeguirCelula', 'irParaFolhaDaMontagem',
+    'folhaAnteriorDaMontagem', 'proximaFolhaDaMontagem',
     'duplicarCelula', 'tirarCelula', 'moverCelula', 'completarAFolha', 'ordenarCelulas',
     'celulasForaDaTiragem', 'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado',
     'textoDoNumeroDoModelo', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
@@ -274,10 +278,10 @@ const PECAS = [
             titulos: Array.from(document.querySelectorAll('.mtg-folha-titulo')).map(e => e.textContent.trim()),
         };
     });
-    ok(grade.quantas === 20, 'catorze células mais as vagas: duas folhas de 10 desenhadas', grade.quantas);
-    ok(grade.cheias === 14 && grade.vazias === 6, 'catorze cheias e seis vazias', grade);
-    ok(grade.folhas === 2, 'e são dois papéis, um por folha', grade.folhas);
-    ok(grade.titulos.join('|') === 'Folha 1 de 2|Folha 2 de 2', 'cada folha tem o seu título', grade.titulos);
+    ok(grade.quantas === 10, 'a janela desenha UMA folha por vez: as dez células da folha 1', grade.quantas);
+    ok(grade.cheias === 10 && grade.vazias === 0, 'e na folha 1 as dez estão cheias', grade);
+    ok(grade.folhas === 1, 'um papel na tela — a pilha das duas folhas é que fazia rolar', grade.folhas);
+    ok(grade.titulos.length === 0, 'o título dentro da folha saiu: quem diz qual é ela é o seletor da barra', grade.titulos);
     // Triband: 1 coluna. Todas as células na mesma coluna, descendo.
     ok(grade.primeira.l === grade.segunda.l,
        'num formato de UMA coluna as células ficam na mesma coluna', grade);
@@ -294,13 +298,15 @@ const PECAS = [
         const c = window.__caixas();
         return { quantas: c.length, um: c[0], dois: c[1], tres: c[2], quatro: c[3],
                  folhas: document.querySelectorAll('#mtg-folha .mtg-papel').length,
+                 deFolhas: document.getElementById('mtg-folha-de').textContent,
                  razao: c[0].w / c[0].h };
     });
     ok(pvc.dois.t === pvc.um.t && pvc.dois.l > pvc.um.l,
        'PVC 2×2: a 2ª célula fica AO LADO da 1ª, e não embaixo — a pilha vertical mentia aqui', pvc);
     ok(pvc.tres.t > pvc.um.t && pvc.tres.l === pvc.um.l, 'a 3ª desce para a segunda linha', pvc);
     ok(pvc.quatro.t === pvc.tres.t && pvc.quatro.l === pvc.dois.l, 'e a 4ª fecha o quadrado', pvc);
-    ok(pvc.folhas === 2, 'a 5ª célula abre a segunda folha', pvc.folhas);
+    ok(pvc.folhas === 1, 'e continua UM papel na tela', pvc.folhas);
+    ok(pvc.deFolhas === 'de 2', 'a 5ª célula abre a segunda folha, e o seletor a oferece', pvc.deFolhas);
     ok(Math.abs(pvc.razao - 86 / 54) < 0.15, 'e a credencial sai na proporção dela (86×54 mm)', pvc.razao);
 
     // ── 3b. O zoom ──────────────────────────────────────────────────────────
@@ -313,14 +319,18 @@ const PECAS = [
                      celulaH: Math.round(c.getBoundingClientRect().height),
                      semPapel: p.classList.contains('sem-papel') };
         };
-        const r = { peca: medir() };
-        zoomDaMontagem('folha'); r.folha = medir();
+        // O PADRÃO É `folha` desde 04/09/2026 — a janela abre com a folha
+        // inteira. Os outros dois modos ampliam, e aí a janela rola: é escolha
+        // do operador, não o que ele encontra ao abrir a tela.
+        const r = { padrao: state.montagem.zoom, folha: medir() };
+        zoomDaMontagem('peca');  r.peca = medir();
         zoomDaMontagem('100');   r.cem = medir();
         zoomDaMontagem('peca');
         r.marcado = document.getElementById('mtg-zoom-peca').classList.contains('ativo');
         r.medida = document.getElementById('mtg-folha-num').textContent;
         return r;
     }, PECAS);
+    ok(zoom.padrao === 'folha', 'a tela abre no modo Folha: a folha inteira, sem rolagem', zoom.padrao);
     ok(zoom.peca.celulaH > zoom.folha.celulaH,
        'no modo Peça as células ficam MAIORES que no modo Folha', zoom);
     ok(zoom.peca.semPapel === true && zoom.folha.semPapel === false,
@@ -328,10 +338,140 @@ const PECAS = [
     ok(zoom.marcado, 'o botão do zoom escolhido fica marcado');
     ok(/320×450 mm/.test(zoom.medida), 'e o cabeçalho diz a medida da folha', zoom.medida);
 
+    // ── 3c. A JANELA CABE NA TELA, e mostra UMA FOLHA POR VEZ ──────────────
+    //
+    // Pedido do usuário em 04/09/2026: *"trazer a janela de visualização de
+    // forma que não precise utilizar o scroll, abrindo a janela no tamanho do
+    // formato. Como já funciona no painel de produção na edição do
+    // pedido/MODELO"*. Duas folhas empilhadas nunca caberiam; uma de cada vez
+    // cabe, e as outras ficam nas setas — o mesmo seletor da janela do Pedido.
+    const janela = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const f = document.getElementById('mtg-folha');
+        const card = document.querySelector('.mtg-folha-card');
+        const papel = f.querySelector('.mtg-papel');
+        const r = {
+            rolaVertical: f.scrollHeight > f.clientHeight + 1,
+            rolaHorizontal: f.scrollWidth > f.clientWidth + 1,
+            cardCabeNaTela: Math.round(card.getBoundingClientRect().bottom) <= window.innerHeight,
+            papelCabe: papel.getBoundingClientRect().height <= f.clientHeight + 1
+                    && papel.getBoundingClientRect().width <= f.clientWidth + 1,
+            // A moldura vem do FORMATO, e não do que couber: a proporção do
+            // papel desenhado tem de ser a da folha de saída (320 × 450 mm).
+            razaoPapel: papel.getBoundingClientRect().width / papel.getBoundingClientRect().height,
+            seletorVisivel: document.getElementById('mtg-folha-pag').style.display !== 'none',
+            de: document.getElementById('mtg-folha-de').textContent,
+            valor: document.getElementById('mtg-folha-input').value,
+            antTravada: document.getElementById('mtg-folha-ant').disabled,
+            proxTravada: document.getElementById('mtg-folha-prox').disabled,
+        };
+
+        proximaFolhaDaMontagem();
+        const caixas = window.__caixas();
+        r.folha2 = {
+            indice: state.montagem.folha,
+            valor: document.getElementById('mtg-folha-input').value,
+            primeira: caixas[0].i, cheias: caixas.filter(c => !c.vazia).length,
+            vazias: caixas.filter(c => c.vazia).length,
+            antTravada: document.getElementById('mtg-folha-ant').disabled,
+            proxTravada: document.getElementById('mtg-folha-prox').disabled,
+        };
+
+        // Digitar uma folha que não existe não leva a janela para o vazio.
+        irParaFolhaDaMontagem(9);
+        r.presa = { indice: state.montagem.folha, valor: document.getElementById('mtg-folha-input').value };
+
+        // Uma folha só: o seletor não tem o que oferecer e sai da barra.
+        window.__montar([pecas[0]]);
+        r.umaFolha = document.getElementById('mtg-folha-pag').style.display === 'none';
+
+        // E limpar a folha devolve o card à altura natural, em vez de deixá-lo
+        // do tamanho da montagem que acabou de sair.
+        window.__montar(pecas);
+        limparMontagem();
+        r.limpou = {
+            seletor: document.getElementById('mtg-folha-pag').style.display === 'none',
+            alturaSolta: document.querySelector('.mtg-folha-card').style.height === '',
+        };
+        return r;
+    }, PECAS);
+    ok(!janela.rolaVertical && !janela.rolaHorizontal,
+       'a janela abre SEM ROLAGEM: a folha inteira cabe nela', janela);
+    ok(janela.cardCabeNaTela, 'e o card inteiro cabe na altura da tela', janela);
+    ok(janela.papelCabe, 'o papel desenhado cabe dentro da janela, nos dois eixos', janela);
+    ok(Math.abs(janela.razaoPapel - 320 / 450) < 0.02,
+       'e sai na proporção da FOLHA (320×450 mm) — a moldura é o formato, não o que sobrou de espaço',
+       janela.razaoPapel);
+    ok(janela.seletorVisivel && janela.de === 'de 2' && janela.valor === '1',
+       'com duas folhas o seletor aparece, dizendo em qual delas a janela está', janela);
+    ok(janela.antTravada && !janela.proxTravada,
+       'na folha 1 a seta de voltar fica travada e a de avançar não', janela);
+    ok(janela.folha2.indice === 1 && janela.folha2.valor === '2' && janela.folha2.primeira === '10',
+       'a seta vira para a folha 2, que começa na décima primeira célula', janela.folha2);
+    ok(janela.folha2.cheias === 4 && janela.folha2.vazias === 6,
+       'e ali estão as quatro que sobraram e as seis vagas', janela.folha2);
+    ok(!janela.folha2.antTravada && janela.folha2.proxTravada,
+       'na última folha é a seta de avançar que trava', janela.folha2);
+    ok(janela.presa.indice === 1 && janela.presa.valor === '2',
+       'digitar a folha 10 numa montagem de 2 não leva a janela para o vazio', janela.presa);
+    ok(janela.umaFolha, 'com uma folha só o seletor sai da barra — não teria o que oferecer');
+    ok(janela.limpou.seletor && janela.limpou.alturaSolta,
+       'limpar a folha recolhe o seletor e devolve o card à altura natural', janela.limpou);
+
+    // A janela SEGUE a célula: mover além da fronteira da folha não some com ela.
+    const segue = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const r = {};
+        // A última célula da folha 1 (índice 9) para a primeira da folha 2.
+        moverCelulaDaMontagem(9, 10);
+        r.depoisDeMover = state.montagem.folha;
+        r.naTela = window.__caixas().some(c => c.i === '10');
+        // Acrescentar células que passam da folha atual abre a folha nova. É o
+        // que o `adicionarNaMontagem` faz com a primeira célula que entrou.
+        state.montagem.folha = 0;
+        renderMontagem();
+        const primeiraNova = state.montagem.celulas.length;
+        [900, 901, 902].forEach(pos =>
+            state.montagem.celulas.push({ osId: 'a', itemId: '1000565', pos: pos }));
+        _mtgSeguirCelula(primeiraNova);
+        renderMontagem();
+        r.depoisDeAdicionar = state.montagem.folha;
+        return r;
+    }, PECAS);
+    ok(segue.depoisDeMover === 1 && segue.naTela,
+       'mover uma célula para a folha seguinte leva a janela junto — senão ela sumiria da tela', segue);
+    ok(segue.depoisDeAdicionar === 1,
+       'e acrescentar células que não cabem na folha atual abre a folha onde elas caíram', segue);
+
+    // Soltar a célula SOBRE A SETA a manda para a folha vizinha. É o que
+    // devolve o alcance que o arrasto tinha quando as folhas ficavam empilhadas.
+    const setaSolta = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const disparar = (el, tipo) => el.dispatchEvent(new Event(tipo, { bubbles: true, cancelable: true }));
+        const rotulo = window.__rotulos()[0];
+        disparar(document.querySelector('#mtg-folha .mtg-celula[draggable="true"]'), 'dragstart');
+        const seta = document.getElementById('mtg-folha-prox');
+        disparar(seta, 'dragover');
+        const marcada = seta.classList.contains('mtg-seta-alvo');
+        disparar(seta, 'drop');
+        return { marcada, folha: state.montagem.folha, primeiro: window.__rotulos()[0],
+                 rotulo, limpou: !seta.classList.contains('mtg-seta-alvo') };
+    }, PECAS);
+    ok(setaSolta.marcada, 'a seta se acende quando uma célula paira sobre ela', setaSolta);
+    ok(setaSolta.folha === 1 && setaSolta.primeiro === setaSolta.rotulo,
+       'soltar ali manda a célula para a folha seguinte, e a janela vira para mostrá-la', setaSolta);
+    ok(setaSolta.limpou, 'e a marca da seta se apaga depois');
+
     // ── 4. O KANBAN: repetir, tirar, arrastar, selecionar ───────────────────
     const kanban = await aba.evaluate(pecas => {
         window.__montar(pecas);
+        // No modo Peça, onde a célula é grande, os botões ⧉ e × ficam nela. No
+        // modo Folha, que é o padrão, a célula de uma tira tem 21 px e eles não
+        // cabem — ali quem dá os dois gestos é a barra da seleção, e o bloco
+        // seguinte é que cobra isso.
+        zoomDaMontagem('peca');
         const r = {};
+        r.botoesNaCelula = document.querySelectorAll('#mtg-folha .mtg-celula-btn').length;
         document.querySelector('#mtg-folha .mtg-celula-btn:not(.mtg-celula-tirar)').click();
         r.depoisDeRepetir = window.__rotulos().slice(0, 3);
         r.chipRepetido = document.querySelector('#mtg-lista .mtg-pos').textContent.trim();
@@ -368,9 +508,11 @@ const PECAS = [
     const selecao = await aba.evaluate(pecas => {
         window.__montar(pecas);
         const r = {};
+        r.barraSemSelecao = document.getElementById('mtg-selecao').style.display === 'none';
         selecionarCelulaDaMontagem(0, {});
         r.uma = state.montagem.selecao.slice();
-        r.barraEscondida = document.getElementById('mtg-selecao').style.display === 'none';
+        r.barraComUma = document.getElementById('mtg-selecao').style.display !== 'none';
+        r.barraDizUma = document.getElementById('mtg-selecao').textContent.replace(/\s+/g, ' ').trim();
         selecionarCelulaDaMontagem(3, { shiftKey: true });
         r.faixa = state.montagem.selecao.slice();
         r.barraVisivel = document.getElementById('mtg-selecao').style.display !== 'none';
@@ -387,8 +529,12 @@ const PECAS = [
         r.desmarcou = state.montagem.selecao.slice();
         return r;
     }, PECAS);
-    ok(selecao.uma.join(',') === '0' && selecao.barraEscondida,
-       'com uma célula marcada a barra não aparece: os botões dela já resolvem', selecao);
+    ok(selecao.barraSemSelecao, 'sem nada marcado a barra não aparece', selecao);
+    ok(selecao.uma.join(',') === '0' && selecao.barraComUma
+       && /1 célula selecionada/.test(selecao.barraDizUma)
+       && /Repetir na próxima/.test(selecao.barraDizUma) && /Tirar da folha/.test(selecao.barraDizUma),
+       'com UMA marcada a barra já aparece: no modo Folha os botões da célula não cabem, '
+       + 'e sem ela o operador ficaria só com o teclado', selecao);
     ok(selecao.faixa.join(',') === '0,1,2,3', 'Shift pega o intervalo', selecao.faixa);
     ok(selecao.barraVisivel && /4 células selecionadas/.test(selecao.barraDiz),
        'e a barra aparece dizendo quantas', selecao.barraDiz);
@@ -412,11 +558,17 @@ const PECAS = [
         const depois = window.__rotulos().slice(0, 4);
         const combinadas = posicoesCombinadas(state.montagem.celulas, state.montagem.modelos).slice(0, 3).join(',');
         const movida = window.__rotulos()[0];
+
+        // Soltar numa célula VAZIA manda para o fim da folha. As vagas ficam na
+        // última folha, e com uma folha por vez elas só estão na tela quando a
+        // folha visível é essa — aqui, um modelo só, que cabe numa folha.
+        window.__montar([pecas[0]]);
+        const movida2 = window.__rotulos()[0];
         disparar(cels()[0], 'dragstart');
         disparar(document.querySelector('#mtg-folha .mtg-celula-vazia'), 'drop');
         const ultimo = window.__rotulos().slice(-1)[0];
         const sobrou = document.querySelectorAll('.mtg-celula-arrastando, .mtg-celula-alvo').length;
-        return { antes, depois, marcadaNaOrigem, marcadaNoAlvo, movida, ultimo, sobrou, combinadas };
+        return { antes, depois, marcadaNaOrigem, marcadaNoAlvo, movida: movida2, ultimo, sobrou, combinadas };
     }, PECAS);
     ok(arrasto.marcadaNaOrigem && arrasto.marcadaNoAlvo,
        'enquanto arrasta, a origem e o alvo ficam marcados — o operador vê onde vai cair', arrasto);
@@ -564,8 +716,8 @@ const PECAS = [
     ok(numero.nasceDesligado, 'o número nasce DESLIGADO — novidade que muda o papel entra desligada');
     ok(numero.desligadoNaFolha === 0, 'e desligado, ele não é desenhado em célula nenhuma');
     ok(numero.grade, 'os controles ficam apagados enquanto está desligado — mas à vista, não escondidos');
-    ok(numero.ligado === true && numero.desenhados === 14,
-       'ligado, ele aparece em TODAS as células cheias', numero.desenhados);
+    ok(numero.ligado === true && numero.desenhados === 10,
+       'ligado, ele aparece em TODAS as células cheias da folha na tela', numero.desenhados);
     ok(numero.texto === '1000565', 'com o id do modelo daquela célula', numero.texto);
     ok(/Impact/.test(numero.estilo) && /rotate\(-90deg\)/.test(numero.estilo),
        'na fonte e no giro que o motor usa', numero.estilo);
@@ -661,7 +813,9 @@ const PECAS = [
     });
     ok(/fecha-certo/.test(verde.classe) && /sem sobra/.test(verde.texto),
        'sem sobra o selo fica VERDE', verde);
-    ok(verde.titulos === 0, 'e uma folha só não ganha título de folha', verde.titulos);
+    ok(verde.titulos === 0,
+       'e nenhuma folha ganha título dentro da janela: quem diz qual é ela é o seletor da barra',
+       verde.titulos);
 
     // ── 10. A LINHA DA LISTA VOLTA AO MODELO ───────────────────────────────
     const voltar = await aba.evaluate(pecas => {

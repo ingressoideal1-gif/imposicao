@@ -59,6 +59,7 @@ const NOMES = [
     'celulasDoModelo', 'modelosComCelula', 'posicoesCombinadas',
     'totalDeCelulasDaMontagem', 'contaDaMontagem', 'lugarDaCelulaNaFolha',
     'geometriaDaFolha', 'escalaDaFolhaDaMontagem', 'duplicarCelula', 'tirarCelula',
+    'folhaVisivelDaMontagem', 'alturaDaJanelaDaMontagem',
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
     'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo',
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
@@ -342,6 +343,28 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(Math.abs(cem - 96 / 25.4) < 1e-9, '100% é tamanho real a 96 dpi', cem);
 
     ok(api.escalaDaFolhaDaMontagem('peca', null, 700, 500) === 0, 'sem geometria, escala zero');
+}
+
+// ── 7b. A janela: qual folha ela mostra, e de que tamanho ──────────────────
+//
+// Desde 04/09/2026 a janela mostra UMA folha por vez, no tamanho do formato,
+// para caber sem rolagem. Estas duas contas são o núcleo disso.
+{
+    ok(api.folhaVisivelDaMontagem(0, 3) === 0, 'a primeira folha é a folha 0');
+    ok(api.folhaVisivelDaMontagem(2, 3) === 2, 'e a última de três é a 2');
+    ok(api.folhaVisivelDaMontagem(9, 3) === 2,
+       'pedir a folha 9 numa montagem de três para na última — tirar células some com folhas, '
+       + 'e a janela não pode ficar apontando para uma que não existe mais');
+    ok(api.folhaVisivelDaMontagem(-4, 3) === 0, 'e folha negativa volta para a primeira');
+    ok(api.folhaVisivelDaMontagem('x', 3) === 0, 'lixo digitado no campo vira a primeira folha');
+    ok(api.folhaVisivelDaMontagem(1, 0) === 0, 'sem folha nenhuma, a resposta é 0 e não um erro');
+
+    ok(api.alturaDaJanelaDaMontagem(300, 1080, 200) === 556,
+       'a janela fica com o que sobra da tela: 1080 menos o topo, o resto do card e a folga',
+       api.alturaDaJanelaDaMontagem(300, 1080, 200));
+    ok(api.alturaDaJanelaDaMontagem(400, 768, 210) === 380,
+       'numa tela baixa a conta bate no piso de 380 px: melhor a página rolar um pouco '
+       + 'do que a folha virar uma tarja', api.alturaDaJanelaDaMontagem(400, 768, 210));
 }
 
 // ── 8. O mesmo modelo, adicionado duas vezes ────────────────────────────────

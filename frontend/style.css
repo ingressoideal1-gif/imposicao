@@ -4840,7 +4840,10 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 /* ── O CORPO: a folha manda ────────────────────────────────────────────────
    Ate 03/09/2026 era o contrario — a lista tinha `flex: 1` e a folha uma
    coluna fixa de 380px. Trocar os dois e' a mudanca central do redesenho. */
-.mtg-corpo { display: flex; gap: 18px; align-items: stretch; }
+/* `flex-start` e nao `stretch`: o card da folha recebe a altura da tela (ver
+   _mtgAjustarAlturaDaJanela) e a coluna de apoio fica com a altura do que ela
+   tem dentro, em vez de ser esticada junto. */
+.mtg-corpo { display: flex; gap: 18px; align-items: flex-start; }
 .mtg-folha-card {
     flex: 1 1 auto; min-width: 0;
     display: flex; flex-direction: column;
@@ -4888,6 +4891,38 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-zoom button:hover { color: var(--text); }
 .mtg-zoom button.ativo { background: var(--blue-dim); color: #93c5fd; }
 
+/* O SELETOR DE FOLHA (04/09/2026). A janela mostra uma folha por vez para
+   caber inteira sem rolagem; este e' o par de setas que troca de folha, com a
+   mesma caixa do zoom para as duas nao brigarem na barra. */
+.mtg-folha-pag {
+    display: flex; align-items: center; gap: 2px; padding: 0 6px 0 9px;
+    background: rgba(10, 15, 30, 0.6);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.mtg-folha-pag label {
+    font-size: 0.78rem; font-weight: 600; color: var(--text-dim); margin: 0;
+}
+.mtg-folha-pag button {
+    display: flex; align-items: center; justify-content: center;
+    padding: 5px 4px; border: none; background: transparent;
+    color: var(--text-dim); cursor: pointer; border-radius: 4px;
+    transition: all var(--transition);
+}
+.mtg-folha-pag button:hover:not(:disabled) { color: var(--text); background: var(--blue-dim); }
+.mtg-folha-pag button:disabled { opacity: 0.35; cursor: default; }
+/* Enquanto uma celula paira sobre a seta: soltar ali a manda para aquela folha. */
+.mtg-folha-pag button.mtg-seta-alvo {
+    background: var(--blue-dim); color: #93c5fd;
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.6);
+}
+.mtg-folha-pag input {
+    width: 42px; height: 26px; text-align: center;
+    padding: 2px 4px; font-size: 0.82rem; font-family: 'Inter', sans-serif;
+    color: var(--text); background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border); border-radius: 4px;
+}
+.mtg-folha-pag span { font-size: 0.78rem; color: var(--text-faint); }
+
 /* O menu do Ordenar: abre no hover, como todo menu deste painel. */
 .mtg-menu { position: relative; }
 .mtg-menu-lista {
@@ -4931,12 +4966,21 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    Fundo claro porque e' PAPEL: a folha montada nao e' um painel escuro, e ver
    as celulas na cor do material e' o que deixa o operador conferir o que sai. */
 .mtg-folha {
-    flex: 1 1 auto; min-height: 380px;
-    /* A folha ROLA DENTRO do card, e nao empurra a pagina: assim a coluna de
-       apoio (o numero no papel, o destino do arquivo) continua a vista enquanto
-       o operador percorre as celulas. Sem o teto, vinte celulas de 74px faziam
-       a pagina inteira rolar e os controles saiam da tela. */
-    max-height: calc(100vh - 340px);
+    flex: 1 1 auto;
+    /* A ALTURA E' MEDIDA, nao escrita aqui: o `_mtgAjustarAlturaDaJanela` do
+       montagem.js poe nela o que sobra da tela, porque o que vem acima muda de
+       altura sozinho (a barra da selecao, a trava, a recusa). Este `calc` e' so'
+       a rede para o caso de o JS nao ter rodado ainda.
+
+       A folha ROLA DENTRO do card, e nao empurra a pagina: assim a coluna de
+       apoio (o numero no papel, o destino do arquivo) continua a vista. No modo
+       Folha, que e' o padrao, nao ha o que rolar -- a folha inteira cabe.
+
+       `min-height: 0` porque o padrao do flex e' `auto`, e com ele um item
+       nunca encolhe abaixo do conteudo: a janela ignoraria a altura do card e
+       o esticaria de volta. */
+    min-height: 0;
+    max-height: calc(100vh - 300px);
     background: #f1f5f9; border-radius: var(--radius-sm);
     padding: 12px; overflow: auto;
     display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -4948,18 +4992,15 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    posicionadas em cima dele pelas coordenadas em mm — a mesma geometria do
    motor (ver geometriaDaFolha no montagem.js). */
 .mtg-papel {
-    position: relative; flex: 0 0 auto;
+    /* `margin: auto` e nao `justify-content: center` no pai: centraliza a folha
+       na janela SEM decepar o topo quando ela e' maior que a janela (modos Peca
+       e 100%), que e' o defeito conhecido do centro com overflow. */
+    position: relative; flex: 0 0 auto; margin: auto;
     background: #ffffff; border: 1px solid #cbd5e1; border-radius: 2px;
     box-shadow: 0 1px 6px rgba(15, 23, 42, 0.12);
 }
 /* No modo `Peca` nao ha papel em volta: so' a area imposta, ampliada. */
 .mtg-papel.sem-papel { background: transparent; border: none; box-shadow: none; }
-
-.mtg-folha-titulo {
-    flex: 0 0 auto; align-self: flex-start;
-    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
-    text-transform: uppercase; color: #64748b; padding: 2px 2px 0;
-}
 
 /* A CELULA E' UM CARTAO DE KANBAN (03/09/2026): tem alca para arrastar, o ⧉
    que a repete na proxima e o × que tira so' ela. O rotulo e os botoes somem
