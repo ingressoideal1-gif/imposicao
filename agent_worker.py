@@ -993,14 +993,7 @@ def verificar_atualizacao(forcado: bool = False):
     exe_path = sys.executable
     bat_path = os.path.join(tempfile.gettempdir(), "newprod_update.bat")
     with open(bat_path, "w", encoding="utf-8") as f:
-        f.write(f"""@echo off
-timeout /t 3 /nobreak > nul
-taskkill /IM "{os.path.basename(exe_path)}" /F > nul 2>&1
-msiexec /i "{destino}" /qn
-start "" "{exe_path}"
-del "{destino}" > nul 2>&1
-del "%~f0"
-""")
+        f.write(_script_de_update(exe_path, destino))
 
     # Marcado ANTES de disparar o .bat: se o msiexec falhar, o agente reinicia na
     # versao antiga e este registro sobrevive, mostrando que chegou ate a instalacao.
@@ -1008,6 +1001,44 @@ del "%~f0"
     print(f"[update] sha256 conferido. Instalando {versao_nova} e reiniciando...", flush=True)
     subprocess.Popen([bat_path], shell=True,
                      creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+
+
+def _script_de_update(exe_path, destino):
+    """O .bat que encerra o agente, instala o MSI e sobe a versao nova.
+
+    Separado para poder ser lido por teste: o que ele faz so acontece na
+    estacao, uma vez, e sem rede de teste um erro aqui e' descoberto por quem
+    esta esperando o material sair da impressora.
+
+    O `set` de variaveis vazias antes do `start` e o que faz o executavel novo
+    EXTRAIR os proprios arquivos. Ele e' "onefile": ao subir, o processo pai
+    extrai tudo para uma pasta temporaria e avisa o filho, por estas variaveis,
+    "ja extrai, use aquela pasta" -- e o filho nao extrai nada. Como este .bat
+    e' disparado pelo proprio agente, ele HERDA essas variaveis; sem limpa-las,
+    o executavel novo se julga filho de uma extracao que ja aconteceu e
+    reaproveita a pasta do agente ANTIGO, que acabou de morrer e levou quase
+    todo o conteudo dela junto.
+
+    O estrago e' silencioso e enganoso: o codigo que roda e' o novo (sai de
+    dentro do proprio .exe, e por isso a versao reportada esta certa), mas os
+    arquivos de apoio sao os velhos, ou nenhum. Foi assim que tres versoes
+    seguidas levaram a `mfc140u.dll` para dentro do executavel em 04/09/2026 e
+    a estacao continuou sem ela no disco. Vale para tudo o que viaja no
+    executavel -- DLLs, PPDs, o pool do QR Ideal.
+    """
+    variaveis = ("_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE",
+                 "_PYI_PARENT_PROCESS_LEVEL", "_MEIPASS2")
+    limpeza = chr(10).join('set "%s="' % v for v in variaveis)
+    return """@echo off
+timeout /t 3 /nobreak > nul
+taskkill /IM "{nome}" /F > nul 2>&1
+msiexec /i "{destino}" /qn
+{limpeza}
+start "" "{exe}"
+del "{destino}" > nul 2>&1
+del "%~f0"
+""".format(nome=os.path.basename(exe_path), destino=destino,
+           limpeza=limpeza, exe=exe_path)
 
 
 def run_loop():
