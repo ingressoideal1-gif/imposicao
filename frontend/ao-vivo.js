@@ -472,14 +472,27 @@
      * inteira com esta tela aberta, e um pedido a cada trinta segundos por
      * horas seria bateria e dados gastos para desenhar o que ninguém olha.
      */
-    function ligarRelogio(sessao) {
+    function ligarRelogio() {
         pararRelogio();
         estado.relogio = setInterval(function () {
             if (document.hidden) { return; }
             if ($('ao-vivo').classList.contains('sumindo')) { return pararRelogio(); }
             var d = estado.dados;
             if (d && d.evento && d.evento.status !== 'ativo') { return pararRelogio(); }
-            buscar(sessao);
+            // A sessão é pedida de NOVO a cada volta, e não guardada de quando
+            // a tela abriu. Esta tela fica aberta a noite inteira, e o token do
+            // Supabase vence em uma hora: com a cópia velha, ela deslogaria o
+            // dono no meio do evento. O SDK renova sozinho, e `sessao()`
+            // entrega o token de agora.
+            Promise.resolve().then(function () {
+                return window.AcessoConta.sessao();
+            }).catch(function () { return null; }).then(function (s) {
+                if (s) { return buscar(s); }
+                // Sem sessão o relógio para, e a tela fica com os últimos
+                // números em vez de piscar a tela de entrar sozinha por cima do
+                // que o dono está olhando. Ele mesmo tocará em Atualizar.
+                pararRelogio();
+            });
         }, INTERVALO_MS);
     }
 
@@ -519,7 +532,7 @@
             var aviso = $('ao-vivo-aviso');
             aviso.textContent = 'Buscando os números deste evento…';
             aviso.classList.remove('sumindo');
-            return buscar(s).then(function () { ligarRelogio(s); });
+            return buscar(s).then(function () { ligarRelogio(); });
         });
     }
 
