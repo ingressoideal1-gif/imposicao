@@ -97,3 +97,93 @@ def test_com_win32ui_a_bandeira_nao_atrapalha_o_mock(tmp_path, monkeypatch):
         "Qualquer", _pdf_min(tmp_path), {"print_mode": "gdi"})
     assert ok is True
     assert "MOCK" in msg
+
+
+# ---------------------------------------------------------------------------
+# A CAUSA, encontrada em 04/09/2026: o executavel leva o win32ui.pyd, mas nao
+# leva a DLL nativa que ele carrega.
+#
+# A correcao de 03/09 (1.2.299) poe 'win32ui' nos hiddenimports do
+# `agent_tray.spec`, e com isso o `pythonwin\win32ui.pyd` passou a entrar no
+# bundle. So que o `.pyd` NAO se basta: ele importa `mfc140u.dll` -- o runtime
+# do MFC --, que nao acompanha o pywin32 (a pasta `pythonwin/` do
+# site-packages nao tem a DLL) e nao faz parte do Windows. Ela chega na
+# maquina pelo "Visual C++ 2015-2022 Redistributable (x64)", instalado por
+# outros programas ao longo dos anos.
+#
+# Dai o sintoma que parecia versao do Windows: as estacoes antigas acumularam
+# o runtime (Corel, Adobe, driver de impressora), e uma maquina recem-formatada
+# nao tem nenhum deles. Quem decide nao e o Windows 10 ou 11 -- e se aquele
+# runtime foi parar ali algum dia. Enquanto a DLL nao viajar DENTRO do
+# executavel, a impressao da estacao depende do historico de instalacoes dela.
+#
+# O `MSVCP140.dll`, o `VCRUNTIME140.dll` e o `VCRUNTIME140_1.dll` ja viajam no
+# bundle; faltava so o `mfc140u.dll`, e e o unico que o win32ui pede a mais.
+# ---------------------------------------------------------------------------
+
+def _raiz():
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _spec():
+    with open(os.path.join(_raiz(), "agent_tray.spec"), encoding="utf-8") as f:
+        return f.read()
+
+
+def test_o_mfc140u_viaja_dentro_do_executavel_do_agente():
+    """Sem isto o agente COMPILA e so falha na estacao, no clique do operador.
+
+    E falha em UMAS estacoes so -- as que nunca receberam o Visual C++
+    Redistributable --, que e o disfarce mais caro que este defeito tem: parece
+    problema da maquina, e nao do instalador que saiu daqui.
+    """
+    spec = _spec()
+    assert "mfc140u.dll" in spec, (
+        "o agent_tray.spec nao leva o mfc140u.dll: o win32ui.pyd vai para a "
+        "estacao sem a DLL que ele carrega, e a impressao GDI so funciona "
+        "onde por acaso alguem ja instalou o Visual C++ Redistributable"
+    )
+    assert "binaries=[]" not in spec, (
+        "a lista de binaries voltou a ficar vazia -- o mfc140u.dll precisa "
+        "entrar por ela"
+    )
+
+
+def test_o_mfc140u_fica_ao_lado_do_pyd_que_o_carrega():
+    r"""Destino 'pythonwin', e nao a raiz do bundle.
+
+    O CPython carrega extensao com `LoadLibraryExW(..., LOAD_WITH_ALTERED_SEARCH_PATH)`,
+    e com essa flag o primeiro lugar em que o Windows procura as dependencias e
+    a PASTA DO PROPRIO .pyd. Como o PyInstaller poe o win32ui em
+    `pythonwin\win32ui.pyd`, a DLL ao lado dele e a colocacao que nao depende
+    de o bootloader ter acrescentado a raiz do bundle ao caminho de busca.
+    """
+    linhas = [l for l in _spec().splitlines()
+              if not l.lstrip().startswith("#")
+              and "'pythonwin'" in l
+              and ("mfc" in l.lower())]
+    assert linhas, (
+        "nenhuma linha do agent_tray.spec poe o mfc140u.dll na pasta "
+        "'pythonwin': ao lado do win32ui.pyd e a colocacao que o "
+        "LOAD_WITH_ALTERED_SEARCH_PATH do CPython acha com certeza"
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="dependencia nativa do Windows")
+def test_o_win32ui_realmente_pede_o_mfc140u():
+    """A prova de que a linha do spec nao e superstic~ao.
+
+    Se um dia o pywin32 parar de depender do MFC, este teste passa a falhar e
+    avisa que a DLL pode sair do bundle -- em vez de ela ficar la para sempre
+    porque ninguem lembra por que entrou.
+    """
+    import importlib.util
+    spec_pyd = importlib.util.find_spec("win32ui")
+    if spec_pyd is None or not spec_pyd.origin or not os.path.exists(spec_pyd.origin):
+        pytest.skip("win32ui.pyd nao esta nesta maquina")
+    with open(spec_pyd.origin, "rb") as f:
+        bruto = f.read()
+    assert b"mfc140u.dll" in bruto.lower(), (
+        "o win32ui.pyd desta maquina nao importa mais o mfc140u.dll -- "
+        "conferir se a DLL ainda precisa viajar no bundle"
+    )

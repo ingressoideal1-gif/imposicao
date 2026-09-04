@@ -47,10 +47,51 @@ if _pulados:
     print('[agent_tray.spec] fora do executavel por estarem no .gitignore: '
           + ', '.join(_pulados))
 
+# mfc140u.dll: o `win32ui.pyd` NAO se basta, e a falta dele so aparece na estacao.
+#
+# O pedido 21524 (03/09/2026) fez o win32ui entrar nos hiddenimports, e com isso
+# o `pythonwin\win32ui.pyd` passou a viajar no executavel. No dia seguinte o
+# mesmo erro continuou em ALGUMAS estacoes: o `.pyd` importa `mfc140u.dll` -- o
+# runtime do MFC --, que o pywin32 nao traz (a pasta `pythonwin/` do
+# site-packages tem o `.pyd` e nada de DLL) e que o Windows nao inclui. Ela
+# chega na maquina pelo "Visual C++ 2015-2022 Redistributable (x64)", que outros
+# programas instalam ao longo dos anos.
+#
+# Por isso parecia versao do Windows: as estacoes antigas acumularam o runtime
+# (Corel, Adobe, driver de impressora) e a recem-formatada nao. O que decide e o
+# historico de instalacoes daquela maquina, e depender disso significa uma
+# estacao que nao imprime sem ninguem entender por que.
+#
+# `MSVCP140.dll`, `VCRUNTIME140.dll` e `VCRUNTIME140_1.dll` ja viajam no bundle;
+# o `mfc140u.dll` e o unico que o win32ui pede a mais.
+#
+# O destino e 'pythonwin', ao lado do `.pyd` que o carrega: o CPython abre
+# extensao com `LoadLibraryExW(..., LOAD_WITH_ALTERED_SEARCH_PATH)`, e essa flag
+# manda o Windows procurar as dependencias PRIMEIRO na pasta do proprio `.pyd`.
+# Na raiz do bundle tambem funcionaria, mas dependeria de o bootloader ter
+# acrescentado a raiz ao caminho de busca -- ao lado nao depende de nada.
+#
+# Sem a DLL o build PARA, em vez de sair um instalador que so falha na estacao:
+# e o mesmo criterio da lista do git ali em cima.
+_MFC = 'mfc140u.dll'
+_mfc_candidatos = [
+    os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', _MFC),
+    os.path.join(os.path.dirname(os.__file__), '..', 'Lib', 'site-packages', 'pythonwin', _MFC),
+]
+_mfc = next((c for c in _mfc_candidatos if os.path.exists(c)), None)
+if not _mfc:
+    raise SystemExit(f"""[agent_tray.spec] Nao achei o {_MFC} nesta maquina.
+  Ele e a DLL que o win32ui.pyd carrega, e sem ela a impressao GDI
+  falha na estacao que nao tiver o Visual C++ Redistributable.
+  Instale o "Microsoft Visual C++ 2015-2022 Redistributable (x64)"
+  nesta maquina de compilacao e rode de novo.""")
+
+_binarios = [(_mfc, 'pythonwin')]
+
 a = Analysis(
     ['agent_tray.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=_binarios,
     # ('ppds', 'ppds') foi removido em 2026-08-09, e nao deve voltar.
     #
     # A pasta nunca teve um .ppd: continha 7 temporarios .TMP commitados por
