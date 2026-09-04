@@ -4,6 +4,99 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Ideal Control: o evento acontecendo, na mão do dono
+
+Pedido do usuário: *"onde podemos melhorar o Pwa Ideal control? qual a sua
+sugestão de melhorias?"* — e, das cinco propostas apresentadas, *"executar de 1
+a 5"*.
+
+O aplicativo sabia tudo **antes** do evento — setores, horários, aparelhos — e
+sabia tudo **depois**, num número solto na lista de finalizados. Nas quatro horas
+em que a fila anda e os aparelhos trabalham, ele não dizia nada ao dono. Era a
+única parte do caminho em que a pessoa que pagou pelo controle de acesso não
+tinha para onde olhar.
+
+### A tela "Ao vivo" (e "Relatório", que é a mesma parada)
+
+Um botão novo na linha de cada evento, entre a barra de LER e a engrenagem. No
+evento ativo ela se chama **Ao vivo** e se refaz sozinha a cada 30 segundos; no
+finalizado se chama **Relatório** e fica parada. Duas telas fariam "quantos
+entraram?" ter duas respostas conforme a hora da pergunta.
+
+Ela mostra, nesta ordem — e a ordem é a resposta, porque quem a abre pode estar
+com uma fila esperando:
+
+1. **o resumo** — entraram, dentro agora (só onde alguém saiu), ingressos
+   impressos, comparecimento, recusas;
+2. **procurar um ingresso** pelo número, no evento inteiro. *"Este ingresso já
+   entrou?"* é a pergunta da porta, e até agora só a gráfica sabia responder;
+3. entradas **por setor** e **por hora**, com a hora de pico marcada;
+4. as **recusas**, com o nome que a pessoa entende;
+5. os **aparelhos**, com o último sinal de cada um;
+6. a **planilha da noite**, com a leitura negada junto — é ela que responde "por
+   que a fila parou às 22h".
+
+E a barra do evento ativo passou a dizer **"412 entraram"**. Esse número já vinha
+na resposta e era jogado fora: o `/meus-eventos` conta as entradas de todos os
+eventos a cada abertura da casa, e a tela só o usava nos finalizados.
+
+**O relógio é o do servidor.** A resposta traz o `agora` dele, e "último sinal há
+40 minutos" sai daí. Calculado com o relógio do celular, mente sempre que o
+celular estiver errado — e um aparelho que parece mudo por causa do relógio do
+dono é uma corrida até a porta à toa.
+
+### As duas saídas que faltavam
+
+Eram as duas únicas situações do controle de acesso cuja resposta era "a gráfica
+mexe no banco à mão". Regra deste projeto: toda trava diz, nela mesma, como se
+sai dela.
+
+**Tirar um pedido do evento.** O cliente carrega no evento errado e o Carregar
+passa a recusar com "este pedido já está num evento", sem volta em tela nenhuma.
+Agora descarimba as credenciais, desliga os setores daquele pedido e solta o
+vínculo — nessa ordem, com o vínculo do pedido saindo por último, para que uma
+falha no meio deixe a operação repetível. Nenhum ingresso deixa de valer: o que
+sai é o carimbo. **Não vale depois que houve leitura na portaria** — seria perder
+de que setor cada pessoa entrou.
+
+**Conferir os setores.** O setor é gravado uma vez, no Carregar. Se depois disso
+um modelo ganhar numeração com código — que é o conserto quando a gráfica erra a
+numeração —, o setor dele nunca aparecia, e ninguém procura um setor que nunca
+existiu. Cria o que falta e carimba as credenciais; atualiza a quantidade e
+**nunca o nome**, que é do cliente; e desliga o setor sem código só quando ele
+está vazio, que é o caso dos oito setores órfãos de agosto.
+
+As duas nas **duas** telas — o aplicativo do dono e o Ideal Control da gráfica —
+pela mesma função: a autorização difere, a regra não.
+
+### O que mudou por baixo
+
+As contas do relatório saíram da `acesso-interno` e foram para
+`_compartilhado/relatorio.ts`. Duas cópias não quebrariam nada, e é por isso que
+seriam perigosas: a gráfica diria 412 e o cliente 409, as duas telas abertas ao
+mesmo tempo, sem como saber qual acertou nem como refazer a conta da noite que já
+passou.
+
+Três buracos fechados de quebra:
+
+- a tabela `MOTIVOS` não tinha `evento_inativo` nem `setor_bloqueado`, as duas
+  regras que entraram no validador da portaria depois dela — o relatório
+  escrevia o nome cru da coluna;
+- os **181 testes das Edge Functions** não eram disparados por nada. Agora rodam
+  com a suíte, em três segundos;
+- todo `.js` do frontend passa por um `node --check`. Uma aspa mal fechada no
+  `ideal-control.js` deixou a tela da gráfica em branco durante esta tarefa, e a
+  falha dizia só "Waiting failed: 30000ms exceeded".
+
+### O que ficou para o usuário
+
+**A prova da portaria com um celular de verdade, offline** — a única que vale, e
+a única que nenhum teste faz. O roteiro está escrito em
+[docs/prova_da_portaria.md](prova_da_portaria.md), com o evento e os números de
+hoje. Cinco passos, uns vinte minutos.
+
+---
+
 ## [2026-09-04] — Lista de arte: o card diz quando a arte veio de outro modelo
 
 Pedido do usuário: *"na lista de arte na edição do pedido, nos modelos onde foram
