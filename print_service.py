@@ -37,11 +37,20 @@ except ImportError:
 # que fez este projeto aprender a declarar esses modulos explicitamente em
 # `agent_tray.spec`; win32ui, win32gui e win32con estao la agora pelo mesmo
 # motivo.
+# ERRO_WIN32UI guarda o ImportError original -- e' ele que diz QUAL DLL faltou.
+#
+# Em 04/09/2026 a 1.2.302 saiu levando o `mfc140u.dll` dentro do executavel e a
+# estacao devolveu a MESMA mensagem de antes, palavra por palavra. Sem a causa
+# tecnica junto, nao havia como distinguir "a DLL nao veio no instalador" de "a
+# DLL veio e nao carregou porque falta outra da cadeia" -- e a segunda hipotese
+# era a certa. Uma linha de diagnostico teria poupado uma versao inteira.
 try:
     import win32gui, win32ui, win32con
     HAS_WIN32UI = True
-except ImportError:
+    ERRO_WIN32UI = ""
+except ImportError as _e:
     HAS_WIN32UI = False
+    ERRO_WIN32UI = str(_e)
 
 PPD_DIR = "ppds"
 os.makedirs(PPD_DIR, exist_ok=True)
@@ -618,6 +627,10 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
                "Reinicie o NewProd; se persistir, reinstale o NewProd ou "
                "instale o \"Microsoft Visual C++ Redistributável (x64)\" da "
                "Microsoft nesta estação, e avise o suporte.")
+        # A causa tecnica vai junto, em UMA linha e sem traceback: e o unico
+        # dado que diz de onde partir da proxima vez.
+        if ERRO_WIN32UI:
+            msg += f" (causa: {ERRO_WIN32UI})"
         print(f"[print][GDI] {msg}")
         return False, msg
 

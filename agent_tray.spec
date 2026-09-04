@@ -62,31 +62,48 @@ if _pulados:
 # historico de instalacoes daquela maquina, e depender disso significa uma
 # estacao que nao imprime sem ninguem entender por que.
 #
-# `MSVCP140.dll`, `VCRUNTIME140.dll` e `VCRUNTIME140_1.dll` ja viajam no bundle;
-# o `mfc140u.dll` e o unico que o win32ui pede a mais.
-#
 # O destino e 'pythonwin', ao lado do `.pyd` que o carrega: o CPython abre
 # extensao com `LoadLibraryExW(..., LOAD_WITH_ALTERED_SEARCH_PATH)`, e essa flag
 # manda o Windows procurar as dependencias PRIMEIRO na pasta do proprio `.pyd`.
-# Na raiz do bundle tambem funcionaria, mas dependeria de o bootloader ter
-# acrescentado a raiz ao caminho de busca -- ao lado nao depende de nada.
 #
-# Sem a DLL o build PARA, em vez de sair um instalador que so falha na estacao:
-# e o mesmo criterio da lista do git ali em cima.
-_MFC = 'mfc140u.dll'
-_mfc_candidatos = [
-    os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', _MFC),
-    os.path.join(os.path.dirname(os.__file__), '..', 'Lib', 'site-packages', 'pythonwin', _MFC),
+# As tres DLLs vao JUNTAS, na mesma pasta, porque a cadeia so fecha inteira.
+#
+# A 1.2.302 levou so o mfc140u.dll e a estacao continuou recusando: o
+# `mfc140u.dll` por sua vez importa `VCRUNTIME140.dll` e `VCRUNTIME140_1.dll`,
+# e essas duas o PyInstaller poe na RAIZ do bundle -- que nao e' procurada
+# quando o CPython abre o `pythonwin\win32ui.pyd`. A flag que ele usa
+# (LOAD_WITH_ALTERED_SEARCH_PATH) procura na pasta do proprio `.pyd` e depois
+# no System32; a raiz do _MEIPASS nao entra na conta (o `os.add_dll_directory`
+# que o PyInstaller chama cobre so a pasta `pywin32_system32`).
+#
+# Na estacao COM o Visual C++ instalado, o System32 fecha a cadeia e nada disso
+# aparece. Na estacao sem ele, o `VCRUNTIME140.dll` ainda escapa por acaso --
+# ja esta em memoria, porque o `python314.dll` depende dele --, mas o
+# `VCRUNTIME140_1.dll` so entra se algum outro modulo em C++ tiver sido
+# importado antes. Depender dessa ordem e' o mesmo defeito com outra roupa.
+_RUNTIME_DO_WIN32UI = ('mfc140u.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')
+_pastas_de_runtime = [
+    os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32'),
+    os.path.dirname(os.path.dirname(os.__file__)),
 ]
-_mfc = next((c for c in _mfc_candidatos if os.path.exists(c)), None)
-if not _mfc:
-    raise SystemExit(f"""[agent_tray.spec] Nao achei o {_MFC} nesta maquina.
-  Ele e a DLL que o win32ui.pyd carrega, e sem ela a impressao GDI
-  falha na estacao que nao tiver o Visual C++ Redistributable.
-  Instale o "Microsoft Visual C++ 2015-2022 Redistributable (x64)"
-  nesta maquina de compilacao e rode de novo.""")
+_binarios = []
+_faltando = []
+for _dll in _RUNTIME_DO_WIN32UI:
+    _achado = next((os.path.join(_p, _dll) for _p in _pastas_de_runtime
+                    if os.path.exists(os.path.join(_p, _dll))), None)
+    if _achado:
+        _binarios.append((_achado, 'pythonwin'))
+    else:
+        _faltando.append(_dll)
 
-_binarios = [(_mfc, 'pythonwin')]
+# Sem as DLLs o build PARA, em vez de sair um instalador que so falha na
+# estacao: e' o mesmo criterio da lista do git ali em cima.
+if _faltando:
+    raise SystemExit(f"""[agent_tray.spec] Nao achei nesta maquina: {', '.join(_faltando)}.
+  Sao as DLLs que o win32ui.pyd carrega para imprimir no modo GDI, e sem elas
+  a impressao falha na estacao que nao tiver o Visual C++ Redistributable.
+  Instale o "Microsoft Visual C++ 2015-2022 Redistributable (x64)" nesta
+  maquina de compilacao e rode de novo.""")
 
 a = Analysis(
     ['agent_tray.py'],

@@ -161,9 +161,9 @@ def test_o_mfc140u_fica_ao_lado_do_pyd_que_o_carrega():
     linhas = [l for l in _spec().splitlines()
               if not l.lstrip().startswith("#")
               and "'pythonwin'" in l
-              and ("mfc" in l.lower())]
+              and "_binarios" in l]
     assert linhas, (
-        "nenhuma linha do agent_tray.spec poe o mfc140u.dll na pasta "
+        "nenhuma linha do agent_tray.spec manda as DLLs para a pasta "
         "'pythonwin': ao lado do win32ui.pyd e a colocacao que o "
         "LOAD_WITH_ALTERED_SEARCH_PATH do CPython acha com certeza"
     )
@@ -187,3 +187,70 @@ def test_o_win32ui_realmente_pede_o_mfc140u():
         "o win32ui.pyd desta maquina nao importa mais o mfc140u.dll -- "
         "conferir se a DLL ainda precisa viajar no bundle"
     )
+
+
+# ---------------------------------------------------------------------------
+# O elo que faltava, 04/09/2026: a DLL do MFC tambem tem dependencias.
+#
+# A 1.2.302 poe o `mfc140u.dll` ao lado do `win32ui.pyd`, e ainda assim a
+# estacao continuou recusando. O motivo esta na CADEIA: o `mfc140u.dll` importa
+# `VCRUNTIME140.dll` e `VCRUNTIME140_1.dll`, e essas duas o PyInstaller poe na
+# RAIZ do bundle -- que nao e' procurada quando o CPython abre o
+# `pythonwin\win32ui.pyd` com LOAD_WITH_ALTERED_SEARCH_PATH: essa flag procura
+# na pasta do proprio `.pyd` e depois no System32, e a raiz do _MEIPASS nao
+# entra (o `os.add_dll_directory` do PyInstaller cobre so o `pywin32_system32`).
+#
+# Na estacao que TEM o Visual C++ instalado, o System32 salva a cadeia inteira e
+# nada disso aparece. Na que nao tem, o `VCRUNTIME140.dll` ainda escapa por
+# acaso -- ele ja esta carregado no processo, porque o `python314.dll` depende
+# dele --, mas o `VCRUNTIME140_1.dll` so entra em memoria se algum outro modulo
+# em C++ tiver sido importado antes. Depender dessa ordem e' o mesmo defeito de
+# ontem com outra roupa: funciona ou nao conforme a maquina.
+#
+# A correcao e' a pasta `pythonwin/` do bundle se bastar: o `.pyd`, a DLL do MFC
+# e as duas do runtime C, todas no mesmo lugar.
+# ---------------------------------------------------------------------------
+
+def test_o_runtime_c_acompanha_o_mfc_dentro_da_pasta_pythonwin():
+    """As tres DLLs juntas, ou a cadeia depende do System32 da estacao."""
+    spec = _spec()
+    linhas = [l for l in spec.splitlines() if not l.lstrip().startswith("#")]
+    corpo = "\n".join(linhas)
+    for dll in ("mfc140u.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll"):
+        assert dll in corpo, (
+            f"o {dll} precisa viajar dentro de pythonwin/: sem ele a cadeia do "
+            "MFC so fecha em estacao que tenha o Visual C++ instalado"
+        )
+
+
+def test_a_recusa_do_gdi_diz_a_causa_tecnica():
+    """Sem a causa, a proxima investigacao comeca do zero de novo.
+
+    A mensagem continua sem traceback -- o que se acrescenta e UMA linha com o
+    ImportError original, que e o que distingue "a DLL nao veio" de "a DLL veio
+    e nao carregou". Sem ela, os dois casos produzem exatamente o mesmo texto na
+    tela do operador, e foi por isso que a 1.2.302 saiu consertando o elo errado.
+    """
+    assert hasattr(print_service, "ERRO_WIN32UI"), (
+        "sumiu o registro do ImportError original do win32ui"
+    )
+    assert isinstance(print_service.ERRO_WIN32UI, str)
+
+
+def test_a_causa_tecnica_chega_ao_operador(tmp_path, monkeypatch):
+    monkeypatch.setattr(print_service, "HAS_WIN32", True)
+    monkeypatch.setattr(print_service, "HAS_WIN32UI", False)
+    monkeypatch.setattr(print_service, "ERRO_WIN32UI",
+                        "DLL load failed while importing win32ui: modulo nao encontrado")
+
+    ok, msg = print_service.send_print_job_windows(
+        "Qualquer Impressora", _pdf_min(tmp_path), {"print_mode": "gdi"})
+
+    assert ok is False
+    assert "DLL load failed" in msg, (
+        "a causa tecnica precisa chegar junto -- e ela que diz qual DLL faltou"
+    )
+    assert "Traceback" not in msg, "causa tecnica sim, traceback nao"
+    # O recado de acao continua la: a causa e' um acrescimo, nao uma troca.
+    assert "win32ui" in msg.lower()
+    assert any(p in msg for p in ("NewProd", "Redistribu"))
