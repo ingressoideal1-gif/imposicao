@@ -63,6 +63,18 @@ import {
   recusaHumana,
 } from "./puro.ts";
 import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
+// Os numeros do evento sao os MESMOS que a tela da grafica mostra, e por isso
+// vem de la e nao daqui. Ver o cabecalho de `aoVivo`, mais abaixo.
+import {
+  dashboard,
+  leiturasDoEvento,
+  listarIngressos,
+} from "../_compartilhado/relatorio.ts";
+import {
+  numeroDaPagina,
+  tamanhoDaPagina,
+  termoSeguro,
+} from "../_compartilhado/relatorio_puro.ts";
 import {
   clientesDaConta, contaPrecisaTrocarSenha, marcarSenhaTrocada,
 } from "../_compartilhado/contas.ts";
@@ -509,16 +521,19 @@ async function trocarMinhaSenha(
 
 // ── O painel do evento ──────────────────────────────────────────────────────
 
-async function painel(eventoId: string): Promise<any> {
-  const evento = ((await banco(
-    "GET",
-    `producao_acesso_eventos?id=eq.${eventoId}` +
-      "&select=id,nome_evento,data_evento,local_evento,status",
-  )) ?? [])[0] ?? null;
-
-  // `lotacao` NAO entra no select: a lotacao de um setor E a quantidade
-  // contratada no ERP. Um segundo numero, digitado a parte, envelheceria no
-  // instante em que o cliente aumentasse o pedido.
+/**
+ * Os setores ativos do evento, cada um com as faixas bloqueadas dele.
+ *
+ * Uma consulta so, para as DUAS telas deste arquivo -- a configuracao e os
+ * numeros do evento. Duas consultas separadas nao dariam erro nenhum: dariam um
+ * setor visivel numa tela e ausente na outra no dia em que uma das duas
+ * ganhasse um filtro que a outra nao ganhou.
+ *
+ * `lotacao` NAO entra no select: a lotacao de um setor E a quantidade
+ * contratada no ERP. Um segundo numero, digitado a parte, envelheceria no
+ * instante em que o cliente aumentasse o pedido.
+ */
+async function setoresDoEvento(eventoId: string): Promise<any[]> {
   const setores = (await banco(
     "GET",
     `producao_acesso_setores?evento_id=eq.${eventoId}&status=eq.ativo` +
@@ -526,6 +541,28 @@ async function painel(eventoId: string): Promise<any> {
       "bloqueado,bloqueado_motivo" +
       "&order=nome.asc",
   )) ?? [];
+
+  // `status=eq.ativo` porque bloqueio liberado e historico, nao configuracao.
+  // Mostra-lo faria o dono liberar de novo o que ja esta liberado.
+  const bloqueios = (await banco(
+    "GET",
+    `producao_acesso_bloqueios?evento_id=eq.${eventoId}&status=eq.ativo` +
+      "&select=id,setor_id,de,ate,motivo&order=de.asc",
+  )) ?? [];
+  for (const s of setores) {
+    s.bloqueios = bloqueios.filter((b: any) => String(b.setor_id) === String(s.id));
+  }
+  return setores;
+}
+
+async function painel(eventoId: string): Promise<any> {
+  const evento = ((await banco(
+    "GET",
+    `producao_acesso_eventos?id=eq.${eventoId}` +
+      "&select=id,nome_evento,data_evento,local_evento,status",
+  )) ?? [])[0] ?? null;
+
+  const setores = await setoresDoEvento(eventoId);
 
   // A faixa IMPRESSA em cada setor vem do ERP, e nao de um MIN/MAX sobre as
   // credenciais publicadas: uma faixa deduzida do que ja foi impresso encolhe
@@ -555,17 +592,6 @@ async function painel(eventoId: string): Promise<any> {
     // "de 0000 a 0000" na tela do dono seria pior que linha nenhuma.
     s.numero_de = f?.numeracao_inicio ?? null;
     s.numero_ate = f?.numeracao_fim ?? null;
-  }
-
-  // `status=eq.ativo` porque bloqueio liberado e historico, nao configuracao.
-  // Mostra-lo faria o dono liberar de novo o que ja esta liberado.
-  const bloqueios = (await banco(
-    "GET",
-    `producao_acesso_bloqueios?evento_id=eq.${eventoId}&status=eq.ativo` +
-      "&select=id,setor_id,de,ate,motivo&order=de.asc",
-  )) ?? [];
-  for (const s of setores) {
-    s.bloqueios = bloqueios.filter((b: any) => String(b.setor_id) === String(s.id));
   }
 
   const aparelhos = (await banco(
@@ -611,6 +637,62 @@ async function painel(eventoId: string): Promise<any> {
   }
 
   return { evento, setores, aparelhos, pedidos, codigos_cliente: codigos };
+}
+
+// ── O evento acontecendo ────────────────────────────────────────────────────
+
+/**
+ * Os numeros do evento para o DONO -- durante a noite e depois dela.
+ *
+ * ESTA FUNCAO EXISTE PORQUE O DONO FICAVA CEGO NA HORA DO EVENTO. Ele
+ * configurava tudo antes, e recebia um numero solto depois de finalizar; nas
+ * quatro horas em que a fila anda e os portoes trabalham, o aplicativo nao lhe
+ * dizia nada. A conta ja era feita -- `meusEventos` conta as entradas de todos
+ * os eventos a cada abertura da casa --, e so aparecia na lista de finalizados.
+ *
+ * As contas sao as MESMAS da tela da grafica, e vem do
+ * `_compartilhado/relatorio.ts` de proposito: duas telas que respondem "quantos
+ * entraram" nao podem calcular isso em dois lugares. O sintoma de duas copias
+ * seria a grafica dizer 412 e o cliente dizer 409, as duas telas abertas ao
+ * mesmo tempo, sem como saber qual acertou -- nem como refazer a conta depois.
+ *
+ * O `contratado` sai da soma dos SETORES, e nao dos modelos do ERP: a lotacao
+ * de um setor E a quantidade contratada, e o dono so tem setores. A tela da
+ * grafica soma pelos modelos porque ela abre o pedido antes de o cliente
+ * carrega-lo, quando setor nenhum existe ainda.
+ *
+ * `agora` vai junto e nao e enfeite: "ultimo sinal ha 40 minutos" calculado com
+ * o relogio do celular mente sempre que ele estiver errado -- e um portao que
+ * parece mudo por causa do relogio do dono e uma corrida ate a porta a toa.
+ */
+async function aoVivo(evento: any): Promise<any> {
+  const setores = await setoresDoEvento(evento.id);
+  const contratado = setores.reduce(
+    (soma: number, s: any) => soma + Number(s.quantidade ?? 0),
+    0,
+  );
+  const numeros = await dashboard(evento.id, setores, contratado);
+
+  // `token_hash` NAO entra: e segredo, e o que a tela precisa saber e so se o
+  // aparelho ja foi pareado e quando ele deu sinal pela ultima vez.
+  const aparelhos = (await banco(
+    "GET",
+    `producao_acesso_dispositivos?evento_id=eq.${evento.id}` +
+      "&select=id,nome,status,ultimo_visto&order=nome.asc",
+  )) ?? [];
+
+  return {
+    evento: {
+      id: evento.id,
+      nome_evento: evento.nome_evento ?? null,
+      data_evento: evento.data_evento ?? null,
+      local_evento: evento.local_evento ?? null,
+      status: evento.status ?? null,
+    },
+    ...numeros,
+    aparelhos,
+    agora: new Date().toISOString(),
+  };
 }
 
 // ── O QR do Pedido ──────────────────────────────────────────────────────────
@@ -884,6 +966,48 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   if (metodo === "GET" && p.length === 2 && p[0] === "eventos") {
     await eventoDoDono(p[1], usuario);
     return ok(await painel(p[1]));
+  }
+
+  // ── As tres leituras da tela "Ao vivo" ────────────────────────────────────
+  //
+  // As tres SO LEEM, e por isso nao pedem elevacao: e a mesma porta do painel
+  // logo acima. Olhar quantos entraram no proprio evento nao pode custar a
+  // senha -- quem esta olhando esta na porta, com o celular na mao, e cobrar a
+  // senha ali seria cobra-la a cada vez que ele quisesse conferir um numero.
+  if (metodo === "GET" && p.length === 3 && p[0] === "eventos" && p[2] === "ao-vivo") {
+    return ok(await aoVivo(await eventoDoDono(p[1], usuario)));
+  }
+  // "Este ingresso aqui, que eu tenho na mao, ja entrou?" -- a pergunta da
+  // porta. Sem `setor_id` procura no EVENTO INTEIRO, porque quem pergunta nao
+  // sabe de que setor o ingresso e: e justamente isso que ele veio descobrir.
+  if (metodo === "GET" && p.length === 3 && p[0] === "eventos" && p[2] === "ingressos") {
+    const evento = await eventoDoDono(p[1], usuario);
+    const setorPedido = url.searchParams.get("setor_id");
+    // O setor pedido tem de ser DESTE evento. Sem esta conferencia, o dono de
+    // um evento leria a lista de ingressos de outro passando o id na URL.
+    const setor = setorPedido ? await setorDoDono(setorPedido, usuario) : null;
+    if (setor && String(setor.evento_id) !== String(evento.id)) {
+      throw new Recusa(403, "setor nao encontrado nesta conta");
+    }
+    const busca = url.searchParams.get("busca");
+    return ok(await listarIngressos(
+      evento.id,
+      setor ? setor.id : null,
+      numeroDaPagina(url.searchParams.get("pagina") ?? 1),
+      tamanhoDaPagina(url.searchParams.get("por_pagina")),
+      busca === null ? null : termoSeguro(busca).trim(),
+    ));
+  }
+  // A base do arquivo que o dono baixa no fim da noite. Pagina, porque ele
+  // baixa o evento inteiro -- e o teto de 1.000 linhas do PostgREST cortaria em
+  // silencio um evento grande, que e exatamente o que ele quer conferir.
+  if (metodo === "GET" && p.length === 3 && p[0] === "eventos" && p[2] === "leituras") {
+    const evento = await eventoDoDono(p[1], usuario);
+    return ok(await leiturasDoEvento(
+      evento.id,
+      numeroDaPagina(url.searchParams.get("pagina") ?? 1),
+      tamanhoDaPagina(url.searchParams.get("por_pagina")),
+    ));
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "eventos" && p[2] === "elevar") {
     const c = await corpo();

@@ -43,28 +43,23 @@ import {
   excluirAparelho,
 } from "../_compartilhado/configuracao.ts";
 import { contasDoCliente, liberarAcesso, novaSenhaProvisoria } from "../_compartilhado/contas.ts";
+// As contas do relatorio moram no compartilhado desde 04/09/2026: o dono do
+// evento ve os MESMOS numeros no aplicativo dele, e duas copias diriam 412 aqui
+// e 409 la, as duas telas abertas ao mesmo tempo, sem como saber qual acertou.
 import {
-  horaCheia,
-  MOTIVOS,
+  dashboard,
+  listarIngressos,
+  numerosDoSetor,
+} from "../_compartilhado/relatorio.ts";
+import {
   numeracaoDoModelo,
   numeroDaPagina,
   pedacosDaRota,
-  situacao,
   tamanhoDaPagina,
-  termoSeguro,
   URL_DE_INSTALACAO,
 } from "./puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
-
-/**
- * Teto de leituras trazidas para montar o grafico por hora. Os TOTAIS nao
- * passam por aqui -- eles saem de `contar()`, que e exato a qualquer tamanho.
- * So o histograma precisa das linhas, e um evento gigante nao pode travar a
- * tela. Quando o teto e atingido, a resposta DIZ (`grafico_truncado`): um corte
- * silencioso viraria um grafico que parece completo e nao e.
- */
-const LEITURAS_PARA_O_GRAFICO = 20000;
 
 const FORMATO_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,28 +85,6 @@ function uuid(valor: string, oque: string): string {
 // formato de erro divergiriam no dia em que uma delas fosse ajustada.
 
 // ── Leitura ─────────────────────────────────────────────────────────────────
-
-/**
- * Traz uma tabela inteira em paginas de 1.000, ate o teto.
- *
- * O `order` tem de vir no caminho: sem ordem definida, o PostgREST pode repetir
- * e pular linhas entre paginas -- duas paginas somariam 2.000 linhas com
- * repetidas dentro.
- */
-async function todasAsLinhas(
-  caminho: string,
-  teto = LEITURAS_PARA_O_GRAFICO,
-): Promise<[any[], boolean]> {
-  const linhas: any[] = [];
-  let inicio = 0;
-  while (inicio < teto) {
-    const lote = (await banco("GET", `${caminho}&offset=${inicio}&limit=1000`)) ?? [];
-    linhas.push(...lote);
-    if (lote.length < 1000) return [linhas, false];
-    inicio += 1000;
-  }
-  return [linhas, true];
-}
 
 async function eventoDoPedido(pedidoIdInt: number): Promise<any> {
   return ((await banco(
@@ -296,138 +269,6 @@ async function clienteDoPedido(pedidoIdInt: number): Promise<any> {
   };
 }
 
-async function numerosDoSetor(setorId: string): Promise<any> {
-  return {
-    publicadas: await contar(
-      `producao_acesso_credenciais?setor_id=eq.${setorId}&origem=eq.qr_ideal`,
-    ),
-    codigos_cliente: await contar(
-      `producao_acesso_credenciais?setor_id=eq.${setorId}&origem=eq.cliente`,
-    ),
-    entradas: await contar(
-      `producao_acesso_leituras?setor_id=eq.${setorId}` +
-        "&resultado=eq.permitido&tipo=eq.entrada",
-    ),
-  };
-}
-
-async function dashboard(eventoId: string, setores: any[], modelos: any[]): Promise<any> {
-  const contratado = modelos
-    .filter((m) => m.sobe_ao_controle)
-    .reduce((s, m) => s + m.quantidade, 0);
-
-  const publicado = await contar(
-    `producao_acesso_credenciais?evento_id=eq.${eventoId}&origem=eq.qr_ideal`,
-  );
-  const cortesias = await contar(
-    `producao_acesso_credenciais?evento_id=eq.${eventoId}&origem=eq.cliente`,
-  );
-  const entradas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.permitido&tipo=eq.entrada`,
-  );
-  const saidas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.permitido&tipo=eq.saida`,
-  );
-  const recusadas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.negado`,
-  );
-
-  const [leituras, truncado] = await todasAsLinhas(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}` +
-      "&select=momento,resultado,motivo,tipo,setor_id,dispositivo_id&order=momento.asc",
-  );
-
-  const porHora: Record<string, { entradas: number; saidas: number; recusas: number }> = {};
-  const entradasPorSetor: Record<string, number> = {};
-  const motivos: Record<string, number> = {};
-  for (const l of leituras) {
-    if (l.resultado === "permitido" && l.tipo !== "saida" && l.setor_id) {
-      const k = String(l.setor_id);
-      entradasPorSetor[k] = (entradasPorSetor[k] ?? 0) + 1;
-    }
-    if (l.resultado === "negado") {
-      const m = l.motivo ?? null;
-      motivos[String(m)] = (motivos[String(m)] ?? 0) + 1;
-    }
-
-    const hora = horaCheia(l.momento);
-    if (!hora) continue;
-    porHora[hora] ??= { entradas: 0, saidas: 0, recusas: 0 };
-    if (l.resultado === "negado") porHora[hora].recusas += 1;
-    else if (l.tipo === "saida") porHora[hora].saidas += 1;
-    else porHora[hora].entradas += 1;
-  }
-
-  const bloqueados = setores.reduce(
-    (soma, s) =>
-      soma + (s.bloqueios ?? []).reduce(
-        (t: number, b: any) => t + Math.max(0, b.ate - b.de + 1),
-        0,
-      ),
-    0,
-  );
-
-  const horasOrdenadas = Object.keys(porHora).sort();
-  let pico: string | null = null;
-  let picoEntradas = 0;
-  for (const h of horasOrdenadas) {
-    if (porHora[h].entradas > picoEntradas) {
-      picoEntradas = porHora[h].entradas;
-      pico = h;
-    }
-  }
-  // `max(..., default=(None, 0))[0]` do Python devolve a PRIMEIRA hora quando
-  // todas empatam em zero. Sem esta linha, o `>` acima deixaria `pico` nulo.
-  if (pico === null && horasOrdenadas.length) pico = horasOrdenadas[0];
-
-  return {
-    publico: {
-      contratado,
-      publicado,
-      cortesias,
-      entraram: entradas,
-      sairam: saidas,
-      // Quem esta DENTRO agora. So faz sentido onde ha reentrada; nos setores de
-      // entrada unica, saidas sao sempre zero e o numero coincide com
-      // "entraram" -- que e o comportamento certo.
-      presentes: Math.max(0, entradas - saidas),
-      recusadas,
-      bloqueados,
-      // A pergunta que o dono faz primeiro: quantos dos que compraram
-      // apareceram? Sem `publicado` ainda nao ha denominador, e devolver 0%
-      // mentiria -- devolve nulo e a tela diz "—".
-      comparecimento_pct: publicado
-        ? Math.round(entradas * 1000.0 / publicado) / 10
-        : null,
-    },
-    // Sai da MESMA varredura de leituras que o histograma usa -- nenhuma
-    // consulta a mais. Contar por setor no banco custaria uma ida por setor.
-    por_setor: setores.map((s) => ({
-      setor_id: s.id,
-      nome: s.nome,
-      contratado: s.quantidade ?? 0,
-      entraram: entradasPorSetor[String(s.id)] ?? 0,
-      ocupacao_pct: s.quantidade
-        ? Math.round((entradasPorSetor[String(s.id)] ?? 0) * 1000.0 / s.quantidade) / 10
-        : null,
-    })),
-    recusas: Object.entries(motivos)
-      .sort((a, b) => b[1] - a[1])
-      .map(([m, quantas]) => ({
-        motivo: m === "null" ? "sem motivo" : m,
-        rotulo: MOTIVOS[m] ?? (m === "null" ? "sem motivo" : m),
-        quantas,
-      })),
-    por_hora: horasOrdenadas.map((h) => ({ hora: h, ...porHora[h] })),
-    pico,
-    // Nenhum corte silencioso: quando o histograma nao cabe no teto, a resposta
-    // diz. Um grafico cortado que nao avisa se le como o evento inteiro -- e o
-    // numero que ele contradiz (`entraram`) esta logo acima.
-    grafico_truncado: truncado,
-    leituras_lidas: leituras.length,
-  };
-}
-
 async function setor(setorId: string): Promise<any> {
   const linha = ((await banco(
     "GET",
@@ -457,29 +298,13 @@ async function evento(eventoId: string): Promise<any> {
   return linha;
 }
 
-async function entradasPorCredencial(ids: string[]): Promise<Record<string, string>> {
-  if (!ids.length) return {};
-  const lista = ids.map((i) => `"${i}"`).join(",");
-  const linhas = (await banco(
-    "GET",
-    `producao_acesso_leituras?credencial_id=in.(${lista})` +
-      "&resultado=eq.permitido&tipo=eq.entrada" +
-      "&select=credencial_id,momento&order=momento.asc",
-  )) ?? [];
-  const primeira: Record<string, string> = {};
-  for (const l of linhas) {
-    const k = String(l.credencial_id);
-    if (!(k in primeira)) primeira[k] = l.momento;
-  }
-  return primeira;
-}
-
 /**
  * Os ingressos de um setor, com a situacao de cada um.
  *
- * O CODIGO NAO ENTRA. A lista traz o numero (que e o que esta impresso e o que
- * o atendente procura), a origem e a situacao. `codigo_visivel` so sai para os
- * codigos que o proprio cliente carregou.
+ * A lista em si vem do `_compartilhado/relatorio.ts` -- a MESMA que o
+ * aplicativo do dono do evento usa desde 04/09/2026. O que esta funcao
+ * acrescenta e o cabecalho do setor e os tres numeros dele, que so esta tela
+ * mostra.
  */
 async function ingressosDoSetor(
   setorId: string,
@@ -488,63 +313,10 @@ async function ingressosDoSetor(
   busca: string | null,
 ): Promise<any> {
   const s = await setor(setorId);
-
-  let filtro = `producao_acesso_credenciais?setor_id=eq.${s.id}`;
-  if (busca !== null && busca !== "") {
-    if (/^\d+$/.test(busca.trim())) {
-      filtro += `&numero=eq.${Number(busca)}`;
-    } else {
-      filtro += `&codigo_visivel=ilike.*${termoSeguro(busca)}*`;
-    }
-  }
-
-  // `order` explicito e sempre o mesmo: sem ele, duas paginas do PostgREST
-  // podem repetir e pular linhas, e a tela mostraria o mesmo ingresso duas
-  // vezes em paginas diferentes.
-  //
-  // Pede UMA linha a mais do que cabe. E como se sabe que "ha mais" sem uma
-  // segunda consulta -- e sem prometer um total que o teto de 1.000 do
-  // PostgREST nao deixaria contar de graca.
-  let linhas = (await banco(
-    "GET",
-    filtro + "&select=id,numero,codigo_visivel,origem,status,created_at" +
-      "&order=numero.asc,created_at.asc" +
-      `&offset=${(pagina - 1) * porPagina}&limit=${porPagina + 1}`,
-  )) ?? [];
-  const haMais = linhas.length > porPagina;
-  linhas = linhas.slice(0, porPagina);
-
-  const entradas = await entradasPorCredencial(linhas.map((l: any) => l.id));
-  const faixas = ((await banco(
-    "GET",
-    `producao_acesso_bloqueios?setor_id=eq.${s.id}&status=eq.ativo&select=de,ate,motivo`,
-  )) ?? []) as any[];
-
-  const ingressos = linhas.map((l: any) => {
-    const numero = l.numero;
-    const bloqueio = faixas.find(
-      (f) => numero !== null && numero !== undefined && f.de <= numero && numero <= f.ate,
-    )?.motivo ?? null;
-    const entrada = entradas[String(l.id)] ?? null;
-    return {
-      id: l.id,
-      numero,
-      // So o do cliente. O do QR Ideal nao existe em claro em lugar nenhum --
-      // nem aqui, nem no banco.
-      codigo: l.origem === "cliente" ? (l.codigo_visivel ?? null) : null,
-      origem: l.origem,
-      situacao: situacao(l, bloqueio, entrada),
-      motivo_bloqueio: bloqueio,
-      entrou_em: entrada,
-    };
-  });
-
+  const lista = await listarIngressos(s.evento_id, s.id, pagina, porPagina, busca);
   return {
     setor: { id: s.id, nome: s.nome ?? null, quantidade: s.quantidade ?? null },
-    pagina,
-    por_pagina: porPagina,
-    ha_mais: haMais,
-    ingressos,
+    ...lista,
     // Os numeros deste setor vem de carona, e so na PRIMEIRA pagina: quem abriu
     // a lista esta olhando este setor agora, e e o momento certo de contar.
     // Repeti-los a cada pagina seriam tres idas ao banco por toque em
@@ -707,10 +479,20 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     const pedido = inteiro(p[1], "path", "pedido");
     const eventoId = (await eventoDoPedido(pedido))?.evento_id;
     if (!eventoId) throw new Recusa(404, "este pedido ainda nao virou evento");
+    // O contratado desta tela sai dos MODELOS DO ERP que sobem ao controle, e
+    // nao dos setores: o atendente abre o pedido para conferir o que foi
+    // contratado, inclusive antes de o cliente carregar o pedido e os setores
+    // existirem. O aplicativo do dono soma pelos setores, que e o que ele tem.
+    // Por isso o `dashboard` recebe o numero pronto em vez de escolher um dos
+    // dois caminhos por conta propria.
+    const modelos = await modelosDoPedido(pedido);
+    const contratado = modelos
+      .filter((m) => m.sobe_ao_controle)
+      .reduce((s, m) => s + m.quantidade, 0);
     return ok(await dashboard(
       eventoId,
       await setoresDoEvento(eventoId, pedido),
-      await modelosDoPedido(pedido),
+      contratado,
     ));
   }
   if (metodo === "GET" && p.length === 3 && p[0] === "setores" && p[2] === "ingressos") {
