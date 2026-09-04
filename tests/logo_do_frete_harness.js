@@ -111,6 +111,26 @@ const logoDoFreteHtml = new Function(
     ok(logoDoFrete('Braspress') === esperada, 'Braspress');
 })();
 
+(function aSvtEOsCorreiosGanharamLogoEm0409() {
+    // As duas grafias foram medidas no banco em 04/09/2026, quando o usuario
+    // mandou as imagens: eram os dois nomes que ainda apareciam ESCRITOS na
+    // coluna de frete do Painel de Producao, dois deles em pedidos EM PRODUCAO.
+    ok(/Azul_Cargo/.test(logoDoFrete('SVT TRANSPORTES')),
+        'SVT TRANSPORTES mostra a logo da Azul Cargo', logoDoFrete('SVT TRANSPORTES'));
+    ok(logoDoFrete('SVT') === logoDoFrete('SVT TRANSPORTES'),
+        'e a sigla sozinha acha a mesma');
+
+    // `CORREIOS SEDE` -- sem o X -- e como o ERP escreveu em 2 pedidos. Ele nao
+    // CONTEM `SEDEX` nem esta CONTIDO nele, entao a busca por trecho nao o
+    // alcancava: era exatamente por isso que a coluna mostrava o nome. A chave
+    // e `CORREIOS` justamente para nao depender de o ERP digitar certo.
+    const sedex = logoDoFrete('SEDEX');
+    ok(logoDoFrete('CORREIOS SEDE') === sedex,
+        'CORREIOS SEDE, com o X faltando, cai na logo do SEDEX', logoDoFrete('CORREIOS SEDE'));
+    ok(logoDoFrete('CORREIOS SEDEX') === sedex, 'e a grafia inteira tambem');
+    ok(logoDoFrete('Correios') === sedex, 'e o nome da empresa sozinho');
+})();
+
 (function aChaveMaisLongaVence() {
     // Duas chaves podem casar com o mesmo texto por trecho. Quem decide e o
     // COMPRIMENTO, e nao a ordem em que foram escritas no objeto -- ordem de

@@ -4,6 +4,47 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Frete: a SVT e os Correios ganharam logo na coluna do Painel de Produção
+
+Pedido do usuário: *"No painel da produção, na listagem dos pedidos, a coluna
+frete, onde diz SVT Transportes, utilizar logo [Azul Cargo]. Onde diz Correios
+Sedex, utilizar o logo [Sedex]."*
+
+A coluna mostra a logo da transportadora e, **quando não tem logo cadastrada, o
+nome escrito** — de propósito, para nunca sair imagem quebrada. Eram esses dois
+nomes escritos que ele estava vendo.
+
+### O que o banco diz, medido no dia
+
+| Grafia no `frete_escolhido` | Pedidos | Estava |
+|---|---|---|
+| `SVT TRANSPORTES` | 8 (dois **EM PRODUÇÃO**) | sem logo |
+| `CORREIOS SEDE` | 2 (um **EM PRODUÇÃO**) | sem logo |
+| `Correios` | 3 | sem logo |
+
+O caso dos Correios tem uma armadilha: no banco está escrito **`CORREIOS SEDE`,
+sem o X**. Como a busca por trecho compara nos dois sentidos, esse texto não
+contém `SEDEX` nem está contido nele — e por isso escapava da chave que existe
+desde sempre. A chave nova é **`CORREIOS`**, e não a grafia truncada: assim
+`Correios`, `CORREIOS SEDE` e um `CORREIOS SEDEX` que venha amanhã caem todos na
+mesma logo, sem depender de o ERP digitar certo.
+
+### Onde isso vive
+
+- `frontend/logo-do-frete.js`, no mapa `LOGO_DO_FRETE` — o mesmo arquivo que a
+  aba de Entrega do Portal do Pedido usa, então as duas telas mudaram juntas.
+- `tests/logo_do_frete_harness.js` subiu de 65 para **70 conferências**.
+
+### O que ficou de fora, e ele decide
+
+O banco tem outras dez grafias da Azul que continuam aparecendo pelo nome:
+`AZUL ECOMM` (18 pedidos), `Azul Cargo` (10), `AVI AZUL` (4), `EXPRESSO AZUL
+CARGO`, `AZUL EXPRESSO`, `Azul Cargo Premium`, `Azul Expresso`, `AZUL ECOM`,
+`AZUL` e `Azul`. Uma chave `AZUL` cobriria todas de uma vez, mas isso é escolha
+do usuário — são 40 pedidos que passariam a mostrar a logo da Azul Cargo sem ele
+ter pedido.
+
+
 ## [2026-09-04] — Corrigir Arte: a arte volta editável, e o PRONTO do designer aprova sozinho
 
 O fluxo criado em 02/09 (a produção devolve um modelo ao designer pelo status

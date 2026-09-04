@@ -36,9 +36,34 @@
 //
 // Por isso a chave agora é `SAO MIGUEL`, sem acento e sem a palavra
 // `TRANSPORTADORA`, e os dois lados da comparação passam pelo `normalizarFrete`.
+//
+// ## A SVT e os Correios, medidos em 04/09/2026
+//
+// Nesse dia o usuário pediu logo para os dois nomes que ainda apareciam escritos
+// na coluna de frete do Painel de Produção: `SVT TRANSPORTES` (8 pedidos, dois
+// deles EM PRODUÇÃO naquela manhã) e o que ele leu na tela como "Correios
+// Sedex".
+//
+// O segundo é o caso interessante: no banco ele está escrito `CORREIOS SEDE`
+// (2 pedidos) — sem o X. Como não contém `SEDEX` nem está contido nele, a busca
+// por trecho não o alcançava, e a tela mostrava o nome. Por isso a chave nova é
+// `CORREIOS`, e não a grafia truncada: assim `Correios` (3 pedidos),
+// `CORREIOS SEDE` e um `CORREIOS SEDEX` que venha amanhã caem todos na mesma
+// logo, sem depender de o ERP digitar certo.
+//
+// Qual desenho representa cada transportadora é escolha do usuário, que conhece
+// a operação — a SVT aponta para a logo da Azul Cargo porque foi o que ele
+// mandou.
 
 const LOGO_DO_FRETE = {
     'SEDEX': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
+    // A mesma imagem do SEDEX, porque é a mesma empresa: o ERP escreve o serviço
+    // (`SEDEX`) num pedido e a transportadora (`Correios`, `CORREIOS SEDE`) no
+    // outro. Ver a seção "A SVT e os Correios" no topo.
+    'CORREIOS': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
+    // Cobre `SVT TRANSPORTES`, que é como o ERP escreve hoje, e a sigla sozinha
+    // se ela vier amanhã — a busca por trecho encaixa as duas.
+    'SVT': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678292897_Azul_Cargo.png',
     // O endereço anterior desta logo (`1785678293565_Sao-Miguel.png`) respondia
     // 400 em 03/09/2026: o arquivo tinha saído do bucket, e a coluna do painel
     // vinha mostrando o texto de reserva no lugar da imagem. A URL abaixo foi
