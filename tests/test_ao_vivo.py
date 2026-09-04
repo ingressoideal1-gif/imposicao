@@ -225,7 +225,8 @@ def test_a_planilha_usa_ponto_e_virgula_e_aspas():
         "aparelho": "Portão 1", "numero": 42,
     }])
     linhas = saida.split("\r\n")
-    assert linhas[0].startswith("Hora no aparelho;Hora no servidor;Setor")
+    assert linhas[0] == ("Hora no aparelho;Hora no servidor;Setor;Aparelho;"
+                         "Numero;Tipo;Resultado;Motivo")
     assert '"VIP; Camarote"' in linhas[1]
     assert '"Ingresso já usado"' in linhas[1]
     assert '"42"' in linhas[1]

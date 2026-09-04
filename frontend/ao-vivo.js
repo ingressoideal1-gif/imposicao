@@ -258,7 +258,7 @@
         var lista = d.aparelhos || [];
         if (!lista.length) {
             texto(caixa, 'p',
-                  'Nenhum portão ligado neste evento ainda.', 'config-ajuda');
+                  'Nenhum aparelho lendo neste evento ainda.', 'config-ajuda');
             return;
         }
         lista.forEach(function (a) {
@@ -364,7 +364,7 @@
         // `;` e não `,`: o Excel em português abre o ponto-e-vírgula em colunas
         // sem perguntar nada, e é nele que este arquivo vai ser aberto.
         var linhas = [[
-            'Hora no aparelho', 'Hora no servidor', 'Setor', 'Portao',
+            'Hora no aparelho', 'Hora no servidor', 'Setor', 'Aparelho',
             'Numero', 'Tipo', 'Resultado', 'Motivo'
         ].join(';')];
         leituras.forEach(function (l) {

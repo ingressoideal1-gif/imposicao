@@ -51,7 +51,7 @@ que sim, este aparelho vai ler. Dê um nome a ele — *Teste 04/09*, por exemplo
 Depois, na engrenagem do evento → **Aparelhos** → o aparelho que você acabou de criar →
 **Selecionar os setores**: deixe aceso **só o CAMAROTE**.
 
-> O portão nasce validando **todos** os setores, de propósito: um portão sem setor recusa
+> O aparelho nasce validando **todos** os setores, de propósito: um aparelho sem setor recusa
 > tudo com o laranja de "outra porta", e o porteiro não teria como saber por quê.
 > Restringir é escolha da engrenagem, feita depois e com calma — é o que você está fazendo
 > agora.

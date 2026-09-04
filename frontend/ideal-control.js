@@ -546,16 +546,15 @@
     function desvincularPedido() {
         var botao = $('ic-btn-desvincular');
         var pedido = estado.pedido;
+        // `confirm()` do navegador, como as outras três ações desta tela que
+        // não têm volta fácil. Uma frase só, do jeito que elas são: a caixa do
+        // navegador não formata parágrafo, e o texto longo vira um bloco que
+        // ninguém lê antes de clicar em OK.
         if (!window.confirm(
-            'Tirar o pedido ' + pedido + ' do evento?
-
-'
-            + 'Os setores dele saem do evento e os ingressos voltam a ficar '
-            + 'soltos. Nenhum ingresso deixa de valer, e o cliente pode carregar '
-            + 'o pedido de novo no evento certo.
-
-'
-            + 'Não funciona se já houve leitura na portaria.')) {
+            'Tirar o pedido ' + pedido + ' do evento? Os setores dele saem, os '
+            + 'ingressos voltam a ficar soltos (nenhum deixa de valer) e o '
+            + 'cliente pode carregar o pedido de novo no evento certo. Não '
+            + 'funciona se já houve leitura na portaria.')) {
             return Promise.resolve();
         }
         botao.disabled = true;

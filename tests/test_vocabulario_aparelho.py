@@ -18,6 +18,7 @@ FRONTEND = os.path.join(RAIZ, "frontend")
 ARQUIVOS = [
     "controle.html", "portaria.html",
     "lista-eventos.js", "virar-portao.js", "controle.js", "fila-presa.js",
+    "ao-vivo.js",
     "portaria.js", "parede-pwa.js", "menu-geral.js", "aparelho.js",
     "app.webmanifest",
 ]
