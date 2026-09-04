@@ -108,6 +108,30 @@ def classificar(estacoes_vivas: list, repo: str):
     return mudas, atrasadas
 
 
+def sem_gdi(estacoes_vivas: list):
+    """["NOME (causa)"] das estacoes que dizem NAO conseguir imprimir.
+
+    Le o `printers_json.impressao`, que a estacao passou a mandar em 04/09/2026
+    justamente para esta pergunta poder ser respondida daqui, sem acesso remoto
+    a maquina. Estacao que nao informa o campo NAO entra: agente antigo nao
+    manda, e "nao sei" nao e "esta quebrada" -- alarme que ninguem pode atender
+    ensina a passar o olho pela lista inteira, e ai o que importa passa junto.
+    """
+    fora = []
+    for e in estacoes_vivas:
+        nome = e.get("nome") or ""
+        if e_instalacao_de_teste(nome):
+            continue
+        imp = e.get("impressao") or {}
+        if not isinstance(imp, dict) or "win32ui" not in imp:
+            continue
+        if imp.get("win32ui"):
+            continue
+        causa = str(imp.get("erro") or "sem causa informada")[:120]
+        fora.append(f"{nome} ({causa})")
+    return fora
+
+
 def _pedir(url: str, chave: str, colunas: str):
     alvo = f"{url}/rest/v1/print_agents?select={colunas}&order=last_seen.desc"
     req = urllib.request.Request(alvo, headers={"apikey": chave,
@@ -198,7 +222,14 @@ def main():
         vivas += 1
         if base:
             por_base[base] = por_base.get(base, 0) + 1
-        vivas_detalhe.append({"nome": nome, "versao": versao})
+        pj = l.get("printers_json") or {}
+        if isinstance(pj, str):
+            try:
+                pj = json.loads(pj)
+            except Exception:
+                pj = {}
+        vivas_detalhe.append({"nome": nome, "versao": versao,
+                              "impressao": pj.get("impressao") or {}})
 
     mudas, atrasadas = classificar(vivas_detalhe, repo)
 
@@ -225,6 +256,14 @@ def main():
     if atrasadas:
         print(f"ALERTA: estacao(oes) atras do repositorio ({repo}): " +
               ", ".join(atrasadas) + ". Ver GUIA_AGENTE.md.")
+
+    # Antes do retorno e depois dos outros: uma estacao que nao imprime e a
+    # pior noticia desta lista. Ela aparece "em dia" em toda coluna acima.
+    travadas = sem_gdi(vivas_detalhe)
+    if travadas:
+        print("ALERTA: estacao(oes) que NAO conseguem imprimir no modo GDI: " +
+              "; ".join(travadas) + ". A causa entre parenteses diz qual "
+              "componente do Windows faltou naquela maquina.")
     return 0
 
 

@@ -208,6 +208,7 @@ def sync_heartbeat():
             "painel": painel,
             "acesso_base": _acesso_base(),
             "fontes": diagnostico_fontes(),
+            "impressao": diagnostico_impressao(),
             "ultimo_update": ultimo_update()
         }
 
@@ -468,6 +469,57 @@ def _testar_alcance_storage():
         _STORAGE_ALCANCAVEL = False
         print(f"[fontes] Storage inalcancavel desta estacao: {e}", flush=True)
     return _STORAGE_ALCANCAVEL
+
+
+def diagnostico_impressao():
+    """A estacao consegue imprimir no modo GDI? Enviado junto do heartbeat.
+
+    Mesma razao do `diagnostico_fontes()` logo abaixo: nem sempre ha acesso
+    fisico as estacoes da grafica. Em 04/09/2026 duas versoes do agente sairam
+    tentando adivinhar qual DLL faltava numa delas, porque a mensagem que
+    chegava era a mesma nos dois casos possiveis, e a maquina que compila TEM o
+    Visual C++ instalado -- ali tudo funciona de qualquer jeito. Com estes
+    campos, a propria estacao conta o que eu iria ate la ver.
+
+    Nunca levanta excecao: um campo a mais que estoure tiraria a estacao do
+    painel inteiro (o `last_seen` para de ser gravado e ela some da lista), o
+    que e muito pior do que o diagnostico que ele traz.
+    """
+    d = {"win32ui": False, "win32print": False,
+         "mfc_no_sistema": False, "dlls_do_bundle": []}
+
+    try:
+        import print_service
+        d["win32print"] = bool(getattr(print_service, "HAS_WIN32", False))
+        d["win32ui"] = bool(getattr(print_service, "HAS_WIN32UI", False))
+        erro = getattr(print_service, "ERRO_WIN32UI", "")
+        if not d["win32ui"] and erro:
+            # Cortado: e' uma linha de ImportError, nao um traceback, e o
+            # heartbeat vai a cada 30 s.
+            d["erro"] = str(erro)[:300]
+    except Exception as e:
+        d["erro"] = ("print_service indisponivel: %s" % e)[:300]
+
+    # A mfc140u.dll no System32 e' o que separa a maquina que recebeu o "Visual
+    # C++ Redistributable" em algum momento da que nunca recebeu. Foi a
+    # correlacao com "Windows 11" que o usuario notou, e a causa por tras dela.
+    try:
+        d["mfc_no_sistema"] = os.path.exists(os.path.join(
+            os.environ.get("SystemRoot", r"C:\Windows"), "System32", "mfc140u.dll"))
+    except Exception:
+        pass
+
+    # O que o executavel extraiu ao lado do win32ui.pyd. Diz se a estacao ja
+    # esta rodando a versao com o conserto, sem depender do numero da versao.
+    try:
+        base = getattr(sys, "_MEIPASS", "")
+        pasta = os.path.join(base, "pythonwin") if base else ""
+        if pasta and os.path.isdir(pasta):
+            d["dlls_do_bundle"] = sorted(os.listdir(pasta))
+    except Exception:
+        pass
+
+    return d
 
 
 def diagnostico_fontes():
