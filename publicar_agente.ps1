@@ -130,6 +130,21 @@ function Get-LimiteDoBucket {
     return 0
 }
 
+function Test-ObjetoNoBucket {
+    <#
+    .SYNOPSIS
+        O objeto ja esta no bucket? Pergunta pela URL PUBLICA, que e a que o
+        agente usa. Serve para nunca reenviar por cima de um envio que chegou.
+    #>
+    param([Parameter(Mandatory)][string]$Url)
+    try {
+        $r = Invoke-WebRequest -Uri $Url -Method Head -UseBasicParsing -TimeoutSec 60
+        return ([int]$r.StatusCode -eq 200)
+    } catch {
+        return $false
+    }
+}
+
 function Restore-Versao {
     foreach ($caminho in $script:Backup.Keys) {
         [System.IO.File]::WriteAllBytes($caminho, $script:Backup[$caminho])
@@ -341,34 +356,82 @@ $urlUpload  = $urlPublica -replace '/object/public/', '/object/'
 # O arquivo vai como STREAM, e nao lido para a memoria: `[IO.File]::OpenRead`
 # mais `StreamContent`. Ler 68 MB para um array de bytes funcionaria, mas e
 # desperdicio numa maquina que esta compilando MSI ao mesmo tempo.
+#
+# E O ENVIO NAO PODE MORRER NA PRIMEIRA QUEDA DA REDE.
+#
+# Em 04/09/2026 a publicacao do 1.2.301 caiu TRES vezes seguidas, sempre com
+# "Ocorreu um erro ao copiar o conteudo para um fluxo" -- que por dentro e
+# "A conexao foi encerrada". Medido com o curl, o que acontece e a internet da
+# grafica oscilando: a subida vai de 730 kB/s a 97 kB/s e a conexao e resetada
+# no meio (uma vez aos 21 MB de 68). Nao e o Supabase, nao e cota e nao e o
+# nome do objeto ja existir -- o MESMO arquivo subiu em 10 s numa janela boa,
+# minutos antes.
+#
+# Contra uma rede que oscila, tentar de novo resolve: basta uma das tentativas
+# pegar uma janela boa. Cada queda custava um build inteiro, porque o script
+# abortava e a versao voltava atras.
+#
+# A retentativa e SEGURA porque, antes de cada nova tentativa, o script
+# pergunta ao bucket se o objeto ficou la. Se ficou, ele PARA em vez de mandar
+# de novo: reenviar por cima seria o unico jeito de o CDN passar a servir um
+# binario que nao corresponde ao sha do manifesto.
 Write-Host "  Enviando o MSI ($mb MB)..." -ForegroundColor Cyan
 Add-Type -AssemblyName System.Net.Http
-$http = $null
-$conteudo = $null
-$fluxo = $null
-try {
-    $http = [System.Net.Http.HttpClient]::new()
-    $http.Timeout = [TimeSpan]::FromHours(1)
-    $http.DefaultRequestHeaders.Authorization =
-        [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $chave)
 
-    $fluxo = [System.IO.File]::OpenRead($msi)
-    $conteudo = [System.Net.Http.StreamContent]::new($fluxo)
-    $conteudo.Headers.ContentType =
-        [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/octet-stream')
+$TENTATIVAS = 5
+$enviado = $false
+$ultimoErro = ""
 
-    $resposta = $http.PostAsync($urlUpload, $conteudo).GetAwaiter().GetResult()
-    if (-not $resposta.IsSuccessStatusCode) {
-        $corpo = $resposta.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-        throw "$([int]$resposta.StatusCode) $($resposta.ReasonPhrase) - $corpo"
+for ($tentativa = 1; $tentativa -le $TENTATIVAS -and -not $enviado; $tentativa++) {
+    if ($tentativa -gt 1) {
+        # O objeto ficou no bucket apesar do erro? Entao a tentativa anterior
+        # chegou ao fim e o que se perdeu foi so' a resposta. Reenviar seria
+        # sobrescrever.
+        if (Test-ObjetoNoBucket -Url $urlPublica) {
+            Write-Host "  O objeto ja esta no bucket: a tentativa anterior chegou ao fim." -ForegroundColor Green
+            $enviado = $true
+            break
+        }
+        $espera = 10 * ($tentativa - 1)
+        Write-Host "  Tentativa $tentativa de $TENTATIVAS em $espera s (a anterior caiu: $ultimoErro)" -ForegroundColor Yellow
+        Start-Sleep -Seconds $espera
     }
-} catch {
-    Abortar "O envio do MSI falhou: $($_.Exception.Message)" `
-            "Se disser que o objeto ja existe, NAO sobrescreva — suba a versao. O CDN continuaria servindo o binario antigo."
-} finally {
-    if ($conteudo) { $conteudo.Dispose() }
-    if ($fluxo)    { $fluxo.Dispose() }
-    if ($http)     { $http.Dispose() }
+
+    $http = $null
+    $conteudo = $null
+    $fluxo = $null
+    try {
+        $http = [System.Net.Http.HttpClient]::new()
+        $http.Timeout = [TimeSpan]::FromHours(1)
+        $http.DefaultRequestHeaders.Authorization =
+            [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $chave)
+
+        $fluxo = [System.IO.File]::OpenRead($msi)
+        $conteudo = [System.Net.Http.StreamContent]::new($fluxo)
+        $conteudo.Headers.ContentType =
+            [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/octet-stream')
+
+        $resposta = $http.PostAsync($urlUpload, $conteudo).GetAwaiter().GetResult()
+        if (-not $resposta.IsSuccessStatusCode) {
+            $corpo = $resposta.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            # Resposta do servidor NAO se retenta: 401, 413 e "ja existe" nao
+            # melhoram esperando, e insistir so' esconde o motivo real.
+            Abortar "O envio do MSI falhou: $([int]$resposta.StatusCode) $($resposta.ReasonPhrase) - $corpo" `
+                    "Se disser que o objeto ja existe, NAO sobrescreva — suba a versao. O CDN continuaria servindo o binario antigo."
+        }
+        $enviado = $true
+    } catch {
+        $ultimoErro = $_.Exception.Message
+    } finally {
+        if ($conteudo) { $conteudo.Dispose() }
+        if ($fluxo)    { $fluxo.Dispose() }
+        if ($http)     { $http.Dispose() }
+    }
+}
+
+if (-not $enviado) {
+    Abortar "O envio do MSI falhou nas $TENTATIVAS tentativas. Ultimo erro: $ultimoErro" `
+            "A subida da internet caiu no meio das $mb MB todas as vezes. Espere a rede firmar e rode de novo com o MESMO numero — o objeto nao chegou ao bucket."
 }
 
 # ─── 7. Conferir baixando pela URL publica ───────────────────────────────────

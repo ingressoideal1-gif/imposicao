@@ -64,3 +64,50 @@ Describe "Get-MensagemTag" {
         Get-MensagemTag -Versao '1.2.28'              | Should Be 'Agente 1.2.28'
     }
 }
+
+# ── O ENVIO DO MSI AGUENTA A REDE OSCILAR (04/09/2026) ──────────────────────
+#
+# A publicacao do 1.2.301 caiu tres vezes seguidas com a conexao sendo
+# resetada no meio dos 68 MB, e cada queda custava um build inteiro. O envio
+# passou a tentar de novo -- mas so' quando a QUEDA e de transporte, e nunca
+# por cima de um objeto que ja chegou ao bucket.
+Describe "O envio do MSI aguenta a rede oscilar" {
+    BeforeAll {
+        $script:Publicar = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\publicar_agente.ps1"
+    }
+
+    It "tenta mais de uma vez" {
+        $script:Publicar -match '\$TENTATIVAS\s*=\s*[2-9]' | Should Be $true
+    }
+
+    It "espera entre uma tentativa e outra, em vez de martelar a rede" {
+        $script:Publicar -match 'Start-Sleep -Seconds \$espera' | Should Be $true
+    }
+
+    It "pergunta ao bucket antes de reenviar — nunca sobrescreve o que ja chegou" {
+        $script:Publicar -match 'if \(Test-ObjetoNoBucket -Url \$urlPublica\)' | Should Be $true
+    }
+
+    It "a pergunta ao bucket usa a URL PUBLICA, que e a que o agente le" {
+        $script:Publicar -match 'function Test-ObjetoNoBucket[\s\S]{0,400}Invoke-WebRequest -Uri \$Url -Method Head' | Should Be $true
+    }
+
+    It "resposta do servidor NAO e retentada — 401 e 'ja existe' nao melhoram esperando" {
+        # O Abortar dentro do ramo de status ruim e' o que garante isto: ele
+        # sai do script, em vez de cair no laco de novo.
+        $script:Publicar -match 'if \(-not \$resposta.IsSuccessStatusCode\)[\s\S]{0,300}Abortar' | Should Be $true
+    }
+
+    It "esgotadas as tentativas, aborta dizendo que o objeto NAO chegou ao bucket" {
+        $script:Publicar -match 'falhou nas \$TENTATIVAS tentativas' | Should Be $true
+        $script:Publicar -match 'o objeto nao chegou ao bucket' | Should Be $true
+    }
+
+    It "o manifesto continua vindo DEPOIS da conferencia do sha" {
+        # A ordem e' a razao de o release nunca apontar para arquivo ausente.
+        $iEnvio = $script:Publicar.IndexOf('Enviando o MSI')
+        $iSha = $script:Publicar.IndexOf('sha256 confere')
+        $iManifesto = $script:Publicar.IndexOf('$urlManifesto')
+        ($iEnvio -gt 0 -and $iSha -gt $iEnvio -and $iManifesto -gt $iSha) | Should Be $true
+    }
+}
