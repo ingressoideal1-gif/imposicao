@@ -22040,6 +22040,13 @@ function bloqueioDeModeloAprovado(item, dataToUpdate) {
         || (c === 'amostra_status' && String(dataToUpdate[c]).toUpperCase() === 'REPROVADA'));
     if (ehSaidaDaTrava) {
         if (podeDestravarModeloAprovado()) return null;
+        // A PRODUÇÃO JÁ DECIDIU (04/09/2026). Um modelo marcado "Corrigir Arte"
+        // no Painel de Produção está voltando ao designer por ordem de quem
+        // achou o erro no papel — e é justamente a aprovação que trava o card
+        // que precisa cair, senão ele recebe um modelo que não consegue mexer.
+        // Pedir aqui o papel de atendimento faria o operador devolver trabalho
+        // impossível. Ver `STATUS_CORRIGIR_ARTE`.
+        if (modeloEmCorrecaoDeArte(item)) return null;
         return {
             silencioso: false,
             motivo: tituloDoModeloAprovado(item) + '. Só o atendimento, o gerente ou o '
@@ -26918,6 +26925,62 @@ function avisarCorrecaoDeArte(novoStatus) {
 }
 window.avisarCorrecaoDeArte = avisarCorrecaoDeArte;
 
+/**
+ * A produção devolveu o modelo: a ARTE dele volta para **Em Alteração**.
+ *
+ * Pedido do usuário em 04/09/2026, depois de o fluxo do dia 02 funcionar pela
+ * metade: *"Ao voltar para arte, deve voltar 'Em Alteração' para que o designer
+ * possa excluir a arte e carregar a arte alterada"*.
+ *
+ * Sem isto, devolver o modelo devolvia trabalho impossível. Um modelo que já
+ * foi para a produção está APROVADO, e modelo aprovado é travado neste projeto:
+ * o card inteiro fica cinza (`travarCardsDeModelosAprovados`) e o
+ * `saveAmostraToDB` recusa qualquer gravação (`bloqueioDeModeloAprovado`). O
+ * designer via o pedido aparecer no card "Em Arte" e não conseguia apagar a
+ * arte errada nem subir a nova.
+ *
+ * O valor gravado é o mesmo `amostra_status: 'REPROVADA'` do botão "Colocar em
+ * Alteração" do card — a saída da trava que já existia, com selo, remapeamento
+ * de carga e listas (`ARTE_REPROVADOS`) todos prontos para ele. Não inventamos
+ * um quarto valor de arte só porque o recado veio da produção.
+ *
+ * O caminho de volta é o PRONTO do designer, que aprova sozinho — ver
+ * `decisionAmostraItem`.
+ */
+async function devolverArteParaAlteracao(itemId, osId) {
+    const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+    if (!item) {
+        // Sem o item em memória o `saveAmostraToDB` desiste em silêncio, e o
+        // designer receberia o modelo ainda travado sem ninguém saber.
+        console.warn('[Corrigir Arte] item fora do state — a arte não foi para alteração:', itemId, osId);
+        toast('O modelo foi devolvido, mas a arte continua aprovada — abra o pedido '
+            + 'e coloque o modelo em Alteração, senão o designer não consegue trocar '
+            + 'o arquivo.', 'warning');
+        return false;
+    }
+
+    // A marca tem de estar no objeto ANTES da gravação: é ela que abre a trava
+    // do modelo aprovado, em `bloqueioDeModeloAprovado`.
+    item.status_impressao = STATUS_CORRIGIR_ARTE;
+    item.impressao = STATUS_CORRIGIR_ARTE;
+
+    await saveAmostraToDB(itemId, osId, { amostra_status: 'REPROVADA' });
+
+    // Os dois nomes do mesmo dado, nos dois lugares em que ele mora: o card do
+    // modelo lê `amostra_status`, a Lista de Arte lê o `state.modelosGlobais`
+    // (que guarda `status_arte`). Deixar um para trás faz a tela continuar
+    // dizendo "aprovado" até o próximo F5 — e o card seguiria travado.
+    const numOs = parseInt(String(osId).replace('vibe_', ''));
+    const globais = (state.modelosGlobais && state.modelosGlobais[numOs]) || [];
+    [item, globais.find(m => String(m.id) === String(itemId))].forEach(m => {
+        if (!m) return;
+        m.amostra_status = 'REPROVADA';
+        m.status_arte = 'REPROVADA_CLIENTE';
+    });
+    return true;
+}
+window.devolverArteParaAlteracao = devolverArteParaAlteracao;
+
 /** Este modelo está parado esperando o designer corrigir a arte? */
 function modeloEmCorrecaoDeArte(item) {
     if (!item) return false;
@@ -30508,7 +30571,11 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             }
         }
 
-        if (!avisarCorrecaoDeArte(novoStatus)) toast(`Impressão atualizada: ${novoStatus}`, 'success');
+        if (avisarCorrecaoDeArte(novoStatus)) {
+            await devolverArteParaAlteracao(itemId, osId);
+        } else {
+            toast(`Impressão atualizada: ${novoStatus}`, 'success');
+        }
         renderOrdens();
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
@@ -32112,10 +32179,10 @@ function impQueueUpdateField(itemId, osId, field, value) {
         }
         renderImpOSQueue();
         if (avisarCorrecaoDeArte(value)) {
-            // A Lista de Arte reconta os cards e o pedido aparece em "Em Arte"
-            // agora, sem F5 — é o efeito que o operador acabou de ser avisado
-            // que aconteceu.
-            renderOrdens();
+            // A arte sai de aprovada e a Lista de Arte reconta os cards: o
+            // pedido aparece em "Em Arte" agora, sem F5 — é o efeito que o
+            // operador acabou de ser avisado que aconteceu.
+            devolverArteParaAlteracao(itemId, osId).then(() => renderOrdens());
         }
     }
 }
@@ -37910,7 +37977,18 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         const liberaImpressao = status === 'PRONTO'
             && state.amostrasContainerId !== 'cliente-amostras-itens-container'
             && modeloEmCorrecaoDeArte(itemParaLiberar);
-        if (liberaImpressao) gravar.status_impressao = 'Aguardando';
+        if (liberaImpressao) {
+            gravar.status_impressao = 'Aguardando';
+            // A ARTE VOLTA **APROVADA**, e não "PRONTO/aguardando cliente"
+            // (pedido do usuário, 04/09/2026). Esta arte já foi aprovada uma
+            // vez — o que houve foi um conserto pedido pela produção, com o
+            // pedido já na gráfica. Recomeçar o ciclo de aprovação do cliente
+            // pararia o pedido inteiro esperando um aval que ele já tinha dado.
+            //
+            // Só aqui: fora do retorno da produção, PRONTO continua sendo
+            // PRONTO, e quem aprova é o cliente ou o atendimento.
+            gravar.amostra_status = 'APROVADA';
+        }
 
         await saveAmostraToDB(itemId, osId, gravar);
 
@@ -37923,6 +38001,8 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             if (itemParaLiberar) {
                 itemParaLiberar.status_impressao = 'Aguardando';
                 itemParaLiberar.impressao = 'Aguardando';
+                itemParaLiberar.amostra_status = 'APROVADA';
+                itemParaLiberar.status_arte = 'APROVADA';
             }
             const numOs = parseInt(String(osId).replace('vibe_', ''));
             const globais = (state.modelosGlobais && state.modelosGlobais[numOs]) || [];
@@ -37930,6 +38010,8 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             if (globalDoModelo) {
                 globalDoModelo.status_impressao = 'Aguardando';
                 globalDoModelo.impressao = 'Aguardando';
+                globalDoModelo.amostra_status = 'APROVADA';
+                globalDoModelo.status_arte = 'APROVADA';
             }
         }
         
@@ -37977,7 +38059,12 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             msg = 'Item marcado para alteração!';
             toastType = 'warning';
         } else if (status === 'PRONTO') {
-            msg = 'Item marcado como Pronto!';
+            // Quem voltou da produção fecha o ciclo inteiro num clique só, e o
+            // designer precisa ler isso: a arte foi aprovada E a impressora
+            // voltou a poder trabalhar.
+            msg = liberaImpressao
+                ? 'Arte aprovada e impressão liberada — o modelo voltou para a produção como Aguardando.'
+                : 'Item marcado como Pronto!';
             toastType = 'success';
         } else {
             msg = `Status atualizado para ${status}`;
@@ -37998,7 +38085,11 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
             // verificar se TODOS os modelos da OS estão PRONTO. Se sim → 'Enviar Arte'.
             const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
-            if (status === 'PRONTO' && isInternal) await promoverPedidoSeTodosProntos(osId);
+            // O modelo que voltou da produção NÃO promove o pedido. Ele já
+            // passou por "Enviar Arte" uma vez e está na gráfica agora;
+            // devolvê-lo à fila de aprovação do cliente pararia o pedido
+            // inteiro por causa de um conserto. Ver `STATUS_CORRIGIR_ARTE`.
+            if (status === 'PRONTO' && isInternal && !liberaImpressao) await promoverPedidoSeTodosProntos(osId);
         }
         return true;
     } catch (err) {

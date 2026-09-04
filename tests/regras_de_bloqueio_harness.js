@@ -43,9 +43,20 @@ function extrairFuncao(src, nome) {
     return src.slice(i, fim + 2);
 }
 
+// A trava do modelo aprovado consulta a marca "Corrigir Arte", que e uma const:
+// sem ela no ambiente, `bloqueioDeModeloAprovado` estoura com ReferenceError.
+function extrairConst(src, nome) {
+    const i = src.indexOf('\nconst ' + nome + ' = ');
+    if (i < 0) throw new Error('nao achei a const ' + nome);
+    const fim = src.indexOf(';\n', i);
+    if (fim < 0) throw new Error('nao achei o fim da const ' + nome);
+    return src.slice(i, fim + 1);
+}
+
 const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado',
                'podeLiberarParaProducao',
                'modeloEstaAprovado', 'quemAprovouOModelo', 'tituloDoModeloAprovado',
+               'normalizarStatusImpressao', 'modeloEmCorrecaoDeArte',
                'bloqueioDeModeloAprovado',
                'linhasAtivasCsv', 'numeracaoIdDoItem',
                'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
@@ -57,7 +68,8 @@ const NOMES = ['papelAtual', 'podeDefinirDesigner', 'podeDestravarModeloAprovado
 /** A API com um `state` e um `window` proprios daquele caso. */
 function api(st, win) {
     return new Function('state', 'window',
-        NOMES.map(n => extrairFuncao(SCRIPT, n)).join('\n')
+        extrairConst(SCRIPT, 'STATUS_CORRIGIR_ARTE')
+        + NOMES.map(n => extrairFuncao(SCRIPT, n)).join('\n')
         + '\nreturn { ' + NOMES.join(', ') + ' };')(st, win);
 }
 
@@ -265,6 +277,24 @@ const EM_ARTE = { id: 'm2', amostra_status: 'PRONTO' };
     ok(r1 && r1.silencioso === false, 'e ela e dita em voz alta, nao engolida', r1);
     ok(A.bloqueioDeModeloAprovado(APROVADO, { amostra_obs: 'x' }) !== null,
         'nem escreve na descricao');
+})();
+
+(function oModeloDevolvidoPelaProducaoPassaPelaTrava() {
+    // Pedido do usuario em 04/09/2026. Quem marca "Corrigir Arte" e o operador
+    // da producao, que nao e atendimento nem gerente. Se a trava exigisse o
+    // papel aqui, ele devolveria ao designer um modelo que ninguem consegue
+    // destravar -- e era exatamente o que acontecia.
+    const EM_CORRECAO = Object.assign({}, APROVADO, { status_impressao: 'Corrigir Arte' });
+    const A = comoUsuario('designer');
+    ok(A.bloqueioDeModeloAprovado(EM_CORRECAO, { amostra_status: 'REPROVADA' }) === null,
+        'o modelo devolvido pela producao vai para Em Alteracao sem pedir papel');
+    // E so essa gravacao: o resto do modelo aprovado continua travado ate a
+    // arte sair de aprovada.
+    ok(A.bloqueioDeModeloAprovado(EM_CORRECAO, { arte_url: 'https://x/nova.pdf' }) !== null,
+        'e nada alem dela passa antes de a arte sair de aprovada');
+    // E a trava continua de pe para o modelo que ninguem devolveu.
+    ok(A.bloqueioDeModeloAprovado(APROVADO, { amostra_status: 'REPROVADA' }) !== null,
+        'sem a marca da producao, o papel continua valendo');
 })();
 
 (function aPreviaCompostaEDescartadaEmSilencio() {

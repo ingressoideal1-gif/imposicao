@@ -4,6 +4,57 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Corrigir Arte: a arte volta editável, e o PRONTO do designer aprova sozinho
+
+O fluxo criado em 02/09 (a produção devolve um modelo ao designer pelo status
+**Corrigir Arte**) funcionava pela metade. Nas palavras do usuário: *"Ao voltar
+para arte, deve voltar 'Em Alteração' para que o designer possa excluir a arte e
+carregar a arte alterada. Quando o designer marcar 'Pronto' somente nestes casos
+que estão retornando do painel de produção, a arte deve marcar automaticamente
+como Aprovada."*
+
+### O que estava acontecendo
+
+O pedido voltava para o card **Em Arte** e a impressão daquele modelo travava —
+as duas coisas certas. Mas o modelo continuava **APROVADO**, e modelo aprovado é
+travado neste projeto por decisão de 19/08: o card inteiro fica cinza
+(`travarCardsDeModelosAprovados`) e o `saveAmostraToDB` recusa qualquer gravação
+(`bloqueioDeModeloAprovado`).
+
+Ou seja: o designer via chegar um trabalho que **não conseguia fazer**. Não dava
+para apagar a arte errada nem subir a corrigida.
+
+### O que mudou
+
+| Momento | Antes | Agora |
+|---|---|---|
+| Operador marca **Corrigir Arte** | só trava a impressão | trava a impressão **e põe a arte em "Em Alteração"** |
+| Card do modelo para o designer | cinza, tudo desabilitado | aberto — troca a arte, apaga, sobe a nova |
+| Designer marca **PRONTO** | arte vira "aguardando cliente" | arte vira **APROVADA** sozinha |
+| Pedido depois do PRONTO | podia ser promovido a "Enviar Arte" | continua na produção, sem voltar à fila do cliente |
+
+A arte volta como **APROVADA** porque ela já tinha sido aprovada uma vez: o que
+houve foi um conserto pedido pela produção, com o pedido já na gráfica.
+Recomeçar o ciclo de aprovação do cliente pararia o pedido inteiro esperando um
+aval que ele já tinha dado. Fora do retorno da produção, nada muda — PRONTO
+continua sendo PRONTO, e quem aprova é o cliente ou o atendimento.
+
+### Onde isso vive
+
+- `devolverArteParaAlteracao()` no `frontend/script.js` — uma vez só, chamada
+  pelos **três** seletores de status que escrevem "Corrigir Arte": a linha do
+  pedido no Painel de Produção (`updateItemImpressao`), a Fila de Impressão
+  (`impQueueUpdateField`) e a tela do Pedido (`pedQueueUpdateField`, no
+  `pedido.js`, que a consulta pelo `window`).
+- A saída da trava do modelo aprovado ganhou uma linha: modelo devolvido pela
+  produção passa **sem** exigir o papel de atendimento/gerente/adm. Sem isso, o
+  operador devolveria um modelo que ninguém consegue destravar.
+- O valor gravado é o `amostra_status: 'REPROVADA'` que o botão "Colocar em
+  Alteração" já usava — nenhum valor novo de arte foi inventado, e nenhuma
+  coluna nova nasceu no banco.
+- `tests/corrigir_arte_harness.js` subiu de 51 para **69 verificações**.
+
+
 ## [2026-09-04] — Montagem: a janela abre com a folha inteira, sem rolagem
 
 Pedido do usuário: **"no menu montagem, trazer a janela de visualização de forma

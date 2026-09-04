@@ -20,7 +20,11 @@
 //   4. os quatro seletores de status oferecem a opcao (senao a tela mente);
 //   5. as duas telas de imposicao travam o IMPRIMIR e deixam o PDF passar;
 //   6. o PRONTO do designer devolve o modelo para Aguardando, nos dois nomes
-//      em que esse dado mora na memoria.
+//      em que esse dado mora na memoria;
+//   7. a ARTE do modelo devolvido sai de aprovada e vai para "Em Alteracao",
+//      senao o card fica travado e o designer nao troca o arquivo (04/09/2026);
+//   8. o PRONTO desses modelos aprova a arte sozinho e NAO manda o pedido de
+//      volta para a fila de aprovacao do cliente (04/09/2026).
 //
 // Roda em node, sem navegador: `node tests/corrigir_arte_harness.js`.
 // Os trechos sao LIDOS do codigo vivo, nao copiados.
@@ -31,6 +35,8 @@ const path = require('path');
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+
+const CHAVE_FINAL = String.fromCharCode(10) + '}';
 
 let falhas = 0;
 let total = 0;
@@ -282,6 +288,80 @@ function pedidoNaProducao(extra) {
     ok(trecho.indexOf('itemParaLiberar.status_impressao') > 0, 'atualiza status_impressao');
     ok(trecho.indexOf('itemParaLiberar.impressao') > 0, 'atualiza o espelho impressao');
     ok(trecho.indexOf('modelosGlobais') > 0, 'e o catalogo global, que a Lista de Arte le');
+})();
+
+(function aArteDoModeloDevolvidoVoltaParaAlteracao() {
+    // A metade que faltava no dia 02: o pedido aparecia no card "Em Arte", mas
+    // o modelo continuava APROVADO -- e modelo aprovado e travado neste
+    // projeto. O designer nao conseguia apagar a arte errada nem subir a nova.
+    const ini = SCRIPT.indexOf('async function devolverArteParaAlteracao(');
+    ok(ini > 0, 'a funcao devolverArteParaAlteracao existe');
+    const f = SCRIPT.slice(ini, SCRIPT.indexOf(CHAVE_FINAL, ini) + 2);
+    ok(f.indexOf("amostra_status: 'REPROVADA'") > 0,
+        'grava o mesmo "Em Alteracao" do botao do card');
+    ok(f.indexOf('item.status_impressao = STATUS_CORRIGIR_ARTE') > 0,
+        'marca o item ANTES de gravar -- e a marca que abre a trava');
+    ok(f.indexOf("m.status_arte = 'REPROVADA_CLIENTE'") > 0,
+        'e o catalogo global, que a Lista de Arte le');
+    ok(SCRIPT.indexOf('window.devolverArteParaAlteracao = devolverArteParaAlteracao;') > 0,
+        'a funcao sai no window -- o pedido.js a consulta por la');
+})();
+
+(function aTravaDoModeloAprovadoAbreParaAProducao() {
+    // Sem esta saida, so atendimento/gerente/adm conseguiriam devolver o
+    // modelo: o operador da producao marcaria "Corrigir Arte" e a arte
+    // continuaria aprovada, em silencio.
+    const f = extrairFuncao(SCRIPT, 'bloqueioDeModeloAprovado');
+    const i = f.indexOf('if (ehSaidaDaTrava) {');
+    ok(i > 0, 'a saida da trava existe');
+    const trecho = f.slice(i, i + 900);
+    ok(trecho.indexOf('if (modeloEmCorrecaoDeArte(item)) return null;') > 0,
+        'modelo devolvido pela producao passa pela trava');
+    ok(trecho.indexOf('podeDestravarModeloAprovado()') < trecho.indexOf('modeloEmCorrecaoDeArte(item)'),
+        'o papel continua valendo para quem NAO foi devolvido pela producao');
+})();
+
+(function osTresSeletoresDeStatusChamamADevolucao() {
+    // Tres telas escrevem "Corrigir Arte": a linha do pedido no Painel de
+    // Producao, a Fila de Impressao e a tela do Pedido. Uma que esquecesse a
+    // arte devolveria o modelo travado.
+    const chamadas = (SCRIPT + PEDIDO).split('devolverArteParaAlteracao(itemId, osId)').length - 1;
+    ok(chamadas >= 3, 'os tres seletores devolvem a arte junto', { chamadas });
+    ok(PEDIDO.indexOf('devolverArteParaAlteracao') > 0,
+        'a tela do Pedido tambem -- e por onde a grafica trabalha todo dia');
+})();
+
+(function oProntoDesseModeloAprovaAArteSozinho() {
+    // Regra do usuario, 04/09/2026: a arte ja tinha sido aprovada uma vez, e o
+    // conserto pedido pela producao nao recomeca o ciclo do cliente.
+    const i = SCRIPT.indexOf('if (liberaImpressao) {');
+    ok(i > 0, 'o bloco do PRONTO existe');
+    const trecho = SCRIPT.slice(i, i + 1200);
+    ok(trecho.indexOf("gravar.amostra_status = 'APROVADA'") > 0,
+        'o PRONTO grava a arte como APROVADA, e nao como PRONTO');
+    ok(trecho.indexOf("gravar.status_impressao = 'Aguardando'") > 0,
+        'e a impressao continua voltando para Aguardando');
+})();
+
+(function oPedidoNaGraficaNaoVoltaParaEnviarArte() {
+    // O pedido esta na producao; manda-lo de volta a fila de aprovacao do
+    // cliente por causa de um modelo corrigido pararia o pedido inteiro.
+    const i = SCRIPT.indexOf('await promoverPedidoSeTodosProntos(osId);');
+    ok(i > 0, 'a promocao para "Enviar Arte" existe');
+    const linha = SCRIPT.slice(SCRIPT.lastIndexOf('\n', i), i + 60);
+    ok(linha.indexOf('!liberaImpressao') > 0,
+        'quem voltou da producao nao promove o pedido');
+})();
+
+(function aMemoriaDaArteAndaJuntoComADaImpressao() {
+    const i = SCRIPT.indexOf('if (liberaImpressao) {\n            // Os DOIS nomes');
+    const j = i > 0 ? i : SCRIPT.indexOf('itemParaLiberar.status_impressao');
+    ok(j > 0, 'o bloco que atualiza a memoria existe');
+    const trecho = SCRIPT.slice(j, j + 1800);
+    ok(trecho.indexOf("itemParaLiberar.amostra_status = 'APROVADA'") > 0,
+        'o card do modelo ja mostra a arte aprovada, sem F5');
+    ok(trecho.indexOf("globalDoModelo.status_arte = 'APROVADA'") > 0,
+        'e a Lista de Arte tira o pedido do card "Em Arte" junto');
 })();
 
 // --- Resultado ---------------------------------------------------------------

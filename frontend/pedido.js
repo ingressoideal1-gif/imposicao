@@ -7224,6 +7224,12 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         renderPedOSQueue();
         updatePedImprimirButtonsVisibility();
         if (typeof avisarCorrecaoDeArte === 'function' && avisarCorrecaoDeArte(value)) {
+            // A arte tem de sair de APROVADA junto, senão o card do designer
+            // continua travado e ele não troca o arquivo — ver
+            // `devolverArteParaAlteracao` no script.js, que é quem sabe a regra.
+            if (typeof devolverArteParaAlteracao === 'function') {
+                await devolverArteParaAlteracao(itemId, osId);
+            }
             // A Lista de Arte reconta os cards agora: o pedido aparece em "Em
             // Arte" sem F5, que é o efeito que o aviso acabou de prometer.
             if (typeof renderOrdens === 'function') renderOrdens();
