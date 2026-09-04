@@ -506,3 +506,64 @@ def test_a_casa_vazia_traz_o_botao_que_leva_aos_finalizados():
     assert 'id="btn-ver-finalizados"' in bloco
     assert "Ver eventos finalizados" in bloco
     assert 'class="sumindo"' in bloco, "a saida nasce escondida; quem a mostra e o JS"
+
+
+# ── O número que a casa deixava cair (04/09/2026) ───────────────────────────
+#
+# O `/meus-eventos` conta as entradas de TODOS os eventos a cada abertura da
+# casa, e a tela só usava o número na lista de finalizados. Era exatamente a
+# coisa que o dono queria saber durante o evento, calculada e jogada fora.
+
+
+def test_unir_traz_quantos_entraram_do_evento_da_conta():
+    linhas = unir([], [dict(E1, entradas=412)])
+    assert linhas[0]["entradas"] == 412
+
+
+def test_evento_so_do_chaveiro_nao_afirma_numero_nenhum():
+    """Sem rede não dá para saber quantos entraram, e um zero chutado na barra
+    seria mentira — o porteiro leria "ninguém entrou" num evento cheio."""
+    assert unir([P], [])[0]["entradas"] is None
+
+
+def test_a_barra_do_evento_ativo_diz_quantos_ja_entraram():
+    linha = dict(LINHA_BASE, data="2026-09-12", local="Arena", entradas=412)
+    assert _sub_evento(desenhar_html([linha])) == "12/09 · Arena · 412 entraram"
+
+
+def test_uma_pessoa_so_entra_no_singular():
+    linha = dict(LINHA_BASE, data=None, local="", entradas=1)
+    assert _sub_evento(desenhar_html([linha])) == "1 entrou"
+
+
+def test_zero_entradas_NAO_ocupa_a_linha_do_subtitulo():
+    """"0 entraram" na barra de um evento que só acontece sábado não informa
+    nada e rouba a linha que diz onde ele é."""
+    linha = dict(LINHA_BASE, data="2026-09-12", local="Arena", entradas=0)
+    assert _sub_evento(desenhar_html([linha])) == "12/09 · Arena"
+
+
+def test_sem_saber_o_numero_a_barra_tambem_cala():
+    linha = dict(LINHA_BASE, data=None, local="", entradas=None, ehAparelho=True)
+    assert _sub_evento(desenhar_html([linha])) == "lê neste aparelho"
+
+
+def test_a_linha_do_evento_leva_o_botao_do_ao_vivo_com_rotulo_em_texto():
+    """Controle novo nesta aplicação se explica sozinho. A engrenagem passa só
+    com o ícone porque é um desenho que todo mundo conhece; um pulso, não."""
+    html = desenhar_html([dict(LINHA_BASE, entradas=10)])
+    assert "botao-ao-vivo" in html
+    assert "AO VIVO" in html
+    assert 'aria-label="Ver os números de' in html
+
+
+def test_o_evento_finalizado_tem_como_abrir_o_relatorio():
+    """Um evento que acabou deixa um número solto na lista. O relatório é o que
+    o dono leva embora — e ele vem ANTES do "Reabrir", que é a exceção."""
+    html = _chamar_completo("desenharFinalizados",
+                            [[{"id": "e-9", "nome": "Fenachamp",
+                               "data": "2026-08-01", "entradas": 800}]])["finalizadosHtml"]
+    assert 'id="relatorio-e-9"' in html
+    assert 'aria-label="Relatório de Fenachamp"' in html
+    assert html.index("relatorio-e-9") < html.index("reabrir-e-9")
+

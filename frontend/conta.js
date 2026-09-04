@@ -11,11 +11,11 @@
  *
  * ## Quem manda no que aparece na tela
  *
- * Esta pagina tem SEIS estados de topo, e eles nunca convivem: a tela inicial
+ * Esta pagina tem SETE estados de topo, e eles nunca convivem: a tela inicial
  * (`#lista` + `#bloco-novo-evento`), o menu do olho (`#menu-geral`), a
  * configuracao de um evento (`#engrenagem`), "Meus Pedidos"
- * (`#meus-pedidos`), a tela de entrar (`#bloco-entrar`) e a troca de senha
- * (`#trocar-senha`).
+ * (`#meus-pedidos`), o evento acontecendo (`#ao-vivo`), a tela de entrar
+ * (`#bloco-entrar`) e a troca de senha (`#trocar-senha`).
  *
  * Ate a primeira revisao desta tarefa havia DOIS donos sem contrato entre si:
  * o `menu-geral.js`, que escondia a tela inicial atras do olho, e este arquivo,
@@ -57,14 +57,15 @@
     // como "esta na frente" quando ela fecha, para o `esconderEntrar()` nao
     // devolver a tela inicial POR BAIXO de Meus Pedidos. Estar aqui da os dois
     // de uma vez, porque o `NA_FRENTE` abaixo e montado a partir desta lista.
-    // `caixa-carregar` NAO e um setimo estado: e um cartao DENTRO de Meus
-    // Pedidos, e por isso os "seis" acima continuam sendo seis. Ele entra aqui
+    // `caixa-carregar` NAO e um estado de topo: e um cartao DENTRO de Meus
+    // Pedidos, e por isso os SETE acima continuam sendo sete. Ele entra aqui
     // pelos mesmos DOIS papeis: ser escondido quando uma tela de conta abre --
     // senao o login nasceria por cima da caixa com a senha do dono digitada
     // dentro --, e contar como "esta na frente" quando ela fecha, para a tela
     // inicial nao voltar POR BAIXO dele.
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
-    var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos', 'caixa-carregar'];
+    var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos', 'caixa-carregar',
+                      'ao-vivo'];
     // TUDO o que pode estar na frente da tela inicial -- os estados de fora e
     // as DUAS telas deste arquivo.
     //

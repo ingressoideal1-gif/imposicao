@@ -241,6 +241,10 @@ PAINEL_ARQUIVOS = [
     # Sai junto com o `meus-pedidos.js`, que e quem a abre -- um dos dois de
     # fora e a estacao servindo uma tela cujo botao nao faz nada.
     "carregar-pedido.js",
+    # O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatorio" depois
+    # (04/09/2026). Sai junto porque a lista de eventos passou a ter o botao que
+    # o abre -- de fora, a estacao serviria uma tela cujo botao nao faz nada.
+    "ao-vivo.js",
     # O deposito entra JUNTO com eles, embora seja da portaria: antes de trocar
     # de evento, o "virar portao" pergunta a ele quantas leituras ainda nao
     # subiram, e sem essa conta a troca perderia contagem que o cliente pagou

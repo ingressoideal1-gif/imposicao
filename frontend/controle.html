@@ -80,9 +80,9 @@
 
     <!-- Envolve a lista inteira para a engrenagem poder escondê-la de uma vez.
 
-         `#lista` (com a barra `#bloco-novo-evento` acima dela) é um dos SEIS
+         `#lista` (com a barra `#bloco-novo-evento` acima dela) é um dos SETE
          estados de topo desta página, ao lado de `#menu-geral`, `#engrenagem`,
-         `#meus-pedidos`, `#bloco-entrar` e `#trocar-senha`. Eles nunca
+         `#meus-pedidos`, `#ao-vivo`, `#bloco-entrar` e `#trocar-senha`. Eles nunca
          aparecem juntos, e quem esconde e devolve a tela inicial para todos é
          o `conta.js`, por `conta.esconderTelaInicial()`. -->
     <div id="lista">
@@ -123,9 +123,9 @@
     <!-- MEUS PEDIDOS: os pedidos já impressos deste cliente, cada um com o
          Carregar que o transforma em evento.
 
-         É o SEXTO estado de topo desta página, ao lado de #lista (+ a barra
-         #bloco-novo-evento), #menu-geral, #engrenagem, #bloco-entrar e
-         #trocar-senha. Quem esconde e devolve a tela inicial para todos eles é
+         É um dos SETE estados de topo desta página, ao lado de #lista (+ a
+         barra #bloco-novo-evento), #menu-geral, #engrenagem, #ao-vivo,
+         #bloco-entrar e #trocar-senha. Quem esconde e devolve a tela inicial para todos eles é
          o `conta.js`, por `conta.esconderTelaInicial()`. -->
     <div id="meus-pedidos" class="sumindo">
         <!-- "Voltar" e "Atualizar" lado a lado: navegar para fora da tela e
@@ -185,9 +185,76 @@
         <div id="erro-carregar" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
     </div>
 
+    <!-- O EVENTO ACONTECENDO.
+
+         É o SÉTIMO estado de topo desta página, ao lado de #lista (+ a barra
+         #bloco-novo-evento), #menu-geral, #engrenagem, #meus-pedidos,
+         #bloco-entrar e #trocar-senha. Quem esconde e devolve a tela inicial
+         para todos eles é o `conta.js`, por `conta.esconderTelaInicial()`.
+
+         Uma tela, dois nomes: "Ao vivo" no evento ativo, onde ela se refaz
+         sozinha a cada trinta segundos, e "Relatório" no finalizado, onde ela
+         fica parada. São os mesmos números — duas telas fariam "quantos
+         entraram?" ter duas respostas conforme a hora da pergunta. -->
+    <div id="ao-vivo" class="sumindo">
+        <div class="linha-botoes">
+            <button id="btn-voltar-ao-vivo" class="secundario" type="button">← Voltar aos meus eventos</button>
+            <button id="btn-atualizar-ao-vivo" class="secundario" type="button">Atualizar</button>
+        </div>
+        <h1 id="ao-vivo-titulo" class="rotulo-secao">Ao vivo</h1>
+        <p id="ao-vivo-nome" class="ao-vivo-nome"></p>
+        <p id="ao-vivo-sub" class="config-ajuda"></p>
+        <!-- O que o sistema faz sozinho precisa se anunciar: sem esta linha o
+             dono fica recarregando na mão sem saber que não precisa. -->
+        <p id="ao-vivo-atualizando" class="config-ajuda sumindo">Esta tela se atualiza sozinha a cada 30 segundos.</p>
+        <!-- `role="alert"` porque este parágrafo é o único lugar onde uma falha
+             da busca aparece: sem ele, quem usa leitor de tela fica no
+             "Buscando…" sem saber que a resposta chegou e deu errado. -->
+        <p id="ao-vivo-aviso" class="aviso sumindo" role="alert"></p>
+
+        <div id="ao-vivo-corpo" class="sumindo">
+            <div id="ao-vivo-resumo" class="placas"></div>
+
+            <!-- PROCURAR UM INGRESSO. A pergunta da porta, e por isso ela vem
+                 antes dos gráficos: quem abre esta tela com uma fila esperando
+                 não pode rolar até o fim para achar o campo. -->
+            <h2 class="rotulo-secao">Procurar um ingresso</h2>
+            <p class="config-ajuda">Digite o número impresso no ingresso. A busca é no evento inteiro — não precisa saber de que setor ele é.</p>
+            <div class="linha-busca">
+                <input id="ao-vivo-busca" type="search" inputmode="numeric"
+                       autocomplete="off" placeholder="Número do ingresso"
+                       aria-label="Número do ingresso">
+                <button id="btn-ao-vivo-procurar" type="button">Procurar</button>
+            </div>
+            <div id="ao-vivo-achados"></div>
+
+            <h2 class="rotulo-secao">Por setor</h2>
+            <div id="ao-vivo-setores"></div>
+
+            <h2 class="rotulo-secao">Entradas por hora</h2>
+            <div id="ao-vivo-horas"></div>
+
+            <!-- Some inteira quando não houve recusa nenhuma: uma seção vazia
+                 chamada "Recusas" faz o dono procurar um problema que não
+                 existe. -->
+            <div id="ao-vivo-secao-recusas" class="sumindo">
+                <h2 class="rotulo-secao">Recusas</h2>
+                <div id="ao-vivo-recusas"></div>
+            </div>
+
+            <h2 class="rotulo-secao">Portões</h2>
+            <div id="ao-vivo-aparelhos"></div>
+
+            <h2 class="rotulo-secao">Levar embora</h2>
+            <p class="config-ajuda">Uma planilha com todas as leituras da noite, inclusive as recusadas, com a hora do aparelho e a hora do servidor.</p>
+            <button id="btn-ao-vivo-csv" class="secundario" type="button">Baixar a planilha da noite</button>
+            <p id="ao-vivo-aviso-csv" class="config-ajuda sumindo" role="status"></p>
+        </div>
+    </div>
+
     <!-- O MENU GERAL, atrás do olho do cabeçalho.
 
-         É um dos seis estados de topo desta página, e como os outros nunca
+         É um dos sete estados de topo desta página, e como os outros nunca
          aparece junto com eles. Aqui vai o que é da
          TELA, e não de um evento: a configuração de um evento continua sendo a
          engrenagem ao lado da barra dele.
@@ -326,7 +393,7 @@
     </div>
 
     <!-- A ENGRENAGEM: toda a configuração do evento, atrás de uma senha.
-         Mais um dos seis estados de topo, e quem faz a troca é o
+         Mais um dos sete estados de topo, e quem faz a troca é o
          `abrirEngrenagem` / `fecharEngrenagem`, do script da engrenagem.
 
          Ela esconde a barra `#bloco-novo-evento` JUNTO com o `#lista`: a barra
@@ -611,6 +678,10 @@
      Depois do `meus-pedidos.js` porque é de lá que ela é aberta, e ela devolve
      a lista de pedidos ao fechar. -->
 <script src="carregar-pedido.js?v=819"></script>
+<!-- O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatório" depois. É a
+     tela que a lista de eventos abre pelo botão do meio da linha, e a lista de
+     finalizados pelo toque na linha inteira. -->
+<script src="ao-vivo.js?v=819"></script>
 <script src="caixa-confirmar.js?v=819"></script>
 <script src="menu-geral.js?v=819"></script>
 <script src="fila-presa.js?v=819"></script>

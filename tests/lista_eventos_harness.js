@@ -91,6 +91,12 @@ async function rodar(caso) {
         return {
             resultado: r, localStorage: guardado,
             eventosHtml: caixa ? caixa.innerHTML : null,
+            // O HTML da lista de finalizados, pelo mesmo motivo do de
+            // `#eventos`: e ele que prova o que a linha realmente mostra.
+            finalizadosHtml: (function () {
+                var f = document.getElementById('finalizados');
+                return f ? f.innerHTML : null;
+            })(),
             saidaEscondida: saidaVazio ? saidaVazio.classList.contains('sumindo') : null,
             saidaTexto: quantos ? quantos.textContent : null,
         };

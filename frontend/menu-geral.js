@@ -1,7 +1,7 @@
 /**
  * O menu geral, atras do olho do cabecalho.
  *
- * Um dos SEIS estados de topo desta pagina -- a tela inicial (`#lista` + a
+ * Um dos SETE estados de topo desta pagina -- a tela inicial (`#lista` + a
  * barra `#bloco-novo-evento`), este menu, a `#engrenagem`, `#meus-pedidos`,
  * `#bloco-entrar` e `#trocar-senha` --, e como eles nunca aparece junto com os
  * outros. Quem esconde e devolve a tela inicial para todos e o `conta.js`.

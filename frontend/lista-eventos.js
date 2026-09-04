@@ -45,7 +45,11 @@
                 // so a conta sabe disso. Sem elas o subtitulo da barra ainda
                 // mostra "le neste aparelho", que e o que importa aqui.
                 data: null,
-                local: ''
+                local: '',
+                // Quantos entraram so a conta sabe. Sem rede, a barra mostra o
+                // que importa no portao -- "le neste aparelho" -- e cala sobre
+                // o resto, em vez de escrever um zero que seria mentira.
+                entradas: null
             };
         });
 
@@ -71,7 +75,12 @@
                 ehAparelho: !!ja,
                 nomeAparelho: ja ? ja.nomeAparelho : '',
                 data: ev.data_evento || null,
-                local: ev.local_evento || ''
+                local: ev.local_evento || '',
+                // O numero JA VINHA na resposta e era jogado fora nos eventos
+                // ativos: o `/meus-eventos` conta as entradas de todos eles a
+                // cada abertura da casa, e a tela so o usava nos finalizados.
+                // Era a unica coisa que o dono queria saber durante o evento.
+                entradas: typeof ev.entradas === 'number' ? ev.entradas : null
             };
         });
 
@@ -161,6 +170,17 @@
         ]);
     }
 
+    /**
+     * O pulso do "Ao vivo": a linha de um monitor cardiaco.
+     *
+     * Desenhado aqui, como os outros dois desta tela, e pelo mesmo motivo --
+     * esta pagina precisa abrir sem rede, e cada arquivo de imagem e mais uma
+     * requisicao que pode faltar.
+     */
+    function iconePulso() {
+        return svg(['M3 12h4l3 8 4-16 3 8h4']);
+    }
+
     function iconeEngrenagem() {
         return svg([
             'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
@@ -193,6 +213,11 @@
             partes.push('lê neste aparelho'
                 + (ev.nomeAparelho ? (' como ' + ev.nomeAparelho) : ''));
         }
+        // Quantos ja entraram, quando ha alguem. Zero fica de FORA: um "0
+        // entraram" na barra de um evento que so acontece sabado nao informa
+        // nada e ocupa a linha que diz onde ele e. `null` e "nao sei" -- o
+        // celular sem rede, que nao pode afirmar numero nenhum.
+        if (ev.entradas) { partes.push(quantosEntraram(ev.entradas)); }
         if (!partes.length) { return null; }
         var span = document.createElement('span');
         span.className = 'sub-evento';
@@ -268,6 +293,30 @@
             window.virarPortao.abrir(ev.id, ev.nome);
         });
         linha.appendChild(barra);
+
+        // O caminho para os numeros do evento. Fica ENTRE a barra e a
+        // engrenagem de proposito: a barra e o que o porteiro toca com pressa,
+        // a engrenagem e configuracao, e olhar quanta gente entrou nao e nem
+        // uma coisa nem outra -- e o que o dono faz a noite inteira.
+        //
+        // Com rotulo em texto, e nao so o icone: controle novo nesta aplicacao
+        // se explica sozinho. A engrenagem passa sem ele porque e um desenho
+        // que todo mundo ja conhece; um pulso, nao.
+        var aoVivo = document.createElement('button');
+        aoVivo.type = 'button';
+        aoVivo.className = 'botao-ao-vivo';
+        aoVivo.id = 'ao-vivo-' + ev.id;
+        aoVivo.appendChild(iconePulso());
+        var rotuloVivo = document.createElement('span');
+        rotuloVivo.className = 'rotulo-ao-vivo';
+        rotuloVivo.textContent = 'AO VIVO';
+        aoVivo.appendChild(rotuloVivo);
+        aoVivo.setAttribute('aria-label', 'Ver os números de ' + ev.nome);
+        aoVivo.title = 'Ao vivo';
+        aoVivo.addEventListener('click', function () {
+            window.aoVivo.abrir(ev.id, ev.nome);
+        });
+        linha.appendChild(aoVivo);
 
         var engrenagem = document.createElement('button');
         engrenagem.type = 'button';
@@ -394,6 +443,20 @@
         detalhe.textContent = partes.join(' · ');
         dados.appendChild(detalhe);
         linha.appendChild(dados);
+
+        // O relatorio da noite. Vem ANTES do "Reabrir" porque e o que se faz
+        // com um evento que acabou: reabrir e a excecao (o evento que foi
+        // finalizado cedo demais), olhar o resultado e a regra.
+        var relatorio = document.createElement('button');
+        relatorio.type = 'button';
+        relatorio.className = 'secundario botao-relatorio';
+        relatorio.id = 'relatorio-' + ev.id;
+        relatorio.textContent = 'Relatório';
+        relatorio.setAttribute('aria-label', 'Relatório de ' + ev.nome);
+        relatorio.addEventListener('click', function () {
+            window.aoVivo.abrir(ev.id, ev.nome);
+        });
+        linha.appendChild(relatorio);
 
         var reabrir = document.createElement('button');
         reabrir.type = 'button';

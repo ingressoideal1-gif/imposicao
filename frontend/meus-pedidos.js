@@ -5,7 +5,7 @@
  * nao carregado); esta tela so desenha e manda para a caixa do Carregar.
  * Sem sessao, pede para entrar primeiro e volta para ca.
  *
- * ## O sexto estado de topo da casa
+ * ## Um dos estados de topo da casa
  *
  * `#meus-pedidos` entra ao lado de `#lista` + `#bloco-novo-evento`, do
  * `#menu-geral`, da `#engrenagem`, do `#bloco-entrar` e do `#trocar-senha` --

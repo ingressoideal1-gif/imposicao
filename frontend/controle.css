@@ -885,6 +885,8 @@ button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
 #menu-geral #btn-voltar-menu,
 #meus-pedidos #btn-voltar-pedidos,
 #meus-pedidos #btn-atualizar-pedidos,
+#ao-vivo #btn-voltar-ao-vivo,
+#ao-vivo #btn-atualizar-ao-vivo,
 #engrenagem #btn-fechar-engrenagem {
     width: auto; padding: 9px 16px 9px 12px; min-height: 40px;
     font-size: .9rem; font-weight: 700; color: #cbd5e1;
@@ -1330,3 +1332,148 @@ html.com-fundo body::after { opacity: .3; }
 .botao-engrenagem { width: 48px; height: 48px; }
 .botao-engrenagem svg { width: 26px; height: 26px; }
 #btn-meus-pedidos-mais { font-size: 1.95rem; }
+
+
+/* ══ O EVENTO ACONTECENDO ═══════════════════════════════════════════════════
+   A tela "Ao vivo" (e "Relatório", que é a mesma parada). Ela é lida de pé, na
+   porta, com uma mão — então o número vem grande e a barra é só o resumo dele.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* O botão da linha do evento: entre a barra de LER e a engrenagem. Retângulo
+   arredondado, e não bolinha, porque ele carrega o rótulo em texto embaixo do
+   ícone -- controle novo nesta aplicação se explica sozinho. */
+.botao-ao-vivo {
+    width: 56px; height: 48px; flex: none; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px;
+    background: rgba(20, 184, 166, .10); border: 1px solid rgba(45, 212, 191, .32);
+    color: var(--teal-claro); font-family: inherit; cursor: pointer;
+    margin: 0; padding: 0; min-height: 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.botao-ao-vivo:hover:not(:disabled) { background: rgba(20, 184, 166, .18); filter: none; }
+.botao-ao-vivo svg { width: 20px; height: 20px; }
+.rotulo-ao-vivo {
+    font-size: .5rem; font-weight: 800; letter-spacing: .08em; line-height: 1;
+}
+
+/* O nome do evento no topo da tela, logo abaixo do "Ao vivo". */
+.ao-vivo-nome {
+    margin: 0 0 2px; font-size: 1.25rem; font-weight: 700;
+    letter-spacing: -0.01em; overflow-wrap: anywhere;
+}
+
+/* ── As placas do resumo ─────────────────────────────────────────────────
+   Grade que se ajusta sozinha: o número de placas muda com o evento (não há
+   "dentro agora" sem saída registrada, nem "recusas" sem recusa). */
+.placas {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 10px; margin: 4px 0 8px;
+}
+.placa {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 14px 14px 12px;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.placa-valor {
+    font-size: 1.7rem; font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.02em;
+    /* Números em colunas que se comparam de relance: sem isto o "1" estreito
+       desalinha as placas entre si. */
+    font-variant-numeric: tabular-nums;
+}
+.placa-rotulo {
+    font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--dim);
+}
+/* A placa que responde a pergunta principal, e a que avisa. Cor SOMADA ao
+   rótulo, nunca no lugar dele. */
+.placa.destaque { border-color: rgba(45, 212, 191, .38); }
+.placa.destaque .placa-valor { color: var(--teal-claro); }
+.placa.atencao { border-color: rgba(239, 68, 68, .35); }
+.placa.atencao .placa-valor { color: #fca5a5; }
+
+/* ── As barras ───────────────────────────────────────────────────────────
+   Rótulo à esquerda, trilho no meio, número à direita. O número está SEMPRE
+   escrito: a barra é resumo, e comprimento não se lê com precisão. */
+.barra-linha {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 0; font-size: .86rem;
+}
+.barra-rotulo {
+    flex: 0 0 auto; min-width: 42px; color: var(--dim);
+    font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.barra-rotulo:empty { display: none; }
+.barra-trilho {
+    flex: 1; height: 10px; border-radius: 999px; min-width: 40px;
+    background: rgba(148, 163, 184, .14); overflow: hidden;
+}
+.barra-cheia {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--teal), var(--teal-claro));
+    /* Zero por cento tem de aparecer como zero, e não como um fiapo. */
+    min-width: 0;
+}
+.barra-valor {
+    flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: #cbd5e1;
+}
+/* A hora de pico. Ela é o único ponto do gráfico que responde a uma pergunta
+   sozinha ("a que horas a fila apertou?"), e por isso é a única marcada. */
+.barra-pico .barra-rotulo { color: var(--teal-claro); }
+.barra-pico .barra-cheia { background: linear-gradient(90deg, var(--teal-claro), #7dd3fc); }
+
+/* ── O cartão de um setor ────────────────────────────────────────────────── */
+.cartao-setor-vivo { padding: 14px 16px; margin-bottom: 10px; }
+.setor-vivo-topo {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; margin-bottom: 4px;
+}
+.setor-vivo-topo strong { font-size: 1rem; overflow-wrap: anywhere; }
+.setor-vivo-conta {
+    flex: none; font-size: .84rem; font-weight: 700; color: var(--dim);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Os portões ──────────────────────────────────────────────────────────── */
+.aparelho-vivo {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 14px; margin-bottom: 8px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    font-size: .9rem;
+}
+.aparelho-vivo-nome { font-weight: 700; overflow-wrap: anywhere; }
+.aparelho-vivo-sinal { flex: none; color: var(--dim); font-size: .82rem; }
+/* Pausado ou desligado: a palavra basta, e a cor a reforça. */
+.aparelho-vivo-sinal.parado { color: #fcd34d; }
+
+/* ── Procurar um ingresso ───────────────────────────────────────────────── */
+.linha-busca { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
+.linha-busca input {
+    flex: 1; margin: 0; min-width: 0;
+    /* 16px é o piso: abaixo disso o iOS dá zoom ao focar o campo, e a tela
+       inteira salta no meio de uma fila. */
+    font-size: 16px;
+}
+.linha-busca button { width: auto; flex: 0 0 auto; margin: 0; padding: 0 18px; }
+
+.cartao-achado { padding: 14px 16px; margin-bottom: 10px; border-left-width: 3px; }
+.achado-topo {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.achado-topo strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.achado-setor { flex: none; color: var(--dim); font-size: .82rem; overflow-wrap: anywhere; }
+.achado-situacao { margin-top: 4px; font-weight: 700; }
+.achado-hora, .achado-motivo { margin-top: 2px; color: var(--dim); font-size: .84rem; }
+/* A cor diz o mesmo que a frase logo acima dela, nunca sozinha: quem não
+   distingue as duas lê "já entrou" escrito. */
+.cartao-achado.situacao-entrou { border-left-color: var(--verde); }
+.cartao-achado.situacao-entrou .achado-situacao { color: #86efac; }
+.cartao-achado.situacao-disponivel { border-left-color: var(--teal); }
+.cartao-achado.situacao-bloqueado { border-left-color: #ef4444; }
+.cartao-achado.situacao-bloqueado .achado-situacao { color: #fca5a5; }
+.cartao-achado.situacao-cancelado { border-left-color: var(--apagado); }
+.cartao-achado.situacao-cancelado .achado-situacao { color: var(--apagado); }
