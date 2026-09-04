@@ -329,10 +329,16 @@ Antes disso, abrir o pedido 18560 custava vinte idas ao banco.
   ela não existe no banco nem no `ROLE_DEFAULTS`, justamente para não aparecer num `upsert`
   e mexer na grade que o administrador edita ao vivo.
 
-O que ainda falta da parte 3c: o painel **ao vivo** (esta tela é sob demanda, não empurra
-atualização), cancelar credencial, desvincular pedido do evento, reativar aparelho revogado,
-e a mudança do Ideal Control antigo (hoje em `../ideal-IdealControl/`) para dentro deste
-repositório.
+O que ainda falta da parte 3c: **cancelar credencial**, **reativar aparelho revogado**, o
+**aviso que chega sem o dono perguntar** (um portão que parou de sincronizar há quarenta
+minutos ainda só é descoberto por quem vai olhar), e a mudança do Ideal Control antigo (hoje
+em `../ideal-IdealControl/`) para dentro deste repositório.
+
+Saíram desta lista em 04/09/2026, na v820: o painel **ao vivo** — que virou uma tela do
+aplicativo do dono, com os mesmos números da tela da gráfica —, **desvincular pedido do
+evento**, e a limpeza dos setores órfãos, que agora acontece dentro do "Conferir os
+setores". Ver [controle_acesso.md → O evento ao
+vivo](controle_acesso.md#o-evento-ao-vivo-04092026).
 
 O que a parte 3 inteira precisa entregar está no fim do
 [docs/controle_acesso.md](controle_acesso.md), com as decisões que o usuário já tomou.

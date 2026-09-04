@@ -1477,3 +1477,16 @@ html.com-fundo body::after { opacity: .3; }
 .cartao-achado.situacao-bloqueado .achado-situacao { color: #fca5a5; }
 .cartao-achado.situacao-cancelado { border-left-color: var(--apagado); }
 .cartao-achado.situacao-cancelado .achado-situacao { color: var(--apagado); }
+
+/* A linha "Pedido 20272   [botão]", usada pelos dois cartões que agem sobre um
+   pedido do evento: conferir os setores e tirar do evento. */
+.linha-pedido-evento {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 0; border-top: 1px solid var(--border);
+    font-size: .92rem; font-weight: 700;
+}
+.linha-pedido-evento:first-child { border-top: none; }
+.linha-pedido-evento button {
+    width: auto; margin: 0; flex: 0 0 auto;
+    padding: 6px 14px; min-height: 36px; font-size: .84rem;
+}

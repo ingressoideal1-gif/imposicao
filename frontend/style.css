@@ -3050,6 +3050,8 @@ input[type=number] {
 
 .ic-dim   { color: var(--text-dim); font-size: 0.85rem; }
 .ic-ajuda { color: var(--text-dim); font-size: 0.78rem; line-height: 1.45; margin: 4px 0 0; }
+/* Os botoes que agem sobre o VINCULO do pedido com o evento, lado a lado. */
+.ic-linha-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .ic-secao-titulo {
     font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.09em;

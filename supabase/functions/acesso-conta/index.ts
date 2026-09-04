@@ -75,6 +75,13 @@ import {
   tamanhoDaPagina,
   termoSeguro,
 } from "../_compartilhado/relatorio_puro.ts";
+// Desfazer o vinculo do pedido e reconferir os setores. As mesmas funcoes que a
+// tela da grafica chama: duas copias divergiriam, e o sintoma seria a grafica
+// desfazendo de um jeito que o cliente nao consegue reproduzir.
+import {
+  desvincularPedido,
+  sincronizarSetores,
+} from "../_compartilhado/vinculo.ts";
 import {
   clientesDaConta, contaPrecisaTrocarSenha, marcarSenhaTrocada,
 } from "../_compartilhado/contas.ts";
@@ -141,6 +148,27 @@ async function eventoDoDono(eventoId: string, usuario: { id: string }): Promise<
     throw new Recusa(403, "evento nao encontrado nesta conta");
   }
   return linha;
+}
+
+/**
+ * O pedido e o evento dele, se o evento for desta conta.
+ *
+ * A conferencia e pelo EVENTO, e nao pelo cliente da proposta: quem pode
+ * desfazer o vinculo e quem e dono do evento em que o pedido caiu -- que e
+ * exatamente a pessoa que precisa desfaze-lo quando ele caiu no lugar errado.
+ */
+async function pedidoDoDono(
+  pedidoIdInt: number,
+  usuario: { id: string },
+): Promise<{ pedido: number; evento: any }> {
+  const linha = ((await banco(
+    "GET",
+    `producao_acesso_pedidos?pedido_id_int=eq.${pedidoIdInt}&select=pedido_id_int,evento_id`,
+  )) ?? [])[0];
+  if (!linha?.evento_id) {
+    throw new Recusa(409, "este pedido ainda nao esta em nenhum evento");
+  }
+  return { pedido: pedidoIdInt, evento: await eventoDoDono(linha.evento_id, usuario) };
 }
 
 async function setorDoDono(setorId: string, usuario: { id: string }): Promise<any> {
@@ -1096,6 +1124,29 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     const evento = await eventoDoDono(p[1], usuario);
     await exigirElevacao(evento.id, usuario, req);
     return ok(await aplicarCodigos(evento.id, await corpo()));
+  }
+
+  // ── As duas saidas que faltavam (04/09/2026) ──────────────────────────────
+  //
+  // Carregar o pedido no evento errado e ficar sem setor por causa de uma
+  // numeracao trocada depois eram, ate agora, as duas unicas situacoes cuja
+  // resposta era "a grafica mexe no banco a mao". Regra deste projeto: toda
+  // trava diz, na propria tela, como se sai dela.
+  //
+  // As duas ESCREVEM, entao passam pela mesma elevacao das outras -- e contra
+  // o evento DO PEDIDO, achado agora, nunca contra um id que o chamador
+  // mandasse por fora.
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
+      p[2] === "desvincular") {
+    const alvo = await pedidoDoDono(inteiro(p[1], "path", "pedido"), usuario);
+    await exigirElevacao(alvo.evento.id, usuario, req);
+    return ok(await desvincularPedido(alvo.pedido, alvo.evento.id));
+  }
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
+      p[2] === "sincronizar-setores") {
+    const alvo = await pedidoDoDono(inteiro(p[1], "path", "pedido"), usuario);
+    await exigirElevacao(alvo.evento.id, usuario, req);
+    return ok(await sincronizarSetores(alvo.pedido, alvo.evento.id));
   }
 
   // O codigo depende do METODO, e nao do caminho: GET vira 404 e o resto vira

@@ -416,6 +416,7 @@
             + (p.evento ? ' · ' + p.evento.nome_evento : '');
 
         desenharSituacao();
+        desenharVinculo();
         desenharAcessoDoCliente(estado.painel.cliente);
         // A seção do público aparece com o BOTÃO, e não com os números: eles
         // só são buscados se alguém pedir.
@@ -476,6 +477,99 @@
             linha.appendChild(marca);
             lista.appendChild(linha);
         });
+    }
+
+    // ── As duas saidas que faltavam ────────────────────────────────
+    //
+    // O cliente carregou o pedido no evento errado, ou um modelo ganhou
+    // numeracao com codigo depois do carregar. Ate 04/09/2026 as duas so
+    // tinham conserto a mao, no banco -- e quem atende o telefone quando elas
+    // acontecem e esta tela.
+    //
+    // As MESMAS rotas que o aplicativo do dono chama. O que difere e a porta:
+    // la e o dono mais a elevacao, aqui basta o papel no painel.
+
+    function desenharVinculo() {
+        var secao = $('ic-vinculo-secao');
+        if (!secao) { return; }
+        var temEvento = !!(estado.painel && estado.painel.evento);
+        // Sem evento nao ha vinculo a desfazer nem setor a conferir: os dois
+        // botoes agiriam sobre nada, e o atendente tocaria neles para descobrir.
+        secao.style.display = temEvento ? '' : 'none';
+        if (!temEvento) { return; }
+        $('ic-vinculo-aviso').style.display = 'none';
+        $('ic-btn-conferir-setores').onclick = conferirSetores;
+        $('ic-btn-desvincular').onclick = desvincularPedido;
+    }
+
+    function avisarVinculo(frase) {
+        var el = $('ic-vinculo-aviso');
+        el.textContent = frase;
+        el.style.display = '';
+    }
+
+    function conferirSetores() {
+        var botao = $('ic-btn-conferir-setores');
+        var pedido = estado.pedido;
+        botao.disabled = true;
+        return gravar('/pedidos/' + pedido + '/sincronizar-setores', {}, 'POST')
+            .then(function (r) {
+                var partes = [];
+                if ((r.criados || []).length) {
+                    partes.push('Criei: ' + r.criados.join(', ') + '.');
+                }
+                if ((r.atualizados || []).length) {
+                    partes.push('Acertei a quantidade de: ' + r.atualizados.join(', ') + '.');
+                }
+                if ((r.desligados || []).length) {
+                    partes.push('Desliguei (sem código e vazios): '
+                                + r.desligados.join(', ') + '.');
+                }
+                if ((r.mantidos_com_ingresso || []).length) {
+                    partes.push('ATENÇÃO — sem código no pedido, mas com ingresso '
+                                + 'publicado: ' + r.mantidos_com_ingresso.join(', ')
+                                + '. Deixei como está.');
+                }
+                if (!partes.length) { partes.push('Está tudo certo: nada a mudar.'); }
+                avisarVinculo(partes.join(' '));
+                // Só recarrega se o atendente ainda estiver no mesmo pedido: a
+                // resposta pode chegar depois de ele abrir outro, e redesenhar
+                // ali mostraria os setores deste embaixo do número daquele.
+                if (estado.pedido === pedido) { return abrirPedido(pedido); }
+            })
+            // `gravar()` ja mostrou o motivo em toast e relancou. Engolir aqui
+            // e o que impede o erro de virar "unhandled rejection" no console.
+            .catch(function () { })
+            .then(function () { botao.disabled = false; });
+    }
+
+    function desvincularPedido() {
+        var botao = $('ic-btn-desvincular');
+        var pedido = estado.pedido;
+        if (!window.confirm(
+            'Tirar o pedido ' + pedido + ' do evento?
+
+'
+            + 'Os setores dele saem do evento e os ingressos voltam a ficar '
+            + 'soltos. Nenhum ingresso deixa de valer, e o cliente pode carregar '
+            + 'o pedido de novo no evento certo.
+
+'
+            + 'Não funciona se já houve leitura na portaria.')) {
+            return Promise.resolve();
+        }
+        botao.disabled = true;
+        return gravar('/pedidos/' + pedido + '/desvincular', {}, 'POST')
+            .then(function (r) {
+                avisarVinculo('Pedido ' + pedido + ' fora do evento. '
+                    + ((r.nomes || []).length
+                        ? ('Saíram os setores: ' + r.nomes.join(', ') + '. ')
+                        : '')
+                    + 'Ele volta a aparecer em Meus Pedidos, no aplicativo do cliente.');
+                if (estado.pedido === pedido) { return abrirPedido(pedido); }
+            })
+            .catch(function () { /* `gravar()` ja mostrou o motivo */ })
+            .then(function () { botao.disabled = false; });
     }
 
     function selo(pai, rotulo, classe) {

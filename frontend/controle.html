@@ -504,6 +504,28 @@
                 <span class="secao-seta" aria-hidden="true"></span>
             </button>
             <div class="secao-corpo" id="corpo-setores">
+                <!-- CONFERIR OS SETORES (04/09/2026).
+
+                     Os setores são gravados UMA VEZ, no momento do Carregar. Se
+                     depois disso um modelo ganhar uma numeração com código —
+                     que é o conserto quando a gráfica errou a numeração —, o
+                     setor dele nunca aparecia, e ninguém procura um setor que
+                     nunca existiu. -->
+                <div class="cartao" id="cartao-conferir-setores">
+                    <h3>Conferir os setores</h3>
+                    <p class="config-ajuda">
+                        Compara com o pedido na gráfica e cria o setor que estiver
+                        faltando — é o que resolve quando um modelo ganhou código
+                        depois que você carregou o pedido. Os nomes que você deu
+                        continuam como estão.
+                    </p>
+                    <!-- Um botão POR PEDIDO. Um evento pode reunir vários — a
+                         pista num, o camarote noutro —, e conferir "o primeiro"
+                         seria conferir metade do evento e dizer que está tudo
+                         certo. -->
+                    <div id="pedidos-para-conferir"></div>
+                    <p id="aviso-conferir-setores" class="config-ajuda sumindo" role="status"></p>
+                </div>
                 <div id="setores"></div>
             </div>
         </div>
@@ -560,6 +582,30 @@
                         volta, e o celular pode estar na mão do porteiro.
                     </p>
                     <button id="btn-zerar-entradas" class="so-com-senha perigo">Zerar as entradas deste evento</button>
+                </div>
+
+                <!-- TIRAR UM PEDIDO DO EVENTO (04/09/2026).
+
+                     O cliente carrega o pedido no evento errado, ou junta dois
+                     que não deviam ficar juntos. Até agora não havia caminho de
+                     volta em tela nenhuma — nem na dele, nem na da gráfica —, e
+                     o conserto era a gráfica mexer no banco à mão. Regra deste
+                     projeto: toda trava diz, nela mesma, por onde se sai. -->
+                <div class="cartao" id="cartao-desvincular">
+                    <h3>Tirar um pedido deste evento</h3>
+                    <p class="config-ajuda">
+                        Para quando o pedido foi carregado no evento errado. Os
+                        setores dele saem daqui e os ingressos voltam a ficar
+                        soltos — nenhum ingresso deixa de valer, e o pedido pode
+                        ser carregado de novo no evento certo.
+                    </p>
+                    <p class="config-ajuda">
+                        <strong>Não dá para tirar</strong> um pedido que já teve
+                        leitura na portaria: perderíamos de que setor cada pessoa
+                        entrou, e o relatório da noite não teria como ser refeito.
+                    </p>
+                    <div id="pedidos-do-evento"></div>
+                    <p id="aviso-desvincular" class="config-ajuda sumindo" role="status"></p>
                 </div>
 
                 <div class="cartao" id="cartao-finalizar-evento">

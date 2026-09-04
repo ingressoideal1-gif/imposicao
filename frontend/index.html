@@ -3505,6 +3505,37 @@
                     <div id="ic-situacao" class="ic-selos"></div>
                     <div id="ic-modelos" class="card" style="padding:14px 16px;margin:12px 0 20px;"></div>
 
+                    <!-- AS DUAS SAÍDAS QUE FALTAVAM (04/09/2026).
+
+                         Até agora as duas situações abaixo só tinham conserto à
+                         mão, no banco — e quem atende o telefone quando elas
+                         acontecem é esta tela.
+
+                         "Conferir os setores": o setor é gravado UMA VEZ, no
+                         Carregar. Se depois disso o modelo ganhar numeração com
+                         código — que é o conserto quando erramos a numeração —,
+                         o setor dele nunca aparecia.
+
+                         "Tirar do evento": o cliente carregou o pedido no evento
+                         errado. Não havia caminho de volta em tela nenhuma. -->
+                    <div id="ic-vinculo-secao" class="card"
+                         style="display:none;padding:14px 16px;margin:0 0 20px;">
+                        <div class="ic-linha-acoes">
+                            <button id="ic-btn-conferir-setores" class="btn btn-sm btn-outline"
+                                    type="button">Conferir os setores</button>
+                            <button id="ic-btn-desvincular" class="btn btn-sm btn-outline"
+                                    type="button">Tirar este pedido do evento</button>
+                        </div>
+                        <p class="ic-ajuda" style="margin:8px 0 0;">
+                            <strong>Conferir os setores</strong> compara com o pedido e cria
+                            o setor que estiver faltando, sem tocar nos nomes que o cliente
+                            deu. <strong>Tirar do evento</strong> solta o pedido para ele ser
+                            carregado no evento certo — não vale depois que houve leitura na
+                            portaria.
+                        </p>
+                        <p id="ic-vinculo-aviso" class="ic-ajuda" style="display:none;"></p>
+                    </div>
+
                     <!-- Dashboard de público.
                          Atrás de um botão de propósito: ele custa cinco contagens,
                          uma varredura das leituras e uma passada por setor. Quem

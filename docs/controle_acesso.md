@@ -4,12 +4,14 @@ O QR Ideal ([docs/qr_ideal.md](qr_ideal.md)) põe no ingresso um código que nin
 adivinha. Este documento é a outra metade: como esse código chega à nuvem, como o cliente
 cadastra o evento dele, e o que protege cada passo.
 
-Estado em 15/08/2026: **partes 2 e 3a no ar** (site v582, agente 1.2.81). A parte 3b — o
-aplicativo da portaria — **está pronta e testada, ainda não publicada**: o código está
-neste repositório e os 603 testes passam, mas só vai ao ar quando o usuário rodar
-`.\publicar.ps1` e `.\publicar_agente.ps1`. Até lá, as 2.163 credenciais já publicadas
-continuam sem ser lidas por ninguém. A parte 3c — painel ao vivo e relatórios — ainda não
-começou.
+Estado em 04/09/2026: **partes 2, 3a e 3b no ar**, mais a primeira metade da 3c (a tela da
+gráfica, v589) e, desde a v820, a segunda: o **evento ao vivo** na mão do dono, a busca por
+um ingresso, a planilha da noite e as duas saídas que faltavam — tirar um pedido do evento
+e reconferir os setores. Ver [O evento ao vivo](#o-evento-ao-vivo-04092026).
+
+A prova que continua faltando é a mesma desde agosto, e nenhuma linha de código a
+substitui: **parear um celular de verdade, desligar Wi-Fi e dados, e ler**. Ver o item 4 de
+[STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 ## O caminho inteiro, em ordem
 
@@ -732,16 +734,25 @@ valida. O evento inteiro, e não só os setores autorizados, porque é isso que 
 distinguir "não é deste evento" de "é deste evento, mas de outra porta" — e chamar o segundo
 de primeiro faz o porteiro devolver ingresso bom achando que é falso.
 
-As seis regras vivem em `frontend/portaria-validacao.js`, puras, e a **ordem é a resposta**:
+As **oito** regras vivem em `frontend/portaria-validacao.js`, puras, e a **ordem é a
+resposta** — um ingresso pode falhar por dois motivos ao mesmo tempo, e o porteiro precisa
+ouvir o que ele consegue resolver:
 
 | # | Regra | O que o porteiro vê |
 |---|---|---|
+| 0 | `evento_inativo` | o dono desligou o evento inteiro — a única frase que explica por que a fila parou |
 | 1 | `desconhecido` | vermelho — não é deste evento |
 | 2 | `setor_nao_autorizado` | **laranja** — ingresso é de um setor que este aparelho não lê |
-| 3 | `fora_da_janela` | o setor abre às 20h / fechou às 2h |
-| 4 | `bloqueado` | vermelho, **com o motivo em corpo grande** |
-| 5 | `ja_entrou` | só onde `tipo_uso = unico` |
-| 6 | permitido | verde, setor e número |
+| 3 | `setor_bloqueado` | o dono desligou ESTA porta, e disse por quê |
+| 4 | `fora_da_janela` | o setor abre às 20h / fechou às 2h |
+| 5 | `bloqueado` | vermelho, **com o motivo em corpo grande** |
+| 6 | `ja_entrou` | só onde `tipo_uso = unico` |
+| 7 | permitido | verde, setor e número |
+
+Eram seis quando a parte 3b subiu; `evento_inativo` e `setor_bloqueado` entraram depois. A
+tabela `MOTIVOS` do relatório, que traduz cada um para o nome que a pessoa entende, ficou
+para trás nessa mudança e escrevia o nome cru da coluna — hoje
+`tests/test_motivos_de_recusa.py` cobra a lista inteira contra este arquivo.
 
 Casando em mais de um setor autorizado — o mesmo `0001` do VIP e do Camarote —, o aparelho
 **pergunta qual**, mostrando só os que casaram.
@@ -884,6 +895,95 @@ essa conferência, um `setor_id` com `%26select=*` dentro chega ao FastAPI já d
 e emenda um filtro que ninguém escreveu — foi exatamente isso que a mutação de teste
 produziu (`producao_acesso_setores?id=eq.x&select=*&select=...`) antes da guarda existir.
 
+<a name="o-evento-ao-vivo-04092026"></a>
+## O evento ao vivo (04/09/2026)
+
+O aplicativo sabia tudo **antes** do evento — setores, horários, portões — e sabia tudo
+**depois**, num número solto na lista de finalizados. Nas quatro horas em que a fila anda e
+os portões trabalham, ele não dizia nada ao dono. Era a única parte do caminho em que a
+pessoa que pagou pelo controle de acesso não tinha para onde olhar.
+
+O mais barato disso já estava pago: o `/meus-eventos` **conta as entradas de todos os
+eventos** a cada abertura da casa, e a tela usava o número só nos finalizados. Hoje a barra
+do evento ativo diz "412 entraram".
+
+### A tela
+
+`frontend/ao-vivo.js`, o **sétimo estado de topo** do `controle.html`. Uma tela, dois
+nomes: **Ao vivo** no evento ativo, onde ela se refaz sozinha a cada 30 segundos, e
+**Relatório** no finalizado, onde fica parada. Duas telas fariam "quantos entraram?" ter
+duas respostas conforme a hora da pergunta.
+
+O que ela mostra, nesta ordem — e a ordem é a resposta, porque quem abre esta tela pode
+estar com uma fila esperando:
+
+1. **o resumo** — entraram, dentro agora (só onde houve saída), impressos, comparecimento,
+   recusas;
+2. **procurar um ingresso** pelo número, no evento inteiro. "Este ingresso já entrou?" é a
+   pergunta da porta, e até agora só a gráfica sabia responder;
+3. entradas **por setor** e **por hora**, com a hora de pico marcada;
+4. as **recusas**, com o nome que a pessoa entende;
+5. os **portões**, com o último sinal de cada um;
+6. a **planilha da noite**, com a leitura negada junto.
+
+Duas coisas valem registrar porque são erros fáceis de cometer aqui:
+
+- **O relógio é o do servidor.** A resposta traz `agora`, e "último sinal há 40 minutos"
+  sai dele. Calculado com o relógio do celular, ele mente sempre que o celular estiver
+  errado — e um portão que parece mudo por causa do relógio do dono é uma corrida até a
+  porta à toa.
+- **As contas são as MESMAS da tela da gráfica.** Elas mudaram para
+  `supabase/functions/_compartilhado/relatorio.ts` por causa disso. Duas cópias não
+  quebrariam nada: a gráfica diria 412 e o cliente 409, as duas telas abertas ao mesmo
+  tempo, sem como saber qual acertou nem como refazer a conta da noite que já passou.
+
+O que muda entre as duas telas é só de onde sai o `contratado`: a gráfica soma os modelos
+do ERP que sobem ao controle (ela abre o pedido antes de o cliente carregá-lo, quando setor
+nenhum existe), e o aplicativo do dono soma a quantidade dos setores, que **é** a
+quantidade contratada. Por isso o `dashboard` recebe o número pronto em vez de escolher um
+dos dois caminhos sozinho.
+
+### As três leituras novas
+
+Todas em `acesso-conta`, todas contra um evento da conta, e **nenhuma pede elevação**:
+olhar quantos entraram no próprio evento não pode custar a senha, porque quem está olhando
+está na porta com o celular na mão.
+
+| Rota | O que devolve |
+|---|---|
+| `GET /eventos/{id}/ao-vivo` | o painel inteiro, mais os aparelhos e o `agora` do servidor |
+| `GET /eventos/{id}/ingressos` | a busca por número; sem `setor_id`, procura no evento inteiro |
+| `GET /eventos/{id}/leituras` | a base da planilha, paginada |
+
+### As duas saídas que faltavam
+
+`supabase/functions/_compartilhado/vinculo.ts`, chamado pelas **duas** telas — a do cliente
+com elevação, a da gráfica com o papel.
+
+**Tirar um pedido do evento** (`POST /pedidos/{p}/desvincular`). O cliente carrega o pedido
+no evento errado e o `carregar` passa a recusar com "este pedido já está num evento". Não
+havia caminho de volta em tela nenhuma, e o conserto era mexer no banco à mão.
+
+Ele descarimba as credenciais, desliga os setores daquele pedido (`status = excluido`, e
+não `DELETE`: o vínculo do aparelho com o setor aponta para aquela linha) e solta o pedido
+— **nessa ordem**, com o `evento_id` do pedido saindo por último, para que uma falha no
+meio deixe a operação repetível em vez de deixar setores vivos apontando para um evento que
+o pedido já não conhece. Nenhum ingresso deixa de valer: o que sai é o carimbo.
+
+**Não vale depois que houve leitura.** Seria perder de que setor cada pessoa entrou, e o
+relatório da noite não teria como ser refeito.
+
+**Conferir os setores** (`POST /pedidos/{p}/sincronizar-setores`). O setor é gravado uma
+vez, no momento do carregar. Se depois disso um modelo ganhar numeração com código — que é
+exatamente o conserto quando a gráfica erra a numeração —, o setor dele nunca aparecia, e o
+sintoma é o pior desta casa: ninguém procura um setor que nunca existiu.
+
+Ele cria o que falta e carimba as credenciais na mesma passada; atualiza a **quantidade**
+(que é a lotação contratada) e **nunca o nome** (que é do cliente, e ele o escolheu para o
+porteiro ler); e desliga o setor cujo modelo perdeu o código **só quando ele está vazio** —
+que é o caso dos oito setores órfãos criados antes de o filtro de legibilidade existir. Com
+ingresso dentro, ele fica, e a tela avisa: isso é decisão de gente, não de rotina.
+
 ## O que falta (a partir da parte 3c)
 
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
@@ -919,10 +1019,14 @@ Em 15/08/2026 o usuário revisou essa tela usando-a, e quatro coisas mudaram por
   botão apagado e não acontecia nada. Foi assim que "criar aparelho" virou "não está
   funcionando".
 
-O que falta da parte 3c, depois da tela da gráfica descrita acima: o painel **ao vivo**
-(aquela tela é sob demanda — não empurra atualização), cancelar credencial, desvincular
-pedido do evento, reativar aparelho revogado, e a limpeza dos oito setores órfãos citados
-acima, em [Só sobe o que a portaria tem como ler](#so-sobe-o-que-a-portaria-le).
+O que falta da parte 3c, depois da tela da gráfica e do [evento ao
+vivo](#o-evento-ao-vivo-04092026): **cancelar credencial** (hoje um ingresso perdido só sai
+por bloqueio de faixa, que serve para um só quando `de` e `ate` são iguais), **reativar
+aparelho revogado**, e o **aviso que chega sem o dono perguntar** — um portão que parou de
+sincronizar há quarenta minutos ainda só é descoberto por quem vai olhar.
+
+Saíram desta lista em 04/09/2026: o painel ao vivo, desvincular pedido do evento, e a
+limpeza dos setores órfãos, que hoje acontece dentro do "Conferir os setores".
 
 Decisões já tomadas pelo usuário. As quatro primeiras estão registradas na
 [spec de 13/08](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md); a quinta é

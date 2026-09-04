@@ -51,6 +51,13 @@ import {
   listarIngressos,
   numerosDoSetor,
 } from "../_compartilhado/relatorio.ts";
+// Desfazer o vinculo do pedido e reconferir os setores -- as mesmas funcoes que
+// o aplicativo do dono chama. Duas copias divergiriam, e o sintoma seria a
+// grafica desfazendo de um jeito que o cliente nao consegue reproduzir.
+import {
+  desvincularPedido,
+  sincronizarSetores,
+} from "../_compartilhado/vinculo.ts";
 import {
   numeracaoDoModelo,
   numeroDaPagina,
@@ -474,6 +481,28 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "contas" && p[2] === "nova-senha") {
     return ok(await novaSenhaProvisoria(uuid(p[1], "conta")));
+  }
+  // ── As duas saidas que faltavam (04/09/2026) ──────────────────────────────
+  //
+  // O cliente carregou o pedido no evento errado, ou um modelo ganhou numeracao
+  // com codigo depois do carregar. Ate agora as duas so tinham conserto a mao,
+  // no banco -- e quem atende o telefone e esta tela.
+  //
+  // As MESMAS funcoes que o aplicativo do dono chama: a autorizacao difere (aqui
+  // basta o papel, la e o dono mais a elevacao), a regra nao.
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
+      p[2] === "desvincular") {
+    const pedido = inteiro(p[1], "path", "pedido");
+    const eventoId = (await eventoDoPedido(pedido))?.evento_id;
+    if (!eventoId) throw new Recusa(409, "este pedido nao esta em nenhum evento");
+    return ok(await desvincularPedido(pedido, eventoId));
+  }
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
+      p[2] === "sincronizar-setores") {
+    const pedido = inteiro(p[1], "path", "pedido");
+    const eventoId = (await eventoDoPedido(pedido))?.evento_id;
+    if (!eventoId) throw new Recusa(409, "este pedido ainda nao virou evento");
+    return ok(await sincronizarSetores(pedido, eventoId));
   }
   if (metodo === "GET" && p.length === 3 && p[0] === "pedidos" && p[2] === "dashboard") {
     const pedido = inteiro(p[1], "path", "pedido");

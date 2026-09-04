@@ -438,6 +438,7 @@
         });
 
         desenharAtivacao();
+        desenharConferirSetores();
         desenharZonaDeRisco();
 
         // As linhas recolhidas se atualizam junto com o que há dentro delas —
@@ -488,6 +489,104 @@
         };
     }
 
+    // ── CONFERIR OS SETORES ─────────────────────────────────────────────────
+    //
+    // Os setores são gravados UMA VEZ, no momento do Carregar. Se depois disso
+    // um modelo ganhar uma numeração com código — que é exatamente o conserto
+    // quando a gráfica errou a numeração —, o setor dele nunca aparecia.
+    //
+    // O sintoma é o pior desta casa: ninguém procura um setor que nunca
+    // existiu. O dono conta os setores na tela, acha que está tudo lá, e os
+    // ingressos daquele modelo são recusados na porta como "não é deste
+    // evento".
+
+    function desenharConferirSetores() {
+        var caixa = $('pedidos-para-conferir');
+        if (!caixa) { return; }
+        caixa.innerHTML = '';
+        var pedidos = (estado.painel || {}).pedidos || [];
+        if (!pedidos.length) {
+            var vazio = document.createElement('p');
+            vazio.className = 'config-ajuda';
+            vazio.textContent = 'Nenhum pedido carregado neste evento.';
+            caixa.appendChild(vazio);
+            return;
+        }
+        pedidos.forEach(function (ped) {
+            caixa.appendChild(linhaDePedido(
+                ped, 'Conferir', 'Conferir os setores do pedido ',
+                function (b) { return conferirSetores(ped.pedido_id_int, b); }
+            ));
+        });
+    }
+
+    /**
+     * Uma linha "Pedido 20272   [botão]", usada pelos dois cartões.
+     *
+     * Os dois listam os MESMOS pedidos e diferem só no que o botão faz —
+     * duas montagens separadas divergiriam na primeira vez que uma delas
+     * ganhasse uma coluna.
+     */
+    function linhaDePedido(ped, rotulo, ariaPrefixo, aoTocar) {
+        var linha = document.createElement('div');
+        linha.className = 'linha-pedido-evento';
+        var nome = document.createElement('span');
+        nome.textContent = 'Pedido ' + ped.pedido_id_int;
+        linha.appendChild(nome);
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'secundario so-com-senha';
+        b.textContent = rotulo;
+        // O número do pedido no rótulo lido: "Conferir" sozinho se repete em
+        // cada linha, e quem usa leitor de tela ouviria a mesma palavra sem
+        // saber de qual pedido se trata.
+        b.setAttribute('aria-label', ariaPrefixo + ped.pedido_id_int);
+        b.addEventListener('click', function () { aoTocar(b); });
+        linha.appendChild(b);
+        return linha;
+    }
+
+    /**
+     * Roda a conferência e DIZ o que mudou, item por item.
+     *
+     * "Pronto" não serve aqui: o dono precisa saber se algum setor nasceu, e
+     * qual. Uma conferência que não relata o resultado é indistinguível de uma
+     * que não rodou — e ele a repetiria, achando que não funcionou.
+     */
+    function conferirSetores(pedido, botao) {
+        var aviso = $('aviso-conferir-setores');
+        window.botaoEspera.comecar(botao, 'Conferindo…');
+        return gravar('/pedidos/' + pedido + '/sincronizar-setores', {}, 'POST')
+            .then(function (r) {
+                var partes = [];
+                if ((r.criados || []).length) {
+                    partes.push('Criei ' + r.criados.length + ' setor'
+                        + (r.criados.length === 1 ? '' : 'es') + ': '
+                        + r.criados.join(', ') + '.');
+                }
+                if ((r.atualizados || []).length) {
+                    partes.push('Acertei a quantidade de: ' + r.atualizados.join(', ') + '.');
+                }
+                if ((r.desligados || []).length) {
+                    partes.push('Desliguei ' + r.desligados.join(', ')
+                        + ' — o modelo não tem mais código e o setor estava vazio.');
+                }
+                if ((r.mantidos_com_ingresso || []).length) {
+                    // Desligar um setor que tem ingresso impresso é decisão de
+                    // gente, não de rotina. A tela avisa e não faz.
+                    partes.push('Atenção: ' + r.mantidos_com_ingresso.join(', ')
+                        + ' não tem mais código no pedido, mas tem ingresso publicado. '
+                        + 'Deixei como está — fale com a gráfica.');
+                }
+                if (!partes.length) { partes.push('Está tudo certo: nada a mudar.'); }
+                aviso.textContent = partes.join(' ');
+                aviso.classList.remove('sumindo');
+                return carregarPainel();
+            })
+            .catch(function () { /* `gravar()` já escreveu o motivo */ })
+            .then(function () { window.botaoEspera.terminar(botao); });
+    }
+
     // ── A ZONA DE RISCO ─────────────────────────────────────────────────────
     //
     // Duas ações, no fim de tudo, separadas do resto: zerar a contagem e
@@ -499,6 +598,7 @@
         var zerar = $('btn-zerar-entradas');
         if (!zerar) { return; }              // outra página serve o arquivo
         zerar.onclick = function () { zerarEntradas(); };
+        desenharPedidosDoEvento();
 
         var finalizar = $('btn-finalizar-evento');
         // Um evento que JÁ está finalizado só chega a esta tela por reabertura,
@@ -506,6 +606,63 @@
         var jaFinalizado = (estado.painel.evento || {}).status === 'finalizado';
         $('cartao-finalizar-evento').classList.toggle('sumindo', jaFinalizado);
         finalizar.onclick = function () { finalizarEvento(); };
+    }
+
+    /**
+     * Os pedidos deste evento, cada um com o "Tirar".
+     *
+     * O cartão inteiro some quando não há pedido nenhum: um "Tirar um pedido
+     * deste evento" numa lista vazia só faz o dono procurar o que não está lá.
+     */
+    function desenharPedidosDoEvento() {
+        var caixa = $('pedidos-do-evento');
+        if (!caixa) { return; }
+        caixa.innerHTML = '';
+        var pedidos = (estado.painel || {}).pedidos || [];
+        $('cartao-desvincular').classList.toggle('sumindo', !pedidos.length);
+        pedidos.forEach(function (ped) {
+            caixa.appendChild(linhaDePedido(
+                ped, 'Tirar', 'Tirar do evento o pedido ',
+                function (b) { return desvincularPedido(ped.pedido_id_int, b); }
+            ));
+        });
+    }
+
+    /**
+     * Tirar um pedido do evento — a saída que faltava.
+     *
+     * Confirmação antes, e a senha que a elevação já cobre: diferente do zerar,
+     * isto NÃO destrói nada. Os ingressos continuam existindo, e o pedido pode
+     * ser carregado de novo no evento certo — que é justamente o que a pessoa
+     * veio fazer.
+     *
+     * Quem recusa quando já houve leitura é o servidor, e a frase dele chega
+     * inteira à tela: repetir a regra aqui seria uma segunda cópia dela, e a
+     * cópia é que envelhece.
+     */
+    function desvincularPedido(pedido, botao) {
+        var aviso = $('aviso-desvincular');
+        return window.caixaConfirmar.perguntar(
+            'Tirar o pedido ' + pedido + ' deste evento? Os setores dele saem '
+            + 'daqui e os ingressos voltam a ficar soltos. Nenhum ingresso deixa '
+            + 'de valer, e você pode carregar o pedido de novo no evento certo.',
+            { rotulo: 'Tirar do evento', perigo: true }
+        ).then(function (sim) {
+            if (!sim) { return; }
+            window.botaoEspera.comecar(botao, 'Tirando…');
+            return gravar('/pedidos/' + pedido + '/desvincular', {}, 'POST')
+                .then(function (r) {
+                    aviso.textContent = 'Pedido ' + pedido + ' fora deste evento. '
+                        + ((r.nomes || []).length
+                            ? ('Saíram os setores: ' + r.nomes.join(', ') + '. ')
+                            : '')
+                        + 'Ele volta a aparecer em Meus Pedidos.';
+                    aviso.classList.remove('sumindo');
+                    return carregarPainel();
+                })
+                .catch(function () { /* `gravar()` já escreveu o motivo */ })
+                .then(function () { window.botaoEspera.terminar(botao); });
+        });
     }
 
     /**
