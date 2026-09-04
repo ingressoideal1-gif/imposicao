@@ -622,6 +622,11 @@ ela subiu na v589 e ninguém a usou de verdade.
 **É a única prova que vale, e ela não foi feita.** A portaria está no ar desde a v585;
 falta o que sempre faltou: parear um aparelho, **desligar Wi-Fi e dados**, e ler.
 
+> **O roteiro está escrito, com o evento e os números de hoje:**
+> [docs/prova_da_portaria.md](prova_da_portaria.md). Cinco passos, uns vinte minutos. Ele
+> foi montado em 04/09/2026 consultando o banco, e não a memória — o evento testável mudou
+> de nome desde agosto, e dois dos cinco setores não servem mais.
+
 Dois casos importam mais que os outros:
 
 - ler um ingresso do **1000110 (CAMAROTE, pedido 18560)**, que tem QR Ideal → verde;
