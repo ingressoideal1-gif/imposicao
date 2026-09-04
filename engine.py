@@ -4312,24 +4312,171 @@ class ImpositionEngine:
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
+    def _desenhar_capa_de_bloco(self, p, cell_x0, cell_y0, item_start, item_end, cfg, multi_map, stack_size):
+        """Desenha UMA capa de bloco na célula que começa em (cell_x0, cell_y0).
+
+        `item_start` é o primeiro item do bloco: é dele que saem a arte da capa,
+        o número do bloco e o começo da faixa. `item_end` só é usado como último
+        recurso, quando o item não diz de que modelo veio.
+        """
+        current_doc_base = item_start["doc_base"]
+
+        model_idx = item_start.get("model_idx")
+        if model_idx is not None:
+            global_start_of_model = item_start["global_idx"] - item_start["local_idx"]
+            model_total_items = max(item["local_idx"] for item in multi_map if item.get("model_idx") == model_idx) + 1
+            end_local_idx = min(item_start["local_idx"] + stack_size - 1, model_total_items - 1)
+            item_end_of_block = multi_map[global_start_of_model + end_local_idx]
+            v_start = item_start["val1"]
+            v_end = item_end_of_block["val1"]
+        else:
+            v_start = item_start["val1"]
+            v_end = item_end["val1"]
+
+        bloco_num = (item_start["local_idx"] // stack_size) + 1
+
+        if current_doc_base:
+            page_base = current_doc_base[0]
+            bw = page_base.rect.width
+            bh = page_base.rect.height
+
+            scale = cfg.cover_scale / 100.0
+            if scale <= 0.05:
+                scale = 0.8
+            new_w = bw * scale
+            new_h = bh * scale
+
+            off_x = cfg.cover_offset_x * 2.83465
+            off_y = cfg.cover_offset_y * 2.83465
+
+            cx = cell_x0 + (cfg.item_w - new_w) / 2 + off_x
+            cy = cell_y0 + (cfg.item_h - new_h) / 2 - off_y
+
+            p.show_pdf_page(
+                fitz.Rect(cx, cy, cx + new_w, cy + new_h),
+                current_doc_base, 0, keep_proportion=False, clip=page_base.rect
+            )
+
+        v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
+        v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
+
+        # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
+        if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
+            camarote_num = cfg.c_ini + (bloco_num - 1)
+            bloco_str = f"Camarote {camarote_num:02d}"
+            sufixo_str = f" - de 1 a {cfg.l_cam}"
+        elif getattr(cfg, 'num_tipo', '') == 'TICKET':
+            # TICKET: v_start/v_end são valores de "folha", não de ingresso
+            # Cada folha contém ticket_qtd ingressos
+            # v_start=1, v_end=50 com ticket_qtd=2 → range real = 0001 a 0100
+            tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
+            if tq > 1:
+                t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
+                t_v_end = v_end * tq                  # folha 50 → ingresso 100
+            else:
+                t_v_start = v_start
+                t_v_end = v_end
+            t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
+            t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
+            bloco_str = f"Bloco {bloco_num:02d}"
+            sufixo_str = f" - de {t_v_start_str} a {t_v_end_str}"
+        else:
+            bloco_str = f"Bloco {bloco_num:02d}"
+            sufixo_str = f" - de {v_start_str} a {v_end_str}"
+        font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
+
+        def hex_to_rgb(h):
+            h = str(h).lstrip('#')
+            if len(h) < 6: h = "000000"
+            return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
+
+        color_rgb = hex_to_rgb(cfg.cover_font_color)
+        w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
+        font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
+
+        p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
+        p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+
+    def _blocos_da_montagem(self, set_def, stack_size):
+        """Os blocos que a pilha de MONTAGEM contém, na ordem da numeração.
+
+        Devolve uma lista de `(primeiro_item, ultimo_item)` — um par por bloco.
+
+        A sobra é compactada nas células para gastar menos papel (300 itens em
+        38 folhas de 8 poses, e não 50 folhas com duas poses vazias), então uma
+        célula não é um bloco: ela começa no meio de um e termina no meio de
+        outro. É por isso que o operador monta esses blocos contando à mão — e
+        é por isso que a capa deles não pode sair da célula. Ela sai daqui: dos
+        itens em sequência, quebrados a cada `stack_size`.
+        """
+        itens = [
+            item
+            for cell_items in set_def["cell_allocations"]
+            for item in cell_items
+            if item is not None
+        ]
+        itens.sort(key=lambda item: item["global_idx"])
+
+        blocos = []
+        for item in itens:
+            n = item["local_idx"] // stack_size
+            if blocos and blocos[-1][0] == n:
+                blocos[-1][2] = item
+            else:
+                blocos.append([n, item, item])
+        return [(inicio, fim) for _, inicio, fim in blocos]
+
     def _generate_capa_for_chunk(self, set_idx, layer_idx, set_def, cfg, multi_map):
         doc_c = fitz.open()
-        p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if self.rotate_angle > 0:
-            p.set_rotation(self.rotate_angle)
+
+        def nova_folha():
+            pagina = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+            if self.rotate_angle > 0:
+                pagina.set_rotation(self.rotate_angle)
+            return pagina
+
+        p = nova_folha()
 
         start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
         start_y = (cfg.sheet_h - (cfg.rows * cfg.item_h + (cfg.rows - 1) * cfg.gap_v)) / 2
 
         stack_size = cfg.sheets_per_block
+        poses = cfg.rows * cfg.cols
 
-        for row in range(cfg.rows):
-            for col in range(cfg.cols):
-                P = row * cfg.cols + col
-                cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
-                cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
-                cell_x1 = cell_x0 + cfg.item_w
-                cell_y1 = cell_y0 + cfg.item_h
+        def canto_da_celula(P):
+            row, col = divmod(P, cfg.cols)
+            return (
+                start_x + col * (cfg.item_w + cfg.gap_h),
+                start_y + row * (cfg.item_h + cfg.gap_v),
+            )
+
+        if set_def["type"] == "assembly":
+            # UMA CAPA POR BLOCO, e não por célula (04/09/2026, pedido 21524).
+            #
+            # Antes a capa da montagem era desenhada célula a célula, como a do
+            # set estrito: a célula cujo primeiro item não caísse em fronteira
+            # de bloco levava o carimbo "MONTAGEM" e nenhuma capa. Num trabalho
+            # de 1.500 ingressos em blocos de 50 numa folha de 8 poses, só a
+            # primeira célula da sobra começava bloco — a folha de capas saía
+            # com uma capa só, a do bloco 25, e as capas dos blocos 26 a 30 não
+            # eram geradas em lugar nenhum. O operador montava cinco blocos e
+            # não tinha capa para pôr neles.
+            #
+            # A folha de capas da montagem não acompanha a pilha; ela é cortada
+            # e cada capa vai para o bloco que o operador montou. Por isso as
+            # capas preenchem as células em ordem, e o que manda é o bloco.
+            for ordem, (item_start, item_end) in enumerate(self._blocos_da_montagem(set_def, stack_size)):
+                P = ordem % poses
+                if ordem > 0 and P == 0:
+                    # A sobra nunca tem mais blocos do que a folha tem poses,
+                    # mas se um dia tiver, a capa continua saindo — em outra
+                    # folha, e não descartada em silêncio.
+                    p = nova_folha()
+                cell_x0, cell_y0 = canto_da_celula(P)
+                self._desenhar_capa_de_bloco(p, cell_x0, cell_y0, item_start, item_end, cfg, multi_map, stack_size)
+        else:
+            for P in range(poses):
+                cell_x0, cell_y0 = canto_da_celula(P)
 
                 cell_items = set_def["cell_allocations"][P]
                 # Pegar apenas os items da camada atual
@@ -4338,98 +4485,9 @@ class ImpositionEngine:
                 if not valid_items:
                     continue
 
-                item_start = valid_items[0]
-                item_end = valid_items[-1]
-
-                is_montagem_cell = (set_def["type"] == "assembly" and (item_start["local_idx"] % stack_size != 0))
-
-                if is_montagem_cell:
-                    font_size = 50
-                    text = "MONTAGEM"
-                    w_text = fitz.get_text_length(text, fontname="hebo", fontsize=font_size)
-                    cx = cell_x0 + (cfg.item_w - w_text) / 2
-                    cy = cell_y0 + (cfg.item_h / 2) + (font_size / 3)
-                    p.insert_text(fitz.Point(cx, cy), text, fontname="hebo", fontsize=font_size, color=(0,0,0))
-                    continue
-
-                current_doc_base = item_start["doc_base"]
-                
-                model_idx = item_start.get("model_idx")
-                if model_idx is not None:
-                    global_start_of_model = item_start["global_idx"] - item_start["local_idx"]
-                    model_total_items = max(item["local_idx"] for item in multi_map if item.get("model_idx") == model_idx) + 1
-                    end_local_idx = min(item_start["local_idx"] + stack_size - 1, model_total_items - 1)
-                    item_end_of_block = multi_map[global_start_of_model + end_local_idx]
-                    v_start = item_start["val1"]
-                    v_end = item_end_of_block["val1"]
-                else:
-                    v_start = item_start["val1"]
-                    v_end = item_end["val1"]
-
-                bloco_num = (item_start["local_idx"] // stack_size) + 1
-
-                if current_doc_base:
-                    page_base = current_doc_base[0]
-                    bw = page_base.rect.width
-                    bh = page_base.rect.height
-
-                    scale = cfg.cover_scale / 100.0
-                    if scale <= 0.05:
-                        scale = 0.8
-                    new_w = bw * scale
-                    new_h = bh * scale
-
-                    off_x = cfg.cover_offset_x * 2.83465
-                    off_y = cfg.cover_offset_y * 2.83465
-
-                    cx = cell_x0 + (cfg.item_w - new_w) / 2 + off_x
-                    cy = cell_y0 + (cfg.item_h - new_h) / 2 - off_y
-
-                    p.show_pdf_page(
-                        fitz.Rect(cx, cy, cx + new_w, cy + new_h),
-                        current_doc_base, 0, keep_proportion=False, clip=page_base.rect
-                    )
-
-                v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
-                v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
-
-
-                # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
-                if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
-                    camarote_num = cfg.c_ini + (bloco_num - 1)
-                    bloco_str = f"Camarote {camarote_num:02d}"
-                    sufixo_str = f" - de 1 a {cfg.l_cam}"
-                elif getattr(cfg, 'num_tipo', '') == 'TICKET':
-                    # TICKET: v_start/v_end são valores de "folha", não de ingresso
-                    # Cada folha contém ticket_qtd ingressos
-                    # v_start=1, v_end=50 com ticket_qtd=2 → range real = 0001 a 0100
-                    tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
-                    if tq > 1:
-                        t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
-                        t_v_end = v_end * tq                  # folha 50 → ingresso 100
-                    else:
-                        t_v_start = v_start
-                        t_v_end = v_end
-                    t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
-                    t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
-                    bloco_str = f"Bloco {bloco_num:02d}"
-                    sufixo_str = f" - de {t_v_start_str} a {t_v_end_str}"
-                else:
-                    bloco_str = f"Bloco {bloco_num:02d}"
-                    sufixo_str = f" - de {v_start_str} a {v_end_str}"
-                font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
-
-                def hex_to_rgb(h):
-                    h = str(h).lstrip('#')
-                    if len(h) < 6: h = "000000"
-                    return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
-
-                color_rgb = hex_to_rgb(cfg.cover_font_color)
-                w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
-                font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
-
-                p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
-                p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+                self._desenhar_capa_de_bloco(
+                    p, cell_x0, cell_y0, valid_items[0], valid_items[-1], cfg, multi_map, stack_size
+                )
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_01_capa.pdf")
         _salvar_pdf(doc_c, out_name)

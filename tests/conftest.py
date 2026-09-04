@@ -41,6 +41,7 @@ import pytest
 # ela bate com o que esta escrito nos testes de verdade, e reprova quando alguem
 # escreve um arquivo novo desses sem passar por aqui.
 GRAVAM_NA_PASTA_DO_REPO = {
+    "test_engine_capa_montagem.py",
     "test_engine_csv_ativo.py",
     "test_engine_dual_vdp.py",
     "test_engine_entrega_por_bloco.py",
