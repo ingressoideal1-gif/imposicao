@@ -11,6 +11,24 @@
 //
 // Nos 4% sem texto, a aba monta a lista a partir de `produtos_proposta`.
 //
+// ## Por que o resumo agora e LIDO, e nao so exibido
+//
+// Desde 04/09/2026 o usuario pediu o orcamento em forma de tabela --
+// Quantidade, Produto, Valor, e embaixo o frete, o prazo e o TOTAL. A fonte nao
+// mudou: `orcamentoEstruturado` recorta esses pedacos do MESMO texto, sem
+// recalcular nada. O que vai para a tela sao os caracteres que o ERP escreveu.
+//
+// O ERP escreve em dois modelos de mensagem, e os dois sao reconhecidos:
+//
+//   MODELO A   ✅ *100* Cartao PVC: *R$ 220,50* (3 dias uteis)
+//   MODELO B   • 400 un — Credencial PVC — R$ 2.260,00
+//
+// A ultima conferencia do leitor e aritmetica: a soma dos itens mais o frete
+// tem de dar o total que o ERP escreveu. Medido nos 2.500 resumos mais recentes
+// em 04/09/2026, 2.479 fecham (99%); os 21 que nao fecham sao pedidos em que o
+// ERP cotou o SEDEX mas nao o somou ao total -- e ali a aba volta ao paragrafo
+// corrido, que e o que ela mostrava antes.
+//
 // ## O que o negrito do WhatsApp exige
 //
 // O texto vem do banco do PARCEIRO e vai para dentro de `innerHTML`. Ele e
@@ -72,6 +90,22 @@ const linhasDoOrcamento = new Function(
     + recortar(DADOS, 'emReal') + '\n'
     + recortar(DADOS, 'rotuloDoFrete') + '\n'
     + recortar(ORCAMENTO, 'linhasDoOrcamento') + '\nreturn linhasDoOrcamento;')();
+
+// O leitor do resumo. `diasDoPrazo` e `emDiasUteis` vem do `cliente-dados.js`
+// porque a regra do prazo e a MESMA da aba de Entrega: o maior dos itens.
+const orcamentoEstruturado = new Function(
+    recortar(DADOS, 'diasDoPrazo') + '\n'
+    + recortar(DADOS, 'emDiasUteis') + '\n'
+    + recortar(ORCAMENTO, 'reaisEmNumero') + '\n'
+    + recortar(ORCAMENTO, 'quantidadeEmTexto') + '\n'
+    + recortar(ORCAMENTO, 'nomeDoProduto') + '\n'
+    + recortar(ORCAMENTO, 'maiorPrazo') + '\n'
+    + recortar(ORCAMENTO, 'orcamentoEstruturado') + '\nreturn orcamentoEstruturado;')();
+
+const tabelaDoOrcamento = new Function(
+    ESCAPA + '\n'
+    + recortar(ORCAMENTO, 'linhaDoFecho') + '\n'
+    + recortar(ORCAMENTO, 'tabelaDoOrcamento') + '\nreturn tabelaDoOrcamento;')();
 
 // A regra de "pago" nao mora mais no `cliente-pagamento.js`: desde 25/08/2026
 // ela esta em `pagamento-do-pedido.js`, compartilhada com a coluna Pagamento da
@@ -147,6 +181,167 @@ const podePagar = doPagamento('podePagar');
     ok(resumoLimpo(t) === t, 'nada a cortar', resumoLimpo(t));
     ok(resumoLimpo('') === '', 'vazio');
     ok(resumoLimpo(null) === '', 'nulo');
+})();
+
+// ─── 2b. O resumo lido como tabela ──────────────────────────────────────────
+//
+// Os textos daqui sao COPIAS do banco, com o espaco nao-separavel (U+00A0) que
+// o ERP poe entre o "R$" e o numero. Ele e o detalhe que derruba um leitor
+// escrito no olho: parece um espaco comum e nao e.
+
+const NB = String.fromCharCode(0xa0);   // o espaco nao-separavel do ERP
+
+function resumoModeloA(itens, frete, total) {
+    return 'Olá, 😀\n\nOrçamento para:\n*Alexandre Machado De Macedo*\n\n'
+        + '📄 Proposta *21708*\n\n*Segue orçamento para os itens solicitados.*\n\n'
+        + '*Produtos Orçados:*\n\n' + itens.join('\n') + '\n\n'
+        + (frete ? frete + '\n\n' : '')
+        + 'O valor total do pedido ficou em *R$' + NB + total + '*\n\n'
+        + 'Se estiver tudo certo, me confirma por aqui que já dou andamento ao processo!';
+}
+
+(function oModeloAViraTabela() {
+    // Pedido 21708, copiado do banco.
+    const r = orcamentoEstruturado(resumoModeloA([
+        '✅ *15* Cordão com presilha Jacaré.: *R$' + NB + '54,45* (3 dias úteis)',
+        '✅ *15* Credencial PVC: *R$' + NB + '93,60* (3 dias úteis)'
+    ], 'Frete via *Retirada Local: Grátis*', '148,05'));
+
+    ok(r !== null, 'o modelo A e reconhecido');
+    ok(r.itens.length === 2, 'os dois itens', r && r.itens);
+    ok(r.itens[0].qtd === '15 un.', 'a quantidade sai como o usuario pediu', r.itens[0]);
+    ok(r.itens[0].produto === 'Cordão com presilha Jacaré',
+        'e o ponto final do cadastro do ERP nao vai para a tabela', r.itens[0]);
+    ok(r.itens[1].valor.indexOf('93,60') > 0, 'o valor e o do texto', r.itens[1]);
+    ok(r.frete.rotulo === 'Retirada Local' && r.frete.valor === 'Grátis',
+        'o frete sai separado em nome e valor', r.frete);
+    ok(r.prazo === '3 dias úteis', 'o prazo vem do parenteses do item', r.prazo);
+    ok(r.total.indexOf('148,05') > 0, 'e o total e o que o ERP escreveu', r.total);
+})();
+
+(function oValorMostradoEhOCaractereDoErpENaoUmaConta() {
+    // A tabela nao recalcula nada: se ela reconvertesse os numeros, um centavo
+    // de arredondamento apareceria na frente do cliente como outro preco.
+    //
+    // O unico caractere que muda e o espaco nao-separavel, que vira espaco
+    // comum na entrada do leitor -- e o que separa "R$" do numero nao quebra
+    // linha de qualquer jeito, porque a coluna de valor e `nowrap`.
+    const r = orcamentoEstruturado(resumoModeloA(
+        ['✅ *1.500* Ingresso MOBI: *R$' + NB + '346,50* (1 dia útil)'],
+        'Frete via *Retirada Local: Grátis*', '346,50'));
+    ok(r.itens[0].valor === 'R$ 346,50',
+        'os digitos sao os mesmos do resumo', r.itens[0].valor);
+    ok(r.itens[0].valor.indexOf(NB) < 0,
+        'e o espaco nao-separavel foi normalizado', r.itens[0].valor);
+    ok(r.itens[0].qtd === '1.500 un.', 'inclusive o ponto de milhar da quantidade', r.itens[0]);
+})();
+
+(function oOrcamentoAvulsoNaoInventaQuantidade() {
+    // 1.911 das linhas de item medidas em 04/09/2026 sao assim: sem quantidade,
+    // so o nome e o valor. Escrever "Orçamento Avulso un." seria inventar.
+    const r = orcamentoEstruturado(resumoModeloA(
+        ['✅ *Orçamento Avulso*: *R$' + NB + '87,20*'],
+        'Frete via *Frete Incluso: R$' + NB + '0,00*', '87,20'));
+    ok(r !== null, 'reconhecido', r);
+    ok(r.itens[0].qtd === '', 'sem quantidade', r.itens[0]);
+    ok(r.itens[0].produto === 'Orçamento Avulso', 'o nome esta no lugar do nome', r.itens[0]);
+    ok(r.prazo === null, 'e sem prazo nenhum a linha do prazo nao aparece', r.prazo);
+})();
+
+(function oModeloBTambemEhLido() {
+    // Pedido 18141, copiado do banco: outro modelo de mensagem do ERP.
+    const r = orcamentoEstruturado(
+        'Olá FLY ENTRETENIMENTO LTDA - 61368 😀\nSegue abaixo o orçamento nº 18141 📄\n\n'
+        + '🛍️ *Itens do pedido:*\n'
+        + '• 4000 un — Tag Chip  RFID / NFC — R$ 6.640,00\n'
+        + '• 10000 un — Pulseira Bracelete — R$ 2.740,00\n'
+        + '• 4000 un — Pulseira TexBand — R$ 2.940,00\n\n'
+        + '📦 *Subtotal dos produtos:* R$ 12.320,00\n\n'
+        + '🚚 *Frete SEDEX:* R$ 466,22\n\n'
+        + '💰 *Valor total do pedido:* R$ 12.786,22\n\n'
+        + 'Fico à disposição para ajustar quantidades, modelos ou prazos 😊');
+
+    ok(r !== null, 'o modelo B e reconhecido', r);
+    ok(r.itens.length === 3, 'os tres itens', r && r.itens.length);
+    ok(r.itens[0].qtd === '4.000 un.' || r.itens[0].qtd === '4000 un.',
+        'o "400 un" do ERP vira a mesma coluna do modelo A', r.itens[0]);
+    ok(r.itens[0].produto === 'Tag Chip  RFID / NFC', 'o nome inteiro', r.itens[0]);
+    ok(r.frete.rotulo === 'Frete SEDEX' && r.frete.valor === 'R$ 466,22',
+        'o frete do modelo B', r.frete);
+    ok(r.total === 'R$ 12.786,22', 'e o total', r.total);
+})();
+
+(function aTabelaTemDeFecharComOTotal() {
+    // Pedido 21685, do banco: o ERP cotou o SEDEX mas NAO o somou ao total.
+    // 150,00 + 79,17 nao da 150,00 -- e uma tabela que nao fecha na frente do
+    // cliente e pior do que o paragrafo corrido que a aba mostrava antes.
+    const r = orcamentoEstruturado(resumoModeloA(
+        ['✅ *2* Dseg - Jet Band: *R$' + NB + '150,00* (1 dia util)'],
+        'Frete via *Correios SEDEX: R$' + NB + '79,17*', '150,00'));
+    ok(r === null, 'nao fechou, entao nao vira tabela', r);
+})();
+
+(function oFreteGratisValeZeroENaoDerrubaAConta() {
+    const r = orcamentoEstruturado(resumoModeloA(
+        ['✅ *100* Cartão/Crachá PVC 0,76mm: *R$' + NB + '220,50* (3 dias úteis)'],
+        'Frete via *Retirada Local: Grátis*', '220,50'));
+    ok(r !== null, '"Grátis" e zero, e a conta fecha', r);
+})();
+
+(function textoQueNaoEhOrcamentoNaoViraTabela() {
+    ok(orcamentoEstruturado('') === null, 'vazio');
+    ok(orcamentoEstruturado(null) === null, 'nulo nao quebra');
+    ok(orcamentoEstruturado('Bom dia, seu pedido esta pronto.') === null, 'recado qualquer');
+    // Sem o total escrito nao ha o que conferir.
+    ok(orcamentoEstruturado('✅ *10* Pulseira: *R$' + NB + '20,00*') === null,
+        'item sem total nao vira tabela');
+})();
+
+(function oMaiorPrazoEhOQueVale() {
+    // O pedido so sai da grafica quando o ULTIMO item fica pronto.
+    const r = orcamentoEstruturado(resumoModeloA([
+        '✅ *10* Pulseira Triband: *R$' + NB + '10,00* (Produção: 1 dia útil + Frete)',
+        '✅ *10* Credencial PVC: *R$' + NB + '20,00* (3 dias úteis)'
+    ], 'Frete via *Retirada Local: Grátis*', '30,00'));
+    ok(r.prazo === '3 dias úteis', 'o maior dos dois, e nao a soma nem o primeiro', r.prazo);
+})();
+
+// ─── 2c. A tabela desenhada ─────────────────────────────────────────────────
+
+(function aTabelaTrazAsTresColunasEOFecho() {
+    const html = tabelaDoOrcamento({
+        itens: [{ qtd: '10 un.', produto: 'Cartão/Crachá PVC 0,76 mm', valor: 'R$ 42,50' }],
+        frete: { rotulo: 'Retirada Local', valor: 'Grátis' },
+        prazo: '3 dias úteis',
+        total: 'R$ 224,50'
+    });
+    ok(/<th[^>]*>Quantidade<\/th>/.test(html), 'a coluna Quantidade', html);
+    ok(/<th[^>]*>Produto<\/th>/.test(html), 'a coluna Produto');
+    ok(/Valor<\/th>/.test(html), 'a coluna Valor');
+    ok(html.indexOf('10 un.') > 0, 'a quantidade do item');
+    ok(html.indexOf('Retirada Local') > 0, 'o frete');
+    ok(html.indexOf('3 dias úteis') > 0, 'o prazo');
+    ok(/fecho-linha total/.test(html) && html.indexOf('R$ 224,50') > 0,
+        'e o TOTAL em destaque, dentro da tabela', html);
+})();
+
+(function itemSemQuantidadeGanhaTracoENaoCelulaVazia() {
+    const html = tabelaDoOrcamento({
+        itens: [{ qtd: '', produto: 'Orçamento Avulso', valor: 'R$ 87,20' }],
+        frete: null, prazo: null, total: 'R$ 87,20'
+    });
+    ok(html.indexOf('—') > 0, 'a celula da quantidade traz um traco', html);
+    ok(html.indexOf('Prazo') < 0, 'e sem prazo a linha do prazo nem aparece', html);
+})();
+
+(function oNomeDoProdutoVemDoBancoDoParceiroEEhEscapado() {
+    // Mesma razao do negrito: o texto e do ERP e vai para dentro de innerHTML.
+    const html = tabelaDoOrcamento({
+        itens: [{ qtd: '1 un.', produto: '<img src=x onerror=alert(1)>', valor: 'R$ 1,00' }],
+        frete: null, prazo: null, total: 'R$ 1,00'
+    });
+    ok(html.indexOf('<img') < 0, 'a tag nao chega viva ao DOM', html);
+    ok(html.indexOf('&lt;img') > 0, 'ela aparece como texto', html);
 })();
 
 // ─── 3. O orcamento montado a mao (os 4% sem texto) ─────────────────────────
