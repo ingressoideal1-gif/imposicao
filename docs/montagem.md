@@ -6,7 +6,10 @@ frentes do mesmo dia: as artes passaram a ser montadas pelas **mesmas funções 
 tela do Pedido** (§6), a folha virou um **kanban de células** (arrastar, repetir,
 tirar) e a tela inteira foi **redesenhada** — a folha montada tomou o lugar
 nobre, passou a ser desenhada na grade de verdade do formato, e o número do
-modelo ganhou controle de posição, rotação, tamanho e cor (§5).
+modelo ganhou controle de posição, rotação, tamanho e cor (§5). No mesmo dia ela
+ganhou o **aproveitamento da folha**: com dois modelos ou mais, a tela sugere
+quantas células de cada um a folha deve levar para gastar o mínimo de papel
+(§5).
 
 Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (a tela inteira),
 [`frontend/pedido.js`](../frontend/pedido.js) (`arteDoModeloParaFolha` e
@@ -161,6 +164,8 @@ Três dessas não são preferência: são impossibilidade física.
 | Repetir célula (⧉) | a **mesma peça**, impressa duas vezes, logo abaixo | 03/09 |
 | Tirar célula (×) | só aquela; as outras do modelo ficam | 03/09 |
 | Ordem da folha | **kanban**: arrastar a célula muda a sequência | 03/09 |
+| Quantidade do aproveitamento | a **tiragem** do modelo | 03/09 |
+| Como a sugestão vira folha | os **três** caminhos ficam oferecidos | 03/09 |
 
 ---
 
@@ -411,6 +416,89 @@ propósito.
 > vindo do deslocamento do modelo dela (§3). Os avisos da tela dizem isso em
 > texto, porque é a dúvida que o operador teria.
 
+### O aproveitamento da folha (03/09/2026)
+
+Pedido do usuário: *"ao carregar 2 modelos ou mais, ao analisar a quantidade de
+cada modelo, sugerir a quantidade de repetições de cada modelo para que com a
+impressão repetida da folha imposta se atinja o melhor número de aproveitamento.
+Exemplo: formato com 10 células, modelo 1, 30 unidades, modelo 2, 70 unidades.
+Montagem sugerida 3x o modelo 1 e 7x o modelo 2"*.
+
+A quantidade de cada modelo é a **tiragem** dele — a coluna que a lista já
+mostra. Decisão do usuário na mesma conversa.
+
+#### A conta
+
+O desperdício de uma folha impressa `R` vezes é `P × R − Q`: tudo o que sai do
+papel e não vira peça pedida, seja célula vazia ou peça a mais. `P` (células da
+folha) e `Q` (o total pedido) são dados, então **gastar menos papel é imprimir
+menos vezes** — a conta se resume a achar o menor `R` que caiba.
+
+Para um `R` qualquer, o mínimo de células que o modelo `i` precisa na folha é
+`ceil(q_i / R)`: com menos que isso, `R` impressões não fecham a tiragem dele.
+Se a soma desses mínimos cabe na folha, aquele `R` serve. Basta varrer `R` de
+baixo para cima — a partir de `ceil(Q / P)`, abaixo do qual nem o total caberia
+— e parar no primeiro que couber.
+
+No exemplo do usuário: `R = 9` pede 4 + 8 = 12 células e não cabe; `R = 10` pede
+3 + 7 = 10 e cabe. Sai exatamente a montagem que ele descreveu, com desperdício
+zero.
+
+> Uma proporção arredondada (`q_i × P ÷ Q`) daria o mesmo resultado **nesse
+> exemplo**, e passaria a errar em todo caso onde a proporção não é exata. O
+> erro sai em papel comprado, e por isso a conta está travada em
+> `test_o_aproveitamento_da_folha_e_o_menor_numero_de_impressoes`.
+
+O que sobrar de célula depois dos mínimos é distribuído pelo método da maior
+sobra, proporcional à tiragem: o papel daquela folha já está comprado, e deixar
+a célula vazia desperdiça igual sem entregar nada. Vira peça a mais, e a coluna
+**Sobra** diz quantas — silenciar isso seria imprimir código que ninguém pediu.
+
+#### Os três caminhos, e por que o arriscado continua na tela
+
+O usuário pediu que **os três** ficassem oferecidos. Eles diferem no que a
+palavra "repetida" significa:
+
+| Caminho | O que monta | Quando serve |
+|---|---|---|
+| **Uma folha, N impressões** | uma folha só, com a mistura (3 + 7) | peça sem dado variável: as N impressões saem iguais, e é isso que o gang run quer |
+| **Distribuir em N folhas** | todas as peças, com a mistura em cada folha | peça com dado variável: cada célula é um item diferente, nenhuma folha se repete |
+| **Aplicar o recomendado** | escolhe entre os dois pelo tipo da peça | o caminho normal |
+
+> ⚠️ **Imprimir a mesma folha N vezes só entrega a tiragem quando a peça sai
+> igual.** Com numeração de dado variável, repetir a folha repete o código — N
+> ingressos válidos para a mesma entrada, descobertos na portaria. É exatamente
+> o que esta tela existe para não fazer (§2).
+
+Por isso a folha repetida com dado variável **pergunta antes**, num popup que
+diz o que vai acontecer e aponta a alternativa. Avisado, o operador decide: a
+opção continua na tela, como ele pediu.
+
+**O que conta como dado variável.** Numeração sem elemento nenhum é caso comum e
+legítimo neste projeto — a folha sai só com a arte. Com qualquer elemento que
+mude de um item para o outro, a peça é variável. A classificação erra **de
+propósito para o lado seguro**: só `FIXED`, `PICOTE`, `SVG` e `PDF` contam como
+fixos, e mesmo esses viram variáveis se lerem coluna do banco (a foto da
+credencial é o caso comum). Tipo de elemento desconhecido conta como variável, e
+**numeração que a tela não conseguiu ler também** — modelo sem numeração nenhuma
+é arte só, mas modelo com numeração que não desceu é tratado como ingresso.
+
+#### O teto da folha distribuída
+
+Distribuir desenha **uma célula por peça**. Numa tiragem de produção
+(3.000 + 1.920) são quase cinco mil células na tela, e ela não dá conta. Acima
+de 800 peças o botão **nasce desabilitado**, com o motivo no rótulo de ajuda e a
+saída na frase: aquela tiragem se imprime pela tela do Pedido. Botão que recusa
+depois do clique faz o operador aprender por tentativa.
+
+#### O que a sugestão não muda
+
+Nada do código de ingresso. Aplicar substitui as células da folha, e cada uma
+continua deslocada pela **tiragem** dos modelos anteriores (§3) — não pelo
+número de células que a sugestão deu a eles. A folha distribuída também nunca
+inventa posição: ela enfileira `1..tiragem` de cada modelo e só distribui o que
+existe. E `Ctrl+Z` devolve a folha anterior.
+
 ### A linha da lista é o caminho de volta ao modelo
 
 Clicar numa linha devolve **aquele pedido e aquele modelo** ao compositor, com o
@@ -583,8 +671,8 @@ Duas coisas que só a captura de tela mostrou, na revisão do redesenho:
 
 | Harness | Verificações | O que trava |
 |---|---|---|
-| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 175 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o lugar da célula na folha, a geometria e os zooms, o desfazer, completar e ordenar, o saneamento do número, o preparo das artes **pedido a pedido**, o payload |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 132 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha na **grade do formato**, ⧉, ×, o arrasto com os eventos nativos, a seleção e o teclado, **o número medido no elemento desenhado**, layout, **a entrega do arquivo** |
+| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 241 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o lugar da célula na folha, a geometria e os zooms, o desfazer, completar e ordenar, o saneamento do número, o preparo das artes **pedido a pedido**, o payload, o **aproveitamento da folha** |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 162 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha na **grade do formato**, ⧉, ×, o arrasto com os eventos nativos, a seleção e o teclado, **o número medido no elemento desenhado**, layout, o **painel do aproveitamento** com os três caminhos, **a entrega do arquivo** |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta
 o que só se lê no código-fonte: que a Montagem chama o construtor do Pedido e

@@ -225,12 +225,38 @@ def test_o_primeiro_lote_chega_muito_antes_do_fim(servidor):
     chegadas, fim = _correr(servidor, _payload(200, 5, True))
 
     assert len(chegadas) == 10, f"esperava 10 lotes, vieram {len(chegadas)}"
-    assert chegadas[0] < fim * 0.5, (
-        "o primeiro lote so chegou na metade final do trabalho: a esteira voltou "
-        f"a entregar tudo no fim (primeiro em {chegadas[0]:.1f}s de {fim:.1f}s)"
+
+    # ── Por que a regua nao e uma PROPORCAO do relogio (03/09/2026) ────────
+    #
+    # Ate esta data a cobranca era `chegadas[0] < fim * 0.5`. Ela compara um
+    # custo FIXO -- subir o pedido, abrir a arte, montar o pool, e a cauda depois
+    # do ultimo lote -- com um custo VARIAVEL, o desenho das 50 folhas. Os dois
+    # nao crescem juntos: medido nesta maquina, o espalhamento dos dez lotes fica
+    # em ~1,0 s sempre, enquanto o `fim` vai de 1,4 s ocioso a 5,3 s com a suite
+    # inteira rodando em paralelo. A proporcao despenca sem que nada tenha
+    # regredido -- e foi o que aconteceu quando a suite passou a subir um Chrome
+    # de verdade: este teste falhava junto e passava sozinho.
+    #
+    # O que o usuario pediu, e o que a correcao entrega, e o ESPALHAMENTO: o
+    # primeiro lote na mao do cliente enquanto os outros nove ainda estao sendo
+    # desenhados. Antes da correcao os dez marcavam o MESMO instante, o do fim --
+    # entao e o intervalo entre eles que separa o certo do errado, e ele nao
+    # depende de quanto a maquina esta carregada.
+    espalhamento = chegadas[-1] - chegadas[0]
+    assert espalhamento > 0.3, (
+        "os dez lotes chegaram numa rajada so: a esteira voltou a entregar tudo "
+        f"no fim (do primeiro ao ultimo, {espalhamento:.2f}s; o trabalho inteiro "
+        f"levou {fim:.1f}s)"
     )
-    # E eles chegam espalhados, nao numa rajada so no final.
-    assert chegadas[-1] > chegadas[0], "os lotes chegaram todos no mesmo instante"
+
+    # E eles chegam UM A UM, e nao metade no meio e metade no fim. O intervalo
+    # tipico entre lotes consecutivos e de ~0,11 s; numa rajada seria zero.
+    intervalos = sorted(b - a for a, b in zip(chegadas, chegadas[1:]))
+    tipico = intervalos[len(intervalos) // 2]
+    assert tipico > 0.02, (
+        f"os lotes chegaram amontoados: intervalo tipico de {tipico:.3f}s entre "
+        "um lote e o seguinte"
+    )
 
 
 def test_sem_a_escolha_o_trabalho_continua_saindo_num_arquivo_so(servidor):

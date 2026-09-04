@@ -554,7 +554,8 @@ def test_o_operador_tem_como_desfazer():
     for gesto in ("function adicionarNaMontagem()", "function removerDaMontagem(indice)",
                   "function duplicarCelulaDaMontagem(i)", "function removerCelulaDaMontagem(i)",
                   "function moverCelulaDaMontagem(de, para)", "function limparMontagem()",
-                  "function completarAFolhaDaMontagem()", "function ordenarMontagem(criterio)"):
+                  "function completarAFolhaDaMontagem()", "function ordenarMontagem(criterio)",
+                  "function aplicarSugestaoDaMontagem(modo)"):
         corpo = js[js.index(gesto):]
         corpo = corpo[:corpo.index("\n}") + 2]
         assert "guardarNaHistoria()" in corpo, (
@@ -612,3 +613,150 @@ def test_a_folha_ocupa_o_lugar_nobre():
     atalhos = atalhos[:atalhos.index("</p>")]
     for palavra in ("Arraste", "repete", "tira s&oacute; ela", "Ctrl+Z"):
         assert palavra in atalhos, "o texto dos gestos perdeu: " + palavra
+
+
+def test_o_aproveitamento_da_folha_e_o_menor_numero_de_impressoes():
+    """Pedido do usuario em 03/09/2026, com o exemplo dentro.
+
+    *"Ao carregar 2 modelos ou mais, ao analisar a quantidade de cada modelo,
+    sugerir a quantidade de repeticoes de cada modelo para que com a impressao
+    repetida da folha imposta se atinja o melhor numero de aproveitamento.
+    Exemplo: formato com 10 celulas, modelo 1, 30 unidades, modelo 2, 70
+    unidades. Montagem sugerida 3x o modelo 1 e 7x o modelo 2."*
+
+    O que trava aqui e' a CONTA, porque ela e' a razao de ser do recurso. O
+    desperdicio de uma folha impressa R vezes e' `P * R - Q`, e P (celulas da
+    folha) e Q (o que se precisa) sao dados: gastar menos papel e' imprimir
+    menos vezes. Trocar isso por uma proporcao arredondada — que no exemplo do
+    usuario da' o mesmo resultado — passaria a errar em todo caso onde a
+    proporcao nao e' exata, e o erro sai em papel comprado.
+    """
+    js = _ler("frontend/montagem.js")
+
+    corpo = js[js.index("function sugestaoDeAproveitamento(modelos, porFolha) {"):]
+    corpo = corpo[:corpo.index("\n}") + 2]
+    assert "Math.ceil(q / R)" in corpo, (
+        "a conta deixou de ser o minimo de celulas por impressao; a sugestao "
+        "passaria a gastar papel a mais"
+    )
+    assert "Math.ceil(Q / P)" in corpo, (
+        "a varredura perdeu o piso: ela comecaria em 1 e faria voltas a toa"
+    )
+
+    # A quantidade e' a TIRAGEM do modelo — escolha do usuario na mesma conversa.
+    assert "parseInt(m.qtd)" in corpo, (
+        "a sugestao deixou de ler a tiragem do modelo, que e' de onde o usuario "
+        "decidiu que as quantidades vem"
+    )
+
+
+def test_a_folha_repetida_com_dado_variavel_e_avisada():
+    """A trava que impede a tela de virar fabrica de ingresso duplicado.
+
+    Imprimir a MESMA folha N vezes so' entrega N vezes a tiragem quando a peca
+    sai igual. Com numeracao de dado variavel — sequencial ou de banco — cada
+    item e' unico, e repetir a folha repete o codigo: sairiam N ingressos
+    validos para a mesma entrada, descobertos na portaria.
+
+    O usuario pediu, em 03/09/2026, que os TRES caminhos ficassem oferecidos.
+    Entao o caminho arriscado continua na tela — mas ele diz, antes, o que vai
+    acontecer, e aponta a alternativa.
+    """
+    js = _ler("frontend/montagem.js")
+
+    # A classificacao erra para o lado seguro: so' o que esta' na lista e' fixo.
+    varia = js[js.index("function elementoDaNumeracaoVaria(el) {"):]
+    varia = varia[:varia.index("\n}") + 2]
+    assert "MTG_ELEMENTOS_SEM_DADO.indexOf(tipo) === -1) return true" in varia, (
+        "elemento de tipo desconhecido deixou de contar como variavel; um "
+        "elemento novo passaria a autorizar a folha repetida, calado"
+    )
+    assert "'FIXED', 'PICOTE', 'SVG', 'PDF'" in js, "a lista do que nao varia mudou"
+
+    # E a numeracao que a tela nao conseguiu ler conta como variavel: chutar
+    # "arte fixa" ali faria a tela recomendar a folha repetida para um ingresso.
+    modelo = js[js.index("function modeloTemDadoVariavel(item, num) {"):]
+    modelo = modelo[:modelo.index("\n}") + 2]
+    assert "return !!id" in modelo, (
+        "modelo com numeracao que nao se conseguiu ler voltou a contar como "
+        "arte fixa; a tela recomendaria a folha repetida para um ingresso"
+    )
+    assert "variavel: modeloTemDadoVariavel(item, num)" in js, (
+        "a lista voltou a classificar o modelo pela numeracao lida so'"
+    )
+
+    aplicar = js[js.index("async function aplicarSugestaoDaMontagem(modo) {"):]
+    aplicar = aplicar[:aplicar.index("\n}") + 2]
+    assert "escolhido === 'unica' && sug.temDadoVariavel" in aplicar, (
+        "a folha repetida com dado variavel deixou de ser conferida"
+    )
+    assert "confirmarPopup" in aplicar and "mesmos códigos" in aplicar, (
+        "o aviso sumiu, ou deixou de dizer que os codigos saem repetidos"
+    )
+    assert "Distribuir em " in aplicar, (
+        "o aviso deixou de apontar a saida; trava sem saida nao vale nesta grafica"
+    )
+    assert "guardarNaHistoria()" in aplicar, (
+        "aplicar a sugestao substitui a folha sem guardar a anterior"
+    )
+
+
+def test_a_sugestao_nao_mexe_no_codigo_de_ingresso_nenhum():
+    """A garantia que sustenta a tela inteira, aplicada ao recurso novo.
+
+    A ordem das celulas no papel e o DESLOCAMENTO das posicoes sao coisas
+    separadas: o deslocamento vem da tiragem dos modelos anteriores
+    (`posicoesCombinadas`), e nenhuma das duas montagens sugeridas o toca.
+
+    E a folha distribuida nunca inventa posicao: ela enfileira 1..tiragem de
+    cada modelo e so' distribui o que existe.
+    """
+    js = _ler("frontend/montagem.js")
+
+    dist = js[js.index("function celulasDistribuidas(sug) {"):]
+    dist = dist[:dist.index("\n}") + 2]
+    assert "p <= it.qtd" in dist, (
+        "a folha distribuida passou a poder emitir posicao alem da tiragem — "
+        "seria item que nao existe indo ao motor"
+    )
+    assert "filas[j].shift()" in dist, (
+        "as posicoes deixaram de sair de uma fila; poderiam repetir"
+    )
+
+    unica = js[js.index("function celulasDaFolhaUnica(sug) {"):]
+    unica = unica[:unica.index("\n}") + 2]
+    assert "p <= it.celulas" in unica, "a folha unica deixou de respeitar a mistura"
+
+    # E o painel nao existe sem dois modelos: nao ha proporcao entre um so'.
+    render = js[js.index("function _mtgRenderSugestao() {"):]
+    render = render[:render.index("\n}\n") + 3]
+    assert "modelos.length < 2" in render, (
+        "o painel do aproveitamento passou a aparecer com um modelo so'"
+    )
+
+
+def test_o_caminho_que_a_tela_nao_cumpre_nasce_travado():
+    """Botao que recusa depois do clique faz o operador aprender por tentativa.
+
+    A folha distribuida desenha uma celula por peca. Numa tiragem de producao
+    (3.000 + 1.920) sao quase cinco mil celulas na tela, e ela nao da' conta —
+    entao o botao nasce desabilitado, com o motivo no `title` e a saida na
+    frase: aquela tiragem se imprime pela tela do Pedido.
+    """
+    js = _ler("frontend/montagem.js")
+
+    sug = js[js.index("function sugestaoDeAproveitamento(modelos, porFolha) {"):]
+    sug = sug[:sug.index("\n}") + 2]
+    assert "podeDistribuir: Q <= MTG_MAX_CELULAS_DISTRIBUIDAS" in sug, (
+        "a sugestao deixou de dizer se distribuir e' possivel; o botao voltaria "
+        "a prometer o que a tela recusa"
+    )
+
+    render = js[js.index("function _mtgRenderSugestao() {"):]
+    render = render[:render.index("\n}\n") + 3]
+    assert "semDistribuir ? 'disabled' : ''" in render, (
+        "o botao de distribuir deixou de nascer travado quando nao cabe"
+    )
+    assert "tela do Pedido" in render, (
+        "a trava perdeu a saida: ela precisa dizer, na propria tela, para onde ir"
+    )

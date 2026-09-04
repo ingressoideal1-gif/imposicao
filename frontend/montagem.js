@@ -648,6 +648,250 @@ function ordenarCelulas(celulas, modelos, criterio) {
         .map(x => x.c);
 }
 
+/* ── O aproveitamento da folha (03/09/2026) ──────────────────────────────── */
+
+// Os tipos de elemento que NÃO mudam de um item para o outro. Tudo o que não
+// estiver nesta lista — TEXT, QR, QR_IDEAL, BARCODE, FOTO, CAMAROTE, TEATRO,
+// METADATA — imprime uma coisa diferente em cada peça.
+//
+// A classificação erra DE PROPÓSITO para o lado seguro: elemento de tipo
+// desconhecido conta como variável, e arte fixa que leia coluna do banco (a
+// foto da credencial é o caso comum) também. Errar para o outro lado ofereceria
+// ao operador repetir a mesma folha — e com ela o mesmo código — N vezes.
+const MTG_ELEMENTOS_SEM_DADO = ['FIXED', 'PICOTE', 'SVG', 'PDF'];
+
+// Acima disto a folha distribuída deixa de caber na tela: são células
+// desenhadas uma a uma, com alça, rótulo e dois botões cada.
+const MTG_MAX_CELULAS_DISTRIBUIDAS = 800;
+
+/** Este elemento imprime coisa diferente em cada item? */
+function elementoDaNumeracaoVaria(el) {
+    if (!el) return false;
+    const tipo = String(el.type || 'TEXT').toUpperCase();
+    if (MTG_ELEMENTOS_SEM_DADO.indexOf(tipo) === -1) return true;
+    return el.source === 'database' || String(el.csv_column || '').trim() !== '';
+}
+
+/**
+ * Esta numeração faz cada peça sair diferente da anterior?
+ *
+ * É a pergunta que decide se a folha pode ser IMPRESSA REPETIDA. Numeração sem
+ * elemento nenhum é caso comum e legítimo neste projeto — a folha sai só com a
+ * arte —, e aí as N impressões saem iguais, que é o que o gang run quer. Com
+ * qualquer elemento variável, repetir a folha repete o código.
+ */
+function numeracaoTemDadoVariavel(num) {
+    return !!(num && (num.elements || []).some(elementoDaNumeracaoVaria));
+}
+
+/**
+ * Este MODELO faz cada peça sair diferente da anterior?
+ *
+ * Diferente de `numeracaoTemDadoVariavel`, que só olha a numeração já lida:
+ * aqui entra o caso em que a tela NÃO conseguiu ler a numeração do modelo —
+ * banco que não desceu, id que não casa. Modelo sem numeração nenhuma é arte
+ * só, e é caso comum e legítimo; modelo COM numeração que não se conseguiu ler
+ * conta como variável, porque o erro tem de cair para o lado seguro. Chutar
+ * "arte fixa" ali faria a tela recomendar a folha repetida para um ingresso.
+ */
+function modeloTemDadoVariavel(item, num) {
+    if (num) return numeracaoTemDadoVariavel(num);
+    const id = (typeof numeracaoIdDoItem === 'function')
+        ? numeracaoIdDoItem(item)
+        : (item && (item.amostra_num_id || item.numeracao_id));
+    return !!id;
+}
+
+/**
+ * A folha mais aproveitada para as tiragens que estão na montagem.
+ *
+ * Pedido do usuário em 03/09/2026: "ao carregar 2 modelos ou mais, ao analisar
+ * a quantidade de cada modelo, sugerir a quantidade de repetições de cada
+ * modelo para que com a impressão repetida da folha imposta se atinja o melhor
+ * número de aproveitamento. Exemplo: formato com 10 células, modelo 1, 30
+ * unidades, modelo 2, 70 unidades. Montagem sugerida 3x o modelo 1 e 7x o
+ * modelo 2". A quantidade de cada modelo é a TIRAGEM dele — escolha do usuário
+ * na mesma conversa.
+ *
+ * ## A conta
+ *
+ * O desperdício de uma folha impressa `R` vezes é `P * R - Q`: tudo o que sai
+ * do papel e não vira peça pedida, seja célula vazia ou peça a mais. `P`
+ * (células da folha) e `Q` (o que se precisa ao todo) são dados, então
+ * desperdiçar menos é IMPRIMIR MENOS VEZES — a conta se resume a achar o menor
+ * `R` que caiba.
+ *
+ * Para um `R` qualquer, o mínimo de células que o modelo `i` precisa na folha é
+ * `ceil(q_i / R)`: com menos que isso, `R` impressões não fecham a tiragem
+ * dele. Se a soma desses mínimos cabe na folha, aquele `R` serve. Basta então
+ * varrer `R` de baixo para cima e parar no primeiro que couber.
+ *
+ * No exemplo do usuário (P = 10, q = 30 e 70): R = 9 pede 4 + 8 = 12 células e
+ * não cabe; R = 10 pede 3 + 7 = 10 e cabe. Sai exatamente a montagem que ele
+ * descreveu, com desperdício zero.
+ *
+ * O piso da varredura é `ceil(Q / P)` — abaixo disso nem o total caberia. O
+ * teto é a maior tiragem, onde cada modelo pede uma célula só; por isso a
+ * varredura sempre acha resposta enquanto houver célula para um de cada.
+ *
+ * ## A sobra da folha
+ *
+ * O que sobrar de célula depois dos mínimos é distribuído pelo método da maior
+ * sobra, proporcional à tiragem. O papel daquela folha já está comprado: deixar
+ * a célula vazia desperdiça igual e não entrega nada. Vira peça a mais, e a
+ * tela diz quantas — silenciar isso seria imprimir código que ninguém pediu.
+ */
+function sugestaoDeAproveitamento(modelos, porFolha) {
+    const P = parseInt(porFolha) || 0;
+    const lista = (modelos || []);
+    const vazia = {
+        viavel: false, motivo: '', porFolha: P, impressoes: 0, folhas: 0,
+        total: 0, itens: [], celulasUsadas: 0, temDadoVariavel: false,
+    };
+
+    if (lista.length < 2) {
+        return Object.assign(vazia, {
+            motivo: 'A sugestão precisa de dois modelos ou mais na folha.' });
+    }
+    if (!P) {
+        return Object.assign(vazia, {
+            motivo: 'Sem o formato resolvido não dá para saber quantas células cabem na folha.' });
+    }
+    if (lista.length > P) {
+        return Object.assign(vazia, {
+            motivo: 'A folha tem ' + P + ' célula(s) e há ' + lista.length + ' modelos: '
+                + 'não cabe nem um de cada. Tire modelos da montagem, ou use um formato maior.' });
+    }
+
+    const qtds = lista.map(m => parseInt(m.qtd) || 0);
+    const semTiragem = lista.filter((m, j) => qtds[j] <= 0);
+    if (semTiragem.length) {
+        return Object.assign(vazia, {
+            motivo: 'O modelo ' + semTiragem.map(m => m.itemId).join(', ') + ' está sem '
+                + 'tiragem conhecida, e sem ela não há proporção a calcular. Abra o pedido '
+                + 'na tela do Pedido uma vez e volte aqui.' });
+    }
+
+    const Q = qtds.reduce((a, b) => a + b, 0);
+    const teto = Math.max.apply(null, qtds);
+    let impressoes = 0;
+    let celulas = null;
+    for (let R = Math.max(1, Math.ceil(Q / P)); R <= teto; R++) {
+        const c = qtds.map(q => Math.ceil(q / R));
+        if (c.reduce((a, b) => a + b, 0) <= P) { impressoes = R; celulas = c; break; }
+    }
+    if (!celulas) {
+        return Object.assign(vazia, {
+            motivo: 'Não achei uma divisão da folha que atenda estas tiragens.' });
+    }
+
+    // A sobra da folha, pelo método da maior sobra sobre a tiragem.
+    const livres = P - celulas.reduce((a, b) => a + b, 0);
+    if (livres > 0) {
+        const ideal = qtds.map(q => livres * q / Q);
+        const inteiro = ideal.map(x => Math.floor(x));
+        const ordem = ideal
+            .map((x, j) => ({ j: j, frac: x - Math.floor(x) }))
+            .sort((a, b) => (b.frac - a.frac) || (qtds[b.j] - qtds[a.j]) || (a.j - b.j));
+        let dados = inteiro.reduce((a, b) => a + b, 0);
+        for (let k = 0; dados < livres; k++, dados++) inteiro[ordem[k % ordem.length].j]++;
+        for (let j = 0; j < celulas.length; j++) celulas[j] += inteiro[j];
+    }
+
+    const itens = lista.map((m, j) => ({
+        osId: m.osId, itemId: m.itemId, nome: m.nome,
+        pedidoNumero: m.pedidoNumero, variavel: m.variavel === true,
+        qtd: qtds[j], celulas: celulas[j],
+        produz: celulas[j] * impressoes,
+        sobra: celulas[j] * impressoes - qtds[j],
+    }));
+
+    return {
+        viavel: true, motivo: '', porFolha: P,
+        impressoes: impressoes,
+        // Distribuindo as peças de verdade o número de folhas é OUTRO: elas se
+        // empacotam melhor do que uma folha repetida. Ver `celulasDistribuidas`.
+        folhas: Math.ceil(Q / P),
+        total: Q, itens: itens,
+        celulasUsadas: celulas.reduce((a, b) => a + b, 0),
+        temDadoVariavel: itens.some(it => it.variavel),
+        // Distribuir desenha uma celula por peca. Acima do teto a tela nao da'
+        // conta, e o botao precisa nascer travado com o motivo a vista em vez
+        // de recusar depois do clique.
+        podeDistribuir: Q <= MTG_MAX_CELULAS_DISTRIBUIDAS,
+    };
+}
+
+/**
+ * UMA folha com a mistura sugerida — o gang run.
+ *
+ * As posições são 1..células de cada modelo. A folha sai uma vez no PDF, e o
+ * operador a manda para a impressora `impressoes` vezes. Só é honesto quando a
+ * peça não tem dado variável: com dado variável, as N impressões saem com o
+ * MESMO código, e é isso que a tela avisa antes de aplicar.
+ */
+function celulasDaFolhaUnica(sug) {
+    const out = [];
+    if (!sug || !sug.viavel) return out;
+    for (const it of sug.itens) {
+        for (let p = 1; p <= it.celulas; p++) {
+            out.push({ osId: it.osId, itemId: it.itemId, pos: p });
+        }
+    }
+    return out;
+}
+
+/**
+ * TODAS as peças, arrumadas para cada folha sair com a mistura sugerida.
+ *
+ * É o mesmo aproveitamento, feito de um jeito que serve também à peça com dado
+ * variável: cada célula é um item DIFERENTE, e nenhuma folha se repete. A
+ * mistura por folha é a da sugestão; quando um modelo acaba antes dos outros, a
+ * vaga que ele deixa é preenchida por quem ainda tem peça, para a folha não
+ * sair com buraco — papel é custo de produção.
+ */
+function celulasDistribuidas(sug) {
+    const out = [];
+    if (!sug || !sug.viavel) return out;
+
+    const filas = sug.itens.map(it => {
+        const f = [];
+        for (let p = 1; p <= it.qtd; p++) f.push(p);
+        return f;
+    });
+    const P = sug.porFolha;
+
+    for (;;) {
+        let naFolha = 0;
+        for (let j = 0; j < filas.length && naFolha < P; j++) {
+            const it = sug.itens[j];
+            for (let n = 0; n < it.celulas && filas[j].length && naFolha < P; n++) {
+                out.push({ osId: it.osId, itemId: it.itemId, pos: filas[j].shift() });
+                naFolha++;
+            }
+        }
+        for (let j = 0; j < filas.length && naFolha < P; j++) {
+            const it = sug.itens[j];
+            while (filas[j].length && naFolha < P) {
+                out.push({ osId: it.osId, itemId: it.itemId, pos: filas[j].shift() });
+                naFolha++;
+            }
+        }
+        if (naFolha === 0) break;
+    }
+    return out;
+}
+
+/**
+ * Qual dos dois caminhos a tela recomenda.
+ *
+ * Peça com dado variável não pode ter a folha repetida — seria o mesmo código
+ * saindo N vezes, que é exatamente o que esta tela existe para não fazer.
+ */
+function modoSugeridoDaMontagem(sug) {
+    return (sug && sug.temDadoVariavel) ? 'distribuir' : 'unica';
+}
+
 /**
  * As células cuja posição passou da tiragem que o motor vai criar.
  *
@@ -1138,6 +1382,9 @@ function adicionarNaMontagem() {
             pedidoNumero: _mtgNumeroDoPedido(osId),
             nome: item.nome_modelo || item.produto || 'modelo',
             qtd: total,
+            // Lido AQUI, com a numeracao ja resolvida: e' o que decide se a
+            // folha pode ser impressa repetida sem repetir codigo.
+            variavel: modeloTemDadoVariavel(item, num),
             peca: peca,
         };
         modelos.push(m);
@@ -1345,6 +1592,160 @@ function limparMontagem() {
     state.montagem.selecao = [];
     onMontagemPosicoesChange();
     renderMontagem();
+}
+
+/* ── O aproveitamento da folha, na tela ──────────────────────────────────── */
+
+/** A sugestão para a montagem de agora. */
+function _mtgSugestaoAtual() {
+    const m = state.montagem;
+    return sugestaoDeAproveitamento(m.modelos, _mtgCelulasPorFolha(m.modelos));
+}
+
+/**
+ * Aplica a mistura sugerida à folha.
+ *
+ * `modo` é `auto` (o que a peça recomenda), `unica` (uma folha, N impressões)
+ * ou `distribuir` (todas as peças, N folhas com a mesma mistura). Os três ficam
+ * oferecidos na tela, por decisão do usuário em 03/09/2026 — mas o caminho que
+ * repete a folha com dado variável passa por uma confirmação que diz, em texto,
+ * que os códigos vão sair repetidos.
+ *
+ * SUBSTITUI as células da folha: é uma montagem sugerida, e não um acréscimo. O
+ * que havia antes fica no desfazer.
+ */
+async function aplicarSugestaoDaMontagem(modo) {
+    const sug = _mtgSugestaoAtual();
+    if (!sug.viavel) {
+        if (typeof toast === 'function') toast(sug.motivo, 'error');
+        return;
+    }
+
+    const escolhido = (!modo || modo === 'auto') ? modoSugeridoDaMontagem(sug) : modo;
+
+    // A folha distribuída desenha uma célula por peça. Tiragem inteira não é
+    // trabalho desta tela, e a saída está na frase.
+    if (escolhido === 'distribuir' && !sug.podeDistribuir) {
+        if (typeof toast === 'function') {
+            toast('São ' + sug.total + ' peças ao todo, e distribuir desenharia uma célula para '
+                + 'cada uma. Tiragem desse tamanho é trabalho da tela do Pedido. Aqui, use '
+                + '"Uma folha, ' + sug.impressoes + ' impressões".', 'error');
+        }
+        return;
+    }
+
+    if (escolhido === 'unica' && sug.temDadoVariavel) {
+        const quais = sug.itens.filter(it => it.variavel).map(it => it.itemId).join(', ');
+        const segue = (typeof confirmarPopup === 'function') ? await confirmarPopup({
+            titulo: 'A folha repetida sai com o mesmo código',
+            mensagem: 'O modelo ' + quais + ' tem numeração com dado variável: cada peça sai '
+                + 'diferente da anterior. Imprimir esta folha ' + sug.impressoes + ' vezes '
+                + 'imprime ' + sug.impressoes + ' vezes as <strong>mesmas peças</strong>, com '
+                + 'os mesmos códigos.',
+            detalhe: 'Se o que você quer são peças diferentes, cancele e use "Distribuir em '
+                + sug.folhas + ' folhas": a mesma mistura em cada folha, e cada célula um item.',
+            textoOk: 'Montar assim mesmo',
+            textoCancelar: 'Cancelar',
+        }) : true;
+        if (!segue) return;
+    }
+
+    guardarNaHistoria();
+    state.montagem.celulas = (escolhido === 'unica')
+        ? celulasDaFolhaUnica(sug)
+        : celulasDistribuidas(sug);
+    state.montagem.selecao = [];
+    renderMontagem();
+
+    if (typeof toast === 'function') {
+        toast(escolhido === 'unica'
+            ? 'Folha montada: ' + sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ')
+                + '. Imprima ' + sug.impressoes + ' vez(es).'
+            : sug.total + ' peça(s) distribuída(s) em ' + sug.folhas + ' folha(s), com a mesma '
+                + 'mistura em cada uma.', 'success');
+    }
+}
+
+/** O painel do aproveitamento: só existe com dois modelos ou mais na folha. */
+function _mtgRenderSugestao() {
+    const caixa = document.getElementById('mtg-sugestao');
+    if (!caixa) return;
+
+    const modelos = state.montagem.modelos;
+    if (modelos.length < 2) { caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
+    caixa.style.display = '';
+
+    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>';
+    const sug = _mtgSugestaoAtual();
+
+    if (!sug.viavel) {
+        caixa.innerHTML = cab + '<p class="mtg-dica" style="margin:0;">'
+            + escapeHtml(sug.motivo) + '</p>';
+        return;
+    }
+
+    const recomendado = modoSugeridoDaMontagem(sug);
+    // Distribuir desenha uma célula por peça: acima do teto a tela não dá conta,
+    // e o botão nasce travado dizendo por quê e para onde ir. Quando é o
+    // recomendado que está travado, a montagem inteira é tiragem de produção — e
+    // o lugar dela é a tela do Pedido, não esta.
+    const semDistribuir = !sug.podeDistribuir;
+    const recTravado = semDistribuir && recomendado === 'distribuir';
+    const motivoTravado = 'São ' + sug.total + ' peças: distribuir desenharia uma célula '
+        + 'para cada uma, e a tela não dá conta. Tiragem desse tamanho se imprime pela tela '
+        + 'do Pedido.';
+    const linhas = sug.itens.map(it => `
+      <tr>
+        <td title="${escapeHtml(it.nome)}">${escapeHtml(it.itemId)}${it.variavel
+            ? ' <span class="mtg-sug-var" title="numeração com dado variável: cada peça sai diferente">var</span>' : ''}</td>
+        <td class="num">${it.qtd}</td>
+        <td class="num forte">${it.celulas}</td>
+        <td class="num">${it.produz}</td>
+        <td class="num ${it.sobra > 0 ? 'sobra' : ''}">${it.sobra > 0 ? '+' + it.sobra : '—'}</td>
+      </tr>`).join('');
+
+    const mistura = sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ');
+
+    caixa.innerHTML = cab + `
+      <p class="mtg-dica" style="margin:0 0 10px;">A folha tem <strong>${sug.porFolha}</strong>
+        célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). A divisão abaixo é a
+        que gasta menos papel.</p>
+
+      <table class="mtg-sug-tabela">
+        <thead><tr><th>Modelo</th><th class="num">Tiragem</th><th class="num">Por folha</th>
+          <th class="num">Produz</th><th class="num">Sobra</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+
+      <p class="mtg-sug-frase"><strong>${escapeHtml(mistura)}</strong> por folha.</p>
+
+      <div class="mtg-sug-botoes">
+        <button type="button" class="btn-primary mtg-sug-rec" ${recTravado ? 'disabled' : ''}
+                title="${recTravado ? escapeHtml(motivoTravado) : ''}"
+                onclick="aplicarSugestaoDaMontagem('auto')">
+          ${recomendado === 'unica'
+            ? 'Aplicar o recomendado &mdash; uma folha, ' + sug.impressoes + ' impress&otilde;es'
+            : 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'}
+        </button>
+        <button type="button" class="btn-secondary"
+                onclick="aplicarSugestaoDaMontagem('unica')">Uma folha, ${sug.impressoes} impress&otilde;es</button>
+        <button type="button" class="btn-secondary" ${semDistribuir ? 'disabled' : ''}
+                title="${semDistribuir ? escapeHtml(motivoTravado) : ''}"
+                onclick="aplicarSugestaoDaMontagem('distribuir')">Distribuir em ${sug.folhas} folhas</button>
+      </div>
+
+      <p class="mtg-dica" style="margin:10px 0 0;">${recTravado
+        ? '<strong>' + escapeHtml(motivoTravado) + '</strong> Aqui a folha repetida também não '
+          + 'serve: há modelo com dado variável, e repetir a folha repetiria o código.'
+        : sug.temDadoVariavel
+        ? 'Há modelo com dado variável na folha: <strong>repetir a mesma folha repetiria o '
+          + 'código</strong>. Por isso o recomendado é distribuir — mesma mistura em cada folha, '
+          + 'cada célula um item diferente.'
+        : 'Nenhum modelo tem dado variável: as peças saem iguais, então a mesma folha impressa '
+          + sug.impressoes + ' vez(es) entrega a tiragem inteira. É o caminho mais curto.'}</p>
+
+      <p class="mtg-dica" style="margin:6px 0 0;">Aplicar <strong>substitui</strong> as células
+        que estão na folha. <code>Ctrl+Z</code> devolve.</p>`;
 }
 
 /* ── O número do modelo no papel ─────────────────────────────────────────── */
@@ -1937,6 +2338,7 @@ function renderMontagem() {
         if (b) b.classList.toggle('ativo', state.montagem.zoom === z);
     });
 
+    _mtgRenderSugestao();
     _mtgRenderNumero();
     _mtgRenderFolha();
 }

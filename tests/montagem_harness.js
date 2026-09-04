@@ -50,7 +50,8 @@ function extrairConst(nome) {
 }
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
-                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX'];
+                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX',
+                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const NOMES = [
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
@@ -60,6 +61,9 @@ const NOMES = [
     'geometriaDaFolha', 'escalaDaFolhaDaMontagem', 'duplicarCelula', 'tirarCelula',
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
     'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo',
+    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
+    'sugestaoDeAproveitamento',
+    'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
     '_mtgNumeroDoPedido', '_mtgEstiloDoNumero',
@@ -740,6 +744,238 @@ async function testarPreparo() {
     ok(p.formato && p.formato.id === 'F1' && p.saida && p.saida.id === 'S1', 'formato e saída da primeira peça');
     ok(p.refazer_de === 0 && p.refazer_ate === 0, 'a faixa de folhas fica zerada: com células, ela não se aplica');
     ok(p.numeracao === null && p.numeracao_id === null, 'sem numeração do trabalho: ela vai por arte');
+}
+
+// ── 19. O aproveitamento da folha ───────────────────────────────────────────
+//
+// Pedido do usuário em 03/09/2026, com o exemplo dele dentro: "formato com 10
+// células, modelo 1, 30 unidades, modelo 2, 70 unidades. Montagem sugerida 3x o
+// modelo 1 e 7x o modelo 2".
+//
+// A conta é achar o MENOR número de impressões que caiba na folha, porque o
+// desperdício é `P * R - Q` e P e Q são dados: imprimir menos vezes é gastar
+// menos papel. Errar isso não estraga ingresso nenhum — estraga papel, que é
+// custo de produção todo dia.
+{
+    const pecaT = { formato_id: 'F1', saida_id: 'S1', celulas_por_folha: 10 };
+    const mod = (itemId, qtd, variavel) => ({
+        osId: 'a', itemId, nome: 'm' + itemId, pedidoNumero: '21346',
+        qtd, variavel: variavel === true, peca: pecaT });
+
+    // ── O exemplo do usuário, ao pé da letra ──────────────────────────────
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 10);
+        ok(s.viavel, 'o exemplo do usuário produz sugestão', s.motivo);
+        ok(s.itens[0].celulas === 3 && s.itens[1].celulas === 7,
+           'formato de 10 células com tiragens 30 e 70 sugere 3× o modelo 1 e 7× o modelo 2',
+           s.itens.map(i => i.celulas));
+        ok(s.impressoes === 10, 'e a folha é impressa 10 vezes', s.impressoes);
+        ok(s.itens.every(i => i.sobra === 0), 'sem sobra: a conta fecha exata', s.itens);
+        ok(s.celulasUsadas === 10, 'a folha sai cheia', s.celulasUsadas);
+        ok(s.total === 100, 'o total é a soma das tiragens', s.total);
+    }
+
+    // Nove impressões NÃO cabem — é isso que faz dez ser a resposta, e não uma
+    // proporção arredondada por acaso. Com R = 9 os mínimos são 4 + 8 = 12.
+    ok(Math.ceil(30 / 9) + Math.ceil(70 / 9) === 12,
+       'com 9 impressões os mínimos somam 12 e estouram a folha de 10');
+
+    // ── A folha sobrando célula vira peça a mais, e a tela diz quanto ─────
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 1), mod('M2', 1)], 10);
+        ok(s.impressoes === 1, 'duas peças numa folha de dez saem numa impressão só', s.impressoes);
+        ok(s.celulasUsadas === 10, 'as oito células livres são aproveitadas', s.celulasUsadas);
+        ok(s.itens[0].celulas === 5 && s.itens[1].celulas === 5,
+           'e divididas pela proporção da tiragem', s.itens.map(i => i.celulas));
+        ok(s.itens[0].sobra === 4 && s.itens[1].sobra === 4,
+           'a sobra é declarada: quatro peças a mais de cada', s.itens.map(i => i.sobra));
+    }
+
+    // ── Tiragem de produção: a conta continua valendo ────────────────────
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 3000), mod('M2', 1920)], 10);
+        ok(s.impressoes === 500, '3000 e 1920 numa folha de 10 fecham em 500 impressões', s.impressoes);
+        ok(s.itens[0].celulas === 6 && s.itens[1].celulas === 4,
+           'com 6 células de um e 4 do outro', s.itens.map(i => i.celulas));
+        ok(s.itens[0].sobra === 0 && s.itens[1].sobra === 80,
+           'e 80 peças a mais do segundo, que é o preço de fechar a folha', s.itens.map(i => i.sobra));
+    }
+
+    // ── Distribuir empacota melhor do que repetir ────────────────────────
+    //
+    // Uma folha repetida obriga TODO modelo a caber em toda folha; distribuindo,
+    // as peças se acomodam. Com 1 e 100 numa folha de 10 a diferença aparece: 12
+    // impressões contra 11 folhas.
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 1), mod('M2', 100)], 10);
+        ok(s.impressoes === 12, 'a folha repetida precisa de 12 impressões', s.impressoes);
+        ok(s.folhas === 11, 'distribuindo, são 11 folhas', s.folhas);
+    }
+
+    // ── As recusas, cada uma com a saída na frase ────────────────────────
+    {
+        const um = api.sugestaoDeAproveitamento([mod('M1', 30)], 10);
+        ok(!um.viavel && /dois modelos/.test(um.motivo), 'com um modelo só não há o que sugerir', um.motivo);
+
+        const semFormato = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 0);
+        ok(!semFormato.viavel && /formato/.test(semFormato.motivo),
+           'sem saber quantas células cabem, não há conta', semFormato.motivo);
+
+        const demais = api.sugestaoDeAproveitamento(
+            [mod('A', 1), mod('B', 1), mod('C', 1)], 2);
+        ok(!demais.viavel && /não cabe nem um de cada/.test(demais.motivo),
+           'três modelos numa folha de duas células é impossível, e a frase diz o que fazer',
+           demais.motivo);
+
+        const semTiragem = api.sugestaoDeAproveitamento([mod('M1', 0), mod('M2', 70)], 10);
+        ok(!semTiragem.viavel && /tiragem/.test(semTiragem.motivo),
+           'modelo sem tiragem conhecida não entra na proporção', semTiragem.motivo);
+    }
+
+    // ── UMA folha com a mistura ──────────────────────────────────────────
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 10);
+        const c = api.celulasDaFolhaUnica(s);
+        ok(c.length === 10, 'a folha única tem exatamente as células do formato', c.length);
+        ok(c.filter(x => x.itemId === 'M1').length === 3
+            && c.filter(x => x.itemId === 'M2').length === 7,
+           'com 3 de um e 7 do outro');
+        ok(c.filter(x => x.itemId === 'M1').map(x => x.pos).join(',') === '1,2,3',
+           'e as posições começam em 1, sem buraco', c.map(x => x.pos));
+    }
+
+    // ── TODAS as peças, com a mistura em cada folha ──────────────────────
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 10);
+        const c = api.celulasDistribuidas(s);
+        ok(c.length === 100, 'a folha distribuída tem uma célula por peça', c.length);
+
+        const posM1 = c.filter(x => x.itemId === 'M1').map(x => x.pos);
+        ok(posM1.length === 30 && new Set(posM1).size === 30,
+           'as 30 peças do primeiro modelo, sem repetir posição', posM1.length);
+        ok(Math.max.apply(null, posM1) === 30,
+           'e nenhuma posição além da tiragem dele', Math.max.apply(null, posM1));
+
+        // A mistura por folha é o que o operador vai ver no papel.
+        for (let f = 0; f < 10; f++) {
+            const folha = c.slice(f * 10, f * 10 + 10);
+            ok(folha.filter(x => x.itemId === 'M1').length === 3
+                && folha.filter(x => x.itemId === 'M2').length === 7,
+               'a folha ' + (f + 1) + ' sai com a mistura sugerida',
+               folha.map(x => x.itemId));
+        }
+    }
+
+    // Modelo que acaba antes não deixa buraco: a vaga vai para quem ainda tem
+    // peça. Papel é custo, e uma folha com célula vazia no meio é papel jogado
+    // fora — a mesma regra do Refazer Célula.
+    {
+        const s = api.sugestaoDeAproveitamento([mod('M1', 4), mod('M2', 16)], 10);
+        const c = api.celulasDistribuidas(s);
+        ok(c.length === 20, 'as vinte peças entram', c.length);
+        ok(c.slice(0, 10).length === 10 && c.slice(10, 20).length === 10,
+           'e as duas folhas saem cheias');
+        ok(c.filter(x => x.itemId === 'M1').length === 4,
+           'sem inventar peça do modelo que acabou',
+           c.filter(x => x.itemId === 'M1').length);
+    }
+
+    // ── Quem varia de um item para o outro ───────────────────────────────
+    {
+        const varia = api.elementoDaNumeracaoVaria;
+        ok(varia({ type: 'TEXT' }) === true, 'texto sequencial varia');
+        ok(varia({ type: 'QR_IDEAL' }) === true, 'o QR Ideal varia');
+        ok(varia({ type: 'BARCODE' }) === true, 'o código de barras varia');
+        ok(varia({ type: 'FOTO' }) === true, 'a foto da credencial varia');
+        ok(varia({ type: 'ELEMENTO_QUE_AINDA_NAO_EXISTE' }) === true,
+           'tipo desconhecido conta como variável — o erro tem de cair para o lado seguro');
+        ok(varia({ type: 'FIXED' }) === false, 'texto fixo não varia');
+        ok(varia({ type: 'PICOTE' }) === false, 'o picote não varia');
+        ok(varia({ type: 'SVG' }) === false, 'um SVG solto não varia');
+        ok(varia({ type: 'SVG', csv_column: 'logo' }) === true,
+           'mas um SVG que lê coluna do banco varia');
+        ok(varia({ type: 'PDF', source: 'database' }) === true,
+           'e um PDF vindo do banco também');
+
+        // E o modelo inteiro, que e' o que a lista guarda. Numeracao que a tela
+        // nao conseguiu ler conta como variavel: chutar "arte fixa" ali faria a
+        // tela recomendar a folha repetida para um ingresso.
+        const doModelo = api.modeloTemDadoVariavel;
+        ok(doModelo({ amostra_num_id: null }, null) === false,
+           'modelo sem numeracao nenhuma e arte so');
+        ok(doModelo({ amostra_num_id: 77 }, null) === true,
+           'modelo com numeracao que a tela nao conseguiu ler conta como variavel');
+        ok(doModelo({ amostra_num_id: 77 }, { elements: [] }) === false,
+           'lida e sem elemento, volta a ser arte so');
+        ok(doModelo({ amostra_num_id: 77 }, { elements: [{ type: 'QR_IDEAL' }] }) === true,
+           'lida e com elemento variavel, e variavel');
+
+        const temDado = api.numeracaoTemDadoVariavel;
+        ok(temDado(null) === false, 'modelo sem numeração não tem dado variável');
+        ok(temDado({ elements: [] }) === false,
+           'numeração sem elemento nenhum é arte só — caso comum e legítimo neste projeto');
+        ok(temDado({ elements: [{ type: 'FIXED' }, { type: 'PICOTE' }] }) === false,
+           'só elemento fixo continua sendo arte só');
+        ok(temDado({ elements: [{ type: 'FIXED' }, { type: 'QR_IDEAL' }] }) === true,
+           'um elemento variável já basta');
+    }
+
+    // ── O caminho recomendado sai do tipo da peça ────────────────────────
+    {
+        const fixa = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 10);
+        ok(api.modoSugeridoDaMontagem(fixa) === 'unica',
+           'sem dado variável, o recomendado é a folha impressa N vezes');
+
+        const comDado = api.sugestaoDeAproveitamento(
+            [mod('M1', 30), mod('M2', 70, true)], 10);
+        ok(comDado.temDadoVariavel === true, 'a sugestão sabe que há dado variável na folha');
+        ok(api.modoSugeridoDaMontagem(comDado) === 'distribuir',
+           'com dado variável, repetir a folha repetiria o código: o recomendado é distribuir');
+    }
+
+    // ── O teto da folha distribuída ──────────────────────────────────────
+    //
+    // Distribuir desenha uma célula por peça. Numa tiragem de produção isso são
+    // milhares de células na tela, e a tela não dá conta — então o caminho nasce
+    // travado, com o motivo à vista, em vez de recusar depois do clique.
+    {
+        const cabe = api.sugestaoDeAproveitamento(
+            [mod('M1', 400), mod('M2', 400)], 10);
+        ok(cabe.total === 800 && cabe.podeDistribuir === true,
+           'oitocentas peças ainda cabem na folha distribuída', cabe.total);
+
+        const naoCabe = api.sugestaoDeAproveitamento(
+            [mod('M1', 400), mod('M2', 401)], 10);
+        ok(naoCabe.podeDistribuir === false,
+           'oitocentas e uma já não cabem — o teto é fechado', naoCabe.total);
+
+        const producao = api.sugestaoDeAproveitamento(
+            [mod('M1', 3000), mod('M2', 1920)], 10);
+        ok(producao.viavel && producao.podeDistribuir === false,
+           'uma tiragem de produção continua tendo sugestão, mas não distribuída',
+           producao.total);
+    }
+
+    // ── A tradução das posições continua valendo depois de aplicar ───────
+    //
+    // Esta é a verificação que liga o recurso novo à regra que sustenta a tela
+    // inteira: a ordem das células no papel não pode mexer no índice de
+    // ingresso nenhum. Cada célula continua deslocada pela TIRAGEM dos modelos
+    // anteriores, e não pelo número de células que a sugestão deu a eles.
+    {
+        const modelos = [mod('M1', 30), mod('M2', 70)];
+        const s = api.sugestaoDeAproveitamento(modelos, 10);
+        const c = api.celulasDistribuidas(s);
+        const comb = api.posicoesCombinadas(c, modelos);
+        ok(comb.length === 100, 'uma posição combinada por célula', comb.length);
+
+        const doM1 = c.map((x, i) => ({ x, i })).filter(o => o.x.itemId === 'M1');
+        ok(doM1.every(o => comb[o.i] === o.x.pos),
+           'o primeiro modelo não sofre deslocamento nenhum');
+        const doM2 = c.map((x, i) => ({ x, i })).filter(o => o.x.itemId === 'M2');
+        ok(doM2.every(o => comb[o.i] === 30 + o.x.pos),
+           'e o segundo é deslocado pela TIRAGEM do primeiro (30), não pelas 3 células dele');
+    }
 }
 
 testarPreparo().then(() => {

@@ -51,7 +51,8 @@ function extrairConst(nome) {
 }
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
-                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_HISTORIA_MAX', '_MTG_TONS'];
+                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_HISTORIA_MAX', '_MTG_TONS',
+                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const FUNCOES = [
     'montagemVazia', 'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
@@ -72,6 +73,10 @@ const FUNCOES = [
     'duplicarCelulaDaMontagem', 'removerCelulaDaMontagem', 'moverCelulaDaMontagem',
     'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem',
     'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem',
+    // O aproveitamento da folha (03/09/2026).
+    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'sugestaoDeAproveitamento',
+    'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
+    '_mtgSugestaoAtual', 'aplicarSugestaoDaMontagem', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
     // A saida.
     'pastaDaMontagem', 'abrirNaTelaDaMontagem', 'nomeDoArquivoDaMontagem',
@@ -156,6 +161,8 @@ const PECAS = [
         "function _mtgNumeracaoDoItem() { return null; }",
         "function onMontagemPosicoesChange() {}",
         "function toast(m, t) { (window.__toasts = window.__toasts || []).push((t||'info') + ': ' + m); }",
+        "window.__confirmou = []; window.__confirmarResposta = true;",
+        "async function confirmarPopup(o) { window.__confirmou.push(o); return window.__confirmarResposta; }",
         // O de verdade consulta o banco (loadOSItens). Aqui ele so' faz o que a
         // tela ve': guarda o pedido escolhido e enche o seletor de modelos.
         "async function onMontagemPedidoChange() {",
@@ -181,6 +188,7 @@ const PECAS = [
         " 'zoomDaMontagem','desfazerMontagem','refazerMontagem','celulasDoModelo',",
         " 'alternarNumeroDaMontagem','mudarNumeroDaMontagem','retomarDaMontagem',",
         " 'contaDaMontagem','geometriaDaFolha','textoDoNumeroDoModelo','nomeDoArquivoDaMontagem',",
+        " 'aplicarSugestaoDaMontagem','sugestaoDeAproveitamento','modoSugeridoDaMontagem',",
         " 'encherPastasDaMontagem','onMontagemPastaChange','gerarPdfDaMontagem'",
         "].forEach(function (n) { window[n] = eval(n); });",
         "_mtgLigarArrasto();",
@@ -196,7 +204,8 @@ const PECAS = [
         "  state.montagem = montagemVazia();",
         "  state.montagem.modelos = pecas.map(function (p) { return {",
         "    osId: p.osId, itemId: p.id, pedidoNumero: p.pedido, nome: p.nome,",
-        "    qtd: p.qtd, peca: pecaDaMontagem(window.__item(p)) }; });",
+        "    qtd: p.qtd, variavel: p.variavel === true,",
+        "    peca: pecaDaMontagem(window.__item(p)) }; });",
         "  pecas.forEach(function (p) { p.pos.forEach(function (pos) {",
         "    state.montagem.celulas.push({ osId: p.osId, itemId: p.id, pos: pos }); }); });",
         "  renderMontagem();",
@@ -852,6 +861,204 @@ const PECAS = [
        && /Ctrl\+Z/.test(layout.atalhos),
        'os gestos estão escritos em texto — ícone sem rótulo não vale nesta gráfica', layout.atalhos);
 
+    // ── O APROVEITAMENTO DA FOLHA (03/09/2026) ──────────────────────────────
+    //
+    // Pedido do usuário, com o exemplo dentro: "formato com 10 células, modelo
+    // 1, 30 unidades, modelo 2, 70 unidades. Montagem sugerida 3x o modelo 1 e
+    // 7x o modelo 2". O painel só aparece com dois modelos ou mais, e oferece
+    // os TRÊS caminhos — decisão do usuário na mesma conversa.
+    const APROV = [
+        { id: 'M1', osId: 'a', pedido: '21202', nome: 'INTEIRA', qtd: 30, pos: [1] },
+        { id: 'M2', osId: 'a', pedido: '21202', nome: 'MEIA', qtd: 70, pos: [1] },
+    ];
+
+    // Com UM modelo o painel não existe: não há proporção entre uma coisa só.
+    const soUm = await aba.evaluate(pecas => {
+        window.__montar([pecas[0]]);
+        const c = document.getElementById('mtg-sugestao');
+        return { escondido: c.style.display === 'none', vazio: c.innerHTML.trim() === '' };
+    }, APROV);
+    ok(soUm.escondido && soUm.vazio,
+       'com um modelo só, o painel do aproveitamento não ocupa espaço na tela', soUm);
+
+    const painel = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const c = document.getElementById('mtg-sugestao');
+        const bt = Array.from(c.querySelectorAll('button'));
+        return {
+            visivel: c.style.display !== 'none',
+            texto: c.textContent.replace(/\s+/g, ' ').trim(),
+            botoes: bt.map(b => ({
+                rotulo: b.textContent.replace(/\s+/g, ' ').trim(),
+                acao: b.getAttribute('onclick') || '',
+            })),
+            celulasPorModelo: Array.from(c.querySelectorAll('tbody tr'))
+                .map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim())),
+        };
+    }, APROV);
+
+    ok(painel.visivel, 'com dois modelos, o painel do aproveitamento aparece');
+    ok(/3× M1 \+ 7× M2 por folha/.test(painel.texto),
+       'e diz a mistura do exemplo do usuário: 3 de um, 7 do outro', painel.texto.slice(0, 260));
+    ok(painel.celulasPorModelo[0][1] === '30' && painel.celulasPorModelo[0][2] === '3'
+        && painel.celulasPorModelo[1][1] === '70' && painel.celulasPorModelo[1][2] === '7',
+       'a tabela mostra a tiragem de cada modelo e quantas células ele leva na folha',
+       painel.celulasPorModelo);
+    ok(painel.botoes.length === 3, 'os TRÊS caminhos ficam oferecidos', painel.botoes);
+    ok(/Aplicar o recomendado/.test(painel.botoes[0].rotulo)
+        && /uma folha, 10 impress/.test(painel.botoes[0].rotulo),
+       'sem dado variável o recomendado é a folha impressa 10 vezes', painel.botoes[0]);
+    ok(/Uma folha, 10 impress/.test(painel.botoes[1].rotulo)
+        && /Distribuir em 10 folhas/.test(painel.botoes[2].rotulo),
+       'e os outros dois dizem, em texto, o que fazem', painel.botoes.map(b => b.rotulo));
+    ok(painel.botoes[0].acao.indexOf("'auto'") > 0
+        && painel.botoes[1].acao.indexOf("'unica'") > 0
+        && painel.botoes[2].acao.indexOf("'distribuir'") > 0,
+       'cada botão chama o seu modo', painel.botoes.map(b => b.acao));
+
+    // ── Aplicar o recomendado: uma folha com a mistura ──────────────────────
+    const unica = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        // Um teste anterior trocou o `toast` global pelo dele; este põe o seu.
+        window.__toasts = [];
+        window.toast = (m, tipo) => window.__toasts.push((tipo || 'info') + ': ' + m);
+        await aplicarSugestaoDaMontagem('auto');
+        const conta = contaDaMontagem(state.montagem.celulas, 10);
+        return {
+            celulas: state.montagem.celulas.length,
+            folhas: conta.folhas, vazias: conta.vazias,
+            deM1: state.montagem.celulas.filter(c => c.itemId === 'M1').length,
+            deM2: state.montagem.celulas.filter(c => c.itemId === 'M2').length,
+            desenhadas: document.querySelectorAll('#mtg-folha .mtg-celula:not(.mtg-celula-vazia)').length,
+            toast: (window.__toasts || []).join(' | '),
+            podeDesfazer: !document.getElementById('mtg-desfazer').disabled,
+        };
+    }, APROV);
+    ok(unica.celulas === 10 && unica.folhas === 1 && unica.vazias === 0,
+       'o recomendado monta UMA folha cheia', unica);
+    ok(unica.deM1 === 3 && unica.deM2 === 7, 'com 3 do primeiro e 7 do segundo', unica);
+    ok(unica.desenhadas === 10, 'e a folha na tela mostra as dez', unica);
+    ok(/Imprima 10 vez/.test(unica.toast),
+       'o aviso diz quantas vezes imprimir — sem isso a folha sozinha não entrega a tiragem',
+       unica.toast);
+    ok(unica.podeDesfazer, 'e o desfazer fica armado: aplicar substitui o que havia');
+
+    const desfeito = await aba.evaluate(() => {
+        desfazerMontagem();
+        return state.montagem.celulas.length;
+    });
+    ok(desfeito === 2, 'Ctrl+Z devolve a folha que o operador tinha montado', desfeito);
+
+    // ── Distribuir: cada folha sai com a mesma mistura ──────────────────────
+    const distribuido = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        await aplicarSugestaoDaMontagem('distribuir');
+        const cel = state.montagem.celulas;
+        const porFolha = [];
+        for (let f = 0; f < 10; f++) {
+            const bloco = cel.slice(f * 10, f * 10 + 10);
+            porFolha.push(bloco.filter(c => c.itemId === 'M1').length + '+'
+                + bloco.filter(c => c.itemId === 'M2').length);
+        }
+        const posM1 = cel.filter(c => c.itemId === 'M1').map(c => c.pos);
+        return {
+            celulas: cel.length, porFolha: porFolha,
+            posRepetida: posM1.length !== new Set(posM1).size,
+            maiorPos: Math.max.apply(null, posM1),
+        };
+    }, APROV);
+    ok(distribuido.celulas === 100, 'distribuir traz uma célula por peça', distribuido.celulas);
+    ok(distribuido.porFolha.every(x => x === '3+7'),
+       'e TODA folha sai com a mistura sugerida', distribuido.porFolha);
+    ok(!distribuido.posRepetida && distribuido.maiorPos === 30,
+       'sem repetir posição e sem passar da tiragem: cada célula é um item diferente',
+       distribuido);
+
+    // ── Dado variável: a folha repetida é avisada antes ─────────────────────
+    const comDado = await aba.evaluate(async pecas => {
+        const alterado = pecas.map((p, j) => Object.assign({}, p, { variavel: j === 1 }));
+        window.__montar(alterado);
+        const c = document.getElementById('mtg-sugestao');
+        const rec = c.querySelector('.mtg-sug-rec').textContent.replace(/\s+/g, ' ').trim();
+
+        // O operador insiste na folha repetida e o popup pergunta.
+        window.__confirmou = [];
+        window.__confirmarResposta = false;
+        await aplicarSugestaoDaMontagem('unica');
+        const recusado = state.montagem.celulas.length;
+
+        window.__confirmarResposta = true;
+        await aplicarSugestaoDaMontagem('unica');
+        return {
+            recomendado: rec,
+            avisoNaTela: c.textContent.replace(/\s+/g, ' ').trim(),
+            marcaVar: c.querySelectorAll('.mtg-sug-var').length,
+            perguntou: window.__confirmou.length,
+            pergunta: JSON.stringify(window.__confirmou[0] || {}),
+            aposRecusar: recusado,
+            aposAceitar: state.montagem.celulas.length,
+        };
+    }, APROV);
+    ok(/Aplicar o recomendado.*distribuir em 10 folhas/.test(comDado.recomendado),
+       'com dado variável na folha, o recomendado passa a ser distribuir', comDado.recomendado);
+    ok(comDado.marcaVar === 1, 'e o modelo variável fica marcado na tabela', comDado.marcaVar);
+    ok(/repetir a mesma folha repetiria o código/.test(comDado.avisoNaTela),
+       'o motivo está escrito na tela, e não só no popup', comDado.avisoNaTela.slice(-260));
+    ok(comDado.perguntou === 2,
+       'pedir a folha repetida com dado variável SEMPRE pergunta antes', comDado.perguntou);
+    ok(/mesmos códigos/.test(comDado.pergunta) && /Distribuir em 10 folhas/.test(comDado.pergunta),
+       'e a pergunta diz o que acontece e qual é a alternativa', comDado.pergunta.slice(0, 400));
+    ok(comDado.aposRecusar === 2,
+       'cancelar não mexe na folha — o operador volta ao que tinha', comDado.aposRecusar);
+    ok(comDado.aposAceitar === 10,
+       'avisado, ele segue: a decisão continua sendo dele', comDado.aposAceitar);
+
+    // ── Caminho impossível nasce travado, e diz por quê ─────────────────────
+    //
+    // Com as quatro peças de produção são 5.870 peças: distribuir desenharia uma
+    // célula para cada. O botão que a tela não pode cumprir fica desabilitado
+    // com o motivo no `title` — botão que recusa depois do clique faz o operador
+    // aprender por tentativa.
+    const teto = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const c = document.getElementById('mtg-sugestao');
+        const bt = Array.from(c.querySelectorAll('button'));
+        window.__toasts = [];
+        window.toast = (m, tipo) => window.__toasts.push((tipo || 'info') + ': ' + m);
+        const antes = state.montagem.celulas.length;
+        await aplicarSugestaoDaMontagem('distribuir');
+        return {
+            travados: bt.map(b => b.disabled),
+            motivo: bt[2].title,
+            explicacao: c.textContent.replace(/\s+/g, ' ').trim(),
+            mexeu: state.montagem.celulas.length !== antes,
+            recusa: (window.__toasts || []).join(' | '),
+        };
+    }, PECAS);
+    ok(teto.travados[2] === true, 'o botão de distribuir nasce travado nessa tiragem', teto.travados);
+    ok(teto.travados[0] === false && teto.travados[1] === false,
+       'e os outros dois continuam à mão: a folha repetida ainda serve aqui', teto.travados);
+    ok(/tela do Pedido/.test(teto.motivo),
+       'o motivo aponta para onde ir — trava sem saída não vale nesta gráfica', teto.motivo);
+    ok(!teto.mexeu && /tela do Pedido/.test(teto.recusa),
+       'e chamar o modo travado por fora não mexe na folha', teto);
+
+    // ── O painel mora na coluna de apoio, depois da lista de modelos ────────
+    const lugar = await aba.evaluate(() => {
+        const c = document.getElementById('mtg-sugestao');
+        const lista = document.querySelector('.mtg-lista-card');
+        return {
+            noLado: !!c.closest('.mtg-lado'),
+            depoisDaLista: !!(lista.compareDocumentPosition(c)
+                & Node.DOCUMENT_POSITION_FOLLOWING),
+            largura: Math.round(c.getBoundingClientRect().width),
+            paiLargura: Math.round(c.parentElement.getBoundingClientRect().width),
+        };
+    });
+    ok(lugar.noLado && lugar.depoisDaLista,
+       'o painel fica na coluna de apoio, logo abaixo dos modelos que ele analisa', lugar);
+    ok(lugar.largura <= lugar.paiLargura + 1, 'e não vaza da coluna', lugar);
+
     if (FOTO) {
         await aba.evaluate(pecas => {
             window.__montar(pecas);
@@ -860,6 +1067,18 @@ const PECAS = [
         const el = await aba.$('#view-montagem');
         await el.screenshot({ path: FOTO });
         console.log('foto em ' + FOTO);
+
+        // A coluna de apoio nao cabe na janela junto com a folha inteira, e o
+        // que passa da altura da janela sai em branco. Ela ganha a sua propria
+        // foto: e' onde mora o painel do aproveitamento.
+        await aba.evaluate(() => {
+            document.querySelector('.mtg-folha-card').style.display = 'none';
+            window.scrollTo(0, 0);
+        });
+        const lado = await aba.$('.mtg-lado');
+        const fotoLado = FOTO.replace(/\.png$/i, '') + '-lado.png';
+        await lado.screenshot({ path: fotoLado });
+        console.log('foto em ' + fotoLado);
     }
 
     await navegador.close();

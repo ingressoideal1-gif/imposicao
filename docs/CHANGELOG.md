@@ -4,6 +4,109 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-03] — Montagem: a folha se divide sozinha entre os modelos, gastando o mínimo de papel
+
+Pedido do usuário: **"ao carregar 2 modelos ou mais, ao analisar a quantidade de
+cada modelo, sugerir a quantidade de repetições de cada modelo para que com a
+impressão repetida da folha imposta se atinja o melhor número de aproveitamento.
+Exemplo: formato com 10 células, modelo 1, 30 unidades, modelo 2, 70 unidades.
+Montagem sugerida 3x o modelo 1 e 7x o modelo 2"**.
+
+A quantidade de cada modelo é a **tiragem** dele — decisão do usuário na mesma
+conversa. O painel aparece sozinho quando há dois modelos ou mais na folha.
+
+### A conta: menos papel é menos impressões
+
+O desperdício de uma folha impressa `R` vezes é `P × R − Q` — tudo o que sai do
+papel e não vira peça pedida, seja célula vazia ou peça a mais. `P` (células da
+folha) e `Q` (o total pedido) são dados, então gastar menos papel é **imprimir
+menos vezes**, e a conta se resume a achar o menor `R` que caiba.
+
+Para um `R` qualquer, o mínimo de células do modelo `i` é `ceil(q_i / R)`. Se a
+soma dos mínimos cabe na folha, aquele `R` serve. A varredura começa em
+`ceil(Q / P)` e para no primeiro que couber.
+
+No exemplo do usuário: `R = 9` pede 4 + 8 = 12 células e não cabe; `R = 10` pede
+3 + 7 = 10 e cabe. Sai exatamente a montagem que ele descreveu, com desperdício
+zero.
+
+> Uma proporção arredondada daria o mesmo resultado **nesse exemplo** e passaria
+> a errar sempre que a proporção não fosse exata — e o erro sai em papel
+> comprado. Por isso a conta está travada por teste.
+
+O que sobra de célula depois dos mínimos é distribuído pelo método da maior
+sobra: o papel daquela folha já está comprado. Vira peça a mais, e a coluna
+**Sobra** diz quantas.
+
+### Os três caminhos, porque "repetida" tem dois sentidos
+
+| Caminho | O que monta |
+|---|---|
+| **Uma folha, N impressões** | uma folha com a mistura (3 + 7), mandada N vezes à impressora |
+| **Distribuir em N folhas** | todas as peças, com a mesma mistura em cada folha |
+| **Aplicar o recomendado** | escolhe entre os dois pelo tipo da peça |
+
+O risco que separa os dois: **imprimir a mesma folha N vezes só entrega a
+tiragem quando a peça sai igual**. Com numeração de dado variável — sequencial
+ou de banco —, repetir a folha repete o código: sairiam N ingressos válidos para
+a mesma entrada, descobertos na portaria. É exatamente o que a Montagem existe
+para não fazer.
+
+O usuário pediu os três caminhos oferecidos, e eles estão. Mas o arriscado
+**pergunta antes**, num popup que diz o que vai acontecer e aponta a
+alternativa. Avisado, ele decide.
+
+A classificação do que é dado variável erra de propósito para o lado seguro: só
+`FIXED`, `PICOTE`, `SVG` e `PDF` contam como fixos, e mesmo esses viram
+variáveis se lerem coluna do banco (a foto da credencial). Tipo de elemento
+desconhecido conta como variável.
+
+### Caminho impossível nasce travado
+
+Distribuir desenha uma célula por peça. Acima de 800 peças a tela não dá conta,
+e o botão nasce desabilitado com o motivo à vista e a saída na frase — aquela
+tiragem se imprime pela tela do Pedido. Isso apareceu na revisão em tela: o
+botão prometia "Distribuir em 587 folhas" e a trava recusaria depois do clique.
+
+### O que não mudou
+
+Nenhum código de ingresso. Aplicar substitui as células da folha, e cada uma
+continua deslocada pela tiragem dos modelos anteriores — não pelas células que a
+sugestão deu a eles. A folha distribuída nunca emite posição além da tiragem. E
+`Ctrl+Z` devolve a folha anterior.
+
+### Um efeito colateral: a régua do teste da esteira
+
+A suíte inteira passou a subir um Chrome de verdade (o harness da tela da
+Montagem), e com isso o
+`test_entrega_imediata.py::test_o_primeiro_lote_chega_muito_antes_do_fim`
+começou a **falhar junto e passar sozinho**. Não era regressão: a régua dele
+comparava um custo fixo (subir o pedido, abrir a arte, montar o pool, e a cauda
+depois do último lote) com um custo variável (desenhar as 50 folhas), na forma
+`chegadas[0] < fim * 0.5`.
+
+Medido nesta máquina: o espalhamento dos dez lotes fica em **~1,0 s sempre**,
+enquanto o `fim` vai de 1,4 s ocioso a 5,3 s com a suíte em paralelo. A
+proporção despenca sem nada ter mudado.
+
+A régua passou a medir o que a correção de fato entrega — o **espalhamento**:
+os dez lotes chegam um a um, com intervalo típico de ~0,11 s, em vez de todos no
+mesmo instante (que era o defeito original). Isso não depende da carga da
+máquina.
+
+### Testes
+
+`tests/montagem_harness.js` 175 → **241** verificações (o exemplo do usuário ao
+pé da letra, a minimalidade das impressões, a sobra declarada, as recusas, os
+dois construtores de célula, a classificação do dado variável, o teto);
+`tests/montagem_tela_harness.js` 132 → **162** (o painel, os três botões, o
+popup do risco recusado e aceito, a mistura em cada folha, o botão travado);
+mais quatro testes em `tests/test_montagem.py`.
+
+Documentação: [`docs/montagem.md`](montagem.md).
+
+---
+
 ## [2026-09-03] — Montagem redesenhada: a folha no lugar nobre, na grade de verdade, com o número do modelo configurável
 
 Pedido do usuário: **"ajustar a página Montagem, rever usabilidade geral,
