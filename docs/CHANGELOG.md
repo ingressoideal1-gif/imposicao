@@ -4,6 +4,64 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Lista de arte: o card diz quando a arte veio de outro modelo
+
+Pedido do usuário: *"na lista de arte na edição do pedido, nos modelos onde foram
+utilizado o recurso de 'colar' arte de outro modelo, deixar o ícone de 'colar'
+selecionado, com contorno fio verde, para identificarmos que a arte ali aplicada
+no modelo vem de outro modelo, aceito sugestões para melhorar a ideia."*
+
+Um modelo cuja arte foi trazida de outro pelo **📥 COLAR** passa a se identificar
+sozinho no card, de três formas ao mesmo tempo:
+
+- o **📥 COLAR** fica com fio verde no modelo que **recebeu** a arte;
+- o **🔗 COPIAR** fica com fio verde no modelo que **cedeu** — os dois lados,
+  decisão do usuário, para que o modelo de origem também mostre que a arte dele
+  está em uso em outro lugar do pedido;
+- um selo verde no cabeçalho do card diz em texto de quem é a arte:
+  **`🔗 Frente: arte colada do modelo Ingresso Pista`**. Sem ele a única pista
+  seria a cor de um ícone, e cor sozinha não se explica.
+
+Frente e verso são contados separado: dá para ter a frente própria e o verso
+colado, e cada face ganha o seu selo.
+
+### Como o sistema sabe disso sem coluna nova no banco
+
+Nada é gravado. A colagem é **deduzida na hora de desenhar a tela**, de dois
+fatos que o dado já carrega:
+
+1. **o nome do arquivo guarda a origem** — todo envio de arte vira
+   `arte_<face>_<pedido>_<modelo>_<timestamp>.<ext>`, então a própria URL diz
+   qual modelo enviou aquele arquivo;
+2. **dois modelos com a mesma URL só podem ter chegado ali por colagem**, porque
+   cada envio gera um nome único (tem o timestamp dentro).
+
+Deduzir, em vez de salvar uma marca, ganha três coisas de graça: vale
+**retroativamente** para os pedidos que já foram colados antes disso existir; a
+marca **some sozinha** quando o operador envia uma arte nova por cima (uma coluna
+salva continuaria dizendo "colada" depois que a arte já é outra); e não abre
+exceção nova na tabela do parceiro.
+
+Casos de borda cobertos: arte vinda de **outro pedido** (o selo cita o número do
+pedido, porque o modelo de origem não está na lista); arte antiga, sem o padrão
+no nome, ainda é pega pela URL repetida, desempatando pelo menor id; e
+reaproveitar a própria arte da frente no verso do **mesmo** modelo não vira
+marca, porque não veio de outro modelo.
+
+### Onde isso vive
+
+- `frontend/script.js` — `donoDaArteNaUrl`, `origemDaArteDoModelo`,
+  `textoDaOrigemDaArte`, `seloDeArte` e `atualizarMarcasDeArteCompartilhada`.
+- `frontend/style.css` — a classe `.arte-compartilhada`.
+- `tests/arte_colada_harness.js` — 57 conferências.
+
+A marca se repõe sem redesenhar o card: colar, enviar arte nova e remover arte
+chamam `atualizarMarcasDeArteCompartilhada`, que mexe só na classe, no título e
+no selo. Redesenhar os cards dispararia os `onchange` de Cor e Numeração, e já
+foi assim que se gravou `amostra_cor_id = null` por engano.
+
+---
+
 ## [2026-09-04] — Frete: a SVT e os Correios ganharam logo na coluna do Painel de Produção
 
 Pedido do usuário: *"No painel da produção, na listagem dos pedidos, a coluna

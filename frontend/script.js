@@ -33360,11 +33360,37 @@ function renderAmostrasOSItens(osId) {
                     Se os modelos dividem o mesmo CSV, reparta as linhas em <b>🧩 Linhas</b>; se são bancos diferentes, confira os arquivos antes de imprimir.</span>
                 </div>` : '';
 
+        // ── De onde veio a arte deste modelo (04/09/2026) ──
+        //
+        // Quando o operador usa o 📥 COLAR para trazer a arte de outro modelo,
+        // o card passa a dizer isso: o 📥 ganha fio verde no modelo que
+        // recebeu, o 🔗 ganha fio verde no modelo que cedeu, e o cabeçalho
+        // ganha um selo em texto com o nome do outro modelo. Sem o selo, a
+        // única pista seria a cor de um ícone — e cor sozinha não se explica.
+        //
+        // Nada disso é lido do banco: `origemDaArteDoModelo` deduz a colagem
+        // da própria URL. Por isso vale para os pedidos já colados antes de
+        // hoje, e some sozinho quando entra uma arte nova por cima.
+        const origemArteFrente = origemDaArteDoModelo(item, 'frente', itens, targetOSId);
+        const origemArteVerso  = origemDaArteDoModelo(item, 'verso',  itens, targetOSId);
+        // Classe, e não estilo inline, porque as marcas também são repostas
+        // sem redesenhar o card — ver `atualizarMarcasDeArteCompartilhada`.
+        const marcaDeArteColada = (o) => (o && o.papel === 'colada') ? 'arte-compartilhada' : '';
+        const marcaDeArteCedida = (o) => (o && o.papel === 'cedida') ? 'arte-compartilhada' : '';
+        // A frase explica o fio verde, então só entra no botão que está verde.
+        // No outro, o título continua dizendo o que o botão FAZ — trocá-lo
+        // deixaria o operador sem saber para que serve o que ele vai clicar.
+        const tituloDeArte = (o, face, padrao, papel) => escapeHtml(
+            (o && o.papel === papel && textoDaOrigemDaArte(o, face, targetOSId)) || padrao);
+        const selosDeArteCompartilhada = seloDeArte(origemArteFrente, 'frente', !!item.verso, targetOSId)
+                                       + seloDeArte(origemArteVerso,  'verso',  !!item.verso, targetOSId);
+
         return `
         <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ` data-modelo-aprovado="1" data-titulo-aprovado="${escapeHtml(tituloAprovado)}"` : ''}>
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <span id="selos-arte-${idx}" style="display: contents;">${selosDeArteCompartilhada}</span>
                     <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '--'}</span>
                     ${statusBadge}
                 </div>
@@ -33453,8 +33479,8 @@ function renderAmostrasOSItens(osId) {
                                             <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                             <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D da frente">🎨</button>
-                                            <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
-                                            <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                             <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
                                             <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
                                             <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
@@ -33471,8 +33497,8 @@ function renderAmostrasOSItens(osId) {
                                             <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
                                             <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Criar Arte 2D do verso">🎨</button>
-                                            <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
-                                            <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteVerso)}" data-libera-copia="1" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Copiar Link da Arte Verso', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteVerso)}" id="btn-paste-amostra-arte-verso-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Colar Link da Arte Verso', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                             <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')" title="Remover Arte do Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">✕</button>
                                             <span id="amostra-item-arte-verso-name-${idx}" style="display:none;"></span>
                                         </div>
@@ -33485,8 +33511,8 @@ function renderAmostrasOSItens(osId) {
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                         <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D para este modelo">🎨</button>
-                                        <button class="btn btn-sm btn-secondary" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
-                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                        <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                        <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
                                         <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
                                         <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
                                         <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
@@ -34723,6 +34749,11 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 // O arquivo enviado agora e a arte do modelo: a estrutura vetorial
                 // da edicao anterior nao vale mais e nao pode reaparecer no editor.
                 invalidarArteVetorial(item, osId, idx, faceKey);
+
+                // Arte nova por cima desfaz a colagem: este modelo passa a ter
+                // arte propria, e quem tinha cedido a dele perde o par. A marca
+                // verde sai sozinha porque e deduzida da URL, nao salva.
+                atualizarMarcasDeArteCompartilhada(osId);
             }
 
             // Se modo PDF, gerar snapshot da primeira página e inicializar viewer
@@ -34858,6 +34889,10 @@ async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     // Re-renderizar imediatamente a janela combinada sem a camada de arte
     renderItemAmostraCombinada(idx, osId);
 
+    // Tirar a arte desfaz o par: o outro modelo deixa de ter com quem
+    // compartilhar, e o fio verde dele tem de sair junto.
+    atualizarMarcasDeArteCompartilhada(osId);
+
     // Salvar no banco zerando URL, base64 e JSON vetorial
     const payload = face === 'verso' ? {
         verso_arte_url: null,
@@ -34875,6 +34910,188 @@ async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
         .then(() => toast('Arte removida do banco com sucesso!', 'success'))
         .catch((err) => toast('Falha ao remover arte: ' + (err.message || err), 'error'));
 }
+
+/**
+ * De qual pedido e de qual modelo NASCEU o arquivo de arte, lido do próprio
+ * nome dele.
+ *
+ * Todo envio de arte pela tela vira `arte_<face>_<pedido>_<modelo>_<ts>.<ext>`
+ * (ver `onItemArteUpload`), então a URL já carrega a origem — não há coluna
+ * nova a criar no banco para saber de onde a arte veio.
+ *
+ * O id do pedido pode ter hífen (uuid), por isso ele é o pedaço "que sobra":
+ * o modelo é o penúltimo campo e o timestamp, o último.
+ */
+function donoDaArteNaUrl(url) {
+    const nome = String(url || '').split('?')[0].split('/').pop();
+    const m = /^arte_(?:frente|verso)_(.+)_([^_]+)_(\d{10,})\.[A-Za-z0-9]+$/.exec(nome);
+    if (!m) return null;
+    return { pedido: m[1], modelo: m[2] };
+}
+window.donoDaArteNaUrl = donoDaArteNaUrl;
+
+/**
+ * A arte desta face veio de outro modelo, ou está emprestada a outro?
+ *
+ * Pedido do usuário em 04/09/2026: quando o operador usa o 📥 COLAR para
+ * trazer a arte de outro modelo, o card tem de dizer isso — senão, olhando o
+ * pedido depois, ninguém sabe que aquela arte não é própria daquele modelo.
+ *
+ * Nada disso é gravado. A colagem é deduzida de dois fatos que o dado já
+ * carrega:
+ *
+ *   1. o nome do arquivo guarda quem o enviou (`donoDaArteNaUrl`);
+ *   2. dois modelos com a MESMA url só podem ter chegado ali por colagem,
+ *      porque cada envio gera um nome único (tem o timestamp dentro).
+ *
+ * Deduzir, em vez de salvar uma marca, é o que faz a marca valer para os
+ * pedidos que já foram colados antes disso existir — e é o que faz ela SUMIR
+ * sozinha quando o operador envia uma arte nova por cima. Uma coluna salva
+ * continuaria dizendo "colada" depois que a arte já é outra.
+ *
+ * Devolve `null` quando a arte é própria e não está em mais ninguém, ou
+ * `{ papel, id, nome, pedido }`, onde `papel` é:
+ *   'colada' — este modelo recebeu a arte de outro (o 📥 fica verde);
+ *   'cedida' — a arte nasceu aqui e está em uso em outro modelo (o 🔗 fica
+ *              verde). Marcar este lado também foi decisão do usuário: sem
+ *              ele, o modelo de origem não mostra que sua arte está em uso
+ *              em outro lugar do pedido.
+ */
+function origemDaArteDoModelo(item, face, itens, osId) {
+    if (!item) return null;
+    const url = face === 'verso' ? item.verso_arte_url : item.arte_url;
+    if (!url) return null;
+
+    const lista = Array.isArray(itens) ? itens : [];
+    const meuId = String(item.id);
+    const usa = (i) => i.arte_url === url || i.verso_arte_url === url;
+    const nomeDe = (i) => (typeof nomeDoModeloParaLista === 'function'
+        ? nomeDoModeloParaLista(i)
+        : (i.nome_produto_real || i.produto || ('Modelo ' + i.id)));
+
+    const dono = donoDaArteNaUrl(url);
+    let origemId = dono ? String(dono.modelo) : null;
+
+    // Arte antiga, ou link colado de fora: sem o dono escrito no nome do
+    // arquivo, o desempate é o menor id entre os modelos que dividem o
+    // arquivo — o modelo mais antigo do pedido é o que cedeu. Arquivo fora do
+    // padrão que só UM modelo usa não é colagem de coisa nenhuma.
+    if (!origemId) {
+        const dividem = lista.filter(usa);
+        if (dividem.length < 2) return null;
+        origemId = String(dividem.map(i => String(i.id))
+            .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0))[0]);
+    }
+
+    const pedido = dono ? String(dono.pedido) : (osId != null ? String(osId) : null);
+
+    if (origemId !== meuId) {
+        // O modelo de origem pode não estar nesta lista: a arte veio de outro
+        // pedido, ou daquele modelo que já foi excluído. Aí não há nome a
+        // mostrar, e o texto cita o pedido.
+        const fonte = lista.find(i => String(i.id) === origemId);
+        return { papel: 'colada', id: origemId, nome: fonte ? nomeDe(fonte) : null, pedido };
+    }
+
+    const destinos = lista.filter(i => String(i.id) !== meuId && usa(i));
+    if (!destinos.length) return null;
+    return { papel: 'cedida', id: String(destinos[0].id), nome: destinos.map(nomeDe).join(', '), pedido };
+}
+window.origemDaArteDoModelo = origemDaArteDoModelo;
+
+/**
+ * A frase que explica a marca verde, usada no título do botão e do selo.
+ * Um fio verde sozinho não se explica — ver a regra de interface deste
+ * projeto: todo controle novo precisa dizer em texto o que é.
+ */
+function textoDaOrigemDaArte(origem, face, osId) {
+    if (!origem) return '';
+    const daFace = face === 'verso' ? 'do verso' : 'da frente';
+    if (origem.papel === 'cedida') {
+        return 'A arte ' + daFace + ' nasceu neste modelo e também está em uso em: ' + origem.nome + '.';
+    }
+    if (origem.nome) {
+        return 'A arte ' + daFace + ' foi colada do modelo "' + origem.nome + '" — é o mesmo arquivo.';
+    }
+    if (origem.pedido && String(origem.pedido) !== String(osId)) {
+        return 'A arte ' + daFace + ' foi colada de outro pedido (nº ' + origem.pedido + ').';
+    }
+    return 'A arte ' + daFace + ' foi colada de outro modelo.';
+}
+window.textoDaOrigemDaArte = textoDaOrigemDaArte;
+
+/**
+ * O selo verde do cabeçalho do card: "🔗 Frente: arte colada do modelo X".
+ *
+ * Ele existe porque um fio verde no ícone só se explica com o mouse em cima.
+ * O selo diz em texto, de longe, que a arte daquele modelo não é dele.
+ */
+function seloDeArte(origem, face, temVerso, osId) {
+    if (!origem) return '';
+    // O "Frente:"/"Verso:" só aparece em quem tem verso: no modelo de uma
+    // face só, ele seria ruído.
+    const prefixo = temVerso ? (face === 'verso' ? 'Verso: ' : 'Frente: ') : '';
+    const alvo = origem.nome
+        ? ('modelo ' + origem.nome)
+        : ((origem.pedido && String(origem.pedido) !== String(osId)) ? ('pedido nº ' + origem.pedido) : 'outro modelo');
+    const texto = origem.papel === 'cedida'
+        ? (prefixo + 'arte também usada em ' + origem.nome)
+        : (prefixo + 'arte colada do ' + alvo);
+    return '<span class="badge arte-compartilhada" style="font-size: 0.72rem;" title="'
+        + escapeHtml(textoDaOrigemDaArte(origem, face, osId)) + '">🔗 ' + escapeHtml(texto) + '</span>';
+}
+window.seloDeArte = seloDeArte;
+
+/**
+ * Repõe as marcas de arte compartilhada nos cards JÁ desenhados.
+ *
+ * Colar uma arte muda a marca de dois modelos ao mesmo tempo — o que recebeu
+ * e o que cedeu — e enviar ou remover uma arte pode desfazer o par. Sem isto,
+ * o operador colaria a arte e só veria o fio verde depois de sair e voltar no
+ * pedido, o que faria o recurso parecer quebrado.
+ *
+ * É de propósito que aqui não se chame `renderAmostrasOSItens`: redesenhar os
+ * cards dispara os `onchange` dos seletores de Cor e Numeração, e é assim que
+ * já se gravou `amostra_cor_id = null` por engano. Esta função mexe só na
+ * classe, no título e no selo.
+ */
+function atualizarMarcasDeArteCompartilhada(osId) {
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const alvo = os ? os.id : osId;
+    const itens = (state.osItens && (state.osItens[alvo] || state.osItens[osId])) || [];
+
+    itens.forEach((item, idx) => {
+        const temVerso = !!item.verso;
+        ['frente', 'verso'].forEach(face => {
+            const origem = origemDaArteDoModelo(item, face, itens, alvo);
+            const sufixo = face === 'verso' ? '-verso' : '';
+            const daFace = face === 'verso' ? ' Verso' : '';
+
+            const colada = !!origem && origem.papel === 'colada';
+            const cedida = !!origem && origem.papel === 'cedida';
+            const frase = textoDaOrigemDaArte(origem, face, alvo);
+
+            const colar = document.getElementById('btn-paste-amostra-arte' + sufixo + '-' + idx);
+            if (colar) {
+                colar.classList.toggle('arte-compartilhada', colada);
+                colar.title = colada ? frase : ('Colar Link da Arte' + daFace);
+            }
+
+            const copiar = document.getElementById('btn-copy-amostra-arte' + sufixo + '-' + idx);
+            if (copiar) {
+                copiar.classList.toggle('arte-compartilhada', cedida);
+                copiar.title = cedida ? frase : ('Copiar Link da Arte' + daFace);
+            }
+        });
+
+        const caixa = document.getElementById('selos-arte-' + idx);
+        if (caixa) {
+            caixa.innerHTML = seloDeArte(origemDaArteDoModelo(item, 'frente', itens, alvo), 'frente', temVerso, alvo)
+                            + seloDeArte(origemDaArteDoModelo(item, 'verso',  itens, alvo), 'verso',  temVerso, alvo);
+        }
+    });
+}
+window.atualizarMarcasDeArteCompartilhada = atualizarMarcasDeArteCompartilhada;
 
 // Funções globais de Copiar/Colar links de arte entre modelos
 window.copiarArte = function(url, face) {
@@ -34966,6 +35183,10 @@ window.colarArte = async function(idx, osId, itemId, face = 'frente') {
         if (hasCanvas) {
             renderItemAmostraCombinada(idx, osId);
         }
+
+        // A colagem muda a marca de DOIS cards ao mesmo tempo: o que recebeu
+        // ganha o fio verde no 📥, e o que cedeu ganha no 🔗.
+        atualizarMarcasDeArteCompartilhada(osId);
 
         toast('Arte vinculada com sucesso!', 'success');
     } catch (e) {
