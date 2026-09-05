@@ -38,7 +38,7 @@ function tituloDoCartao(nomeDoIcone, texto) {
  *
  * Redação dada pelo usuário em 05/09/2026: "Agora depende só de Você, seu
  * pedido pode chegar em até: N dias úteis - A contar da aprovação dos Modelos e
- * Confirmação do PAGAMENTO". O prazo deixa de ser piso ("a partir de") e passa a
+ * Confirmação do PAGAMENTO (até as 17h)". O prazo deixa de ser piso ("a partir de") e passa a
  * ser teto ("em até"), com as DUAS condições ditas no mesmo painel: aprovar os
  * modelos e pagar. É o que o cliente precisa fazer para o relógio começar a
  * correr -- daí o "depende só de você". A nota embaixo repete quando a produção
@@ -80,7 +80,7 @@ function cartaoDeChegada(dados) {
         + '</div>';
 
     const condicao = retirada ? '' :
-        '<span class="portal-chegada-condicao"> - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO</span>';
+        '<span class="portal-chegada-condicao"> - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO (até as 17h)</span>';
 
     return '<div class="portal-chegada">'
         + '<span class="portal-chegada-rotulo">'

@@ -269,7 +269,7 @@ Desde 25/08/2026 a conta **abre a aba**, num painel próprio (`cartaoDeChegada`)
 
 ```
 AGORA DEPENDE SÓ DE VOCÊ, SEU PEDIDO PODE CHEGAR EM ATÉ:
-7 dias úteis - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO
+7 dias úteis - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO (até as 17h)
 Entra em produção quando o último modelo do pedido for aprovado
 e o pagamento for confirmado.
 

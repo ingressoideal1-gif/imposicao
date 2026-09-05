@@ -8,7 +8,7 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 O usuário mandou formatar o painel "Seu pedido chega em" da aba Entrega assim:
 **"Agora depende só de Você, seu pedido pode chegar em até: 2 dias úteis - A
-contar da aprovação dos Modelos e Confirmação do PAGAMENTO"**, com a nota
+contar da aprovação dos Modelos e Confirmação do PAGAMENTO (até as 17h)"**, com a nota
 "Entra em produção quando o último modelo do pedido for aprovado e o pagamento
 for confirmado". O prazo deixa de ser piso ("a partir de") e passa a ser teto
 ("em até"), e as duas condições que o cliente controla ficam ditas no mesmo
