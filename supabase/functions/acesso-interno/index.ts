@@ -55,10 +55,14 @@ import {
 // o aplicativo do dono chama. Duas copias divergiriam, e o sintoma seria a
 // grafica desfazendo de um jeito que o cliente nao consegue reproduzir.
 import {
+  criarEventoDoPedido,
   desvincularPedido,
   sincronizarSetores,
 } from "../_compartilhado/vinculo.ts";
+import { gerarSal } from "../_compartilhado/pedidos.ts";
+import { nomeDaFicha } from "../acesso-conta/puro.ts";
 import {
+  idDeNumeracao,
   numeracaoDoModelo,
   numeroDaPagina,
   pedacosDaRota,
@@ -118,8 +122,10 @@ async function modelosDoPedido(pedidoIdInt: number): Promise<any[]> {
       "tipo_numeracao,ordem,amostra_num_id&order=ordem.asc",
   )) ?? [];
 
-  const ids = [...new Set(
-    todos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
+  // So UUID: ver `idDeNumeracao`, em `modelos.ts`. Um id torto recusa a
+  // consulta inteira, e a tela do pedido morre em 500 por causa de um modelo.
+  const ids: string[] = [...new Set<string>(
+    todos.map((m: any) => idDeNumeracao(m.amostra_num_id)).filter(Boolean) as string[],
   )].sort();
   const numeracoes: Record<string, unknown> = {};
   if (ids.length) {
@@ -434,6 +440,45 @@ async function pesoDosPedidos(
  * recusa com 404 por nao ter o que configurar. Quantos sao vai em
  * `sem_modelo`, para a tela poder dizer isso em vez de simplesmente omitir.
  */
+/**
+ * Faz nascer o evento de um pedido, pela tela da grafica.
+ *
+ * As travas sao as MESMAS do "Carregar" do cliente, menos as que so fazem
+ * sentido de la (a senha do dono, a elevacao do navegador): aqui quem pede ja
+ * provou o papel de ADM ou Atendimento no painel.
+ *
+ * Nao exige que o pedido ja esteja impresso, e isso e deliberado: a razao de a
+ * grafica criar o evento e justamente entregar o Ideal Control pronto ANTES. A
+ * credencial que ainda nao existe nasce ligada, porque a publicacao le os
+ * setores do pedido (`setoresDoPedido`, em `pedidos.ts`).
+ */
+async function criarEvento(pedidoIdInt: number, corpo: any): Promise<any> {
+  const proposta = ((await banco(
+    "GET",
+    `propostas?id_int=eq.${pedidoIdInt}&select=id_int,id_cliente,status_interno`,
+  )) ?? [])[0];
+  if (!proposta) throw new Recusa(404, `o pedido ${pedidoIdInt} nao existe no ERP`);
+  if (String(proposta.status_interno ?? "").trim().toUpperCase() === "CANCELADO") {
+    throw new Recusa(409, "este pedido esta cancelado no ERP");
+  }
+
+  // O nome sai da ficha de arte, que e onde o cliente escreveu o nome do
+  // evento. Sem ficha, "Pedido N" -- e a tela deixa renomear logo em seguida.
+  const ficha = ((await banco(
+    "GET",
+    `pedidos_artes?id_int=eq.${pedidoIdInt}&select=nome_evento,data_evento,local_evento` +
+      "&order=created_at.asc",
+  )) ?? [])[0];
+
+  return await criarEventoDoPedido(pedidoIdInt, {
+    id_cliente: Number(proposta.id_cliente) || null,
+    nome_evento: String(corpo?.nome_evento ?? "").trim() || nomeDaFicha(ficha, pedidoIdInt),
+    data_evento: ficha?.data_evento ?? null,
+    local_evento: ficha?.local_evento ?? null,
+    sal: gerarSal(),
+  });
+}
+
 async function painelDoCliente(idCliente: number): Promise<any> {
   const c = ((await banco(
     "GET",
@@ -570,6 +615,19 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   //
   // As MESMAS funcoes que o aplicativo do dono chama: a autorizacao difere (aqui
   // basta o papel, la e o dono mais a elevacao), a regra nao.
+  // ── O evento nasce pela grafica (04/09/2026) ────────────────────────────
+  //
+  // "precisamos do acesso no menu ideal control, antes do cliente fazer o
+  // acesso pelo pwa -- visualizar setores, codigos, todas as configuracoes."
+  //
+  // Ate aqui o evento so nascia no aplicativo do cliente, e sem evento nao
+  // havia setor, codigo nem aparelho para a grafica configurar. O que esta
+  // rota faz e exatamente o que o "Carregar" do cliente faz -- a mesma funcao,
+  // em `vinculo.ts` --, so que a porta e o papel no painel.
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
+      p[2] === "criar-evento") {
+    return ok(await criarEvento(inteiro(p[1], "path", "pedido"), await corpo()));
+  }
   if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" &&
       p[2] === "desvincular") {
     const pedido = inteiro(p[1], "path", "pedido");

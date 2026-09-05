@@ -697,8 +697,10 @@ def test_pedido_sem_evento_explica_o_que_falta():
     vazia.
 
     Ate 17/08/2026 o proximo passo era o cliente abrir o QR do Pedido; a tela
-    saiu junto com ele, e agora e o cliente que carrega o pedido pela propria
-    conta, no aplicativo.
+    Ate 17/08/2026 o proximo passo era o cliente abrir o QR do Pedido; a tela
+    saiu junto com ele. E desde 04/09/2026 o proximo passo pode ser dado AQUI:
+    a grafica faz o evento nascer, para entregar setores, codigos e aparelhos
+    ja configurados.
     """
     saida = _no_navegador(SERVIDOR + """
         window.PAINEL = JSON.parse(JSON.stringify(window.PAINEL));
@@ -716,11 +718,84 @@ def test_pedido_sem_evento_explica_o_que_falta():
         };
     """)
     assert saida["aviso_visivel"] is True
-    assert "carrega o pedido" in saida["aviso"]
+    assert "ainda não virou evento" in saida["aviso"]
+    # E o proximo passo e um BOTAO, e nao uma instrucao para outra pessoa fazer.
+    assert "Criar o evento deste pedido" in saida["aviso"]
     assert saida["dashboard"] == "none"
     assert saida["setores"] == "none"
     # ...mas os modelos do ERP continuam a vista: e o que o pedido TEM.
     assert saida["modelos"] == 3
+
+
+def test_a_grafica_cria_o_evento_do_pedido_sem_esperar_o_cliente():
+    """Decisao do usuario, 04/09/2026: "precisamos do acesso no menu ideal
+    control, antes do cliente fazer o acesso pelo pwa -- visualizar setores,
+    codigos, todas as configuracoes".
+
+    Sem evento nao existe setor, nem codigo, nem aparelho: a tela da grafica
+    nao tinha o que configurar ate o cliente tocar em "Carregar" no aplicativo
+    dele. O botao faz o evento nascer daqui, e a tela recarrega o pedido -- e a
+    recarga que traz os setores e os aparelhos para a tela.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        const semEvento = JSON.parse(JSON.stringify(window.PAINEL));
+        semEvento.evento = null;
+        semEvento.setores = [];
+        semEvento.aparelhos = [];
+        window.PAINEL = semEvento;
+        window.__respostas['/pedidos/18560/criar-evento'] = {
+            evento_id: 'ev-1', nome_evento: 'Baile do Hawaii',
+            setores: ['PISTA', 'CAMAROTE'],
+        };
+        await IdealControl.abrirPedido(18560);
+        const antes = document.getElementById('ic-setores-secao').style.display;
+        // A recarga tem de trazer o pedido JA com evento -- e o que o servidor
+        // devolveria depois de criar.
+        window.__respostas['/pedidos/18560'] = window.DEPOIS;
+        document.getElementById('ic-criar-evento').click();
+        await new Promise(r => setTimeout(r, 250));
+        return {
+            antes: antes,
+            chamada: window.__chamadas.some(c =>
+                c.caminho === '/pedidos/18560/criar-evento' && c.metodo === 'POST'),
+            semEventoDepois: document.getElementById('ic-sem-evento').style.display,
+            setoresDepois: document.getElementById('ic-setores-secao').style.display,
+            eventoDepois: document.getElementById('ic-evento-secao').style.display,
+            nome: document.getElementById('ic-ev-nome').value,
+            avisos: (window._avisos || []).map(a => a[0]),
+        };
+    """.replace('window.DEPOIS', json.dumps(PAINEL_FALSO)))
+    assert saida["antes"] == "none", "havia setor antes de o evento existir"
+    assert saida["chamada"] is True
+    assert saida["semEventoDepois"] == "none"
+    assert saida["setoresDepois"] != "none"
+    assert saida["eventoDepois"] != "none"
+    assert saida["nome"] == "Baile do Hawaii"
+    assert any("Evento criado" in a for a in saida["avisos"]), saida["avisos"]
+
+
+def test_criar_o_evento_que_falha_devolve_o_botao_e_diz_o_motivo():
+    """A recusa mais provavel: nenhum modelo com codigo que a portaria leia.
+    O botao volta a funcionar, e o motivo aparece na tela -- nao so no console.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        const semEvento = JSON.parse(JSON.stringify(window.PAINEL));
+        semEvento.evento = null;
+        window.PAINEL = semEvento;
+        const erro = new Error('nenhum modelo deste pedido tem codigo que a portaria leia');
+        window.__respostas['/pedidos/18560/criar-evento'] = erro;
+        await IdealControl.abrirPedido(18560);
+        document.getElementById('ic-criar-evento').click();
+        await new Promise(r => setTimeout(r, 200));
+        const botao = document.getElementById('ic-criar-evento');
+        const aviso = document.getElementById('ic-criar-evento-aviso');
+        return { desabilitado: botao.disabled, rotulo: botao.textContent.trim(),
+                 aviso: aviso.textContent, visivel: aviso.style.display !== 'none' };
+    """)
+    assert saida["desabilitado"] is False
+    assert saida["rotulo"] == "Criar o evento deste pedido"
+    assert saida["visivel"] is True
+    assert "codigo que a portaria leia" in saida["aviso"]
 
 
 def test_pedido_que_nao_existe_mostra_o_recado_e_nao_a_tela_anterior():

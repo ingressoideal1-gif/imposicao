@@ -59,3 +59,32 @@ export function numeracaoDoModelo(elements: unknown): Record<string, unknown> | 
   return null;
 }
 
+
+/**
+ * O `amostra_num_id` de um modelo aponta para uma numeracao? So se for UUID.
+ *
+ * ## O 500 que ele existe para nao repetir (04/09/2026)
+ *
+ * `producao_numeracoes.id` e UUID. Um modelo do pedido 21346 tinha
+ * `amostra_num_id` gravado como o texto **"n1"** -- rascunho de outra epoca,
+ * que ninguem apagou. Basta ele entrar num `id=in.(...)` para o PostgREST
+ * recusar a consulta INTEIRA com 22P02, "invalid input syntax for type uuid".
+ *
+ * O efeito nao ficava no modelo torto: derrubava a tela toda. `GET
+ * /meus-pedidos` respondia 500, e o cliente cuja lista incluisse esse pedido
+ * nao via pedido NENHUM -- nem os dez que estavam perfeitos. Como o pedido de
+ * teste do projeto e justamente o 21346, era impossivel testar o aplicativo do
+ * cliente com a conta de teste.
+ *
+ * Um id que nao e UUID nao pode apontar para numeracao nenhuma. Descartar e a
+ * mesma coisa que o modelo ja diz quando `amostra_num_id` e nulo: sem
+ * numeracao, nao sobe ao controle. O que nao se pode e deixar um dado torto de
+ * um modelo apagar a resposta dos outros.
+ */
+const PARECE_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function idDeNumeracao(valor: unknown): string | null {
+  const s = String(valor ?? "").trim();
+  return PARECE_UUID.test(s) ? s : null;
+}

@@ -224,3 +224,109 @@ export async function sincronizarSetores(
     mantidos_com_ingresso: mantidos,
   };
 }
+
+/**
+ * O evento nasce: cria o evento, um setor por modelo legivel, e liga o pedido.
+ *
+ * ## Por que a grafica cria o evento (04/09/2026)
+ *
+ * Ate hoje o evento so nascia quando o CLIENTE tocava em "Carregar" no
+ * aplicativo. Antes disso nao havia setor, nao havia codigo de staff, nao havia
+ * aparelho -- e a tela da grafica, que existe para entregar o Ideal Control
+ * PRE-CONFIGURADO, so podia mostrar "Este pedido ainda nao virou evento".
+ *
+ * Decisao do usuario: "precisamos do acesso no menu ideal control, antes do
+ * cliente fazer o acesso pelo pwa -- visualizar setores, codigos, todas as
+ * configuracoes". Entao a grafica passa a poder fazer o evento nascer.
+ *
+ * ## De quem e o evento que a grafica cria
+ *
+ * De ninguem em particular: `dono_auth_id` fica nulo, e o dono e o CLIENTE, por
+ * `id_cliente`. `pertenceAConta` ja aceita as duas formas de posse -- a conta
+ * que criou o evento, ou qualquer conta ligada aquele cliente --, entao o
+ * cliente encontra este evento assim que a conta dele existir, sem precisar de
+ * remendo. Escrever aqui o `auth_user_id` do atendente seria pior: o evento
+ * ficaria pendurado na pessoa que atendeu o telefone.
+ *
+ * ## A linha da publicacao
+ *
+ * `producao_acesso_pedidos` pode nao existir ainda, quando o pedido nem foi
+ * impresso. Ela e criada aqui, com o sal do pedido, porque e nela que o vinculo
+ * com o evento mora -- sem a linha, o PATCH do fim nao acha nada e o pedido fica
+ * com setores e sem evento, que e um estado que nenhuma tela sabe mostrar.
+ *
+ * NAO se usa `abrirPedido` para isso: ela reabre a publicacao de um pedido ja
+ * fechado, e reabrir a publicacao nao e o que se pediu ao criar um evento.
+ */
+export async function criarEventoDoPedido(
+  pedidoIdInt: number,
+  dados: {
+    id_cliente: number | null;
+    nome_evento: string;
+    data_evento?: string | null;
+    local_evento?: string | null;
+    dono_auth_id?: string | null;
+    sal: string;
+  },
+): Promise<{ evento_id: string; nome_evento: string; setores: string[] }> {
+  const setores = await modelosLegiveis(pedidoIdInt);
+  if (!setores.length) {
+    throw new Recusa(
+      409,
+      "nenhum modelo deste pedido tem codigo que a portaria leia; " +
+        "sem isso nao ha setor a criar",
+    );
+  }
+
+  const linha = ((await banco(
+    "GET",
+    `producao_acesso_pedidos?pedido_id_int=eq.${pedidoIdInt}&select=pedido_id_int,evento_id`,
+  )) ?? [])[0];
+  if (linha?.evento_id) throw new Recusa(409, "este pedido ja esta num evento");
+  if (!linha) {
+    await banco("POST", "producao_acesso_pedidos", {
+      pedido_id_int: pedidoIdInt,
+      sal: dados.sal,
+    }, "return=minimal");
+  }
+
+  const evento = (await banco("POST", "producao_acesso_eventos", {
+    id_cliente: dados.id_cliente,
+    dono_auth_id: dados.dono_auth_id ?? null,
+    nome_evento: dados.nome_evento,
+    data_evento: dados.data_evento ?? null,
+    local_evento: dados.local_evento ?? null,
+    // O sal do EVENTO serve aos codigos que o proprio cliente carregar (staff,
+    // cortesia). Os do QR Ideal usam o sal do pedido, que e outro.
+    sal: dados.sal,
+  }))[0];
+
+  // Um modelo = um setor. A credencial ja impressa e carimbada agora; a que
+  // ainda nao foi nasce ligada, porque a publicacao le os setores do pedido.
+  const criados: string[] = [];
+  for (const s of setores) {
+    const setor = (await banco("POST", "producao_acesso_setores", {
+      evento_id: evento.id,
+      pedido_id_int: pedidoIdInt,
+      modelo_id: s.modelo_id,
+      nome: s.nome,
+      quantidade: s.quantidade,
+    }))[0];
+    criados.push(s.nome);
+    await banco(
+      "PATCH",
+      `producao_acesso_credenciais?pedido_id_int=eq.${pedidoIdInt}` +
+        `&modelo_id=eq.${s.modelo_id}`,
+      { evento_id: evento.id, setor_id: setor.id },
+      "return=minimal",
+    );
+  }
+
+  // Por ultimo, como no `desvincularPedido`: se algo falhar no meio, o pedido
+  // ainda nao se diz carregado e a operacao pode ser repetida.
+  await banco("PATCH", `producao_acesso_pedidos?pedido_id_int=eq.${pedidoIdInt}`, {
+    evento_id: evento.id,
+  }, "return=minimal");
+
+  return { evento_id: evento.id, nome_evento: evento.nome_evento, setores: criados };
+}

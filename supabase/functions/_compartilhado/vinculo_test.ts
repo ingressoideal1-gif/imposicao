@@ -8,7 +8,7 @@
  * Rodar: npx deno test --allow-env _compartilhado/vinculo_test.ts
  */
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { desvincularPedido, sincronizarSetores } from "./vinculo.ts";
+import { criarEventoDoPedido, desvincularPedido, sincronizarSetores } from "./vinculo.ts";
 import { Recusa } from "./sessao.ts";
 
 const fetchDeVerdade = globalThis.fetch;
@@ -156,11 +156,17 @@ Deno.test("desvincular: pedido sem setor nenhum passa sem quebrar", async () => 
  * O `modelosLegiveis` vai ao banco por conta propria. As duas tabelas que ele
  * le sao declaradas aqui: os modelos do ERP e as numeracoes deles.
  */
+//
+// O id da numeracao e um UUID DE VERDADE aqui, e nao um apelido curto: desde
+// 04/09/2026 `modelosLegiveis` descarta o que nao tem forma de UUID. A fixture
+// antiga usava "n1" -- que e, por coincidencia exata, o valor torto que estava
+// no banco de producao e derrubava a tela de pedidos do cliente com 500.
+const NUM_ID = "11111111-1111-1111-1111-111111111111";
 const MODELOS_DO_ERP = [
-  { id: 1000001, nome_modelo: "VIP", quantidade: 100, amostra_num_id: "n1" },
-  { id: 1000002, nome_modelo: "Pista", quantidade: 500, amostra_num_id: "n1" },
+  { id: 1000001, nome_modelo: "VIP", quantidade: 100, amostra_num_id: NUM_ID },
+  { id: 1000002, nome_modelo: "Pista", quantidade: 500, amostra_num_id: NUM_ID },
 ];
-const NUMERACOES = [{ id: "n1", elements: [{ type: "QR", pad: 4 }] }];
+const NUMERACOES = [{ id: NUM_ID, elements: [{ type: "QR", pad: 4 }] }];
 
 Deno.test("sincronizar: cria o setor que faltava e carimba as credenciais dele", async () => {
   // O caso que motivou tudo: um modelo ganhou numeracao com codigo DEPOIS do
@@ -271,4 +277,108 @@ Deno.test("sincronizar: o setor sem codigo COM ingresso dentro fica, e a respost
   );
   assertEquals(resultado.desligados, []);
   assertEquals(resultado.mantidos_com_ingresso, ["Camarote antigo"]);
+});
+
+// ── O evento que a grafica faz nascer (04/09/2026) ──────────────────────────
+//
+// Ate aqui o evento so nascia no "Carregar" do aplicativo do cliente. Sem
+// evento nao ha setor, codigo nem aparelho -- e a tela da grafica, que existe
+// para entregar o Ideal Control pre-configurado, nao tinha o que configurar.
+
+const MODELOS_DO_PEDIDO = [
+  { id: 1000001, id_int: 18560, nome_modelo: "VIP", quantidade: 100,
+    amostra_num_id: "11111111-1111-1111-1111-111111111111", ordem: 1 },
+];
+const NUMERACAO_COM_QR = [
+  { id: "11111111-1111-1111-1111-111111111111",
+    elements: [{ type: "QR_IDEAL" }] },
+];
+
+Deno.test("criarEventoDoPedido: cria o evento, o setor, carimba e liga o pedido", async () => {
+  const { resultado, idas } = await comBanco({
+    "pedidos_modelos": MODELOS_DO_PEDIDO,
+    "producao_numeracoes": NUMERACAO_COM_QR,
+    "producao_acesso_pedidos": [{ pedido_id_int: 18560, evento_id: null }],
+  }, {}, () =>
+    criarEventoDoPedido(18560, {
+      id_cliente: 14,
+      nome_evento: "Baile do Hawaii",
+      sal: "sal-de-mesa",
+    }));
+
+  assertEquals(resultado.setores, ["VIP"]);
+
+  const evento = idas.find((i) => i.metodo === "POST" && i.caminho.startsWith("producao_acesso_eventos"));
+  assertEquals(Boolean(evento), true);
+  const corpo = JSON.parse(evento!.corpo);
+  assertEquals(corpo.id_cliente, 14);
+  // O dono e o CLIENTE, por `id_cliente`. Pendurar o evento no atendente que
+  // criou seria dar a ele um evento que nao e dele.
+  assertEquals(corpo.dono_auth_id, null);
+
+  // O carimbo das credenciais ja impressas.
+  assertEquals(
+    idas.some((i) =>
+      i.metodo === "PATCH" && i.caminho.includes("producao_acesso_credenciais") &&
+      i.caminho.includes("modelo_id=eq.1000001")
+    ),
+    true,
+  );
+
+  // E o vinculo por ULTIMO: se algo falhar no meio, o pedido ainda nao se diz
+  // carregado e da para repetir.
+  const patches = idas.filter((i) => i.metodo === "PATCH");
+  const ultimo = patches[patches.length - 1];
+  assertEquals(ultimo.caminho.includes("producao_acesso_pedidos"), true);
+  assertEquals(JSON.parse(ultimo.corpo).evento_id, "setor-novo");
+});
+
+Deno.test("criarEventoDoPedido: pedido que ja esta num evento e recusado", async () => {
+  const erro = await assertRejects(
+    () =>
+      comBanco({
+        "pedidos_modelos": MODELOS_DO_PEDIDO,
+        "producao_numeracoes": NUMERACAO_COM_QR,
+        "producao_acesso_pedidos": [{ pedido_id_int: 18560, evento_id: "ev-ja-existe" }],
+      }, {}, () =>
+        criarEventoDoPedido(18560, {
+          id_cliente: 14, nome_evento: "x", sal: "s",
+        })),
+    Recusa,
+  );
+  assertEquals(erro.status, 409);
+});
+
+Deno.test("criarEventoDoPedido: sem modelo legivel nao cria evento nenhum", async () => {
+  const erro = await assertRejects(
+    () =>
+      comBanco({
+        "pedidos_modelos": [{ ...MODELOS_DO_PEDIDO[0], amostra_num_id: null }],
+        "producao_numeracoes": [],
+        "producao_acesso_pedidos": [{ pedido_id_int: 18560, evento_id: null }],
+      }, {}, () =>
+        criarEventoDoPedido(18560, {
+          id_cliente: 14, nome_evento: "x", sal: "s",
+        })),
+    Recusa,
+  );
+  assertEquals(erro.status, 409);
+});
+
+Deno.test("criarEventoDoPedido: pedido nunca publicado ganha a linha da publicacao", async () => {
+  const { idas } = await comBanco({
+    "pedidos_modelos": MODELOS_DO_PEDIDO,
+    "producao_numeracoes": NUMERACAO_COM_QR,
+    // Sem linha em `producao_acesso_pedidos`: o pedido nem foi impresso.
+    "producao_acesso_pedidos": [],
+  }, {}, () =>
+    criarEventoDoPedido(18560, {
+      id_cliente: 14, nome_evento: "Antes de imprimir", sal: "sal-do-pedido",
+    }));
+
+  const criada = idas.find((i) =>
+    i.metodo === "POST" && i.caminho.startsWith("producao_acesso_pedidos")
+  );
+  assertEquals(Boolean(criada), true, "sem a linha, o vinculo do fim nao acha nada");
+  assertEquals(JSON.parse(criada!.corpo).sal, "sal-do-pedido");
 });

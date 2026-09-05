@@ -34,7 +34,7 @@ export function pedacosDaRota(pathname: string): string[] {
  * vive em `_compartilhado/modelos.ts`. O reexport mantem os testes deste
  * modulo apontando para onde foram escritos.
  */
-export { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
+export { idDeNumeracao, numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 
 /**
  * As contas do relatorio, compartilhadas com a tela do dono desde 04/09/2026.

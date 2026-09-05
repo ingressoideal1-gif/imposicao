@@ -11,6 +11,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import casos from "./hora_casos.json" with { type: "json" };
 import {
   horaCheia,
+  idDeNumeracao,
   numeracaoDoModelo,
   numeroDaPagina,
   pedacosDaRota,
@@ -128,4 +129,28 @@ Deno.test("modelo: lixo na lista nao derruba a leitura", () => {
 
 Deno.test("a URL de instalacao e a casa do aplicativo, no dominio publico, com barra no fim", () => {
   assertEquals(URL_DE_INSTALACAO, "https://ideal-imposition.vercel.app/ic/");
+});
+
+// ── O id da numeracao (04/09/2026) ──────────────────────────────────────────
+//
+// `producao_numeracoes.id` e UUID. Um modelo do pedido 21346 tinha
+// `amostra_num_id` gravado como o texto "n1", e isso fazia o PostgREST recusar
+// a consulta INTEIRA com 22P02 -- derrubando `GET /meus-pedidos` com 500. O
+// cliente cuja lista incluisse aquele pedido nao via pedido nenhum.
+
+Deno.test("id de numeracao: UUID passa, com maiuscula ou minuscula", () => {
+  assertEquals(
+    idDeNumeracao("0077b75e-5b1f-58e8-b32b-cfd2e1f88e20"),
+    "0077b75e-5b1f-58e8-b32b-cfd2e1f88e20",
+  );
+  assertEquals(
+    idDeNumeracao("  0077B75E-5B1F-58E8-B32B-CFD2E1F88E20  "),
+    "0077B75E-5B1F-58E8-B32B-CFD2E1F88E20",
+  );
+});
+
+Deno.test("id de numeracao: o que nao e UUID e descartado, e nao vira consulta", () => {
+  for (const torto of ["n1", "", "   ", null, undefined, 7, "0077b75e5b1f58e8b32bcfd2e1f88e20"]) {
+    assertEquals(idDeNumeracao(torto), null, `deixou passar: ${String(torto)}`);
+  }
 });

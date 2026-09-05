@@ -62,7 +62,7 @@ import {
   precisaDeSenha,
   recusaHumana,
 } from "./puro.ts";
-import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
+import { idDeNumeracao, numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 // Os numeros do evento sao os MESMOS que a tela da grafica mostra, e por isso
 // vem de la e nao daqui. Ver o cabecalho de `aoVivo`, mais abaixo.
 import {
@@ -463,8 +463,11 @@ async function meusPedidos(usuario: { id: string }): Promise<any> {
     `pedidos_modelos?id_int=in.(${lista})` +
       "&select=id,id_int,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
   )) ?? [];
-  const numIds = [...new Set(
-    modelos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
+  // `idDeNumeracao` descarta o que nao e UUID: um unico `amostra_num_id`
+  // torto derrubava esta consulta inteira, e com ela a lista de pedidos do
+  // cliente. Ver o comentario em `modelos.ts`.
+  const numIds: string[] = [...new Set<string>(
+    modelos.map((m: any) => idDeNumeracao(m.amostra_num_id)).filter(Boolean) as string[],
   )].sort();
   const numeracoes: Record<string, unknown> = {};
   if (numIds.length) {

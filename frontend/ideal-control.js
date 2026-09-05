@@ -540,6 +540,42 @@
         $('ic-btn-desvincular').onclick = desvincularPedido;
     }
 
+    /**
+     * Criar o evento deste pedido, pela gráfica.
+     *
+     * O mesmo que o "Carregar" do aplicativo do cliente faz — a mesma função no
+     * servidor. A diferença é a porta: aqui basta o papel de ADM ou Atendimento.
+     *
+     * Depois disto a tela recarrega o pedido inteiro, e é a recarga que traz os
+     * setores, os aparelhos e o bloco de dados do evento. Sem ela o atendente
+     * ficaria olhando para a mesma tela vazia depois de o evento já existir.
+     */
+    function criarEvento() {
+        var botao = $('ic-criar-evento');
+        var aviso = $('ic-criar-evento-aviso');
+        var pedido = estado.pedido;
+        botao.disabled = true;
+        botao.textContent = 'Criando o evento…';
+        aviso.style.display = 'none';
+        return gravar('/pedidos/' + pedido + '/criar-evento', {}, 'POST')
+            .then(function (r) {
+                avisar('Evento criado: ' + (r.nome_evento || '')
+                       + ' · ' + (r.setores || []).length + ' setor(es).', 'success');
+                // `abrirPedido`, e não um desenho local: o painel inteiro muda
+                // com o evento — setores, aparelhos, situação, o painel de
+                // público. Redesenhar só um pedaço deixaria o resto mentindo.
+                return abrirPedido(pedido);
+            })
+            .catch(function (e) {
+                botao.disabled = false;
+                botao.textContent = 'Criar o evento deste pedido';
+                aviso.textContent = (e && e.message)
+                    || 'Não consegui criar o evento agora.';
+                aviso.style.display = '';
+                if (window.console) { console.error('[ideal-control] criarEvento', e); }
+            });
+    }
+
     function avisarVinculo(frase) {
         var el = $('ic-vinculo-aviso');
         el.textContent = frase;
@@ -1197,7 +1233,19 @@
         var ev = estado.painel.evento;
         $('ic-evento-secao').style.display = ev ? '' : 'none';
         $('ic-sem-evento').style.display = ev ? 'none' : '';
-        if (!ev) { return; }
+        if (!ev) {
+            // O botão que faz o evento nascer pela gráfica. Ele só existe
+            // enquanto não há evento: depois disso o que vale é o bloco de
+            // dados do evento, logo acima.
+            var botao = $('ic-criar-evento');
+            if (botao) {
+                botao.disabled = false;
+                botao.textContent = 'Criar o evento deste pedido';
+                botao.onclick = criarEvento;
+            }
+            $('ic-criar-evento-aviso').style.display = 'none';
+            return;
+        }
         $('ic-ev-nome').value = ev.nome_evento || '';
         $('ic-ev-local').value = ev.local_evento || '';
         $('ic-ev-data').value = deISOParaCampo(ev.data_evento);

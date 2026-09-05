@@ -13,7 +13,7 @@
  * neste projeto -- ver a secao seguinte.
  */
 import { banco } from "./banco.ts";
-import { numeracaoDoModelo } from "./modelos.ts";
+import { idDeNumeracao, numeracaoDoModelo } from "./modelos.ts";
 
 /**
  * 32 bytes sorteados, em hexadecimal. Porte de `qr_ideal.gerar_sal`.
@@ -140,9 +140,9 @@ export async function modelosLegiveis(pedidoIdInt: number): Promise<
       "&select=id,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
   )) ?? [];
 
-  const ids = [...new Set(
-    modelos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
-  )].sort();
+  const ids: string[] = [...new Set<string>(
+    modelos.map((m: any) => idDeNumeracao(m.amostra_num_id)).filter(Boolean) as string[],
+    )].sort();
   const numeracoes: Record<string, unknown> = {};
   if (ids.length) {
     const lista = ids.map((i) => `"${i}"`).join(",");
