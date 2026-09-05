@@ -371,6 +371,45 @@ async function pedidosComControle(limite: number): Promise<any[]> {
 }
 
 /**
+ * Quantos modelos e quantos ingressos tem cada pedido de uma lista.
+ *
+ * Serve para uma pergunta so: este pedido tem o que configurar? Pedido sem
+ * modelo no ERP faz `painelDoPedido` responder 404 -- oferece-lo na lista seria
+ * um botao que nunca abre.
+ *
+ * Em lotes, e cada lote paginado, porque o `max_rows` deste PostgREST e 1000 e
+ * ele corta em SILENCIO. Um corte aqui nao daria erro: apagaria pedidos da
+ * lista do cliente, que e exatamente o defeito que esta funcao veio consertar.
+ */
+async function pesoDosPedidos(
+  ids: number[],
+): Promise<Record<string, { modelos: number; quantidade: number }>> {
+  const conta: Record<string, { modelos: number; quantidade: number }> = {};
+  const LOTE = 40;
+  const PAGINA = 1000;
+  for (let i = 0; i < ids.length; i += LOTE) {
+    const lote = ids.slice(i, i + LOTE).join(",");
+    let de = 0;
+    for (;;) {
+      const linhas = (await banco(
+        "GET",
+        `pedidos_modelos?id_int=in.(${lote})&select=id_int,quantidade` +
+          `&order=id.asc&limit=${PAGINA}&offset=${de}`,
+      )) ?? [];
+      for (const m of linhas) {
+        const k = String(m.id_int);
+        conta[k] ??= { modelos: 0, quantidade: 0 };
+        conta[k].modelos += 1;
+        conta[k].quantidade += Number(m.quantidade ?? 0);
+      }
+      if (linhas.length < PAGINA) break;
+      de += PAGINA;
+    }
+  }
+  return conta;
+}
+
+/**
  * Tudo o que a grafica precisa saber de um cliente, pelo numero dele.
  *
  * A busca desta tela passou a ser pelo NUMERO DO CLIENTE em 18/08/2026, por
@@ -378,9 +417,22 @@ async function pedidosComControle(limite: number): Promise<any[]> {
  * lado -- o numero do pedido ele teria de perguntar, e o cliente muitas vezes
  * nao tem.
  *
- * Devolve o cliente, as contas dele (o mesmo bloco de "Acesso do cliente", que
- * agora nao depende mais de abrir um pedido) e os pedidos dele que tem controle
- * de acesso, do mais recente para o mais antigo.
+ * ## TODOS os pedidos, e nao so os que ja subiram (04/09/2026)
+ *
+ * Ate hoje esta lista saia de `producao_acesso_pedidos` -- ou seja, so os
+ * pedidos que JA passaram pela publicacao do controle de acesso. O efeito era
+ * silencioso e ruim: o cliente 11406 tem quatro pedidos com modelo, e a tela
+ * mostrava um. Os outros tres existiam, tinham numeracao, e nao havia caminho
+ * nenhum ate eles por esta tela.
+ *
+ * Decisao do usuario, no mesmo dia: "todos os pedidos devem ficar disponiveis
+ * para visualizacao e edicao pelo menu ideal control". Entao a lista passa a
+ * sair das PROPOSTAS do cliente, e o que veio do controle vira enfeite de cada
+ * linha -- `no_controle`, o evento, o quanto ja foi publicado.
+ *
+ * Fica de fora so o pedido sem modelo nenhum no ERP, que `painelDoPedido`
+ * recusa com 404 por nao ter o que configurar. Quantos sao vai em
+ * `sem_modelo`, para a tela poder dizer isso em vez de simplesmente omitir.
  */
 async function painelDoCliente(idCliente: number): Promise<any> {
   const c = ((await banco(
@@ -389,30 +441,57 @@ async function painelDoCliente(idCliente: number): Promise<any> {
   )) ?? [])[0];
   if (!c) throw new Recusa(404, `o cliente ${idCliente} nao existe no ERP`);
 
-  // As propostas do cliente primeiro, e so entao os pedidos com controle: e o
-  // caminho mais curto entre "numero do cliente" e "pedidos dele", porque a
-  // tabela de controle nao guarda o cliente -- ela guarda o pedido.
+  // As propostas do cliente primeiro: e o caminho mais curto entre "numero do
+  // cliente" e "pedidos dele", porque a tabela de controle nao guarda o cliente
+  // -- ela guarda o pedido.
   const propostas = ((await banco(
     "GET",
-    `propostas?id_cliente=eq.${idCliente}&select=id_int&order=created_at.desc&limit=200`,
-  )) ?? []).map((p: any) => Number(p.id_int)).filter(Boolean);
+    `propostas?id_cliente=eq.${idCliente}&select=id_int,created_at` +
+      "&order=created_at.desc&limit=200",
+  )) ?? []).filter((p: any) => Number(p.id_int));
 
-  let pedidos: any[] = [];
-  if (propostas.length) {
-    pedidos = (await banco(
-      "GET",
-      `producao_acesso_pedidos?pedido_id_int=in.(${propostas.join(",")})` +
-        "&select=pedido_id_int,evento_id,publicado_em,total_credenciais,created_at" +
-        "&order=created_at.desc",
-    )) ?? [];
+  const ids: number[] = [...new Set<number>(propostas.map((p: any) => Number(p.id_int)))];
+  const peso = ids.length ? await pesoDosPedidos(ids) : {};
+
+  // O que o controle de acesso sabe de cada um -- quando sabe alguma coisa.
+  const doControle: Record<string, any> = {};
+  if (ids.length) {
+    for (
+      const a of (await banco(
+        "GET",
+        `producao_acesso_pedidos?pedido_id_int=in.(${ids.join(",")})` +
+          "&select=pedido_id_int,evento_id,publicado_em,total_credenciais",
+      )) ?? []
+    ) {
+      doControle[String(a.pedido_id_int)] = a;
+    }
   }
 
-  const ids = [...new Set(
+  let semModelo = 0;
+  const pedidos: any[] = [];
+  for (const p of propostas) {
+    const chave = String(p.id_int);
+    const q = peso[chave];
+    if (!q) { semModelo += 1; continue; }
+    const a = doControle[chave];
+    pedidos.push({
+      pedido_id_int: Number(p.id_int),
+      created_at: p.created_at,
+      modelos: q.modelos,
+      quantidade: q.quantidade,
+      no_controle: Boolean(a),
+      evento_id: a?.evento_id ?? null,
+      publicado_em: a?.publicado_em ?? null,
+      total_credenciais: a?.total_credenciais ?? 0,
+    });
+  }
+
+  const eventosDaLista: string[] = [...new Set<string>(
     pedidos.filter((p: any) => p.evento_id).map((p: any) => String(p.evento_id)),
   )].sort();
   const eventos: Record<string, any> = {};
-  if (ids.length) {
-    const lista = ids.map((i) => `"${i}"`).join(",");
+  if (eventosDaLista.length) {
+    const lista = eventosDaLista.map((i) => `"${i}"`).join(",");
     for (
       const e of (await banco(
         "GET",
@@ -440,6 +519,7 @@ async function painelDoCliente(idCliente: number): Promise<any> {
       contas: await contasDoCliente(idCliente),
     },
     pedidos,
+    sem_modelo: semModelo,
   };
 }
 

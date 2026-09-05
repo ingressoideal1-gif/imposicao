@@ -33,6 +33,23 @@ export function senhaProvisoria(): string {
   return saida;
 }
 
+/**
+ * O que "liberar o acesso" devolve.
+ *
+ * `criada_aqui` existe para a TELA saber o que dizer quando `ja_tinha_conta`
+ * vem verdadeiro: conta que a grafica criou pede "toque em Nova senha
+ * provisoria"; conta que ja era do cliente no Vibe pede "ele entra com a senha
+ * que ja usa". Sem esse campo as duas situacoes davam a mesma frase -- e a
+ * segunda frase, na primeira situacao, manda o atendente procurar uma senha
+ * que nao existe.
+ */
+export interface Liberacao {
+  email: string;
+  ja_tinha_conta: boolean;
+  criada_aqui: boolean;
+  senha_provisoria: string | null;
+}
+
 const PARECE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function emailLimpo(valor: unknown): string {
@@ -98,33 +115,18 @@ export async function contasDoCliente(idCliente: number): Promise<any[]> {
  * atomicas -- sao dois servicos diferentes. Se a segunda falhar (rede,
  * PostgREST fora do ar), o codigo abaixo desfaz a conta criada, para o e-mail
  * voltar a poder tentar do zero. E se a propria desfeita falhar, a conta fica
- * orfa -- e e por isso que o ramo "ja tinha conta", logo acima na leitura mas
- * depois na ordem de checagem, sabe reconhece-la pelo `user_metadata` e
- * completar a ligacao que faltou, em vez de tratar como conta de outra
- * origem para sempre.
+ * orfa -- e e por isso que `ligarContaExistente`, logo abaixo, sabe reconhece-la
+ * pelo `user_metadata` e completar a ligacao que faltou, em vez de tratar como
+ * conta de outra origem para sempre.
  */
 export async function liberarAcesso(
   idCliente: number,
   email: string,
   criadoPor: string,
-): Promise<{ email: string; ja_tinha_conta: boolean; senha_provisoria: string | null }> {
+): Promise<Liberacao> {
   const e = emailLimpo(email);
   const existente = await usuarioPorEmail(e);
-  if (existente) {
-    const recuperada = await recuperarOrfaSeForNossa(existente, idCliente, e, criadoPor);
-    if (recuperada) return recuperada;
-
-    await banco("POST", "producao_acesso_contas?on_conflict=auth_user_id,id_cliente", {
-      auth_user_id: existente,
-      id_cliente: idCliente,
-      email: e,
-      criada_aqui: false,
-      senha_provisoria_em: null,
-      criado_por: criadoPor,
-      ativo: true,
-    }, "resolution=merge-duplicates,return=minimal");
-    return { email: e, ja_tinha_conta: true, senha_provisoria: null };
-  }
+  if (existente) return await ligarContaExistente(existente, idCliente, e, criadoPor);
 
   const senha = senhaProvisoria();
   const criado = await criarUsuario(e, senha, { origem: "ideal-control", id_cliente: idCliente });
@@ -139,62 +141,109 @@ export async function liberarAcesso(
       ativo: true,
     }, "return=minimal");
   } catch (erro) {
-    // Sem desfazer, esta conta fica orfa PARA SEMPRE: a proxima tentativa com
-    // o mesmo e-mail cairia no ramo "ja tinha conta", com criada_aqui:false --
-    // e dai `novaSenhaProvisoria` recusaria com 403 uma conta que a grafica
-    // criou de verdade. Melhor desfazer e deixar o e-mail livre para tentar de
-    // novo.
+    // Sem desfazer, esta conta ficaria orfa: a proxima tentativa com o mesmo
+    // e-mail cairia em `ligarContaExistente`. De la ela volta inteira (o
+    // `user_metadata` a reconhece), mas desfazer aqui e mais barato e deixa o
+    // e-mail livre para tentar do zero.
     try {
       await apagarUsuario(criado.id);
     } catch {
       // Se nem a desfeita for possivel, a conta fica orfa mesmo -- mas
-      // `recuperarOrfaSeForNossa`, acima, cobre esse caso na proxima tentativa.
+      // `ligarContaExistente` cobre esse caso na proxima tentativa.
     }
     throw erro;
   }
-  return { email: e, ja_tinha_conta: false, senha_provisoria: senha };
+  return { email: e, ja_tinha_conta: false, criada_aqui: true, senha_provisoria: senha };
 }
 
 /**
- * Uma conta que existe no GoTrue mas nao tem NENHUMA linha em
- * `producao_acesso_contas` e suspeita: ou e de outro sistema (o Vibe tambem
- * usa este projeto Supabase), ou e uma orfa nossa de uma `liberarAcesso`
- * anterior que criou a conta e caiu antes de gravar a ligacao.
+ * O e-mail ja tem conta no GoTrue. Liga-la a este cliente -- sem rebaixar o
+ * que ja existe.
  *
- * So tratamos como nossa quando o `user_metadata.origem` bate com o que
- * `criarUsuario` grava -- do contrario, "adotar" resetaria a senha de uma
- * conta de outra origem, o que seria muito pior que o problema que resolve.
+ * ## O defeito que esta funcao existe para nao repetir (04/09/2026)
  *
- * Devolve `null` quando nao e o caso (a conta ja tem ligacao, ou nao e nossa)
- * -- e `liberarAcesso` segue para o ramo normal de so ligar.
+ * A versao anterior gravava sempre `criada_aqui: false` e
+ * `senha_provisoria_em: null`, com `merge-duplicates`. Tocar em "Liberar
+ * acesso" uma SEGUNDA vez no mesmo e-mail -- o que o atendente faz quando nao
+ * viu a senha da primeira -- reescrevia a ligacao que a propria grafica tinha
+ * acabado de criar, e a conta passava a se dizer "conta do Vibe".
+ *
+ * O estrago nao aparecia na hora: aparecia depois, quando o botao "Nova senha
+ * provisoria" sumia da tela (ele so existe para `criada_aqui`) e o servidor
+ * passava a recusar com 403 "a senha dela se recupera no Vibe". Resultado: uma
+ * conta criada por nos, cuja senha ninguem chegou a ver, e que ninguem mais
+ * conseguia redefinir. Aconteceu com dois clientes no mesmo dia.
+ *
+ * Duas regras saem disso:
+ *
+ * 1. **Ligacao que ja existe nao se reescreve.** So `email` e `ativo` -- nunca
+ *    `criada_aqui`, nunca `senha_provisoria_em`.
+ * 2. **`criada_aqui` sai da ORIGEM da conta**, e nao do caminho por onde a tela
+ *    chegou aqui. Quem sabe se a conta e nossa e o `user_metadata.origem` que
+ *    `criarUsuario` gravou -- o mesmo sinal que `recuperarOrfaSeForNossa` usa.
  */
-async function recuperarOrfaSeForNossa(
+async function ligarContaExistente(
   authUserId: string,
   idCliente: number,
   email: string,
   criadoPor: string,
-): Promise<{ email: string; ja_tinha_conta: boolean; senha_provisoria: string | null } | null> {
+): Promise<Liberacao> {
   const ligacoes = (await banco(
     "GET",
-    `producao_acesso_contas?auth_user_id=eq.${authUserId}&select=auth_user_id&limit=1`,
+    `producao_acesso_contas?auth_user_id=eq.${authUserId}&select=id_cliente,criada_aqui`,
   )) ?? [];
-  if (ligacoes.length) return null;
+
+  const desteCliente = ligacoes.find(
+    (l: any) => Number(l.id_cliente) === Number(idCliente),
+  );
+  if (desteCliente) {
+    // `ativo: true` porque a ligacao pode ter sido desligada antes, e liberar
+    // de novo e justamente o pedido de religa-la. O e-mail vai junto so para
+    // acompanhar uma troca de caixa no GoTrue.
+    await banco(
+      "PATCH",
+      `producao_acesso_contas?auth_user_id=eq.${authUserId}&id_cliente=eq.${idCliente}`,
+      { email, ativo: true },
+      "return=minimal",
+    );
+    return {
+      email,
+      ja_tinha_conta: true,
+      criada_aqui: Boolean(desteCliente.criada_aqui),
+      senha_provisoria: null,
+    };
+  }
 
   const usuario = await obterUsuario(authUserId);
-  if (usuario?.user_metadata?.origem !== "ideal-control") return null;
+  const nossa = usuario?.user_metadata?.origem === "ideal-control";
 
-  const senha = senhaProvisoria();
-  await trocarSenhaDoUsuario(authUserId, senha);
+  // Sem ligacao NENHUMA e nossa: e a orfa de uma tentativa que caiu no meio.
+  // Ela ganha senha nova, porque a anterior se perdeu junto com a tentativa.
+  if (!ligacoes.length && nossa) {
+    const senha = senhaProvisoria();
+    await trocarSenhaDoUsuario(authUserId, senha);
+    await banco("POST", "producao_acesso_contas", {
+      auth_user_id: authUserId,
+      id_cliente: idCliente,
+      email,
+      criada_aqui: true,
+      senha_provisoria_em: new Date().toISOString(),
+      criado_por: criadoPor,
+      ativo: true,
+    }, "return=minimal");
+    return { email, ja_tinha_conta: false, criada_aqui: true, senha_provisoria: senha };
+  }
+
   await banco("POST", "producao_acesso_contas", {
     auth_user_id: authUserId,
     id_cliente: idCliente,
     email,
-    criada_aqui: true,
-    senha_provisoria_em: new Date().toISOString(),
+    criada_aqui: nossa,
+    senha_provisoria_em: null,
     criado_por: criadoPor,
     ativo: true,
   }, "return=minimal");
-  return { email, ja_tinha_conta: false, senha_provisoria: senha };
+  return { email, ja_tinha_conta: true, criada_aqui: nossa, senha_provisoria: null };
 }
 
 /** So para conta que a grafica criou. A anterior deixa de valer no mesmo ato. */

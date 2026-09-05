@@ -200,3 +200,83 @@ Deno.test("liberarAcesso: conta existente que NAO e nossa so liga, sem tocar em 
     restaurar();
   }
 });
+
+// ── O rebaixamento silencioso (04/09/2026) ──────────────────────────────────
+//
+// Tocar em "Liberar acesso" duas vezes no mesmo e-mail -- o que o atendente faz
+// quando nao viu a senha da primeira vez -- reescrevia a ligacao com
+// `criada_aqui: false`. A conta criada pela grafica passava a se dizer conta do
+// Vibe: o botao "Nova senha provisoria" sumia da tela e o servidor recusava com
+// 403. Duas contas de cliente ficaram sem ninguem que pudesse redefinir a senha.
+
+Deno.test("liberarAcesso: liberar DE NOVO nao rebaixa a conta que a grafica criou", async () => {
+  const { idas, restaurar } = comFetchDublado((ida) => {
+    if (ida.url.includes("/rest/v1/rpc/acesso_usuario_por_email")) return jsonResp("user-789");
+    if (
+      ida.metodo === "GET" && ida.url.startsWith("/rest/v1/producao_acesso_contas") &&
+      ida.url.includes("auth_user_id=eq.user-789")
+    ) {
+      return jsonResp([{ id_cliente: 7, criada_aqui: true }]);
+    }
+    if (ida.metodo === "PATCH" && ida.url.startsWith("/rest/v1/producao_acesso_contas")) {
+      return vazio();
+    }
+    throw new Error(`chamada inesperada: ${ida.metodo} ${ida.url}`);
+  });
+  try {
+    const r = await liberarAcesso(7, "denovo@exemplo.com", "atendente@grafica");
+    assertEquals(r.ja_tinha_conta, true);
+    assertEquals(r.criada_aqui, true, "a conta deixou de se dizer nossa");
+    assertEquals(r.senha_provisoria, null);
+
+    const patch = idas.find((i) => i.metodo === "PATCH");
+    assert(patch, "nao religou a conta");
+    const corpo = JSON.parse(patch!.corpo);
+    assert(!("criada_aqui" in corpo), "reescreveu criada_aqui numa ligacao que ja existia");
+    assert(
+      !("senha_provisoria_em" in corpo),
+      "apagou a marca da senha provisoria numa ligacao que ja existia",
+    );
+    assert(!idas.some((i) => i.metodo === "PUT"), "mexeu na senha sem ninguem pedir");
+    assert(
+      !idas.some((i) => i.metodo === "POST" && i.url.startsWith("/rest/v1/producao_acesso_contas")),
+      "inseriu uma segunda ligacao para o mesmo cliente",
+    );
+  } finally {
+    restaurar();
+  }
+});
+
+Deno.test("liberarAcesso: conta NOSSA ligada a outro cliente entra como nossa no cliente novo", async () => {
+  const { idas, restaurar } = comFetchDublado((ida) => {
+    if (ida.url.includes("/rest/v1/rpc/acesso_usuario_por_email")) return jsonResp("user-900");
+    if (
+      ida.metodo === "GET" && ida.url.startsWith("/rest/v1/producao_acesso_contas") &&
+      ida.url.includes("auth_user_id=eq.user-900")
+    ) {
+      return jsonResp([{ id_cliente: 1, criada_aqui: true }]);
+    }
+    if (ida.metodo === "GET" && ida.url.includes("/auth/v1/admin/users/user-900")) {
+      return jsonResp({ id: "user-900", user_metadata: { origem: "ideal-control" } });
+    }
+    if (ida.metodo === "POST" && ida.url.startsWith("/rest/v1/producao_acesso_contas")) {
+      return vazio();
+    }
+    throw new Error(`chamada inesperada: ${ida.metodo} ${ida.url}`);
+  });
+  try {
+    const r = await liberarAcesso(2, "doisclientes@exemplo.com", "atendente@grafica");
+    assertEquals(r.ja_tinha_conta, true);
+    assertEquals(r.criada_aqui, true);
+    const insercao = idas.find(
+      (i) => i.metodo === "POST" && i.url.startsWith("/rest/v1/producao_acesso_contas"),
+    );
+    assert(insercao, "nao gravou a ligacao com o cliente novo");
+    assertEquals(JSON.parse(insercao!.corpo).criada_aqui, true);
+    // A senha NAO se troca aqui: a conta ja esta em uso por outro cliente, e
+    // resetar derrubaria o acesso de quem ja entra com ela.
+    assert(!idas.some((i) => i.metodo === "PUT"), "trocou a senha de uma conta em uso");
+  } finally {
+    restaurar();
+  }
+});

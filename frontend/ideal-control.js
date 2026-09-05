@@ -362,6 +362,21 @@
         caixa.innerHTML = '';
         var pedidos = r.pedidos || [];
         $('ic-cliente-sem-pedido').style.display = pedidos.length ? 'none' : '';
+
+        // Quantos ficaram de fora, e por quê. Desde 04/09/2026 esta lista traz
+        // TODOS os pedidos do cliente; o único que não entra é o que não tem
+        // modelo no ERP, e omiti-lo calado faria o atendente procurar por ele.
+        var semModelo = Number(r.sem_modelo || 0);
+        var aviso = $('ic-cliente-sem-modelo');
+        if (aviso) {
+            aviso.style.display = semModelo ? '' : 'none';
+            aviso.textContent = semModelo === 1
+                ? 'Mais 1 pedido deste cliente ainda não tem modelo cadastrado no ERP — '
+                  + 'não há o que configurar nele.'
+                : ('Mais ' + semModelo + ' pedidos deste cliente ainda não têm modelo '
+                   + 'cadastrado no ERP — não há o que configurar neles.');
+        }
+
         pedidos.forEach(function (p) {
             var b = document.createElement('button');
             b.type = 'button';
@@ -375,6 +390,16 @@
             // saber antes de abrir o pedido.
             if (p.status_evento && p.status_evento !== 'ativo') {
                 partes.push(SITUACAO_DO_EVENTO[p.status_evento] || p.status_evento);
+            }
+            // Em que pé está no controle de acesso. Sem isto, os pedidos que
+            // nunca subiram ficariam iguais aos que já têm ingresso publicado.
+            if (p.no_controle) {
+                partes.push(numero(p.total_credenciais || 0) + ' publicados');
+            } else {
+                partes.push('ainda não publicado');
+            }
+            if (p.quantidade) {
+                partes.push(numero(p.quantidade) + ' no pedido');
             }
             b.textContent = partes.join(' · ');
             b.addEventListener('click', function () { abrirPedido(p.pedido_id_int); });
@@ -880,8 +905,16 @@
             }
             var avisoTexto = '';
             if (r && r.ja_tinha_conta) {
-                avisoTexto = 'Esse e-mail já tem conta; ela foi ligada a este cliente '
-                    + 'e a pessoa entra com a senha que já usa.';
+                // Duas situações bem diferentes por trás do mesmo "já tinha".
+                // A conta que NÓS criamos não tem senha que o cliente conheça:
+                // mandá-lo "entrar com a senha que já usa" seria mandá-lo
+                // procurar uma senha que não existe.
+                avisoTexto = r.criada_aqui
+                    ? ('Este cliente já tem o acesso liberado neste e-mail. Se ele não '
+                       + 'tem a senha em mãos, toque em "Nova senha provisória" na linha '
+                       + 'da conta, logo acima.')
+                    : ('Esse e-mail já tem conta; ela foi ligada a este cliente '
+                       + 'e a pessoa entra com a senha que já usa.');
             } else if (r && r.senha_provisoria) {
                 mostrarSenhaProvisoria(r.senha_provisoria, (r && r.email) || email);
             }
@@ -1775,6 +1808,15 @@
         $('ic-buscar').addEventListener('click', function () {
             abrirCliente($('ic-busca').value);
         });
+        // "Abrir pedido" (04/09/2026): a decisao do usuario e que TODO pedido
+        // seja alcancavel por este menu, e nem todo pedido esta na lista de
+        // algum cliente que ele tenha em maos. Botao separado, e nao um palpite
+        // sobre o numero digitado: 21524 e um pedido E um cliente, e adivinhar
+        // errado abre a ficha de outra pessoa sem parecer erro nenhum.
+        $('ic-buscar-pedido').addEventListener('click', function () {
+            abrirPedido($('ic-busca').value);
+        });
+        // O Enter continua sendo o do cliente, que e a busca do dia a dia.
         $('ic-busca').addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') { abrirCliente($('ic-busca').value); }
         });

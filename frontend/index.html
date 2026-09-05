@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=821">
-    <script src="pdf-lib.min.js?v=821"></script>
+    <link rel="stylesheet" href="/style.css?v=822">
+    <script src="pdf-lib.min.js?v=822"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3472,11 +3472,24 @@
                          quem esta do outro lado; o numero do pedido ele teria de
                          perguntar, e o cliente muitas vezes nao tem em maos. -->
                     <div class="ic-busca-linha">
-                        <label for="ic-busca" class="ic-rotulo-busca">Número do cliente</label>
+                        <label for="ic-busca" class="ic-rotulo-busca">Número</label>
                         <input id="ic-busca" class="form-control" type="search"
                                inputmode="numeric" placeholder="Ex.: 14">
                         <button id="ic-buscar" class="btn btn-primary">Abrir cliente</button>
+                        <button id="ic-buscar-pedido" class="btn btn-secondary">Abrir pedido</button>
                     </div>
+                    <!-- DOIS BOTOES, e nao um campo que adivinha (04/09/2026).
+
+                         Os dois numeros vivem em faixas que se cruzam: 21524 e
+                         o numero de um pedido E o numero de um cliente, duas
+                         pessoas diferentes. Um campo que tentasse adivinhar
+                         abriria o cliente errado sem errar nada visivel -- uma
+                         tela plausivel, com o nome de outra gente. Quem sabe de
+                         qual numero se trata e quem digitou. -->
+                    <p class="ic-ajuda" style="margin-top:8px;">
+                        O mesmo número pode ser de um cliente e de um pedido — diga qual
+                        você quer. Pelo cliente você vê <strong>todos os pedidos dele</strong>.
+                    </p>
                     <p class="ic-ajuda" style="margin-top:10px;">Últimos pedidos com controle de acesso:</p>
                     <div id="ic-recentes" class="ic-recentes"></div>
                 </div>
@@ -3494,10 +3507,14 @@
                     <h3 class="ic-secao-titulo">Pedidos deste cliente</h3>
                     <div id="ic-cliente-pedidos" class="ic-cliente-pedidos"></div>
                     <p id="ic-cliente-sem-pedido" class="ic-ajuda" style="display:none;">
-                        Este cliente ainda não tem nenhum pedido com controle de acesso.
-                        Libere o acesso dele abaixo — quando o pedido for publicado, ele
-                        carrega no aplicativo e o evento nasce ali.
+                        Este cliente ainda não tem nenhum pedido com modelo cadastrado no
+                        ERP. Libere o acesso dele abaixo — quando o pedido for publicado,
+                        ele carrega no aplicativo e o evento nasce ali.
                     </p>
+                    <!-- Pedido sem modelo no ERP nao entra na lista: nao ha o que
+                         configurar nele, e o botao abriria em erro. Dizer quantos
+                         sao e melhor que omiti-los em silencio. -->
+                    <p id="ic-cliente-sem-modelo" class="ic-ajuda" style="display:none;"></p>
                 </div>
 
                 <div id="ic-conteudo" style="display:none;">
@@ -4236,45 +4253,45 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=821"></script>
-    <script src="/supabase-config.js?v=821"></script>
-    <script src="mapas.js?v=821"></script>
-    <script src="cor-numeracao-do-modelo.js?v=821"></script>
+    <script src="/banco-nao-responde.js?v=822"></script>
+    <script src="/supabase-config.js?v=822"></script>
+    <script src="mapas.js?v=822"></script>
+    <script src="cor-numeracao-do-modelo.js?v=822"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=821"></script>
-    <script src="logo-do-frete.js?v=821"></script>
+    <script src="banco-do-modelo.js?v=822"></script>
+    <script src="logo-do-frete.js?v=822"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=821"></script>
-    <script src="arte-de-impressao.js?v=821"></script>
-    <script src="qr-canvas.js?v=821"></script>
-    <script src="barcode-canvas.js?v=821"></script>
+    <script src="pagamento-do-pedido.js?v=822"></script>
+    <script src="arte-de-impressao.js?v=822"></script>
+    <script src="qr-canvas.js?v=822"></script>
+    <script src="barcode-canvas.js?v=822"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=821"></script>
-    <script src="fonte-canvas.js?v=821"></script>
+    <script src="numero-da-pagina.js?v=822"></script>
+    <script src="fonte-canvas.js?v=822"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=821"></script>
-    <script src="fonte-nome.js?v=821"></script>
-    <script src="qr-ideal-colunas.js?v=821"></script>
-    <script src="csv-editor.js?v=821"></script>
-    <script src="amostra-modal.js?v=821"></script>
-    <script src="texto-ajuste.js?v=821"></script>
-    <script src="foto-lib.js?v=821"></script>
-    <script src="gerenciador-fotos.js?v=821"></script>
-    <script src="editor-foto.js?v=821"></script>
-    <script src="script.js?v=821"></script>
-    <script src="ideal-control.js?v=821"></script>
-    <script src="criador-arte.js?v=821"></script>
-    <script src="/pedido.js?v=821"></script>
-    <script src="montagem.js?v=821"></script>
-    <script src="acabamento.js?v=821"></script>
-    <script src="avisos.js?v=821"></script>
+    <script src="fonte-glifos.js?v=822"></script>
+    <script src="fonte-nome.js?v=822"></script>
+    <script src="qr-ideal-colunas.js?v=822"></script>
+    <script src="csv-editor.js?v=822"></script>
+    <script src="amostra-modal.js?v=822"></script>
+    <script src="texto-ajuste.js?v=822"></script>
+    <script src="foto-lib.js?v=822"></script>
+    <script src="gerenciador-fotos.js?v=822"></script>
+    <script src="editor-foto.js?v=822"></script>
+    <script src="script.js?v=822"></script>
+    <script src="ideal-control.js?v=822"></script>
+    <script src="criador-arte.js?v=822"></script>
+    <script src="/pedido.js?v=822"></script>
+    <script src="montagem.js?v=822"></script>
+    <script src="acabamento.js?v=822"></script>
+    <script src="avisos.js?v=822"></script>
 
 
 

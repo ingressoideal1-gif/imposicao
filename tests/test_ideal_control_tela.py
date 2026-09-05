@@ -144,6 +144,10 @@ PAINEL_FALSO = {
 # O que `GET /clientes/{n}` devolve: quem e o cliente, as contas dele e os
 # pedidos dele que tem controle de acesso. E por aqui que a tela entra desde
 # 18/08/2026 -- a busca e pelo numero do cliente.
+# Desde 04/09/2026 esta lista traz TODOS os pedidos do cliente, e nao so os que
+# ja subiram ao controle -- decisao do usuario: "todos os pedidos devem ficar
+# disponiveis para visualizacao e edicao pelo menu ideal control". Por isso a
+# fixture tem os dois casos, e o `sem_modelo` dos que ficaram de fora.
 CLIENTE_FALSO = {
     "cliente": {
         "id_cliente": 14, "nome": "DANIEL MOREIRA", "fantasia": "",
@@ -153,8 +157,17 @@ CLIENTE_FALSO = {
         {"pedido_id_int": 18560, "evento_id": "ev-1", "publicado_em": None,
          "total_credenciais": 1000, "created_at": "2026-08-14T10:00:00Z",
          "nome_evento": "Baile do Hawaii", "data_evento": None,
-         "local_evento": "Clube", "status_evento": "ativo"},
+         "local_evento": "Clube", "status_evento": "ativo",
+         "no_controle": True, "modelos": 2, "quantidade": 1000},
+        # Nunca passou pela publicacao: antes desta data ele nao aparecia em
+        # lugar nenhum desta tela.
+        {"pedido_id_int": 21708, "evento_id": None, "publicado_em": None,
+         "total_credenciais": 0, "created_at": "2026-09-04T15:11:00Z",
+         "nome_evento": None, "data_evento": None,
+         "local_evento": None, "status_evento": None,
+         "no_controle": False, "modelos": 2, "quantidade": 30},
     ],
+    "sem_modelo": 3,
 }
 
 DASHBOARD_FALSO = {
@@ -1059,6 +1072,78 @@ def test_o_caminho_inteiro_com_o_config_real_chega_ao_motor():
     assert "Baile do Hawaii" in saida["titulo"]
 
 
+# ── Todo pedido alcancavel por este menu (04/09/2026) ───────────────────────
+#
+# Decisao do usuario: "todos os pedidos devem ficar disponiveis para
+# visualizacao e edicao pelo menu ideal control".
+#
+# Nao estavam. As duas listas da tela -- os recentes e os pedidos do cliente --
+# saiam de `producao_acesso_pedidos`, ou seja, so o que JA tinha subido ao
+# controle. O cliente 11406, de verdade, tem quatro pedidos com modelo e a tela
+# mostrava um. E a busca so aceitava numero de CLIENTE: quem digitasse o numero
+# de um pedido abria a ficha de outra pessoa, porque as duas faixas de numero se
+# cruzam -- 21524 e um pedido e tambem um cliente.
+
+
+def test_a_lista_do_cliente_traz_tambem_o_pedido_que_nunca_subiu():
+    saida = _no_navegador(SERVIDOR + """
+        window.__respostas['/clientes/14'] = window.CLIENTE_COM_PEDIDO;
+        await IdealControl.abrirCliente(14);
+        return {
+            pedidos: document.getElementById('ic-cliente-pedidos').textContent,
+            botoes: document.querySelectorAll('#ic-cliente-pedidos button').length,
+            semModelo: document.getElementById('ic-cliente-sem-modelo').textContent,
+            semModeloVisivel:
+                document.getElementById('ic-cliente-sem-modelo').style.display !== 'none',
+        };
+    """)
+    assert "18560" in saida["pedidos"] and "21708" in saida["pedidos"]
+    assert saida["botoes"] == 2
+    # Cada linha diz em que pe o pedido esta -- senao os dois pareceriam iguais.
+    assert "1.000 publicados" in saida["pedidos"]
+    assert "ainda não publicado" in saida["pedidos"]
+    # E os que ficaram de fora sao contados, em vez de sumirem calados.
+    assert saida["semModeloVisivel"] is True
+    assert "3 pedidos" in saida["semModelo"]
+
+
+def test_abrir_pedido_pelo_numero_e_um_botao_separado_do_cliente():
+    """O mesmo numero pode ser de um cliente e de um pedido.
+
+    Adivinhar abriria a ficha de outra pessoa sem parecer erro: uma tela
+    plausivel, com nome, e-mail e nenhum pedido. Por isso sao dois botoes -- e
+    este teste prova que cada um vai para a sua rota.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        window.__respostas['/clientes/21524'] = window.CLIENTE_COM_PEDIDO;
+        window.__respostas['/pedidos/21524'] = window.PAINEL;
+        document.getElementById('ic-busca').value = '21524';
+        document.getElementById('ic-buscar-pedido').click();
+        await new Promise(r => setTimeout(r, 200));
+        return {
+            caminhos: window.__chamadas.map(c => c.caminho),
+            conteudo: document.getElementById('ic-conteudo').style.display,
+            titulo: document.getElementById('ic-titulo').textContent,
+        };
+    """)
+    assert "/pedidos/21524" in saida["caminhos"], saida["caminhos"]
+    assert "/clientes/21524" not in saida["caminhos"],         "o botao de pedido foi parar na rota de cliente"
+    assert saida["conteudo"] != "none"
+    assert "18560" in saida["titulo"] or "Baile do Hawaii" in saida["titulo"]
+
+
+def test_o_botao_de_cliente_continua_indo_para_a_rota_de_cliente():
+    saida = _no_navegador(SERVIDOR + """
+        window.__respostas['/clientes/21524'] = window.CLIENTE_COM_PEDIDO;
+        document.getElementById('ic-busca').value = '21524';
+        document.getElementById('ic-buscar').click();
+        await new Promise(r => setTimeout(r, 200));
+        return window.__chamadas.map(c => c.caminho);
+    """)
+    assert "/clientes/21524" in saida, saida
+    assert "/pedidos/21524" not in saida, saida
+
+
 # ── Acesso do cliente ───────────────────────────────────────────────────────
 #
 # Decisao de 17/08/2026: o QR do Pedido saiu, e quem traz os pedidos para o
@@ -1231,6 +1316,26 @@ def test_email_que_ja_tinha_conta_so_liga_e_diz_isso():
         return document.getElementById('ic-acesso-secao').textContent;
     """ % json.dumps(CLIENTE))
     assert "já tem conta" in saida and "senha que já usa" in saida
+
+
+def test_conta_que_a_grafica_criou_manda_gerar_outra_senha_e_nao_a_do_vibe():
+    """"Já tinha conta" sao duas situacoes bem diferentes.
+
+    Se a conta e do Vibe, o cliente entra com a senha que ja usa. Se fomos NOS
+    que a criamos, nao existe senha que ele conheca -- e mandar procurar uma e
+    mandar procurar o que nao ha. Em 04/09/2026 esta era a unica frase, e ela
+    saiu para dois clientes cuja senha ninguem tinha visto.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: true, criada_aqui: true, senha_provisoria: null };
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 200));
+        return document.getElementById('ic-acesso-aviso').textContent;
+    """ % json.dumps(CLIENTE))
+    assert "Nova senha provisória" in saida, saida
+    assert "senha que já usa" not in saida, saida
 
 
 def test_email_que_ja_tinha_conta_nao_mostra_link_de_whatsapp():
