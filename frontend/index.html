@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=820">
-    <script src="pdf-lib.min.js?v=820"></script>
+    <link rel="stylesheet" href="/style.css?v=821">
+    <script src="pdf-lib.min.js?v=821"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3568,57 +3568,6 @@
                         </div>
                     </div>
 
-                    <!-- ACESSO DO CLIENTE: onde o atendente libera o aplicativo
-                         para o cliente deste pedido, com senha provisoria, e o
-                         QR de instalacao (um so, generico). Decisao de 17/08/2026:
-                         o QR do Pedido saiu; a conta do cliente e que traz os pedidos. -->
-                    <div id="ic-acesso-secao" style="display:none;">
-                        <h3 class="ic-secao-titulo">Acesso do cliente</h3>
-                        <div class="card" style="padding:14px 16px;margin-bottom:20px;">
-                            <p id="ic-acesso-cliente" style="margin:0 0 8px;font-weight:600;"></p>
-                            <div id="ic-acesso-contas" class="ic-dim" style="margin-bottom:12px;"></div>
-                            <div class="ic-grade">
-                                <div class="ic-campo">
-                                    <label for="ic-acesso-email">E-mail do cliente</label>
-                                    <input id="ic-acesso-email" class="form-control" type="email" autocomplete="off">
-                                </div>
-                            </div>
-                            <button id="ic-acesso-liberar" class="btn btn-sm btn-primary">Liberar acesso</button>
-                            <p id="ic-acesso-aviso" class="ic-ajuda" style="display:none;"></p>
-
-                            <!-- A senha aparece UMA vez: o que fica gravado e o
-                                 hash dela, como no codigo de pareamento do
-                                 aparelho. Por isso a caixa diz isso em texto. -->
-                            <div id="ic-acesso-senha" class="card ic-codigo-caixa" style="display:none;">
-                                <h4 style="margin:0 0 6px;">Senha provisória — anote e passe ao cliente</h4>
-                                <p class="ic-ajuda" style="margin-bottom:10px;">
-                                    Ela aparece <strong>uma vez só</strong>. No primeiro acesso o
-                                    cliente escolhe a senha dele.
-                                </p>
-                                <div id="ic-acesso-senha-valor" class="ic-codigo-valor"></div>
-                                <button id="ic-acesso-senha-copiar" class="btn btn-sm btn-outline"
-                                        style="margin-top:10px;">Copiar a senha</button>
-                                <!-- Mesmo ciclo de vida da senha: nasce e some com ela, porque
-                                     a mensagem carrega e-mail e senha em claro na URL. Ver
-                                     `mostrarSenhaProvisoria` em ideal-control.js. -->
-                                <a id="ic-acesso-whatsapp" class="btn btn-secondary"
-                                   style="margin-top:10px;margin-left:8px;display:none;"
-                                   target="_blank" rel="noopener noreferrer">Enviar por WhatsApp</a>
-                            </div>
-
-                            <hr style="margin:16px 0;border:0;border-top:1px solid rgba(255,255,255,.08);">
-                            <h4 style="margin:0 0 6px;">QR de instalação do aplicativo</h4>
-                            <p class="ic-ajuda">Um só para todos os clientes: leva à instalação do
-                               Ideal Control. Pode ir para material impresso e para o WhatsApp.</p>
-                            <canvas id="ic-qr-instalacao" width="180" height="180"
-                                    style="background:#fff;border-radius:8px;margin-top:10px;"></canvas>
-                            <p style="margin:8px 0 0;">
-                                <code id="ic-qr-link"></code>
-                                <button id="ic-qr-copiar" class="btn btn-sm btn-ghost">Copiar link</button>
-                            </p>
-                        </div>
-                    </div>
-
                     <!-- Dados do evento -->
                     <p id="ic-sem-evento" class="empty-state" style="display:none;">
                         Este pedido ainda não virou evento. O cliente carrega o pedido no
@@ -3678,6 +3627,71 @@
                          quem poe um aparelho no ar hoje e o proprio dono, tocando na
                          barra do evento no celular. Gerar um codigo aqui produzia um
                          segredo que nenhuma tela aceitava. -->
+                </div>
+
+                <!-- O bloco vive FORA do `#ic-conteudo` (04/09/2026).
+
+                     Ele nasceu dentro, quando esta tela so tinha uma porta: o
+                     numero do pedido. Em 18/08/2026 a busca passou a ser pelo
+                     numero do CLIENTE, e o proprio codigo anotou que "o bloco de
+                     liberar acesso vive aqui TAMBEM... cliente novo ainda nao tem
+                     pedido com controle nenhum, e era justamente ele quem
+                     precisava do acesso liberado". So que o `#ic-conteudo` e o
+                     painel DO PEDIDO, e ele so aparece quando um pedido abre --
+                     entao o bloco continuava escondido junto, e o recado logo
+                     acima ("Libere o acesso dele abaixo") apontava para um vazio.
+
+                     Aqui fora ele aparece nas duas portas, e continua depois do
+                     pedido: "abaixo", como os dois recados dizem. -->
+                <!-- ACESSO DO CLIENTE: onde o atendente libera o aplicativo
+                     para o cliente deste pedido, com senha provisoria, e o
+                     QR de instalacao (um so, generico). Decisao de 17/08/2026:
+                     o QR do Pedido saiu; a conta do cliente e que traz os pedidos. -->
+                <div id="ic-acesso-secao" style="display:none;">
+                    <h3 class="ic-secao-titulo">Acesso do cliente</h3>
+                    <div class="card" style="padding:14px 16px;margin-bottom:20px;">
+                        <p id="ic-acesso-cliente" style="margin:0 0 8px;font-weight:600;"></p>
+                        <div id="ic-acesso-contas" class="ic-dim" style="margin-bottom:12px;"></div>
+                        <div class="ic-grade">
+                            <div class="ic-campo">
+                                <label for="ic-acesso-email">E-mail do cliente</label>
+                                <input id="ic-acesso-email" class="form-control" type="email" autocomplete="off">
+                            </div>
+                        </div>
+                        <button id="ic-acesso-liberar" class="btn btn-sm btn-primary">Liberar acesso</button>
+                        <p id="ic-acesso-aviso" class="ic-ajuda" style="display:none;"></p>
+
+                        <!-- A senha aparece UMA vez: o que fica gravado e o
+                             hash dela, como no codigo de pareamento do
+                             aparelho. Por isso a caixa diz isso em texto. -->
+                        <div id="ic-acesso-senha" class="card ic-codigo-caixa" style="display:none;">
+                            <h4 style="margin:0 0 6px;">Senha provisória — anote e passe ao cliente</h4>
+                            <p class="ic-ajuda" style="margin-bottom:10px;">
+                                Ela aparece <strong>uma vez só</strong>. No primeiro acesso o
+                                cliente escolhe a senha dele.
+                            </p>
+                            <div id="ic-acesso-senha-valor" class="ic-codigo-valor"></div>
+                            <button id="ic-acesso-senha-copiar" class="btn btn-sm btn-outline"
+                                    style="margin-top:10px;">Copiar a senha</button>
+                            <!-- Mesmo ciclo de vida da senha: nasce e some com ela, porque
+                                 a mensagem carrega e-mail e senha em claro na URL. Ver
+                                 `mostrarSenhaProvisoria` em ideal-control.js. -->
+                            <a id="ic-acesso-whatsapp" class="btn btn-secondary"
+                               style="margin-top:10px;margin-left:8px;display:none;"
+                               target="_blank" rel="noopener noreferrer">Enviar por WhatsApp</a>
+                        </div>
+
+                        <hr style="margin:16px 0;border:0;border-top:1px solid rgba(255,255,255,.08);">
+                        <h4 style="margin:0 0 6px;">QR de instalação do aplicativo</h4>
+                        <p class="ic-ajuda">Um só para todos os clientes: leva à instalação do
+                           Ideal Control. Pode ir para material impresso e para o WhatsApp.</p>
+                        <canvas id="ic-qr-instalacao" width="180" height="180"
+                                style="background:#fff;border-radius:8px;margin-top:10px;"></canvas>
+                        <p style="margin:8px 0 0;">
+                            <code id="ic-qr-link"></code>
+                            <button id="ic-qr-copiar" class="btn btn-sm btn-ghost">Copiar link</button>
+                        </p>
+                    </div>
                 </div>
             </section>
 
@@ -4222,45 +4236,45 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=820"></script>
-    <script src="/supabase-config.js?v=820"></script>
-    <script src="mapas.js?v=820"></script>
-    <script src="cor-numeracao-do-modelo.js?v=820"></script>
+    <script src="/banco-nao-responde.js?v=821"></script>
+    <script src="/supabase-config.js?v=821"></script>
+    <script src="mapas.js?v=821"></script>
+    <script src="cor-numeracao-do-modelo.js?v=821"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=820"></script>
-    <script src="logo-do-frete.js?v=820"></script>
+    <script src="banco-do-modelo.js?v=821"></script>
+    <script src="logo-do-frete.js?v=821"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=820"></script>
-    <script src="arte-de-impressao.js?v=820"></script>
-    <script src="qr-canvas.js?v=820"></script>
-    <script src="barcode-canvas.js?v=820"></script>
+    <script src="pagamento-do-pedido.js?v=821"></script>
+    <script src="arte-de-impressao.js?v=821"></script>
+    <script src="qr-canvas.js?v=821"></script>
+    <script src="barcode-canvas.js?v=821"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=820"></script>
-    <script src="fonte-canvas.js?v=820"></script>
+    <script src="numero-da-pagina.js?v=821"></script>
+    <script src="fonte-canvas.js?v=821"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=820"></script>
-    <script src="fonte-nome.js?v=820"></script>
-    <script src="qr-ideal-colunas.js?v=820"></script>
-    <script src="csv-editor.js?v=820"></script>
-    <script src="amostra-modal.js?v=820"></script>
-    <script src="texto-ajuste.js?v=820"></script>
-    <script src="foto-lib.js?v=820"></script>
-    <script src="gerenciador-fotos.js?v=820"></script>
-    <script src="editor-foto.js?v=820"></script>
-    <script src="script.js?v=820"></script>
-    <script src="ideal-control.js?v=820"></script>
-    <script src="criador-arte.js?v=820"></script>
-    <script src="/pedido.js?v=820"></script>
-    <script src="montagem.js?v=820"></script>
-    <script src="acabamento.js?v=820"></script>
-    <script src="avisos.js?v=820"></script>
+    <script src="fonte-glifos.js?v=821"></script>
+    <script src="fonte-nome.js?v=821"></script>
+    <script src="qr-ideal-colunas.js?v=821"></script>
+    <script src="csv-editor.js?v=821"></script>
+    <script src="amostra-modal.js?v=821"></script>
+    <script src="texto-ajuste.js?v=821"></script>
+    <script src="foto-lib.js?v=821"></script>
+    <script src="gerenciador-fotos.js?v=821"></script>
+    <script src="editor-foto.js?v=821"></script>
+    <script src="script.js?v=821"></script>
+    <script src="ideal-control.js?v=821"></script>
+    <script src="criador-arte.js?v=821"></script>
+    <script src="/pedido.js?v=821"></script>
+    <script src="montagem.js?v=821"></script>
+    <script src="acabamento.js?v=821"></script>
+    <script src="avisos.js?v=821"></script>
 
 
 

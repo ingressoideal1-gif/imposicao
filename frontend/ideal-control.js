@@ -265,7 +265,17 @@
         // Toda gravação termina aqui (`recarregar`), e limpar sempre fecharia
         // a lista debaixo de quem estava procurando um ingresso — no instante
         // seguinte a ele salvar o nome do setor, sem ter tocado na lista.
-        if (estado.pedido !== n) { estado.ingressos = {}; estado.dashboard = null; }
+        if (estado.pedido !== n) {
+            estado.ingressos = {};
+            estado.dashboard = null;
+            // O bloco "Acesso do cliente" mora FORA do `#ic-conteudo` desde
+            // 04/09/2026, entao esconder o painel do pedido nao o esconde mais.
+            // Trocar de pedido pode trocar de cliente, e um bloco de fora ficaria
+            // na tela com o nome -- e talvez a senha -- de quem nao esta mais
+            // aberto. So no troca de pedido: `recarregar()` volta por aqui a cada
+            // gravacao, e piscar o bloco a cada salvar seria ruido.
+            desenharAcessoDoCliente(null);
+        }
         estado.pedido = n;
         $('ic-carregando').style.display = '';
         $('ic-conteudo').style.display = 'none';
@@ -316,6 +326,9 @@
         estado.dashboard = null;
         $('ic-conteudo').style.display = 'none';
         $('ic-cliente-secao').style.display = 'none';
+        // Pelo mesmo motivo do `abrirPedido`: o bloco de acesso e do CLIENTE, e
+        // buscar outro cliente sempre troca de quem se fala.
+        desenharAcessoDoCliente(null);
         $('ic-carregando').style.display = '';
         $('ic-vazio').style.display = 'none';
 
@@ -802,6 +815,31 @@
                + 'outra.'), 'warning');
     }
 
+    /**
+     * Depois de liberar o acesso, quem a tela relê -- pela porta por onde ela
+     * entrou.
+     *
+     * Com um pedido aberto, relê o pedido: é dele que sai o painel inteiro.
+     * Sem pedido -- a tela entrou pela busca por cliente, e o bloco "Acesso do
+     * cliente" existe ali também --, relê o cliente. Pedir `/pedidos/null`
+     * devolveria 422, e o atendente leria "não consegui atualizar a lista de
+     * contas" logo depois de o acesso ter sido liberado com sucesso.
+     *
+     * Devolve o CLIENTE fresco, que é o que o bloco desenha.
+     */
+    function relerQuemMostrar(pedidoAlvo, clienteAlvo) {
+        if (pedidoAlvo) {
+            return pedir('/pedidos/' + pedidoAlvo).then(function (novo) {
+                estado.painel = novo;
+                return novo && novo.cliente;
+            });
+        }
+        return pedir('/clientes/' + clienteAlvo).then(function (novo) {
+            estado.painelCliente = novo;
+            return novo && novo.cliente;
+        });
+    }
+
     function liberarAcesso() {
         var c = estado.clienteAberto;
         if (!c) { return Promise.resolve(); }
@@ -847,15 +885,20 @@
             } else if (r && r.senha_provisoria) {
                 mostrarSenhaProvisoria(r.senha_provisoria, (r && r.email) || email);
             }
-            // Relê o pedido para a lista de contas se atualizar. O redesenho
-            // limpa a caixa da senha, então ela é reposta logo depois: perder a
-            // senha provisória por causa de um refresh seria perdê-la de vez.
-            return pedir('/pedidos/' + pedidoAlvo).then(function (novo) {
+            // Relê para a lista de contas se atualizar. O redesenho limpa a
+            // caixa da senha, então ela é reposta logo depois: perder a senha
+            // provisória por causa de um refresh seria perdê-la de vez.
+            return relerQuemMostrar(pedidoAlvo, clienteAlvo).then(function (fresco) {
                 if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
-                estado.painel = novo;
                 var senhaNaTela = $('ic-acesso-senha').style.display !== 'none'
                     ? $('ic-acesso-senha-valor').textContent : '';
-                desenharAcessoDoCliente();
+                // COM o cliente, sempre. Sem argumento, `desenharAcessoDoCliente`
+                // entende "este pedido não tem cliente no ERP" e ESCONDE o bloco
+                // inteiro -- levando junto a senha provisória que acabou de
+                // nascer e que não aparece de novo. Foi o que aconteceu de
+                // verdade em 04/09/2026: o acesso era liberado no servidor, e a
+                // tela do atendente ficava sem bloco e sem senha.
+                desenharAcessoDoCliente(fresco || c);
                 var emailNaTela = (r && r.email) || email;
                 $('ic-acesso-email').value = emailNaTela;
                 if (senhaNaTela) { mostrarSenhaProvisoria(senhaNaTela, emailNaTela); }
@@ -936,7 +979,12 @@
             // sair da tela. A conta também — assim um redesenho que troque o
             // objeto `conta` não muda a URL de uma chamada já em voo.
             var pedidoAlvo = estado.pedido;
-            var dono = (estado.painel && estado.painel.cliente) || {};
+            // Quem o bloco está mostrando AGORA, e não `estado.painel` -- que é
+            // nulo quando a tela entrou pela busca por cliente. Com ele nulo o
+            // `clienteAlvo` saía `undefined`, `aindaNaTela` respondia "não", e a
+            // senha nova era gerada (a anterior deixando de valer) sem nunca
+            // aparecer na tela.
+            var dono = estado.clienteAberto || {};
             var clienteAlvo = dono.id_cliente;
             var nomeAlvo = dono.nome || conta.email;
             var contaAlvo = conta.auth_user_id;

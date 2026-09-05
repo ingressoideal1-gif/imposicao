@@ -1087,18 +1087,102 @@ def test_o_bloco_acesso_do_cliente_mostra_o_cliente_e_as_contas():
 
 
 def test_liberar_acesso_mostra_a_senha_provisoria_uma_vez():
+    """A senha tem de estar VISIVEL, e nao so escrita no documento.
+
+    Este teste media `senha.style.display` -- do proprio quadro da senha -- e
+    passava verde enquanto a tela mostrava um vazio. O defeito estava um nivel
+    acima: a releitura chamava `desenharAcessoDoCliente()` SEM o cliente, a
+    funcao entendia "pedido sem cliente no ERP" e escondia a SECAO inteira. O
+    quadro da senha continuava com `display` vazio, dentro de um pai
+    escondido.
+
+    Custou o dia 04/09/2026: o acesso era liberado no servidor (a conta nasceu,
+    o log mostra 200), o atendente nao via senha nenhuma, e sem senha ninguem
+    entra no aplicativo para testar o pedido. Por isso a pergunta aqui passou a
+    ser a do olho: `offsetParent` e altura maior que zero.
+    """
     saida = _no_navegador(SERVIDOR + """
         window.__painel.cliente = %s;
         window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' };
         await IdealControl.abrirPedido(20272);
         document.getElementById('ic-acesso-liberar').click();
-        await new Promise(r => setTimeout(r, 60));
+        await new Promise(r => setTimeout(r, 200));
         const senha = document.getElementById('ic-acesso-senha');
-        return { visivel: senha.style.display !== 'none', texto: senha.textContent,
+        return { visivel: senha.offsetParent !== null
+                          && senha.getBoundingClientRect().height > 0,
+                 secao: document.getElementById('ic-acesso-secao').style.display,
+                 texto: senha.textContent,
                  corpo: window.__chamadas.find(c => c.caminho === '/clientes/14/contas').corpo };
     """ % json.dumps(CLIENTE))
+    assert saida["secao"] != "none", "a secao inteira sumiu, levando a senha junto"
     assert saida["visivel"] and "K7M2PQ9X" in saida["texto"]
     assert saida["corpo"] == {"email": "daniel@exemplo.com"}
+
+
+# A OUTRA PORTA. O bloco "Acesso do cliente" e desenhado por dois caminhos: a
+# abertura de um pedido e a busca por numero do cliente -- e e pela busca que
+# entra o cliente novo, justamente quem ainda nao tem pedido com controle e mais
+# precisa do acesso liberado. Os testes acima so cobriam a primeira porta.
+
+CLIENTE_SEM_CONTA = json.loads(json.dumps(CLIENTE_FALSO))
+CLIENTE_SEM_CONTA["cliente"]["contas"] = []
+
+CLIENTE_COM_CONTA_NOSSA = json.loads(json.dumps(CLIENTE_FALSO))
+CLIENTE_COM_CONTA_NOSSA["cliente"]["contas"] = [
+    {"auth_user_id": "u-1", "email": "maria@exemplo.com", "criada_aqui": True,
+     "senha_provisoria": False, "criado_em": "2026-08-17T10:00:00Z"},
+]
+
+
+def test_liberar_acesso_pela_busca_por_cliente_tambem_mostra_a_senha():
+    """Sem pedido aberto, a releitura nao pode ir a `/pedidos/null`.
+
+    `estado.pedido` e nulo nesta porta. A releitura montava
+    `/pedidos/null`, o servidor devolveria 422, e o atendente leria "nao
+    consegui atualizar a lista de contas" logo depois de o acesso ter sido
+    liberado de verdade.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        window.__respostas['/clientes/14'] = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com.br', ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' };
+        await IdealControl.abrirCliente(14);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 200));
+        const senha = document.getElementById('ic-acesso-senha');
+        return { visivel: senha.offsetParent !== null
+                          && senha.getBoundingClientRect().height > 0,
+                 texto: senha.textContent,
+                 caminhos: window.__chamadas.map(c => c.caminho) };
+    """ % json.dumps(CLIENTE_SEM_CONTA))
+    assert saida["visivel"] and "K7M2PQ9X" in saida["texto"]
+    assert not [c for c in saida["caminhos"] if "null" in c or "undefined" in c],         saida["caminhos"]
+
+
+def test_nova_senha_provisoria_pela_busca_por_cliente_aparece_na_tela():
+    """A senha nova nasce ao custo da anterior -- entao ela TEM de aparecer.
+
+    Nesta porta `estado.painel` e nulo, e era dele que saia o dono da conta.
+    O `clienteAlvo` saia `undefined`, a conferencia "a tela ainda mostra este
+    cliente?" respondia nao, e a tela avisava que o atendente tinha trocado de
+    cliente -- com a senha anterior ja invalidada no servidor.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        window.__respostas['/clientes/14'] = %s;
+        window.__respostas['/contas/u-1/nova-senha'] = { senha_provisoria: 'W4T8ZR2M' };
+        await IdealControl.abrirCliente(14);
+        document.querySelectorAll('#ic-acesso-contas button')[0].click();
+        await new Promise(r => setTimeout(r, 20));
+        [].slice.call(document.querySelectorAll('#ic-acesso-contas button'))
+            .filter(b => b.textContent === 'Sim, gerar')[0].click();
+        await new Promise(r => setTimeout(r, 200));
+        const senha = document.getElementById('ic-acesso-senha');
+        return { visivel: senha.offsetParent !== null
+                          && senha.getBoundingClientRect().height > 0,
+                 texto: senha.textContent,
+                 avisos: (window._avisos || []).map(a => a[0]) };
+    """ % json.dumps(CLIENTE_COM_CONTA_NOSSA))
+    assert saida["visivel"] and "W4T8ZR2M" in saida["texto"]
+    assert not saida["avisos"], saida["avisos"]
 
 
 def test_liberar_acesso_tambem_poe_o_link_de_whatsapp():
