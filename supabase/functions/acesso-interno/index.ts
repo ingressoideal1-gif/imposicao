@@ -461,6 +461,17 @@ async function criarEvento(pedidoIdInt: number, corpo: any): Promise<any> {
   if (String(proposta.status_interno ?? "").trim().toUpperCase() === "CANCELADO") {
     throw new Recusa(409, "este pedido esta cancelado no ERP");
   }
+  // Sem cliente nao ha dono possivel: o evento criado aqui nao tem conta
+  // (`dono_auth_id` nulo) e pertence ao cliente por `id_cliente`. Com os dois
+  // vazios ele seria um evento que NINGUEM encontra -- nem o cliente, nem o
+  // aplicativo, nem esta tela pela busca por cliente.
+  const idCliente = Number(proposta.id_cliente) || null;
+  if (!idCliente) {
+    throw new Recusa(
+      409,
+      "este pedido nao tem cliente no ERP; sem cliente nao ha de quem ser o evento",
+    );
+  }
 
   // O nome sai da ficha de arte, que e onde o cliente escreveu o nome do
   // evento. Sem ficha, "Pedido N" -- e a tela deixa renomear logo em seguida.
@@ -471,7 +482,7 @@ async function criarEvento(pedidoIdInt: number, corpo: any): Promise<any> {
   )) ?? [])[0];
 
   return await criarEventoDoPedido(pedidoIdInt, {
-    id_cliente: Number(proposta.id_cliente) || null,
+    id_cliente: idCliente,
     nome_evento: String(corpo?.nome_evento ?? "").trim() || nomeDaFicha(ficha, pedidoIdInt),
     data_evento: ficha?.data_evento ?? null,
     local_evento: ficha?.local_evento ?? null,
