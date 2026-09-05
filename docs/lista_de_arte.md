@@ -738,6 +738,60 @@ passaria a depender de por onde a pessoa entrou. Há teste travando isso.
 O **Painel do Acabamento** tem a mesma forma no cabeçalho do pedido aberto, com
 tamanhos próprios — ver [`painel_do_acabamento.md`](painel_do_acabamento.md).
 
+## O pedido aberto: como a tela se organiza (05/09/2026)
+
+Abrir um pedido pela Lista de Arte mostra a tela de **Amostras**
+(`#view-amostras`): o cabeçalho do pedido, os cards dos modelos à esquerda
+(55%) e a coluna do briefing à direita (45%). Em 05/09/2026 o usuário pediu um
+layout melhor organizado **sem mudar nenhuma função** — o desenho foi
+apresentado num canvas, aprovado, e então aplicado. Tudo o que havia continua
+havendo, com os mesmos ids e as mesmas chamadas; o que mudou foi o lugar.
+
+**O cabeçalho** (`index.html`, `#amostras-os-banner`) tem três linhas curtas em
+vez de uma fileira de onze botões iguais:
+
+1. Número, botão do Vibe, cliente e a contagem de modelos à esquerda; à
+   direita, as duas ações que levam para fora da tela — **✉️ Enviar Link ao
+   Cliente** e **✕ Fechar Pedido**.
+2. Os grupos **Arquivos** (PDF Gabarito, PDF Arte, PDF Prova | Importar PDF
+   Artes) e **Pedido** (Dados de Entrega / Faturamento, Conferência de dados).
+3. Os grupos **Devolver** (Voltar para Atendimento, Voltar para Arte) e **Todos
+   os modelos** (as ações em lote, preenchidas por `renderAcoesEmLoteDoPedido`).
+
+Cada grupo é um `.banner-grupo` com um `.banner-grupo-rotulo` — as classes
+estão no `style.css`.
+
+**O card do modelo** (em `renderAmostrasOSItens`) segue a ordem em que o
+designer trabalha: cabeçalho com produto, chip do ID, setor e status; **Cor** e
+**Numeração** numa linha; a **Arte** na linha seguinte, com os ícones de Frente
+e Verso todos na mesma linha e o rótulo da face acima de cada grupo; a linha do
+banco de dados (Banco · Vem de · Linhas · Colunas) numa linha só; a prévia; e,
+por último, a decisão — anotação à esquerda, os botões MARCAR PRONTO / APROVADO
+/ EM ALTERAÇÃO empilhados à direita, com as faixas de aviso acima da anotação.
+As barras de navegação das linhas do CSV e da escala da arte são finas e ficam
+lado a lado quando cabem; o texto de ajuda da escala virou dica ao passar o
+mouse. O botão do modo PDF multipágina escreve **PDF** em vermelho no centro do
+ícone, a pedido do usuário.
+
+> [!IMPORTANT]
+> **A orientação da prévia vem do FORMATO do modelo, nunca do arquivo da arte.**
+> Janela vertical (formato mais alto que largo, como uma credencial 5,4×8,5)
+> mostra frente e verso **lado a lado**; janela horizontal (um ingresso 10×5)
+> mostra **um abaixo do outro**. Quem decide é `janelaVertical`, calculado no
+> card a partir de `height_mm > width_mm` do formato, e passado a
+> `blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado)`. Sem o quinto
+> argumento a prévia empilha, como sempre fez. O teto de 450px por face não muda.
+
+**O briefing** ganhou legibilidade: nome, data e local do evento em amarelo
+claro (`#fbbf24`), maiores e em negrito; e cada produto virou um bloco próprio
+com faixa verde-água — o nome do produto em branco, a quantidade como selo
+("500 un.") e a caixa de observações com fundo sólido, borda visível, fonte da
+tela, 0,95rem e entrelinha 1,55. Os ids (`briefing-nome-*`, `briefing-obs-item-*`)
+e o `saveBriefingField` são os de sempre.
+
+O `tests/layout_do_pedido_harness.js` trava a ordem das partes, os onze
+botões pelo que chamam, a regra da orientação e o ícone do PDF.
+
 ## Onde mexer
 
 | O quê | Onde |
@@ -749,6 +803,7 @@ tamanhos próprios — ver [`painel_do_acabamento.md`](painel_do_acabamento.md).
 | O carimbo dos concluídos | `celulaDeEntradaEmProducaoHtml` (e o `th-tempo-arte` em `renderOrdens`) |
 | O título da tela de Pedido | `pintarTituloDaTelaDePedido`, `ESTILO_CLIENTE_DO_PEDIDO` |
 | A caixa de designers | `renderDesignersBoxHTML` |
+| O layout do pedido aberto (cabeçalho, card, briefing) | `#amostras-os-banner` no `index.html`; o card e o briefing em `renderAmostrasOSItens`; a orientação da prévia em `janelaVertical` / `blocoDeArteDoModelo` |
 | As travas do negócio | `podeDefinirDesigner`, `bloqueioDeModeloAprovado`, `divergenciaDeCelulasDoModelo`, `bancoDeDadosIncompletoDoModelo`, `fonteSemGlifoDoModelo`, `podeLiberarParaProducao` |
 | O botão do parceiro | `botaoDoVibeHtml`, `linkDoPedidoNoVibe` |
 | O link direto | `linkDiretoDoPedido`, `pedidoDoLinkDireto`, `abrirPedidoDoLinkDireto` |

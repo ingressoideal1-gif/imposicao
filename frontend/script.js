@@ -32874,9 +32874,13 @@ window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDad
  * as duas coisas ao mesmo tempo e a REGRA, e nao a excecao: a frente e um PDF
  * paginado e o verso e um arquivo de uma pagina so.
  */
-function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml) {
+function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
     return (item.verso ? `
-                        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+                        <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+                            <!-- Janela vertical (formato mais alto que largo): as duas
+                                 faces lado a lado. Janela horizontal: uma abaixo da outra.
+                                 Quem decide e o formato do modelo, no card. -->
+                            <div style="${ladoALado ? 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start;' : 'display: flex; flex-direction: column; gap: 16px;'} width: 100%;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
                                 ${item.modo_pdf ? `
@@ -32914,22 +32918,25 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml) {
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
                                 </div>
                             </div>
+                            </div>
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;">
 
                             <!-- Navegacao das linhas do CSV. Um seletor so comanda
                                  as duas faces: frente e verso mostram sempre a
                                  MESMA linha. Escondida ate a numeracao ter elemento
                                  de banco de dados; quem mostra e preenche e o
                                  atualizarNavCsvDaAmostra(). -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:4px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="display:flex; align-items:center; gap:10px;">
+                            <div id="amostra-csv-nav-${idx}" style="display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 10px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:8px;">
                                     <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.82rem; color:var(--text); min-width:90px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:60px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:2px 4px; font-size:0.82rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
                                     <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
                                 </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.72rem; color:var(--text-dim); text-align:center; margin-left:4px;"></div>
                             </div>
                             ${escalaArteHtml}
+                            </div>
                         </div>
                         ` : `
                         ${item.modo_pdf ? `
@@ -32950,19 +32957,21 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml) {
                         ` : `
                         <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
 
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;">
                             <!-- Navegacao das linhas do CSV. Fica escondida ate
                                  a numeracao ter elemento de banco de dados; quem
                                  mostra e preenche e atualizarNavCsvDaAmostra(). -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:12px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="display:flex; align-items:center; gap:10px;">
+                            <div id="amostra-csv-nav-${idx}" style="display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 10px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:8px;">
                                     <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.82rem; color:var(--text); min-width:90px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:60px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:2px 4px; font-size:0.82rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
                                     <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
                                 </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.72rem; color:var(--text-dim); text-align:center; margin-left:4px;"></div>
                             </div>
                             ${escalaArteHtml}
+                            </div>
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
@@ -33132,22 +33141,21 @@ function renderAmostrasOSItens(osId) {
         // pelo cliente estes campos nascem travados como o resto do card.
         // CRASE aqui dentro fecharia o template literal do card.
         const escalaArteHtml = `
-                            <div id="amostra-escala-${idx}" style="display:none; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:10px; padding:8px 12px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                            <div id="amostra-escala-${idx}" title="Vale para a impressão e a imposição. A arte fica centralizada na célula; a numeração não muda de tamanho." style="display:none; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; padding:4px 10px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
                                 <span style="font-size:0.78rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Escala da arte</span>
                                 <label style="display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; color:var(--text-dim); margin:0;" title="Largura da arte, em % do tamanho do arquivo. A numeração não muda.">
                                     H
                                     <input type="number" id="amostra-escala-h-${idx}" value="${escArte.h}" min="${ESCALA_ARTE_MIN}" max="${ESCALA_ARTE_MAX}" step="0.1"
-                                           style="width:74px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;"
+                                           style="width:60px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:2px 4px; font-size:0.82rem;"
                                            onchange="salvarEscalaDaArte(${idx}, '${osId}', '${item.id}')">%
                                 </label>
                                 <label style="display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; color:var(--text-dim); margin:0;" title="Altura da arte, em % do tamanho do arquivo. A numeração não muda.">
                                     V
                                     <input type="number" id="amostra-escala-v-${idx}" value="${escArte.v}" min="${ESCALA_ARTE_MIN}" max="${ESCALA_ARTE_MAX}" step="0.1"
-                                           style="width:74px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;"
+                                           style="width:60px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:2px 4px; font-size:0.82rem;"
                                            onchange="salvarEscalaDaArte(${idx}, '${osId}', '${item.id}')">%
                                 </label>
-                                <button class="btn btn-sm btn-secondary" onclick="zerarEscalaDaArte(${idx}, '${osId}', '${item.id}')" title="Voltar a arte ao tamanho original do arquivo" style="font-size:0.75rem; padding:4px 10px;">↺ 100%</button>
-                                <span style="font-size:0.74rem; color:var(--text-dim); width:100%; text-align:center;">Vale para a impressão e a imposição. A arte fica centralizada na célula; a numeração não muda de tamanho.</span>
+                                <button class="btn btn-sm btn-secondary" onclick="zerarEscalaDaArte(${idx}, '${osId}', '${item.id}')" title="Voltar a arte ao tamanho original do arquivo" style="font-size:0.72rem; padding:0 8px; height:26px;">↺ 100%</button>
                             </div>`;
         
         let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
@@ -33193,6 +33201,15 @@ function renderAmostrasOSItens(osId) {
             }
         }
 
+
+        // A orientação da janela de visualização vem do FORMATO, nunca do
+        // arquivo da arte (regra do usuário, 05/09/2026): janela vertical mostra
+        // frente e verso lado a lado; janela horizontal, um abaixo do outro.
+        const formatoDoItem = itemFormatoId
+            ? (state.formatos || []).find(f => String(f.id) === String(itemFormatoId))
+            : null;
+        const janelaVertical = !!(formatoDoItem
+            && parseFloat(formatoDoItem.height_mm) > parseFloat(formatoDoItem.width_mm));
 
         // Filtrar cores com base no formato do produto
         const filteredCores = itemFormatoId
@@ -33386,70 +33403,32 @@ function renderAmostrasOSItens(osId) {
                                        + seloDeArte(origemArteVerso,  'verso',  !!item.verso, targetOSId);
 
         return `
-        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;"${modeloTravado ? ` data-modelo-aprovado="1" data-titulo-aprovado="${escapeHtml(tituloAprovado)}"` : ''}>
-            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
+        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt; padding: 0;"${modeloTravado ? ` data-modelo-aprovado="1" data-titulo-aprovado="${escapeHtml(tituloAprovado)}"` : ''}>
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; border-radius: 13px 13px 0 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0; padding: 12px 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap;">
+                    <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
+                    <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.74rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo"> <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i> <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span> </span>
+                </div>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span id="selos-arte-${idx}" style="display: contents;">${selosDeArteCompartilhada}</span>
                     <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '--'}</span>
                     ${statusBadge}
                 </div>
             </div>
-            <div style="padding: 24px;">
-                <div class="amostra-mid-row" style="grid-template-columns: 1fr; gap: 12px;">
-                    <div class="amostra-decisao-panel" style="padding: 14px 16px;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
-                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="2" data-libera-aprovado="1" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
-                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
-                        </div>
-                        ${faixaCorrigirArte}
-                        ${faixaModeloTravado}
-                        ${faixaDistribuicaoOrfa}
-                        ${faixaDivergenciaCelulas}
-                        ${faixaBancoIncompleto}
-                        ${faixaSemGlifo}
-                        ${faixaCelulasRepetidas}
-                        <div class="amostra-decisao-btns">
-                            ${state.amostrasContainerId === 'cliente-amostras-itens-container'
-                                ? `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
-                                </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                    ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
-                                </button>
-                                `
-                                : `
-                                <button class="btn" data-libera-aprovado="1" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                    ❌ EM ALTERAÇÃO
-                                </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco || travaDeGlifo ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : (travaDeGlifo ? `title="${escapeHtml(semGlifo.texto)}"` : ''))}>
-                                    🎨 MARCAR PRONTO
-                                </button>
-                                ${podeAprovarPeloPainel ? `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" title="Aprovar a amostra pelo painel — mesmo efeito do Aprovar do link do cliente">
-                                    ✅ APROVADO
-                                </button>
-                                ` : ''}
-                                `
-                            }
-                        </div>
-                    </div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
-                    <div class="amostra-config-panel" style="padding: 14px 16px;">
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 0.72; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
-                                    <label style="display: flex; align-items: center; height: 24px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor</label>
-                                    <select class="form-control" style="width: 100%; height: 40px; padding-top: 0; padding-bottom: 0;" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
+                                    <label style="display: flex; align-items: center; height: 22px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em;">Cor</label>
+                                    <select class="form-control" style="width: 100%; height: 36px; padding-top: 0; padding-bottom: 0;" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Cor --</option>
                                         ${corsOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0; display: block;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; height: 24px; margin-bottom: 4px;">
-                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração</label>
+                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0; display: block;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; height: 22px; margin-bottom: 4px;">
+                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em; margin: 0;">Numeração</label>
                                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                                             <div style="display: flex; gap: 4px; align-items: center;">
                                                 <button class="btn btn-sm btn-ghost" style="height: 22px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 0.85rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
@@ -33457,75 +33436,75 @@ function renderAmostrasOSItens(osId) {
                                             </div>
                                         `}
                                     </div>
-                                    <select class="form-control" style="width: 100%; height: 40px; padding-top: 0; padding-bottom: 0;" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
+                                    <select class="form-control" style="width: 100%; height: 36px; padding-top: 0; padding-bottom: 0;" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Numeração --</option>
                                         ${numOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" style="margin-bottom: 0; flex: 2.2; min-width: 0; display: block;">
-                                    <div style="display: flex; align-items: center; height: 24px; margin-bottom: 4px;">
-                                        <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.8rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
-                                            <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
-                                            <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
-                                        </span>
-                                    </div>
+                            </div>
+                            <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
                                     ${item.verso ? `
-                                    <div style="display:flex; flex-direction: column; gap:8px;">
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <label style="display: flex; align-items: center; height: 22px; margin: 0; color: #60a5fa; text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em;">Frente</label>
                                         <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
-                                            <span class="badge badge-blue" style="font-size: 0.7rem; font-weight: 700; width: 60px; height: 40px; display: inline-flex; align-items: center; justify-content: center;">FRENTE</span>
-                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte da frente (PDF, JPG, PNG)">
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte da frente (PDF, JPG, PNG)">
                                                 🖼️ Arte
                                             </label>
                                             <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D da frente">🎨</button>
-                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
-                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
-                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
-                                            <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
+                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D da frente">🎨</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
+                                            <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"></path><path d="M15 2v6h6"></path><text x="12" y="18.2" text-anchor="middle" font-size="8.5" font-weight="800" font-family="Inter, system-ui, sans-serif" fill="#ef4444" stroke="none">PDF</text></svg></button>
                                             <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
                                         </div>
                                         <!-- O upload do verso some no modo PDF porque ali o verso
                                              sai das páginas pares do próprio arquivo. No FxVersoUnico
                                              ele volta: é justamente por aqui que entra o PDF de uma
                                              página que se repete em todas as peças (31/08/2026). -->
-                                        <div style="display:${(item.modo_pdf && !versoUnico(modoDeVersoDoModelo(item))) ? 'none' : 'flex'}; gap:6px; align-items: center; flex-wrap: wrap;">
-                                            <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; height: 40px; display: inline-flex; align-items: center; justify-content: center;">VERSO</span>
-                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte do verso (PDF, JPG, PNG)">
+                                        </div>
+                                        <span style="width: 1px; height: 62px; background: rgba(148,163,184,0.2); align-self: flex-start;"></span>
+                                        <div style="display: ${(item.modo_pdf && !versoUnico(modoDeVersoDoModelo(item))) ? 'none' : 'flex'}; flex-direction: column; gap: 4px;">
+                                            <label style="display: flex; align-items: center; height: 22px; margin: 0; color: #fbbf24; text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em;">Verso</label>
+                                            <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte do verso (PDF, JPG, PNG)">
                                                 🖼️ Verso
                                             </label>
                                             <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
-                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Criar Arte 2D do verso">🎨</button>
-                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteVerso)}" data-libera-copia="1" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Copiar Link da Arte Verso', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
-                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteVerso)}" id="btn-paste-amostra-arte-verso-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Colar Link da Arte Verso', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
-                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')" title="Remover Arte do Verso" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">✕</button>
+                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Criar Arte 2D do verso">🎨</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteVerso)}" data-libera-copia="1" id="btn-copy-amostra-arte-verso-${idx}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Copiar Link da Arte Verso', 'cedida')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">🔗</button>
+                                            <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteVerso)}" id="btn-paste-amostra-arte-verso-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="${tituloDeArte(origemArteVerso, 'verso', 'Colar Link da Arte Verso', 'colada')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')" title="Remover Arte do Verso" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'verso') ? '' : 'display:none;'}">✕</button>
                                             <span id="amostra-item-arte-verso-name-${idx}" style="display:none;"></span>
                                         </div>
                                     </div>
                                     ` : `
-                                    <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
-                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <label style="display: flex; align-items: center; height: 22px; margin: 0; text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em;">Arte</label>
+                                        <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
+                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
                                             🖼️ Arte
                                         </label>
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D para este modelo">🎨</button>
-                                        <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
-                                        <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
-                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
-                                        <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 40px; width: 40px; min-width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;">📄</button>
+                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Criar Arte 2D para este modelo">🎨</button>
+                                        <button class="btn btn-sm btn-secondary ${marcaDeArteCedida(origemArteFrente)}" data-libera-copia="1" id="btn-copy-amostra-arte-${idx}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Copiar Link da Arte', 'cedida')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">🔗</button>
+                                        <button class="btn btn-sm btn-secondary ${marcaDeArteColada(origemArteFrente)}" id="btn-paste-amostra-arte-${idx}" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="${tituloDeArte(origemArteFrente, 'frente', 'Colar Link da Arte', 'colada')}" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;">📥</button>
+                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')" title="Remover Arte" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; ${itemTemArte(item, 'frente') ? '' : 'display:none;'}">✕</button>
+                                        <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página" style="height: 36px; width: 36px; min-width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"></path><path d="M15 2v6h6"></path><text x="12" y="18.2" text-anchor="middle" font-size="8.5" font-weight="800" font-family="Inter, system-ui, sans-serif" fill="#ef4444" stroke="none">PDF</text></svg></button>
                                         <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
+                                    </div>
                                     </div>
                                     `}
                                 </div>
-                            </div>
                             <!-- Banco de dados (CSV) da numeração. Fica escondida
                                  enquanto a numeração escolhida não tiver um; quem
                                  mostra e preenche é atualizarBotoesCsvDaAmostra().
                                  Nasceu com rótulo porque a versão anterior — dois
                                  emojis nus ao lado do título — não se explicava. -->
-                            <div id="linha-csv-${idx}" style="display:none; flex-direction:column; gap:8px; padding:8px 10px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                            <div id="linha-csv-${idx}" style="display:none; flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px; padding:8px 12px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
                                 <span style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:5px; min-width:0;">
                                     🗂️ Banco de dados:
                                     <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
@@ -33535,7 +33514,7 @@ function renderAmostrasOSItens(osId) {
                                      PROPRIO pedido. O padrao continua sendo a numeracao,
                                      entao todo pedido que ja existe segue igual -- o que
                                      muda e passar a haver escolha. -->
-                                <div style="display:flex; align-items:center; gap:6px;">
+                                <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
                                     <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;">Vem de:</span>
                                     <select class="form-control" id="banco-do-pedido-${idx}" style="flex:1; min-width:0; height:26px; padding:2px 6px; font-size:0.8rem;" onchange="trocarBancoDoModelo(${idx}, '${osId}', this.value)" title="De qual banco de dados este modelo lê"></select>
                                 </div>
@@ -33549,18 +33528,18 @@ function renderAmostrasOSItens(osId) {
                                      esta mexendo na numeracao inteira. Aqui, dentro do
                                      pedido, so existe o que e DO MODELO: a fatia dele. -->
                                 <div style="display:flex; gap:6px;">
-                                    <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
                                     <!-- So aparece quando ha o que separar: banco com coluna
                                          Data e mais de um dia, e algum modelo do pedido cuja
                                          Qtd fecha com as linhas do dia dele. Quem decide e o
                                          planoDeSeparacaoPorDia, chamado no
                                          atualizarBotoesCsvDaAmostra -- CRASE aqui dentro
                                          fecharia o template literal do card. -->
-                                    <button class="btn btn-sm btn-secondary" id="btn-csv-dia-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="separarNumeracaoPorDia(${idx}, '${osId}')" title="Criar uma numeração por dia, cada uma só com as linhas do seu dia">📆 Separar por dia</button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-dia-${idx}" style="white-space:nowrap; display:none;" onclick="separarNumeracaoPorDia(${idx}, '${osId}')" title="Criar uma numeração por dia, cada uma só com as linhas do seu dia">📆 Separar por dia</button>
                                     <!-- So com banco do pedido: no CSV de dentro da
                                          numeracao os campos ja apontam para as colunas
                                          dela, e nao ha de-para nenhum a fazer. -->
-                                    <button class="btn btn-sm btn-secondary" id="btn-csv-colunas-${idx}" style="flex:1; white-space:nowrap; display:none;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="De qual coluna do banco cada campo deste modelo lê">🔤 Colunas</button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-colunas-${idx}" style="white-space:nowrap; display:none;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="De qual coluna do banco cada campo deste modelo lê">🔤 Colunas</button>
                                     <!-- O 📊 de corrigir o banco DO PEDIDO saiu do card em
                                          28/08/2026 (redesenho do usuario): editar conteudo e
                                          coisa do pedido e mora no box Gerenciamento de
@@ -33571,18 +33550,16 @@ function renderAmostrasOSItens(osId) {
                                      Quem preenche e desenharColunasDoModeloNoCard(); fica
                                      escondida enquanto o modelo nao esta ligado a um banco
                                      do pedido. -->
-                                <div id="csv-colunas-modelo-${idx}" style="display:none; flex-wrap:wrap; align-items:center; gap:4px; cursor:pointer;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="As colunas do banco que os elementos deste modelo leem. Clique para mudar."></div>
+                                <div id="csv-colunas-modelo-${idx}" style="display:none; flex-wrap:wrap; align-items:center; gap:4px; cursor:pointer; flex-basis:100%;" onclick="abrirColunasDoModelo(${idx}, '${osId}')" title="As colunas do banco que os elementos deste modelo leem. Clique para mudar."></div>
                             </div>
-                        </div>
                     </div>
                     `}
-                </div>
-                <div class="amostra-preview-container" style="margin-top: 12px; min-height: 0; justify-content: flex-start;">
+                <div class="amostra-preview-container" style="margin-top: 0; min-height: 0; justify-content: flex-start; padding: 16px;">
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
                         <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                             ${item.nome_modelo || `Modelo ${idx + 1}`}
                         </div>
-                        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 0.92rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em;">
+                        <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 0.88rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em;">
                             <span>📦 Qtd: <b>${item.quantidade || 0}</b></span>
                             <span>NI: <b>${item.num_inicial || 1}</b> → NF: <b>${item.num_final || item.quantidade || 0}</b></span>
                             <span style="color: ${item.verso ? 'var(--text)' : 'var(--text-dim)'};">${item.verso ? '✅ Verso' : 'S/ Verso'}</span>
@@ -33632,9 +33609,50 @@ function renderAmostrasOSItens(osId) {
                         `}
                         `)
                     :
-                        blocoDeArteDoModelo(item, idx, osId, escalaArteHtml)
+                        blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, janelaVertical)
                     }
                 </div>
+                    <div class="amostra-decisao-panel" style="padding: 12px 14px; gap: 10px;">
+                        ${faixaCorrigirArte}
+                        ${faixaModeloTravado}
+                        ${faixaDistribuicaoOrfa}
+                        ${faixaDivergenciaCelulas}
+                        ${faixaBancoIncompleto}
+                        ${faixaSemGlifo}
+                        ${faixaCelulasRepetidas}
+                        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 176px; gap: 12px; align-items: stretch;">
+                        <div class="form-group" style="margin-bottom: 0; gap: 6px;">
+                            <label for="amostra-obs-${item.id}" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em;">Anotações / Observações de Alteração</label>
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" data-libera-aprovado="1" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px; flex: 1; min-height: 78px;"
+                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
+                        </div>
+                        <div class="amostra-decisao-btns" style="flex-direction: column; gap: 6px; margin-top: 0; justify-content: flex-end;">
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container'
+                                ? `
+                                <button class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
+                                </button>
+                                <button class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                    ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
+                                </button>
+                                `
+                                : `
+                                <button class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco || travaDeGlifo ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : (travaDeGlifo ? `title="${escapeHtml(semGlifo.texto)}"` : ''))}>
+                                    🎨 MARCAR PRONTO
+                                </button>
+                                ${podeAprovarPeloPainel ? `
+                                <button class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" title="Aprovar a amostra pelo painel — mesmo efeito do Aprovar do link do cliente">
+                                    ✅ APROVADO
+                                </button>
+                                ` : ''}
+                                <button class="btn" data-libera-aprovado="1" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                    ❌ EM ALTERAÇÃO
+                                </button>
+                                `
+                            }
+                        </div>
+                    </div>
+                        </div>
             </div>
         </div>`;
     }).join('');
@@ -33663,12 +33681,13 @@ function renderAmostrasOSItens(osId) {
 
         let obsAccordionHtml = uniqueProducts.map((prod) => {
             return `
-                <div style="border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;">
-                    <div style="padding: 10px; background: rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
-                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);"><i class="fa-solid fa-cube" style="margin-right: 6px;"></i> Ref: ${prod.quantidade || 0} un. - ${prod.nome}</span>
+                <div style="border: 1px solid rgba(20,184,166,0.35); border-radius: 10px; overflow: hidden;">
+                    <div style="padding: 9px 12px; background: rgba(20,184,166,0.10); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.95rem; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; min-width: 0;"><i class="fa-solid fa-cube" style="color: #2dd4bf;"></i> ${prod.nome}</span>
+                        <span class="badge badge-teal" style="font-size: 0.72rem; white-space: nowrap;">${prod.quantidade || 0} un.</span>
                     </div>
-                    <div style="padding: 8px;">
-                        <textarea id="briefing-obs-item-${prod.id}" oninput="saveBriefingField('${osNum}', null, this.value, true, '${prod.id}')" rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.05); color: var(--text);" placeholder="Observações específicas para este produto..."></textarea>
+                    <div style="padding: 10px;">
+                        <textarea id="briefing-obs-item-${prod.id}" oninput="saveBriefingField('${osNum}', null, this.value, true, '${prod.id}')" rows="3" style="width: 100%; border: 1px solid rgba(148,163,184,0.35); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.55; resize: vertical; background: rgba(10,15,30,0.7); color: #f8fafc;" placeholder="Observações específicas para este produto..."></textarea>
                     </div>
                 </div>
             `;
@@ -33683,33 +33702,32 @@ function renderAmostrasOSItens(osId) {
                 <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding-right: 8px;">
                     <!-- Briefing Base -->
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
-                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
-                            <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-                                Briefing Base do Evento
-                            </div>
-                            <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
-                                Dados preenchidos pelo comercial para guiar a criação da arte.
-                            </div>
+                        <div class="card-header" style="background: transparent; border-bottom: 1px solid rgba(148,163,184,0.18); padding: 14px 16px 10px 16px; margin-bottom: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+                            <div style="font-weight: 800; color: #ffffff; font-size: 1.1rem;">Briefing Base do Evento</div>
+                            <div style="font-size: 0.78rem; color: var(--text-dim);">Preenchido pelo comercial</div>
                         </div>
-                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                            <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
-                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Nome do Evento">
+                        <div class="card-body" style="padding: 14px 16px 16px 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div class="form-group" style="margin: 0; gap: 5px;">
+                                <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
+                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="margin-top: 0; color: #fbbf24; font-size: 1.05rem; font-weight: 700; padding: 9px 14px;" placeholder="Nome do Evento">
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
-                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="DD/MM/AAAA">
+                                <div class="form-group" style="margin: 0; gap: 5px;">
+                                    <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
+                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="margin-top: 0; color: #fbbf24; font-size: 1rem; font-weight: 600; padding: 9px 14px;" placeholder="DD/MM/AAAA">
                                 </div>
-                                <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
-                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Local">
+                                <div class="form-group" style="margin: 0; gap: 5px;">
+                                    <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
+                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="margin-top: 0; color: #fbbf24; font-size: 1rem; font-weight: 600; padding: 9px 14px;" placeholder="Local">
                                 </div>
                             </div>
 
-                            <div style="margin-top: 8px;">
-                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--teal); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                                    <i class="fa-solid fa-list-check"></i> Observações por produto
+                            <div style="margin-top: 6px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,0.18); display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                    <div style="font-size: 0.8rem; font-weight: 800; color: #2dd4bf; text-transform: uppercase; letter-spacing: 0.08em; display: flex; align-items: center; gap: 6px;">
+                                        <i class="fa-solid fa-list-check"></i> Observações por produto
+                                    </div>
+                                    <span style="font-size: 0.74rem; color: var(--text-dim);">${uniqueProducts.length} ${uniqueProducts.length === 1 ? 'produto' : 'produtos'}</span>
                                 </div>
                                 ${obsAccordionHtml}
                             </div>
@@ -38483,7 +38501,7 @@ function renderAcoesEmLoteDoPedido(osId) {
     const id = escapeJsAttr(String(osId));
     const base = 'font-weight: 700; height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 6px; cursor: pointer; font-size: 0.78rem;';
     el.innerHTML = `
-        <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;">Todos os modelos:</span>
+        <span class="banner-grupo-rotulo">Todos os modelos:</span>
         <button class="btn btn-sm" id="btn-lote-pronto" style="${base} background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;"
                 onclick="acaoEmLoteNoPedido('${id}', 'PRONTO')"
                 title="Marca PRONTO todos os modelos do pedido que podem ser marcados — pula os já prontos, os aprovados e os com banco ou células em divergência, e diz quais antes de fazer.">🎨 Marcar todos PRONTO</button>

@@ -1455,6 +1455,32 @@ body.not-logged-in .app-shell {
     }
 }
 
+/* ─── Cabeçalho do pedido aberto (Lista de Arte) ────────────────────────────
+   Os botões do topo ficam em grupos com rótulo — Arquivos, Pedido, Devolver,
+   Todos os modelos. Só organização: os botões e o que fazem não mudaram
+   (redesenho aprovado pelo usuário em 05/09/2026). */
+.banner-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.banner-grupo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px 4px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    flex-wrap: wrap;
+}
+.banner-grupo-rotulo {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+.banner-grupo-separador { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+
 /* Linha 2: Decisão + Config lado a lado */
 .amostra-mid-row {
     display: grid;

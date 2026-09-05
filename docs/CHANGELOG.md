@@ -4,6 +4,40 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-05] — Lista de Arte: o pedido aberto reorganizado (v829)
+
+O usuário pediu, sobre a tela do pedido aberto na Lista de Arte, **só layout**:
+"analisar os botões do topo e sugerir uma forma de organizar melhor; o box do
+modelo, para deixar os espaços melhor organizados e otimizados; o briefing,
+para trazer de forma mais clara as observações por produto — não alterar
+nenhuma função, tudo funciona corretamente". O desenho foi apresentado num
+canvas (layout atual ao lado da proposta), ajustado duas vezes com ele, e
+então aplicado.
+
+- **Cabeçalho do pedido**: os mesmos onze botões e as três ações em lote, em
+  três linhas curtas com grupos rotulados — *Arquivos*, *Pedido*, *Devolver*,
+  *Todos os modelos*. Enviar Link ao Cliente e Fechar Pedido vão para a direita
+  da linha do título. Classes `.banner-grupo` e `.banner-grupo-rotulo`.
+- **Card do modelo**: o ID sobe para o cabeçalho; Cor e Numeração numa linha;
+  os ícones de arte de Frente e Verso na mesma linha, com o rótulo da face
+  acima; a linha do banco de dados numa linha só; as barras de linhas do CSV
+  e de escala finas (o texto de ajuda da escala virou dica); e a decisão vai
+  para o **fim**, com a anotação à esquerda e os botões empilhados à direita.
+  Recuos internos de 28+24 caem para 16.
+- **A orientação da prévia vem do formato** (regra nova, dada pelo usuário):
+  janela vertical mostra frente e verso lado a lado; horizontal, um abaixo do
+  outro. `janelaVertical` no card → `blocoDeArteDoModelo(..., ladoALado)`.
+- **Modo PDF multipágina**: o ícone passa a escrever **PDF** em vermelho no
+  centro, a pedido do usuário.
+- **Briefing**: nome, data e local maiores e em amarelo claro; cada produto
+  vira um bloco com faixa verde-água, nome em branco e a quantidade como selo;
+  a observação sai com fundo sólido, borda visível, fonte da tela e entrelinha
+  maior.
+- `tests/layout_do_pedido_harness.js` trava tudo isso; os 99 harnesses
+  existentes continuaram passando sem alteração.
+
+---
+
 ## [2026-09-04] — Ideal Control: o dia em que alguém tentou usar (v821 → v827)
 
 Depois da análise e das cinco melhorias da manhã, o usuário foi **usar** o Ideal
