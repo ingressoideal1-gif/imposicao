@@ -4,6 +4,16 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-05] — Link do cliente: "Para finalizar, falta: ..." em amarelo
+
+A lista do que ainda depende do cliente (aprovar as artes na aba Arte, conferir
+Entrega, conferir Nota) saía em cinza apagado (`portal-aviso calmo`) e passava
+despercebida. O usuário mandou dar destaque, "talvez em amarelo": classe nova
+`portal-aviso pendente`, fundo e borda em âmbar, texto em amarelo claro e
+negrito. `cartaoDeFinalizacao` em `cliente-confirmacoes.js`.
+
+---
+
 ## [2026-09-05] — Link do cliente: o prazo da aba Entrega com a redação nova
 
 O usuário mandou formatar o painel "Seu pedido chega em" da aba Entrega assim:

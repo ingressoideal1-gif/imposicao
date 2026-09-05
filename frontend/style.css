@@ -3881,6 +3881,15 @@ input[type=number] {
 .portal-aviso.ok      { background: rgba(34, 197, 94, 0.10);  border: 1px solid rgba(34, 197, 94, 0.35); }
 .portal-aviso.atencao { background: rgba(249, 115, 22, 0.10); border: 1px solid rgba(249, 115, 22, 0.40); }
 .portal-aviso.calmo   { background: rgba(148, 163, 184, 0.08); border: 1px solid var(--border); color: var(--text-dim); }
+/* O que ainda falta o cliente fazer, em amarelo: é a lista que ele precisa ler
+   e não lia em cinza (pedido do usuário, 05/09/2026). */
+.portal-aviso.pendente {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.55);
+    color: #fcd34d;
+    font-weight: 600;
+}
+.portal-aviso.pendente b { color: #fde68a; }
 
 /* O resumo do orçamento vem do ERP com quebras de linha próprias. */
 .portal-resumo {

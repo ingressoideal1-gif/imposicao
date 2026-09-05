@@ -219,8 +219,12 @@ function cartaoDeFinalizacao() {
     if (c.faturamento === null) faltam.push('conferir os dados na aba <b>Nota</b>');
 
     if (faltam.length) {
+        // `pendente`, e não `calmo`: o cliente pedia esta lista em cinza apagado
+        // e não a via — o usuário mandou destacá-la em amarelo em 05/09/2026.
+        // É a única coisa da página que ainda depende dele; cinza é para o que
+        // não pede ação.
         return '<div class="portal-cartao">'
-            + '<div class="portal-aviso calmo">Para finalizar, falta: ' + faltam.join('; ') + '.</div>'
+            + '<div class="portal-aviso pendente">Para finalizar, falta: ' + faltam.join('; ') + '.</div>'
             + '<button type="button" class="portal-botao" disabled>' + icone('check', 17)
             + 'Finalizar pedido</button>'
             + '</div>';
