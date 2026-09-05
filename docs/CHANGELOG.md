@@ -4,6 +4,21 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-05] — Link do cliente: o prazo da aba Entrega com a redação nova
+
+O usuário mandou formatar o painel "Seu pedido chega em" da aba Entrega assim:
+**"Agora depende só de Você, seu pedido pode chegar em até: 2 dias úteis - A
+contar da aprovação dos Modelos e Confirmação do PAGAMENTO"**, com a nota
+"Entra em produção quando o último modelo do pedido for aprovado e o pagamento
+for confirmado". O prazo deixa de ser piso ("a partir de") e passa a ser teto
+("em até"), e as duas condições que o cliente controla ficam ditas no mesmo
+painel. Só o número segue grande e verde; a condição vem na mesma linha, em
+tamanho de texto (`.portal-chegada-condicao`), para caber no celular. A
+retirada não mudou. `cartaoDeChegada` em `cliente-entrega.js`;
+`docs/fluxo_aprovacao_arte.md` atualizado.
+
+---
+
 ## [2026-09-05] — Lista de Arte: o pedido aberto reorganizado (v829)
 
 O usuário pediu, sobre a tela do pedido aberto na Lista de Arte, **só layout**:

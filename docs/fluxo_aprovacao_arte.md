@@ -268,10 +268,10 @@ misturavam.
 Desde 25/08/2026 a conta **abre a aba**, num painel próprio (`cartaoDeChegada`):
 
 ```
-SEU PEDIDO CHEGA EM
-7 dias úteis
-A contar da aprovação, e é o piso do prazo: a gráfica só despacha
-quando o último modelo do pedido fica pronto.
+AGORA DEPENDE SÓ DE VOCÊ, SEU PEDIDO PODE CHEGAR EM ATÉ:
+7 dias úteis - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO
+Entra em produção quando o último modelo do pedido for aprovado
+e o pagamento for confirmado.
 
 [ PRODUÇÃO ]     [ TRANSPORTE ]
   5 dias úteis     2 dias úteis
@@ -321,8 +321,10 @@ coisa com a unidade perdida.
 > [!IMPORTANT]
 > A soma **não sai** quando um dos lados não tem número. "A combinar" não vira
 > zero: somar o que der inventaria uma data de entrega que ninguém prometeu, e é
-> da data prometida que o cliente cobra depois. E é "a partir de", não "em" — é
-> o piso do prazo.
+> da data prometida que o cliente cobra depois. Desde 05/09/2026 a redação é
+> "em até", com as duas condições no mesmo painel — aprovar os modelos e
+> confirmar o pagamento —, porque é disso que o relógio depende (redação dada
+> pelo usuário). Na retirada continua "Pronto para retirada em".
 
 > [!NOTE]
 > `propostas_os.data_termino` **não aparece** nesta aba. Ela continua sendo o

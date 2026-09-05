@@ -4345,6 +4345,15 @@ input[type=number] {
     line-height: 1.2;
     margin-top: 4px;
 }
+/* A condição do prazo segue o número na mesma linha, em tamanho de texto:
+   "2 dias úteis - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO".
+   Grande e verde é só o número; o resto quebra de linha sozinho no celular. */
+.portal-chegada-condicao {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.35;
+}
 .portal-chegada-nota {
     display: block;
     font-size: 0.78rem;

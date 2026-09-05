@@ -36,9 +36,16 @@ function tituloDoCartao(nomeDoIcone, texto) {
  * painel grande escrito "a combinar" não é resposta -- é um espaço nobre gasto
  * para não dizer nada.
  *
- * O texto continua sendo "a partir de": é o piso do prazo, e a gráfica não
- * promete o dia exato da entrega. Inventar uma data aqui seria criar uma
- * promessa que ninguém fez -- e é da data prometida que o cliente cobra depois.
+ * Redação dada pelo usuário em 05/09/2026: "Agora depende só de Você, seu
+ * pedido pode chegar em até: N dias úteis - A contar da aprovação dos Modelos e
+ * Confirmação do PAGAMENTO". O prazo deixa de ser piso ("a partir de") e passa a
+ * ser teto ("em até"), com as DUAS condições ditas no mesmo painel: aprovar os
+ * modelos e pagar. É o que o cliente precisa fazer para o relógio começar a
+ * correr -- daí o "depende só de você". A nota embaixo repete quando a produção
+ * de fato começa, para ninguém contar o prazo desde o dia do pedido.
+ *
+ * Só o número fica grande e verde; a condição segue na mesma linha, menor, para
+ * a frase inteira caber na tela de um celular sem virar quatro linhas de 1.45rem.
  */
 function cartaoDeChegada(dados) {
     const pedido = (dados && dados.pedido) || null;
@@ -72,14 +79,17 @@ function cartaoDeChegada(dados) {
         + escapeHtml(rotuloDoFrete(pedido, frete))
         + '</div>';
 
+    const condicao = retirada ? '' :
+        '<span class="portal-chegada-condicao"> - A contar da aprovação dos Modelos e Confirmação do PAGAMENTO</span>';
+
     return '<div class="portal-chegada">'
         + '<span class="portal-chegada-rotulo">'
-        + (retirada ? 'Pronto para retirada em' : 'Seu pedido chega em') + '</span>'
-        + '<span class="portal-chegada-valor">' + escapeHtml(valor) + '</span>'
+        + (retirada ? 'Pronto para retirada em' : 'Agora depende só de Você, seu pedido pode chegar em até:') + '</span>'
+        + '<span class="portal-chegada-valor">' + escapeHtml(valor) + condicao + '</span>'
         + '<span class="portal-chegada-nota">'
         + (retirada
             ? 'A contar da aprovação. Avisamos você quando estiver pronto para buscar.'
-            : 'A contar da aprovação, e é o piso do prazo: a gráfica só despacha quando o último modelo do pedido fica pronto.')
+            : 'Entra em produção quando o último modelo do pedido for aprovado e o pagamento for confirmado.')
         + '</span>'
         + '<div class="portal-chegada-contas">' + caixas.join('') + '</div>'
         + transporte
