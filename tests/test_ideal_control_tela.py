@@ -191,7 +191,8 @@ DASHBOARD_FALSO = {
 }
 
 
-def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False):
+def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False,
+                  viewport=(1440, 900), browser_script=""):
     """Abre a secao do index.html num Chrome de verdade, sem backend.
 
     A pagina hospedeira e minima de proposito: carregar o index.html inteiro
@@ -232,7 +233,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
 (async () => {{
   const browser = await puppeteer.launch({{ args: ['--no-sandbox'] }});
   const page = await browser.newPage();
-  await page.setViewport({{ width: 1440, height: 900 }});
+  await page.setViewport({{ width: {viewport[0]}, height: {viewport[1]} }});
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
   page.on('console', m => {{
@@ -288,6 +289,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
     {script_extra}
   }});
 
+  {browser_script}
   await browser.close();
   console.log(JSON.stringify({{ saida, erros }}));
 }})();
@@ -1749,3 +1751,103 @@ def test_excluir_o_aparelho_daqui_manda_um_DELETE():
         return { chamadas: window._chamadas.filter(c => c.metodo === 'DELETE') };
     """ % SERVIDOR)
     assert saida["chamadas"][0]["caminho"] == "/aparelhos/a1"
+
+# Layout aprovado: navegação real, sem clicar programaticamente em campos ocultos.
+LAYOUT_CLIENTE = SERVIDOR + """
+    window.PAINEL.cliente = window.CLIENTE_COM_PEDIDO.cliente;
+    window.__respostas['/clientes/14'] = window.CLIENTE_COM_PEDIDO;
+    await IdealControl.abrirCliente(14);
+    await IdealControl.abrirPedido(18560);
+    return { ok: true };
+"""
+
+
+def test_layout_navegacao_teclado_operacoes_e_consultas_sob_demanda():
+    _no_navegador(LAYOUT_CLIENTE, browser_script="""
+      const assert = require('assert/strict');
+      const visivel = selector => page.$eval(selector, el => el.checkVisibility());
+      assert(await visivel('#ic-setor-s1 summary'));
+      assert(!(await visivel('#ic-ev-nome')));
+      assert(!(await visivel('#ic-setor-nome-s2')));
+      await page.click('#ic-aba-modelos');
+      assert(await visivel('#ic-modelos'));
+      await page.keyboard.press('ArrowRight');
+      assert(await visivel('#ic-aparelhos'));
+      await page.keyboard.press('ArrowRight');
+      assert(await visivel('#ic-dashboard-abrir'));
+      assert.equal(await page.evaluate(() => _chamadas.filter(c => /dashboard|ingressos/.test(c.caminho)).length), 0);
+      await page.click('#ic-dashboard-abrir');
+      await page.waitForSelector('.ic-kpi', {visible:true});
+      await page.click('#ic-aba-evento');
+      await page.click('#ic-ev-nome');
+      await page.keyboard.down('Control');
+      await page.keyboard.press('A');
+      await page.keyboard.up('Control');
+      await page.type('#ic-ev-nome', 'Evento revisado');
+      await page.click('#ic-ev-salvar');
+      await page.waitForFunction(() => _chamadas.some(c => c.corpo && c.corpo.nome_evento === 'Evento revisado'));
+      await page.waitForSelector('#ic-ev-nome', {visible:true});
+      await page.click('#ic-aba-setores');
+      await page.click('#ic-setor-s2 summary');
+      await page.click('#ic-setor-aba-s2-bloqueios');
+      assert(await visivel('#ic-setor-bloqueio-s2'));
+      await page.evaluate(() => IdealControl.abrirPedido(18560));
+      assert(await visivel('#ic-setor-bloqueio-s2'));
+      await page.click('#ic-acesso-abrir');
+      assert(await visivel('#ic-acesso-email'));
+      await page.keyboard.press('Escape');
+      assert(!(await visivel('#ic-acesso-email')));
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'ic-acesso-abrir');
+      await page.click('#ic-instalacao-abrir');
+      assert(await visivel('#ic-qr-copiar'));
+      await page.keyboard.press('Escape');
+      assert.equal(await page.evaluate(() => _chamadas.filter(c => /ingressos/.test(c.caminho)).length), 0);
+    """)
+
+
+@pytest.mark.parametrize('largura', [1600, 1024, 768, 390])
+def test_layout_cabe_na_tela_em_todas_as_abas(largura):
+    _no_navegador(LAYOUT_CLIENTE, viewport=(largura, 1000), browser_script="""
+      const assert = require('assert/strict');
+      for (const aba of ['setores','modelos','aparelhos','publico','evento']) {
+        await page.click('#ic-aba-' + aba);
+        const tamanho = await page.evaluate(() => ({
+          tela: innerWidth, conteudo: document.documentElement.scrollWidth
+        }));
+        assert(tamanho.conteudo <= tamanho.tela, aba + ': ' + JSON.stringify(tamanho));
+        const lateral = await page.$eval('.ic-lateral', el => ({largura:el.clientWidth, conteudo:el.scrollWidth}));
+        assert(lateral.conteudo <= lateral.largura, JSON.stringify(lateral));
+      }
+      await page.click('#ic-acesso-abrir');
+      const dialogo = await page.$eval('#ic-acesso-dialogo', el => ({
+        largura: el.clientWidth, conteudo: el.scrollWidth
+      }));
+      assert(dialogo.conteudo <= dialogo.largura);
+    """)
+
+
+def test_layout_acesso_sem_pedido_e_troca_de_cliente():
+    _no_navegador(LAYOUT_CLIENTE, browser_script="""
+      const assert = require('assert/strict');
+      await page.click('#ic-acesso-abrir');
+      await page.evaluate(async () => {
+        __respostas['/clientes/99'] = {cliente:{id_cliente:99,nome:'Novo cliente',email:'novo@example.com',contas:[]},pedidos:[]};
+        await IdealControl.abrirCliente(99);
+      });
+      assert.equal(await page.$eval('#ic-acesso-dialogo', el => el.open), false);
+      assert.equal(await page.$eval('#ic-conteudo', el => el.checkVisibility()), false);
+      await page.click('#ic-acesso-abrir');
+      assert.equal(await page.$eval('#ic-acesso-email', el => el.value), 'novo@example.com');
+      await page.keyboard.press('Escape');
+      await page.evaluate(async () => {
+        PAINEL.cliente = {id_cliente:15,nome:'Outro cliente',email:'outro@example.com',contas:[]};
+        PAINEL.evento = null; PAINEL.setores = []; PAINEL.aparelhos = [];
+        await IdealControl.abrirPedido(21524);
+      });
+      assert.equal(await page.$eval('#ic-cliente-secao', el => el.checkVisibility()), false);
+      assert.equal(await page.$eval('#ic-resumo-nome', el => el.textContent), 'Outro cliente');
+      assert.equal(await page.$eval('#ic-criar-evento', el => el.checkVisibility()), true);
+      await page.click('#ic-aba-modelos');
+      assert.equal(await page.$eval('#ic-modelos', el => el.checkVisibility()), true);
+      assert.equal(await page.$eval('#ic-criar-evento', el => el.checkVisibility()), false);
+    """)

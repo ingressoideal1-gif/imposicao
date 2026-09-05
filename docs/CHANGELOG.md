@@ -4,6 +4,29 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-05] — Ideal Control: implementação do layout aprovado
+
+O menu da gráfica passa a organizar cliente e pedidos na lateral e o pedido
+selecionado em cinco abas: Setores, Modelos, Aparelhos, Público e Evento.
+Cada setor é expansível, com opções de Configuração, Ingressos, Bloqueios e
+Staff e cortesia. A aba e os setores abertos são preservados ao salvar no mesmo
+pedido; mudar de pedido reinicia a navegação dos setores.
+
+Gerenciar acesso e o QR/link de instalação abrem em janelas próprias. O acesso
+continua disponível para cliente sem pedido; trocar de cliente fecha as janelas
+anteriores e atualiza a identificação. A senha provisória abre sua janela para
+que o resultado fique visível. O painel de público e os ingressos continuam
+sendo consultados apenas mediante solicitação, pelas mesmas rotas e permissões.
+
+Implementação em `frontend/ideal-control.js`, `frontend/index.html` e
+`frontend/style.css`, baseada em `design/ideal-control-proposta-2026-09-05/`.
+CSS restrito ao menu, abas navegáveis por teclado e adaptação para celular.
+Testes em navegador cobrem operações existentes, navegação, troca de cliente e
+larguras de 390, 768, 1024 e 1600 pixels: 70 testes passaram. Publicação v833;
+o agente 1.2.323 inclui a mesma interface.
+
+---
+
 ## [2026-09-05] — Link do cliente: "Para finalizar, falta: ..." em amarelo
 
 A lista do que ainda depende do cliente (aprovar as artes na aba Arte, conferir

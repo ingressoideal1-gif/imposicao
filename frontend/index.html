@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=832">
-    <script src="pdf-lib.min.js?v=832"></script>
+    <link rel="stylesheet" href="/style.css?v=833">
+    <script src="pdf-lib.min.js?v=833"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3476,12 +3476,8 @@
             <section id="view-ideal-control" class="view-section" style="max-width:100%;">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>🎟️ Ideal Control</h1>
-                        <p>Pesquise pelo <strong>número do cliente</strong> e configure o
-                           controle de acesso dele. Tudo o que o cliente salva no
-                           aplicativo aparece aqui, e o que você salva aqui chega ao
-                           aplicativo dele. Sem senha de evento: basta estar logado
-                           como ADM ou Atendimento.</p>
+                        <h1>Ideal Control</h1>
+                        <p>Do pedido ao evento: clientes, setores e portaria em um só lugar.</p>
                     </div>
                 </div>
 
@@ -3527,7 +3523,7 @@
                     <div id="ic-cliente-pedidos" class="ic-cliente-pedidos"></div>
                     <p id="ic-cliente-sem-pedido" class="ic-ajuda" style="display:none;">
                         Este cliente ainda não tem nenhum pedido com modelo cadastrado no
-                        ERP. Libere o acesso dele abaixo — quando o pedido for publicado,
+                        ERP. Use Gerenciar acesso — quando o pedido for publicado,
                         ele carrega no aplicativo e o evento nasce ali.
                     </p>
                     <!-- Pedido sem modelo no ERP nao entra na lista: nao ha o que
@@ -4286,45 +4282,45 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=832"></script>
-    <script src="/supabase-config.js?v=832"></script>
-    <script src="mapas.js?v=832"></script>
-    <script src="cor-numeracao-do-modelo.js?v=832"></script>
+    <script src="/banco-nao-responde.js?v=833"></script>
+    <script src="/supabase-config.js?v=833"></script>
+    <script src="mapas.js?v=833"></script>
+    <script src="cor-numeracao-do-modelo.js?v=833"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=832"></script>
-    <script src="logo-do-frete.js?v=832"></script>
+    <script src="banco-do-modelo.js?v=833"></script>
+    <script src="logo-do-frete.js?v=833"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=832"></script>
-    <script src="arte-de-impressao.js?v=832"></script>
-    <script src="qr-canvas.js?v=832"></script>
-    <script src="barcode-canvas.js?v=832"></script>
+    <script src="pagamento-do-pedido.js?v=833"></script>
+    <script src="arte-de-impressao.js?v=833"></script>
+    <script src="qr-canvas.js?v=833"></script>
+    <script src="barcode-canvas.js?v=833"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=832"></script>
-    <script src="fonte-canvas.js?v=832"></script>
+    <script src="numero-da-pagina.js?v=833"></script>
+    <script src="fonte-canvas.js?v=833"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=832"></script>
-    <script src="fonte-nome.js?v=832"></script>
-    <script src="qr-ideal-colunas.js?v=832"></script>
-    <script src="csv-editor.js?v=832"></script>
-    <script src="amostra-modal.js?v=832"></script>
-    <script src="texto-ajuste.js?v=832"></script>
-    <script src="foto-lib.js?v=832"></script>
-    <script src="gerenciador-fotos.js?v=832"></script>
-    <script src="editor-foto.js?v=832"></script>
-    <script src="script.js?v=832"></script>
-    <script src="ideal-control.js?v=832"></script>
-    <script src="criador-arte.js?v=832"></script>
-    <script src="/pedido.js?v=832"></script>
-    <script src="montagem.js?v=832"></script>
-    <script src="acabamento.js?v=832"></script>
-    <script src="avisos.js?v=832"></script>
+    <script src="fonte-glifos.js?v=833"></script>
+    <script src="fonte-nome.js?v=833"></script>
+    <script src="qr-ideal-colunas.js?v=833"></script>
+    <script src="csv-editor.js?v=833"></script>
+    <script src="amostra-modal.js?v=833"></script>
+    <script src="texto-ajuste.js?v=833"></script>
+    <script src="foto-lib.js?v=833"></script>
+    <script src="gerenciador-fotos.js?v=833"></script>
+    <script src="editor-foto.js?v=833"></script>
+    <script src="script.js?v=833"></script>
+    <script src="ideal-control.js?v=833"></script>
+    <script src="criador-arte.js?v=833"></script>
+    <script src="/pedido.js?v=833"></script>
+    <script src="montagem.js?v=833"></script>
+    <script src="acabamento.js?v=833"></script>
+    <script src="avisos.js?v=833"></script>
 
 
 
@@ -4652,8 +4648,6 @@
 
 </body>
 </html>
-
-
 
 
 

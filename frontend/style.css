@@ -5538,3 +5538,103 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     border-color: var(--acab-realce);
     color: var(--acab-realce-texto);
 }
+
+/* Ideal Control — layout aprovado em 05/09/2026. Escopo restrito à view. */
+#view-ideal-control [hidden] { display: none !important; }
+#view-ideal-control::before { background: radial-gradient(760px 380px at 16% -30%, rgba(20,184,166,.10), transparent 62%); }
+#view-ideal-control .page-header { margin-bottom: 16px; }
+#view-ideal-control .page-header h1 { font-size: 1.65rem; }
+#view-ideal-control .page-header p { max-width: none; }
+#view-ideal-control .ic-busca-card { padding: 12px 16px !important; }
+#view-ideal-control .ic-busca-linha { max-width: 900px; }
+#view-ideal-control .ic-recentes { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 5px; }
+#view-ideal-control .ic-recentes .btn { flex: 0 0 auto; }
+#view-ideal-control .ic-workspace { display: grid; grid-template-columns: 246px minmax(0,1fr); gap: 24px; align-items: start; }
+#view-ideal-control .ic-workspace.ic-sem-cliente { grid-template-columns: minmax(0,1fr); }
+#view-ideal-control .ic-sem-cliente .ic-lateral { display: none; }
+#view-ideal-control .ic-workspace > *,
+#view-ideal-control .ic-campo { min-width: 0; }
+#view-ideal-control .ic-lateral { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+#view-ideal-control .ic-lateral > * { min-width: 0; }
+#view-ideal-control .btn-outline { background: #182338; color: #e2e8f0; border: 1px solid #344156; }
+#view-ideal-control .btn-outline:hover { background: #24344c; }
+#view-ideal-control .btn-primary { background: #5eead4; color: #06231f; border: 1px solid #5eead4; box-shadow: none; }
+#view-ideal-control .btn-primary:hover { background: #99f6e4; }
+#view-ideal-control input[type=datetime-local] { color-scheme: dark; }
+#view-ideal-control .ic-cliente-resumo { padding: 16px; margin: 0; }
+#view-ideal-control .ic-cliente-resumo h2 { font-size: 1rem; line-height: 1.4; margin: 6px 0; }
+#view-ideal-control .ic-cliente-resumo p { overflow-wrap: anywhere; }
+#view-ideal-control .ic-cliente-resumo .btn { width: 100%; margin-top: 12px; white-space: normal; }
+#view-ideal-control #ic-cliente-secao { padding: 0 4px; }
+#view-ideal-control #ic-cliente-nome,
+#view-ideal-control #ic-cliente-dados { display: none; }
+#view-ideal-control .ic-cliente-pedidos { max-height: 480px; overflow-y: auto; padding: 2px; }
+#view-ideal-control .ic-pedido-do-cliente { white-space: normal; display: block; line-height: 1.6; padding: 10px 12px; }
+#view-ideal-control .ic-pedido-do-cliente[aria-current=true] { background: rgba(45,212,191,.12); border-color: #2dd4bf; color: var(--text); }
+#view-ideal-control #ic-instalacao-abrir { white-space: normal; line-height: 1.5; }
+#view-ideal-control #ic-titulo { font-size: 1.4rem !important; line-height: 1.35; margin: 0 0 12px !important; }
+#view-ideal-control .ic-selos { gap: 6px; margin-bottom: 18px; }
+#view-ideal-control .ic-abas { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+#view-ideal-control .ic-aba { flex: 0 0 auto; color: var(--text-dim); background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 12px 14px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+#view-ideal-control .ic-aba[aria-selected=true] { color: #5eead4; border-bottom-color: #5eead4; }
+#view-ideal-control .ic-aba:hover { background: rgba(148,163,184,.08); }
+#view-ideal-control :is(.ic-aba,summary,.btn):focus-visible { outline: 2px solid #5eead4; outline-offset: -2px; }
+#view-ideal-control .ic-aba-painel { min-width: 0; }
+#view-ideal-control .ic-secao-titulo { margin: 0 0 12px; font-size: .85rem; text-transform: none; letter-spacing: 0; color: var(--text); }
+#view-ideal-control .ic-secao-titulo::before { display: none; }
+#view-ideal-control #ic-btn-conferir-setores { margin-bottom: 12px; }
+#view-ideal-control .ic-setor { padding: 0; margin-bottom: 8px; overflow: hidden; }
+#view-ideal-control .ic-setor-topo { display: grid; grid-template-columns: minmax(130px,1fr) minmax(130px,1fr) auto; gap: 6px 14px; align-items: center; padding: 16px; margin: 0; cursor: pointer; list-style: none; }
+#view-ideal-control .ic-setor-topo::-webkit-details-marker { display: none; }
+#view-ideal-control .ic-setor-topo::after { content: '⌄'; grid-column: 3; grid-row: 1; justify-self: end; }
+#view-ideal-control .ic-setor[open] > summary::after { content: '⌃'; }
+#view-ideal-control .ic-setor-topo > .badge { grid-column: 3; grid-row: 1; margin-right: 20px; }
+#view-ideal-control .ic-setor-topo > span[id^=ic-numeros] { grid-column: 1 / -1; grid-row: 2; }
+#view-ideal-control .ic-setor-topo > span:empty { display: none; }
+#view-ideal-control .ic-setor[open] > summary { background: rgba(45,212,191,.07); border-bottom: 1px solid var(--border); }
+#view-ideal-control .ic-setor > .ic-abas { margin: 0; padding: 6px 10px 0; border-bottom: 0; }
+#view-ideal-control .ic-setor .ic-aba { font-size: .76rem; padding: 10px; }
+#view-ideal-control .ic-setor > .ic-aba-painel { padding: 16px; }
+#view-ideal-control .ic-setor .ic-bloco { margin-top: 0; padding-top: 0; border-top: 0; }
+#view-ideal-control .ic-setor .ic-bloco + .ic-bloco { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+#view-ideal-control .ic-grade { grid-template-columns: repeat(2,minmax(0,1fr)); }
+#view-ideal-control .ic-kpis { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+#view-ideal-control .ic-kpi { padding: 14px; }
+#view-ideal-control .ic-kpi::before { display: none; }
+#view-ideal-control .ic-duas-colunas { grid-template-columns: repeat(2,minmax(0,1fr)); }
+#view-ideal-control .ic-modelo { grid-template-columns: minmax(0,1fr) auto auto; }
+#view-ideal-control .ic-dialogo { position: fixed; inset: 0; margin: auto; width: min(680px,calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; box-sizing: border-box; padding: 22px; background: #101a2b; color: var(--text, #eef3fa); border: 1px solid #344156; border-radius: 16px; }
+#view-ideal-control .ic-dialogo::backdrop { background: rgba(2,6,23,.75); }
+#view-ideal-control .ic-dialogo-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+#view-ideal-control .ic-dialogo-topo h2 { margin: 0; font-size: 1.1rem; }
+#view-ideal-control #ic-acesso-secao > h3 { display: none; }
+#view-ideal-control .ic-dialogo .ic-grade { grid-template-columns: minmax(0,1fr); }
+#view-ideal-control .ic-dialogo code,
+#view-ideal-control .ic-dialogo p { overflow-wrap: anywhere; }
+@media(min-width:1600px) {
+ #view-ideal-control .ic-setor .ic-grade { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+@media(max-width:1100px) {
+ #view-ideal-control .ic-workspace { grid-template-columns: 210px minmax(0,1fr); gap: 16px; }
+ #view-ideal-control .ic-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ #view-ideal-control .ic-setor-topo { grid-template-columns: minmax(0,1fr) auto; }
+ #view-ideal-control .ic-setor-topo > span:first-of-type { grid-column: 1; grid-row: 2; }
+ #view-ideal-control .ic-setor-topo > span[id^=ic-numeros] { grid-row: 3; }
+ #view-ideal-control .ic-setor-topo > .badge, #view-ideal-control .ic-setor-topo::after { grid-column: 2; }
+ #view-ideal-control .ic-duas-colunas { grid-template-columns: minmax(0,1fr); }
+}
+@media(max-width:760px) {
+ #view-ideal-control .ic-workspace { grid-template-columns: minmax(0,1fr); }
+ #view-ideal-control .ic-cliente-pedidos { flex-direction: row; overflow-x: auto; max-height: none; }
+ #view-ideal-control .ic-pedido-do-cliente { flex: 0 0 220px; }
+ #view-ideal-control .ic-busca-linha { flex-wrap: wrap; gap: 8px; }
+ #view-ideal-control .ic-busca-linha label { width: 100%; }
+ #view-ideal-control .ic-busca-linha input { flex-basis: 100%; }
+ #view-ideal-control .ic-busca-linha .btn { flex: 1; }
+ #view-ideal-control .ic-grade { grid-template-columns: minmax(0,1fr); }
+ #view-ideal-control .ic-modelo { grid-template-columns: minmax(0,1fr); }
+ #view-ideal-control .ic-paginacao, #view-ideal-control .ic-bloqueio { flex-wrap: wrap; }
+ #view-ideal-control .ic-ingresso { grid-template-columns: 70px minmax(0,1fr); }
+ #view-ideal-control .ic-ingresso > :last-child { grid-column: 1 / -1; }
+ #view-ideal-control .ic-dialogo { padding: 14px; }
+}

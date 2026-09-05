@@ -64,7 +64,180 @@
 
     var $ = function (id) { return document.getElementById(id); };
 
+    // Apenas apresentação: os nós existentes mantêm seus IDs e ouvintes.
+    var layout = { aba: 'setores', setores: {}, pronto: false };
+
+    function abas(pai, prefixo, itens, escolhida, aoTrocar) {
+        var barra = texto(pai, 'div', '', 'ic-abas');
+        barra.setAttribute('role', 'tablist');
+        barra.setAttribute('aria-label', prefixo === 'ic-aba' ? 'Pedido e evento' : 'Opções do setor');
+        function selecionar(chave) {
+            itens.forEach(function (item) {
+                var ativo = item.chave === chave;
+                item.botao.setAttribute('aria-selected', String(ativo));
+                item.botao.tabIndex = ativo ? 0 : -1;
+                item.painel.hidden = !ativo;
+            });
+            aoTrocar(chave);
+        }
+        itens.forEach(function (item, i) {
+            var b = texto(barra, 'button', item.nome, 'ic-aba');
+            b.type = 'button';
+            b.id = prefixo + '-' + item.chave;
+            b.setAttribute('role', 'tab');
+            b.setAttribute('aria-controls', b.id + '-painel');
+            item.botao = b;
+            item.painel.id = b.id + '-painel';
+            item.painel.classList.add('ic-aba-painel');
+            item.painel.setAttribute('role', 'tabpanel');
+            item.painel.setAttribute('aria-labelledby', b.id);
+            item.painel.tabIndex = 0;
+            b.onclick = function () { selecionar(item.chave); };
+            b.onkeydown = function (ev) {
+                var n = ev.key === 'ArrowRight' ? (i + 1) % itens.length
+                    : ev.key === 'ArrowLeft' ? (i + itens.length - 1) % itens.length
+                    : ev.key === 'Home' ? 0 : ev.key === 'End' ? itens.length - 1 : -1;
+                if (n < 0) { return; }
+                ev.preventDefault();
+                selecionar(itens[n].chave);
+                itens[n].botao.focus();
+            };
+        });
+        itens.forEach(function (item) { pai.appendChild(item.painel); });
+        selecionar(escolhida);
+    }
+
+    function montarLayout() {
+        if (layout.pronto) { return; }
+        layout.pronto = true;
+        var view = $('view-ideal-control');
+        var busca = $('ic-busca').closest('.card');
+        busca.classList.add('ic-busca-card');
+        var workspace = texto(view, 'div', '', 'ic-workspace');
+        workspace.id = 'ic-workspace';
+        var lateral = texto(workspace, 'aside', '', 'ic-lateral');
+        lateral.setAttribute('aria-label', 'Cliente e pedidos');
+        var resumo = texto(lateral, 'div', '', 'card ic-cliente-resumo');
+        resumo.id = 'ic-cliente-resumo';
+        resumo.hidden = true;
+        texto(resumo, 'p', 'CLIENTE', 'ic-ajuda');
+        texto(resumo, 'h2', '').id = 'ic-resumo-nome';
+        texto(resumo, 'p', '', 'ic-dim').id = 'ic-resumo-dados';
+        texto(resumo, 'p', '', 'ic-ajuda').id = 'ic-resumo-acesso';
+        var acesso = texto(resumo, 'button', 'Gerenciar acesso', 'btn btn-sm btn-primary');
+        acesso.id = 'ic-acesso-abrir';
+        acesso.type = 'button';
+        var pedidos = texto(resumo, 'button', 'Ver todos os pedidos', 'btn btn-sm btn-outline');
+        pedidos.id = 'ic-cliente-todos';
+        pedidos.type = 'button';
+        pedidos.onclick = function () {
+            if (estado.clienteAberto) { abrirCliente(estado.clienteAberto.id_cliente); }
+        };
+        lateral.appendChild($('ic-cliente-secao'));
+        var instalar = texto(lateral, 'button', 'Aplicativo do cliente · QR e link', 'btn btn-sm btn-outline');
+        instalar.id = 'ic-instalacao-abrir';
+        instalar.type = 'button';
+        instalar.hidden = true;
+        var principal = texto(workspace, 'div', '', 'ic-principal');
+        principal.appendChild($('ic-carregando'));
+        principal.appendChild($('ic-vazio'));
+        var inicial = texto(principal, 'div', 'Abra um cliente ou pedido para configurar o controle de acesso.', 'empty-state');
+        inicial.id = 'ic-orientacao';
+        principal.appendChild($('ic-conteudo'));
+
+        function dialogo(id, titulo, gatilho) {
+            var d = texto(view, 'dialog', '', 'ic-dialogo');
+            d.id = id;
+            var topo = texto(d, 'div', '', 'ic-dialogo-topo');
+            texto(topo, 'h2', titulo).id = id + '-titulo';
+            d.setAttribute('aria-labelledby', id + '-titulo');
+            var fechar = texto(topo, 'button', 'Fechar', 'btn btn-sm btn-outline');
+            fechar.type = 'button';
+            fechar.onclick = function () { d.close(); };
+            var aviso = texto(d, 'p', '', 'ic-ajuda ic-dialogo-aviso');
+            aviso.setAttribute('role', 'status');
+            gatilho.onclick = function () { aviso.textContent = ''; d.showModal(); };
+            return d;
+        }
+        var acessoDialogo = dialogo('ic-acesso-dialogo', 'Acesso do cliente', acesso);
+        var instalacaoDialogo = dialogo('ic-instalacao-dialogo', 'Aplicativo do cliente', instalar);
+        // O QR genérico fica separado da concessão de acesso e da senha.
+        var cardAcesso = $('ic-acesso-secao').querySelector('.card');
+        var divisoria = cardAcesso.querySelector(':scope > hr');
+        while (divisoria.nextSibling) { instalacaoDialogo.appendChild(divisoria.nextSibling); }
+        divisoria.remove();
+        acessoDialogo.appendChild($('ic-acesso-secao'));
+
+        $('ic-conteudo').appendChild($('ic-vinculo-aviso'));
+        var itens = [
+            ['setores', 'Setores', ['ic-setores-secao']],
+            ['modelos', 'Modelos', ['ic-modelos']],
+            ['aparelhos', 'Aparelhos', ['ic-aparelhos-secao']],
+            ['publico', 'Público', ['ic-dashboard-secao']],
+            ['evento', 'Evento', ['ic-evento-secao', 'ic-vinculo-secao']]
+        ].map(function (item) {
+            var painel = document.createElement('div');
+            item[2].forEach(function (id) { painel.appendChild($(id)); });
+            if (item[0] === 'setores' || item[0] === 'publico') {
+                var vazio = texto(painel, 'p', '', 'ic-ajuda');
+                vazio.id = 'ic-' + item[0] + '-vazio';
+            }
+            return { chave: item[0], nome: item[1], painel: painel };
+        });
+        abas($('ic-conteudo'), 'ic-aba', itens, layout.aba, function (chave) {
+            layout.aba = chave;
+            atualizarLayout();
+        });
+        // A reconciliação continua acessível junto aos setores; a desvinculação
+        // fica em Evento, junto da explicação e do aviso da operação.
+        var conferir = $('ic-btn-conferir-setores');
+        conferir.title = 'Compara com o pedido e cria os setores que faltam, preservando os nomes definidos pelo cliente.';
+        $('ic-setores-secao').insertBefore(conferir, $('ic-setores'));
+    }
+
+    function atualizarLayout() {
+        if (!layout.pronto) { return; }
+        var p = estado.painel, c = estado.clienteAberto;
+        $('ic-workspace').classList.toggle('ic-sem-cliente', !c);
+        $('ic-cliente-resumo').hidden = !c;
+        $('ic-instalacao-abrir').hidden = !c;
+        $('ic-orientacao').hidden = !!p || $('ic-carregando').style.display !== 'none'
+            || $('ic-vazio').style.display !== 'none';
+        if (c) {
+            $('ic-resumo-nome').textContent = c.nome || ('Cliente ' + c.id_cliente);
+            $('ic-resumo-dados').textContent = '#' + c.id_cliente + (c.email ? ' · ' + c.email : '');
+            $('ic-resumo-acesso').textContent = (c.contas || []).length ? 'Acesso liberado' : 'Acesso ainda não liberado';
+        } else {
+            ['ic-acesso-dialogo', 'ic-instalacao-dialogo'].forEach(function (id) {
+                if ($(id).open) { $(id).close(); }
+            });
+        }
+        var listaAtual = c && estado.painelCliente && estado.painelCliente.cliente
+            && String(estado.painelCliente.cliente.id_cliente) === String(c.id_cliente);
+        $('ic-cliente-secao').style.display = listaAtual ? '' : 'none';
+        $('ic-cliente-todos').hidden = !!listaAtual;
+        document.querySelectorAll('.ic-pedido-do-cliente').forEach(function (b) {
+            b.setAttribute('aria-current', String(b.id === 'ic-pedido-' + estado.pedido));
+        });
+        if (!p) { return; }
+        $('ic-sem-evento').hidden = layout.aba === 'modelos';
+        $('ic-setores-vazio').textContent = p.evento && !(p.setores || []).length
+            ? 'Nenhum setor neste evento. Confira os modelos e use Conferir os setores acima.' : '';
+        // Mesmo sem setores é preciso conseguir reconciliar o pedido.
+        if (p.evento && !(p.setores || []).length) { $('ic-setores-secao').style.display = ''; }
+        $('ic-publico-vazio').textContent = p.evento && !p.tem_dashboard
+            ? 'O painel de público ainda não está disponível para este pedido.' : '';
+        var ev = p.evento;
+        var status = $('ic-status-evento');
+        if (!status) { status = texto($('ic-situacao'), 'span', '', 'badge'); status.id = 'ic-status-evento'; }
+        status.textContent = ev ? (SITUACAO_DO_EVENTO[ev.status] || ev.status || '') : '';
+        status.hidden = !ev;
+        status.className = 'badge ' + (ev && ev.status === 'ativo' ? 'badge-green' : 'badge-amber');
+    }
+
     function avisar(texto, tipo) {
+        var aviso = document.querySelector('#view-ideal-control dialog[open] .ic-dialogo-aviso');
+        if (aviso) { aviso.textContent = texto; }
         if (typeof window.toast === 'function') { window.toast(texto, tipo || 'info'); }
     }
 
@@ -266,6 +439,9 @@
         // a lista debaixo de quem estava procurando um ingresso — no instante
         // seguinte a ele salvar o nome do setor, sem ter tocado na lista.
         if (estado.pedido !== n) {
+            layout.setores = {};
+            layout.aba = 'setores';
+            if ($('ic-aba-setores')) { $('ic-aba-setores').click(); }
             estado.ingressos = {};
             estado.dashboard = null;
             // O bloco "Acesso do cliente" mora FORA do `#ic-conteudo` desde
@@ -280,6 +456,8 @@
         $('ic-carregando').style.display = '';
         $('ic-conteudo').style.display = 'none';
         $('ic-vazio').style.display = 'none';
+
+        atualizarLayout();
 
         // O `.catch` cobre o `desenhar()` TAMBÉM, e não só a ida à rede: um erro
         // ao montar a tela — um campo que o servidor deixou de mandar, por
@@ -300,6 +478,7 @@
             // No console fica o erro inteiro, com a pilha — a tela recebe uma
             // frase, quem for investigar recebe o resto.
             if (window.console) { console.error('[ideal-control] abrirPedido', e); }
+            atualizarLayout();
         });
     }
 
@@ -324,6 +503,7 @@
         estado.painel = null;
         estado.ingressos = {};
         estado.dashboard = null;
+        layout.setores = {};
         $('ic-conteudo').style.display = 'none';
         $('ic-cliente-secao').style.display = 'none';
         // Pelo mesmo motivo do `abrirPedido`: o bloco de acesso e do CLIENTE, e
@@ -344,6 +524,7 @@
                 ? ('O cliente ' + n + ' não existe no ERP.')
                 : ((e && e.message) || 'Não consegui abrir este cliente.');
             if (window.console) { console.error('[ideal-control] abrirCliente', e); }
+            atualizarLayout();
         });
     }
 
@@ -466,6 +647,7 @@
         desenharEvento();
         desenharSetores();
         desenharAparelhos();
+        atualizarLayout();
     }
 
     /**
@@ -747,6 +929,7 @@
         var secao = $('ic-acesso-secao');
         estado.clienteAberto = c || null;
         secao.style.display = c ? '' : 'none';
+        atualizarLayout();
         if (!c) { return; }
 
         $('ic-acesso-cliente').textContent = c.nome + ' (cliente ' + c.id_cliente + ')'
@@ -826,6 +1009,10 @@
      * existe. `desenharAcessoDoCliente` é quem o esconde de novo.
      */
     function mostrarSenhaProvisoria(senha, email) {
+        // O resultado precisa ficar visível mesmo se a janela foi fechada
+        // enquanto o servidor respondia. O chamador já confere o cliente alvo.
+        var dialogo = $('ic-acesso-dialogo');
+        if (dialogo && !dialogo.open) { dialogo.showModal(); }
         $('ic-acesso-senha-valor').textContent = senha;
         $('ic-acesso-senha').style.display = '';
         $('ic-acesso-senha-copiar').onclick = function () {
@@ -1301,15 +1488,28 @@
         caixa.innerHTML = '';
         var setores = estado.painel.setores || [];
         $('ic-setores-secao').style.display = setores.length ? '' : 'none';
-        setores.forEach(function (s) { caixa.appendChild(cartaoDeSetor(s)); });
+        setores.forEach(function (s) {
+            caixa.appendChild(cartaoDeSetor(s));
+            pintarNumeros(s.id);
+        });
     }
 
     function cartaoDeSetor(s) {
-        var el = document.createElement('div');
+        var el = document.createElement('details');
         el.className = 'card ic-setor';
         el.id = 'ic-setor-' + s.id;
 
-        var topo = document.createElement('div');
+        var local = layout.setores[s.id];
+        if (!local) {
+            local = layout.setores[s.id] = {
+                aberto: (estado.painel.setores || [])[0] === s,
+                aba: 'configuracao'
+            };
+        }
+        el.open = local.aberto;
+        el.addEventListener('toggle', function () { local.aberto = el.open; });
+
+        var topo = document.createElement('summary');
         topo.className = 'ic-setor-topo';
         texto(topo, 'h3', s.nome);
         // Só o que veio do ERP: quantidade contratada e faixa impressa. As
@@ -1322,7 +1522,10 @@
               + (faixa ? ' · ' + faixa : ''), 'ic-dim');
         var numeros = texto(topo, 'span', '', 'ic-dim');
         numeros.id = 'ic-numeros-' + s.id;
+        texto(topo, 'span', s.bloqueado ? 'Bloqueado' : 'Liberado',
+            'badge ' + (s.bloqueado ? 'badge-amber' : 'badge-green'));
         el.appendChild(topo);
+        var configuracao = document.createElement('div');
 
         // ── Configuração ───────────────────────────────────────────────────
         var grade = document.createElement('div');
@@ -1337,6 +1540,7 @@
         var sel = document.createElement('select');
         sel.className = 'form-control';
         sel.id = 'ic-setor-uso-' + s.id;
+        uso.querySelector('label').htmlFor = sel.id;
         [['unico', 'Vale uma entrada só'],
          ['reentrada', 'Permite sair e voltar']].forEach(function (par) {
             var op = document.createElement('option');
@@ -1353,7 +1557,7 @@
               'Vazio = já está valendo. A portaria aceita a qualquer momento.');
         campo(grade, 'Fecha em', 'datetime-local', 'ic-setor-fecha-' + s.id,
               deISOParaCampo(s.fecha_em), 'Vazio = não fecha.');
-        el.appendChild(grade);
+        configuracao.appendChild(grade);
 
         var salvar = document.createElement('button');
         salvar.className = 'btn btn-sm btn-primary';
@@ -1367,12 +1571,16 @@
                 fecha_em: doCampoParaISO($('ic-setor-fecha-' + s.id).value)
             }).then(recarregar).catch(function () { /* já avisado */ });
         });
-        el.appendChild(salvar);
-
-        el.appendChild(bloqueioDoSetorInteiro(s));
-        el.appendChild(bloqueiosDoSetor(s));
-        el.appendChild(codigosDoSetor(s));
-        el.appendChild(ingressosDoSetor(s));
+        configuracao.appendChild(salvar);
+        var bloqueios = document.createElement('div');
+        bloqueios.appendChild(bloqueioDoSetorInteiro(s));
+        bloqueios.appendChild(bloqueiosDoSetor(s));
+        abas(el, 'ic-setor-aba-' + s.id, [
+            { chave: 'configuracao', nome: 'Configuração', painel: configuracao },
+            { chave: 'ingressos', nome: 'Ingressos', painel: ingressosDoSetor(s) },
+            { chave: 'bloqueios', nome: 'Bloqueios', painel: bloqueios },
+            { chave: 'staff', nome: 'Staff e cortesia', painel: codigosDoSetor(s) }
+        ], local.aba, function (chave) { local.aba = chave; });
         return el;
     }
 
@@ -1852,6 +2060,7 @@
     function iniciar() {
         if (jaLigou) { return listarRecentes(); }
         jaLigou = true;
+        montarLayout();
 
         $('ic-buscar').addEventListener('click', function () {
             abrirCliente($('ic-busca').value);
