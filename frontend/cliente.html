@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideal Imposition — Aprovação do Pedido</title>
     <meta name="description" content="Ideal Imposition — Envio de artes e aprovação de pedidos online.">
-    <link rel="stylesheet" href="/style.css?v=824">
+    <link rel="stylesheet" href="/style.css?v=825">
     <style>
         /* Ajustes básicos para o cliente rodar isolado, caso existam dependências no body geral */
         body { margin: 0; background-color: var(--bg); color: var(--text); font-family: sans-serif; }
@@ -170,37 +170,37 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=824"></script>
-    <script src="/supabase-config.js?v=824"></script>
-    <script src="/cor-numeracao-do-modelo.js?v=824"></script>
-    <script src="/logo-do-frete.js?v=824"></script>
-    <script src="/qr-canvas.js?v=824"></script>
-    <script src="/barcode-canvas.js?v=824"></script>
+    <script src="/banco-nao-responde.js?v=825"></script>
+    <script src="/supabase-config.js?v=825"></script>
+    <script src="/cor-numeracao-do-modelo.js?v=825"></script>
+    <script src="/logo-do-frete.js?v=825"></script>
+    <script src="/qr-canvas.js?v=825"></script>
+    <script src="/barcode-canvas.js?v=825"></script>
     <!-- A mesma regra de numero por pagina que o painel usa. -->
-    <script src="/numero-da-pagina.js?v=824"></script>
+    <script src="/numero-da-pagina.js?v=825"></script>
     <!-- `fonte-canvas.js` antes de quem desenha: sem ele esta pagina montava a
          string de `ctx.font` na mão e o cliente via a numeração com outra fonte. -->
-    <script src="/fonte-canvas.js?v=824"></script>
+    <script src="/fonte-canvas.js?v=825"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="/fonte-glifos.js?v=824"></script>
-    <script src="/texto-ajuste.js?v=824"></script>
-    <script src="/foto-lib.js?v=824"></script>
+    <script src="/fonte-glifos.js?v=825"></script>
+    <script src="/texto-ajuste.js?v=825"></script>
+    <script src="/foto-lib.js?v=825"></script>
     <!-- A regra de "pago" antes de quem a usa: a mesma que a Lista de Arte lê
          para decidir o selo PAGO, para as duas telas não divergirem. -->
     <!-- Os icones desenhados, antes de qualquer tela que os use: as abas, os
          cartoes e os selos pedem o SVG a este arquivo em vez de escrever emoji. -->
-    <script src="/icones-cliente.js?v=824"></script>
-    <script src="/pagamento-do-pedido.js?v=824"></script>
-    <script src="/cliente-dados.js?v=824"></script>
-    <script src="/cliente-shell.js?v=824"></script>
-    <script src="/cliente-confirmacoes.js?v=824"></script>
-    <script src="/cliente-entrega.js?v=824"></script>
-    <script src="/cliente-faturamento.js?v=824"></script>
-    <script src="/cliente-orcamento.js?v=824"></script>
-    <script src="/cliente-pagamento.js?v=824"></script>
-    <script src="/cliente.js?v=824"></script>
+    <script src="/icones-cliente.js?v=825"></script>
+    <script src="/pagamento-do-pedido.js?v=825"></script>
+    <script src="/cliente-dados.js?v=825"></script>
+    <script src="/cliente-shell.js?v=825"></script>
+    <script src="/cliente-confirmacoes.js?v=825"></script>
+    <script src="/cliente-entrega.js?v=825"></script>
+    <script src="/cliente-faturamento.js?v=825"></script>
+    <script src="/cliente-orcamento.js?v=825"></script>
+    <script src="/cliente-pagamento.js?v=825"></script>
+    <script src="/cliente.js?v=825"></script>
 </body>
 </html>

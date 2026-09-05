@@ -82,10 +82,11 @@ function confere(nome, condicao, detalhe) {
     const erros2 = [];
     pagina2.on('pageerror', (e) => erros2.push(String(e)));
     await pagina2.setContent('<!doctype html><html><body></body></html>');
-    await pagina2.evaluate(() => {
-        // O que existe num harness: o objeto, sem o PostgREST junto.
-        window.supabaseClient = { storage: { from: () => ({ getPublicUrl: () => ({}) }) } };
-    });
+    // Declarado como o `supabase-config.js` declara: `let`, no escopo de script.
+    // `window.supabaseClient` NAO existe -- e foi por ler `window` que o fundo
+    // nunca subiu ao aplicativo (04/09/2026).
+    await pagina2.addScriptTag({ content:
+        "let supabaseClient = { storage: { from: () => ({ getPublicUrl: () => ({}) }) } };" });
     await pagina2.addScriptTag({ path: path.join(FRENTE, 'fundo-do-app.js') });
     await new Promise((ok) => setTimeout(ok, 300));
     confere('nao derruba a pagina com cliente reduzido', erros2.length === 0,
@@ -102,6 +103,68 @@ function confere(nome, condicao, detalhe) {
     await new Promise((ok) => setTimeout(ok, 300));
     confere('nao derruba a pagina sem cliente nenhum', erros3.length === 0,
             erros3.join(' | '));
+
+    // ── 3. o caminho inteiro, com o cliente como ele EXISTE na pagina ──────
+    //
+    // `let supabaseClient` no escopo de script, sem `window.supabaseClient`.
+    // Antes de 04/09/2026 este caso nao existia, e o script lia `window`:
+    // achava `undefined`, concluia "sem rede" e nunca pedia a foto. A tabela
+    // estava certa, a imagem publica, a previa do ADM bonita -- e o celular
+    // abria sem fundo, em silencio, por dez dias.
+    const pagina4 = await browser.newPage();
+    const erros4 = [];
+    pagina4.on('pageerror', (e) => erros4.push(String(e)));
+    const pedidos4 = [];
+    await pagina4.setRequestInterception(true);
+    pagina4.on('request', (req) => {
+        const url = req.url();
+        if (url === 'https://banco.de.mesa/storage/v1/object/public/app-imagens/fundo-pwa/v1.jpg') {
+            pedidos4.push(url);
+            // Um JPEG minusculo, so para o fetch responder 200 com bytes.
+            // O CORS que o Storage do Supabase manda de verdade: sem ele o
+            // `fetch` de outra origem falha e o script, de proposito, cala.
+            return req.respond({ status: 200, contentType: 'image/jpeg',
+                                 headers: { 'Access-Control-Allow-Origin': '*' },
+                                 body: Buffer.from('ffd8ffd9', 'hex') });
+        }
+        if (url.startsWith('http://arnes.local')) {
+            return req.respond({ status: 200, contentType: 'text/html',
+                                 body: '<!doctype html><html><body></body></html>' });
+        }
+        req.abort();
+    });
+    await pagina4.goto('http://arnes.local/', { waitUntil: 'domcontentloaded' });
+    await pagina4.addScriptTag({ content: `
+        let supabaseClient = {
+            from: (tabela) => {
+                window.__perguntou = tabela;
+                // Um "thenable" de verdade: o script encadeia .then(...).catch(...),
+                // entao o then tem de devolver uma Promise, e nao o retorno do callback.
+                const resposta = { data: [{ arquivo: 'fundo-pwa/v1.jpg', veu: 0.6, versao: 'v1' }] };
+                const q = { select: () => q, eq: () => q, order: () => q, limit: () => q,
+                            then: (ok, ko) => Promise.resolve(resposta).then(ok, ko) };
+                return q;
+            },
+            storage: { from: () => ({ getPublicUrl: (arquivo) => ({ data: {
+                publicUrl: 'https://banco.de.mesa/storage/v1/object/public/app-imagens/' + arquivo } }) }) },
+        };` });
+    await pagina4.addScriptTag({ path: path.join(FRENTE, 'fundo-do-app.js') });
+    await new Promise((ok) => setTimeout(ok, 600));
+    const estado4 = await pagina4.evaluate(() => ({
+        perguntou: window.__perguntou,
+        comFundo: document.documentElement.classList.contains('com-fundo'),
+        imagem: document.documentElement.style.getPropertyValue('--fundo-imagem'),
+        veu: document.documentElement.style.getPropertyValue('--fundo-veu'),
+        temWindow: 'supabaseClient' in window,
+    }));
+    confere('o cliente so existe como `let` (o cenario real)', estado4.temWindow === false);
+    confere('pergunta ao banco qual e o fundo', estado4.perguntou === 'imposition_fundo_pwa',
+            JSON.stringify(estado4));
+    confere('baixa a foto publicada', pedidos4.length === 1, JSON.stringify(pedidos4));
+    confere('poe a foto na tela', estado4.comFundo && /^url\("blob:/.test(estado4.imagem),
+            JSON.stringify(estado4));
+    confere('aplica o veu do ADM', estado4.veu === '0.6', JSON.stringify(estado4));
+    confere('nao derruba a pagina no caminho inteiro', erros4.length === 0, erros4.join(' | '));
 
     confere('o modulo do ADM nao derruba nada ao carregar', erros.length === 0,
             erros.join(' | '));

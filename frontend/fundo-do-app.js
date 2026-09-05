@@ -50,6 +50,35 @@
     var CHAVE_META = 'ideal_fundo_meta';
     var BUCKET = 'app-imagens';
 
+    /**
+     * O cliente do Supabase — pelo IDENTIFICADOR NU, nunca por `window`.
+     *
+     * `supabase-config.js` faz `let supabaseClient = null;` no topo de um
+     * script clássico. `let` cria a ligação no escopo de script, não em
+     * `window`: `window.supabaseClient` é `undefined` para sempre, enquanto o
+     * nome nu entrega o cliente inteiro.
+     *
+     * Foi exatamente por isso que o fundo NUNCA subiu ao aplicativo (04/09/2026):
+     * este arquivo lia `window.supabaseClient`, achava `undefined`, concluía
+     * "sem rede" e nunca perguntava ao banco qual era a foto. A tabela estava
+     * certa, a imagem estava pública, o ADM via a prévia — e o celular abria
+     * sem foto, sem erro nenhum, porque este arquivo é desenhado para não
+     * derrubar nada. Um silêncio de dez dias.
+     *
+     * O `try` cobre a zona morta temporal: se um dia este script carregar antes
+     * do `supabase-config.js`, ler a ligação lançaria em vez de dar `undefined`.
+     * É o mesmo cuidado do `clienteDoPainel` em `ideal-control.js`, que caiu
+     * na mesma armadilha em 16/08/2026.
+     */
+    function clienteDoApp() {
+        try {
+            return (typeof supabaseClient !== 'undefined' && supabaseClient)
+                ? supabaseClient : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     /** A meta guardada: `{ arquivo, veu, versao }`, ou null. */
     function metaGuardada() {
         try {
@@ -132,7 +161,7 @@
     }
 
     function enderecoDe(arquivo) {
-        var cliente = window.supabaseClient || window.supabase;
+        var cliente = clienteDoApp();
         if (!cliente || !cliente.storage) { return null; }
         try {
             var r = cliente.storage.from(BUCKET).getPublicUrl(arquivo);
@@ -151,7 +180,7 @@
      * por causa de um acabamento. Este arquivo não pode custar a tela.
      */
     function oQueEstaNoAr() {
-        var cliente = window.supabaseClient;
+        var cliente = clienteDoApp();
         if (!cliente || typeof cliente.from !== 'function') { return Promise.resolve(null); }
         if (!navigator.onLine) { return Promise.resolve(null); }
         return cliente
