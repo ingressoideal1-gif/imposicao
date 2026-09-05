@@ -1156,11 +1156,10 @@ html.com-fundo body::after { opacity: .3; }
     padding: 14px 0 14px 17px;
     border: 0;
     border-radius: 17px;
-    /* Os "veios": a mesma fita, a 3,5%, DENTRO da peca. E o que separa o
-       cartao do fundo agora que ele nao tem mais borda. */
-    background:
-        repeating-linear-gradient(107deg, rgba(255, 255, 255, .035) 0 18px, transparent 18px 52px),
-        linear-gradient(168deg, #1b2740 0%, #141d33 52%, #111a2e 100%);
+    /* Sem os "veios" (as listras diagonais dentro da peca) desde 04/09/2026,
+       por pedido do usuario. O que separa o cartao do fundo e o degrade
+       proprio dele, mais o fio de luz no topo e a sombra recortada. */
+    background: linear-gradient(168deg, #1b2740 0%, #141d33 52%, #111a2e 100%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
     -webkit-mask:
         radial-gradient(circle 9px at var(--pico) 0,    #0000 98%, #000) 0 0    / 100% 50.5% no-repeat,
@@ -1261,11 +1260,11 @@ html.com-fundo body::after { opacity: .3; }
     box-shadow: 0 10px 22px -12px rgba(226, 118, 42, .85), inset 0 1px 0 rgba(255, 255, 255, .3);
 }
 
-/* ── Os cartoes tambem ganham os veios ─────────────────────────────────── */
+/* ── Os cartoes: so o degrade, sem listras ─────────────────────────────────
+   As listras diagonais ("veios") sairam de dentro dos cartoes em 04/09/2026,
+   a pedido do usuario. A fita da marca continua nos titulos de secao. */
 .cartao, .linha-finalizada {
-    background:
-        repeating-linear-gradient(107deg, rgba(255, 255, 255, .03) 0 18px, transparent 18px 52px),
-        linear-gradient(180deg, var(--card-2), var(--card));
+    background: linear-gradient(180deg, var(--card-2), var(--card));
 }
 
 /* ── O PEDIDO tambem e um ingresso ─────────────────────────────────────────

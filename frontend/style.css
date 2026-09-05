@@ -3282,11 +3282,11 @@ input[type=number] {
     background: repeating-linear-gradient(107deg, #2dd4bf 0 3px, transparent 3px 7px);
 }
 
-/* Os cartoes desta tela ganham os veios -- a fita a 3%, dentro da peca. */
+/* Os cartoes desta tela: so o degrade. As listras diagonais ("veios") de
+   dentro dos cartoes sairam em 04/09/2026, a pedido do usuario -- aqui e no
+   aplicativo, no mesmo dia, para as duas telas continuarem irmas. */
 #view-ideal-control .card {
-    background:
-        repeating-linear-gradient(107deg, rgba(255, 255, 255, .03) 0 18px, transparent 18px 52px),
-        linear-gradient(180deg, #172136, #131c2e);
+    background: linear-gradient(180deg, #172136, #131c2e);
     border-color: rgba(148, 163, 184, .18);
 }
 
