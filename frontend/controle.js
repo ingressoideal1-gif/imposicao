@@ -2383,7 +2383,15 @@
         try {
             if (window.caches && caches.keys) {
                 passos.push(caches.keys().then(function (nomes) {
-                    return Promise.all(nomes.map(function (n) { return caches.delete(n); }));
+                    // A foto de fundo fica: ela mora num cache próprio
+                    // (`ideal-fundo-*`, ver `fundo-do-app.js`) justamente para
+                    // este botão não a levar junto. Ela é conteúdo, não
+                    // aplicativo — e tirá-la daqui obrigava um download novo no
+                    // meio do evento. Até 04/09/2026 este botão limpava tudo, e
+                    // o fundo sumia no "atualizar".
+                    return Promise.all(nomes
+                        .filter(function (n) { return n.indexOf('ideal-fundo') !== 0; })
+                        .map(function (n) { return caches.delete(n); }));
                 }));
             }
         } catch (e) { /* sem Cache Storage: idem */ }

@@ -166,6 +166,62 @@ function confere(nome, condicao, detalhe) {
     confere('aplica o veu do ADM', estado4.veu === '0.6', JSON.stringify(estado4));
     confere('nao derruba a pagina no caminho inteiro', erros4.length === 0, erros4.join(' | '));
 
+    // ── 4. a segunda abertura SEM a copia local (04/09/2026) ─────────────
+    //
+    // O "Atualizar o aplicativo" do rodape apagava todos os caches, inclusive
+    // o da foto; a meta sobrevivia no localStorage. A versao anterior anotava
+    // "ja apliquei" antes de procurar a copia, lia "nada mudou" e nao baixava
+    // -- em TODAS as aberturas seguintes. O fundo sumia no atualizar e nao
+    // voltava. Aqui: meta presente, cache vazio, banco igual. Tem de baixar.
+    const pagina5 = await browser.newPage();
+    const erros5 = [];
+    pagina5.on('pageerror', (e) => erros5.push(String(e)));
+    const pedidos5 = [];
+    await pagina5.setRequestInterception(true);
+    pagina5.on('request', (req) => {
+        const url = req.url();
+        if (url === 'https://banco.de.mesa/storage/v1/object/public/app-imagens/fundo-pwa/v1.jpg') {
+            pedidos5.push(url);
+            return req.respond({ status: 200, contentType: 'image/jpeg',
+                                 headers: { 'Access-Control-Allow-Origin': '*' },
+                                 body: Buffer.from('ffd8ffd9', 'hex') });
+        }
+        if (url.startsWith('http://arnes.local')) {
+            return req.respond({ status: 200, contentType: 'text/html',
+                                 body: '<!doctype html><html><body></body></html>' });
+        }
+        req.abort();
+    });
+    await pagina5.goto('http://arnes.local/', { waitUntil: 'domcontentloaded' });
+    await pagina5.evaluate(() => {
+        // A meta de uma abertura anterior -- e nenhuma copia no Cache Storage
+        // (nesta origem o `caches` nem existe, que e o mesmo que "apagado").
+        localStorage.setItem('ideal_fundo_meta',
+            JSON.stringify({ arquivo: 'fundo-pwa/v1.jpg', veu: 0.6, versao: 'v1' }));
+    });
+    await pagina5.addScriptTag({ content: `
+        let supabaseClient = {
+            from: () => {
+                const resposta = { data: [{ arquivo: 'fundo-pwa/v1.jpg', veu: 0.6, versao: 'v1' }] };
+                const q = { select: () => q, eq: () => q, order: () => q, limit: () => q,
+                            then: (ok, ko) => Promise.resolve(resposta).then(ok, ko) };
+                return q;
+            },
+            storage: { from: () => ({ getPublicUrl: (arquivo) => ({ data: {
+                publicUrl: 'https://banco.de.mesa/storage/v1/object/public/app-imagens/' + arquivo } }) }) },
+        };` });
+    await pagina5.addScriptTag({ path: path.join(FRENTE, 'fundo-do-app.js') });
+    await new Promise((ok) => setTimeout(ok, 600));
+    const estado5 = await pagina5.evaluate(() => ({
+        comFundo: document.documentElement.classList.contains('com-fundo'),
+        imagem: document.documentElement.style.getPropertyValue('--fundo-imagem'),
+    }));
+    confere('sem copia local, baixa de novo mesmo com o banco igual', pedidos5.length === 1,
+            JSON.stringify(pedidos5));
+    confere('e poe a foto na tela na segunda abertura',
+            estado5.comFundo && /^url\("blob:/.test(estado5.imagem), JSON.stringify(estado5));
+    confere('nao derruba a pagina na segunda abertura', erros5.length === 0, erros5.join(' | '));
+
     confere('o modulo do ADM nao derruba nada ao carregar', erros.length === 0,
             erros.join(' | '));
 

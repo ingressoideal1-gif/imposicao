@@ -206,14 +206,25 @@
 
     function montar() {
         // ── 1. o que já está no aparelho, agora ────────────────────────────
+        //
+        // `naTela` é uma PROMESSA do endereço que de fato foi aplicado — ou de
+        // null. Não é o endereço que a meta diz que deveria existir. A
+        // diferença custou o fundo inteiro em 04/09/2026: a versão anterior
+        // anotava "já apliquei" antes de a cópia ser procurada, e quando ela
+        // não estava lá (o "Atualizar o aplicativo" do rodapé apagava TODOS os
+        // caches, inclusive este), a etapa 2 lia "nada mudou, já está na tela"
+        // e não baixava. A meta sobrevivia no localStorage, então toda abertura
+        // seguinte repetia a conclusão. O fundo sumia no atualizar e não
+        // voltava nunca mais.
         var meta = metaGuardada();
-        var jaAplicado = null;
+        var naTela = Promise.resolve(null);
         if (meta && meta.arquivo) {
             var endereco = enderecoDe(meta.arquivo);
             if (endereco) {
-                jaAplicado = endereco;
-                daCopia(endereco).then(function (url) {
-                    if (url) { aplicar(url, meta.veu); }
+                naTela = daCopia(endereco).then(function (url) {
+                    if (!url) { return null; }
+                    aplicar(url, meta.veu);
+                    return endereco;
                 });
             }
         }
@@ -229,21 +240,27 @@
             var mudouSoOVeu = meta && meta.versao === noAr.versao
                               && Number(meta.veu) !== Number(noAr.veu);
 
-            // O véu é um número: trocá-lo não custa download nenhum.
-            if (mudouSoOVeu) {
-                guardarMeta(noAr);
-                document.documentElement.style.setProperty('--fundo-veu', String(noAr.veu));
-                return;
-            }
-            if (!mudouAImagem && jaAplicado === endereco) { return; }
+            naTela.then(function (aplicado) {
+                // O véu é um número: trocá-lo não custa download nenhum — mas
+                // só se a foto estiver na tela. Sem cópia, cai no download.
+                if (mudouSoOVeu && aplicado === endereco) {
+                    guardarMeta(noAr);
+                    document.documentElement.style.setProperty('--fundo-veu', String(noAr.veu));
+                    return;
+                }
+                // A foto de sempre, e ela ESTÁ na tela: nada a fazer. A
+                // pergunta é sobre o que foi aplicado, não sobre o que a meta
+                // prometia.
+                if (!mudouAImagem && aplicado === endereco) { return; }
 
-            baixarEGuardar(endereco).then(function (url) {
-                aplicar(url, noAr.veu);
-                guardarMeta(noAr);
-                limpar(endereco);
-            }).catch(function () {
-                // Falhou o download: fica a cópia anterior, que já está na
-                // tela. Fundo velho é melhor que tela piscando.
+                baixarEGuardar(endereco).then(function (url) {
+                    aplicar(url, noAr.veu);
+                    guardarMeta(noAr);
+                    limpar(endereco);
+                }).catch(function () {
+                    // Falhou o download: fica a cópia anterior, se houver. Fundo
+                    // velho é melhor que tela piscando.
+                });
             });
         });
     }
