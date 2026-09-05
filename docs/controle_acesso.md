@@ -458,7 +458,13 @@ O QR do Pedido saiu de circulação. O que existe agora:
    cliente": cria a conta na mesma auth do Vibe com uma senha provisória (8
    símbolos, sem `0 O 1 I L`, mostrada uma vez) e grava a ligação conta ↔
    `id_cliente` em `producao_acesso_contas`. E-mail que já tinha conta é só
-   ligado — a senha dele fica em paz (`criada_aqui = false`).
+   ligado — a senha dele fica em paz (`criada_aqui = false`). **Liberar de novo
+   o mesmo e-mail não reescreve a ligação** (04/09/2026): até então o segundo
+   clique gravava `criada_aqui: false` por cima, o botão "Nova senha provisória"
+   sumia e o servidor recusava com 403 uma conta que a gráfica criou. Quem diz
+   se a conta é nossa é o `user_metadata.origem` gravado ao criá-la. O bloco
+   "Acesso do cliente" existe nas duas portas da tela — pedido aberto ou busca
+   por cliente — e não mais só dentro do painel do pedido.
 2. **O cliente instala o app pelo QR de instalação** (um só, genérico:
    `https://ideal-imposition.vercel.app/ic/`) e entra. O primeiro acesso obriga a
    trocar a senha. "Esqueci minha senha" manda falar com a gráfica: o projeto não
@@ -466,7 +472,10 @@ O QR do Pedido saiu de circulação. O que existe agora:
 3. **"Meus Pedidos"** (`GET /meus-pedidos`) lista os pedidos do cliente **já
    impressos** — com pelo menos uma credencial publicada; `publicado_em` não serve,
    porque gerar QR e reimprimir a zeram —, legíveis, não cancelados e ainda não
-   carregados. Nome, data e local vêm de `pedidos_artes`.
+   carregados. Nome, data e local vêm de `pedidos_artes`. Um `amostra_num_id`
+   que não tem forma de UUID (havia um `"n1"` no pedido de testes) é descartado
+   por `idDeNumeracao()` antes da consulta: até 04/09/2026 ele fazia o banco
+   recusar a consulta inteira, e o cliente não via pedido nenhum.
 4. **"Carregar"** (`POST /pedidos/{p}/carregar`) cria o evento (ou junta a um
    existente do mesmo cliente), um setor por modelo legível, carimba as
    credenciais e devolve a **elevação de 15 minutos** — por isso o "usar este
@@ -984,6 +993,74 @@ porteiro ler); e desliga o setor cujo modelo perdeu o código **só quando ele e
 que é o caso dos oito setores órfãos criados antes de o filtro de legibilidade existir. Com
 ingresso dentro, ele fica, e a tela avisa: isso é decisão de gente, não de rotina.
 
+## Quais pedidos entram, e por qual porta (04/09/2026)
+
+A pergunta do usuário, ao fim do dia: *"em quais pedidos pode ser utilizado o PWA Ideal
+Control?"*. A resposta é uma regra só, e ela já estava escrita em [Só sobe o que a portaria
+tem como ler](#só-sobe-o-que-a-portaria-tem-como-ler): **qualquer pedido do ERP em que pelo
+menos um modelo tenha numeração com código que a portaria leia** — QR Ideal, QR ou código de
+barras gerado a partir do número do item. Não existe marcação "controle de acesso" no
+pedido; ela é deduzida da numeração, por `numeracaoDoModelo`, a mesma regra que o agente
+usa para decidir o que publica. Elemento alimentado por coluna do CSV e elemento de valor
+fixo não contam; `amostra_num_id` que não é UUID não aponta para numeração nenhuma.
+
+Dentro do pedido, **só os modelos legíveis viram setor**. Um crachá só com texto aparece na
+tela da gráfica como "sem código (não sobe)", e isso não é defeito.
+
+O que desqualifica o pedido inteiro: **cancelado** no ERP, **sem cliente** na proposta (o
+evento pertence ao cliente, e sem cliente ninguém o encontra), ou **sem modelo nenhum**.
+
+### As duas portas para o evento
+
+Até 04/09/2026 o evento só nascia quando o cliente tocava em "Carregar" no aplicativo — e
+sem evento não havia setor, código de staff nem aparelho para a gráfica configurar. A tela
+da gráfica, cuja razão de existir é entregar o Ideal Control pré-configurado, ficava sem o
+que configurar até o cliente agir. Decisão do usuário: *"precisamos do acesso no menu
+ideal control, antes do cliente fazer o acesso pelo pwa — visualizar setores, códigos,
+todas as configurações"*. Regra que sai daí: **nenhuma configuração do controle de acesso
+pode depender de um gesto do cliente.**
+
+| | Gráfica — "Criar o evento deste pedido" | Cliente — "Carregar" |
+|---|---|---|
+| Onde | menu Ideal Control, `POST /pedidos/{p}/criar-evento` (acesso-interno) | aplicativo, `POST /pedidos/{p}/carregar` (acesso-conta) |
+| Quem prova ser | o papel ADM/Atendimento no painel | o dono, mais a senha ou o bilhete de conta |
+| Precisa estar impresso? | **não** — a credencial que vier depois nasce ligada, porque a publicação lê os setores do pedido (`setoresDoPedido`) | **sim** — só entra em "Meus Pedidos" o que já tem credencial publicada |
+| Dono do evento | o **cliente**, por `id_cliente`; `dono_auth_id` fica **nulo** (coluna liberada em `sql/schema_acesso_evento_sem_dono.sql`) — nunca o atendente | a conta que carregou, mais o `id_cliente` |
+| Já está num evento | recusa 409 | não aparece na lista |
+
+As duas portas chamam a **mesma função** — `criarEventoDoPedido`, em
+`_compartilhado/vinculo.ts` —, que cria a linha de `producao_acesso_pedidos` se ela ainda
+não existir (com o sal do pedido, sem passar por `abrirPedido`, que reabriria a
+publicação), cria o evento, um setor por modelo legível, carimba as credenciais já impressas
+e liga o pedido por último — para uma falha no meio deixar a operação repetível. A regra de
+posse (`pertenceAConta`) já aceitava as duas formas desde 17/08 — "a conta que criou, ou
+qualquer conta ligada àquele cliente" —, então o cliente encontra o evento criado pela
+gráfica assim que a conta dele existir. Exercitado em produção no mesmo dia: pedido 21524 →
+evento **SOBERANAS**, setor INGRESSO com 1.500.
+
+### Todo pedido é alcançável pelo menu
+
+No mesmo dia: *"todos os pedidos devem ficar disponíveis para visualização e edição pelo
+menu ideal control"*. A lista de pedidos do cliente saía de `producao_acesso_pedidos` — só o
+que já tinha subido; o cliente 11406 tinha quatro pedidos com modelo e a tela mostrava um.
+Agora ela sai das **propostas** do cliente, cada linha dizendo *N publicados* ou *ainda não
+publicado*, e os pedidos sem modelo são contados numa linha à parte em vez de omitidos. A
+busca ganhou o botão **Abrir pedido** ao lado de **Abrir cliente**: as duas faixas de número
+se cruzam — 21524 é um pedido *e* um cliente —, e um campo que adivinhasse abriria a ficha de
+outra pessoa sem produzir erro nenhum.
+
+### O fundo do aplicativo
+
+A foto de evento que o ADM publica (aba "Fundo do PWA") **nunca tinha chegado ao
+aplicativo**: `fundo-do-app.js` lia `window.supabaseClient`, que não existe —
+`supabase-config.js` declara `let supabaseClient`, no escopo de script —, concluía "sem rede"
+e calava, por dez dias. A mesma armadilha que o `ideal-control.js` documenta desde 16/08.
+E o "Atualizar o aplicativo" do rodapé apagava todos os caches, inclusive o da foto, enquanto
+o carregador anotava "já apliquei" antes de procurar a cópia: o fundo sumia no atualizar e não
+voltava. Hoje o carregador acha o cliente pelo nome nu, decide sobre o que **de fato** foi
+aplicado, e o botão preserva `ideal-fundo-*`. O arnês declara o cliente como a página
+declara.
+
 ## O que falta (a partir da parte 3c)
 
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
@@ -1026,7 +1103,14 @@ aparelho revogado**, e o **aviso que chega sem o dono perguntar** — um portão
 sincronizar há quarenta minutos ainda só é descoberto por quem vai olhar.
 
 Saíram desta lista em 04/09/2026: o painel ao vivo, desvincular pedido do evento, e a
-limpeza dos setores órfãos, que hoje acontece dentro do "Conferir os setores".
+limpeza dos setores órfãos, que hoje acontece dentro do "Conferir os setores". Entraram no
+mesmo dia, pela [Segunda Passagem](https://claude.ai/code/artifact/2fa75e9d-f940-4d75-96bc-909762fd297c):
+o **aviso de versão nova no painel** (hoje só o agente tem a faixa, e duas vezes num dia o
+usuário relatou defeito já corrigido porque a página aberta era a de antes), uma **prova de
+sucesso contra o banco real para toda rota que escreve** (o NOT NULL do `dono_auth_id` passou
+por 200 testes que dublam o banco), e a **prova da portaria offline**
+([prova_da_portaria.md](prova_da_portaria.md)), que continua sendo a única parte do caminho
+que nenhum teste faz.
 
 Decisões já tomadas pelo usuário. As quatro primeiras estão registradas na
 [spec de 13/08](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md); a quinta é

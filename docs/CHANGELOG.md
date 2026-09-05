@@ -4,6 +4,75 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-09-04] — Ideal Control: o dia em que alguém tentou usar (v821 → v827)
+
+Depois da análise e das cinco melhorias da manhã, o usuário foi **usar** o Ideal
+Control — liberar o acesso de um cliente e testar os pedidos dele — e não
+conseguiu. O que se seguiu foram sete publicações num dia, seis defeitos de
+produção, uma regra nova de produto e uma revisão do fluxo inteira
+(*Segunda Passagem*). Nenhum dos defeitos era o que parecia à primeira vista.
+
+### O que estava impedindo
+
+1. **A senha provisória sumia no instante de aparecer** (v821). O servidor
+   liberava o acesso e a tela escondia o bloco inteiro: o redesenho chamava
+   `desenharAcessoDoCliente()` sem dizer de qual cliente, e a função entendia
+   "pedido sem cliente" — que é o que o argumento vazio significa para ela. O
+   teste passava porque media o `display` de um filho de um pai escondido;
+   agora pergunta o que o olho pergunta.
+2. **O bloco "Acesso do cliente" não aparecia pela busca por cliente** (v821).
+   Morava dentro do painel do pedido, que só abre quando um pedido abre. O
+   texto dizia "libere o acesso dele abaixo" — e abaixo não havia nada.
+3. **Liberar de novo rebaixava a conta que a gráfica criou** (v822). O segundo
+   clique gravava `criada_aqui: false` com `merge-duplicates`; o botão "Nova
+   senha provisória" sumia e o servidor recusava com 403. Duas contas ficaram
+   assim; a que era de verdade do Vibe desde 2025 foi deixada em paz
+   (`sql/conserto_conta_rebaixada.sql`).
+4. **Um `amostra_num_id` gravado como "n1" derrubava `/meus-pedidos` com 500**
+   (v823). `producao_numeracoes.id` é UUID; bastava o valor torto entrar no
+   `in.(...)` para o banco recusar a consulta inteira. O cliente cuja lista
+   incluísse aquele pedido não via pedido nenhum — e o pedido era o 21346, o de
+   testes. `idDeNumeracao()` descarta o que não tem forma de UUID, nos três
+   lugares; a fixture dos testes usava exatamente "n1".
+5. **O evento criado pela gráfica gravava nulo numa coluna NOT NULL** (v824).
+   Encontrado na revisão, conferindo o esquema, antes de alguém esbarrar:
+   `sql/schema_acesso_evento_sem_dono.sql`.
+6. **A foto de fundo nunca chegou ao aplicativo** (v825, v826). O carregador
+   lia `window.supabaseClient`, que não existe (`let` no escopo de script),
+   concluía "sem rede" e calava — por dez dias. E o "Atualizar o aplicativo"
+   apagava o cache da foto enquanto o carregador, na abertura seguinte, anotava
+   "já apliquei" antes de procurar a cópia: o fundo sumia no atualizar e não
+   voltava.
+
+### As regras que nasceram do dia
+
+- **Todo pedido é alcançável pelo menu Ideal Control** (v822). A lista do
+  cliente saía de `producao_acesso_pedidos` — só o que já tinha subido; o
+  cliente 11406 tinha quatro pedidos com modelo e a tela mostrava um. Agora sai
+  das propostas, cada linha dizendo *N publicados* ou *ainda não publicado*, e
+  os sem modelo são contados numa linha à parte. E a busca ganhou o botão
+  **Abrir pedido** ao lado de **Abrir cliente**: 21524 é um pedido *e* um
+  cliente, e adivinhar abriria a ficha de outra pessoa sem parecer erro.
+- **A gráfica cria o evento antes do cliente** (v823/v824). "Precisamos do
+  acesso no menu ideal control, antes do cliente fazer o acesso pelo pwa —
+  visualizar setores, códigos, todas as configurações." O evento só nascia no
+  "Carregar" do aplicativo; sem evento não havia o que configurar. Botão
+  **Criar o evento deste pedido**, mesma função do servidor
+  (`criarEventoDoPedido`, em `vinculo.ts`), dono pelo `id_cliente` e
+  `dono_auth_id` nulo — nunca o atendente. Não exige impressão: a credencial
+  que vier depois nasce ligada. Exercitado em produção: pedido 21524 → evento
+  **SOBERANAS**.
+- **Sem listras dentro dos cartões** (v827), no aplicativo e no painel. A fita
+  da marca fica nos títulos de seção, na luz da página e no picote.
+
+### Números
+
+2.391 testes na suíte; 200 nas Edge Functions (8 novos); 64 na tela do Ideal
+Control (5 novos); o arnês do fundo com 3 casos novos, um deles com o cliente
+declarado como a página declara. Agente 1.2.311 → 1.2.317.
+
+---
+
 ## [2026-09-04] — Ideal Control: o evento acontecendo, na mão do dono
 
 Pedido do usuário: *"onde podemos melhorar o Pwa Ideal control? qual a sua
