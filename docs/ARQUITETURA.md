@@ -10,7 +10,8 @@ flowchart TD
     W --> A["Supabase Auth"]
     W <--> D["PostgreSQL e Storage"]
     W --> E["Edge Functions"]
-    D <--> N["NewProd local"]
+    W <--> N["NewProd local"]
+    D <--> N
     N --> G["Motor de imposição"]
     N --> P["Impressoras"]
 ```
@@ -49,7 +50,15 @@ Não documentar o estado atual de RLS somente a partir de um arquivo SQL. Script
 
 As Edge Functions são o backend na nuvem. Elas concentram operações que exigem validação no servidor, acesso protegido ou uso de segredos que não podem ser expostos no navegador ou na estação.
 
-Os segredos de produção pertencem ao ambiente do Supabase. A chave `service_role` nunca deve ser gravada no frontend nem versionada.
+Os segredos da nuvem pertencem ao ambiente protegido do Supabase. A chave
+`service_role` nunca deve ser gravada no frontend, incorporada no NewProd nem
+versionada.
+
+A estação usa um canal de autenticação diferente: o build atual incorpora um
+segredo específico do agente para autenticar a comunicação da estação. Essa
+credencial não é a `service_role`; ainda assim, deve ser tratada como material
+restrito, com finalidade limitada, rotação controlada e sem exposição no
+frontend ou em logs.
 
 ### NewProd
 
@@ -111,7 +120,7 @@ A imposição não é executada no Render nem em outro backend Python público.
 
 ### Fila e sincronização
 
-`agent_worker.py` mantém a identidade da estação, heartbeat, fila de trabalhos, sincronizações e atualizações. O acesso ao Supabase pelo agente deve usar apenas as credenciais previstas para esse canal; segredos administrativos permanecem nas Edge Functions.
+`agent_worker.py` mantém a identidade da estação, heartbeat, fila de trabalhos, sincronizações e atualizações. O agente usa a credencial específica de estação prevista para esse canal. Segredos administrativos, especialmente a `service_role`, permanecem exclusivamente nas Edge Functions.
 
 ## Implantação e versões
 
