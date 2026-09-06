@@ -47,10 +47,22 @@ O modo local/offline é um fluxo separado. Ele não transforma o NewProd em back
 
 ## Desenvolvimento
 
-Antes de alterar ou publicar:
+Para revisar apenas as alterações locais, sem consultar os ambientes:
+
+```powershell
+git status --short
+git diff --stat
+git diff --check
+```
+
+Antes de publicar, execute a conferência operacional:
 
 ```powershell
 .\ferramentas\conferir.ps1
 ```
+
+`conferir.ps1` não publica nem cria commits, mas também não é uma verificação
+exclusivamente local: consulta o Supabase real, verifica estações, chama RPCs e
+executa testes Pester. Use-o quando esses acessos operacionais forem apropriados.
 
 Consulte [docs/PUBLICAR.md](docs/PUBLICAR.md) para o fluxo oficial de publicação.
