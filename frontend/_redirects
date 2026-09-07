@@ -1,0 +1,11 @@
+# Redirecionamentos publicos antigos.
+/portaria.html /ic/portaria.html 301
+/controle.html /ic/controle.html 301
+
+# Rotas amigaveis servidas pelos mesmos arquivos estaticos.
+/ic /controle.html 200
+/ic/ /controle.html 200
+/ic/* /:splat 200
+/cliente/* /cliente.html 200
+/pedido/* /index.html 200
+/ /index.html 200

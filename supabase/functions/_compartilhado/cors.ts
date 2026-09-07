@@ -30,12 +30,14 @@
  * conferem cabecalho de origem. So o navegador.
  */
 
-// As duas origens em que o site atende. A do servidor Python que ficava na nuvem
-// saiu em 17/08/2026, junto com o servidor.
+// Origens da hospedagem nova e as duas origens Vercel mantidas para rollback e
+// para os QR codes antigos.
 //
 // `imposicao.vercel.app` fica: QR ja impresso e ja enviado por WhatsApp carrega o
 // endereco antigo, e tirar a origem quebraria todo QR que ja saiu daqui.
 const ORIGENS_PERMITIDAS = [
+  "https://imposition.ai-ideal.com.br",
+  "https://imposicao.pages.dev",
   "https://ideal-imposition.vercel.app",
   "https://imposicao.vercel.app",
 ];
@@ -47,7 +49,9 @@ const ORIGENS_PERMITIDAS = [
  * qualquer um registra, lendo a carga inteira do evento.
  */
 const ORIGEM_PERMITIDA = new RegExp(
-  "^(https://(ideal-imposition|imposicao)(-[a-z0-9-]+)?\\.vercel\\.app" +
+  "^(https://(([a-z0-9-]+\\.)?imposicao\\.pages\\.dev" +
+    "|imposition\\.ai-ideal\\.com\\.br" +
+    "|(ideal-imposition|imposicao)(-[a-z0-9-]+)?\\.vercel\\.app)" +
     "|http://(localhost|127\\.0\\.0\\.1)(:\\d+)?)$",
 );
 

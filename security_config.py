@@ -17,21 +17,25 @@ import os
 from urllib.parse import urlparse
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# As duas origens em que o site atende. O painel servido pela estação chama o
+# As origens em que o site atende durante a migracao. O painel servido pela estação chama o
 # `/api/*` da própria máquina (same-origin), mas a tela do operador pode ter sido
 # baixada de qualquer uma destas duas, e é a origem dela que o navegador manda.
 #
 # A origem do servidor que ficava na nuvem saiu daqui em 17/08/2026, junto com o
 # servidor.
 ALLOWED_ORIGINS = [
+    "https://imposition.ai-ideal.com.br",
+    "https://imposicao.pages.dev",
     "https://ideal-imposition.vercel.app",
     "https://imposicao.vercel.app",
 ]
 
-# Cobre os deploys de preview do Vercel (URL dinâmica por branch) e o
-# desenvolvimento local em qualquer porta.
+# Cobre os deploys de preview da Cloudflare e do Vercel, alem do desenvolvimento
+# local em qualquer porta. Os enderecos Vercel ficam aceitos durante o rollback.
 ALLOWED_ORIGIN_REGEX = (
-    r"https://(ideal-imposition|imposicao)(-[a-z0-9-]+)?\.vercel\.app"
+    r"https://(([a-z0-9-]+\.)?imposicao\.pages\.dev"
+    r"|imposition\.ai-ideal\.com\.br"
+    r"|(ideal-imposition|imposicao)(-[a-z0-9-]+)?\.vercel\.app)"
     r"|http://(localhost|127\.0\.0\.1)(:\d+)?"
 )
 
