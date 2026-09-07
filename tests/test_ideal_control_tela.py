@@ -1245,7 +1245,7 @@ def test_o_bloco_acesso_do_cliente_mostra_o_cliente_e_as_contas():
     assert "DANIEL MOREIRA" in saida["texto"] and "maria@exemplo.com" in saida["texto"]
     assert "Nova senha provisória" in saida["texto"]
     assert saida["email"] == "daniel@exemplo.com"
-    assert saida["link"] == "https://ideal-imposition.vercel.app/ic/"
+    assert saida["link"] == "https://imposition.ai-ideal.com.br/ic/"
 
 
 def test_liberar_acesso_mostra_a_senha_provisoria_uma_vez():
@@ -1376,7 +1376,7 @@ def test_liberar_acesso_tambem_poe_o_link_de_whatsapp():
     assert saida["mensagem"] == (
         "Olá! Seu acesso ao Ideal Control (controle de acesso da Ingresso Ideal) "
         "está liberado.\n\n"
-        "1) Instale o aplicativo: https://ideal-imposition.vercel.app/ic/\n"
+        "1) Instale o aplicativo: https://imposition.ai-ideal.com.br/ic/\n"
         "2) Entre com o e-mail: daniel@exemplo.com\n"
         "3) Senha provisória: K7M2PQ9X\n\n"
         "No primeiro acesso o aplicativo pede para você escolher a sua senha."

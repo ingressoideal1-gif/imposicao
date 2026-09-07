@@ -846,7 +846,7 @@
      * de quem só quer mostrar o código ao cliente que está no balcão. A
      * resposta do servidor troca este valor depois, se um dia divergirem.
      */
-    var URL_INSTALACAO_PADRAO = 'https://ideal-imposition.vercel.app/ic/';
+    var URL_INSTALACAO_PADRAO = 'https://imposition.ai-ideal.com.br/ic/';
     var urlInstalacao = URL_INSTALACAO_PADRAO;
     var jaPerguntouInstalacao = false;
 
