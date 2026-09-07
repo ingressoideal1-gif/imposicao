@@ -1,0 +1,31 @@
+# HTML e rotas de entrada sempre conferem a versao publicada.
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/ic
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/ic/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/cliente/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/pedido/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/*.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# JS e CSS levam versao na URL e podem ficar uma hora no navegador.
+/*.js
+  Cache-Control: public, max-age=3600
+
+/*.css
+  Cache-Control: public, max-age=3600

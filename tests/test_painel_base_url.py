@@ -56,3 +56,16 @@ def test_o_endereco_antigo_continua_aceito_como_origem_nossa():
     origens quebraria todo QR que ja saiu daqui."""
     assert "https://imposicao.vercel.app" in security_config.ALLOWED_ORIGINS
     assert ONDE_O_APLICATIVO_MORA in security_config.ALLOWED_ORIGINS
+
+
+def test_as_origens_da_migracao_cloudflare_estao_autorizadas():
+    assert "https://imposition.ai-ideal.com.br" in security_config.ALLOWED_ORIGINS
+    assert "https://imposicao.pages.dev" in security_config.ALLOWED_ORIGINS
+    assert re.fullmatch(
+        security_config.ALLOWED_ORIGIN_REGEX,
+        "https://migration-cloudflare.imposicao.pages.dev",
+    )
+    assert not re.fullmatch(
+        security_config.ALLOWED_ORIGIN_REGEX,
+        "https://imposicao.pages.dev.exemplo.com",
+    )

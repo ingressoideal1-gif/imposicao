@@ -86,6 +86,20 @@ Deno.test("origem: um preview do Vercel passa pela regex", () => {
   assertEquals(origemPermitida(previa), previa);
 });
 
+Deno.test("origem: Cloudflare Pages, preview e dominio proprio passam", () => {
+  const previa = "https://migration-cloudflare.imposicao.pages.dev";
+  assertEquals(origemPermitida("https://imposicao.pages.dev"), "https://imposicao.pages.dev");
+  assertEquals(origemPermitida(previa), previa);
+  assertEquals(
+    origemPermitida("https://imposition.ai-ideal.com.br"),
+    "https://imposition.ai-ideal.com.br",
+  );
+});
+
+Deno.test("origem: sufixo enganoso do Pages NAO passa", () => {
+  assertEquals(origemPermitida("https://imposicao.pages.dev.exemplo.com"), null);
+});
+
 Deno.test("origem: desenvolvimento local em qualquer porta passa", () => {
   assertEquals(origemPermitida("http://localhost:9123"), "http://localhost:9123");
   assertEquals(origemPermitida("http://127.0.0.1"), "http://127.0.0.1");
