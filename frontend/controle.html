@@ -22,7 +22,7 @@
     <!-- A fonte da identidade visual, pre-carregada para a tela nao trocar de
          letra depois de aberta. Local, e no pre-cache do service worker. -->
     <link rel="preload" href="ideal-control.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="controle.css?v=833">
+    <link rel="stylesheet" href="controle.css?v=834">
 </head>
 <body>
 <div class="folha">
@@ -136,7 +136,8 @@
             <button id="btn-atualizar-pedidos" class="secundario" type="button">Atualizar</button>
         </div>
         <h1 class="rotulo-secao">Meus Pedidos</h1>
-        <p class="config-ajuda">Os pedidos que a gráfica já imprimiu para você. Carregar um pedido cria o evento dele em <strong>Meus Eventos</strong>.</p>
+        <button id="btn-conferencia-pedidos" type="button" class="secundario">Conferir pedidos · Gráfica</button>
+        <p class="config-ajuda">Os pedidos que a gráfica já imprimiu para você. Toque em <strong>Preparar para leitura</strong> para organizar o evento e baixar os dados neste aparelho.</p>
         <div id="pedidos"></div>
         <!-- `role="alert"` porque este paragrafo e o unico lugar onde uma
              falha da busca aparece: sem ele, quem usa leitor de tela fica no
@@ -159,6 +160,8 @@
          baixo dele. -->
     <div id="caixa-carregar" class="cartao sumindo">
         <h1 id="carregar-titulo">Carregar o pedido</h1>
+        <details id="preparar-detalhes">
+        <summary>Nome, data, local ou juntar a outro evento</summary>
         <label for="carregar-destino">Onde</label>
         <select id="carregar-destino"></select>
         <div id="carregar-campos-novo">
@@ -169,6 +172,7 @@
             <label for="carregar-local">Local</label>
             <input id="carregar-local" type="text" maxlength="200">
         </div>
+        </details>
         <p class="config-ajuda">Cada modelo do pedido vira um setor do evento. Setor ainda não impresso passa a valer quando a gráfica imprimir.</p>
         <!-- Daqui para baixo e a CONFIRMACAO: quem esta assinando, e a senha.
              A linha que a `.carregar-conta` desenha e o que separa isto da
@@ -180,6 +184,11 @@
              Nasce escondido: quem abre a caixa e o `carregar-pedido.js`, e e
              ele que sabe se ha bilhete valido. -->
         <p id="carregar-sem-senha" class="config-ajuda sumindo">Você entrou há pouco: não precisa digitar a senha de novo.</p>
+        <div id="preparar-aparelho" class="sumindo">
+            <label for="preparar-nome-aparelho">Nome deste aparelho</label>
+            <input id="preparar-nome-aparelho" maxlength="60" placeholder="Meu celular">
+            <p class="config-ajuda">Ao confirmar, o aplicativo prepara este celular para a leitura. Mantenha a internet ligada até o download terminar.</p>
+        </div>
         <button id="btn-carregar-confirmar">Carregar</button>
         <button id="btn-carregar-cancelar" class="secundario">Cancelar</button>
         <div id="erro-carregar" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
@@ -263,6 +272,21 @@
          usuário. Eles ocupavam o fim da tela inicial e empurravam para baixo a
          única coisa que o porteiro precisa achar com pressa — a barra do evento
          que ele vai ler. -->
+    <div id="conferencia-pedidos" class="sumindo">
+        <button id="btn-conferencia-voltar" type="button" class="secundario">← Voltar</button>
+        <h1>Conferência da gráfica</h1>
+        <p class="config-ajuda">Consulte com sua conta de Administrador ou Atendimento. Nenhum pedido ou ingresso é alterado nesta tela.</p>
+        <form id="conferencia-form">
+            <label for="conferencia-tipo">Buscar por</label>
+            <select id="conferencia-tipo"><option value="pedido">Número do pedido</option><option value="cliente">Nome do cliente</option></select>
+            <label for="conferencia-busca">Pedido ou cliente</label>
+            <input id="conferencia-busca" type="search" maxlength="64" required>
+            <button type="submit">Buscar</button>
+        </form>
+        <p id="conferencia-aviso" role="status" aria-live="polite"></p>
+        <div id="conferencia-resultado"></div>
+    </div>
+
     <div id="menu-geral" class="sumindo">
         <button id="btn-voltar-menu" class="secundario" type="button">← Voltar</button>
 
@@ -278,6 +302,7 @@
              dos finalizados porque é o que ela procura sem saber onde está —
              os eventos finalizados ela sabe que estão aqui. -->
         <h1 class="rotulo-secao">Minha conta</h1>
+        <button id="btn-conferencia-menu" type="button" class="secundario">Conferir pedidos · Gráfica</button>
         <!-- Qual conta esta aberta NESTE aparelho -- util no celular do
              porteiro, que pode ter passado por mais de uma. Preenchido pelo
              `menu-geral.js` a cada abertura do menu, e nao uma vez so: quem
@@ -322,6 +347,7 @@
         <label for="senha">Senha</label>
         <input id="senha" type="password" autocomplete="current-password" autocapitalize="none">
         <button id="btn-entrar">Entrar</button>
+        <button id="btn-conferencia-login" type="button" class="secundario">Conferir pedidos · Gráfica</button>
         <button id="btn-esqueci" class="secundario">Esqueci minha senha</button>
         <!-- SO aparece quando a pessoa escolheu vir para ca (o "Trocar minha
              senha" do menu, num celular que ja e aparelho e nao tem sessao).
@@ -655,13 +681,13 @@
      terceiro significa que quem controlar aquele endereco controla o portao.
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
-<script src="supabase-js.min.js?v=833"></script>
+<script src="supabase-js.min.js?v=834"></script>
 <!-- ANTES do supabase-config.js: a barra que avisa "o banco nao esta
      respondendo" conta o tempo das chamadas ao banco, e o carimbo de
      sessao de la precisa ficar por cima dela. -->
-<script src="banco-nao-responde.js?v=833"></script>
-<script src="supabase-config.js?v=833"></script>
-<script src="acesso-conta.js?v=833"></script>
+<script src="banco-nao-responde.js?v=834"></script>
+<script src="supabase-config.js?v=834"></script>
+<script src="acesso-conta.js?v=834"></script>
 
 <!-- O FUNDO DA CASA: a foto de evento que o ADM publica.
 
@@ -674,7 +700,7 @@
      leitor de QR trabalham a cada quadro, e a tela inteira ja e
      significado -- verde passou, vermelho nao entra, laranja e outra
      porta. -->
-<script src="fundo-do-app.js?v=833"></script>
+<script src="fundo-do-app.js?v=834"></script>
 
 <!-- NAO ha mais camera nesta tela. Ela lia o QR do Pedido, e desde 17/08/2026
      um evento nasce de um pedido que a conta do cliente ja traz -- entao o
@@ -684,24 +710,24 @@
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
-<script src="aparelho.js?v=833"></script>
+<script src="aparelho.js?v=834"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=833"></script>
+<script src="sw-registro.js?v=834"></script>
 
 <!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
-<script src="chaveiro.js?v=833"></script>
+<script src="chaveiro.js?v=834"></script>
 <!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
      de trocar de evento, o "virar portão" precisa saber quantas leituras ainda
      não subiram. Sem este arquivo, aquela conta lança e o toque na barra do
      evento não faz absolutamente nada — sem erro na tela, sem uma palavra. Foi
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
-<script src="portaria-deposito.js?v=833"></script>
-<script src="lista-eventos.js?v=833"></script>
+<script src="portaria-deposito.js?v=834"></script>
+<script src="lista-eventos.js?v=834"></script>
 <!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
@@ -710,29 +736,30 @@
      enquanto uma chamada de rede corre. ANTES do `conta.js` de proposito: e
      ele quem usa `window.botaoEspera` primeiro, no "Entrar" e no "Salvar a
      senha". -->
-<script src="botao-espera.js?v=833"></script>
-<script src="conta.js?v=833"></script>
+<script src="botao-espera.js?v=834"></script>
+<script src="conta.js?v=834"></script>
 <!-- O olho de mostrar/ocultar senha, ao lado de cada campo de senha da casa.
      Depois do `conta.js` por estilo -- ele nao depende de nenhum dos scripts
      acima, so do DOM que o proprio `controle.html` ja declarou. -->
-<script src="mostrar-senha.js?v=833"></script>
+<script src="mostrar-senha.js?v=834"></script>
 <!-- "Meus Pedidos": a lista dos pedidos já impressos e o Carregar. Depois do
      `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
      tem evento nenhum. -->
-<script src="meus-pedidos.js?v=833"></script>
+<script src="meus-pedidos.js?v=834"></script>
+<script src="conferencia-pedidos.js?v=834"></script>
 <!-- A caixa do Carregar: a ficha da arte, a senha, e a pergunta do aparelho.
      Depois do `meus-pedidos.js` porque é de lá que ela é aberta, e ela devolve
      a lista de pedidos ao fechar. -->
-<script src="carregar-pedido.js?v=833"></script>
+<script src="carregar-pedido.js?v=834"></script>
 <!-- O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatório" depois. É a
      tela que a lista de eventos abre pelo botão do meio da linha, e a lista de
      finalizados pelo toque na linha inteira. -->
-<script src="ao-vivo.js?v=833"></script>
-<script src="caixa-confirmar.js?v=833"></script>
-<script src="menu-geral.js?v=833"></script>
-<script src="fila-presa.js?v=833"></script>
-<script src="virar-portao.js?v=833"></script>
-<script src="controle.js?v=833"></script>
-<script src="parede-pwa.js?v=833"></script>
+<script src="ao-vivo.js?v=834"></script>
+<script src="caixa-confirmar.js?v=834"></script>
+<script src="menu-geral.js?v=834"></script>
+<script src="fila-presa.js?v=834"></script>
+<script src="virar-portao.js?v=834"></script>
+<script src="controle.js?v=834"></script>
+<script src="parede-pwa.js?v=834"></script>
 </body>
 </html>

@@ -53,6 +53,7 @@ const ARQUIVOS = [
     'conta.js?v=' + VERSAO,
     'mostrar-senha.js?v=' + VERSAO,
     'meus-pedidos.js?v=' + VERSAO,
+    'conferencia-pedidos.js?v=' + VERSAO,
     'carregar-pedido.js?v=' + VERSAO,
     // O evento acontecendo (04/09/2026). Fora desta lista, o aplicativo
     // INSTALADO abriria a casa e o botao "Ao vivo" nao faria nada -- sem erro

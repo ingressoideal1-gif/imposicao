@@ -605,6 +605,13 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   if (metodo === "GET" && p.length === 2 && p[0] === "pedidos") {
     return ok(await painelDoPedido(inteiro(p[1], "path", "pedido")));
   }
+  if (metodo === "GET" && p.length === 1 && p[0] === "clientes") {
+    const busca = String(q.get("busca") ?? "").trim().replace(/[%_*(),&]/g, "").slice(0, 64);
+    if (busca.length < 2) throw new Recusa(422, "digite pelo menos duas letras do cliente");
+    const clientes = (await banco("GET", "clientes?select=id_cliente,nome&nome=ilike.*" +
+      encodeURIComponent(busca) + "*&order=nome.asc&limit=30")) ?? [];
+    return ok({ clientes });
+  }
   if (metodo === "GET" && p.length === 2 && p[0] === "clientes") {
     return ok(await painelDoCliente(inteiro(p[1], "path", "cliente")));
   }

@@ -109,14 +109,14 @@
         var b = document.createElement('button');
         b.type = 'button';
         b.id = 'carregar-' + p.pedido;
-        b.textContent = 'Carregar';
+        b.textContent = 'Preparar para leitura';
         // "Carregar" sozinho se repete em cada cartao: sem o numero do pedido,
         // quem usa leitor de tela ouve a mesma palavra varias vezes sem saber
         // de qual pedido se trata.
-        b.setAttribute('aria-label', 'Carregar o pedido ' + p.pedido);
+        b.setAttribute('aria-label', 'Preparar para leitura o pedido ' + p.pedido);
         b.addEventListener('click', function () {
             if (!window.carregarPedido) { return; }
-            window.carregarPedido.abrir(p.pedido, sessao, p);
+            window.carregarPedido.abrir(p.pedido, sessao, p, true);
         });
         acoes.appendChild(b);
         c.appendChild(acoes);
