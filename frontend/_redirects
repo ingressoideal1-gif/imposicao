@@ -3,9 +3,11 @@
 /controle.html /ic/controle.html 301
 
 # Rotas amigaveis servidas pelos mesmos arquivos estaticos.
-/ic /controle.html 200
-/ic/ /controle.html 200
+/ic /controle 200
+/ic/ /controle 200
+/ic/portaria.html /portaria 200
+/ic/controle.html /controle 200
 /ic/* /:splat 200
-/cliente/* /cliente.html 200
+/cliente/* /cliente 200
 /pedido/* /index.html 200
 / /index.html 200
