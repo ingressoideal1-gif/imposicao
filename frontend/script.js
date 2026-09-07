@@ -25842,6 +25842,9 @@ async function temSessaoDoSupabase() {
  * `loadOrdens()`: em 01/09/2026 eram 143 recusas em 26h, todas com
  * `referer: http://127.0.0.1:9000/`.
  */
+// Dominio publico dos links de aprovacao, inclusive no painel local ou legado.
+const CLIENTE_BASE_URL = 'https://imposition.ai-ideal.com.br';
+
 async function carregarLinksExistentes() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     if (!await temSessaoDoSupabase()) return;
@@ -25856,7 +25859,7 @@ async function carregarLinksExistentes() {
         }
         if (!state.linksCliente) state.linksCliente = {};
         if (!state.linksClienteData) state.linksClienteData = {};
-        const base = window.location.origin;
+        const base = CLIENTE_BASE_URL;
         (data || []).forEach(row => {
             state.linksCliente[row.os_id] = `${base}/cliente/${row.numero_pedido}-${row.token}`;
             state.linksClienteData[row.os_id] = row;
@@ -40071,7 +40074,7 @@ async function getOrCreateLinkCliente(osId, numero) {
         // na tela do cliente, a RLS não deixa criar -- só atualizar.
         await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
 
-        return `${window.location.origin}/cliente/${numero}-${token}`;
+        return `${CLIENTE_BASE_URL}/cliente/${numero}-${token}`;
     } catch (e) {
         console.error('Erro ao obter/criar link do cliente:', e);
         return null;
@@ -40080,7 +40083,7 @@ async function getOrCreateLinkCliente(osId, numero) {
 
 async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     const novoStatus = 'Aguard. Aprovação';
-    const host = window.location.origin;
+    const host = CLIENTE_BASE_URL;
     const finalUrl = linkUrl || `${host}/cliente.html?os=${osId}`;
 
     // Sempre a MESMA aba do cliente — modal de email é aberto SOMENTE quando o
@@ -40277,7 +40280,7 @@ async function gerarLinkCliente(osId, numero) {
         }
         gravarStatusOverride(osId, 'Enviar Arte');
 
-        const host = window.location.origin;
+        const host = CLIENTE_BASE_URL;
         const finalUrl = preparo.link || `${host}/cliente/${numero}`;
 
         // 4. Copiar link para clipboard

@@ -519,11 +519,11 @@ function classificarComArte(statusDaArte, extra) {
 //   1. frontend/script.js              monta a URL para o atendente copiar
 //   2. sql/link_pronto_para_o_erp.sql  monta a coluna `link`
 //   3. frontend/cliente.js             ACEITA a rota, e e quem diz o que vale
-//   4. security_config.py              guarda o dominio canonico
+//   4. sql/links_cliente_cloudflare_20260907.sql atualiza o dominio publico
 
 const SQL_LINK = fs.readFileSync(path.join(RAIZ, 'sql', 'link_pronto_para_o_erp.sql'), 'utf8');
 const CLIENTE_JS = fs.readFileSync(path.join(RAIZ, 'frontend', 'cliente.js'), 'utf8');
-const SEGURANCA = fs.readFileSync(path.join(RAIZ, 'security_config.py'), 'utf8');
+const SQL_DOMINIO = fs.readFileSync(path.join(RAIZ, 'sql', 'links_cliente_cloudflare_20260907.sql'), 'utf8');
 
 (function osQuatroLugaresConcordamNoFormato() {
     ok(SCRIPT.indexOf('/cliente/${row.numero_pedido}-${row.token}') > 0,
@@ -537,12 +537,11 @@ const SEGURANCA = fs.readFileSync(path.join(RAIZ, 'security_config.py'), 'utf8')
 })();
 
 (function oDominioDaColunaEODominioCanonico() {
-    // Se um deles mudar sozinho, o ERP passa a distribuir link para um endereco
-    // que nao existe -- e o painel continua funcionando, entao ninguem descobre.
-    const doSql = (SQL_LINK.match(/'(https:\/\/[^\/']+)\/cliente\//) || [])[1];
-    const doPy = (SEGURANCA.match(/PAINEL_BASE_URL = "([^"]+)"/) || [])[1];
-    ok(!!doSql, 'a coluna gerada traz um dominio', doSql);
-    ok(doSql === doPy, 'e ele e o mesmo do PAINEL_BASE_URL', { doSql: doSql, doPy: doPy });
+    // A migracao posterior define o dominio; o SQL inicial permanece historico.
+    const doSql = (SQL_DOMINIO.match(/SET EXPRESSION AS \(\s*'(https:\/\/[^\/']+)\/cliente\//) || [])[1];
+    const doPainel = (SCRIPT.match(/const CLIENTE_BASE_URL = '([^']+)'/) || [])[1];
+    ok(!!doSql, 'a migracao traz um dominio', doSql);
+    ok(doSql === doPainel, 'ERP e painel usam o mesmo dominio', { doSql, doPainel });
 })();
 
 (function aColunaEGeradaEnaoPreenchidaAMao() {
