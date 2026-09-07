@@ -1,4 +1,12 @@
-# Ideal Imposition — Documentação Completa do Projeto
+# Ideal Imposition — Documentação detalhada do projeto
+
+> [!IMPORTANT]
+> A visão arquitetural oficial está em [ARQUITETURA.md](ARQUITETURA.md).
+> Este arquivo preserva detalhes técnicos úteis, mas algumas seções ainda serão
+> revisadas contra o código atual e a configuração efetivamente publicada.
+> Não use afirmações históricas sobre Firebase, Render, RLS, portas ou versões
+> como prova do estado de produção.
+
 
 > Sistema profissional de imposição gráfica com dados variáveis (VDP) para produção de ingressos, pulseiras e credenciais.
 
@@ -10,7 +18,7 @@
 2. [Arquitetura](#arquitetura)
 3. [Stack Tecnológico](#stack-tecnológico)
 4. [Estrutura de Arquivos](#estrutura-de-arquivos)
-5. [Backend — API (FastAPI)](#backend--api-fastapi)
+5. [Motor local — API FastAPI](#motor-local--api-fastapi)
 6. [Motor de Imposição (engine.py)](#motor-de-imposição-enginepy)
 7. [Banco de Dados](#banco-de-dados)
 8. [Frontend (SPA)](#frontend-spa)
@@ -45,17 +53,17 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 │  └─ API_BASE_URL = "" → a estação que serviu a página            │
 ├──────────────────────────────────────────────────────────────────┤
 │  BACKEND (só local: estação da gráfica)                          │
-│  FastAPI + Uvicorn (porta 8080)                                  │
+│  FastAPI + Uvicorn (NewProd instalado: 127.0.0.1:9000)           │
 │  ├─ db.py → formats_db.json (JSON local)                        │
 │  ├─ engine.py → Motor de imposição PDF (PyMuPDF)                │
 │  └─ print_service.py → Impressão via Win32                      │
 ├──────────────────────────────────────────────────────────────────┤
-│  AGENTE LOCAL (opcional, porta 9000)                             │
-│  local_print_agent.py                                            │
+│  NEWPROD LOCAL (necessário para imposição e impressão)            │
+│  agent_tray.py → app.py                                           │
 │  └─ Imprime na estação; o painel abre por http://localhost:9000 │
 ├──────────────────────────────────────────────────────────────────┤
 │  BANCO DE DADOS                                                  │
-│  ├─ Supabase PostgreSQL (9 tabelas, RLS desabilitado)           │
+│  ├─ Supabase PostgreSQL (schema e RLS: conferir no ambiente)     │
 │  └─ formats_db.json (fallback local do backend)                 │
 ├──────────────────────────────────────────────────────────────────┤
 │  SISTEMA EXTERNO (Vibecode)                                      │
@@ -123,7 +131,7 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 ## Estrutura de Arquivos
 
 ```
-ideal-imposition/
+imposicao/
 ├── app.py                    # API FastAPI principal (526 linhas)
 ├── engine.py                 # Motor de imposição PDF (1200+ linhas)
 ├── db.py                     # Persistência JSON local (349 linhas)
@@ -162,16 +170,21 @@ ideal-imposition/
 
 ---
 
-## Backend — API (FastAPI)
+## Motor local — API FastAPI
 
 **Arquivo:** `app.py` (526 linhas)
-**Porta:** 8080
+**Modo instalado:** o NewProd carrega `app.py` em `127.0.0.1:9000`.
 **Framework:** FastAPI com Uvicorn
-**CORS:** Habilitado para todas as origens
+**Segurança de origem:** configuração centralizada em `security_config.py`.
+
+A execução direta de `app.py` é um modo técnico diferente e não representa,
+por si só, o comportamento do NewProd instalado.
 
 ### Autenticação
 
-> ⚠️ **ATENÇÃO**: A autenticação está **desabilitada**. A função `get_current_user()` sempre retorna um usuário fake com permissões de admin. Deve ser implementada antes de ir para produção com múltiplos usuários.
+> A interface de login é própria do Ideal Imposition, com autenticação pelo
+> Supabase Auth e autorização complementar da aplicação. O modo local/offline
+> é um fluxo separado. Consulte [ARQUITETURA.md](ARQUITETURA.md).
 
 ### Endpoints Completos
 

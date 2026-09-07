@@ -1,5 +1,8 @@
 # Publicar o Ideal Imposition
 
+> Domínio principal: [ideal-imposition.vercel.app](https://ideal-imposition.vercel.app).
+> O nome do projeto Vercel não precisa coincidir com o nome do repositório.
+
 Este é o único documento sobre publicação. Se outro texto discordar dele, o outro está
 velho.
 
@@ -38,7 +41,9 @@ combinar.
 `publicar.ps1` só confere se ele SOBE (`import app, engine, db`) — quem o leva à
 gráfica é o build do agente.
 
-**O agente é separado.** Tem numeração própria (`1.2.22`) e sai por outro comando.
+**O agente é separado.** Sua versão de código vem de `agent_version.py`; a versão
+instalada nas estações e a versão disponível no manifesto de atualização devem ser
+conferidas separadamente. Ele sai por outro comando.
 
 ---
 
@@ -133,7 +138,8 @@ to Production**.
 .\voltar.ps1
 ```
 
-Desfaz as mudanças e republica site e motor juntos, na versão anterior. Para uma versão
+Desfaz as mudanças no repositório e republica o site e as Edge Functions conforme o
+fluxo normal. Isso **não rebaixa automaticamente o NewProd já instalado** nas estações. Para uma versão
 específica:
 
 ```powershell
@@ -150,7 +156,7 @@ conflito, o script diz como desistir sem mudar nada.
 ## Publicar o agente
 
 ```powershell
-.\publicar_agente.ps1 1.2.23 -Notas "o que mudou"
+.\publicar_agente.ps1 <NOVA_VERSAO> -Notas "o que mudou"
 ```
 
 Para ensaiar sem publicar nada, acrescente `-Simular`: ele escreve a versão, compila,
@@ -159,7 +165,7 @@ confere tamanho e integridade, e depois devolve os arquivos ao estado anterior.
 **Para voltar a versão do agente, o número precisa ser NOVO:**
 
 ```powershell
-.\publicar_agente.ps1 1.2.24 -Codigo agente-v1.2.22
+.\publicar_agente.ps1 <NOVA_VERSAO> -Codigo agente-v<VERSAO_ANTERIOR>
 ```
 
 Republicar o número antigo **não faz nada**: as estações só aceitam número maior que o
