@@ -17,10 +17,12 @@ def test_as_rotas_da_vercel_foram_reproduzidas_no_pages():
     regras = set(_linhas("_redirects"))
     assert "/portaria.html /ic/portaria.html 301" in regras
     assert "/controle.html /ic/controle.html 301" in regras
-    assert "/ic /controle.html 200" in regras
-    assert "/ic/ /controle.html 200" in regras
+    assert "/ic /controle 200" in regras
+    assert "/ic/ /controle 200" in regras
+    assert "/ic/portaria.html /portaria 200" in regras
+    assert "/ic/controle.html /controle 200" in regras
     assert "/ic/* /:splat 200" in regras
-    assert "/cliente/* /cliente.html 200" in regras
+    assert "/cliente/* /cliente 200" in regras
     assert "/pedido/* /index.html 200" in regras
 
 
