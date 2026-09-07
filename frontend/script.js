@@ -41497,7 +41497,7 @@ async function sendPrintJob() {
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(options));
 
-                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData });
                 if (!res.ok) {
                     const errText = await res.text();
                     throw new Error(errText || 'Falha ao enviar para impressora local.');
@@ -42794,7 +42794,7 @@ function criarEntregaDeImpressao({ total = null } = {}) {
                 formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(itemOptions));
-                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData });
                 if (!res.ok) {
                     const errText = await res.text();
                     throw new Error(errText || 'Falha ao enviar para impressora local.');
