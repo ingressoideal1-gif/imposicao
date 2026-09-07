@@ -159,14 +159,18 @@
      * @param dados   o cartao inteiro do pedido: `nome_evento`, `data_evento`,
      *                `local_evento` vindos da ficha da arte, ja editaveis
      */
-    function abrir(pedido, sessao, dados) {
+    function abrir(pedido, sessao, dados, preparar) {
         dados = dados || {};
         // A DONA das telas primeiro, o nosso cartao depois. Ela esconde tambem
         // o `#caixa-carregar` (ele esta no `DOS_OUTROS`), entao a ordem inversa
         // o apagaria no mesmo gesto que o abriu -- foi assim que o
         // `meus-pedidos.js` errou antes.
         window.conta.esconderTelaInicial(true);
-        $('carregar-titulo').textContent = 'Carregar o pedido ' + pedido;
+        $('carregar-titulo').textContent = (preparar ? 'Preparar para leitura: pedido ' : 'Carregar o pedido ') + pedido;
+        $('preparar-aparelho').classList.toggle('sumindo', !preparar);
+        $('preparar-detalhes').open = !preparar;
+        $('preparar-nome-aparelho').value = window.chaveiro.nomeDoAparelho() || 'Meu celular';
+        $('btn-carregar-confirmar').textContent = preparar ? 'Preparar para leitura' : 'Carregar';
         $('carregar-nome').value = dados.nome_evento || ('Pedido ' + pedido);
         $('carregar-data').value = dados.data_evento
             ? window.Controle.deISOParaCampo(dados.data_evento) : '';
@@ -198,7 +202,7 @@
             $('carregar-campos-novo').classList.toggle('sumindo', !!$('carregar-destino').value);
         };
         $('btn-carregar-cancelar').onclick = function () { fechar(); };
-        $('btn-carregar-confirmar').onclick = function () { confirmar(pedido, sessao); };
+        $('btn-carregar-confirmar').onclick = function () { confirmar(pedido, sessao, preparar); };
         // A senha e o ultimo campo, e o Enter dela e o gesto natural de
         // terminar. Sem isto o teclado do celular oferece "Ir" e nada acontece.
         // Mesma ligacao que a caixa de senha da configuracao ja tem.
@@ -275,7 +279,7 @@
         if (!carregado || carregado === evento_id) { return Promise.resolve(0); }
         if (!window.portariaDeposito) { return Promise.resolve(-1); }
         return window.portariaDeposito.contarFila().catch(function () {
-            return 0;                  // IndexedDB fora do ar: nao ha fila a proteger
+            return -1;                 // Sem leitura do IndexedDB, nao podemos afirmar fila vazia.
         });
     }
 
@@ -354,10 +358,11 @@
      *
      * (c) O caso comum: aparelho livre. Pergunta e liga.
      */
-    function depoisDeCarregar(r, sessao) {
+    function depoisDeCarregar(r, sessao, preparacao) {
         var prefixo = fraseDoResultado(r);
 
         if (window.chaveiro.procurar(r.evento_id)) {
+            if (preparacao) { return window.virarPortao.abrir(r.evento_id, r.nome_evento); }
             return window.caixaConfirmar.perguntar(
                 prefixo + 'Este aparelho já lê este evento. Quer ir para a leitura agora?',
                 { rotulo: 'Ir para a leitura' }
@@ -383,6 +388,9 @@
             // os setores errados.
             return contarAparelhos(r.evento_id, sessao).catch(function () { return null; })
                 .then(function (painel) {
+                    if (preparacao) {
+                        return ligarEsteAparelho(r.evento_id, sessao, r.elevacao, preparacao.nome, painel);
+                    }
                     return window.caixaConfirmar.perguntar(
                         prefixo + 'Quer usar este aparelho para ler os ingressos dele?',
                         {
@@ -418,7 +426,9 @@
         return erro(texto);
     }
 
-    function confirmar(pedido, sessao) {
+    function confirmar(pedido, sessao, preparar) {
+        if ($('btn-carregar-confirmar').disabled) { return; }
+        var preparacao = preparar ? { nome: ($('preparar-nome-aparelho').value || '').trim().slice(0, 60) || 'Meu celular' } : null;
         var senha = $('carregar-senha').value || '';
         var destino = $('carregar-destino').value || null;
         var nome = ($('carregar-nome').value || '').trim();
@@ -480,7 +490,7 @@
             // minutos que a pessoa acabou de comprar. Pode nao vir -- e ai nao
             // ha bilhete nenhum a entregar.
             if (r.elevacao) { window.Controle.receberElevacao(r.evento_id, r.elevacao); }
-            return depoisDeCarregar(r, sessao).catch(function (e) {
+            return depoisDeCarregar(r, sessao, preparacao).catch(function (e) {
                 // O EVENTO ESTA CRIADO. Seja qual for a falha daqui -- rede,
                 // senha recusada, ou o dono cancelando a caixa de senha --, a
                 // casa e o lugar certo de parar: o evento novo esta la, e a

@@ -79,7 +79,7 @@ def test_tocar_na_barra_com_sessao_desenha_os_cartoes():
     t = saida["texto"]
     assert "20272" in t and "Click" in t and "PISTA" in t and "1.500" in t and "VIP" in t
     assert "impresso" in t and "aguardando impressão" in t
-    assert saida["botao"] == "Carregar"
+    assert saida["botao"] == "Preparar para leitura"
 
 
 def test_sem_sessao_a_barra_pede_para_entrar_primeiro():

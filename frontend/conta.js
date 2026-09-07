@@ -65,7 +65,7 @@
     // inicial nao voltar POR BAIXO dele.
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
     var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos', 'caixa-carregar',
-                      'ao-vivo'];
+                      'ao-vivo', 'conferencia-pedidos'];
     // TUDO o que pode estar na frente da tela inicial -- os estados de fora e
     // as DUAS telas deste arquivo.
     //
@@ -94,6 +94,7 @@
      */
     function esconderTelaInicial(esconder) {
         if (esconder) {
+            if (window.conferenciaPedidos) { window.conferenciaPedidos.limpar(); }
             DA_TELA_INICIAL.concat(DOS_OUTROS).forEach(function (id) {
                 var el = $(id);
                 if (el) { el.classList.add('sumindo'); }
