@@ -116,6 +116,7 @@ function montarCenario(opcoes) {
             return { ok: true, json: async () => ({ path: 'C:\\HOT\\' + nome }) };
         }
         if (String(url).includes('/api/print/submit')) {
+            ok(url === 'http://127.0.0.1:9000/api/print/submit', 'PDF vai para NewProd, nunca para o site', url);
             enviados.push(init.body.campos.file);
             return { ok: true, text: async () => '' };
         }
@@ -125,7 +126,7 @@ function montarCenario(opcoes) {
         return { ok: true, json: async () => ({}), text: async () => '' };
     }
 
-    const janela = { _printCancelRequested: false, isPrinting: false, location: { hostname: 'localhost' } };
+    const janela = { _printCancelRequested: false, isPrinting: false, location: { hostname: 'imposition.ai-ideal.com.br' } };
 
     const criar = new Function(
         'window', 'document', 'toast', 'fetch', 'FormData', 'setTimeout',
