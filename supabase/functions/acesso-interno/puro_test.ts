@@ -128,7 +128,7 @@ Deno.test("modelo: lixo na lista nao derruba a leitura", () => {
 });
 
 Deno.test("a URL de instalacao e a casa do aplicativo, no dominio publico, com barra no fim", () => {
-  assertEquals(URL_DE_INSTALACAO, "https://ideal-imposition.vercel.app/ic/");
+  assertEquals(URL_DE_INSTALACAO, "https://imposition.ai-ideal.com.br/ic/");
 });
 
 // ── O id da numeracao (04/09/2026) ──────────────────────────────────────────

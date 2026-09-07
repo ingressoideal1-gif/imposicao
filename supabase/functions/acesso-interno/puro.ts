@@ -57,4 +57,4 @@ export {
  * dominio publico e nao o da estacao, porque o painel da grafica roda nos
  * dois e o QR vai para o celular do cliente.
  */
-export const URL_DE_INSTALACAO = "https://ideal-imposition.vercel.app/ic/";
+export const URL_DE_INSTALACAO = "https://imposition.ai-ideal.com.br/ic/";
