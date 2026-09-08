@@ -203,7 +203,7 @@ const api = new Function('state', 'window',
         'modelo com verso EM modo PDF ganha a barra das setas');
     ok(comVersoEPdf.includes('id="amostra-pdf-canvas-0"'),
         'modelo com verso EM modo PDF ganha o canvas do visualizador');
-    ok(comVersoEPdf.includes('pdfViewerPrevPage(0)') && comVersoEPdf.includes('pdfViewerNextPage(0)'),
+    ok(comVersoEPdf.includes("pdfViewerPrevPage(0, 'os-1')") && comVersoEPdf.includes("pdfViewerNextPage(0, 'os-1')"),
         'as duas setas estao ligadas ao folheador de paginas');
     // O verso NAO pode sumir junto: e a outra face que o operador aprova, e no
     // FxVersoUnico ela vem de um arquivo proprio.

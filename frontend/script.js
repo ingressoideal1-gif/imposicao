@@ -21995,6 +21995,8 @@ function travarCardsDeModelosAprovados(container) {
 
     container.querySelectorAll('[data-modelo-aprovado="1"]').forEach(card => {
         card.querySelectorAll('input, select, textarea, button').forEach(el => {
+            // Folhear a arte aprovada é leitura; a escala continua bloqueada.
+            if (el.hasAttribute('data-navegacao-pdf')) return;
             // Duas saídas, com listas de gente diferentes: `data-libera-aprovado`
             // é o que ALTERA o modelo (a anotação e a volta para alteração), e
             // `data-libera-copia` é o que só o LÊ (copiar o link da arte).
@@ -32887,7 +32889,7 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
                                 ${item.modo_pdf ? `
-                                <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                                <div id="amostra-pdf-viewer-${idx}" data-pdf-os="${osId}" style="text-align: center;">
                                     <!-- 450px, o MESMO teto do canvas do verso logo abaixo (02/09/2026).
                                          Enquanto a frente parava em 400px e o verso em 450px, as duas
                                          faces mostravam a MESMA celula em tamanhos diferentes: a frente
@@ -32900,9 +32902,10 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                                          setas do folheador. -->
                                     <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                                     <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                        <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerPrevPage(${idx}, '${osId}')">◀</button>
                                         <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
-                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                        <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerNextPage(${idx}, '${osId}')">▶</button>
+                                        <button id="amostra-pdf-retry-${idx}" class="btn btn-sm btn-secondary" data-navegacao-pdf style="display:none" onclick="renderItemAmostraCombinada(${idx}, '${osId}')">Tentar novamente</button>
                                     </div>
                                 </div>
                                 ` : `
@@ -32943,12 +32946,13 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                         </div>
                         ` : `
                         ${item.modo_pdf ? `
-                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                        <div id="amostra-pdf-viewer-${idx}" data-pdf-os="${osId}" style="text-align: center;">
                             <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerPrevPage(${idx}, '${osId}')">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerNextPage(${idx}, '${osId}')">▶</button>
+                                <button id="amostra-pdf-retry-${idx}" class="btn btn-sm btn-secondary" data-navegacao-pdf style="display:none" onclick="renderItemAmostraCombinada(${idx}, '${osId}')">Tentar novamente</button>
                             </div>
                             ${escalaArteHtml}
                             <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
@@ -33590,12 +33594,13 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         ` : `
                         ${item.modo_pdf ? `
-                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                        <div id="amostra-pdf-viewer-${idx}" data-pdf-os="${osId}" style="text-align: center;">
                             <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerPrevPage(${idx}, '${osId}')">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
-                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerNextPage(${idx}, '${osId}')">▶</button>
+                                <button id="amostra-pdf-retry-${idx}" class="btn btn-sm btn-secondary" data-navegacao-pdf style="display:none" onclick="renderItemAmostraCombinada(${idx}, '${osId}')">Tentar novamente</button>
                             </div>
                             <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'}">
                                  <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
@@ -34778,7 +34783,7 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
             }
 
             // Se modo PDF, gerar snapshot da primeira página e inicializar viewer
-            if (item && item.modo_pdf && file.type === 'application/pdf') {
+            if (item && item.modo_pdf && face !== 'verso' && file.type === 'application/pdf') {
                 try {
                     const arrayBuf = await file.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
@@ -35576,45 +35581,24 @@ async function toggleModoPdf(idx, osId, itemId) {
     if (!item) return;
     
     const novoModoPdf = !item.modo_pdf;
+    const bloqueio = bloqueioDeModeloAprovado(item, { modo_pdf: novoModoPdf });
+    if (bloqueio) { toast(bloqueio.motivo, 'warning'); return; }
     item.modo_pdf = novoModoPdf;
     
     // Persiste no banco
     try {
         await saveAmostraToDB(itemId, osId, { modo_pdf: item.modo_pdf });
     } catch (e) {
+        item.modo_pdf = !novoModoPdf;
         console.error('[PDF MODE] Erro ao salvar modo_pdf:', e);
+        toast('Não consegui salvar o modo PDF. Tente novamente.', 'error');
+        return;
     }
+    // Trocar o visualizador não remove o arquivo. Só "Remover Arte" apaga o vínculo.
     
-    // Ao desativar modo PDF: zerar a arte_url explicitamente
-    if (!novoModoPdf && item.arte_url) {
-        item.arte_url = null;
-        try {
-            await saveAmostraToDB(itemId, osId, { arte_url: null, _isExplicitRemove: true });
-        } catch (e) {
-            console.warn('[PDF MODE] Erro ao limpar arte_url:', e);
-        }
-    }
-    
-    // Re-renderiza a tela (necessário para criar/remover o canvas do DOM)
-    // Preservar a arte_url e pdfViewerState antes do render
-    const savedArteUrl = item.arte_url;
-    const pdfKey = `${osId}_${idx}`;
-    const savedViewerState = pdfViewerState[pdfKey] || pdfViewerState[idx];
-    
+    // O desenho dos cards inicializa/reutiliza o PDF no novo DOM.
+    // Não restaurar um viewer por timer: o operador pode já ter trocado de pedido.
     renderAmostrasOSItens(osId);
-    
-    // Após o DOM ser reconstruído, restaurar o viewer se havia PDF
-    if (novoModoPdf && savedArteUrl) {
-        setTimeout(async () => {
-            if (savedViewerState && savedViewerState.pdfUrl === savedArteUrl) {
-                pdfViewerState[pdfKey] = savedViewerState;
-                pdfViewerState[idx] = savedViewerState;
-                await renderPdfViewerPage(pdfKey, savedViewerState.currentPage || 1, idx);
-            } else {
-                await initPdfViewer(pdfKey, savedArteUrl, osId, idx);
-            }
-        }, 50);
-    }
     
     toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
@@ -35660,6 +35644,10 @@ function getPdfUrlForItem(item, face, osId, idx) {
 async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
     const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
     if (!canvas) return;
+    const viewer = pdfViewerState[`${osId}_${idx}`];
+    const aindaAtual = () => document.getElementById(`amostra-pdf-canvas-${idx}`) === canvas
+        && pdfViewerState[`${osId}_${idx}`] === viewer
+        && (state.osItens[osId] || [])[idx] === item && item.modo_pdf;
     
     const img = new Image();
     img.crossOrigin = 'Anonymous';
@@ -35668,6 +35656,8 @@ async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
         img.onerror = resolve;
         img.src = imgUrl;
     });
+    if (!aindaAtual()) return;
+    atualizarEstadoDoPdf(idx, item, itemTemArte(item) ? 'imagem' : 'ausente');
     
     if (img.width > 0 && img.height > 0) {
         canvas.width = img.width;
@@ -35695,14 +35685,12 @@ async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
             // esta funcao e async, entao da para esperar de verdade e sair certo de
             // primeira, sem o vai-e-volta de carregar e mandar redesenhar.
             await precarregarArtesDosElementos(num.elements, linhasDaPagina(num, item, 1));
+            if (!aindaAtual()) return;
             drawNumeracaoElementsOverCanvas(ctx, num, item, 1, canvas.width, canvas.height);
         }
 
         canvas.style.display = 'block';
 
-        const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
-        if (nav) nav.style.display = 'none';
-        
         const empty = document.getElementById(`amostra-item-empty-${idx}`);
         if (empty) empty.style.display = 'none';
     }
@@ -35762,8 +35750,9 @@ window.escalaDaArteDoTrabalho = escalaDaArteDoTrabalho;
  * está gravado.
  *
  * A regra é uma só, valha a arte para o modo PDF Multi-Página ou para o upload
- * comum: **os campos aparecem quando há arte na tela**. Sem arte não há o que
- * escalar, e dois campos mudos ao lado do "faça upload" só fariam pergunta.
+ * comum: os campos aparecem quando há arte na tela. No modo PDF ficam visíveis
+ * também durante a carga ou quando falta o original, desabilitados com o aviso
+ * do visualizador, para que uma falha não pareça remoção das ferramentas.
  *
  * O campo que está sendo digitado não é sobrescrito — um redesenho do card no
  * meio da digitação apagaria o número pela metade.
@@ -35776,8 +35765,13 @@ function atualizarCaixaDeEscalaDaArte(idx, item, container) {
     if (!caixa) return;
 
     const temArte = !!(item && (itemTemArte(item, 'frente') || itemTemArte(item, 'verso')));
-    caixa.style.display = temArte ? 'flex' : 'none';
-    if (!temArte) return;
+    caixa.style.display = (temArte || item?.modo_pdf) ? 'flex' : 'none';
+    if (!temArte && !item?.modo_pdf) return;
+
+    const bloqueada = (typeof modeloEstaAprovado === 'function' && modeloEstaAprovado(item)) || !temArte;
+    if (caixa.querySelectorAll) caixa.querySelectorAll('input, button').forEach(el => {
+        el.disabled = bloqueada;
+    });
 
     const esc = escalaDaArteDoModelo(item);
     const campoH = document.getElementById(`amostra-escala-h-${idx}`);
@@ -35890,6 +35884,13 @@ async function salvarEscalaDaArte(idx, osId, itemId) {
     };
     const h = limpar(campoH);
     const v = limpar(campoV);
+    const bloqueio = bloqueioDeModeloAprovado(item, { arte_escala_h: h, arte_escala_v: v });
+    if (bloqueio) {
+        const esc = escalaDaArteDoModelo(item);
+        campoH.value = esc.h; campoV.value = esc.v;
+        toast(bloqueio.motivo, 'warning');
+        return;
+    }
     // O campo volta a mostrar o valor já aparado: digitar 900 e ver 900 na tela
     // enquanto o papel sai a 400 seria mentir para o operador.
     campoH.value = h;
@@ -35899,19 +35900,19 @@ async function salvarEscalaDaArte(idx, osId, itemId) {
         return;
     }
 
-    item.arte_escala_h = h;
-    item.arte_escala_v = v;
-    // A arte de aprovação do cliente é refeita no MARCAR PRONTO; marcar aqui faz
-    // a prévia guardada acompanhar quem já estava pronto antes da mudança.
-    item._needsSnapshot = true;
-
     try {
         await saveAmostraToDB(itemId, osId, { arte_escala_h: h, arte_escala_v: v });
     } catch (e) {
+        const esc = escalaDaArteDoModelo(item);
+        campoH.value = esc.h; campoV.value = esc.v;
         console.error('[Escala da arte] Erro ao salvar:', e);
         toast('Não consegui salvar a escala da arte: ' + (e.message || e), 'error');
         return;
     }
+    item.arte_escala_h = h;
+    item.arte_escala_v = v;
+    // Só a gravação confirmada pode avançar a prévia local.
+    item._needsSnapshot = true;
 
     // Redesenhar pelo caminho deste card: no modo PDF quem desenha é o leitor de
     // páginas; na arte comum é a composição das camadas do card. Chamar só um
@@ -35920,7 +35921,7 @@ async function salvarEscalaDaArte(idx, osId, itemId) {
     const key = `${osId}_${idx}`;
     const vs = pdfViewerState[key] || pdfViewerState[idx];
     if (item.modo_pdf && vs && vs.pdf) {
-        await renderPdfViewerPage(key in pdfViewerState ? key : idx, vs.currentPage || 1, idx);
+        await renderPdfViewerPage(key in pdfViewerState ? key : idx, vs.requestedPage || vs.currentPage || 1, idx);
     } else {
         await renderItemAmostraCombinada(idx, osId);
     }
@@ -35939,10 +35940,63 @@ async function zerarEscalaDaArte(idx, osId, itemId) {
 }
 window.zerarEscalaDaArte = zerarEscalaDaArte;
 
+function pdfViewerAindaAtual(viewer) {
+    if (!viewer || viewer.cancelado) return false;
+    const atual = pdfViewerState[`${viewer.osId}_${viewer.idx}`];
+    if (atual !== viewer) return false;
+    const item = (state.osItens[viewer.osId] || [])[viewer.idx];
+    if (item?.modo_pdf === false) return false;
+    if (viewer.itemId != null && String(item?.id) !== String(viewer.itemId)) return false;
+    const card = document.getElementById(`amostra-pdf-viewer-${viewer.idx}`);
+    return !card?.dataset?.pdfOs || card.dataset.pdfOs === String(viewer.osId);
+}
+
+function atualizarEstadoDoPdf(idx, item, situacao, viewer = null) {
+    const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+    const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
+    const pronto = situacao === 'pronto';
+    if (nav) {
+        nav.style.display = 'flex';
+        const botoes = nav.querySelectorAll ? nav.querySelectorAll('[data-navegacao-pdf]') : [];
+        if (botoes[0]) botoes[0].disabled = !pronto || viewer.currentPage <= 1;
+        if (botoes[1]) botoes[1].disabled = !pronto || viewer.currentPage >= viewer.totalPages;
+    }
+    const mensagens = {
+        carregando: 'Carregando PDF…',
+        erro: 'Não foi possível carregar o PDF. Use Tentar novamente.',
+        ausente: 'PDF original não vinculado. Envie o arquivo para folhear e ajustar a escala.',
+        formato: 'Selecione o formato para visualizar o PDF.',
+        imagem: 'Prévia estática — a paginação depende do PDF original.'
+    };
+    if (info) info.textContent = pronto
+        ? `Página ${viewer.currentPage} / ${viewer.totalPages}` : mensagens[situacao];
+    const retry = document.getElementById(`amostra-pdf-retry-${idx}`);
+    if (retry) retry.style.display = situacao === 'erro' ? 'inline-block' : 'none';
+    atualizarCaixaDeEscalaDaArte(idx, item);
+    const caixa = document.getElementById(`amostra-escala-${idx}`);
+    if (caixa?.querySelectorAll) caixa.querySelectorAll('input, button').forEach(el => {
+        el.disabled = !pronto || (typeof modeloEstaAprovado === 'function' && modeloEstaAprovado(item));
+    });
+}
+
 async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
     if (!pdfUrl) return;
-    
-    try {
+    const card = document.getElementById(`amostra-pdf-viewer-${idx}`);
+    if (card?.dataset?.pdfOs && card.dataset.pdfOs !== String(osId)) return;
+    const item = (state.osItens[osId] || [])[idx];
+    const anterior = pdfViewerState[key];
+    if (anterior?.carregando && anterior.pdfUrl === pdfUrl && anterior.itemId === item?.id) {
+        return anterior.carregando;
+    }
+    if (anterior?.pdf && anterior.pdfUrl === pdfUrl && anterior.itemId === item?.id) {
+        return renderPdfViewerPage(key, anterior.currentPage || 1, idx);
+    }
+    const solicitacao = { pdfUrl, osId, idx, itemId: item?.id, currentPage: 1, totalPages: 0 };
+    pdfViewerState[key] = solicitacao;
+    pdfViewerState[idx] = solicitacao;
+    atualizarEstadoDoPdf(idx, item, 'carregando');
+    solicitacao.carregando = (async () => {
+      try {
         let arrayBuffer;
         // Tentar buscar diretamente (Supabase Storage permite CORS para buckets públicos)
         try {
@@ -35963,29 +36017,30 @@ async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
         
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         
-        const stateObj = {
-            pdf: pdf,
-            pdfUrl: pdfUrl,
-            currentPage: 1,
-            totalPages: pdf.numPages,
-            osId: osId,
-            idx: idx
-        };
-        pdfViewerState[key] = stateObj;
-        pdfViewerState[idx] = stateObj;
+        if (pdfViewerState[key] !== solicitacao || !pdfViewerAindaAtual(solicitacao)) {
+            if (typeof pdf.destroy === 'function') await pdf.destroy();
+            return;
+        }
+        solicitacao.pdf = pdf;
+        solicitacao.totalPages = pdf.numPages;
         
         await renderPdfViewerPage(key, 1, idx);
     } catch (err) {
         console.error('[PDF Viewer] Erro ao carregar PDF:', err);
-        delete pdfViewerState[key];
-        delete pdfViewerState[idx];
+        if (pdfViewerState[key] !== solicitacao || !pdfViewerAindaAtual(solicitacao)) return;
+        solicitacao.pdf = null;
 
         // Fallback: se houver imagem (amostra_arte_base64), renderizar como imagem
-        const item = (osId && state.osItens && state.osItens[osId]) ? state.osItens[osId][idx] : null;
         if (item && item.amostra_arte_base64) {
-            renderImageModeInPdfViewer(idx, item.amostra_arte_base64, item, osId);
+            await renderImageModeInPdfViewer(idx, item.amostra_arte_base64, item, osId);
         }
-    }
+        if (pdfViewerState[key] !== solicitacao || !pdfViewerAindaAtual(solicitacao)) return;
+        atualizarEstadoDoPdf(idx, item, 'erro');
+      } finally {
+        solicitacao.carregando = null;
+      }
+    })();
+    return solicitacao.carregando;
 }
 
 function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
@@ -36197,7 +36252,10 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
 async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
     const viewerState = pdfViewerState[keyOrIdx] || pdfViewerState[idxParam];
-    if (!viewerState || !viewerState.pdf) return;
+    if (!viewerState || !viewerState.pdf || !pdfViewerAindaAtual(viewerState)) return;
+    pageNum = Math.min(viewerState.totalPages, Math.max(1, parseInt(pageNum, 10) || 1));
+    viewerState.requestedPage = pageNum;
+    const versao = viewerState.renderVersion = (viewerState.renderVersion || 0) + 1;
     
     // Extrair SEMPRE o índice numérico real do card na DOM (0, 1, 2...)
     let idx = (idxParam !== null && idxParam !== undefined) ? idxParam : viewerState.idx;
@@ -36214,6 +36272,7 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
     
     try {
         const page = await viewerState.pdf.getPage(pageNum);
+        if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
         const scale = 2.0;
         const viewport = page.getViewport({ scale });
 
@@ -36222,6 +36281,13 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
             console.warn(`[PDF Viewer] Canvas #amostra-pdf-canvas-${idx} não encontrado no DOM (keyOrIdx=${keyOrIdx}).`);
             return;
         }
+        // O pdf.js não permite dois render() simultâneos no mesmo canvas.
+        // O último pedido de página/escala vence, sem erro intermitente nas setas.
+        if (canvas._pdfRenderTask) {
+            canvas._pdfRenderTask.cancel();
+            try { await canvas._pdfRenderTask.promise; } catch (_) { /* render anterior cancelado */ }
+        }
+        if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
 
         // Quem é este modelo e qual a numeração dele — resolvido ANTES de medir
         // o canvas, porque é daí que saem a escala da arte e o tamanho da célula.
@@ -36284,6 +36350,7 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
             ctxAviso.fillText('Escolha a Cor ou a Numeração acima —', 150, 116);
             ctxAviso.fillText('é delas que sai o tamanho da peça.', 150, 134);
             canvas.style.display = 'block';
+            atualizarEstadoDoPdf(idx, item, 'formato');
             return;
         }
         const larguraCelula = fmt.width_mm * MM_EM_PT * scale;
@@ -36308,16 +36375,22 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         // desenha na resolução final — nada é ampliado depois, então a página
         // continua nítida em qualquer escala. O que passa da borda do canvas é
         // aparado pelo próprio canvas, como o motor apara na célula.
-        await page.render({
+        const tarefa = page.render({
             canvasContext: ctx,
             viewport: viewport,
             transform: [esc.h / 100, 0, 0, esc.v / 100, arteX, arteY],
-        }).promise;
+        });
+        canvas._pdfRenderTask = tarefa;
+        try { await tarefa.promise; }
+        finally { if (canvas._pdfRenderTask === tarefa) canvas._pdfRenderTask = null; }
+        if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)
+            || document.getElementById(`amostra-pdf-canvas-${idx}`) !== canvas) return;
 
         if (num && num.elements && num.elements.length > 0) {
             // Ver o comentario em renderImageModeInPdfViewer: a arte dos elementos
             // SVG/PDF e aguardada aqui, antes de desenhar.
             await precarregarArtesDosElementos(num.elements, linhasDaPagina(num, item, pageNum));
+            if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
             // A numeração é carimbada sobre a CÉLULA, e não sobre a arte: ela
             // não anda nem estica junto com a escala — a arte é a única camada
             // que muda de tamanho. Por isso as medidas vêm do canvas.
@@ -36343,23 +36416,29 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         if (empty) empty.style.display = 'none';
         
         viewerState.currentPage = pageNum;
+        atualizarEstadoDoPdf(idx, item, 'pronto', viewerState);
     } catch (err) {
+        if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
         console.error('[PDF Viewer] Erro ao renderizar página:', err);
+        const item = (state.osItens[viewerState.osId] || [])[idx];
+        atualizarEstadoDoPdf(idx, item, 'erro');
     }
 }
 
-function pdfViewerPrevPage(idx) {
-    const key = (state.activeOSId ? `${state.activeOSId}_${idx}` : idx);
+function pdfViewerPrevPage(idx, osId = state.amostrasOSAtivo || state.activeOSId) {
+    const key = (osId ? `${osId}_${idx}` : idx);
     const viewerState = pdfViewerState[key] || pdfViewerState[idx];
-    if (!viewerState || viewerState.currentPage <= 1) return;
-    renderPdfViewerPage(key in pdfViewerState ? key : idx, viewerState.currentPage - 1, idx);
+    const pagina = viewerState?.requestedPage || viewerState?.currentPage;
+    if (!viewerState?.pdf || (osId && viewerState.osId !== osId) || pagina <= 1) return;
+    return renderPdfViewerPage(key in pdfViewerState ? key : idx, pagina - 1, idx);
 }
 
-function pdfViewerNextPage(idx) {
-    const key = (state.activeOSId ? `${state.activeOSId}_${idx}` : idx);
+function pdfViewerNextPage(idx, osId = state.amostrasOSAtivo || state.activeOSId) {
+    const key = (osId ? `${osId}_${idx}` : idx);
     const viewerState = pdfViewerState[key] || pdfViewerState[idx];
-    if (!viewerState || viewerState.currentPage >= viewerState.totalPages) return;
-    renderPdfViewerPage(key in pdfViewerState ? key : idx, viewerState.currentPage + 1, idx);
+    const pagina = viewerState?.requestedPage || viewerState?.currentPage;
+    if (!viewerState?.pdf || (osId && viewerState.osId !== osId) || pagina >= viewerState.totalPages) return;
+    return renderPdfViewerPage(key in pdfViewerState ? key : idx, pagina + 1, idx);
 }
 
 /**
@@ -36444,8 +36523,16 @@ window.confirmarNaTela = confirmarNaTela;
  * exibido antes de a próxima página terminar de renderizar.
  */
 function limparVisualizadorPdf(idx) {
+    const viewer = pdfViewerState[idx];
+    if (viewer) {
+        viewer.cancelado = true;
+        Object.keys(pdfViewerState).forEach(key => {
+            if (pdfViewerState[key] === viewer) delete pdfViewerState[key];
+        });
+    }
     const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
     if (pdfCanvas) {
+        if (pdfCanvas._pdfRenderTask) pdfCanvas._pdfRenderTask.cancel();
         try {
             const pctx = pdfCanvas.getContext('2d');
             if (pctx) pctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
@@ -36581,6 +36668,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     // Se modo PDF ativo, não compor multicamada — usar PDF viewer dedicado
     if (usaVisualizadorPaginado) {
+        const card = document.getElementById(`amostra-pdf-viewer-${idx}`);
+        if (card?.dataset?.pdfOs && card.dataset.pdfOs !== String(osId)) return;
         if (canvas) canvas.style.display = 'none';
         
         // Pega a URL do PDF (com busca em 4 níveis)
@@ -36596,16 +36685,18 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             );
             
             if (isImage) {
-                renderImageModeInPdfViewer(idx, pdfUrl, itemForPdf, osId);
+                limparVisualizadorPdf(idx);
+                await renderImageModeInPdfViewer(idx, pdfUrl, itemForPdf, osId);
             } else {
                 const existing = pdfViewerState[key] || pdfViewerState[idx];
-                if (!existing || existing.pdfUrl !== pdfUrl) {
-                    initPdfViewer(key, pdfUrl, osId, idx);
+                if (!existing || !existing.pdf || existing.pdfUrl !== pdfUrl || existing.osId !== osId
+                    || (existing.itemId != null && String(existing.itemId) !== String(itemForPdf.id))) {
+                    await initPdfViewer(key, pdfUrl, osId, idx);
                 } else {
                     pdfViewerState[key] = existing;
                     pdfViewerState[key].osId = osId;
                     pdfViewerState[key].idx = idx;
-                    renderPdfViewerPage(key, existing.currentPage || 1, idx);
+                    await renderPdfViewerPage(key, existing.requestedPage || existing.currentPage || 1, idx);
                 }
             }
         } else {
@@ -36615,6 +36706,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             // escondia — depois de excluir a arte, a página do PDF continuava na tela,
             // ao lado do aviso de "faça upload", e parecia que a exclusão não pegou.
             limparVisualizadorPdf(idx);
+            atualizarEstadoDoPdf(idx, itemForPdf, 'ausente');
             if (empty) empty.style.display = 'block';
         }
         return;
