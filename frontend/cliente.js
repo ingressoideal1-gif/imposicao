@@ -216,6 +216,26 @@ function temArteVisivel(item) {
  * vivo no canvas ou a imagem aprovada, se há arte visível na frente e no verso,
  * e se este modelo tem ingressos para folhear.
  */
+function cabecalhoModeloCliente(item, idx, chip) {
+    const nome = item.nome_modelo || `Modelo ${idx + 1}`;
+    const produto = item.nome_produto_real || item.produto;
+    // Exibir os valores salvos, inclusive zero, sem recalcular a numeração.
+    const texto = valor => escapeHtml(String(valor === undefined || valor === null || valor === '' ? '--' : valor));
+    return `<div class="amostra-modelo-info">
+        <div class="amostra-modelo-nome-linha">
+            <span class="amostra-modelo-nome" tabindex="0">${escapeHtml(nome)}</span>
+            ${chip}
+        </div>
+        <div class="amostra-modelo-dados" tabindex="0" role="region" aria-label="Dados do modelo. Deslize para os lados para conferir todas as informações.">
+            ${produto && produto !== nome ? `<span class="amostra-modelo-produto">${escapeHtml(produto)}</span>` : ''}
+            <span>Qtd: <b>${texto(item.quantidade ?? item.qtd ?? 0)}</b> un</span>
+            <span title="Numeração inicial">NI: <b>${texto(item.num_inicial ?? item.numeracao_inicio)}</b></span>
+            <span title="Numeração final">NF: <b>${texto(item.num_final ?? item.numeracao_fim)}</b></span>
+            <span>Impressão: <b>${item.verso ? 'Frente e verso' : 'Só frente'}</b></span>
+        </div>
+    </div>`;
+}
+
 function blocoDeArteDoCliente(item, idx, ctx) {
     const desenhoAoVivo = ctx.desenhoAoVivo;
     const arteVisivel = ctx.arteVisivel;
@@ -533,10 +553,8 @@ function renderAmostrasOSItens(osId) {
         // cima, é vocabulário do painel interno: quem lê esta página é o
         // cliente da gráfica, não o operador.
         //
-        // Agora: nome do modelo e estado no topo, a arte grande, o que ela é
-        // (produto, quantidade, frente e verso) embaixo dela, e por último os
-        // dois botões — com a caixa de alteração nascendo só depois de ele
-        // pedir alteração.
+        // Nome e estado na primeira linha, dados na segunda, dentro da janela.
+        // A arte e os botões vêm depois; a alteração continua sob demanda.
         if (ehCliente) {
             const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
 
@@ -560,17 +578,6 @@ function renderAmostrasOSItens(osId) {
                 : (status === 'REPROVADA'
                     ? '<span class="amostra-chip amostra-chip-alteracao">' + icone('alerta', 13) + 'Alteração pedida</span>'
                     : '<span class="amostra-chip amostra-chip-pendente">' + icone('relogio', 13) + 'Aguarda você</span>');
-
-            // O que o modelo É, embaixo da arte — e não no cabeçalho junto do
-            // nome. O cliente identifica o modelo pelo NOME dele ("Pista — Lote
-            // 1"); o produto e a quantidade são a conferência que ele faz
-            // depois de olhar o desenho.
-            const meta = '<div class="amostra-meta">'
-                + '<span class="amostra-meta-item">' + escapeHtml(item.nome_produto_real || item.produto || '--') + '</span>'
-                + '<span class="amostra-meta-item">' + icone('entrega', 12)
-                + escapeHtml(String(item.quantidade || 0)) + ' un</span>'
-                + (item.verso ? '<span class="amostra-meta-item">' + icone('duplex', 12) + 'Frente e verso</span>' : '')
-                + '</div>';
 
             // A decisão: dois botões com o MESMO peso. Só depois de decidido é
             // que a cor entra, para dizer o que ele escolheu.
@@ -618,15 +625,11 @@ function renderAmostrasOSItens(osId) {
             return `
         <div class="card" style="border: 1px solid ${status === 'APROVADA' ? 'rgba(34,197,94,0.55)'
             : (status === 'REPROVADA' ? 'rgba(249,115,22,0.55)' : 'var(--border)')}; margin-bottom: 6pt; padding: 0;">
-            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 14px; margin: 0;">
-                <span class="card-title" style="font-weight: 800; min-width: 0; overflow-wrap: anywhere;">${escapeHtml(item.nome_modelo || `Modelo ${idx + 1}`)}</span>
-                ${chip}
-            </div>
             <div class="amostra-card-corpo" style="padding: 14px;">
-                <div class="amostra-preview-container" style="position: relative; margin-top: 0;">
-                    ${blocoDeArteDoCliente(item, idx, ctxDaArte)}
+                <div class="amostra-preview-container amostra-modelo-janela" style="position: relative; margin-top: 0;">
+                    ${cabecalhoModeloCliente(item, idx, chip)}
+                    <div class="amostra-modelo-arte">${blocoDeArteDoCliente(item, idx, ctxDaArte)}</div>
                 </div>
-                ${meta}
                 ${decisao}
                 ${caixaAlteracao}
             </div>
