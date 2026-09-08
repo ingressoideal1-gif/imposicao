@@ -1,0 +1,58 @@
+/* Cabeçalho compacto do modelo, exclusivo do portal do cliente. */
+.cliente-page .amostra-preview-container.amostra-modelo-janela {
+    padding: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.amostra-modelo-info {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    background: rgba(59, 130, 246, 0.08);
+    border-bottom: 1px solid var(--border);
+}
+.amostra-modelo-nome-linha {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+}
+.amostra-modelo-nome {
+    min-width: 0;
+    overflow-x: auto;
+    color: #ffd700;
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.amostra-modelo-nome-linha .amostra-chip {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.amostra-modelo-dados {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 5px;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+}
+.amostra-modelo-dados > span { flex-shrink: 0; }
+.amostra-modelo-dados b { color: var(--text); }
+.amostra-modelo-nome, .amostra-modelo-dados {
+    scrollbar-width: thin;
+    scrollbar-color: #64748b transparent;
+}
+.amostra-modelo-arte {
+    width: 100%;
+    min-width: 0;
+    padding: 18px 24px;
+    overflow: auto;
+    text-align: center;
+}
+@media (max-width: 600px) {
+    .amostra-modelo-arte { padding: 18px 10px; }
+}
