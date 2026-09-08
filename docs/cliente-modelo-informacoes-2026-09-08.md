@@ -30,3 +30,12 @@ Após o merge, conferir o check Cloudflare Pages e o conteúdo público de
 `/cliente.html`, `/cliente.js?v=20260908` e `/cliente-modelo.css?v=20260908`.
 Não é necessário abrir links reais de clientes para verificar os assets.
 Recuperação: reverter apenas o commit desta entrega e aguardar o novo deploy.
+
+## Complemento: cor do modelo
+
+A segunda linha também exibe `Cor`, entre o produto e a quantidade. Usa o nome
+da cor selecionada no catálogo já carregado pelo portal; sem esse registro,
+exibe o `padrao` salvo no modelo. Quando ambos estão ausentes, mostra `--`.
+O texto é escapado como os demais dados. Não altera a seleção nem grava a cor.
+O JavaScript deste complemento usa `?v=2026090802`; o CSS permanece igual.
+O harness cobre cor do catálogo, padrão sem catálogo, ausência e escape de texto.

@@ -216,9 +216,10 @@ function temArteVisivel(item) {
  * vivo no canvas ou a imagem aprovada, se há arte visível na frente e no verso,
  * e se este modelo tem ingressos para folhear.
  */
-function cabecalhoModeloCliente(item, idx, chip) {
+function cabecalhoModeloCliente(item, idx, chip, corSelecionada) {
     const nome = item.nome_modelo || `Modelo ${idx + 1}`;
     const produto = item.nome_produto_real || item.produto;
+    const cor = corSelecionada?.name || corSelecionada?.tipo || item.padrao;
     // Exibir os valores salvos, inclusive zero, sem recalcular a numeração.
     const texto = valor => escapeHtml(String(valor === undefined || valor === null || valor === '' ? '--' : valor));
     return `<div class="amostra-modelo-info">
@@ -228,6 +229,7 @@ function cabecalhoModeloCliente(item, idx, chip) {
         </div>
         <div class="amostra-modelo-dados" tabindex="0" role="region" aria-label="Dados do modelo. Deslize para os lados para conferir todas as informações.">
             ${produto && produto !== nome ? `<span class="amostra-modelo-produto">${escapeHtml(produto)}</span>` : ''}
+            <span>Cor: <b>${texto(cor)}</b></span>
             <span>Qtd: <b>${texto(item.quantidade ?? item.qtd ?? 0)}</b> un</span>
             <span title="Numeração inicial">NI: <b>${texto(item.num_inicial ?? item.numeracao_inicio)}</b></span>
             <span title="Numeração final">NF: <b>${texto(item.num_final ?? item.numeracao_fim)}</b></span>
@@ -627,7 +629,7 @@ function renderAmostrasOSItens(osId) {
             : (status === 'REPROVADA' ? 'rgba(249,115,22,0.55)' : 'var(--border)')}; margin-bottom: 6pt; padding: 0;">
             <div class="amostra-card-corpo" style="padding: 14px;">
                 <div class="amostra-preview-container amostra-modelo-janela" style="position: relative; margin-top: 0;">
-                    ${cabecalhoModeloCliente(item, idx, chip)}
+                    ${cabecalhoModeloCliente(item, idx, chip, selectedCor)}
                     <div class="amostra-modelo-arte">${blocoDeArteDoCliente(item, idx, ctxDaArte)}</div>
                 </div>
                 ${decisao}

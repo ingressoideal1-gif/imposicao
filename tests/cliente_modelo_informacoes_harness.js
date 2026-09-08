@@ -34,6 +34,8 @@ function funcao(nome) {
                 state.arteSomenteLeitura = leitura;
                 renderAmostrasOSItens('teste');
             };
+            state.cores = [{ id: 'cor-amarela', name: 'Amarela' }];
+            modelo.amostra_cor_id = 'cor-amarela';
             mostrar();
         });
         for (const width of [1100, 390, 320]) {
@@ -58,6 +60,7 @@ function funcao(nome) {
             assert.equal(layout.botoes, 2);
             assert.match(layout.texto, /NI: 0001/);
             assert.match(layout.texto, /NF: 1000/);
+            assert.match(layout.texto, /Cor: Amarela/);
             if (process.env.MODELO_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.MODELO_SCREENSHOTS, `cliente-modelo-${width}.png`), fullPage: true });
         }
         await page.evaluate(() => mostrar({ ...modelo, quantidade: 0, num_inicial: 0, num_final: 0, verso: true, verso_amostra_arte_base64: modelo.amostra_arte_base64 }));
@@ -77,7 +80,15 @@ function funcao(nome) {
         texto = await page.$eval('.amostra-modelo-dados', el => el.textContent);
         assert.match(texto, /NI: --/);
         assert.match(texto, /NF: --/);
-        console.log('OK: layout em 1100/390/320px, valores salvos, zeros, ausencia de numeracao, escape, verso e modo leitura.');
+        await page.evaluate(() => mostrar({ ...modelo, amostra_cor_id: null, padrao: 'Azul especial' }));
+        texto = await page.$eval('.amostra-modelo-dados', el => el.textContent);
+        assert.match(texto, /Cor: Azul especial/);
+        await page.evaluate(() => mostrar({ ...modelo, amostra_cor_id: null, padrao: '' }));
+        texto = await page.$eval('.amostra-modelo-dados', el => el.textContent);
+        assert.match(texto, /Cor: --/);
+        await page.evaluate(() => mostrar({ ...modelo, amostra_cor_id: null, padrao: '<img src=x onerror=alert(1)>' }));
+        assert.equal(await page.$('.amostra-modelo-dados img'), null);
+        console.log('OK: layout em 1100/390/320px, cor do catalogo, cor pelo padrao, cor ausente, valores salvos, zeros, ausencia de numeracao, escape, verso e modo leitura.');
     } finally {
         await browser.close();
     }
