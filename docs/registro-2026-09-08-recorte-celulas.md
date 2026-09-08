@@ -69,3 +69,22 @@ manifesto `latest.json`. O pacote nao deve ser anexado a repositorios GitHub.
 
 Os arquivos reais do pedido 21417 nao foram acessados. A verificacao fisica
 desse pedido e a confirmacao de instalacao nas estacoes permanecem pendentes.
+
+## Publicacao confirmada
+
+- Correcao enviada a `main` em `c25ac31f`; check Cloudflare Pages concluido com
+  `success` para esse commit.
+- MSI 1.2.325 enviado ao bucket existente, sem sobrescrever outro instalador.
+  A primeira tentativa de envio falhou na conexao; a seguinte foi concluida.
+- Arquivo baixado novamente pela URL publica sem query: tamanho e SHA-256
+  identicos aos do pacote local registrados acima.
+- Somente depois dessa conferencia, `latest.json` foi atualizado. A leitura
+  publica usando o mesmo mecanismo sem cache do agente confirmou versao,
+  URL, SHA-256, tamanho e notas do NewProd 1.2.325.
+- Nao houve deploy manual de Edge Functions, migracao de banco ou impressao.
+  A instalacao em cada estacao segue o atualizador existente; publicar o
+  manifesto nao comprova que todas as estacoes ja instalaram o pacote.
+
+Para recuperar o comportamento anterior, usar o codigo anterior com uma
+versao superior, conforme `GUIA_AGENTE.md`. Reapontar para 1.2.323 nao provoca
+downgrade automatico nas estacoes que ja receberam 1.2.325.
