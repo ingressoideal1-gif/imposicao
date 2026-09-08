@@ -291,7 +291,7 @@ function montarLote(mundo) {
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
 
     const posPreparo = trecho.indexOf('await prepararLinkDaArtePronta(osId, numero)');
-    const posCopia = trecho.indexOf('navigator.clipboard.writeText');
+    const posCopia = trecho.indexOf('await copiarTextoDoLinkCliente(finalUrl)');
     const posStatus = trecho.indexOf('gravarStatusOverride(osId,');
 
     ok(posPreparo > 0, 'ele espera o preparo da arte e do link');
