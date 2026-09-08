@@ -1637,10 +1637,9 @@ function drawPedPreview() {
                     //
                     // O recorte na célula já existe: o `gctx` foi clipado no
                     // retângulo da célula logo acima, então o que passar do corte
-                    // não aparece — como no papel. O motor ainda deixa a arte
-                    // usar metade do vão até a célula vizinha como sangria; aqui
-                    // a janela mostra a peça já aparada, que é o que sai do
-                    // corte.
+                    // não aparece — como no papel. O motor recorta o grupo
+                    // completo na mesma borda, sem sangria no vão entre células
+                    // (regra confirmada em 08/09/2026, pedido 21417).
                     const _escArte = (multiArteItem && multiArteItem._escalaH !== undefined)
                         ? { h: multiArteItem._escalaH, v: multiArteItem._escalaV }
                         : ((typeof escalaDaArteDoTrabalho === 'function')

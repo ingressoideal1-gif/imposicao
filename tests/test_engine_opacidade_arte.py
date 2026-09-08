@@ -350,11 +350,13 @@ def test_faixa_e_texto_numerico(valor, esperado):
 def _impor(tmp_path, opacidade, arte_b64):
     from engine import ImpositionConfig, ImpositionEngine
 
-    # Caminho ABSOLUTO para a arte base, e a saida sempre em tmp_path: este teste
-    # nao escreve nada na pasta do repositorio, e por isso nao precisa entrar em
-    # GRAVAM_NA_PASTA_DO_REPO nem correr serializado (ver test_paralelismo.py).
-    base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        "base_ticket.pdf")
+    # A base tambem e sintetica e temporaria: base_ticket.pdf e ignorado pelo
+    # Git e nao existe numa copia limpa usada para publicar o agente.
+    base = str(tmp_path / "base.pdf")
+    with fitz.open() as base_doc:
+        pagina = base_doc.new_page(width=100 * MM2PT, height=50 * MM2PT)
+        pagina.draw_rect(pagina.rect, fill=(1, 1, 1), color=None)
+        base_doc.save(base)
     saida_pdf = str(tmp_path / "imposto.pdf")
     el = {
         "type": "PDF", "pdf_content": arte_b64,

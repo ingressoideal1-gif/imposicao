@@ -461,35 +461,11 @@ def _caixa_girada(cx: float, cy: float, w_pt: float, h_pt: float, angle) -> fitz
 
 
 def _folga_de_sangria(cfg) -> tuple[float, float]:
-    """Quanto a pagina temporaria de um ingresso cresce para cada lado, em pontos.
+    """Folga interna da pagina temporaria, em pontos.
 
-    ## Por que ela existe
-
-    O motor monta o ingresso numa pagina temporaria quando a pose tem giro (ou
-    quando a folha leva o nome da arte). Essa pagina era do tamanho EXATO do
-    ingresso — e uma pagina de PDF recorta o proprio conteudo na borda. Tudo o
-    que passava do corte deixava de existir: a SANGRIA, que e justamente a sobra
-    que protege do desvio da guilhotina.
-
-    Na pose SEM giro nada disso acontece: arte e elementos vao direto na folha,
-    em coordenadas absolutas, e a sangria sai no papel. Ou seja, a MESMA folha
-    imprimia de dois jeitos. Medido em 27/08/2026 no formato `Credencial 90x140`,
-    que gira as poses 2 e 3 em 180 graus: poses 0 e 1 com 2,45 mm de sangria,
-    poses 2 e 3 com 0,00 mm. Metade das credenciais de cada folha saia aparada.
-
-    ## Por que um ingresso inteiro para cada lado
-
-    Porque nao ha o que estimar. Medir a sobra de cada elemento antes de desenhar
-    exigiria adivinhar a largura de um texto que ainda nao foi montado, e um chute
-    que erra para menos volta a aparar em silencio. Um ingresso de folga cobre
-    qualquer sangria concebivel — a de norma tem 3 mm — e para de custar ai: a
-    area extra e transparente, entao ela nao pinta nada nem cobre a celula
-    vizinha. O que cresce e a caixa da pagina, nao o desenho.
-
-    A folga e SIMETRICA de proposito: o centro da pagina continua sendo o centro
-    do ingresso, entao o giro segue em torno do mesmo ponto e a arte cai no mesmo
-    lugar de sempre. Quem cola na folha estica o retangulo da celula na mesma
-    medida, e a escala continua 1:1.
+    Mantida simetrica para preservar as transformacoes das poses giradas.
+    Desde 08/09/2026 ela NAO autoriza tinta fora da celula: `_recortar_celula`
+    limita o grupo completo na folha final, como a Visualizacao do pedido.
     """
     return cfg.item_w, cfg.item_h
 
@@ -519,50 +495,13 @@ def _escala_da_arte(cfg, arte_data=None) -> tuple[float, float]:
 
 
 def _arte_na_celula(cfg, x0_celula, y0_celula, base_w, base_h, src_rect, sx, sy):
-    """Onde a arte entra na celula e que pedaco dela aparece.
+    """Posiciona a arte com escala por eixo, centro e deslocamentos preservados.
 
-    Devolve `(rect_destino, clip_na_origem)`, prontos para o `show_pdf_page`, ou
-    `(None, None)` quando nao sobra nada visivel.
-
-    ## A 100% nada muda
-
-    Com `sx == sy == 1.0` esta funcao devolve exatamente o retangulo que o motor
-    sempre montou — a arte no tamanho natural do arquivo, centralizada na celula,
-    mais o deslocamento do formato — e a pagina inteira como clip. E o mesmo
-    desenho de antes, byte a byte: os milhares de trabalhos que ja passaram por
-    aqui nao mudam por causa desta funcao.
-
-    ## O que a escala faz
-
-    Estica a arte em torno do CENTRO da celula, cada eixo por conta propria — foi
-    o pedido: "% horizontal e % vertical", "mantem centralizado a celula". O
-    centro nao se move, entao aumentar sobra dos dois lados iguais e diminuir
-    encolhe para dentro pelos quatro lados.
-
-    NADA E RASTERIZADO. Esticar um PDF colado por `show_pdf_page` e trocar o
-    retangulo de destino: o conteudo continua vetor, o texto continua texto, e
-    quem decide a resolucao continua sendo o RIP da impressora.
-    `keep_proportion=False` e obrigatorio no chamador — com `True` o PyMuPDF
-    recusaria esticar em eixos diferentes e encaixaria a arte proporcionalmente,
-    ignorando em silencio metade do que o operador digitou.
-
-    ## Ate onde a arte pode crescer
-
-    Regra dada pelo usuario em 31/08/2026: recorta na celula mais a sangria,
-    nenhum ingresso invade o vizinho. Aqui isso vira o maior entre dois limites:
-
-    · A celula mais METADE do vao ate a celula ao lado (`gap_h`/`gap_v`). E o
-      espaco fisico que existe na folha antes de encostar na arte da vizinha, e e
-      exatamente onde a sangria deve morar. Com vao zero, o limite e o corte.
-
-    · O espaco que a arte JA ocupava a 100%. Sem isto, uma arte que hoje nasce
-      maior que a celula — e que hoje passa por cima da vizinha, porque o motor
-      nunca a aparou — encolheria de repente ao receber 100,1%, e o operador
-      veria a escala CORTAR ao mandar aumentar.
-
-    O recorte e feito no CLIP DA ORIGEM, e nao com uma mascara por cima: o
-    pedaco que nao cabe simplesmente nao e colado. Isso mantem o arquivo limpo e
-    o resultado igual no papel e na tela.
+    O recorte e aplicado por `_recortar_celula` ao conjunto completo na folha,
+    depois da rotacao. Assim vale tambem a 100%, para elementos PDF/SVG e para
+    artes originalmente maiores que a celula. O limite nao acompanha offsets
+    da arte nem cresce com o vao. `keep_proportion=False` no chamador preserva
+    as escalas independentes sem rasterizar.
     """
     largura = base_w * sx
     altura = base_h * sy
@@ -570,38 +509,30 @@ def _arte_na_celula(cfg, x0_celula, y0_celula, base_w, base_h, src_rect, sx, sy)
     y0 = y0_celula + (cfg.item_h - altura) / 2 - cfg.offset_v
     destino = fitz.Rect(x0, y0, x0 + largura, y0 + altura)
 
-    if sx == 1.0 and sy == 1.0:
-        return destino, src_rect
-
-    folga_x = max(cfg.gap_h / 2.0, (base_w - cfg.item_w) / 2.0, 0.0)
-    folga_y = max(cfg.gap_v / 2.0, (base_h - cfg.item_h) / 2.0, 0.0)
-    limite = fitz.Rect(
-        x0_celula - folga_x + cfg.offset_h,
-        y0_celula - folga_y - cfg.offset_v,
-        x0_celula + cfg.item_w + folga_x + cfg.offset_h,
-        y0_celula + cfg.item_h + folga_y - cfg.offset_v,
-    )
-
-    visivel = destino & limite
-    if visivel.is_empty or destino.width <= 0 or destino.height <= 0:
+    if destino.is_empty:
         return None, None
-    if visivel.x0 <= destino.x0 and visivel.y0 <= destino.y0 \
-            and visivel.x1 >= destino.x1 and visivel.y1 >= destino.y1:
-        return destino, src_rect
+    return destino, src_rect
 
-    # De volta as coordenadas da pagina de origem: a mesma proporcao, porque
-    # `keep_proportion=False` faz o mapeamento ser linear nos dois eixos.
-    fx0 = (visivel.x0 - destino.x0) / destino.width
-    fx1 = (visivel.x1 - destino.x0) / destino.width
-    fy0 = (visivel.y0 - destino.y0) / destino.height
-    fy1 = (visivel.y1 - destino.y0) / destino.height
-    clip = fitz.Rect(
-        src_rect.x0 + fx0 * src_rect.width,
-        src_rect.y0 + fy0 * src_rect.height,
-        src_rect.x0 + fx1 * src_rect.width,
-        src_rect.y0 + fy1 * src_rect.height,
-    )
-    return visivel, clip
+
+def _recortar_celula(page, inicio, rect):
+    """Recorta somente os fluxos acrescentados desde o inicio desta celula.
+
+    Os desenhos do PyMuPDF sao acrescentados em fluxos q/Q balanceados. Um
+    cerco externo q / retangulo W n / Q limita arte, texto e elementos juntos,
+    sem alterar os XObjects compartilhados ou o conteudo das outras poses.
+    Aplicado depois do desenho para manter os fluxos balanceados durante as
+    insercoes do PyMuPDF. Uma celula vazia nao acrescenta estado grafico.
+    """
+    novos = page.get_contents()[inicio:]
+    if not novos:
+        return
+    # A API desenha com Y para baixo; os operadores PDF usam Y para cima.
+    limite = rect * ~page.transformation_matrix
+    abertura = (f"q\n{limite.x0:.6f} {limite.y0:.6f} "
+                f"{limite.width:.6f} {limite.height:.6f} re W n\n").encode("ascii")
+    doc = page.parent
+    doc.update_stream(novos[0], abertura + doc.xref_stream(novos[0]))
+    doc.update_stream(novos[-1], doc.xref_stream(novos[-1]) + b"\nQ\n")
 
 
 def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
@@ -3513,6 +3444,7 @@ class ImpositionEngine:
 
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
                     arte_nome = arte_data.get("nome", "")
+                    inicio_celula = len(out_page_front.get_contents())
 
                     if cell_rotation == 0 and not arte_nome:
                         # FAST PATH: render arte e VDP diretamente na folha de saída
@@ -3634,6 +3566,9 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
+                    _recortar_celula(out_page_front, inicio_celula,
+                                     fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
+
             # 2. RENDERIZAR VERSO DA FOLHA (SE DUPLEX)
             if is_duplex:
                 out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
@@ -3726,6 +3661,7 @@ class ImpositionEngine:
                         cell_rotation = (360 - cell_rotation_frente) % 360
 
                         # 1. Criar PDF temporário para renderizar o verso do item + elementos VDP
+                        inicio_celula = len(out_page_back.get_contents())
                         temp_doc = fitz.open()
                         _fx, _fy = _folga_de_sangria(cfg)
                         temp_page = temp_doc.new_page(
@@ -3814,6 +3750,9 @@ class ImpositionEngine:
                             clip=_temp_doc_m[0].rect
                         )
                         _temp_doc_m.close()
+
+                        _recortar_celula(out_page_back, inicio_celula,
+                                         fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
 
         print(f"[engine] loop done elapsed={_time.monotonic()-_t0:.1f}s, saving...")
         if cfg.has_cover:
@@ -3921,6 +3860,8 @@ class ImpositionEngine:
 
                 if i_start >= cfg.total_items:
                     continue
+
+                inicio_celula = len(p.get_contents())
                 
                 if is_montagem:
                     font_size = 50
@@ -3929,6 +3870,8 @@ class ImpositionEngine:
                     cx = cell_x0 + (cfg.item_w - w_text) / 2
                     cy = cell_y0 + (cfg.item_h / 2) + (font_size / 3)
                     p.insert_text(fitz.Point(cx, cy), text, fontname="hebo", fontsize=font_size, color=(0,0,0))
+                    _recortar_celula(p, inicio_celula,
+                                     fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
                     continue
                     
                 current_doc_base = doc_base
@@ -4011,12 +3954,16 @@ class ImpositionEngine:
                 p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
                 p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
+                _recortar_celula(p, inicio_celula,
+                                 fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
+
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
         _salvar_pdf(doc_c, out_name)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
     def _render_item_front(self, out_page_front, item_data, row, col, cfg, start_x, start_y):
+        inicio_celula = len(out_page_front.get_contents())
         P = row * cfg.cols + col
         cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
         cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
@@ -4159,7 +4106,11 @@ class ImpositionEngine:
             )
             _temp_doc_m.close()
 
+        _recortar_celula(out_page_front, inicio_celula,
+                         fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
+
     def _render_item_back(self, out_page_back, item_data, row, col, cfg, start_x, start_y):
+        inicio_celula = len(out_page_back.get_contents())
         col_verso = cfg.cols - 1 - col
         P = row * cfg.cols + col_verso
         cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
@@ -4302,6 +4253,9 @@ class ImpositionEngine:
             )
             _temp_doc_m.close()
 
+        _recortar_celula(out_page_back, inicio_celula,
+                         fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
+
     def _generate_contracapa_for_chunk(self, set_idx, layer_idx, set_def, cfg):
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
@@ -4319,6 +4273,7 @@ class ImpositionEngine:
         o número do bloco e o começo da faixa. `item_end` só é usado como último
         recurso, quando o item não diz de que modelo veio.
         """
+        inicio_celula = len(p.get_contents())
         current_doc_base = item_start["doc_base"]
 
         model_idx = item_start.get("model_idx")
@@ -4396,6 +4351,9 @@ class ImpositionEngine:
 
         p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
         p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+
+        _recortar_celula(p, inicio_celula,
+                         fitz.Rect(cell_x0, cell_y0, cell_x0 + cfg.item_w, cell_y0 + cfg.item_h))
 
     def _blocos_da_montagem(self, set_def, stack_size):
         """Os blocos que a pilha de MONTAGEM contém, na ordem da numeração.

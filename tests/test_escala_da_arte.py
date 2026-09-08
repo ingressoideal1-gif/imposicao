@@ -19,8 +19,8 @@ O que cada um trava:
   · Os dois eixos sao independentes: 50% na horizontal nao encolhe a altura.
   · O centro nao se move — foi o pedido explicito ("mantem centralizado a
     celula").
-  · Passar de 100% nao invade a celula vizinha: a arte e aparada na celula mais
-    metade do vao ate ela.
+  · O limite e a borda exata da celula, inclusive a 100% e com vao entre poses
+    (regra confirmada em 08/09/2026 para o pedido 21417).
   · A pose GIRADA mede igual a pose reta. Sao dois caminhos diferentes dentro do
     motor, e ja divergiram antes.
 """
@@ -182,23 +182,17 @@ def test_aumentar_nao_passa_da_celula_quando_nao_ha_vao(tmp_path):
 
 
 @pytest.mark.xdist_group("engine_escala")
-def test_aumentar_usa_metade_do_vao_como_sangria(tmp_path):
-    """Com 10 mm de vao, a arte pode crescer 5 mm para cada lado — e para ai.
-
-    E a regra do usuario: recorta na celula mais a sangria, sem invadir a
-    vizinha. Metade do vao e exatamente o espaco que existe antes de encostar na
-    arte do ingresso ao lado.
-    """
+def test_aumentar_preserva_o_vao_sem_sangria(tmp_path):
+    """Mesmo com 10 mm de vao, o limite continua sendo a borda da celula."""
     FOLHA_LARGA = 260.0
     pdf = _impor(tmp_path, escala_h=200, cols=2, gap_h=10.0, folha_w=FOLHA_LARGA)
     caixa = _caixa_da_tinta(pdf)
     largura_usada = 2 * PECA_W + 10.0
     x0_grade = (FOLHA_LARGA - largura_usada) / 2
-    # A tinta das duas celulas se junta no meio, entao mede-se so a borda de fora
-    assert caixa[0] == pytest.approx(x0_grade - 5.0, abs=TOLERANCIA_MM), \
-        "a arte da primeira celula nao usou os 5 mm de sangria, ou passou deles"
-    assert caixa[2] == pytest.approx(x0_grade + largura_usada + 5.0, abs=TOLERANCIA_MM), \
-        "a arte da ultima celula nao usou os 5 mm de sangria, ou passou deles"
+    assert caixa[0] == pytest.approx(x0_grade, abs=TOLERANCIA_MM)
+    assert caixa[2] == pytest.approx(x0_grade + largura_usada, abs=TOLERANCIA_MM)
+    assert _caixa_da_tinta(pdf, faixa_x_mm=(x0_grade + PECA_W + 1,
+                                           x0_grade + PECA_W + 9)) is None
 
 
 @pytest.mark.xdist_group("engine_escala")
@@ -264,16 +258,10 @@ def test_numa_folha_combinada_cada_modelo_leva_a_propria_escala(tmp_path):
 
 
 @pytest.mark.xdist_group("engine_escala")
-def test_arte_maior_que_a_celula_nao_encolhe_ao_ganhar_escala(tmp_path):
-    """Uma arte que ja nascia com sangria continua com ela a 101%.
-
-    Sem a regra do "o que ela ja ocupava a 100%", mandar aumentar faria a arte
-    ENCOLHER — o recorte comeria a sangria que o arquivo trazia de fabrica.
-    """
+def test_arte_maior_que_a_celula_e_recortada_a_100_e_101_por_cento(tmp_path):
+    """O tamanho original maior nao autoriza a arte a passar da borda."""
     arte = _arte_preta(tmp_path, PECA_W + 6, PECA_H + 6, "arte_sangrada.pdf")
     cem = _caixa_da_tinta(_impor(tmp_path, arte=arte))
     mais = _caixa_da_tinta(_impor(tmp_path, escala_h=101, escala_v=101, arte=arte))
-    assert (mais[2] - mais[0]) >= (cem[2] - cem[0]) - TOLERANCIA_MM, \
-        "aumentar a escala encolheu a arte"
-    assert (mais[3] - mais[1]) >= (cem[3] - cem[1]) - TOLERANCIA_MM, \
-        "aumentar a escala encolheu a arte"
+    for caixa in (cem, mais):
+        assert caixa == pytest.approx(_celula_unica(), abs=TOLERANCIA_MM)

@@ -1,34 +1,10 @@
 # -*- coding: utf-8 -*-
-"""A sangria sobrevive na pose girada.
+"""A sangria da origem e recortada igualmente nas poses retas e giradas.
 
-## O defeito, medido em 27/08/2026
-
-O motor tem dois caminhos para montar um ingresso na folha:
-
-  · pose SEM giro — arte e elementos vao direto na folha, em coordenadas
-    absolutas. O que passa da borda do ingresso continua no papel: e a SANGRIA,
-    a sobra que protege do desvio da guilhotina.
-  · pose COM giro — o ingresso e montado numa pagina temporaria do tamanho dele
-    e colada girada. A pagina temporaria era do tamanho EXATO do ingresso, entao
-    tudo o que passava da borda simplesmente nao existia.
-
-O formato `Credencial 90x140` gira as poses 2 e 3 em 180 graus. Medido numa
-imposicao completa, com um elemento PDF de 110 x 154 mm num ingresso de
-105 x 148 (2,5 mm de sangria em volta):
-
-    pose 0 e 1 (sem giro)  -> 2,45 mm de tinta alem do corte
-    pose 2 e 3 (180 graus) -> 0,00 mm
-
-Metade das credenciais de cada folha saia sem a sobra. Levantamento do banco no
-mesmo dia: 45 elementos PDF de 21 numeracoes passam da borda de proposito, e
-todos usam esse formato.
-
-## O conserto
-
-A pagina temporaria passou a nascer com folga em volta — um ingresso inteiro
-para cada lado — e a colagem na folha usa o retangulo da celula esticado na
-mesma medida. Como a folga e simetrica, o centro nao se move: o giro continua
-em torno do mesmo ponto, e a arte cai no mesmo lugar de sempre.
+Em 08/09/2026, na analise do pedido 21417, o usuario definiu o limite exato da
+celula, igual a Visualizacao. Essa regra substitui a preservacao de sangria
+externa de 27/08. Mantemos a medicao de tinta nas quatro bordas da grade e a
+verificacao de centro, agora exigindo que nada seja pintado fora do corte.
 """
 import os
 import fitz
@@ -134,25 +110,23 @@ def _sangria_medida(pdf, pose):
 
 
 @pytest.mark.xdist_group("engine_sangria")
-def test_a_pose_sem_giro_deixa_a_sangria_passar(tmp_path):
-    """O caminho que sempre esteve certo — guarda contra consertar para o lado errado."""
+def test_a_pose_sem_giro_recorta_a_sangria(tmp_path):
+    """Elementos desenhados diretamente na folha respeitam a borda da celula."""
     pdf = _impor(tmp_path, {})
     for pose in (0, 1, 2, 3):
         sx, sy = _sangria_medida(pdf, pose)
-        assert sx > SANGRIA - 0.3, f"pose {pose}: sangria horizontal sumiu ({sx:.2f} mm)"
-        assert sy > SANGRIA - 0.3, f"pose {pose}: sangria vertical sumiu ({sy:.2f} mm)"
+        assert sx < 0.2, f"pose {pose}: tinta fora do corte horizontal ({sx:.2f} mm)"
+        assert sy < 0.2, f"pose {pose}: tinta fora do corte vertical ({sy:.2f} mm)"
 
 
 @pytest.mark.xdist_group("engine_sangria")
-def test_a_pose_girada_tambem_deixa_a_sangria_passar(tmp_path):
-    """O defeito: as poses 2 e 3 do `Credencial 90x140` saiam aparadas no corte."""
+def test_a_pose_girada_tambem_recorta_a_sangria(tmp_path):
+    """A folga da pagina temporaria nao permite invadir a celula vizinha."""
     pdf = _impor(tmp_path, {"2": 180, "3": 180})
     for pose in (2, 3):
         sx, sy = _sangria_medida(pdf, pose)
-        assert sx > SANGRIA - 0.3, (
-            f"pose {pose} girada: a sangria horizontal foi aparada ({sx:.2f} mm)")
-        assert sy > SANGRIA - 0.3, (
-            f"pose {pose} girada: a sangria vertical foi aparada ({sy:.2f} mm)")
+        assert sx < 0.2, f"pose {pose} girada: tinta fora do corte horizontal ({sx:.2f} mm)"
+        assert sy < 0.2, f"pose {pose} girada: tinta fora do corte vertical ({sy:.2f} mm)"
 
 
 @pytest.mark.xdist_group("engine_sangria")
@@ -164,7 +138,7 @@ def test_a_folga_nova_nao_desloca_o_que_ja_estava_certo(tmp_path):
     esc = 200 / 72.0
     start_x = (220 - 2 * PECA_W) / 2 * MM2PT
     start_y = (320 - 2 * PECA_H) / 2 * MM2PT
-    # o canto do desenho preto de cada pose fica a exatamente `SANGRIA` fora do corte
+    # O centro permanece coberto de tinta depois de recortar a sobra.
     for pose in (0, 3):
         row, col = pose // 2, pose % 2
         cx = start_x + (col + 0.5) * PECA_W * MM2PT
