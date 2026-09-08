@@ -30,6 +30,7 @@
  * usuario e o dono da grafica a edita ao vivo. O papel e o rotulo do seletor; a
  * grade e a origem da verdade.
  */
+import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
@@ -251,6 +252,15 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       throw new Recusa(422, "corpo invalido: esperava JSON");
     }
   };
+
+  if (p[0] === "email" && p.length === 2) {
+    if (!((p[1] === "config" && req.method === "GET") ||
+          (["enviar", "testar"].includes(p[1]) && req.method === "POST"))) {
+      throw new Recusa(405, "Operação de e-mail não permitida. A configuração é feita na nuvem.");
+    }
+    const quem = await quemChama(req);
+    return ok(await operarEmailArtes(p[1], req.method === "GET" ? {} : await corpoJson(), quem));
+  }
 
   // ── /user/permissions ──
   if (p[0] === "user" && p[1] === "permissions") {
