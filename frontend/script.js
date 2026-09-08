@@ -40521,8 +40521,8 @@ function ensureModalEmailElement() {
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button class="btn btn-secondary btn-sm" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Configurar Servidor SMTP e E-mail Remetente">
-                            ⚙️ Configurar Remetente
+                        <button class="btn btn-secondary btn-sm" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Consultar o remetente e testar o envio">
+                            ✉️ Remetente e teste
                         </button>
                         <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
                     </div>
@@ -40563,7 +40563,7 @@ function ensureModalEmailElement() {
 
                     <!-- Prévia dos Modelos (Cards com Foto) -->
                     <div id="modal-email-modelos-preview" style="display:flex;flex-direction:column;gap:10px;">
-                        <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">🖼️ Amostras Incluídas no Envio:</label>
+                        <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">🖼️ Prévia das artes — disponíveis pelo link de aprovação:</label>
                         <div id="modal-email-modelos-container" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;"></div>
                     </div>
 
@@ -40584,7 +40584,6 @@ function ensureModalEmailElement() {
             </div>
         `;
         document.body.appendChild(modal);
-        document.getElementById('btn-abrir-config-email').addEventListener('click', abrirModalConfigEmail);
     }
     if (modal.parentNode !== document.body) {
         document.body.appendChild(modal);
@@ -40598,77 +40597,19 @@ function ensureModalConfigEmailElement() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-config-email-remetente';
-        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999999;align-items:center;justify-content:center;padding:16px;';
         modal.innerHTML = `
-            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:560px;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
-                <!-- Header -->
-                <div style="padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;box-shadow:0 4px 12px rgba(59,130,246,0.3);">
-                            ⚙️
-                        </div>
-                        <div>
-                            <h3 style="margin:0;font-size:1.1rem;font-weight:800;color:#fff;">Configurações de E-mail Remetente</h3>
-                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);">Cadastre o servidor SMTP da gráfica para envio direto</p>
-                        </div>
-                    </div>
-                    <button onclick="fecharModalConfigEmail()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+            <div style="background:var(--card-bg,#1e293b);padding:24px;border-radius:14px;width:100%;max-width:520px;color:var(--text-color,#e2e8f0);">
+                <h3 style="margin-top:0;">Remetente dos e-mails</h3>
+                <p>O envio é feito pela nuvem, com a mesma conta de e-mail para toda a equipe.</p>
+                <p id="config-email-status" role="status">Consultando o serviço de e-mail...</p>
+                <p><strong>Remetente:</strong> <span id="config-email-remetente"></span></p>
+                <p>Para alterar a conta de envio, fale com o administrador. A senha não é cadastrada neste painel.</p>
+                <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="fecharModalConfigEmail()">Fechar</button>
+                    <button class="btn btn-primary btn-sm" id="btn-testar-email-nuvem" onclick="testarEnvioEmailConfig()" disabled>Enviar teste para meu e-mail</button>
                 </div>
-
-                <!-- Body -->
-                <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">E-mail Remetente (De:)</label>
-                            <input type="email" id="config-email-remetente" class="form-control" placeholder="atendimento@ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Nome de Exibição</label>
-                            <input type="text" id="config-email-nome" class="form-control" placeholder="Ingresso Ideal — Atendimento" style="width:100%;font-size:0.85rem;">
-                        </div>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Servidor SMTP (Host)</label>
-                            <input type="text" id="config-email-host" class="form-control" placeholder="smtp.gmail.com / mail.ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Porta</label>
-                            <input type="number" id="config-email-port" class="form-control" placeholder="587" value="587" style="width:100%;font-size:0.85rem;">
-                        </div>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Usuário Autenticação</label>
-                            <input type="text" id="config-email-user" class="form-control" placeholder="usuario@ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Senha / Token de App</label>
-                            <input type="password" id="config-email-password" class="form-control" placeholder="••••••••••••" style="width:100%;font-size:0.85rem;">
-                        </div>
-                    </div>
-
-                    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-                        <input type="checkbox" id="config-email-tls" checked style="width:16px;height:16px;cursor:pointer;">
-                        <label for="config-email-tls" style="font-size:0.82rem;color:#cbd5e1;cursor:pointer;">Usar Conexão Segura (TLS/SSL)</label>
-                    </div>
-                </div>
-
-                <!-- Footer -->
-                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.25);">
-                    <button class="btn btn-secondary btn-sm" onclick="fecharModalConfigEmail()" style="font-size:0.82rem;">Cancelar</button>
-                    <div style="display:flex;gap:8px;">
-                        <button class="btn btn-secondary btn-sm" onclick="testarEnvioEmailConfig()" style="font-size:0.82rem;font-weight:700;">🧪 Envio Teste</button>
-                        <button class="btn btn-primary btn-sm" onclick="salvarConfigEmailRemetente()" style="font-size:0.85rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#2563eb);padding:6px 16px;">💾 Salvar Configurações</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-    if (modal.parentNode !== document.body) {
+            </div>`;
         document.body.appendChild(modal);
     }
     return modal;
@@ -40690,6 +40631,8 @@ window.abrirModalConfigEmail = abrirModalConfigEmail;
  * Abre o modal de notificação/e-mail do cliente após a geração do link
  */
 async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
+    window._activeEmailModalData = null;
+    emailUltimoEnvioAceito = "";
     console.log('[LinkDebug] abrirModalEnviarEmailCliente ENTRY osId=', osId, 'numero=', numero);
     const modal = ensureModalEmailElement();
     console.log('[LinkDebug] modal element:', modal, 'display antes:', modal?.style?.display);
@@ -40906,80 +40849,108 @@ window.dispararMailtoCliente = dispararMailtoCliente;
 
 // ─── CONFIGURAÇÕES E DISPARO DIRETO DE E-MAIL (SMTP / API) ───────────────────
 
-function carregarConfigEmailRemetente() {
-    const config = JSON.parse(localStorage.getItem('ideal_email_remetente_config') || '{}');
-    const elRemetente = document.getElementById('config-email-remetente');
-    const elNome = document.getElementById('config-email-nome');
-    const elHost = document.getElementById('config-email-host');
-    const elPort = document.getElementById('config-email-port');
-    const elUser = document.getElementById('config-email-user');
-    const elPass = document.getElementById('config-email-password');
-    const elTls = document.getElementById('config-email-tls');
+// Envio sempre autenticado na nuvem, inclusive quando o painel é aberto na estação.
+let emailOperacaoEmAndamento = false;
+let emailConfigCarregada = false;
+let emailUltimoEnvioAceito = '';
+try { localStorage.removeItem('ideal_email_remetente_config'); } catch (_) {}
 
-    if (elRemetente) elRemetente.value = config.email_remetente || 'atendimento@ingressoideal.com.br';
-    if (elNome) elNome.value = config.nome_remetente || 'Ingresso Ideal — Atendimento';
-    if (elHost) elHost.value = config.host || '';
-    if (elPort) elPort.value = config.port || '587';
-    if (elUser) elUser.value = config.user || '';
-    if (elPass) elPass.value = config.has_password ? '******' : (config.password || '');
-    if (elTls) elTls.checked = config.use_tls !== false;
+async function requisitarEmail(caminho, dados) {
+    const sessao = typeof supabaseClient !== 'undefined' && supabaseClient
+        ? await supabaseClient.auth.getSession() : null;
+    if (sessao?.error) throw new Error('Não foi possível validar sua sessão. Entre novamente.');
+    const token = sessao?.data?.session?.access_token;
+    if (!token) throw new Error('Entre na sua conta do painel para enviar e-mails.');
+    let resposta;
+    try {
+        resposta = await fetch(API_PAINEL + '/api/email/' + caminho, {
+            method: dados === undefined ? 'GET' : 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            ...(dados === undefined ? {} : { body: JSON.stringify(dados) })
+        });
+    } catch (_) {
+        throw new Error('Não foi possível confirmar a operação de e-mail. Se era um envio, confira o recebimento antes de tentar novamente.');
+    }
+    let resultado;
+    try { resultado = await resposta.json(); }
+    catch (_) { throw new Error('O serviço de e-mail não respondeu corretamente. Se era um envio, confira o recebimento antes de repetir.'); }
+    if (!resposta.ok || !resultado.ok) {
+        const detalhe = resultado.detail || resultado.error;
+        throw new Error(typeof detalhe === 'string' ? detalhe : 'Falha no serviço de e-mail.');
+    }
+    return resultado;
 }
 
+async function carregarConfigEmailRemetente() {
+    emailConfigCarregada = false;
+    const status = document.getElementById('config-email-status');
+    const remetente = document.getElementById('config-email-remetente');
+    const teste = document.getElementById('btn-testar-email-nuvem');
+    if (teste) teste.disabled = true;
+    if (remetente) remetente.textContent = '';
+    if (status) status.textContent = 'Consultando o serviço de e-mail...';
+    try {
+        const config = (await requisitarEmail('config')).config;
+        emailConfigCarregada = config.configurado === true;
+        if (remetente) remetente.textContent = config.email_remetente || '';
+        if (status) status.textContent = emailConfigCarregada
+            ? 'Configuração disponível. Envie um teste para conferir o recebimento.'
+            : 'O administrador precisa configurar o envio de e-mail na nuvem.';
+        if (teste) teste.disabled = !emailConfigCarregada || emailOperacaoEmAndamento;
+    } catch (e) {
+        if (status) status.textContent = e.message;
+        toast(e.message, 'error');
+    }
+}
 
 function fecharModalConfigEmail() {
     const modal = document.getElementById('modal-config-email-remetente');
     if (modal) modal.style.display = 'none';
 }
 
-async function salvarConfigEmailRemetente() {
-    const config = {
-        email_remetente: document.getElementById('config-email-remetente')?.value || '',
-        nome_remetente: document.getElementById('config-email-nome')?.value || '',
-        host: document.getElementById('config-email-host')?.value || '',
-        port: parseInt(document.getElementById('config-email-port')?.value || '587'),
-        user: document.getElementById('config-email-user')?.value || '',
-        password: document.getElementById('config-email-password')?.value || '',
-        use_tls: document.getElementById('config-email-tls')?.checked !== false
-    };
-
-    if (!config.email_remetente) {
-        toast('Por favor, informe o e-mail remetente!', 'warning');
-        return;
+async function executarOperacaoEmail(acao) {
+    if (emailOperacaoEmAndamento) return;
+    emailOperacaoEmAndamento = true;
+    const botoes = document.querySelectorAll('#btn-disparar-email-direto, #btn-testar-email-nuvem');
+    botoes.forEach(b => { b.disabled = true; });
+    try { await acao(); }
+    catch (e) { toast(e.message, 'error'); }
+    finally {
+        emailOperacaoEmAndamento = false;
+        botoes.forEach(b => { b.disabled = b.id === 'btn-testar-email-nuvem' && !emailConfigCarregada; });
     }
-
-    localStorage.setItem('ideal_email_remetente_config', JSON.stringify(config));
-
-    toast('Configurações de e-mail salvas com sucesso! ⚙️', 'success');
-    fecharModalConfigEmail();
 }
 
 async function testarEnvioEmailConfig() {
-    toast('⚠️ Envio direto de e-mail requer servidor SMTP (backend). Use "Abrir Outlook" ou copie o texto por enquanto.', 'warning');
+    return executarOperacaoEmail(async () => {
+        if (!emailConfigCarregada) throw new Error('Aguarde a configuração do envio ficar disponível.');
+        toast('Enviando teste para o e-mail da sua conta...', 'info');
+        const resultado = await requisitarEmail('testar', {});
+        toast(resultado.message + ' Confira sua caixa de entrada e o spam.', 'success');
+    });
 }
 
 async function dispararEmailDiretoCliente() {
-    const to = document.getElementById('modal-email-to')?.value || '';
-    const subject = document.getElementById('modal-email-subject')?.value || '';
-    const body = document.getElementById('modal-email-body')?.value || '';
-
-    if (!to) {
-        toast('Por favor, informe o e-mail do cliente (Destinatário)!', 'warning');
-        return;
-    }
-    if (!subject) {
-        toast('Por favor, informe o assunto do e-mail!', 'warning');
-        return;
-    }
-
-    // Sem backend SMTP, redirecionar para mailto como fallback
-    toast('Abrindo cliente de e-mail com os dados preenchidos...', 'info');
-    const mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailtoLink, '_blank');
+    return executarOperacaoEmail(async () => {
+        const pedido = window._activeEmailModalData;
+        if (!pedido?.osId || !pedido?.linkUrl) throw new Error('Aguarde os dados do pedido carregarem antes de enviar.');
+        const to = document.getElementById('modal-email-to').value.trim();
+        const subject = document.getElementById('modal-email-subject').value.trim();
+        if (!to || !document.getElementById('modal-email-to').checkValidity()) throw new Error('Informe um e-mail válido para o cliente.');
+        if (!subject) throw new Error('Informe o assunto do e-mail.');
+        const dados = { os_id: pedido.osId, link_url: pedido.linkUrl, to, subject,
+            body_text: document.getElementById('modal-email-body').value };
+        const assinatura = JSON.stringify(dados);
+        if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
+        toast('Enviando e-mail...', 'info');
+        const resultado = await requisitarEmail('enviar', dados);
+        emailUltimoEnvioAceito = assinatura;
+        toast(resultado.message, 'success');
+    });
 }
 
 window.abrirModalConfigEmail = abrirModalConfigEmail;
 window.fecharModalConfigEmail = fecharModalConfigEmail;
-window.salvarConfigEmailRemetente = salvarConfigEmailRemetente;
 window.testarEnvioEmailConfig = testarEnvioEmailConfig;
 window.dispararEmailDiretoCliente = dispararEmailDiretoCliente;
 
