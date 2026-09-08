@@ -111,10 +111,12 @@ function montarJanela({ formatos, item, num }) {
     };
 
     const corpo =
-        'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
+        'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400; function bloqueioDeModeloAprovado() { return null; }\n'
         + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
         + recortar(SCRIPT, 'function formatoDoModelo(', 'formatoDoModelo')
         + recortar(SCRIPT, 'function atualizarCaixaDeEscalaDaArte(', 'atualizarCaixaDeEscalaDaArte')
+        + recortar(SCRIPT, 'function pdfViewerAindaAtual(', 'pdfViewerAindaAtual')
+        + recortar(SCRIPT, 'function atualizarEstadoDoPdf(', 'atualizarEstadoDoPdf')
         + recortar(SCRIPT, 'async function renderPdfViewerPage(', 'renderPdfViewerPage')
         + '\nreturn renderPdfViewerPage;';
 
@@ -239,7 +241,7 @@ function itemBase(extra) {
     // ─── 4. Valores impossiveis nao chegam ao papel ──────────────────────────
     {
         const fn = new Function('window',
-            'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
+            'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400; function bloqueioDeModeloAprovado() { return null; }\n'
             + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
             + '\nreturn escalaDaArteDoModelo;')({});
         ok(fn({}).h === 100 && fn({}).v === 100, 'sem nada gravado, 100 e 100');
@@ -271,7 +273,7 @@ function itemBase(extra) {
         const salvar = new Function(
             'state', 'document', 'pdfViewerState', 'console', 'window',
             'saveAmostraToDB', 'toast', 'renderPdfViewerPage', 'renderItemAmostraCombinada',
-            'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
+            'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400; function bloqueioDeModeloAprovado() { return null; }\n'
             + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
             + corpo)(
             state, doc, pdfViewerState, { error() {} }, {},
@@ -314,7 +316,7 @@ function itemBase(extra) {
             const campoH = doc.criar('amostra-escala-h-0');
             const campoV = doc.criar('amostra-escala-v-0');
             const fn = new Function('document', 'window', 'itemTemArte',
-                'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400;\n'
+                'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400; function bloqueioDeModeloAprovado() { return null; }\n'
                 + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
                 + recortar(SCRIPT, 'function atualizarCaixaDeEscalaDaArte(', 'atualizarCaixaDeEscalaDaArte')
                 + '\nreturn atualizarCaixaDeEscalaDaArte;')(
