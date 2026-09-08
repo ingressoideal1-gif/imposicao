@@ -30193,19 +30193,19 @@ function renderOrdens() {
                     // ao cliente. "Gerar" sobrevive para o pedido antigo, que
                     // ficou sem link porque foi marcado pronto antes da mudança.
                     const labelLink = linkSalvo ? '🔗 Copiar Link' : '🔗 Gerar Link';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
                                 } else if (isAlterado) {
                                     // Arte alterada/corrigida: sempre mostrar opção de reenviar com nova imagem
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', true, this)" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="window.open('${escapeJsAttr(linkSalvo)}','${ABA_DO_CLIENTE}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
-                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
+                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
                                         <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${escapeJsAttr(os.id)}', '${escapeJsAttr(os.numero)}', '${escapeJsAttr(linkSalvo)}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
                                 } else if (isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;cursor:pointer;">🔗 Gerar Link</button>`);
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;cursor:pointer;">🔗 Gerar Link</button>`);
                                 }
 
 
@@ -39976,14 +39976,6 @@ function generateClientToken(length = 6) {
 }
 
 /**
- * Gera ou recupera o link público do cliente para uma OS
- */
-/**
- * Cria ou recupera o link do cliente para uma OS.
- * Retorna a URL completa, ou null em caso de erro.
- * Uso interno — não copia nem exibe toast.
- */
-/**
  * Garante que o pedido tenha linha em `pedidos_artes` ANTES de ir ao cliente.
  *
  * A tela do cliente roda como `anon` -- o link não tem sessão do Supabase -- e a
@@ -40027,58 +40019,65 @@ async function garantirLinhaDePedidoArte(numInt) {
 }
 window.garantirLinhaDePedidoArte = garantirLinhaDePedidoArte;
 
-async function getOrCreateLinkCliente(osId, numero) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return null;
-    try {
-        const { data: existing, error: fetchError } = await supabaseClient
-            .from('pedidos_links_cliente')
-            .select('*')
-            .eq('os_id', osId)
-            .eq('ativo', true)
-            .maybeSingle();
+async function buscarLinkClienteAtivo(osId) {
+    const { data, error } = await supabaseClient
+        .from('pedidos_links_cliente')
+        .select('id, os_id, numero_pedido, token, ativo, status_arte, arte_pronta_em, cliente_abriu_em')
+        .eq('os_id', osId)
+        .eq('ativo', true)
+        .maybeSingle();
+    if (error) throw error;
+    return data;
+}
 
-        if (fetchError && fetchError.code !== 'PGRST116') {
-            if (fetchError.code === '42P01') return null; // tabela não existe ainda
-            throw fetchError;
-        }
-
-        let token;
-        const os = state.ordens.find(o => o.id === osId);
-        const currentStatus = os ? (os.status || 'Enviar Arte') : 'Enviar Arte';
-        
-        if (existing) {
-            token = existing.token;
-            await supabaseClient
-                .from('pedidos_links_cliente')
-                .update({ status_arte: currentStatus })
-                .eq('id', existing.id);
-            if (!state.linksClienteData) state.linksClienteData = {};
-            state.linksClienteData[osId] = { ...existing, status_arte: currentStatus };
-        }
- else {
-            token = generateClientToken(6);
-            const { error: insertError } = await supabaseClient
-                .from('pedidos_links_cliente')
-                .insert({
-                    os_id: osId,
-                    numero_pedido: String(numero),
-                    token: token,
-                    id_int: os ? (os.numero || numero) : numero,
-                    status_arte: currentStatus
-                });
-            if (insertError) throw insertError;
-        }
-
-        // O pedido está indo ao cliente: a linha em `pedidos_artes` precisa
-        // existir agora, enquanto quem está aqui é um usuário logado. Depois,
-        // na tela do cliente, a RLS não deixa criar -- só atualizar.
-        await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
-
-        return `${CLIENTE_BASE_URL}/cliente/${numero}-${token}`;
-    } catch (e) {
-        console.error('Erro ao obter/criar link do cliente:', e);
-        return null;
+function memorizarLinkCliente(osId, numero, registro) {
+    if (!registro || registro.ativo !== true || registro.os_id !== osId
+        || String(registro.numero_pedido) !== String(numero)
+        || !/^\d+$/.test(String(numero)) || !/^[a-z0-9]+$/i.test(registro.token || '')) {
+        throw new Error('O link do pedido está inválido ou inativo. Atualize a lista e tente novamente.');
     }
+    const url = `${CLIENTE_BASE_URL}/cliente/${registro.numero_pedido}-${registro.token}`;
+    if (!state.linksCliente) state.linksCliente = {};
+    if (!state.linksClienteData) state.linksClienteData = {};
+    state.linksCliente[osId] = url;
+    state.linksClienteData[osId] = registro;
+    return url;
+}
+
+// Retorna somente um link confirmado no banco; falhas interrompem o chamador.
+async function getOrCreateLinkCliente(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Supabase não configurado.');
+    }
+    if (!osId || !/^\d+$/.test(String(numero))) throw new Error('Número do pedido inválido.');
+    let registro = await buscarLinkClienteAtivo(osId);
+    const os = (state.ordens || []).find(o => o.id === osId);
+    if (!registro) {
+        const { data, error } = await supabaseClient
+            .from('pedidos_links_cliente')
+            .insert({
+                os_id: osId,
+                numero_pedido: String(numero),
+                token: generateClientToken(6),
+                id_int: os ? (os.numero || numero) : numero,
+                ativo: true,
+                status_arte: os ? (os.status || 'Enviar Arte') : 'Enviar Arte'
+            })
+            .select('id, os_id, numero_pedido, token, ativo, status_arte, arte_pronta_em, cliente_abriu_em')
+            .single();
+        if (error) {
+            if (error.code !== '23505') throw error;
+            // Outra aba pode ter criado o mesmo link enquanto esta preparava a
+            // arte. Reutilizar o token confirmado; nunca substituir ou reativar.
+            registro = await buscarLinkClienteAtivo(osId);
+            if (!registro) throw new Error('Já existe um link inativo para este pedido. Solicite a revisão do link ao responsável.');
+        } else {
+            registro = data;
+        }
+    }
+    const link = memorizarLinkCliente(osId, numero, registro);
+    await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
+    return link;
 }
 
 async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
@@ -40126,10 +40125,6 @@ function gerarLinkClienteBanner() {
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
-/**
- * Gera (ou recupera) o link do cliente, copia para a área de transferência
- * e exibe o modal de e-mail instantaneamente.
- */
 /**
  * Os estágios que "a arte ficou pronta" pode substituir em `pedidos_artes.status`.
  *
@@ -40216,6 +40211,7 @@ async function prepararLinkDaArtePronta(osId, numero) {
     }
 
     const link = await getOrCreateLinkCliente(osId, numero);
+    if (!link) return { ok: false, link: null, falhas: [{ nome: 'Link do cliente', motivo: 'link não confirmado' }] };
 
     const { error } = await supabaseClient
         .from('pedidos_links_cliente')
@@ -40224,9 +40220,12 @@ async function prepararLinkDaArtePronta(osId, numero) {
             cliente_abriu_em: null,
             status_arte: 'Enviar Arte'
         })
-        .eq('os_id', osId);
+        .eq('os_id', osId)
+        .eq('ativo', true)
+        .select('id')
+        .single();
     if (error) {
-        console.warn('[Arte] Nao consegui carimbar a versao da arte no link:', error.message || error);
+        return { ok: false, link: null, falhas: [{ nome: 'Link do cliente', motivo: error.message || 'falha ao registrar a versão' }] };
     }
 
     // O estado em memória acompanha, senão a linha da tela continuaria dizendo
@@ -40241,69 +40240,120 @@ async function prepararLinkDaArtePronta(osId, numero) {
     return { ok: true, link: link, falhas: [] };
 }
 
-async function gerarLinkCliente(osId, numero) {
+// O navegador pode negar a cópia depois de uma espera de rede, ou nem expor
+// clipboard na estação por HTTP. Só anunciar sucesso se uma API o confirmar.
+async function copiarTextoDoLinkCliente(texto) {
+    try {
+        await navigator.clipboard.writeText(texto);
+        return true;
+    } catch (_) { /* tentar a alternativa local */ }
+
+    const anterior = document.activeElement;
+    const campo = document.createElement('textarea');
+    campo.value = texto;
+    campo.readOnly = true;
+    campo.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    let copiado = false;
+    try {
+        (document.querySelector('dialog[open]') || document.body).appendChild(campo);
+        campo.focus();
+        campo.select();
+        campo.setSelectionRange(0, texto.length);
+        copiado = document.execCommand('copy') === true;
+    } catch (_) { /* oferecer a cópia manual abaixo */ }
+    finally {
+        campo.remove();
+        if (anterior && typeof anterior.focus === 'function') anterior.focus();
+    }
+    if (!copiado) {
+        toast('O navegador bloqueou a cópia automática. Copie o link na janela aberta.', 'warning');
+        window.prompt('Copie este link para enviar ao cliente:', texto);
+    }
+    return copiado;
+}
+
+const linksClienteEmAndamento = new Set();
+
+async function gerarLinkCliente(osId, numero, reenviar = false, botao = null) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
         toast('Supabase não configurado. Não é possível gerar o link.', 'error');
         return;
     }
+    if (linksClienteEmAndamento.has(osId)) {
+        toast('O link deste pedido está sendo preparado. Aguarde.', 'info');
+        return;
+    }
+    linksClienteEmAndamento.add(osId);
+    const textoBotao = botao ? botao.textContent : '';
+    const devolverFoco = botao && document.activeElement === botao;
+    if (botao) { botao.disabled = true; botao.textContent = '⏳ Aguarde...'; }
     try {
-        // A ARTE DE APROVAÇÃO VEM PRIMEIRO, e é esperada até o fim.
-        //
-        // Ela era regerada no FIM desta função, disparada em segundo plano — ou
-        // seja, depois de o link já estar na área de transferência. O atendente
-        // podia colar o link no WhatsApp enquanto a imagem nova ainda subia, e o
-        // cliente aprovava a arte anterior à correção, sem nada dizendo isso.
-        //
-        // Desde 31/08/2026 quem faz esse trabalho é o `prepararLinkDaArtePronta`,
-        // o mesmo caminho que o designer percorre ao devolver o pedido ao
-        // atendimento. Aqui ele serve ao REENVIO: a arte foi corrigida, e a
-        // versão nova precisa zerar a abertura anterior do cliente.
-        toast('⏳ Atualizando a arte de aprovação...', 'info');
-        const preparo = await prepararLinkDaArtePronta(osId, numero);
-        if (!preparo.ok) {
-            const nomes = (preparo.falhas || []).map(f => f.nome).join(', ');
-            toast('Não consegui atualizar a arte de aprovação de: ' + nomes
-                + '. O link NÃO foi atualizado, porque o cliente veria a arte anterior. '
-                + 'Tente de novo; se insistir, avise o suporte.', 'error');
-            return;
+        let finalUrl = null;
+        let atualizado = false;
+        if (!reenviar) {
+            toast('Consultando o link do cliente...', 'info');
+            const existente = await buscarLinkClienteAtivo(osId);
+            if (existente) finalUrl = memorizarLinkCliente(osId, numero, existente);
         }
+        // Copiar um link existente é somente leitura: não regenera imagens,
+        // não apaga a abertura do cliente e não regride o status da aprovação.
+        if (!finalUrl) {
+            // A ARTE DE APROVAÇÃO VEM PRIMEIRO, e é esperada até o fim.
+            //
+            // Ela era regerada no FIM desta função, disparada em segundo plano — ou
+            // seja, depois de o link já estar na área de transferência. O atendente
+            // podia colar o link no WhatsApp enquanto a imagem nova ainda subia, e o
+            // cliente aprovava a arte anterior à correção, sem nada dizendo isso.
+            //
+            // Desde 31/08/2026 quem faz esse trabalho é o `prepararLinkDaArtePronta`,
+            // o mesmo caminho que o designer percorre ao devolver o pedido ao
+            // atendimento. Aqui ele serve ao REENVIO: a arte foi corrigida, e a
+            // versão nova precisa zerar a abertura anterior do cliente.
+            toast('⏳ Atualizando a arte de aprovação...', 'info');
+            const preparo = await prepararLinkDaArtePronta(osId, numero);
+            if (!preparo.ok || !preparo.link) {
+                const nomes = (preparo.falhas || []).map(f => f.nome).join(', ');
+                toast('Não consegui atualizar a arte de aprovação de: ' + nomes
+                    + '. O link NÃO foi atualizado, porque o cliente veria a arte anterior. '
+                    + 'Tente de novo; se insistir, avise o suporte.', 'error');
+                return;
+            }
 
-        // O status NÃO vira "Aguard. Aprovação" aqui.
-        //
-        // Até 31/08/2026 virava, e era a única marca de que a arte tinha saído.
-        // Agora quem move o pedido é o cliente, quando olha: copiar o link de
-        // novo não prova que alguém viu alguma coisa. Ver `classificarPedidoNaArte`.
-        const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
-        if (os) {
-            os.status = 'Enviar Arte';
-            os.status_calculado = 'Enviar Arte';
+            // O status NÃO vira "Aguard. Aprovação" aqui.
+            //
+            // Até 31/08/2026 virava, e era a única marca de que a arte tinha saído.
+            // Agora quem move o pedido é o cliente, quando olha: copiar o link de
+            // novo não prova que alguém viu alguma coisa. Ver `classificarPedidoNaArte`.
+            const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+            if (os) {
+                os.status = 'Enviar Arte';
+                os.status_calculado = 'Enviar Arte';
+            }
+            gravarStatusOverride(osId, 'Enviar Arte');
+
+            finalUrl = preparo.link;
+            atualizado = true;
         }
-        gravarStatusOverride(osId, 'Enviar Arte');
+        if (!finalUrl) throw new Error('Não foi possível confirmar o link do cliente. Tente novamente.');
 
-        const host = CLIENTE_BASE_URL;
-        const finalUrl = preparo.link || `${host}/cliente/${numero}`;
-
-        // 4. Copiar link para clipboard
-        try {
-            await navigator.clipboard.writeText(finalUrl);
-            toast(`✅ Link copiado! ${finalUrl}`, 'success');
-        } catch (clipErr) {
-            // fallback
-            const ta = document.createElement('textarea');
-            ta.value = finalUrl; document.body.appendChild(ta); ta.select();
-            document.execCommand('copy'); document.body.removeChild(ta);
-            toast(`✅ Link gerado e copiado!`, 'success');
+        if (await copiarTextoDoLinkCliente(finalUrl)) {
+            toast('✅ Link copiado!', 'success');
+            _mostrarIconeEmailNaLinha(osId, numero, finalUrl);
         }
-
-        // 5. Mostrar ícone de email na linha do pedido (sem abrir modal)
-        _mostrarIconeEmailNaLinha(osId, numero, finalUrl);
-
-        // 6. Recarregar lista
-        loadOrdens();
+        if (atualizado) {
+            // Uma falha ao atualizar a lista não desfaz a cópia já confirmada.
+            Promise.resolve().then(() => loadOrdens()).catch(() => {
+                toast('O link foi preparado, mas a lista não atualizou. Atualize a página.', 'warning');
+            });
+        }
 
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
+    } finally {
+        linksClienteEmAndamento.delete(osId);
+        if (botao) { botao.disabled = false; botao.textContent = textoBotao; }
+        if (devolverFoco && document.activeElement === document.body) botao.focus({ preventScroll: true });
     }
 }
 
@@ -40712,12 +40762,12 @@ function fecharModalEnviarEmailCliente() {
     if (modal) modal.style.display = 'none';
 }
 
-function copiarLinkClienteModal() {
+async function copiarLinkClienteModal() {
     const linkStr = document.getElementById('modal-email-link-display')?.textContent || '';
     if (linkStr) {
-        navigator.clipboard.writeText(linkStr).then(() => {
+        if (await copiarTextoDoLinkCliente(linkStr)) {
             toast('Link de aprovação copiado!', 'success');
-        });
+        }
     }
 }
 

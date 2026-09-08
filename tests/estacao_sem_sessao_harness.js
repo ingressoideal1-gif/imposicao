@@ -88,7 +88,8 @@ function bancoFalso(opcoes) {
 
 // A sessao e conferida pela funcao de verdade do script.js, nao por uma copia:
 // se ela mudar de nome ou de regra, este harness quebra junto, como deve.
-const FONTE_COMPARTILHADA = recortarAsync('temSessaoDoSupabase');
+const FONTE_COMPARTILHADA = SCRIPT.match(/const CLIENTE_BASE_URL = '[^']+';/)[0]
+    + '\n' + recortarAsync('temSessaoDoSupabase');
 
 function montar(nome, banco, state, overrides) {
     const window = { location: { origin: 'https://ideal-imposition.vercel.app' } };
