@@ -4,6 +4,7 @@ import math
 import os
 import io
 import tempfile
+import newprod_temp as temp_manager
 import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
@@ -1382,6 +1383,8 @@ class ImpositionEngine:
         # Evita re-leitura do disco a cada chamada, mas PyMuPDF ainda
         # faz deduplicacao interna de streams identicos no PDF.
         self._font_buffer_cache: dict = {}
+        self._font_work = None
+        self._embedded_font_paths = {}
 
     def _folhas_por_lote(self, cfg, refazendo):
         """De quantas folhas e cada lote entregue enquanto o trabalho e gerado.
@@ -2104,13 +2107,8 @@ class ImpositionEngine:
 
             # 1. Tentar ler fonte embutida em Base64 se presente no elemento
             if el.get("_font_data"):
-                import base64, tempfile
                 try:
-                    font_bytes = base64.b64decode(el["_font_data"])
-                    tmp_font = tempfile.NamedTemporaryFile(delete=False, suffix=".ttf")
-                    tmp_font.write(font_bytes)
-                    tmp_font.close()
-                    font_file = tmp_font.name
+                    font_file, font_bytes = self._fonte_embutida(el["_font_data"])
                     # Nome do RECURSO no PDF, e não o nome da família: o PyMuPDF
                     # recusa espaço, e o nome precisa ser único por arquivo.
                     font_name = _nome_de_fonte_para_pdf(family, font_bytes)
@@ -2599,7 +2597,36 @@ class ImpositionEngine:
                 print(f"[engine] Elemento PDF sem pdf_content - ignorado")
 
 
+    def _fonte_embutida(self, encoded):
+        caminho = self._embedded_font_paths.get(encoded)
+        if caminho is None:
+            dados = base64.b64decode(encoded)
+            if self._font_work is None:
+                self._font_work = temp_manager.TrabalhoTemporario()
+            with self._font_work.arquivo(suffix=".ttf") as fonte:
+                fonte.write(dados)
+                caminho = fonte.name
+            self._embedded_font_paths[encoded] = caminho
+            self._font_buffer_cache[caminho] = dados
+        return caminho, self._font_buffer_cache[caminho]
+
+    def _fechar_fontes_temporarias(self):
+        if self._font_work is not None:
+            self._font_work.close()
+            self._font_work = None
+        for caminho in self._embedded_font_paths.values():
+            self._font_buffer_cache.pop(caminho, None)
+            _MEDIDORES.pop(caminho, None)
+            _FRACOES_DO_MEIO.pop(caminho, None)
+        self._embedded_font_paths.clear()
+
     def process(self):
+        try:
+            return self._process()
+        finally:
+            self._fechar_fontes_temporarias()
+
+    def _process(self):
         cfg = self.cfg
         # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
         # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.

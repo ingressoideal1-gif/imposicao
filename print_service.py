@@ -3,6 +3,7 @@ import base64
 import json
 import subprocess
 import tempfile
+import newprod_temp as temp_manager
 import fitz  # PyMuPDF
 from ppd_parser import PPDParser
 
@@ -477,7 +478,7 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg=Non
     ps_path = None
     try:
         # Converter PDF → PostScript via Ghostscript
-        ps_fd, ps_path = tempfile.mkstemp(suffix=".ps")
+        ps_fd, ps_path = tempfile.mkstemp(suffix=".ps", dir=temp_manager.pasta_do_trabalho(pdf_path))
         os.close(ps_fd)
 
         cmd = [
@@ -818,4 +819,3 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
 
     all_errors = " | ".join(errors)
     return False, f"Todas as estrategias de impressao falharam: {all_errors}"
-
