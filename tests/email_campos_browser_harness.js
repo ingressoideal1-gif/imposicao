@@ -16,7 +16,13 @@ function extrair(nome) {
         await page.setRequestInterception(true);
         page.on('request', req => req.abort());
         await page.setContent('<!doctype html><body></body>');
-        await page.addScriptTag({content: extrair('ensureModalEmailElement')});
+        await page.evaluate(css => {
+            const style = document.createElement('style');
+            style.textContent = css;
+            document.head.appendChild(style);
+        }, fs.readFileSync('frontend/style.css', 'utf8'));
+        await page.setViewport({width:1280,height:1000});
+        await page.addScriptTag({content: extrair('ensureModalEmailElement') + '\n' + extrair('mostrarSucessoEnvioEmail')});
         await page.evaluate(() => {
             ensureModalEmailElement().style.display = 'flex';
             document.getElementById('modal-email-subject').value = 'Aprovação — Pedido #11';
@@ -34,7 +40,56 @@ function extrair(nome) {
         assert.equal(await page.$eval('#modal-email-to', e => e.value), 'segundo@example.com');
         assert.doesNotMatch(await page.$eval('#modal-email-subject', e => e.value), /[\r\n]/);
         assert.equal(await page.$eval('#modal-email-subject', e => e.autocomplete), 'off');
+        assert.equal(await page.$('#modal-email-modelos-preview'), null);
+        assert.equal(await page.$('#modal-email-modelos-container'), null);
+        assert.equal(await page.$eval('#modal-email-body', e => getComputedStyle(e).fontFamily.includes('monospace')), false);
+        assert.ok(await page.$eval('#modal-email-body', e => parseFloat(getComputedStyle(e).fontSize) >= 15));
+        const transporte = source.slice(source.indexOf('let emailOperacaoEmAndamento'), source.indexOf('window.abrirModalConfigEmail = abrirModalConfigEmail;', source.indexOf('let emailOperacaoEmAndamento')));
+        await page.addScriptTag({content: `
+            const API_PAINEL = 'https://synthetic.example';
+            const supabaseClient = {auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})}};
+            function abrirModalConfigEmail() {}
+            function toast() {}
+            window.fetch = () => new Promise(resolve => {window.resolverEnvio = resolve;});
+            ${transporte}
+        `});
+        await page.evaluate(() => {
+            window._activeEmailModalData = {osId:'vibe_11',linkUrl:'https://example.com/cliente/11-abc123'};
+            document.getElementById('modal-email-os-numero').textContent = '11';
+            document.getElementById('modal-email-link-display').textContent = window._activeEmailModalData.linkUrl;
+            document.getElementById('modal-email-body').value = 'Olá, Cliente de Exemplo!\n\nSuas artes estão prontas para conferência e aprovação.\n\nRESUMO DOS MODELOS DO PEDIDO:\n\n[01] Pulseira Triband\nQuantidade: 5000\nCor: Padrão\n\nLINK DE APROVAÇÃO INTERATIVA:\nhttps://example.com/cliente/11-abc123\n\nAtenciosamente,\nEquipe Ingresso Ideal / Atendimento';
+        });
+        const preview = process.env.EMAIL_MODAL_PREVIEW_DIR;
+        if (preview) fs.mkdirSync(preview, {recursive:true});
+        for (const [nome,width,height] of [['desktop',1280,1000],['mobile',390,900]]) {
+            await page.setViewport({width,height});
+            assert.ok(await page.$eval('.email-dialog', e => e.scrollWidth <= e.clientWidth + 1));
+            if (preview) await page.screenshot({path:preview + '/modal-email-' + nome + '.png'});
+        }
+        await page.setViewport({width:1280,height:1000});
+        await page.click('#btn-disparar-email-direto');
+        await page.waitForFunction(() => typeof window.resolverEnvio === 'function');
+        assert.equal(await page.$('#modal-email-sucesso'), null, 'Nao mostra sucesso enquanto envio esta pendente');
+        assert.equal(await page.$eval('#btn-disparar-email-direto', e => e.disabled), true);
+        await page.evaluate(() => window.resolverEnvio({ok:true,json:async()=>({ok:true,message:'Aceito'})}));
+        await page.waitForSelector('#modal-email-sucesso[open]');
+        assert.equal(await page.$eval('#modal-email-sucesso-titulo', e => e.textContent), 'Sucesso do Envio');
+        assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e => e.textContent), 'segundo@example.com');
+        if (preview) await page.screenshot({path:preview + '/modal-email-sucesso.png'});
+        await page.setViewport({width:390,height:900});
+        assert.ok(await page.$eval('#modal-email-sucesso', e => e.getBoundingClientRect().right <= innerWidth && e.getBoundingClientRect().left >= 0));
+        await page.setViewport({width:1280,height:1000});
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
+        await page.evaluate(() => document.getElementById('modal-email-subject').value = 'Novo assunto');
+        await page.click('#btn-disparar-email-direto');
+        await page.evaluate(() => window.resolverEnvio({ok:false,json:async()=>({ok:false,error:'Recusado'})}));
+        await page.waitForFunction(() => !document.getElementById('btn-disparar-email-direto').disabled);
+        assert.equal(await page.$('#modal-email-sucesso'), null, 'Falha nao exibe sucesso');
+        await page.evaluate(() => mostrarSucessoEnvioEmail('cliente@example.com'));
+        await page.click('#modal-email-sucesso button');
+        await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
         assert.deepEqual(erros, []);
-        console.log('OK: destinatario e assunto independentes; assunto editavel sem quebras de cabecalho');
+        console.log('OK: campos independentes, modal responsivo sem miniaturas, sucesso somente apos aceite, erro e fechamento');
     } finally { await browser.close(); }
 })().catch(e => {console.error(e);process.exitCode=1;});
