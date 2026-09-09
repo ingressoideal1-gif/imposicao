@@ -40693,6 +40693,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         let clienteNome = os ? (os.cliente || '') : '';
         let clienteEmail = '';
         let nomeEvento = '';
+        let atendente = typeof os?.vendedor === 'string' ? os.vendedor : '';
 
         if (state.todasArtes) {
             const arteObj = state.todasArtes.find(a => String(a.id_int) === String(numInt));
@@ -40709,6 +40710,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
 
                 if (propData && propData.length > 0) {
                     const prop = propData[0];
+                    atendente = typeof prop.vendedor === 'string' ? prop.vendedor : '';
                     if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
                     const idCli = prop.id_faturado || prop.id_cliente;
                     if (idCli) {
@@ -40748,7 +40750,8 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         bodyLines.push(`Por favor, acesse o link acima para conferir o visual final, aprovar ou indicar alterações necessárias.`);
         bodyLines.push(``);
         bodyLines.push(`Atenciosamente,`);
-        bodyLines.push(`Equipe Ingresso Ideal / Atendimento`);
+        atendente = atendente.replace(/\s+/g, ' ').trim();
+        bodyLines.push(atendente ? `Atendimento: ${atendente}` : 'Atendimento');
 
         document.getElementById('modal-email-body').value = bodyLines.join('\n');
 

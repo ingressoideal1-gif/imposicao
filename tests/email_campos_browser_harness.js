@@ -47,7 +47,11 @@ function extrair(nome) {
         const transporte = source.slice(source.indexOf('let emailOperacaoEmAndamento'), source.indexOf('window.abrirModalConfigEmail = abrirModalConfigEmail;', source.indexOf('let emailOperacaoEmAndamento')));
         await page.addScriptTag({content: `
             const API_PAINEL = 'https://synthetic.example';
-            const supabaseClient = {auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})}};
+            window.vendedorProposta = 'Alexandre Almeida';
+            const supabaseClient = {
+                auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})},
+                from:()=>({select:()=>({eq:()=>({limit:async()=>({data:[{vendedor:window.vendedorProposta}]})})})})
+            };
             function abrirModalConfigEmail() {}
             function toast() {}
             const state = {ordens:[{id:'vibe_11',numero:11,cliente:'Cliente de Exemplo'}],todasArtes:[],osItens:{}};
@@ -60,8 +64,19 @@ function extrair(nome) {
             document.getElementById('modal-email-to').value = 'segundo@example.com';
         });
         const corpo = await page.$eval('#modal-email-body', e => e.value);
+        assert.match(corpo, /Atendimento: Alexandre Almeida/);
         assert.doesNotMatch(corpo, /RESUMO DOS MODELOS|Quantidade:|Imagem da Arte|Numeração:/);
         assert.match(corpo, /https:\/\/example.com\/cliente\/11-abc123/);
+        for (const vendedor of ['Emily Boeira', null]) {
+            await page.evaluate(async nome => {
+                window.vendedorProposta = nome;
+                await abrirModalEnviarEmailCliente('vibe_11',11,'https://example.com/cliente/11-abc123');
+                document.getElementById('modal-email-to').value = 'segundo@example.com';
+            }, vendedor);
+            const mensagem = await page.$eval('#modal-email-body', e => e.value);
+            assert.ok(mensagem.endsWith(vendedor ? 'Atendimento: ' + vendedor : 'Atendimento'));
+            assert.doesNotMatch(mensagem, /Alexandre Almeida/);
+        }
         const preview = process.env.EMAIL_MODAL_PREVIEW_DIR;
         if (preview) fs.mkdirSync(preview, {recursive:true});
         for (const [nome,width,height] of [['desktop',1280,1000],['mobile',390,900]]) {

@@ -35,7 +35,7 @@ Deno.test("email: todos os perfis com leitura enviam sem permissão administrati
     assert.ok(c.enviadas[0].html?.includes(`href="${url}"`));
     assert.match(c.enviadas[0].text, /phone=555195343478/);
     assert.equal(c.consultas[0], "pedidos_links_cliente?os_id=eq.vibe_11&ativo=eq.true&select=os_id,numero_pedido,token&limit=2");
-    assert.equal(c.consultas[1], "propostas?id_int=eq.11&select=id_int,texto_whatsapp&limit=2");
+    assert.equal(c.consultas[1], "propostas?id_int=eq.11&select=id_int,texto_whatsapp,vendedor&limit=2");
     assert.match(c.enviadas[0].html!, /Resumo do Orçamento[\s\S]*R\$ 148,05/);
     assert.match(c.enviadas[0].text, /Pagamento: Pix/);
   }
@@ -65,7 +65,7 @@ Deno.test("email: configuração ausente, porta bloqueada ou TLS inválido não 
   }
 });
 Deno.test("email: não aceita sobrescrever SMTP, remetente, HTML, autor ou destinatário de teste", async () => {
-  for (const campo of ["smtp_config", "from", "body_html", "autor", "empresa_id", "orcamento"]) {
+  for (const campo of ["smtp_config", "from", "body_html", "autor", "empresa_id", "orcamento", "vendedor", "atendente"]) {
     const c = contexto();
     await recusa(422, () => operarEmailArtes("enviar", { ...entrada, [campo]: "forjado" }, quem, c.deps));
     assert.equal(c.consultas.length, 0); assert.equal(c.enviadas.length, 0);
@@ -74,6 +74,16 @@ Deno.test("email: não aceita sobrescrever SMTP, remetente, HTML, autor ou desti
   await recusa(422, () => operarEmailArtes("testar", { to: "outro@example.com" }, quem, c.deps));
   await operarEmailArtes("testar", {}, quem, c.deps);
   assert.equal(c.enviadas[0].to, quem.email); assert.equal(c.consultas.length, 0);
+});
+Deno.test("email: assinatura desatualizada cede ao atendimento cadastrado na proposta", async () => {
+  for (const vendedor of ['Alexandre Almeida', 'Emily Boeira']) {
+    const c = contexto([link], [{id_int:11,texto_whatsapp:'Total: R$ 148,05',vendedor}]);
+    await operarEmailArtes('enviar', {...entrada, body_text: entrada.body_text + '\n\nAtenciosamente,\nAtendimento: Nome antigo'}, quem, c.deps);
+    assert.ok(c.enviadas[0].text.includes('Atendimento: ' + vendedor));
+    assert.ok(c.enviadas[0].html?.includes('Atendimento: ' + vendedor));
+    assert.doesNotMatch(c.enviadas[0].text, /Nome antigo/);
+    assert.ok(c.enviadas[0].text.includes(encodeURIComponent('Olá, ' + vendedor + '!')));
+  }
 });
 Deno.test("email: orcamento ausente nao inventa valores; divergencia e falha impedem envio", async () => {
   for (const proposta of [[], [{id_int:11,texto_whatsapp:null}], [{id_int:11,texto_whatsapp:""}]]) {

@@ -1,5 +1,7 @@
 /** HTML de e-mail gerado no servidor. Conteúdo editável sempre escapado. */
 const WHATSAPP = "555195343478"; // Mesmo atendimento de frontend/cliente-entrega.js.
+const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg";
+const LOGO_WHATSAPP = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png";
 const escapar = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 function linhaHtml(linha: string): string {
@@ -15,7 +17,13 @@ function linhaHtml(linha: string): string {
   }).join("");
 }
 
-export function layoutEmailArte(texto: string, portal: string, link?: string, numero?: string, orcamento?: string) {
+export function layoutEmailArte(texto: string, portal: string, link?: string, numero?: string, orcamento?: string, vendedor?: string) {
+  const atendente = (vendedor || "").replace(/\s+/g, " ").trim();
+  if (link) {
+    // Atualiza apenas a assinatura padrão, inclusive em mensagens de abas antigas.
+    texto = texto.replace(/\n*Atenciosamente,?\s*\n(?:Equipe (?:Ingresso Ideal|Ideal Imposition)(?:\s*\/\s*Atendimento)?|Atendimento(?::[^\r\n]*)?)\s*$/i, "").trimEnd();
+    texto += "\n\nAtenciosamente,\n" + (atendente ? `Atendimento: ${atendente}` : "Atendimento");
+  }
   // Também remove o bloco padrão de mensagens preparadas por abas antigas.
   const fonte = texto.split(/\r?\n/);
   const inicioResumo = fonte.findIndex(l => /^\s*RESUMO DOS MODELOS DO PEDIDO:\s*$/i.test(l));
@@ -23,7 +31,7 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
   if (inicioResumo >= 0 && inicioAprovacao > inicioResumo) fonte.splice(inicioResumo, inicioAprovacao - inicioResumo);
   texto = fonte.join("\n");
   const whatsapp = "https://api.whatsapp.com/send?phone=" + WHATSAPP + "&text=" + encodeURIComponent(
-    numero ? `Olá! Preciso de atendimento sobre a aprovação das artes do Pedido #${numero}.` : "Olá! Preciso de atendimento sobre a aprovação das artes.");
+    `Olá${atendente ? ", " + atendente : ""}! Preciso de atendimento sobre a aprovação das artes${numero ? " do Pedido #" + numero : ""}.`);
   const destino = link || portal;
   const pagamento = link ? link + "#pagamento" : "";
   const titulo = link ? "Suas artes estão prontas!" : "Seu e-mail de teste chegou.";
@@ -47,8 +55,8 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#edf3f5;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #dde7eb;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#102b3f;padding:24px 28px;border-bottom:4px solid #11b3b8;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="64"><img src="${escapar(portal)}/logo.png" width="56" height="56" alt="Ingresso Ideal" style="display:block;border:0;border-radius:12px;"></td><td style="color:#fff;font-family:Arial,Helvetica,sans-serif;"><strong style="font-size:23px;letter-spacing:-0.5px;">Ingresso Ideal</strong><br><span style="font-size:12px;color:#b7d9e4;">APROVAÇÃO DE ARTES</span></td></tr></table>
+<tr><td style="background:#fff;padding:24px 28px;border-bottom:4px solid #11b3b8;">
+<img src="${LOGO_EMPRESA}" width="280" alt="Ingresso Ideal — Ingressos, Pulseiras e Credenciais" style="display:block;width:280px;max-width:100%;height:auto;border:0;">
 </td></tr>
 <tr><td style="padding:30px 28px 8px;">
 ${numero ? `<p style="margin:0 0 12px;font-size:12px;font-weight:bold;letter-spacing:1px;color:#087f8c;">PEDIDO #${escapar(numero)}</p>` : ""}
@@ -62,9 +70,9 @@ ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspac
 ${pagamento ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td align="center" bgcolor="#102b3f" style="border-radius:8px;mso-padding-alt:14px 22px;"><a href="${escapar(pagamento)}" style="display:inline-block;padding:14px 22px;border:1px solid #102b3f;border-radius:8px;font-size:15px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;">Realizar Pagamento &rarr;</a></td></tr></table>` : ""}
 ${detalhes ? `<div style="border-top:1px solid #e2e8f0;padding-top:22px;">${detalhes}</div>` : ""}
 </td></tr>
-<tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><strong style="font-size:16px;color:#102b3f;">Precisa de ajuda com as artes?</strong><p style="margin:8px 0 12px;font-size:14px;line-height:1.6;color:#475569;">Nossa equipe de atendimento pode ajudar você.</p><a href="${escapar(whatsapp)}" style="font-size:14px;font-weight:bold;color:#12664b;text-decoration:underline;">Falar com atendente pelo WhatsApp &rarr;</a></td></tr></table></td></tr>
+<tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><a href="${escapar(whatsapp)}" style="display:block;padding:16px;color:#12664b;font-size:15px;font-weight:bold;line-height:32px;text-decoration:none;"><img src="${LOGO_WHATSAPP}" width="32" height="32" alt="WhatsApp" style="vertical-align:middle;border:0;margin-right:8px;">Falar com meu Atendimento</a></td></tr></table></td></tr>
 <tr><td style="padding:22px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.7;color:#64748b;">Se o botão não abrir, copie este endereço no navegador:<br><a href="${escapar(destino)}" style="color:#087f8c;word-break:break-all;">${escapar(destino)}</a><br><br>Ingresso Ideal &middot; Atendimento e aprovação de artes</td></tr>
 </table><!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
-  return { html, text: texto + (orcamento ? "\n\nRESUMO DO ORÇAMENTO:\n" + orcamento : "") + (pagamento ? "\n\nRealizar Pagamento:\n" + pagamento : "") + "\n\nFalar com atendente pelo WhatsApp:\n" + whatsapp };
+  return { html, text: texto + (orcamento ? "\n\nRESUMO DO ORÇAMENTO:\n" + orcamento : "") + (pagamento ? "\n\nRealizar Pagamento:\n" + pagamento : "") + "\n\nFalar com meu Atendimento:\n" + whatsapp };
 }
