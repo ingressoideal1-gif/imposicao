@@ -8,7 +8,7 @@ Deno.test("layout: remove resumo legado de HTML e texto, preservando aprovacao e
   const texto = `Olá, Cliente!\n\nSuas artes estão prontas.\n\nRESUMO DOS MODELOS DO PEDIDO:\n\n[01] Pulseira\nQuantidade: 5000\nArte: https://storage.example/arte.pdf\n\nLINK DE APROVAÇÃO INTERATIVA:\n${link}`;
   const r = layoutEmailArte(texto, portal, link, "11");
   assert.match(r.html, /Abrir aprovação interativa/);
-  assert.match(r.html, /src="https:\/\/vwbtitjlpelrcnsytzqw.supabase.co\/storage\/v1\/object\/public\/app-imagens\/1785672791278_logo_ideal_2026.jpg"/);
+  assert.match(r.html, /src="https:\/\/vwbtitjlpelrcnsytzqw.supabase.co\/storage\/v1\/object\/public\/app-imagens\/1788972058296_logo_ideal_2027.png"/);
   assert.match(r.html, /src="https:\/\/vwbtitjlpelrcnsytzqw.supabase.co\/storage\/v1\/object\/public\/app-imagens\/1787694554509_Whatsapp.png"/);
   assert.match(r.html, /Falar com meu Atendimento/);
   assert.doesNotMatch(r.html, /Precisa de ajuda com as artes|Nossa equipe de atendimento|Falar com atendente pelo WhatsApp/);

@@ -1,6 +1,6 @@
 /** HTML de e-mail gerado no servidor. Conteúdo editável sempre escapado. */
 const WHATSAPP = "555195343478"; // Mesmo atendimento de frontend/cliente-entrega.js.
-const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg";
+const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788972058296_logo_ideal_2027.png";
 const LOGO_WHATSAPP = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png";
 const IMAGEM_APROVACAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788965455974_Email.png";
 const IMAGEM_PAGAMENTO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788966314184_pagamento.png";
@@ -58,7 +58,7 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #dde7eb;border-radius:16px;overflow:hidden;">
 <tr><td style="background:#1c8de2;padding:24px 28px;border-bottom:4px solid #11b3b8;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="120"><img src="${LOGO_EMPRESA}" width="112" alt="Ingresso Ideal" style="display:block;width:112px;height:auto;border:0;"></td><td style="color:#fff;font-family:Arial,Helvetica,sans-serif;"><strong style="font-size:23px;letter-spacing:-0.5px;">Ingresso Ideal</strong><br><span style="font-size:12px;color:#b7d9e4;">APROVAÇÃO DE ARTES</span></td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="143"><img src="${LOGO_EMPRESA}" width="134" alt="Ingresso Ideal" style="display:block;width:134.4px;height:auto;border:0;"></td><td style="color:#fff;font-family:Arial,Helvetica,sans-serif;"><strong style="font-size:23px;letter-spacing:-0.5px;">Ingresso Ideal</strong><br><span style="font-size:12px;color:#b7d9e4;">APROVAÇÃO DE ARTES</span></td></tr></table>
 </td></tr>
 <tr><td style="padding:30px 28px 8px;">
 ${numero ? `<p style="margin:0 0 12px;font-size:19.2px;font-weight:bold;letter-spacing:1px;color:#087f8c;">PEDIDO #${escapar(numero)}</p>` : ""}
