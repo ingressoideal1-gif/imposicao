@@ -40564,7 +40564,7 @@ function ensureModalEmailElement() {
                             <textarea id="modal-email-subject" name="arte_assunto" autocomplete="off" rows="1" maxlength="200" oninput="this.value = this.value.replace(/[\\r\\n]+/g, ' ')"></textarea></div>
                         <div><label for="modal-email-body">Mensagem para o cliente</label>
                             <textarea id="modal-email-body" rows="12" aria-describedby="modal-email-body-hint"></textarea>
-                            <p class="email-hint" id="modal-email-body-hint">Edite a mensagem se necessário. O e-mail será enviado com cabeçalho, botão de aprovação e contato pelo WhatsApp.</p></div>
+                            <p class="email-hint" id="modal-email-body-hint">Edite a mensagem se necessário. O e-mail inclui cabeçalho, resumo do orçamento cadastrado, botões de aprovação e pagamento e contato pelo WhatsApp.</p></div>
                     </div>
                 </div>
                 <div class="email-footer">
@@ -40727,17 +40727,6 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
 
         if (!clienteNome) clienteNome = 'Cliente';
 
-        // 2. Carregar itens da OS se não estiverem no state
-        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
-            try {
-                await loadOSItens(osId);
-            } catch (eItens) {
-                console.warn('[Email Modal] Erro ao carregar itens:', eItens);
-            }
-        }
-
-        const itens = state.osItens[osId] || [];
-
         // 3. Montar preenchimento da UI do Modal
         document.getElementById('modal-email-os-numero').textContent = numero || (os ? os.numero : '');
         document.getElementById('modal-email-link-display').textContent = linkUrl || '';
@@ -40752,30 +40741,6 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         bodyLines.push(``);
         bodyLines.push(`Suas artes relativas ao Pedido #${numero}${nomeEvento ? ` (${nomeEvento})` : ''} já estão prontas para sua conferência e aprovação.`);
         bodyLines.push(``);
-        bodyLines.push(`--------------------------------------------------`);
-        bodyLines.push(`RESUMO DOS MODELOS DO PEDIDO:`);
-        bodyLines.push(`--------------------------------------------------`);
-
-        itens.forEach((item, i) => {
-            const idxStr = (i + 1).toString().padStart(2, '0');
-            const modNome = item.produto || item.nome_modelo || `Modelo ${i + 1}`;
-            const qtdStr = item.qtd || item.quantidade || '0';
-            const corStr = item.cor || item.padrao || 'Padrão';
-            const numStr = item.gabarito_operacional || item.numeracao || item.tipo_numeracao || 'Padrão';
-            const imgUrl = item.arte_url || item.amostra_arte_base64 || '';
-            const versoUrl = item.verso_arte_url || item.verso_amostra_arte_base64 || '';
-
-            bodyLines.push(`[${idxStr}] ${modNome}`);
-            bodyLines.push(`     • Quantidade: ${qtdStr}`);
-            bodyLines.push(`     • Cor: ${corStr}`);
-            bodyLines.push(`     • Numeração: ${numStr}`);
-            if (imgUrl) bodyLines.push(`     • Imagem da Arte (Frente): ${imgUrl.startsWith('data:') ? '[Arte Gerada no Sistema]' : imgUrl}`);
-            if (versoUrl) bodyLines.push(`     • Imagem da Arte (Verso): ${versoUrl.startsWith('data:') ? '[Arte Gerada no Sistema]' : versoUrl}`);
-            bodyLines.push(``);
-
-        });
-
-        bodyLines.push(`--------------------------------------------------`);
         bodyLines.push(`LINK DE APROVAÇÃO INTERATIVA:`);
         bodyLines.push(linkUrl);
         bodyLines.push(`--------------------------------------------------`);

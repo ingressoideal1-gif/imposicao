@@ -50,15 +50,18 @@ function extrair(nome) {
             const supabaseClient = {auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})}};
             function abrirModalConfigEmail() {}
             function toast() {}
+            const state = {ordens:[{id:'vibe_11',numero:11,cliente:'Cliente de Exemplo'}],todasArtes:[],osItens:{}};
             window.fetch = () => new Promise(resolve => {window.resolverEnvio = resolve;});
             ${transporte}
+            async ${extrair('abrirModalEnviarEmailCliente')}
         `});
-        await page.evaluate(() => {
-            window._activeEmailModalData = {osId:'vibe_11',linkUrl:'https://example.com/cliente/11-abc123'};
-            document.getElementById('modal-email-os-numero').textContent = '11';
-            document.getElementById('modal-email-link-display').textContent = window._activeEmailModalData.linkUrl;
-            document.getElementById('modal-email-body').value = 'Olá, Cliente de Exemplo!\n\nSuas artes estão prontas para conferência e aprovação.\n\nRESUMO DOS MODELOS DO PEDIDO:\n\n[01] Pulseira Triband\nQuantidade: 5000\nCor: Padrão\n\nLINK DE APROVAÇÃO INTERATIVA:\nhttps://example.com/cliente/11-abc123\n\nAtenciosamente,\nEquipe Ingresso Ideal / Atendimento';
+        await page.evaluate(async () => {
+            await abrirModalEnviarEmailCliente('vibe_11',11,'https://example.com/cliente/11-abc123');
+            document.getElementById('modal-email-to').value = 'segundo@example.com';
         });
+        const corpo = await page.$eval('#modal-email-body', e => e.value);
+        assert.doesNotMatch(corpo, /RESUMO DOS MODELOS|Quantidade:|Imagem da Arte|Numeração:/);
+        assert.match(corpo, /https:\/\/example.com\/cliente\/11-abc123/);
         const preview = process.env.EMAIL_MODAL_PREVIEW_DIR;
         if (preview) fs.mkdirSync(preview, {recursive:true});
         for (const [nome,width,height] of [['desktop',1280,1000],['mobile',390,900]]) {

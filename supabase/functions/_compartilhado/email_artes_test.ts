@@ -11,12 +11,13 @@ const quem = { id: "operador-sintetico", email: "operador@example.com", permisso
 const link = { os_id: "vibe_11", numero_pedido: "11", token: "abc123" };
 const url = "https://imposition.ai-ideal.com.br/cliente/11-abc123";
 const entrada = { os_id: link.os_id, to: "cliente@example.com", subject: "Aprovação de arte", link_url: url, body_text: "Confira: " + url };
-function contexto(linhas: unknown = [link]) {
+function contexto(linhas: unknown = [link], propostas: unknown = [{id_int:11,texto_whatsapp:"Total do pedido: R$ 148,05\nPagamento: Pix"}]) {
   const enviadas: MensagemArte[] = [], consultas: string[] = [];
   return { enviadas, consultas, deps: {
     ambiente: (nome: string) => env[nome],
     consultar: async (metodo: string, caminho: string) => {
-      assert.equal(metodo, "GET"); consultas.push(caminho); return linhas;
+      assert.equal(metodo, "GET"); consultas.push(caminho);
+      return caminho.startsWith("propostas?") ? propostas : linhas;
     },
     enviar: async (_config: unknown, mensagem: MensagemArte) => { enviadas.push(mensagem); },
   } };
@@ -34,6 +35,9 @@ Deno.test("email: todos os perfis com leitura enviam sem permissão administrati
     assert.ok(c.enviadas[0].html?.includes(`href="${url}"`));
     assert.match(c.enviadas[0].text, /phone=555195343478/);
     assert.equal(c.consultas[0], "pedidos_links_cliente?os_id=eq.vibe_11&ativo=eq.true&select=os_id,numero_pedido,token&limit=2");
+    assert.equal(c.consultas[1], "propostas?id_int=eq.11&select=id_int,texto_whatsapp&limit=2");
+    assert.match(c.enviadas[0].html!, /Resumo do Orçamento[\s\S]*R\$ 148,05/);
+    assert.match(c.enviadas[0].text, /Pagamento: Pix/);
   }
 });
 Deno.test("email: anônimo, cliente sem grade e usuário sem acesso não consultam nem enviam", async () => {
@@ -61,7 +65,7 @@ Deno.test("email: configuração ausente, porta bloqueada ou TLS inválido não 
   }
 });
 Deno.test("email: não aceita sobrescrever SMTP, remetente, HTML, autor ou destinatário de teste", async () => {
-  for (const campo of ["smtp_config", "from", "body_html", "autor", "empresa_id"]) {
+  for (const campo of ["smtp_config", "from", "body_html", "autor", "empresa_id", "orcamento"]) {
     const c = contexto();
     await recusa(422, () => operarEmailArtes("enviar", { ...entrada, [campo]: "forjado" }, quem, c.deps));
     assert.equal(c.consultas.length, 0); assert.equal(c.enviadas.length, 0);
@@ -70,6 +74,24 @@ Deno.test("email: não aceita sobrescrever SMTP, remetente, HTML, autor ou desti
   await recusa(422, () => operarEmailArtes("testar", { to: "outro@example.com" }, quem, c.deps));
   await operarEmailArtes("testar", {}, quem, c.deps);
   assert.equal(c.enviadas[0].to, quem.email); assert.equal(c.consultas.length, 0);
+});
+Deno.test("email: orcamento ausente nao inventa valores; divergencia e falha impedem envio", async () => {
+  for (const proposta of [[], [{id_int:11,texto_whatsapp:null}], [{id_int:11,texto_whatsapp:""}]]) {
+    const c = contexto([link], proposta);
+    await operarEmailArtes("enviar", entrada, quem, c.deps);
+    assert.match(c.enviadas[0].text, /Resumo não disponível/);
+    assert.doesNotMatch(c.enviadas[0].text, /R\$ 0/);
+  }
+  for (const proposta of [[{id_int:22,texto_whatsapp:"Outro cliente"}], [{id_int:11},{id_int:11}], null]) {
+    const c = contexto([link], proposta);
+    await recusa(409, () => operarEmailArtes("enviar", entrada, quem, c.deps));
+    assert.equal(c.enviadas.length, 0);
+  }
+  const c = contexto();
+  await recusa(503, () => operarEmailArtes("enviar", entrada, quem, {...c.deps,
+    consultar: async (_metodo, caminho) => { if (caminho.startsWith('propostas?')) throw new Error('privado'); return [link]; },
+  }));
+  assert.equal(c.enviadas.length, 0);
 });
 Deno.test("email: valida destinatário, cabeçalho, tamanho, corpo e id antes de consultar", async () => {
   for (const alteracao of [
