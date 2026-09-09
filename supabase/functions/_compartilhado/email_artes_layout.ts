@@ -55,8 +55,8 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#edf3f5;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #dde7eb;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#fff;padding:24px 28px;border-bottom:4px solid #11b3b8;">
-<img src="${LOGO_EMPRESA}" width="280" alt="Ingresso Ideal — Ingressos, Pulseiras e Credenciais" style="display:block;width:280px;max-width:100%;height:auto;border:0;">
+<tr><td style="background:#102b3f;padding:24px 28px;border-bottom:4px solid #11b3b8;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="64"><img src="${LOGO_EMPRESA}" width="56" alt="Ingresso Ideal" style="display:block;width:56px;height:auto;border:0;"></td><td style="color:#fff;font-family:Arial,Helvetica,sans-serif;"><strong style="font-size:23px;letter-spacing:-0.5px;">Ingresso Ideal</strong><br><span style="font-size:12px;color:#b7d9e4;">APROVAÇÃO DE ARTES</span></td></tr></table>
 </td></tr>
 <tr><td style="padding:30px 28px 8px;">
 ${numero ? `<p style="margin:0 0 12px;font-size:12px;font-weight:bold;letter-spacing:1px;color:#087f8c;">PEDIDO #${escapar(numero)}</p>` : ""}
@@ -67,7 +67,7 @@ ${intro}
 ${link ? '<p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Confira o visual final, aprove ou solicite ajustes. Tudo no mesmo link.</p>' : ""}
 </td></tr></table>
 ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="padding:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;"><h2 style="margin:0 0 14px;color:#102b3f;font-size:18px;">Resumo do Orçamento</h2><div style="color:#334155;font-size:14px;line-height:1.75;overflow-wrap:anywhere;">${resumoHtml}</div></td></tr></table>` : ""}
-${pagamento ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td align="center" bgcolor="#102b3f" style="border-radius:8px;mso-padding-alt:14px 22px;"><a href="${escapar(pagamento)}" style="display:inline-block;padding:14px 22px;border:1px solid #102b3f;border-radius:8px;font-size:15px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;">Realizar Pagamento &rarr;</a></td></tr></table>` : ""}
+${pagamento ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td align="center" bgcolor="#15803d" style="border-radius:8px;mso-padding-alt:14px 22px;"><a href="${escapar(pagamento)}" style="display:inline-block;padding:14px 22px;border:1px solid #15803d;border-radius:8px;font-size:15px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;">Realizar Pagamento &rarr;</a></td></tr></table>` : ""}
 ${detalhes ? `<div style="border-top:1px solid #e2e8f0;padding-top:22px;">${detalhes}</div>` : ""}
 </td></tr>
 <tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><a href="${escapar(whatsapp)}" style="display:block;padding:16px;color:#12664b;font-size:15px;font-weight:bold;line-height:32px;text-decoration:none;"><img src="${LOGO_WHATSAPP}" width="32" height="32" alt="WhatsApp" style="vertical-align:middle;border:0;margin-right:8px;">Falar com meu Atendimento</a></td></tr></table></td></tr>
