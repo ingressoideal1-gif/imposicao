@@ -26598,12 +26598,14 @@ async function loadOSItens(osId) {
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: idsDoBanco.corId || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
                             amostra_num_id: resolvedNumId || null,
-                            amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
-                            verso_amostra_arte_base64: item.verso_amostra_arte_base64 || (prop ? prop.verso_amostra_arte_base64 : null),
-                            arte_url: item.arte_url || item.url_arquivo_arte || item.url_arquivo || (prop ? (prop.arte_url || prop.url_arquivo_arte || prop.url_arquivo) : null),
-                            verso_arte_url: item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo || (prop ? (prop.verso_arte_url || prop.url_arquivo_arte_verso || prop.verso_url_arquivo) : null),
-                            url_arquivo_arte: item.url_arquivo_arte || item.arte_url || (prop ? (prop.url_arquivo_arte || prop.arte_url) : null),
-                            url_arquivo_arte_verso: item.url_arquivo_arte_verso || item.verso_arte_url || (prop ? (prop.url_arquivo_arte_verso || prop.verso_arte_url) : null),
+                            // Um produto pode ter varios modelos. Sua ultima arte
+                            // nao pertence automaticamente aos modelos novos/vazios.
+                            amostra_arte_base64: item.amostra_arte_base64 || null,
+                            verso_amostra_arte_base64: item.verso_amostra_arte_base64 || null,
+                            arte_url: item.arte_url || item.url_arquivo_arte || item.url_arquivo || null,
+                            verso_arte_url: item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo || null,
+                            url_arquivo_arte: item.url_arquivo_arte || item.arte_url || null,
+                            url_arquivo_arte_verso: item.url_arquivo_arte_verso || item.verso_arte_url || null,
                             amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
                             os_id: osId,
                             _pedidoModeloId: item.id,
@@ -34048,9 +34050,9 @@ function cardTemOqueDesenhar(item, idx, osId) {
     const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
-    const hasSavedLocal = (item.id && (localStorage.getItem(`ideal_arte_url_${item.id}_frente`) || localStorage.getItem(`ideal_arte_url_${item.id}_verso`) || localStorage.getItem(`ideal_arte_json_${item.id}_frente`) || localStorage.getItem(`ideal_arte_json_${item.id}_verso`))) ||
+    const hasSavedLocal = item._dbLoaded !== true && ((item.id && (localStorage.getItem(`ideal_arte_url_${item.id}_frente`) || localStorage.getItem(`ideal_arte_url_${item.id}_verso`) || localStorage.getItem(`ideal_arte_json_${item.id}_frente`) || localStorage.getItem(`ideal_arte_json_${item.id}_verso`))) ||
                           localStorage.getItem(`ideal_arte_url_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_url_${osId}_${idx}_verso`) ||
-                          localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`);
+                          localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`));
     return !!(item.modo_pdf || item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64
         || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json
         || hasSavedLocal || hasSelectValue);
@@ -35612,8 +35614,9 @@ function getPdfUrlForItem(item, face, osId, idx) {
         ? (item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo)
         : (item.arte_url || item.url_arquivo_arte || item.url_arquivo);
         
-    // 2. Se não achou no item, procurar no localStorage local da máquina
-    if (!candidate) {
+    // 2. Cache legado so antes da carga do banco. Um modelo confirmado sem
+    // arte nao pode herdar o arquivo de quem ocupava a mesma posicao na tela.
+    if (!candidate && item._dbLoaded !== true) {
         candidate = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
                     localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
     }
@@ -36720,7 +36723,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
     let faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
-    if (!faceArteUrl && item) {
+    if (!faceArteUrl && item && item._dbLoaded !== true) {
         const faceKey = face === 'back' ? 'verso' : 'frente';
         faceArteUrl = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
                       localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
