@@ -5,7 +5,7 @@
 import { Recusa } from "./sessao.ts";
 
 export type ConfigSmtpArtes = { host: string; usuario: string; senha: string; remetente: string; nome: string };
-export type MensagemArte = { to: string; subject: string; text: string };
+export type MensagemArte = { to: string; subject: string; text: string; html?: string };
 export type ConexaoSmtp = Pick<Deno.TlsConn, "read" | "write" | "close">;
 type Conectar = (opcoes: { hostname: string; port: number }) => Promise<ConexaoSmtp>;
 
@@ -30,14 +30,20 @@ function cabecalho(texto: string): string {
 }
 
 export function mensagemMime(config: ConfigSmtpArtes, mensagem: MensagemArte): string {
-  const corpo = base64(mensagem.text.replace(/\r?\n/g, "\r\n")).match(/.{1,76}/g)?.join("\r\n") || "";
+  const codificar = (texto: string) => base64(texto.replace(/\r?\n/g, "\r\n")).match(/.{1,76}/g)?.join("\r\n") || "";
+  const limite = "ideal_" + crypto.randomUUID();
+  const conteudo = mensagem.html ? [
+    `Content-Type: multipart/alternative; boundary="${limite}"`, "",
+    `--${limite}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.text),
+    `--${limite}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.html),
+    `--${limite}--`, "",
+  ] : ["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.text), ""];
   return [
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${crypto.randomUUID()}@${config.remetente.split("@")[1]}>`,
     `From: ${cabecalho(config.nome)} <${config.remetente}>`,
     `To: <${mensagem.to}>`, `Subject: ${cabecalho(mensagem.subject)}`,
-    'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: base64', "", corpo, "",
+    'MIME-Version: 1.0', ...conteudo,
   ].join("\r\n");
 }
 

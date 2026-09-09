@@ -40543,12 +40543,12 @@ function ensureModalEmailElement() {
                     <!-- Campos de E-mail -->
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                         <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Destinatário (E-mail do Cliente)</label>
-                            <input type="email" id="modal-email-to" class="form-control" placeholder="cliente@email.com" style="width:100%;font-size:0.88rem;">
+                            <label for="modal-email-to" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Destinatário (E-mail do Cliente)</label>
+                            <input type="email" id="modal-email-to" name="arte_destinatario" autocomplete="section-arte-destinatario email" class="form-control" placeholder="cliente@email.com" style="width:100%;font-size:0.88rem;">
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Assunto do E-mail</label>
-                            <input type="text" id="modal-email-subject" class="form-control" style="width:100%;font-size:0.88rem;">
+                            <label for="modal-email-subject" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Assunto do E-mail</label>
+                            <textarea id="modal-email-subject" name="arte_assunto" autocomplete="off" rows="2" maxlength="200" class="form-control" style="width:100%;font-size:0.88rem;resize:vertical;" oninput="this.value = this.value.replace(/[\\r\\n]+/g, ' ')"></textarea>
                         </div>
                     </div>
 
@@ -40556,7 +40556,7 @@ function ensureModalEmailElement() {
                     <div class="form-group" style="margin:0;display:flex;flex-direction:column;gap:6px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;">
                             <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">Corpo da Mensagem / Modelos do Pedido</label>
-                            <span style="font-size:0.75rem;color:var(--text-dim, #94a3b8);">Inclui detalhes e artes de cada modelo</span>
+                            <span style="font-size:0.75rem;color:var(--text-dim, #94a3b8);">O e-mail inclui cabeçalho, botão de aprovação e WhatsApp</span>
                         </div>
                         <textarea id="modal-email-body" class="form-control" rows="9" style="width:100%;font-family:monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
                     </div>
@@ -40778,7 +40778,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         bodyLines.push(`Por favor, acesse o link acima para conferir o visual final, aprovar ou indicar alterações necessárias.`);
         bodyLines.push(``);
         bodyLines.push(`Atenciosamente,`);
-        bodyLines.push(`Equipe Ideal Imposition / Atendimento`);
+        bodyLines.push(`Equipe Ingresso Ideal / Atendimento`);
 
         document.getElementById('modal-email-body').value = bodyLines.join('\n');
 
