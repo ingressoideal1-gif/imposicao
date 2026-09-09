@@ -1378,7 +1378,10 @@ async function initClientePage(numero, token) {
                         const v = String(vt || '').trim().toUpperCase();
                         return !v || v === 'FRENTE' || v === 'SÓ FRENTE' || v === 'SO FRENTE';
                     };
-                    const itemVerso = !_semVerso(item.verso_tipo) || numIsDuplex;
+                    // Mesma precedência do painel: a numeração resolvida manda.
+                    // O modelo pode conservar FRENTE E VERSO de antes da edição.
+                    // Sem numeração disponível, preservar a configuração salva.
+                    const itemVerso = matchedNum ? numIsDuplex : !_semVerso(item.verso_tipo);
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
@@ -1388,7 +1391,7 @@ async function initClientePage(numero, token) {
                         amostra_cor_id: idsDoBanco.corId,
                         amostra_num_id: resolvedNumId,
                         verso: itemVerso,
-                        verso_tipo: itemVerso ? (!_semVerso(item.verso_tipo) ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE'),
+                        verso_tipo: itemVerso ? (!_semVerso(item.verso_tipo) ? item.verso_tipo : 'FRENTE E VERSO') : (matchedNum ? 'Frente' : (item.verso_tipo || 'SÓ FRENTE')),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend,
                         // Garantir que a imagem de aprovacao esteja sempre populada

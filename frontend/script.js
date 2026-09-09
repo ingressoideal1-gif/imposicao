@@ -34668,7 +34668,9 @@ function onItemNumSelect(idx, osId, itemId) {
                 item.verso_tipo = 'FxVerso';
             }
         } else {
-            if (item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM') {
+            // Inclui FRENTE E VERSO e demais valores legados. Sem numeração
+            // selecionada, preservar o verso salvo em vez de inferir Frente.
+            if (numObj) {
                 item.verso_tipo = 'Frente';
                 item.verso = false;
             } else {
@@ -37398,7 +37400,9 @@ async function renderItemAmostraCombinada(idx, osId) {
             }
         }
     } else {
-        if (item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM') {
+        // A numeração atual também prevalece sobre os valores legados aqui.
+        // Sem numeração resolvida, o desenho conserva a configuração do modelo.
+        if (num) {
             item.verso_tipo = 'Frente';
             item.verso = false;
         } else {
