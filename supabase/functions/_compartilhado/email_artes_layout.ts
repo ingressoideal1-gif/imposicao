@@ -3,6 +3,7 @@ const WHATSAPP = "555195343478"; // Mesmo atendimento de frontend/cliente-entreg
 const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg";
 const LOGO_WHATSAPP = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png";
 const IMAGEM_APROVACAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788965455974_Email.png";
+const IMAGEM_PAGAMENTO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788966314184_pagamento.png";
 const escapar = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 function linhaHtml(linha: string): string {
@@ -68,7 +69,7 @@ ${link ? `<a href="${escapar(destino)}" style="display:block;max-width:252px;col
 ${link ? '<p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Confira o visual final, aprove ou solicite ajustes. Tudo no mesmo link.</p>' : ""}
 </td></tr></table>
 ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="padding:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;"><h2 style="margin:0 0 14px;color:#102b3f;font-size:18px;">Resumo do Orçamento</h2><div style="color:#334155;font-size:14px;line-height:1.75;overflow-wrap:anywhere;">${resumoHtml}</div></td></tr></table>` : ""}
-${pagamento ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td align="center" bgcolor="#15803d" style="border-radius:8px;mso-padding-alt:14px 22px;"><a href="${escapar(pagamento)}" style="display:inline-block;padding:14px 22px;border:1px solid #15803d;border-radius:8px;font-size:15px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;">Realizar Pagamento &rarr;</a></td></tr></table>` : ""}
+${pagamento ? `<a href="${escapar(pagamento)}" style="display:block;max-width:252px;margin-bottom:24px;color:#15803d;text-decoration:none;"><img src="${IMAGEM_PAGAMENTO}" width="252" alt="Realizar Pagamento" style="display:block;width:100%;max-width:252px;height:auto;border:0;"></a>` : ""}
 ${detalhes ? `<div style="border-top:1px solid #e2e8f0;padding-top:22px;">${detalhes}</div>` : ""}
 </td></tr>
 <tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><a href="${escapar(whatsapp)}" style="display:block;padding:16px;color:#12664b;font-size:15px;font-weight:bold;line-height:32px;text-decoration:none;"><img src="${LOGO_WHATSAPP}" width="32" height="32" alt="WhatsApp" style="vertical-align:middle;border:0;margin-right:8px;">Falar com meu Atendimento</a></td></tr></table></td></tr>
