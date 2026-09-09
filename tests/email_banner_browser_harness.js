@@ -19,8 +19,8 @@ function extrair(nome, async = false) {
         await page.setContent('<!doctype html><body>' + botao + '</body>');
         const transporte = source.slice(source.indexOf('let emailOperacaoEmAndamento'), source.indexOf('window.abrirModalConfigEmail = abrirModalConfigEmail;', source.indexOf('let emailOperacaoEmAndamento')));
         await page.addScriptTag({content: `
-            const state = {activeOSId:'vibe_11',ordens:[{id:'vibe_11',numero:11,cliente:'Cliente Exemplo'}]};
-            const localStorage = {getItem:()=>null,removeItem:()=>{}};
+            const state = {amostrasOSAtivo:'vibe_11',ordens:[{id:'vibe_11',numero:11,cliente:'Cliente Exemplo'}]};
+            const localStorage = {getItem:()=> 'vibe_99',removeItem:()=>{}};
             const linksClienteEmAndamento = new Set();
             const CLIENTE_BASE_URL = 'https://portal.example';
             const API_PAINEL = 'https://synthetic.example';
@@ -78,6 +78,14 @@ function extrair(nome, async = false) {
         assert.equal(await page.evaluate(() => document.activeElement.id),'btn-enviar-link-os-banner');
         await page.evaluate(() => gerarLinkClienteBanner());
         assert.equal(await page.evaluate(() => envios.length),1,'Novo clique após aceite não duplica mensagem');
+        await page.evaluate(async () => {
+            state.amostrasOSAtivo = null;
+            state.activeOSId = 'vibe_99';
+            await gerarLinkClienteBanner();
+        });
+        assert.equal(await page.evaluate(() => envios.length),1,'Pedido fechado não envia para seleção antiga');
+        assert.match(await page.evaluate(() => avisos.at(-1)),/Nenhum pedido ativo/);
+        await page.evaluate(() => { state.amostrasOSAtivo = 'vibe_11'; });
         for (const email of ['', 'email-invalido']) {
             await page.evaluate(async email => { opcoes.email=email; await gerarLinkClienteBanner(); },email);
             assert.equal(await page.evaluate(() => envios.length),1);
@@ -96,6 +104,7 @@ function extrair(nome, async = false) {
         await page.evaluate(async () => { opcoes.http=true;await gerarLinkClienteBanner(); });
         await page.waitForSelector('#modal-email-sucesso[open]');
         assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e=>e.textContent),'novo@example.com');
+        assert.equal(await page.evaluate(() => envios.at(-1).os_id),'vibe_11','Pedido aberto prevalece sobre seleção antiga');
         assert.equal(await page.$('#modal-envio-email-cliente'),null,'Editor não é criado nem no sucesso nem na falha');
         assert.deepEqual(erros,[]);
         console.log('OK: banner envia sem editor; sucesso após aceite, duplicidade, cadastro inválido, preparo e falha');
