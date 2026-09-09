@@ -31,6 +31,18 @@
 /** O JSON que a função do banco devolveu, guardado para as cinco abas. */
 window.portalDados = null;
 
+/** Banco e mapa dos modelos autorizados pelo mesmo par pedido/token. */
+async function carregarBancosDoPortal(numero, token) {
+    if (!numero || !token || typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Não foi possível validar o link do pedido.');
+    }
+    const { data, error } = await supabaseClient.rpc('link_cliente_bancos_modelos', {
+        p_numero: String(numero), p_token: String(token)
+    });
+    if (error || !data) throw new Error('Não foi possível carregar o banco deste pedido.');
+    return data;
+}
+
 /**
  * Busca no banco tudo o que o Portal do Pedido mostra.
  *
