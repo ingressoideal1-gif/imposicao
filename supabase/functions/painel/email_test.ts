@@ -23,6 +23,7 @@ Deno.test("painel/email: sessão, grade, CORS Cloudflare, métodos e envio sem a
       let dados;
       if (url.includes("imposition_user_permissions?")) dados = permissoes ? [permissoes] : [];
       else if (url.includes("pedidos_links_cliente?")) dados = [{ os_id: "vibe_11", numero_pedido: "11", token: "abc123" }];
+      else if (url.includes("propostas?id_int=eq.11&select=id_int,texto_whatsapp&limit=2")) dados = [{id_int:11,texto_whatsapp:"Total: R$ 148,05"}];
       else throw new Error("consulta fora do contrato");
       return Promise.resolve(Response.json(dados));
     }) as typeof fetch;

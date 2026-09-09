@@ -109,9 +109,24 @@ export async function operarEmailArtes(
         typeof corpo.link_url !== "string" || !body.includes(corpo.link_url)) {
       throw new Recusa(409, "O link da mensagem não corresponde ao pedido. Reabra o envio pela Lista de Artes.");
     }
+    // Mesma fonte do orçamento no portal. Não recalcular preços a partir das artes.
+    let propostas;
+    try {
+      propostas = await (deps.consultar || banco)("GET",
+        `propostas?id_int=eq.${linhas[0].numero_pedido}&select=id_int,texto_whatsapp&limit=2`);
+    } catch { throw new Recusa(503, "Não foi possível consultar o resumo do orçamento. Tente mais tarde."); }
+    if (!Array.isArray(propostas) || propostas.length > 1 ||
+        (propostas.length === 1 && String(propostas[0].id_int) !== String(linhas[0].numero_pedido))) {
+      throw new Recusa(409, "Não foi possível identificar o orçamento deste pedido.");
+    }
+    const resumo = propostas[0]?.texto_whatsapp;
+    if (resumo != null && (typeof resumo !== "string" || resumo.length > 50000)) {
+      throw new Recusa(503, "O resumo do orçamento precisa ser conferido antes do envio.");
+    }
+    const orcamento = resumo?.trim() || "Resumo não disponível neste e-mail. Consulte a aba Orçamento no link de aprovação ou fale com o atendimento.";
     // Links montados na estação também saem com o domínio público configurado.
     mensagem = { to, subject, text: body.replaceAll(corpo.link_url, estado.portal + caminho) };
-    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido)));
+    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido), orcamento));
   }
   const referencia = crypto.randomUUID();
   try {
