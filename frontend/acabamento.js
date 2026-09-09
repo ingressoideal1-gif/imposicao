@@ -2610,22 +2610,22 @@
         return tela.temSessao;
     }
 
-    /** "4,16" e "4.16" são o mesmo peso; vazio é apagar. */
+    /** Entrada em gramas; estado e persistência continuam em kg. Vazio é apagar. */
     function pesoDoTexto(texto) {
         const limpo = String(texto === undefined || texto === null ? '' : texto)
             .trim().replace(',', '.');
         if (!limpo) return null;
         const n = Number(limpo);
         if (!isFinite(n) || n < 0) return undefined;   // undefined = não é peso
-        return Math.round(n * 1000) / 1000;
+        return Math.round(n) / 1000;
     }
 
-    /** O peso na tela sai com vírgula, que é como a balança da gráfica mostra. */
+    /** Converte o peso em kg para os campos em gramas, sem separador de milhar. */
     function pesoParaTexto(valor) {
         if (valor === null || valor === undefined || valor === '') return '';
         const n = Number(valor);
         if (!isFinite(n)) return '';
-        return String(n).replace('.', ',');
+        return String(Math.round(n * 1000));
     }
 
     // ─── A balança ──────────────────────────────────────────────────────────
@@ -2712,7 +2712,7 @@
                 return false;
             }
             await usarPesoDaBalanca(destino, dados.peso_kg, a, b);
-            avisar(`Balança: ${pesoParaTexto(dados.peso_kg)} kg.`, 'success');
+            avisar(`Balança: ${pesoParaTexto(dados.peso_kg)} g.`, 'success');
             return true;
         } catch (e) {
             abrirBalanca({
@@ -2863,7 +2863,7 @@
         return portas.map(p => {
             const achou = p.respondeu === true;
             const peso = achou && p.peso_kg !== null && p.peso_kg !== undefined
-                ? ` — está marcando ${esc(pesoParaTexto(p.peso_kg))} kg` : '';
+                ? ` — está marcando ${esc(pesoParaTexto(p.peso_kg))} g` : '';
             return `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
                             background: rgba(76,200,240,0.07); border: 1px solid rgba(76,200,240,0.20);
@@ -3131,7 +3131,7 @@
 
         const peso = pesoDoTexto(texto);
         if (peso === undefined) {
-            avisar(`"${texto}" não é um peso. Use só números, como 4,16.`, 'error');
+            avisar(`"${texto}" não é um peso. Informe o peso em gramas, como 4160.`, 'error');
             pintarPesos();
             return;
         }
@@ -3361,9 +3361,9 @@
                          title="O peso deste setor é a soma dos volumes — cada modelo foi pesado ao entrar num deles"
                          style="${ESTILO_PESO_SOMADO}">${esc(valor || '—')}</span>`
                 : `<input type="text" inputmode="decimal" id="acab-peso-${setor}"
-                          value="${esc(valor)}" placeholder="0,00" ${pode ? '' : 'disabled'}
+                          value="${esc(valor)}" placeholder="0" ${pode ? '' : 'disabled'}
                           onchange="AcabamentoPainel.mudarPeso('${escJs(numeroDoPedido)}', '${setor}', this.value)"
-                          title="${pode ? 'Peso real deste setor, em quilos' : 'Você tem apenas permissão de ver'}"
+                          title="${pode ? 'Peso real deste setor, em gramas' : 'Você tem apenas permissão de ver'}"
                           style="${ESTILO_PESO_CAMPO} opacity: ${pode ? '1' : '0.5'};" />`;
 
             return `
@@ -3372,7 +3372,7 @@
                     <span style="font-size: 1rem;">${r.icone}</span>
                     <strong style="font-size: 0.84rem; flex: 1 1 auto; min-width: 0;">${esc(r.nome)}</strong>
                     ${campoDoPeso}
-                    <span style="font-size: 0.76rem; color: var(--text-dim);">kg</span>
+                    <span style="font-size: 0.76rem; color: var(--text-dim);">g</span>
                     ${(pode && !somado) ? botaoDaBalanca('setor', numeroDoPedido, setor) : ''}
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -3996,7 +3996,7 @@
                     </td>
                     <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14); text-align: right;
                                font-family: monospace;">
-                        ${peso === null ? '<span style="color:#7fa9d4;">—</span>' : esc(pesoParaTexto(peso)) + ' kg'}
+                        ${peso === null ? '<span style="color:#7fa9d4;">—</span>' : esc(pesoParaTexto(peso)) + ' g'}
                     </td>
                     <td style="padding: 7px 10px; border-bottom: 1px solid rgba(76,200,240,0.14); text-align: right;">
                         ${faltando
@@ -4120,7 +4120,7 @@
                     <label for="acab-liberacao-senha" style="display: block; margin-top: 14px;
                            font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase;
                            letter-spacing: 0.06em;">Senha de liberação</label>
-                    <input type="text" id="acab-liberacao-senha" maxlength="3" autocomplete="off"
+                    <input type="password" id="acab-liberacao-senha" maxlength="3" autocomplete="off"
                            autocapitalize="characters" spellcheck="false" placeholder="A00"
                            style="margin-top: 6px; width: 120px; text-align: center; background: #0d0e20;
                                   border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
@@ -4171,6 +4171,8 @@
     function fecharPopupDaLiberacao() {
         const caixa = document.getElementById('acab-liberacao');
         if (caixa) caixa.style.display = 'none';
+        const campo = document.getElementById('acab-liberacao-senha');
+        if (campo) campo.value = '';
         tela.liberacaoPendente = null;
     }
 
@@ -5258,13 +5260,13 @@
                 ${r && r.porModelo
                     ? `<span style="display: inline-flex; align-items: center; gap: 6px;">
                            <input type="text" inputmode="decimal" id="acab-reg-peso-${indice}"
-                                  value="${esc(pesoParaTexto(l.peso))}" placeholder="0,00"
+                                  value="${esc(pesoParaTexto(l.peso))}" placeholder="0"
                                   oninput="AcabamentoPainel.recalcularRegistro()"
-                                  title="O peso deste modelo na balança"
+                                  title="O peso deste modelo na balança, em gramas"
                                   style="width: 104px; text-align: right; background: ${AZUL.fundo};
                                          border: 1px solid rgba(76,200,240,0.26); border-radius: 6px; color: #ffffff;
                                          padding: 8px 10px; font-size: 0.92rem; font-family: monospace;" />
-                           <span style="font-size: 0.78rem; color: var(--text-dim);">kg</span>
+                           <span style="font-size: 0.78rem; color: var(--text-dim);">g</span>
                            ${botaoDaBalanca('linha', indice)}
                        </span>`
                     : (linhas.length > 1
@@ -5464,13 +5466,13 @@
         return `
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <input type="text" inputmode="decimal" id="acab-reg-peso" autocomplete="off"
-                       value="${esc(r.pesoDoGrupo || '')}" placeholder="0,00"
+                       value="${esc(r.pesoDoGrupo || '')}" placeholder="0"
                        oninput="AcabamentoPainel.recalcularRegistro()"
-                       title="O peso do material na balança, antes de ele entrar no volume"
+                       title="O peso do material na balança, em gramas, antes de ele entrar no volume"
                        style="width: 150px; text-align: right; background: ${AZUL.fundo};
                               border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
                               color: #ffffff; padding: 8px 10px; font-size: 1.25rem; font-family: monospace;" />
-                <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                <span style="font-size: 0.95rem; color: #7fa9d4;">g</span>
                 ${botaoDaBalanca('registro')}
                 <span id="acab-reg-est" style="font-size: 0.8rem; color: var(--text-dim); white-space: nowrap;"></span>
                 ${r.linhas.length > 1 ? `
@@ -6649,15 +6651,15 @@
                     <div id="acab-peso-obrig-corpo"></div>
                     <label for="acab-peso-obrig-campo" style="display: block; margin-top: 14px;
                            font-size: 0.78rem; color: #7fa9d4; text-transform: uppercase;
-                           letter-spacing: 0.06em;">Peso real do setor</label>
+                           letter-spacing: 0.06em;">Peso real do setor (gramas)</label>
                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
                         <input type="text" inputmode="decimal" id="acab-peso-obrig-campo"
-                               autocomplete="off" spellcheck="false" placeholder="0,00"
+                               autocomplete="off" spellcheck="false" placeholder="0"
                                style="width: 140px; text-align: right; background: #0d0e20;
                                       border: 1px solid rgba(76,200,240,0.26); border-radius: 6px;
                                       color: #ffffff; padding: 8px 10px; font-size: 1.25rem;
                                       font-family: monospace;" />
-                        <span style="font-size: 0.95rem; color: #7fa9d4;">kg</span>
+                        <span style="font-size: 0.95rem; color: #7fa9d4;">g</span>
                         ${botaoDaBalanca('obrigatorio')}
                         <span id="acab-peso-obrig-est" style="font-size: 0.8rem; color: var(--text-dim);"></span>
                     </div>
@@ -6803,7 +6805,7 @@
             return;
         }
         if (pesoDoTexto(texto) === undefined) {
-            if (erro) erro.textContent = `"${texto}" não é um peso. Use só números, como 4,16.`;
+            if (erro) erro.textContent = `"${texto}" não é um peso. Informe o peso em gramas, como 4160.`;
             return;
         }
 
@@ -6889,9 +6891,9 @@
                 </div>` : ''}
                 <table style="border-collapse: collapse; font-size: 0.9rem;">
                     <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso digitado</td>
-                        <td style="padding: 3px 0; font-family: monospace; color: #ffffff;">${esc(pesoParaTexto(p.peso))} kg</td></tr>
+                        <td style="padding: 3px 0; font-family: monospace; color: #ffffff;">${esc(pesoParaTexto(p.peso))} g</td></tr>
                     <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Peso estimado</td>
-                        <td style="padding: 3px 0; font-family: monospace;">${esc(kgParaTexto(p.estimado))} kg</td></tr>
+                        <td style="padding: 3px 0; font-family: monospace;">${esc(pesoParaTexto(p.estimado))} g</td></tr>
                     <tr><td style="padding: 3px 14px 3px 0; color: #7fa9d4;">Divergência</td>
                         <td style="padding: 3px 0; font-family: monospace; color: #fbbf24;">${sinal}${esc(Math.abs(pct).toFixed(1).replace('.', ','))}%</td></tr>
                 </table>`;
