@@ -57,6 +57,8 @@ function extrair(nome) {
             const state = {ordens:[{id:'vibe_11',numero:11,cliente:'Cliente de Exemplo'}],todasArtes:[],osItens:{}};
             window.fetch = () => new Promise(resolve => {window.resolverEnvio = resolve;});
             ${transporte}
+            async ${extrair('buscarDadosEmailCliente')}
+            ${extrair('montarMensagemEmailCliente')}
             async ${extrair('abrirModalEnviarEmailCliente')}
         `});
         await page.evaluate(async () => {

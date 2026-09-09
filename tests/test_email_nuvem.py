@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.parametrize("harness", ["email_envio_harness.js", "email_campos_browser_harness.js"])
+@pytest.mark.parametrize("harness", ["email_envio_harness.js", "email_campos_browser_harness.js", "email_banner_browser_harness.js"])
 def test_envio_do_painel_sem_newprod(harness):
     raiz = Path(__file__).resolve().parents[1]
     resultado = subprocess.run(

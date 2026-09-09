@@ -40206,7 +40206,7 @@ window.enviar_link = function(osId, numero) { return gerarLinkCliente(osId, nume
 window.enviarLink = window.enviar_link;
 window.enviarLinkCliente = window.enviar_link;
 
-function gerarLinkClienteBanner() {
+async function gerarLinkClienteBanner() {
     const activeOSId = state.activeOSId || localStorage.getItem('activeOSId');
     console.log('[LinkDebug] gerarLinkClienteBanner: activeOSId=', activeOSId);
     if (!activeOSId) {
@@ -40215,8 +40215,44 @@ function gerarLinkClienteBanner() {
     }
     const os = typeof findOSInState === 'function' ? findOSInState(activeOSId) : (state.ordens ? state.ordens.find(o => o.id === activeOSId) : null);
     const osNum = os ? (os.numero || os.id_int || os.id) : activeOSId;
-    console.log('[LinkDebug] Chamando gerarLinkCliente com osId=', activeOSId, 'num=', osNum);
-    gerarLinkCliente(activeOSId, osNum);
+    return executarOperacaoEmail(async () => {
+        const botao = document.getElementById('btn-enviar-link-os-banner');
+        const textoOriginal = botao?.textContent;
+        if (botao) botao.textContent = '⏳ Enviando e-mail...';
+        try {
+            if (!/^\d+$/.test(String(osNum))) throw new Error('Não foi possível identificar o número do pedido. Atualize a página.');
+            const cliente = await buscarDadosEmailCliente(activeOSId, osNum, true);
+            const campoEmail = document.createElement('input');
+            campoEmail.type = 'email';
+            campoEmail.value = String(cliente.clienteEmail || '').trim();
+            if (!campoEmail.value || !campoEmail.checkValidity()) {
+                throw new Error('O cliente não possui um e-mail válido cadastrado. Atualize o cadastro antes de enviar.');
+            }
+            cliente.clienteEmail = campoEmail.value;
+            if (linksClienteEmAndamento.has(activeOSId)) throw new Error('O link deste pedido está sendo preparado. Aguarde.');
+            linksClienteEmAndamento.add(activeOSId);
+            let linkUrl;
+            try {
+                const existente = await buscarLinkClienteAtivo(activeOSId);
+                if (existente) {
+                    linkUrl = memorizarLinkCliente(activeOSId, osNum, existente);
+                } else {
+                    const preparo = await prepararLinkDaArtePronta(activeOSId, osNum);
+                    if (!preparo?.ok || !preparo.link) throw new Error('Não foi possível preparar a arte e o link de aprovação. O e-mail não foi enviado.');
+                    linkUrl = preparo.link;
+                    if (os) { os.status = 'Enviar Arte'; os.status_calculado = 'Enviar Arte'; }
+                    gravarStatusOverride(activeOSId, 'Enviar Arte');
+                }
+            } finally {
+                linksClienteEmAndamento.delete(activeOSId);
+            }
+            const mensagem = montarMensagemEmailCliente(activeOSId, osNum, linkUrl, cliente);
+            await enviarMensagemEmailCliente({ os_id: activeOSId, link_url: linkUrl,
+                to: mensagem.clienteEmail, subject: mensagem.subject, body_text: mensagem.bodyText }, botao);
+        } finally {
+            if (botao) botao.textContent = textoOriginal;
+        }
+    });
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
@@ -40590,7 +40626,7 @@ function ensureModalEmailElement() {
     return modal;
 }
 
-function mostrarSucessoEnvioEmail(destinatario) {
+function mostrarSucessoEnvioEmail(destinatario, origem = document.activeElement) {
     document.getElementById('modal-email-sucesso')?.close();
     const popup = document.createElement('dialog');
     popup.id = 'modal-email-sucesso';
@@ -40607,7 +40643,7 @@ function mostrarSucessoEnvioEmail(destinatario) {
     popup.querySelector('button').onclick = () => popup.close();
     popup.addEventListener('close', () => {
         popup.remove();
-        document.getElementById('btn-disparar-email-direto')?.focus();
+        if (origem?.isConnected) origem.focus();
     }, { once:true });
     document.body.appendChild(popup);
     popup.showModal();
@@ -40649,9 +40685,79 @@ function abrirModalConfigEmail() {
 }
 window.abrirModalConfigEmail = abrirModalConfigEmail;
 
-/**
- * Abre o modal de notificação/e-mail do cliente após a geração do link
- */
+// Mesmos dados e mensagem para o editor e para o envio direto do pedido.
+async function buscarDadosEmailCliente(osId, numero, exigirCadastro = false) {
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(numero)) : null);
+    const numInt = parseInt(String(numero || osId).replace(/\D/g, ''));
+
+    // 1. Buscar dados do cliente
+    let clienteNome = os ? (os.cliente || '') : '';
+    let clienteEmail = '';
+    let nomeEvento = '';
+    let atendente = typeof os?.vendedor === 'string' ? os.vendedor : '';
+
+    if (state.todasArtes) {
+        const arteObj = state.todasArtes.find(a => String(a.id_int) === String(numInt));
+        if (arteObj && arteObj.nome_evento) nomeEvento = arteObj.nome_evento;
+    }
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && !isNaN(numInt)) {
+        try {
+            const { data: propData, error: propError } = await supabaseClient
+                .from('propostas')
+                .select('*')
+                .eq('id_int', numInt)
+                .limit(exigirCadastro ? 2 : 1);
+
+            if (exigirCadastro && (propError || propData?.length !== 1)) throw new Error('Não foi possível confirmar o cadastro deste pedido. Atualize a página e tente novamente.');
+
+            if (propData && propData.length > 0) {
+                const prop = propData[0];
+                atendente = typeof prop.vendedor === 'string' ? prop.vendedor : '';
+                if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
+                const idCli = prop.id_faturado || prop.id_cliente;
+                if (idCli) {
+                    const { data: cliData, error: cliError } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(exigirCadastro ? 2 : 1);
+                    if (exigirCadastro && (cliError || cliData?.length !== 1)) throw new Error('Não foi possível confirmar o cadastro do cliente. Confira o cadastro antes de enviar.');
+                    if (cliData && cliData.length > 0) {
+                        const cli = cliData[0];
+                        clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
+                        if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
+                    }
+                }
+            }
+        } catch (errCli) {
+            if (exigirCadastro) throw errCli;
+            console.warn('[Email Modal] Erro ao buscar dados do cliente:', errCli);
+        }
+    }
+
+    if (!clienteNome) clienteNome = 'Cliente';
+
+    return { clienteNome, clienteEmail, nomeEvento, atendente };
+}
+
+function montarMensagemEmailCliente(osId, numero, linkUrl, dadosCliente) {
+    let { clienteNome, clienteEmail, nomeEvento, atendente } = dadosCliente;
+    const assuntoStr = `Aprovação de Arte - Pedido #${numero} - ${clienteNome}${nomeEvento ? ` (${nomeEvento})` : ''}`;
+    let bodyLines = [];
+    bodyLines.push(`Olá, ${clienteNome}!`);
+    bodyLines.push(``);
+    bodyLines.push(`Suas artes relativas ao Pedido #${numero}${nomeEvento ? ` (${nomeEvento})` : ''} já estão prontas para sua conferência e aprovação.`);
+    bodyLines.push(``);
+    bodyLines.push(`LINK DE APROVAÇÃO INTERATIVA:`);
+    bodyLines.push(linkUrl);
+    bodyLines.push(`--------------------------------------------------`);
+    bodyLines.push(``);
+    bodyLines.push(`Por favor, acesse o link acima para conferir o visual final, aprovar ou indicar alterações necessárias.`);
+    bodyLines.push(``);
+    bodyLines.push(`Atenciosamente,`);
+    atendente = atendente.replace(/\s+/g, ' ').trim();
+    bodyLines.push(atendente ? `Atendimento: ${atendente}` : 'Atendimento');
+
+    return { osId, numero, linkUrl, clienteEmail, clienteNome, subject: assuntoStr, bodyText: bodyLines.join('\n') };
+}
+
 async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
     window._activeEmailModalData = null;
     emailUltimoEnvioAceito = "";
@@ -40689,78 +40795,14 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
     try {
         toast('Preparando modelo de e-mail...', 'info');
 
-        const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(numero)) : null);
-        const numInt = parseInt(String(numero || osId).replace(/\D/g, ''));
-
-        // 1. Buscar dados do cliente
-        let clienteNome = os ? (os.cliente || '') : '';
-        let clienteEmail = '';
-        let nomeEvento = '';
-        let atendente = typeof os?.vendedor === 'string' ? os.vendedor : '';
-
-        if (state.todasArtes) {
-            const arteObj = state.todasArtes.find(a => String(a.id_int) === String(numInt));
-            if (arteObj && arteObj.nome_evento) nomeEvento = arteObj.nome_evento;
-        }
-
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && !isNaN(numInt)) {
-            try {
-                const { data: propData } = await supabaseClient
-                    .from('propostas')
-                    .select('*')
-                    .eq('id_int', numInt)
-                    .limit(1);
-
-                if (propData && propData.length > 0) {
-                    const prop = propData[0];
-                    atendente = typeof prop.vendedor === 'string' ? prop.vendedor : '';
-                    if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
-                    const idCli = prop.id_faturado || prop.id_cliente;
-                    if (idCli) {
-                        const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(1);
-                        if (cliData && cliData.length > 0) {
-                            const cli = cliData[0];
-                            clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
-                            if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
-                        }
-                    }
-                }
-            } catch (errCli) {
-                console.warn('[Email Modal] Erro ao buscar dados do cliente:', errCli);
-            }
-        }
-
-        if (!clienteNome) clienteNome = 'Cliente';
-
-        // 3. Montar preenchimento da UI do Modal
-        document.getElementById('modal-email-os-numero').textContent = numero || (os ? os.numero : '');
+        const dadosCliente = await buscarDadosEmailCliente(osId, numero);
+        const mensagem = montarMensagemEmailCliente(osId, numero, linkUrl, dadosCliente);
+        document.getElementById('modal-email-os-numero').textContent = numero || '';
         document.getElementById('modal-email-link-display').textContent = linkUrl || '';
-        document.getElementById('modal-email-to').value = clienteEmail;
-
-        const assuntoStr = `Aprovação de Arte - Pedido #${numero} - ${clienteNome}${nomeEvento ? ` (${nomeEvento})` : ''}`;
-        document.getElementById('modal-email-subject').value = assuntoStr;
-
-        // 4. Construir texto da mensagem (E-mail / WhatsApp)
-        let bodyLines = [];
-        bodyLines.push(`Olá, ${clienteNome}!`);
-        bodyLines.push(``);
-        bodyLines.push(`Suas artes relativas ao Pedido #${numero}${nomeEvento ? ` (${nomeEvento})` : ''} já estão prontas para sua conferência e aprovação.`);
-        bodyLines.push(``);
-        bodyLines.push(`LINK DE APROVAÇÃO INTERATIVA:`);
-        bodyLines.push(linkUrl);
-        bodyLines.push(`--------------------------------------------------`);
-        bodyLines.push(``);
-        bodyLines.push(`Por favor, acesse o link acima para conferir o visual final, aprovar ou indicar alterações necessárias.`);
-        bodyLines.push(``);
-        bodyLines.push(`Atenciosamente,`);
-        atendente = atendente.replace(/\s+/g, ' ').trim();
-        bodyLines.push(atendente ? `Atendimento: ${atendente}` : 'Atendimento');
-
-        document.getElementById('modal-email-body').value = bodyLines.join('\n');
-
-        // 5. Exibir modal
-        modal.style.display = 'flex';
-        window._activeEmailModalData = { osId, numero, linkUrl, clienteEmail, clienteNome, bodyText: bodyLines.join('\n') };
+        document.getElementById('modal-email-to').value = mensagem.clienteEmail;
+        document.getElementById('modal-email-subject').value = mensagem.subject;
+        document.getElementById('modal-email-body').value = mensagem.bodyText;
+        window._activeEmailModalData = mensagem;
 
     } catch (e) {
         console.error('[Email Modal] Erro ao abrir modal de e-mail:', e);
@@ -40887,7 +40929,7 @@ function fecharModalConfigEmail() {
 async function executarOperacaoEmail(acao) {
     if (emailOperacaoEmAndamento) return;
     emailOperacaoEmAndamento = true;
-    const botoes = document.querySelectorAll('#btn-disparar-email-direto, #btn-testar-email-nuvem');
+    const botoes = document.querySelectorAll('#btn-disparar-email-direto, #btn-testar-email-nuvem, #btn-enviar-link-os-banner');
     botoes.forEach(b => { b.disabled = true; });
     try { await acao(); }
     catch (e) { toast(e.message, 'error'); }
@@ -40916,13 +40958,17 @@ async function dispararEmailDiretoCliente() {
         if (!subject) throw new Error('Informe o assunto do e-mail.');
         const dados = { os_id: pedido.osId, link_url: pedido.linkUrl, to, subject,
             body_text: document.getElementById('modal-email-body').value };
-        const assinatura = JSON.stringify(dados);
-        if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
         toast('Enviando e-mail...', 'info');
-        await requisitarEmail('enviar', dados);
-        emailUltimoEnvioAceito = assinatura;
-        mostrarSucessoEnvioEmail(to);
+        await enviarMensagemEmailCliente(dados, document.getElementById('btn-disparar-email-direto'));
     });
+}
+
+async function enviarMensagemEmailCliente(dados, origem) {
+    const assinatura = JSON.stringify(dados);
+    if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
+    await requisitarEmail('enviar', dados);
+    emailUltimoEnvioAceito = assinatura;
+    mostrarSucessoEnvioEmail(dados.to, origem);
 }
 
 window.abrirModalConfigEmail = abrirModalConfigEmail;
