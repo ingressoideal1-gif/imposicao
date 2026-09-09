@@ -7,6 +7,7 @@ const campos = {};
 const avisos = [];
 const removidos = [];
 const chamadas = [];
+const sucessos = [];
 const base = 'https://supabase.example/functions/v1/painel';
 let token = 'jwt-sintetico';
 let httpOk = true;
@@ -23,6 +24,7 @@ const ctx = vm.createContext({
     _baseDoAgenteAgora: () => assert.fail('E-mail não pode procurar o NewProd'),
     fetch: async (url, opcoes) => {chamadas.push({url, opcoes}); return {ok:httpOk, json: async () => resposta};},
     toast: (msg, tipo) => avisos.push({msg, tipo}),
+    mostrarSucessoEnvioEmail: to => sucessos.push(to),
 });
 vm.runInContext(trecho, ctx);
 (async () => {
@@ -43,6 +45,7 @@ vm.runInContext(trecho, ctx);
     await Promise.all([ctx.dispararEmailDiretoCliente(), ctx.dispararEmailDiretoCliente()]);
     assert.equal(chamadas.length, antes + 1, 'Clique repetido não duplica envio');
     assert.equal(JSON.parse(chamadas.at(-1).opcoes.body).to, 'cliente@example.com');
+    assert.deepEqual(sucessos, ['cliente@example.com']);
     assert.equal(JSON.parse(chamadas.at(-1).opcoes.body).os_id, 'vibe_11');
     assert.equal(JSON.parse(chamadas.at(-1).opcoes.body).link_url, ctx.window._activeEmailModalData.linkUrl);
     await ctx.dispararEmailDiretoCliente();
@@ -76,5 +79,6 @@ vm.runInContext(trecho, ctx);
     assert.match(avisos.at(-1).msg, /configuração/);
     assert.equal(campos['btn-testar-email-nuvem'].disabled, true);
     assert.doesNotMatch(trecho, /_baseDoAgenteAgora|smtp_config|localStorage\.setItem/);
+    assert.deepEqual(sucessos, ['cliente@example.com'], 'Erro, timeout e repeticao nao abrem popup de sucesso');
     console.log('OK: e-mail na nuvem, sessão, teste, falhas, pedido e duplicidade sem NewProd');
 })().catch(e => {console.error(e); process.exitCode = 1;});

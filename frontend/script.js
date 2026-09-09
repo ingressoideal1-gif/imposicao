@@ -40506,91 +40506,110 @@ function ensureModalEmailElement() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-envio-email-cliente';
-        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(2,6,23,.78);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:20px;';
         modal.innerHTML = `
-            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:780px;max-height:92vh;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
-                <!-- Header -->
-                <div style="padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;box-shadow:0 4px 12px rgba(245,158,11,0.3);">
-                            ✉️
-                        </div>
-                        <div>
-                            <h3 style="margin:0;font-size:1.1rem;font-weight:800;color:#fff;">Enviar Notificação ao Cliente</h3>
-                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);" id="modal-email-subtitle">Pedido #<span id="modal-email-os-numero"></span> — Notificação Pronta para Disparo</p>
-                        </div>
+            <style>
+                #modal-envio-email-cliente { font-family:Inter,"Segoe UI",Arial,sans-serif; }
+                #modal-envio-email-cliente * { box-sizing:border-box; }
+                #modal-envio-email-cliente .email-dialog { width:100%;max-width:900px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;background:#172436;color:#e2e8f0;border:1px solid #35445a;border-radius:18px;box-shadow:0 24px 80px #0008; }
+                #modal-envio-email-cliente .email-header { padding:22px 26px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #35445a; }
+                #modal-envio-email-cliente h3 { margin:0 0 7px;font-size:21px;line-height:1.3;font-weight:700;letter-spacing:-.4px;color:#f8fafc; }
+                #modal-envio-email-cliente .email-subtitle { margin:0;font-size:13px;line-height:1.5;color:#aebed0; }
+                #modal-envio-email-cliente .email-content { padding:22px 26px;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:20px; }
+                #modal-envio-email-cliente .email-link { display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #2e5c68;border-radius:10px;background:#173542; }
+                #modal-envio-email-cliente .email-link-text { flex:1;min-width:0;font-size:13px;line-height:1.6;color:#b6dce6; }
+                #modal-envio-email-cliente #modal-email-link-display { display:block;overflow-wrap:anywhere;color:#d6eef6; }
+                #modal-envio-email-cliente .email-fields { display:flex;flex-direction:column;gap:16px; }
+                #modal-envio-email-cliente label { display:block;margin:0 0 8px;font-size:14px;font-weight:600;color:#e2e8f0; }
+                #modal-envio-email-cliente input, #modal-envio-email-cliente textarea { display:block;width:100%;border:1px solid #516178;border-radius:9px;padding:12px 14px;background:#f8fafc;color:#1e293b;font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:15px;line-height:1.6;box-shadow:none; }
+                #modal-envio-email-cliente input:focus, #modal-envio-email-cliente textarea:focus { outline:2px solid #38bfc6;outline-offset:2px; }
+                #modal-envio-email-cliente #modal-email-subject { min-height:50px;resize:vertical; }
+                #modal-envio-email-cliente #modal-email-body { height:320px;min-height:240px;padding:20px;line-height:1.75;resize:vertical;background:#fff; }
+                #modal-envio-email-cliente .email-hint { margin:8px 0 0;font-size:12px;line-height:1.5;color:#aebed0; }
+                #modal-envio-email-cliente .email-footer { padding:16px 26px;border-top:1px solid #35445a;background:#132031;display:flex;flex-direction:column;gap:14px; }
+                #modal-envio-email-cliente .email-tools, #modal-envio-email-cliente .email-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+                #modal-envio-email-cliente .email-actions { justify-content:space-between; }
+                #modal-envio-email-cliente button { font-family:inherit;font-size:13px;line-height:1.4;font-weight:600;padding:10px 14px;border-radius:8px;border:1px solid #4a5c73;background:#243449;color:#e2e8f0;cursor:pointer; }
+                #modal-envio-email-cliente button:focus-visible { outline:2px solid #38bfc6;outline-offset:3px; }
+                #modal-envio-email-cliente button:disabled { opacity:.6;cursor:wait; }
+                #modal-envio-email-cliente #btn-disparar-email-direto { background:#0d9488;border-color:#14b8a6;color:#fff;font-size:14px;padding:13px 20px; }
+                #modal-envio-email-cliente .email-close { flex-shrink:0;width:36px;height:36px;padding:0;font-size:18px; }
+                @media(max-width:600px) {
+                    #modal-envio-email-cliente { padding:8px!important; }
+                    #modal-envio-email-cliente .email-dialog { max-height:96vh;max-height:96dvh;border-radius:12px; }
+                    #modal-envio-email-cliente .email-header, #modal-envio-email-cliente .email-content, #modal-envio-email-cliente .email-footer { padding:16px; }
+                    #modal-envio-email-cliente h3 { font-size:18px; }
+                    #modal-envio-email-cliente .email-link { align-items:flex-start;flex-wrap:wrap; }
+                    #modal-envio-email-cliente input, #modal-envio-email-cliente textarea { font-size:16px; }
+                    #modal-envio-email-cliente #modal-email-body { padding:14px; }
+                    #modal-envio-email-cliente #btn-disparar-email-direto { flex:1; }
+                    #modal-envio-email-cliente .email-tools button { padding:8px 10px;font-size:12px; }
+                }
+            </style>
+            <div class="email-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-email-title">
+                <div class="email-header">
+                    <div><h3 id="modal-email-title">Enviar Notificação ao Cliente</h3>
+                        <p class="email-subtitle" id="modal-email-subtitle">Pedido #<span id="modal-email-os-numero"></span> · Confira os dados antes de enviar.</p></div>
+                    <button type="button" class="email-close" onclick="fecharModalEnviarEmailCliente()" aria-label="Fechar envio de e-mail">✕</button>
+                </div>
+                <div class="email-content">
+                    <div class="email-link">
+                        <div class="email-link-text"><strong>Link de aprovação interativa</strong><span id="modal-email-link-display"></span></div>
+                        <button type="button" onclick="copiarLinkClienteModal()">Copiar link</button>
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <button class="btn btn-secondary btn-sm" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Consultar o remetente e testar o envio">
-                            ✉️ Remetente e teste
-                        </button>
-                        <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+                    <div class="email-fields">
+                        <div><label for="modal-email-to">Destinatário</label>
+                            <input type="email" id="modal-email-to" name="arte_destinatario" autocomplete="section-arte-destinatario email" placeholder="cliente@email.com"></div>
+                        <div><label for="modal-email-subject">Assunto do e-mail</label>
+                            <textarea id="modal-email-subject" name="arte_assunto" autocomplete="off" rows="1" maxlength="200" oninput="this.value = this.value.replace(/[\\r\\n]+/g, ' ')"></textarea></div>
+                        <div><label for="modal-email-body">Mensagem para o cliente</label>
+                            <textarea id="modal-email-body" rows="12" aria-describedby="modal-email-body-hint"></textarea>
+                            <p class="email-hint" id="modal-email-body-hint">Edite a mensagem se necessário. O e-mail será enviado com cabeçalho, botão de aprovação e contato pelo WhatsApp.</p></div>
                     </div>
                 </div>
-
-                <!-- Body -->
-                <div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;">
-                    
-                    <!-- Box Link Copiado -->
-                    <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.85rem;">
-                            <span style="font-weight:700;color:#60a5fa;">🔗 Link de Aprovação:</span>
-                            <span id="modal-email-link-display" style="color:#e2e8f0;font-family:monospace;margin-left:6px;"></span>
-                        </div>
-                        <button class="btn btn-sm btn-primary" onclick="copiarLinkClienteModal()" style="font-size:0.78rem;font-weight:700;white-space:nowrap;padding:6px 12px;">📋 Copiar Link</button>
+                <div class="email-footer">
+                    <div class="email-tools">
+                        <button type="button" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()">Remetente e teste</button>
+                        <button type="button" onclick="copiarTextoEmailModal()">Copiar e-mail</button>
+                        <button type="button" onclick="copiarWhatsAppModal()">Copiar WhatsApp</button>
+                        <button type="button" onclick="dispararMailtoCliente()">Abrir Outlook</button>
                     </div>
-
-                    <!-- Campos de E-mail -->
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                        <div class="form-group" style="margin:0;">
-                            <label for="modal-email-to" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Destinatário (E-mail do Cliente)</label>
-                            <input type="email" id="modal-email-to" name="arte_destinatario" autocomplete="section-arte-destinatario email" class="form-control" placeholder="cliente@email.com" style="width:100%;font-size:0.88rem;">
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label for="modal-email-subject" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Assunto do E-mail</label>
-                            <textarea id="modal-email-subject" name="arte_assunto" autocomplete="off" rows="2" maxlength="200" class="form-control" style="width:100%;font-size:0.88rem;resize:vertical;" oninput="this.value = this.value.replace(/[\\r\\n]+/g, ' ')"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Prévia do E-mail / Corpo -->
-                    <div class="form-group" style="margin:0;display:flex;flex-direction:column;gap:6px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;">
-                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">Corpo da Mensagem / Modelos do Pedido</label>
-                            <span style="font-size:0.75rem;color:var(--text-dim, #94a3b8);">O e-mail inclui cabeçalho, botão de aprovação e WhatsApp</span>
-                        </div>
-                        <textarea id="modal-email-body" class="form-control" rows="9" style="width:100%;font-family:monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
-                    </div>
-
-                    <!-- Prévia dos Modelos (Cards com Foto) -->
-                    <div id="modal-email-modelos-preview" style="display:flex;flex-direction:column;gap:10px;">
-                        <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">🖼️ Prévia das artes — disponíveis pelo link de aprovação:</label>
-                        <div id="modal-email-modelos-container" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;"></div>
-                    </div>
-
-                </div>
-
-                <!-- Footer / Ações -->
-                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,0.25);flex-wrap:wrap;">
-                    <button class="btn btn-secondary btn-sm" onclick="fecharModalEnviarEmailCliente()" style="font-size:0.82rem;font-weight:600;">Fechar</button>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <button class="btn btn-secondary btn-sm" onclick="copiarTextoEmailModal()" style="font-size:0.82rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;"><i class="fa-regular fa-copy"></i> Copiar E-mail</button>
-                        <button class="btn btn-secondary btn-sm" onclick="copiarWhatsAppModal()" style="font-size:0.82rem;font-weight:700;color:#22c55e;border-color:rgba(34,197,94,0.4);display:inline-flex;align-items:center;gap:6px;"><i class="fa-brands fa-whatsapp"></i> Copiar WhatsApp</button>
-                        <button class="btn btn-secondary btn-sm" onclick="dispararMailtoCliente()" style="font-size:0.82rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;" title="Abrir software de e-mail do sistema (Outlook/Mail)"><i class="fa-solid fa-envelope-open-text"></i> Abrir Outlook</button>
-                        <button class="btn btn-primary btn-sm" id="btn-disparar-email-direto" onclick="dispararEmailDiretoCliente()" style="font-size:0.88rem;font-weight:800;background:linear-gradient(135deg,#10b981,#059669);border:none;padding:7px 16px;box-shadow:0 4px 14px rgba(16,185,129,0.35);display:inline-flex;align-items:center;gap:7px;">
-                            <i class="fa-solid fa-paper-plane"></i> 🚀 Disparar E-mail pela Aplicação
-                        </button>
+                    <div class="email-actions">
+                        <button type="button" onclick="fecharModalEnviarEmailCliente()">Fechar</button>
+                        <button type="button" id="btn-disparar-email-direto" onclick="dispararEmailDiretoCliente()">🚀 Disparar E-mail pela Aplicação</button>
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
         document.body.appendChild(modal);
     }
-    if (modal.parentNode !== document.body) {
-        document.body.appendChild(modal);
-    }
+    if (modal.parentNode !== document.body) document.body.appendChild(modal);
     modal.style.zIndex = '999999';
     return modal;
 }
+
+function mostrarSucessoEnvioEmail(destinatario) {
+    document.getElementById('modal-email-sucesso')?.close();
+    const popup = document.createElement('dialog');
+    popup.id = 'modal-email-sucesso';
+    popup.setAttribute('aria-labelledby', 'modal-email-sucesso-titulo');
+    popup.setAttribute('aria-describedby', 'modal-email-sucesso-descricao');
+    popup.style.cssText = 'box-sizing:border-box;width:calc(100% - 32px);max-width:440px;border:1px solid #cfe6dd;border-radius:18px;padding:28px;background:#fff;color:#18332d;box-shadow:0 24px 80px #0006;font-family:Inter,"Segoe UI",Arial,sans-serif;';
+    popup.innerHTML = `<style>#modal-email-sucesso::backdrop{background:rgba(2,6,23,.65);backdrop-filter:blur(3px);}</style>
+        <div aria-hidden="true" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#dcfce7;color:#15803d;border-radius:50%;font-size:27px;margin-bottom:18px;">✓</div>
+        <h3 id="modal-email-sucesso-titulo" style="margin:0 0 12px;font-size:23px;font-weight:700;">Sucesso do Envio</h3>
+        <p id="modal-email-sucesso-descricao" style="margin:0;font-size:15px;line-height:1.65;">O e-mail foi enviado para <strong id="modal-email-sucesso-destinatario" style="overflow-wrap:anywhere;"></strong>.</p>
+        <p style="margin:12px 0 24px;color:#64748b;font-size:13px;line-height:1.6;">A entrega na caixa de entrada pode levar alguns instantes. Confira também a pasta de spam.</p>
+        <button type="button" autofocus style="width:100%;padding:12px;border:0;border-radius:9px;background:#0d9488;color:white;font:600 15px Inter,'Segoe UI',Arial,sans-serif;cursor:pointer;">Entendido</button>`;
+    popup.querySelector('#modal-email-sucesso-destinatario').textContent = destinatario;
+    popup.querySelector('button').onclick = () => popup.close();
+    popup.addEventListener('close', () => {
+        popup.remove();
+        document.getElementById('btn-disparar-email-direto')?.focus();
+    }, { once:true });
+    document.body.appendChild(popup);
+    popup.showModal();
+}
+
 
 function ensureModalConfigEmailElement() {
     let modal = document.getElementById('modal-config-email-remetente');
@@ -40737,9 +40756,6 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         bodyLines.push(`RESUMO DOS MODELOS DO PEDIDO:`);
         bodyLines.push(`--------------------------------------------------`);
 
-        let modelosContainer = document.getElementById('modal-email-modelos-container');
-        if (modelosContainer) modelosContainer.innerHTML = '';
-
         itens.forEach((item, i) => {
             const idxStr = (i + 1).toString().padStart(2, '0');
             const modNome = item.produto || item.nome_modelo || `Modelo ${i + 1}`;
@@ -40757,17 +40773,6 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
             if (versoUrl) bodyLines.push(`     • Imagem da Arte (Verso): ${versoUrl.startsWith('data:') ? '[Arte Gerada no Sistema]' : versoUrl}`);
             bodyLines.push(``);
 
-            // Thumbnail do modelo no modal
-            if (modelosContainer) {
-                const card = document.createElement('div');
-                card.style.cssText = 'background:rgba(255,255,255,0.04);border:1px solid var(--border-color, rgba(255,255,255,0.1));border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;';
-                card.innerHTML = `
-                    <div style="font-weight:700;font-size:0.8rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#${idxStr} - ${modNome}</div>
-                    <div style="font-size:0.73rem;color:var(--text-dim, #94a3b8);">Qtd: ${qtdStr} | Cor: ${corStr}</div>
-                    ${imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100px;object-fit:contain;border-radius:4px;background:#000;margin-top:4px;" alt="${modNome}" />` : '<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--text-dim);">Sem Amostra</div>'}
-                `;
-                modelosContainer.appendChild(card);
-            }
         });
 
         bodyLines.push(`--------------------------------------------------`);
@@ -40943,9 +40948,9 @@ async function dispararEmailDiretoCliente() {
         const assinatura = JSON.stringify(dados);
         if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
         toast('Enviando e-mail...', 'info');
-        const resultado = await requisitarEmail('enviar', dados);
+        await requisitarEmail('enviar', dados);
         emailUltimoEnvioAceito = assinatura;
-        toast(resultado.message, 'success');
+        mostrarSucessoEnvioEmail(to);
     });
 }
 
