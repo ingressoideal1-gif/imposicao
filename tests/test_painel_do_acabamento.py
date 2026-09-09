@@ -53,6 +53,16 @@ def test_o_harness_do_acabamento_passa():
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
 
 
+def test_os_campos_em_gramas_e_a_senha_mascarada_no_navegador():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "acabamento_gramas_browser_harness.js")],
+        cwd=RAIZ, timeout=60, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in r.stdout
+
+
 def test_o_harness_do_titulo_em_duas_linhas_passa():
     """O titulo do pedido aberto, medido num Chrome de verdade.
 

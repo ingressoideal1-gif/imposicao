@@ -1531,16 +1531,18 @@ function pedidoDeDoisSetores() {
     const { painel } = montarAmbiente();
     const { pesoDoTexto, pesoParaTexto } = painel._regras;
 
-    ok(pesoDoTexto('4,16') === 4.16, 'a virgula da balanca vira ponto');
-    ok(pesoDoTexto('4.16') === 4.16, 'o ponto tambem vale');
-    ok(pesoDoTexto(' 5 ') === 5, 'espaco em volta nao atrapalha');
+    ok(pesoDoTexto('4160,0') === 4.16, 'a virgula da balanca vira ponto');
+    ok(pesoDoTexto('4160.0') === 4.16, 'o ponto tambem vale');
+    ok(pesoDoTexto(' 5000 ') === 5, 'espaco em volta nao atrapalha');
     ok(pesoDoTexto('') === null, 'campo vazio apaga o peso');
     ok(pesoDoTexto('   ') === null, 'so espaco tambem apaga');
     ok(pesoDoTexto('abc') === undefined, 'letra nao e peso');
     ok(pesoDoTexto('-2') === undefined, 'peso negativo nao existe');
     ok(pesoDoTexto('0') === 0, 'zero e um peso valido');
+    ok(pesoDoTexto('1') === 0.001, 'um grama nao vira um quilo');
+    ok(pesoDoTexto('4160,6') === 4.161, 'preserva a precisao de um grama da gravacao');
 
-    ok(pesoParaTexto(4.16) === '4,16', 'na tela ele volta com virgula');
+    ok(pesoParaTexto(4.16) === '4160', 'na tela ele volta em gramas');
     ok(pesoParaTexto(null) === '', 'sem peso, campo vazio');
 })();
 
@@ -1570,7 +1572,7 @@ async function oBoxDePesoAbreComOsSetoresDoPedido() {
        'o box fica acima dos modelos');
 
     // O peso que ja estava no banco volta ao campo, com virgula.
-    ok(amb.elementos['acab-peso-PVC'].value === '4,16',
+    ok(amb.elementos['acab-peso-PVC'].value === '4160',
        'o peso ja gravado aparece no campo', amb.elementos['acab-peso-PVC'].value);
     ok(amb.elementos['acab-peso-LASER'].value === '', 'setor sem peso vem vazio');
 }
@@ -1584,7 +1586,7 @@ async function gravarOPesoAtualizaAlinhaQueExiste() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+    await amb.painel.mudarPeso(200, 'PVC', '4160');
 
     ok(amb.banco._pesosGravados.length === 1, 'linha que existe: uma escrita so',
        String(amb.banco._pesosGravados.length));
@@ -1608,7 +1610,7 @@ async function semLinhaNoBancoOPesoCriaUma() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    await amb.painel.mudarPeso(200, 'LASER', '0,32');
+    await amb.painel.mudarPeso(200, 'LASER', '320');
 
     const tipos = amb.banco._pesosGravados.map(g => g.tipo).join(',');
     ok(tipos === 'update,insert', 'tenta atualizar e, sem linha, insere', tipos);
@@ -1630,7 +1632,7 @@ async function semOsNoParceiroAlinhaNasceSemAmarra() {
 
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
-    await amb.painel.mudarPeso(200, 'FLEXO', '1');
+    await amb.painel.mudarPeso(200, 'FLEXO', '1000');
 
     const inserida = amb.banco._pesosGravados.find(g => g.tipo === 'insert').linha;
     ok(!('id_os' in inserida), 'sem OS, o campo nem e enviado -- nulo por omissao');
@@ -1673,13 +1675,13 @@ async function oPesoNaoTocaEmOutraTabela() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._gravacoes.length = 0;
 
-    await amb.painel.mudarPeso(200, 'PVC', '2,5');
+    await amb.painel.mudarPeso(200, 'PVC', '2500');
     ok(amb.banco._gravacoes.length === 0,
        'gravar peso nao escreve em pedidos_modelos', String(amb.banco._gravacoes.length));
 
     // Setor que o banco recusa nao vira escrita nenhuma.
     amb.banco._pesosGravados.length = 0;
-    await amb.painel.mudarPeso(200, 'SERIGRAFIA', '3');
+    await amb.painel.mudarPeso(200, 'SERIGRAFIA', '3000');
     ok(amb.banco._pesosGravados.length === 0, 'setor fora da lista do banco nem tenta gravar');
 
     // Texto que nao e peso tambem nao chega ao banco.
@@ -1728,11 +1730,11 @@ async function naEstacaoOPesoSaiPeloAgente() {
     ok(html.indexOf('acab-peso-PVC') !== -1, 'e o campo aparece, mesmo sem sessao');
     ok(html.indexOf('entre com a sua conta') === -1,
        'sem o aviso de login: na estacao ha caminho');
-    ok(amb.elementos['acab-peso-PVC'].value === '3', 'com o peso que veio do agente',
+    ok(amb.elementos['acab-peso-PVC'].value === '3000', 'com o peso que veio do agente',
        amb.elementos['acab-peso-PVC'].value);
 
     amb.banco._pesosGravados.length = 0;
-    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+    await amb.painel.mudarPeso(200, 'PVC', '4160');
 
     ok(chamadas.length === 2, 'gravar tambem sai pelo agente', String(chamadas.length));
     ok(chamadas[1].metodo === 'POST', 'com POST');
@@ -1759,7 +1761,7 @@ async function oErroDoAgenteChegaAoOperador() {
 
     await amb.painel.abrirPedido('os-200');
     avisos.length = 0;
-    await amb.painel.mudarPeso(200, 'PVC', '4,16');
+    await amb.painel.mudarPeso(200, 'PVC', '4160');
 
     ok(avisos.length === 1, 'houve aviso', String(avisos.length));
     ok(avisos[0].texto.indexOf('setor invalido: XPTO') !== -1,
@@ -1893,7 +1895,7 @@ async function aBalancaPreencheOPesoDoSetorEGravaPeloCaminhoDeSempre() {
     ok(amb.chamadas[0] && amb.chamadas[0].url === '/api/balanca/peso',
        'o peso foi pedido ao agente desta estacao, em caminho relativo',
        JSON.stringify(amb.chamadas[0]));
-    ok(amb.elementos['acab-peso-PVC'].value === '4,2',
+    ok(amb.elementos['acab-peso-PVC'].value === '4200',
        'o campo ficou com o peso da balanca, com virgula',
        amb.elementos['acab-peso-PVC'].value);
 
@@ -1941,7 +1943,7 @@ async function balancaMudaAbreACaixaQueDizOQueFazer() {
     ok(amb.elementos['acab-balanca-saida'].textContent.indexOf('191249') !== -1,
        'e a saida: os passos no teclado da balanca',
        amb.elementos['acab-balanca-saida'].textContent);
-    ok(amb.elementos['acab-peso-PVC'].value !== '4,2', 'o campo nao foi preenchido com nada');
+    ok(amb.elementos['acab-peso-PVC'].value !== '4200', 'o campo nao foi preenchido com nada');
     ok(!amb.chamadas.some(c => c.metodo === 'POST'), 'e nada foi gravado',
        JSON.stringify(amb.chamadas));
 }
@@ -1972,7 +1974,7 @@ async function oDiagnosticoMostraOQueCadaPortaRespondeu() {
     ok(lista.indexOf('COM1') !== -1 && lista.indexOf('COM7') !== -1,
        'a caixa lista as portas COM da maquina', lista);
     ok(lista.indexOf('é a balança') !== -1, 'e diz qual delas e a balanca');
-    ok(lista.indexOf('2,5 kg') !== -1,
+    ok(lista.indexOf('2500 g') !== -1,
        'mostrando o que ela marca agora, para conferir com o visor');
     ok(lista.indexOf("usarPortaDaBalanca('COM1')") !== -1,
        'as outras ficam com o botao de escolher a mao');
@@ -2078,7 +2080,7 @@ async function oPopupMostraOResumoEEsperaOOk() {
     const corpo = amb.elementos['acab-expedicao-corpo'].innerHTML;
     ok(corpo.indexOf('PVC') !== -1 && corpo.indexOf('Laser') !== -1,
        'o resumo lista os dois setores');
-    ok(corpo.indexOf('4,16 kg') !== -1, 'com o peso digitado', corpo.indexOf('4,16'));
+    ok(corpo.indexOf('4160 g') !== -1, 'com o peso digitado', corpo.indexOf('4,16'));
     ok(corpo.indexOf('Sem peso digitado em Laser') !== -1,
        'e avisa qual setor foi sem peso');
     ok(corpo.indexOf('EXPEDIÇÃO') !== -1, 'e diz o que vai acontecer ao confirmar');
@@ -2516,7 +2518,7 @@ async function oPopupDoPesoGravaEEntaoMarcaPronto() {
     await amb.painel.mudarEstagio('3002', 'os-200', 'Pronto');
 
     // O operador digita o peso no popup e confirma.
-    amb.documento.getElementById('acab-peso-obrig-campo').value = '4,16';
+    amb.documento.getElementById('acab-peso-obrig-campo').value = '4160';
     await amb.painel.confirmarPesoDoSetor();
 
     const peso = amb.banco._pesosGravados.find(g => g.payload && g.payload.peso_real_kg !== undefined);
@@ -2708,7 +2710,7 @@ async function oBoxMostraOEstimadoAoLadoDoPeso() {
     ok(est.style.color !== '#fbbf24', 'e sem o ambar');
 
     // Gravar dentro dos 5 % atualiza o texto: 4,3 contra 4,16 e +3,4 %.
-    await amb.painel.mudarPeso(200, 'PVC', '4,3');
+    await amb.painel.mudarPeso(200, 'PVC', '4300');
     ok(est.textContent.indexOf('+3,4%') !== -1, 'a divergencia acompanha o peso gravado', est.textContent);
     ok(est.style.color !== '#fbbf24', 'dentro dos 5 % nao e ambar');
 }
@@ -2720,7 +2722,7 @@ async function dentroDosCincoPorCentoGravaDireto() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    await amb.painel.mudarPeso(200, 'PVC', '105');
+    await amb.painel.mudarPeso(200, 'PVC', '105000');
     ok(amb.banco._pesosGravados.length === 1, '5,0 % exatos: grava como sempre',
        String(amb.banco._pesosGravados.length));
     ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'sem popup');
@@ -2728,7 +2730,7 @@ async function dentroDosCincoPorCentoGravaDireto() {
 
     // 5,01 %: a gravacao para, e o popup abre.
     amb.banco._pesosGravados.length = 0;
-    await amb.painel.mudarPeso(200, 'PVC', '105,01');
+    await amb.painel.mudarPeso(200, 'PVC', '105010');
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', '5,01 %: o popup da senha abre');
     ok(amb.banco._pesosGravados.length === 0, 'e NADA foi gravado', String(amb.banco._pesosGravados.length));
     ok(amb.banco._setoresDoBanco[0].peso_real_kg === 105, 'o banco continua com o peso de antes');
@@ -2738,26 +2740,28 @@ async function acimaDosCincoPorCentoNadaEGravadoECancelarDevolveOValor() {
     const amb = ambienteComEstimado();
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
-    ok(amb.elementos['acab-peso-PVC'].value === '4,16', 'o campo comeca com o peso do banco');
+    ok(amb.elementos['acab-peso-PVC'].value === '4160', 'o campo comeca com o peso do banco');
 
     // O operador digita 4,5 (8,2 % acima de 4,160): o campo ja mostra 4,5 e o
     // onchange dispara.
-    amb.elementos['acab-peso-PVC'].value = '4,5';
-    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    amb.elementos['acab-peso-PVC'].value = '4500';
+    await amb.painel.mudarPeso(200, 'PVC', '4500');
 
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
     const corpo = amb.elementos['acab-liberacao-corpo'].innerHTML;
     ok(corpo.indexOf('PVC') !== -1, 'o popup diz o setor');
-    ok(corpo.indexOf('4,5 kg') !== -1, 'o peso digitado', corpo);
-    ok(corpo.indexOf('4,160 kg') !== -1, 'o estimado');
+    ok(corpo.indexOf('4500 g') !== -1, 'o peso digitado', corpo);
+    ok(corpo.indexOf('4160 g') !== -1, 'o estimado');
     ok(corpo.indexOf('+8,2%') !== -1, 'e a divergencia em %', corpo);
     ok(amb.banco._pesosGravados.length === 0, 'NADA foi gravado', String(amb.banco._pesosGravados.length));
     ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.16, 'o banco continua com 4,16');
 
     // Cancelar: fecha, e o campo volta ao valor de antes.
+    amb.documento.getElementById('acab-liberacao-senha').value = 'X00';
     amb.painel.fecharPopupDaLiberacao();
+    ok(amb.elementos['acab-liberacao-senha'].value === '', 'cancelar limpa a senha');
     ok(amb.elementos['acab-liberacao'].style.display === 'none', 'Cancelar fecha o popup');
-    ok(amb.elementos['acab-peso-PVC'].value === '4,16',
+    ok(amb.elementos['acab-peso-PVC'].value === '4160',
        'e o campo volta ao valor de antes', amb.elementos['acab-peso-PVC'].value);
     ok(amb.banco._pesosGravados.length === 0, 'sem gravar nada');
 
@@ -2778,7 +2782,7 @@ async function senhaErradaNaoGravaEAvisa() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    await amb.painel.mudarPeso(200, 'PVC', '4500');
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
 
     // Senha vazia nem vai ao servidor.
@@ -2823,7 +2827,7 @@ async function senhaCertaNoSiteGravaPeloCaminhoDeSempre() {
     await amb.painel.abrirPedido('os-200');
     amb.banco._pesosGravados.length = 0;
 
-    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    await amb.painel.mudarPeso(200, 'PVC', '4500');
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
     ok(amb.banco._pesosGravados.length === 0, 'abrir nao gravou');
 
@@ -2839,6 +2843,7 @@ async function senhaCertaNoSiteGravaPeloCaminhoDeSempre() {
     ok(Object.keys(g.payload).sort().join(',') === 'peso_real_kg,updated_at',
        'e a escrita continua estreita: so peso e data');
     ok(amb.banco._setoresDoBanco[0].peso_real_kg === 4.5, 'o banco ficou com 4,5');
+    ok(amb.elementos['acab-liberacao-senha'].value === '', 'liberar limpa a senha');
     ok(amb.elementos['acab-peso-est-PVC'].textContent.indexOf('+8,2%') !== -1,
        'e o estimado ao lado mostra a divergencia', amb.elementos['acab-peso-est-PVC'].textContent);
     ok(amb.elementos['acab-peso-est-PVC'].style.color === '#fbbf24', 'em ambar, porque passou dos 5 %');
@@ -2870,8 +2875,8 @@ async function senhaCertaNaEstacaoGravaPeloAgente() {
     chamadas.length = 0;
 
     // O operador digitou 4,5 no campo; o onchange traz o texto.
-    amb.documento.getElementById('acab-peso-PVC').value = '4,5';
-    await amb.painel.mudarPeso(200, 'PVC', '4,5');
+    amb.documento.getElementById('acab-peso-PVC').value = '4500';
+    await amb.painel.mudarPeso(200, 'PVC', '4500');
     ok(amb.elementos['acab-liberacao'].style.display === 'flex', 'o popup abriu');
     ok(chamadas.length === 0, 'e nenhum POST de peso saiu para o agente', JSON.stringify(chamadas));
 
@@ -2887,7 +2892,7 @@ async function senhaCertaNaEstacaoGravaPeloAgente() {
        'a segunda grava o peso pela rota de sempre', JSON.stringify(chamadas[1]));
     ok(amb.elementos['acab-liberacao'].style.display === 'none', 'e o popup fechou');
     ok(amb.banco._pesosGravados.length === 0, 'NADA foi direto a tabela do parceiro pela estacao');
-    ok(amb.elementos['acab-peso-PVC'].value === '4,5', 'o campo ficou com o peso liberado',
+    ok(amb.elementos['acab-peso-PVC'].value === '4500', 'o campo ficou com o peso liberado',
        amb.elementos['acab-peso-PVC'].value);
 }
 
@@ -2898,7 +2903,7 @@ async function semEstimadoGravaDireto() {
     amb.banco._pesosGravados.length = 0;
 
     ok(telaDoPedido(amb).indexOf('est. —') !== -1, 'o bloco mostra "est. —"');
-    await amb.painel.mudarPeso(200, 'PVC', '999');
+    await amb.painel.mudarPeso(200, 'PVC', '999000');
     ok(amb.elementos['acab-liberacao'].style.display !== 'flex', 'sem estimado nao ha popup');
     ok(amb.banco._pesosGravados.length === 1, 'e o peso grava direto', String(amb.banco._pesosGravados.length));
 
@@ -3421,7 +3426,7 @@ async function oRegistroGravaQuantidadeEPeso() {
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const regs = registrosDoBanco(amb, volumeId);
     ok(regs.length === 1, 'uma linha de registro foi gravada', String(regs.length));
@@ -3448,8 +3453,8 @@ async function oVolumeJaCriadoRecebeMaisModelos() {
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
-    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3002, peso: '2600', responsavel: 'Cesar Almeida' });
 
     const regs = registrosDoBanco(amb, volumeId);
     ok(regs.length === 2, 'o segundo registro ACRESCENTA, nao substitui', String(regs.length));
@@ -3466,7 +3471,7 @@ async function registroParcialNaoFechaOModelo() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
 
-    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10,40',
+    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10400',
                            responsavel: 'Bernardo Farias' });
 
     const status = amb.banco._gravacoes.filter(g => g.payload && g.payload.acabamento_status !== undefined);
@@ -3478,7 +3483,7 @@ async function registroParcialNaoFechaOModelo() {
     ok(html.indexOf('3.000 fora') !== -1, 'e quanto falta');
 
     // A segunda leva fecha.
-    await registrar(amb, { um: 3001, qtds: { 3001: '3000' }, peso: '15,60',
+    await registrar(amb, { um: 3001, qtds: { 3001: '3000' }, peso: '15600',
                            responsavel: 'Bernardo Farias' });
     const status2 = amb.banco._gravacoes.filter(g => g.payload && g.payload.acabamento_status !== undefined);
     ok(status2.some(g => String(g.valor) === '3001' && g.payload.acabamento_status === 'Pronto'),
@@ -3491,11 +3496,11 @@ async function oMesmoModeloCabeEmVariosVolumes() {
     await amb.painel.novoVolume('LASER', 200);
     const v1 = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10,40',
+    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10400',
                            responsavel: 'Bernardo Farias' });
     await amb.painel.novoVolume('LASER', 200);
     const v2 = amb.banco._volumesDoBanco[1].id;
-    await registrar(amb, { um: 3001, volumeId: v2, qtds: { 3001: '3000' }, peso: '15,60',
+    await registrar(amb, { um: 3001, volumeId: v2, qtds: { 3001: '3000' }, peso: '15600',
                            responsavel: 'Cesar Almeida' });
 
     ok(registrosDoBanco(amb, v1).length === 1 && registrosDoBanco(amb, v2).length === 1,
@@ -3521,7 +3526,7 @@ async function oGrupoRepartePesoNaProporcaoDoEstimado() {
 
     // 5.000 + 500 unidades a 5,2 g = 26,000 + 2,600 = 28,600 kg estimados.
     // A balanca leu 28,600: a repartição tem de dar exatamente esses dois.
-    await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { grupo: [3001, 3002], peso: '28600', responsavel: 'Bernardo Farias' });
 
     const regs = registrosDoBanco(amb, volumeId);
     ok(regs.length === 2, 'os dois modelos entraram num registro so', String(regs.length));
@@ -3540,7 +3545,7 @@ async function pesarUmAUmDaUmCampoPorModelo() {
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
     await registrar(amb, { grupo: [3001, 3002], porModelo: true,
-                           pesos: { 3001: '25,80', 3002: '2,90' },
+                           pesos: { 3001: '25800', 3002: '2900' },
                            responsavel: 'Bernardo Farias' });
 
     const porModelo = {};
@@ -3629,8 +3634,8 @@ async function oVolumeMostraOsRegistrosNaOrdem() {
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
-    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3002, peso: '2600', responsavel: 'Cesar Almeida' });
 
     amb.painel.abrirVolume(volumeId);
     const caixa = janelas.achar('acab-volume-janela');
@@ -3658,8 +3663,8 @@ async function tirarDoVolumeDevolveOModelo() {
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
-    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3002, peso: '2600', responsavel: 'Cesar Almeida' });
     const alvo = registrosDoBanco(amb, volumeId).find(r => Number(r.modelo_id) === 3001);
 
     // O card ja esta Pronto: e isso que o Tirar tem de desfazer.
@@ -3701,7 +3706,7 @@ async function comVolumesOPesoDoSetorEDeLeitura() {
     const amb = ambienteDeVolumesComPeso();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const html = telaDoPedido(amb);
     ok(html.indexOf('input type="text" inputmode="decimal" id="acab-peso-LASER"') === -1,
@@ -3719,7 +3724,7 @@ async function osVolumesNaoTocamEmTabelaDoParceiro() {
     const amb = ambienteDeVolumesComPeso();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const naFicha = amb.banco._pesosGravados;
     ok(naFicha.length >= 1, 'registrar atualiza o peso do setor na ficha', String(naFicha.length));
@@ -3751,7 +3756,7 @@ async function naEstacaoOVolumeGravaSemAgente() {
     await amb.painel.abrirPedido('os-200');
 
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     ok(amb.banco._volumesDoBanco.length === 1, 'o volume foi gravado sem sessao nenhuma',
        String(amb.banco._volumesDoBanco.length));
@@ -3785,7 +3790,7 @@ async function oRegistroForaDosCincoPorCentoPedeASenha() {
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
     // Estimado 26,000 kg; 28,000 e +7,7 %.
-    await registrar(amb, { um: 3001, peso: '28,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '28000', responsavel: 'Bernardo Farias' });
 
     ok(registrosDoBanco(amb, volumeId).length === 0, 'nada foi gravado');
     const p = amb.painel._tela.liberacaoPendente;
@@ -3842,7 +3847,7 @@ async function aFotoDoVolumeSobeAoStorageEEsperaOGravar() {
        'e o banco AINDA nao tem a foto -- quem grava e o Gravar');
 
     amb.documento.getElementById('acab-reg-qtd-0').value = '5000';
-    amb.documento.getElementById('acab-reg-peso').value = '26,00';
+    amb.documento.getElementById('acab-reg-peso').value = '26000';
     amb.documento.getElementById('acab-reg-responsavel').value = 'Bernardo Farias';
     await amb.painel.confirmarRegistro();
     ok(!!amb.banco._volumesDoBanco[0].foto_url, 'gravar leva a foto junto');
@@ -3852,7 +3857,7 @@ async function aFotoDoVolumeApareceNosModelosDele() {
     const amb = ambienteDeVolumes();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { grupo: [3001, 3002], peso: '12,48',
+    await registrar(amb, { grupo: [3001, 3002], peso: '12480',
                            responsavel: 'Bernardo Farias', foto: FOTO_DO_VOLUME });
 
     const html = telaDoPedido(amb);
@@ -3866,7 +3871,7 @@ async function aFotoPropriaDoModeloVemPrimeiro() {
     amb.janela.state.osItens['os-200'][0].acabamento_foto_url = 'https://x/propria.jpg';
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { grupo: [3001, 3002], peso: '12,48',
+    await registrar(amb, { grupo: [3001, 3002], peso: '12480',
                            responsavel: 'Bernardo Farias', foto: FOTO_DO_VOLUME });
 
     const html = telaDoPedido(amb);
@@ -4020,7 +4025,7 @@ async function prontoNaoOfereceCaixaDeMarcar() {
     const amb = ambienteDeVolumesComPeso();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const itens = amb.janela.state.osItens['os-200'];
     ok(itens[0].acabamento_status === 'Pronto', 'o modelo ficou Pronto ao entrar inteiro');
@@ -4050,8 +4055,8 @@ async function sairDeProntoTiraDoVolumeEAtualizaOPeso() {
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
 
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
-    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3002, peso: '2600', responsavel: 'Cesar Almeida' });
     ok(Number(amb.banco._volumesDoBanco[0].peso_kg) === 28.6, 'o volume somava os dois');
 
     await amb.painel.mudarEstagio(3001, 'os-200', 'Em acabamento');
@@ -4085,11 +4090,11 @@ async function oModeloRepartidoSaiDeTodosOsVolumes() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const v1 = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10,40',
+    await registrar(amb, { um: 3001, qtds: { 3001: '2000' }, peso: '10400',
                            responsavel: 'Bernardo Farias' });
     await amb.painel.novoVolume('LASER', 200);
     const v2 = amb.banco._volumesDoBanco[1].id;
-    await registrar(amb, { um: 3001, volumeId: v2, qtds: { 3001: '3000' }, peso: '15,60',
+    await registrar(amb, { um: 3001, volumeId: v2, qtds: { 3001: '3000' }, peso: '15600',
                            responsavel: 'Cesar Almeida' });
 
     await amb.painel.mudarEstagio(3001, 'os-200', 'Impresso');
@@ -4110,7 +4115,7 @@ async function cancelarASaidaDeProntoNaoMudaNada() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     amb.janela.confirm = () => false;
     const antes = amb.banco._gravacoes.length;
@@ -4132,7 +4137,7 @@ async function tirarUmModeloAtualizaOPesoDoVolume() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { grupo: [3001, 3002], peso: '28600', responsavel: 'Bernardo Farias' });
 
     const alvo = registrosDoBanco(amb, volumeId).find(r => Number(r.modelo_id) === 3002);
     amb.painel.excluirDoVolume(volumeId, alvo.id);
@@ -4182,7 +4187,7 @@ async function excluirOUltimoVolumeApagaOPesoDoSetor() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const volumeId = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
     ok(Number(amb.banco._setoresDoBanco[0].peso_real_kg) === 26,
        'o peso do setor era a soma do volume');
 
@@ -4211,7 +4216,7 @@ async function aFaixaDoSetorNaoListaOsModelosSemVolume() {
     const amb = ambienteDeVolumesComPeso();
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const lateral = amb.elementos['acab-lateral-resumo'].innerHTML;
     ok(lateral.indexOf('ainda sem volume') === -1,
@@ -4226,8 +4231,8 @@ async function aFaixaDoSetorNaoListaOsModelosSemVolume() {
 
     // E a confirmacao, quando tudo esta em volume, fica: ela e curta e responde
     // a pergunta que se faz antes da expedicao.
-    await registrar(amb, { um: 3002, peso: '2,60', responsavel: 'Cesar Almeida' });
-    await registrar(amb, { um: 3004, peso: '0,52', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3002, peso: '2600', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3004, peso: '520', responsavel: 'Cesar Almeida' });
     ok(amb.elementos['acab-lateral-resumo'].innerHTML.indexOf('todo o setor está em volume') !== -1,
        'com tudo em volume, a lateral confirma em uma linha');
 }
@@ -4267,10 +4272,10 @@ async function comDoisVolumes(amb) {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const v1 = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
     await amb.painel.novoVolume('LASER', 200);
     const v2 = amb.banco._volumesDoBanco[1].id;
-    await registrar(amb, { um: 3002, volumeId: v2, peso: '2,60', responsavel: 'Cesar Almeida' });
+    await registrar(amb, { um: 3002, volumeId: v2, peso: '2600', responsavel: 'Cesar Almeida' });
     return { v1, v2 };
 }
 
@@ -4379,7 +4384,7 @@ async function semOutroVolumeAJanelaDizOQueFazer() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const v1 = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     amb.painel.excluirDoVolume(v1, '');
     const html = janelas.achar('acab-exclusao-janela').innerHTML;
@@ -4395,7 +4400,7 @@ async function excluirOVolumeDesmarcaARevisaoDeTodos() {
     await amb.painel.abrirPedido('os-200');
     await amb.painel.novoVolume('LASER', 200);
     const v1 = amb.banco._volumesDoBanco[0].id;
-    await registrar(amb, { grupo: [3001, 3002], peso: '28,60', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { grupo: [3001, 3002], peso: '28600', responsavel: 'Bernardo Farias' });
     const itens = amb.janela.state.osItens['os-200'];
     ok(itens[0].acabamento_status === 'Pronto' && itens[1].acabamento_status === 'Pronto',
        'os dois estavam revisados');
@@ -4456,7 +4461,7 @@ async function osProntosVaoParaOFimDaLista() {
        'antes, o primeiro do pedido vem primeiro');
 
     await amb.painel.novoVolume('LASER', 200);
-    await registrar(amb, { um: 3001, peso: '26,00', responsavel: 'Bernardo Farias' });
+    await registrar(amb, { um: 3001, peso: '26000', responsavel: 'Bernardo Farias' });
 
     const depois = amb.elementos['acab-detalhe-corpo'].innerHTML;
     ok(depois.indexOf('Credencial VIP') > depois.indexOf('Credencial Staff'),
