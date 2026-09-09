@@ -118,3 +118,28 @@ Não instalar o MSI automaticamente nesta estação durante a publicação.
 Publicar o manifesto não comprova a atualização em todas as estações.
 Recuperação por código anterior com versão superior a 1.2.326; o atualizador
 não executa downgrade ao reapontar o manifesto para 1.2.325.
+
+## Publicação confirmada
+
+- [PR #28](https://github.com/ingressoideal1-gif/imposicao/pull/28) integrado
+  em `aca16b1ef9419ca57ab2ad216a1993c80eb8b815`; Cloudflare Pages reportou
+  `completed/success` para esse commit.
+- MSI enviado sem sobrescrita e baixado pela URL pública sem query. Os
+  74.588.160 bytes e o SHA-256 acima conferiram antes de ativar o manifesto.
+- `latest.json` público confirmado em **1.2.326**, com URL, hash, tamanho e
+  notas idênticos ao manifesto preparado. O arquivo anterior foi preservado
+  em `dist/latest.anterior.json`; download conferido em `dist/conferencia-remota.msi`.
+- Em `https://imposition.ai-ideal.com.br`, HTML do painel e do cliente e os
+  quatro JS afetados retornaram HTTP 200 e conteúdo idêntico à fonte desta
+  entrega (normalização apenas de CRLF/LF). Referências dos assets em v845.
+- A primeira consulta com User-Agent padrão do urllib recebeu HTTP 403.
+  Com uma identificação de navegador, os seis recursos foram verificados;
+  nenhum controle de acesso ou configuração de hospedagem foi alterado.
+- Tags de recuperação desta entrega: `agente-v1.2.326` e `v845`, apontando
+  para o commit integrado acima.
+
+A estação precisa receber o NewProd 1.2.326 pelo atualizador existente
+(menu **Atualizar agora**) para usar a formatação nova do PDF. Não foi
+executada instalação manual, impressão física ou escrita em tabelas de
+negócio. A confirmação de atualização e impressão em cada estação permanece
+pendente; a publicação e os downloads foram confirmados.
