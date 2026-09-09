@@ -178,6 +178,28 @@ function extrair(nome) {
             await onItemArteUpload(0, 'os-1', item.id, 'verso');
             ok(item.verso_arte_url === 'verso.pdf' && item.amostra_arte_base64 === 'previa-frente', 'Upload verso preserva snapshot da frente');
             ok(pdfViewerState['os-1_0'].pdfUrl === 'novo.pdf', 'Upload verso preserva paginador da frente');
+
+            // Modelo novo confirmado vazio pelo banco: cache antigo nao desenha
+            // nem baixa a arte que ocupava este indice antes, em nenhuma face.
+            const novo = { id: 'modelo-novo', _dbLoaded: true, modo_pdf: false,
+                arte_url: null, verso_arte_url: null, formato_id: 'f1' };
+            state.osItens['os-1'] = [novo];
+            localStorage.getItem = () => 'cache-antigo.pdf';
+            let cargasNovas = 0;
+            window.fetch = async () => { cargasNovas++; throw new Error('Nao deveria baixar cache antigo'); };
+            const gravacoesAntesDoNovo = gravacoes.length;
+            for (const face of ['front', 'back']) {
+                const tela = document.createElement('canvas');
+                const vazio = document.createElement('div');
+                await drawAmostraFace(novo, face, tela, vazio, state.formatos[0], null, null, 0, 'os-1', 1);
+                ok(tela.style.display === 'none' && vazio.style.display === 'block', 'Modelo novo sem arte mostra vazio: ' + face);
+            }
+            ok(novo.arte_url === null && novo.verso_arte_url === null, 'Desenho nao importa arte antiga para o modelo');
+            novo.modo_pdf = true;
+            document.querySelector('main').innerHTML = blocoDeArteDoModelo(novo, 0, 'os-1', escala, false);
+            await drawAmostraFace(novo, 'front', null, null, state.formatos[0], null, null, 0, 'os-1', 1);
+            ok(info().includes('original') && botoes()[0].disabled && botoes()[1].disabled, 'Modo PDF novo permanece sem original');
+            ok(cargasNovas === 0 && gravacoes.length === gravacoesAntesDoNovo, 'Previa vazia nao faz downloads nem grava arte');
             return total;
         });
         if (erros.length) throw new Error(erros.join('\n'));
