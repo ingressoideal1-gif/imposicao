@@ -40239,7 +40239,8 @@ window.enviarLink = window.enviar_link;
 window.enviarLinkCliente = window.enviar_link;
 
 async function gerarLinkClienteBanner() {
-    const activeOSId = state.activeOSId || localStorage.getItem('activeOSId');
+    // Mesmo estado usado para abrir e fechar o pedido no banner de artes.
+    const activeOSId = state.amostrasOSAtivo;
     console.log('[LinkDebug] gerarLinkClienteBanner: activeOSId=', activeOSId);
     if (!activeOSId) {
         toast('Nenhum pedido ativo selecionado.', 'warning');
