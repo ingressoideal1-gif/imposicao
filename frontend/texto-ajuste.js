@@ -14,6 +14,16 @@
     // papel — e o mesmo piso que os motores de VDP do mercado usam.
     const PISO_CONDENSA = 0.75;
 
+    // Contrato do novo Texto — Banco de Dados, espelhado em engine.py.
+    // Não converte o dado em número: preserva zeros e códigos alfanuméricos.
+    function formatarTextoDoBanco(el, valor) {
+        let texto = valor == null ? '' : String(valor);
+        if (!texto) return '';
+        const pad = Math.max(0, Math.min(10, Math.trunc(Number(el.pad) || 0)));
+        if (/^[0-9]+$/.test(texto)) texto = texto.padStart(pad, '0');
+        return `${el.prefix || ''}${texto}${el.suffix || ''}`;
+    }
+
     function ajustarTextoNaLargura(medir, texto, corpo, larguraMax, modo) {
         const paragrafos = String(texto).split('\n');
         larguraMax = Number(larguraMax) || 0;
@@ -209,7 +219,8 @@
                 continue;
             }
 
-            const aj = ajustarTextoNaLargura(cfg.medir, pre + bruto + suf, corpoPx, maxPx, modo);
+            const texto = cfg.formatar ? cfg.formatar(bruto) : pre + bruto + suf;
+            const aj = ajustarTextoNaLargura(cfg.medir, texto, corpoPx, maxPx, modo);
             const corpoPt = emPt(aj.corpo);
             if (res.piorCorpoPt === null || corpoPt < res.piorCorpoPt) res.piorCorpoPt = corpoPt;
             if (aj.linhas.length > res.maiorLinhas) res.maiorLinhas = aj.linhas.length;
@@ -231,6 +242,7 @@
     }
 
     window.PISO_CONDENSA = PISO_CONDENSA;
+    window.formatarTextoDoBanco = formatarTextoDoBanco;
     window.ajustarTextoNaLargura = ajustarTextoNaLargura;
     window.desenharTextoAjustado = desenharTextoAjustado;
     window.conferirEstouroDaColuna = conferirEstouroDaColuna;
