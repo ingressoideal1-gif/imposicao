@@ -1,6 +1,6 @@
 # NewProd: gerenciamento de temporários e diagnóstico por estação
 
-## Pedido e estado da entrega
+## Pedido e preparação local
 
 O usuário apresentou uma imagem do Windows com 78,2 GB classificados como
 temporários e 13,6 MB livres em C:, pediu análise das estações e indicou Laser 01.
@@ -150,3 +150,26 @@ baixados pelo usuário e materiais entregues ao destino não são alvos desta po
 
 Instalação e medição da Laser 01 continuam pendentes. Publicação do manifesto não
 comprova que a estação recebeu a versão. Rollback exige versão superior a 1.2.327.
+
+## Publicação confirmada
+
+- [PR #29](https://github.com/ingressoideal1-gif/imposicao/pull/29) integrado em
+  `07b24b41f8d2271e24895c855025bac36e7899fc`. Cloudflare Pages reportou
+  `completed/success` nesse commit.
+- Tag de recuperação `agente-v1.2.327` publicada, apontando para o commit integrado.
+- MSI enviado sem sobrescrita; download pela URL pública sem query conferiu
+  **74.596.352 bytes** e o SHA-256 registrado acima antes da ativação.
+- Manifesto público `latest.json` confirmado em **1.2.327**, com URL, tamanho,
+  SHA-256 e notas iguais ao manifesto preparado.
+- Evidências locais: `dist/validacao-msi.json`, `dist/latest.anterior.json`,
+  `dist/latest.preparado.json` e `dist/conferencia-remota.msi` no worktree do release.
+- Consulta somente de leitura ao heartbeat da estação identificou **LASER-01** em
+  **1.2.325**, com último sinal em **2026-09-09 20:04:32 UTC** (17:04:32 de Brasília).
+  O campo de armazenamento ainda não foi informado. Resultado preservado em
+  `dist/laser01-apos-publicacao.json`, sem credenciais.
+
+A estação está enviando sinal, mas sua atualização para 1.2.327 ainda não foi
+confirmada. O atualizador existente consulta novas versões a cada 30 minutos;
+o diagnóstico de armazenamento será enviado depois que a nova versão iniciar e
+concluir a primeira coleta. Nenhuma instalação foi forçada nem arquivo real apagado
+por esta sessão. Os 78,2 GB da foto permanecem sem origem comprovada.
