@@ -8,19 +8,42 @@ Deno.test("layout: remove resumo legado de HTML e texto, preservando aprovacao e
   const texto = `Olá, Cliente!\n\nSuas artes estão prontas.\n\nRESUMO DOS MODELOS DO PEDIDO:\n\n[01] Pulseira\nQuantidade: 5000\nArte: https://storage.example/arte.pdf\n\nLINK DE APROVAÇÃO INTERATIVA:\n${link}`;
   const r = layoutEmailArte(texto, portal, link, "11");
   assert.match(r.html, /Abrir aprovação interativa/);
-  assert.ok(r.html.includes(`src="${portal}/logo.png"`));
+  assert.match(r.html, /src="https:\/\/vwbtitjlpelrcnsytzqw.supabase.co\/storage\/v1\/object\/public\/app-imagens\/1785672791278_logo_ideal_2026.jpg"/);
+  assert.match(r.html, /src="https:\/\/vwbtitjlpelrcnsytzqw.supabase.co\/storage\/v1\/object\/public\/app-imagens\/1787694554509_Whatsapp.png"/);
+  assert.match(r.html, /Falar com meu Atendimento/);
+  assert.doesNotMatch(r.html, /Precisa de ajuda com as artes|Nossa equipe de atendimento|Falar com atendente pelo WhatsApp/);
   assert.ok(r.html.includes(`href="${link}"`));
   assert.match(r.html, /phone=555195343478/);
   assert.match(r.text, /Suas artes estão prontas/);
   assert.ok(r.text.includes(link));
-  assert.doesNotMatch(r.html + r.text, /RESUMO DOS MODELOS|Pulseira|Quantidade|storage.example/);
+  assert.doesNotMatch(r.html + r.text, /RESUMO DOS MODELOS|\[01\] Pulseira|Quantidade|storage.example/);
 });
 Deno.test("layout: mensagem curta mantem botao antes da despedida e texto editado", () => {
   const texto = `Olá, Cliente!\n\nTexto editado pelo designer.\n\nLINK DE APROVAÇÃO INTERATIVA:\n${link}\n\nAtenciosamente,\nEquipe Ingresso Ideal`;
   const r = layoutEmailArte(texto, portal, link, "11");
-  assert.ok(r.text.startsWith(texto));
+  assert.ok(r.text.startsWith(texto.replace('Equipe Ingresso Ideal', 'Atendimento')));
   assert.ok(r.html.indexOf("Texto editado") < r.html.indexOf("Abrir aprovação interativa"));
   assert.ok(r.html.indexOf("Abrir aprovação interativa") < r.html.indexOf("Atenciosamente"));
+});
+Deno.test("layout: assinatura e WhatsApp usam o responsavel de cada pedido e escapam HTML", () => {
+  const original = `Mensagem editada.\n\nLINK DE APROVAÇÃO INTERATIVA:\n${link}\n\nAtenciosamente,\nAtendimento: Nome desatualizado`;
+  for (const vendedor of ['Alexandre Almeida', 'Emily Boeira', '  André   Toniazzo\n', '<img src=x> & Teste']) {
+    const nome = vendedor.replace(/\s+/g, ' ').trim();
+    const r = layoutEmailArte(original, portal, link, '11', undefined, vendedor);
+    assert.match(r.text, /Mensagem editada/);
+    assert.ok(r.text.includes('Atendimento: ' + nome));
+    assert.doesNotMatch(r.html + r.text, /Nome desatualizado/);
+    assert.equal((r.text.match(/Atenciosamente/g) || []).length, 1);
+    const contato = new URL(r.text.split('\n').at(-1)!);
+    assert.equal(contato.searchParams.get('phone'), '555195343478');
+    assert.equal(contato.searchParams.get('text'), `Olá, ${nome}! Preciso de atendimento sobre a aprovação das artes do Pedido #11.`);
+    assert.doesNotMatch(r.html, /<img src=x>/);
+  }
+});
+Deno.test("layout: sem responsavel cadastrado usa atendimento generico", () => {
+  const r = layoutEmailArte(`Confira ${link}\n\nAtenciosamente,\nEquipe Ingresso Ideal / Atendimento`, portal, link, '11');
+  assert.match(r.text, /Atenciosamente,\nAtendimento\n/);
+  assert.doesNotMatch(r.text, /^Atendimento:|undefined|null|Equipe Ingresso Ideal/m);
 });
 Deno.test("layout: HTML editado e atributos de links sao escapados", () => {
   const r = layoutEmailArte('<script>alert(1)</script>\n<img src=x onerror="alert(2)">\nhttps://storage.example/a?x=1&y=2\njavascript:alert(3)', portal, link, "11");
