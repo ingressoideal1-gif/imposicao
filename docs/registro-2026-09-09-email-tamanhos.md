@@ -1,10 +1,11 @@
-# Tamanhos no e-mail de aprovação — 09/09/2026
+# Tamanhos e cor do cabeçalho no e-mail de aprovação — 09/09/2026
 
 - Logo Ideal: largura de 56 para 112 px (+100%), altura proporcional; célula do
   cabeçalho ampliada para acomodar a imagem e manter o texto ao lado.
 - Imagem Clique aqui: largura máxima de 360 para 252 px (-30%), proporcional.
 - Número do pedido: fonte de 12 para 19,2 px (+60%).
-- Mantidos links, conteúdo, cabeçalho azul, pagamento verde e atendimento.
+- Fundo do cabeçalho atualizado para `#1c8de2`, conforme pedido adicional.
+- Mantidos links, conteúdo, pagamento verde e atendimento.
 
 Oito testes existentes de layout/MIME passaram. Prévias finais em 760 e 390 px
 conferidas no Chrome: logo 112 px, aprovação 252 px, fonte do pedido 19,2 px,

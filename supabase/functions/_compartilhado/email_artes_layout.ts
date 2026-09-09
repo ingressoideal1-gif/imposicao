@@ -56,7 +56,7 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#edf3f5;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border:1px solid #dde7eb;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#102b3f;padding:24px 28px;border-bottom:4px solid #11b3b8;">
+<tr><td style="background:#1c8de2;padding:24px 28px;border-bottom:4px solid #11b3b8;">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="120"><img src="${LOGO_EMPRESA}" width="112" alt="Ingresso Ideal" style="display:block;width:112px;height:auto;border:0;"></td><td style="color:#fff;font-family:Arial,Helvetica,sans-serif;"><strong style="font-size:23px;letter-spacing:-0.5px;">Ingresso Ideal</strong><br><span style="font-size:12px;color:#b7d9e4;">APROVAÇÃO DE ARTES</span></td></tr></table>
 </td></tr>
 <tr><td style="padding:30px 28px 8px;">
