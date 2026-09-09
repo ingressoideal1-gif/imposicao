@@ -2153,11 +2153,15 @@ function drawPedPreview() {
 
                             const colName = el.csv_column || '';
 
-                            val_str = String(state.csvData[item_index][colName] || '');
+                            val_str = el.database_text
+                                ? window.formatarTextoDoBanco(el, state.csvData[item_index][colName])
+                                : String(state.csvData[item_index][colName] || '');
 
                         } else {
 
-                            val_str = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
+                            val_str = el.database_text
+                                ? window.formatarTextoDoBanco(el, el.exemplo || `[${el.csv_column || 'coluna'}]`)
+                                : `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
 
                         }
 

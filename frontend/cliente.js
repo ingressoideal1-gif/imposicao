@@ -3158,7 +3158,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
                     const csvRow = _linhaCsv;
-                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    if (el.database_text) {
+                        label = window.formatarTextoDoBanco(el, csvRow ? csvRow[colName] : (el.exemplo || `[${colName || 'coluna'}]`));
+                    } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
                         label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
@@ -3676,7 +3678,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 // 601 exibia a linha 1 na primeira pagina.
                 const csvData = linhasDaAmostra(item, num);
                 const csvRow = csvData[pageNum - 1] || null;
-                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                if (el.database_text) {
+                    label = window.formatarTextoDoBanco(el, csvRow ? csvRow[colName] : (el.exemplo || `[${colName || 'coluna'}]`));
+                } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
                     label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;

@@ -2008,6 +2008,16 @@ class ImpositionEngine:
                 )
             col_name = el.get("csv_column", "")
             val_str = str((csv_row or {}).get(col_name, ""))
+            if t == "TEXT" and el.get("database_text"):
+                # Espelho de formatarTextoDoBanco (texto-ajuste.js), aplicado
+                # só ao novo elemento. O contrato legado continua intacto.
+                raw = (csv_row or {}).get(col_name)
+                val_str = "" if raw is None else str(raw)
+                if val_str:
+                    pad = max(0, min(10, int(el.get("pad") or 0)))
+                    if val_str.isascii() and val_str.isdigit():
+                        val_str = val_str.zfill(pad)
+                    val_str = f"{el.get('prefix') or ''}{val_str}{el.get('suffix') or ''}"
             # Um QR do banco com a celula VAZIA e' da mesma familia do caso
             # acima: o papel sai com um QR "de nada", legivel, que nao abre porta
             # nenhuma. Foi o quarto relato do 21460 — o painel mandava o banco

@@ -5800,7 +5800,9 @@ function drawElement(ctx, el, S) {
             const colName = el.csv_column || '';
             const csvData = bancoDeAmostra();
             const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
-            if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+            if (el.database_text && csvRow) {
+                label = window.formatarTextoDoBanco(el, csvRow[colName]);
+            } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                 label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
             } else {
                 label = textoDeExemploDoElemento(el);
@@ -7497,6 +7499,15 @@ document.addEventListener('DOMContentLoaded', () => {
  * Cria um elemento novo. `extras` sobrepõe os defaults do tipo — é por onde a box
  * "Adicionar Pdf e Svg" passa o arquivo, o nome e o tamanho natural do elemento.
  */
+// Mesmo elemento TEXT e painel completo do CSV; a marca preserva o contrato
+// de formatação dos elementos antigos ao salvar, duplicar e imprimir.
+window.addDatabaseTextElement = function () {
+    return addElement('TEXT', {
+        database_text: true, source: 'database', csv_column: '',
+        pad: 0, exemplo: '', name: ''
+    });
+};
+
 window.addElement = function (type, extras) {
 
     state.numElCounter++;
@@ -7669,6 +7680,8 @@ function renderElementsList() {
     container.innerHTML = elementsToRender.map(el => {
 
         const isSelected = isElSelected(el.id);
+        const labelTipo = el.type === 'TEXT' && el.database_text
+            ? '🔤 Texto — Banco de Dados' : typeLabel[el.type];
 
         if (el.type === 'PICOTE') {
 
@@ -7680,7 +7693,7 @@ function renderElementsList() {
 
                     <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
-                        <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
+                        <span class="badge ${typeBadge[el.type]}">${labelTipo}</span>
 
                         <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.95rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
@@ -7746,7 +7759,7 @@ function renderElementsList() {
 
                 <div class="form-group">
 
-                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${el.pad} dígitos = ${el.pad > 0 ? '0'.repeat(el.pad - 1) + '1' : '1'})</span></label>
+                    <label title="${el.database_text ? 'Zeros à esquerda para valores compostos apenas por dígitos. Use 0 para manter o dado.' : ''}">Zeros (pad) <span id="pad-hint-${el.id}" style="${el.database_text ? 'display:none;' : ''}font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${el.pad} dígitos = ${el.pad > 0 ? '0'.repeat(el.pad - 1) + '1' : '1'})</span></label>
 
                     <input class="form-control" type="number" value="${el.pad}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' dígitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
 
@@ -8018,7 +8031,7 @@ function renderElementsList() {
 
                 <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
-                    <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
+                    <span class="badge ${typeBadge[el.type]}">${labelTipo}</span>
 
                     <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.95rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
@@ -8327,6 +8340,7 @@ function conferirEstouroDoElemento(el) {
     const chave = [
         el.csv_column, el.max_width_mm || 0, el.overflow || 'shrink',
         el.font_size, el.font_name || '', el.prefix || '', el.suffix || '',
+        el.database_text ? el.pad : '',
         Math.round(alturaMm * 10), Math.round(S * 100)
     ].join('|');
 
@@ -8341,6 +8355,7 @@ function conferirEstouroDoElemento(el) {
         coluna: el.csv_column,
         prefixo: el.prefix || '',
         sufixo: el.suffix || '',
+        formatar: el.database_text ? valor => window.formatarTextoDoBanco(el, valor) : null,
         corpoPx: fs,
         larguraMaxPx: maxPx,
         modo: el.overflow || 'shrink',
@@ -8413,7 +8428,7 @@ function boxEspacoDoTextoHTML(el) {
                         Deixe a largura vazia para texto livre. ${AJUDA_OVERFLOW[modo]}
                         Vale igual na tela e na impressão; com o elemento selecionado, o espaço aparece tracejado no desenho.
                     </div>
-                    ${resumoEstouroHTML(el)}
+                    <div id="resumo-estouro-${el.id}">${resumoEstouroHTML(el)}</div>
                 </div>`;
 }
 
@@ -8490,6 +8505,11 @@ window.updateEl = function (id, field, value) {
 
     el[field] = value;
     saveNumHistory();
+
+    if (el.database_text) {
+        const resumo = document.getElementById(`resumo-estouro-${el.id}`);
+        if (resumo) resumo.innerHTML = resumoEstouroHTML(el);
+    }
 
     drawCanvas();
 
@@ -11183,7 +11203,9 @@ function drawPreview() {
 
                             const colName = el.csv_column || '';
 
-                            val_str = String(state.csvData[item_index][colName] || '');
+                            val_str = el.database_text
+                                ? window.formatarTextoDoBanco(el, state.csvData[item_index][colName])
+                                : String(state.csvData[item_index][colName] || '');
 
                         } else {
 
@@ -16466,6 +16488,9 @@ window.sincronizarNumeracaoDoItem = sincronizarNumeracaoDoItem;
  */
 function textoDeExemploDoElemento(el, semColchetes) {
     const exemplo = String((el && el.exemplo) || '').trim();
+    if (el && el.database_text) {
+        return window.formatarTextoDoBanco(el, exemplo || `[${el.csv_column || 'coluna'}]`);
+    }
     if (exemplo) return `${el.prefix || ''}${exemplo}${el.suffix || ''}`;
     const col = (el && el.csv_column) || 'coluna';
     return semColchetes
@@ -17543,7 +17568,8 @@ function abrirColunasDoModelo(idx, osId) {
     const selo = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', QR_IDEAL: '🎟️ QR Ideal', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
     const nomeDoElemento = (el) => {
         // O nome e o exemplo sao digitados pelo operador: escapa antes do HTML.
-        const tipo = esc(selo[el.type] || el.type || 'Elemento');
+        const tipo = esc(el.type === 'TEXT' && el.database_text
+            ? '🔤 Texto — Banco de Dados' : (selo[el.type] || el.type || 'Elemento'));
         const nome = String(el.name || '').trim();
         const exemplo = String(el.exemplo || '').trim();
         return tipo + (nome ? ' — ' + esc(nome) : '')
@@ -23867,7 +23893,9 @@ window.onAmostraNumeracaoSelect = function() {
                     const colName = el.csv_column || '';
                     const csvData = bancoDeAmostra(num);
                     const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
-                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    if (el.database_text && csvRow) {
+                        label = window.formatarTextoDoBanco(el, csvRow[colName]);
+                    } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
                         label = textoDeExemploDoElemento(el);
@@ -36113,7 +36141,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                     ? linhasDaAmostra(item, num)
                     : (num?.csv_data || item?.csv_data || []);
                 const csvRow = csvData[pageNum - 1] || null;
-                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                if (el.database_text && csvRow) {
+                    label = window.formatarTextoDoBanco(el, csvRow[colName]);
+                } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
                     label = textoDeExemploDoElemento(el);
@@ -37067,7 +37097,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
                     const csvRow = _linhaCsv;
-                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    if (el.database_text && csvRow) {
+                        label = window.formatarTextoDoBanco(el, csvRow[colName]);
+                    } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
                         label = textoDeExemploDoElemento(el);
@@ -44103,6 +44135,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt, face) {
                 label = `${el.prefix || ''}1`;
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                 label = `${el.prefix || ''}1/5`;
+            } else if (el.database_text && el.source === 'database') {
+                const linha = linhaDeAmostra(num);
+                label = linha ? window.formatarTextoDoBanco(el, linha[el.csv_column || ''])
+                    : textoDeExemploDoElemento(el);
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                 label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
