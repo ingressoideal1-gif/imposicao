@@ -67,9 +67,11 @@ def _tinta_dy(font_path):
     }
     doc = fitz.open()
     page = doc.new_page(width=400, height=300)
-    eng = object.__new__(ImpositionEngine)
-    eng._font_buffer_cache = {}
-    eng._render_element(page, el, 0, 0, 1, None)
+    eng = ImpositionEngine(None)
+    try:
+        eng._render_element(page, el, 0, 0, 1, None)
+    finally:
+        eng._fechar_fontes_temporarias()
     dpi = 600
     pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csGRAY)
     esc = dpi / 72.0

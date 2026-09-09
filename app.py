@@ -1,7 +1,7 @@
 import json
 import base64
 import shutil
-import tempfile
+import newprod_temp as temp_manager
 import os
 
 # ─── Monkeypatch Starlette MultiPartParser para permitir uploads/campos maiores (ex: PDFs em base64 grandes) ───
@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import io
 
 DIAG_LOGS = []
+_IMPOSE_TASKS = set()
 def log_diag(msg: str):
     import datetime
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1206,6 +1207,8 @@ async def impose_file(
                     "e refaca o trabalho por la."),
         )
 
+    temporarios = None
+    streaming_iniciado = False
     try:
         import csv
         import io
@@ -1375,6 +1378,7 @@ async def impose_file(
             elif numeracao and "csv_data" in numeracao and numeracao["csv_data"]:
                 csv_data = numeracao["csv_data"]
 
+        temporarios = temp_manager.TrabalhoTemporario()
         # Detectar extensão do arquivo enviado
         base_file_path = ""
         if file:
@@ -1383,7 +1387,7 @@ async def impose_file(
             if ext not in [".pdf", ".jpg", ".jpeg", ".png"]:
                 raise HTTPException(status_code=400, detail=f"Formato de arquivo não suportado: {ext}")
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_in:
+            with temporarios.arquivo(suffix=ext) as tmp_in:
                 content = await file.read()
                 tmp_in.write(content)
                 base_file_path = tmp_in.name
@@ -1415,13 +1419,13 @@ async def impose_file(
                                 doc_merged.insert_pdf(doc_verso)
                                 doc_verso.close()
                                 
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
+                                with temporarios.arquivo(suffix=".pdf") as tmp_in:
                                     doc_merged.save(tmp_in.name)
                                     base_file_path = tmp_in.name
                                 doc_merged.close()
                                 print(f"[impose] Mesclados Frente e Verso da cor {cor_obj.get('name')} para imposicao duplex")
                             else:
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
+                                with temporarios.arquivo(suffix=".pdf") as tmp_in:
                                     tmp_in.write(frente_bytes)
                                     base_file_path = tmp_in.name
                                 print(f"[impose] Carregada apenas Frente da cor {cor_obj.get('name')} para imposicao simplex")
@@ -1438,7 +1442,7 @@ async def impose_file(
             ext_v = os.path.splitext(file_verso.filename)[1].lower() or ".pdf"
             if ext_v not in [".pdf", ".jpg", ".jpeg", ".png"]:
                 raise HTTPException(status_code=400, detail=f"Formato de verso não suportado: {ext_v}")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext_v) as tmp_v:
+            with temporarios.arquivo(suffix=ext_v) as tmp_v:
                 tmp_v.write(await file_verso.read())
                 base_file_verso_path = tmp_v.name
 
@@ -1448,11 +1452,11 @@ async def impose_file(
             if not clean_name.lower().endswith(".pdf"):
                 clean_name += ".pdf"
             clean_name = clean_name.replace(" ", "_")
-            out_pdf_path = os.path.join(tempfile.gettempdir(), clean_name)
+            out_pdf_path = temporarios.caminho(clean_name)
         elif base_file_path:
             out_pdf_path = base_file_path.rsplit(".", 1)[0] + "_imposed.pdf"
         else:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
+            with temporarios.arquivo(suffix=".pdf") as tmp_out:
                 out_pdf_path = tmp_out.name
 
         multi_artes_list = data.get("multi_artes", [])
@@ -1482,7 +1486,7 @@ async def impose_file(
                 file_idx += 1
                 if ma_file and hasattr(ma_file, "filename"):
                     ext = os.path.splitext(ma_file.filename)[1] if ma_file.filename else ".pdf"
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_in:
+                    with temporarios.arquivo(suffix=ext) as tmp_in:
                         await ma_file.seek(0)
                         content = await ma_file.read()
                         if not content:
@@ -1570,6 +1574,7 @@ async def impose_file(
         if wants_stream:
             import asyncio
             import threading
+            from starlette.background import BackgroundTask
             loop = asyncio.get_running_loop()
             queue = asyncio.Queue()
 
@@ -1601,6 +1606,8 @@ async def impose_file(
 
             def on_file_gen(file_info):
                 import base64
+                if cliente_saiu.is_set():
+                    return
                 path = file_info["path"]
                 name = file_info["name"]
                 ftype = file_info["type"]
@@ -1618,6 +1625,8 @@ async def impose_file(
                     with open(path, "rb") as f_pdf:
                         b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
                     esperar_vaga()
+                    if cliente_saiu.is_set():
+                        return
                     loop.call_soon_threadsafe(queue.put_nowait, {
                         "type": "file",
                         "name": name,
@@ -1633,10 +1642,18 @@ async def impose_file(
             engine = ImpositionEngine(config, on_file_generated=on_file_gen)
             print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
 
+            def processar_e_limpar():
+                # A thread e dona dos arquivos ate o motor terminar, mesmo se
+                # a resposta for cancelada. Os lotes na fila ja sao bytes.
+                try:
+                    engine.process()
+                    _publicar_faixa_qr_ideal(config, data)
+                finally:
+                    temporarios.close()
+
             async def run_engine_task():
                 try:
-                    await asyncio.to_thread(engine.process)
-                    _publicar_faixa_qr_ideal(config, data)
+                    await asyncio.to_thread(processar_e_limpar)
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
@@ -1645,24 +1662,10 @@ async def impose_file(
                     await asyncio.sleep(0.5)
                     await queue.put("DONE")
 
-            asyncio.create_task(run_engine_task())
-
-            def cleanup_temp_files():
-                try:
-                    if base_file_path and os.path.exists(base_file_path):
-                        os.remove(base_file_path)
-                    if base_file_verso_path and os.path.exists(base_file_verso_path):
-                        os.remove(base_file_verso_path)
-                    for temp_path in ma_files_map.values():
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
-                    for gf in getattr(engine, "generated_files", []):
-                        if os.path.exists(gf["path"]):
-                            os.remove(gf["path"])
-                    if os.path.exists(out_pdf_path):
-                        os.remove(out_pdf_path)
-                except Exception as ex:
-                    print(f"[impose stream cleanup] Erro: {ex}")
+            tarefa = asyncio.create_task(run_engine_task())
+            _IMPOSE_TASKS.add(tarefa)
+            tarefa.add_done_callback(_IMPOSE_TASKS.discard)
+            streaming_iniciado = True
 
             async def event_generator():
                 try:
@@ -1682,14 +1685,12 @@ async def impose_file(
                         vagas.release()
                 finally:
                     cliente_saiu.set()
-                    if background_tasks:
-                        background_tasks.add_task(cleanup_temp_files)
-                    else:
-                        cleanup_temp_files()
 
             return StreamingResponse(
                 event_generator(),
-                media_type="text/event-stream"
+                media_type="text/event-stream",
+                # Tambem libera o motor se a conexao cair antes do primeiro yield.
+                background=BackgroundTask(cliente_saiu.set),
             )
 
         # Fluxo síncrono original (fallback)
@@ -1709,18 +1710,6 @@ async def impose_file(
                     with open(gf["path"], "rb") as f_pdf:
                         b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
                         multi_files.append({"name": gf["name"], "data": b64_data})
-                    if background_tasks:
-                        background_tasks.add_task(os.remove, gf["path"])
-            
-            if background_tasks:
-                if base_file_path and os.path.exists(base_file_path):
-                    background_tasks.add_task(os.remove, base_file_path)
-                if base_file_verso_path and os.path.exists(base_file_verso_path):
-                    background_tasks.add_task(os.remove, base_file_verso_path)
-                for temp_path in ma_files_map.values():
-                    if os.path.exists(temp_path):
-                        background_tasks.add_task(os.remove, temp_path)
-                        
             return {"type": "multi_file", "files": multi_files}
 
         # Lógica original (arquivo único)
@@ -1730,17 +1719,6 @@ async def impose_file(
 
         with open(out_pdf_to_read, "rb") as f_pdf:
             pdf_bytes = f_pdf.read()
-
-        if background_tasks:
-            if base_file_path and os.path.exists(base_file_path):
-                background_tasks.add_task(os.remove, base_file_path)
-            if base_file_verso_path and os.path.exists(base_file_verso_path):
-                background_tasks.add_task(os.remove, base_file_verso_path)
-            for temp_path in ma_files_map.values():
-                if os.path.exists(temp_path):
-                    background_tasks.add_task(os.remove, temp_path)
-            if os.path.exists(out_pdf_to_read):
-                background_tasks.add_task(os.remove, out_pdf_to_read)
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
@@ -1757,6 +1735,9 @@ async def impose_file(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if temporarios is not None and not streaming_iniciado:
+            temporarios.close()
 
 
 # ─── SERVIÇO DE IMPRESSÃO ──────────────────────────────────────────────────────
@@ -1846,11 +1827,10 @@ async def submit_print_job(
     printer_name: str = Form(...),
     options: str = Form(...) # JSON string
 ):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        pdf_path = tmp.name
-
-    try:
+    with temp_manager.TrabalhoTemporario() as temporarios:
+        with temporarios.arquivo(suffix=".pdf") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            pdf_path = tmp.name
         selected_options = json.loads(options)
         success, msg = print_service.send_print_job_windows(
             printer_name=printer_name,
@@ -1864,9 +1844,6 @@ async def submit_print_job(
         if not success:
             raise HTTPException(status_code=500, detail=msg)
         return {"status": "success", "message": msg}
-    finally:
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
 
 
 # ─── ORDENS DE SERVIÇO ────────────────────────────────────────────────────────

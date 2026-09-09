@@ -18,6 +18,7 @@ gera aviso e imprime sem gerenciamento; nunca bloqueia a producao.
 import json
 import os
 import tempfile
+import newprod_temp as temp_manager
 
 import fitz  # PyMuPDF
 from PIL import ImageCms
@@ -262,12 +263,18 @@ def pdf_com_output_intent(pdf_path: str, cfg: dict) -> str:
     """
     with open(cfg["path"], "rb") as f:
         icc = f.read()
-    doc = fitz.open(pdf_path)
-    embutir_output_intent(doc, icc, cfg["nome"], cfg["classe"])
-    fd, tmp = tempfile.mkstemp(suffix=".pdf")
-    os.close(fd)
-    doc.save(tmp, garbage=4, deflate=True)
-    doc.close()
+    with fitz.open(pdf_path) as doc:
+        embutir_output_intent(doc, icc, cfg["nome"], cfg["classe"])
+        fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=temp_manager.pasta_do_trabalho(pdf_path))
+        os.close(fd)
+        try:
+            doc.save(tmp, garbage=4, deflate=True)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
     return tmp
 
 

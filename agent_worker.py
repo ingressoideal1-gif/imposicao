@@ -8,6 +8,7 @@ import sys
 import uuid
 import shutil
 import tempfile
+import newprod_temp as temp_manager
 import threading
 import urllib.request
 import urllib.error
@@ -208,6 +209,7 @@ def sync_heartbeat():
             "painel": painel,
             "acesso_base": _acesso_base(),
             "fontes": diagnostico_fontes(),
+            "armazenamento": temp_manager.diagnostico(),
             "impressao": diagnostico_impressao(),
             "ultimo_update": ultimo_update()
         }
@@ -384,36 +386,31 @@ def process_queue():
 
             print(f"[agent_worker] Processando Job {job_id} para {printer_name}...", flush=True)
             
-            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            temp_pdf.close()
+            with temp_manager.TrabalhoTemporario() as temporarios:
+                temp_pdf = temporarios.arquivo(suffix=".pdf")
+                temp_pdf.close()
             
-            if not download_file(file_url, temp_pdf.name):
-                _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
-                continue
+                if not download_file(file_url, temp_pdf.name):
+                    _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
+                    continue
 
-            # Hot folder: o trabalho vai para uma pasta observada pelo RIP, e nao
-            # para a fila do Windows. O caminho viaja dentro do ppd_options, que
-            # ja e uma coluna JSON — nao ha coluna nova no Supabase por causa
-            # disso. Sem caminho ali, nada muda: o fluxo segue pelo spooler.
-            pasta = (ppd_options or {}).get("hot_folder_path") if isinstance(ppd_options, dict) else None
-            if pasta:
-                success, msg = _soltar_no_hot_folder(
-                    pasta, titulo_do_job(file_url, job_id), temp_pdf.name)
-            else:
-                # Chamar diretamente a impressão via Windows GDI com as opções enviadas
-                success, msg = print_service.send_print_job_windows(
-                    printer_name=printer_name,
-                    pdf_path=temp_pdf.name,
-                    options=ppd_options,
-                    job_title=titulo_do_job(file_url, job_id)
-                )
+                # Hot folder: o trabalho vai para uma pasta observada pelo RIP, e nao
+                # para a fila do Windows. O caminho viaja dentro do ppd_options, que
+                # ja e uma coluna JSON — nao ha coluna nova no Supabase por causa
+                # disso. Sem caminho ali, nada muda: o fluxo segue pelo spooler.
+                pasta = (ppd_options or {}).get("hot_folder_path") if isinstance(ppd_options, dict) else None
+                if pasta:
+                    success, msg = _soltar_no_hot_folder(
+                        pasta, titulo_do_job(file_url, job_id), temp_pdf.name)
+                else:
+                    # Chamar diretamente a impressão via Windows GDI com as opções enviadas
+                    success, msg = print_service.send_print_job_windows(
+                        printer_name=printer_name,
+                        pdf_path=temp_pdf.name,
+                        options=ppd_options,
+                        job_title=titulo_do_job(file_url, job_id)
+                    )
 
-            try:
-                if os.path.exists(temp_pdf.name):
-                    os.remove(temp_pdf.name)
-            except:
-                pass
-                
             final_status = "completed" if success else "error"
             _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": final_status})
             print(f"[agent_worker] Job {job_id} {final_status}: {msg}", flush=True)
@@ -1058,6 +1055,7 @@ def run_loop():
         _loop_ativo = True
 
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
+    temp_manager.iniciar_manutencao()
     heartbeat_timer = 0
     update_timer = 60   # primeira checagem 1 min apos subir
     catalogo_timer = 10  # a LISTA antes dos binarios: e ela que diz o que baixar

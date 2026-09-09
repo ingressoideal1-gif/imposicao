@@ -175,6 +175,32 @@ def _versoes(linha: dict):
     )
 
 
+def resumo_armazenamento(linha):
+    """Le apenas o diagnostico agregado que viaja no heartbeat existente."""
+    pj = linha.get("printers_json") or {}
+    if isinstance(pj, str):
+        try:
+            pj = json.loads(pj)
+        except (ValueError, TypeError):
+            pj = {}
+    d = pj.get("armazenamento") if isinstance(pj, dict) else None
+    if not isinstance(d, dict) or d.get("estado") != "coletado":
+        return "armazenamento: " + (str(d.get("estado")) if isinstance(d, dict) else "ainda nao informado")
+    try:
+        quando = datetime.datetime.fromtimestamp(d["coletado_em"], datetime.timezone.utc)
+        def tamanho(area):
+            a = d.get(area) or {}
+            parcial = ">=" if a.get("parcial") or a.get("links_ignorados") else ""
+            return f"{parcial}{a.get('bytes', 0) / 1024**3:.2f} GiB"
+        alerta = " [POUCO ESPACO]" if d.get("disco_temp_critico") else ""
+        return (f"armazenamento: livre {d['disco_temp_livre_bytes'] / 1024**3:.2f} GiB; "
+                f"TEMP {tamanho('temp_usuario')}; NewProd {tamanho('gerenciados')}; "
+                f"fontes {tamanho('cache_fontes')}; fotos {tamanho('cache_fotos')}; "
+                f"coleta {quando:%Y-%m-%d %H:%M UTC}{alerta}")
+    except (KeyError, TypeError, ValueError, OSError, OverflowError):
+        return "armazenamento: diagnostico incompleto"
+
+
 def main():
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     import db
@@ -216,6 +242,8 @@ def main():
         # que se quer dizer aqui e "esta estacao nao informa".
         print(f"     {nome[:22]:<22} {(versao or '--'):>8}  painel {(painel or '--'):>5}  "
               f"{quanto:>7}{marca}")
+
+        print("       " + resumo_armazenamento(l))
 
         if sumida:
             continue
