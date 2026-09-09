@@ -30,7 +30,9 @@ Deno.test("email: todos os perfis com leitura enviam sem permissão administrati
     const c = contexto();
     const r = await operarEmailArtes("enviar", entrada, { ...quem, permissoes: { ...quem.permissoes, role } }, c.deps);
     assert.equal(r.ok, true); assert.equal(c.enviadas.length, 1);
-    assert.equal(c.enviadas[0].text, entrada.body_text);
+    assert.ok(c.enviadas[0].text.startsWith(entrada.body_text));
+    assert.ok(c.enviadas[0].html?.includes(`href="${url}"`));
+    assert.match(c.enviadas[0].text, /phone=555195343478/);
     assert.equal(c.consultas[0], "pedidos_links_cliente?os_id=eq.vibe_11&ativo=eq.true&select=os_id,numero_pedido,token&limit=2");
   }
 });
@@ -104,7 +106,8 @@ Deno.test("email: OS local e links legados são enviados com o domínio público
     const c = contexto([{ ...link, os_id }]);
     const link_url = origem + "/cliente/11-abc123";
     await operarEmailArtes("enviar", { ...entrada, os_id, link_url, body_text: link_url }, quem, c.deps);
-    assert.equal(c.enviadas[0].text, url);
+    assert.ok(c.enviadas[0].text.startsWith(url));
+    assert.ok(c.enviadas[0].html?.includes(`href="${url}"`));
   }
 });
 Deno.test("email: falhas de banco e SMTP não expõem detalhes nem produzem sucesso", async () => {

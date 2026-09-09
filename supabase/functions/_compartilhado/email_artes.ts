@@ -1,6 +1,7 @@
 /** E-mail de aprovação: identidade do painel, configuração somente na nuvem. */
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
+import { layoutEmailArte } from "./email_artes_layout.ts";
 import { enviarSmtpArtes, type ConfigSmtpArtes, type MensagemArte } from "./smtp_artes.ts";
 
 type Quem = { id: string; email: string; permissoes: Record<string, unknown> | null };
@@ -81,6 +82,7 @@ export async function operarEmailArtes(
     // O destinatário do teste vem da sessão verificada, nunca do navegador.
     mensagem = { to: email(quem.email), subject: "Teste de e-mail — Ideal Imposition",
       text: "O envio de e-mails do painel está funcionando pela nuvem. Confira também a pasta de spam." };
+    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal));
   } else {
     const id = corpo.os_id;
     if (typeof id !== "string" || !/^(vibe_[1-9][0-9]{0,14}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$/.test(id)) {
@@ -109,6 +111,7 @@ export async function operarEmailArtes(
     }
     // Links montados na estação também saem com o domínio público configurado.
     mensagem = { to, subject, text: body.replaceAll(corpo.link_url, estado.portal + caminho) };
+    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido)));
   }
   const referencia = crypto.randomUUID();
   try {
