@@ -2,6 +2,7 @@
 const WHATSAPP = "555195343478"; // Mesmo atendimento de frontend/cliente-entrega.js.
 const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785672791278_logo_ideal_2026.jpg";
 const LOGO_WHATSAPP = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png";
+const IMAGEM_APROVACAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788965455974_Email.png";
 const escapar = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 function linhaHtml(linha: string): string {
@@ -63,7 +64,7 @@ ${numero ? `<p style="margin:0 0 12px;font-size:12px;font-weight:bold;letter-spa
 <h1 style="margin:0 0 20px;font-size:28px;line-height:1.2;color:#102b3f;">${escapar(titulo)}</h1>
 ${intro}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:6px 0 24px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#087f8c" style="border-radius:8px;mso-padding-alt:16px 24px;"><a href="${escapar(destino)}" style="display:inline-block;padding:16px 24px;font-size:16px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;border:1px solid #087f8c;border-radius:8px;">${escapar(acao)} &rarr;</a></td></tr></table>
+${link ? `<a href="${escapar(destino)}" style="display:block;max-width:360px;color:#087f8c;text-decoration:none;"><img src="${IMAGEM_APROVACAO}" width="360" alt="Clique aqui para liberar seu pedido — Abrir aprovação interativa" style="display:block;width:100%;max-width:360px;height:auto;border:0;"></a>` : `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#087f8c" style="border-radius:8px;mso-padding-alt:16px 24px;"><a href="${escapar(destino)}" style="display:inline-block;padding:16px 24px;font-size:16px;font-weight:bold;line-height:22px;color:#fff;text-decoration:none;border:1px solid #087f8c;border-radius:8px;">${escapar(acao)} &rarr;</a></td></tr></table>`}
 ${link ? '<p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Confira o visual final, aprove ou solicite ajustes. Tudo no mesmo link.</p>' : ""}
 </td></tr></table>
 ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="padding:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;"><h2 style="margin:0 0 14px;color:#102b3f;font-size:18px;">Resumo do Orçamento</h2><div style="color:#334155;font-size:14px;line-height:1.75;overflow-wrap:anywhere;">${resumoHtml}</div></td></tr></table>` : ""}
