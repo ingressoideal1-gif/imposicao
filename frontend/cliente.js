@@ -472,9 +472,11 @@ function renderAmostrasOSItens(osId) {
         // modelo, e a visualização passa a ser desenhada aqui, no navegador
         // dele (canvas), em vez de ser a imagem aprovada (<img>). Uma imagem
         // por linha seria inviável — 3.000 linhas dariam centenas de MB.
-        const numDoModelo = resolvedNumId
+        const numBrutaDoModelo = resolvedNumId
             ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId))
             : null;
+        const numDoModelo = resolverBancoDoCliente(item, numBrutaDoModelo);
+        const problemaBanco = problemaDoBancoCliente(item, numDoModelo);
         // Só troca a imagem aprovada pelo desenho ao vivo quando o desenho tem
         // com o que trabalhar. Sem `arte_url` o canvas sairia com a cor e a
         // numeração e SEM a arte — pior do que não paginar. Modo PDF fica de
@@ -588,6 +590,7 @@ function renderAmostrasOSItens(osId) {
                     <button class="btn" style="${status === 'APROVADA'
                         ? 'background-color: #22c55e; border: 1px solid #22c55e; color: #04240f;'
                         : 'background-color: rgba(255,255,255,0.05); border: 1px solid rgba(148,163,184,0.30); color: var(--text);'}"
+                        data-aprovar-banco="${escapeHtml(String(item.id))}" ${problemaBanco ? 'disabled' : ''}
                         onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
                         ${icone('check', 17)}${status === 'APROVADA' ? 'Aprovado' : 'Aprovar'}
                     </button>
@@ -631,6 +634,7 @@ function renderAmostrasOSItens(osId) {
                 <div class="amostra-preview-container amostra-modelo-janela" style="position: relative; margin-top: 0;">
                     ${cabecalhoModeloCliente(item, idx, chip, selectedCor)}
                     <div class="amostra-modelo-arte">${blocoDeArteDoCliente(item, idx, ctxDaArte)}</div>
+                    <div data-aviso-banco="${escapeHtml(String(item.id))}" role="status" style="padding: 8px; ${problemaBanco ? '' : 'display:none;'}">${htmlAvisoBancoCliente(problemaBanco)}</div>
                 </div>
                 ${decisao}
                 ${caixaAlteracao}
@@ -1243,6 +1247,10 @@ async function initClientePage(numero, token) {
         // no cabeçalho desta página; o `<p>` ficava vazio, e ninguém percebeu
         // porque campo vazio não parece defeito, parece pedido sem nome.
         const portal = await carregarPortal(numero, token);
+        // Só esta chamada conhece bancos separados e seus mapas por modelo.
+        // Erro fica explícito no cartão; nunca vira fallback silencioso ao catálogo.
+        await window.PortalBancos.carregar(numero, token, carregarBancosDoPortal);
+        bancoDesenhosCliente.clear();
         const osCliente = (portal && portal.pedido && portal.pedido.cliente) || '';
         clienteState.idCliente = (portal && portal.pedido && portal.pedido.id_cliente) || null;
 
@@ -1535,6 +1543,10 @@ async function initClientePage(numero, token) {
 async function clienteFinalizarFluxo(fluxoTipo) {
     const osId = clienteState.osId;
     const itens = state.osItens[osId] || [];
+    if (fluxoTipo === 'APROVAR_TUDO' && itens.some(item => problemaDoBancoCliente(item, numDoItem(item)))) {
+        toast('Aguarde a composição dos dados de todas as artes antes de aprovar.', 'warning');
+        return;
+    }
     const btnAprovar = document.getElementById('btn-cliente-aprovar-tudo');
 
     if (btnAprovar) {
@@ -2129,6 +2141,11 @@ async function seguirSozinhoSeAprovouTudo(osId) {
 }
 
 async function decisionAmostraItem(itemId, osId, status) {
+    const itemBanco = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+    if (status === 'APROVADA' && problemaDoBancoCliente(itemBanco, numDoItem(itemBanco))) {
+        toast('Confira o aviso de carregamento da arte antes de aprovar.', 'warning');
+        return;
+    }
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = obsEl ? obsEl.value : '';
 
@@ -2617,11 +2634,128 @@ function temCsvVariavel(num) {
         && (num.elements || []).some(el => el && el.source === 'database'));
 }
 
+// Estado de renderização só desta abertura. Nenhum destes dados é persistido.
+const bancoDesenhosCliente = new Map();
+
+function resolverBancoDoCliente(item, num) {
+    return window.PortalBancos ? window.PortalBancos.resolver(item, num) : num;
+}
+
+function problemaDoBancoCliente(item, num) {
+    if (!window.PortalBancos || !window.PortalBancos.ativo()) return '';
+    const problema = window.PortalBancos.problema(item, num);
+    if (problema) return problema;
+    if (!temCsvVariavel(num)) return '';
+    if (!item.arte_url || (item.verso && !item.verso_arte_url)) return 'Falta a arte original para conferir as linhas do banco.';
+    if (!linhasDaAmostra(item, num).length) return 'Este modelo não tem linhas ativas selecionadas para conferir.';
+    const desenho = bancoDesenhosCliente.get(String(item.id));
+    if (desenho && desenho.erro) return desenho.erro;
+    return desenho && desenho.pronto ? '' : 'Preparando a arte desta página…';
+}
+
+function htmlAvisoBancoCliente(mensagem) {
+    if (!mensagem) return '';
+    return `<span>${escapeHtml(mensagem)}</span> <button type="button" class="btn btn-sm btn-secondary" onclick="recarregarBancoCliente()">Tentar novamente</button>`;
+}
+
+function atualizarAvisoBancoCliente(item, num) {
+    const mensagem = problemaDoBancoCliente(item, num);
+    document.querySelectorAll('[data-aviso-banco]').forEach(el => {
+        if (el.dataset.avisoBanco !== String(item.id)) return;
+        el.style.display = mensagem ? 'block' : 'none';
+        el.innerHTML = htmlAvisoBancoCliente(mensagem);
+    });
+    document.querySelectorAll('[data-aprovar-banco]').forEach(el => {
+        if (el.dataset.aprovarBanco === String(item.id)) el.disabled = !!mensagem;
+    });
+}
+
+async function recarregarBancoCliente() {
+    const osId = clienteState.osId;
+    if (typeof window.repetirFotosQueFalharam === 'function') {
+        const urls = [];
+        for (const item of (state.osItens[osId] || [])) {
+            const num = numDoItem(item);
+            for (const linha of linhasDaAmostra(item, num)) {
+                for (const el of ((num && num.elements) || []).filter(el => el && el.type === 'FOTO')) {
+                    const meta = window.fotoDaLinha(el, linha);
+                    if (meta && meta.url) urls.push(meta.url);
+                }
+            }
+        }
+        window.repetirFotosQueFalharam(urls);
+    }
+    const carga = window.PortalBancos.carregar(clienteState.numero, clienteState.token, carregarBancosDoPortal);
+    bancoDesenhosCliente.clear();
+    renderAmostrasOSItens(osId);
+    await carga;
+    if (clienteState.osId !== osId) return;
+    renderAmostrasOSItens(osId);
+}
+
+async function desenharBancoDoCliente(idx, osId, item, num, cor, container) {
+    const chave = String(item.id);
+    const pedidoGeracao = window.PortalBancos.geracao();
+    const desenho = { pronto: false, erro: '' };
+    bancoDesenhosCliente.set(chave, desenho);
+    const valido = () => bancoDesenhosCliente.get(chave) === desenho
+        && window.PortalBancos.geracao() === pedidoGeracao
+        && clienteState.osId === osId && container.isConnected;
+    const linhas = linhasDaAmostra(item, num);
+    const pagina = paginaDaAmostra(item, linhas.length);
+    const copia = { ...item, _paginaBancoCliente: pagina, _conferenciaBanco: true };
+    atualizarAvisoBancoCliente(item, num);
+    try {
+        if (!linhas.length) throw new Error('Este modelo não tem linhas ativas selecionadas para conferir.');
+        if (!item.arte_url || (item.verso && !item.verso_arte_url)) throw new Error('Falta a arte original para conferir as linhas do banco.');
+        const fmtId = (cor && cor.formato_id) || num.formato_id;
+        const fmt = (state.formatos || []).find(f => String(f.id) === String(fmtId));
+        if (!fmt || !fmt.width_mm || !fmt.height_mm) throw new Error('O formato desta arte não foi carregado.');
+        await precarregarArtesDosElementos(num.elements, [linhas[pagina]]);
+        if (!valido()) return;
+        if ((num.elements || []).some(el => el && el._preloadFalhou)) throw new Error('Um elemento da arte não carregou. Tente novamente.');
+        for (const el of (num.elements || []).filter(el => el && el.type === 'FOTO')) {
+            const meta = typeof window.fotoDaLinha === 'function' ? window.fotoDaLinha(el, linhas[pagina]) : null;
+            if (!meta || !meta.url || !window.fotoImagem(meta.url)) {
+                throw new Error('A foto desta página não está disponível. Confira com a gráfica.');
+            }
+        }
+        const faces = item.verso ? ['front', 'back'] : ['front'];
+        const prontos = [];
+        for (const face of faces) {
+            const sufixo = face === 'back' ? '-verso' : '';
+            const destino = container.querySelector(`#amostra-item-canvas${sufixo}-${idx}`);
+            if (!destino) throw new Error('A área de conferência da arte não foi carregada.');
+            const canvas = document.createElement('canvas');
+            await drawAmostraFace(copia, face, canvas, null, fmt, cor, num, idx, osId, 150 / 25.4);
+            if (!valido()) return;
+            prontos.push({ canvas, destino, sufixo });
+        }
+        // Publicar as duas faces juntas, somente se ainda forem a página pedida.
+        for (const { canvas, destino, sufixo } of prontos) {
+            destino.width = canvas.width;
+            destino.height = canvas.height;
+            destino.getContext('2d').drawImage(canvas, 0, 0);
+            destino.style.display = 'block';
+            const empty = container.querySelector(`#amostra-item-empty${sufixo}-${idx}`);
+            if (empty) empty.style.display = 'none';
+        }
+        desenho.pronto = true;
+        atualizarNavCsvDaAmostra(idx, copia, num, container);
+    } catch (e) {
+        if (!valido()) return;
+        desenho.erro = e.message || 'Não foi possível compor esta página. Tente novamente.';
+    } finally {
+        if (valido()) atualizarAvisoBancoCliente(item, num);
+    }
+}
+
 /** A numeracao de um item, buscada no catalogo ja carregado. */
 function numDoItem(item) {
     const nid = numeracaoIdDoItem(item);
     if (!nid) return null;
-    return (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+    return resolverBancoDoCliente(item, num);
 }
 
 /** As linhas que a visualizacao deste modelo pode mostrar. */
@@ -2635,7 +2769,8 @@ function linhasDaAmostra(item, num) {
 function paginaDaAmostra(item, total) {
     if (!total) return 0;
     if (!state.amostraCsvPaginas) state.amostraCsvPaginas = {};
-    const p = parseInt(state.amostraCsvPaginas[item ? item.id : '']) || 0;
+    const p = item && Number.isInteger(item._paginaBancoCliente) ? item._paginaBancoCliente
+        : (parseInt(state.amostraCsvPaginas[item ? item.id : '']) || 0);
     return Math.max(0, Math.min(total - 1, p));
 }
 
@@ -2928,6 +3063,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             corRendered = true;
         } catch (e) {
             console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar cor PDF:`, e);
+            if (item._conferenciaBanco) throw new Error('A cor de fundo desta arte não carregou.');
         }
     }
     if (_desatualizado()) return;
@@ -3058,6 +3194,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             }
         } catch (e) {
             console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar arte:`, e);
+            if (item._conferenciaBanco) throw new Error('A arte original desta página não carregou.');
         }
     }
 
@@ -3398,7 +3535,17 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     // Obter cor, formato e numeração
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    const num = resolverBancoDoCliente(item, numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null);
+
+    if (window.PortalBancos && window.PortalBancos.ativo()) {
+        if (window.PortalBancos.problema(item, num)) {
+            atualizarAvisoBancoCliente(item, num);
+            return;
+        }
+        if (!item.modo_pdf && temCsvVariavel(num)) {
+            return desenharBancoDoCliente(idx, osId, item, num, cor, container);
+        }
+    }
 
     if (num) {
         preloadAmostraItemPdfElements(num, idx, osId, item);
@@ -3536,28 +3683,25 @@ async function initPdfViewer(idx, pdfUrl, osId) {
 const pdfRenderQueue = {};
 
 function renderPdfViewerPage(idx, pageNum) {
+    const viewer = pdfViewerState[idx];
+    const solicitacao = viewer ? (viewer._solicitacaoBanco = (viewer._solicitacaoBanco || 0) + 1) : 0;
     const anterior = pdfRenderQueue[idx] || Promise.resolve();
     const proxima = anterior
         .catch(() => { /* uma falha anterior não pode travar a fila */ })
-        .then(() => desenharPaginaDoPdf(idx, pageNum));
+        .then(() => {
+            if (viewer !== pdfViewerState[idx] || (viewer && viewer._solicitacaoBanco !== solicitacao)) return;
+            return desenharPaginaDoPdf(idx, pageNum, solicitacao);
+        });
     pdfRenderQueue[idx] = proxima;
     return proxima;
 }
 
-async function desenharPaginaDoPdf(idx, pageNum) {
+async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
     const vs = pdfViewerState[idx];
     if (!vs || !vs.pdf) return;
+    let itemBanco = null, numBanco = null, estadoBanco = null;
+    const atual = () => pdfViewerState[idx] === vs && (solicitacao === undefined || vs._solicitacaoBanco === solicitacao);
     try {
-        const page = await vs.pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.0 });
-        const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
-        if (!canvas) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: ctx, viewport }).promise;
-
         // Estampar numeração sobre a página do PDF (igual ao painel interno)
         const osId = vs.osId || clienteState.osId;
         const items = (osId && state.osItens && state.osItens[osId]) ? state.osItens[osId] : [];
@@ -3572,6 +3716,30 @@ async function desenharPaginaDoPdf(idx, pageNum) {
                 String(n.tipo).trim().toLowerCase() === numIdStr
             );
         }
+        num = resolverBancoDoCliente(item, num);
+        if (window.PortalBancos && window.PortalBancos.ativo()) {
+            itemBanco = item; numBanco = num;
+            const erroBanco = window.PortalBancos.problema(item, num);
+            if (erroBanco) throw new Error(erroBanco);
+            if (temCsvVariavel(num)) {
+                estadoBanco = { pronto: false, erro: '' };
+                bancoDesenhosCliente.set(String(item.id), estadoBanco);
+                atualizarAvisoBancoCliente(item, num);
+                if (linhasDaAmostra(item, num).length !== vs.totalPages) {
+                    throw new Error('O total de páginas do PDF não corresponde às linhas deste modelo. Confira com a gráfica.');
+                }
+            }
+        }
+        const page = await vs.pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const destino = document.getElementById(`amostra-pdf-canvas-${idx}`);
+        if (!destino || !atual()) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (!atual()) return;
         if (num && num.elements && num.elements.length > 0) {
             // A arte dos elementos SVG/PDF e aguardada antes de desenhar: esta funcao
             // e async, entao sai certo de primeira. A foto vai junto, e e a foto
@@ -3581,14 +3749,28 @@ async function desenharPaginaDoPdf(idx, pageNum) {
                 ? linhasDaAmostra(item, num)
                 : (num.csv_data || item.csv_data || []);
             await precarregarArtesDosElementos(num.elements, [_linhasPg[pageNum - 1]].filter(Boolean));
+            if (!atual()) return;
+            if (estadoBanco && num.elements.some(el => el && el._preloadFalhou)) {
+                throw new Error('Um elemento da arte não carregou. Tente novamente.');
+            }
+            if (estadoBanco) {
+                for (const el of num.elements.filter(el => el && el.type === 'FOTO')) {
+                    const meta = window.fotoDaLinha(el, _linhasPg[pageNum - 1]);
+                    if (!meta || !meta.url || !window.fotoImagem(meta.url)) throw new Error('A foto desta página não está disponível.');
+                }
+            }
             // Pelo mesmo motivo da face montada em canvas: a fonte tem de estar
             // na máquina antes do traço, senão a página do PDF sai carimbada
             // com uma genérica e assim fica.
             await garantirFontesCarregadas(fontesDosElementos(num.elements));
+            if (!atual()) return;
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 
-        canvas.style.display = 'block';
+        if (!atual()) return;
+        destino.width = canvas.width; destino.height = canvas.height;
+        destino.getContext('2d').drawImage(canvas, 0, 0);
+        destino.style.display = 'block';
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';
         const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
@@ -3598,8 +3780,15 @@ async function desenharPaginaDoPdf(idx, pageNum) {
         const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
         if (emptyPdf) emptyPdf.style.display = 'none';
         vs.currentPage = pageNum;
+        if (estadoBanco) estadoBanco.pronto = true;
     } catch (err) {
         console.error('[PDF Viewer Cliente] Erro página:', err);
+        if (itemBanco && atual()) {
+            bancoDesenhosCliente.set(String(itemBanco.id), { pronto: false,
+                erro: estadoBanco ? 'Não foi possível compor esta página do PDF. Confira o arquivo e as linhas do banco com a gráfica.' : 'Não foi possível carregar os dados desta arte. Tente novamente.' });
+        }
+    } finally {
+        if (itemBanco && atual()) atualizarAvisoBancoCliente(itemBanco, numBanco);
     }
 }
 

@@ -454,6 +454,14 @@
         return url ? registro(url).espera : Promise.resolve(null);
     }
 
+    /** Nova tentativa explícita: só remove falhas das URLs informadas. */
+    function repetirFotosQueFalharam(urls) {
+        (urls || []).forEach(function (url) {
+            var reg = cache.get(url);
+            if (reg && reg.falhou) cache.delete(url);
+        });
+    }
+
     /**
      * Carrega de uma vez todas as fotos que aqueles elementos vão precisar.
      *
@@ -646,6 +654,7 @@
         fotoImagem: fotoImagem,
         dimensoesDaFoto: dimensoesDaFoto,
         carregarFoto: carregarFoto,
+        repetirFotosQueFalharam: repetirFotosQueFalharam,
         precarregarFotosDosElementos: precarregarFotosDosElementos,
         fotosPendentes: fotosPendentes,
         desenharElementoFoto: desenharElementoFoto
