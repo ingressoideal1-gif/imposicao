@@ -164,6 +164,8 @@ const state = {
 
 // - Variáveis globais de usuários -
 let usuariosSupabase = [];
+// Identidade completa, inclusive administradores fora dos setores de atendimento/design.
+let usuariosObjetosSupabase = [];
 let designersSupabase = [];
 let atendentesSupabase = [];
 let designersObjetosSupabase = [];
@@ -27204,6 +27206,7 @@ async function loadUsuarios() {
             designersSupabase = [];
             atendentesSupabase = [];
             usuariosSupabase = [];
+            usuariosObjetosSupabase = [];
             designersObjetosSupabase = [];
             atendentesObjetosSupabase = [];
 
@@ -27211,6 +27214,11 @@ async function loadUsuarios() {
                 const nome = (u.nome_usuario || '').trim();
                 if (!nome) return;
                 usuariosSupabase.push(nome);
+                usuariosObjetosSupabase.push({
+                    user_id: u.user_id || u.nome_usuario,
+                    nome_usuario: nome,
+                    email: u.email || ''
+                });
 
                 const setor = (u.setor || '').toLowerCase();
                 if (setor.includes('designer')) {
@@ -29438,15 +29446,17 @@ function usuarioDoAvisoDeArte() {
         ? 'conta:' + (conta.id || conta.email)
         : local && local.nome ? 'local:' + local.role + ':' + local.nome : '';
     if (!chave) return null;
-    const designer = getLoggedInDesignerName();
-    const atendente = getLoggedInAtendenteName();
-    if (!designer && !atendente) return null;
+    // Ativar o áudio depende da sessão. O setor serve para os filtros da lista,
+    // mas um administrador também pode ser responsável por um pedido.
+    const nomeCadastro = nomeDoUsuarioLogadoEm(usuariosObjetosSupabase);
+    const designer = getLoggedInDesignerName() || nomeCadastro;
+    const atendente = getLoggedInAtendenteName() || nomeCadastro;
     return { chave, designer, atendente };
 }
 
 function estadoDoAvisoDeArte(usuario) {
     if (!_avisosArtePorUsuario.has(usuario.chave)) {
-        _avisosArtePorUsuario.set(usuario.chave, { vistos: null, som: false });
+        _avisosArtePorUsuario.set(usuario.chave, { vistos: null, statusAtendimento: new Map(), som: false });
     }
     return _avisosArtePorUsuario.get(usuario.chave);
 }
@@ -29460,9 +29470,10 @@ function atualizarBotaoSomArte() {
     botao.disabled = !usuario;
     botao.textContent = ligado ? '🔔 Som ligado' : '🔕 Ativar som';
     botao.setAttribute('aria-pressed', String(ligado));
-    botao.title = usuario
-        ? 'Novos pedidos destinados a ' + (usuario.designer || usuario.atendente) + '. Clique para ativar ou silenciar.'
-        : 'Som disponível para o usuário vinculado ao designer ou atendente do pedido.';
+    botao.title = !usuario ? 'Entre na sua conta para ativar o som.'
+        : usuario.designer || usuario.atendente
+            ? 'Pedidos de ' + (usuario.designer || usuario.atendente) + ': novos pedidos e mudanças de status no seu atendimento. Clique para ativar ou silenciar.'
+            : 'Ativar som. Aguardando identificar seu cadastro de responsável pelos pedidos.';
 }
 
 function tocarAvisoDePedido() {
@@ -29521,22 +29532,43 @@ function conferirNovosPedidosDoUsuario() {
         const lista = document.getElementById('view-lista-arte');
         if (!usuario || document.hidden || !lista || !lista.classList.contains('active')) return;
         const aviso = estadoDoAvisoDeArte(usuario);
+        const statusAtendimento = new Map();
         const pedidos = (state.ordens || []).filter(os => {
-            if (classificarPedidoNaArte(os).fila === 'concluidos') return false;
+            const classificacao = classificarPedidoNaArte(os);
+            const doAtendente = usuario.atendente
+                && (getOSVendedor(os.id) === usuario.atendente || os.vendedor === usuario.atendente);
+            // Guardar também os concluídos: enviar à produção ou cancelar é
+            // uma mudança de status que interessa ao atendente do pedido.
+            if (doAtendente) {
+                const status = [classificacao.statusCalculado, classificacao.fila, os.status_interno]
+                    .map(valor => String(valor || '').trim().toUpperCase());
+                statusAtendimento.set(String(os.numero || os.id), JSON.stringify(status));
+            }
+            if (classificacao.fila === 'concluidos') return false;
             return (usuario.designer && getOSDesigner(os.id, os.numero) === usuario.designer)
-                || (usuario.atendente && (getOSVendedor(os.id) === usuario.atendente || os.vendedor === usuario.atendente));
+                || doAtendente;
         });
         const numeros = [...new Set(pedidos.map(os => String(os.numero || os.id)).filter(Boolean))];
+        const anteriores = aviso.statusAtendimento;
+        aviso.statusAtendimento = statusAtendimento;
         if (!aviso.vistos) {
             aviso.vistos = new Set(numeros);
             return; // Abrir a lista não transforma os pedidos antigos em pedidos novos.
         }
         const novos = numeros.filter(numero => !aviso.vistos.has(numero));
+        const atualizados = [...statusAtendimento.keys()].filter(numero =>
+            !novos.includes(numero) && anteriores.has(numero)
+            && anteriores.get(numero) !== statusAtendimento.get(numero));
         numeros.forEach(numero => aviso.vistos.add(numero));
-        if (!novos.length) return;
+        if (!novos.length && !atualizados.length) return;
         if (aviso.som) tocarAvisoDePedido();
-        toast(novos.length === 1 ? 'Novo pedido destinado a você na Lista de Arte.'
-            : novos.length + ' novos pedidos destinados a você na Lista de Arte.', 'info');
+        const mensagens = [];
+        if (novos.length) mensagens.push(novos.length === 1 ? 'Novo pedido destinado a você na Lista de Arte.'
+            : novos.length + ' novos pedidos destinados a você na Lista de Arte.');
+        if (atualizados.length) mensagens.push(atualizados.length === 1
+            ? 'Um pedido do seu atendimento teve o status atualizado.'
+            : atualizados.length + ' pedidos do seu atendimento tiveram o status atualizado.');
+        toast(mensagens.join(' '), 'info');
     } catch (e) {
         console.warn('[Lista de Arte] Não foi possível verificar os avisos de novos pedidos:', e);
     }

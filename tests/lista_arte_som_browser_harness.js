@@ -7,8 +7,9 @@ const raiz = path.join(__dirname, '..');
 const fonte = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8');
 const html = fs.readFileSync(path.join(raiz, 'frontend/index.html'), 'utf8');
 function extrair(nome) {
-    const inicio = fonte.indexOf(`function ${nome}(`);
+    let inicio = fonte.indexOf(`function ${nome}(`);
     assert.ok(inicio >= 0, nome);
+    if (fonte.slice(inicio - 6, inicio) === 'async ') inicio -= 6;
     return fonte.slice(inicio, fonte.indexOf('\n}', inicio) + 2);
 }
 (async () => {
@@ -25,15 +26,22 @@ function extrair(nome) {
             const state = { ordens: [], todasArtes: [] };
             window.testState = state;
             const localStorage = { getItem: () => null };
-            const designersObjetosSupabase = [
-                { user_id: 'designer-a', nome_usuario: 'Designer A' },
-                { user_id: 'designer-b', nome_usuario: 'Designer B' }];
-            const atendentesObjetosSupabase = [{ user_id: 'atendente-a', nome_usuario: 'Atendente A' }];
+            let usuariosSupabase = [], usuariosObjetosSupabase = [];
+            let designersSupabase = [], designersObjetosSupabase = [];
+            let atendentesSupabase = [], atendentesObjetosSupabase = [];
+            const supabaseClient = { from: () => ({ select: async () => ({ data: [
+                { user_id: 'designer-a', nome_usuario: 'Designer A', setor: 'Designer' },
+                { user_id: 'designer-b', nome_usuario: 'Designer B', setor: 'Designer' },
+                { user_id: 'atendente-a', nome_usuario: 'Atendente A', setor: 'Atendimento' },
+                { user_id: 'admin-a', nome_usuario: 'Administrador A', setor: 'Administrador' }
+            ] }) }) };
+            function populateDesignerFilter() {}
+            function populateAtendenteFilter() {}
             window._currentUser = { id: 'designer-a' };
             window.avisos = [];
             function toast(texto) { avisos.push(texto); }
-            function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila' }; }
-            ${['nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
+            function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila', statusCalculado: os.status || 'Em Arte' }; }
+            ${['loadUsuarios', 'nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
                 'getOSDesigner', 'getOSVendedor'].map(extrair).join('\n')}
             ${fonte.slice(fonte.indexOf('const _avisosArtePorUsuario ='), fonte.indexOf('let _relogioDaListaLigado ='))}
             window.tons = 0;
@@ -42,8 +50,11 @@ function extrair(nome) {
                 window.tons++; return criarOscilador.call(this);
             };
             state.ordens = [{ id: '1', numero: 1, designer_nome: 'Designer A' }];
-            conferirNovosPedidosDoUsuario();
         ` });
+        await page.evaluate(async () => {
+            await loadUsuarios();
+            conferirNovosPedidosDoUsuario();
+        });
         assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [0, 0], 'primeira carga silenciosa');
         await page.click('#btn-som-lista-arte');
         await page.waitForFunction(() => document.getElementById('btn-som-lista-arte').getAttribute('aria-pressed') === 'true');
@@ -57,6 +68,8 @@ function extrair(nome) {
             s.ordens.push({ id: '3', numero: 3, designer_nome: 'Designer A' });
             conferirNovosPedidosDoUsuario(); guardar('novo');
             conferirNovosPedidosDoUsuario(); guardar('repetido');
+            s.ordens[2].status = 'Enviar Arte';
+            conferirNovosPedidosDoUsuario(); guardar('statusSoDesigner');
             s.ordens.push({ id: '4', numero: 4, designer_nome: 'Designer A', fila: 'concluidos' });
             conferirNovosPedidosDoUsuario(); guardar('concluido');
             s.ordens[1].designer_nome = 'Designer A';
@@ -75,6 +88,7 @@ function extrair(nome) {
         assert.deepEqual(resultado.outro, [2, 0]);
         assert.deepEqual(resultado.novo, [4, 1]);
         assert.deepEqual(resultado.repetido, [4, 1]);
+        assert.deepEqual(resultado.statusSoDesigner, [4, 1], 'mudança de status avisa o atendente, não o designer');
         assert.deepEqual(resultado.concluido, [4, 1]);
         assert.deepEqual(resultado.atribuido, [6, 2]);
         assert.deepEqual(resultado.duplicado, [6, 2]);
@@ -88,17 +102,70 @@ function extrair(nome) {
             conferirNovosPedidosDoUsuario();
         });
         assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [10, 3], 'atendente recebe apenas seu pedido');
+        await page.evaluate(() => {
+            testState.ordens.find(o => o.id === '6').status = 'Enviar Arte';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [12, 4], 'atendente é avisado quando o status do seu pedido muda');
+        assert.match(await page.evaluate(() => avisos.at(-1)), /status/);
+        await page.evaluate(() => {
+            conferirNovosPedidosDoUsuario();
+            testState.ordens.find(o => o.id === '2').status = 'Aprovada';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [12, 4], 'status repetido e pedido de outro atendente não avisam');
+        await page.evaluate(() => {
+            const pedido = testState.ordens.find(o => o.id === '6');
+            pedido.status_interno = 'EM PRODUCAO';
+            pedido.fila = 'concluidos';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [14, 5], 'atendente recebe a mudança mesmo quando o pedido sai da fila de arte');
+        await page.evaluate(() => {
+            testState.ordens.find(o => o.id === '6').status_interno = 'ENTREGUE';
+            conferirNovosPedidosDoUsuario();
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [16, 6], 'status do ERP avisa uma vez mesmo sem mudar o card');
         await page.click('#btn-som-lista-arte');
         await page.evaluate(() => {
             testState.ordens.push({ id: '7', numero: 7, vendedor: 'Atendente A' });
             conferirNovosPedidosDoUsuario();
         });
-        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [10, 4], 'silenciado mantém aviso visual');
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [16, 7], 'silenciado mantém aviso visual');
         await page.evaluate(() => {
             _currentUser = null;
             conferirNovosPedidosDoUsuario();
         });
         assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), true);
+        await page.evaluate(() => {
+            _currentUser = { id: 'admin-a' };
+            window._currentPerms = { role: 'admin' };
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), false,
+            'administrador autenticado pode ativar o som mesmo fora das listas de designer/atendente');
+        await page.click('#btn-som-lista-arte');
+        await page.waitForFunction(() => document.getElementById('btn-som-lista-arte').getAttribute('aria-pressed') === 'true');
+        const antesAdmin = await page.evaluate(() => [tons, avisos.length]);
+        await page.evaluate(() => {
+            testState.ordens.push({ id: '8', numero: 8, designer_nome: 'Administrador A' });
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]),
+            [antesAdmin[0] + 2, antesAdmin[1] + 1], 'administrador recebe seu pedido');
+        await page.evaluate(() => {
+            testState.ordens.push({ id: '9', numero: 9, designer_nome: 'Designer B' });
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]),
+            [antesAdmin[0] + 2, antesAdmin[1] + 1], 'perfil admin não recebe pedidos dos demais');
+        await page.evaluate(() => {
+            _currentUser = { id: 'sem-vinculo' };
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), false,
+            'a ativação do áudio depende do login, não do cadastro de responsáveis');
         // Falta de suporte ao áudio não interrompe a atualização da lista.
         await page.evaluate(async () => {
             _currentUser = { id: 'atendente-a' };
@@ -111,7 +178,7 @@ function extrair(nome) {
         assert.equal(await page.$eval('#btn-som-lista-arte', b => b.getAttribute('aria-pressed')), 'false');
         assert.match(await page.evaluate(() => avisos.at(-1)), /Não foi possível ativar o som/);
         assert.deepEqual(erros, []);
-        console.log('OK: Web Audio por clique, login de designer/atendente, primeira carga silenciosa, novos pedidos, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
+        console.log('OK: Web Audio por clique, administrador/designer/atendente, primeira carga silenciosa, novos pedidos, mudanças de status do atendimento e ERP, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
     } finally {
         await browser.close();
     }
