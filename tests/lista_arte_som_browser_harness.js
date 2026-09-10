@@ -7,8 +7,9 @@ const raiz = path.join(__dirname, '..');
 const fonte = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8');
 const html = fs.readFileSync(path.join(raiz, 'frontend/index.html'), 'utf8');
 function extrair(nome) {
-    const inicio = fonte.indexOf(`function ${nome}(`);
+    let inicio = fonte.indexOf(`function ${nome}(`);
     assert.ok(inicio >= 0, nome);
+    if (fonte.slice(inicio - 6, inicio) === 'async ') inicio -= 6;
     return fonte.slice(inicio, fonte.indexOf('\n}', inicio) + 2);
 }
 (async () => {
@@ -25,15 +26,22 @@ function extrair(nome) {
             const state = { ordens: [], todasArtes: [] };
             window.testState = state;
             const localStorage = { getItem: () => null };
-            const designersObjetosSupabase = [
-                { user_id: 'designer-a', nome_usuario: 'Designer A' },
-                { user_id: 'designer-b', nome_usuario: 'Designer B' }];
-            const atendentesObjetosSupabase = [{ user_id: 'atendente-a', nome_usuario: 'Atendente A' }];
+            let usuariosSupabase = [], usuariosObjetosSupabase = [];
+            let designersSupabase = [], designersObjetosSupabase = [];
+            let atendentesSupabase = [], atendentesObjetosSupabase = [];
+            const supabaseClient = { from: () => ({ select: async () => ({ data: [
+                { user_id: 'designer-a', nome_usuario: 'Designer A', setor: 'Designer' },
+                { user_id: 'designer-b', nome_usuario: 'Designer B', setor: 'Designer' },
+                { user_id: 'atendente-a', nome_usuario: 'Atendente A', setor: 'Atendimento' },
+                { user_id: 'admin-a', nome_usuario: 'Administrador A', setor: 'Administrador' }
+            ] }) }) };
+            function populateDesignerFilter() {}
+            function populateAtendenteFilter() {}
             window._currentUser = { id: 'designer-a' };
             window.avisos = [];
             function toast(texto) { avisos.push(texto); }
             function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila' }; }
-            ${['nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
+            ${['loadUsuarios', 'nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
                 'getOSDesigner', 'getOSVendedor'].map(extrair).join('\n')}
             ${fonte.slice(fonte.indexOf('const _avisosArtePorUsuario ='), fonte.indexOf('let _relogioDaListaLigado ='))}
             window.tons = 0;
@@ -42,8 +50,11 @@ function extrair(nome) {
                 window.tons++; return criarOscilador.call(this);
             };
             state.ordens = [{ id: '1', numero: 1, designer_nome: 'Designer A' }];
-            conferirNovosPedidosDoUsuario();
         ` });
+        await page.evaluate(async () => {
+            await loadUsuarios();
+            conferirNovosPedidosDoUsuario();
+        });
         assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [0, 0], 'primeira carga silenciosa');
         await page.click('#btn-som-lista-arte');
         await page.waitForFunction(() => document.getElementById('btn-som-lista-arte').getAttribute('aria-pressed') === 'true');
@@ -99,6 +110,34 @@ function extrair(nome) {
             conferirNovosPedidosDoUsuario();
         });
         assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), true);
+        await page.evaluate(() => {
+            _currentUser = { id: 'admin-a' };
+            window._currentPerms = { role: 'admin' };
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), false,
+            'administrador autenticado pode ativar o som mesmo fora das listas de designer/atendente');
+        await page.click('#btn-som-lista-arte');
+        await page.waitForFunction(() => document.getElementById('btn-som-lista-arte').getAttribute('aria-pressed') === 'true');
+        const antesAdmin = await page.evaluate(() => [tons, avisos.length]);
+        await page.evaluate(() => {
+            testState.ordens.push({ id: '8', numero: 8, designer_nome: 'Administrador A' });
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]),
+            [antesAdmin[0] + 2, antesAdmin[1] + 1], 'administrador recebe seu pedido');
+        await page.evaluate(() => {
+            testState.ordens.push({ id: '9', numero: 9, designer_nome: 'Designer B' });
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]),
+            [antesAdmin[0] + 2, antesAdmin[1] + 1], 'perfil admin não recebe pedidos dos demais');
+        await page.evaluate(() => {
+            _currentUser = { id: 'sem-vinculo' };
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.equal(await page.$eval('#btn-som-lista-arte', b => b.disabled), false,
+            'a ativação do áudio depende do login, não do cadastro de responsáveis');
         // Falta de suporte ao áudio não interrompe a atualização da lista.
         await page.evaluate(async () => {
             _currentUser = { id: 'atendente-a' };
@@ -111,7 +150,7 @@ function extrair(nome) {
         assert.equal(await page.$eval('#btn-som-lista-arte', b => b.getAttribute('aria-pressed')), 'false');
         assert.match(await page.evaluate(() => avisos.at(-1)), /Não foi possível ativar o som/);
         assert.deepEqual(erros, []);
-        console.log('OK: Web Audio por clique, login de designer/atendente, primeira carga silenciosa, novos pedidos, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
+        console.log('OK: Web Audio por clique, carregamento e login de administrador/designer/atendente, primeira carga silenciosa, novos pedidos, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
     } finally {
         await browser.close();
     }

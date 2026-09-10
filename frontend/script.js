@@ -164,6 +164,8 @@ const state = {
 
 // - Variáveis globais de usuários -
 let usuariosSupabase = [];
+// Identidade completa, inclusive administradores fora dos setores de atendimento/design.
+let usuariosObjetosSupabase = [];
 let designersSupabase = [];
 let atendentesSupabase = [];
 let designersObjetosSupabase = [];
@@ -27204,6 +27206,7 @@ async function loadUsuarios() {
             designersSupabase = [];
             atendentesSupabase = [];
             usuariosSupabase = [];
+            usuariosObjetosSupabase = [];
             designersObjetosSupabase = [];
             atendentesObjetosSupabase = [];
 
@@ -27211,6 +27214,11 @@ async function loadUsuarios() {
                 const nome = (u.nome_usuario || '').trim();
                 if (!nome) return;
                 usuariosSupabase.push(nome);
+                usuariosObjetosSupabase.push({
+                    user_id: u.user_id || u.nome_usuario,
+                    nome_usuario: nome,
+                    email: u.email || ''
+                });
 
                 const setor = (u.setor || '').toLowerCase();
                 if (setor.includes('designer')) {
@@ -29438,9 +29446,11 @@ function usuarioDoAvisoDeArte() {
         ? 'conta:' + (conta.id || conta.email)
         : local && local.nome ? 'local:' + local.role + ':' + local.nome : '';
     if (!chave) return null;
-    const designer = getLoggedInDesignerName();
-    const atendente = getLoggedInAtendenteName();
-    if (!designer && !atendente) return null;
+    // Ativar o áudio depende da sessão. O setor serve para os filtros da lista,
+    // mas um administrador também pode ser responsável por um pedido.
+    const nomeCadastro = nomeDoUsuarioLogadoEm(usuariosObjetosSupabase);
+    const designer = getLoggedInDesignerName() || nomeCadastro;
+    const atendente = getLoggedInAtendenteName() || nomeCadastro;
     return { chave, designer, atendente };
 }
 
@@ -29460,9 +29470,10 @@ function atualizarBotaoSomArte() {
     botao.disabled = !usuario;
     botao.textContent = ligado ? '🔔 Som ligado' : '🔕 Ativar som';
     botao.setAttribute('aria-pressed', String(ligado));
-    botao.title = usuario
-        ? 'Novos pedidos destinados a ' + (usuario.designer || usuario.atendente) + '. Clique para ativar ou silenciar.'
-        : 'Som disponível para o usuário vinculado ao designer ou atendente do pedido.';
+    botao.title = !usuario ? 'Entre na sua conta para ativar o som.'
+        : usuario.designer || usuario.atendente
+            ? 'Novos pedidos destinados a ' + (usuario.designer || usuario.atendente) + '. Clique para ativar ou silenciar.'
+            : 'Ativar som. Aguardando identificar seu cadastro de responsável pelos pedidos.';
 }
 
 function tocarAvisoDePedido() {
