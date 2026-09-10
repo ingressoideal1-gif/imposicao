@@ -53,6 +53,15 @@ def test_o_harness_da_arte_de_fundo_passa():
     assert r.returncode == 0, "o harness falhou:\n" + saida
 
 
+def test_opacidade_e_visibilidade_independentes_no_navegador():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "opacidade_fundo_browser_harness.js")],
+        cwd=RAIZ, timeout=90, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+
+
 def test_a_migracao_existe_e_e_aditiva():
     """Coluna nova em tabela viva se adiciona; não se recria a tabela."""
     assert os.path.exists(SQL), "o SQL da migração precisa acompanhar o código"
