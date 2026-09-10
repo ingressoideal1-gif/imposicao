@@ -17,6 +17,8 @@
 // as duas confirmadas → `APROVADO`; qualquer uma com correção → `CORRIGIR`.
 // (`ALTERADO` não vem daqui: nasce do atendente girando o selo na Lista de
 // Arte.)
+// Desde 10/09/2026 cada clique salva a decisão em `confirmacoes_portal` nas
+// observações. O segundo Confirmar aprova o selo conjunto sem Finalizar pedido.
 //
 // ## O cuidado que não pode ser perdido
 //
@@ -34,6 +36,8 @@ window.portalConfirmacoes = {
     textoEntrega: '',
     textoFaturamento: ''
 };
+window.portalGravandoConfirmacao = false;
+window.portalErroConfirmacao = {};
 
 /**
  * O que o cliente já decidiu em VISITAS ANTERIORES, lido do banco.
@@ -71,22 +75,32 @@ function reidratarConfirmacoes(portal) {
     const entrega = (portal && portal.entrega) || null;
     const selo = entrega && entrega.entrega_dados
         ? String(entrega.entrega_dados).trim().toUpperCase() : '';
-    if (selo !== 'APROVADO' && selo !== 'CORRIGIR') return;
-
     const c = window.portalConfirmacoes;
+    let obs = (entrega && entrega.observacoes) || {};
+    if (typeof obs === 'string') {
+        try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
+    }
+    if (typeof obs !== 'object' || !obs) obs = {};
 
+    // ALTERADO pede uma nova conferência, mesmo havendo decisões antigas.
+    if (selo === 'ALTERADO') return;
+    const salvas = obs.confirmacoes_portal;
+    if (salvas && typeof salvas === 'object' && salvas.selo === selo) {
+        ['entrega', 'faturamento'].forEach(qual => {
+            c[qual] = typeof salvas[qual] === 'boolean' ? salvas[qual] : null;
+        });
+        c.textoEntrega = String(obs.correcao_entrega || '');
+        c.textoFaturamento = String(obs.correcao_faturamento || '');
+        clienteState.pedidoFinalizado = salvas.finalizado === true;
+        return;
+    }
+    if (selo !== 'APROVADO' && selo !== 'CORRIGIR') return;
     if (selo === 'APROVADO') {
         c.entrega = true;
         c.faturamento = true;
         clienteState.pedidoFinalizado = true;
         return;
     }
-
-    let obs = entrega.observacoes || {};
-    if (typeof obs === 'string') {
-        try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
-    }
-    if (typeof obs !== 'object' || !obs) obs = {};
 
     const antiga = String(obs.correcao_entrega_faturamento || '').trim();
     const daEntrega = String(obs.correcao_entrega || '').trim() || antiga;
@@ -119,14 +133,13 @@ function artesJaAprovadas() {
 /**
  * O cartão de decisão de uma aba: os dois botões, a caixa de texto e o estado.
  *
- * Os dois botões têm o mesmo peso visual de propósito. Pintar CONFIRMAR de
- * verde e ALTERAR de cinza empurra o cliente a confirmar sem ler — e é
- * exatamente aqui que ele deveria ler.
+ * Confirmar permanece verde e passa a Confirmado depois da gravação.
  *
  * `bloqueio` é o texto do motivo pelo qual o CONFIRMAR não pode ser usado.
  */
 function cartaoDeDecisao(qual, bloqueio) {
     const decidido = window.portalConfirmacoes[qual];
+    const gravando = window.portalGravandoConfirmacao;
     const texto = window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'];
 
     // Os ícones vêm desenhados do `icones-cliente.js`, e não como emoji: emoji é
@@ -166,7 +179,9 @@ function cartaoDeDecisao(qual, bloqueio) {
     // O ALTERAR continua vivo, porque é por ele que se sai da trava.
     const confirmar = bloqueio
         ? '<button type="button" class="portal-botao" disabled>' + icone('check', 17) + 'Confirmar</button>'
-        : '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', true)">' + icone('check', 17) + 'Confirmar</button>';
+        : '<button type="button" class="portal-botao principal" aria-pressed="' + (decidido === true) + '" '
+            + (gravando ? 'disabled ' : '') + 'onclick="decidirDados(\'' + qual + '\', true)">'
+            + icone('check', 17) + (decidido === true ? 'Confirmado' : gravando === qual ? 'Salvando...' : 'Confirmar') + '</button>';
     const motivo = bloqueio
         ? '<div class="portal-vazio" style="margin-top: 10px;">' + escapeHtml(bloqueio) + '</div>'
         : '';
@@ -174,9 +189,12 @@ function cartaoDeDecisao(qual, bloqueio) {
     return '<div class="portal-cartao">'
         + '<h2>' + escapeHtml(ROTULO_DA_ABA[qual].titulo) + '</h2>'
         + estado
+        + (window.portalErroConfirmacao[qual]
+            ? '<div class="portal-aviso atencao" role="alert">Não conseguimos salvar. Tente novamente.</div>' : '')
         + '<div class="portal-par-de-botoes">'
         + confirmar
-        + '<button type="button" class="portal-botao" onclick="decidirDados(\'' + qual + '\', false)">' + icone('lapis', 17) + 'Alterar</button>'
+        + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '')
+            + 'onclick="decidirDados(\'' + qual + '\', false)">' + icone('lapis', 17) + 'Alterar</button>'
         + '</div>'
         + motivo
         + caixa
@@ -203,6 +221,7 @@ function cartaoDeFinalizacao() {
     const c = window.portalConfirmacoes;
     const dados = window.portalDados || {};
     const faltam = [];
+    if (window.portalGravandoConfirmacao) faltam.push('aguardar a gravação dos dados');
     if (!artesJaAprovadas()) faltam.push('aprovar suas artes na aba <b>Arte</b>');
     // A exigência do recebedor só prende enquanto o cliente não usou o ALTERAR.
     //
@@ -237,35 +256,60 @@ function cartaoDeFinalizacao() {
 }
 
 /** Uma decisão do cliente. Redesenha as duas abas: o cartão do fim é o mesmo. */
-window.decidirDados = function (qual, confirmou) {
-    window.portalConfirmacoes[qual] = confirmou;
-    if (confirmou) {
-        window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'] = '';
+window.decidirDados = async function (qual, confirmou) {
+    if (!Object.prototype.hasOwnProperty.call(ROTULO_DA_ABA, qual)
+        || window.portalGravandoConfirmacao) return;
+    const c = window.portalConfirmacoes;
+    if (c[qual] === confirmou) {
+        if (confirmou === true) abrirSecao(SECOES[SECOES.indexOf(qual) + 1]);
+        return;
     }
+    const dados = window.portalDados || {};
+    if (qual === 'entrega' && confirmou === true
+        && entregaExigeRecebedor(dados.endereco, dados.cliente, dados.pedido, dados.frete)) return;
+
+    const proxima = Object.assign({}, c, { [qual]: confirmou });
+    if (confirmou !== false) proxima[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'] = '';
+    const selo = proxima.entrega === false || proxima.faturamento === false ? 'CORRIGIR'
+        : proxima.entrega === true && proxima.faturamento === true ? 'APROVADO' : '';
+    window.portalGravandoConfirmacao = qual;
+    window.portalErroConfirmacao[qual] = false;
     redesenharSecao('entrega');
     redesenharSecao('faturamento');
-    // A trilha do topo e o sinal na aba contam esta decisão. Sem esta linha, o
-    // cliente confirma a entrega e continua vendo "0 de 3 concluídas" logo
-    // acima -- o painel diria o contrário do cartão que ele acabou de tocar.
-    atualizarPainelDoPedido();
+    try {
+        const gravacao = await gravarCorrecaoDoCliente(parseInt(clienteState.numero), {
+            entrega: proxima.entrega === false ? (proxima.textoEntrega || '(sem detalhes)') : '',
+            faturamento: proxima.faturamento === false ? (proxima.textoFaturamento || '(sem detalhes)') : ''
+        }, selo, proxima);
+        if (!gravacao.ok) throw new Error(gravacao.erro || 'Falha ao salvar');
+        Object.assign(c, proxima);
+        clienteState.entregaStatus = selo;
+        clienteState.pedidoFinalizado = false;
+    } catch (e) {
+        window.portalErroConfirmacao[qual] = true;
+    } finally {
+        window.portalGravandoConfirmacao = false;
+        redesenharSecao('entrega');
+        redesenharSecao('faturamento');
+        atualizarPainelDoPedido();
+    }
+    if (confirmou === true && !window.portalErroConfirmacao[qual]) {
+        abrirSecao(SECOES[SECOES.indexOf(qual) + 1]);
+    }
 };
 
 window.desfazerDecisao = function (qual) {
-    window.portalConfirmacoes[qual] = null;
-    redesenharSecao('entrega');
-    redesenharSecao('faturamento');
-    atualizarPainelDoPedido();
+    return window.decidirDados(qual, null);
 };
 
 /**
  * O botão 💾 Salvar correção grava na hora, e diz a verdade sobre ter gravado.
  *
- * Falhar aqui NÃO prende o cliente: a decisão dele continua registrada na tela
- * e o botão de finalizar continua vivo. Ele fica sabendo pelo recibo abaixo da
- * caixa, com o que fazer — e é o botão final que avisa em letra grande se a
- * gravação não passou.
+ * Falhas aparecem no recibo. A trava durante a gravação impede que outra
+ * decisão sobrescreva as observações enquanto a correção está sendo salva.
  */
 window.salvarCorrecaoDeDados = async function (qual) {
+    if (window.portalGravandoConfirmacao) return;
     const campo = document.getElementById('portal-correcao-' + qual);
     const recibo = document.getElementById('portal-recibo-' + qual);
     const texto = campo ? campo.value.trim() : '';
@@ -278,14 +322,22 @@ window.salvarCorrecaoDeDados = async function (qual) {
     window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'] = texto;
     if (recibo) recibo.textContent = 'Salvando...';
 
-    const gravacao = await gravarCorrecaoDoCliente(
-        parseInt(clienteState.numero),
-        {
-            entrega: window.portalConfirmacoes.textoEntrega,
-            faturamento: window.portalConfirmacoes.textoFaturamento
-        },
-        null   // quem decide o selo é o botão final
-    );
+    window.portalGravandoConfirmacao = qual;
+    let gravacao;
+    try {
+        gravacao = await gravarCorrecaoDoCliente(
+            parseInt(clienteState.numero),
+            {
+                entrega: window.portalConfirmacoes.textoEntrega,
+                faturamento: window.portalConfirmacoes.textoFaturamento
+            },
+            null   // a decisão da aba já foi gravada no clique em Alterar
+        );
+    } catch (e) {
+        gravacao = { ok: false };
+    } finally {
+        window.portalGravandoConfirmacao = false;
+    }
 
     if (recibo) {
         recibo.innerHTML = gravacao.ok
@@ -306,6 +358,8 @@ window.salvarCorrecaoDeDados = async function (qual) {
  * lança, então só olhando o `.error` se descobre.
  */
 window.finalizarNoPortal = async function () {
+    if (window.portalGravandoConfirmacao) return;
+    window.portalGravandoConfirmacao = 'finalizar';
     const botao = document.getElementById('portal-btn-finalizar');
     if (botao) { botao.disabled = true; botao.textContent = '⏳ Finalizando...'; }
 
@@ -319,12 +373,18 @@ window.finalizarNoPortal = async function () {
         if (c.faturamento === false) mensagem += '\n\n[FATURAMENTO] ' + (c.textoFaturamento || '(sem detalhes)');
     }
 
-    const gravacao = await gravarCorrecaoDoCliente(
-        parseInt(clienteState.numero),
-        { entrega: c.entrega === false ? (c.textoEntrega || '(sem detalhes)') : '',
-          faturamento: c.faturamento === false ? (c.textoFaturamento || '(sem detalhes)') : '' },
-        precisaAtencao ? 'CORRIGIR' : 'APROVADO'
-    );
+    let gravacao;
+    try {
+        gravacao = await gravarCorrecaoDoCliente(
+            parseInt(clienteState.numero),
+            { entrega: c.entrega === false ? (c.textoEntrega || '(sem detalhes)') : '',
+              faturamento: c.faturamento === false ? (c.textoFaturamento || '(sem detalhes)') : '' },
+            precisaAtencao ? 'CORRIGIR' : 'APROVADO',
+            Object.assign({}, c, { finalizado: true })
+        );
+    } catch (e) {
+        gravacao = { ok: false, erro: e.message || String(e) };
+    }
 
     try {
         const { error: erroChat } = await supabaseClient.from('propostas_chat').insert({
@@ -349,6 +409,7 @@ window.finalizarNoPortal = async function () {
         console.warn('[portal] não foi possível gravar o status do pedido:', e);
     }
 
+    window.portalGravandoConfirmacao = false;
     clienteState.pedidoFinalizado = true;
     clienteState.statusArte = 'APROVADO';
     pintarSeloDoStatus('APROVADO');

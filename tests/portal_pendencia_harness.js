@@ -82,13 +82,12 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
 })();
 
 (function comAArteAindaEsperandoDecisaoAbreNaArte() {
-    // A trava que impede o erro que `seguirSozinhoSeAprovouTudo` documenta:
-    // existem pedidos com TODOS os modelos em APROVADA cujo status continua em
-    // `Aguard. Aprovacao`. Decidir pela contagem de modelos empurraria esse
-    // cliente para longe da arte antes de ele ter visto a arte.
+    // Modelos já aprovados permitem avançar, mesmo antes do fechamento geral.
     const p = portal({ status: 'Aguard. Aprovação', entrega: null, faturamento: null, artesAprovadas: true });
-    ok(p.secaoDeAbertura('Aguard. Aprovação') === 'arte',
-        'status de aprovacao pendente abre na Arte mesmo com os modelos aprovados');
+    ok(p.secaoDeAbertura('Aguard. Aprovação') === 'entrega',
+        'modelos aprovados abrem na Entrega mesmo com status geral aguardando');
+    const pendente = portal({ status: 'Aguard. Aprovação', entrega: null, faturamento: null, artesAprovadas: false });
+    ok(pendente.secaoDeAbertura('Aguard. Aprovação') === 'arte', 'arte ainda pendente continua na Arte');
 
     const emArte = portal({ status: 'Em Arte', entrega: null, faturamento: null, artesAprovadas: false });
     ok(emArte.secaoDeAbertura('Em Arte') === 'arte', 'arte em preparacao abre na Arte');
@@ -98,10 +97,10 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
         'alteracao solicitada abre na Arte -- e la que esta o que ele pediu');
 })();
 
-(function semPendenciaNenhumaOLinkVoltaAAbrirNaArte() {
+(function semPendenciaNenhumaOLinkAbreNoOrcamento() {
     const p = portal({ status: 'EM PRODUCAO', entrega: true, faturamento: true, artesAprovadas: true });
-    ok(p.secaoDeAbertura('EM PRODUCAO') === 'arte',
-        'pedido fechado abre na Arte, que e o que o cliente volta para ver');
+    ok(p.secaoDeAbertura('EM PRODUCAO') === 'orcamento',
+        'com todas as etapas concluídas, abre a próxima aba: Orçamento');
     ok(p.proximaEtapaPendente() === null, 'e nao sobra etapa nenhuma');
 })();
 
@@ -109,7 +108,7 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
     // `false` e "pediu alteracao": e uma decisao, e ja esta com o atendimento.
     // Reabrir o cliente nessa aba seria pedir de novo o que ele ja mandou.
     const p = portal({ status: 'EM PRODUCAO', entrega: false, faturamento: false, artesAprovadas: true });
-    ok(p.secaoDeAbertura('EM PRODUCAO') === 'arte', 'quem pediu correcao nao e cobrado de novo');
+    ok(p.secaoDeAbertura('EM PRODUCAO') === 'orcamento', 'quem pediu correcao nao e cobrado de novo');
 })();
 
 // ─── 2. O verbo de cada etapa ────────────────────────────────────────────────
@@ -162,12 +161,21 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
 // ─── 4. A tela: quem chama quem ──────────────────────────────────────────────
 
 (function montarPortalPerguntaOndeAbrir() {
-    ok(/const abertura = secaoValida\(doHash\) \? doHash : secaoDeAbertura\(statusArte\);/.test(SHELL),
-        'montarPortal decide a aba de abertura por secaoDeAbertura');
+    ok(/const abertura = secaoDeAbertura\(statusArte, inicial\);/.test(SHELL),
+        'montarPortal decide a abertura inclusive com hash');
     ok(/anunciarAberturaAutomatica\(abertura\)/.test(SHELL),
         'e avisa o cliente quando ela nao e a Arte');
-    ok(/if \(!secaoValida\(doHash\) && abertura !== 'arte'\)/.test(SHELL),
-        'o hash na URL continua mandando, e sem aviso');
+    ok(/if \(abertura !== inicial\)/.test(SHELL),
+        'avisa quando a abertura avançou de uma aba concluída');
+})();
+
+(function hashConcluidoAvancaMasLinksPendentesEInformativosPermanecem() {
+    const p = portal({ status: 'APROVADO', entrega: true, faturamento: null, artesAprovadas: true });
+    ok(p.secaoDeAbertura('APROVADO', 'arte') === 'faturamento', '#arte concluída pula para Nota pendente');
+    ok(p.secaoDeAbertura('APROVADO', 'entrega') === 'faturamento', '#entrega confirmada pula para Nota');
+    ok(p.secaoDeAbertura('APROVADO', 'faturamento') === 'faturamento', '#nota pendente permanece');
+    ok(p.secaoDeAbertura('APROVADO', 'orcamento') === 'orcamento', '#orcamento permanece');
+    ok(p.secaoDeAbertura('APROVADO', 'pagamento') === 'pagamento', '#pagamento permanece');
 })();
 
 (function aTrilhaPintaPendenteDeAmbar() {

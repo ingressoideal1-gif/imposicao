@@ -423,15 +423,11 @@ const linhasDoEnvio = new Function(
 
 // ─── 6. Na fonte: o que nao pode voltar ──────────────────────────────────────
 
-(function osDoisBotoesTemOMesmoPeso() {
-    // Pintar CONFIRMAR de verde e ALTERAR de cinza empurra o cliente a
-    // confirmar sem ler -- e e exatamente aqui que ele deveria ler.
+(function confirmarMantemOVerde() {
     const cartao = recortar(CONFIRMACOES, 'cartaoDeDecisao');
-    const confirmar = cartao.indexOf("decidirDados('\" + qual + \"', true)");
-    const alterar = cartao.indexOf("decidirDados('\" + qual + \"', false)");
     ok(cartao.indexOf('CONFIRMAR') > 0 && cartao.indexOf('ALTERAR') > 0, 'os dois botoes existem');
-    ok(!/class="portal-botao principal"[^>]*CONFIRMAR/.test(cartao),
-        'e o CONFIRMAR nao ganha destaque sobre o ALTERAR');
+    ok(/class="portal-botao principal"/.test(cartao), 'Confirmar usa o verde existente');
+    ok(/decidido === true \? 'Confirmado'/.test(cartao), 'a confirmação salva muda o rótulo');
 })();
 
 (function oFinalDizOQueFalta() {
@@ -567,8 +563,101 @@ function reidratar(portal) {
     ok(i > 0 && j > 0 && i < j, 'reidratar vem antes de registrar a primeira secao', [i, j]);
 })();
 
+async function confirmarNoClique() {
+    const vm = require('vm');
+    const linha = { id: 'sintetico', id_int: 123, observacoes: { item_1: 'Preservar' } };
+    const banco = bancoFalso({ 123: linha });
+    let bloqueado = false;
+    const aberturas = [];
+    const contexto = vm.createContext({
+        console, supabaseClient: banco,
+        clienteState: { numero: '123', statusArte: 'AGUARDANDO_APROVACAO' },
+        state: {}, portalDados: {},
+        SECOES: ['arte', 'entrega', 'faturamento', 'orcamento', 'pagamento'],
+        escapeHtml: s => String(s),
+        entregaExigeRecebedor: () => bloqueado,
+        redesenharSecao() {}, atualizarPainelDoPedido() {},
+        abrirSecao: s => aberturas.push(s)
+    });
+    contexto.window = contexto;
+    vm.runInContext(recortar(CLIENTE, 'gravarCorrecaoDoCliente', true) + '\n' + CONFIRMACOES, contexto);
+    const gravar = contexto.gravarCorrecaoDoCliente;
+
+    // Uma requisição lenta não pode antecipar sucesso nem duplicar gravações.
+    let liberar;
+    contexto.gravarCorrecaoDoCliente = (...args) => new Promise(resolve => {
+        liberar = async () => resolve(await gravar(...args));
+    });
+    const primeira = contexto.decidirDados('entrega', true);
+    ok(contexto.portalConfirmacoes.entrega === null, 'não aprova antes de salvar');
+    ok(contexto.cartaoDeDecisao('entrega').includes('Salvando...'), 'mostra gravação em andamento');
+    await contexto.decidirDados('entrega', true);
+    ok(banco.log.updates === 0 && aberturas.length === 0, 'clique repetido aguarda a mesma gravação');
+    await liberar();
+    await primeira;
+    contexto.gravarCorrecaoDoCliente = gravar;
+    ok(linha.observacoes.confirmacoes_portal.entrega === true, 'entrega salva no próprio clique');
+    ok(linha.observacoes.confirmacoes_portal.faturamento === null, 'entrega não aprova nota pendente');
+    ok(linha.entrega_dados === '', 'selo conjunto aguarda a segunda confirmação');
+    ok(aberturas.join() === 'faturamento', 'Entrega avança para Nota após salvar');
+    ok(/principal" aria-pressed="true"/.test(contexto.cartaoDeDecisao('entrega'))
+        && contexto.cartaoDeDecisao('entrega').includes('Confirmado'), 'botão confirmado continua verde');
+    const parcial = reidratar({ entrega: linha });
+    ok(parcial.c.entrega === true && parcial.c.faturamento === null, 'reabrir recupera confirmação parcial');
+    ok(!parcial.estado.pedidoFinalizado, 'confirmar dados não finaliza nem aprova as artes');
+
+    await contexto.decidirDados('faturamento', true);
+    ok(linha.entrega_dados === 'APROVADO', 'duas confirmações aprovam o selo sem Finalizar pedido');
+    ok(aberturas.join() === 'faturamento,orcamento', 'Nota avança para Orçamento');
+    ok(linha.observacoes.item_1 === 'Preservar', 'preserva outras observações');
+    const completas = reidratar({ entrega: linha });
+    ok(completas.c.entrega && completas.c.faturamento, 'reabrir recupera as duas confirmações');
+    ok(contexto.clienteState.statusArte === 'AGUARDANDO_APROVACAO', 'confirmar dados não aprova a arte');
+    const alterado = reidratar({ entrega: { ...linha, entrega_dados: 'ALTERADO' } });
+    ok(alterado.c.entrega === null && alterado.c.faturamento === null, 'ALTERADO pede nova conferência');
+
+    await contexto.desfazerDecisao('entrega');
+    ok(linha.entrega_dados === '' && linha.observacoes.confirmacoes_portal.entrega === null,
+        'desfazer persiste a pendência e retira aprovação conjunta');
+    await contexto.decidirDados('entrega', false);
+    ok(linha.entrega_dados === 'CORRIGIR', 'Alterar retira aprovação e registra correção');
+    ok(aberturas.length === 2, 'Alterar e Desfazer permanecem na aba');
+
+    // Falha devolvida, exceção de rede e UPDATE vazio não podem exibir sucesso.
+    for (const falha of [async () => ({ ok: false }), async () => { throw new Error('offline'); }]) {
+        contexto.gravarCorrecaoDoCliente = falha;
+        await contexto.decidirDados('entrega', true);
+        ok(contexto.portalConfirmacoes.entrega === false && aberturas.length === 2,
+            'falha preserva decisão anterior e não avança');
+        ok(contexto.cartaoDeDecisao('entrega').includes('Não conseguimos salvar'), 'falha fica visível');
+        ok(!contexto.portalGravandoConfirmacao, 'falha libera nova tentativa');
+    }
+    contexto.gravarCorrecaoDoCliente = gravar;
+    bloqueado = true;
+    await contexto.decidirDados('entrega', true);
+    ok(linha.entrega_dados === 'CORRIGIR', 'recebedor obrigatório impede confirmação');
+    bloqueado = false;
+    await contexto.decidirDados('entrega', true);
+    ok(linha.entrega_dados === 'APROVADO' && aberturas.length === 3, 'nova tentativa salva e avança');
+    await contexto.desfazerDecisao('faturamento');
+    const from = banco.from;
+    banco.from = () => {
+        const q = from();
+        const select = q.select;
+        q.select = function () {
+            return this._op === 'update' ? Promise.resolve({ data: [], error: null }) : select.call(this);
+        };
+        return q;
+    };
+    await contexto.decidirDados('faturamento', true);
+    ok(contexto.portalConfirmacoes.faturamento === null && aberturas.length === 3,
+        'UPDATE sem linha afetada não confirma nem avança');
+}
+
+confirmarNoClique().then(() => {
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' conferencias FALHARAM.');
     process.exit(1);
 }
 console.log('OK: ' + total + ' conferencias das duas confirmacoes.');
+}).catch(e => { console.error(e); process.exit(1); });

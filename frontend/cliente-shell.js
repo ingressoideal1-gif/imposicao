@@ -258,28 +258,22 @@ function proximaEtapaPendente() {
  * diz "Pedido em producao" -- uma mensagem de tranquilidade ocupando a primeira
  * tela, enquanto o que falta aparecia como dois pontinhos de 9px no rodape.
  *
- * ## Por que isto NAO repete o erro que `seguirSozinhoSeAprovouTudo` evita
- *
- * Aquela funcao documenta que o avanco nunca pode ser decidido pelo ESTADO na
- * carga da pagina, e a razao e real: existem pedidos com todos os modelos em
- * `APROVADA` cujo status continua em `Aguard. Aprovacao`, e decidir por estado
- * levaria o cliente a APROVAR sem ter visto a arte.
- *
- * Trocar de aba nao aprova nada. Por isso a regra aqui e mais estreita do que
- * la: so quando o STATUS do pedido diz que a arte ja foi decidida
- * (`aprovado`/`producao`) -- e nunca a partir da contagem dos modelos, que e
- * justamente o dado que engana. Se a arte ainda espera decisao, abre na Arte.
+ * A abertura usa as mesmas decisões da trilha, incluindo modelos já aprovados
+ * mesmo quando o status geral ainda aguarda o fechamento do pedido. Trocar de
+ * aba não grava nem aprova nada. Uma aba concluída no hash também avança; abas
+ * informativas e etapas ainda pendentes continuam acessíveis pelo link direto.
  *
  * E a pagina AVISA que abriu sozinha, com o caminho de volta ao lado: o que o
  * sistema faz por conta propria precisa se anunciar.
  */
-function secaoDeAbertura(statusArte) {
+function secaoDeAbertura(statusArte, secaoInicial = 'arte') {
     const chave = seloDoStatus(statusArte).chave;
-    if (chave !== 'aprovado' && chave !== 'producao') return 'arte';
-
-    const proxima = proximaEtapaPendente();
-    if (!proxima || proxima.secao === 'arte') return 'arte';
-    return proxima.secao;
+    const etapas = etapasDoPedido();
+    if (chave === 'aprovado' || chave === 'producao') etapas[0].feito = true;
+    const indice = etapas.findIndex(e => e.secao === secaoInicial);
+    if (indice < 0 || !etapas[indice].feito) return secaoInicial;
+    const proxima = etapas.slice(indice + 1).find(e => !e.feito);
+    return proxima ? proxima.secao : 'orcamento';
 }
 
 /**
@@ -297,8 +291,8 @@ function anunciarAberturaAutomatica(secao) {
     el.insertAdjacentHTML('afterbegin',
         '<div class="portal-cartao portal-abertura">'
         + '<div class="portal-abertura-titulo">' + icone('check', 17, '#22c55e')
-        + 'Sua arte já está aprovada</div>'
-        + '<p class="portal-abertura-texto">Abrimos direto no que ainda falta você conferir. '
+        + (etapasDoPedido()[0].feito ? 'Sua arte já está aprovada' : 'Dados já conferidos') + '</div>'
+        + '<p class="portal-abertura-texto">Abrimos a próxima aba do pedido. '
         + 'A sua arte continua aqui, na aba <b>Arte</b>.</p>'
         + '<button type="button" class="portal-botao" onclick="abrirSecao(\'arte\')">'
         + icone('arte', 17) + 'Ver minha arte</button>'
@@ -438,14 +432,12 @@ function montarPortal(statusArte) {
         botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
     });
 
-    // O hash manda quando existe: e por ele que o cliente recarrega sem voltar
-    // ao comeco, e que o atendente manda o link ja na aba que interessa. Sem
-    // hash -- o caso do link colado no WhatsApp --, quem decide e
-    // `secaoDeAbertura`.
+    // Uma etapa já concluída avança também quando ficou gravada no hash.
     const doHash = (window.location.hash || '').replace('#', '');
-    const abertura = secaoValida(doHash) ? doHash : secaoDeAbertura(statusArte);
+    const inicial = secaoValida(doHash) ? doHash : 'arte';
+    const abertura = secaoDeAbertura(statusArte, inicial);
     abrirSecao(abertura);
-    if (!secaoValida(doHash) && abertura !== 'arte') anunciarAberturaAutomatica(abertura);
+    if (abertura !== inicial) anunciarAberturaAutomatica(abertura);
 
     const barra = document.getElementById('portal-abas');
     if (barra) barra.hidden = false;
