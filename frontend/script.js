@@ -92,6 +92,9 @@ const state = {
 
     bgImageVerso: null,     // HTMLImageElement | null (arte de fundo do verso, em duplex)
 
+    bgEditorOpacity: 0.55,  // preferência temporária de visualização; não vai para o PDF
+    bgEditorVisible: true,
+
     bgLoadToken: 0,         // invalida carregamentos de fundo assíncronos que ficaram para trás
 
     // ── A arte de fundo que PERTENCE à numeração (26/08/2026) ───────────────
@@ -5081,7 +5084,7 @@ function drawCanvasFace(canvas, face) {
 
     // Arte de fundo (camada de referência semitransparente em tamanho original e centralizada)
 
-    if (refBg) {
+    if (refBg && state.bgEditorVisible !== false) {
 
         // Para garantir escala 100% (tamanho máximo no canvas) sem distorção, usamos o aspect ratio
 
@@ -5125,7 +5128,7 @@ function drawCanvasFace(canvas, face) {
 
 
 
-        ctx.globalAlpha = 0.55;
+        ctx.globalAlpha = opacidadeDoFundoNoEditor();
 
         ctx.drawImage(refBg, drawX, drawY, drawW, drawH);
 
@@ -5258,6 +5261,7 @@ function drawCanvasFace(canvas, face) {
 }
 
 function drawCanvas() {
+    atualizarControlesDoFundo();
     const canvasFront = document.getElementById('numeracao-canvas');
     if (!canvasFront || !state.numFormato) return;
 
@@ -6633,9 +6637,49 @@ window.alignSelectedElement = function (alignment) {
 
 // - Arte de Fundo no Canvas (Bug 5) -
 
+function opacidadeDoFundoNoEditor() {
+    const valor = state.bgEditorOpacity;
+    if (valor === undefined || valor === null || valor === '') return 0.55;
+    const op = Number(valor);
+    return Number.isFinite(op) ? Math.min(1, Math.max(0, op)) : 0.55;
+}
+
+function atualizarControlesDoFundo() {
+    const temFundo = !!(state.bgImage || state.bgImageVerso);
+    const visivel = state.bgEditorVisible !== false;
+    const op = opacidadeDoFundoNoEditor();
+    const controle = document.getElementById('bg-editor-opacity');
+    const rotulo = document.getElementById('bg-editor-opacity-val');
+    const botao = document.getElementById('btn-toggle-bg');
+    if (controle) {
+        controle.disabled = !temFundo;
+        controle.value = op;
+    }
+    if (rotulo) rotulo.textContent = Math.round(op * 100) + '%';
+    if (botao) {
+        botao.disabled = !temFundo;
+        botao.textContent = visivel ? 'Ocultar fundo' : 'Mostrar fundo';
+    }
+}
+
+window.updateBgEditorOpacity = function (valor) {
+    const op = Number(valor);
+    if (!Number.isFinite(op)) return;
+    state.bgEditorOpacity = Math.min(1, Math.max(0, op));
+    drawCanvas();
+};
+
+window.toggleBgEditorVisibility = function () {
+    state.bgEditorVisible = state.bgEditorVisible === false;
+    drawCanvas();
+};
+
 
 
 window.clearBgImage = function () {
+
+    state.bgEditorOpacity = 0.55;
+    state.bgEditorVisible = true;
 
     state.bgImage = null;
 
@@ -7951,7 +7995,7 @@ function renderElementsList() {
                 </div>
 
                 <div class="form-group el-full">
-                    <label>Opacidade: <span id="op-val-${el.id}">${Math.round(opAtual * 100)}%</span></label>
+                    <label>Opacidade do elemento: <span id="op-val-${el.id}">${Math.round(opAtual * 100)}%</span></label>
                     <input class="form-control" type="range" min="0" max="1" step="0.05" value="${opAtual}"
                            oninput="updateElOpacidade('${el.id}', parseFloat(this.value))">
                     <div id="op-aviso-${el.id}" style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">
@@ -25635,7 +25679,21 @@ async function sincronizarPedidosProntosParaEnvio() {
  * Carrega todas as OS -- Prioridade: Vibecode → Supabase Imposition → API local
  * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
  */
-async function loadOrdens() {
+let _cargaOrdensEmAndamento = null;
+function loadOrdens() {
+    // O botão, a abertura da tela e o relógio compartilham a mesma consulta.
+    if (!_cargaOrdensEmAndamento) {
+        _cargaOrdensEmAndamento = carregarOrdensDados().then(ok => {
+            if (ok) conferirNovosPedidosDoUsuario();
+            return ok;
+        }).finally(() => {
+            _cargaOrdensEmAndamento = null;
+        });
+    }
+    return _cargaOrdensEmAndamento;
+}
+
+async function carregarOrdensDados() {
     try {
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
         // Isso economiza uma consulta lenta que sempre falharia.
@@ -25679,14 +25737,15 @@ async function loadOrdens() {
                     // propósito: ela é informação de apoio, e segurar a tabela
                     // por ela atrasaria a lista que o atendimento abre de manhã.
                     // Enquanto não chega, a célula mostra o traço.
-                    carregarPagamentosGlobais().then(() => renderOrdens())
+                    const pagamentos = carregarPagamentosGlobais().then(() => renderOrdens())
                         .catch(e => console.warn('Erro ao carregar pagamentos:', e));
 
-                    sincronizarStatusOrdensDinamico().then(() => {
+                    const status = sincronizarStatusOrdensDinamico().then(() => {
                         renderOrdens();
                     }).catch(e => console.warn('Erro ao sincronizar status:', e));
 
-                    return;
+                    await Promise.all([pagamentos, status]);
+                    return true;
                 }
             }
             console.log('[OS] Vibecode sem dados, tentando fallback...');
@@ -25829,12 +25888,15 @@ async function loadOrdens() {
             }
         }
         await sincronizarStatusOrdensDinamico();
-        carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
-        carregarPagamentosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro pagamentos:', e));
+        const modelos = carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
+        const pagamentos = carregarPagamentosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro pagamentos:', e));
         renderOrdens();
+        await Promise.all([modelos, pagamentos]);
+        return true;
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
         toast('Erro ao carregar Ordens de Serviço: ' + e.message, 'error');
+        return false;
     }
 }
 
@@ -29365,11 +29427,138 @@ function atualizarRelogiosDaLista() {
 }
 window.atualizarRelogiosDaLista = atualizarRelogiosDaLista;
 
+// Som e pedidos já vistos pertencem ao login desta sessão, não aos filtros da tela.
+const _avisosArtePorUsuario = new Map();
+let _audioListaArte = null;
+
+function usuarioDoAvisoDeArte() {
+    const conta = window._currentUser;
+    const local = window._acessoLocal;
+    const chave = conta && (conta.id || conta.email)
+        ? 'conta:' + (conta.id || conta.email)
+        : local && local.nome ? 'local:' + local.role + ':' + local.nome : '';
+    if (!chave) return null;
+    const designer = getLoggedInDesignerName();
+    const atendente = getLoggedInAtendenteName();
+    if (!designer && !atendente) return null;
+    return { chave, designer, atendente };
+}
+
+function estadoDoAvisoDeArte(usuario) {
+    if (!_avisosArtePorUsuario.has(usuario.chave)) {
+        _avisosArtePorUsuario.set(usuario.chave, { vistos: null, som: false });
+    }
+    return _avisosArtePorUsuario.get(usuario.chave);
+}
+
+function atualizarBotaoSomArte() {
+    const botao = document.getElementById('btn-som-lista-arte');
+    if (!botao) return;
+    const usuario = usuarioDoAvisoDeArte();
+    const ligado = !!usuario && estadoDoAvisoDeArte(usuario).som
+        && !!_audioListaArte && _audioListaArte.state === 'running';
+    botao.disabled = !usuario;
+    botao.textContent = ligado ? '🔔 Som ligado' : '🔕 Ativar som';
+    botao.setAttribute('aria-pressed', String(ligado));
+    botao.title = usuario
+        ? 'Novos pedidos destinados a ' + (usuario.designer || usuario.atendente) + '. Clique para ativar ou silenciar.'
+        : 'Som disponível para o usuário vinculado ao designer ou atendente do pedido.';
+}
+
+function tocarAvisoDePedido() {
+    if (!_audioListaArte || _audioListaArte.state !== 'running') return false;
+    try {
+        const agora = _audioListaArte.currentTime;
+        [660, 880].forEach((frequencia, i) => {
+            const inicio = agora + i * 0.18;
+            const osc = _audioListaArte.createOscillator();
+            const ganho = _audioListaArte.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(frequencia, inicio);
+            ganho.gain.setValueAtTime(0, inicio);
+            ganho.gain.linearRampToValueAtTime(0.16, inicio + 0.015);
+            ganho.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.16);
+            osc.connect(ganho);
+            ganho.connect(_audioListaArte.destination);
+            osc.onended = () => { osc.disconnect(); ganho.disconnect(); };
+            osc.start(inicio);
+            osc.stop(inicio + 0.17);
+        });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function alternarSomListaArte() {
+    const usuario = usuarioDoAvisoDeArte();
+    if (!usuario) return;
+    const aviso = estadoDoAvisoDeArte(usuario);
+    if (aviso.som && _audioListaArte && _audioListaArte.state === 'running') {
+        aviso.som = false;
+    } else {
+        try {
+            const Audio = window.AudioContext || window.webkitAudioContext;
+            if (!Audio) throw new Error('Áudio indisponível neste navegador.');
+            if (!_audioListaArte || _audioListaArte.state === 'closed') _audioListaArte = new Audio();
+            _audioListaArte.onstatechange = atualizarBotaoSomArte;
+            await _audioListaArte.resume();
+            if (usuarioDoAvisoDeArte()?.chave !== usuario.chave) return;
+            aviso.som = _audioListaArte.state === 'running';
+            if (!aviso.som || !tocarAvisoDePedido()) throw new Error('Não foi possível ativar o som.');
+        } catch (e) {
+            aviso.som = false;
+            toast('Não foi possível ativar o som. Tente novamente pelo botão Ativar som.', 'warning');
+        }
+    }
+    atualizarBotaoSomArte();
+}
+
+function conferirNovosPedidosDoUsuario() {
+    try {
+        atualizarBotaoSomArte();
+        const usuario = usuarioDoAvisoDeArte();
+        const lista = document.getElementById('view-lista-arte');
+        if (!usuario || document.hidden || !lista || !lista.classList.contains('active')) return;
+        const aviso = estadoDoAvisoDeArte(usuario);
+        const pedidos = (state.ordens || []).filter(os => {
+            if (classificarPedidoNaArte(os).fila === 'concluidos') return false;
+            return (usuario.designer && getOSDesigner(os.id, os.numero) === usuario.designer)
+                || (usuario.atendente && (getOSVendedor(os.id) === usuario.atendente || os.vendedor === usuario.atendente));
+        });
+        const numeros = [...new Set(pedidos.map(os => String(os.numero || os.id)).filter(Boolean))];
+        if (!aviso.vistos) {
+            aviso.vistos = new Set(numeros);
+            return; // Abrir a lista não transforma os pedidos antigos em pedidos novos.
+        }
+        const novos = numeros.filter(numero => !aviso.vistos.has(numero));
+        numeros.forEach(numero => aviso.vistos.add(numero));
+        if (!novos.length) return;
+        if (aviso.som) tocarAvisoDePedido();
+        toast(novos.length === 1 ? 'Novo pedido destinado a você na Lista de Arte.'
+            : novos.length + ' novos pedidos destinados a você na Lista de Arte.', 'info');
+    } catch (e) {
+        console.warn('[Lista de Arte] Não foi possível verificar os avisos de novos pedidos:', e);
+    }
+}
+
 let _relogioDaListaLigado = false;
+async function atualizarListaArteAutomaticamente() {
+    const lista = document.getElementById('view-lista-arte');
+    if (document.hidden || !lista || !lista.classList.contains('active')
+        || lista.offsetParent === null || _cargaOrdensEmAndamento) return;
+    try {
+        await loadOrdens();
+    } catch (e) {
+        console.warn('[Lista de Arte] Falha na atualização automática:', e);
+    }
+}
+
 function ligarRelogioDaLista() {
     if (_relogioDaListaLigado) return;
     _relogioDaListaLigado = true;
     setInterval(atualizarRelogiosDaLista, 30000);
+    setInterval(atualizarListaArteAutomaticamente, 60000);
     // De carona no mesmo gatilho de "a lista existe": o status do ERP também
     // precisa ser relido, senão o pedido que foi para a expedição fica na tela
     // até alguém recarregar a página.

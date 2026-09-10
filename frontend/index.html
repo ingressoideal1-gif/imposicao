@@ -703,6 +703,15 @@
                                 <button class="btn btn-sm btn-secondary" onclick="ungroupSelectedElements()" title="Desagrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔓 Desagrupar</button>
                             </div>
                         </div>
+                        <div id="bg-editor-controls" style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:8px;font-size:0.78rem;color:var(--text-dim);">
+                            <label for="bg-editor-opacity" style="margin:0;">Opacidade do fundo: <span id="bg-editor-opacity-val">55%</span></label>
+                            <input id="bg-editor-opacity" type="range" min="0" max="1" step="0.05" value="0.55" disabled
+                                   style="width:130px;max-width:100%;" aria-describedby="bg-editor-help"
+                                   oninput="updateBgEditorOpacity(this.value)">
+                            <button id="btn-toggle-bg" type="button" class="btn btn-sm btn-secondary" disabled
+                                    onclick="toggleBgEditorVisibility()">Ocultar fundo</button>
+                            <span id="bg-editor-help">Só nesta edição, na frente e no verso. Não altera a impressão nem remove o arquivo.</span>
+                        </div>
                         <div style="display: flex; width: 100%; justify-content: center; gap: 24px; overflow: auto; padding: 8px 0; flex-wrap: wrap;">
                             <div id="num-canvas-container-frente" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
                                 <span id="num-canvas-title-frente" style="font-weight: 700; color: var(--blue); font-size: 0.85rem; display: none;">FRENTE</span>
@@ -2938,6 +2947,10 @@
                             <option value="">🎧 Todos os Atendentes</option>
                         </select>
                         <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
+                        <span style="font-size:0.75rem;color:var(--text-dim);">Atualização automática a cada 60 s</span>
+                        <button id="btn-som-lista-arte" type="button" class="btn btn-secondary btn-sm" disabled
+                                aria-pressed="false" onclick="alternarSomListaArte()"
+                                title="Ativar aviso sonoro para novos pedidos destinados ao usuário logado">🔕 Ativar som</button>
                     </div>
                 </div>
 
@@ -4315,7 +4328,7 @@
     <script src="foto-lib.js?v=833"></script>
     <script src="gerenciador-fotos.js?v=833"></script>
     <script src="editor-foto.js?v=833"></script>
-    <script src="script.js?v=847"></script>
+    <script src="script.js?v=850"></script>
     <script src="ideal-control.js?v=833"></script>
     <script src="criador-arte.js?v=833"></script>
     <script src="/pedido.js?v=845"></script>

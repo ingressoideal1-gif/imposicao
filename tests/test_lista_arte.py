@@ -27,3 +27,23 @@ def test_o_harness_da_lista_de_arte_passa():
     )
     assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_atualizacao_automatica_da_lista_de_arte():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "lista_arte_atualizacao_harness.js")],
+        cwd=RAIZ, timeout=30, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o teste não concluiu todos os ciclos"
+
+
+def test_som_apenas_para_pedidos_do_login():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "lista_arte_som_browser_harness.js")],
+        cwd=RAIZ, timeout=60, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o teste do som não concluiu"
