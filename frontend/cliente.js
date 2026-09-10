@@ -1685,7 +1685,7 @@ async function clienteAprovarTudo() {
  *
  * @returns {Promise<{ok: boolean, erro?: string}>}
  */
-async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega) {
+async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirmacoes) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
         return { ok: false, erro: 'sem conexao com o banco' };
     }
@@ -1737,8 +1737,16 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega) {
         delete obs['correcao_faturamento'];
     }
 
+    if (confirmacoes) {
+        obs.confirmacoes_portal = {
+            entrega: confirmacoes.entrega,
+            faturamento: confirmacoes.faturamento,
+            selo: statusEntrega,
+            finalizado: confirmacoes.finalizado === true
+        };
+    }
     const campos = { observacoes: obs };
-    if (statusEntrega) campos.entrega_dados = statusEntrega;
+    if (statusEntrega !== null && statusEntrega !== undefined) campos.entrega_dados = statusEntrega;
 
     if (existente) {
         const { data, error } = await supabaseClient

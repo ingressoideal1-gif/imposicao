@@ -216,8 +216,8 @@ function montar(linhas, erros) {
 
     // Falhar ao gravar nao pode prender o cliente na tela: ele precisa poder
     // finalizar assim mesmo, sabendo que aquele texto nao entrou.
-    ok(salvar.indexOf('return') === salvar.lastIndexOf('return'),
-        'falha ao gravar NAO prende o cliente (o unico return e o do campo vazio)');
+    ok(/finally\s*\{\s*window\.portalGravandoConfirmacao = false/.test(salvar),
+        'falha ao gravar libera a trava para tentar novamente');
     ok(/gravacao\.ok\s*$|gravacao\.ok\s*\?/m.test(salvar),
         'e o recibo na tela diz a verdade sobre ter salvo ou nao');
 
