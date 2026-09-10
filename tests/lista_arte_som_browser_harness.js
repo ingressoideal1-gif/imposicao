@@ -40,7 +40,7 @@ function extrair(nome) {
             window._currentUser = { id: 'designer-a' };
             window.avisos = [];
             function toast(texto) { avisos.push(texto); }
-            function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila' }; }
+            function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila', statusCalculado: os.status || 'Em Arte' }; }
             ${['loadUsuarios', 'nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
                 'getOSDesigner', 'getOSVendedor'].map(extrair).join('\n')}
             ${fonte.slice(fonte.indexOf('const _avisosArtePorUsuario ='), fonte.indexOf('let _relogioDaListaLigado ='))}
@@ -68,6 +68,8 @@ function extrair(nome) {
             s.ordens.push({ id: '3', numero: 3, designer_nome: 'Designer A' });
             conferirNovosPedidosDoUsuario(); guardar('novo');
             conferirNovosPedidosDoUsuario(); guardar('repetido');
+            s.ordens[2].status = 'Enviar Arte';
+            conferirNovosPedidosDoUsuario(); guardar('statusSoDesigner');
             s.ordens.push({ id: '4', numero: 4, designer_nome: 'Designer A', fila: 'concluidos' });
             conferirNovosPedidosDoUsuario(); guardar('concluido');
             s.ordens[1].designer_nome = 'Designer A';
@@ -86,6 +88,7 @@ function extrair(nome) {
         assert.deepEqual(resultado.outro, [2, 0]);
         assert.deepEqual(resultado.novo, [4, 1]);
         assert.deepEqual(resultado.repetido, [4, 1]);
+        assert.deepEqual(resultado.statusSoDesigner, [4, 1], 'mudança de status avisa o atendente, não o designer');
         assert.deepEqual(resultado.concluido, [4, 1]);
         assert.deepEqual(resultado.atribuido, [6, 2]);
         assert.deepEqual(resultado.duplicado, [6, 2]);
@@ -99,12 +102,37 @@ function extrair(nome) {
             conferirNovosPedidosDoUsuario();
         });
         assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [10, 3], 'atendente recebe apenas seu pedido');
+        await page.evaluate(() => {
+            testState.ordens.find(o => o.id === '6').status = 'Enviar Arte';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [12, 4], 'atendente é avisado quando o status do seu pedido muda');
+        assert.match(await page.evaluate(() => avisos.at(-1)), /status/);
+        await page.evaluate(() => {
+            conferirNovosPedidosDoUsuario();
+            testState.ordens.find(o => o.id === '2').status = 'Aprovada';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [12, 4], 'status repetido e pedido de outro atendente não avisam');
+        await page.evaluate(() => {
+            const pedido = testState.ordens.find(o => o.id === '6');
+            pedido.status_interno = 'EM PRODUCAO';
+            pedido.fila = 'concluidos';
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [14, 5], 'atendente recebe a mudança mesmo quando o pedido sai da fila de arte');
+        await page.evaluate(() => {
+            testState.ordens.find(o => o.id === '6').status_interno = 'ENTREGUE';
+            conferirNovosPedidosDoUsuario();
+            conferirNovosPedidosDoUsuario();
+        });
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [16, 6], 'status do ERP avisa uma vez mesmo sem mudar o card');
         await page.click('#btn-som-lista-arte');
         await page.evaluate(() => {
             testState.ordens.push({ id: '7', numero: 7, vendedor: 'Atendente A' });
             conferirNovosPedidosDoUsuario();
         });
-        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [10, 4], 'silenciado mantém aviso visual');
+        assert.deepEqual(await page.evaluate(() => [tons, avisos.length]), [16, 7], 'silenciado mantém aviso visual');
         await page.evaluate(() => {
             _currentUser = null;
             conferirNovosPedidosDoUsuario();
@@ -150,7 +178,7 @@ function extrair(nome) {
         assert.equal(await page.$eval('#btn-som-lista-arte', b => b.getAttribute('aria-pressed')), 'false');
         assert.match(await page.evaluate(() => avisos.at(-1)), /Não foi possível ativar o som/);
         assert.deepEqual(erros, []);
-        console.log('OK: Web Audio por clique, carregamento e login de administrador/designer/atendente, primeira carga silenciosa, novos pedidos, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
+        console.log('OK: Web Audio por clique, administrador/designer/atendente, primeira carga silenciosa, novos pedidos, mudanças de status do atendimento e ERP, atribuição, deduplicação, troca de login, silenciar e ausência de áudio.');
     } finally {
         await browser.close();
     }
