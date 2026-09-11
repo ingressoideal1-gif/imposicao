@@ -1085,9 +1085,8 @@ class ImpositionConfig:
                  base_file_verso: str = None):
 
         self.base_file = base_file
-        # FxVersoUnico: o verso vem em ARQUIVO SEPARADO, de uma pagina so, e e
-        # anexado ao fim do documento da frente no `_load_base_as_pdf`.
-        # `verso_page_idx` guarda em que pagina ele foi parar -- a mesma para
+        # Arte separada do verso: anexada no `_load_base_as_pdf` quando preciso.
+        # No FxVersoUnico, `verso_page_idx` guarda em que pagina ficou -- a mesma para
         # todas as pecas. Fica None enquanto o arquivo nao foi carregado, e
         # tambem quando nao ha verso nenhum.
         self.base_file_verso = base_file_verso
@@ -1618,7 +1617,11 @@ class ImpositionEngine:
         return fitz.open(stream=pdf_bytes, filetype="pdf")
 
     def _load_base_as_pdf(self) -> fitz.Document:
-        """O documento da arte: a frente e, no FxVersoUnico, o verso anexado ao fim.
+        """A frente e o verso separado, quando ele nao esta no PDF da frente.
+
+        No FxVerso individual, anexa o verso se a frente tem uma unica pagina.
+        PDFs com duas ou mais paginas preservam seu verso embutido, assim como
+        no caminho de multi-artes. Frente simples nao usa o arquivo do verso.
 
         No `duplex_unico` frente e verso chegam em arquivos SEPARADOS — a frente
         paginada (uma página por peça), o verso de uma página só. Anexar o verso
@@ -1634,19 +1637,27 @@ class ImpositionEngine:
             return None
 
         verso_path = getattr(self.cfg, "base_file_verso", None)
-        if verso_path and verso_unico(self.cfg.print_mode):
+        unico = verso_unico(self.cfg.print_mode)
+        anexar_verso = tem_verso(self.cfg.print_mode) and (unico or len(doc) == 1)
+        if verso_path and anexar_verso:
             verso_doc = None
             try:
                 verso_doc = self._abrir_arquivo_como_pdf(verso_path)
                 if verso_doc:
                     if len(verso_doc) > 1:
-                        print(f"[engine] FxVersoUnico: o arquivo de verso tem "
+                        print(f"[engine] {self.cfg.print_mode}: o arquivo de verso tem "
                               f"{len(verso_doc)} paginas; so a primeira sera usada.")
                     # O índice é o total de páginas da frente ANTES do anexo: é
                     # exatamente onde o insert_pdf vai colar a página.
                     self.cfg.verso_page_idx = len(doc)
                     doc.insert_pdf(verso_doc, from_page=0, to_page=0)
+                elif not unico:
+                    raise ValueError("Arquivo de arte do verso vazio")
             except Exception as ex:
+                if not unico:
+                    doc.close()
+                    raise ValueError("Nao foi possivel carregar a arte do verso. "
+                                     "Confira o arquivo e gere novamente.") from ex
                 # Sem verso, a célula de verso sai vazia — melhor que derrubar o
                 # trabalho inteiro da frente por causa do arquivo de trás.
                 self.cfg.verso_page_idx = None

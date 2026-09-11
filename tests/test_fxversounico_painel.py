@@ -78,7 +78,7 @@ def test_o_arquivo_do_verso_vai_junto_ao_motor():
     """Um modelo sozinho não passa por multi_artes: manda a arte como upload."""
     for caminho in (SCRIPT, PEDIDO):
         texto = _texto(caminho)
-        assert "versoUnico(payload.print_mode)" in texto, (
+        assert "temVerso(payload.print_mode)" in texto, (
             os.path.basename(caminho) + " parou de decidir pelo modo se manda o "
             "arquivo de verso"
         )

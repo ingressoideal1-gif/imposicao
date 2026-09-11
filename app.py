@@ -1173,9 +1173,8 @@ def qr_ideal_previa(pedido: str, modelo: str, item: int = 1):
 async def impose_file(
     request: Request,
     file: UploadFile | None = File(None),
-    # FxVersoUnico: a arte do verso, um arquivo de UMA pagina que se repete em
-    # todas as pecas. Opcional -- so o `duplex_unico` de um modelo sozinho o
-    # manda; a multi-selecao ja manda o verso por arte, em `pdf_verso_url`.
+    # Arte separada do verso nos modos duplex de um modelo sozinho.
+    # A multi-selecao manda o verso por arte, em `pdf_verso_url`.
     file_verso: UploadFile | None = File(None),
     csv_file: UploadFile | None = File(None),
     multi_artes_files: list[UploadFile] = File(default=[]),
