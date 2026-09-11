@@ -13227,11 +13227,10 @@ window.runImposition = async function (mode, returnBlob = false) {
         formData.append('file', selectedFile);
     }
 
-    // O arquivo do verso do FxVersoUnico (31/08/2026). Um modelo sozinho não
-    // passa por `multi_artes` — manda a arte como upload —, então o verso
-    // precisa de um campo próprio. Nos outros modos o motor ignora este arquivo:
-    // ali o verso sai das páginas do próprio arquivo da frente.
-    if (versoUnico(payload.print_mode)) {
+    // Um modelo sozinho manda as artes como uploads separados. Ambos os modos
+    // duplex precisam do verso; no FxVerso o motor usa este arquivo quando a
+    // frente tem uma pagina, preservando PDFs que ja trazem as duas faces.
+    if (temVerso(payload.print_mode)) {
         const versoFile = isPedTab ? (state.pedArtVersoFile || state.impArtVersoFile)
                                    : state.impArtVersoFile;
         if (versoFile) formData.append('file_verso', versoFile);
