@@ -94,3 +94,31 @@ chaves de serviço ao worktree/pacote. Nenhuma dependência foi instalada.
 Ativar `latest.json` somente após conferir o MSI pela URL pública com tamanho
 e SHA-256 idênticos ao pacote validado. Instalação na estação e conferência
 física são etapas posteriores e não são comprovadas pelo deploy.
+
+## Publicação confirmada
+
+- [PR #36](https://github.com/ingressoideal1-gif/imposicao/pull/36) integrada:
+  `7dd93125573391bf766d17e21543158e263749f1`.
+- Tag `agente-v1.2.328` publicada nesse commit.
+- Cloudflare Pages: `completed/success` no commit integrado. Após propagação,
+  os quatro HTMLs e `pedido.js`/`script.js` responderam HTTP 200 e coincidiram
+  com a fonte validada, normalizando apenas BOM e CRLF/LF. Scripts em v852.
+- MSI: **74.604.544 bytes**, ProductVersion **1.2.328.0** conferido diretamente
+  na tabela de propriedades do instalador, sem instalá-lo.
+- SHA-256 local e do download público:
+  `eadfd2db2c80b8977b42c278c6c4c9c7e5327ea02652296bf19b1e8589089fd6`.
+- O conteúdo compilado de nove módulos foi comparado às fontes, incluindo
+  `engine`, `app` e `agent_version`; seis arquivos do frontend embutido também
+  coincidiram. DLLs de impressão e credencial restrita presentes; nenhum `.env`
+  no executável. PyInstaller e WiX concluídos com sucesso.
+- Upload do MSI sem sobrescrita, download público e verificação de tamanho/hash
+  concluídos **antes** da ativação. Manifesto `latest.json` público confirmado
+  em **1.2.328**, com URL, tamanho, SHA-256 e notas esperados.
+- Evidências locais em `dist/validacao-msi.json`, `dist/frontend-publico.json`,
+  `dist/latest.anterior.json`, `dist/latest.preparado.json` e
+  `dist/conferencia-remota.msi`, no worktree desta entrega.
+
+Atualização instalada e impressão física continuam pendentes. Na estação,
+confirmar NewProd 1.2.328 antes de gerar o PDF individual novamente; conferir
+arte e numeração nas duas faces antes da tiragem. Nenhum dado do pedido foi
+modificado e nenhuma impressão física foi acionada nesta publicação.

@@ -48,13 +48,17 @@ def config(tmp_path, modo="duplex", paginas=None, verso=True, schema="sequential
 
 
 @pytest.mark.parametrize("schema", ["sequential", "cut_stack"])
-def test_arte_e_numeracao_saem_juntas_no_verso(tmp_path, schema):
+@pytest.mark.parametrize("capa", [False, True])
+def test_arte_e_numeracao_saem_juntas_no_verso(tmp_path, schema, capa):
     cfg = config(tmp_path, schema=schema)
+    cfg.has_cover = capa
     motor = ImpositionEngine(cfg)
     motor.process()
     numeros = []
     total_frentes = total_versos = 0
     for arquivo in motor.generated_files:
+        if arquivo["type"] not in ("single", "miolo"):
+            continue
         with fitz.open(arquivo["path"]) as doc:
             for i, page in enumerate(doc):
                 texto = page.get_text()
@@ -94,34 +98,8 @@ def test_verso_invalido_nao_gera_trabalho_incompleto(tmp_path):
     assert not Path(cfg.out_pdf).exists()
 
 
-@pytest.mark.parametrize("arquivo", ["pedido.js", "script.js"])
-def test_upload_envia_verso_nos_dois_modos_duplex(arquivo):
-    # Executa o bloco real de FormData com as funcoes reais de modo.
-    js = r"""
-const fs = require('fs'), vm = require('vm'), assert = require('assert');
-const src = fs.readFileSync(process.argv[1], 'utf8');
-const helpers = ['temVerso', 'versoUnico'].map(name =>
-    src.match(new RegExp('function ' + name + '\\(printMode\\)\\s*\\{[\\s\\S]*?\\n\\}'))[0]).join('\n');
-const upload = src.indexOf("formData.append('file_verso'");
-const start = src.lastIndexOf('\n    if (', upload);
-const end = src.indexOf('\n    }', upload) + 6;
-const bloco = src.slice(start, end);
-for (const print_mode of ['front', 'duplex', 'duplex_unico']) {
-  for (const presente of [true, false]) {
-    for (const isPedTab of [true, false]) {
-      const sent = [];
-      const file = presente ? 'verso.pdf' : null;
-      vm.runInNewContext(helpers + bloco, {
-        payload: {print_mode}, isPedTab,
-        state: {pedArtVersoFile:file, impArtVersoFile:file},
-        formData: {append:(...args) => sent.push(args)}
-      });
-      assert.deepStrictEqual(sent, presente && print_mode !== 'front'
-        ? [['file_verso', 'verso.pdf']] : [], print_mode);
-    }
-  }
-}
-"""
-    result = subprocess.run(["node", "-e", js, str(RAIZ / "frontend" / arquivo)],
+def test_carregamento_do_verso_antes_do_upload():
+    result = subprocess.run(["node", str(RAIZ / "tests/verso_carregamento_harness.js")],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "OK:" in result.stdout
