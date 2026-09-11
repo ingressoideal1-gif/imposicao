@@ -90,6 +90,11 @@ def is_allowed_release_url(url: str) -> bool:
 # O que muda é só o que se cunha daqui para a frente.
 PAINEL_BASE_URL = "https://ideal-imposition.vercel.app"
 
+# Origem das atualizacoes do painel da estacao, migrada para Cloudflare.
+# Independente do endereco dos links/QRs acima: a Vercel conserva uma copia
+# antiga e sincronizar dela desfaz as correcoes embutidas no agente novo.
+PAINEL_SYNC_BASE_URL = "https://imposicao.pages.dev"
+
 # Só o que a estação precisa. As fontes (fonts_local) ficam de fora: são ~140 MB
 # e já têm o próprio sincronismo, pelo Storage.
 #
@@ -139,6 +144,8 @@ PAINEL_ARQUIVOS = [
     # com um 404 no lugar da barra.
     "avisos.js",
     "cliente.js",
+    "cliente-bancos.js",
+    "cliente-modelo.css",
     # Os sete arquivos do Portal do Pedido (20/08/2026). A pagina do cliente
     # deixou de ser um funil de aprovacao e virou cinco secoes; cada uma mora no
     # seu arquivo, e a `cliente.html` carrega todos. Sem eles aqui, a estacao

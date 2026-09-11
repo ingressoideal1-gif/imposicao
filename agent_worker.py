@@ -638,7 +638,7 @@ def _sincronizar_fontes_em_thread():
 #
 # A imposicao continua na estacao. Quem escolhe o motor e o supabase-config.js,
 # em tempo de execucao, pela porta da pagina — servido na 9000, API_BASE_URL
-# fica vazio e o motor e o local. Ver security_config.PAINEL_BASE_URL.
+# fica vazio e o motor e o local. Ver security_config.PAINEL_SYNC_BASE_URL.
 
 PAINEL_DIR = os.path.join(db.DB_DIR, "painel")
 
@@ -668,7 +668,8 @@ def sincronizar_painel():
     copia embutida no executavel, que o app.py semeia.
     """
     import security_config
-    base = security_config.PAINEL_BASE_URL.rstrip("/")
+    from agent_version import AGENT_VERSION
+    base = security_config.PAINEL_SYNC_BASE_URL.rstrip("/")
     temp = PAINEL_DIR + ".novo"
 
     try:
@@ -677,11 +678,13 @@ def sincronizar_painel():
         os.makedirs(temp, exist_ok=True)
 
         for nome in security_config.PAINEL_ARQUIVOS:
-            # Cache-buster: o painel na Vercel ja responde no-store, mas uma
+            # Cache-buster: o painel publicado ja responde no-store, mas uma
             # borda intermediaria mal configurada devolveria arquivo velho — e o
             # sintoma seria exatamente o que estamos consertando.
             url = f"{base}/{nome}?t={int(time.time())}"
-            req = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+            req = urllib.request.Request(url, headers={
+                "Cache-Control": "no-cache", "User-Agent": f"NewProd Agent/{AGENT_VERSION}"
+            })
             with urllib.request.urlopen(req, timeout=30) as resp:
                 if resp.status != 200:
                     raise RuntimeError(f"HTTP {resp.status} em {nome}")
