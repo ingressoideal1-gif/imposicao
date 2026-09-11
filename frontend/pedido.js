@@ -6309,7 +6309,17 @@ window.runPedImposition = async function (mode, isRefazer) {
     // duplex precisam do verso; no FxVerso o motor usa este arquivo quando a
     // frente tem uma pagina, preservando PDFs que ja trazem as duas faces.
     if (temVerso(payload.print_mode)) {
-        const versoFile = state.pedArtVersoFile || state.impArtVersoFile;
+        let versoFile = isPedTab ? state.pedArtVersoFile : state.impArtVersoFile;
+        if (!isMultiSelected && schema !== 'multi_artes') {
+            try {
+                if (typeof prepararVersoDoTrabalho !== 'function') {
+                    return desistir('Atualize o painel antes de gerar a impressão com verso.');
+                }
+                versoFile = await prepararVersoDoTrabalho(state, payload.print_mode, versoFile);
+            } catch (erro) {
+                return desistir(erro.message);
+            }
+        }
         if (versoFile) formData.append('file_verso', versoFile);
     }
 

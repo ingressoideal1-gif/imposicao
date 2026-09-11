@@ -87,6 +87,58 @@
         return url;
     }
 
+    // A previa baixa em segundo plano e pode terminar depois do clique em
+    // Gerar/Imprimir. O arquivo deste trabalho vem do modelo, nao desse cache.
+    async function prepararVersoDoTrabalho(estado, modo, arquivoManual) {
+        if (modo !== 'duplex' && modo !== 'duplex_unico') return null;
+        function selecao() {
+            const ativo = estado.activeOSItem;
+            if (!ativo) return null;
+            const item = (estado.osItens?.[ativo.osId] || [])
+                .find(i => String(i.id) === String(ativo.itemId));
+            if (!item) throw new Error('Reabra o modelo antes de gerar a impressão.');
+            return { os: String(ativo.osId), id: String(item.id),
+                frente: item.arte_url || item.url_arquivo_arte || null,
+                verso: item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo || null };
+        }
+        const inicial = selecao();
+        if (!inicial) return arquivoManual || null;
+        const url = arteDeImpressao(inicial.verso);
+        // Sem original, nunca reaproveitar o verso de outro modelo ou de Cor.
+        if (!url) return null;
+        const controle = new AbortController();
+        const limite = setTimeout(() => controle.abort(), 30000);
+        try {
+            const resposta = await fetch(url, { signal: controle.signal });
+            if (!resposta.ok) throw new Error('Download recusado');
+            const blob = await resposta.blob();
+            if (!blob.size || /text\/html|application\/json/i.test(blob.type)) {
+                throw new Error('Arquivo vazio ou resposta inválida');
+            }
+            // Os originais aceitos pelo motor sao PDF ou imagem. Uma resposta
+            // de erro HTTP 200 nao pode virar um upload com extensao .pdf.
+            const bytes = new Uint8Array(await blob.slice(0, 1024).arrayBuffer());
+            const pdf = new TextDecoder('latin1').decode(bytes).includes('%PDF-');
+            const png = bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
+            const jpg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+            const webp = String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
+                && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
+            if (!pdf && !png && !jpg && !webp) throw new Error('Formato inválido');
+            if (JSON.stringify(selecao()) !== JSON.stringify(inicial)) {
+                throw new Error('O modelo ou a arte mudou durante o carregamento. Gere novamente.');
+            }
+            const extensao = pdf ? 'pdf' : png ? 'png' : jpg ? 'jpg' : 'webp';
+            return new File([blob], `verso_${inicial.id}.${extensao}`,
+                { type: pdf ? 'application/pdf' : `image/${extensao === 'jpg' ? 'jpeg' : extensao}` });
+        } catch (erro) {
+            if (erro.message.startsWith('O modelo ou a arte mudou')) throw erro;
+            throw new Error('Não foi possível carregar a arte do verso. Confira a conexão e gere novamente.');
+        } finally {
+            clearTimeout(limite);
+        }
+    }
+
+    raiz.prepararVersoDoTrabalho = prepararVersoDoTrabalho;
     raiz.ehAmostraRenderizada = ehAmostraRenderizada;
     raiz.arteDeImpressao = arteDeImpressao;
     raiz.PASTA_AMOSTRA_RENDERIZADA = PASTA_AMOSTRA;
