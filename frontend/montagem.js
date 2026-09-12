@@ -1317,8 +1317,12 @@ function pedidosParaMontagem() {
 function encherFormatosDaMontagem() {
     const sel = document.getElementById('mtg-formato');
     if (!sel) return;
-    const formatos = new Map((state.formatos || []).map(f =>
-        [String(f.id), f.nome || 'Formato #' + f.id]));
+    const formatos = new Map((state.formatos || []).map(f => {
+        const nome = f.name || f.nome || 'Formato sem nome';
+        const tamanho = Number(f.width_mm) > 0 && Number(f.height_mm) > 0
+            ? ` (${f.width_mm} × ${f.height_mm} mm)` : '';
+        return [String(f.id), nome + tamanho];
+    }));
     if (state.montagem.formatoSel && !formatos.has(String(state.montagem.formatoSel))) {
         formatos.set(String(state.montagem.formatoSel), 'Formato indisponível');
     }

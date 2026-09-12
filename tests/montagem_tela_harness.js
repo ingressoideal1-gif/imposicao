@@ -1340,7 +1340,7 @@ const PECAS = [
             { id_produto: 502, nomeReal: 'PVC', id_formato: 88 },
             { id_produto: 503, nomeReal: 'Outro produto Triband', id_formato: 77 },
         ];
-        state.formatos.push({ id: 'F3', id_formato_num: 99, nome: 'Sem pedidos' });
+        state.formatos.push({ id: 'F3', id_formato_num: 99, name: 'Credencial <PVC>', width_mm: 85, height_mm: 54 });
         state.ordens = [
             { id: 'a', numero: 100, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 11, id_produto: 501 }, { id: 12, id_produto: 502 }] },
             { id: 'b', numero: 101, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 13, id_produto: 502 }] },
@@ -1365,6 +1365,7 @@ const PECAS = [
         const valores = id => Array.from(document.getElementById(id).options).map(o => o.value).filter(Boolean).sort();
         const todos = valores('mtg-pedido');
         const formatos = valores('mtg-formato');
+        const rotulo = document.querySelector('#mtg-formato option[value=F3]').textContent;
         const fallback = formatoDoModeloNaMontagem({ formato_id: 'F2' }, 'a');
         const desconhecido = formatoDoModeloNaMontagem({ id_produto: 999 }, 'a');
         const vinculo = formatoDoModeloNaMontagem({ id_produto_proposta_origem: 15 }, 'd');
@@ -1406,10 +1407,11 @@ const PECAS = [
         document.getElementById('mtg-formato').value = 'F2'; onMontagemFormatoChange();
         liberar(); await carregando;
         const semRespostaAntiga = !state.montagem.pedidoSel && !valores('mtg-modelo').length;
-        return { produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
+        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
+    ok(filtros.rotulo === 'Credencial <PVC> (85 × 54 mm)', 'formato mostra name e tamanho com texto escapado, mantendo id interno', filtros.rotulo);
     ok(filtros.formatos.join() === 'F1,F2,F3' && filtros.fallback === 'F2' && filtros.desconhecido === '' && filtros.vinculo === 'F1', 'lista formatos sem duplicar produtos e resolve formato direto, vinculo e desconhecido', filtros);
     ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com formato escolhido e sem limite antigo de 30 dias', filtros);
     ok(filtros.modelos.join() === 'A1,A5' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos reune produtos do mesmo formato e cruza status Aguardando', filtros);
