@@ -54,6 +54,8 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const NOMES = [
+    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem',
     'celulasDoModelo', 'modelosComCelula', 'posicoesCombinadas',
@@ -104,7 +106,7 @@ const GLOBAIS = [
     'fatiaCsvDoItem', 'state', 'document', 'modoDeVersoDoModelo', 'rotacaoDaFolhaDoFormato',
     'arteDoModeloParaFolha', 'arteParaOMotor', 'garantirBancosDoTrabalho', 'garantirCsvDoTrabalho',
     'pedidosComBancoDesconhecido', 'bancoVazioNoPayload', 'recadoDeBancoVazio',
-    'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
+    'arteParaImpor', 'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
 const fabrica = new Function(...GLOBAIS,
     CONSTANTES.map(extrairConst).join('\n') + '\n'
@@ -591,17 +593,18 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'arte sem tiragem conhecida não recusa ninguém — o motor confere de novo');
 }
 
-// ── 15. O modo de impressão da folha ────────────────────────────────────────
+// ── 15. O modo é uniforme, mesmo ao gerar apenas uma das faces ─────────────
 {
-    const apiVerso = montarApi({ state, modoDeVersoDoModelo: it => it.modo });
-    const m = modoNome => ({ peca: { _item: { modo: modoNome } } });
-    ok(apiVerso.modoDaFolhaDaMontagem([m('front'), m('front')]) === 'front', 'só frente é front');
-    ok(apiVerso.modoDaFolhaDaMontagem([m('front'), m('duplex')]) === 'duplex', 'um verso comum faz a folha duplex');
-    ok(apiVerso.modoDaFolhaDaMontagem([m('duplex'), m('duplex_unico')]) === 'duplex_unico',
-       'o verso único vence: é o único que diz ao motor como ler as páginas');
-    ok(apiVerso.modoDaFolhaDaMontagem([]) === 'front', 'sem modelo, frente');
-    ok(api.modoDaFolhaDaMontagem([m('duplex')]) === 'front',
-       'sem a função da tela do Pedido (estação velha), frente — nunca um valor que o motor não conhece');
+    const m = print_mode => ({ peca: { print_mode } });
+    for (const modo of ['front', 'duplex', 'duplex_unico']) {
+        ok(api.modoDaFolhaDaMontagem([m(modo), m(modo)]) === modo, 'mantém o modo ' + modo);
+    }
+    for (const modos of [['front', 'duplex'], ['duplex', 'duplex_unico']]) {
+        let recusou = false;
+        try { api.modoDaFolhaDaMontagem(modos.map(m)); } catch (_) { recusou = true; }
+        ok(recusou, 'recusa modos misturados: ' + modos.join(','));
+    }
+    ok(api.modoDaFolhaDaMontagem([]) === 'front', 'sem modelo, frente');
 }
 
 // ── 16. O número do modelo: os quatro campos ────────────────────────────────
@@ -656,17 +659,19 @@ async function testarPreparo() {
     const st = novoState();
     st.montagem.numero = { imprimir: true, pos: 'base', rot: 180, size: 20, cor: '#ff0000' };
     st.osItens = {
-        a: [{ id: '1', quantidade: 100, amostra_num_id: 'N1' }, { id: '2', quantidade: 30, amostra_num_id: 'N2' }],
-        b: [{ id: '9', quantidade: 50, amostra_num_id: 'N1' }],
+        a: [{ id: '1', quantidade: 100, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1' }, { id: '2', quantidade: 30, amostra_num_id: 'N2', formato_id: 'F1', saida_id: 'S1' }],
+        b: [{ id: '9', quantidade: 50, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1' }],
     };
+    st.ordens = ['a', 'b'].map(id => ({ id, status_interno: 'EM PRODUCAO' }));
     const modelos = [
-        { osId: 'a', itemId: '1', peca: {} },
-        { osId: 'b', itemId: '9', peca: {} },
-        { osId: 'a', itemId: '2', peca: {} },
+        { osId: 'a', itemId: '1', peca: { formato_id: 'F1', saida_id: 'S1' } },
+        { osId: 'b', itemId: '9', peca: { formato_id: 'F1', saida_id: 'S1' } },
+        { osId: 'a', itemId: '2', peca: { formato_id: 'F1', saida_id: 'S1' } },
     ];
     const log = [];
     const base = {
         state: st,
+        arteParaImpor: x => x || null,
         numeracaoIdDoItem: it => it.amostra_num_id,
         numeracaoSemElementosDeLayout: n => n,
         numeroDoPedidoDoItem: osId => ({ a: '21202', b: '21188' })[osId] || null,
@@ -686,7 +691,7 @@ async function testarPreparo() {
     };
 
     const artes = await montarApi(base).prepararArtesDaMontagem(modelos);
-    ok(log.join(' | ') === 'bancos a | csv N1,N2 | arte a/1 bancos=a | arte a/2 bancos=a | bancos b | csv N1 | arte b/9 bancos=b',
+    ok(log.join(' | ') === 'csv N1,N2 | bancos a | arte a/1 bancos=a | arte a/2 bancos=a | csv N1 | bancos b | arte b/9 bancos=b',
        'pedido a pedido: carrega os bancos de A, monta as artes de A; depois B', log);
     ok(artes.map(a => a.modelo).join(',') === '1,9,2',
        'as artes saem NA ORDEM DOS MODELOS, e não na ordem dos pedidos — é a ordem do multi_artes', artes.map(a => a.modelo));
@@ -705,6 +710,7 @@ async function testarPreparo() {
     const stRuim = Object.assign({}, base);
     stRuim.state = novoState();
     stRuim.state.osItens = st.osItens;
+    stRuim.state.ordens = st.ordens;
     stRuim.state.montagem.numero = { imprimir: true, pos: 'diagonal', rot: 45, size: 999, cor: 'azul' };
     const artesRuins = await montarApi(stRuim).prepararArtesDaMontagem(modelos);
     ok(artesRuins.every(a => a.nome_pos === 'esquerda' && a.nome_rot === 90
@@ -746,7 +752,7 @@ async function testarPreparo() {
         modoDeVersoDoModelo: it => it.modo || 'front',
         rotacaoDaFolhaDoFormato: f => f && f.default_rotate_page ? 90 : 0,
     });
-    const peca = { formato_id: 'F1', saida_id: 'S1', celulas_por_folha: 10, _item: { modo: 'duplex' } };
+    const peca = { formato_id: 'F1', saida_id: 'S1', celulas_por_folha: 10, print_mode: 'duplex', _item: { modo: 'duplex' } };
     const modelos = [
         { osId: 'a', itemId: '1000565', qtd: 3000, peca },
         { osId: 'b', itemId: '1000412', qtd: 150, peca: Object.assign({}, peca, { _item: { modo: 'front' } }) },

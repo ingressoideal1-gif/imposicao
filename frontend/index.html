@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=855">
-    <script src="pdf-lib.min.js?v=855"></script>
+    <link rel="stylesheet" href="/style.css?v=856">
+    <script src="pdf-lib.min.js?v=856"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3080,10 +3080,12 @@
                  desenhada na GRADE e na proporcao reais do formato. O trabalho
                  do operador acontece nela; a tabela de modelos e' referencia. -->
             <section id="view-montagem" class="view-section" style="max-width: 100%;">
+                <p id="mtg-geracao-aviso" role="status" aria-live="polite"></p>
+                <fieldset id="mtg-editor" aria-label="Montagem">
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>&#129513; Montagem</h1>
-                        <p>Junta numa folha s&oacute; as c&eacute;lulas a refazer, mesmo que venham de pedidos diferentes.</p>
+                        <p>Monte c&eacute;lulas de modelos aguardando, em pedidos em produ&ccedil;&atilde;o. Filtre pelo produto para encontrar os modelos.</p>
                     </div>
                     <!-- DESFAZER E REFAZER (03/09/2026). Era a falta mais grave:
                          um x no lugar errado apagava a celula sem volta, e repor
@@ -3110,18 +3112,20 @@
                 <!-- O compositor -->
                 <div class="card mtg-card-compositor">
                     <div class="mtg-compositor">
+                        <div class="mtg-campo" style="flex: 1 1 210px; min-width: 180px;">
+                            <label for="mtg-produto">Produto</label>
+                            <select id="mtg-produto" class="form-control" onchange="onMontagemProdutoChange()">
+                                <option value="">Todos os produtos</option>
+                            </select>
+                        </div>
                         <div class="mtg-campo" style="flex: 0 0 230px;">
                             <label for="mtg-pedido">Pedido</label>
                             <select id="mtg-pedido" class="form-control" onchange="onMontagemPedidoChange()">
-                                <option value="">Impressos nos &uacute;ltimos 30 dias&hellip;</option>
+                                <option value="">Pedidos em produ&ccedil;&atilde;o&hellip;</option>
                             </select>
                         </div>
 
-                        <!-- A busca por numero. O seletor lista os IMPRESSOS RECENTES,
-                             que e o caso normal; este campo cobre o pedido antigo que
-                             voltou do cliente e nao esta naquela lista. Um select nao
-                             se digita, e prometer "ou digite o numero" nele seria uma
-                             promessa que a tela nao cumpre. -->
+                        <!-- A busca por número respeita o produto e o status do pedido. -->
                         <div class="mtg-campo" style="flex: 0 0 124px;">
                             <label for="mtg-buscar">Ou o n&uacute;mero</label>
                             <input type="text" id="mtg-buscar" class="form-control" placeholder="21346"
@@ -3131,7 +3135,7 @@
                         </div>
 
                         <div class="mtg-campo" style="flex: 1 1 300px; min-width: 0;">
-                            <label for="mtg-modelo">Modelo</label>
+                            <label for="mtg-modelo">Modelo aguardando <span id="mtg-modelo-face" class="mtg-face-modelo" hidden></span></label>
                             <select id="mtg-modelo" class="form-control" onchange="onMontagemModeloChange()" disabled>
                                 <option value="">&mdash;</option>
                             </select>
@@ -3263,6 +3267,16 @@
                         <div class="card mtg-numero-card" id="mtg-numero"></div>
 
                         <div class="card mtg-saida-card">
+                            <div class="mtg-faces">
+                                <label for="mtg-face">Faces da impressão</label>
+                                <p id="mtg-face-aviso" role="status">Adicione um modelo para escolher as faces.</p>
+                                <select id="mtg-face" class="form-control" onchange="mudarFaceDaMontagem(this.value)" disabled>
+                                    <option value="both">Frente e verso</option>
+                                    <option value="front">Apenas frente</option>
+                                    <option value="back">Apenas verso</option>
+                                </select>
+                                <em>A escolha vale para o PDF gerado. O verso mantém o posicionamento para o registro com a frente.</em>
+                            </div>
                             <!-- ONDE O ARQUIVO VAI PARAR. Quem abre o seletor de pastas e
                                  quem escreve no disco e' a ESTACAO, nao o navegador: e por
                                  isso que funciona em qualquer navegador da grafica, sem
@@ -3294,6 +3308,7 @@
                         </div>
                     </div>
                 </div>
+            </fieldset>
             </section>
 
             <section id="view-impressoras" class="view-section">
@@ -4296,45 +4311,45 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=855"></script>
-    <script src="/supabase-config.js?v=855"></script>
-    <script src="mapas.js?v=855"></script>
-    <script src="cor-numeracao-do-modelo.js?v=855"></script>
+    <script src="/banco-nao-responde.js?v=856"></script>
+    <script src="/supabase-config.js?v=856"></script>
+    <script src="mapas.js?v=856"></script>
+    <script src="cor-numeracao-do-modelo.js?v=856"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=855"></script>
-    <script src="logo-do-frete.js?v=855"></script>
+    <script src="banco-do-modelo.js?v=856"></script>
+    <script src="logo-do-frete.js?v=856"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=855"></script>
-    <script src="arte-de-impressao.js?v=855"></script>
-    <script src="qr-canvas.js?v=855"></script>
-    <script src="barcode-canvas.js?v=855"></script>
+    <script src="pagamento-do-pedido.js?v=856"></script>
+    <script src="arte-de-impressao.js?v=856"></script>
+    <script src="qr-canvas.js?v=856"></script>
+    <script src="barcode-canvas.js?v=856"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=855"></script>
-    <script src="fonte-canvas.js?v=855"></script>
+    <script src="numero-da-pagina.js?v=856"></script>
+    <script src="fonte-canvas.js?v=856"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=855"></script>
-    <script src="fonte-nome.js?v=855"></script>
-    <script src="qr-ideal-colunas.js?v=855"></script>
-    <script src="csv-editor.js?v=855"></script>
-    <script src="amostra-modal.js?v=855"></script>
-    <script src="texto-ajuste.js?v=855"></script>
-    <script src="foto-lib.js?v=855"></script>
-    <script src="gerenciador-fotos.js?v=855"></script>
-    <script src="editor-foto.js?v=855"></script>
-    <script src="script.js?v=855"></script>
-    <script src="ideal-control.js?v=855"></script>
-    <script src="criador-arte.js?v=855"></script>
-    <script src="/pedido.js?v=855"></script>
-    <script src="montagem.js?v=855"></script>
-    <script src="acabamento.js?v=855"></script>
-    <script src="avisos.js?v=855"></script>
+    <script src="fonte-glifos.js?v=856"></script>
+    <script src="fonte-nome.js?v=856"></script>
+    <script src="qr-ideal-colunas.js?v=856"></script>
+    <script src="csv-editor.js?v=856"></script>
+    <script src="amostra-modal.js?v=856"></script>
+    <script src="texto-ajuste.js?v=856"></script>
+    <script src="foto-lib.js?v=856"></script>
+    <script src="gerenciador-fotos.js?v=856"></script>
+    <script src="editor-foto.js?v=856"></script>
+    <script src="script.js?v=856"></script>
+    <script src="ideal-control.js?v=856"></script>
+    <script src="criador-arte.js?v=856"></script>
+    <script src="/pedido.js?v=856"></script>
+    <script src="montagem.js?v=856"></script>
+    <script src="acabamento.js?v=856"></script>
+    <script src="avisos.js?v=856"></script>
 
 
 

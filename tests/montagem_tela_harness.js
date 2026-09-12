@@ -55,6 +55,11 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const FUNCOES = [
+    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'encherProdutosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemProdutoChange', 'buscarPedidoDaMontagem',
+    'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem', '_mtgRenderFaces',
+    '_mtgAtualizarGeracao', 'mudarFaceDaMontagem', 'selecionarFacesDoPdfDaMontagem',
+    '_mtgItemEscolhido',
     'montagemVazia', 'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo',
     'modelosComCelula', 'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
@@ -117,6 +122,8 @@ const PECAS = [
         headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     const aba = await navegador.newPage();
+    await aba.setRequestInterception(true);
+    aba.on('request', req => /^https?:/.test(req.url()) ? req.abort() : req.continue());
     await aba.setViewport({ width: 1600, height: 1050, deviceScaleFactor: FOTO ? 2 : 1 });
 
     await aba.setContent(
@@ -206,6 +213,8 @@ const PECAS = [
         "window.__itensPorPedido = { a: ['1000565', '1000589'], b: ['1000412'], c: ['1000203'] };",
         "window.__montar = function (pecas) {",
         "  state.montagem = montagemVazia();",
+        "  state.ordens = Array.from(new Set(pecas.map(p => p.osId))).map(id => ({ id, numero: pecas.find(p => p.osId === id).pedido, status_interno: 'EM PRODUCAO' }));",
+        "  state.osItens = {}; pecas.forEach(p => { (state.osItens[p.osId] ||= []).push(window.__item(p)); });",
         "  state.montagem.modelos = pecas.map(function (p) { return {",
         "    osId: p.osId, itemId: p.id, pedidoNumero: p.pedido, nome: p.nome,",
         "    qtd: p.qtd, variavel: p.variavel === true,",
@@ -1213,9 +1222,196 @@ const PECAS = [
        'o painel fica na coluna de apoio, logo abaixo dos modelos que ele analisa', lugar);
     ok(lugar.largura <= lugar.paiLargura + 1, 'e não vaza da coluna', lugar);
 
+    // Regressão: nenhum redesenho reabilita o envio ou altera o trabalho em voo.
+    const concorrencia = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const btn = document.getElementById('mtg-btn-pdf');
+        const mensagens = [], pedidos = [];
+        let liberar;
+        window._mtgEstacao = async () => 'http://estacao-simulada';
+        window.prepararArtesDaMontagem = () => new Promise(r => { liberar = r; });
+        window.fetch = async (url, opts) => {
+            pedidos.push(JSON.parse(opts.body.get('payload')));
+            return { ok: true, blob: async () => new Blob(['PDF simulado']) };
+        };
+        window.toast = (m, tipo) => mensagens.push({ m, tipo });
+        window.baixarPdfDaMontagem = () => {};
+        window.abrirPdfDaMontagemNaTela = () => {};
+        document.getElementById('mtg-pasta').value = '';
+        const total = state.montagem.celulas.length;
+        const gerar = gerarPdfDaMontagem();
+        await Promise.resolve();
+        zoomDaMontagem('peca');
+        const bloqueou = btn.disabled && document.getElementById('mtg-editor').inert;
+        duplicarCelulaDaMontagem(0);
+        removerCelulaDaMontagem(0);
+        limparMontagem();
+        desfazerMontagem();
+        mudarFaceDaMontagem('back');
+        const manteve = state.montagem.celulas.length === total && state.montagem.face === 'front';
+        await gerarPdfDaMontagem();
+        liberar(window.__artes());
+        await gerar;
+        const fim = { disabled: btn.disabled, texto: btn.textContent, gerando: state.montagem.gerando };
+        window._mtgEstacao = async () => null;
+        await gerarPdfDaMontagem();
+        const recuperouErro = !state.montagem.gerando && !btn.disabled && mensagens.some(x => x.tipo === 'error');
+        return { bloqueou, manteve, envios: pedidos.length, celulas: pedidos[0].refazer_celulas.length, total, fim, recuperouErro };
+    }, PECAS);
+    ok(concorrencia.bloqueou && concorrencia.manteve, 'zoom, edição e face preservam a montagem durante a geração', concorrencia);
+    ok(concorrencia.envios === 1 && concorrencia.celulas === concorrencia.total, 'clique repetido gera um único trabalho com as células do início', concorrencia);
+    ok(!concorrencia.fim.disabled && !concorrencia.fim.gerando && !/Montando/.test(concorrencia.fim.texto), 'restaura botão e rótulo depois do sucesso', concorrencia);
+    ok(concorrencia.recuperouErro, 'libera a edição depois de erro na estação', concorrencia);
+
+    const faces = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        const sel = document.getElementById('mtg-face');
+        const semVerso = sel.value === 'front' && sel.querySelector('[value="back"]').disabled;
+        state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
+        state.montagem.face = 'both';
+        renderMontagem();
+        const destacado = document.querySelectorAll('#mtg-lista .mtg-com-verso').length === pecas.length
+            && document.getElementById('mtg-face-aviso').classList.contains('mtg-com-verso');
+        mudarFaceDaMontagem('back');
+        const soVerso = sel.value === 'back' && state.montagem.face === 'back';
+        mudarFaceDaMontagem('front');
+        const mistura = porQueNaoCabeNaMontagem(state.montagem.modelos[0].peca,
+            { ...state.montagem.modelos[0].peca, print_mode: 'front' });
+        state.montagem.pedidoSel = 'a'; state.montagem.modeloSel = 'M';
+        state.osItens.a = [{ id: 'M', verso: true }];
+        renderMontagem();
+        const compositor = !document.getElementById('mtg-modelo-face').hidden
+            && /COM VERSO/.test(document.getElementById('mtg-modelo-face').textContent);
+        return { semVerso, destacado, soVerso, mistura, compositor };
+    }, PECAS);
+    ok(faces.semVerso && faces.destacado && faces.compositor, 'destaca verso no compositor, lista e saída; só frente não oferece verso', faces);
+    ok(faces.soVerso && /frente e verso/.test(faces.mistura || ''), 'seleção de apenas frente não libera mistura de modelos com/sem verso', faces);
+
+    await aba.addScriptTag({ path: path.join(RAIZ, 'frontend/pdf-lib.min.js') });
+    const entregaFaces = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const doc = await PDFLib.PDFDocument.create();
+        for (let i = 0; i < 4; i++) doc.addPage([300 + i, 400]);
+        const blob = new Blob([await doc.save()], { type: 'application/pdf' });
+        let entregue, enviado, chamadas = 0;
+        window._mtgEstacao = async () => 'http://estacao-simulada';
+        window.prepararArtesDaMontagem = async () => window.__artes();
+        window.fetch = async (url, opts) => {
+            chamadas++;
+            enviado = JSON.parse(opts.body.get('payload'));
+            return { ok: true, blob: async () => blob };
+        };
+        window.baixarPdfDaMontagem = (blob, nome) => { entregue = { blob, nome }; };
+        window.toast = () => {};
+        const resultados = [];
+        for (const modo of ['duplex', 'duplex_unico']) {
+            state.montagem.modelos.forEach(m => { m.peca.print_mode = modo; });
+            for (const face of ['both', 'front', 'back']) {
+                mudarFaceDaMontagem(face);
+                entregue = null;
+                await gerarPdfDaMontagem();
+                if (!entregue) throw new Error('PDF não entregue: ' + modo + '/' + face);
+                const pdf = await PDFLib.PDFDocument.load(await entregue.blob.arrayBuffer());
+                resultados.push({ modo, face, modoMotor: enviado.print_mode,
+                    paginas: pdf.getPages().map(p => p.getWidth()), nome: entregue.nome });
+            }
+        }
+        const antes = chamadas;
+        state.montagem.modelos[0].peca.print_mode = 'front';
+        state.montagem.face = 'front';
+        entregue = null;
+        await gerarPdfDaMontagem();
+        return { resultados, recusouMistura: chamadas === antes && !entregue };
+    }, PECAS);
+    for (const r of entregaFaces.resultados) {
+        const esperado = r.face === 'both' ? [300, 301, 302, 303] : r.face === 'front' ? [300, 302] : [301, 303];
+        ok(r.modoMotor === r.modo && r.paginas.join() === esperado.join(), 'gera e entrega as faces escolhidas: ' + r.modo + '/' + r.face, r);
+        ok(r.nome.endsWith(({ both: '_frente-e-verso.pdf', front: '_frente.pdf', back: '_verso.pdf' })[r.face]), 'o nome identifica as faces entregues', r);
+    }
+    ok(entregaFaces.recusouMistura, 'a geração também recusa a mistura antes de contatar o motor', entregaFaces);
+
+    // A partir daqui a seleção usa os handlers reais, com a carga de dados simulada.
+    await aba.evaluate(['onMontagemPedidoChange', '_mtgGarantirBancosDoPedido',
+        '_mtgNumeracaoDoItem', 'adicionarNaMontagem', 'modeloTemDadoVariavel'].map(extrair).join('\n'));
+    const filtros = await aba.evaluate(async () => {
+        state.montagem = montagemVazia();
+        state.produtosGlobais = [
+            { id_produto: 501, nomeReal: 'Triband', id_formato: 77 },
+            { id_produto: 502, nomeReal: 'PVC', id_formato: 88 },
+            { id_produto: 503, nomeReal: 'Sem pedidos', id_formato: 77 },
+        ];
+        state.ordens = [
+            { id: 'a', numero: 100, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 11, id_produto: 501 }, { id: 12, id_produto: 502 }] },
+            { id: 'b', numero: 101, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 13, id_produto: 502 }] },
+            { id: 'c', numero: 102, status_interno: 'CANCELADO', _itens_raw: [{ id: 14, id_produto: 501 }] },
+            { id: 'd', numero: 103, status_interno: ' em produção ', created_at: '2020-01-01', _itens_raw: [{ id: 15, id_produto: 501 }] },
+            { id: 'e', numero: 104, status_interno: 'EM ACABAMENTO', _itens_raw: [{ id: 16, id_produto: 501 }] },
+            { id: 'f', numero: 105, status: 'EM PRODUCAO', status_interno: 'EM ARTE' },
+        ];
+        const item = (id, produto, status) => ({ id, id_produto: produto, _vibe_id_produto: produto,
+            nome_modelo: id, qtd: 10, cor: 'azul', status_impressao: status, verso_tipo: 'Frente' });
+        state.osItens = {
+            a: [item('A1', 501, 'Aguardando'), item('A2', 501, 'Impresso'), item('A3', 501, 'Corrigir Arte'), item('A4', 502, 'AGUARD.')],
+            b: [item('B1', 502, 'Aguardando')], c: [item('C1', 501, 'Aguardando')],
+            d: [{ ...item('D1', null, 'Aguardando'), id_produto_proposta_origem: 15, formato_id: 'F1' }],
+        };
+        const avisos = [], cargas = [];
+        window.toast = msg => avisos.push(msg);
+        window.loadOSItens = async id => { cargas.push(id); };
+        window.garantirBancosDoTrabalho = async () => {};
+        window.garantirCsvDoTrabalho = async () => {};
+        encherProdutosDaMontagem(); encherPedidosDaMontagem(); renderMontagem();
+        const valores = id => Array.from(document.getElementById(id).options).map(o => o.value).filter(Boolean).sort();
+        const todos = valores('mtg-pedido');
+        document.getElementById('mtg-produto').value = '501'; onMontagemProdutoChange();
+        const triband = valores('mtg-pedido');
+        document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
+        const modelos = valores('mtg-modelo');
+        document.getElementById('mtg-modelo').value = 'A1'; onMontagemModeloChange();
+        document.getElementById('mtg-posicoes').value = '1'; adicionarNaMontagem();
+        const entrou = state.montagem.celulas.length;
+        state.montagem.modeloSel = 'A2'; adicionarNaMontagem();
+        state.montagem.modeloSel = 'A4'; adicionarNaMontagem();
+        const protegeInclusao = state.montagem.celulas.length === entrou;
+        const cargasAntes = cargas.length;
+        document.getElementById('mtg-buscar').value = '101'; buscarPedidoDaMontagem();
+        document.getElementById('mtg-buscar').value = '102'; buscarPedidoDaMontagem();
+        const buscaRecusada = cargas.length === cargasAntes;
+        document.getElementById('mtg-produto').value = '502'; onMontagemProdutoChange();
+        const pvc = valores('mtg-pedido');
+        const limpou = !state.montagem.pedidoSel && !state.montagem.modeloSel
+            && !document.getElementById('mtg-posicoes').value && document.getElementById('mtg-modelo').disabled;
+        const preservou = state.montagem.celulas.length === entrou;
+        await retomarDaMontagem(0);
+        const retornoRecusado = !state.montagem.pedidoSel;
+        document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
+        const modelosPvc = valores('mtg-modelo');
+        document.getElementById('mtg-produto').value = '503'; onMontagemProdutoChange();
+        const vazio = document.getElementById('mtg-pedido').disabled && !valores('mtg-pedido').length;
+        // Troca de produto enquanto o pedido carrega: a resposta antiga não volta.
+        document.getElementById('mtg-produto').value = '501'; onMontagemProdutoChange();
+        document.getElementById('mtg-pedido').value = 'a';
+        let liberar;
+        window.loadOSItens = () => new Promise(r => { liberar = r; });
+        const carregando = onMontagemPedidoChange();
+        document.getElementById('mtg-produto').value = '502'; onMontagemProdutoChange();
+        liberar(); await carregando;
+        const semRespostaAntiga = !state.montagem.pedidoSel && !valores('mtg-modelo').length;
+        return { todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
+            limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
+            produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
+    });
+    ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com produto escolhido e sem limite antigo de 30 dias', filtros);
+    ok(filtros.modelos.join() === 'A1' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos cruza produto e status Aguardando', filtros);
+    ok(filtros.entrou === 1 && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'inclusão, busca e retorno não contornam os filtros', filtros);
+    ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar produto limpa a seleção e preserva a montagem existente', filtros);
+    ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '501', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
+
     if (FOTO) {
         await aba.evaluate(pecas => {
             window.__montar(pecas);
+            state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
+            state.montagem.face = 'back';
             alternarNumeroDaMontagem();
         }, PECAS);
         const el = await aba.$('#view-montagem');
@@ -1227,6 +1423,9 @@ const PECAS = [
         // foto: e' onde mora o painel do aproveitamento.
         await aba.evaluate(() => {
             document.querySelector('.mtg-folha-card').style.display = 'none';
+            document.querySelector('.main-content').style.cssText = 'padding:24px;height:auto;overflow:visible;';
+            document.body.style.cssText = 'height:auto;overflow:visible;';
+            document.documentElement.style.cssText = 'height:auto;overflow:visible;';
             window.scrollTo(0, 0);
         });
         const lado = await aba.$('.mtg-lado');
