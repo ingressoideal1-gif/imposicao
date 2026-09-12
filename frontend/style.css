@@ -1079,6 +1079,24 @@ input[type="color"].element-card-fields .form-control,
     min-width: 0;
 }
 
+/* Identificacao do modelo com verso, somente no fundo da janela. */
+.ped-preview-canvas-container.ped-modelo-com-verso {
+    position: relative;
+    background: #597d73;
+    padding-top: 48px;
+}
+
+.ped-modelo-verso-aviso {
+    position: absolute;
+    top: 14px;
+    right: 20px;
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
 /* Canvas do pedido: pode ser maior que o container (scroll interno), nunca expande o container */
 #ped-preview-canvas {
     background: #ffffff;

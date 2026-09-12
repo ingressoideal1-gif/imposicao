@@ -67,6 +67,24 @@ function modoDeVersoDoModelo(item) {
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
 
+/** Indicador da janela, fora do canvas e independente da face em visualizacao. */
+function atualizarIndicadorModeloComVerso(item) {
+    const area = document.querySelector('.ped-preview-canvas-container');
+    if (!area) return;
+    const nid = typeof numeracaoIdDoItem === 'function' ? numeracaoIdDoItem(item) : null;
+    const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
+    const comVerso = temVerso(num && num.print_mode);
+    area.classList.toggle('ped-modelo-com-verso', comVerso);
+    let aviso = area.querySelector('.ped-modelo-verso-aviso');
+    if (comVerso && !aviso) {
+        aviso = document.createElement('span');
+        aviso.className = 'ped-modelo-verso-aviso';
+        aviso.textContent = 'Modelo com Verso';
+        area.appendChild(aviso);
+    }
+    if (aviso) aviso.hidden = !comVerso;
+}
+
 function applyPedFormatoDefaults() {
     const fmtSel = document.getElementById('ped-formato');
     if (!fmtSel) return;
@@ -587,6 +605,9 @@ function drawPedPreview() {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
     const activeItem = state.activeOSItem;
+    atualizarIndicadorModeloComVerso(activeItem
+        ? (state.osItens[activeItem.osId] || []).find(i => String(i.id) === String(activeItem.itemId))
+        : null);
     
     // Auto-preencher 'Folhas p/ Bloco' se disponivel na OS, para manter o Preview consistente
     if (state.selectedOSItems && state.selectedOSItems.length > 0) {
@@ -4119,6 +4140,7 @@ async function enviarParaPedido(itemId, osId) {
     // A previa se apaga AGORA, antes de qualquer espera, para nunca mostrar a
     // folha do modelo anterior debaixo do nome do modelo novo.
     if (trocouDeModelo) limparPreviaEnquantoCarrega();
+    atualizarIndicadorModeloComVerso(item);
 
     // O cabecalho da janela diz DE QUE MODELO ela e'. Com a janela abrindo
     // dentro da fila, entre dezenas de linhas parecidas, isso deixou de ser
