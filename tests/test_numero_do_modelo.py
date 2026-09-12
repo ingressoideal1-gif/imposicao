@@ -515,3 +515,13 @@ def test_a_folha_impressa_obedece_aos_tres_campos(tmp_path):
     # Encostado na base (linha de base a 20 pt dela) e centrado na largura.
     assert y1 == pytest.approx(CELL_Y0 + CELL_H - 20, abs=8)
     assert (x0 + x1) / 2 == pytest.approx(CELL_X0 + CELL_W / 2, abs=1.5)
+
+
+@pytest.mark.parametrize("texto", ["VIP", "21869", "A&B"])
+def test_identificacao_literal_nao_recebe_zeros(texto):
+    doc, pagina = _pagina()
+    try:
+        engine._desenhar_numero_do_modelo(pagina, {"nome": texto, "nome_literal": True}, FX, FY, _Cfg())
+        assert pagina.get_text().strip() == texto
+    finally:
+        doc.close()

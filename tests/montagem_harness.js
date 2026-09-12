@@ -63,9 +63,9 @@ const NOMES = [
     'geometriaDaFolha', 'escalaDaFolhaDaMontagem', 'duplicarCelula', 'tirarCelula',
     'folhaVisivelDaMontagem', 'alturaDaJanelaDaMontagem',
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
-    'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo',
+    'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem',
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
-    'sugestaoDeAproveitamento',
+    'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
@@ -696,10 +696,19 @@ async function testarPreparo() {
     ok(artes.map(a => a.modelo).join(',') === '1,9,2',
        'as artes saem NA ORDEM DOS MODELOS, e não na ordem dos pedidos — é a ordem do multi_artes', artes.map(a => a.modelo));
     ok(artes.every(a => a._multi === true), 'cada arte passa por arteParaOMotor como folha combinada');
-    ok(artes.every(a => a.nome === String(a.modelo)),
+    ok(artes.every(a => a.nome === String(a.modelo).padStart(6, '0')),
        'com o número ligado, ele vai em cada arte — a escolha da montagem, não a salva no modelo');
     ok(artes.map(a => a._tiragem).join(',') === '100,50,30',
        'cada arte diz quantos itens têm como sair certo', artes.map(a => a._tiragem));
+
+    st.montagem.numero.tipo = 'pedido';
+    const porPedido = await montarApi(base).prepararArtesDaMontagem(modelos);
+    ok(porPedido.map(a => a.nome).join(',') === '21202,21188,21202' && porPedido.every(a => a.nome_literal),
+       'identificacao usa o numero de cada pedido sem alterar modelos', porPedido.map(a => a.nome));
+    st.montagem.numero.tipo = 'personalizado'; st.montagem.numero.texto = 'VIP';
+    const pessoais = await montarApi(base).prepararArtesDaMontagem(modelos);
+    ok(pessoais.every(a => a.nome === 'VIP' && a.nome_literal), 'texto curto personalizado vai literal ao motor');
+    st.montagem.numero.tipo = 'modelo';
 
     // OS QUATRO CAMPOS DO NÚMERO viajam em CADA arte.
     ok(artes.every(a => a.nome_color === '#ff0000' && a.nome_size === 20

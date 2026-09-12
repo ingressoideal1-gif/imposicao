@@ -70,7 +70,7 @@ const FUNCOES = [
     'folhaAnteriorDaMontagem', 'proximaFolhaDaMontagem',
     'duplicarCelula', 'tirarCelula', 'moverCelula', 'completarAFolha', 'ordenarCelulas',
     'celulasForaDaTiragem', 'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado',
-    'textoDoNumeroDoModelo', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
+    'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     // O historico (03/09/2026).
     'guardarNaHistoria', '_mtgAplicar', '_mtgInstantaneoAtual', 'desfazerMontagem', 'refazerMontagem',
     // A tela.
@@ -81,9 +81,9 @@ const FUNCOES = [
     'removerDaMontagem', 'retomarDaMontagem', 'onMontagemModeloChange',
     'duplicarCelulaDaMontagem', 'removerCelulaDaMontagem', 'moverCelulaDaMontagem',
     'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem',
-    'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem',
+    'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem', 'mudarTextoDaMontagem',
     // O aproveitamento da folha (03/09/2026).
-    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'sugestaoDeAproveitamento',
+    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     '_mtgSugestaoAtual', 'aplicarSugestaoDaMontagem', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
@@ -197,9 +197,9 @@ const PECAS = [
         " 'duplicarCelulaDaMontagem','removerCelulaDaMontagem','moverCelulaDaMontagem',",
         " 'selecionarCelulaDaMontagem','completarAFolhaDaMontagem','ordenarMontagem',",
         " 'zoomDaMontagem','desfazerMontagem','refazerMontagem','celulasDoModelo',",
-        " 'alternarNumeroDaMontagem','mudarNumeroDaMontagem','retomarDaMontagem',",
-        " 'contaDaMontagem','geometriaDaFolha','textoDoNumeroDoModelo','nomeDoArquivoDaMontagem',",
-        " 'aplicarSugestaoDaMontagem','sugestaoDeAproveitamento','modoSugeridoDaMontagem',",
+        " 'alternarNumeroDaMontagem','mudarNumeroDaMontagem', 'mudarTextoDaMontagem','retomarDaMontagem',",
+        " 'contaDaMontagem','geometriaDaFolha','textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem','nomeDoArquivoDaMontagem',",
+        " 'aplicarSugestaoDaMontagem','sugestaoDeAproveitamento', 'resumoAtualDaMontagem','modoSugeridoDaMontagem',",
         " 'encherPastasDaMontagem','onMontagemPastaChange','gerarPdfDaMontagem'",
         "].forEach(function (n) { window[n] = eval(n); });",
         "_mtgLigarArrasto();",
@@ -1041,8 +1041,8 @@ const PECAS = [
         const c = document.getElementById('mtg-sugestao');
         return { escondido: c.style.display === 'none', vazio: c.innerHTML.trim() === '' };
     }, APROV);
-    ok(soUm.escondido && soUm.vazio,
-       'com um modelo só, o painel do aproveitamento não ocupa espaço na tela', soUm);
+    ok(!soUm.escondido && !soUm.vazio,
+       'com um modelo, o painel mostra o aproveitamento atual', soUm);
 
     const painel = await aba.evaluate(pecas => {
         window.__montar(pecas);
@@ -1055,7 +1055,7 @@ const PECAS = [
                 rotulo: b.textContent.replace(/\s+/g, ' ').trim(),
                 acao: b.getAttribute('onclick') || '',
             })),
-            celulasPorModelo: Array.from(c.querySelectorAll('tbody tr'))
+            celulasPorModelo: Array.from(c.querySelectorAll('.mtg-recomendacao tbody tr'))
                 .map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim())),
         };
     }, APROV);
@@ -1209,9 +1209,9 @@ const PECAS = [
     // ── O painel mora na coluna de apoio, depois da lista de modelos ────────
     const lugar = await aba.evaluate(() => {
         const c = document.getElementById('mtg-sugestao');
-        const lista = document.querySelector('.mtg-lista-card');
+        const lista = document.querySelector('.mtg-folha-card');
         return {
-            noLado: !!c.closest('.mtg-lado'),
+            noLado: !!c.closest('.mtg-principal'),
             depoisDaLista: !!(lista.compareDocumentPosition(c)
                 & Node.DOCUMENT_POSITION_FOLLOWING),
             largura: Math.round(c.getBoundingClientRect().width),
@@ -1219,7 +1219,7 @@ const PECAS = [
         };
     });
     ok(lugar.noLado && lugar.depoisDaLista,
-       'o painel fica na coluna de apoio, logo abaixo dos modelos que ele analisa', lugar);
+       'o painel fica abaixo da janela de visualizacao', lugar);
     ok(lugar.largura <= lugar.paiLargura + 1, 'e não vaza da coluna', lugar);
 
     // Regressão: nenhum redesenho reabilita o envio ou altera o trabalho em voo.
@@ -1441,6 +1441,40 @@ const PECAS = [
     ok(pendentes.habilitado && pendentes.modelos.join() === 'M0,M1,M2,M3,M4',
         'cinco modelos sem status de impressao aparecem como Aguardando mesmo com producao PENDENTE; impressos e correcao ficam fora', pendentes);
 
+    const dinamico = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        await aplicarSugestaoDaMontagem('unica');
+        const resumo = () => resumoAtualDaMontagem(state.montagem.modelos, state.montagem.celulas, 10);
+        const antes = resumo();
+        duplicarCelulaDaMontagem(0);
+        const depois = resumo();
+        const textoAtual = document.getElementById('mtg-aproveitamento-atual').textContent;
+        desfazerMontagem();
+        return { antes, depois, textoAtual, voltou: resumo().usadas === antes.usadas };
+    }, APROV);
+    ok(dinamico.antes.usadas === 10 && dinamico.antes.repeticoes === 10 && dinamico.depois.usadas === 11
+        && dinamico.depois.folhas === 2 && dinamico.depois.itens[0].repetidas === 1
+        && dinamico.depois.ocupacao === 55 && /11 células/.test(dinamico.textoAtual) && dinamico.voltou,
+        'duplicar e desfazer recalculam ocupacao, repeticoes e producao da montagem atual', dinamico);
+
+    const identificacao = await aba.evaluate(() => {
+        state.montagem.numero.imprimir = true;
+        mudarNumeroDaMontagem('tipo', 'pedido');
+        const pedido = textoDeIdentificacaoDaMontagem('M1', 'a', '21202');
+        mudarNumeroDaMontagem('tipo', 'personalizado');
+        const campo = document.getElementById('mtg-num-texto');
+        campo.focus(); campo.value = '<VIP>'; campo.dispatchEvent(new Event('input', { bubbles: true }));
+        const foco = document.activeElement === campo;
+        const visivel = document.getElementById('mtg-folha').textContent.includes('<VIP>');
+        mudarNumeroDaMontagem('tipo', 'modelo');
+        const sumiu = !document.getElementById('mtg-num-texto');
+        mudarNumeroDaMontagem('tipo', 'personalizado');
+        return { pedido, foco, visivel, sumiu, texto: document.getElementById('mtg-num-texto').value };
+    });
+    ok(identificacao.pedido === '21202' && identificacao.foco && identificacao.visivel
+        && identificacao.sumiu && identificacao.texto === '<VIP>',
+        'seletor alterna pedido e personalizado; digitacao atualiza previa, preserva foco e texto', identificacao);
+
     if (FOTO) {
         await aba.evaluate(pecas => {
             window.__montar(pecas);
@@ -1448,6 +1482,15 @@ const PECAS = [
             state.montagem.face = 'back';
             alternarNumeroDaMontagem();
         }, PECAS);
+        await aba.evaluate(() => {
+            document.querySelector('.main-content').style.cssText = 'padding:24px;height:auto;overflow:visible;';
+            document.body.style.cssText = 'height:auto;overflow:visible;';
+            document.documentElement.style.cssText = 'height:auto;overflow:visible;';
+            state.montagem.numero.imprimir = true;
+            mudarNumeroDaMontagem('tipo', 'personalizado');
+            mudarTextoDaMontagem('CONFERIDO');
+            document.getElementById('mtg-num-texto').value = 'CONFERIDO';
+        });
         const el = await aba.$('#view-montagem');
         await el.screenshot({ path: FOTO });
         console.log('foto em ' + FOTO);

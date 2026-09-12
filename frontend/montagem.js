@@ -167,7 +167,7 @@ if (typeof state !== 'undefined' && state && (!state.montagem || !state.montagem
  * `imprimir` nasce DESLIGADO, como a caixa equivalente da tela do Pedido.
  */
 function numeroPadraoDaMontagem() {
-    return { imprimir: false, pos: 'esquerda', rot: 90, size: 14, cor: '#000000' };
+    return { tipo: 'modelo', texto: '', imprimir: false, pos: 'esquerda', rot: 90, size: 14, cor: '#000000' };
 }
 
 /** Os quatro valores que o motor aceita em cada campo. */
@@ -1095,6 +1095,8 @@ function numeroDaMontagemSaneado(n) {
     const rot = parseInt(n.rot);
 
     return {
+        tipo: ['modelo', 'pedido', 'personalizado'].includes(n.tipo) ? n.tipo : 'modelo',
+        texto: String(n.texto || '').replace(/[\r\n]/g, ' '),
         imprimir: n.imprimir === true,
         pos: MTG_POSICOES_DO_NUMERO.indexOf(n.pos) >= 0 ? n.pos : p.pos,
         rot: MTG_ROTACOES_DO_NUMERO.indexOf(rot) >= 0 ? rot : p.rot,
@@ -1918,16 +1920,49 @@ async function aplicarSugestaoDaMontagem(modo) {
     }
 }
 
+/** Resume o desenho atual; cada repetição imprime novamente todas as suas folhas. */
+function resumoAtualDaMontagem(modelos, celulas, porFolha) {
+    const folhas = porFolha > 0 ? Math.ceil(celulas.length / porFolha) : 0;
+    const itens = modelos.map(m => {
+        const posicoes = celulas.filter(c => chaveDoModelo(c) === chaveDoModelo(m)).map(c => c.pos);
+        return { ...m, celulas: posicoes.length, repetidas: posicoes.length - new Set(posicoes).size };
+    });
+    const completa = itens.length > 0 && itens.every(m => m.celulas > 0 && Number(m.qtd) > 0);
+    const repeticoes = completa ? Math.max(...itens.map(m => Math.ceil(Number(m.qtd) / m.celulas))) : null;
+    return { folhas, usadas: celulas.length, vagas: folhas * porFolha - celulas.length,
+        ocupacao: folhas ? 100 * celulas.length / (folhas * porFolha) : 0,
+        repeticoes, itens: itens.map(m => ({ ...m,
+            produz: repeticoes == null ? null : repeticoes * m.celulas,
+            sobra: repeticoes == null ? null : repeticoes * m.celulas - Number(m.qtd) })) };
+}
+
 /** O painel do aproveitamento: só existe com dois modelos ou mais na folha. */
 function _mtgRenderSugestao() {
     const caixa = document.getElementById('mtg-sugestao');
     if (!caixa) return;
 
     const modelos = state.montagem.modelos;
-    if (modelos.length < 2) { caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
+    if (!modelos.length) { caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
     caixa.style.display = '';
 
-    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>';
+    const atual = resumoAtualDaMontagem(modelos, state.montagem.celulas, _mtgCelulasPorFolha(modelos));
+    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>' + `
+      <div class="mtg-sug-atual" id="mtg-aproveitamento-atual" aria-live="polite">
+        <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
+          ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
+        <table class="mtg-sug-tabela"><thead><tr><th>Pedido</th><th>Modelo / nome</th>
+          <th class="num">Tiragem</th><th class="num">Células</th><th class="num">Repetidas</th>
+          <th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>
+          ${atual.itens.map(m => `<tr><td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
+            <td>${escapeHtml(String(m.itemId))} · ${escapeHtml(String(m.nome || ''))}</td>
+            <td class="num">${m.qtd || '—'}</td><td class="num">${m.celulas}</td>
+            <td class="num">${m.repetidas}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
+            <td class="num">${m.sobra == null ? '—' : m.sobra}</td></tr>`).join('')}
+        </tbody></table>
+        <p>${atual.repeticoes == null ? 'Informe as tiragens e inclua células de todos os modelos para calcular as repetições.'
+            : `Para atender às tiragens com esta distribuição: <strong>${atual.repeticoes} repetição(ões)</strong> da montagem inteira, totalizando ${atual.repeticoes * atual.folhas} folhas impressas.`}</p>
+        <p class="mtg-dica">Repetidas são cópias da mesma posição do modelo. Reimprimir a montagem repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
+      </div>`;
     const sug = _mtgSugestaoAtual();
 
     if (!sug.viavel) {
@@ -1959,6 +1994,7 @@ function _mtgRenderSugestao() {
     const mistura = sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ');
 
     caixa.innerHTML = cab + `
+      <details class="mtg-recomendacao"><summary>Recomendação automática</summary>
       <p class="mtg-dica" style="margin:0 0 10px;">A folha tem <strong>${sug.porFolha}</strong>
         célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). A divisão abaixo é a
         que gasta menos papel.</p>
@@ -1997,7 +2033,7 @@ function _mtgRenderSugestao() {
           + sug.impressoes + ' vez(es) entrega a tiragem inteira. É o caminho mais curto.'}</p>
 
       <p class="mtg-dica" style="margin:6px 0 0;">Aplicar <strong>substitui</strong> as células
-        que estão na folha. <code>Ctrl+Z</code> devolve.</p>`;
+        que estão na folha. <code>Ctrl+Z</code> devolve.</p></details>`;
 }
 
 /* ── O número do modelo no papel ─────────────────────────────────────────── */
@@ -2007,6 +2043,13 @@ function alternarNumeroDaMontagem() {
     const n = state.montagem.numero;
     n.imprimir = !n.imprimir;
     renderMontagem();
+}
+
+function mudarTextoDaMontagem(texto) {
+    if (state.montagem.gerando) return;
+    state.montagem.numero = numeroDaMontagemSaneado({ ...state.montagem.numero, texto });
+    // Não recriar o input enquanto digita: conserva foco e posição do cursor.
+    _mtgRenderFolha();
 }
 
 function mudarNumeroDaMontagem(campo, valor) {
@@ -2028,6 +2071,13 @@ function mudarNumeroDaMontagem(campo, valor) {
  * quase nada é preenchido — mas o modelo de id 4200 sai "004200", e a prévia
  * tem de mostrar isso.
  */
+function textoDeIdentificacaoDaMontagem(itemId, osId, pedidoNumero, numero) {
+    const n = numeroDaMontagemSaneado(numero || state.montagem.numero);
+    if (n.tipo === 'personalizado') return n.texto;
+    if (n.tipo === 'pedido') return String(pedidoNumero || _mtgNumeroDoPedido(osId));
+    return textoDoNumeroDoModelo(itemId);
+}
+
 function textoDoNumeroDoModelo(itemId) {
     return String(itemId == null ? '' : itemId).padStart(6, '0');
 }
@@ -2116,7 +2166,7 @@ function _mtgRenderNumero() {
 
     caixa.innerHTML = `
       <div class="mtg-num-cabecalho">
-        <h2>Número do modelo no papel</h2>
+        <h2>Identificação na célula</h2>
         <label class="mtg-num-liga" title="Sai deitado na borda de cada item">
           <input type="checkbox" id="mtg-num-imprimir" ${n.imprimir ? 'checked' : ''}
                  onchange="alternarNumeroDaMontagem()">
@@ -2125,6 +2175,17 @@ function _mtgRenderNumero() {
       </div>
       <p class="mtg-dica" style="margin:0 0 12px;">Numa folha que mistura pedidos, é por ele que se separa o material depois de cortar.</p>
 
+      <div class="mtg-identificacao">
+        <label for="mtg-num-tipo">Identificação</label>
+        <select id="mtg-num-tipo" class="form-control" onchange="mudarNumeroDaMontagem('tipo', this.value)">
+          <option value="modelo" ${!n.tipo || n.tipo === 'modelo' ? 'selected' : ''}>Número do modelo</option>
+          <option value="pedido" ${n.tipo === 'pedido' ? 'selected' : ''}>Número do Pedido</option>
+          <option value="personalizado" ${n.tipo === 'personalizado' ? 'selected' : ''}>Personalizado</option>
+        </select>
+        ${n.tipo === 'personalizado' ? `<label for="mtg-num-texto">Texto na célula</label>
+          <input id="mtg-num-texto" class="form-control" type="text" value="${escapeHtml(n.texto || '')}"
+                 oninput="mudarTextoDaMontagem(this.value)">` : ''}
+      </div>
       <div class="mtg-num-grade${n.imprimir ? '' : ' desligado'}">
         <div class="mtg-num-campo">
           <span class="mtg-num-rotulo">Posição</span>
@@ -2301,7 +2362,7 @@ function _mtgRenderFolha() {
                         onclick="event.stopPropagation(); duplicarCelulaDaMontagem(${i})">&#10697;</button>
                 <button type="button" class="mtg-celula-btn mtg-celula-tirar" title="Tirar só esta célula da folha"
                         onclick="event.stopPropagation(); removerCelulaDaMontagem(${i})">&times;</button>` : '';
-            const textoNum = textoDoNumeroDoModelo(c.itemId);
+            const textoNum = textoDeIdentificacaoDaMontagem(c.itemId, c.osId, m.pedidoNumero, numero);
             const numeroHtml = numero.imprimir
                 ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
                 : '';
@@ -3100,6 +3161,8 @@ async function prepararArtesDaMontagem(modelos) {
             // 03/09/2026; antes disso só a cor passava, e os outros três eram
             // constantes no `engine.py`. Agente velho ignora os campos novos e
             // imprime como sempre — que é exatamente o padrão desta tela.
+            pronta.nome = numero.imprimir ? textoDeIdentificacaoDaMontagem(m.itemId, m.osId, m.pedidoNumero, numero) : '';
+            pronta.nome_literal = numero.tipo !== 'modelo';
             pronta.nome_color = numero.cor;
             pronta.nome_size = numero.size;
             pronta.nome_pos = numero.pos;

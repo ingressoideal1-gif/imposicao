@@ -721,8 +721,8 @@ def test_a_sugestao_nao_mexe_no_codigo_de_ingresso_nenhum():
     # E o painel nao existe sem dois modelos: nao ha proporcao entre um so'.
     render = js[js.index("function _mtgRenderSugestao() {"):]
     render = render[:render.index("\n}\n") + 3]
-    assert "modelos.length < 2" in render, (
-        "o painel do aproveitamento passou a aparecer com um modelo so'"
+    assert "if (!modelos.length)" in render, (
+        "o painel vazio deixou de ser recolhido"
     )
 
 

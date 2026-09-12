@@ -3,10 +3,6 @@ import os
 
 block_cipher = None
 
-# MEDICAO: bundle do frontend sem fonts_local (222 TTF, ~140 MB dos 254 MB).
-# Este build NAO serve para release — as 222 fontes com arquivo_url relativo
-# (/fonts_local/...) deixam de existir em disco e o agente falharia ao embuti-las.
-# So vale depois que as fontes forem hospedadas e o catalogo migrado para URL absoluta.
 # O que o git se RECUSA a versionar nao entra no executavel.
 #
 # Este walk embute a pasta `frontend/` inteira, arquivo por arquivo, sem olhar
@@ -35,7 +31,6 @@ except Exception as _e:
 _frontend_datas = []
 _pulados = []
 for _raiz, _dirs, _arqs in os.walk('frontend'):
-    _dirs[:] = [d for d in _dirs if d != 'fonts_local']
     for _a in _arqs:
         _caminho = os.path.join(_raiz, _a)
         if os.path.normpath(_caminho) in _ignorados:
