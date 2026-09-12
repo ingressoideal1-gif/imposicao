@@ -306,23 +306,14 @@ def test_a_montagem_nao_tem_caminho_para_a_nuvem():
 
 
 def test_a_regra_de_compatibilidade_e_a_decidida():
-    """Formato + cor + saida + face; modo de impressao NAO.
-
-    O usuario abriu o pedido dizendo que a unica condicao seria o mesmo formato.
-    Tres das quatro conferencias sao impossibilidade fisica da folha — cor
-    (o material), saida (o tamanho) e face (o verso existe ou nao) —, e ele
-    decidiu manter as quatro em 29/08/2026.
-
-    Sequencial x Blocado ficou de FORA de proposito: aqui nao ha pilha para
-    cortar, e recusar por isso barraria combinacao legitima sem proteger nada.
-    """
+    """Somente formato e frente/verso limitam a compatibilidade entre modelos."""
     js = _ler("frontend/montagem.js")
     corpo = js[js.index("function porQueNaoCabeNaMontagem(a, b) {"):]
     corpo = corpo[:corpo.index("\n}") + 2]
 
-    for campo in ("formato_id", "saida_id"):
-        assert campo in corpo, campo + " saiu da conferencia"
-    assert "cor" in corpo and "padrao" in corpo, "a cor saiu da conferencia"
+    assert "formato_id" in corpo
+    assert "saida_id" not in corpo, "saida voltou a impedir a montagem"
+    assert "cor(a)" not in corpo and "padrao" not in corpo, "cor voltou a impedir a montagem"
     assert "modoDaPecaNaMontagem" in corpo, "a face efetiva saiu da conferencia"
 
     assert "modoDeImpressaoDoModelo" not in corpo, (

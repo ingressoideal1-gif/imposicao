@@ -16,7 +16,7 @@ const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
 
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
-const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8');
+const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const FOTO = process.argv[2] || null;
 
@@ -55,8 +55,8 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const FUNCOES = [
-    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
-    'encherProdutosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemProdutoChange', 'buscarPedidoDaMontagem',
+    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'encherFormatosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemFormatoChange', 'buscarPedidoDaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem', '_mtgRenderFaces',
     '_mtgAtualizarGeracao', 'mudarFaceDaMontagem', 'selecionarFacesDoPdfDaMontagem',
     '_mtgItemEscolhido',
@@ -256,7 +256,7 @@ const PECAS = [
     ok(vazio.existe, 'a tela vazia mostra o convite, e não uma tabela sem linha', vazio);
     ok(/pedidos diferentes/.test(vazio.texto),
        'e diz a coisa que a tela existe para fazer: juntar pedidos diferentes', vazio.texto.slice(0, 120));
-    ok(/mesmo formato, cor, saída e face/.test(vazio.texto),
+    ok(/mesmo formato e configuração de frente\/verso/.test(vazio.texto),
        'e diz a condição, para o operador não descobrir na recusa', vazio.texto.slice(0, 200));
     ok(vazio.temGarantia,
        'e a garantia do código igual ao original está à vista — é o que dá confiança de refazer');
@@ -806,9 +806,9 @@ const PECAS = [
                  selo: s.textContent.replace(/\s+/g, ' ').trim(), classe: s.className };
     }, PECAS);
     ok(trava.visivel, 'a trava aparece com a primeira célula');
-    ok(/Triband/.test(trava.texto) && /Azul Celeste/.test(trava.texto)
-        && /SRA3/.test(trava.texto) && /Só frente/.test(trava.texto),
-       'e diz as QUATRO coisas que a folha aceita', trava.texto);
+    ok(/Triband/.test(trava.texto) && !/Azul Celeste|SRA3/.test(trava.texto)
+        && /Só frente/.test(trava.texto),
+       'mostra apenas formato e frente/verso como restricoes', trava.texto);
     ok(/2 folha\(s\)/.test(trava.selo) && /14 célula\(s\)/.test(trava.selo)
         && /sobram 6 célula\(s\)/.test(trava.selo), 'o selo diz folhas, células e sobra', trava.selo);
     ok(/tem-sobra/.test(trava.classe),
@@ -1338,20 +1338,21 @@ const PECAS = [
         state.produtosGlobais = [
             { id_produto: 501, nomeReal: 'Triband', id_formato: 77 },
             { id_produto: 502, nomeReal: 'PVC', id_formato: 88 },
-            { id_produto: 503, nomeReal: 'Sem pedidos', id_formato: 77 },
+            { id_produto: 503, nomeReal: 'Outro produto Triband', id_formato: 77 },
         ];
+        state.formatos.push({ id: 'F3', id_formato_num: 99, nome: 'Sem pedidos' });
         state.ordens = [
             { id: 'a', numero: 100, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 11, id_produto: 501 }, { id: 12, id_produto: 502 }] },
             { id: 'b', numero: 101, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 13, id_produto: 502 }] },
             { id: 'c', numero: 102, status_interno: 'CANCELADO', _itens_raw: [{ id: 14, id_produto: 501 }] },
-            { id: 'd', numero: 103, status_interno: ' em produção ', created_at: '2020-01-01', _itens_raw: [{ id: 15, id_produto: 501 }] },
+            { id: 'd', numero: 103, status_interno: ' em produção ', created_at: '2020-01-01', _itens_raw: [{ id: 15, id_produto: 503 }] },
             { id: 'e', numero: 104, status_interno: 'EM ACABAMENTO', _itens_raw: [{ id: 16, id_produto: 501 }] },
             { id: 'f', numero: 105, status: 'EM PRODUCAO', status_interno: 'EM ARTE' },
         ];
         const item = (id, produto, status) => ({ id, id_produto: produto, _vibe_id_produto: produto,
             nome_modelo: id, qtd: 10, cor: 'azul', status_impressao: status, verso_tipo: 'Frente' });
         state.osItens = {
-            a: [item('A1', 501, 'Aguardando'), item('A2', 501, 'Impresso'), item('A3', 501, 'Corrigir Arte'), item('A4', 502, 'AGUARD.')],
+            a: [item('A1', 501, 'Aguardando'), item('A2', 501, 'Impresso'), item('A3', 501, 'Corrigir Arte'), item('A4', 502, 'AGUARD.'), { ...item('A5', 503, 'Aguardando'), cor: 'Dourado', saida_id: 'S2' }],
             b: [item('B1', 502, 'Aguardando')], c: [item('C1', 501, 'Aguardando')],
             d: [{ ...item('D1', null, 'Aguardando'), id_produto_proposta_origem: 15, formato_id: 'F1' }],
         };
@@ -1360,15 +1361,23 @@ const PECAS = [
         window.loadOSItens = async id => { cargas.push(id); };
         window.garantirBancosDoTrabalho = async () => {};
         window.garantirCsvDoTrabalho = async () => {};
-        encherProdutosDaMontagem(); encherPedidosDaMontagem(); renderMontagem();
+        encherFormatosDaMontagem(); encherPedidosDaMontagem(); renderMontagem();
         const valores = id => Array.from(document.getElementById(id).options).map(o => o.value).filter(Boolean).sort();
         const todos = valores('mtg-pedido');
-        document.getElementById('mtg-produto').value = '501'; onMontagemProdutoChange();
+        const formatos = valores('mtg-formato');
+        const fallback = formatoDoModeloNaMontagem({ formato_id: 'F2' }, 'a');
+        const desconhecido = formatoDoModeloNaMontagem({ id_produto: 999 }, 'a');
+        const vinculo = formatoDoModeloNaMontagem({ id_produto_proposta_origem: 15 }, 'd');
+        document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
         const triband = valores('mtg-pedido');
         document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
         const modelos = valores('mtg-modelo');
         document.getElementById('mtg-modelo').value = 'A1'; onMontagemModeloChange();
         document.getElementById('mtg-posicoes').value = '1'; adicionarNaMontagem();
+        document.getElementById('mtg-modelo').value = 'A5'; onMontagemModeloChange();
+        document.getElementById('mtg-posicoes').value = '2'; adicionarNaMontagem();
+        const produtosCompartilham = state.montagem.modelos.length === 2
+            && state.montagem.modelos.every(m => m.peca.formato_id === 'F1');
         const entrou = state.montagem.celulas.length;
         state.montagem.modeloSel = 'A2'; adicionarNaMontagem();
         state.montagem.modeloSel = 'A4'; adicionarNaMontagem();
@@ -1377,7 +1386,7 @@ const PECAS = [
         document.getElementById('mtg-buscar').value = '101'; buscarPedidoDaMontagem();
         document.getElementById('mtg-buscar').value = '102'; buscarPedidoDaMontagem();
         const buscaRecusada = cargas.length === cargasAntes;
-        document.getElementById('mtg-produto').value = '502'; onMontagemProdutoChange();
+        document.getElementById('mtg-formato').value = 'F2'; onMontagemFormatoChange();
         const pvc = valores('mtg-pedido');
         const limpou = !state.montagem.pedidoSel && !state.montagem.modeloSel
             && !document.getElementById('mtg-posicoes').value && document.getElementById('mtg-modelo').disabled;
@@ -1386,26 +1395,27 @@ const PECAS = [
         const retornoRecusado = !state.montagem.pedidoSel;
         document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
         const modelosPvc = valores('mtg-modelo');
-        document.getElementById('mtg-produto').value = '503'; onMontagemProdutoChange();
+        document.getElementById('mtg-formato').value = 'F3'; onMontagemFormatoChange();
         const vazio = document.getElementById('mtg-pedido').disabled && !valores('mtg-pedido').length;
         // Troca de produto enquanto o pedido carrega: a resposta antiga não volta.
-        document.getElementById('mtg-produto').value = '501'; onMontagemProdutoChange();
+        document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
         document.getElementById('mtg-pedido').value = 'a';
         let liberar;
         window.loadOSItens = () => new Promise(r => { liberar = r; });
         const carregando = onMontagemPedidoChange();
-        document.getElementById('mtg-produto').value = '502'; onMontagemProdutoChange();
+        document.getElementById('mtg-formato').value = 'F2'; onMontagemFormatoChange();
         liberar(); await carregando;
         const semRespostaAntiga = !state.montagem.pedidoSel && !valores('mtg-modelo').length;
-        return { todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
+        return { produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
-    ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com produto escolhido e sem limite antigo de 30 dias', filtros);
-    ok(filtros.modelos.join() === 'A1' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos cruza produto e status Aguardando', filtros);
-    ok(filtros.entrou === 1 && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'inclusão, busca e retorno não contornam os filtros', filtros);
-    ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar produto limpa a seleção e preserva a montagem existente', filtros);
-    ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '501', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
+    ok(filtros.formatos.join() === 'F1,F2,F3' && filtros.fallback === 'F2' && filtros.desconhecido === '' && filtros.vinculo === 'F1', 'lista formatos sem duplicar produtos e resolve formato direto, vinculo e desconhecido', filtros);
+    ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com formato escolhido e sem limite antigo de 30 dias', filtros);
+    ok(filtros.modelos.join() === 'A1,A5' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos reune produtos do mesmo formato e cruza status Aguardando', filtros);
+    ok(filtros.entrou === 2 && filtros.produtosCompartilham && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'produtos diferentes compartilham a montagem; inclusao, busca e retorno respeitam filtros', filtros);
+    ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar formato limpa a seleção e preserva a montagem existente', filtros);
+    ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '503', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
 
     if (FOTO) {
         await aba.evaluate(pecas => {
