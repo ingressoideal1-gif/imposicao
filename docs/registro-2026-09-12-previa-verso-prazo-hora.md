@@ -59,8 +59,25 @@ invalidar o cache dos arquivos do painel quando houver publicacao.
 reutilizado o `node_modules` ja instalado no checkout original por uma junction;
 nenhuma dependencia foi instalada ou alterada.
 
-Estado da entrega: alteracoes preparadas e validadas para publicacao na
-Cloudflare. Nenhum PDF foi enviado a uma impressora e nenhum arquivo foi
-colocado em hot folder durante esta validacao. A confirmacao visual na estacao
-depende de a versao publicada ser sincronizada pelo NewProd e de o painel ser
-recarregado.
+Estado da validacao: nenhum PDF foi enviado a uma impressora e nenhum arquivo
+foi colocado em hot folder durante os testes locais. A confirmacao visual na
+estacao depende de a versao publicada ser sincronizada pelo NewProd e de o
+painel ser recarregado.
+
+## Publicacao
+
+A implementacao foi integrada pelo PR #39 no commit
+`a66fe9b0766b560f0eca8f1fe2db33ce7e524b9d`. O check `Cloudflare Pages`
+terminou com sucesso em 12/09/2026 as 08:07 (America/Sao_Paulo).
+
+Depois da propagacao, `index.html`, `producao.html`, `pedido.js` e `script.js`
+foram baixados de `https://imposicao.pages.dev` com cache desabilitado. Os
+quatro arquivos corresponderam as fontes validadas depois de normalizar BOM e
+finais de linha. Tambem foram confirmados no endereco publico o carimbo v854,
+`pdfDaFaceNaPreviaPedido` e a exibicao de hora do prazo.
+
+Esta entrega altera somente o painel e nao exige novo MSI. Na verificacao das
+08:09, a copia local da estacao ainda nao havia executado o proximo sincronismo
+automatico; por isso a validacao visual no NewProd continuou pendente de
+sincronizacao e recarregamento da pagina. Publicacao na Cloudflare nao comprova
+sozinha que a estacao ja recebeu a copia nova.
