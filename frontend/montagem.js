@@ -129,8 +129,11 @@ function montagemVazia() {
     return {
         celulas: [],
         modelos: [],
+        produtoSel: null,
         pedidoSel: null,
         modeloSel: null,
+        face: 'both',
+        gerando: false,
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
         // valer para todas de uma vez — repor doze células custava doze cliques.
         selecao: [],
@@ -348,8 +351,27 @@ function pecaDaMontagem(item) {
         saida_id: saidaIdDoItem(item, fmt),
         cor: item ? (item.cor || item.padrao || '') : '',
         verso_tipo: item ? item.verso_tipo : null,
+        print_mode: modoDoModeloNaMontagem(item),
         _item: item,
     };
+}
+
+// A numeração atual define as faces. O ERP é a reserva para modelos sem
+// modo explícito; um texto antigo do ERP não pode reativar um verso removido.
+function modoDoModeloNaMontagem(item) {
+    if (!item) return 'front';
+    const id = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    const modo = String((num && num.print_mode) || '').trim().toLowerCase();
+    if (['front', 'duplex', 'duplex_unico'].includes(modo)) return modo;
+    const legado = String(item.verso_tipo || '').trim().toUpperCase();
+    return item.verso === true || (legado && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(legado))
+        ? 'duplex' : 'front';
+}
+
+function modoDaPecaNaMontagem(peca) {
+    return peca && peca.print_mode || modoDoModeloNaMontagem(peca && (peca._item || peca));
 }
 
 /**
@@ -391,13 +413,16 @@ function porQueNaoCabeNaMontagem(a, b) {
     if (!b.formato_id) return 'não dá para saber o formato deste modelo — abra o pedido na tela do Pedido uma vez e volte aqui';
 
     const cor = x => String(x.cor || x.padrao || '').toLowerCase().trim();
-    const face = x => (x.verso_tipo && x.verso_tipo !== 'Frente' && x.verso_tipo !== 'SÓ FRENTE')
-        ? 'verso' : 'frente';
+    const face = x => modoDaPecaNaMontagem(x) !== 'front';
 
     if (String(a.formato_id || '') !== String(b.formato_id || '')) return 'o formato é outro';
     if (cor(a) !== cor(b)) return 'a cor do material é outra';
     if (String(a.saida_id || '') !== String(b.saida_id || '')) return 'a saída é outra';
     if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
+    // O motor recebe um modo de paginação para a folha inteira.
+    if (modoDaPecaNaMontagem(a) !== modoDaPecaNaMontagem(b)) {
+        return 'os modelos usam paginações de verso diferentes — monte cada modo separadamente';
+    }
 
     return null;
 }
@@ -995,24 +1020,89 @@ function celulasForaDaTiragem(celulas, modelos, artes) {
  * O modo de impressão da folha: `front`, `duplex` ou `duplex_unico` — os três
  * valores que o motor conhece (`tem_verso` / `verso_unico` no engine.py).
  *
- * Vem de `modoDeVersoDoModelo`, a mesma regra que a tela do Pedido aplica ao
- * modelo ativo. A trava da montagem já garante que todos os modelos têm a
- * mesma face; o que pode variar entre eles é só o verso comum × verso único,
- * e o único vence porque é o único que diz ao motor como ler as páginas.
+ * Usa o mesmo modo efetivo que a compatibilidade. O modo deve ser uniforme:
+ * verso comum e verso único percorrem as páginas de formas diferentes.
  *
  * A primeira versão mandava `'simplex'`, valor que o motor não conhece e trata
  * como frente — o verso nunca saía.
  */
 function modoDaFolhaDaMontagem(modelos) {
-    let modo = 'front';
-    for (const m of (modelos || [])) {
-        const it = m.peca && m.peca._item;
-        const dele = (typeof modoDeVersoDoModelo === 'function' && it)
-            ? modoDeVersoDoModelo(it) : 'front';
-        if (dele === 'duplex_unico') return 'duplex_unico';
-        if (dele === 'duplex') modo = 'duplex';
+    const modos = new Set((modelos || []).map(m => modoDaPecaNaMontagem(m.peca)));
+    if (modos.size > 1) {
+        throw new Error('A montagem contém modelos com faces ou paginações diferentes. Separe os modelos antes de gerar.');
     }
-    return modo;
+    return modos.values().next().value || 'front';
+}
+
+function mudarFaceDaMontagem(face) {
+    if (state.montagem.gerando) return;
+    if (!['both', 'front', 'back'].includes(face)) return;
+    state.montagem.face = face;
+    renderMontagem();
+}
+
+function _mtgRenderFaces() {
+    const m = state.montagem;
+    const comVerso = m.modelos.some(x => modoDaPecaNaMontagem(x.peca) !== 'front');
+    if (m.modelos.length && !comVerso && !m.gerando) m.face = 'front';
+    const sel = document.getElementById('mtg-face');
+    if (sel) {
+        for (const opt of sel.options) opt.disabled = !comVerso && opt.value !== 'front';
+        sel.value = comVerso ? (m.face || 'both') : 'front';
+        sel.disabled = !m.modelos.length;
+    }
+    const aviso = document.getElementById('mtg-face-aviso');
+    if (aviso) {
+        aviso.textContent = !m.modelos.length ? 'Adicione um modelo para escolher as faces.'
+            : comVerso ? 'MODELOS COM VERSO · não combine com modelos só frente.' : 'Modelos só frente · impressão apenas da frente.';
+        aviso.classList.toggle('mtg-com-verso', comVerso);
+    }
+    const escolhido = document.getElementById('mtg-modelo-face');
+    const item = _mtgItemEscolhido();
+    if (escolhido) {
+        escolhido.hidden = !item;
+        escolhido.textContent = item && modoDoModeloNaMontagem(item) !== 'front' ? 'MODELO COM VERSO' : 'Modelo só frente';
+        escolhido.classList.toggle('mtg-com-verso', !!item && modoDoModeloNaMontagem(item) !== 'front');
+    }
+}
+
+function _mtgAtualizarGeracao() {
+    const gerando = !!state.montagem.gerando;
+    const editor = document.getElementById('mtg-editor');
+    if (editor) { editor.disabled = gerando; editor.inert = gerando; }
+    const btn = document.getElementById('mtg-btn-pdf');
+    if (btn) {
+        btn.disabled = gerando || !!state.montagem.carregando || !state.montagem.celulas.length;
+        btn.textContent = gerando ? 'Montando…' : 'Gerar o PDF da montagem';
+    }
+    const aviso = document.getElementById('mtg-geracao-aviso');
+    if (aviso) aviso.textContent = gerando ? 'Gerando a montagem. Aguarde para continuar a edição.' : '';
+}
+
+// O motor monta frente/verso em pares, preservando o espelhamento do verso.
+// Filtrar DEPOIS mantém as páginas e os códigos do original, inclusive no
+// duplex clássico com frentes e versos alternados no PDF de entrada.
+async function selecionarFacesDoPdfDaMontagem(blob, face, modo, folhas) {
+    if (modo === 'front') {
+        if (face === 'back') throw new Error('Este modelo não possui verso.');
+        return blob;
+    }
+    if (!['both', 'front', 'back'].includes(face)) throw new Error('Escolha as faces da impressão.');
+    if (!window.PDFLib || !window.PDFLib.PDFDocument) throw new Error('Não foi possível carregar o leitor de PDF. Recarregue o painel.');
+    const PDFDocument = window.PDFLib.PDFDocument;
+    const origem = await PDFDocument.load(await blob.arrayBuffer());
+    const total = origem.getPageCount();
+    if (!total || total !== folhas * 2) {
+        throw new Error('O PDF retornou uma quantidade inesperada de páginas. As faces não foram entregues; confira a estação.');
+    }
+    if (face === 'both') return blob;
+    // Remover no documento original preserva o OutputIntent/ICC e os recursos
+    // das páginas. Copiar para outro documento perderia o perfil do catálogo.
+    const paridade = face === 'back' ? 1 : 0;
+    for (let i = total - 1; i >= 0; i--) {
+        if (i % 2 !== paridade) origem.removePage(i);
+    }
+    return new Blob([await origem.save()], { type: 'application/pdf' });
 }
 
 /**
@@ -1115,6 +1205,7 @@ function _mtgInstantaneoAtual() {
 }
 
 function desfazerMontagem() {
+    if (state.montagem.gerando) return;
     const m = state.montagem;
     if (!m.historia.length) return;
     m.futuro.push(_mtgInstantaneoAtual());
@@ -1124,6 +1215,7 @@ function desfazerMontagem() {
 }
 
 function refazerMontagem() {
+    if (state.montagem.gerando) return;
     const m = state.montagem;
     if (!m.futuro.length) return;
     m.historia.push(_mtgInstantaneoAtual());
@@ -1141,7 +1233,8 @@ function _mtgItemEscolhido() {
     const m = state.montagem;
     if (!m || !m.pedidoSel || !m.modeloSel) return null;
     return (state.osItens[m.pedidoSel] || [])
-        .find(i => String(i.id) === String(m.modeloSel)) || null;
+        .find(i => String(i.id) === String(m.modeloSel)
+            && modeloDisponivelNaMontagem(m.pedidoSel, i)) || null;
 }
 
 /** A numeração daquele modelo, já resolvida (banco do pedido incluído). */
@@ -1199,28 +1292,93 @@ function _mtgNumeroDoPedido(osId) {
     return n || String(osId);
 }
 
-/**
- * Os pedidos que a tela oferece: os impressos nos ÚLTIMOS 30 DIAS.
- *
- * Refazer célula é sempre sobre material que JÁ SAIU — oferecer a fila inteira
- * encheria o seletor de pedidos que não têm célula nenhuma para repor. Pedido
- * mais antigo entra pelo número, no campo ao lado.
- */
-function pedidosParaMontagem(dias) {
-    const limite = Date.now() - ((parseInt(dias) || 30) * 24 * 60 * 60 * 1000);
-    const saida = [];
+/** Filtros da Montagem: produto, pedido Em produção e modelo Aguardando. */
+function pedidoEmProducaoNaMontagem(os) {
+    // Status do pedido no ERP, não o status da arte ou de impressão.
+    return String((os && os.status_interno) || '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().toUpperCase() === 'EM PRODUCAO';
+}
 
-    for (const os of (state.ordens || [])) {
-        const quando = (typeof quandoOPedidoFicouImpresso === 'function')
-            ? quandoOPedidoFicouImpresso(os) : null;
-        if (quando === null || quando < limite) continue;
-        saida.push({ os, quando });
+function produtoDoModeloNaMontagem(item, osId) {
+    if (!item) return '';
+    const id = [item._vibe_id_produto, item.id_produto].find(x => x && String(x) !== 'sem_produto');
+    if (id) return String(id);
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId));
+    const origem = item.id_produto_proposta_origem || item.id;
+    const produto = ((os && os._itens_raw) || []).find(p => String(p.id) === String(origem));
+    return produto && produto.id_produto ? String(produto.id_produto) : '';
+}
+
+function pedidoDisponivelNaMontagem(os, produtoId = state.montagem.produtoSel) {
+    if (!pedidoEmProducaoNaMontagem(os)) return false;
+    if (!produtoId) return true;
+    return (os._itens_raw || []).some(p => String(p.id_produto) === String(produtoId))
+        || (state.osItens[os.id] || []).some(it => produtoDoModeloNaMontagem(it, os.id) === String(produtoId));
+}
+
+function modeloDisponivelNaMontagem(osId, item, produtoId = state.montagem.produtoSel) {
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId));
+    if (!pedidoEmProducaoNaMontagem(os) || !item) return false;
+    const bruto = item.status_impressao || item.status_producao || item.impressao;
+    const status = typeof normalizarStatusImpressao === 'function'
+        ? normalizarStatusImpressao(bruto)
+        : ((!bruto || ['AGUARD.', 'AGUARDANDO', 'PARCIAL', 'ERRO', 'REVISAO', 'REVISÃO']
+            .includes(String(bruto).trim().toUpperCase())) ? 'Aguardando' : bruto);
+    return status === 'Aguardando' && (!produtoId || produtoDoModeloNaMontagem(item, osId) === String(produtoId));
+}
+
+function pedidosParaMontagem() {
+    return (state.ordens || []).filter(os => pedidoDisponivelNaMontagem(os))
+        .slice().sort((a, b) => String(b.numero || b.id).localeCompare(String(a.numero || a.id), 'pt-BR', { numeric: true }));
+}
+
+function encherProdutosDaMontagem() {
+    const sel = document.getElementById('mtg-produto');
+    if (!sel) return;
+    const produtos = new Map();
+    for (const p of (state.produtosGlobais || [])) {
+        if (p.id_produto && String(p.id_produto) !== 'sem_produto') {
+            produtos.set(String(p.id_produto), p.nomeReal || 'Produto #' + p.id_produto);
+        }
     }
+    // O pedido pode referenciar um produto ainda ausente do catálogo da sessão.
+    for (const os of (state.ordens || []).filter(pedidoEmProducaoNaMontagem)) {
+        for (const p of os._itens_raw || []) {
+            if (p.id_produto && String(p.id_produto) !== 'sem_produto' && !produtos.has(String(p.id_produto))) produtos.set(String(p.id_produto), p.nome_produto || 'Produto #' + p.id_produto);
+        }
+        for (const it of state.osItens[os.id] || []) {
+            const id = produtoDoModeloNaMontagem(it, os.id);
+            if (id && !produtos.has(id)) produtos.set(id, it.nome_produto_real || 'Produto #' + id);
+        }
+    }
+    if (state.montagem.produtoSel && !produtos.has(String(state.montagem.produtoSel))) {
+        produtos.set(String(state.montagem.produtoSel), 'Produto #' + state.montagem.produtoSel);
+    }
+    sel.innerHTML = '<option value="">Todos os produtos</option>'
+        + Array.from(produtos).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+            .map(([id, nome]) => `<option value="${escapeHtml(id)}">${escapeHtml(String(nome))}</option>`).join('');
+    sel.value = state.montagem.produtoSel || '';
+}
 
-    // Do mais recente ao mais antigo: o que acabou de sair da impressora é o
-    // que tem chance de ter estragado uma folha.
-    saida.sort((a, b) => b.quando - a.quando);
-    return saida.map(x => x.os);
+function onMontagemProdutoChange() {
+    if (state.montagem.gerando) return;
+    const sel = document.getElementById('mtg-produto');
+    state.montagem.produtoSel = sel && sel.value || null;
+    // Invalida também respostas ainda em voo do pedido anterior.
+    state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
+    state.montagem.pedidoSel = null;
+    state.montagem.modeloSel = null;
+    const pedido = document.getElementById('mtg-pedido');
+    if (pedido) pedido.value = '';
+    const modelo = document.getElementById('mtg-modelo');
+    if (modelo) { modelo.innerHTML = '<option value="">Escolha o pedido…</option>'; modelo.disabled = true; }
+    for (const id of ['mtg-posicoes', 'mtg-buscar']) {
+        const campo = document.getElementById(id);
+        if (campo) campo.value = '';
+    }
+    encherPedidosDaMontagem();
+    onMontagemPosicoesChange();
+    renderMontagem();
 }
 
 /** Enche o seletor de pedidos. */
@@ -1229,19 +1387,17 @@ function encherPedidosDaMontagem() {
     if (!sel) return;
 
     const atual = sel.value;
-    const lista = pedidosParaMontagem(30);
+    const lista = pedidosParaMontagem();
 
-    // "Impressos nos últimos 30 dias", e não "escolha ou digite": um <select>
-    // não se digita, e o campo do número fica ao lado. Prometer aqui o que a
-    // tela cumpre em outro lugar só confunde.
-    sel.innerHTML = '<option value="">Impressos nos últimos 30 dias…</option>'
+    sel.innerHTML = '<option value="">' + (lista.length ? 'Pedidos em produção…' : 'Nenhum pedido em produção para este produto') + '</option>'
         + lista.map(os => {
             const num = escapeHtml(String(os.numero || os.id));
-            const nome = escapeHtml(String(os.cliente_nome || os.titulo || '').slice(0, 40));
+            const nome = escapeHtml(String(os.cliente_nome || os.cliente || os.titulo || '').slice(0, 40));
             return `<option value="${escapeHtml(String(os.id))}">${num}${nome ? ' · ' + nome : ''}</option>`;
         }).join('');
 
-    if (atual) sel.value = atual;
+    if (atual && lista.some(os => String(os.id) === atual)) sel.value = atual;
+    sel.disabled = lista.length === 0;
 }
 
 /**
@@ -1277,17 +1433,23 @@ async function _mtgGarantirBancosDoPedido(osId) {
 }
 
 async function onMontagemPedidoChange() {
+    if (state.montagem.gerando) return;
     const sel = document.getElementById('mtg-pedido');
     const osId = sel ? sel.value : '';
+    const os = (state.ordens || []).find(o => String(o.id) === osId);
+    const carga = state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
     state.montagem.pedidoSel = osId || null;
     state.montagem.modeloSel = null;
 
     const selMod = document.getElementById('mtg-modelo');
     if (!selMod) return;
 
-    if (!osId) {
+    if (!osId || !pedidoDisponivelNaMontagem(os)) {
+        state.montagem.pedidoSel = null;
+        if (sel) sel.value = '';
         selMod.innerHTML = '<option value="">—</option>';
         selMod.disabled = true;
+        onMontagemPosicoesChange();
         renderMontagem();
         return;
     }
@@ -1295,28 +1457,37 @@ async function onMontagemPedidoChange() {
     selMod.innerHTML = '<option value="">Carregando…</option>';
     selMod.disabled = true;
 
-    // O MESMO loadOSItens da tela, e não uma consulta própria: `formato_id` e
-    // `saida_id` NÃO existem em `pedidos_modelos` — são resolvidos em memória a
-    // partir do texto do ERP. Uma consulta crua traria modelos sem formato, e a
-    // conferência de compatibilidade recusaria todos.
-    if (typeof loadOSItens === 'function') {
-        try { await loadOSItens(osId); } catch (e) { console.warn('[montagem]', e); }
+    state.montagem.carregando = (state.montagem.carregando || 0) + 1;
+    _mtgAtualizarGeracao();
+    try {
+        if (typeof loadOSItens === 'function') await loadOSItens(osId);
+        await _mtgGarantirBancosDoPedido(osId);
+        if (state.montagem.cargaSelecao !== carga || state.montagem.pedidoSel !== osId) return;
+
+        const itens = (state.osItens[osId] || []).filter(it => modeloDisponivelNaMontagem(osId, it));
+        selMod.innerHTML = '<option value="">' + (itens.length ? 'Modelos aguardando…' : 'Nenhum modelo aguardando para este produto') + '</option>'
+            + itens.map(it => {
+                const nome = escapeHtml(String(it.nome_modelo || it.produto || 'modelo').slice(0, 60));
+                const face = modoDoModeloNaMontagem(it) !== 'front' ? ' · COM VERSO' : ' · Só frente';
+                return `<option value="${escapeHtml(String(it.id))}">${escapeHtml(String(it.id))} · ${nome}${face}</option>`;
+            }).join('');
+        selMod.disabled = itens.length === 0;
+
+    } catch (e) {
+        if (state.montagem.cargaSelecao === carga && state.montagem.pedidoSel === osId) {
+            selMod.innerHTML = '<option value="">Falha ao carregar. Selecione o pedido novamente.</option>';
+            selMod.disabled = true;
+            if (typeof toast === 'function') toast('Não foi possível carregar os modelos do pedido.', 'error');
+        }
+    } finally {
+        state.montagem.carregando--;
+        onMontagemPosicoesChange();
+        renderMontagem();
     }
-    // E os bancos deste pedido, para a tiragem da lista sair certa.
-    await _mtgGarantirBancosDoPedido(osId);
-
-    const itens = state.osItens[osId] || [];
-    selMod.innerHTML = '<option value="">Escolha o modelo…</option>'
-        + itens.map(it => {
-            const nome = escapeHtml(String(it.nome_modelo || it.produto || 'modelo').slice(0, 60));
-            return `<option value="${escapeHtml(String(it.id))}">${escapeHtml(String(it.id))} · ${nome}</option>`;
-        }).join('');
-    selMod.disabled = itens.length === 0;
-
-    renderMontagem();
 }
 
 function onMontagemModeloChange() {
+    if (state.montagem.gerando) return;
     const sel = document.getElementById('mtg-modelo');
     state.montagem.modeloSel = sel && sel.value ? sel.value : null;
     onMontagemPosicoesChange();
@@ -1408,8 +1579,9 @@ function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
     // nao existe — e prometer uma comparacao vazia so' confundiria.
     const comparacao = aceita ? `
           <p style="margin:0 0 10px;font-size:0.82rem;color:var(--text);line-height:1.55;">
-            A folha já está em <strong>${cor(aceita)}</strong> e este modelo é <strong>${cor(tentado)}</strong>.
-            Uma folha é de um material só — as duas não saem da mesma passagem pela impressora.
+            A folha usa <strong>${cor(aceita)}</strong> · ${modoDaPecaNaMontagem(aceita) === 'front' ? 'só frente' : 'com verso'}.
+            O modelo usa <strong>${cor(tentado)}</strong> · ${modoDaPecaNaMontagem(tentado) === 'front' ? 'só frente' : 'com verso'}.
+            Formato, material, saída e paginação precisam ser compatíveis.
           </p>` : '';
     const saida = aceita ? `
           <button type="button" class="btn btn-secondary btn-sm" onclick="limparMontagem()">
@@ -1429,6 +1601,7 @@ function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
 
 /** Junta as posições digitadas à folha, registrando o modelo se for novo. */
 function adicionarNaMontagem() {
+    if (state.montagem.gerando) return;
     const item = _mtgItemEscolhido();
     if (!item) return;
 
@@ -1515,14 +1688,19 @@ function _mtgLinhaAtiva(m) {
  * precisa apagá-la primeiro.
  */
 async function retomarDaMontagem(indice) {
+    if (state.montagem.gerando) return;
     const m = state.montagem.modelos[indice];
     if (!m) return;
+    const os = (state.ordens || []).find(o => String(o.id) === String(m.osId));
+    const item = (state.osItens[m.osId] || []).find(it => String(it.id) === String(m.itemId)) || m.peca._item;
+    if (!pedidoDisponivelNaMontagem(os) || !modeloDisponivelNaMontagem(m.osId, item)) {
+        if (typeof toast === 'function') toast('Este modelo não está disponível no filtro atual. Confira o produto e os status do pedido e do modelo.', 'warning');
+        return;
+    }
 
     const sel = document.getElementById('mtg-pedido');
     if (sel) {
-        // O pedido pode não estar na lista dos 30 dias — foi buscado pelo número,
-        // ou o seletor foi redesenhado depois. Sem a opção, o `value` não pega e
-        // o clique não faria nada.
+        // Recria somente uma opção que passou pelo mesmo filtro dos seletores.
         if (!Array.from(sel.options).some(o => o.value === String(m.osId))) {
             const opt = document.createElement('option');
             opt.value = String(m.osId);
@@ -1534,6 +1712,7 @@ async function retomarDaMontagem(indice) {
 
     // Recarrega os modelos daquele pedido, que é o que enche o segundo seletor.
     await onMontagemPedidoChange();
+    if (state.montagem.gerando || String(state.montagem.pedidoSel) !== String(m.osId)) return;
 
     const selMod = document.getElementById('mtg-modelo');
     if (selMod) {
@@ -1547,6 +1726,7 @@ async function retomarDaMontagem(indice) {
 
 /** Tira o modelo `indice` da montagem — e todas as células dele da folha. */
 function removerDaMontagem(indice) {
+    if (state.montagem.gerando) return;
     const { celulas, modelos } = state.montagem;
     const m = modelos[indice];
     if (!m) return;
@@ -1574,6 +1754,7 @@ function _mtgAlvosDoGesto(i) {
 
 /** O ⧉ da célula: a mesma peça, repetida logo abaixo. */
 function duplicarCelulaDaMontagem(i) {
+    if (state.montagem.gerando) return;
     const alvos = _mtgAlvosDoGesto(i);
     guardarNaHistoria();
     // Do fim para o começo: cada inserção empurra os índices seguintes, e
@@ -1589,6 +1770,7 @@ function duplicarCelulaDaMontagem(i) {
  * continuaria na lista e no deslocamento, confundindo quem confere.
  */
 function removerCelulaDaMontagem(i) {
+    if (state.montagem.gerando) return;
     const alvos = _mtgAlvosDoGesto(i);
     guardarNaHistoria();
     for (let k = alvos.length - 1; k >= 0; k--) tirarCelula(state.montagem.celulas, alvos[k]);
@@ -1600,6 +1782,7 @@ function removerCelulaDaMontagem(i) {
 
 /** O arrasto: a célula `de` passa a ocupar a posição `para` da folha. */
 function moverCelulaDaMontagem(de, para) {
+    if (state.montagem.gerando) return;
     guardarNaHistoria();
     moverCelula(state.montagem.celulas, de, para);
     state.montagem.selecao = [];
@@ -1615,6 +1798,7 @@ function moverCelulaDaMontagem(de, para) {
  * diferentes.
  */
 function selecionarCelulaDaMontagem(i, ev) {
+    if (state.montagem.gerando) return;
     const m = state.montagem;
     const multi = ev && (ev.ctrlKey || ev.metaKey);
     const faixa = ev && ev.shiftKey;
@@ -1637,6 +1821,7 @@ function selecionarCelulaDaMontagem(i, ev) {
 
 /** Completa a folha repetindo as células que já estão nela. */
 function completarAFolhaDaMontagem() {
+    if (state.montagem.gerando) return;
     const m = state.montagem;
     const porFolha = _mtgCelulasPorFolha(m.modelos);
     const conta = contaDaMontagem(m.celulas, porFolha);
@@ -1653,6 +1838,7 @@ function completarAFolhaDaMontagem() {
 
 /** Reordena a folha e diz o que fez. */
 function ordenarMontagem(criterio) {
+    if (state.montagem.gerando) return;
     const m = state.montagem;
     if (!m.celulas.length) return;
     guardarNaHistoria();
@@ -1673,6 +1859,7 @@ function zoomDaMontagem(qual) {
 }
 
 function limparMontagem() {
+    if (state.montagem.gerando) return;
     guardarNaHistoria();
     state.montagem.celulas = [];
     state.montagem.modelos = [];
@@ -1702,6 +1889,7 @@ function _mtgSugestaoAtual() {
  * que havia antes fica no desfazer.
  */
 async function aplicarSugestaoDaMontagem(modo) {
+    if (state.montagem.gerando) return;
     const sug = _mtgSugestaoAtual();
     if (!sug.viavel) {
         if (typeof toast === 'function') toast(sug.motivo, 'error');
@@ -1737,6 +1925,7 @@ async function aplicarSugestaoDaMontagem(modo) {
         if (!segue) return;
     }
 
+    if (state.montagem.gerando) return;
     guardarNaHistoria();
     state.montagem.celulas = (escolhido === 'unica')
         ? celulasDaFolhaUnica(sug)
@@ -1838,12 +2027,14 @@ function _mtgRenderSugestao() {
 /* ── O número do modelo no papel ─────────────────────────────────────────── */
 
 function alternarNumeroDaMontagem() {
+    if (state.montagem.gerando) return;
     const n = state.montagem.numero;
     n.imprimir = !n.imprimir;
     renderMontagem();
 }
 
 function mudarNumeroDaMontagem(campo, valor) {
+    if (state.montagem.gerando) return;
     const n = state.montagem.numero;
     if (campo === 'size') n.size = parseFloat(valor);
     else if (campo === 'rot') n.rot = parseInt(valor);
@@ -2276,6 +2467,7 @@ function _mtgLigarArrasto() {
         .forEach(e => e.classList.remove('mtg-celula-arrastando', 'mtg-celula-alvo'));
 
     folha.addEventListener('dragstart', ev => {
+        if (state.montagem.gerando) { ev.preventDefault(); return; }
         const el = celulaDe(ev);
         if (!el || !el.hasAttribute('draggable')) return;
         de = parseInt(el.dataset.i);
@@ -2361,6 +2553,7 @@ function _mtgLigarTeclado() {
     window._mtgTecladoLigado = true;
 
     document.addEventListener('keydown', ev => {
+        if (state.montagem.gerando) return;
         const view = document.getElementById('view-montagem');
         if (!view || !view.classList.contains('active')) return;
 
@@ -2472,8 +2665,7 @@ function renderMontagem() {
         } else {
             const p = modelos[0].peca;
             const sai = _mtgSaidaDaFolha(modelos);
-            const face = (p.verso_tipo && p.verso_tipo !== 'Frente' && p.verso_tipo !== 'SÓ FRENTE')
-                ? 'Frente e verso' : 'Só frente';
+            const face = modoDaPecaNaMontagem(p) !== 'front' ? 'MODELOS COM VERSO' : 'Só frente';
             trava.innerHTML = `
                 <span class="mtg-trava-titulo">
                   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2zm-8-2a3 3 0 0 1 6 0v2H9V7z"/></svg>
@@ -2482,7 +2674,7 @@ function renderMontagem() {
                 <span class="mtg-chip">${escapeHtml(p.formato_nome || ('formato ' + p.formato_id))}</span>
                 <span class="mtg-chip">${escapeHtml(String(p.cor || 'sem cor'))}</span>
                 <span class="mtg-chip">${escapeHtml(sai ? sai.nome : 'saída ' + p.saida_id)}</span>
-                <span class="mtg-chip">${face}</span>
+                <span class="mtg-chip ${modoDaPecaNaMontagem(p) !== 'front' ? 'mtg-com-verso' : ''}">${face}</span>
                 <span style="margin-left:auto;font-size:0.75rem;color:var(--text-faint);">definido pela primeira célula</span>`;
             trava.style.display = 'flex';
         }
@@ -2505,7 +2697,7 @@ function renderMontagem() {
                 <rect x="6" y="39" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2" stroke-dasharray="3 3"/>
               </svg>
               <h3>Nenhuma célula na montagem ainda</h3>
-              <p>Escolha o pedido, o modelo e digite as posições que precisam sair de novo. Repita para quantos pedidos quiser: <strong>a folha aceita células de pedidos diferentes</strong>, desde que sejam do mesmo formato, cor, saída e face.</p>
+              <p>Escolha o produto, um pedido em produção e um modelo aguardando. Digite as posições que precisam sair. Repita para quantos pedidos quiser: <strong>a folha aceita células de pedidos diferentes</strong>, desde que sejam do mesmo formato, cor, saída e face.</p>
               <div class="mtg-garantia">
                 <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="flex-shrink:0;"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.3 13.6-3.2-3.2 1.4-1.4 1.8 1.8 4.6-4.6 1.4 1.4-6 6z"/></svg>
                 <span>O código do ingresso refeito é <strong>o mesmo do original</strong> — a célula substitui, não duplica.</span>
@@ -2536,6 +2728,7 @@ function renderMontagem() {
                       <div style="min-width:0;">
                         <div style="color:var(--text);font-weight:600;">${escapeHtml(String(m.pedidoNumero || m.osId))} · ${escapeHtml(String(m.itemId))}</div>
                         <div style="font-size:0.75rem;">${escapeHtml(String(m.nome).slice(0, 40))}</div>
+                        <span class="mtg-face-modelo ${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'mtg-com-verso' : ''}">${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'MODELO COM VERSO' : 'Só frente'}</span>
                       </div>
                     </div>
                   </td>
@@ -2581,12 +2774,23 @@ function renderMontagem() {
     _mtgRenderSugestao();
     _mtgRenderNumero();
     _mtgRenderFolha();
+    _mtgRenderFaces();
+    _mtgAtualizarGeracao();
 }
 
 /** Chamada ao entrar na tela. */
 async function abrirMontagem() {
+    if (state.montagem && state.montagem.gerando) { renderMontagem(); return; }
     if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
+    encherProdutosDaMontagem();
     encherPedidosDaMontagem();
+    const pedido = document.getElementById('mtg-pedido');
+    if (state.montagem.pedidoSel && (!pedido || !pedido.value)) {
+        state.montagem.pedidoSel = null;
+        state.montagem.modeloSel = null;
+        const modelo = document.getElementById('mtg-modelo');
+        if (modelo) { modelo.innerHTML = '<option value="">Escolha o pedido…</option>'; modelo.disabled = true; }
+    }
     _mtgLigarArrasto();
     _mtgLigarTeclado();
     onMontagemPosicoesChange();
@@ -2724,6 +2928,7 @@ function onMontagemPastaChange() {
  * navegador nao enxerga o disco de la.
  */
 async function escolherPastaDaMontagem() {
+    if (state.montagem.gerando) return;
     const btn = document.getElementById('mtg-btn-pasta');
     const rotulo = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = 'Escolha na janela&hellip;'; }
@@ -2866,18 +3071,7 @@ async function prepararArtesDaMontagem(modelos) {
         if (!(state.osItens[osId] || []).length && typeof loadOSItens === 'function') {
             try { await loadOSItens(osId); } catch (e) { console.warn('[montagem]', e); }
         }
-        const itens = state.osItens[osId] || [];
-
-        // Os bancos do PEDIDO, e a certeza de que foram lidos.
-        if (typeof garantirBancosDoTrabalho === 'function') {
-            await garantirBancosDoTrabalho([osId]);
-        }
-        if (typeof pedidosComBancoDesconhecido === 'function'
-            && pedidosComBancoDesconhecido([osId]).length) {
-            throw new Error('Não consegui ler os bancos de dados do pedido ' + _mtgNumeroDoPedido(osId)
-                + '. Gerar agora sairia com número sequencial no lugar do código. '
-                + 'Confira a conexão da estação e clique de novo.');
-        }
+        let itens = state.osItens[osId] || [];
 
         // E o CSV de cada numeração que estes modelos usam.
         const ids = indicesPorPedido[osId].map(j => {
@@ -2890,6 +3084,18 @@ async function prepararArtesDaMontagem(modelos) {
             await garantirCsvDoTrabalho(ids);
         }
 
+        // Carregar por último: nenhuma espera entre a leitura dos bancos e a
+        // cópia das artes, pois outras telas também usam este estado global.
+        if (typeof garantirBancosDoTrabalho === 'function') {
+            await garantirBancosDoTrabalho([osId]);
+        }
+        if ((typeof pedidosComBancoDesconhecido === 'function'
+            && pedidosComBancoDesconhecido([osId]).length)
+            || (state._bancosPedidoDe != null && String(state._bancosPedidoDe) !== osId)) {
+            throw new Error('Não consegui confirmar os bancos de dados do pedido ' + _mtgNumeroDoPedido(osId) + '. Confira a conexão e tente novamente.');
+        }
+        itens = state.osItens[osId] || [];
+
         for (const j of indicesPorPedido[osId]) {
             const m = modelos[j];
             const it = itens.find(i => String(i.id) === String(m.itemId));
@@ -2898,7 +3104,19 @@ async function prepararArtesDaMontagem(modelos) {
                     + ' não está mais no pedido. Tire-o da montagem e gere de novo.');
             }
 
+            // O filtro de produto organiza a escolha, sem apagar a folha pronta.
+            // Os status, entretanto, precisam continuar válidos para gerar.
+            if (!modeloDisponivelNaMontagem(m.osId, it, null)) {
+                throw new Error('O pedido ' + _mtgNumeroDoPedido(m.osId) + ' precisa estar Em produção e o modelo ' + m.itemId + ' Aguardando. Confira os status antes de gerar.');
+            }
+
+            const atual = pecaDaMontagem(it);
+            const mudou = porQueNaoCabeNaMontagem(m.peca, atual);
+            if (mudou) throw new Error('O modelo ' + m.itemId + ' mudou desde a montagem: ' + mudou + '. Remova e adicione o modelo novamente.');
+
             const arte = arteDoModeloParaFolha({ osId: m.osId, itemId: m.itemId }, null, { comPrevia: false });
+            arte.pdf_verso_url = atual.print_mode === 'front' ? null
+                : arteParaImpor(it.verso_arte_url || it.url_arquivo_arte_verso);
             // Uma escolha para a montagem inteira, e não a opção salva em cada
             // modelo — ver `imprimirNumeroNaMontagem`.
             arte._imprimirNumero = numero.imprimir;
@@ -2919,7 +3137,8 @@ async function prepararArtesDaMontagem(modelos) {
                 if (pronta.numeracao_2) pronta.numeracao_2 = numeracaoSemElementosDeLayout(pronta.numeracao_2);
             }
             pronta._tiragem = totalDeItensDoModelo(it, pronta.numeracao);
-            artes[j] = pronta;
+            // Destacar do catálogo antes de passar para o próximo pedido.
+            artes[j] = JSON.parse(JSON.stringify(pronta));
         }
     }
 
@@ -3022,18 +3241,34 @@ function payloadDaMontagem(celulas, modelos, artes) {
  * VAI PARAR" acima.
  */
 async function gerarPdfDaMontagem() {
-    const celulas = state.montagem.celulas;
-    const modelos = state.montagem.modelos;
+    if (state.montagem.gerando) return;
+    if (state.montagem.carregando) {
+        if (typeof toast === 'function') toast('Aguarde o carregamento do pedido antes de gerar.', 'warning');
+        return;
+    }
+    const celulas = state.montagem.celulas.map(c => ({ ...c }));
+    const modelos = JSON.parse(JSON.stringify(state.montagem.modelos));
     if (!celulas.length || !modelos.length) return;
-
-    const btn = document.getElementById('mtg-btn-pdf');
-    const rotulo = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Montando…'; }
+    state.montagem.gerando = true;
+    _mtgAtualizarGeracao();
 
     const pasta = pastaDaMontagem();
-    const nome = nomeDoArquivoDaMontagem();
+    const abrir = abrirNaTelaDaMontagem();
+    const face = state.montagem.face || 'both';
+    let nome = nomeDoArquivoDaMontagem();
 
     try {
+        const modo = modoDaFolhaDaMontagem(modelos);
+        if (!_mtgCelulasPorFolha(modelos)) throw new Error('O formato não informa quantas células cabem na folha. Confira o formato antes de gerar.');
+        for (const m of modelos) {
+            const recusa = porQueNaoCabeNaMontagem(modelos[0].peca, m.peca);
+            if (recusa) throw new Error('Modelos incompatíveis: ' + recusa + '.');
+        }
+        if (modo === 'front' && face === 'back') throw new Error('Esta montagem não possui verso. Selecione Apenas frente.');
+        const faceEfetiva = modo === 'front' ? 'front' : face;
+        const rotuloFace = { both: 'Frente e verso', front: 'Apenas frente', back: 'Apenas verso' }[faceEfetiva];
+        if (!rotuloFace) throw new Error('Escolha as faces da impressão.');
+        nome = nome.replace(/\.pdf$/i, '_' + ({ both: 'frente-e-verso', front: 'frente', back: 'verso' }[faceEfetiva]) + '.pdf');
         const base = await _mtgEstacao();
         if (!base) {
             throw new Error('Nenhuma estação respondeu. A montagem é gerada na estação da gráfica — '
@@ -3066,7 +3301,8 @@ async function gerarPdfDaMontagem() {
             throw new Error(detalhe);
         }
 
-        const blob = await resp.blob();
+        const folhas = contaDaMontagem(celulas, _mtgCelulasPorFolha(modelos)).folhas;
+        const blob = await selecionarFacesDoPdfDaMontagem(await resp.blob(), faceEfetiva, modo, folhas);
         const total = totalDeCelulasDaMontagem(celulas);
 
         let onde = '';
@@ -3085,18 +3321,19 @@ async function gerarPdfDaMontagem() {
             baixarPdfDaMontagem(blob, nome);
         }
 
-        if (abrirNaTelaDaMontagem()) abrirPdfDaMontagemNaTela(blob, nome);
+        if (abrir) abrirPdfDaMontagemNaTela(blob, nome);
 
         if (typeof toast === 'function') {
             toast(onde
-                ? `Montagem gerada (${total} célula(s)) e gravada em ${onde}`
-                : `Montagem gerada: ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
+                ? `${rotuloFace}: montagem gerada (${total} célula(s)) e gravada em ${onde}`
+                : `${rotuloFace}: montagem gerada com ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
         }
     } catch (e) {
         console.error('[montagem]', e);
         if (typeof toast === 'function') toast(e.message || String(e), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+        state.montagem.gerando = false;
+        renderMontagem();
     }
 }
 
@@ -3113,37 +3350,26 @@ async function _mtgEstacao() {
     return null;
 }
 
-/**
- * Busca o pedido pelo número e o escolhe.
- *
- * O seletor lista os IMPRESSOS NOS ÚLTIMOS 30 DIAS, que é o caso normal: refazer
- * célula é sobre material que acabou de sair. Este campo cobre o outro caso — o
- * pedido antigo que voltou do cliente, e que não está naquela lista.
- *
- * Procura em TODOS os pedidos que o painel tem em memória, e não só nos
- * impressos: um pedido pode ter voltado sem que o status diga isso, e recusar a
- * busca por causa do status seria travar o operador por um dado que não é dele.
- */
+/** Busca pelo número, limitada ao produto escolhido e aos pedidos Em produção. */
 function buscarPedidoDaMontagem() {
+    if (state.montagem.gerando) return;
     const campo = document.getElementById('mtg-buscar');
     const alvo = String((campo && campo.value) || '').trim();
     if (!alvo) return;
 
-    const os = (state.ordens || []).find(o =>
+    const os = pedidosParaMontagem().find(o =>
         String(o.numero) === alvo || String(o.id) === alvo);
 
     if (!os) {
         if (typeof toast === 'function') {
-            toast(`O pedido ${alvo} não está entre os que o painel carregou. `
-                + `Abra-o uma vez no Painel de Produção e volte aqui.`, 'warning');
+            toast(`O pedido ${alvo} não está disponível: ele precisa estar Em produção e conter o produto selecionado.`, 'warning');
         }
         return;
     }
 
     const sel = document.getElementById('mtg-pedido');
     if (sel) {
-        // O pedido buscado pode não estar na lista dos 30 dias: entra como opção
-        // própria, senão o `sel.value` não pegaria e a busca não faria nada.
+        // A busca nunca acrescenta uma opção fora dos filtros atuais.
         if (!Array.from(sel.options).some(o => o.value === String(os.id))) {
             const opt = document.createElement('option');
             opt.value = String(os.id);

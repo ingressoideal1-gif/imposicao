@@ -323,7 +323,7 @@ def test_a_regra_de_compatibilidade_e_a_decidida():
     for campo in ("formato_id", "saida_id"):
         assert campo in corpo, campo + " saiu da conferencia"
     assert "cor" in corpo and "padrao" in corpo, "a cor saiu da conferencia"
-    assert "verso_tipo" in corpo, "a face saiu da conferencia"
+    assert "modoDaPecaNaMontagem" in corpo, "a face efetiva saiu da conferencia"
 
     assert "modoDeImpressaoDoModelo" not in corpo, (
         "Sequencial x Blocado voltou a impedir a montagem; aqui nao ha pilha"
@@ -331,7 +331,7 @@ def test_a_regra_de_compatibilidade_e_a_decidida():
     assert "modo_pdf" not in corpo, "o modo PDF voltou a impedir a montagem"
 
     # As duas grafias convivem no banco — o pedido 20495 tem as duas.
-    assert "'SÓ FRENTE'" in corpo, (
+    assert "'SÓ FRENTE'" in js[js.index("function modoDoModeloNaMontagem(item)"):], (
         "a grafia 'SÓ FRENTE' saiu: modelos que a usam seriam recusados contra "
         "os que usam 'Frente', sendo a mesma coisa"
     )

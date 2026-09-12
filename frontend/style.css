@@ -4981,7 +4981,8 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-compositor {
     display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
 }
-.mtg-campo { display: flex; flex-direction: column; gap: 6px; }
+.mtg-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mtg-campo .form-control { min-width: 0; width: 100%; }
 .mtg-campo > label {
     font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em;
     text-transform: uppercase; color: var(--text-faint);
@@ -5039,6 +5040,16 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 }
 /* min-width:0 porque o padrao (`auto`) impede o card de ficar menor que o
    min-content do que esta dentro — e uma folha larga esticaria a coluna. */
+#mtg-editor { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+#mtg-geracao-aviso:empty { display: none; }
+#mtg-geracao-aviso { padding: 12px; background: #17385a; color: #dbeafe; border-radius: 8px; }
+.mtg-face-modelo { display: inline-block; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
+.mtg-face-modelo[hidden] { display: none; }
+.mtg-com-verso { background: #3b2a09 !important; color: #fde68a !important; border: 1px solid #d99a21; font-weight: 700; }
+.mtg-faces { margin-bottom: 16px; }
+.mtg-faces label { font-weight: 700; }
+#mtg-face-aviso { margin: 8px 0; padding: 8px; border-radius: 6px; font-size: 0.8rem; }
+.mtg-faces em { display: block; margin-top: 8px; font-size: 0.75rem; color: var(--text-dim); }
 .mtg-lado {
     flex: 0 0 440px; min-width: 0;
     display: flex; flex-direction: column; gap: 16px;
