@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const RAIZ = path.dirname(__dirname);
 
-const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8');
+const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
@@ -54,7 +54,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
 
 const NOMES = [
-    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem',
@@ -168,12 +168,12 @@ state.montagem.numero = api.numeroPadraoDaMontagem();
        'formato diferente é recusado — foi a única condição que o usuário citou');
 
     const outraCor = igual(); outraCor.cor = 'Dourado';
-    ok(api.porQueNaoCabeNaMontagem(base, outraCor) === 'a cor do material é outra',
-       'COR diferente é recusada: a folha é de um material só');
+    ok(api.porQueNaoCabeNaMontagem(base, outraCor) === null,
+       'COR diferente nao impede a montagem');
 
     const outraSaida = igual(); outraSaida.saida_id = 'S2';
-    ok(api.porQueNaoCabeNaMontagem(base, outraSaida) === 'a saída é outra',
-       'SAÍDA diferente é recusada: é o tamanho da folha física');
+    ok(api.porQueNaoCabeNaMontagem(base, outraSaida) === null,
+       'SAIDA diferente nao impede a montagem');
 
     const outraFace = igual(); outraFace.verso_tipo = 'Frente e Verso';
     ok(api.porQueNaoCabeNaMontagem(base, outraFace) === 'um imprime frente e verso e o outro só frente',

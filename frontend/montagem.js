@@ -129,7 +129,7 @@ function montagemVazia() {
     return {
         celulas: [],
         modelos: [],
-        produtoSel: null,
+        formatoSel: null,
         pedidoSel: null,
         modeloSel: null,
         face: 'both',
@@ -280,7 +280,7 @@ function totalDeItensDoModelo(item, num) {
  *  1. o payload ia com `formato: null` e o motor recusava — "Formato não
  *     encontrado", que ao menos aparece na tela;
  *  2. o `porQueNaoCabeNaMontagem` comparava `'' !== ''` e devolvia "cabe"
- *     SEMPRE. A regra que o usuário decidiu — formato, cor, saída e face —
+ *     SEMPRE. A regra que o usuário decidiu — formato e configuração de frente/verso —
  *     estava **inerte**, e uma folha com dois materiais diferentes teria
  *     passado sem um aviso.
  *
@@ -375,32 +375,10 @@ function modoDaPecaNaMontagem(peca) {
 }
 
 /**
- * Por que estas duas peças NÃO podem dividir a mesma folha de montagem.
- *
- * Devolve o motivo em português, ou `null` quando cabem.
- *
- * ── Por que não é só o formato ───────────────────────────────────────────
- *
- * O usuário abriu o pedido dizendo que a única condição seria o mesmo formato.
- * Três das quatro conferências abaixo não são preferência, são impossibilidade
- * física da folha, e por isso ficaram (decisão dele em 29/08/2026, depois de a
- * diferença ser apontada):
- *
- *   · COR    — a folha é de um material só. Triband azul e Triband dourado não
- *              saem da mesma passagem pela impressora.
- *   · SAÍDA  — é o tamanho da folha física.
- *   · FACE   — o verso da folha existe ou não existe; não há meio termo.
- *
- * ── E por que o modo de impressão saiu ───────────────────────────────────
- *
- * O `porQueNaoCombina` da tela do Pedido recusa também Sequencial × Blocado,
- * e ali isso está certo: a ordem das células decide como a pilha é cortada.
- * Aqui não há pilha. A montagem compacta as células numa folha, na ordem
- * digitada, e o corte não existe — recusar por isso barraria combinação
- * legítima sem proteger nada.
- *
- * O modo PDF também saiu: ele decide de onde a ARTE vem para a tiragem
- * inteira, e cada célula da montagem já traz a arte do seu próprio modelo.
+ * Compatibilidade da montagem: somente formato e configuração de frente/verso.
+ * Produtos, cores e saídas diferentes não impedem compartilhar a montagem.
+ * A folha usa a saída da primeira peça. A paginação de verso precisa ser
+ * compatível porque o motor recebe um único modo para a folha inteira.
  */
 function porQueNaoCabeNaMontagem(a, b) {
     if (!a || !b) return null;
@@ -412,12 +390,9 @@ function porQueNaoCabeNaMontagem(a, b) {
     if (!a.formato_id) return 'não sei o formato da folha desta montagem';
     if (!b.formato_id) return 'não dá para saber o formato deste modelo — abra o pedido na tela do Pedido uma vez e volte aqui';
 
-    const cor = x => String(x.cor || x.padrao || '').toLowerCase().trim();
     const face = x => modoDaPecaNaMontagem(x) !== 'front';
 
     if (String(a.formato_id || '') !== String(b.formato_id || '')) return 'o formato é outro';
-    if (cor(a) !== cor(b)) return 'a cor do material é outra';
-    if (String(a.saida_id || '') !== String(b.saida_id || '')) return 'a saída é outra';
     if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
     // O motor recebe um modo de paginação para a folha inteira.
     if (modoDaPecaNaMontagem(a) !== modoDaPecaNaMontagem(b)) {
@@ -1292,7 +1267,7 @@ function _mtgNumeroDoPedido(osId) {
     return n || String(osId);
 }
 
-/** Filtros da Montagem: produto, pedido Em produção e modelo Aguardando. */
+/** Filtros da Montagem: formato, pedido Em produção e modelo Aguardando. */
 function pedidoEmProducaoNaMontagem(os) {
     // Status do pedido no ERP, não o status da arte ou de impressão.
     return String((os && os.status_interno) || '').normalize('NFD')
@@ -1309,14 +1284,21 @@ function produtoDoModeloNaMontagem(item, osId) {
     return produto && produto.id_produto ? String(produto.id_produto) : '';
 }
 
-function pedidoDisponivelNaMontagem(os, produtoId = state.montagem.produtoSel) {
-    if (!pedidoEmProducaoNaMontagem(os)) return false;
-    if (!produtoId) return true;
-    return (os._itens_raw || []).some(p => String(p.id_produto) === String(produtoId))
-        || (state.osItens[os.id] || []).some(it => produtoDoModeloNaMontagem(it, os.id) === String(produtoId));
+function formatoDoModeloNaMontagem(item, osId) {
+    if (!item) return '';
+    const formato = formatoDoItem({ ...item,
+        _vibe_id_produto: produtoDoModeloNaMontagem(item, osId) });
+    return formato ? String(formato.id) : '';
 }
 
-function modeloDisponivelNaMontagem(osId, item, produtoId = state.montagem.produtoSel) {
+function pedidoDisponivelNaMontagem(os, formatoId = state.montagem.formatoSel) {
+    if (!pedidoEmProducaoNaMontagem(os)) return false;
+    if (!formatoId) return true;
+    return (os._itens_raw || []).some(p => formatoDoModeloNaMontagem(p, os.id) === String(formatoId))
+        || (state.osItens[os.id] || []).some(it => formatoDoModeloNaMontagem(it, os.id) === String(formatoId));
+}
+
+function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.formatoSel) {
     const os = (state.ordens || []).find(o => String(o.id) === String(osId));
     if (!pedidoEmProducaoNaMontagem(os) || !item) return false;
     const bruto = item.status_impressao || item.status_producao || item.impressao;
@@ -1324,7 +1306,7 @@ function modeloDisponivelNaMontagem(osId, item, produtoId = state.montagem.produ
         ? normalizarStatusImpressao(bruto)
         : ((!bruto || ['AGUARD.', 'AGUARDANDO', 'PARCIAL', 'ERRO', 'REVISAO', 'REVISÃO']
             .includes(String(bruto).trim().toUpperCase())) ? 'Aguardando' : bruto);
-    return status === 'Aguardando' && (!produtoId || produtoDoModeloNaMontagem(item, osId) === String(produtoId));
+    return status === 'Aguardando' && (!formatoId || formatoDoModeloNaMontagem(item, osId) === String(formatoId));
 }
 
 function pedidosParaMontagem() {
@@ -1332,38 +1314,24 @@ function pedidosParaMontagem() {
         .slice().sort((a, b) => String(b.numero || b.id).localeCompare(String(a.numero || a.id), 'pt-BR', { numeric: true }));
 }
 
-function encherProdutosDaMontagem() {
-    const sel = document.getElementById('mtg-produto');
+function encherFormatosDaMontagem() {
+    const sel = document.getElementById('mtg-formato');
     if (!sel) return;
-    const produtos = new Map();
-    for (const p of (state.produtosGlobais || [])) {
-        if (p.id_produto && String(p.id_produto) !== 'sem_produto') {
-            produtos.set(String(p.id_produto), p.nomeReal || 'Produto #' + p.id_produto);
-        }
+    const formatos = new Map((state.formatos || []).map(f =>
+        [String(f.id), f.nome || 'Formato #' + f.id]));
+    if (state.montagem.formatoSel && !formatos.has(String(state.montagem.formatoSel))) {
+        formatos.set(String(state.montagem.formatoSel), 'Formato indisponível');
     }
-    // O pedido pode referenciar um produto ainda ausente do catálogo da sessão.
-    for (const os of (state.ordens || []).filter(pedidoEmProducaoNaMontagem)) {
-        for (const p of os._itens_raw || []) {
-            if (p.id_produto && String(p.id_produto) !== 'sem_produto' && !produtos.has(String(p.id_produto))) produtos.set(String(p.id_produto), p.nome_produto || 'Produto #' + p.id_produto);
-        }
-        for (const it of state.osItens[os.id] || []) {
-            const id = produtoDoModeloNaMontagem(it, os.id);
-            if (id && !produtos.has(id)) produtos.set(id, it.nome_produto_real || 'Produto #' + id);
-        }
-    }
-    if (state.montagem.produtoSel && !produtos.has(String(state.montagem.produtoSel))) {
-        produtos.set(String(state.montagem.produtoSel), 'Produto #' + state.montagem.produtoSel);
-    }
-    sel.innerHTML = '<option value="">Todos os produtos</option>'
-        + Array.from(produtos).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+    sel.innerHTML = '<option value="">Todos os formatos</option>'
+        + Array.from(formatos).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
             .map(([id, nome]) => `<option value="${escapeHtml(id)}">${escapeHtml(String(nome))}</option>`).join('');
-    sel.value = state.montagem.produtoSel || '';
+    sel.value = state.montagem.formatoSel || '';
 }
 
-function onMontagemProdutoChange() {
+function onMontagemFormatoChange() {
     if (state.montagem.gerando) return;
-    const sel = document.getElementById('mtg-produto');
-    state.montagem.produtoSel = sel && sel.value || null;
+    const sel = document.getElementById('mtg-formato');
+    state.montagem.formatoSel = sel && sel.value || null;
     // Invalida também respostas ainda em voo do pedido anterior.
     state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
     state.montagem.pedidoSel = null;
@@ -1389,7 +1357,7 @@ function encherPedidosDaMontagem() {
     const atual = sel.value;
     const lista = pedidosParaMontagem();
 
-    sel.innerHTML = '<option value="">' + (lista.length ? 'Pedidos em produção…' : 'Nenhum pedido em produção para este produto') + '</option>'
+    sel.innerHTML = '<option value="">' + (lista.length ? 'Pedidos em produção…' : 'Nenhum pedido em produção para este formato') + '</option>'
         + lista.map(os => {
             const num = escapeHtml(String(os.numero || os.id));
             const nome = escapeHtml(String(os.cliente_nome || os.cliente || os.titulo || '').slice(0, 40));
@@ -1465,7 +1433,7 @@ async function onMontagemPedidoChange() {
         if (state.montagem.cargaSelecao !== carga || state.montagem.pedidoSel !== osId) return;
 
         const itens = (state.osItens[osId] || []).filter(it => modeloDisponivelNaMontagem(osId, it));
-        selMod.innerHTML = '<option value="">' + (itens.length ? 'Modelos aguardando…' : 'Nenhum modelo aguardando para este produto') + '</option>'
+        selMod.innerHTML = '<option value="">' + (itens.length ? 'Modelos aguardando…' : 'Nenhum modelo aguardando para este formato') + '</option>'
             + itens.map(it => {
                 const nome = escapeHtml(String(it.nome_modelo || it.produto || 'modelo').slice(0, 60));
                 const face = modoDoModeloNaMontagem(it) !== 'front' ? ' · COM VERSO' : ' · Só frente';
@@ -1581,7 +1549,7 @@ function _mtgHtmlDaRecusa(motivo, aceita, tentado) {
           <p style="margin:0 0 10px;font-size:0.82rem;color:var(--text);line-height:1.55;">
             A folha usa <strong>${cor(aceita)}</strong> · ${modoDaPecaNaMontagem(aceita) === 'front' ? 'só frente' : 'com verso'}.
             O modelo usa <strong>${cor(tentado)}</strong> · ${modoDaPecaNaMontagem(tentado) === 'front' ? 'só frente' : 'com verso'}.
-            Formato, material, saída e paginação precisam ser compatíveis.
+            Somente o formato e a configuração de frente/verso precisam ser compatíveis.
           </p>` : '';
     const saida = aceita ? `
           <button type="button" class="btn btn-secondary btn-sm" onclick="limparMontagem()">
@@ -1694,7 +1662,7 @@ async function retomarDaMontagem(indice) {
     const os = (state.ordens || []).find(o => String(o.id) === String(m.osId));
     const item = (state.osItens[m.osId] || []).find(it => String(it.id) === String(m.itemId)) || m.peca._item;
     if (!pedidoDisponivelNaMontagem(os) || !modeloDisponivelNaMontagem(m.osId, item)) {
-        if (typeof toast === 'function') toast('Este modelo não está disponível no filtro atual. Confira o produto e os status do pedido e do modelo.', 'warning');
+        if (typeof toast === 'function') toast('Este modelo não está disponível no filtro atual. Confira o formato e os status do pedido e do modelo.', 'warning');
         return;
     }
 
@@ -2664,7 +2632,6 @@ function renderMontagem() {
             trava.style.display = 'none';
         } else {
             const p = modelos[0].peca;
-            const sai = _mtgSaidaDaFolha(modelos);
             const face = modoDaPecaNaMontagem(p) !== 'front' ? 'MODELOS COM VERSO' : 'Só frente';
             trava.innerHTML = `
                 <span class="mtg-trava-titulo">
@@ -2672,8 +2639,6 @@ function renderMontagem() {
                   A folha aceita
                 </span>
                 <span class="mtg-chip">${escapeHtml(p.formato_nome || ('formato ' + p.formato_id))}</span>
-                <span class="mtg-chip">${escapeHtml(String(p.cor || 'sem cor'))}</span>
-                <span class="mtg-chip">${escapeHtml(sai ? sai.nome : 'saída ' + p.saida_id)}</span>
                 <span class="mtg-chip ${modoDaPecaNaMontagem(p) !== 'front' ? 'mtg-com-verso' : ''}">${face}</span>
                 <span style="margin-left:auto;font-size:0.75rem;color:var(--text-faint);">definido pela primeira célula</span>`;
             trava.style.display = 'flex';
@@ -2697,7 +2662,7 @@ function renderMontagem() {
                 <rect x="6" y="39" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2" stroke-dasharray="3 3"/>
               </svg>
               <h3>Nenhuma célula na montagem ainda</h3>
-              <p>Escolha o produto, um pedido em produção e um modelo aguardando. Digite as posições que precisam sair. Repita para quantos pedidos quiser: <strong>a folha aceita células de pedidos diferentes</strong>, desde que sejam do mesmo formato, cor, saída e face.</p>
+              <p>Escolha o formato, um pedido em produção e um modelo aguardando. Digite as posições que precisam sair. Repita para quantos pedidos quiser: <strong>a folha aceita células de produtos e pedidos diferentes</strong>, desde que sejam do mesmo formato e configuração de frente/verso.</p>
               <div class="mtg-garantia">
                 <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="flex-shrink:0;"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.3 13.6-3.2-3.2 1.4-1.4 1.8 1.8 4.6-4.6 1.4 1.4-6 6z"/></svg>
                 <span>O código do ingresso refeito é <strong>o mesmo do original</strong> — a célula substitui, não duplica.</span>
@@ -2782,7 +2747,7 @@ function renderMontagem() {
 async function abrirMontagem() {
     if (state.montagem && state.montagem.gerando) { renderMontagem(); return; }
     if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
-    encherProdutosDaMontagem();
+    encherFormatosDaMontagem();
     encherPedidosDaMontagem();
     const pedido = document.getElementById('mtg-pedido');
     if (state.montagem.pedidoSel && (!pedido || !pedido.value)) {
@@ -3104,7 +3069,7 @@ async function prepararArtesDaMontagem(modelos) {
                     + ' não está mais no pedido. Tire-o da montagem e gere de novo.');
             }
 
-            // O filtro de produto organiza a escolha, sem apagar a folha pronta.
+            // O filtro de formato organiza a escolha, sem apagar a folha pronta.
             // Os status, entretanto, precisam continuar válidos para gerar.
             if (!modeloDisponivelNaMontagem(m.osId, it, null)) {
                 throw new Error('O pedido ' + _mtgNumeroDoPedido(m.osId) + ' precisa estar Em produção e o modelo ' + m.itemId + ' Aguardando. Confira os status antes de gerar.');
@@ -3350,7 +3315,7 @@ async function _mtgEstacao() {
     return null;
 }
 
-/** Busca pelo número, limitada ao produto escolhido e aos pedidos Em produção. */
+/** Busca pelo número, limitada ao formato escolhido e aos pedidos Em produção. */
 function buscarPedidoDaMontagem() {
     if (state.montagem.gerando) return;
     const campo = document.getElementById('mtg-buscar');
@@ -3362,7 +3327,7 @@ function buscarPedidoDaMontagem() {
 
     if (!os) {
         if (typeof toast === 'function') {
-            toast(`O pedido ${alvo} não está disponível: ele precisa estar Em produção e conter o produto selecionado.`, 'warning');
+            toast(`O pedido ${alvo} não está disponível: ele precisa estar Em produção e conter o formato selecionado.`, 'warning');
         }
         return;
     }
