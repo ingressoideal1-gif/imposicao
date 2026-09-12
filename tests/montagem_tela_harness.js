@@ -1457,6 +1457,21 @@ const PECAS = [
         && dinamico.depois.ocupacao === 55 && /11 células/.test(dinamico.textoAtual) && dinamico.voltou,
         'duplicar e desfazer recalculam ocupacao, repeticoes e producao da montagem atual', dinamico);
 
+    const espacoInferior = await aba.evaluate(() => {
+        const gaps = [];
+        for (let i = 0; i < 4; i++) {
+            window.scrollTo(0, i % 2 ? 300 : 0);
+            renderMontagem();
+            const card = document.querySelector('.mtg-folha-card');
+            const ultimo = card.lastElementChild;
+            gaps.push(card.getBoundingClientRect().bottom - ultimo.getBoundingClientRect().bottom);
+        }
+        window.scrollTo(0, 0);
+        return gaps;
+    });
+    ok(espacoInferior.every(gap => gap >= 0 && gap < 50),
+        'card termina junto aos atalhos, sem vazio após rolar e redesenhar', espacoInferior);
+
     const identificacao = await aba.evaluate(() => {
         state.montagem.numero.imprimir = false;
         renderMontagem();
