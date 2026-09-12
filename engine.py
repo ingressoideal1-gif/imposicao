@@ -858,7 +858,7 @@ def _desenhar_numero_do_modelo(page, item: dict, fx: float, fy: float, cfg) -> N
     if not nome:
         return
 
-    texto = str(nome).zfill(6)
+    texto = str(nome) if item.get("nome_literal") is True else str(nome).zfill(6)
     corpo = _numero_do_modelo_corpo(item)
     posicao = _numero_do_modelo_posicao(item)
     giro = _numero_do_modelo_giro(item)
@@ -3045,6 +3045,7 @@ class ImpositionEngine:
                         # verso em todas as peças; só a numeração muda.
                         "verso_page_idx": art_verso_page_idx,
                         "nome": art.get("nome", ""),
+                        "nome_literal": art.get("nome_literal") is True,
                         "nome_color": art.get("nome_color", "#000000"),
                         # Corpo, borda e giro do numero do modelo (03/09/2026).
                         # Vao crus, como vieram do payload: quem confere faixa e

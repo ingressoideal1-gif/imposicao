@@ -15,9 +15,10 @@ def test_regras_e_filtro_de_faces():
     assert "OK:" in r.stdout
 
 
+@pytest.mark.parametrize("identificacao", ["VIP", "21869"])
 @pytest.mark.parametrize("modo", ["duplex", "duplex_unico"])
 @pytest.mark.parametrize("posicoes", [[2], [3, 1, 3, 5, 2]])
-def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes):
+def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes, identificacao):
     # Importar o motor não deve consultar credenciais, banco ou serviços.
     # A pasta de perfis criada pelo módulo também fica no diretório do teste.
     monkeypatch.chdir(tmp_path)
@@ -43,7 +44,7 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
         saida=dict(width_mm=180, height_mm=120), numeracao=None,
         layout_schema="multi_artes", print_mode=modo, rotate_page=90,
         multi_artes=[dict(qtd=10, modelo="M1", pedido="A", start=101,
-                          numeracao=numeracao, pdf_url=None, local_path=str(base), nome="")],
+                          numeracao=numeracao, pdf_url=None, local_path=str(base), nome=identificacao, nome_literal=True)],
         refazer_celulas=posicoes, refazer_repetir=True,
     )
     ImpositionEngine(cfg).process()
@@ -55,6 +56,8 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
     with fitz.open(entrada) as original:
         assert len(original) == folhas * 2
         assert "FRENTE-" in original[0].get_text()
+        assert identificacao in original[0].get_text()
+        assert identificacao.zfill(6) not in original[0].get_text()
         assert "VERSO-" in original[1].get_text()
         for paridade, arquivo in enumerate([frente, verso]):
             with fitz.open(arquivo) as filtrado:

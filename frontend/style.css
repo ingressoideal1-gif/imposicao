@@ -5033,6 +5033,11 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    _mtgAjustarAlturaDaJanela) e a coluna de apoio fica com a altura do que ela
    tem dentro, em vez de ser esticada junto. */
 .mtg-corpo { display: flex; gap: 18px; align-items: flex-start; }
+.mtg-principal { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.mtg-principal > .mtg-sugestao { margin: 0; padding: 18px 20px; overflow-x: auto; }
+.mtg-sug-atual { margin-bottom: 16px; }
+.mtg-identificacao { display: grid; gap: 8px; margin-bottom: 12px; }
+.mtg-identificacao label { font-size: 0.8rem; color: var(--text-dim); }
 .mtg-folha-card {
     flex: 1 1 auto; min-width: 0;
     display: flex; flex-direction: column;
