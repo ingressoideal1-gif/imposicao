@@ -2400,14 +2400,14 @@ function _mtgAjustarAlturaDaJanela(alvo) {
     if (!alvo || typeof window === 'undefined' || !alvo.closest) return;
     const card = alvo.closest('.mtg-folha-card');
     if (!card) return;
-    // A medida vai no CARD, e não na janela. A janela é `flex: 1` dentro dele:
-    // dar altura a ela não adianta nada, porque o flex a estica de volta para
-    // o tamanho do card — foi o que a primeira versão desta função fez, e a
-    // folha continuou passando da tela.
+    // O card acompanha o conteúdo. Fixar sua altura deixava um espaço vazio
+    // quando a janela atingia o max-height do CSS, afastando o aproveitamento.
+    card.style.height = '';
     const resto = Math.max(0, card.offsetHeight - alvo.offsetHeight);
     const altura = alturaDaJanelaDaMontagem(
         card.getBoundingClientRect().top, window.innerHeight, resto);
-    card.style.height = (altura + resto) + 'px';
+    alvo.style.height = altura + 'px';
+
 }
 
 /** Devolve o card à altura natural — sem folha desenhada, não há o que medir. */
@@ -2415,6 +2415,7 @@ function _mtgSoltarAlturaDaJanela(alvo) {
     if (!alvo || !alvo.closest) return;
     const card = alvo.closest('.mtg-folha-card');
     if (card) card.style.height = '';
+    alvo.style.height = '';
 }
 
 /** O seletor `Folha ‹ 1 › de 3` da barra: espelha o da janela do Pedido. */

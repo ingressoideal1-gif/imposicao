@@ -5029,7 +5029,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 /* ── O CORPO: a folha manda ────────────────────────────────────────────────
    Ate 03/09/2026 era o contrario — a lista tinha `flex: 1` e a folha uma
    coluna fixa de 380px. Trocar os dois e' a mudanca central do redesenho. */
-/* `flex-start` e nao `stretch`: o card da folha recebe a altura da tela (ver
+/* `flex-start` e nao `stretch`: a janela da folha recebe a altura disponível (ver
    _mtgAjustarAlturaDaJanela) e a coluna de apoio fica com a altura do que ela
    tem dentro, em vez de ser esticada junto. */
 .mtg-corpo { display: flex; gap: 18px; align-items: flex-start; }
@@ -5039,7 +5039,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-identificacao { display: grid; gap: 8px; margin-bottom: 12px; }
 .mtg-identificacao label { font-size: 0.8rem; color: var(--text-dim); }
 .mtg-folha-card {
-    flex: 1 1 auto; min-width: 0;
+    flex: 0 0 auto; min-width: 0;
     display: flex; flex-direction: column;
     padding: 18px 20px 16px; margin-bottom: 0;
 }
