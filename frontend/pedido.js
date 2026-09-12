@@ -334,6 +334,30 @@ async function guardarPdfDoVersoDaPrevia(pdfV) {
 }
 window.guardarPdfDoVersoDaPrevia = guardarPdfDoVersoDaPrevia;
 
+/** Escolhe o PDF e a pagina que representam esta face na previa do Pedido. */
+function pdfDaFaceNaPreviaPedido(isBack, schema, itemIndex) {
+    const frente = state.pedArtPdfDoc || null;
+    const verso = state.pedArtVersoPdfDoc || null;
+
+    if (schema === 'pdf_multiple') {
+        if (versoUnico(state.printMode)) {
+            return isBack
+                ? { documento: verso, pagina: verso ? 1 : 0 }
+                : { documento: frente, pagina: itemIndex + 1 };
+        }
+        if (state.printMode === 'duplex') {
+            return { documento: frente, pagina: isBack ? (itemIndex * 2 + 2) : (itemIndex * 2 + 1) };
+        }
+        return { documento: frente, pagina: itemIndex + 1 };
+    }
+
+    // No duplex individual, o motor usa a pagina 1 do arquivo separado quando
+    // ela existe. Sem arquivo separado, preserva o PDF com as faces embutidas.
+    if (isBack && verso) return { documento: verso, pagina: 1 };
+    return { documento: frente, pagina: isBack ? 2 : 1 };
+}
+window.pdfDaFaceNaPreviaPedido = pdfDaFaceNaPreviaPedido;
+
 /**
  * Mede a página de uma arte da folha COMBINADA e guarda o tamanho pela URL.
  *
@@ -1545,7 +1569,8 @@ function drawPedPreview() {
                 ctx.restore();
             };
 
-            let activePdfDoc = state.pedArtPdfDoc;
+            const pdfDaFace = pdfDaFaceNaPreviaPedido(isBack, schema, item_index);
+            let activePdfDoc = pdfDaFace.documento;
 
             let activeImage = state.pedArtImage;
 
@@ -1654,48 +1679,9 @@ function drawPedPreview() {
 
                     if (activePdfDoc) {
 
-                        // Determinar qual página física real do PDF base exibir
-
-                        let pageNum = 1;
-
-                        if (schema === "pdf_multiple") {
-
-                            if (versoUnico(state.printMode)) {
-
-                                // A frente anda 1 a 1, como no simplex. O verso
-                                // sai de OUTRO arquivo, sempre da pagina 1: e a
-                                // mesma para todas as pecas. Sem arquivo de
-                                // verso a celula fica vazia de proposito --
-                                // desenhar a pagina 1 da frente ali seria a tela
-                                // mentindo sobre o que vai sair no papel.
-
-                                if (isBack) {
-
-                                    activePdfDoc = state.pedArtVersoPdfDoc || null;
-
-                                    pageNum = activePdfDoc ? 1 : 0;
-
-                                } else {
-
-                                    pageNum = item_index + 1;
-
-                                }
-
-                            } else if (state.printMode === "duplex") {
-
-                                pageNum = isBack ? (item_index * 2 + 2) : (item_index * 2 + 1);
-
-                            } else {
-
-                                pageNum = item_index + 1;
-
-                            }
-
-                        } else {
-
-                            pageNum = isBack ? 2 : 1;
-
-                        }
+                        // Na folha combinada, cada PDF continua com as faces
+                        // embutidas. No modelo individual vale a selecao acima.
+                        const pageNum = isMultiArtePdf ? (isBack ? 2 : 1) : pdfDaFace.pagina;
 
 
 
