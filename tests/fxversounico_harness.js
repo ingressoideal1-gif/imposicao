@@ -252,6 +252,7 @@ const api = new Function('state', 'window',
         "const finalItems = (state.printMode === 'duplex') ? Math.ceil(totalPages / 2) : totalPages;",
         "total = state.printMode === 'duplex' ? Math.ceil(totalPages / 2) : totalPages;",
         // Qual pagina do arquivo cai em cada pose da folha.
+        "if (state.printMode === 'duplex') {",
         '} else if (state.printMode === "duplex") {',
         "? (state.printMode === 'duplex' ? item_index * 2 + 1 : item_index + 1)",
         "const pFrente = state.printMode === 'duplex' ? (item_index * 2 + 1) : (item_index + 1);",

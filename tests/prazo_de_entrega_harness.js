@@ -31,7 +31,8 @@ function recortar(nome) {
 
 const api = new Function(
     recortar('_prazoDoPedido') + '\n' + recortar('pedidoEstaAtrasado') + '\n' + recortar('pedidoEhParaHoje')
-    + '\nreturn { _prazoDoPedido, pedidoEstaAtrasado, pedidoEhParaHoje };')();
+    + '\n' + recortar('formatPrazoBadge')
+    + '\nreturn { _prazoDoPedido, pedidoEstaAtrasado, pedidoEhParaHoje, formatPrazoBadge };')();
 
 /** Uma data como o Vibe grava: meia-noite local, sem fuso. */
 function comoOVibeGrava(d) {
@@ -124,6 +125,21 @@ const AMANHA = comoOVibeGrava(diasDeHoje(1));
     const bloco = SCRIPT.slice(SCRIPT.indexOf("from('propostas_os')") - 900,
                                SCRIPT.indexOf("from('propostas_os')") + 900);
     ok(/catch \(oe\)/.test(bloco), 'a leitura do prazo tem rede de seguranca');
+})();
+
+(function exibeDataEHoraNosDoisPaineis() {
+    const badge = valor => api.formatPrazoBadge({ prazo_entrega: valor });
+    ok(badge('2026-09-11T09:05:00').includes('>11/09 09:05</span>'),
+        'a hora e os minutos ficam visiveis, com zeros a esquerda');
+    ok(badge('2026-09-11T00:00:00').includes('>11/09 00:00</span>'),
+        'meia-noite registrada e exibida');
+    ok(badge('2026-09-11').includes('>11/09 --:--</span>'),
+        'data sem hora nao inventa horario');
+    ok(badge(null).includes('>--</span>') && badge('invalido').includes('>--</span>'),
+        'prazo ausente ou invalido continua sem estimativa');
+    const acab = fs.readFileSync(path.join(RAIZ, 'frontend', 'acabamento.js'), 'utf8');
+    ok(acab.includes("const badgePrazo = fn('formatPrazoBadge')") && acab.includes('badgePrazo(os)'),
+        'a coluna do acabamento usa a mesma exibicao de data e hora');
 })();
 
 // ─── Fim ─────────────────────────────────────────────────────────────────────

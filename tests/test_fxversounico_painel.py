@@ -91,9 +91,9 @@ def test_o_arquivo_do_verso_vai_junto_ao_motor():
 def test_a_previa_do_verso_unico_nao_desenha_a_frente_no_lugar_do_verso():
     """Sem arquivo de verso a célula fica vazia — a tela não pode inventar."""
     texto = _texto(PEDIDO)
-    assert "activePdfDoc = state.pedArtVersoPdfDoc || null;" in texto, (
+    assert "? { documento: verso, pagina: verso ? 1 : 0 }" in texto, (
         "a previa do Pedido voltou a desenhar o verso a partir do arquivo da "
-        "frente — no FxVersoUnico o verso mora em OUTRO arquivo"
+        "frente — no FxVersoUnico o verso mora em outro arquivo"
     )
     assert "pageNum >= 1" in texto, (
         "sumiu a guarda de pagina zero da previa do Pedido; `getPage(0)` estoura"

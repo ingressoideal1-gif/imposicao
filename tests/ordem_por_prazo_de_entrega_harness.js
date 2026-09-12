@@ -14,7 +14,7 @@
 //   1. a lista sobe: quem vence antes vem antes;
 //   2. pedido SEM prazo vai para o FIM, e nao para o topo (que e onde um `null`
 //      tratado como zero o poria numa ordem crescente);
-//   3. empate no mesmo dia desempata pelo numero MENOR -- o pedido que entrou
+//   3. empate na mesma data e hora desempata pelo numero MENOR -- o pedido que entrou
 //      antes --, e a lista nao "danca" entre desenhos;
 //   4. data pura ("2026-08-21", sem hora) e lida como meia-noite LOCAL: no
 //      Brasil, lida como UTC, ela viraria 21h do dia anterior e o pedido
@@ -172,6 +172,19 @@ const numeros = lista => lista.map(os => os.numero);
     ok(ordenarPorPrazoDeEntrega([]).length === 0, 'lista vazia sai vazia');
     ok(ordenarPorPrazoDeEntrega(null).length === 0, 'lista nula sai vazia, e nao quebra o desenho');
     ok(ordenarPorPrazoDeEntrega(undefined).length === 0, 'lista ausente sai vazia');
+})();
+
+(function mesmoDiaOrdenaPelaHoraEMinuto() {
+    const lista = [
+        pedido(21001, '2026-09-11T17:00:00'),
+        pedido(21002, '2026-09-11T09:30:00'),
+        pedido(21003, '2026-09-11T09:05:00'),
+        pedido(21004, '2026-09-12T08:00:00'),
+        pedido(21005, null),
+    ];
+    const fora = numeros(ordenarPorPrazoDeEntrega(lista));
+    ok(JSON.stringify(fora) === JSON.stringify([21003, 21002, 21001, 21004, 21005]),
+        'ordena por dia, hora e minutos antes do numero do pedido; sem prazo no fim', fora);
 })();
 
 // --- Resultado --------------------------------------------------------------

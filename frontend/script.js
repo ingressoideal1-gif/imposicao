@@ -27957,7 +27957,7 @@ function ordenarImpressosPorData(lista) {
  *
  * Pedido SEM prazo vai para o FIM. `propostas_os` ainda está sendo preenchida
  * pelo parceiro, e pedido sem data não pode encabeçar a fila como se vencesse
- * hoje (que é onde um `null` tratado como zero o poria). Empate no mesmo dia:
+ * hoje (que é onde um `null` tratado como zero o poria). Empate na mesma data e hora:
  * o número MENOR primeiro, que é o pedido que entrou antes.
  *
  * Vale para as listas de TRABALHO (Geral, Para Hoje, Atrasados) do Painel de
@@ -30741,11 +30741,15 @@ function formatPrazoBadge(os) {
 
     const dia = String(prazo.getDate()).padStart(2, '0');
     const mes = String(prazo.getMonth() + 1).padStart(2, '0');
-    const completa = prazo.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
+    const semHora = typeof os.prazo_entrega === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(os.prazo_entrega);
+    const hora = semHora ? '--:--' : `${String(prazo.getHours()).padStart(2, '0')}:${String(prazo.getMinutes()).padStart(2, '0')}`;
+    const completa = semHora
+        ? `${prazo.toLocaleDateString('pt-BR')} — hora não informada`
+        : prazo.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
 
     return `<span title="${titulo} — ${completa}" style="display:inline-block; background:${cor};`
         + ` color:#ffffff; font-weight:800; font-size:1rem; padding:4px 14px; border-radius:6px;`
-        + ` box-shadow:0 3px 8px rgba(0,0,0,0.35); letter-spacing:0.02em; white-space:nowrap;">${dia}/${mes}</span>`;
+        + ` box-shadow:0 3px 8px rgba(0,0,0,0.35); letter-spacing:0.02em; white-space:nowrap;">${dia}/${mes} ${hora}</span>`;
 }
 window.formatPrazoBadge = formatPrazoBadge;
 
