@@ -1301,7 +1301,11 @@ function pedidoDisponivelNaMontagem(os, formatoId = state.montagem.formatoSel) {
 function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.formatoSel) {
     const os = (state.ordens || []).find(o => String(o.id) === String(osId));
     if (!pedidoEmProducaoNaMontagem(os) || !item) return false;
-    const bruto = item.status_impressao || item.status_producao || item.impressao;
+    // Mesma fonte da coluna Status do Pedido: null/vazio significa Aguardando.
+    // status_producao pertence a outro fluxo; PENDENTE não deve ocultar modelos.
+    // O campo impressao é somente o fallback de itens legados sem a coluna.
+    const bruto = Object.prototype.hasOwnProperty.call(item, 'status_impressao')
+        ? item.status_impressao : item.impressao;
     const status = typeof normalizarStatusImpressao === 'function'
         ? normalizarStatusImpressao(bruto)
         : ((!bruto || ['AGUARD.', 'AGUARDANDO', 'PARCIAL', 'ERRO', 'REVISAO', 'REVISÃO']

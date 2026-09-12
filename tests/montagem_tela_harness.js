@@ -1419,6 +1419,28 @@ const PECAS = [
     ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar formato limpa a seleção e preserva a montagem existente', filtros);
     ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '503', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
 
+    const pendentes = await aba.evaluate(async () => {
+        state.montagem = montagemVazia();
+        state.ordens = [{ id: 'regressao', numero: 99999, status_interno: 'EM PRODUCAO',
+            _itens_raw: [{ id: 1, id_produto: 501 }] }];
+        state.osItens = { regressao: Array.from({ length: 5 }, (_, i) => ({
+            id: 'M' + i, _vibe_id_produto: 501, qtd: 10,
+            status_impressao: null, status_producao: 'PENDENTE', impressao: 'PENDENTE',
+        })) };
+        state.osItens.regressao.push(
+            { id: 'impresso', _vibe_id_produto: 501, status_impressao: 'Impresso' },
+            { id: 'correcao', _vibe_id_produto: 501, status_impressao: 'Corrigir Arte' });
+        window.loadOSItens = async () => {};
+        encherFormatosDaMontagem(); encherPedidosDaMontagem();
+        document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
+        document.getElementById('mtg-pedido').value = 'regressao'; await onMontagemPedidoChange();
+        const seletor = document.getElementById('mtg-modelo');
+        return { habilitado: !seletor.disabled,
+            modelos: Array.from(seletor.options).map(o => o.value).filter(Boolean) };
+    });
+    ok(pendentes.habilitado && pendentes.modelos.join() === 'M0,M1,M2,M3,M4',
+        'cinco modelos sem status de impressao aparecem como Aguardando mesmo com producao PENDENTE; impressos e correcao ficam fora', pendentes);
+
     if (FOTO) {
         await aba.evaluate(pecas => {
             window.__montar(pecas);
