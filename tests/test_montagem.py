@@ -626,13 +626,10 @@ def test_o_aproveitamento_da_folha_e_o_menor_numero_de_impressoes():
 
     corpo = js[js.index("function sugestaoDeAproveitamento(modelos, porFolha) {"):]
     corpo = corpo[:corpo.index("\n}") + 2]
-    assert "Math.ceil(q / R)" in corpo, (
-        "a conta deixou de ser o minimo de celulas por impressao; a sugestao "
-        "passaria a gastar papel a mais"
-    )
-    assert "Math.ceil(Q / P)" in corpo, (
-        "a varredura perdeu o piso: ela comecaria em 1 e faria voltas a toa"
-    )
+    # A otimização agora é compartilhada com Completar a folha. O harness
+    # compara o resultado a todas as divisões possíveis em 3072 cenários,
+    # em vez de prender a validação ao texto de uma busca linear.
+    assert "otimizarCelulasDaMontagem(qtds, P)" in corpo
 
     # A quantidade e' a TIRAGEM do modelo — escolha do usuario na mesma conversa.
     assert "parseInt(m.qtd)" in corpo, (
