@@ -83,7 +83,7 @@ const FUNCOES = [
     'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem',
     'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem', 'mudarTextoDaMontagem',
     // O aproveitamento da folha (03/09/2026).
-    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
+    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'otimizarCelulasDaMontagem', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     '_mtgSugestaoAtual', 'aplicarSugestaoDaMontagem', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
@@ -199,7 +199,7 @@ const PECAS = [
         " 'zoomDaMontagem','desfazerMontagem','refazerMontagem','celulasDoModelo',",
         " 'alternarNumeroDaMontagem','mudarNumeroDaMontagem', 'mudarTextoDaMontagem','retomarDaMontagem',",
         " 'contaDaMontagem','geometriaDaFolha','textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem','nomeDoArquivoDaMontagem',",
-        " 'aplicarSugestaoDaMontagem','sugestaoDeAproveitamento', 'resumoAtualDaMontagem','modoSugeridoDaMontagem',",
+        " 'aplicarSugestaoDaMontagem','otimizarCelulasDaMontagem', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem','modoSugeridoDaMontagem',",
         " 'encherPastasDaMontagem','onMontagemPastaChange','gerarPdfDaMontagem'",
         "].forEach(function (n) { window[n] = eval(n); });",
         "_mtgLigarArrasto();",
@@ -1458,8 +1458,14 @@ const PECAS = [
         'duplicar e desfazer recalculam ocupacao, repeticoes e producao da montagem atual', dinamico);
 
     const identificacao = await aba.evaluate(() => {
-        state.montagem.numero.imprimir = true;
-        mudarNumeroDaMontagem('tipo', 'pedido');
+        state.montagem.numero.imprimir = false;
+        renderMontagem();
+        const drop = document.getElementById('mtg-num-tipo');
+        drop.value = 'pedido';
+        drop.dispatchEvent(new Event('change', { bubbles: true }));
+        const ativou = state.montagem.numero.imprimir && document.getElementById('mtg-num-imprimir').checked;
+        const previaPedido = document.getElementById('mtg-folha').querySelector('.mtg-celula span[style]');
+        const pedidoVisivel = !!previaPedido && previaPedido.textContent === '21202';
         const pedido = textoDeIdentificacaoDaMontagem('M1', 'a', '21202');
         mudarNumeroDaMontagem('tipo', 'personalizado');
         const campo = document.getElementById('mtg-num-texto');
@@ -1469,10 +1475,14 @@ const PECAS = [
         mudarNumeroDaMontagem('tipo', 'modelo');
         const sumiu = !document.getElementById('mtg-num-texto');
         mudarNumeroDaMontagem('tipo', 'personalizado');
-        return { pedido, foco, visivel, sumiu, texto: document.getElementById('mtg-num-texto').value };
+        const texto = document.getElementById('mtg-num-texto').value;
+        alternarNumeroDaMontagem();
+        const desligou = !state.montagem.numero.imprimir && !document.getElementById('mtg-folha').textContent.includes('<VIP>');
+        return { pedido, foco, visivel, sumiu, texto, ativou, pedidoVisivel, desligou };
     });
     ok(identificacao.pedido === '21202' && identificacao.foco && identificacao.visivel
-        && identificacao.sumiu && identificacao.texto === '<VIP>',
+        && identificacao.sumiu && identificacao.texto === '<VIP>'
+        && identificacao.ativou && identificacao.pedidoVisivel && identificacao.desligou,
         'seletor alterna pedido e personalizado; digitacao atualiza previa, preserva foco e texto', identificacao);
 
     if (FOTO) {

@@ -65,7 +65,7 @@ const NOMES = [
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
     'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem',
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
-    'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
+    'otimizarCelulasDaMontagem', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
@@ -1014,6 +1014,39 @@ async function testarPreparo() {
         ok(doM2.every(o => comb[o.i] === 30 + o.x.pos),
            'e o segundo é deslocado pela TIRAGEM do primeiro (30), não pelas 3 células dele');
     }
+}
+
+// Oráculo independente: enumera todas as divisões pequenas da folha.
+{
+    const melhor = (a, b) => {
+        for (let j = 0; j < a.length; j++) if (a[j] !== b[j]) return a[j] > b[j];
+        return false;
+    };
+    for (let a = 1; a <= 8; a++) for (let b = 1; b <= 8; b++) for (let c = 1; c <= 8; c++) {
+        const qtds = [a, b, c];
+        for (let P = 3; P <= 8; P++) {
+            let best = null;
+            for (let x = 1; x < P - 1; x++) for (let y = 1; y < P - x; y++) {
+                const counts = [x, y, P - x - y];
+                const R = Math.max(...qtds.map((q, j) => Math.ceil(q / counts[j])));
+                const sobras = counts.map((n, j) => n * R - qtds[j]).sort((x, y) => x - y);
+                if (!best || R < best.R || (R === best.R && melhor(sobras, best.sobras))) best = {R, sobras};
+            }
+            const atual = api.otimizarCelulasDaMontagem(qtds, P);
+            const sobras = atual.celulas.map((n, j) => n * atual.impressoes - qtds[j]).sort((x, y) => x - y);
+            ok(atual.impressoes === best.R && JSON.stringify(sobras) === JSON.stringify(best.sobras),
+                'mínimo de repetições e melhores sobras entre todas as divisões', {qtds, P, atual, best});
+        }
+    }
+    ok(api.otimizarCelulasDaMontagem([1, 1000000000], 2).impressoes === 1000000000,
+       'tiragem grande resolve sem varrer milhões de repetições');
+    const modelos = [{osId:'a', itemId:'1', qtd:1}, {osId:'a', itemId:'2', qtd:9}];
+    const celulas = [{osId:'a', itemId:'1', pos:7}, {osId:'a', itemId:'2', pos:12}];
+    api.completarAFolha(celulas, 4, modelos);
+    ok(celulas.filter(c => c.itemId === '2').length === 3, 'completar reduz repetições de nove para três');
+    ok(celulas.every(c => c.pos === (c.itemId === '1' ? 7 : 12)), 'completar preserva posições manuais');
+    const eq = api.otimizarCelulasDaMontagem([1, 4, 1], 10);
+    ok(JSON.stringify(eq.celulas) === JSON.stringify([3, 5, 2]), 'extras favorecem menor sobra');
 }
 
 testarPreparo().then(() => {

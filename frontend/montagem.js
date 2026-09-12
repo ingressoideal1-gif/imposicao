@@ -648,18 +648,9 @@ function moverCelula(celulas, de, para) {
     return celulas;
 }
 
-/**
- * Repete as células que já estão na folha até fechá-la, sem sobra.
- *
- * A sobra é papel pago igual: uma folha de PVC com duas células vazias custa o
- * mesmo que uma cheia. Isto percorre as células na ordem, em voltas, repetindo
- * cada uma logo depois da sua cópia anterior — assim o material sai agrupado,
- * que é o que facilita separar depois de cortar.
- *
- * Devolve o que FOI feito, para a tela poder dizer antes de fazer: nenhuma
- * decisão de papel deste projeto acontece calada.
- */
-function completarAFolha(celulas, porFolha) {
+/** Completa preservando posições existentes; com tiragens conhecidas, minimiza
+ * repetições e equilibra sobras. Sem tiragem, mantém a repetição em ordem. */
+function completarAFolha(celulas, porFolha, modelos) {
     const p = parseInt(porFolha) || 0;
     const n = (celulas || []).length;
     if (!p || !n) return { celulas: celulas, entraram: 0 };
@@ -668,14 +659,22 @@ function completarAFolha(celulas, porFolha) {
     if (resto === 0) return { celulas: celulas, entraram: 0 };
 
     const faltam = p - resto;
-    // Da ÚLTIMA para a primeira, inserindo cada cópia logo depois da original:
-    // percorrer do fim evita que uma inserção mova o índice das que ainda não
-    // foram copiadas.
     const originais = celulas.slice();
+    const presentes = (modelos || []).filter(m => originais.some(c => chaveDoModelo(c) === chaveDoModelo(m)));
+    const minimos = presentes.map(m => originais.filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length);
+    const qtds = presentes.map(m => parseInt(m.qtd) || 0);
+    const conhecidos = presentes.length && qtds.every(q => q > 0)
+        && originais.every(c => presentes.some(m => chaveDoModelo(m) === chaveDoModelo(c)));
+    const plano = conhecidos ? otimizarCelulasDaMontagem(qtds, n + faltam, minimos) : null;
+    const extras = [];
+    if (plano) presentes.forEach((m, j) => {
+        const fontes = originais.filter(c => chaveDoModelo(c) === chaveDoModelo(m));
+        for (let k = minimos[j]; k < plano.celulas[j]; k++) extras.push(fontes[(k - minimos[j]) % fontes.length]);
+    });
     let entraram = 0;
     let volta = 0;
     while (entraram < faltam) {
-        const alvo = originais[entraram % originais.length];
+        const alvo = plano ? extras[entraram] : originais[entraram % originais.length];
         // Cada volta acrescenta a cópia depois da última cópia daquela célula.
         const chave = chaveDoModelo(alvo) + '|' + alvo.pos;
         let ultima = -1;
@@ -803,23 +802,34 @@ function modeloTemDadoVariavel(item, num) {
  * Para um `R` qualquer, o mínimo de células que o modelo `i` precisa na folha é
  * `ceil(q_i / R)`: com menos que isso, `R` impressões não fecham a tiragem
  * dele. Se a soma desses mínimos cabe na folha, aquele `R` serve. Basta então
- * varrer `R` de baixo para cima e parar no primeiro que couber.
- *
- * No exemplo do usuário (P = 10, q = 30 e 70): R = 9 pede 4 + 8 = 12 células e
- * não cabe; R = 10 pede 3 + 7 = 10 e cabe. Sai exatamente a montagem que ele
- * descreveu, com desperdício zero.
- *
- * O piso da varredura é `ceil(Q / P)` — abaixo disso nem o total caberia. O
- * teto é a maior tiragem, onde cada modelo pede uma célula só; por isso a
- * varredura sempre acha resposta enquanto houver célula para um de cada.
- *
- * ## A sobra da folha
- *
- * O que sobrar de célula depois dos mínimos é distribuído pelo método da maior
- * sobra, proporcional à tiragem. O papel daquela folha já está comprado: deixar
- * a célula vazia desperdiça igual e não entrega nada. Vira peça a mais, e a
- * tela diz quantas — silenciar isso seria imprimir código que ninguém pediu.
+ * buscar o menor R viável. Células livres vão para a menor sobra atual,
+ * favorecendo reservas em todos os modelos, dentro da capacidade disponível.
  */
+function otimizarCelulasDaMontagem(qtds, capacidade, minimos) {
+    const base = minimos || qtds.map(() => 1);
+    const conta = r => qtds.map((q, j) => Math.max(base[j], Math.ceil(q / r)));
+    let baixo = Math.max(1, Math.ceil(qtds.reduce((a, b) => a + b, 0) / capacidade));
+    let alto = Math.max(...qtds);
+    // A viabilidade é monotônica: busca binária evita varrer toda a tiragem.
+    while (baixo < alto) {
+        const meio = baixo + Math.floor((alto - baixo) / 2);
+        if (conta(meio).reduce((a, b) => a + b, 0) <= capacidade) alto = meio;
+        else baixo = meio + 1;
+    }
+    const celulas = conta(baixo);
+    let livres = capacidade - celulas.reduce((a, b) => a + b, 0);
+    // Eleva a menor sobra primeiro (inclusive zero). Empates seguem a ordem
+    // dos modelos. Nunca aumenta R para obter peças de reserva.
+    while (livres-- > 0) {
+        let alvo = 0;
+        for (let j = 1; j < qtds.length; j++) {
+            if (celulas[j] * baixo - qtds[j] < celulas[alvo] * baixo - qtds[alvo]) alvo = j;
+        }
+        celulas[alvo]++;
+    }
+    return { impressoes: baixo, celulas };
+}
+
 function sugestaoDeAproveitamento(modelos, porFolha) {
     const P = parseInt(porFolha) || 0;
     const lista = (modelos || []);
@@ -852,30 +862,7 @@ function sugestaoDeAproveitamento(modelos, porFolha) {
     }
 
     const Q = qtds.reduce((a, b) => a + b, 0);
-    const teto = Math.max.apply(null, qtds);
-    let impressoes = 0;
-    let celulas = null;
-    for (let R = Math.max(1, Math.ceil(Q / P)); R <= teto; R++) {
-        const c = qtds.map(q => Math.ceil(q / R));
-        if (c.reduce((a, b) => a + b, 0) <= P) { impressoes = R; celulas = c; break; }
-    }
-    if (!celulas) {
-        return Object.assign(vazia, {
-            motivo: 'Não achei uma divisão da folha que atenda estas tiragens.' });
-    }
-
-    // A sobra da folha, pelo método da maior sobra sobre a tiragem.
-    const livres = P - celulas.reduce((a, b) => a + b, 0);
-    if (livres > 0) {
-        const ideal = qtds.map(q => livres * q / Q);
-        const inteiro = ideal.map(x => Math.floor(x));
-        const ordem = ideal
-            .map((x, j) => ({ j: j, frac: x - Math.floor(x) }))
-            .sort((a, b) => (b.frac - a.frac) || (qtds[b.j] - qtds[a.j]) || (a.j - b.j));
-        let dados = inteiro.reduce((a, b) => a + b, 0);
-        for (let k = 0; dados < livres; k++, dados++) inteiro[ordem[k % ordem.length].j]++;
-        for (let j = 0; j < celulas.length; j++) celulas[j] += inteiro[j];
-    }
+    const { impressoes, celulas } = otimizarCelulasDaMontagem(qtds, P);
 
     const itens = lista.map((m, j) => ({
         osId: m.osId, itemId: m.itemId, nome: m.nome,
@@ -1806,7 +1793,7 @@ function completarAFolhaDaMontagem() {
     if (!porFolha || !m.celulas.length || conta.vazias === 0) return;
 
     guardarNaHistoria();
-    const r = completarAFolha(m.celulas, porFolha);
+    const r = completarAFolha(m.celulas, porFolha, m.modelos);
     m.selecao = [];
     renderMontagem();
     if (typeof toast === 'function' && r.entraram) {
@@ -1994,10 +1981,11 @@ function _mtgRenderSugestao() {
     const mistura = sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ');
 
     caixa.innerHTML = cab + `
-      <details class="mtg-recomendacao"><summary>Recomendação automática</summary>
+      <section class="mtg-recomendacao" aria-labelledby="mtg-recomendacao-titulo"><h3 id="mtg-recomendacao-titulo">Recomendação automática</h3>
       <p class="mtg-dica" style="margin:0 0 10px;">A folha tem <strong>${sug.porFolha}</strong>
         célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). A divisão abaixo é a
-        que gasta menos papel.</p>
+        que minimiza as repetições da folha. Com o mesmo número de repetições, prioriza
+        sobras nos modelos que têm menos, sem aumentar as impressões para criar reservas.</p>
 
       <table class="mtg-sug-tabela">
         <thead><tr><th>Modelo</th><th class="num">Tiragem</th><th class="num">Por folha</th>
@@ -2033,7 +2021,7 @@ function _mtgRenderSugestao() {
           + sug.impressoes + ' vez(es) entrega a tiragem inteira. É o caminho mais curto.'}</p>
 
       <p class="mtg-dica" style="margin:6px 0 0;">Aplicar <strong>substitui</strong> as células
-        que estão na folha. <code>Ctrl+Z</code> devolve.</p></details>`;
+        que estão na folha. <code>Ctrl+Z</code> devolve.</p></section>`;
 }
 
 /* ── O número do modelo no papel ─────────────────────────────────────────── */
@@ -2058,6 +2046,8 @@ function mudarNumeroDaMontagem(campo, valor) {
     if (campo === 'size') n.size = parseFloat(valor);
     else if (campo === 'rot') n.rot = parseInt(valor);
     else n[campo] = valor;
+    // Escolher a identificação deve mostrá-la na prévia e na impressão.
+    if (campo === 'tipo') n.imprimir = true;
     state.montagem.numero = Object.assign(numeroDaMontagemSaneado(n), { imprimir: n.imprimir });
     renderMontagem();
 }
