@@ -427,6 +427,43 @@ const PECAS = [
     ok(janela.limpou.seletor && janela.limpou.alturaSolta,
        'limpar a folha recolhe o seletor e devolve o card à altura natural', janela.limpou);
 
+    const fundoVerso = await aba.evaluate(pecas => {
+        const referencia = document.createElement('div');
+        referencia.className = 'ped-preview-canvas-container';
+        document.body.appendChild(referencia);
+        const fundoNormalPedido = getComputedStyle(referencia).backgroundColor;
+        window.__montar(pecas);
+        const janela = document.getElementById('mtg-folha');
+        const fundoNormalMontagem = getComputedStyle(janela).backgroundColor;
+
+        state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
+        _mtgRenderFolha();
+        referencia.classList.add('ped-modelo-com-verso');
+        const papel = janela.querySelector('.mtg-papel');
+        const estilo = getComputedStyle(janela);
+        const paddingY = (parseFloat(estilo.paddingTop) || 0) + (parseFloat(estilo.paddingBottom) || 0);
+        const resultado = {
+            normalIgual: fundoNormalMontagem === fundoNormalPedido,
+            versoIgual: getComputedStyle(janela).backgroundColor === getComputedStyle(referencia).backgroundColor,
+            aviso: (janela.querySelector('.ped-modelo-verso-aviso') || {}).textContent || '',
+            avisos: janela.querySelectorAll('.ped-modelo-verso-aviso').length,
+            papelCabe: papel.getBoundingClientRect().height <= janela.clientHeight - paddingY + 1,
+        };
+        state.montagem.modelos.forEach(m => { m.peca.print_mode = 'front'; });
+        _mtgRenderFolha();
+        resultado.removeu = !janela.classList.contains('ped-modelo-com-verso')
+            && !janela.querySelector('.ped-modelo-verso-aviso')
+            && getComputedStyle(janela).backgroundColor === fundoNormalPedido;
+        referencia.remove();
+        return resultado;
+    }, PECAS);
+    ok(fundoVerso.normalIgual && fundoVerso.versoIgual,
+       'a janela usa os mesmos fundos normal e com verso do painel de produção', fundoVerso);
+    ok(fundoVerso.aviso === 'Modelo com Verso' && fundoVerso.avisos === 1,
+       'modelo duplex mostra a descrição Modelo com Verso uma única vez', fundoVerso);
+    ok(fundoVerso.papelCabe && fundoVerso.removeu,
+       'a faixa de verso não aperta a folha e desaparece ao voltar para só frente', fundoVerso);
+
     // A janela SEGUE a célula: mover além da fronteira da folha não some com ela.
     const segue = await aba.evaluate(pecas => {
         window.__montar(pecas);
@@ -1331,7 +1368,7 @@ const PECAS = [
     ok(entregaFaces.recusouMistura, 'a geração também recusa a mistura antes de contatar o motor', entregaFaces);
 
     // A partir daqui a seleção usa os handlers reais, com a carga de dados simulada.
-    await aba.evaluate(['onMontagemPedidoChange', '_mtgGarantirBancosDoPedido',
+    await aba.evaluate(['_mtgOpcaoDoModelo', 'onMontagemPedidoChange', '_mtgGarantirBancosDoPedido',
         '_mtgNumeracaoDoItem', 'adicionarNaMontagem', 'modeloTemDadoVariavel'].map(extrair).join('\n'));
     const filtros = await aba.evaluate(async () => {
         state.montagem = montagemVazia();
@@ -1353,7 +1390,7 @@ const PECAS = [
             nome_modelo: id, qtd: 10, cor: 'azul', status_impressao: status, verso_tipo: 'Frente' });
         state.osItens = {
             a: [item('A1', 501, 'Aguardando'), item('A2', 501, 'Impresso'), item('A3', 501, 'Corrigir Arte'), item('A4', 502, 'AGUARD.'), { ...item('A5', 503, 'Aguardando'), cor: 'Dourado', saida_id: 'S2' }],
-            b: [item('B1', 502, 'Aguardando')], c: [item('C1', 501, 'Aguardando')],
+            b: [{ ...item('B1', 502, 'Aguardando'), verso_tipo: 'Frente e Verso' }], c: [item('C1', 501, 'Aguardando')],
             d: [{ ...item('D1', null, 'Aguardando'), id_produto_proposta_origem: 15, formato_id: 'F1' }],
         };
         const avisos = [], cargas = [];
@@ -1362,8 +1399,15 @@ const PECAS = [
         window.garantirBancosDoTrabalho = async () => {};
         window.garantirCsvDoTrabalho = async () => {};
         encherFormatosDaMontagem(); encherPedidosDaMontagem(); renderMontagem();
-        const valores = id => Array.from(document.getElementById(id).options).map(o => o.value).filter(Boolean).sort();
+        const valores = id => Array.from(document.getElementById(id).options).map(o => o.value)
+            .filter(v => v && v !== '__todos__').sort();
         const todos = valores('mtg-pedido');
+        await onMontagemPedidoChange();
+        const opcoesGerais = Array.from(document.getElementById('mtg-modelo').options).slice(1);
+        const modelosGerais = opcoesGerais.map(o => o.value).sort();
+        const rotulosGerais = opcoesGerais.map(o => o.textContent);
+        document.getElementById('mtg-modelo').value = 'b::B1'; onMontagemModeloChange();
+        const selecaoGeral = { pedido: state.montagem.pedidoSel, modelo: state.montagem.modeloSel };
         const formatos = valores('mtg-formato');
         const rotulo = document.querySelector('#mtg-formato option[value=F3]').textContent;
         const fallback = formatoDoModeloNaMontagem({ formato_id: 'F2' }, 'a');
@@ -1401,19 +1445,27 @@ const PECAS = [
         // Troca de produto enquanto o pedido carrega: a resposta antiga não volta.
         document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
         document.getElementById('mtg-pedido').value = 'a';
-        let liberar;
-        window.loadOSItens = () => new Promise(r => { liberar = r; });
+        const liberar = [];
+        window.loadOSItens = () => new Promise(r => { liberar.push(r); });
         const carregando = onMontagemPedidoChange();
-        document.getElementById('mtg-formato').value = 'F2'; onMontagemFormatoChange();
-        liberar(); await carregando;
-        const semRespostaAntiga = !state.montagem.pedidoSel && !valores('mtg-modelo').length;
-        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
+        document.getElementById('mtg-formato').value = 'F2';
+        const novaCarga = onMontagemFormatoChange();
+        liberar.splice(0).forEach(r => r()); await Promise.all([carregando, novaCarga]);
+        const semRespostaAntiga = !state.montagem.pedidoSel
+            && valores('mtg-modelo').join() === 'a::A4,b::B1';
+        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, modelosGerais, rotulosGerais, selecaoGeral, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
     ok(filtros.rotulo === 'Credencial <PVC> (85 × 54 mm)', 'formato mostra name e tamanho com texto escapado, mantendo id interno', filtros.rotulo);
     ok(filtros.formatos.join() === 'F1,F2,F3' && filtros.fallback === 'F2' && filtros.desconhecido === '' && filtros.vinculo === 'F1', 'lista formatos sem duplicar produtos e resolve formato direto, vinculo e desconhecido', filtros);
     ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com formato escolhido e sem limite antigo de 30 dias', filtros);
+    ok(filtros.modelosGerais.join() === 'a::A1,a::A4,a::A5,b::B1,d::D1'
+        && filtros.selecaoGeral.pedido === 'b' && filtros.selecaoGeral.modelo === 'B1',
+       'Pedidos em produção reúne modelos aguardando de todos os pedidos e preserva o par pedido/modelo', filtros);
+    ok(filtros.rotulosGerais.every(t => /^\d+ · \w+ · .+ · \d/.test(t))
+        && filtros.rotulosGerais.some(t => t.startsWith('101 · B1 · B1 · 10') && t.endsWith('COM VERSO')),
+       'cada opção mostra Pedido, Modelo, Nome e Quantidade nesta ordem, preservando o aviso de verso', filtros.rotulosGerais);
     ok(filtros.modelos.join() === 'A1,A5' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos reune produtos do mesmo formato e cruza status Aguardando', filtros);
     ok(filtros.entrou === 2 && filtros.produtosCompartilham && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'produtos diferentes compartilham a montagem; inclusao, busca e retorno respeitam filtros', filtros);
     ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar formato limpa a seleção e preserva a montagem existente', filtros);

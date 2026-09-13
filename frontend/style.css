@@ -1080,7 +1080,8 @@ input[type="color"].element-card-fields .form-control,
 }
 
 /* Identificacao do modelo com verso, somente no fundo da janela. */
-.ped-preview-canvas-container.ped-modelo-com-verso {
+.ped-preview-canvas-container.ped-modelo-com-verso,
+.mtg-folha.ped-modelo-com-verso {
     position: relative;
     background: #597d73;
     padding-top: 48px;
@@ -5185,7 +5186,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
        o esticaria de volta. */
     min-height: 0;
     max-height: calc(100vh - 300px);
-    background: #f1f5f9; border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm);
     padding: 12px; overflow: auto;
     display: flex; flex-direction: column; align-items: center; gap: 10px;
 }

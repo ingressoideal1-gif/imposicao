@@ -1342,8 +1342,10 @@ function onMontagemFormatoChange() {
         if (campo) campo.value = '';
     }
     encherPedidosDaMontagem();
+    const cargaModelos = onMontagemPedidoChange();
     onMontagemPosicoesChange();
     renderMontagem();
+    return cargaModelos;
 }
 
 /** Enche o seletor de pedidos. */
@@ -1354,15 +1356,26 @@ function encherPedidosDaMontagem() {
     const atual = sel.value;
     const lista = pedidosParaMontagem();
 
-    sel.innerHTML = '<option value="">' + (lista.length ? 'Pedidos em produção…' : 'Nenhum pedido em produção para este formato') + '</option>'
+    sel.innerHTML = '<option value="__todos__">' + (lista.length ? 'Pedidos em produção' : 'Nenhum pedido em produção para este formato') + '</option>'
         + lista.map(os => {
             const num = escapeHtml(String(os.numero || os.id));
             const nome = escapeHtml(String(os.cliente_nome || os.cliente || os.titulo || '').slice(0, 40));
             return `<option value="${escapeHtml(String(os.id))}">${num}${nome ? ' · ' + nome : ''}</option>`;
         }).join('');
 
-    if (atual && lista.some(os => String(os.id) === atual)) sel.value = atual;
+    if (atual === '__todos__' || (atual && lista.some(os => String(os.id) === atual))) sel.value = atual;
     sel.disabled = lista.length === 0;
+}
+
+function _mtgOpcaoDoModelo(os, item, todos) {
+    const pedido = String(os.numero || os.id);
+    const modelo = String(item.id);
+    const nome = String(item.nome_modelo || item.produto || 'modelo').slice(0, 60);
+    const quantidade = totalDeItensDoModelo(item, _mtgNumeracaoDoItem(item)).toLocaleString('pt-BR');
+    const face = modoDoModeloNaMontagem(item) !== 'front' ? ' · COM VERSO' : ' · Só frente';
+    const valor = todos ? String(os.id) + '::' + modelo : modelo;
+    return `<option value="${escapeHtml(valor)}" data-pedido-id="${escapeHtml(String(os.id))}" data-modelo-id="${escapeHtml(modelo)}">`
+        + `${escapeHtml(pedido)} · ${escapeHtml(modelo)} · ${escapeHtml(nome)} · ${escapeHtml(quantidade)}${face}</option>`;
 }
 
 /**
@@ -1401,15 +1414,17 @@ async function onMontagemPedidoChange() {
     if (state.montagem.gerando) return;
     const sel = document.getElementById('mtg-pedido');
     const osId = sel ? sel.value : '';
+    const todos = osId === '__todos__';
     const os = (state.ordens || []).find(o => String(o.id) === osId);
+    const pedidos = todos ? pedidosParaMontagem() : (os ? [os] : []);
     const carga = state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
-    state.montagem.pedidoSel = osId || null;
+    state.montagem.pedidoSel = todos ? null : (osId || null);
     state.montagem.modeloSel = null;
 
     const selMod = document.getElementById('mtg-modelo');
     if (!selMod) return;
 
-    if (!osId || !pedidoDisponivelNaMontagem(os)) {
+    if (!pedidos.length || (!todos && !pedidoDisponivelNaMontagem(os))) {
         state.montagem.pedidoSel = null;
         if (sel) sel.value = '';
         selMod.innerHTML = '<option value="">—</option>';
@@ -1419,27 +1434,36 @@ async function onMontagemPedidoChange() {
         return;
     }
 
-    selMod.innerHTML = '<option value="">Carregando…</option>';
+    selMod.innerHTML = `<option value="">Carregando modelos de ${pedidos.length} pedido(s)…</option>`;
     selMod.disabled = true;
 
     state.montagem.carregando = (state.montagem.carregando || 0) + 1;
     _mtgAtualizarGeracao();
     try {
-        if (typeof loadOSItens === 'function') await loadOSItens(osId);
-        await _mtgGarantirBancosDoPedido(osId);
-        if (state.montagem.cargaSelecao !== carga || state.montagem.pedidoSel !== osId) return;
+        // Poucos pedidos por vez evitam uma rajada de consultas ao abrir a lista geral.
+        const fila = pedidos.slice();
+        const carregar = async () => {
+            while (fila.length && state.montagem.cargaSelecao === carga) {
+                const pedido = fila.shift();
+                if (typeof loadOSItens === 'function') await loadOSItens(pedido.id);
+                await _mtgGarantirBancosDoPedido(pedido.id);
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, pedidos.length) }, carregar));
+        if (state.montagem.cargaSelecao !== carga) return;
+        if (!todos && state.montagem.pedidoSel !== osId) return;
 
-        const itens = (state.osItens[osId] || []).filter(it => modeloDisponivelNaMontagem(osId, it));
-        selMod.innerHTML = '<option value="">' + (itens.length ? 'Modelos aguardando…' : 'Nenhum modelo aguardando para este formato') + '</option>'
-            + itens.map(it => {
-                const nome = escapeHtml(String(it.nome_modelo || it.produto || 'modelo').slice(0, 60));
-                const face = modoDoModeloNaMontagem(it) !== 'front' ? ' · COM VERSO' : ' · Só frente';
-                return `<option value="${escapeHtml(String(it.id))}">${escapeHtml(String(it.id))} · ${nome}${face}</option>`;
-            }).join('');
+        const itens = pedidos.flatMap(pedido => (state.osItens[pedido.id] || [])
+            .filter(it => modeloDisponivelNaMontagem(pedido.id, it))
+            .map(it => ({ pedido, item: it })));
+        selMod.innerHTML = '<option value="">' + (itens.length
+            ? 'Pedido · Modelo · Nome · Quantidade'
+            : 'Nenhum modelo aguardando para este formato') + '</option>'
+            + itens.map(({ pedido, item }) => _mtgOpcaoDoModelo(pedido, item, todos)).join('');
         selMod.disabled = itens.length === 0;
 
     } catch (e) {
-        if (state.montagem.cargaSelecao === carga && state.montagem.pedidoSel === osId) {
+        if (state.montagem.cargaSelecao === carga && (todos || state.montagem.pedidoSel === osId)) {
             selMod.innerHTML = '<option value="">Falha ao carregar. Selecione o pedido novamente.</option>';
             selMod.disabled = true;
             if (typeof toast === 'function') toast('Não foi possível carregar os modelos do pedido.', 'error');
@@ -1454,7 +1478,13 @@ async function onMontagemPedidoChange() {
 function onMontagemModeloChange() {
     if (state.montagem.gerando) return;
     const sel = document.getElementById('mtg-modelo');
-    state.montagem.modeloSel = sel && sel.value ? sel.value : null;
+    const opcao = sel && sel.selectedOptions && sel.selectedOptions[0];
+    const filtroPedido = document.getElementById('mtg-pedido');
+    state.montagem.pedidoSel = opcao && opcao.dataset.pedidoId
+        ? opcao.dataset.pedidoId
+        : (filtroPedido && filtroPedido.value === '__todos__' ? null : state.montagem.pedidoSel);
+    state.montagem.modeloSel = opcao && opcao.dataset.modeloId
+        ? opcao.dataset.modeloId : (sel && sel.value ? sel.value : null);
     onMontagemPosicoesChange();
     // Redesenha porque a linha ativa da lista sai daqui: escolher pelo seletor
     // tem de marcar a mesma linha que clicar nela marcaria.
@@ -2263,6 +2293,10 @@ function _mtgRenderFolha() {
 
     const geo = geometriaDaFolha(modelos[0].peca, _mtgSaidaDaFolha(modelos));
     const conta = contaDaMontagem(celulas, porFolha);
+    // A compatibilidade da Montagem garante que todos tenham a mesma regra de
+    // frente/verso. A janela repete o indicador do painel de produção.
+    const comVerso = modelos.some(m => modoDaPecaNaMontagem(m.peca) !== 'front');
+    alvo.className = 'mtg-folha' + (comVerso ? ' ped-modelo-com-verso' : '');
 
     if (!geo) {
         // Sem medidas não dá para desenhar uma folha honesta. Melhor uma lista
@@ -2284,8 +2318,13 @@ function _mtgRenderFolha() {
     // A área disponível decide a escala. `clientWidth` é o que sobra depois do
     // padding do container — medir aqui, e não chutar, é o que faz a folha
     // caber em qualquer largura de tela da gráfica.
-    const larg = Math.max(240, (alvo.clientWidth || 700) - 24);
-    const alt = Math.max(240, (alvo.clientHeight || 520) - 24);
+    const estiloJanela = typeof getComputedStyle === 'function' ? getComputedStyle(alvo) : null;
+    const paddingX = estiloJanela
+        ? (parseFloat(estiloJanela.paddingLeft) || 0) + (parseFloat(estiloJanela.paddingRight) || 0) : 24;
+    const paddingY = estiloJanela
+        ? (parseFloat(estiloJanela.paddingTop) || 0) + (parseFloat(estiloJanela.paddingBottom) || 0) : 24;
+    const larg = Math.max(240, (alvo.clientWidth || 700) - paddingX);
+    const alt = Math.max(240, (alvo.clientHeight || 520) - paddingY);
     const escala = escalaDaFolhaDaMontagem(zoom, geo, larg, alt);
     const px = mm => (mm * escala);
 
@@ -2377,8 +2416,8 @@ function _mtgRenderFolha() {
             + celulasDaFolha.join('') + '</div>');
     }
 
-    alvo.className = 'mtg-folha';
-    alvo.innerHTML = html.join('');
+    alvo.innerHTML = (comVerso
+        ? '<span class="ped-modelo-verso-aviso">Modelo com Verso</span>' : '') + html.join('');
 
     if (numFolha) {
         const medida = geo.temPapel
@@ -2814,8 +2853,9 @@ async function abrirMontagem() {
         state.montagem.pedidoSel = null;
         state.montagem.modeloSel = null;
         const modelo = document.getElementById('mtg-modelo');
-        if (modelo) { modelo.innerHTML = '<option value="">Escolha o pedido…</option>'; modelo.disabled = true; }
+        if (modelo) { modelo.innerHTML = '<option value="">Carregando modelos…</option>'; modelo.disabled = true; }
     }
+    await onMontagemPedidoChange();
     _mtgLigarArrasto();
     _mtgLigarTeclado();
     onMontagemPosicoesChange();
