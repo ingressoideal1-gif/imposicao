@@ -51,7 +51,11 @@ function extrairConst(nome) {
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX',
-                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
+                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS',
+                    'MTG_MAX_MONTAGENS_SUGERIDAS', 'MTG_MAX_PARTICOES_REPETICOES',
+                    'MTG_TEMPO_BUSCA_AUTOMATICA_MS', '_mtgCacheDeSugestoes',
+                    'MTG_MAX_COMBINACOES_ANALISADAS',
+                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_TEMPO_COMBINACOES_MS', '_mtgCacheCombinacoes'];
 
 const NOMES = [
     'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
@@ -65,11 +69,15 @@ const NOMES = [
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
     'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem',
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
-    'otimizarCelulasDaMontagem', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
+    'otimizarCelulasDaMontagem', 'configuracaoDeMontagens', '_mtgParticoesDeRepeticoes',
+    '_mtgSobrasDoPlano', '_mtgMelhorEquilibrio', '_mtgPlanoParaRepeticoes',
+    '_mtgPlanoComQuantidade', 'sugestaoDeAproveitamento', 'sugestaoDeMultiplasMontagens', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
+    'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
-    '_mtgNumeroDoPedido', '_mtgEstiloDoNumero',
+    '_mtgNumeroDoPedido', '_mtgEstiloDoNumero', '_mtgModeloDoItem',
+    '_mtgChaveDoCandidato', 'melhoresCombinacoesDeModelosDaMontagem',
 ];
 
 // O `state` do painel, com o catálogo que a resolução do formato consulta.
@@ -811,6 +819,105 @@ async function testarPreparo() {
         ok(s.itens.every(i => i.sobra === 0), 'sem sobra: a conta fecha exata', s.itens);
         ok(s.celulasUsadas === 10, 'a folha sai cheia', s.celulasUsadas);
         ok(s.total === 100, 'o total é a soma das tiragens', s.total);
+    }
+
+    // ── Várias montagens: menos impressões, sem célula vazia ─────────────
+    {
+        const cfg = api.configuracaoDeMontagens(99, 0);
+        ok(cfg.numero === 5 && cfg.minimo === 1,
+           'a configuração limita o seletor a cinco montagens e saneia o mínimo', cfg);
+        ok(api._mtgMelhorEquilibrio({ sobras: [2, 2, 2] }, { sobras: [0, 0, 6] }),
+           'com as mesmas impressões, sobras em todos os modelos vencem sobra concentrada');
+        const s = api.sugestaoDeMultiplasMontagens([mod('M1', 3), mod('M2', 1)], 2, 1, 1);
+        ok(s.planoSolicitado.impressoes === 3,
+           'uma montagem precisa de três impressões para tiragens 3 e 1', s.planoSolicitado);
+        ok(s.planoSugerido && s.planoSugerido.quantidade === 2
+            && s.planoSugerido.impressoes === 2,
+           'duas montagens são sugeridas porque reduzem o total para duas impressões', s.planoSugerido);
+        ok(s.planoSugerido.layouts.every(l => l.reduce((a, b) => a + b, 0) === 2),
+           'toda montagem sugerida usa todas as células da folha', s.planoSugerido.layouts);
+        ok(s.planoSugerido.itens.every(it => it.produz >= it.qtd),
+           'o plano cobre a tiragem de todos os modelos', s.planoSugerido.itens);
+        ok(new Set(s.planoSugerido.layouts.map(l => l.join(','))).size === 2,
+           'as duas composições são realmente diferentes', s.planoSugerido.layouts);
+
+        const minimoDois = api.sugestaoDeMultiplasMontagens([mod('M1', 3), mod('M2', 1)], 2, 1, 2);
+        ok(minimoDois.planoSolicitado.repeticoes.every(r => r >= 2),
+           'o mínimo informado vale para cada montagem', minimoDois.planoSolicitado.repeticoes);
+        ok(!minimoDois.planoSugerido,
+           'não sugere mais montagens quando elas não reduzem as impressões respeitando o mínimo');
+
+        const celulas = api.celulasDasMontagens(s, s.planoSugerido);
+        ok(celulas.length === 4,
+           'aplicar duas montagens materializa duas folhas completas', celulas);
+    }
+
+    // ── Recomenda quais modelos economizam quando impressos juntos ───────
+    {
+        const bons = api.melhoresCombinacoesDeModelosDaMontagem(
+            [mod('R1', 11), mod('R2', 11)], 10, 1, 1);
+        ok(bons.length === 1 && bons[0].baseSeparada === 4
+            && bons[0].plano.impressoes === 3 && bons[0].economia === 1,
+           'a combinação compara os mesmos modelos separados e encontra economia real', bons);
+
+        const semEconomia = api.melhoresCombinacoesDeModelosDaMontagem(
+            [mod('R1', 30), mod('R2', 70)], 10, 1, 1);
+        ok(semEconomia.length === 0,
+           'uma combinação que apenas empata com a impressão separada não é recomendada', semEconomia);
+
+        const variavel = api.melhoresCombinacoesDeModelosDaMontagem(
+            [mod('R1', 11, true), mod('R2', 11)], 10, 1, 1);
+        ok(variavel.length === 0,
+           'modelo com dado variável não recebe recomendação que repetiria posições e códigos');
+
+        const frente = mod('FRENTE', 11);
+        const verso = mod('VERSO', 11);
+        verso.peca = { ...verso.peca, print_mode: 'duplex' };
+        const faces = api.melhoresCombinacoesDeModelosDaMontagem([frente, verso], 10, 1, 1);
+        ok(faces.length === 0,
+           'modelos só frente e com verso não aparecem na mesma combinação recomendada');
+
+        const muitos = Array.from({ length: 9 }, (_, i) => mod('EXATO' + i, 100 - i * 10))
+            .concat(mod('ULTIMO1', 11), mod('ULTIMO2', 11));
+        const entreTodos = api.melhoresCombinacoesDeModelosDaMontagem(muitos, 10, 1, 1);
+        ok(entreTodos.some(r => r.modelos.map(m => m.itemId).sort().join() === 'ULTIMO1,ULTIMO2'),
+           'a triagem considera também a melhor combinação depois dos dez maiores modelos', entreTodos);
+    }
+
+    // Oráculo independente para duas montagens pequenas: enumera todas as
+    // composições cheias e todas as repetições. Assim o teste não repete a
+    // implementação do otimizador ao conferir o objetivo principal.
+    {
+        function composicoes(total, partes, prefixo, saida) {
+            if (partes === 1) { saida.push(prefixo.concat(total)); return; }
+            for (let x = 0; x <= total; x++) composicoes(total - x, partes - 1, prefixo.concat(x), saida);
+        }
+        function menorExaustivo(qtds, capacidade, minimo) {
+            const layouts = [];
+            composicoes(capacidade, qtds.length, [], layouts);
+            let melhor = null;
+            for (let a = 0; a < layouts.length; a++) for (let b = a + 1; b < layouts.length; b++) {
+                for (let r1 = minimo; r1 <= 10; r1++) for (let r2 = minimo; r2 <= 10; r2++) {
+                    if (qtds.every((q, i) => layouts[a][i] * r1 + layouts[b][i] * r2 >= q)) {
+                        const total = r1 + r2;
+                        if (melhor == null || total < melhor) melhor = total;
+                    }
+                }
+            }
+            return melhor;
+        }
+        for (let P = 2; P <= 4; P++) for (let q1 = 1; q1 <= 6; q1++) for (let q2 = 1; q2 <= 6; q2++) {
+            const esperado = menorExaustivo([q1, q2], P, 1);
+            const obtido = api._mtgPlanoComQuantidade([q1, q2], P, 2, 1, 10);
+            ok((obtido && obtido.impressoes) === esperado,
+               `duas montagens acham o menor total para P=${P}, tiragens ${q1}/${q2}`,
+               { esperado, obtido: obtido && obtido.impressoes,
+                 candidato: api._mtgPlanoParaRepeticoes([q1, q2], P, [2, 1]) });
+            if (obtido) {
+                ok(obtido.layouts.every(l => l.reduce((a, b) => a + b, 0) === P),
+                   'o plano exaustivamente conferido não deixa célula vazia', obtido.layouts);
+            }
+        }
     }
 
     // Nove impressões NÃO cabem — é isso que faz dez ser a resposta, e não uma

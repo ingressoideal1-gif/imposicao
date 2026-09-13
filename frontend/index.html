@@ -14,8 +14,8 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=863">
-    <script src="pdf-lib.min.js?v=863"></script>
+    <link rel="stylesheet" href="/style.css?v=864">
+    <script src="pdf-lib.min.js?v=864"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3134,9 +3134,36 @@
                                    onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPedidoDaMontagem();}">
                         </div>
 
-                        <div class="mtg-campo" style="flex: 1 1 300px; min-width: 0;">
-                            <label for="mtg-modelo">Modelo aguardando <span id="mtg-modelo-face" class="mtg-face-modelo" hidden></span></label>
-                            <select id="mtg-modelo" class="form-control" onchange="onMontagemModeloChange()" disabled>
+                        <div class="mtg-campo mtg-campo-modelos" style="flex: 1 1 300px; min-width: 0;">
+                            <label for="mtg-modelos-trigger">Modelo aguardando <span id="mtg-modelo-face" class="mtg-face-modelo" hidden></span></label>
+                            <div class="mtg-modelos-multi" id="mtg-modelos-multi">
+                                <button type="button" id="mtg-modelos-trigger" class="form-control mtg-modelos-trigger"
+                                        onclick="alternarSeletorDeModelosDaMontagem()" disabled
+                                        aria-expanded="false" aria-controls="mtg-modelos-painel">
+                                    Selecione o pedido
+                                </button>
+                                <div id="mtg-modelos-painel" class="mtg-modelos-painel" hidden>
+                                    <div class="mtg-modelos-painel-topo">
+                                        <strong>Selecionar modelos aguardando</strong>
+                                        <button type="button" class="mtg-modelos-fechar" onclick="alternarSeletorDeModelosDaMontagem(false)" aria-label="Fechar">&times;</button>
+                                    </div>
+                                    <input type="search" id="mtg-modelos-busca" class="form-control"
+                                           placeholder="Buscar pedido, modelo ou nome&hellip;"
+                                           oninput="buscarModelosDaMontagem(this.value)">
+                                    <button type="button" class="mtg-modelos-todos" onclick="marcarTodosModelosCompativeisDaMontagem()">
+                                        Selecionar todos os compat&iacute;veis
+                                    </button>
+                                    <div id="mtg-modelos-recomendacoes"></div>
+                                    <div id="mtg-modelos-opcoes" class="mtg-modelos-opcoes"></div>
+                                    <div class="mtg-modelos-rodape">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="limparSelecaoDeModelosDaMontagem()">Limpar sele&ccedil;&atilde;o</button>
+                                        <button type="button" class="btn btn-primary btn-sm" id="mtg-modelos-carregar"
+                                                onclick="carregarModelosSelecionadosDaMontagem()" disabled>Carregar modelos selecionados</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Fonte interna para o fluxo de posição individual e compatibilidade legada. -->
+                            <select id="mtg-modelo" class="form-control mtg-modelo-fonte" onchange="onMontagemModeloChange()" disabled tabindex="-1" aria-hidden="true">
                                 <option value="">&mdash;</option>
                             </select>
                         </div>
@@ -4308,45 +4335,45 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=863"></script>
-    <script src="/supabase-config.js?v=863"></script>
-    <script src="mapas.js?v=863"></script>
-    <script src="cor-numeracao-do-modelo.js?v=863"></script>
+    <script src="/banco-nao-responde.js?v=864"></script>
+    <script src="/supabase-config.js?v=864"></script>
+    <script src="mapas.js?v=864"></script>
+    <script src="cor-numeracao-do-modelo.js?v=864"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=863"></script>
-    <script src="logo-do-frete.js?v=863"></script>
+    <script src="banco-do-modelo.js?v=864"></script>
+    <script src="logo-do-frete.js?v=864"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=863"></script>
-    <script src="arte-de-impressao.js?v=863"></script>
-    <script src="qr-canvas.js?v=863"></script>
-    <script src="barcode-canvas.js?v=863"></script>
+    <script src="pagamento-do-pedido.js?v=864"></script>
+    <script src="arte-de-impressao.js?v=864"></script>
+    <script src="qr-canvas.js?v=864"></script>
+    <script src="barcode-canvas.js?v=864"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=863"></script>
-    <script src="fonte-canvas.js?v=863"></script>
+    <script src="numero-da-pagina.js?v=864"></script>
+    <script src="fonte-canvas.js?v=864"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=863"></script>
-    <script src="fonte-nome.js?v=863"></script>
-    <script src="qr-ideal-colunas.js?v=863"></script>
-    <script src="csv-editor.js?v=863"></script>
-    <script src="amostra-modal.js?v=863"></script>
-    <script src="texto-ajuste.js?v=863"></script>
-    <script src="foto-lib.js?v=863"></script>
-    <script src="gerenciador-fotos.js?v=863"></script>
-    <script src="editor-foto.js?v=863"></script>
-    <script src="script.js?v=863"></script>
-    <script src="ideal-control.js?v=863"></script>
-    <script src="criador-arte.js?v=863"></script>
-    <script src="/pedido.js?v=863"></script>
-    <script src="montagem.js?v=863"></script>
-    <script src="acabamento.js?v=863"></script>
-    <script src="avisos.js?v=863"></script>
+    <script src="fonte-glifos.js?v=864"></script>
+    <script src="fonte-nome.js?v=864"></script>
+    <script src="qr-ideal-colunas.js?v=864"></script>
+    <script src="csv-editor.js?v=864"></script>
+    <script src="amostra-modal.js?v=864"></script>
+    <script src="texto-ajuste.js?v=864"></script>
+    <script src="foto-lib.js?v=864"></script>
+    <script src="gerenciador-fotos.js?v=864"></script>
+    <script src="editor-foto.js?v=864"></script>
+    <script src="script.js?v=864"></script>
+    <script src="ideal-control.js?v=864"></script>
+    <script src="criador-arte.js?v=864"></script>
+    <script src="/pedido.js?v=864"></script>
+    <script src="montagem.js?v=864"></script>
+    <script src="acabamento.js?v=864"></script>
+    <script src="avisos.js?v=864"></script>
 
 
 
