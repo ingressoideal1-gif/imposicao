@@ -2491,9 +2491,25 @@ function _mtgSugestaoAtual() {
     return sugestao;
 }
 
+function agendarConfiguracaoDeMontagens(campo, valor) {
+    const m = state.montagem;
+    const cfg = configuracaoDeMontagens(
+        campo === 'numero' ? valor : m.quantidadeMontagens,
+        campo === 'minimo' ? valor : m.minimoRepeticoes);
+    m.quantidadeMontagens = cfg.numero;
+    m.minimoRepeticoes = cfg.minimo;
+    clearTimeout(m.timerConfiguracao);
+    m.timerConfiguracao = setTimeout(() => {
+        m.timerConfiguracao = null;
+        mudarConfiguracaoDeMontagens(campo, campo === 'numero' ? cfg.numero : cfg.minimo);
+    }, 300);
+}
+
 async function mudarConfiguracaoDeMontagens(campo, valor) {
     if (state.montagem.gerando) return;
     const m = state.montagem;
+    clearTimeout(m.timerConfiguracao);
+    m.timerConfiguracao = null;
     const cfg = configuracaoDeMontagens(
         campo === 'numero' ? valor : m.quantidadeMontagens,
         campo === 'minimo' ? valor : m.minimoRepeticoes);
@@ -2593,11 +2609,17 @@ function resumoAtualDaMontagem(modelos, celulas, porFolha, repeticoesPorFolha) {
     if (planoValido) {
         const detalhados = itens.map(m => {
             let produz = 0;
+            const participacoes = [];
             for (let f = 0; f < folhas; f++) {
-                produz += celulas.slice(f * porFolha, (f + 1) * porFolha)
-                    .filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length * repeticoesPorFolha[f];
+                const naMontagem = celulas.slice(f * porFolha, (f + 1) * porFolha)
+                    .filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length;
+                produz += naMontagem * repeticoesPorFolha[f];
+                if (naMontagem) participacoes.push({ montagem: f + 1, repeticoes: repeticoesPorFolha[f] });
             }
-            return { ...m, produz, sobra: produz - Number(m.qtd) };
+            const repeticoesTexto = participacoes.length === 1
+                ? participacoes[0].repeticoes + '×'
+                : participacoes.map(p => 'M' + p.montagem + ': ' + p.repeticoes + '×').join(' · ');
+            return { ...m, produz, sobra: produz - Number(m.qtd), repeticoesTexto };
         });
         return { folhas, usadas: celulas.length, vagas: folhas * porFolha - celulas.length,
             ocupacao: 100 * celulas.length / (folhas * porFolha), repeticoes: null,
@@ -2611,6 +2633,7 @@ function resumoAtualDaMontagem(modelos, celulas, porFolha, repeticoesPorFolha) {
         repeticoes, repeticoesPorFolha: null,
         totalImpressoes: repeticoes == null ? null : repeticoes * folhas,
         itens: itens.map(m => ({ ...m,
+            repeticoesTexto: repeticoes == null ? '—' : repeticoes + '×',
             produz: repeticoes == null ? null : repeticoes * m.celulas,
             sobra: repeticoes == null ? null : repeticoes * m.celulas - Number(m.qtd) })) };
 }
@@ -2664,7 +2687,8 @@ function _mtgRenderSugestao() {
               .map(n => `<option value="${n}"${n === cfgAtual.numero ? ' selected' : ''}>${n}</option>`).join('')}
         </select></label>
         <label><span>Mínimo de repetições</span><input id="mtg-minimo-repeticoes" type="number" min="1" max="1000000" step="1"
-          value="${cfgAtual.minimo}" onchange="mudarConfiguracaoDeMontagens('minimo', this.value)"></label>
+          value="${cfgAtual.minimo}" oninput="agendarConfiguracaoDeMontagens('minimo', this.value)"
+          onchange="mudarConfiguracaoDeMontagens('minimo', this.value)"></label>
       </div>`;
     const recomendado = sug.viavel ? modoSugeridoDaMontagem(sug) : null;
     const solicitado = sug.viavel ? sug.planoSolicitado : null;
@@ -2692,16 +2716,16 @@ function _mtgRenderSugestao() {
         <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
           ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
         <table class="mtg-sug-tabela"><thead><tr><th>Pedido</th><th>Modelo / nome</th>
-          <th class="num">Tiragem</th><th class="num">Células</th><th class="num">Repetidas</th>
+          <th class="num">Tiragem</th><th class="num">Células</th><th class="num">Repetições</th>
           <th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>
           ${atual.itens.map(m => `<tr><td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
             <td>${escapeHtml(String(m.itemId))} · ${escapeHtml(String(m.nome || ''))}</td>
             <td class="num">${m.qtd || '—'}</td><td class="num">${m.celulas}</td>
-            <td class="num">${m.repetidas}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
+            <td class="num">${escapeHtml(m.repeticoesTexto || '—')}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
             <td class="num">${m.sobra == null ? '—' : m.sobra}</td></tr>`).join('')}
         </tbody></table>
         <p>${instrucaoAtual}</p>
-        <p class="mtg-dica">Repetidas são cópias da mesma posição do modelo. Reimprimir a montagem repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
+        <p class="mtg-dica">Repetições mostram quantas vezes imprimir cada montagem em que o modelo aparece. Reimprimir repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
       </div>`;
     if (!sug.viavel) {
         caixa.innerHTML = cab + '<p class="mtg-dica" style="margin:0;">'
@@ -4181,6 +4205,9 @@ if (typeof window !== 'undefined') {
     window.alternarNumeroDaMontagem = alternarNumeroDaMontagem;
     window.mudarNumeroDaMontagem = mudarNumeroDaMontagem;
     window.limparMontagem = limparMontagem;
+    window.agendarConfiguracaoDeMontagens = agendarConfiguracaoDeMontagens;
+    window.mudarConfiguracaoDeMontagens = mudarConfiguracaoDeMontagens;
+    window.aplicarSugestaoDaMontagem = aplicarSugestaoDaMontagem;
     window.renderMontagem = renderMontagem;
     window.prepararArtesDaMontagem = prepararArtesDaMontagem;
     window.gerarPdfDaMontagem = gerarPdfDaMontagem;

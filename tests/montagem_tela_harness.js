@@ -98,7 +98,8 @@ const FUNCOES = [
     '_mtgPlanoParaRepeticoes', '_mtgPlanoComQuantidade', 'sugestaoDeAproveitamento', 'sugestaoDeMultiplasMontagens', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
-    '_mtgSugestaoAtual', 'mudarConfiguracaoDeMontagens', 'aplicarSugestaoDaMontagem',
+    '_mtgSugestaoAtual', 'agendarConfiguracaoDeMontagens', 'mudarConfiguracaoDeMontagens',
+    'aplicarSugestaoDaMontagem',
     '_mtgPlanoHtml', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
     // A saida.
@@ -1175,6 +1176,56 @@ const PECAS = [
        'as repetições próprias das duas montagens conservam o menor total', duasConfiguradas);
     ok(duasConfiguradas.minimo === 3 && duasConfiguradas.repeticoesComMinimo.every(r => r >= 3),
        'alterar o mínimo recalcula a janela atual e aplica o novo limite', duasConfiguradas);
+
+    const quatroIguais = await aba.evaluate(async () => {
+        const pecas = Array.from({ length: 4 }, (_, i) => ({
+            id: 'Q' + (i + 1), osId: 'q', pedido: '23000', nome: 'Modelo ' + (i + 1),
+            qtd: 15, pos: [1, 2, 3, 4, 5], produto: 501,
+        }));
+        window.__montar(pecas);
+        state.montagem.modelos.forEach(m => { m.peca.celulas_por_folha = 20; });
+        await aplicarSugestaoDaMontagem('auto');
+        const ler = () => {
+            const aplicado = state.montagem.planoAplicado;
+            const resumo = resumoAtualDaMontagem(state.montagem.modelos, state.montagem.celulas,
+                20, aplicado && aplicado.repeticoes);
+            return {
+                folhas: resumo.folhas,
+                plano: aplicado && aplicado.repeticoes.slice(),
+                celulas: resumo.itens.map(i => i.celulas),
+                repeticoes: resumo.itens.map(i => i.repeticoesTexto),
+                produz: resumo.itens.map(i => i.produz),
+                sobras: resumo.itens.map(i => i.sobra),
+                tabela: document.getElementById('mtg-aproveitamento-atual').textContent.replace(/\s+/g, ' ').trim(),
+            };
+        };
+        const inicial = ler();
+        const numero = document.getElementById('mtg-numero-montagens');
+        numero.value = '2';
+        numero.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const duas = ler();
+        const minimo = document.getElementById('mtg-minimo-repeticoes');
+        minimo.value = '4';
+        minimo.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 350));
+        const minimoQuatro = ler();
+        return { inicial, duas, minimoQuatro,
+            numero: state.montagem.quantidadeMontagens,
+            minimo: state.montagem.minimoRepeticoes };
+    });
+    ok(quatroIguais.inicial.folhas === 1 && quatroIguais.inicial.repeticoes.every(x => x === '3×'),
+       'quatro tiragens de 15 começam com uma montagem repetida três vezes', quatroIguais.inicial);
+    ok(quatroIguais.duas.folhas === 2 && quatroIguais.duas.celulas.reduce((a, b) => a + b, 0) === 40
+        && quatroIguais.duas.repeticoes.some(x => /M1:.*M2:/.test(x))
+        && quatroIguais.duas.repeticoes.every(x => x !== '—')
+        && /Repetições/.test(quatroIguais.duas.tabela),
+       'trocar para duas montagens atualiza folha, células e repetições visíveis', quatroIguais.duas);
+    ok(quatroIguais.minimo === 4 && quatroIguais.minimoQuatro.produz.every(x => x >= 15)
+        && quatroIguais.minimoQuatro.sobras.some(x => x > 0)
+        && quatroIguais.minimoQuatro.plano.every(x => x >= 4),
+       'digitar mínimo 4 recalcula repetições, produção e sobras sem exigir que o campo perca o foco',
+       quatroIguais.minimoQuatro);
 
     // ── Aplicar o recomendado: uma folha com a mistura ──────────────────────
     const unica = await aba.evaluate(async pecas => {
