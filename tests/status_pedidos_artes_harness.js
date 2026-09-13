@@ -48,5 +48,6 @@ igual(contexto.calcular([aprovado], 'CORRIGIR', 'APROVADO'), 'Corrigir Dados', '
 igual(contexto.calcular([aprovado, pendente], 'CORRIGIR', ''), 'Corrigir Dados', 'correção vence parcial');
 igual(contexto.calcular([alteracao, aprovado], 'APROVADO', ''), 'Em Alteração', 'alteração de arte');
 igual(contexto.calcular([pendente], '', 'Enviar Arte'), 'Enviar Arte', 'pronto para envio');
+igual(contexto.calcular([pendente], '', 'ENVIAR ARTE'), 'Enviar Arte', 'grafia antiga em maiúsculas');
 
-console.log('status pedidos_artes: 8 casos OK');
+console.log('status pedidos_artes: 9 casos OK');

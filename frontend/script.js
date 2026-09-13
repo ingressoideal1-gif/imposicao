@@ -28896,6 +28896,7 @@ function calcularStatusConsolidadoPedidoArte(modelos, entregaStatus, statusAtual
     if (aprovadas > 0) return 'Apr Parcial';
 
     const atual = normalizar(statusAtual);
+    if (atual === 'ENVIAR ARTE') return 'Enviar Arte';
     if (atual === 'AGUARDANDO_APROVACAO') return 'Em Aprovação';
     if (atual === 'APROVADO PARCIAL') return 'Apr Parcial';
     if (ARTE_APROVADOS.includes(atual)) {

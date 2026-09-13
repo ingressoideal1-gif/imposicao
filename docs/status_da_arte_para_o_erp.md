@@ -15,6 +15,9 @@ confirmação conjunta de **Entrega/Faturam.**
 | `Corrigir Dados` | foi solicitada alteração em Entrega/Faturam.; este status tem prioridade mesmo com arte aprovada, parcialmente aprovada ou em alteração |
 | `APROVADO` | todas as artes e Entrega/Faturam. estão aprovados |
 
+`Enviar Arte` deve ser gravado exatamente com essa capitalização.
+`ENVIAR ARTE` permanece aceito somente para leitura e conversão de registros antigos.
+
 `AGUARDANDO_APROVACAO` é lido como `Em Aprovação` e
 `APROVADO PARCIAL` é lido como `Apr Parcial`, mas esses valores antigos
 não devem ser gravados em novos eventos.
