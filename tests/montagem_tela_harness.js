@@ -52,7 +52,11 @@ function extrairConst(nome) {
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_HISTORIA_MAX', '_MTG_TONS',
-                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS'];
+                    'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS',
+                    'MTG_MAX_MONTAGENS_SUGERIDAS', 'MTG_MAX_PARTICOES_REPETICOES',
+                    'MTG_TEMPO_BUSCA_AUTOMATICA_MS', '_mtgCacheDeSugestoes',
+                    'MTG_MAX_COMBINACOES_ANALISADAS',
+                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_TEMPO_COMBINACOES_MS', '_mtgCacheCombinacoes'];
 
 const FUNCOES = [
     'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
@@ -76,16 +80,24 @@ const FUNCOES = [
     // A tela.
     '_mtgCelulasPorFolha', '_mtgSaidaDaFolha', '_mtgNumeroDoPedido', '_mtgLinhaAtiva',
     '_mtgHtmlDaRecusa', '_mtgAlvosDoGesto', '_mtgIndiceDoModelo',
+    '_mtgModeloDoItem', '_mtgChaveDoCandidato', 'melhoresCombinacoesDeModelosDaMontagem',
+    'alternarSeletorDeModelosDaMontagem', 'buscarModelosDaMontagem', 'marcarModeloDaMontagem',
+    'limparSelecaoDeModelosDaMontagem', 'marcarTodosModelosCompativeisDaMontagem', 'usarCombinacaoDeModelosDaMontagem',
+    'carregarModelosSelecionadosDaMontagem', '_mtgRenderSeletorDeModelos',
     '_mtgEspacoDoNumero', '_mtgEstiloDoNumero',
     '_mtgRenderNumero', '_mtgRenderFolha', 'renderMontagem', 'limparMontagem',
-    'removerDaMontagem', 'retomarDaMontagem', 'onMontagemModeloChange',
+    'removerDaMontagem', 'retomarDaMontagem', 'onMontagemModeloChange', 'onMontagemPosicoesChange',
     'duplicarCelulaDaMontagem', 'removerCelulaDaMontagem', 'moverCelulaDaMontagem',
     'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem',
     'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem', 'mudarTextoDaMontagem',
     // O aproveitamento da folha (03/09/2026).
-    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'otimizarCelulasDaMontagem', 'sugestaoDeAproveitamento', 'resumoAtualDaMontagem',
+    'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'otimizarCelulasDaMontagem',
+    'configuracaoDeMontagens', '_mtgParticoesDeRepeticoes', '_mtgSobrasDoPlano', '_mtgMelhorEquilibrio',
+    '_mtgPlanoParaRepeticoes', '_mtgPlanoComQuantidade', 'sugestaoDeAproveitamento', 'sugestaoDeMultiplasMontagens', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
-    '_mtgSugestaoAtual', 'aplicarSugestaoDaMontagem', '_mtgRenderSugestao',
+    'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
+    '_mtgSugestaoAtual', 'mudarConfiguracaoDeMontagens', 'aplicarSugestaoDaMontagem',
+    '_mtgPlanoHtml', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
     // A saida.
     'pastaDaMontagem', 'abrirNaTelaDaMontagem', 'nomeDoArquivoDaMontagem',
@@ -1088,33 +1100,65 @@ const PECAS = [
         return {
             visivel: c.style.display !== 'none',
             texto: c.textContent.replace(/\s+/g, ' ').trim(),
+            numero: document.getElementById('mtg-numero-montagens').value,
+            opcoes: Array.from(document.getElementById('mtg-numero-montagens').options).map(o => o.value).join(','),
+            minimo: document.getElementById('mtg-minimo-repeticoes').value,
             botoes: bt.map(b => ({
                 rotulo: b.textContent.replace(/\s+/g, ' ').trim(),
                 acao: b.getAttribute('onclick') || '',
             })),
-            celulasPorModelo: Array.from(c.querySelectorAll('.mtg-recomendacao tbody tr'))
+            resultadoPorModelo: Array.from(c.querySelectorAll('.mtg-plano tbody tr'))
                 .map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim())),
         };
     }, APROV);
 
     ok(painel.visivel, 'com dois modelos, o painel do aproveitamento aparece');
-    ok(/3× M1 \+ 7× M2 por folha/.test(painel.texto),
+    ok(/3× M1 \+ 7× M2/.test(painel.texto),
        'e diz a mistura do exemplo do usuário: 3 de um, 7 do outro', painel.texto.slice(0, 260));
-    ok(painel.celulasPorModelo[0][1] === '30' && painel.celulasPorModelo[0][2] === '3'
-        && painel.celulasPorModelo[1][1] === '70' && painel.celulasPorModelo[1][2] === '7',
-       'a tabela mostra a tiragem de cada modelo e quantas células ele leva na folha',
-       painel.celulasPorModelo);
+    ok(painel.resultadoPorModelo[0][1] === '30' && painel.resultadoPorModelo[0][2] === '30'
+        && painel.resultadoPorModelo[1][1] === '70' && painel.resultadoPorModelo[1][2] === '70',
+       'a tabela mostra a tiragem e a produção calculada de cada modelo', painel.resultadoPorModelo);
+    ok(painel.numero === '1' && painel.minimo === '1' && painel.opcoes === '1,2,3,4,5',
+       'os campos começam em 1 e o seletor oferece somente de 1 a 5 montagens', painel);
     ok(painel.botoes.length === 3, 'os TRÊS caminhos ficam oferecidos', painel.botoes);
     ok(/Aplicar o recomendado/.test(painel.botoes[0].rotulo)
-        && /uma folha, 10 impress/.test(painel.botoes[0].rotulo),
+        && /1 montagem, 10 impress/.test(painel.botoes[0].rotulo),
        'sem dado variável o recomendado é a folha impressa 10 vezes', painel.botoes[0]);
-    ok(/Uma folha, 10 impress/.test(painel.botoes[1].rotulo)
+    ok(/Aplicar 1 montagem configurada/.test(painel.botoes[1].rotulo)
         && /Distribuir em 10 folhas/.test(painel.botoes[2].rotulo),
        'e os outros dois dizem, em texto, o que fazem', painel.botoes.map(b => b.rotulo));
     ok(painel.botoes[0].acao.indexOf("'auto'") > 0
-        && painel.botoes[1].acao.indexOf("'unica'") > 0
+        && painel.botoes[1].acao.indexOf("'solicitada'") > 0
         && painel.botoes[2].acao.indexOf("'distribuir'") > 0,
        'cada botão chama o seu modo', painel.botoes.map(b => b.acao));
+
+    const duasConfiguradas = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const sel = document.getElementById('mtg-numero-montagens');
+        sel.value = '2';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        const previa = document.getElementById('mtg-sugestao').textContent.replace(/\s+/g, ' ').trim();
+        await aplicarSugestaoDaMontagem('solicitada');
+        const pags = [];
+        for (let f = 0; f < 2; f++) {
+            pags.push(state.montagem.celulas.slice(f * 10, (f + 1) * 10)
+                .map(c => c.itemId).sort().join(','));
+        }
+        return {
+            previa,
+            quantidade: state.montagem.quantidadeMontagens,
+            celulas: state.montagem.celulas.length,
+            repeticoes: state.montagem.planoAplicado.repeticoes,
+            distintas: pags[0] !== pags[1],
+        };
+    }, APROV);
+    ok(duasConfiguradas.quantidade === 2 && /2 montagens configuradas/.test(duasConfiguradas.previa),
+       'escolher 2 no seletor recalcula e mostra o plano antes de aplicar', duasConfiguradas);
+    ok(duasConfiguradas.celulas === 20 && duasConfiguradas.distintas,
+       'aplicar o plano configurado cria duas montagens diferentes e sem células vazias', duasConfiguradas);
+    ok(duasConfiguradas.repeticoes.length === 2
+        && duasConfiguradas.repeticoes.reduce((a, b) => a + b, 0) === 10,
+       'as repetições próprias das duas montagens conservam o menor total', duasConfiguradas);
 
     // ── Aplicar o recomendado: uma folha com a mistura ──────────────────────
     const unica = await aba.evaluate(async pecas => {
@@ -1138,7 +1182,7 @@ const PECAS = [
        'o recomendado monta UMA folha cheia', unica);
     ok(unica.deM1 === 3 && unica.deM2 === 7, 'com 3 do primeiro e 7 do segundo', unica);
     ok(unica.desenhadas === 10, 'e a folha na tela mostra as dez', unica);
-    ok(/Imprima 10 vez/.test(unica.toast),
+    ok(/montagem 1, 10 vez/.test(unica.toast),
        'o aviso diz quantas vezes imprimir — sem isso a folha sozinha não entrega a tiragem',
        unica.toast);
     ok(unica.podeDesfazer, 'e o desfazer fica armado: aplicar substitui o que havia');
@@ -1148,6 +1192,34 @@ const PECAS = [
         return state.montagem.celulas.length;
     });
     ok(desfeito === 2, 'Ctrl+Z devolve a folha que o operador tinha montado', desfeito);
+
+    // ── Mais montagens só são sugeridas quando reduzem impressões ─────────
+    const varias = await aba.evaluate(async () => {
+        const pecas = [
+            { id: 'V1', osId: 'a', pedido: '21202', nome: 'A', qtd: 4, pos: [1], produto: 502 },
+            { id: 'V2', osId: 'a', pedido: '21202', nome: 'B', qtd: 4, pos: [1], produto: 502 },
+            { id: 'V3', osId: 'a', pedido: '21202', nome: 'C', qtd: 1, pos: [1], produto: 502 },
+        ];
+        window.__montar(pecas);
+        const antes = document.getElementById('mtg-sugestao').textContent.replace(/\s+/g, ' ').trim();
+        await aplicarSugestaoDaMontagem('auto');
+        const depois = document.getElementById('mtg-sugestao').textContent.replace(/\s+/g, ' ').trim();
+        return {
+            antes, depois,
+            folhas: contaDaMontagem(state.montagem.celulas, 4).folhas,
+            cheias: state.montagem.celulas.length === 8,
+            repeticoes: state.montagem.planoAplicado && state.montagem.planoAplicado.repeticoes,
+            cabecalho: document.getElementById('mtg-folha-num').textContent,
+        };
+    });
+    ok(/usar 2 montagens reduz de 4 para 3 impressões/.test(varias.antes),
+       'a recomendação automática explica a economia antes de aplicar', varias.antes);
+    ok(varias.folhas === 2 && varias.cheias && varias.repeticoes.reduce((a, b) => a + b, 0) === 3
+        && varias.repeticoes.every(r => r >= 1),
+       'o recomendado cria duas composições cheias e conserva as repetições de cada uma', varias);
+    ok(/Montagem 1: repetir [12] vez/.test(varias.cabecalho)
+        && /Montagem 1: [12] vez/.test(varias.depois) && /Montagem 2: [12] vez/.test(varias.depois),
+       'a visualização e o aproveitamento informam quantas vezes imprimir cada montagem', varias);
 
     // ── Distribuir: cada folha sai com a mesma mistura ──────────────────────
     const distribuido = await aba.evaluate(async pecas => {
@@ -1418,7 +1490,11 @@ const PECAS = [
         document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
         const modelos = valores('mtg-modelo');
         document.getElementById('mtg-modelo').value = 'A1'; onMontagemModeloChange();
-        document.getElementById('mtg-posicoes').value = '1'; adicionarNaMontagem();
+        const padraoHabilitado = !document.getElementById('mtg-add').disabled;
+        adicionarNaMontagem();
+        const adicionouPosicaoUm = state.montagem.celulas.length === 1
+            && state.montagem.celulas[0].itemId === 'A1'
+            && state.montagem.celulas[0].pos === 1;
         document.getElementById('mtg-modelo').value = 'A5'; onMontagemModeloChange();
         document.getElementById('mtg-posicoes').value = '2'; adicionarNaMontagem();
         const produtosCompartilham = state.montagem.modelos.length === 2
@@ -1453,7 +1529,7 @@ const PECAS = [
         liberar.splice(0).forEach(r => r()); await Promise.all([carregando, novaCarga]);
         const semRespostaAntiga = !state.montagem.pedidoSel
             && valores('mtg-modelo').join() === 'a::A4,b::B1';
-        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, modelosGerais, rotulosGerais, selecaoGeral, triband, modelos, entrou, protegeInclusao, buscaRecusada, pvc,
+        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, modelosGerais, rotulosGerais, selecaoGeral, triband, modelos, padraoHabilitado, adicionouPosicaoUm, entrou, protegeInclusao, buscaRecusada, pvc,
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
@@ -1467,9 +1543,62 @@ const PECAS = [
         && filtros.rotulosGerais.some(t => t.startsWith('101 · B1 · B1 · 10') && t.endsWith('COM VERSO')),
        'cada opção mostra Pedido, Modelo, Nome e Quantidade nesta ordem, preservando o aviso de verso', filtros.rotulosGerais);
     ok(filtros.modelos.join() === 'A1,A5' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos reune produtos do mesmo formato e cruza status Aguardando', filtros);
+    ok(filtros.padraoHabilitado && filtros.adicionouPosicaoUm,
+       'com Posições vazio, + Adicionar fica habilitado e inclui a posição 1', filtros);
     ok(filtros.entrou === 2 && filtros.produtosCompartilham && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'produtos diferentes compartilham a montagem; inclusao, busca e retorno respeitam filtros', filtros);
     ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar formato limpa a seleção e preserva a montagem existente', filtros);
     ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '503', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
+
+    const multiModelos = await aba.evaluate(async () => {
+        state.montagem = montagemVazia();
+        state.ordens = [
+            { id: 'aa', numero: 22001, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 1, id_produto: 501 }] },
+            { id: 'bb', numero: 22002, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 2, id_produto: 501 }] },
+        ];
+        const item = (id, verso) => ({ id, _vibe_id_produto: 501, qtd: 11,
+            nome_modelo: 'Modelo ' + id, status_impressao: 'Aguardando',
+            verso_tipo: verso ? 'Frente e Verso' : 'Frente' });
+        state.osItens = { aa: [item('CA', false), item('CV', true)], bb: [item('CB', false)] };
+        window.loadOSItens = async () => {};
+        window.garantirBancosDoTrabalho = async () => {};
+        window.garantirCsvDoTrabalho = async () => {};
+        encherFormatosDaMontagem(); encherPedidosDaMontagem();
+        document.getElementById('mtg-formato').value = 'F1';
+        await onMontagemFormatoChange();
+        alternarSeletorDeModelosDaMontagem(true);
+        const painel = document.getElementById('mtg-modelos-painel');
+        const recomendacao = document.getElementById('mtg-modelos-recomendacoes').textContent.replace(/\s+/g, ' ').trim();
+        marcarModeloDaMontagem('aa::CA', true);
+        const frenteHabilitada = !document.querySelector('[data-modelo-chave="bb::CB"] input').disabled;
+        const versoTravado = document.querySelector('[data-modelo-chave="aa::CV"] input').disabled;
+        usarCombinacaoDeModelosDaMontagem(['aa::CA', 'bb::CB']);
+        const botao = document.getElementById('mtg-modelos-carregar');
+        const antes = { marcados: state.montagem.modelosMarcados.slice().sort(),
+            botao: botao.textContent, aberto: !painel.hidden };
+        carregarModelosSelecionadosDaMontagem();
+        return {
+            linhas: painel.querySelectorAll('.mtg-modelo-opcao').length,
+            recomendacao, frenteHabilitada, versoTravado, antes,
+            carregados: state.montagem.modelos.map(m => m.itemId).sort(),
+            celulas: state.montagem.celulas.length,
+            painelFechado: painel.hidden,
+            aproveitamento: document.getElementById('mtg-sugestao').textContent.replace(/\s+/g, ' ').trim(),
+            fonteOculta: getComputedStyle(document.getElementById('mtg-modelo')).display === 'none',
+        };
+    });
+    ok(multiModelos.linhas === 3 && /Economia de 1 impressão/.test(multiModelos.recomendacao)
+        && /22001 · CA/.test(multiModelos.recomendacao) && /22002 · CB/.test(multiModelos.recomendacao),
+       'o painel lista os modelos e recomenda a combinação pela economia contra impressão separada', multiModelos);
+    ok(multiModelos.frenteHabilitada && multiModelos.versoTravado,
+       'a primeira marcação mantém frente compatível e desabilita o modelo com verso', multiModelos);
+    ok(multiModelos.antes.marcados.join() === 'aa::CA,bb::CB'
+        && /Carregar 2 modelos/.test(multiModelos.antes.botao) && multiModelos.antes.aberto,
+       'Usar esta combinação marca os checkboxes e mantém a revisão antes de carregar', multiModelos.antes);
+    ok(multiModelos.carregados.join() === 'CA,CB' && multiModelos.celulas === 0
+        && multiModelos.painelFechado && /Recomendação automática/.test(multiModelos.aproveitamento),
+       'carregar leva os modelos ao cálculo automático sem inventar células na folha', multiModelos);
+    ok(multiModelos.fonteOculta,
+       'o seletor antigo permanece apenas como fonte interna e não duplica o controle na tela');
 
     const pendentes = await aba.evaluate(async () => {
         state.montagem = montagemVazia();
@@ -1553,6 +1682,28 @@ const PECAS = [
         'seletor alterna pedido e personalizado; digitacao atualiza previa, preserva foco e texto', identificacao);
 
     if (FOTO) {
+        await aba.evaluate(async () => {
+            state.montagem = montagemVazia();
+            state.ordens = [
+                { id: 'fa', numero: 22001, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 1, id_produto: 501 }] },
+                { id: 'fb', numero: 22002, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 2, id_produto: 501 }] },
+            ];
+            const item = (id, qtd, verso) => ({ id, _vibe_id_produto: 501, qtd,
+                nome_modelo: 'Modelo ' + id, status_impressao: 'Aguardando',
+                verso_tipo: verso ? 'Frente e Verso' : 'Frente' });
+            state.osItens = { fa: [item('CAMAROTE', 1101, false), item('VERSO', 400, true)],
+                fb: [item('PISTA', 701, false), item('CORTESIA', 121, false)] };
+            window.loadOSItens = async () => {};
+            encherFormatosDaMontagem(); encherPedidosDaMontagem();
+            document.getElementById('mtg-formato').value = 'F1';
+            await onMontagemFormatoChange();
+            alternarSeletorDeModelosDaMontagem(true);
+        });
+        const compositor = await aba.$('#mtg-modelos-painel');
+        const fotoModelos = FOTO.replace(/\.png$/i, '') + '-modelos.png';
+        await compositor.screenshot({ path: fotoModelos });
+        console.log('foto em ' + fotoModelos);
+
         await aba.evaluate(pecas => {
             window.__montar(pecas);
             state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });

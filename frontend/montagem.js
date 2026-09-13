@@ -132,6 +132,10 @@ function montagemVazia() {
         formatoSel: null,
         pedidoSel: null,
         modeloSel: null,
+        modelosDisponiveis: [],
+        modelosMarcados: [],
+        buscaModelos: '',
+        seletorModelosAberto: false,
         face: 'both',
         gerando: false,
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
@@ -141,6 +145,9 @@ function montagemVazia() {
         // `folhaVisivelDaMontagem` e `_mtgRenderFolha`.
         zoom: 'folha',
         folha: 0,
+        quantidadeMontagens: 1,
+        minimoRepeticoes: 1,
+        planoAplicado: null,
         numero: numeroPadraoDaMontagem(),
         // Instantâneos para o desfazer. Ver `guardarNaHistoria`.
         historia: [],
@@ -805,11 +812,12 @@ function modeloTemDadoVariavel(item, num) {
  * buscar o menor R viável. Células livres vão para a menor sobra atual,
  * favorecendo reservas em todos os modelos, dentro da capacidade disponível.
  */
-function otimizarCelulasDaMontagem(qtds, capacidade, minimos) {
+function otimizarCelulasDaMontagem(qtds, capacidade, minimos, minimoRepeticoes) {
     const base = minimos || qtds.map(() => 1);
     const conta = r => qtds.map((q, j) => Math.max(base[j], Math.ceil(q / r)));
-    let baixo = Math.max(1, Math.ceil(qtds.reduce((a, b) => a + b, 0) / capacidade));
-    let alto = Math.max(...qtds);
+    let baixo = Math.max(1, parseInt(minimoRepeticoes) || 1,
+        Math.ceil(qtds.reduce((a, b) => a + b, 0) / capacidade));
+    let alto = Math.max(baixo, ...qtds);
     // A viabilidade é monotônica: busca binária evita varrer toda a tiragem.
     while (baixo < alto) {
         const meio = baixo + Math.floor((alto - baixo) / 2);
@@ -828,6 +836,266 @@ function otimizarCelulasDaMontagem(qtds, capacidade, minimos) {
         celulas[alvo]++;
     }
     return { impressoes: baixo, celulas };
+}
+
+const MTG_MAX_MONTAGENS_SUGERIDAS = 5;
+const MTG_MAX_PARTICOES_REPETICOES = 6000;
+const MTG_TEMPO_BUSCA_AUTOMATICA_MS = 120;
+const _mtgCacheDeSugestoes = new Map();
+
+function configuracaoDeMontagens(numero, minimo) {
+    return {
+        numero: Math.max(1, Math.min(MTG_MAX_MONTAGENS_SUGERIDAS, parseInt(numero) || 1)),
+        minimo: Math.max(1, Math.min(1000000, parseInt(minimo) || 1)),
+    };
+}
+
+/** Partições sem permutações: 30+20 é a mesma escolha de 20+30. */
+function _mtgParticoesDeRepeticoes(total, quantidade, minimo, limite = MTG_MAX_PARTICOES_REPETICOES) {
+    const saida = [];
+    const atual = [];
+    function visitar(restante, faltam, maximo) {
+        if (saida.length >= limite) return;
+        if (faltam === 1) {
+            if (restante >= minimo && restante <= maximo) saida.push(atual.concat(restante));
+            return;
+        }
+        const maior = Math.min(maximo, restante - minimo * (faltam - 1));
+        const ideal = restante / faltam;
+        const valores = [];
+        for (let r = minimo; r <= maior; r++) valores.push(r);
+        valores.sort((a, b) => Math.abs(a - ideal) - Math.abs(b - ideal) || b - a);
+        for (const r of valores) {
+            atual.push(r);
+            visitar(restante - r, faltam - 1, r);
+            atual.pop();
+            if (saida.length >= limite) break;
+        }
+    }
+    visitar(total, quantidade, total);
+    return saida;
+}
+
+function _mtgSobrasDoPlano(layouts, repeticoes, qtds) {
+    return qtds.map((q, i) => layouts.reduce((s, l, k) => s + l[i] * repeticoes[k], 0) - q);
+}
+
+function _mtgMelhorEquilibrio(a, b) {
+    if (!b) return true;
+    const sa = a.sobras.slice().sort((x, y) => x - y);
+    const sb = b.sobras.slice().sort((x, y) => x - y);
+    for (let i = 0; i < sa.length; i++) {
+        if (sa[i] !== sb[i]) return sa[i] > sb[i];
+    }
+    return false;
+}
+
+/**
+ * Para repetições já escolhidas, distribui células inteiras entre modelos.
+ * O DFS trabalha modelo a modelo e guarda apenas capacidades usadas: cobrir um
+ * modelo com mais células nunca ajuda os seguintes, pois a sobra será colocada
+ * depois. Assim a busca continua pequena nos formatos usuais da gráfica.
+ */
+function _mtgPlanoParaRepeticoes(qtds, capacidade, repeticoes, limiteTempo) {
+    const K = repeticoes.length;
+    const N = qtds.length;
+    const ordem = qtds.map((q, i) => ({ q, i })).sort((a, b) => b.q - a.q || a.i - b.i);
+    const opcoes = ordem.map(({ q }) => {
+        const lista = [];
+        const vetor = Array(K).fill(0);
+        function gerar(k, produzido) {
+            if (limiteTempo && Date.now() > limiteTempo) return;
+            if (k === K - 1) {
+                const x = Math.max(0, Math.ceil((q - produzido) / repeticoes[k]));
+                if (x <= capacidade) lista.push(vetor.slice(0, k).concat(x));
+                return;
+            }
+            for (let x = 0; x <= capacidade; x++) {
+                vetor[k] = x;
+                gerar(k + 1, produzido + x * repeticoes[k]);
+            }
+        }
+        gerar(0, 0);
+        if (limiteTempo && Date.now() > limiteTempo) return [];
+        lista.sort((a, b) => a.reduce((s, x) => s + x, 0) - b.reduce((s, x) => s + x, 0));
+        const minimas = [];
+        for (const candidata of lista) {
+            if (!minimas.some(m => m.every((x, k) => x <= candidata[k]))) minimas.push(candidata);
+        }
+        return minimas;
+    });
+
+    const usados = Array(K).fill(0);
+    const layouts = Array.from({ length: K }, () => Array(N).fill(0));
+    const memo = new Set();
+    function distribuir(pos) {
+        if (limiteTempo && Date.now() > limiteTempo) return false;
+        if (pos === ordem.length) return true;
+        const chave = pos + '|' + usados.join(',');
+        if (memo.has(chave)) return false;
+        const modelo = ordem[pos].i;
+        for (const opcao of opcoes[pos]) {
+            if (opcao.some((x, k) => usados[k] + x > capacidade)) continue;
+            for (let k = 0; k < K; k++) {
+                usados[k] += opcao[k];
+                layouts[k][modelo] = opcao[k];
+            }
+            if (distribuir(pos + 1)) return true;
+            for (let k = 0; k < K; k++) {
+                usados[k] -= opcao[k];
+                layouts[k][modelo] = 0;
+            }
+        }
+        memo.add(chave);
+        return false;
+    }
+    if (!distribuir(0)) return null;
+
+    // Não existe célula vazia: cada espaço restante vira excedente do modelo
+    // que está com a menor sobra naquele instante.
+    let sobras = _mtgSobrasDoPlano(layouts, repeticoes, qtds);
+    const ordemLayouts = Array.from({ length: K }, (_, k) => k)
+        .sort((a, b) => repeticoes[a] - repeticoes[b] || a - b);
+    const vagas = [];
+    for (const k of ordemLayouts) for (let n = usados[k]; n < capacidade; n++) vagas.push(k);
+    function preencherVagas(pos) {
+        if (limiteTempo && Date.now() > limiteTempo) return false;
+        if (pos === vagas.length) return new Set(layouts.map(l => l.join(','))).size === K;
+        const k = vagas[pos];
+        const candidatos = Array.from({ length: N }, (_, i) => i)
+            .sort((a, b) => sobras[a] - sobras[b] || a - b);
+        for (const alvo of candidatos) {
+            layouts[k][alvo]++;
+            usados[k]++;
+            sobras[alvo] += repeticoes[k];
+            const terminouLayout = usados[k] === capacidade;
+            const duplicou = terminouLayout && layouts.some((l, outro) =>
+                outro !== k && usados[outro] === capacidade && l.join(',') === layouts[k].join(','));
+            if (!duplicou && preencherVagas(pos + 1)) return true;
+            sobras[alvo] -= repeticoes[k];
+            usados[k]--;
+            layouts[k][alvo]--;
+        }
+        return false;
+    }
+    if (!preencherVagas(0)) return null;
+
+    // Layouts iguais representam uma montagem só. Quando as repetições são
+    // iguais, uma troca cruzada cria duas composições sem alterar a produção.
+    for (let b = 1; b < K; b++) {
+        for (let a = 0; a < b; a++) {
+            if (layouts[a].join(',') !== layouts[b].join(',')) continue;
+            let mudou = false;
+            if (repeticoes[a] === repeticoes[b]) {
+                for (let u = 0; u < N && !mudou; u++) for (let v = u + 1; v < N && !mudou; v++) {
+                    if (layouts[a][u] > 0 && layouts[b][v] > 0) {
+                        layouts[a][u]--; layouts[a][v]++;
+                        layouts[b][v]--; layouts[b][u]++;
+                        mudou = true;
+                    }
+                }
+            }
+            if (!mudou) return null;
+        }
+    }
+    if (new Set(layouts.map(l => l.join(','))).size !== K) return null;
+    sobras = _mtgSobrasDoPlano(layouts, repeticoes, qtds);
+    if (sobras.some(x => x < 0)) return null;
+
+    // Com o total de impressões já mínimo, desloca células entre modelos para
+    // elevar primeiro a menor sobra. Cada troca conserva folha cheia e número
+    // de impressões; só é aceita se mantiver as tiragens e composições distintas.
+    for (;;) {
+        let melhorTroca = null;
+        const atual = { sobras };
+        for (let k = 0; k < K; k++) for (let de = 0; de < N; de++) {
+            if (!layouts[k][de] || sobras[de] < repeticoes[k]) continue;
+            for (let para = 0; para < N; para++) {
+                if (para === de) continue;
+                layouts[k][de]--; layouts[k][para]++;
+                const distinta = new Set(layouts.map(l => l.join(','))).size === K;
+                layouts[k][para]--; layouts[k][de]++;
+                if (!distinta) continue;
+                const novas = sobras.slice();
+                novas[de] -= repeticoes[k];
+                novas[para] += repeticoes[k];
+                const candidata = { sobras: novas, k, de, para };
+                if (_mtgMelhorEquilibrio(candidata, atual)
+                    && (!melhorTroca || _mtgMelhorEquilibrio(candidata, melhorTroca))) {
+                    melhorTroca = candidata;
+                }
+            }
+        }
+        if (!melhorTroca) break;
+        layouts[melhorTroca.k][melhorTroca.de]--;
+        layouts[melhorTroca.k][melhorTroca.para]++;
+        sobras = melhorTroca.sobras;
+    }
+    return { layouts, repeticoes: repeticoes.slice(), sobras,
+        impressoes: repeticoes.reduce((a, b) => a + b, 0) };
+}
+
+function _mtgPlanoComQuantidade(qtds, capacidade, quantidade, minimo, maximoTotal, limiteTempo) {
+    if (quantidade === 1) {
+        const uma = otimizarCelulasDaMontagem(qtds, capacidade, null, minimo);
+        if (maximoTotal != null && uma.impressoes > maximoTotal) return null;
+        return { layouts: [uma.celulas], repeticoes: [uma.impressoes],
+            quantidade: 1, impressoes: uma.impressoes,
+            sobras: uma.celulas.map((x, i) => x * uma.impressoes - qtds[i]) };
+    }
+    if (qtds.length > quantidade * capacidade) return null;
+    const piso = Math.max(Math.ceil(qtds.reduce((a, b) => a + b, 0) / capacidade), quantidade * minimo);
+    const uma = otimizarCelulasDaMontagem(qtds, capacidade, null, minimo).impressoes;
+    const teto = maximoTotal == null ? Math.max(piso, uma + quantidade * minimo + capacidade) : maximoTotal;
+    for (let total = piso; total <= teto; total++) {
+        let melhor = null;
+        for (const repeticoes of _mtgParticoesDeRepeticoes(total, quantidade, minimo)) {
+            if (limiteTempo && Date.now() > limiteTempo) return null;
+            const plano = _mtgPlanoParaRepeticoes(qtds, capacidade, repeticoes, limiteTempo);
+            if (plano && _mtgMelhorEquilibrio(plano, melhor)) melhor = plano;
+        }
+        if (melhor) return melhor;
+    }
+    return null;
+}
+
+function sugestaoDeMultiplasMontagens(modelos, porFolha, numeroMontagens, minimoRepeticoes) {
+    const base = sugestaoDeAproveitamento(modelos, porFolha);
+    if (!base.viavel) return { ...base, planoSolicitado: null, planoSugerido: null };
+    const cfg = configuracaoDeMontagens(numeroMontagens, minimoRepeticoes);
+    const qtds = base.itens.map(it => it.qtd);
+    const solicitado = _mtgPlanoComQuantidade(qtds, porFolha, cfg.numero, cfg.minimo, null,
+        cfg.numero > 1 ? Date.now() + 350 : null);
+    if (!solicitado) return { ...base, viavel: false,
+        motivo: `Não encontrei ${cfg.numero} composições diferentes com no mínimo ${cfg.minimo} repetição(ões) cada.`,
+        configuracao: cfg, planoSolicitado: null, planoSugerido: null };
+
+    let sugerido = null;
+    const minimoTeorico = Math.ceil(qtds.reduce((a, b) => a + b, 0) / porFolha);
+    const limiteAutomatico = Date.now() + MTG_TEMPO_BUSCA_AUTOMATICA_MS;
+    const maximoK = Math.min(MTG_MAX_MONTAGENS_SUGERIDAS,
+        Math.floor((solicitado.impressoes - 1) / cfg.minimo));
+    for (let k = cfg.numero + 1; k <= maximoK; k++) {
+        const candidato = _mtgPlanoComQuantidade(qtds, porFolha, k, cfg.minimo,
+            (sugerido || solicitado).impressoes - 1, limiteAutomatico);
+        if (candidato && (!sugerido || candidato.impressoes < sugerido.impressoes
+            || (candidato.impressoes === sugerido.impressoes && _mtgMelhorEquilibrio(candidato, sugerido)))) {
+            sugerido = candidato;
+        }
+        // Nenhum plano pode usar menos folhas do que peças / capacidade. Ao
+        // atingir esse piso, continuar testando mais montagens só gasta CPU.
+        if (sugerido && sugerido.impressoes === minimoTeorico) break;
+        if (Date.now() > limiteAutomatico) break;
+    }
+
+    function completar(plano) {
+        if (!plano) return null;
+        return { ...plano, quantidade: plano.layouts.length,
+            itens: base.itens.map((it, i) => ({ ...it,
+                produz: it.qtd + plano.sobras[i], sobra: plano.sobras[i] })) };
+    }
+    return { ...base, configuracao: cfg,
+        planoSolicitado: completar(solicitado), planoSugerido: completar(sugerido) };
 }
 
 function sugestaoDeAproveitamento(modelos, porFolha) {
@@ -955,7 +1223,30 @@ function celulasDistribuidas(sug) {
  * saindo N vezes, que é exatamente o que esta tela existe para não fazer.
  */
 function modoSugeridoDaMontagem(sug) {
-    return (sug && sug.temDadoVariavel) ? 'distribuir' : 'unica';
+    if (sug && sug.temDadoVariavel) return 'distribuir';
+    const plano = sug && (sug.planoSugerido || sug.planoSolicitado);
+    return plano && plano.quantidade > 1 ? 'multiplas' : 'unica';
+}
+
+function celulasDasMontagens(sug, plano) {
+    if (!sug || !plano) return [];
+    const proximas = sug.itens.map(() => 1);
+    const saida = [];
+    for (const layout of plano.layouts) {
+        for (let i = 0; i < layout.length; i++) {
+            const item = sug.itens[i];
+            for (let n = 0; n < layout[i]; n++) {
+                const pos = ((proximas[i] - 1) % item.qtd) + 1;
+                saida.push({ osId: item.osId, itemId: item.itemId, pos });
+                proximas[i]++;
+            }
+        }
+    }
+    return saida;
+}
+
+function _mtgAssinaturaDasCelulas(celulas) {
+    return (celulas || []).map(c => chaveDoModelo(c) + ':' + c.pos).join(';');
 }
 
 /**
@@ -1145,6 +1436,8 @@ function guardarNaHistoria() {
         celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
         modelos: m.modelos.slice(),
         selecao: m.selecao.slice(),
+        planoAplicado: m.planoAplicado ? { ...m.planoAplicado,
+            repeticoes: m.planoAplicado.repeticoes.slice() } : null,
     });
     if (m.historia.length > MTG_HISTORIA_MAX) m.historia.shift();
     // Mexer depois de desfazer apaga o futuro: é o comportamento que todo
@@ -1157,6 +1450,8 @@ function _mtgAplicar(instantaneo) {
     m.celulas = instantaneo.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos }));
     m.modelos = instantaneo.modelos.slice();
     m.selecao = (instantaneo.selecao || []).slice();
+    m.planoAplicado = instantaneo.planoAplicado ? { ...instantaneo.planoAplicado,
+        repeticoes: instantaneo.planoAplicado.repeticoes.slice() } : null;
 }
 
 function _mtgInstantaneoAtual() {
@@ -1165,6 +1460,8 @@ function _mtgInstantaneoAtual() {
         celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
         modelos: m.modelos.slice(),
         selecao: m.selecao.slice(),
+        planoAplicado: m.planoAplicado ? { ...m.planoAplicado,
+            repeticoes: m.planoAplicado.repeticoes.slice() } : null,
     };
 }
 
@@ -1333,6 +1630,10 @@ function onMontagemFormatoChange() {
     state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
     state.montagem.pedidoSel = null;
     state.montagem.modeloSel = null;
+    state.montagem.modelosDisponiveis = [];
+    state.montagem.modelosMarcados = [];
+    state.montagem.buscaModelos = '';
+    state.montagem.seletorModelosAberto = false;
     const pedido = document.getElementById('mtg-pedido');
     if (pedido) pedido.value = '';
     const modelo = document.getElementById('mtg-modelo');
@@ -1378,6 +1679,270 @@ function _mtgOpcaoDoModelo(os, item, todos) {
         + `${escapeHtml(pedido)} · ${escapeHtml(modelo)} · ${escapeHtml(nome)} · ${escapeHtml(quantidade)}${face}</option>`;
 }
 
+const MTG_MAX_COMBINACOES_ANALISADAS = 24;
+const MTG_MAX_RECOMENDACOES_MODELOS = 3;
+const MTG_TEMPO_COMBINACOES_MS = 500;
+const _mtgCacheCombinacoes = new Map();
+
+function _mtgModeloDoItem(osId, item) {
+    if (!item) return null;
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId));
+    const num = _mtgNumeracaoDoItem(item);
+    return {
+        osId: String(osId), itemId: item.id,
+        pedidoNumero: os && (os.numero || os.id) || _mtgNumeroDoPedido(osId),
+        nome: item.nome_modelo || item.produto || 'modelo',
+        qtd: totalDeItensDoModelo(item, num),
+        variavel: modeloTemDadoVariavel(item, num),
+        peca: pecaDaMontagem(item),
+    };
+}
+
+function _mtgChaveDoCandidato(c) {
+    return String(c.osId) + '::' + String(c.item && c.item.id);
+}
+
+/**
+ * Compara combinações com a impressão separada dos MESMOS modelos. Sem essa
+ * base, duas tiragens pequenas sempre pareceriam melhores só por serem pequenas.
+ */
+function melhoresCombinacoesDeModelosDaMontagem(modelos, porFolha, numeroMontagens, minimoRepeticoes) {
+    const P = parseInt(porFolha) || 0;
+    const cfg = configuracaoDeMontagens(numeroMontagens, minimoRepeticoes);
+    const elegiveis = (modelos || []).filter(m => m && m.qtd > 0 && !m.variavel)
+        .slice().sort((a, b) => Number(b.qtd) - Number(a.qtd)
+            || String(b.pedidoNumero).localeCompare(String(a.pedidoNumero), 'pt-BR', { numeric: true }));
+    if (!P || elegiveis.length < 2) return [];
+
+    const chaveCache = [P, cfg.numero, cfg.minimo]
+        .concat(elegiveis.map(m => [chaveDoModelo(m), m.qtd, modoDaPecaNaMontagem(m.peca)].join(':'))).join('|');
+    if (_mtgCacheCombinacoes.has(chaveCache)) return _mtgCacheCombinacoes.get(chaveCache);
+
+    const grupos = new Map();
+    for (const m of elegiveis) {
+        const chave = modoDaPecaNaMontagem(m.peca);
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(m);
+    }
+    const candidatos = [];
+    const assinaturas = new Set();
+    const potencial = lista => {
+        const separados = lista.reduce((s, m) => s + Math.max(cfg.minimo, Math.ceil(Number(m.qtd) / P)), 0);
+        return separados - Math.max(cfg.minimo, Math.ceil(lista.reduce((s, m) => s + Number(m.qtd), 0) / P));
+    };
+    const adicionar = lista => {
+        if (lista.length < 2 || lista.length > P) return;
+        const chave = lista.map(chaveDoModelo).sort().join('|');
+        if (assinaturas.has(chave)) return;
+        assinaturas.add(chave);
+        candidatos.push({ modelos: lista.slice(), potencial: potencial(lista) });
+    };
+    for (const grupo of grupos.values()) {
+        const maximo = Math.min(5, P, grupo.length);
+        if (maximo < 2) continue;
+        const pares = [];
+        for (let a = 0; a < grupo.length; a++) for (let b = a + 1; b < grupo.length; b++) {
+            pares.push({ modelos: [grupo[a], grupo[b]], potencial: potencial([grupo[a], grupo[b]]) });
+        }
+        pares.sort((a, b) => b.potencial - a.potencial);
+        // Todos os pares participam da triagem barata. Os melhores viram
+        // sementes e crescem, um modelo por vez, até cinco modelos.
+        for (const semente of pares.slice(0, Math.min(12, pares.length))) {
+            let atual = semente.modelos.slice();
+            adicionar(atual);
+            while (atual.length < maximo) {
+                const restante = grupo.filter(m => !atual.includes(m));
+                if (!restante.length) break;
+                restante.sort((a, b) => potencial(atual.concat(b)) - potencial(atual.concat(a)));
+                atual = atual.concat(restante[0]);
+                adicionar(atual);
+            }
+        }
+        if (grupo.length <= maximo) adicionar(grupo);
+    }
+    candidatos.sort((a, b) => b.potencial - a.potencial || b.modelos.length - a.modelos.length);
+    const subconjuntos = candidatos.slice(0, MTG_MAX_COMBINACOES_ANALISADAS).map(c => c.modelos);
+
+    const resultados = [];
+    const limiteTempo = Date.now() + MTG_TEMPO_COMBINACOES_MS;
+    for (const combinacao of subconjuntos) {
+        if (Date.now() > limiteTempo) break;
+        const baseSeparada = combinacao.reduce((s, m) =>
+            s + Math.max(cfg.minimo, Math.ceil(Number(m.qtd) / P)), 0);
+        const sug = sugestaoDeMultiplasMontagens(combinacao, P, cfg.numero, cfg.minimo);
+        if (!sug.viavel) continue;
+        const plano = sug.planoSugerido || sug.planoSolicitado;
+        const economia = plano ? baseSeparada - plano.impressoes : 0;
+        if (economia <= 0) continue;
+        resultados.push({ modelos: combinacao, plano, economia, baseSeparada,
+            percentual: 100 * economia / baseSeparada });
+    }
+    resultados.sort((a, b) => b.economia - a.economia
+        || a.plano.impressoes - b.plano.impressoes
+        || a.plano.quantidade - b.plano.quantidade
+        || b.modelos.length - a.modelos.length
+        || (_mtgMelhorEquilibrio(a.plano, b.plano) ? -1 : 1));
+    const saida = resultados.slice(0, MTG_MAX_RECOMENDACOES_MODELOS);
+    if (_mtgCacheCombinacoes.size >= 30) _mtgCacheCombinacoes.delete(_mtgCacheCombinacoes.keys().next().value);
+    _mtgCacheCombinacoes.set(chaveCache, saida);
+    return saida;
+}
+
+function alternarSeletorDeModelosDaMontagem(aberto) {
+    const m = state.montagem;
+    m.seletorModelosAberto = typeof aberto === 'boolean' ? aberto : !m.seletorModelosAberto;
+    _mtgRenderSeletorDeModelos();
+    if (m.seletorModelosAberto) {
+        const busca = document.getElementById('mtg-modelos-busca');
+        if (busca) setTimeout(() => busca.focus({ preventScroll: true }), 0);
+    }
+}
+
+function buscarModelosDaMontagem(texto) {
+    state.montagem.buscaModelos = String(texto || '');
+    _mtgRenderSeletorDeModelos();
+}
+
+function marcarModeloDaMontagem(chave, marcado) {
+    const m = state.montagem;
+    const candidatos = m.modelosDisponiveis || [];
+    const candidato = candidatos.find(c => _mtgChaveDoCandidato(c) === String(chave));
+    if (!candidato || modeloDaMontagem(m.modelos, candidato.osId, candidato.item.id)) return;
+    const marcados = new Set(m.modelosMarcados || []);
+    if (marcado) {
+        const base = m.modelos[0] || candidatos
+            .filter(c => marcados.has(_mtgChaveDoCandidato(c))).map(c => c.modelo)[0];
+        if (base && porQueNaoCabeNaMontagem(base.peca, candidato.modelo.peca)) return;
+        marcados.add(String(chave));
+    } else {
+        marcados.delete(String(chave));
+    }
+    m.modelosMarcados = Array.from(marcados);
+    _mtgRenderSeletorDeModelos();
+}
+
+function limparSelecaoDeModelosDaMontagem() {
+    state.montagem.modelosMarcados = [];
+    _mtgRenderSeletorDeModelos();
+}
+
+function marcarTodosModelosCompativeisDaMontagem() {
+    const m = state.montagem;
+    const candidatos = m.modelosDisponiveis || [];
+    const carregados = new Set(m.modelos.map(x => String(x.osId) + '::' + String(x.itemId)));
+    const base = m.modelos[0] || candidatos.find(c => !carregados.has(_mtgChaveDoCandidato(c)))?.modelo;
+    if (!base) return;
+    m.modelosMarcados = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
+        && !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca)).map(_mtgChaveDoCandidato);
+    _mtgRenderSeletorDeModelos();
+}
+
+function usarCombinacaoDeModelosDaMontagem(chaves) {
+    const m = state.montagem;
+    const candidatos = m.modelosDisponiveis || [];
+    const pedidas = new Set((chaves || []).map(String));
+    const escolhidas = candidatos.filter(c => pedidas.has(_mtgChaveDoCandidato(c)));
+    const base = m.modelos[0] || (escolhidas[0] && escolhidas[0].modelo);
+    m.modelosMarcados = escolhidas.filter(c => !base
+        || !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca)).map(_mtgChaveDoCandidato);
+    _mtgRenderSeletorDeModelos();
+}
+
+function carregarModelosSelecionadosDaMontagem() {
+    if (state.montagem.gerando) return;
+    const m = state.montagem;
+    const marcados = new Set(m.modelosMarcados || []);
+    const novos = (m.modelosDisponiveis || []).filter(c => marcados.has(_mtgChaveDoCandidato(c))
+        && !modeloDaMontagem(m.modelos, c.osId, c.item.id));
+    if (!novos.length) return;
+    const base = m.modelos[0] || novos[0].modelo;
+    if (novos.some(c => porQueNaoCabeNaMontagem(base.peca, c.modelo.peca))) return;
+    guardarNaHistoria();
+    for (const c of novos) m.modelos.push(c.modelo);
+    const primeiro = novos[0];
+    m.pedidoSel = primeiro.osId;
+    m.modeloSel = String(primeiro.item.id);
+    m.modelosMarcados = [];
+    m.seletorModelosAberto = false;
+    const sel = document.getElementById('mtg-modelo');
+    if (sel) {
+        const opt = Array.from(sel.options).find(o => o.dataset.pedidoId === String(primeiro.osId)
+            && o.dataset.modeloId === String(primeiro.item.id));
+        if (opt) sel.value = opt.value;
+    }
+    renderMontagem();
+    onMontagemPosicoesChange();
+    if (typeof toast === 'function') toast(novos.length + (novos.length === 1
+        ? ' modelo carregado para o cálculo.' : ' modelos carregados para o cálculo.'), 'success');
+}
+
+function _mtgRenderSeletorDeModelos() {
+    const m = state.montagem;
+    const painel = document.getElementById('mtg-modelos-painel');
+    const trigger = document.getElementById('mtg-modelos-trigger');
+    const opcoes = document.getElementById('mtg-modelos-opcoes');
+    const recs = document.getElementById('mtg-modelos-recomendacoes');
+    const carregar = document.getElementById('mtg-modelos-carregar');
+    if (!painel || !trigger || !opcoes || !recs || !carregar) return;
+    const candidatos = m.modelosDisponiveis || [];
+    const marcados = new Set(m.modelosMarcados || []);
+    const carregados = new Set(m.modelos.map(x => String(x.osId) + '::' + String(x.itemId)));
+    const qtdMarcada = Array.from(marcados).filter(k => !carregados.has(k)).length;
+    trigger.disabled = !candidatos.length || !!m.carregando;
+    trigger.textContent = m.carregando ? 'Carregando modelos…'
+        : qtdMarcada ? qtdMarcada + (qtdMarcada === 1 ? ' modelo selecionado' : ' modelos selecionados')
+        : candidatos.length ? candidatos.length + (candidatos.length === 1 ? ' modelo aguardando' : ' modelos aguardando')
+        : 'Nenhum modelo aguardando';
+    trigger.setAttribute('aria-expanded', m.seletorModelosAberto ? 'true' : 'false');
+    painel.hidden = !m.seletorModelosAberto;
+    if (!m.seletorModelosAberto) return;
+
+    const campoBusca = document.getElementById('mtg-modelos-busca');
+    if (campoBusca && document.activeElement !== campoBusca) campoBusca.value = m.buscaModelos || '';
+    const busca = String(m.buscaModelos || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const base = m.modelos[0] || candidatos
+        .filter(c => marcados.has(_mtgChaveDoCandidato(c))).map(c => c.modelo)[0];
+    const visiveis = candidatos.filter(c => !busca || [c.modelo.pedidoNumero, c.item.id, c.modelo.nome]
+        .join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(busca));
+    opcoes.innerHTML = visiveis.length ? visiveis.map(c => {
+        const chave = _mtgChaveDoCandidato(c);
+        const jaCarregado = carregados.has(chave);
+        const motivo = !jaCarregado && base ? porQueNaoCabeNaMontagem(base.peca, c.modelo.peca) : '';
+        const travado = jaCarregado || !!motivo;
+        const face = modoDaPecaNaMontagem(c.modelo.peca) === 'front' ? 'Só frente' : 'COM VERSO';
+        return `<label class="mtg-modelo-opcao${travado ? ' desabilitado' : ''}" data-modelo-chave="${escapeHtml(chave)}">
+          <input type="checkbox" ${jaCarregado || marcados.has(chave) ? 'checked' : ''} ${travado ? 'disabled' : ''}
+            onchange="marcarModeloDaMontagem('${escapeHtml(chave)}', this.checked)">
+          <span><strong>${escapeHtml(String(c.modelo.pedidoNumero))} · ${escapeHtml(String(c.item.id))}</strong>
+            <small>${escapeHtml(String(c.modelo.nome))}</small></span>
+          <b>${Number(c.modelo.qtd).toLocaleString('pt-BR')}</b>
+          <em class="${face === 'COM VERSO' ? 'mtg-com-verso' : ''}">${face}</em>
+          ${jaCarregado ? '<i>Carregado</i>' : motivo ? `<i>${escapeHtml(motivo)}</i>` : ''}
+        </label>`;
+    }).join('') : '<p class="mtg-dica">Nenhum modelo corresponde à busca.</p>';
+    carregar.disabled = qtdMarcada === 0;
+    carregar.textContent = qtdMarcada ? 'Carregar ' + qtdMarcada + (qtdMarcada === 1 ? ' modelo' : ' modelos')
+        : 'Carregar modelos selecionados';
+
+    const livres = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
+        && (!base || !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca))).map(c => c.modelo);
+    const P = livres.length ? _mtgCelulasPorFolha([livres[0]]) : 0;
+    const recomendacoes = melhoresCombinacoesDeModelosDaMontagem(livres, P,
+        m.quantidadeMontagens || 1, m.minimoRepeticoes || 1);
+    const variaveis = livres.filter(x => x.variavel).length;
+    const avisoVariavel = variaveis ? `<p class="mtg-combinacoes-limite">${variaveis} ${variaveis === 1 ? 'modelo com dado variável fica' : 'modelos com dados variáveis ficam'} fora das combinações repetidas para não duplicar códigos.</p>` : '';
+    recs.innerHTML = recomendacoes.length ? `<div class="mtg-combinacoes"><h4>Combinações recomendadas</h4>${avisoVariavel}`
+        + recomendacoes.map((r, i) => {
+            const chaves = r.modelos.map(x => String(x.osId) + '::' + String(x.itemId));
+            const nomes = r.modelos.map(x => `${x.pedidoNumero} · ${x.itemId}`).join(' + ');
+            return `<div class="mtg-combinacao"><strong>${i + 1}. Economia de ${r.economia} ${r.economia === 1 ? 'impressão' : 'impressões'}</strong>
+              <span>${escapeHtml(nomes)}</span>
+              <small>${r.plano.quantidade} ${r.plano.quantidade === 1 ? 'montagem' : 'montagens'} · ${r.plano.impressoes} impressões; separados: ${r.baseSeparada}</small>
+              <button type="button" class="btn btn-secondary btn-sm" onclick='usarCombinacaoDeModelosDaMontagem(${JSON.stringify(chaves)})'>Usar esta combinação</button></div>`;
+        }).join('') + '</div>'
+        : `<div class="mtg-combinacoes vazia"><h4>Combinações recomendadas</h4>${avisoVariavel}<p>Nenhuma combinação vantajosa encontrada para este formato e configuração de frente/verso.</p></div>`;
+}
+
 /**
  * Os bancos e o CSV de cada numeração deste pedido, na mão.
  *
@@ -1420,6 +1985,10 @@ async function onMontagemPedidoChange() {
     const carga = state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
     state.montagem.pedidoSel = todos ? null : (osId || null);
     state.montagem.modeloSel = null;
+    state.montagem.modelosDisponiveis = [];
+    state.montagem.modelosMarcados = [];
+    state.montagem.buscaModelos = '';
+    state.montagem.seletorModelosAberto = false;
 
     const selMod = document.getElementById('mtg-modelo');
     if (!selMod) return;
@@ -1456,6 +2025,10 @@ async function onMontagemPedidoChange() {
         const itens = pedidos.flatMap(pedido => (state.osItens[pedido.id] || [])
             .filter(it => modeloDisponivelNaMontagem(pedido.id, it))
             .map(it => ({ pedido, item: it })));
+        state.montagem.modelosDisponiveis = itens.map(({ pedido, item }) => ({
+            osId: String(pedido.id), pedido, item,
+            modelo: _mtgModeloDoItem(pedido.id, item),
+        })).filter(c => c.modelo && c.modelo.qtd > 0);
         selMod.innerHTML = '<option value="">' + (itens.length
             ? 'Pedido · Modelo · Nome · Quantidade'
             : 'Nenhum modelo aguardando para este formato') + '</option>'
@@ -1466,6 +2039,7 @@ async function onMontagemPedidoChange() {
         if (state.montagem.cargaSelecao === carga && (todos || state.montagem.pedidoSel === osId)) {
             selMod.innerHTML = '<option value="">Falha ao carregar. Selecione o pedido novamente.</option>';
             selMod.disabled = true;
+            state.montagem.modelosDisponiveis = [];
             if (typeof toast === 'function') toast('Não foi possível carregar os modelos do pedido.', 'error');
         }
     } finally {
@@ -1485,10 +2059,12 @@ function onMontagemModeloChange() {
         : (filtroPedido && filtroPedido.value === '__todos__' ? null : state.montagem.pedidoSel);
     state.montagem.modeloSel = opcao && opcao.dataset.modeloId
         ? opcao.dataset.modeloId : (sel && sel.value ? sel.value : null);
-    onMontagemPosicoesChange();
     // Redesenha porque a linha ativa da lista sai daqui: escolher pelo seletor
     // tem de marcar a mesma linha que clicar nela marcaria.
     renderMontagem();
+    // O estado final dos controles é calculado depois do redesenho. Assim o
+    // padrão da posição 1 já deixa + Adicionar disponível ao escolher o modelo.
+    onMontagemPosicoesChange();
 }
 
 /**
@@ -1538,9 +2114,12 @@ function onMontagemPosicoesChange() {
     if (item && !recusa) {
         const num = _mtgNumeracaoDoItem(item);
         total = totalDeItensDoModelo(item, num);
-        const { posicoes, invalidos } = posicoesDaMontagem(campo ? campo.value : '', total);
+        const texto = campo ? campo.value.trim() : '';
+        const { posicoes, invalidos } = posicoesDaMontagem(texto, total);
 
-        podeAdicionar = posicoes.length > 0;
+        // A posição 1 é o uso mais comum. Com o campo vazio, o clique em
+        // Adicionar assume essa posição sem obrigar o operador a digitá-la.
+        podeAdicionar = total > 0 && (!texto || posicoes.length > 0);
 
         if (dica) {
             if (invalidos.length) {
@@ -1549,7 +2128,7 @@ function onMontagemPosicoesChange() {
             } else if (posicoes.length) {
                 dica.innerHTML = `<strong>${posicoes.length}</strong> célula(s) deste modelo entram na folha.`;
             } else {
-                dica.innerHTML = 'A posição é a do item <strong>dentro do modelo</strong> — o 1º, o 6º, o 22º da tiragem, onde quer que ele tenha caído na folha. Faixas valem: <code>1-4</code>.';
+                dica.innerHTML = 'Campo vazio adiciona a <strong>posição 1</strong>. Para outras posições, informe o item dentro do modelo — por exemplo <code>6,22</code> ou <code>1-4</code>.';
             }
         }
     } else if (dica && !recusa) {
@@ -1612,7 +2191,8 @@ function adicionarNaMontagem() {
     const num = _mtgNumeracaoDoItem(item);
     const total = totalDeItensDoModelo(item, num);
     const campo = document.getElementById('mtg-posicoes');
-    const { posicoes } = posicoesDaMontagem(campo ? campo.value : '', total);
+    const texto = campo ? campo.value.trim() : '';
+    const { posicoes } = posicoesDaMontagem(texto || '1', total);
     if (!posicoes.length) return;
 
     guardarNaHistoria();
@@ -1623,17 +2203,7 @@ function adicionarNaMontagem() {
     // tiragem duas vezes, e todas as posições seguintes sairiam erradas.
     let m = modeloDaMontagem(modelos, osId, item.id);
     if (!m) {
-        m = {
-            osId: osId,
-            itemId: item.id,
-            pedidoNumero: _mtgNumeroDoPedido(osId),
-            nome: item.nome_modelo || item.produto || 'modelo',
-            qtd: total,
-            // Lido AQUI, com a numeracao ja resolvida: e' o que decide se a
-            // folha pode ser impressa repetida sem repetir codigo.
-            variavel: modeloTemDadoVariavel(item, num),
-            peca: peca,
-        };
+        m = _mtgModeloDoItem(osId, item);
         modelos.push(m);
     }
 
@@ -1868,14 +2438,33 @@ function limparMontagem() {
 /** A sugestão para a montagem de agora. */
 function _mtgSugestaoAtual() {
     const m = state.montagem;
-    return sugestaoDeAproveitamento(m.modelos, _mtgCelulasPorFolha(m.modelos));
+    const porFolha = _mtgCelulasPorFolha(m.modelos);
+    const chave = [porFolha, m.quantidadeMontagens || 1, m.minimoRepeticoes || 1]
+        .concat(m.modelos.map(x => [chaveDoModelo(x), x.qtd, x.variavel ? 1 : 0].join(':'))).join('|');
+    if (_mtgCacheDeSugestoes.has(chave)) return _mtgCacheDeSugestoes.get(chave);
+    const sugestao = sugestaoDeMultiplasMontagens(m.modelos, porFolha,
+        m.quantidadeMontagens || 1, m.minimoRepeticoes || 1);
+    if (_mtgCacheDeSugestoes.size >= 50) _mtgCacheDeSugestoes.delete(_mtgCacheDeSugestoes.keys().next().value);
+    _mtgCacheDeSugestoes.set(chave, sugestao);
+    return sugestao;
+}
+
+function mudarConfiguracaoDeMontagens(campo, valor) {
+    if (state.montagem.gerando) return;
+    const m = state.montagem;
+    const cfg = configuracaoDeMontagens(
+        campo === 'numero' ? valor : m.quantidadeMontagens,
+        campo === 'minimo' ? valor : m.minimoRepeticoes);
+    m.quantidadeMontagens = cfg.numero;
+    m.minimoRepeticoes = cfg.minimo;
+    _mtgRenderSugestao();
 }
 
 /**
  * Aplica a mistura sugerida à folha.
  *
- * `modo` é `auto` (o que a peça recomenda), `unica` (uma folha, N impressões)
- * ou `distribuir` (todas as peças, N folhas com a mesma mistura). Os três ficam
+ * `modo` é `auto` (o plano com menos impressões), `solicitada` (a quantidade
+ * configurada), `unica` (compatibilidade com o caminho antigo) ou `distribuir`.
  * oferecidos na tela, por decisão do usuário em 03/09/2026 — mas o caminho que
  * repete a folha com dado variável passa por uma confirmação que diz, em texto,
  * que os códigos vão sair repetidos.
@@ -1892,6 +2481,11 @@ async function aplicarSugestaoDaMontagem(modo) {
     }
 
     const escolhido = (!modo || modo === 'auto') ? modoSugeridoDaMontagem(sug) : modo;
+    const plano = escolhido === 'multiplas'
+        ? (sug.planoSugerido || sug.planoSolicitado)
+        : escolhido === 'solicitada' ? sug.planoSolicitado
+        : escolhido === 'unica' ? _mtgPlanoComQuantidade(sug.itens.map(it => it.qtd),
+            sug.porFolha, 1, sug.configuracao.minimo, null) : null;
 
     // A folha distribuída desenha uma célula por peça. Tiragem inteira não é
     // trabalho desta tela, e a saída está na frase.
@@ -1904,13 +2498,14 @@ async function aplicarSugestaoDaMontagem(modo) {
         return;
     }
 
-    if (escolhido === 'unica' && sug.temDadoVariavel) {
+    if (plano && sug.temDadoVariavel) {
         const quais = sug.itens.filter(it => it.variavel).map(it => it.itemId).join(', ');
+        const totalImpressoes = plano.impressoes;
         const segue = (typeof confirmarPopup === 'function') ? await confirmarPopup({
             titulo: 'A folha repetida sai com o mesmo código',
             mensagem: 'O modelo ' + quais + ' tem numeração com dado variável: cada peça sai '
-                + 'diferente da anterior. Imprimir esta folha ' + sug.impressoes + ' vezes '
-                + 'imprime ' + sug.impressoes + ' vezes as <strong>mesmas peças</strong>, com '
+                + 'diferente da anterior. Repetir estas montagens ' + totalImpressoes + ' vezes '
+                + 'imprime novamente as <strong>mesmas peças</strong>, com '
                 + 'os mesmos códigos.',
             detalhe: 'Se o que você quer são peças diferentes, cancele e use "Distribuir em '
                 + sug.folhas + ' folhas": a mesma mistura em cada folha, e cada célula um item.',
@@ -1922,35 +2517,74 @@ async function aplicarSugestaoDaMontagem(modo) {
 
     if (state.montagem.gerando) return;
     guardarNaHistoria();
-    state.montagem.celulas = (escolhido === 'unica')
-        ? celulasDaFolhaUnica(sug)
-        : celulasDistribuidas(sug);
+    state.montagem.celulas = plano ? celulasDasMontagens(sug, plano) : celulasDistribuidas(sug);
+    state.montagem.planoAplicado = plano ? {
+        repeticoes: plano.repeticoes.slice(),
+        assinatura: _mtgAssinaturaDasCelulas(state.montagem.celulas),
+    } : null;
     state.montagem.selecao = [];
     renderMontagem();
 
     if (typeof toast === 'function') {
-        toast(escolhido === 'unica'
-            ? 'Folha montada: ' + sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ')
-                + '. Imprima ' + sug.impressoes + ' vez(es).'
+        toast(plano
+            ? plano.quantidade + (plano.quantidade === 1 ? ' montagem aplicada: ' : ' montagens aplicadas: ')
+                + plano.repeticoes.map((r, i) => 'montagem ' + (i + 1) + ', ' + r + ' vez(es)').join('; ') + '.'
             : sug.total + ' peça(s) distribuída(s) em ' + sug.folhas + ' folha(s), com a mesma '
                 + 'mistura em cada uma.', 'success');
     }
 }
 
 /** Resume o desenho atual; cada repetição imprime novamente todas as suas folhas. */
-function resumoAtualDaMontagem(modelos, celulas, porFolha) {
+function resumoAtualDaMontagem(modelos, celulas, porFolha, repeticoesPorFolha) {
     const folhas = porFolha > 0 ? Math.ceil(celulas.length / porFolha) : 0;
     const itens = modelos.map(m => {
         const posicoes = celulas.filter(c => chaveDoModelo(c) === chaveDoModelo(m)).map(c => c.pos);
         return { ...m, celulas: posicoes.length, repetidas: posicoes.length - new Set(posicoes).size };
     });
+    const planoValido = Array.isArray(repeticoesPorFolha)
+        && repeticoesPorFolha.length === folhas && folhas > 0;
+    if (planoValido) {
+        const detalhados = itens.map(m => {
+            let produz = 0;
+            for (let f = 0; f < folhas; f++) {
+                produz += celulas.slice(f * porFolha, (f + 1) * porFolha)
+                    .filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length * repeticoesPorFolha[f];
+            }
+            return { ...m, produz, sobra: produz - Number(m.qtd) };
+        });
+        return { folhas, usadas: celulas.length, vagas: folhas * porFolha - celulas.length,
+            ocupacao: 100 * celulas.length / (folhas * porFolha), repeticoes: null,
+            repeticoesPorFolha: repeticoesPorFolha.slice(),
+            totalImpressoes: repeticoesPorFolha.reduce((a, b) => a + b, 0), itens: detalhados };
+    }
     const completa = itens.length > 0 && itens.every(m => m.celulas > 0 && Number(m.qtd) > 0);
     const repeticoes = completa ? Math.max(...itens.map(m => Math.ceil(Number(m.qtd) / m.celulas))) : null;
     return { folhas, usadas: celulas.length, vagas: folhas * porFolha - celulas.length,
         ocupacao: folhas ? 100 * celulas.length / (folhas * porFolha) : 0,
-        repeticoes, itens: itens.map(m => ({ ...m,
+        repeticoes, repeticoesPorFolha: null,
+        totalImpressoes: repeticoes == null ? null : repeticoes * folhas,
+        itens: itens.map(m => ({ ...m,
             produz: repeticoes == null ? null : repeticoes * m.celulas,
             sobra: repeticoes == null ? null : repeticoes * m.celulas - Number(m.qtd) })) };
+}
+
+function _mtgPlanoHtml(sug, plano, titulo) {
+    if (!plano) return '';
+    const cartoes = plano.layouts.map((layout, k) => {
+        const mistura = layout.map((n, i) => n ? n + '× ' + sug.itens[i].itemId : '')
+            .filter(Boolean).join(' + ');
+        return `<div class="mtg-plano-card"><strong>Montagem ${k + 1}</strong>`
+            + `<span>Repetir ${plano.repeticoes[k]} vez(es)</span>`
+            + `<small>${escapeHtml(mistura)}</small></div>`;
+    }).join('');
+    const linhas = plano.itens.map(it => `<tr><td title="${escapeHtml(it.nome)}">${escapeHtml(it.itemId)}`
+        + `${it.variavel ? ' <span class="mtg-sug-var" title="numeração com dado variável: cada peça sai diferente">var</span>' : ''}</td>`
+        + `<td class="num">${it.qtd}</td><td class="num">${it.produz}</td>`
+        + `<td class="num ${it.sobra > 0 ? 'sobra' : ''}">${it.sobra > 0 ? '+' + it.sobra : '—'}</td></tr>`).join('');
+    return `<div class="mtg-plano"><h4>${escapeHtml(titulo)}</h4><div class="mtg-plano-grade">${cartoes}</div>`
+        + `<p><strong>${plano.impressoes} ${plano.impressoes === 1 ? 'impressão' : 'impressões'}</strong> no total. Todas as montagens usam as ${sug.porFolha} células.</p>`
+        + `<table class="mtg-sug-tabela"><thead><tr><th>Modelo</th><th class="num">Tiragem</th>`
+        + `<th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 
 /** O painel do aproveitamento: só existe com dois modelos ou mais na folha. */
@@ -1962,8 +2596,29 @@ function _mtgRenderSugestao() {
     if (!modelos.length) { caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
     caixa.style.display = '';
 
-    const atual = resumoAtualDaMontagem(modelos, state.montagem.celulas, _mtgCelulasPorFolha(modelos));
-    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>' + `
+    const porFolha = _mtgCelulasPorFolha(modelos);
+    const aplicado = state.montagem.planoAplicado;
+    const repeticoesAplicadas = aplicado
+        && aplicado.assinatura === _mtgAssinaturaDasCelulas(state.montagem.celulas)
+        ? aplicado.repeticoes : null;
+    const atual = resumoAtualDaMontagem(modelos, state.montagem.celulas, porFolha, repeticoesAplicadas);
+    const instrucaoAtual = atual.repeticoesPorFolha
+        ? `Para atender às tiragens: <strong>${atual.totalImpressoes} impressões</strong> no total. `
+          + atual.repeticoesPorFolha.map((r, i) => `Montagem ${i + 1}: ${r} vez(es)`).join(' · ') + '.'
+        : atual.repeticoes == null ? 'Informe as tiragens e inclua células de todos os modelos para calcular as repetições.'
+        : `Para atender às tiragens com esta distribuição: <strong>${atual.repeticoes} repetição(ões)</strong> da montagem inteira, totalizando ${atual.totalImpressoes} folhas impressas.`;
+    const cfgAtual = configuracaoDeMontagens(state.montagem.quantidadeMontagens || 1,
+        state.montagem.minimoRepeticoes || 1);
+    const controles = `<div class="mtg-sug-config">
+        <label><span>Número de montagens</span><select id="mtg-numero-montagens"
+          onchange="mudarConfiguracaoDeMontagens('numero', this.value)">
+          ${Array.from({ length: MTG_MAX_MONTAGENS_SUGERIDAS }, (_, i) => i + 1)
+              .map(n => `<option value="${n}"${n === cfgAtual.numero ? ' selected' : ''}>${n}</option>`).join('')}
+        </select></label>
+        <label><span>Mínimo de repetições</span><input id="mtg-minimo-repeticoes" type="number" min="1" max="1000000" step="1"
+          value="${cfgAtual.minimo}" onchange="mudarConfiguracaoDeMontagens('minimo', this.value)"></label>
+      </div>`;
+    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>' + controles + `
       <div class="mtg-sug-atual" id="mtg-aproveitamento-atual" aria-live="polite">
         <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
           ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
@@ -1976,8 +2631,7 @@ function _mtgRenderSugestao() {
             <td class="num">${m.repetidas}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
             <td class="num">${m.sobra == null ? '—' : m.sobra}</td></tr>`).join('')}
         </tbody></table>
-        <p>${atual.repeticoes == null ? 'Informe as tiragens e inclua células de todos os modelos para calcular as repetições.'
-            : `Para atender às tiragens com esta distribuição: <strong>${atual.repeticoes} repetição(ões)</strong> da montagem inteira, totalizando ${atual.repeticoes * atual.folhas} folhas impressas.`}</p>
+        <p>${instrucaoAtual}</p>
         <p class="mtg-dica">Repetidas são cópias da mesma posição do modelo. Reimprimir a montagem repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
       </div>`;
     const sug = _mtgSugestaoAtual();
@@ -1998,43 +2652,36 @@ function _mtgRenderSugestao() {
     const motivoTravado = 'São ' + sug.total + ' peças: distribuir desenharia uma célula '
         + 'para cada uma, e a tela não dá conta. Tiragem desse tamanho se imprime pela tela '
         + 'do Pedido.';
-    const linhas = sug.itens.map(it => `
-      <tr>
-        <td title="${escapeHtml(it.nome)}">${escapeHtml(it.itemId)}${it.variavel
-            ? ' <span class="mtg-sug-var" title="numeração com dado variável: cada peça sai diferente">var</span>' : ''}</td>
-        <td class="num">${it.qtd}</td>
-        <td class="num forte">${it.celulas}</td>
-        <td class="num">${it.produz}</td>
-        <td class="num ${it.sobra > 0 ? 'sobra' : ''}">${it.sobra > 0 ? '+' + it.sobra : '—'}</td>
-      </tr>`).join('');
-
-    const mistura = sug.itens.map(it => it.celulas + '× ' + it.itemId).join(' + ');
+    const solicitado = sug.planoSolicitado;
+    const sugerido = sug.planoSugerido;
+    const planoRecomendado = sugerido || solicitado;
+    const economia = sugerido ? solicitado.impressoes - sugerido.impressoes : 0;
+    const nomeSolicitado = solicitado.quantidade === 1
+        ? '1 montagem configurada' : solicitado.quantidade + ' montagens configuradas';
+    const nomeRecomendado = planoRecomendado.quantidade === 1
+        ? '1 montagem' : planoRecomendado.quantidade + ' montagens';
 
     caixa.innerHTML = cab + `
       <section class="mtg-recomendacao" aria-labelledby="mtg-recomendacao-titulo"><h3 id="mtg-recomendacao-titulo">Recomendação automática</h3>
       <p class="mtg-dica" style="margin:0 0 10px;">A folha tem <strong>${sug.porFolha}</strong>
-        célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). A divisão abaixo é a
-        que minimiza as repetições da folha. Com o mesmo número de repetições, prioriza
-        sobras nos modelos que têm menos, sem aumentar as impressões para criar reservas.</p>
-
-      <table class="mtg-sug-tabela">
-        <thead><tr><th>Modelo</th><th class="num">Tiragem</th><th class="num">Por folha</th>
-          <th class="num">Produz</th><th class="num">Sobra</th></tr></thead>
-        <tbody>${linhas}</tbody>
-      </table>
-
-      <p class="mtg-sug-frase"><strong>${escapeHtml(mistura)}</strong> por folha.</p>
+        célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). Cada montagem sai cheia
+        e deve ser repetida ao menos <strong>${sug.configuracao.minimo}</strong> vez(es). Entre soluções
+        com o mesmo total de impressões, a preferência é distribuir as sobras entre os modelos.</p>
+      ${sugerido ? `<p class="mtg-sug-melhoria"><strong>Sugestão:</strong> usar ${sugerido.quantidade} montagens reduz de ${solicitado.impressoes} para ${sugerido.impressoes} impressões, economizando ${economia}.</p>`
+        : `<p class="mtg-dica">Nenhuma quantidade maior, até ${MTG_MAX_MONTAGENS_SUGERIDAS}, reduz o total de impressões respeitando o mínimo informado.</p>`}
+      ${_mtgPlanoHtml(sug, solicitado, nomeSolicitado)}
+      ${sugerido ? _mtgPlanoHtml(sug, sugerido, 'Melhor sugestão automática') : ''}
 
       <div class="mtg-sug-botoes">
         <button type="button" class="btn-primary mtg-sug-rec" ${recTravado ? 'disabled' : ''}
                 title="${recTravado ? escapeHtml(motivoTravado) : ''}"
                 onclick="aplicarSugestaoDaMontagem('auto')">
-          ${recomendado === 'unica'
-            ? 'Aplicar o recomendado &mdash; uma folha, ' + sug.impressoes + ' impress&otilde;es'
-            : 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'}
+          ${recomendado === 'distribuir'
+            ? 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'
+            : `Aplicar o recomendado &mdash; ${nomeRecomendado}, ${planoRecomendado.impressoes} impress&otilde;es`}
         </button>
         <button type="button" class="btn-secondary"
-                onclick="aplicarSugestaoDaMontagem('unica')">Uma folha, ${sug.impressoes} impress&otilde;es</button>
+                onclick="aplicarSugestaoDaMontagem('solicitada')">Aplicar ${nomeSolicitado}</button>
         <button type="button" class="btn-secondary" ${semDistribuir ? 'disabled' : ''}
                 title="${semDistribuir ? escapeHtml(motivoTravado) : ''}"
                 onclick="aplicarSugestaoDaMontagem('distribuir')">Distribuir em ${sug.folhas} folhas</button>
@@ -2047,8 +2694,7 @@ function _mtgRenderSugestao() {
         ? 'Há modelo com dado variável na folha: <strong>repetir a mesma folha repetiria o '
           + 'código</strong>. Por isso o recomendado é distribuir — mesma mistura em cada folha, '
           + 'cada célula um item diferente.'
-        : 'Nenhum modelo tem dado variável: as peças saem iguais, então a mesma folha impressa '
-          + sug.impressoes + ' vez(es) entrega a tiragem inteira. É o caminho mais curto.'}</p>
+        : 'O PDF terá uma página para cada montagem. Use a quantidade de repetições indicada em cada uma.'}</p>
 
       <p class="mtg-dica" style="margin:6px 0 0;">Aplicar <strong>substitui</strong> as células
         que estão na folha. <code>Ctrl+Z</code> devolve.</p></section>`;
@@ -2423,7 +3069,11 @@ function _mtgRenderFolha() {
         const medida = geo.temPapel
             ? `${Math.round(geo.sheetW)}×${Math.round(geo.sheetH)} mm`
             : `${geo.cols}×${geo.rows}`;
-        numFolha.textContent = `${conta.folhas} folha(s) · ${total} célula(s) · ${medida}`;
+        const plano = state.montagem.planoAplicado;
+        const instrucao = plano && plano.assinatura === _mtgAssinaturaDasCelulas(celulas)
+            && plano.repeticoes.length === conta.folhas
+            ? ` · Montagem ${visivel + 1}: repetir ${plano.repeticoes[visivel]} vez(es)` : '';
+        numFolha.textContent = `${conta.folhas} folha(s) · ${total} célula(s) · ${medida}${instrucao}`;
     }
 
     _mtgRenderSeletorDeFolha(conta.folhas, visivel);
@@ -2836,6 +3486,7 @@ function renderMontagem() {
     });
 
     _mtgRenderSugestao();
+    _mtgRenderSeletorDeModelos();
     _mtgRenderNumero();
     _mtgRenderFolha();
     _mtgRenderFaces();
@@ -3457,6 +4108,13 @@ if (typeof window !== 'undefined') {
     window.onMontagemPedidoChange = onMontagemPedidoChange;
     window.onMontagemModeloChange = onMontagemModeloChange;
     window.onMontagemPosicoesChange = onMontagemPosicoesChange;
+    window.alternarSeletorDeModelosDaMontagem = alternarSeletorDeModelosDaMontagem;
+    window.buscarModelosDaMontagem = buscarModelosDaMontagem;
+    window.marcarModeloDaMontagem = marcarModeloDaMontagem;
+    window.marcarTodosModelosCompativeisDaMontagem = marcarTodosModelosCompativeisDaMontagem;
+    window.limparSelecaoDeModelosDaMontagem = limparSelecaoDeModelosDaMontagem;
+    window.usarCombinacaoDeModelosDaMontagem = usarCombinacaoDeModelosDaMontagem;
+    window.carregarModelosSelecionadosDaMontagem = carregarModelosSelecionadosDaMontagem;
     window.adicionarNaMontagem = adicionarNaMontagem;
     window.removerDaMontagem = removerDaMontagem;
     window.retomarDaMontagem = retomarDaMontagem;

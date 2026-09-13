@@ -675,8 +675,8 @@ def test_a_folha_repetida_com_dado_variavel_e_avisada():
 
     aplicar = js[js.index("async function aplicarSugestaoDaMontagem(modo) {"):]
     aplicar = aplicar[:aplicar.index("\n}") + 2]
-    assert "escolhido === 'unica' && sug.temDadoVariavel" in aplicar, (
-        "a folha repetida com dado variavel deixou de ser conferida"
+    assert "plano && sug.temDadoVariavel" in aplicar, (
+        "uma ou mais montagens repetidas com dado variavel deixaram de ser conferidas"
     )
     assert "confirmarPopup" in aplicar and "mesmos códigos" in aplicar, (
         "o aviso sumiu, ou deixou de dizer que os codigos saem repetidos"
