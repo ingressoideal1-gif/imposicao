@@ -957,11 +957,13 @@ async function testarPreparo() {
         ok(s.folhas === 11, 'distribuindo, são 11 folhas', s.folhas);
     }
 
-    // ── As recusas, cada uma com a saída na frase ────────────────────────
+    // ── Um modelo também recebe a montagem pronta ───────────────────────
     {
         const um = api.sugestaoDeAproveitamento([mod('M1', 30)], 10);
-        ok(!um.viavel && /dois modelos/.test(um.motivo), 'com um modelo só não há o que sugerir', um.motivo);
+        ok(um.viavel && um.impressoes === 3 && um.itens[0].celulas === 10,
+           'um modelo só recebe uma folha cheia e a quantidade de repetições', um);
 
+        // ── As recusas, cada uma com a saída na frase ────────────────────
         const semFormato = api.sugestaoDeAproveitamento([mod('M1', 30), mod('M2', 70)], 0);
         ok(!semFormato.viavel && /formato/.test(semFormato.motivo),
            'sem saber quantas células cabem, não há conta', semFormato.motivo);

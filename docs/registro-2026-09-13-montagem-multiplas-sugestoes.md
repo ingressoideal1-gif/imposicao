@@ -1,7 +1,7 @@
 # Montagem — múltiplas composições e mínimo de repetições
 
 Data: 13/09/2026
-Estado: publicado na versão v864.
+Estado: aplicação imediata publicada na versão v867.
 
 ## Objetivo
 
@@ -32,13 +32,15 @@ A recomendação mostra antes da aplicação:
 
 Ao aplicar, a visualização cria uma folha por composição. O cabeçalho da folha e o resumo do aproveitamento conservam a instrução de repetição de cada montagem enquanto as células não forem modificadas manualmente. O PDF contém uma página lógica por montagem; o operador usa a quantidade indicada para imprimir cada composição.
 
+O botão **Aplicar o recomendado** fica no topo do box, antes dos controles. Alterar **Número de montagens** ou **Mínimo de repetições** recalcula e substitui imediatamente a composição mostrada na janela, preservando o estado anterior no histórico para desfazer.
+
 No compositor, quando um modelo válido está selecionado e o campo **Posições** está vazio, **+ Adicionar** inclui diretamente a posição 1. O preenchimento explícito continua aceitando posições isoladas e faixas, com a mesma validação contra a tiragem.
 
 ## Seleção de modelos e combinações recomendadas
 
-O campo **Modelo aguardando** abre um painel multiseleção. Cada linha apresenta pedido, modelo, nome, quantidade e frente/verso, com pesquisa por esses dados. O primeiro modelo marcado define a configuração de faces; opções incompatíveis ficam desabilitadas. O operador pode marcar individualmente, selecionar todos os compatíveis ou usar uma combinação recomendada e revisar os checkboxes antes de carregar.
+O campo **Modelo aguardando** abre um painel multiseleção. Cada linha apresenta pedido, modelo, nome, quantidade e frente/verso, com pesquisa por esses dados. O primeiro modelo marcado define a configuração de faces; opções incompatíveis ficam desabilitadas. O operador pode marcar individualmente, selecionar todos os compatíveis ou usar uma combinação recomendada.
 
-**Carregar modelos selecionados** adiciona os modelos ao cálculo de aproveitamento sem criar células na folha. Depois do carregamento, cada modelo continua disponível na lista da montagem e pode receber posições manualmente ou participar da recomendação automática.
+Cada checkbox altera a montagem imediatamente. Desde o primeiro modelo, a janela recebe uma folha cheia, as repetições calculadas e a projeção de produção e sobra. Marcar outro modelo, desmarcar ou escolher **Usar esta combinação** substitui a janela pela nova recomendação; o botão do rodapé apenas fecha o painel.
 
 As combinações são comparadas com a impressão separada dos mesmos modelos. Só aparecem sugestões com economia estritamente positiva. A classificação considera, nesta ordem, maior economia, menor total de impressões, menor quantidade de montagens e melhor distribuição das sobras. São mostradas até três alternativas.
 
