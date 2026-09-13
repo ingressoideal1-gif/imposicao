@@ -418,7 +418,7 @@ function classificarComArte(statusDaArte, extra) {
 (function aPalavraOPOSTAContinuaValendo() {
     const c = classificarComArte('AGUARDANDO_APROVACAO');
     ok(c.fila === 'aprovacao', 'AGUARDANDO_APROVACAO vai para a Fila de Aprovacao', c);
-    ok(c.statusCalculado === 'Aguard. Aprovação', 'e o badge diz "Aguard. Aprovacao"', c);
+    ok(c.statusCalculado === 'Em Aprovação', 'e o badge diz "Em Aprovacao"', c);
 
     const d = classificarComArte('AGUARD. APROVAÇÃO');
     ok(d.fila === 'aprovacao', 'a forma com acento tambem', d);
@@ -439,7 +439,7 @@ function classificarComArte(statusDaArte, extra) {
     // tela do link. E' o unico sinal que significa "uma pessoa olhou".
     const c = classificarComArte('AGUARDANDO', { link: true, abriu: '2026-08-31T18:00:00Z' });
     ok(c.fila === 'aprovacao', 'cliente olhou: vai para a Fila de Aprovacao', c);
-    ok(c.statusCalculado === 'Aguard. Aprovação', 'e o badge diz "Aguard. Aprovacao"', c);
+    ok(c.statusCalculado === 'Em Aprovação', 'e o badge diz "Em Aprovacao"', c);
 
     // Refazer a arte zera a marca. Sem isso, o pedido que voltou de uma
     // alteracao saltaria para "Aguard. Aprovacao" com a abertura da versao
@@ -454,11 +454,11 @@ function classificarComArte(statusDaArte, extra) {
     // caso comum, porque ele abre logo depois de receber. Sem esta regra o badge
     // ficaria presa em "Enviar Arte" com o cliente ja olhando a arte.
     const c = classificarComArte('ENVIAR ARTE', { link: true, abriu: '2026-08-31T18:00:00Z' });
-    ok(c.statusCalculado === 'Aguard. Aprovação', 'cliente olhou vence a palavra ENVIAR ARTE', c);
+    ok(c.statusCalculado === 'Em Aprovação', 'cliente olhou vence a palavra ENVIAR ARTE', c);
 
     // Mas a arte aprovada continua vencendo os dois: e' a pergunta anterior.
     const d = classificarComArte('APROVADO', { link: true, abriu: '2026-08-31T18:00:00Z' });
-    ok(d.statusCalculado === 'Aprovada', 'e a arte aprovada continua vencendo tudo', d);
+    ok(d.statusCalculado === 'Dados Pendentes', 'arte aprovada sem dados fica pendente', d);
 })();
 
 (function aArteProntaContinuaNaFilaDeAprovacao() {

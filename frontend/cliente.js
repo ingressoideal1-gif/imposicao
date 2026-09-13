@@ -76,6 +76,67 @@ function toast(msg, type = 'info') {
 
 }
 
+const STATUS_MODELO_APROVADO_PARA_PEDIDO = [
+    'APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'
+];
+const STATUS_MODELO_EM_ALTERACAO_PARA_PEDIDO = [
+    'REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'
+];
+
+function calcularStatusConsolidadoPedidoArteCliente(itens, entregaStatus, statusAtual) {
+    const normalizar = valor => String(valor || '').trim().toUpperCase();
+    const entrega = normalizar(entregaStatus);
+    const estados = (itens || []).map(item => [
+        normalizar(item.status_arte), normalizar(item.amostra_status), normalizar(item.aprovacao)
+    ].filter(Boolean));
+
+    if (entrega === 'CORRIGIR') return 'Corrigir Dados';
+    if (estados.some(valores => valores.some(status => STATUS_MODELO_EM_ALTERACAO_PARA_PEDIDO.includes(status)))) return 'Em Alteração';
+
+    const aprovadas = estados.filter(valores => valores.some(status => STATUS_MODELO_APROVADO_PARA_PEDIDO.includes(status))).length;
+    if (estados.length > 0 && aprovadas === estados.length) {
+        return entrega === 'APROVADO' ? 'APROVADO' : 'Dados Pendentes';
+    }
+    if (aprovadas > 0) return 'Apr Parcial';
+
+    const atual = normalizar(statusAtual);
+    if (atual === 'AGUARDANDO_APROVACAO') return 'Em Aprovação';
+    if (atual === 'APROVADO PARCIAL') return 'Apr Parcial';
+    if (STATUS_MODELO_APROVADO_PARA_PEDIDO.includes(atual)) {
+        return entrega === 'APROVADO' ? 'APROVADO' : 'Dados Pendentes';
+    }
+    return statusAtual || null;
+}
+
+async function sincronizarStatusConsolidadoPedidoArteCliente(numPedInt, itens, entregaInformada) {
+    if (!numPedInt || isNaN(numPedInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
+    const { data: artes, error } = await supabaseClient
+        .from('pedidos_artes')
+        .select('id, status, entrega_dados')
+        .eq('id_int', numPedInt)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!artes || artes.length === 0) return null;
+
+    const entrega = entregaInformada !== undefined
+        ? entregaInformada
+        : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'CORRIGIR')
+            ? 'CORRIGIR'
+            : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'APROVADO')
+                ? 'APROVADO' : (artes[0].entrega_dados || '');
+    const novoStatus = calcularStatusConsolidadoPedidoArteCliente(itens || [], entrega, artes[0].status);
+    if (!novoStatus) return null;
+
+    const { error: erroUpdate } = await supabaseClient
+        .from('pedidos_artes')
+        .update({ status: novoStatus })
+        .eq('id_int', numPedInt);
+    if (erroUpdate) throw erroUpdate;
+    return novoStatus;
+}
+window.calcularStatusConsolidadoPedidoArteCliente = calcularStatusConsolidadoPedidoArteCliente;
+window.sincronizarStatusConsolidadoPedidoArteCliente = sincronizarStatusConsolidadoPedidoArteCliente;
+
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
@@ -153,6 +214,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         Object.assign(itemLocal, dataToUpdate);
+        if (dbData.status_arte) itemLocal.status_arte = dbData.status_arte;
     } catch (e) {
         console.error('[SAVE] Erro:', e);
         throw e;
@@ -1563,18 +1625,21 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
             await Promise.all(savePromises);
 
-            // Também atualizar o status em pedidos_artes para manter compatibilidade (Execução paralela)
+            // Registra autoria por arte; o status da tabela é consolidado por pedido logo abaixo.
             const artesPromises = itens.map(async (item) => {
                 try {
                     await supabaseClient
                         .from('pedidos_artes')
-                        .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
+                        .update({ aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
                         .eq('id_modelo', item.id)
                         .order('versao', { ascending: false })
                         .limit(1);
                 } catch (e) { /* silencioso */ }
             });
             await Promise.all(artesPromises);
+            const statusConsolidado = await sincronizarStatusConsolidadoPedidoArteCliente(
+                parseInt(clienteState.numero), itens, clienteState.entregaStatus || ''
+            );
 
             // Log no chat da proposta
             try {
@@ -1592,9 +1657,9 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             // tela sequencial, e sim duas abas que já estavam ali o tempo todo.
             // A página leva o cliente até a primeira delas, para ele não ter de
             // adivinhar que ainda há um passo.
-            clienteState.statusArte = 'APROVADO';
+            clienteState.statusArte = statusConsolidado || 'Dados Pendentes';
             state.arteSomenteLeitura = true;
-            pintarSeloDoStatus('APROVADO');
+            pintarSeloDoStatus(clienteState.statusArte);
             redesenharSecao('arte');
             redesenharSecao('entrega');
             redesenharSecao('faturamento');
@@ -1695,8 +1760,10 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
 
     const { data: existente, error: erroLeitura } = await supabaseClient
         .from('pedidos_artes')
-        .select('id, observacoes')
+        .select('id, observacoes, status, entrega_dados')
         .eq('id_int', numPedInt)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
     if (erroLeitura) return { ok: false, erro: erroLeitura.message || String(erroLeitura) };
@@ -1747,6 +1814,15 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
     }
     const campos = { observacoes: obs };
     if (statusEntrega !== null && statusEntrega !== undefined) campos.entrega_dados = statusEntrega;
+    const itensPedido = (typeof state !== 'undefined' && state.osItens
+        && typeof clienteState !== 'undefined' && state.osItens[clienteState.osId]) || [];
+    const entregaParaCalculo = statusEntrega !== null && statusEntrega !== undefined
+        ? statusEntrega : (existente && existente.entrega_dados);
+    const statusConsolidado = typeof calcularStatusConsolidadoPedidoArteCliente === 'function'
+        ? calcularStatusConsolidadoPedidoArteCliente(
+            itensPedido, entregaParaCalculo, existente && existente.status
+        ) : null;
+    if (statusConsolidado) campos.status = statusConsolidado;
 
     if (existente) {
         const { data, error } = await supabaseClient
@@ -2197,17 +2273,20 @@ async function decisionAmostraItem(itemId, osId, status) {
                 console.warn('Erro ao inserir mensagem no chat:', chatErr);
             }
             
-            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
+            // A observação continua na versão afetada; o status é consolidado por pedido.
             if (status === 'REPROVADA') {
                 try {
                     await supabaseClient
                         .from('pedidos_artes')
-                        .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                        .update({ comentarios_revisao: obs })
                         .eq('id_modelo', itemId)
                         .order('versao', { ascending: false })
                         .limit(1);
                 } catch (e) { /* silencioso */ }
             }
+            await sincronizarStatusConsolidadoPedidoArteCliente(
+                parseInt(clienteState.numero), state.osItens[osId] || [], clienteState.entregaStatus || ''
+            );
         }
         
         // Esta foi a ÚLTIMA arte? Então o portal vai seguir sozinho, e o aviso

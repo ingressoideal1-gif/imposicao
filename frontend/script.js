@@ -25620,7 +25620,8 @@ async function sincronizarPedidosProntosParaEnvio() {
     // Status que já passaram do ponto: mexer neles seria andar para trás.
     const IGNORAR = [
         'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-        'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
+        'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO',
+        'EM APROVAÇÃO', 'DADOS PENDENTES', 'CORRIGIR DADOS', 'APR PARCIAL'
     ];
     // Status do banco que significam "o designer terminou".
     const PRONTOS = ['PRONTO', 'AGUARDANDO_CLIENTE'];
@@ -25670,6 +25671,7 @@ async function sincronizarPedidosProntosParaEnvio() {
                     ? supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id)
                     : supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id)
             );
+            gravacoes.push(marcarEstagioDaArteNoErp(os.numero, 'Enviar Arte'));
         }
 
         // Antes as gravações eram disparadas com `.then(function(){})` e qualquer
@@ -26958,6 +26960,11 @@ function getStatusBadge(status) {
         'Corrigir Arte':       { icon: '🎨', bg: '#f59e0b', label: 'Corrigir Arte' },
         'Arte Pronta':         { icon: '✅', bg: '#8b5cf6', label: 'Arte Pronta' },
         'Enviar Arte':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
+        'EM APROVAÇÃO':        { icon: '⏳', bg: '#8b5cf6', label: 'Em Aprovação' },
+        'EM APROVACAO':        { icon: '⏳', bg: '#8b5cf6', label: 'Em Aprovação' },
+        'DADOS PENDENTES':     { icon: '📋', bg: '#f59e0b', label: 'Dados Pendentes' },
+        'CORRIGIR DADOS':      { icon: '⚠️', bg: '#ef4444', label: 'Corrigir Dados' },
+        'APR PARCIAL':         { icon: '🟡', bg: '#f59e0b', label: 'Apr Parcial' },
         'Aguard. Aprovação':   { icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
         'Aguardando':          { icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
         'Aprovada':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
@@ -26980,15 +26987,17 @@ function getStatusBadge(status) {
         'REPROVADO':           { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
         'REPROVADA':           { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
         'REPROVADA_CLIENTE':   { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
-        'APROVADO':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'APROVADO':            { icon: '✅', bg: '#22c55e', label: 'APROVADO' },
         'APROVADA_CLIENTE':    { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'LIBERADA':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'Arte APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'ARTE_APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'Enviar ARTE':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
-        'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
+        'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#8b5cf6', label: 'Em Aprovação' },
+        'APROVADO PARCIAL':    { icon: '🟡', bg: '#f59e0b', label: 'Apr Parcial' },
     };
-    const s = map[status] || { icon: '❓', bg: '#6b7280', label: status || '—' };
+    const chave = String(status || '').trim();
+    const s = map[chave] || map[chave.toUpperCase()] || { icon: '❓', bg: '#6b7280', label: status || '—' };
     return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:3px 10px;border-radius:12px;background:${s.bg}22;color:${s.bg};font-weight:600;border:1px solid ${s.bg}44;">${s.icon} ${s.label}</span>`;
 }
 
@@ -27084,6 +27093,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
         m.amostra_status = 'REPROVADA';
         m.status_arte = 'REPROVADA_CLIENTE';
     });
+    await sincronizarStatusConsolidadoPedidoArte(numOs, globais.length ? globais : state.osItens[osId]);
     return true;
 }
 window.devolverArteParaAlteracao = devolverArteParaAlteracao;
@@ -27163,6 +27173,11 @@ function getAprovacaoBadge(aprov) {
         // Novos status da tabela pedidos_artes
         'EM_REVISAO_INTERNA': { cls: 'badge-amber', icon: '🎨', text: 'Rev. Interna' },
         'AGUARDANDO_APROVACAO': { cls: 'badge-yellow', icon: '⏳', text: 'Aguard. Cliente' },
+        'EM APROVAÇÃO': { cls: 'badge-yellow', icon: '⏳', text: 'Em Aprovação' },
+        'DADOS PENDENTES': { cls: 'badge-yellow', icon: '📋', text: 'Dados Pendentes' },
+        'CORRIGIR DADOS': { cls: 'badge-red', icon: '⚠️', text: 'Corrigir Dados' },
+        'APR PARCIAL': { cls: 'badge-yellow', icon: '🟡', text: 'Apr Parcial' },
+        'APROVADO PARCIAL': { cls: 'badge-yellow', icon: '🟡', text: 'Apr Parcial' },
         'APROVADA_CLIENTE': { cls: 'badge-teal', icon: '✅', text: 'Aprov. Cliente' },
         'REPROVADA_CLIENTE': { cls: 'badge-red', icon: '❌', text: 'Reprov. Cliente' },
         'LIBERADA': { cls: 'badge-teal', icon: '📋', text: 'Liberada' }
@@ -28842,7 +28857,7 @@ window.pedidoEntraNoPainel = pedidoEntraNoPainel;
 // resposta que o card da tela dá.
 
 const ARTE_REPROVADOS = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
-const ARTE_APROVADOS = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
+const ARTE_APROVADOS = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA', 'DADOS PENDENTES'];
 // `AGUARDANDO` NAO entra aqui, e a diferenca custa a fila inteira do designer.
 //
 // Sao duas palavras parecidas e opostas, e as duas existem em
@@ -28860,7 +28875,68 @@ const ARTE_APROVADOS = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 
 // O banco separa as duas sem ambiguidade: dos pedidos em `AGUARDANDO`,
 // **nenhum** tem link do cliente gerado (ou seja, nada foi enviado) e todos tem
 // `propostas.em_arte = true`. Ver `ARTE_COM_O_DESIGNER`, logo abaixo.
-const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARD. APROVAÇAO'];
+const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'EM APROVAÇÃO', 'EM APROVACAO', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARD. APROVAÇAO'];
+
+function calcularStatusConsolidadoPedidoArte(modelos, entregaStatus, statusAtual) {
+    const normalizar = valor => String(valor || '').trim().toUpperCase();
+    const entrega = normalizar(entregaStatus);
+    const estados = (modelos || []).map(modelo => [
+        normalizar(modelo.status_arte), normalizar(modelo.amostra_status), normalizar(modelo.aprovacao)
+    ].filter(Boolean));
+
+    if (entrega === 'CORRIGIR') return 'Corrigir Dados';
+
+    const temAlteracao = estados.some(valores => valores.some(status => ARTE_REPROVADOS.includes(status)));
+    if (temAlteracao) return 'Em Alteração';
+
+    const aprovadas = estados.filter(valores => valores.some(status => ARTE_APROVADOS.includes(status))).length;
+    if (estados.length > 0 && aprovadas === estados.length) {
+        return entrega === 'APROVADO' ? 'APROVADO' : 'Dados Pendentes';
+    }
+    if (aprovadas > 0) return 'Apr Parcial';
+
+    const atual = normalizar(statusAtual);
+    if (atual === 'AGUARDANDO_APROVACAO') return 'Em Aprovação';
+    if (atual === 'APROVADO PARCIAL') return 'Apr Parcial';
+    if (ARTE_APROVADOS.includes(atual)) {
+        return entrega === 'APROVADO' ? 'APROVADO' : 'Dados Pendentes';
+    }
+    return statusAtual || null;
+}
+
+async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
+    const numInt = parseInt(numero, 10);
+    if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
+
+    const { data: artes, error } = await supabaseClient
+        .from('pedidos_artes')
+        .select('id, status, entrega_dados')
+        .eq('id_int', numInt)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!artes || artes.length === 0) return null;
+
+    const entrega = artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'CORRIGIR')
+        ? 'CORRIGIR'
+        : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'APROVADO')
+            ? 'APROVADO' : (artes[0].entrega_dados || '');
+    const listaModelos = modelos || ((state.modelosGlobais && state.modelosGlobais[numInt]) || []);
+    const novoStatus = calcularStatusConsolidadoPedidoArte(listaModelos, entrega, artes[0].status);
+    if (!novoStatus) return null;
+
+    if (artes.some(a => a.status !== novoStatus)) {
+        const { error: erroUpdate } = await supabaseClient
+            .from('pedidos_artes')
+            .update({ status: novoStatus })
+            .eq('id_int', numInt);
+        if (erroUpdate) throw erroUpdate;
+    }
+    (state.todasArtes || []).filter(a => a.id_int === numInt).forEach(a => { a.status = novoStatus; });
+    return novoStatus;
+}
+
+window.calcularStatusConsolidadoPedidoArte = calcularStatusConsolidadoPedidoArte;
+window.sincronizarStatusConsolidadoPedidoArte = sincronizarStatusConsolidadoPedidoArte;
 
 // A arte ainda esta com o designer: o card certo e "Em Arte".
 //
@@ -28944,8 +29020,8 @@ function classificarPedidoNaArte(os) {
         statusCalculado = 'Enviar Arte';
     } else if (isEmAlteracaoCalculado) {
         statusCalculado = 'Em Alteração';
-    } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || clienteAbriuOLink || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
-        statusCalculado = 'Aguard. Aprovação';
+    } else if (clienteAbriuOLink || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
+        statusCalculado = 'Em Aprovação';
     } else if (ARTE_COM_O_DESIGNER.includes(osStatus) || ARTE_COM_O_DESIGNER.includes(globalStatus)) {
         // Depois do ramo de aprovação de propósito: se alguém gerou o link do
         // cliente, a arte saiu daqui, mesmo que a palavra do ERP não tenha
@@ -28960,8 +29036,17 @@ function classificarPedidoNaArte(os) {
     const isEntregaAprovada = (entregaStatus === 'APROVADO');
     const isArteAprovada = (statusCalculado === 'Aprovada');
 
-    const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
-    const isEmAprovacaoFila = (statusCalculado === 'Enviar Arte' || statusCalculado === 'Aguard. Aprovação' || statusCalculado === 'Arte Pronta' || statusCalculado === 'Aprovada');
+    const temArteAprovada = modelosGlobaisOS.some(m => {
+        const sAm = (m.amostra_status || '').trim().toUpperCase();
+        const sArt = (m.status_arte || '').trim().toUpperCase();
+        return ARTE_APROVADOS.includes(sAm) || ARTE_APROVADOS.includes(sArt);
+    });
+    if (entregaStatus === 'CORRIGIR') statusCalculado = 'Corrigir Dados';
+    else if (isArteAprovada) statusCalculado = isEntregaAprovada ? 'APROVADO' : 'Dados Pendentes';
+    else if (!isEmAlteracaoCalculado && temArteAprovada) statusCalculado = 'Apr Parcial';
+
+    const isTotalmenteAprovado = statusCalculado === 'APROVADO';
+    const isEmAprovacaoFila = ['Enviar Arte', 'Em Aprovação', 'Arte Pronta', 'Dados Pendentes', 'Apr Parcial', 'Corrigir Dados'].includes(statusCalculado);
 
     // O cancelado vem ANTES de tudo: nenhum estágio de arte o traz de volta
     // para a fila do designer, e o badge diz o que ele é. Sem esta linha ele
@@ -30033,7 +30118,7 @@ function renderOrdens() {
                 'REPROVADA_CLIENTE': 'Em Alteração',
                 'ENVIAR ARTE': 'Enviar Arte',
                 'ARTE PRONTA': 'Enviar Arte',
-                'AGUARD. APROVACAO': 'Aguard. Aprovação',
+                'AGUARD. APROVACAO': 'Em Aprovação',
                 // `AGUARDANDO` é a arte esperando o DESIGNER, e não o cliente —
                 // ver `ARTE_COM_O_DESIGNER`. O filtro tem de concordar com o
                 // badge, senão filtrar por "Em Arte" esconde justamente os
@@ -30043,9 +30128,14 @@ function renderOrdens() {
                 // Ver `STATUS_CORRIGIR_ARTE`: é um estágio próprio, e não "Em
                 // Arte", senão filtrar por ele não acharia nada.
                 'CORRIGIR ARTE': 'Corrigir Arte',
-                'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
-                'APROVADA': 'Aprovada',
-                'APROVADO': 'Aprovada'
+                'AGUARDANDO_APROVACAO': 'Em Aprovação',
+                'EM APROVACAO': 'Em Aprovação',
+                'APROVADO PARCIAL': 'Apr Parcial',
+                'APR PARCIAL': 'Apr Parcial',
+                'DADOS PENDENTES': 'Dados Pendentes',
+                'CORRIGIR DADOS': 'Corrigir Dados',
+                'APROVADA': 'Dados Pendentes',
+                'APROVADO': 'APROVADO'
             };
 
             const stNormCalculado = statusNormMap[norm(osStatusCalculado)] || osStatusCalculado;
@@ -30441,9 +30531,9 @@ function renderOrdens() {
 
                                 // ── Botões por status ──
                                 const isReprovada = stUp === 'REPROVADA' || stUp === 'REPROVADO' || stUp === 'REPROVADA_CLIENTE';
-                                const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA';
+                                const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA' || stUp === 'DADOS PENDENTES';
                                 const isArtePronta = st === 'Arte Pronta' || st === 'Enviar Arte' || st === 'Enviar ARTE';
-                                const isAguardando = st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
+                                const isAguardando = st === 'Em Aprovação' || st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
                                 const isAlterado = stUp === 'EM ALTERAÇÃO' || stUp === 'EM ALTERACAO' || st === 'Em Alteração';
 
                                 // 1) Botão de link
@@ -32790,6 +32880,7 @@ async function clienteAprovarEntregaDados(osId, osNum) {
                 .from('pedidos_artes')
                 .update({ entrega_dados: 'APROVADO' })
                 .eq('id_int', numInt);
+            await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
         const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
@@ -32865,6 +32956,7 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
                 .from('pedidos_artes')
                 .update({
                     entrega_dados: 'CORRIGIR',
+                    status: 'Corrigir Dados',
                     observacoes: obsObj
                 })
                 .eq('id_int', numInt);
@@ -32903,6 +32995,7 @@ async function marcarEntregaDadosCorrigido(osId, osNum) {
                 .from('pedidos_artes')
                 .update({ entrega_dados: 'APROVADO' })
                 .eq('id_int', numInt);
+            await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
         const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
@@ -34721,6 +34814,7 @@ window.alterarEntregaDadosStatus = async function(osIntNum, currentStatus) {
             await supabaseClient.from('pedidos_artes')
                 .update({ entrega_dados: valToSave })
                 .eq('id_int', numInt);
+            await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
         const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
@@ -38648,7 +38742,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
                 try {
                     await supabaseClient
                         .from('pedidos_artes')
-                        .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                        .update({ comentarios_revisao: obs })
                         .eq('id_modelo', itemId)
                         .order('versao', { ascending: false })
                         .limit(1);
@@ -38686,6 +38780,9 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
                 state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
             }
             try { await loadOSItens(osId); } catch (e) { console.warn('[decisionAmostraItem] loadOSItens err:', e); }
+            const osDaDecisao = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+            const numeroDaDecisao = osDaDecisao ? osDaDecisao.numero : String(osId).replace('vibe_', '');
+            await sincronizarStatusConsolidadoPedidoArte(numeroDaDecisao, state.osItens[osId] || []);
             renderAmostrasOSItens(osId);
 
             // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
@@ -38743,6 +38840,7 @@ async function promoverPedidoSeTodosProntos(osId) {
     } catch (autoErr) {
         console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
     }
+    await marcarEstagioDaArteNoErp(os.numero, 'Enviar Arte');
     toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
     return true;
 }
@@ -38832,6 +38930,9 @@ window.acaoEmLoteNoPedido = async function(osId, acao) {
         state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
     }
     try { await loadOSItens(osId); } catch (e) { console.warn('[lote] loadOSItens err:', e); }
+    const osDoLote = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const numeroDoLote = osDoLote ? osDoLote.numero : String(osId).replace('vibe_', '');
+    await sincronizarStatusConsolidadoPedidoArte(numeroDoLote, state.osItens[osId] || []);
     renderAmostrasOSItens(osId);
     if (acao === 'PRONTO') await promoverPedidoSeTodosProntos(osId);
 
@@ -40282,7 +40383,6 @@ async function setStatusArteAtual(novoStatus) {
         const { error } = await supabaseClient
             .from('pedidos_artes')
             .update({ 
-                status: novoStatus,
                 comentarios_revisao: comment || arteAtual.comentarios_revisao,
                 aprovado_por: novoStatus.includes('APROVADA') || novoStatus === 'LIBERADA' ? 'Avaliador' : null,
                 data_aprovacao: novoStatus.includes('APROVADA') || novoStatus === 'LIBERADA' ? new Date().toISOString() : null
@@ -40300,7 +40400,12 @@ async function setStatusArteAtual(novoStatus) {
         const item = (state.osItens[artesModalState.osId] || []).find(i => String(i.id) === String(artesModalState.itemId));
         if (item) {
             item.aprovacao = novoStatus;
+            item.status_arte = novoStatus;
         }
+        const numeroPedido = arteAtual.id_int || String(artesModalState.osId || '').replace('vibe_', '');
+        await sincronizarStatusConsolidadoPedidoArte(
+            numeroPedido, state.osItens[artesModalState.osId] || []
+        );
             
         const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESSÃO' : novoStatus;
         await logToChatIdeal(`Arte do Modelo ${artesModalState.modeloNome} (versão ${arteAtual.versao}) alterada para: ${statusTexto}.\\n${comment ? 'Obs: '+comment : ''}`);
@@ -40537,6 +40642,7 @@ window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 const ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI = [
     'AGUARDANDO', 'EM ARTE', 'ARTE_EM_ANDAMENTO', 'ENVIAR ARTE', 'ARTE PRONTA',
     'AGUARDANDO_APROVACAO', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO',
+    'EM APROVAÇÃO', 'EM APROVACAO', 'APR PARCIAL', 'APROVADO PARCIAL',
     'REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE',
     'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'
 ];
@@ -40556,17 +40662,20 @@ async function marcarEstagioDaArteNoErp(numero, palavra) {
     const n = parseInt(numero, 10);
     if (isNaN(n)) return;
     try {
-        const { data } = await supabaseClient
+        const { data, error } = await supabaseClient
             .from('pedidos_artes')
             .select('id, status')
-            .eq('id_int', n)
-            .maybeSingle();
+            .eq('id_int', n);
+        if (error) throw error;
         // Sem linha ainda não é erro: quem a cria é o `garantirLinhaDePedidoArte`,
         // chamado dentro do `getOrCreateLinkCliente` logo antes daqui.
-        if (!data) return;
-        const atual = (data.status || '').trim().toUpperCase();
-        if (atual && !ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI.includes(atual)) return;
-        await supabaseClient.from('pedidos_artes').update({ status: palavra }).eq('id', data.id);
+        if (!data || data.length === 0) return;
+        const podeSubstituirTodas = data.every(linha => {
+            const atual = (linha.status || '').trim().toUpperCase();
+            return !atual || ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI.includes(atual);
+        });
+        if (!podeSubstituirTodas) return;
+        await supabaseClient.from('pedidos_artes').update({ status: palavra }).eq('id_int', n);
     } catch (e) {
         console.warn('[Arte] Não consegui gravar o estágio no ERP:', e.message || e);
     }
@@ -40636,7 +40745,7 @@ async function prepararLinkDaArtePronta(osId, numero) {
         state.linksClienteData[osId].status_arte = 'Enviar Arte';
     }
 
-    await marcarEstagioDaArteNoErp(numero, 'ENVIAR ARTE');
+    await marcarEstagioDaArteNoErp(numero, 'Enviar Arte');
 
     return { ok: true, link: link, falhas: [] };
 }

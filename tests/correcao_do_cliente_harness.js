@@ -62,6 +62,8 @@ function bancoFalso(linhas, erros) {
                 return this;
             };
             q.eq = function (campo, valor) { this._id = valor; return this; };
+            q.order = function () { return this; };
+            q.limit = function () { return this; };
             q.maybeSingle = function () {
                 if (erros.leitura) return Promise.resolve({ data: null, error: { message: erros.leitura } });
                 return Promise.resolve({ data: linhas[this._id] || null, error: null });

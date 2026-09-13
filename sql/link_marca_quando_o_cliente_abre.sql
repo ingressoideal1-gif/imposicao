@@ -67,7 +67,7 @@ COMMENT ON COLUMN public.pedidos_links_cliente.cliente_abriu_em IS
 -- sem privilégio nenhum na tabela.
 --
 -- A função faz DUAS coisas de propósito, e a segunda é a que interessa ao ERP:
--- ela também grava `AGUARDANDO_APROVACAO` em `pedidos_artes.status`. Assim o
+-- ela também grava `Em Aprovação` em `pedidos_artes.status`. Assim o
 -- parceiro enxerga o estágio mesmo que ninguém tenha o painel aberto naquele
 -- momento — que é o caso normal, porque quem está na tela é o cliente.
 --
@@ -114,7 +114,7 @@ BEGIN
     -- pedido para "aguardando aprovação". A lista é a dos estágios anteriores a
     -- este — os mesmos nomes documentados em `docs/status_da_arte_para_o_erp.md`.
     UPDATE pedidos_artes a
-       SET status = 'AGUARDANDO_APROVACAO',
+       SET status = 'Em Aprovação',
            updated_at = now()
      WHERE a.id_int::text = v_id_int
        AND (a.status IS NULL
@@ -128,7 +128,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.link_cliente_visto(text, text) IS
-'Carimba o primeiro gesto do cliente na tela do link (cliente_abriu_em) e move pedidos_artes.status para AGUARDANDO_APROVACAO. Idempotente: so escreve na primeira vez. Criada em 31/08/2026, quando o link passou a nascer junto com a arte pronta e a existencia dele deixou de significar que o cliente ja tinha olhado.';
+'Carimba o primeiro gesto do cliente na tela do link (cliente_abriu_em) e move pedidos_artes.status para Em Aprovação. Idempotente: so escreve na primeira vez. Atualizada em 13/09/2026 para o vocabulario consolidado do ERP.';
 
 -- ─── 3. Quem pode chamar ─────────────────────────────────────────────────────
 --

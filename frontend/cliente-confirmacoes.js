@@ -411,8 +411,8 @@ window.finalizarNoPortal = async function () {
 
     window.portalGravandoConfirmacao = false;
     clienteState.pedidoFinalizado = true;
-    clienteState.statusArte = 'APROVADO';
-    pintarSeloDoStatus('APROVADO');
+    clienteState.statusArte = precisaAtencao ? 'Corrigir Dados' : 'APROVADO';
+    pintarSeloDoStatus(clienteState.statusArte);
 
     // ORDEM IMPORTA: redesenhar PRIMEIRO, avisar depois.
     //

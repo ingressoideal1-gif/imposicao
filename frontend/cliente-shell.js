@@ -60,6 +60,15 @@ function semAcento(texto) {
 function seloDoStatus(statusArte) {
     const s = semAcento(statusArte);
 
+    if (s.indexOf('CORRIGIR DADOS') >= 0) {
+        return { chave: 'correcao-dados', texto: 'Corrigir dados', cor: '#ef4444' };
+    }
+    if (s.indexOf('DADOS PENDENTES') >= 0) {
+        return { chave: 'aprovado', texto: 'Artes aprovadas · dados pendentes', cor: '#f59e0b' };
+    }
+    if (s.indexOf('APR PARCIAL') >= 0 || s.indexOf('APROVADO PARCIAL') >= 0) {
+        return { chave: 'aprovar', texto: 'Aprovação parcial', cor: '#f59e0b' };
+    }
     if (s.indexOf('ENVIAR ARTE') >= 0 || s.indexOf('AGUARD') >= 0) {
         return { chave: 'aprovar', texto: 'Aguardando sua aprovação', cor: '#f59e0b' };
     }
