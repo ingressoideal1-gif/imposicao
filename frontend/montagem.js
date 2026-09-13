@@ -2585,6 +2585,14 @@ async function aplicarSugestaoDaMontagem(modo) {
         repeticoes: plano.repeticoes.slice(),
         assinatura: _mtgAssinaturaDasCelulas(state.montagem.celulas),
     } : null;
+    // O recomendado passa a ser também a configuração visível. Antes, a folha
+    // podia mostrar duas montagens enquanto o seletor continuava em 1, e o
+    // mínimo permanecia no valor usado para iniciar a busca. O menor valor da
+    // lista é exatamente o mínimo efetivo do plano aplicado.
+    if (plano && (!modo || modo === 'auto')) {
+        state.montagem.quantidadeMontagens = plano.quantidade;
+        state.montagem.minimoRepeticoes = Math.min(...plano.repeticoes);
+    }
     state.montagem.selecao = [];
     renderMontagem();
 

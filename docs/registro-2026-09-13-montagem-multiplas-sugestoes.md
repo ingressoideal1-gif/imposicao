@@ -1,7 +1,7 @@
 # Montagem — múltiplas composições e mínimo de repetições
 
 Data: 13/09/2026
-Estado: correção dos controles publicada na versão v868.
+Estado: sincronização do recomendado publicada na versão v869.
 
 ## Objetivo
 
@@ -35,6 +35,8 @@ Ao aplicar, a visualização cria uma folha por composição. O cabeçalho da fo
 O botão **Aplicar o recomendado** fica no topo do box, antes dos controles. Alterar **Número de montagens** ou **Mínimo de repetições** recalcula e substitui imediatamente a composição mostrada na janela, preservando o estado anterior no histórico para desfazer.
 
 O mínimo também recalcula enquanto o valor é digitado, após uma pausa curta, sem exigir que o campo perca o foco. Na tabela da montagem atual, **Repetições** mostra quantas vezes cada montagem que contém o modelo deve ser impressa; **Produz** e **Sobra** usam essas mesmas repetições.
+
+Ao aplicar o recomendado, os controles passam a representar o plano que está na janela: **Número de montagens** recebe a quantidade de composições aplicadas e **Mínimo de repetições** recebe a menor repetição entre elas.
 
 No compositor, quando um modelo válido está selecionado e o campo **Posições** está vazio, **+ Adicionar** inclui diretamente a posição 1. O preenchimento explícito continua aceitando posições isoladas e faixas, com a mesma validação contra a tiragem.
 

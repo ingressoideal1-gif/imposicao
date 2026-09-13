@@ -1174,8 +1174,11 @@ const PECAS = [
     ok(duasConfiguradas.repeticoes.length === 2
         && duasConfiguradas.repeticoes.reduce((a, b) => a + b, 0) === 10,
        'as repetições próprias das duas montagens conservam o menor total', duasConfiguradas);
-    ok(duasConfiguradas.minimo === 3 && duasConfiguradas.repeticoesComMinimo.every(r => r >= 3),
-       'alterar o mínimo recalcula a janela atual e aplica o novo limite', duasConfiguradas);
+    ok(duasConfiguradas.minimo === 5
+        && duasConfiguradas.minimo === Math.min(...duasConfiguradas.repeticoesComMinimo)
+        && duasConfiguradas.repeticoesComMinimo.every(r => r >= 3),
+       'alterar o mínimo recalcula a janela e sincroniza o campo com o mínimo efetivo do plano',
+       duasConfiguradas);
 
     const quatroIguais = await aba.evaluate(async () => {
         const pecas = Array.from({ length: 4 }, (_, i) => ({
@@ -1243,12 +1246,19 @@ const PECAS = [
             desenhadas: document.querySelectorAll('#mtg-folha .mtg-celula:not(.mtg-celula-vazia)').length,
             toast: (window.__toasts || []).join(' | '),
             podeDesfazer: !document.getElementById('mtg-desfazer').disabled,
+            numeroConfigurado: state.montagem.quantidadeMontagens,
+            minimoConfigurado: state.montagem.minimoRepeticoes,
+            numeroVisivel: document.getElementById('mtg-numero-montagens').value,
+            minimoVisivel: document.getElementById('mtg-minimo-repeticoes').value,
         };
     }, APROV);
     ok(unica.celulas === 10 && unica.folhas === 1 && unica.vazias === 0,
        'o recomendado monta UMA folha cheia', unica);
     ok(unica.deM1 === 3 && unica.deM2 === 7, 'com 3 do primeiro e 7 do segundo', unica);
     ok(unica.desenhadas === 10, 'e a folha na tela mostra as dez', unica);
+    ok(unica.numeroConfigurado === 1 && unica.minimoConfigurado === 10
+        && unica.numeroVisivel === '1' && unica.minimoVisivel === '10',
+       'aplicar o recomendado sincroniza os controles com 1 montagem e mínimo de 10 repetições', unica);
     ok(/montagem 1, 10 vez/.test(unica.toast),
        'o aviso diz quantas vezes imprimir — sem isso a folha sozinha não entrega a tiragem',
        unica.toast);
@@ -1277,6 +1287,10 @@ const PECAS = [
             cheias: state.montagem.celulas.length === 8,
             repeticoes: state.montagem.planoAplicado && state.montagem.planoAplicado.repeticoes,
             cabecalho: document.getElementById('mtg-folha-num').textContent,
+            numeroConfigurado: state.montagem.quantidadeMontagens,
+            minimoConfigurado: state.montagem.minimoRepeticoes,
+            numeroVisivel: document.getElementById('mtg-numero-montagens').value,
+            minimoVisivel: document.getElementById('mtg-minimo-repeticoes').value,
         };
     });
     ok(/usar 2 montagens reduz de 4 para 3 impressões/.test(varias.antes),
@@ -1284,6 +1298,9 @@ const PECAS = [
     ok(varias.folhas === 2 && varias.cheias && varias.repeticoes.reduce((a, b) => a + b, 0) === 3
         && varias.repeticoes.every(r => r >= 1),
        'o recomendado cria duas composições cheias e conserva as repetições de cada uma', varias);
+    ok(varias.numeroConfigurado === 2 && varias.minimoConfigurado === 1
+        && varias.numeroVisivel === '2' && varias.minimoVisivel === '1',
+       'o plano automático com duas montagens atualiza o drop e o mínimo visíveis', varias);
     ok(/Montagem 1: repetir [12] vez/.test(varias.cabecalho)
         && /Montagem 1: [12] vez/.test(varias.depois) && /Montagem 2: [12] vez/.test(varias.depois),
        'a visualização e o aproveitamento informam quantas vezes imprimir cada montagem', varias);
