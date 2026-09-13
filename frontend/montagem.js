@@ -134,6 +134,7 @@ function montagemVazia() {
         modeloSel: null,
         modelosDisponiveis: [],
         modelosMarcados: [],
+        modelosDoSeletor: [],
         buscaModelos: '',
         seletorModelosAberto: false,
         face: 'both',
@@ -1106,9 +1107,9 @@ function sugestaoDeAproveitamento(modelos, porFolha) {
         total: 0, itens: [], celulasUsadas: 0, temDadoVariavel: false,
     };
 
-    if (lista.length < 2) {
+    if (!lista.length) {
         return Object.assign(vazia, {
-            motivo: 'A sugestão precisa de dois modelos ou mais na folha.' });
+            motivo: 'Selecione ao menos um modelo para calcular a montagem.' });
     }
     if (!P) {
         return Object.assign(vazia, {
@@ -1435,6 +1436,8 @@ function guardarNaHistoria() {
     m.historia.push({
         celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
         modelos: m.modelos.slice(),
+        modelosMarcados: (m.modelosMarcados || []).slice(),
+        modelosDoSeletor: (m.modelosDoSeletor || []).slice(),
         selecao: m.selecao.slice(),
         planoAplicado: m.planoAplicado ? { ...m.planoAplicado,
             repeticoes: m.planoAplicado.repeticoes.slice() } : null,
@@ -1449,6 +1452,8 @@ function _mtgAplicar(instantaneo) {
     const m = state.montagem;
     m.celulas = instantaneo.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos }));
     m.modelos = instantaneo.modelos.slice();
+    m.modelosMarcados = (instantaneo.modelosMarcados || []).slice();
+    m.modelosDoSeletor = (instantaneo.modelosDoSeletor || []).slice();
     m.selecao = (instantaneo.selecao || []).slice();
     m.planoAplicado = instantaneo.planoAplicado ? { ...instantaneo.planoAplicado,
         repeticoes: instantaneo.planoAplicado.repeticoes.slice() } : null;
@@ -1459,6 +1464,8 @@ function _mtgInstantaneoAtual() {
     return {
         celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
         modelos: m.modelos.slice(),
+        modelosMarcados: (m.modelosMarcados || []).slice(),
+        modelosDoSeletor: (m.modelosDoSeletor || []).slice(),
         selecao: m.selecao.slice(),
         planoAplicado: m.planoAplicado ? { ...m.planoAplicado,
             repeticoes: m.planoAplicado.repeticoes.slice() } : null,
@@ -1702,6 +1709,12 @@ function _mtgChaveDoCandidato(c) {
     return String(c.osId) + '::' + String(c.item && c.item.id);
 }
 
+function _mtgModelosFixosDoSeletor(m) {
+    const controlados = new Set(m.modelosDoSeletor || []);
+    return (m.modelos || []).filter(modelo => !controlados.has(
+        String(modelo.osId) + '::' + String(modelo.itemId)));
+}
+
 /**
  * Compara combinações com a impressão separada dos MESMOS modelos. Sem essa
  * base, duas tiragens pequenas sempre pareceriam melhores só por serem pequenas.
@@ -1803,14 +1816,17 @@ function buscarModelosDaMontagem(texto) {
     _mtgRenderSeletorDeModelos();
 }
 
-function marcarModeloDaMontagem(chave, marcado) {
+async function marcarModeloDaMontagem(chave, marcado) {
     const m = state.montagem;
     const candidatos = m.modelosDisponiveis || [];
     const candidato = candidatos.find(c => _mtgChaveDoCandidato(c) === String(chave));
-    if (!candidato || modeloDaMontagem(m.modelos, candidato.osId, candidato.item.id)) return;
+    const controlados = new Set(m.modelosDoSeletor || []);
+    const jaCarregado = modeloDaMontagem(m.modelos, candidato && candidato.osId,
+        candidato && candidato.item && candidato.item.id);
+    if (!candidato || (jaCarregado && !controlados.has(String(chave)))) return;
     const marcados = new Set(m.modelosMarcados || []);
     if (marcado) {
-        const base = m.modelos[0] || candidatos
+        const base = _mtgModelosFixosDoSeletor(m)[0] || candidatos
             .filter(c => marcados.has(_mtgChaveDoCandidato(c))).map(c => c.modelo)[0];
         if (base && porQueNaoCabeNaMontagem(base.peca, candidato.modelo.peca)) return;
         marcados.add(String(chave));
@@ -1818,62 +1834,78 @@ function marcarModeloDaMontagem(chave, marcado) {
         marcados.delete(String(chave));
     }
     m.modelosMarcados = Array.from(marcados);
-    _mtgRenderSeletorDeModelos();
+    await _mtgAplicarModelosMarcadosDaMontagem();
 }
 
-function limparSelecaoDeModelosDaMontagem() {
+async function limparSelecaoDeModelosDaMontagem() {
     state.montagem.modelosMarcados = [];
-    _mtgRenderSeletorDeModelos();
+    await _mtgAplicarModelosMarcadosDaMontagem();
 }
 
-function marcarTodosModelosCompativeisDaMontagem() {
+async function marcarTodosModelosCompativeisDaMontagem() {
     const m = state.montagem;
     const candidatos = m.modelosDisponiveis || [];
-    const carregados = new Set(m.modelos.map(x => String(x.osId) + '::' + String(x.itemId)));
-    const base = m.modelos[0] || candidatos.find(c => !carregados.has(_mtgChaveDoCandidato(c)))?.modelo;
+    const carregados = new Set(_mtgModelosFixosDoSeletor(m)
+        .map(x => String(x.osId) + '::' + String(x.itemId)));
+    const base = _mtgModelosFixosDoSeletor(m)[0]
+        || candidatos.find(c => !carregados.has(_mtgChaveDoCandidato(c)))?.modelo;
     if (!base) return;
     m.modelosMarcados = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
         && !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca)).map(_mtgChaveDoCandidato);
-    _mtgRenderSeletorDeModelos();
+    await _mtgAplicarModelosMarcadosDaMontagem();
 }
 
-function usarCombinacaoDeModelosDaMontagem(chaves) {
+async function usarCombinacaoDeModelosDaMontagem(chaves) {
     const m = state.montagem;
     const candidatos = m.modelosDisponiveis || [];
     const pedidas = new Set((chaves || []).map(String));
     const escolhidas = candidatos.filter(c => pedidas.has(_mtgChaveDoCandidato(c)));
-    const base = m.modelos[0] || (escolhidas[0] && escolhidas[0].modelo);
+    const base = _mtgModelosFixosDoSeletor(m)[0] || (escolhidas[0] && escolhidas[0].modelo);
     m.modelosMarcados = escolhidas.filter(c => !base
         || !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca)).map(_mtgChaveDoCandidato);
-    _mtgRenderSeletorDeModelos();
+    await _mtgAplicarModelosMarcadosDaMontagem();
 }
 
-function carregarModelosSelecionadosDaMontagem() {
+async function _mtgAplicarModelosMarcadosDaMontagem() {
     if (state.montagem.gerando) return;
     const m = state.montagem;
     const marcados = new Set(m.modelosMarcados || []);
-    const novos = (m.modelosDisponiveis || []).filter(c => marcados.has(_mtgChaveDoCandidato(c))
-        && !modeloDaMontagem(m.modelos, c.osId, c.item.id));
-    if (!novos.length) return;
-    const base = m.modelos[0] || novos[0].modelo;
-    if (novos.some(c => porQueNaoCabeNaMontagem(base.peca, c.modelo.peca))) return;
+    const fixos = _mtgModelosFixosDoSeletor(m);
+    const escolhidos = (m.modelosDisponiveis || []).filter(c => marcados.has(_mtgChaveDoCandidato(c)));
+    const base = fixos[0] || (escolhidos[0] && escolhidos[0].modelo);
+    const validos = escolhidos.filter(c => !base || !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca));
+    m.modelosMarcados = validos.map(_mtgChaveDoCandidato);
+
     guardarNaHistoria();
-    for (const c of novos) m.modelos.push(c.modelo);
-    const primeiro = novos[0];
-    m.pedidoSel = primeiro.osId;
-    m.modeloSel = String(primeiro.item.id);
-    m.modelosMarcados = [];
-    m.seletorModelosAberto = false;
+    const chavesFixas = new Set(fixos.map(x => String(x.osId) + '::' + String(x.itemId)));
+    const controladosAgora = validos.filter(c => !chavesFixas.has(_mtgChaveDoCandidato(c)));
+    m.modelos = fixos.concat(controladosAgora.map(c => c.modelo));
+    m.modelosDoSeletor = controladosAgora.map(_mtgChaveDoCandidato);
+    const primeiro = validos[0];
+    if (primeiro) {
+        m.pedidoSel = primeiro.osId;
+        m.modeloSel = String(primeiro.item.id);
+    }
     const sel = document.getElementById('mtg-modelo');
-    if (sel) {
+    if (sel && primeiro) {
         const opt = Array.from(sel.options).find(o => o.dataset.pedidoId === String(primeiro.osId)
             && o.dataset.modeloId === String(primeiro.item.id));
         if (opt) sel.value = opt.value;
     }
+    if (!m.modelos.length) {
+        m.celulas = [];
+        m.planoAplicado = null;
+        m.selecao = [];
+        renderMontagem();
+        return;
+    }
     renderMontagem();
-    onMontagemPosicoesChange();
-    if (typeof toast === 'function') toast(novos.length + (novos.length === 1
-        ? ' modelo carregado para o cálculo.' : ' modelos carregados para o cálculo.'), 'success');
+    await aplicarSugestaoDaMontagem('auto', { guardarHistoria: false, silencioso: true });
+}
+
+function carregarModelosSelecionadosDaMontagem() {
+    state.montagem.seletorModelosAberto = false;
+    renderMontagem();
 }
 
 function _mtgRenderSeletorDeModelos() {
@@ -1886,8 +1918,9 @@ function _mtgRenderSeletorDeModelos() {
     if (!painel || !trigger || !opcoes || !recs || !carregar) return;
     const candidatos = m.modelosDisponiveis || [];
     const marcados = new Set(m.modelosMarcados || []);
+    const controlados = new Set(m.modelosDoSeletor || []);
     const carregados = new Set(m.modelos.map(x => String(x.osId) + '::' + String(x.itemId)));
-    const qtdMarcada = Array.from(marcados).filter(k => !carregados.has(k)).length;
+    const qtdMarcada = marcados.size;
     trigger.disabled = !candidatos.length || !!m.carregando;
     trigger.textContent = m.carregando ? 'Carregando modelos…'
         : qtdMarcada ? qtdMarcada + (qtdMarcada === 1 ? ' modelo selecionado' : ' modelos selecionados')
@@ -1900,7 +1933,7 @@ function _mtgRenderSeletorDeModelos() {
     const campoBusca = document.getElementById('mtg-modelos-busca');
     if (campoBusca && document.activeElement !== campoBusca) campoBusca.value = m.buscaModelos || '';
     const busca = String(m.buscaModelos || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const base = m.modelos[0] || candidatos
+    const base = _mtgModelosFixosDoSeletor(m)[0] || candidatos
         .filter(c => marcados.has(_mtgChaveDoCandidato(c))).map(c => c.modelo)[0];
     const visiveis = candidatos.filter(c => !busca || [c.modelo.pedidoNumero, c.item.id, c.modelo.nome]
         .join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(busca));
@@ -1908,7 +1941,7 @@ function _mtgRenderSeletorDeModelos() {
         const chave = _mtgChaveDoCandidato(c);
         const jaCarregado = carregados.has(chave);
         const motivo = !jaCarregado && base ? porQueNaoCabeNaMontagem(base.peca, c.modelo.peca) : '';
-        const travado = jaCarregado || !!motivo;
+        const travado = (jaCarregado && !controlados.has(chave)) || !!motivo;
         const face = modoDaPecaNaMontagem(c.modelo.peca) === 'front' ? 'Só frente' : 'COM VERSO';
         return `<label class="mtg-modelo-opcao${travado ? ' desabilitado' : ''}" data-modelo-chave="${escapeHtml(chave)}">
           <input type="checkbox" ${jaCarregado || marcados.has(chave) ? 'checked' : ''} ${travado ? 'disabled' : ''}
@@ -1920,9 +1953,8 @@ function _mtgRenderSeletorDeModelos() {
           ${jaCarregado ? '<i>Carregado</i>' : motivo ? `<i>${escapeHtml(motivo)}</i>` : ''}
         </label>`;
     }).join('') : '<p class="mtg-dica">Nenhum modelo corresponde à busca.</p>';
-    carregar.disabled = qtdMarcada === 0;
-    carregar.textContent = qtdMarcada ? 'Carregar ' + qtdMarcada + (qtdMarcada === 1 ? ' modelo' : ' modelos')
-        : 'Carregar modelos selecionados';
+    carregar.disabled = false;
+    carregar.textContent = 'Fechar';
 
     const livres = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
         && (!base || !porQueNaoCabeNaMontagem(base.peca, c.modelo.peca))).map(c => c.modelo);
@@ -2029,6 +2061,9 @@ async function onMontagemPedidoChange() {
             osId: String(pedido.id), pedido, item,
             modelo: _mtgModeloDoItem(pedido.id, item),
         })).filter(c => c.modelo && c.modelo.qtd > 0);
+        const chavesDisponiveis = new Set(state.montagem.modelosDisponiveis.map(_mtgChaveDoCandidato));
+        state.montagem.modelosMarcados = (state.montagem.modelosDoSeletor || [])
+            .filter(chave => chavesDisponiveis.has(chave));
         selMod.innerHTML = '<option value="">' + (itens.length
             ? 'Pedido · Modelo · Nome · Quantidade'
             : 'Nenhum modelo aguardando para este formato') + '</option>'
@@ -2297,8 +2332,13 @@ function removerDaMontagem(indice) {
     if (!m) return;
     guardarNaHistoria();
     const k = chaveDoModelo(m);
+    const chaveSeletor = String(m.osId) + '::' + String(m.itemId);
     state.montagem.celulas = celulas.filter(c => chaveDoModelo(c) !== k);
     modelos.splice(indice, 1);
+    state.montagem.modelosMarcados = (state.montagem.modelosMarcados || [])
+        .filter(chave => chave !== chaveSeletor);
+    state.montagem.modelosDoSeletor = (state.montagem.modelosDoSeletor || [])
+        .filter(chave => chave !== chaveSeletor);
     state.montagem.selecao = [];
     onMontagemPosicoesChange();
     renderMontagem();
@@ -2428,6 +2468,8 @@ function limparMontagem() {
     guardarNaHistoria();
     state.montagem.celulas = [];
     state.montagem.modelos = [];
+    state.montagem.modelosMarcados = [];
+    state.montagem.modelosDoSeletor = [];
     state.montagem.selecao = [];
     onMontagemPosicoesChange();
     renderMontagem();
@@ -2449,7 +2491,7 @@ function _mtgSugestaoAtual() {
     return sugestao;
 }
 
-function mudarConfiguracaoDeMontagens(campo, valor) {
+async function mudarConfiguracaoDeMontagens(campo, valor) {
     if (state.montagem.gerando) return;
     const m = state.montagem;
     const cfg = configuracaoDeMontagens(
@@ -2457,7 +2499,11 @@ function mudarConfiguracaoDeMontagens(campo, valor) {
         campo === 'minimo' ? valor : m.minimoRepeticoes);
     m.quantidadeMontagens = cfg.numero;
     m.minimoRepeticoes = cfg.minimo;
-    _mtgRenderSugestao();
+    if (m.modelos.length) {
+        await aplicarSugestaoDaMontagem('auto', { silencioso: true });
+    } else {
+        _mtgRenderSugestao();
+    }
 }
 
 /**
@@ -2474,6 +2520,7 @@ function mudarConfiguracaoDeMontagens(campo, valor) {
  */
 async function aplicarSugestaoDaMontagem(modo) {
     if (state.montagem.gerando) return;
+    const cfgAplicacao = arguments[1] || {};
     const sug = _mtgSugestaoAtual();
     if (!sug.viavel) {
         if (typeof toast === 'function') toast(sug.motivo, 'error');
@@ -2516,7 +2563,7 @@ async function aplicarSugestaoDaMontagem(modo) {
     }
 
     if (state.montagem.gerando) return;
-    guardarNaHistoria();
+    if (cfgAplicacao.guardarHistoria !== false) guardarNaHistoria();
     state.montagem.celulas = plano ? celulasDasMontagens(sug, plano) : celulasDistribuidas(sug);
     state.montagem.planoAplicado = plano ? {
         repeticoes: plano.repeticoes.slice(),
@@ -2525,7 +2572,7 @@ async function aplicarSugestaoDaMontagem(modo) {
     state.montagem.selecao = [];
     renderMontagem();
 
-    if (typeof toast === 'function') {
+    if (!cfgAplicacao.silencioso && typeof toast === 'function') {
         toast(plano
             ? plano.quantidade + (plano.quantidade === 1 ? ' montagem aplicada: ' : ' montagens aplicadas: ')
                 + plano.repeticoes.map((r, i) => 'montagem ' + (i + 1) + ', ' + r + ' vez(es)').join('; ') + '.'
@@ -2587,7 +2634,7 @@ function _mtgPlanoHtml(sug, plano, titulo) {
         + `<th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 
-/** O painel do aproveitamento: só existe com dois modelos ou mais na folha. */
+/** O painel do aproveitamento: existe assim que um modelo entra na montagem. */
 function _mtgRenderSugestao() {
     const caixa = document.getElementById('mtg-sugestao');
     if (!caixa) return;
@@ -2597,6 +2644,7 @@ function _mtgRenderSugestao() {
     caixa.style.display = '';
 
     const porFolha = _mtgCelulasPorFolha(modelos);
+    const sug = _mtgSugestaoAtual();
     const aplicado = state.montagem.planoAplicado;
     const repeticoesAplicadas = aplicado
         && aplicado.assinatura === _mtgAssinaturaDasCelulas(state.montagem.celulas)
@@ -2618,7 +2666,28 @@ function _mtgRenderSugestao() {
         <label><span>Mínimo de repetições</span><input id="mtg-minimo-repeticoes" type="number" min="1" max="1000000" step="1"
           value="${cfgAtual.minimo}" onchange="mudarConfiguracaoDeMontagens('minimo', this.value)"></label>
       </div>`;
-    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>' + controles + `
+    const recomendado = sug.viavel ? modoSugeridoDaMontagem(sug) : null;
+    const solicitado = sug.viavel ? sug.planoSolicitado : null;
+    const sugerido = sug.viavel ? sug.planoSugerido : null;
+    const planoRecomendado = sugerido || solicitado;
+    const semDistribuir = sug.viavel && !sug.podeDistribuir;
+    const recTravado = sug.viavel && semDistribuir && recomendado === 'distribuir';
+    const motivoTravado = sug.viavel ? 'São ' + sug.total + ' peças: distribuir desenharia uma célula '
+        + 'para cada uma, e a tela não dá conta. Tiragem desse tamanho se imprime pela tela '
+        + 'do Pedido.' : '';
+    const nomeSolicitado = solicitado && (solicitado.quantidade === 1
+        ? '1 montagem configurada' : solicitado.quantidade + ' montagens configuradas');
+    const nomeRecomendado = planoRecomendado && (planoRecomendado.quantidade === 1
+        ? '1 montagem' : planoRecomendado.quantidade + ' montagens');
+    const botaoRecomendado = sug.viavel ? `<button type="button" class="btn-primary mtg-sug-rec mtg-sug-rec-topo"
+            ${recTravado ? 'disabled' : ''} title="${recTravado ? escapeHtml(motivoTravado) : ''}"
+            onclick="aplicarSugestaoDaMontagem('auto')">
+          ${recomendado === 'distribuir'
+            ? 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'
+            : `Aplicar o recomendado &mdash; ${nomeRecomendado}, ${planoRecomendado.impressoes} impress&otilde;es`}
+        </button>` : '';
+    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>'
+        + botaoRecomendado + controles + `
       <div class="mtg-sug-atual" id="mtg-aproveitamento-atual" aria-live="polite">
         <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
           ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
@@ -2634,32 +2703,17 @@ function _mtgRenderSugestao() {
         <p>${instrucaoAtual}</p>
         <p class="mtg-dica">Repetidas são cópias da mesma posição do modelo. Reimprimir a montagem repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
       </div>`;
-    const sug = _mtgSugestaoAtual();
-
     if (!sug.viavel) {
         caixa.innerHTML = cab + '<p class="mtg-dica" style="margin:0;">'
             + escapeHtml(sug.motivo) + '</p>';
         return;
     }
 
-    const recomendado = modoSugeridoDaMontagem(sug);
     // Distribuir desenha uma célula por peça: acima do teto a tela não dá conta,
     // e o botão nasce travado dizendo por quê e para onde ir. Quando é o
     // recomendado que está travado, a montagem inteira é tiragem de produção — e
     // o lugar dela é a tela do Pedido, não esta.
-    const semDistribuir = !sug.podeDistribuir;
-    const recTravado = semDistribuir && recomendado === 'distribuir';
-    const motivoTravado = 'São ' + sug.total + ' peças: distribuir desenharia uma célula '
-        + 'para cada uma, e a tela não dá conta. Tiragem desse tamanho se imprime pela tela '
-        + 'do Pedido.';
-    const solicitado = sug.planoSolicitado;
-    const sugerido = sug.planoSugerido;
-    const planoRecomendado = sugerido || solicitado;
     const economia = sugerido ? solicitado.impressoes - sugerido.impressoes : 0;
-    const nomeSolicitado = solicitado.quantidade === 1
-        ? '1 montagem configurada' : solicitado.quantidade + ' montagens configuradas';
-    const nomeRecomendado = planoRecomendado.quantidade === 1
-        ? '1 montagem' : planoRecomendado.quantidade + ' montagens';
 
     caixa.innerHTML = cab + `
       <section class="mtg-recomendacao" aria-labelledby="mtg-recomendacao-titulo"><h3 id="mtg-recomendacao-titulo">Recomendação automática</h3>
@@ -2673,13 +2727,6 @@ function _mtgRenderSugestao() {
       ${sugerido ? _mtgPlanoHtml(sug, sugerido, 'Melhor sugestão automática') : ''}
 
       <div class="mtg-sug-botoes">
-        <button type="button" class="btn-primary mtg-sug-rec" ${recTravado ? 'disabled' : ''}
-                title="${recTravado ? escapeHtml(motivoTravado) : ''}"
-                onclick="aplicarSugestaoDaMontagem('auto')">
-          ${recomendado === 'distribuir'
-            ? 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'
-            : `Aplicar o recomendado &mdash; ${nomeRecomendado}, ${planoRecomendado.impressoes} impress&otilde;es`}
-        </button>
         <button type="button" class="btn-secondary"
                 onclick="aplicarSugestaoDaMontagem('solicitada')">Aplicar ${nomeSolicitado}</button>
         <button type="button" class="btn-secondary" ${semDistribuir ? 'disabled' : ''}

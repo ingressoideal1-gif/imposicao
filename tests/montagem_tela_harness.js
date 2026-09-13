@@ -80,10 +80,12 @@ const FUNCOES = [
     // A tela.
     '_mtgCelulasPorFolha', '_mtgSaidaDaFolha', '_mtgNumeroDoPedido', '_mtgLinhaAtiva',
     '_mtgHtmlDaRecusa', '_mtgAlvosDoGesto', '_mtgIndiceDoModelo',
-    '_mtgModeloDoItem', '_mtgChaveDoCandidato', 'melhoresCombinacoesDeModelosDaMontagem',
+    '_mtgModeloDoItem', '_mtgChaveDoCandidato', '_mtgModelosFixosDoSeletor',
+    'melhoresCombinacoesDeModelosDaMontagem',
     'alternarSeletorDeModelosDaMontagem', 'buscarModelosDaMontagem', 'marcarModeloDaMontagem',
     'limparSelecaoDeModelosDaMontagem', 'marcarTodosModelosCompativeisDaMontagem', 'usarCombinacaoDeModelosDaMontagem',
-    'carregarModelosSelecionadosDaMontagem', '_mtgRenderSeletorDeModelos',
+    '_mtgAplicarModelosMarcadosDaMontagem', 'carregarModelosSelecionadosDaMontagem',
+    '_mtgRenderSeletorDeModelos',
     '_mtgEspacoDoNumero', '_mtgEstiloDoNumero',
     '_mtgRenderNumero', '_mtgRenderFolha', 'renderMontagem', 'limparMontagem',
     'removerDaMontagem', 'retomarDaMontagem', 'onMontagemModeloChange', 'onMontagemPosicoesChange',
@@ -1077,7 +1079,7 @@ const PECAS = [
     //
     // Pedido do usuário, com o exemplo dentro: "formato com 10 células, modelo
     // 1, 30 unidades, modelo 2, 70 unidades. Montagem sugerida 3x o modelo 1 e
-    // 7x o modelo 2". O painel só aparece com dois modelos ou mais, e oferece
+    // 7x o modelo 2". O painel aparece desde o primeiro modelo, e oferece
     // os TRÊS caminhos — decisão do usuário na mesma conversa.
     const APROV = [
         { id: 'M1', osId: 'a', pedido: '21202', nome: 'INTEIRA', qtd: 30, pos: [1] },
@@ -1103,6 +1105,9 @@ const PECAS = [
             numero: document.getElementById('mtg-numero-montagens').value,
             opcoes: Array.from(document.getElementById('mtg-numero-montagens').options).map(o => o.value).join(','),
             minimo: document.getElementById('mtg-minimo-repeticoes').value,
+            recomendadoNoTopo: !!document.querySelector('.mtg-sug-rec-topo')
+                && document.querySelector('.mtg-sug-rec-topo').compareDocumentPosition(
+                    document.getElementById('mtg-numero-montagens')) & Node.DOCUMENT_POSITION_FOLLOWING,
             botoes: bt.map(b => ({
                 rotulo: b.textContent.replace(/\s+/g, ' ').trim(),
                 acao: b.getAttribute('onclick') || '',
@@ -1120,6 +1125,8 @@ const PECAS = [
        'a tabela mostra a tiragem e a produção calculada de cada modelo', painel.resultadoPorModelo);
     ok(painel.numero === '1' && painel.minimo === '1' && painel.opcoes === '1,2,3,4,5',
        'os campos começam em 1 e o seletor oferece somente de 1 a 5 montagens', painel);
+    ok(!!painel.recomendadoNoTopo,
+       'Aplicar o recomendado aparece no topo do Aproveitamento, antes dos controles', painel);
     ok(painel.botoes.length === 3, 'os TRÊS caminhos ficam oferecidos', painel.botoes);
     ok(/Aplicar o recomendado/.test(painel.botoes[0].rotulo)
         && /1 montagem, 10 impress/.test(painel.botoes[0].rotulo),
@@ -1137,28 +1144,37 @@ const PECAS = [
         const sel = document.getElementById('mtg-numero-montagens');
         sel.value = '2';
         sel.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
         const previa = document.getElementById('mtg-sugestao').textContent.replace(/\s+/g, ' ').trim();
-        await aplicarSugestaoDaMontagem('solicitada');
         const pags = [];
         for (let f = 0; f < 2; f++) {
             pags.push(state.montagem.celulas.slice(f * 10, (f + 1) * 10)
                 .map(c => c.itemId).sort().join(','));
         }
+        const repeticoes = state.montagem.planoAplicado.repeticoes.slice();
+        const minimo = document.getElementById('mtg-minimo-repeticoes');
+        minimo.value = '3';
+        minimo.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
         return {
             previa,
             quantidade: state.montagem.quantidadeMontagens,
             celulas: state.montagem.celulas.length,
-            repeticoes: state.montagem.planoAplicado.repeticoes,
+            repeticoes,
             distintas: pags[0] !== pags[1],
+            minimo: state.montagem.minimoRepeticoes,
+            repeticoesComMinimo: state.montagem.planoAplicado.repeticoes.slice(),
         };
     }, APROV);
     ok(duasConfiguradas.quantidade === 2 && /2 montagens configuradas/.test(duasConfiguradas.previa),
-       'escolher 2 no seletor recalcula e mostra o plano antes de aplicar', duasConfiguradas);
+       'escolher 2 no seletor recalcula e aplica o plano na janela atual', duasConfiguradas);
     ok(duasConfiguradas.celulas === 20 && duasConfiguradas.distintas,
        'aplicar o plano configurado cria duas montagens diferentes e sem células vazias', duasConfiguradas);
     ok(duasConfiguradas.repeticoes.length === 2
         && duasConfiguradas.repeticoes.reduce((a, b) => a + b, 0) === 10,
        'as repetições próprias das duas montagens conservam o menor total', duasConfiguradas);
+    ok(duasConfiguradas.minimo === 3 && duasConfiguradas.repeticoesComMinimo.every(r => r >= 3),
+       'alterar o mínimo recalcula a janela atual e aplica o novo limite', duasConfiguradas);
 
     // ── Aplicar o recomendado: uma folha com a mistura ──────────────────────
     const unica = await aba.evaluate(async pecas => {
@@ -1568,17 +1584,34 @@ const PECAS = [
         alternarSeletorDeModelosDaMontagem(true);
         const painel = document.getElementById('mtg-modelos-painel');
         const recomendacao = document.getElementById('mtg-modelos-recomendacoes').textContent.replace(/\s+/g, ' ').trim();
-        marcarModeloDaMontagem('aa::CA', true);
+        await marcarModeloDaMontagem('aa::CA', true);
         const frenteHabilitada = !document.querySelector('[data-modelo-chave="bb::CB"] input').disabled;
         const versoTravado = document.querySelector('[data-modelo-chave="aa::CV"] input').disabled;
-        usarCombinacaoDeModelosDaMontagem(['aa::CA', 'bb::CB']);
+        const aposUmCheckbox = {
+            celulas: state.montagem.celulas.length,
+            repeticoes: state.montagem.planoAplicado && state.montagem.planoAplicado.repeticoes.slice(),
+        };
+        await marcarModeloDaMontagem('bb::CB', true);
+        const aposCheckbox = {
+            modelos: state.montagem.modelos.map(m => m.itemId).sort(),
+            celulas: state.montagem.celulas.length,
+            repeticoes: state.montagem.planoAplicado && state.montagem.planoAplicado.repeticoes.slice(),
+        };
+        await marcarModeloDaMontagem('bb::CB', false);
+        const aposDesmarcar = {
+            modelos: state.montagem.modelos.map(m => m.itemId),
+            celulas: state.montagem.celulas.length,
+        };
+        await limparSelecaoDeModelosDaMontagem();
+        await usarCombinacaoDeModelosDaMontagem(['aa::CA', 'bb::CB']);
         const botao = document.getElementById('mtg-modelos-carregar');
         const antes = { marcados: state.montagem.modelosMarcados.slice().sort(),
             botao: botao.textContent, aberto: !painel.hidden };
         carregarModelosSelecionadosDaMontagem();
         return {
             linhas: painel.querySelectorAll('.mtg-modelo-opcao').length,
-            recomendacao, frenteHabilitada, versoTravado, antes,
+            recomendacao, frenteHabilitada, versoTravado, aposUmCheckbox, aposCheckbox,
+            aposDesmarcar, antes,
             carregados: state.montagem.modelos.map(m => m.itemId).sort(),
             celulas: state.montagem.celulas.length,
             painelFechado: painel.hidden,
@@ -1591,12 +1624,20 @@ const PECAS = [
        'o painel lista os modelos e recomenda a combinação pela economia contra impressão separada', multiModelos);
     ok(multiModelos.frenteHabilitada && multiModelos.versoTravado,
        'a primeira marcação mantém frente compatível e desabilita o modelo com verso', multiModelos);
+    ok(multiModelos.aposUmCheckbox.celulas === 10
+        && multiModelos.aposUmCheckbox.repeticoes.join() === '2',
+       'o primeiro checkbox já abre uma folha cheia com a repetição calculada', multiModelos.aposUmCheckbox);
+    ok(multiModelos.aposCheckbox.modelos.join() === 'CA,CB' && multiModelos.aposCheckbox.celulas === 10
+        && multiModelos.aposCheckbox.repeticoes.length === 1,
+       'marcar os checkboxes já abre a montagem recomendada com suas repetições', multiModelos.aposCheckbox);
+    ok(multiModelos.aposDesmarcar.modelos.join() === 'CA' && multiModelos.aposDesmarcar.celulas === 10,
+       'desmarcar recalcula a folha imediatamente com os modelos restantes', multiModelos.aposDesmarcar);
     ok(multiModelos.antes.marcados.join() === 'aa::CA,bb::CB'
-        && /Carregar 2 modelos/.test(multiModelos.antes.botao) && multiModelos.antes.aberto,
-       'Usar esta combinação marca os checkboxes e mantém a revisão antes de carregar', multiModelos.antes);
-    ok(multiModelos.carregados.join() === 'CA,CB' && multiModelos.celulas === 0
+        && multiModelos.antes.botao === 'Fechar' && multiModelos.antes.aberto,
+       'Usar esta combinação aplica os modelos e mantém o painel aberto para revisão', multiModelos.antes);
+    ok(multiModelos.carregados.join() === 'CA,CB' && multiModelos.celulas === 10
         && multiModelos.painelFechado && /Recomendação automática/.test(multiModelos.aproveitamento),
-       'carregar leva os modelos ao cálculo automático sem inventar células na folha', multiModelos);
+       'a combinação recomendada já desenha a folha e informa as repetições antes de fechar', multiModelos);
     ok(multiModelos.fonteOculta,
        'o seletor antigo permanece apenas como fonte interna e não duplica o controle na tela');
 
