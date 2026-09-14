@@ -26,8 +26,9 @@
 > [`fluxo_aprovacao_arte.md`](fluxo_aprovacao_arte.md) (as telas de arte),
 > [`tela_do_pedido.md`](tela_do_pedido.md) (a tela onde se manda imprimir),
 > [`painel_do_acabamento.md`](painel_do_acabamento.md) (o Acabamento),
-> [`PUBLICAR.md`](PUBLICAR.md) e [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md)
-> (publicação e agente).
+> [`PUBLICAR.md`](PUBLICAR.md), [`ENTREGA_SEGURA.md`](ENTREGA_SEGURA.md) e
+> [`../GUIA_AGENTE.md`](../GUIA_AGENTE.md) (publicação atual, próximo fluxo e
+> agente).
 >
 > O que continua verdadeiro aqui: a descrição do **motor de imposição**
 > (`engine.py`), dos **elementos VDP**, dos **esquemas de imposição**, do **modo

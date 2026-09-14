@@ -6,6 +6,11 @@
 Este é o único documento sobre publicação. Se outro texto discordar dele, o outro está
 velho.
 
+> **Próximo fluxo:** o contrato do `entrega-segura.ps1` está em
+> [`ENTREGA_SEGURA.md`](ENTREGA_SEGURA.md). A primeira implementação existe
+> localmente, mas ainda aguarda publicação e uma execução real acompanhada; por
+> isso ainda não substitui os comandos desta página.
+
 ---
 
 ## Conferir se está tudo em ordem
