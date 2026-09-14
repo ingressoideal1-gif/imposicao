@@ -109,8 +109,8 @@ const api = new Function('state', 'window',
 // ─── 4. O modo que vale para um modelo do pedido ─────────────────────────────
 
 (function oModoDoModelo() {
-    // O FxVersoUnico vive so na numeracao: `verso_tipo` e coluna do ERP
-    // parceiro e nao conhece esse texto (decisao do usuario, 31/08/2026).
+    // Os modos duplex explícitos vivem na numeração. O ERP pode continuar com
+    // `verso_tipo = Frente`, como no modelo Setor do pedido 21894.
     state.numeracoes = [
         { id: 'n1', print_mode: 'front' },
         { id: 'n2', print_mode: 'duplex' },
@@ -131,8 +131,8 @@ const api = new Function('state', 'window',
         'modelo so de frente continua so de frente');
     ok(api.modoDeVersoDoModelo({ verso_tipo: 'Frente', verso: false }) === 'front',
         'modelo sem numeracao apontada continua so de frente');
-    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n2', verso_tipo: 'Frente', verso: false }) === 'front',
-        'numeracao FxVerso nao inventa verso num modelo marcado como Frente');
+    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n2', verso_tipo: 'Frente', verso: false }) === 'duplex',
+        'numeracao FxVerso ativa o verso mesmo com o ERP ainda marcado como Frente');
 })();
 
 // ─── 5. A conta de quantas pecas ─────────────────────────────────────────────

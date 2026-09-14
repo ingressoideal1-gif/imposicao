@@ -195,6 +195,19 @@ const PAISES = [
     ok(/pdf_url: itemArteUrl/.test(PEDIDO), 'a arte de cada modelo leva o pdf_url');
     ok(/pdf_verso_url: itemArteVersoUrl/.test(PEDIDO), 'e o verso');
     ok(/pdf_name: itemPdfName/.test(PEDIDO), 'e o nome do arquivo');
+
+    // Pedido 21894: as duas numerações estão em duplex, mas o ERP ainda traz
+    // Foto como "FRENTE E VERSO" e Setor como "Frente". O construtor da folha
+    // precisa perguntar ao resolvedor comum; ler `verso_tipo` diretamente
+    // descartava as duas URLs e o motor desenhava só a numeração no verso.
+    const decisoesPedido = PEDIDO.match(
+        /const wantsDuplex = sItem \? temVerso\(modoDeVersoDoModelo\(sItem\)\) : false;/g) || [];
+    const decisoesScript = SCRIPT.match(
+        /const wantsDuplex = sItem \? temVerso\(modoDeVersoDoModelo\(sItem\)\) : false;/g) || [];
+    ok(decisoesPedido.length === 2,
+        'as duas montagens do Pedido decidem o verso pela numeracao e pelo ERP', decisoesPedido.length);
+    ok(decisoesScript.length === 1,
+        'a tela Imposicao decide o verso pela mesma regra', decisoesScript.length);
 })();
 
 // ─── A seleção pertence a UM pedido só ───────────────────────────────────────

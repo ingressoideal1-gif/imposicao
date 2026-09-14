@@ -5025,13 +5025,10 @@ window.versoUnico = versoUnico;
  * O nome diz VERSO e não IMPRESSÃO porque `modoDeImpressaoDoModelo` já existe
  * neste arquivo desde antes, e responde outra coisa: sequencial ou blocado.
  *
- * O FxVersoUnico vive só na numeração (`producao_numeracoes.print_mode`, tabela
- * nossa): a coluna `verso_tipo` é do ERP parceiro e não conhece esse texto, por
- * decisão do usuário em 31/08/2026. Por isso a numeração só é consultada para
- * ACRESCENTAR o terceiro modo — fora dele a regra continua exatamente a de
- * antes, o `verso` do item. Deixar a numeração mandar em tudo seria regressão:
- * quase nenhuma numeração cadastrada tem `print_mode` duplex, e modelos de
- * frente e verso perderiam o verso.
+ * Os modos duplex explícitos vivem na numeração
+ * (`producao_numeracoes.print_mode`). Eles ACRESCENTAM verso mesmo quando o
+ * `verso_tipo` legado ainda diz Frente. Um `front` da numeração não rebaixa o
+ * verso do ERP: há cadastros antigos em que esse campo ficou no padrão.
  */
 function modoDeVersoDoModelo(item) {
     // A linha CRUA do catálogo, e não o `numeracaoDoModelo`: o `print_mode` vem
@@ -5040,6 +5037,7 @@ function modoDeVersoDoModelo(item) {
     const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
     const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
     if (versoUnico(num && num.print_mode)) return 'duplex_unico';
+    if (temVerso(num && num.print_mode)) return 'duplex';
     const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
     return temVersoNoErp ? 'duplex' : 'front';
 }
@@ -12683,7 +12681,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             // trabalho sai só com numeração, que é o correto e o que sempre foi.
             const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
 
-            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'Frente') : false;
+            const wantsDuplex = sItem ? temVerso(modoDeVersoDoModelo(sItem)) : false;
             const itemArteVersoUrl = (sItem && wantsDuplex)
                 ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
                 : null;

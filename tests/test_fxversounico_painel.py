@@ -26,11 +26,10 @@ quando aparece uma nova sem classificação.
 
 ## O que NÃO pode regredir
 
-Quase nenhuma das numerações cadastradas tem `print_mode` duplex — o
-levantamento de 25/08/2026 achou zero em 86. Por isso a numeração só é
-consultada para ACRESCENTAR o FxVersoUnico: um modelo que o ERP marca como
-frente e verso continua com verso mesmo que a numeração dele diga `front`.
-Fazer a numeração mandar em tudo apagaria o verso de quase todo o cadastro.
+Cadastros antigos podem ter `print_mode=front` por padrão enquanto o ERP marca
+frente e verso. Por isso `front` não pode rebaixar o ERP. Em contrapartida,
+`duplex` e `duplex_unico` explícitos na numeração precisam ACRESCENTAR o verso:
+é o caso atual do pedido 21894.
 """
 import os
 import re
@@ -100,19 +99,21 @@ def test_a_previa_do_verso_unico_nao_desenha_a_frente_no_lugar_do_verso():
     )
 
 
-def test_a_numeracao_so_acrescenta_o_terceiro_modo():
-    """Ela não pode rebaixar a verso um modelo que o ERP diz ter verso."""
-    texto = _texto(SCRIPT)
-    i = texto.index("function modoDeVersoDoModelo(")
-    corpo = texto[i:texto.index("\n}", i) + 2]
-    assert "if (versoUnico(num && num.print_mode)) return 'duplex_unico';" in corpo, (
-        "o modoDeVersoDoModelo parou de reconhecer o FxVersoUnico da numeracao"
-    )
-    assert re.search(r"item\.verso === true \|\| \(item\.verso_tipo", corpo), (
-        "o modoDeVersoDoModelo parou de cair no `verso` do ERP — quase nenhuma "
-        "numeracao cadastrada tem print_mode duplex, e sem esta linha os modelos "
-        "de frente e verso perderiam o verso"
-    )
+def test_a_numeracao_acrescenta_os_modos_duplex_sem_rebaixar_o_erp():
+    """Duplex explícito ativa verso; front ainda preserva o legado do ERP."""
+    for caminho in (SCRIPT, PEDIDO):
+        texto = _texto(caminho)
+        i = texto.index("function modoDeVersoDoModelo(")
+        corpo = texto[i:texto.index("\n}", i) + 2]
+        assert "if (versoUnico(num && num.print_mode)) return 'duplex_unico';" in corpo, (
+            "o modoDeVersoDoModelo parou de reconhecer o FxVersoUnico da numeracao"
+        )
+        assert "if (temVerso(num && num.print_mode)) return 'duplex';" in corpo, (
+            "a numeracao FxVerso deixou de ativar o verso do modelo"
+        )
+        assert re.search(r"item\.verso === true \|\| \(item\.verso_tipo", corpo), (
+            "o modoDeVersoDoModelo parou de preservar o verso legado do ERP"
+        )
 
 
 def test_o_nome_nao_colide_com_o_modo_sequencial_ou_blocado():
