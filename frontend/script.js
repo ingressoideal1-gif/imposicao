@@ -27064,34 +27064,70 @@ window.avisarCorrecaoDeArte = avisarCorrecaoDeArte;
 async function devolverArteParaAlteracao(itemId, osId) {
     const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
     if (!item) {
-        // Sem o item em memória o `saveAmostraToDB` desiste em silêncio, e o
-        // designer receberia o modelo ainda travado sem ninguém saber.
         console.warn('[Corrigir Arte] item fora do state — a arte não foi para alteração:', itemId, osId);
-        toast('O modelo foi devolvido, mas a arte continua aprovada — abra o pedido '
-            + 'e coloque o modelo em Alteração, senão o designer não consegue trocar '
-            + 'o arquivo.', 'warning');
+        toast('Não foi possível devolver o modelo para correção: modelo não carregado. Atualize a tela e tente novamente.', 'error');
         return false;
     }
 
-    // A marca tem de estar no objeto ANTES da gravação: é ela que abre a trava
-    // do modelo aprovado, em `bloqueioDeModeloAprovado`.
-    item.status_impressao = STATUS_CORRIGIR_ARTE;
-    item.impressao = STATUS_CORRIGIR_ARTE;
-
-    await saveAmostraToDB(itemId, osId, { amostra_status: 'REPROVADA' });
-
-    // Os dois nomes do mesmo dado, nos dois lugares em que ele mora: o card do
-    // modelo lê `amostra_status`, a Lista de Arte lê o `state.modelosGlobais`
-    // (que guarda `status_arte`). Deixar um para trás faz a tela continuar
-    // dizendo "aprovado" até o próximo F5 — e o card seguiria travado.
     const numOs = parseInt(String(osId).replace('vibe_', ''));
+    const modeloId = item._pedidoModeloId || item.id;
+    const cliente = (typeof vibeClient !== 'undefined' && vibeClient) ||
+        (typeof supabaseClient !== 'undefined' && supabaseClient);
+
+    if (!cliente || isNaN(numOs) || !modeloId || String(modeloId).startsWith('vibe_')) {
+        toast('Não foi possível devolver o modelo para correção: registro do modelo não confirmado.', 'error');
+        return false;
+    }
+
+    try {
+        // As duas mudanças que tornam o retrabalho possível são uma gravação só:
+        // a impressão fica travada e a arte aprovada fica editável. Até a v872
+        // elas viajavam separadas, sem confirmação de linha, e a tela podia
+        // anunciar sucesso deixando Aguardando/APROVADA no banco.
+        const idBanco = /^\d+$/.test(String(modeloId)) ? parseInt(modeloId, 10) : modeloId;
+        const { data, error } = await cliente
+            .from('pedidos_modelos')
+            .update({
+                status_impressao: STATUS_CORRIGIR_ARTE,
+                status_arte: 'REPROVADA_CLIENTE'
+            })
+            .eq('id', idBanco)
+            .eq('id_int', numOs)
+            .select('id, status_impressao, status_arte');
+
+        if (error) throw error;
+        if (!data || data.length !== 1) {
+            throw new Error('o banco não confirmou exatamente um modelo atualizado');
+        }
+        if (normalizarStatusImpressao(data[0].status_impressao) !== STATUS_CORRIGIR_ARTE ||
+                String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE') {
+            throw new Error('o banco devolveu um estado diferente do solicitado');
+        }
+    } catch (e) {
+        console.error('[Corrigir Arte] gravação não confirmada:', e);
+        toast('Não foi possível devolver o modelo para correção. Nada foi confirmado; atualize a tela e tente novamente. '
+            + (e && (e.message || e.details) || ''), 'error');
+        return false;
+    }
+
+    // Só muda a memória depois de o banco devolver a linha com os dois estados.
     const globais = (state.modelosGlobais && state.modelosGlobais[numOs]) || [];
-    [item, globais.find(m => String(m.id) === String(itemId))].forEach(m => {
+    [item, globais.find(m => String(m.id) === String(modeloId) || String(m.id) === String(itemId))].forEach(m => {
         if (!m) return;
+        m.status_impressao = STATUS_CORRIGIR_ARTE;
+        m.impressao = STATUS_CORRIGIR_ARTE;
         m.amostra_status = 'REPROVADA';
         m.status_arte = 'REPROVADA_CLIENTE';
     });
-    await sincronizarStatusConsolidadoPedidoArte(numOs, globais.length ? globais : state.osItens[osId]);
+
+    // O classificador usa o modelo como fonte principal, então uma falha do
+    // consolidado não pode apagar a devolução já confirmada. O modelo continua
+    // visível no card Em Arte e a falha secundária fica registrada no console.
+    try {
+        await sincronizarStatusConsolidadoPedidoArte(numOs, globais.length ? globais : state.osItens[osId]);
+    } catch (e) {
+        console.warn('[Corrigir Arte] modelo confirmado; falhou apenas o status consolidado:', e);
+    }
     return true;
 }
 window.devolverArteParaAlteracao = devolverArteParaAlteracao;
@@ -30906,6 +30942,18 @@ function formatDateTime(dateStr) {
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
     try {
+        if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
+            const confirmado = await devolverArteParaAlteracao(itemId, osId);
+            if (!confirmado) {
+                await loadOSItens(osId);
+                renderOrdens();
+                return;
+            }
+            avisarCorrecaoDeArte(novoStatus);
+            renderOrdens();
+            return;
+        }
+
         if (itemId && itemId.toString().startsWith('vibe_item_')) {
             const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
             impOverrides[itemId] = novoStatus;
@@ -30950,11 +30998,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             }
         }
 
-        if (avisarCorrecaoDeArte(novoStatus)) {
-            await devolverArteParaAlteracao(itemId, osId);
-        } else {
-            toast(`Impressão atualizada: ${novoStatus}`, 'success');
-        }
+        toast(`Impressão atualizada: ${novoStatus}`, 'success');
         renderOrdens();
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
@@ -32467,10 +32511,23 @@ function impQueueUpdateNum(itemId, osId, numId) {
 }
 
 /** Atualiza um campo genérico (NI, NF, QTD ou Numeração) do item */
-function impQueueUpdateField(itemId, osId, field, value) {
+async function impQueueUpdateField(itemId, osId, field, value) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
+
+    if (field === 'status_impressao' && normalizarStatusImpressao(value) === STATUS_CORRIGIR_ARTE) {
+        const confirmado = await devolverArteParaAlteracao(itemId, osId);
+        if (!confirmado) {
+            try { await loadOSItens(osId); } catch (e) { console.warn('[Corrigir Arte] falha ao recarregar:', e); }
+        } else {
+            avisarCorrecaoDeArte(value);
+        }
+        renderImpOSQueue();
+        renderOrdens();
+        return;
+    }
+
     item[field] = value;
 
     // Recalcular num_final se qtd ou num_inicial mudar
@@ -32566,12 +32623,6 @@ function impQueueUpdateField(itemId, osId, field, value) {
             }
         }
         renderImpOSQueue();
-        if (avisarCorrecaoDeArte(value)) {
-            // A arte sai de aprovada e a Lista de Arte reconta os cards: o
-            // pedido aparece em "Em Arte" agora, sem F5 — é o efeito que o
-            // operador acabou de ser avisado que aconteceu.
-            devolverArteParaAlteracao(itemId, osId).then(() => renderOrdens());
-        }
     }
 }
 

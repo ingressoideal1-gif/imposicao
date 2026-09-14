@@ -55,6 +55,7 @@ import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HARNESS = os.path.join(RAIZ, "tests", "corrigir_arte_harness.js")
+HARNESS_PERSISTENCIA = os.path.join(RAIZ, "tests", "corrigir_arte_persistencia_harness.js")
 
 
 def _ler(rel):
@@ -67,6 +68,15 @@ def test_o_harness_de_corrigir_arte_passa():
 
     r = subprocess.run(
         ["node", HARNESS], cwd=RAIZ, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_a_persistencia_de_corrigir_arte_e_confirmada_pelo_banco():
+    r = subprocess.run(
+        ["node", HARNESS_PERSISTENCIA], cwd=RAIZ, timeout=30,
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")

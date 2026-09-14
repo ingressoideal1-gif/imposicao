@@ -33,8 +33,8 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
-const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
-const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const CHAVE_FINAL = String.fromCharCode(10) + '}';
 
@@ -297,10 +297,16 @@ function pedidoNaProducao(extra) {
     const ini = SCRIPT.indexOf('async function devolverArteParaAlteracao(');
     ok(ini > 0, 'a funcao devolverArteParaAlteracao existe');
     const f = SCRIPT.slice(ini, SCRIPT.indexOf(CHAVE_FINAL, ini) + 2);
-    ok(f.indexOf("amostra_status: 'REPROVADA'") > 0,
-        'grava o mesmo "Em Alteracao" do botao do card');
-    ok(f.indexOf('item.status_impressao = STATUS_CORRIGIR_ARTE') > 0,
-        'marca o item ANTES de gravar -- e a marca que abre a trava');
+    ok(f.indexOf("status_impressao: STATUS_CORRIGIR_ARTE") > 0,
+        'grava Corrigir Arte na mesma operacao');
+    ok(f.indexOf("status_arte: 'REPROVADA_CLIENTE'") > 0,
+        'grava Em Alteracao na mesma operacao');
+    ok(f.indexOf(".select('id, status_impressao, status_arte')") > 0,
+        'pede ao banco a linha efetivamente atualizada');
+    ok(f.indexOf('data.length !== 1') > 0,
+        'recusa zero linha e atualizacao ambigua');
+    ok(f.indexOf('Só muda a memória depois') > 0,
+        'a memoria so muda depois da confirmacao duravel');
     ok(f.indexOf("m.status_arte = 'REPROVADA_CLIENTE'") > 0,
         'e o catalogo global, que a Lista de Arte le');
     ok(SCRIPT.indexOf('window.devolverArteParaAlteracao = devolverArteParaAlteracao;') > 0,
@@ -329,6 +335,28 @@ function pedidoNaProducao(extra) {
     ok(chamadas >= 3, 'os tres seletores devolvem a arte junto', { chamadas });
     ok(PEDIDO.indexOf('devolverArteParaAlteracao') > 0,
         'a tela do Pedido tambem -- e por onde a grafica trabalha todo dia');
+})();
+
+(function sucessoSoDepoisDaConfirmacao() {
+    const updateIni = SCRIPT.indexOf('async function updateItemImpressao(');
+    const update = SCRIPT.slice(updateIni, SCRIPT.indexOf(CHAVE_FINAL, updateIni) + 2);
+    const impIni = SCRIPT.indexOf('async function impQueueUpdateField(');
+    const imp = SCRIPT.slice(impIni, SCRIPT.indexOf(CHAVE_FINAL, impIni) + 2);
+    const pedIni = PEDIDO.indexOf('async function pedQueueUpdateField(');
+    const ped = PEDIDO.slice(pedIni, PEDIDO.indexOf(CHAVE_FINAL, pedIni) + 2);
+
+    for (const [nome, fonte] of [['detalhe', update], ['producao', imp], ['pedido', ped]]) {
+        const gravacao = fonte.indexOf('await devolverArteParaAlteracao(itemId, osId)');
+        const aviso = fonte.indexOf('avisarCorrecaoDeArte(');
+        ok(gravacao > 0, nome + ': aguarda a devolucao atomica');
+        ok(aviso > gravacao, nome + ': avisa somente depois da confirmacao');
+    }
+    const impCorrecao = imp.slice(0, imp.indexOf('item[field] = value'));
+    const pedCorrecao = ped.slice(0, ped.indexOf('item[field] = value'));
+    ok(impCorrecao.indexOf('return;') > 0 && impCorrecao.indexOf('autoSaveOSItemField') < 0,
+        'o ramo Corrigir Arte da producao sai antes do autosave sem confirmacao');
+    ok(pedCorrecao.indexOf('return;') > 0 && pedCorrecao.indexOf('autoSaveOSItemField') < 0,
+        'o ramo Corrigir Arte do pedido sai antes do autosave sem confirmacao');
 })();
 
 (function oProntoDesseModeloAprovaAArteSozinho() {

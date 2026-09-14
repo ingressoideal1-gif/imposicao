@@ -7221,6 +7221,22 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
+
+    if (field === 'status_impressao' && typeof normalizarStatusImpressao === 'function'
+            && normalizarStatusImpressao(value) === window.STATUS_CORRIGIR_ARTE) {
+        const confirmado = typeof devolverArteParaAlteracao === 'function'
+            ? await devolverArteParaAlteracao(itemId, osId) : false;
+        if (!confirmado) {
+            try { await loadOSItens(osId); } catch (e) { console.warn('[Corrigir Arte] falha ao recarregar:', e); }
+        } else if (typeof avisarCorrecaoDeArte === 'function') {
+            avisarCorrecaoDeArte(value);
+        }
+        renderPedOSQueue();
+        updatePedImprimirButtonsVisibility();
+        if (typeof renderOrdens === 'function') renderOrdens();
+        return;
+    }
+
     item[field] = value;
     autoSaveOSItemField(itemId, osId, field, value);
 
@@ -7303,17 +7319,6 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         }
         renderPedOSQueue();
         updatePedImprimirButtonsVisibility();
-        if (typeof avisarCorrecaoDeArte === 'function' && avisarCorrecaoDeArte(value)) {
-            // A arte tem de sair de APROVADA junto, senão o card do designer
-            // continua travado e ele não troca o arquivo — ver
-            // `devolverArteParaAlteracao` no script.js, que é quem sabe a regra.
-            if (typeof devolverArteParaAlteracao === 'function') {
-                await devolverArteParaAlteracao(itemId, osId);
-            }
-            // A Lista de Arte reconta os cards agora: o pedido aparece em "Em
-            // Arte" sem F5, que é o efeito que o aviso acabou de prometer.
-            if (typeof renderOrdens === 'function') renderOrdens();
-        }
     }
 }
 
