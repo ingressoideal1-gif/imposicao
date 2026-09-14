@@ -133,7 +133,7 @@ function artesJaAprovadas() {
 /**
  * O cartão de decisão de uma aba: os dois botões, a caixa de texto e o estado.
  *
- * Confirmar permanece verde e passa a Confirmado depois da gravação.
+ * Confirmar fica neutro; só fica verde e passa a Confirmado após a gravação.
  *
  * `bloqueio` é o texto do motivo pelo qual o CONFIRMAR não pode ser usado.
  */
@@ -179,7 +179,7 @@ function cartaoDeDecisao(qual, bloqueio) {
     // O ALTERAR continua vivo, porque é por ele que se sai da trava.
     const confirmar = bloqueio
         ? '<button type="button" class="portal-botao" disabled>' + icone('check', 17) + 'Confirmar</button>'
-        : '<button type="button" class="portal-botao principal" aria-pressed="' + (decidido === true) + '" '
+        : '<button type="button" class="portal-botao' + (decidido === true ? ' principal' : '') + '" aria-pressed="' + (decidido === true) + '" '
             + (gravando ? 'disabled ' : '') + 'onclick="decidirDados(\'' + qual + '\', true)">'
             + icone('check', 17) + (decidido === true ? 'Confirmado' : gravando === qual ? 'Salvando...' : 'Confirmar') + '</button>';
     const motivo = bloqueio

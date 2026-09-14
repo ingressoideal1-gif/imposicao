@@ -425,11 +425,23 @@ const linhasDoEnvio = new Function(
 
 // ─── 6. Na fonte: o que nao pode voltar ──────────────────────────────────────
 
-(function confirmarMantemOVerde() {
+(function verdeSomenteQuandoConfirmado() {
     const cartao = recortar(CONFIRMACOES, 'cartaoDeDecisao');
     ok(cartao.indexOf('CONFIRMAR') > 0 && cartao.indexOf('ALTERAR') > 0, 'os dois botoes existem');
-    ok(/class="portal-botao principal"/.test(cartao), 'Confirmar usa o verde existente');
-    ok(/decidido === true \? 'Confirmado'/.test(cartao), 'a confirmação salva muda o rótulo');
+    const janela = { portalConfirmacoes: {}, portalErroConfirmacao: {} };
+    const render = new Function('window', 'escapeHtml',
+        extrairTabela(CONFIRMACOES, 'ROTULO_DA_ABA') + cartao + ';return cartaoDeDecisao;')(janela, String);
+    for (const qual of ['entrega', 'faturamento']) {
+        for (const valor of [null, false, true]) {
+            janela.portalConfirmacoes[qual] = valor;
+            const html = render(qual);
+            ok(html.includes('class="portal-botao principal"') === (valor === true),
+                qual + ': verde somente com decisão confirmada', valor);
+            ok(html.includes('Confirmado') === (valor === true), qual + ': rótulo acompanha a confirmação', valor);
+        }
+        ok(!render(qual, 'Falta recebedor').includes('class="portal-botao principal"'),
+            qual + ': confirmação bloqueada não fica verde');
+    }
 })();
 
 (function oFinalDizOQueFalta() {
@@ -593,6 +605,7 @@ async function confirmarNoClique() {
     const primeira = contexto.decidirDados('entrega', true);
     ok(contexto.portalConfirmacoes.entrega === null, 'não aprova antes de salvar');
     ok(contexto.cartaoDeDecisao('entrega').includes('Salvando...'), 'mostra gravação em andamento');
+    ok(!contexto.cartaoDeDecisao('entrega').includes('portal-botao principal'), 'gravação pendente não fica verde');
     await contexto.decidirDados('entrega', true);
     ok(banco.log.updates === 0 && aberturas.length === 0, 'clique repetido aguarda a mesma gravação');
     await liberar();
@@ -600,6 +613,7 @@ async function confirmarNoClique() {
     contexto.gravarCorrecaoDoCliente = gravar;
     ok(linha.observacoes.confirmacoes_portal.entrega === true, 'entrega salva no próprio clique');
     ok(linha.observacoes.confirmacoes_portal.faturamento === null, 'entrega não aprova nota pendente');
+    ok(!contexto.cartaoDeDecisao('faturamento').includes('portal-botao principal'), 'confirmar entrega não colore Nota pendente');
     ok(linha.entrega_dados === '', 'selo conjunto aguarda a segunda confirmação');
     ok(aberturas.join() === 'faturamento', 'Entrega avança para Nota após salvar');
     ok(/principal" aria-pressed="true"/.test(contexto.cartaoDeDecisao('entrega'))
@@ -621,6 +635,7 @@ async function confirmarNoClique() {
     await contexto.desfazerDecisao('entrega');
     ok(linha.entrega_dados === '' && linha.observacoes.confirmacoes_portal.entrega === null,
         'desfazer persiste a pendência e retira aprovação conjunta');
+    ok(!contexto.cartaoDeDecisao('entrega').includes('portal-botao principal'), 'desfazer retira o verde');
     await contexto.decidirDados('entrega', false);
     ok(linha.entrega_dados === 'CORRIGIR', 'Alterar retira aprovação e registra correção');
     ok(aberturas.length === 2, 'Alterar e Desfazer permanecem na aba');
@@ -632,6 +647,7 @@ async function confirmarNoClique() {
         ok(contexto.portalConfirmacoes.entrega === false && aberturas.length === 2,
             'falha preserva decisão anterior e não avança');
         ok(contexto.cartaoDeDecisao('entrega').includes('Não conseguimos salvar'), 'falha fica visível');
+        ok(!contexto.cartaoDeDecisao('entrega').includes('portal-botao principal'), 'falha não colore como confirmado');
         ok(!contexto.portalGravandoConfirmacao, 'falha libera nova tentativa');
     }
     contexto.gravarCorrecaoDoCliente = gravar;
