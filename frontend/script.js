@@ -28909,7 +28909,7 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
 
     const { data: artes, error } = await supabaseClient
         .from('pedidos_artes')
-        .select('id, status, entrega_dados')
+        .select('id, status, entrega_dados, observacoes')
         .eq('id_int', numInt)
         .order('created_at', { ascending: false });
     if (error) throw error;
@@ -28919,15 +28919,37 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
         ? 'CORRIGIR'
         : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'APROVADO')
             ? 'APROVADO' : (artes[0].entrega_dados || '');
+    const observacoesComoObjeto = valor => {
+        if (valor && typeof valor === 'object' && !Array.isArray(valor)) return { ...valor };
+        if (typeof valor === 'string' && valor.trim()) {
+            try { return JSON.parse(valor); } catch (e) { return {}; }
+        }
+        return {};
+    };
+    const obsMaisRecente = observacoesComoObjeto(artes[0].observacoes);
+    const statusAtual = String(artes[0].status || '').trim().toUpperCase() === 'CORRIGIR DADOS'
+        ? (obsMaisRecente.status_antes_correcao_dados || artes[0].status)
+        : artes[0].status;
     const listaModelos = modelos || ((state.modelosGlobais && state.modelosGlobais[numInt]) || []);
-    const novoStatus = calcularStatusConsolidadoPedidoArte(listaModelos, entrega, artes[0].status);
+    const novoStatus = calcularStatusConsolidadoPedidoArte(listaModelos, entrega, statusAtual);
     if (!novoStatus) return null;
 
-    if (artes.some(a => a.status !== novoStatus)) {
+    for (const arte of artes) {
+        const payload = {};
+        if (arte.status !== novoStatus) payload.status = novoStatus;
+        if (entrega === 'CORRIGIR'
+            && String(arte.status || '').trim().toUpperCase() !== 'CORRIGIR DADOS') {
+            const obs = observacoesComoObjeto(arte.observacoes);
+            if (!obs.status_antes_correcao_dados && arte.status) {
+                obs.status_antes_correcao_dados = arte.status;
+                payload.observacoes = obs;
+            }
+        }
+        if (Object.keys(payload).length === 0) continue;
         const { error: erroUpdate } = await supabaseClient
             .from('pedidos_artes')
-            .update({ status: novoStatus })
-            .eq('id_int', numInt);
+            .update(payload)
+            .eq('id', arte.id);
         if (erroUpdate) throw erroUpdate;
     }
     (state.todasArtes || []).filter(a => a.id_int === numInt).forEach(a => { a.status = novoStatus; });
@@ -32964,10 +32986,10 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
                 .from('pedidos_artes')
                 .update({
                     entrega_dados: 'CORRIGIR',
-                    status: 'Corrigir Dados',
                     observacoes: obsObj
                 })
                 .eq('id_int', numInt);
+            await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
         const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);

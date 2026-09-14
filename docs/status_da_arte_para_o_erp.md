@@ -31,6 +31,11 @@ não devem ser gravados em novos eventos.
    `Dados Pendentes`.
 4. Parte das artes aprovada grava `Apr Parcial`.
 
+Ao entrar em `Corrigir Dados`, o sistema preserva
+`observacoes.status_antes_correcao_dados`. Esse valor permite restaurar o
+estado correto das artes quando o atendimento concluir a correção, inclusive
+em pedidos legados cujo `pedidos_modelos.status_arte` esteja vazio.
+
 O painel e o portal atualizam todas as linhas do mesmo `id_int`, porque um
 pedido pode ter mais de um registro em `pedidos_artes`.
 

@@ -11,8 +11,9 @@ function trechoConst(nome) {
 }
 
 function trechoFuncao(nome) {
-    const inicio = fonte.indexOf('function ' + nome + '(');
+    let inicio = fonte.indexOf('function ' + nome + '(');
     if (inicio < 0) throw new Error('função não encontrada: ' + nome);
+    if (fonte.slice(inicio - 6, inicio) === 'async ') inicio -= 6;
     const abre = fonte.indexOf('{', inicio);
     let nivel = 0;
     for (let i = abre; i < fonte.length; i++) {
@@ -50,4 +51,52 @@ igual(contexto.calcular([alteracao, aprovado], 'APROVADO', ''), 'Em Alteração'
 igual(contexto.calcular([pendente], '', 'Enviar Arte'), 'Enviar Arte', 'pronto para envio');
 igual(contexto.calcular([pendente], '', 'ENVIAR ARTE'), 'Enviar Arte', 'grafia antiga em maiúsculas');
 
-console.log('status pedidos_artes: 9 casos OK');
+async function testarRetornoDaCorrecaoComModeloLegado() {
+    const linha = {
+        id: 'arte-20942',
+        status: 'Dados Pendentes',
+        entrega_dados: 'CORRIGIR',
+        observacoes: { existente: true }
+    };
+    const atualizacoes = [];
+    const banco = {
+        from() {
+            return {
+                payload: null,
+                select() { return this; },
+                update(payload) { this.payload = payload; return this; },
+                eq() {
+                    if (!this.payload) return this;
+                    atualizacoes.push(this.payload);
+                    Object.assign(linha, this.payload);
+                    return Promise.resolve({ error: null });
+                },
+                order() { return Promise.resolve({ data: [linha], error: null }); }
+            };
+        }
+    };
+    const ctx = { supabaseClient: banco, state: { modelosGlobais: { 20942: [] }, todasArtes: [] } };
+    vm.createContext(ctx);
+    vm.runInContext(
+        trechoConst('ARTE_REPROVADOS') + '\n' +
+        trechoConst('ARTE_APROVADOS') + '\n' +
+        trechoFuncao('calcularStatusConsolidadoPedidoArte') + '\n' +
+        trechoFuncao('sincronizarStatusConsolidadoPedidoArte') + '\n' +
+        'this.sincronizar = sincronizarStatusConsolidadoPedidoArte;',
+        ctx
+    );
+
+    igual(await ctx.sincronizar(20942), 'Corrigir Dados', 'entrada na correção');
+    igual(linha.observacoes.status_antes_correcao_dados, 'Dados Pendentes', 'preserva aprovação das artes');
+    linha.entrega_dados = 'APROVADO';
+    igual(await ctx.sincronizar(20942), 'APROVADO', 'atendimento conclui a correção');
+    igual(linha.status, 'APROVADO', 'pedido legado sai de Corrigir Dados');
+    if (atualizacoes.length !== 2) throw new Error('esperava duas atualizações consolidadas');
+}
+
+testarRetornoDaCorrecaoComModeloLegado().then(() => {
+    console.log('status pedidos_artes: 13 casos OK');
+}).catch(erro => {
+    console.error(erro);
+    process.exit(1);
+});

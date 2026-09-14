@@ -77,7 +77,8 @@ function toast(msg, type = 'info') {
 }
 
 const STATUS_MODELO_APROVADO_PARA_PEDIDO = [
-    'APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'
+    'APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA',
+    'ARTE APROVADA', 'DADOS PENDENTES'
 ];
 const STATUS_MODELO_EM_ALTERACAO_PARA_PEDIDO = [
     'REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'
@@ -113,7 +114,7 @@ async function sincronizarStatusConsolidadoPedidoArteCliente(numPedInt, itens, e
     if (!numPedInt || isNaN(numPedInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
     const { data: artes, error } = await supabaseClient
         .from('pedidos_artes')
-        .select('id, status, entrega_dados')
+        .select('id, status, entrega_dados, observacoes')
         .eq('id_int', numPedInt)
         .order('created_at', { ascending: false });
     if (error) throw error;
@@ -125,7 +126,14 @@ async function sincronizarStatusConsolidadoPedidoArteCliente(numPedInt, itens, e
             ? 'CORRIGIR'
             : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'APROVADO')
                 ? 'APROVADO' : (artes[0].entrega_dados || '');
-    const novoStatus = calcularStatusConsolidadoPedidoArteCliente(itens || [], entrega, artes[0].status);
+    let obsMaisRecente = artes[0].observacoes || {};
+    if (typeof obsMaisRecente === 'string') {
+        try { obsMaisRecente = JSON.parse(obsMaisRecente); } catch (e) { obsMaisRecente = {}; }
+    }
+    const statusAtual = String(artes[0].status || '').trim().toUpperCase() === 'CORRIGIR DADOS'
+        ? (obsMaisRecente.status_antes_correcao_dados || artes[0].status)
+        : artes[0].status;
+    const novoStatus = calcularStatusConsolidadoPedidoArteCliente(itens || [], entrega, statusAtual);
     if (!novoStatus) return null;
 
     const { error: erroUpdate } = await supabaseClient
@@ -1774,6 +1782,11 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
         try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
     }
     if (typeof obs !== 'object' || !obs) obs = {};
+    if (String(statusEntrega || '').trim().toUpperCase() === 'CORRIGIR'
+        && existente && String(existente.status || '').trim().toUpperCase() !== 'CORRIGIR DADOS'
+        && !obs.status_antes_correcao_dados && existente.status) {
+        obs.status_antes_correcao_dados = existente.status;
+    }
 
     // `texto` aceita duas formas, e as duas continuam valendo.
     //
@@ -1819,9 +1832,13 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
         && typeof clienteState !== 'undefined' && state.osItens[clienteState.osId]) || [];
     const entregaParaCalculo = statusEntrega !== null && statusEntrega !== undefined
         ? statusEntrega : (existente && existente.entrega_dados);
+    const statusAnterior = existente
+        && String(existente.status || '').trim().toUpperCase() === 'CORRIGIR DADOS'
+        ? (obs.status_antes_correcao_dados || existente.status)
+        : (existente && existente.status);
     const statusConsolidado = typeof calcularStatusConsolidadoPedidoArteCliente === 'function'
         ? calcularStatusConsolidadoPedidoArteCliente(
-            itensPedido, entregaParaCalculo, existente && existente.status
+            itensPedido, entregaParaCalculo, statusAnterior
         ) : null;
     if (statusConsolidado) campos.status = statusConsolidado;
 
