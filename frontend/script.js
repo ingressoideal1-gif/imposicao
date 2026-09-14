@@ -27132,6 +27132,93 @@ async function devolverArteParaAlteracao(itemId, osId) {
 }
 window.devolverArteParaAlteracao = devolverArteParaAlteracao;
 
+/**
+ * Completa o retorno de um pedido que já saiu da Arte.
+ *
+ * Mudar apenas o status geral para "Em Arte" não basta quando o ERP ainda diz
+ * EXPEDICAO/PRODUCAO: `pedidoSaiuDaArte` o manteria em Concluídos. A marca
+ * durável que vence essa regra mora nos modelos, em `status_impressao =
+ * Corrigir Arte`. O update é único para que um pedido com vários modelos não
+ * fique devolvido pela metade.
+ */
+async function prepararModelosReprovadosParaRetornoAArte(os) {
+    if (!os) {
+        toast('Não foi possível retornar o pedido para Arte: pedido não carregado.', 'error');
+        return false;
+    }
+    if (!pedidoSaiuDaArte(os)) return true;
+
+    const numOs = parseInt(os.numero || os.id_int || String(os.id || '').replace('vibe_', ''), 10);
+    const abertos = (state.osItens && state.osItens[os.id]) || [];
+    const globais = (state.modelosGlobais && state.modelosGlobais[numOs]) || [];
+    const porId = new Map();
+    [...globais, ...abertos].forEach(modelo => {
+        const id = modelo && (modelo._pedidoModeloId || modelo.id);
+        if (!id || String(id).startsWith('vibe_')) return;
+        porId.set(String(id), modelo);
+    });
+    const reprovados = [...porId.values()].filter(modelo => {
+        const estados = [modelo.status_arte, modelo.amostra_status, modelo.aprovacao]
+            .map(valor => String(valor || '').trim().toUpperCase());
+        return estados.some(status => ARTE_REPROVADOS.includes(status));
+    });
+
+    if (!Number.isFinite(numOs) || reprovados.length === 0) {
+        toast('O pedido já saiu da Arte, mas nenhum modelo reprovado foi encontrado. '
+            + 'Marque Corrigir Arte no modelo afetado.', 'error');
+        return false;
+    }
+
+    const ids = reprovados.map(modelo => {
+        const id = modelo._pedidoModeloId || modelo.id;
+        return /^\d+$/.test(String(id)) ? parseInt(id, 10) : id;
+    });
+    const cliente = (typeof vibeClient !== 'undefined' && vibeClient) ||
+        (typeof supabaseClient !== 'undefined' && supabaseClient);
+    if (!cliente) {
+        toast('Não foi possível retornar o pedido para Arte: banco indisponível.', 'error');
+        return false;
+    }
+
+    try {
+        const { data, error } = await cliente
+            .from('pedidos_modelos')
+            .update({
+                status_impressao: STATUS_CORRIGIR_ARTE,
+                status_arte: 'REPROVADA_CLIENTE'
+            })
+            .eq('id_int', numOs)
+            .in('id', ids)
+            .select('id, status_impressao, status_arte');
+        if (error) throw error;
+
+        const confirmados = new Set((data || []).filter(modelo =>
+            normalizarStatusImpressao(modelo.status_impressao) === STATUS_CORRIGIR_ARTE &&
+            String(modelo.status_arte || '').trim().toUpperCase() === 'REPROVADA_CLIENTE'
+        ).map(modelo => String(modelo.id)));
+        if (confirmados.size !== ids.length || ids.some(id => !confirmados.has(String(id)))) {
+            throw new Error('o banco não confirmou todos os modelos devolvidos');
+        }
+
+        [globais, abertos].forEach(lista => lista.forEach(modelo => {
+            const id = modelo && (modelo._pedidoModeloId || modelo.id);
+            if (!confirmados.has(String(id))) return;
+            modelo.status_impressao = STATUS_CORRIGIR_ARTE;
+            modelo.impressao = STATUS_CORRIGIR_ARTE;
+            modelo.amostra_status = 'REPROVADA';
+            modelo.status_arte = 'REPROVADA_CLIENTE';
+        }));
+        await sincronizarStatusConsolidadoPedidoArte(numOs, globais.length ? globais : abertos);
+        return true;
+    } catch (e) {
+        console.error('[Voltar para Arte] modelos não confirmados:', e);
+        toast('Não foi possível confirmar o retorno completo do pedido para Arte; '
+            + 'atualize a tela e tente novamente. ' + (e && (e.message || e.details) || ''), 'error');
+        return false;
+    }
+}
+window.prepararModelosReprovadosParaRetornoAArte = prepararModelosReprovadosParaRetornoAArte;
+
 /** Este modelo está parado esperando o designer corrigir a arte? */
 function modeloEmCorrecaoDeArte(item) {
     if (!item) return false;
@@ -34765,6 +34852,7 @@ async function voltarParaArte() {
 
     try {
         const os = state.ordens.find(o => o.id === osId);
+        if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
 
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
@@ -34850,6 +34938,7 @@ window.voltarParaArteFromLista = async function(osId) {
     const novoStatus = 'Em Arte';
     try {
         const os = state.ordens.find(o => o.id === osId);
+        if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
 
         gravarStatusOverride(osId, novoStatus);
 
