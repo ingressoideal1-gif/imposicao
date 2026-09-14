@@ -31437,6 +31437,15 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho(null));
     }
 
+    // A janela do Pedido tambem precisa do banco que pertence ao PEDIDO, nao
+    // somente do CSV embutido na numeracao. A impressao ja fazia esta garantia
+    // antes do payload, mas a previa era desenhada antes dela e mostrava apenas
+    // os marcadores das colunas. No 21894 cada modelo usa um mapa diferente do
+    // mesmo banco, portanto a carga precisa terminar antes de preencher a tela.
+    if (typeof garantirBancosDoTrabalho === 'function') {
+        await garantirBancosDoTrabalho([osId]);
+    }
+
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
     // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
     // na folha combinada. Ver problemaNaSelecao().

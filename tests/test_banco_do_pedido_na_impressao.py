@@ -22,6 +22,7 @@ import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HARNESS = os.path.join(RAIZ, "tests", "banco_do_pedido_na_impressao_harness.js")
+HARNESS_PREVIA = os.path.join(RAIZ, "tests", "previa_banco_modelos_combinados_harness.js")
 
 
 def _ler(rel):
@@ -44,6 +45,24 @@ def test_o_harness_do_banco_na_impressao_passa():
     )
     assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_o_harness_da_previa_com_bancos_por_modelo_passa():
+    r = subprocess.run(
+        ["node", HARNESS_PREVIA], cwd=RAIZ, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
+    assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_abrir_modelo_carrega_o_banco_do_pedido_antes_de_preencher_a_tela():
+    fonte = _ler("frontend/script.js")
+    corpo = _corpo_da_imposicao(fonte, "async function enviarParaImposicao(")
+    assert "await garantirBancosDoTrabalho([osId])" in corpo
+    assert corpo.index("garantirBancosDoTrabalho") < corpo.index("limparSelecaoDeOutroPedido"), (
+        "a janela começa a ser preenchida antes de o banco do pedido chegar"
+    )
 
 
 def test_as_duas_telas_garantem_os_bancos_do_pedido():

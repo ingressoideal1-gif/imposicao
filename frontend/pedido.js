@@ -377,6 +377,28 @@ function pdfDaFaceNaPreviaPedido(isBack, schema, itemIndex) {
 }
 window.pdfDaFaceNaPreviaPedido = pdfDaFaceNaPreviaPedido;
 
+/** Numeração da arte combinada já ligada ao banco e à fatia deste modelo. */
+function numeracaoDaArteNaPreviaPedido(arte) {
+    if (!arte) return null;
+    let num = (state.numeracoes || []).find(n => String(n.id) === String(arte.num1_id)) || null;
+    const osId = arte._osId || (state.activeOSItem && state.activeOSItem.osId);
+    const itemId = arte._itemId || arte.modelo;
+    const item = osId && itemId
+        ? (state.osItens[osId] || []).find(it => String(it.id) === String(itemId))
+        : null;
+
+    if (item && typeof resolverNumeracaoParaModelo === 'function') {
+        num = resolverNumeracaoParaModelo(num, item);
+    }
+    if (item && num && Array.isArray(num.csv_data)
+            && typeof vinculoDeBancoDoModelo === 'function' && vinculoDeBancoDoModelo(item)
+            && typeof linhasDoModeloNoPayload === 'function') {
+        num = Object.assign({}, num, { csv_data: linhasDoModeloNoPayload(item, num) });
+    }
+    return num;
+}
+window.numeracaoDaArteNaPreviaPedido = numeracaoDaArteNaPreviaPedido;
+
 /**
  * Mede a página de uma arte da folha COMBINADA e guarda o tamanho pela URL.
  *
@@ -760,12 +782,16 @@ function drawPedPreview() {
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
                 pdfVersoDoc: pdfVersoDoc,
+                _itemId: s.itemId,
+                _osId: s.osId,
                 // O tamanho da PAGINA de cada arte, em pontos. E o que faz a
                 // folha combinada desenhar a arte no tamanho do arquivo, como o
                 // motor faz, em vez de esticada ate a celula. Ver
                 // `medirArteDaFolhaCombinada`.
                 artWidth: (state.multiArtesPdfTamanho[itemArteUrl] || {}).w,
                 artHeight: (state.multiArtesPdfTamanho[itemArteUrl] || {}).h,
+                artVersoWidth: (state.multiArtesPdfTamanho[itemArteVersoUrl] || {}).w,
+                artVersoHeight: (state.multiArtesPdfTamanho[itemArteVersoUrl] || {}).h,
                 bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
                 // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
                 // coluna do pool por modelo; sem isto o motor recusa a folha.
@@ -940,7 +966,12 @@ function drawPedPreview() {
         }
     }
 
-    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
+    let num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
+    if (activeItem && typeof resolverNumeracaoParaModelo === 'function') {
+        const item = (state.osItens[activeItem.osId] || [])
+            .find(it => String(it.id) === String(activeItem.itemId));
+        if (item) num = resolverNumeracaoParaModelo(num, item);
+    }
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 
@@ -1425,17 +1456,21 @@ function drawPedPreview() {
             ctx.clip();
 
             let multiArteItem = null;
+            let multiArteLocalIndex = item_index;
             const artesList = artesMultiAtivas;
 
             if (artesList.length > 0) {
                 if (typeof item_arte_index !== 'undefined' && item_arte_index !== null) {
                     multiArteItem = artesList[item_arte_index];
+                    multiArteLocalIndex = (typeof item_local_index !== 'undefined' && item_local_index !== null)
+                        ? item_local_index : item_index;
                 } else {
                     let accumulated = 0;
                     for (let i = 0; i < artesList.length; i++) {
                         let q = parseInt(artesList[i].qtd) || 0;
                         if (item_index >= accumulated && item_index < accumulated + q) {
                             multiArteItem = artesList[i];
+                            multiArteLocalIndex = item_index - accumulated;
                             break;
                         }
                         accumulated += q;
@@ -1598,6 +1633,8 @@ function drawPedPreview() {
 
             let isMultiArtePdf = false;
 
+            let isMultiArteVersoSeparado = false;
+
             let art_orig_w = state.pedArtWidth;
 
             let art_orig_h = state.pedArtHeight;
@@ -1606,15 +1643,20 @@ function drawPedPreview() {
 
              if (multiArteItem) {
 
-                if (multiArteItem.pdfDoc) {
+                const pdfDoModelo = isBack && multiArteItem.pdfVersoDoc
+                    ? multiArteItem.pdfVersoDoc : multiArteItem.pdfDoc;
 
-                    activePdfDoc = multiArteItem.pdfDoc;
+                if (pdfDoModelo) {
+
+                    activePdfDoc = pdfDoModelo;
 
                     isMultiArtePdf = true;
 
-                    art_orig_w = multiArteItem.artWidth || item_w;
+                    isMultiArteVersoSeparado = !!(isBack && multiArteItem.pdfVersoDoc);
 
-                    art_orig_h = multiArteItem.artHeight || item_h;
+                    art_orig_w = (isMultiArteVersoSeparado ? multiArteItem.artVersoWidth : multiArteItem.artWidth) || item_w;
+
+                    art_orig_h = (isMultiArteVersoSeparado ? multiArteItem.artVersoHeight : multiArteItem.artHeight) || item_h;
 
                 }
 
@@ -1701,9 +1743,11 @@ function drawPedPreview() {
 
                     if (activePdfDoc) {
 
-                        // Na folha combinada, cada PDF continua com as faces
-                        // embutidas. No modelo individual vale a selecao acima.
-                        const pageNum = isMultiArtePdf ? (isBack ? 2 : 1) : pdfDaFace.pagina;
+                        // Na folha combinada, o verso separado usa sua pagina 1;
+                        // sem ele, preservamos a pagina 2 do PDF de duas faces.
+                        const pageNum = isMultiArtePdf
+                            ? ((isBack && !isMultiArteVersoSeparado) ? 2 : 1)
+                            : pdfDaFace.pagina;
 
 
 
@@ -2040,6 +2084,15 @@ function drawPedPreview() {
 
             if (currentNum && currentNum.elements) {
 
+                // Na folha combinada cada modelo tem seu proprio banco e sua
+                // propria fatia. `state.csvData` descreve apenas o modelo aberto
+                // e nao pode alimentar Foto e Setor ao mesmo tempo.
+                const linhasDaNumeracao = Array.isArray(currentNum.csv_data)
+                    ? currentNum.csv_data : state.csvData;
+                const indiceDaLinha = multiArteItem ? multiArteLocalIndex : item_index;
+                const linhaAtual = linhasDaNumeracao && linhasDaNumeracao[indiceDaLinha]
+                    ? linhasDaNumeracao[indiceDaLinha] : null;
+
                 let effectiveStart = start;
                 let val_index = item_index;
                 if (schema === "multi_artes" || isMultiSelected) {
@@ -2127,16 +2180,16 @@ function drawPedPreview() {
                         val_str = el.fixed_value || "";
 
                     } else if (el.type === 'TEATRO_FILA') {
-                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
+                        const filaVal = linhaAtual ? linhaAtual.Fila || 'A' : 'A';
                         val_str = `${el.prefix || ''}${filaVal}`;
 
                     } else if (el.type === 'TEATRO_LUGAR') {
-                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        const lugarVal = linhaAtual ? linhaAtual.Numero || '22' : '22';
                         val_str = `${el.prefix || ''}${lugarVal}`;
 
                     } else if (el.type === 'TEATRO_COMBO') {
-                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
-                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        const filaVal = linhaAtual ? linhaAtual.Fila || 'A' : 'A';
+                        const lugarVal = linhaAtual ? linhaAtual.Numero || '22' : '22';
                         const filaT = `${el.prefix_fila || ''}${filaVal}`;
                         const lugarT = `${el.prefix_lugar || ''}${lugarVal}`;
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
@@ -2157,13 +2210,13 @@ function drawPedPreview() {
 
                     } else if (el.source === 'database') {
 
-                        if (state.csvData && state.csvData[item_index]) {
+                        if (linhaAtual) {
 
                             const colName = el.csv_column || '';
 
                             val_str = el.database_text
-                                ? window.formatarTextoDoBanco(el, state.csvData[item_index][colName])
-                                : String(state.csvData[item_index][colName] || '');
+                                ? window.formatarTextoDoBanco(el, linhaAtual[colName])
+                                : String(linhaAtual[colName] || '');
 
                         } else {
 
@@ -2283,7 +2336,7 @@ function drawPedPreview() {
                         // que a foto É o conteúdo.
                         if (typeof window.desenharElementoFoto === 'function') {
 
-                            const _lf = (state.csvData && state.csvData[item_index]) || null;
+                            const _lf = linhaAtual;
                             if (_lf && _linhasFoto.indexOf(_lf) === -1) _linhasFoto.push(_lf);
 
                             // Sem repintor por elemento, de propósito. Cada foto que
@@ -2456,7 +2509,9 @@ function drawPedPreview() {
         };
 
         // Para multi_artes ou imposição combinada, usar a numeração específica de cada arte se disponível
-        const artNum1 = multiArteItem ? (multiArteItem.numeracao || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id))) : null;
+        const artNum1 = multiArteItem
+            ? (multiArteItem.numeracao || numeracaoDaArteNaPreviaPedido(multiArteItem))
+            : null;
         const artNum2 = multiArteItem ? (multiArteItem.numeracao_2 || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num2_id))) : null;
         if (multiArteItem) {
             drawVdpElements(artNum1, 1, gctx);
@@ -3097,7 +3152,11 @@ function updatePedSummary() {
 
 
 
-    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
+    let num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
+    if (typeof resolverNumeracaoParaModelo === 'function') {
+        const item = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+        if (item) num = resolverNumeracaoParaModelo(num, item);
+    }
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 

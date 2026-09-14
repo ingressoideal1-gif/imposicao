@@ -59,8 +59,10 @@ const verso = { nome: 'verso', numPages: 1 };
 
 ok(PEDIDO.includes('const pdfDaFace = pdfDaFaceNaPreviaPedido(isBack, schema, item_index);'),
     'drawPedPreview usa a selecao testada');
-ok(PEDIDO.includes('const pageNum = isMultiArtePdf ? (isBack ? 2 : 1) : pdfDaFace.pagina;'),
-    'drawPedPreview usa a pagina testada');
+ok(PEDIDO.includes("const pdfDoModelo = isBack && multiArteItem.pdfVersoDoc"),
+    'multi-artes escolhe o documento separado do verso');
+ok(PEDIDO.includes("? ((isBack && !isMultiArteVersoSeparado) ? 2 : 1)"),
+    'multi-artes usa pagina 1 do verso separado e pagina 2 do PDF embutido');
 
 if (falhas) process.exit(1);
 console.log('OK: previa do verso separado -- ' + total + ' verificacoes.');
