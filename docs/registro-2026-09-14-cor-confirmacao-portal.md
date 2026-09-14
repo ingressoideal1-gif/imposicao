@@ -21,8 +21,8 @@ Chromium com CSS real, dados fictícios e gravação simulada confirmou cores an
 durante e depois do clique, independência das abas, falha e nova tentativa.
 Capturas de 390 px em `rascunhos/confirmar-cor/`, ignorado pelo Git.
 
-Implementação local em `../imposicao-confirmar-cor`, branch
+Implementação preparada em `../imposicao-confirmar-cor`, branch
 `fix/confirmar-cor-apos-gravacao`, base `bbe65e08` de `origin/main`.
-Checkout original com alterações anteriores preservado. Sem envio, SQL remoto,
-aprovação de pedido real, commit ou publicação nesta etapa.
-Próximo passo: publicar o frontend após autorização para esta correção.
+Checkout original com alterações anteriores preservado. Nenhum SQL remoto ou
+aprovação de pedido real foi executado nesta correção. A entrega foi integrada
+ao lote de publicação v873.
