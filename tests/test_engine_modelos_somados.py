@@ -93,6 +93,92 @@ def _impor(tmp_path, artes, **extra):
     return cfg, str(out)
 
 
+def test_dois_modelos_reaproveitam_a_mesma_arte_na_frente_e_no_verso(tmp_path, monkeypatch, capsys):
+    """Pedido 21894: a mesma URL de uma pagina pode ser frente e verso.
+
+    No ``multi_artes`` o cache e por URL. Frente e verso iguais precisam virar
+    documentos PyMuPDF independentes antes do ``insert_pdf``; inserir um
+    documento nele proprio e recusado e deixava o verso sem a arte base.
+    """
+    with fitz.open() as origem:
+        pagina = origem.new_page(width=70 * 72 / 25.4, height=40 * 72 / 25.4)
+        pagina.insert_text((20, 40), "ARTE-COMUM-21894", fontsize=12)
+        arte_bytes = origem.tobytes()
+
+    class Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return arte_bytes
+
+    chamadas = []
+
+    def urlopen_falso(req, timeout=None):
+        chamadas.append((req.full_url, timeout))
+        return Resposta()
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_falso)
+
+    url = "https://example.invalid/arte-comum-21894.pdf"
+    numeracao = {
+        "tipo": "SEQUENCIAL",
+        "start": 1,
+        "print_mode": "duplex",
+        "elements": [],
+    }
+    artes = [
+        {
+            "qtd": 1,
+            "nome": "",
+            "numeracao": numeracao,
+            "numeracao_2": None,
+            "pdf_url": url,
+            "pdf_verso_url": url,
+            "local_path": None,
+            "modelo": modelo,
+            "pedido": "21894",
+        }
+        for modelo in ("1000940", "1000947")
+    ]
+    saida = tmp_path / "mesma-arte-frente-verso.pdf"
+    cfg = ImpositionConfig(
+        base_file="",
+        out_pdf=str(saida),
+        formato={
+            "name": "Uma celula",
+            "width_mm": 70,
+            "height_mm": 40,
+            "cols": 1,
+            "rows": 1,
+            "gap_h_mm": 0,
+            "gap_v_mm": 0,
+            "offset_h_mm": 0,
+            "offset_v_mm": 0,
+            "rotations": {},
+        },
+        numeracao=None,
+        saida={"name": "70x40", "width_mm": 70, "height_mm": 40},
+        layout_schema="multi_artes",
+        print_mode="duplex",
+        multi_artes=artes,
+    )
+
+    ImpositionEngine(cfg).process()
+
+    with fitz.open(saida) as resultado:
+        assert len(resultado) == 4
+        for pagina in resultado:
+            assert "ARTE-COMUM-21894" in pagina.get_text()
+
+    assert chamadas == [(url, 15)], "a URL compartilhada deve ser baixada uma vez"
+    assert "source and target cannot be same object" not in capsys.readouterr().out
+
+
 # A folha carrega mais texto que os campos: marcas de corte, rotulos de lado.
 # So os nomes do banco interessam, e eles tem forma fixa (A1, B7, C12).
 _NOME = re.compile(r"^[A-Z]\d+$")
