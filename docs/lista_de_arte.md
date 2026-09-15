@@ -10,15 +10,16 @@ função `renderOrdens()`.
 
 ---
 
-## Os cinco cards
+## Os seis cards
 
 Os cards no topo não são enfeite: cada um é um filtro, e clicar em qualquer um
 deles troca a tabela de baixo e o título dela.
 
 | Card | Fila interna | O que reúne |
 |------|--------------|-------------|
-| 🌐 Todos os Pedidos Pendentes | `todos` | Em Arte + Fila de Aprovação |
+| 🌐 Todos os Pedidos Pendentes | `todos` | Em Arte + Pendente + Fila de Aprovação |
 | 🎨 Em Arte | `fila` | O trabalho do designer ainda está aberto |
+| ⚠️ Pendente | `pendente` | O atendimento precisa corrigir dados ou fornecer informação; reúne `Corrigir Dados` e `Pendente Informação` |
 | ⏳ Fila de Aprovação | `aprovacao` | Foi para o cliente e aguarda resposta |
 | ✅ Fila de Aprovados | `aprovados` | Arte **e** dados de entrega aprovados |
 | 🏆 Pedidos Concluídos | `concluidos` | Já saiu da arte para a produção — ou foi cancelado. É o **arquivo**, e o único card paginado |
@@ -30,9 +31,16 @@ que devolve `{ statusCalculado, fila }`. Ela lê quatro fontes — `propostas`,
 1. **Saiu da arte?** (`pedidoSaiuDaArte`) → `concluidos`. Esta pergunta vem
    primeiro de propósito: sem isso, o pedido liberado para produção voltaria a
    ser contado em "Em Arte" e reapareceria na tabela.
-2. **Arte aprovada E entrega aprovada?** → `aprovados`
-3. **Está com o cliente?** → `aprovacao`
-4. Senão → `fila`
+2. **Precisa corrigir dados ou fornecer informação?** → `pendente`
+3. **Arte aprovada E entrega aprovada?** → `aprovados`
+4. **Está com o cliente?** → `aprovacao`
+5. Senão → `fila`
+
+No pedido aberto pelo card **Em Arte**, o box **Devolver** contém o botão
+**Pendente Informação**. A ação grava esse valor em `pedidos_artes.status` e
+move o pedido para o card **Pendente**. O mesmo acontece ao usar **Voltar para
+Atendimento** quando nem todos os modelos estão prontos. O botão explícito fica
+oculto quando o pedido pertence a outro card.
 
 ### Quais palavras tiram um pedido da arte
 

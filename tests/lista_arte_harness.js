@@ -14,6 +14,7 @@ const path = require('path');
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const INDEX = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+const PRODUCAO = fs.readFileSync(path.join(RAIZ, 'frontend', 'producao.html'), 'utf8');
 
 let falhas = 0;
 let total = 0;
@@ -202,21 +203,22 @@ const { pedidoCancelado } = new Function(
     // tabela, justamente os pedidos que ja tinham saido da arte.
     ok(!/baseOrdensArte = state\.ordens;/.test(SCRIPT),
         'o filtro de status nao varre state.ordens');
-    ok(/baseOrdensArte = \[\.\.\.ordensFilaArte, \.\.\.ordensAprovacao, \.\.\.ordensAprovados\];/.test(SCRIPT),
+    ok(/baseOrdensArte = \[\.\.\.ordensFilaArte, \.\.\.ordensPendentesArte, \.\.\.ordensAprovacao, \.\.\.ordensAprovados\];/.test(SCRIPT),
         'ele varre so quem continua na arte');
 })();
 
-// ─── Os cinco cards abrem a lista deles ──────────────────────────────────────
+// ─── Os seis cards abrem a lista deles ───────────────────────────────────────
 //
 // Usuario, 19/08/2026: "ao clicar em qualquer um dos cards, deve atualizar a
 // pagina conforme os status de cada card". O de Concluidos era o unico mudo --
 // e, desde que os pedidos em producao passaram a contar SO nele, era tambem o
 // unico caminho para ve-los nesta pagina. Card que conta e nao abre vira beco.
 
-(function todosOsCincoCardsAbremAFilaDeles() {
+(function todosOsSeisCardsAbremAFilaDeles() {
     const CARDS = [
         ['card-stat-pedidos-todos', 'todos'],
         ['card-stat-pedidos-fila', 'fila'],
+        ['card-stat-pedidos-pendente', 'pendente'],
         ['card-stat-pedidos-aprovacao', 'aprovacao'],
         ['card-stat-pedidos-aprovados', 'aprovados'],
         ['card-stat-pedidos-concluidos', 'concluidos'],
@@ -238,7 +240,7 @@ const { pedidoCancelado } = new Function(
         'a fila de Concluidos e o balde que o card conta');
     ok(/Pedidos Conclu[ií]dos`/.test(SCRIPT), 'e a tabela muda de titulo');
     ok(/cardConcluidosEl\.style\.border/.test(SCRIPT), 'e o card escolhido se destaca');
-    ok(/\[cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl\]/.test(SCRIPT),
+    ok(/\[cardTodosEl, cardFilaEl, cardPendenteEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl\]/.test(SCRIPT),
         'e ele volta ao normal quando outro card e escolhido');
 })();
 
@@ -467,6 +469,41 @@ function classificarComArte(statusDaArte, extra) {
     const c = classificarComArte('ENVIAR ARTE', { link: true });
     ok(c.statusCalculado === 'Enviar Arte', 'ENVIAR ARTE continua com o badge "Enviar Arte"', c);
     ok(c.fila === 'aprovacao', 'e continua na Fila de Aprovacao', c);
+})();
+
+(function pendenciasTemCardProprio() {
+    const dados = classificarComArte('APROVADO', { entrega: 'CORRIGIR' });
+    ok(dados.fila === 'pendente' && dados.statusCalculado === 'Corrigir Dados',
+        'Corrigir Dados fica no card Pendente mesmo com a arte aprovada', dados);
+
+    const informacao = classificarComArte('Pendente Informação');
+    ok(informacao.fila === 'pendente' && informacao.statusCalculado === 'Pendente Informação',
+        'Pendente Informação fica no card Pendente', informacao);
+
+    ok(/const ordensTodos = \[\.\.\.ordensFilaArte, \.\.\.ordensPendentesArte, \.\.\.ordensAprovacao\];/.test(SCRIPT),
+        'Todos os Pedidos Pendentes tambem inclui o novo card Pendente');
+    ok(/if \(cardPendenteEl\) cardPendenteEl\.style\.border = '1px solid #ef4444';/.test(SCRIPT),
+        'o card Pendente conserva o contorno vermelho quando nao esta selecionado');
+})();
+
+(function aDecisaoPendenteInformacaoEPersistente() {
+    const inicio = SCRIPT.indexOf('\nasync function gravarPedidoComoPendenteInformacao(');
+    const fim = SCRIPT.indexOf('\n}', inicio);
+    const funcao = SCRIPT.slice(inicio, fim + 2);
+    ok(inicio > 0, 'existe a gravacao consolidada de Pendente Informacao');
+    ok(/\.from\('pedidos_artes'\)[\s\S]*?\.update\(\{ status: novoStatus \}\)[\s\S]*?\.eq\('id_int', numero\)/.test(funcao),
+        'Pendente Informacao e gravado em pedidos_artes.status para o pedido');
+    ok(/async function marcarPendenteInformacao\([\s\S]*?classificarPedidoNaArte\(os\)\.fila !== 'fila'/.test(SCRIPT),
+        'o botao so aceita pedidos do card Em Arte');
+    ok(/if \(!todasProntas\) \{[\s\S]{0,180}?await gravarPedidoComoPendenteInformacao\(osId, os\);/.test(SCRIPT),
+        'Voltar para Atendimento usa a mesma gravacao quando faltam modelos prontos');
+    ok(/await substituirPendenteInformacao\(os, novoStatus\);/.test(SCRIPT),
+        'uma nova direção remove a pendencia manual antes de seguir o fluxo');
+    ok(/id="btn-pendente-informacao"[^>]*onclick="marcarPendenteInformacao\(\)"/.test(INDEX),
+        'o botao Pendente Informacao existe no box Devolver');
+    ok(/id="btn-pendente-informacao"[^>]*onclick="marcarPendenteInformacao\(\)"/.test(PRODUCAO)
+        && /id="card-stat-pedidos-pendente"[^>]*setFiltroFilaArte\('pendente'\)/.test(PRODUCAO),
+        'a pagina de producao conserva o mesmo botao e o card Pendente');
 })();
 
 (function aRegraAntigaNaoPodeVoltar() {

@@ -723,8 +723,9 @@ código de produção) e `tests/test_portal_pendencia.py`.
 
 5. Clica em **"Voltar para Atendimento"**
 6. O sistema verifica se **todos** os modelos estão com `amostra_status === 'PRONTO'`
-   - **Sim** → status muda para `Enviar ARTE`, link é gerado automaticamente e copiado para a área de transferência
-   - **Não** → status muda para `Pendente Informação`, alerta ao operador
+   - **Sim** → status muda para `Enviar Arte` e o link é gerado automaticamente
+   - **Não** → status muda para `Pendente Informação`, grava em `pedidos_artes.status` e alerta ao operador
+   - O mesmo status pode ser escolhido diretamente pelo botão **Pendente Informação**, no box **Devolver**, enquanto o pedido estiver em **Em Arte**
 7. O link gerado tem formato: `https://dominio.com/cliente/{numero}-{token}` (ex: `/cliente/17823-zi1v27`)
 
 ### 3. Acesso pelo Cliente

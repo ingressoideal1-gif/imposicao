@@ -50,6 +50,8 @@ igual(contexto.calcular([aprovado, pendente], 'CORRIGIR', ''), 'Corrigir Dados',
 igual(contexto.calcular([alteracao, aprovado], 'APROVADO', ''), 'Em Alteração', 'alteração de arte');
 igual(contexto.calcular([pendente], '', 'Enviar Arte'), 'Enviar Arte', 'pronto para envio');
 igual(contexto.calcular([pendente], '', 'ENVIAR ARTE'), 'Enviar Arte', 'grafia antiga em maiúsculas');
+igual(contexto.calcular([alteracao], '', 'Pendente Informação'), 'Pendente Informação', 'informação pendente permanece até nova direção');
+igual(contexto.calcular([aprovado], 'CORRIGIR', 'Pendente Informação'), 'Corrigir Dados', 'correção de dados vence informação pendente');
 
 async function testarRetornoDaCorrecaoComModeloLegado() {
     const linha = {
@@ -95,7 +97,7 @@ async function testarRetornoDaCorrecaoComModeloLegado() {
 }
 
 testarRetornoDaCorrecaoComModeloLegado().then(() => {
-    console.log('status pedidos_artes: 13 casos OK');
+    console.log('status pedidos_artes: 15 casos OK');
 }).catch(erro => {
     console.error(erro);
     process.exit(1);

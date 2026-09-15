@@ -1459,6 +1459,7 @@
                                 <input type="file" id="import-pdf-arte-input" accept=".pdf" style="display: none;" onchange="importarPdfMultipage(event)" />
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf" onclick="exportarPdfModelos()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf"></i> PDF Prova</button>
                                 <button class="btn btn-primary btn-sm" onclick="voltarParaAtendimento()" style="font-size: 0.78rem; font-weight: 600;">↩️ Voltar para Atendimento</button>
+                                <button class="btn btn-secondary btn-sm" id="btn-pendente-informacao" onclick="marcarPendenteInformacao()" style="font-size: 0.78rem; font-weight: 600; border-color: #ef4444; color: #ef4444;">⚠️ Pendente Informação</button>
                                 <button class="btn btn-danger btn-sm" onclick="voltarParaArte()" style="font-size: 0.78rem; font-weight: 600;">🎨 Voltar para Arte</button>
                                 <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">✕ Fechar Pedido</button>
                             </div>
@@ -1822,6 +1823,11 @@
                         <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
                         <div class="stat-card-icon">🎨</div>
                     </div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-pendente" onclick="setFiltroFilaArte('pendente')" style="cursor: pointer; transition: all 0.2s ease; border-color: #ef4444;" title="Clique para exibir pedidos com dados ou informações pendentes">
+                        <div class="stat-card-title">Pendente</div>
+                        <div class="stat-card-value" id="stat-pedidos-pendente-arte" style="color: #ef4444;">0</div>
+                        <div class="stat-card-icon">⚠️</div>
+                    </div>
                     <div class="stat-card clickable-card" id="card-stat-pedidos-aprovacao" onclick="setFiltroFilaArte('aprovacao')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovação">
                         <div class="stat-card-title">Em Aprovação</div>
                         <div class="stat-card-value purple" id="stat-pedidos-aprovacao-arte">0</div>
@@ -2125,7 +2131,7 @@
     <script src="/foto-lib.js?v=873"></script>
     <script src="/gerenciador-fotos.js?v=873"></script>
     <script src="/editor-foto.js?v=873"></script>
-    <script src="/script.js?v=876"></script>
+    <script src="/script.js?v=877"></script>
     <script src="/criador-arte.js?v=873"></script>
     <script src="/pedido.js?v=873"></script>
 

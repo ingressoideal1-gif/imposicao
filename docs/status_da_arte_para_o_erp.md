@@ -13,6 +13,7 @@ confirmação conjunta de **Entrega/Faturam.**
 | `Apr Parcial` | pelo menos uma arte foi aprovada e ainda existe arte pendente, sem solicitação de correção de dados |
 | `Dados Pendentes` | todas as artes foram aprovadas, mas Entrega/Faturam. ainda não foi aprovado |
 | `Corrigir Dados` | foi solicitada alteração em Entrega/Faturam.; este status tem prioridade mesmo com arte aprovada, parcialmente aprovada ou em alteração |
+| `Pendente Informação` | o atendimento ainda precisa fornecer informação antes de o pedido seguir; pode ser marcado pelo botão no box Devolver ou pelo retorno sem todos os modelos prontos |
 | `APROVADO` | todas as artes e Entrega/Faturam. estão aprovados |
 
 `Enviar Arte` deve ser gravado exatamente com essa capitalização.
@@ -25,11 +26,12 @@ não devem ser gravados em novos eventos.
 ## Precedência
 
 1. Entrega/Faturam. igual a `CORRIGIR` grava `Corrigir Dados`.
-2. Sem correção de dados, qualquer arte reprovada grava `Em Alteração`.
-3. Todas as artes aprovadas gravam `APROVADO` somente se
+2. A decisão explícita de que faltam informações grava `Pendente Informação`.
+3. Sem correção de dados ou informação pendente, qualquer arte reprovada grava `Em Alteração`.
+4. Todas as artes aprovadas gravam `APROVADO` somente se
    `pedidos_artes.entrega_dados = 'APROVADO'`; caso contrário, gravam
    `Dados Pendentes`.
-4. Parte das artes aprovada grava `Apr Parcial`.
+5. Parte das artes aprovada grava `Apr Parcial`.
 
 Ao entrar em `Corrigir Dados`, o sistema preserva
 `observacoes.status_antes_correcao_dados`. Esse valor permite restaurar o

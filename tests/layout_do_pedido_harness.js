@@ -32,11 +32,11 @@ function extrairFuncao(src, nome) {
     const banner = HTML.slice(i, HTML.indexOf('<!-- Container dinâmico dos cards de itens do pedido -->', i));
     ok(banner.length > 0, 'o cabecalho do pedido aberto existe');
 
-    // Os onze botoes de sempre — pelo que eles CHAMAM, nao pelo texto.
+    // Os botoes do cabecalho — pelo que eles CHAMAM, nao pelo texto.
     const chamadas = [
         'gerarLinkClienteBanner()', 'exportarPdfGabarito()', 'exportarPdfSomenteArte()',
         "document.getElementById('import-pdf-arte-input').click()", 'exportarPdfModelos()',
-        'voltarParaAtendimento()', 'voltarParaArte()', 'toggleBoxEntregaDados()',
+        'voltarParaAtendimento()', 'marcarPendenteInformacao()', 'voltarParaArte()', 'toggleBoxEntregaDados()',
         'abrirConferenciaDeDados()', 'clearAmostrasOS()',
     ];
     for (const c of chamadas) ok(banner.indexOf('onclick="' + c + '"') > 0, 'o botao que chama ' + c + ' continua no cabecalho');

@@ -26974,7 +26974,9 @@ function getStatusBadge(status) {
         'FINALIZADA':          { icon: '✅', bg: '#22c55e', label: 'Finalizada' },
         'CANCELADA':           { icon: '❌', bg: '#ef4444', label: 'Cancelada' },
         'EM IMPRESSÃO':        { icon: '🖨️', bg: '#a855f7', label: 'Em Impressão' },
-        'Pendente Informação': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Info' },
+        'Pendente Informação': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Informação' },
+        'PENDENTE INFORMAÇÃO': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Informação' },
+        'PENDENTE INFORMACAO': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Informação' },
 
         // ── Mapeamento e Legados ────────────────────────────────────
         'Em Fila':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
@@ -29001,11 +29003,13 @@ const ARTE_EM_APROVACAO = ['ENVIAR ARTE', 'ARTE PRONTA', 'EM APROVAÇÃO', 'EM A
 function calcularStatusConsolidadoPedidoArte(modelos, entregaStatus, statusAtual) {
     const normalizar = valor => String(valor || '').trim().toUpperCase();
     const entrega = normalizar(entregaStatus);
+    const atual = normalizar(statusAtual);
     const estados = (modelos || []).map(modelo => [
         normalizar(modelo.status_arte), normalizar(modelo.amostra_status), normalizar(modelo.aprovacao)
     ].filter(Boolean));
 
     if (entrega === 'CORRIGIR') return 'Corrigir Dados';
+    if (atual === 'PENDENTE INFORMAÇÃO' || atual === 'PENDENTE INFORMACAO') return 'Pendente Informação';
 
     const temAlteracao = estados.some(valores => valores.some(status => ARTE_REPROVADOS.includes(status)));
     if (temAlteracao) return 'Em Alteração';
@@ -29016,7 +29020,6 @@ function calcularStatusConsolidadoPedidoArte(modelos, entregaStatus, statusAtual
     }
     if (aprovadas > 0) return 'Apr Parcial';
 
-    const atual = normalizar(statusAtual);
     if (atual === 'ENVIAR ARTE') return 'Enviar Arte';
     if (atual === 'AGUARDANDO_APROVACAO') return 'Em Aprovação';
     if (atual === 'APROVADO PARCIAL') return 'Apr Parcial';
@@ -29094,6 +29097,7 @@ const ARTE_COM_O_DESIGNER = ['AGUARDANDO', 'EM ARTE', 'ARTE_EM_ANDAMENTO'];
  *
  * `fila` é o card da Lista de Arte em que ele aparece:
  *   'fila'       → Em Arte            (o trabalho do designer ainda está aberto)
+ *   'pendente'   → Pendente           (o atendimento precisa corrigir dados ou fornecer informação)
  *   'aprovacao'  → Fila de Aprovação  (foi para o cliente e aguarda resposta)
  *   'aprovados'  → Fila de Aprovados  (arte E dados de entrega aprovados)
  *   'concluidos' → Pedidos Concluídos (já saiu da arte para a produção)
@@ -29179,6 +29183,10 @@ function classificarPedidoNaArte(os) {
     const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
     const isEntregaAprovada = (entregaStatus === 'APROVADO');
     const isArteAprovada = (statusCalculado === 'Aprovada');
+    const isPendenteInformacao = osStatus === 'PENDENTE INFORMAÇÃO'
+        || osStatus === 'PENDENTE INFORMACAO'
+        || globalStatus === 'PENDENTE INFORMAÇÃO'
+        || globalStatus === 'PENDENTE INFORMACAO';
 
     const temArteAprovada = modelosGlobaisOS.some(m => {
         const sAm = (m.amostra_status || '').trim().toUpperCase();
@@ -29186,11 +29194,13 @@ function classificarPedidoNaArte(os) {
         return ARTE_APROVADOS.includes(sAm) || ARTE_APROVADOS.includes(sArt);
     });
     if (entregaStatus === 'CORRIGIR') statusCalculado = 'Corrigir Dados';
+    else if (isPendenteInformacao) statusCalculado = 'Pendente Informação';
     else if (isArteAprovada) statusCalculado = isEntregaAprovada ? 'APROVADO' : 'Dados Pendentes';
     else if (!isEmAlteracaoCalculado && temArteAprovada) statusCalculado = 'Apr Parcial';
 
     const isTotalmenteAprovado = statusCalculado === 'APROVADO';
-    const isEmAprovacaoFila = ['Enviar Arte', 'Em Aprovação', 'Arte Pronta', 'Dados Pendentes', 'Apr Parcial', 'Corrigir Dados'].includes(statusCalculado);
+    const isPendenteFila = ['Corrigir Dados', 'Pendente Informação'].includes(statusCalculado);
+    const isEmAprovacaoFila = ['Enviar Arte', 'Em Aprovação', 'Arte Pronta', 'Dados Pendentes', 'Apr Parcial'].includes(statusCalculado);
 
     // O cancelado vem ANTES de tudo: nenhum estágio de arte o traz de volta
     // para a fila do designer, e o badge diz o que ele é. Sem esta linha ele
@@ -29220,6 +29230,7 @@ function classificarPedidoNaArte(os) {
 
     let fila;
     if (pedidoSaiuDaArte(os)) fila = 'concluidos';
+    else if (isPendenteFila) fila = 'pendente';
     else if (isTotalmenteAprovado) fila = 'aprovados';
     else if (isEmAprovacaoFila) fila = 'aprovacao';
     else fila = 'fila';
@@ -30070,6 +30081,7 @@ function renderOrdens() {
 
     // Fila 2: Arte vs Fila de Aprovação vs Fila de Aprovados
     let ordensFilaArte = [];
+    let ordensPendentesArte = [];
     let ordensAprovacao = [];
     let ordensAprovados = [];
     let ordensConcluidosArte = [];
@@ -30085,6 +30097,7 @@ function renderOrdens() {
 
         if (c.fila === 'concluidos') ordensConcluidosArte.push(os);
         else if (c.fila === 'aprovados') ordensAprovados.push(os);
+        else if (c.fila === 'pendente') ordensPendentesArte.push(os);
         else if (c.fila === 'aprovacao') ordensAprovacao.push(os);
         else ordensFilaArte.push(os);
     });
@@ -30095,13 +30108,16 @@ function renderOrdens() {
     ligarRelogioDaLista();
 
     // --- Calcular Estatísticas dos Cards KPI ---
-    const ordensTodos = [...ordensFilaArte, ...ordensAprovacao];
+    const ordensTodos = [...ordensFilaArte, ...ordensPendentesArte, ...ordensAprovacao];
 
     const statPedidosTodosArteEl = document.getElementById('stat-pedidos-todos-arte');
     if (statPedidosTodosArteEl) statPedidosTodosArteEl.textContent = ordensTodos.length;
 
     const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
     if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensFilaArte.length;
+
+    const statPedidosPendentesArteEl = document.getElementById('stat-pedidos-pendente-arte');
+    if (statPedidosPendentesArteEl) statPedidosPendentesArteEl.textContent = ordensPendentesArte.length;
 
     const statPedidosAprovacaoArteEl = document.getElementById('stat-pedidos-aprovacao-arte');
     if (statPedidosAprovacaoArteEl) statPedidosAprovacaoArteEl.textContent = ordensAprovacao.length;
@@ -30127,7 +30143,7 @@ function renderOrdens() {
         baseOrdensArte = ordensAprovados;
     } else if (state.filtroStatusArte) {
         // state.ordens não: traria de volta os pedidos que já saíram da arte.
-        baseOrdensArte = [...ordensFilaArte, ...ordensAprovacao, ...ordensAprovados];
+        baseOrdensArte = [...ordensFilaArte, ...ordensPendentesArte, ...ordensAprovacao, ...ordensAprovados];
     } else if (activeFilaTipo === 'concluidos') {
         baseOrdensArte = ordensConcluidosArte;
         // A lista dos concluídos tem ordem própria, lá embaixo. Marcado AQUI, e
@@ -30138,6 +30154,8 @@ function renderOrdens() {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
         baseOrdensArte = ordensAprovacao;
+    } else if (activeFilaTipo === 'pendente') {
+        baseOrdensArte = ordensPendentesArte;
     } else if (activeFilaTipo === 'todos') {
         baseOrdensArte = ordensTodos;
     } else if (activeFilaTipo === 'fila') {
@@ -30155,6 +30173,8 @@ function renderOrdens() {
             tituloTabelaArteEl.innerHTML = `<span class="icon">✅</span> Fila de Aprovados`;
         } else if (activeFilaTipo === 'aprovacao') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">⏳</span> Fila de Aprovação`;
+        } else if (activeFilaTipo === 'pendente') {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">⚠️</span> Pendente`;
         } else if (activeFilaTipo === 'fila') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">🎨</span> Em Arte`;
         } else {
@@ -30175,16 +30195,21 @@ function renderOrdens() {
 
     const cardTodosEl = document.getElementById('card-stat-pedidos-todos');
     const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
+    const cardPendenteEl = document.getElementById('card-stat-pedidos-pendente');
     const cardAprovacaoEl = document.getElementById('card-stat-pedidos-aprovacao');
     const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
     const cardConcluidosEl = document.getElementById('card-stat-pedidos-concluidos');
 
-    [cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl].forEach(c => {
+    [cardTodosEl, cardFilaEl, cardPendenteEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl].forEach(c => {
         if (c) {
             c.style.border = '1px solid var(--border)';
             c.style.boxShadow = 'none';
         }
     });
+
+    // O contorno vermelho identifica o card Pendente mesmo quando outro filtro
+    // está selecionado. Ao selecionar, ele fica mais espesso logo abaixo.
+    if (cardPendenteEl) cardPendenteEl.style.border = '1px solid #ef4444';
 
     if (activeFilaTipo === 'concluidos' && cardConcluidosEl) {
         cardConcluidosEl.style.border = '2px solid var(--amber)';
@@ -30195,6 +30220,9 @@ function renderOrdens() {
     } else if (activeFilaTipo === 'aprovacao' && cardAprovacaoEl) {
         cardAprovacaoEl.style.border = '2px solid #8b5cf6';
         cardAprovacaoEl.style.boxShadow = '0 0 12px rgba(139, 92, 246, 0.3)';
+    } else if (activeFilaTipo === 'pendente' && cardPendenteEl) {
+        cardPendenteEl.style.border = '2px solid #ef4444';
+        cardPendenteEl.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.35)';
     } else if (activeFilaTipo === 'fila' && cardFilaEl) {
         cardFilaEl.style.border = '2px solid var(--blue)';
         cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
@@ -30278,6 +30306,7 @@ function renderOrdens() {
                 'APR PARCIAL': 'Apr Parcial',
                 'DADOS PENDENTES': 'Dados Pendentes',
                 'CORRIGIR DADOS': 'Corrigir Dados',
+                'PENDENTE INFORMACAO': 'Pendente Informação',
                 'APROVADA': 'Dados Pendentes',
                 'APROVADO': 'APROVADO'
             };
@@ -33526,6 +33555,16 @@ function renderAmostrasOSItens(osId) {
 
     if (!os || !container) return;
 
+    // Esta decisão pertence ao atendimento enquanto o pedido ainda está no
+    // card Em Arte. Nos demais cards o botão não representa uma transição
+    // válida e, no portal do cliente, ele nem deve aparecer.
+    const btnPendenteInformacao = document.getElementById('btn-pendente-informacao');
+    if (btnPendenteInformacao) {
+        const pedidoEstaNoCardEmArte = containerId === 'amostras-itens-container'
+            && classificarPedidoNaArte(os).fila === 'fila';
+        btnPendenteInformacao.style.display = pedidoEstaNoCardEmArte ? 'inline-flex' : 'none';
+    }
+
     if (state.osItens[targetOSId]) {
         state.osItens[targetOSId].sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
     }
@@ -34747,6 +34786,104 @@ function atualizarBarraFinalCliente(osId) {
 }
 
 /**
+ * Grava a decisão explícita de que o atendimento ainda precisa fornecer
+ * informação. `pedidos_artes.status` é a fonte consolidada; as outras tabelas
+ * continuam sincronizadas para as telas que ainda as leem diretamente.
+ */
+async function gravarPedidoComoPendenteInformacao(osId, os) {
+    const novoStatus = 'Pendente Informação';
+    const numero = parseInt(os && (os.numero || os.id_int) || String(osId || '').replace(/\D/g, ''));
+    if (!numero || isNaN(numero)) throw new Error('Número do pedido inválido.');
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const linhaExiste = await garantirLinhaDePedidoArte(numero);
+        if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+
+        const { data: linhasAtualizadas, error: erroArte } = await supabaseClient
+            .from('pedidos_artes')
+            .update({ status: novoStatus })
+            .eq('id_int', numero)
+            .select('id');
+        if (erroArte) throw erroArte;
+        if (!linhasAtualizadas || linhasAtualizadas.length === 0) {
+            throw new Error('O status consolidado da arte não foi atualizado.');
+        }
+
+        if (String(osId).startsWith('vibe_')) {
+            const { error } = await supabaseClient
+                .from('pedidos_links_cliente')
+                .update({ status_arte: novoStatus })
+                .eq('os_id', osId);
+            if (error) console.warn('Status consolidado salvo; falhou a sincronização do link:', error);
+        } else {
+            const { error } = await supabaseClient
+                .from('producao_ordens_servico')
+                .update({ status: novoStatus })
+                .eq('id', osId);
+            if (error) console.warn('Status consolidado salvo; falhou a sincronização da OS:', error);
+        }
+    }
+
+    gravarStatusOverride(osId, novoStatus);
+    if (os) {
+        os.status = novoStatus;
+        os.status_calculado = novoStatus;
+    }
+    (state.todasArtes || [])
+        .filter(arte => parseInt(arte.id_int) === numero)
+        .forEach(arte => { arte.status = novoStatus; });
+
+    return novoStatus;
+}
+window.gravarPedidoComoPendenteInformacao = gravarPedidoComoPendenteInformacao;
+
+/** Remove a pendência manual somente quando uma nova direção foi escolhida. */
+async function substituirPendenteInformacao(os, novoStatus) {
+    const numero = parseInt(os && (os.numero || os.id_int));
+    if (!numero || isNaN(numero)) return;
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { error } = await supabaseClient
+            .from('pedidos_artes')
+            .update({ status: novoStatus })
+            .eq('id_int', numero)
+            .in('status', ['Pendente Informação', 'PENDENTE INFORMAÇÃO', 'PENDENTE INFORMACAO']);
+        if (error) throw error;
+    }
+
+    (state.todasArtes || [])
+        .filter(arte => parseInt(arte.id_int) === numero
+            && ['PENDENTE INFORMAÇÃO', 'PENDENTE INFORMACAO'].includes(String(arte.status || '').trim().toUpperCase()))
+        .forEach(arte => { arte.status = novoStatus; });
+}
+window.substituirPendenteInformacao = substituirPendenteInformacao;
+
+/** Ação explícita do botão "Pendente Informação" no box Devolver. */
+async function marcarPendenteInformacao() {
+    const osId = state.amostrasOSAtivo;
+    const os = (state.ordens || []).find(o => o.id === osId);
+    if (!osId || !os) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+    if (classificarPedidoNaArte(os).fila !== 'fila') {
+        toast('Pendente Informação está disponível somente para pedidos Em Arte.', 'warning');
+        return;
+    }
+
+    try {
+        await gravarPedidoComoPendenteInformacao(osId, os);
+        toast(`Pedido #${os.numero} marcado como "Pendente Informação".`, 'warning');
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao marcar informação pendente:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+window.marcarPendenteInformacao = marcarPendenteInformacao;
+
+/**
  * Atualiza o status global do pedido ao clicar em "Voltar para Atendimento".
  * - Se TODOS os modelos estiverem PRONTO → 'Enviar Arte' (mas normalmente isso
  *   já foi feito automaticamente por decisionAmostraItem)
@@ -34768,10 +34905,20 @@ async function voltarParaAtendimento() {
 
     // Verificar se todos os itens possuem amostra_status === 'PRONTO' ou 'APROVADA'
     const todasProntas = itens.every(item => item.amostra_status === 'PRONTO' || item.amostra_status === 'APROVADA');
-    const novoStatus = todasProntas ? 'Enviar Arte' : 'Pendente Informação';
+    const novoStatus = 'Enviar Arte';
 
     try {
         const os = state.ordens.find(o => o.id === osId);
+
+        if (!todasProntas) {
+            await gravarPedidoComoPendenteInformacao(osId, os);
+            toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
+            clearAmostrasOS();
+            showView('view-lista-arte');
+            return;
+        }
+
+        await substituirPendenteInformacao(os, novoStatus);
 
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
@@ -34821,8 +34968,6 @@ async function voltarParaAtendimento() {
             }
         } else if (todasProntas) {
             toast('Pedido marcado como "Enviar Arte". Use o botão de link na lista para compartilhar com o cliente.', 'success');
-        } else {
-            toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
         }
 
         clearAmostrasOS();
@@ -34853,6 +34998,7 @@ async function voltarParaArte() {
     try {
         const os = state.ordens.find(o => o.id === osId);
         if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
+        await substituirPendenteInformacao(os, novoStatus);
 
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);

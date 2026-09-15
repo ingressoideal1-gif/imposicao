@@ -9,4 +9,4 @@ def test_status_consolidado_pedidos_artes():
         check=False,
     )
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
-    assert "13 casos OK" in resultado.stdout
+    assert "15 casos OK" in resultado.stdout
