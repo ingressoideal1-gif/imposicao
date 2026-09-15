@@ -2790,13 +2790,12 @@ class ImpositionEngine:
         pdf_cache = {}
         # ANEXAR O VERSO SEM ANEXAR DUAS VEZES (31/08/2026).
         #
-        # `_load_art_as_pdf` guarda o documento POR URL em `pdf_cache`, e o
-        # `insert_pdf` altera o documento guardado. Dois modelos que usam o mesmo
-        # arquivo de frente recebem o MESMO objeto: sem esta memória, o segundo
-        # anexaria o verso outra vez e a peça sairia com a página errada no
-        # papel. A chave é o PAR (frente, verso), porque dois modelos podem
-        # dividir a frente e ter versos diferentes — nesse caso são dois anexos
-        # legítimos, cada um com o seu índice.
+        # `_load_art_as_pdf` guarda a FONTE por URL em `pdf_cache`. Ela precisa
+        # ficar imutavel: frente e verso podem apontar para a mesma URL (pedido
+        # 21894), e o PyMuPDF recusa inserir um documento nele proprio. Alem
+        # disso, dois modelos podem dividir a frente e ter versos diferentes.
+        # Cada PAR recebe, portanto, uma copia independente para a mesclagem; o
+        # segundo modelo que usa o mesmo par reaproveita essa copia pronta.
         versos_mesclados = {}
 
         is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
@@ -3017,15 +3016,30 @@ class ImpositionEngine:
                                 # da frente — é justamente o caso das 9 páginas.
                                 verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
                                 if verso_doc:
-                                    art_verso_page_idx = len(art_doc)
-                                    if verso_unico(cfg.print_mode):
-                                        if len(verso_doc) > 1:
-                                            print(f"[engine] FxVersoUnico: o arquivo de verso "
-                                                  f"tem {len(verso_doc)} paginas; so a primeira "
-                                                  f"sera usada.")
-                                        art_doc.insert_pdf(verso_doc, from_page=0, to_page=0)
-                                    else:
-                                        art_doc.insert_pdf(verso_doc)
+                                    # Nunca alterar a fonte guardada por URL.
+                                    # Se as duas URLs forem iguais, `verso_doc`
+                                    # e `art_doc` sao o MESMO objeto do cache;
+                                    # a copia tambem resolve esse caso.
+                                    composto = fitz.open(
+                                        stream=art_doc.tobytes(), filetype="pdf")
+                                    try:
+                                        art_verso_page_idx = len(composto)
+                                        if verso_unico(cfg.print_mode):
+                                            if len(verso_doc) > 1:
+                                                print(f"[engine] FxVersoUnico: o arquivo de verso "
+                                                      f"tem {len(verso_doc)} paginas; so a primeira "
+                                                      f"sera usada.")
+                                            composto.insert_pdf(verso_doc, from_page=0, to_page=0)
+                                        else:
+                                            composto.insert_pdf(verso_doc)
+                                    except Exception:
+                                        composto.close()
+                                        raise
+                                    art_doc = composto
+                                    # O ciclo de vida continua centralizado no
+                                    # fechamento de `pdf_cache` no fim do motor.
+                                    pdf_cache[("frente_verso", chave_verso,
+                                               cfg.print_mode)] = art_doc
                                     versos_mesclados[chave_verso] = (art_doc, art_verso_page_idx)
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
