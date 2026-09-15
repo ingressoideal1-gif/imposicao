@@ -12,7 +12,9 @@
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.dirname(__dirname);
-const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
+let puppeteer;
+try { puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer')); }
+catch (_) { puppeteer = require('puppeteer'); }
 
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
@@ -51,12 +53,13 @@ function extrairConst(nome) {
 }
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
-                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_HISTORIA_MAX', '_MTG_TONS',
+                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_MAX_CELULAS_MANUAIS', 'MTG_HISTORIA_MAX',
+                    'MTG_RASCUNHO_CHAVE', 'MTG_RASCUNHO_VALIDADE_MS', '_MTG_TONS',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS',
                     'MTG_MAX_MONTAGENS_SUGERIDAS', 'MTG_MAX_PARTICOES_REPETICOES',
-                    'MTG_TEMPO_BUSCA_AUTOMATICA_MS', '_mtgCacheDeSugestoes',
+                    'MTG_ORCAMENTO_BUSCA_AUTOMATICA', 'MTG_ORCAMENTO_PLANO_SOLICITADO', '_mtgCacheDeSugestoes',
                     'MTG_MAX_COMBINACOES_ANALISADAS',
-                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_TEMPO_COMBINACOES_MS', '_mtgCacheCombinacoes'];
+                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const FUNCOES = [
     'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
@@ -65,7 +68,7 @@ const FUNCOES = [
     '_mtgAtualizarGeracao', 'mudarFaceDaMontagem', 'selecionarFacesDoPdfDaMontagem',
     '_mtgItemEscolhido',
     'montagemVazia', 'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
-    'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo',
+    'porQueNaoCabeNaMontagem', 'validarMontagemParaGerar', 'chaveDoModelo', 'modeloDaMontagem', 'celulasDoModelo',
     'modelosComCelula', 'posicoesCombinadas', 'totalDeCelulasDaMontagem', 'contaDaMontagem',
     'lugarDaCelulaNaFolha', 'geometriaDaFolha', 'escalaDaFolhaDaMontagem',
     // A janela de uma folha por vez (04/09/2026).
@@ -76,6 +79,7 @@ const FUNCOES = [
     'celulasForaDaTiragem', 'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado',
     'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem', 'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
     // O historico (03/09/2026).
+    '_mtgModeloPersistivel', 'salvarRascunhoDaMontagem', 'restaurarRascunhoDaMontagem',
     'guardarNaHistoria', '_mtgAplicar', '_mtgInstantaneoAtual', 'desfazerMontagem', 'refazerMontagem',
     // A tela.
     '_mtgCelulasPorFolha', '_mtgSaidaDaFolha', '_mtgNumeroDoPedido', '_mtgLinhaAtiva',
@@ -90,15 +94,15 @@ const FUNCOES = [
     '_mtgRenderNumero', '_mtgRenderFolha', 'renderMontagem', 'limparMontagem',
     'removerDaMontagem', 'retomarDaMontagem', 'onMontagemModeloChange', 'onMontagemPosicoesChange',
     'duplicarCelulaDaMontagem', 'removerCelulaDaMontagem', 'moverCelulaDaMontagem',
-    'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem',
+    'selecionarCelulaDaMontagem', 'completarAFolhaDaMontagem', 'ordenarMontagem', 'alternarMenuOrdenacaoDaMontagem',
     'zoomDaMontagem', 'alternarNumeroDaMontagem', 'mudarNumeroDaMontagem', 'mudarTextoDaMontagem',
     // O aproveitamento da folha (03/09/2026).
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'otimizarCelulasDaMontagem',
-    'configuracaoDeMontagens', '_mtgParticoesDeRepeticoes', '_mtgSobrasDoPlano', '_mtgMelhorEquilibrio',
+    'configuracaoDeMontagens', '_mtgOrcamento', '_mtgConsumirOrcamento', '_mtgParticoesDeRepeticoes', '_mtgSobrasDoPlano', '_mtgMelhorEquilibrio',
     '_mtgPlanoParaRepeticoes', '_mtgPlanoComQuantidade', 'sugestaoDeAproveitamento', 'sugestaoDeMultiplasMontagens', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
-    '_mtgSugestaoAtual', 'agendarConfiguracaoDeMontagens', 'mudarConfiguracaoDeMontagens',
+    'mudarModoTrabalhoDaMontagem', '_mtgSugestaoAtual', 'agendarConfiguracaoDeMontagens', 'mudarConfiguracaoDeMontagens',
     'aplicarSugestaoDaMontagem',
     '_mtgPlanoHtml', '_mtgRenderSugestao',
     '_mtgLigarArrasto', 'imprimirNumeroNaMontagem',
@@ -174,6 +178,12 @@ const PECAS = [
         "  saidas: [{ id: 'S1', nome: 'SRA3', width_mm: 320, height_mm: 450 }],",
         "  numeracoes: [], osItens: {}, ordens: [],",
         "};",
+        "const __armazenamento = new Map();",
+        "Object.defineProperty(window, 'localStorage', { value: {",
+        "  getItem: k => __armazenamento.has(k) ? __armazenamento.get(k) : null,",
+        "  setItem: (k, v) => __armazenamento.set(k, String(v)),",
+        "  removeItem: k => __armazenamento.delete(k)",
+        "} });",
         "function escapeHtml(s) {",
         "  return String(s == null ? '' : s).replace(/[&<>\"']/g, function (c) {",
         "    return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; });",
@@ -228,6 +238,7 @@ const PECAS = [
         "window.__itensPorPedido = { a: ['1000565', '1000589'], b: ['1000412'], c: ['1000203'] };",
         "window.__montar = function (pecas) {",
         "  state.montagem = montagemVazia();",
+        "  if (window.__modoTeste === 'planejamento') state.montagem.modoTrabalho = 'planejamento';",
         "  state.ordens = Array.from(new Set(pecas.map(p => p.osId))).map(id => ({ id, numero: pecas.find(p => p.osId === id).pedido, status_interno: 'EM PRODUCAO' }));",
         "  state.osItens = {}; pecas.forEach(p => { (state.osItens[p.osId] ||= []).push(window.__item(p)); });",
         "  state.montagem.modelos = pecas.map(function (p) { return {",
@@ -250,7 +261,8 @@ const PECAS = [
         "    h: Math.round(parseFloat(e.style.height)), vazia: e.classList.contains('mtg-celula-vazia') }; }); };",
     ].join('\n');
 
-    await aba.evaluate(PRELUDIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
+    const DOMINIO = MTG.slice(MTG.indexOf('const MontagemDominio ='), MTG.indexOf('\n/**\n * As posições digitadas')).trim();
+    await aba.evaluate(PRELUDIO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
         + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
 
     // ── 2. O estado vazio se explica ────────────────────────────────────────
@@ -271,7 +283,7 @@ const PECAS = [
     ok(vazio.existe, 'a tela vazia mostra o convite, e não uma tabela sem linha', vazio);
     ok(/pedidos diferentes/.test(vazio.texto),
        'e diz a coisa que a tela existe para fazer: juntar pedidos diferentes', vazio.texto.slice(0, 120));
-    ok(/mesmo formato e configuração de frente\/verso/.test(vazio.texto),
+    ok(/formato, material\/cor, saída física, bloco e paginação sejam compatíveis/.test(vazio.texto),
        'e diz a condição, para o operador não descobrir na recusa', vazio.texto.slice(0, 200));
     ok(vazio.temGarantia,
        'e a garantia do código igual ao original está à vista — é o que dá confiança de refazer');
@@ -281,11 +293,50 @@ const PECAS = [
        'desfazer e completar nascem travados: não há o que desfazer nem o que completar', vazio);
     ok(vazio.folhaVazia, 'e a folha nasce em branco');
 
+    const modos = await aba.evaluate(async () => {
+        const manualInicial = document.getElementById('mtg-modo-manual').getAttribute('aria-pressed');
+        await mudarModoTrabalhoDaMontagem('planejamento');
+        const planejamento = state.montagem.modoTrabalho;
+        const planejamentoMarcado = document.getElementById('mtg-modo-planejamento').getAttribute('aria-pressed');
+        await mudarModoTrabalhoDaMontagem('manual');
+        return { manualInicial, planejamento, planejamentoMarcado,
+            manualFinal: state.montagem.modoTrabalho };
+    });
+    ok(modos.manualInicial === 'true' && modos.planejamento === 'planejamento'
+        && modos.planejamentoMarcado === 'true' && modos.manualFinal === 'manual',
+       'os fluxos manual e planejamento são explícitos e o controle reflete o modo ativo', modos);
+
     // ── 3. A FOLHA É UMA FOLHA: a grade real do formato ─────────────────────
     //
     // Ate 03/09/2026 a previa empilhava as celulas verticalmente, sempre. Isso
     // so' esta' certo num formato de uma coluna. Este bloco e' o que impede a
     // tela de voltar a mentir sobre onde a peca cai no papel.
+    await aba.evaluate(pecas => window.__montar(pecas), PECAS);
+
+    const rascunho = await aba.evaluate(() => {
+        state.montagem.modoTrabalho = 'planejamento';
+        state.montagem.face = 'front';
+        renderMontagem();
+        const bruto = localStorage.getItem(MTG_RASCUNHO_CHAVE);
+        state.montagem = montagemVazia();
+        const restaurou = restaurarRascunhoDaMontagem();
+        const recuperado = { celulas: state.montagem.celulas.length,
+            modelos: state.montagem.modelos.length, modo: state.montagem.modoTrabalho,
+            face: state.montagem.face };
+        const adulterado = JSON.parse(bruto);
+        adulterado.celulas[0].pos = 999999;
+        localStorage.setItem(MTG_RASCUNHO_CHAVE, JSON.stringify(adulterado));
+        state.montagem = montagemVazia();
+        const aceitouInvalido = restaurarRascunhoDaMontagem();
+        return { tinha: !!bruto, restaurou, recuperado, aceitouInvalido,
+            removeuInvalido: localStorage.getItem(MTG_RASCUNHO_CHAVE) === null };
+    });
+    ok(rascunho.tinha && rascunho.restaurou && rascunho.recuperado.celulas === 14
+        && rascunho.recuperado.modelos === 4 && rascunho.recuperado.modo === 'planejamento'
+        && rascunho.recuperado.face === 'front',
+       'o rascunho íntegro recupera folha, modelos, modo e faces após uma interrupção', rascunho);
+    ok(!rascunho.aceitouInvalido && rascunho.removeuInvalido,
+       'um rascunho fora da tiragem é descartado pela mesma barreira da geração', rascunho);
     await aba.evaluate(pecas => window.__montar(pecas), PECAS);
 
     const grade = await aba.evaluate(() => {
@@ -608,6 +659,9 @@ const PECAS = [
     // O arrasto, com os eventos nativos do HTML5.
     const arrasto = await aba.evaluate(pecas => {
         window.__montar(pecas);
+        // O modo Folha pode omitir rótulos quando a tira física fica pequena;
+        // o gesto é conferido no zoom Peça, em que o conteúdo é legível.
+        zoomDaMontagem('peca');
         const antes = window.__rotulos().slice(0, 4);
         const cels = () => document.querySelectorAll('#mtg-folha .mtg-celula[draggable="true"]');
         const disparar = (el, tipo) => el.dispatchEvent(new Event(tipo, { bubbles: true, cancelable: true }));
@@ -838,6 +892,9 @@ const PECAS = [
             dica: linhas[0].children[1].getAttribute('title') || '',
             tons: document.querySelectorAll('#mtg-lista .mtg-tom').length,
             resumo: document.getElementById('mtg-resumo').textContent,
+            conferencia: document.getElementById('mtg-confirmacao').textContent.replace(/\s+/g, ' ').trim(),
+            pronta: document.getElementById('mtg-confirmacao').classList.contains('pronta')
+                && !document.getElementById('mtg-btn-pdf').disabled,
         };
     }, PECAS);
     ok(lista.cabecalho.join('|').indexOf('Modelo|Tiragem|Na folha') === 0,
@@ -847,6 +904,8 @@ const PECAS = [
     ok(/posição vale/.test(lista.dica), 'e a dica explica para que serve o número', lista.dica);
     ok(lista.tons === 4, 'cada modelo tem o seu tom, o mesmo da célula na folha', lista.tons);
     ok(/3 pedido\(s\) · 4 modelo\(s\)/.test(lista.resumo), 'e o resumo conta pedidos e modelos', lista.resumo);
+    ok(lista.pronta && /Pronto/.test(lista.conferencia) && /bloco 50/.test(lista.conferencia),
+       'a conferência física visível libera o PDF somente quando o estado está íntegro', lista.conferencia);
 
     // ── 9. A trava e o selo ────────────────────────────────────────────────
     const trava = await aba.evaluate(pecas => {
@@ -858,9 +917,9 @@ const PECAS = [
                  selo: s.textContent.replace(/\s+/g, ' ').trim(), classe: s.className };
     }, PECAS);
     ok(trava.visivel, 'a trava aparece com a primeira célula');
-    ok(/Triband/.test(trava.texto) && !/Azul Celeste|SRA3/.test(trava.texto)
-        && /Só frente/.test(trava.texto),
-       'mostra apenas formato e frente/verso como restricoes', trava.texto);
+    ok(/Triband/.test(trava.texto) && /Azul Celeste/.test(trava.texto)
+        && /SRA3/.test(trava.texto) && /Bloco 50/.test(trava.texto) && /Só frente/.test(trava.texto),
+       'mostra toda a identidade física que trava a montagem', trava.texto);
     ok(/2 folha\(s\)/.test(trava.selo) && /14 célula\(s\)/.test(trava.selo)
         && /sobram 6 célula\(s\)/.test(trava.selo), 'o selo diz folhas, células e sobra', trava.selo);
     ok(/tem-sobra/.test(trava.classe),
@@ -1003,8 +1062,8 @@ const PECAS = [
        destino.pastaQuebrada);
     ok(destino.pastaQuebrada.some(l => /warning: .*a pasta sumiu/.test(l)),
        'e o operador fica sabendo o que falhou, com o motivo do disco', destino.pastaQuebrada);
-    ok(destino.nome === 'montagem_2026-08-29_1405.pdf',
-       'o nome do arquivo leva data E hora: refazer célula acontece o dia inteiro', destino.nome);
+    ok(destino.nome === 'montagem_21202-21188-20990_4-modelos_2026-08-29_1405.pdf',
+       'o nome identifica pedidos/modelos, data e hora sem precisar abrir o PDF', destino.nome);
 
     const pl = destino.payload;
     ok(pl && pl.schema === 'multi_artes' && pl.refazer_repetir === true,
@@ -1017,7 +1076,7 @@ const PECAS = [
        'o modo de impressão vem dos modelos e a rotação vem do formato', pl && { pm: pl.print_mode, rot: pl.rotate_page });
     ok(destino.preparoRecusou.some(l => /error: Não consegui ler os bancos/.test(l)) && !destino.foiAoMotor,
        'preparo que recusa para ANTES do motor, com o recado na tela', destino.preparoRecusou);
-    ok(destino.foraDaTiragem.some(l => /error: Posição que não existe mais/.test(l)) && !destino.foiAoMotor2,
+    ok(destino.foraDaTiragem.some(l => /error: .*posição #6 ultrapassa a tiragem/i.test(l)) && !destino.foiAoMotor2,
        'posição que deixou de existir também para antes do motor', destino.foraDaTiragem);
 
     const pastas = await aba.evaluate(() => {
@@ -1086,6 +1145,10 @@ const PECAS = [
         { id: 'M1', osId: 'a', pedido: '21202', nome: 'INTEIRA', qtd: 30, pos: [1] },
         { id: 'M2', osId: 'a', pedido: '21202', nome: 'MEIA', qtd: 70, pos: [1] },
     ];
+
+    // O planejamento agora é um modo explícito. A reposição manual não roda
+    // nem exibe o otimizador enquanto o operador está corrigindo células.
+    await aba.evaluate(() => { window.__modoTeste = 'planejamento'; });
 
     // Com UM modelo o painel não existe: não há proporção entre uma coisa só.
     const soUm = await aba.evaluate(pecas => {
@@ -1579,6 +1642,14 @@ const PECAS = [
         const adicionouPosicaoUm = state.montagem.celulas.length === 1
             && state.montagem.celulas[0].itemId === 'A1'
             && state.montagem.celulas[0].pos === 1;
+        document.getElementById('mtg-posicoes').value = '2,999';
+        onMontagemPosicoesChange();
+        const antesInvalido = state.montagem.celulas.length;
+        const invalidoTravado = document.getElementById('mtg-add').disabled;
+        adicionarNaMontagem();
+        const entradaTransacional = invalidoTravado
+            && state.montagem.celulas.length === antesInvalido
+            && document.getElementById('mtg-posicoes').value === '2,999';
         document.getElementById('mtg-modelo').value = 'A5'; onMontagemModeloChange();
         document.getElementById('mtg-posicoes').value = '2'; adicionarNaMontagem();
         const produtosCompartilham = state.montagem.modelos.length === 2
@@ -1605,15 +1676,15 @@ const PECAS = [
         // Troca de produto enquanto o pedido carrega: a resposta antiga não volta.
         document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
         document.getElementById('mtg-pedido').value = 'a';
-        const liberar = [];
-        window.loadOSItens = () => new Promise(r => { liberar.push(r); });
+        let primeiraCarga = true;
+        window.loadOSItens = () => new Promise(r => setTimeout(r, primeiraCarga ? (primeiraCarga = false, 15) : 0));
         const carregando = onMontagemPedidoChange();
         document.getElementById('mtg-formato').value = 'F2';
         const novaCarga = onMontagemFormatoChange();
-        liberar.splice(0).forEach(r => r()); await Promise.all([carregando, novaCarga]);
+        await Promise.all([carregando, novaCarga]);
         const semRespostaAntiga = !state.montagem.pedidoSel
             && valores('mtg-modelo').join() === 'a::A4,b::B1';
-        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, modelosGerais, rotulosGerais, selecaoGeral, triband, modelos, padraoHabilitado, adicionouPosicaoUm, entrou, protegeInclusao, buscaRecusada, pvc,
+        return { rotulo, produtosCompartilham, formatos, fallback, desconhecido, vinculo, todos, modelosGerais, rotulosGerais, selecaoGeral, triband, modelos, padraoHabilitado, adicionouPosicaoUm, entradaTransacional, entrou, protegeInclusao, buscaRecusada, pvc,
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
@@ -1629,17 +1700,22 @@ const PECAS = [
     ok(filtros.modelos.join() === 'A1,A5' && filtros.modelosPvc.join() === 'A4', 'o dropdown de modelos reune produtos do mesmo formato e cruza status Aguardando', filtros);
     ok(filtros.padraoHabilitado && filtros.adicionouPosicaoUm,
        'com Posições vazio, + Adicionar fica habilitado e inclui a posição 1', filtros);
-    ok(filtros.entrou === 2 && filtros.produtosCompartilham && filtros.protegeInclusao && filtros.buscaRecusada && filtros.retornoRecusado, 'produtos diferentes compartilham a montagem; inclusao, busca e retorno respeitam filtros', filtros);
+    ok(filtros.entradaTransacional,
+       'uma posição inválida trava a entrada inteira, não adiciona a parte válida e conserva o texto', filtros);
+    ok(filtros.entrou === 1 && !filtros.produtosCompartilham && filtros.protegeInclusao
+        && filtros.buscaRecusada && filtros.retornoRecusado,
+       'modelo de outra cor/saída não entra; inclusão, busca e retorno respeitam filtros', filtros);
     ok(filtros.pvc.join() === 'a,b' && filtros.limpou && filtros.preservou, 'trocar formato limpa a seleção e preserva a montagem existente', filtros);
     ok(filtros.vazio && filtros.semRespostaAntiga && filtros.produtoPorVinculo === '503', 'trata lista vazia, carga atrasada e vínculo exato com produto do pedido', filtros);
 
     const multiModelos = await aba.evaluate(async () => {
         state.montagem = montagemVazia();
+        state.montagem.modoTrabalho = 'planejamento';
         state.ordens = [
             { id: 'aa', numero: 22001, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 1, id_produto: 501 }] },
             { id: 'bb', numero: 22002, status_interno: 'EM PRODUCAO', _itens_raw: [{ id: 2, id_produto: 501 }] },
         ];
-        const item = (id, verso) => ({ id, _vibe_id_produto: 501, qtd: 11,
+        const item = (id, verso) => ({ id, _vibe_id_produto: 501, qtd: 11, cor: 'Azul',
             nome_modelo: 'Modelo ' + id, status_impressao: 'Aguardando',
             verso_tipo: verso ? 'Frente e Verso' : 'Frente' });
         state.osItens = { aa: [item('CA', false), item('CV', true)], bb: [item('CB', false)] };

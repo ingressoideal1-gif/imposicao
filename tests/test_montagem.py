@@ -46,6 +46,19 @@ def test_o_harness_da_tela_passa():
     _rodar("montagem_tela_harness.js")
 
 
+def test_o_dominio_e_isolado_sem_criar_dependencia_de_versao_do_agente():
+    html = _ler("frontend/index.html")
+    assert "montagem-dominio.js" not in html
+    seguranca = _ler("security_config.py")
+    assert '"montagem-dominio.js"' not in seguranca
+    script = _ler("frontend/script.js")
+    assert "perm_producao_view:    ['nav-lista-impressao', 'nav-montagem']" in script
+    assert "perm_producao_view:    ['view-lista-impressao', 'view-montagem']" in script
+    montagem = _ler("frontend/montagem.js")
+    assert "const MontagemDominio = (() =>" in montagem
+    assert "return Object.freeze({ posicoes, validar, posicoesCombinadas })" in montagem
+
+
 def test_o_motor_so_mudou_para_repetir_celula():
     """O que a Montagem precisa do motor ja existia — menos uma chave.
 
@@ -119,7 +132,7 @@ def test_a_traducao_das_posicoes_desloca_pela_tiragem():
     )
     # Desde o kanban (03/09/2026) o deslocamento vem dos MODELOS e a ordem da
     # saida vem das CELULAS. Arrastar celula nao pode mexer no indice de ninguem.
-    assert "deslocamento[chaveDoModelo(c)]" in corpo, (
+    assert "deslocamento.get(k)" in corpo and "const k = chave(c)" in corpo, (
         "cada celula deixou de levar o deslocamento do SEU modelo"
     )
 
@@ -306,14 +319,14 @@ def test_a_montagem_nao_tem_caminho_para_a_nuvem():
 
 
 def test_a_regra_de_compatibilidade_e_a_decidida():
-    """Somente formato e frente/verso limitam a compatibilidade entre modelos."""
+    """A mesma passagem fisica exige formato, saida, material, bloco e faces."""
     js = _ler("frontend/montagem.js")
     corpo = js[js.index("function porQueNaoCabeNaMontagem(a, b) {"):]
     corpo = corpo[:corpo.index("\n}") + 2]
 
-    assert "formato_id" in corpo
-    assert "saida_id" not in corpo, "saida voltou a impedir a montagem"
-    assert "cor(a)" not in corpo and "padrao" not in corpo, "cor voltou a impedir a montagem"
+    for campo in ("formato_id", "saida_id", "bloco"):
+        assert campo in corpo, campo + " saiu da conferencia"
+    assert "const cor" in corpo and "padrao" in corpo, "material/cor saiu da conferencia"
     assert "modoDaPecaNaMontagem" in corpo, "a face efetiva saiu da conferencia"
 
     assert "modoDeImpressaoDoModelo" not in corpo, (
@@ -715,10 +728,11 @@ def test_a_sugestao_nao_mexe_no_codigo_de_ingresso_nenhum():
     unica = unica[:unica.index("\n}") + 2]
     assert "p <= it.celulas" in unica, "a folha unica deixou de respeitar a mistura"
 
-    # E o painel nao existe sem dois modelos: nao ha proporcao entre um so'.
+    # O painel some sem modelos e também no modo manual, em que o operador
+    # informa posições exatas sem acionar o planejamento.
     render = js[js.index("function _mtgRenderSugestao() {"):]
     render = render[:render.index("\n}\n") + 3]
-    assert "if (!modelos.length)" in render, (
+    assert "if (!modelos.length || state.montagem.modoTrabalho !== 'planejamento')" in render, (
         "o painel vazio deixou de ser recolhido"
     )
 

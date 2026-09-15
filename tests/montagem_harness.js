@@ -50,18 +50,18 @@ function extrairConst(nome) {
 }
 
 const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
-                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX',
+                    'MTG_TAMANHO_MIN', 'MTG_TAMANHO_MAX', 'MTG_MAX_CELULAS_MANUAIS',
                     'MTG_ELEMENTOS_SEM_DADO', 'MTG_MAX_CELULAS_DISTRIBUIDAS',
                     'MTG_MAX_MONTAGENS_SUGERIDAS', 'MTG_MAX_PARTICOES_REPETICOES',
-                    'MTG_TEMPO_BUSCA_AUTOMATICA_MS', '_mtgCacheDeSugestoes',
+                    'MTG_ORCAMENTO_BUSCA_AUTOMATICA', 'MTG_ORCAMENTO_PLANO_SOLICITADO', '_mtgCacheDeSugestoes',
                     'MTG_MAX_COMBINACOES_ANALISADAS',
-                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_TEMPO_COMBINACOES_MS', '_mtgCacheCombinacoes'];
+                    'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const NOMES = [
     'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
-    'porQueNaoCabeNaMontagem', 'chaveDoModelo', 'modeloDaMontagem',
+    'porQueNaoCabeNaMontagem', 'validarMontagemParaGerar', 'chaveDoModelo', 'modeloDaMontagem',
     'celulasDoModelo', 'modelosComCelula', 'posicoesCombinadas',
     'totalDeCelulasDaMontagem', 'contaDaMontagem', 'lugarDaCelulaNaFolha',
     'geometriaDaFolha', 'escalaDaFolhaDaMontagem', 'duplicarCelula', 'tirarCelula',
@@ -69,13 +69,13 @@ const NOMES = [
     'moverCelula', 'completarAFolha', 'ordenarCelulas', 'celulasForaDaTiragem',
     'modoDaFolhaDaMontagem', 'numeroDaMontagemSaneado', 'textoDoNumeroDoModelo', 'textoDeIdentificacaoDaMontagem',
     'elementoDaNumeracaoVaria', 'numeracaoTemDadoVariavel', 'modeloTemDadoVariavel',
-    'otimizarCelulasDaMontagem', 'configuracaoDeMontagens', '_mtgParticoesDeRepeticoes',
+    'otimizarCelulasDaMontagem', 'configuracaoDeMontagens', '_mtgOrcamento', '_mtgConsumirOrcamento', '_mtgParticoesDeRepeticoes',
     '_mtgSobrasDoPlano', '_mtgMelhorEquilibrio', '_mtgPlanoParaRepeticoes',
     '_mtgPlanoComQuantidade', 'sugestaoDeAproveitamento', 'sugestaoDeMultiplasMontagens', 'resumoAtualDaMontagem',
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
-    'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem',
+    'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem', 'nomeDoArquivoDaMontagem',
     '_mtgNumeroDoPedido', '_mtgEstiloDoNumero', '_mtgModeloDoItem',
     '_mtgChaveDoCandidato', 'melhoresCombinacoesDeModelosDaMontagem',
 ];
@@ -117,7 +117,8 @@ const GLOBAIS = [
     'arteParaImpor', 'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
 const fabrica = new Function(...GLOBAIS,
-    CONSTANTES.map(extrairConst).join('\n') + '\n'
+    FONTE.slice(FONTE.indexOf('const MontagemDominio ='), FONTE.indexOf('\n/**\n * As posições digitadas')).trim() + '\n'
+    + CONSTANTES.map(extrairConst).join('\n') + '\n'
     + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
 function montarApi(stubs) {
     const s = Object.assign({ state: novoState() }, stubs || {});
@@ -136,6 +137,9 @@ state.montagem.numero = api.numeroPadraoDaMontagem();
 
     const f = api.posicoesDaMontagem('1-4', 100);
     ok(f.posicoes.join(',') === '1,2,3,4', 'faixa vira lista', f);
+    const fComEspacos = api.posicoesDaMontagem('1 - 4', 100);
+    ok(fComEspacos.posicoes.join(',') === '1,2,3,4' && fComEspacos.invalidos.length === 0,
+       'faixa com espaços continua sendo uma faixa inteira', fComEspacos);
 
     const m = api.posicoesDaMontagem('7; 3 , 1-3', 100);
     ok(m.posicoes.join(',') === '7,3,1,2', 'ponto e vírgula e espaço separam, e o repetido não entra duas vezes', m);
@@ -162,26 +166,34 @@ state.montagem.numero = api.numeroPadraoDaMontagem();
 
     const semTotal = api.posicoesDaMontagem('1,9999', 0);
     ok(semTotal.posicoes.join(',') === '1,9999', 'sem total conhecido, nada é recusado por tamanho', semTotal);
+
+    const faixaAbsurda = api.posicoesDaMontagem('1-999999999', 0);
+    ok(faixaAbsurda.posicoes.length === 0 && faixaAbsurda.invalidos.length === 1,
+       'faixa manual absurda é recusada sem expandir milhões de células', faixaAbsurda);
 }
 
 // ── 2. O que pode dividir a folha ───────────────────────────────────────────
 {
-    const base = { formato_id: 'F1', cor: 'Azul Celeste', saida_id: 'S1', verso_tipo: 'Frente' };
+    const base = { formato_id: 'F1', cor: 'Azul Celeste', saida_id: 'S1', bloco: 50, verso_tipo: 'Frente' };
     const igual = () => JSON.parse(JSON.stringify(base));
 
     ok(api.porQueNaoCabeNaMontagem(base, igual()) === null, 'duas peças iguais cabem');
 
     const outroFmt = igual(); outroFmt.formato_id = 'F2';
     ok(api.porQueNaoCabeNaMontagem(base, outroFmt) === 'o formato é outro',
-       'formato diferente é recusado — foi a única condição que o usuário citou');
+       'formato diferente é recusado');
 
     const outraCor = igual(); outraCor.cor = 'Dourado';
-    ok(api.porQueNaoCabeNaMontagem(base, outraCor) === null,
-       'COR diferente nao impede a montagem');
+    ok(api.porQueNaoCabeNaMontagem(base, outraCor) === 'o material/cor é outro',
+       'material/cor diferente é recusado antes do papel');
 
     const outraSaida = igual(); outraSaida.saida_id = 'S2';
-    ok(api.porQueNaoCabeNaMontagem(base, outraSaida) === null,
-       'SAIDA diferente nao impede a montagem');
+    ok(api.porQueNaoCabeNaMontagem(base, outraSaida) === 'a saída física é outra',
+       'saída física diferente é recusada');
+
+    const outroBloco = igual(); outroBloco.bloco = 25;
+    ok(api.porQueNaoCabeNaMontagem(base, outroBloco) === 'a quantidade de folhas por bloco é outra',
+       'bloco diferente é recusado em Multi-Artes');
 
     const outraFace = igual(); outraFace.verso_tipo = 'Frente e Verso';
     ok(api.porQueNaoCabeNaMontagem(base, outraFace) === 'um imprime frente e verso e o outro só frente',
@@ -191,7 +203,7 @@ state.montagem.numero = api.numeroPadraoDaMontagem();
     ok(api.porQueNaoCabeNaMontagem(base, soFrente) === null,
        '"Frente" e "SÓ FRENTE" são a mesma coisa, e as duas grafias existem no banco');
 
-    const porPadrao = { formato_id: 'F1', padrao: 'azul celeste', saida_id: 'S1', verso_tipo: 'Frente' };
+    const porPadrao = { formato_id: 'F1', padrao: 'azul celeste', saida_id: 'S1', bloco: 50, verso_tipo: 'Frente' };
     ok(api.porQueNaoCabeNaMontagem(base, porPadrao) === null,
        'a cor vale por `cor` ou por `padrao`, e a caixa não separa duas iguais');
 
@@ -252,6 +264,28 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
 
     const repetida = api.posicoesCombinadas([celulas[1], celulas[1], celulas[3]], MODELOS);
     ok(repetida.join(',') === '6,6,3340', 'célula repetida vai duas vezes, com o mesmo índice', repetida);
+
+    let orfaFalhou = false;
+    try { api.posicoesCombinadas([cel('x', 'nao-carregado', 1)], MODELOS); }
+    catch (e) { orfaFalhou = /nenhum modelo carregado/.test(e.message); }
+    ok(orfaFalhou, 'posição combinada não aceita célula órfã como deslocamento zero');
+}
+
+// A barreira canônica recusa estados que a interface nunca deveria produzir.
+{
+    const peca = { formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50, print_mode: 'front' };
+    const modelos = [{ osId: 'a', itemId: 'M1', qtd: 10, peca }];
+    ok(api.validarMontagemParaGerar([cel('a', 'M1', 3)], modelos).ok,
+       'estado íntegro passa pelo validador canônico');
+    const orfa = api.validarMontagemParaGerar([cel('a', 'OUTRO', 3)], modelos);
+    ok(!orfa.ok && /nenhum modelo/.test(orfa.erros.join(' ')),
+       'célula órfã é recusada em vez de cair no deslocamento zero', orfa);
+    const fora = api.validarMontagemParaGerar([cel('a', 'M1', 11)], modelos);
+    ok(!fora.ok && /ultrapassa/.test(fora.erros.join(' ')),
+       'posição acima da tiragem é recusada', fora);
+    const duplicado = api.validarMontagemParaGerar([cel('a', 'M1', 1)], modelos.concat(modelos));
+    ok(!duplicado.ok && /mais de uma vez/.test(duplicado.erros.join(' ')),
+       'modelo duplicado é recusado antes do payload', duplicado);
 }
 
 // ── 4. A conta da folha ─────────────────────────────────────────────────────
@@ -372,8 +406,8 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(api.alturaDaJanelaDaMontagem(300, 1080, 200) === 556,
        'a janela fica com o que sobra da tela: 1080 menos o topo, o resto do card e a folga',
        api.alturaDaJanelaDaMontagem(300, 1080, 200));
-    ok(api.alturaDaJanelaDaMontagem(400, 768, 210) === 380,
-       'numa tela baixa a conta bate no piso de 380 px: melhor a página rolar um pouco '
+    ok(api.alturaDaJanelaDaMontagem(400, 768, 210) === 330,
+       'numa tela baixa a conta bate no piso de 330 px: melhor a página rolar um pouco '
        + 'do que a folha virar uma tarja', api.alturaDaJanelaDaMontagem(400, 768, 210));
 }
 
@@ -462,6 +496,7 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(p.item_w_mm === 245 && p.item_h_mm === 20, 'e as medidas da peça em mm', p);
     ok(p.gap_v_mm === 2, 'e os vãos entre as células', p);
     ok(p.saida_id === 'S1', 'e a saida', p);
+    ok(p.bloco === 50, 'e a blocagem efetiva do formato', p);
     ok(p.formato_nome === 'Triband 245x20 mm', 'e o nome, para a trava mostrar', p);
     ok(p._item && p._item.id === '1', 'e guarda o item, que o payload usa para a arte', !!p._item);
 
@@ -667,14 +702,14 @@ async function testarPreparo() {
     const st = novoState();
     st.montagem.numero = { imprimir: true, pos: 'base', rot: 180, size: 20, cor: '#ff0000' };
     st.osItens = {
-        a: [{ id: '1', quantidade: 100, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1' }, { id: '2', quantidade: 30, amostra_num_id: 'N2', formato_id: 'F1', saida_id: 'S1' }],
-        b: [{ id: '9', quantidade: 50, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1' }],
+        a: [{ id: '1', quantidade: 100, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50 }, { id: '2', quantidade: 30, amostra_num_id: 'N2', formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50 }],
+        b: [{ id: '9', quantidade: 50, amostra_num_id: 'N1', formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50 }],
     };
     st.ordens = ['a', 'b'].map(id => ({ id, status_interno: 'EM PRODUCAO' }));
     const modelos = [
-        { osId: 'a', itemId: '1', peca: { formato_id: 'F1', saida_id: 'S1' } },
-        { osId: 'b', itemId: '9', peca: { formato_id: 'F1', saida_id: 'S1' } },
-        { osId: 'a', itemId: '2', peca: { formato_id: 'F1', saida_id: 'S1' } },
+        { osId: 'a', itemId: '1', qtd: 100, variavel: true, peca: { formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50, print_mode: 'front' } },
+        { osId: 'b', itemId: '9', qtd: 50, variavel: true, peca: { formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50, print_mode: 'front' } },
+        { osId: 'a', itemId: '2', qtd: 30, variavel: true, peca: { formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 50, print_mode: 'front' } },
     ];
     const log = [];
     const base = {
@@ -769,7 +804,8 @@ async function testarPreparo() {
         modoDeVersoDoModelo: it => it.modo || 'front',
         rotacaoDaFolhaDoFormato: f => f && f.default_rotate_page ? 90 : 0,
     });
-    const peca = { formato_id: 'F1', saida_id: 'S1', celulas_por_folha: 10, print_mode: 'duplex', _item: { modo: 'duplex' } };
+    const peca = { formato_id: 'F1', saida_id: 'S1', cor: 'Azul', bloco: 25,
+        celulas_por_folha: 10, print_mode: 'duplex', _item: { modo: 'duplex' } };
     const modelos = [
         { osId: 'a', itemId: '1000565', qtd: 3000, peca },
         { osId: 'b', itemId: '1000412', qtd: 150, peca: Object.assign({}, peca, { _item: { modo: 'front' } }) },
@@ -788,6 +824,7 @@ async function testarPreparo() {
     ok(p.rotate_page === 90, 'a rotação da folha vem do formato', p.rotate_page);
     ok(p.pedido === null && p.modelo === null, 'sem pedido nem modelo "do trabalho": cada arte leva os seus');
     ok(p.formato && p.formato.id === 'F1' && p.saida && p.saida.id === 'S1', 'formato e saída da primeira peça');
+    ok(p.sheets_per_block === 25, 'o bloco físico confirmado também chega ao motor', p.sheets_per_block);
     ok(p.refazer_de === 0 && p.refazer_ate === 0, 'a faixa de folhas fica zerada: com células, ela não se aplica');
     ok(p.numeracao === null && p.numeracao_id === null, 'sem numeração do trabalho: ela vai por arte');
 }

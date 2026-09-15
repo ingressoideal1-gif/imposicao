@@ -4977,6 +4977,23 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-btn-limpar { border-color: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; }
 .mtg-btn-limpar:disabled { color: var(--text-faint) !important; border-color: var(--border) !important; }
 
+.mtg-modos {
+    display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr));
+    gap: 8px; margin: 0 0 10px;
+}
+.mtg-modos button {
+    display: flex; align-items: baseline; gap: 8px; text-align: left;
+    padding: 9px 12px; color: var(--text-dim); background: rgba(10, 15, 30, 0.45);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;
+}
+.mtg-modos button strong { color: var(--text); font-size: 0.9rem; }
+.mtg-modos button span { font-size: 0.76rem; line-height: 1.25; }
+.mtg-modos button.ativo {
+    border-color: var(--blue); background: var(--blue-dim);
+    box-shadow: inset 3px 0 0 var(--blue);
+}
+.mtg-modos button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+
 .mtg-card-compositor { position: relative; z-index: 90; overflow: visible; padding: 20px 22px; margin-bottom: 16px; }
 
 .mtg-compositor {
@@ -5016,11 +5033,11 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-modelo-opcao:hover { border-color: rgba(96, 165, 250, 0.55); background: rgba(59, 130, 246, 0.07); }
 .mtg-modelo-opcao input { width: 16px; height: 16px; }
 .mtg-modelo-opcao span { display: flex; flex-direction: column; min-width: 0; }
-.mtg-modelo-opcao small { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtg-modelo-opcao small { color: var(--text-dim); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mtg-modelo-opcao b { font-variant-numeric: tabular-nums; color: #cbd5e1; }
 .mtg-modelo-opcao em { font-size: 0.65rem; font-style: normal; font-weight: 800; color: var(--text-dim); white-space: nowrap; }
 .mtg-modelo-opcao em.mtg-com-verso { color: #fcd34d; }
-.mtg-modelo-opcao i { grid-column: 2 / -1; font-size: 0.68rem; font-style: normal; color: var(--text-faint); }
+.mtg-modelo-opcao i { grid-column: 2 / -1; font-size: 0.72rem; line-height: 1.4; font-style: normal; color: var(--text-dim); }
 .mtg-modelo-opcao.desabilitado { opacity: 0.5; cursor: default; }
 .mtg-modelos-rodape {
     position: sticky; bottom: -14px; display: flex; justify-content: space-between; gap: 10px;
@@ -5043,7 +5060,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     text-transform: uppercase; color: var(--text-faint);
 }
 .mtg-dica {
-    margin: 14px 0 0; font-size: 0.75rem; color: #64748b; line-height: 1.45;
+    margin: 14px 0 0; font-size: 0.78rem; color: var(--text-dim); line-height: 1.5;
 }
 .mtg-dica code {
     font-family: ui-monospace, monospace; color: var(--text-dim);
@@ -5098,6 +5115,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     margin: 10px 0 12px;
 }
 @media (max-width: 760px) {
+    .mtg-modos { grid-template-columns: 1fr; }
     .mtg-modelos-painel { position: fixed; inset: 12px; width: auto; max-height: none; }
     .mtg-modelo-opcao { grid-template-columns: auto minmax(120px, 1fr) auto; }
     .mtg-modelo-opcao em { grid-column: 2; }
@@ -5215,7 +5233,8 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
-.mtg-menu:hover .mtg-menu-lista { display: block; }
+.mtg-menu:hover .mtg-menu-lista, .mtg-menu:focus-within .mtg-menu-lista,
+.mtg-menu.aberto .mtg-menu-lista { display: block; }
 .mtg-menu-lista button {
     display: block; width: 100%; text-align: left;
     padding: 8px 11px; border: none; background: none; cursor: pointer;
@@ -5346,8 +5365,10 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 /* A posicao que sai MAIS DE UMA VEZ tem cor propria: repetir e' decisao do
    operador, e ele precisa reconhecer na lista o que fez na folha. */
 .mtg-pos.repetida { background: rgba(139, 92, 246, 0.18); color: #c4b5fd; }
-.mtg-tirar { color: var(--text-faint); cursor: pointer; font-size: 1.05rem; }
+.mtg-tirar { color: var(--text-faint); cursor: pointer; font-size: 1.05rem;
+    border: 0; background: transparent; padding: 3px 6px; border-radius: 4px; }
 .mtg-tirar:hover { color: var(--red); }
+.mtg-tirar:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 
 /* O estado vazio. E' aqui que a tela precisa se explicar sozinha. */
 .mtg-vazio {
@@ -5439,11 +5460,12 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 
 .mtg-num-cor {
     width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
-    flex-shrink: 0; border: 1px solid rgba(148, 163, 184, 0.4);
+    flex-shrink: 0; padding: 0; border: 1px solid rgba(148, 163, 184, 0.4);
     transition: all var(--transition);
 }
 .mtg-num-cor:hover { transform: scale(1.08); }
 .mtg-num-cor.ativa { border: 2px solid var(--blue); box-shadow: 0 0 0 2px var(--blue-glow); }
+.mtg-num-cor:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .mtg-numero-card input[type="color"] {
     width: 32px; height: 26px; padding: 0; cursor: pointer;
     background: rgba(10, 15, 30, 0.6);
@@ -5455,6 +5477,19 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    o seletor nativo do Windows NA ESTACAO -- o navegador nao enxerga o disco de
    la, e nenhuma estacao da grafica usa o mesmo navegador. */
 .mtg-saida-card { display: flex; flex-direction: column; gap: 12px; }
+.mtg-confirmacao {
+    display: grid; gap: 5px; padding: 11px 12px; border-radius: var(--radius-sm);
+    background: rgba(148, 163, 184, 0.06); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 0.78rem; line-height: 1.45;
+}
+.mtg-confirmacao > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mtg-confirmacao strong { color: var(--text); font-size: 0.82rem; }
+.mtg-confirmacao b { padding: 2px 7px; border-radius: 999px; font-size: 0.68rem; text-transform: uppercase; }
+.mtg-confirmacao p, .mtg-confirmacao em { margin: 0; }
+.mtg-confirmacao.pronta { border-color: rgba(34, 197, 94, 0.4); background: rgba(22, 101, 52, 0.1); }
+.mtg-confirmacao.pronta b { color: #bbf7d0; background: rgba(34, 197, 94, 0.18); }
+.mtg-confirmacao.impedida { border-color: rgba(239, 68, 68, 0.42); background: rgba(127, 29, 29, 0.1); }
+.mtg-confirmacao.impedida b, .mtg-confirmacao.impedida em { color: #fecaca; }
 .mtg-destino { display: flex; flex-direction: column; gap: 7px; }
 .mtg-destino > label {
     font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em;
