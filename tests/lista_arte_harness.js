@@ -27,7 +27,8 @@ function ok(cond, nome, extra) {
 }
 
 function extrair(nome) {
-    const i = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    let i = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    if (i < 0) i = SCRIPT.indexOf('\nasync function ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no script.js');
     const fim = SCRIPT.indexOf('\n}', i);
     if (fim < 0) throw new Error('nao achei o fim da funcao ' + nome);
@@ -239,9 +240,29 @@ const { pedidoCancelado } = new Function(
     ok(/activeFilaTipo === 'concluidos'\)\s*\{\s*baseOrdensArte = ordensConcluidosArte;/.test(SCRIPT),
         'a fila de Concluidos e o balde que o card conta');
     ok(/Pedidos Conclu[ií]dos`/.test(SCRIPT), 'e a tabela muda de titulo');
-    ok(/cardConcluidosEl\.style\.border/.test(SCRIPT), 'e o card escolhido se destaca');
-    ok(/\[cardTodosEl, cardFilaEl, cardPendenteEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl\]/.test(SCRIPT),
+    ok(/card\.el\.classList\.toggle\('lista-arte-ativo', selecionado\)/.test(SCRIPT),
+        'e o card escolhido recebe a classe de destaque');
+    ok(/const cardsDaListaArte = \[[\s\S]*?cardTodosEl[\s\S]*?cardConcluidosEl[\s\S]*?\];/.test(SCRIPT),
         'e ele volta ao normal quando outro card e escolhido');
+})();
+
+(function oCardSelecionadoAcendeComIconeMaior() {
+    const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+    ok(/\.stat-card\.lista-arte-ativo\s*\{[\s\S]*?box-shadow:[\s\S]*?var\(--card-accent-rgb\)/.test(CSS),
+        'o card ativo recebe luz na sua propria cor');
+    ok(/\.stat-card\.lista-arte-ativo \.stat-card-icon\s*\{[\s\S]*?font-size: 3\.25rem;[\s\S]*?drop-shadow/.test(CSS),
+        'o icone do card ativo fica maior e iluminado');
+    ok(/card\.el\.setAttribute\('aria-pressed', selecionado \? 'true' : 'false'\)/.test(SCRIPT),
+        'o estado selecionado tambem fica explicito para acessibilidade');
+    ok(/\{ el: cardTodosEl, tipo: 'todos'[^\n]+[\s\S]*?\{ el: cardConcluidosEl, tipo: 'concluidos'/.test(SCRIPT),
+        'os seis cards recebem cor e destaque pelo mesmo mecanismo');
+})();
+
+(function oCliqueAtualizaOsDadosDoCard() {
+    const filtro = extrair('setFiltroFilaArte');
+    ok(/async function setFiltroFilaArte/.test(filtro), 'o clique pode aguardar a atualizacao dos dados');
+    ok(/state\.filtroFilaTipo = tipo;[\s\S]*?renderOrdens\(\);[\s\S]*?await loadOrdens\(\);/.test(filtro),
+        'o card acende imediatamente e depois atualiza contadores, lista e informacoes');
 })();
 
 (function aCasaVaziaDeConcluidosNaoFalaDeArte() {
@@ -482,7 +503,7 @@ function classificarComArte(statusDaArte, extra) {
 
     ok(/const ordensTodos = \[\.\.\.ordensFilaArte, \.\.\.ordensPendentesArte, \.\.\.ordensAprovacao\];/.test(SCRIPT),
         'Todos os Pedidos Pendentes tambem inclui o novo card Pendente');
-    ok(/if \(cardPendenteEl\) cardPendenteEl\.style\.border = '1px solid #ef4444';/.test(SCRIPT),
+    ok(/card\.el\.style\.border = card\.tipo === 'pendente' && !selecionado \? '1px solid #ef4444' : '';/.test(SCRIPT),
         'o card Pendente conserva o contorno vermelho quando nao esta selecionado');
 })();
 

@@ -13,7 +13,8 @@ função `renderOrdens()`.
 ## Os seis cards
 
 Os cards no topo não são enfeite: cada um é um filtro, e clicar em qualquer um
-deles troca a tabela de baixo e o título dela.
+deles acende o card na sua própria cor, amplia e ilumina o ícone, troca a tabela
+e o título e consulta novamente os dados usados nos contadores e nas linhas.
 
 | Card | Fila interna | O que reúne |
 |------|--------------|-------------|

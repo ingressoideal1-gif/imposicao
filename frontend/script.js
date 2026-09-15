@@ -27944,13 +27944,16 @@ function renderVendedorSelect(osId) {
 }
 
 /**
- * Altera o filtro do card KPI da Fila de Arte ('todos', 'fila', 'aprovacao', 'aprovados')
+ * Altera o filtro do card KPI e atualiza os dados da Lista de Arte.
  */
-function setFiltroFilaArte(tipo) {
+async function setFiltroFilaArte(tipo) {
     console.log('[Lista Arte] Filtrar por card:', tipo);
     state.filtroFilaTipo = tipo;
     state.filtroStatusArte = '';
+    // Acende o card e troca a lista imediatamente; depois consulta novamente as
+    // fontes da tela. `loadOrdens` já reúne cliques concorrentes na mesma carga.
     renderOrdens();
+    await loadOrdens();
 }
 window.setFiltroFilaArte = setFiltroFilaArte;
 
@@ -30200,36 +30203,24 @@ function renderOrdens() {
     const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
     const cardConcluidosEl = document.getElementById('card-stat-pedidos-concluidos');
 
-    [cardTodosEl, cardFilaEl, cardPendenteEl, cardAprovacaoEl, cardAprovadosEl, cardConcluidosEl].forEach(c => {
-        if (c) {
-            c.style.border = '1px solid var(--border)';
-            c.style.boxShadow = 'none';
-        }
+    const cardsDaListaArte = [
+        { el: cardTodosEl, tipo: 'todos', cor: '#06b6d4', rgb: '6, 182, 212' },
+        { el: cardFilaEl, tipo: 'fila', cor: '#3b82f6', rgb: '59, 130, 246' },
+        { el: cardPendenteEl, tipo: 'pendente', cor: '#ef4444', rgb: '239, 68, 68' },
+        { el: cardAprovacaoEl, tipo: 'aprovacao', cor: '#8b5cf6', rgb: '139, 92, 246' },
+        { el: cardAprovadosEl, tipo: 'aprovados', cor: '#14b8a6', rgb: '20, 184, 166' },
+        { el: cardConcluidosEl, tipo: 'concluidos', cor: '#f59e0b', rgb: '245, 158, 11' }
+    ];
+    cardsDaListaArte.forEach(card => {
+        if (!card.el) return;
+        const selecionado = activeFilaTipo === card.tipo;
+        card.el.style.setProperty('--card-accent', card.cor);
+        card.el.style.setProperty('--card-accent-rgb', card.rgb);
+        card.el.classList.toggle('lista-arte-ativo', selecionado);
+        card.el.setAttribute('aria-pressed', selecionado ? 'true' : 'false');
+        card.el.style.border = card.tipo === 'pendente' && !selecionado ? '1px solid #ef4444' : '';
+        card.el.style.boxShadow = '';
     });
-
-    // O contorno vermelho identifica o card Pendente mesmo quando outro filtro
-    // está selecionado. Ao selecionar, ele fica mais espesso logo abaixo.
-    if (cardPendenteEl) cardPendenteEl.style.border = '1px solid #ef4444';
-
-    if (activeFilaTipo === 'concluidos' && cardConcluidosEl) {
-        cardConcluidosEl.style.border = '2px solid var(--amber)';
-        cardConcluidosEl.style.boxShadow = '0 0 12px rgba(245, 158, 11, 0.3)';
-    } else if (activeFilaTipo === 'aprovados' && cardAprovadosEl) {
-        cardAprovadosEl.style.border = '2px solid var(--teal)';
-        cardAprovadosEl.style.boxShadow = '0 0 12px rgba(20, 184, 166, 0.3)';
-    } else if (activeFilaTipo === 'aprovacao' && cardAprovacaoEl) {
-        cardAprovacaoEl.style.border = '2px solid #8b5cf6';
-        cardAprovacaoEl.style.boxShadow = '0 0 12px rgba(139, 92, 246, 0.3)';
-    } else if (activeFilaTipo === 'pendente' && cardPendenteEl) {
-        cardPendenteEl.style.border = '2px solid #ef4444';
-        cardPendenteEl.style.boxShadow = '0 0 12px rgba(239, 68, 68, 0.35)';
-    } else if (activeFilaTipo === 'fila' && cardFilaEl) {
-        cardFilaEl.style.border = '2px solid var(--blue)';
-        cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
-    } else if (cardTodosEl) {
-        cardTodosEl.style.border = '2px solid #06b6d4';
-        cardTodosEl.style.boxShadow = '0 0 12px rgba(6, 182, 212, 0.3)';
-    }
 
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
     let filteredArte = baseOrdensArte.filter(os => {
