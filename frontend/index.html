@@ -14,7 +14,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=873">
+    <link rel="stylesheet" href="/style.css?v=876">
     <script src="pdf-lib.min.js?v=873"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -3109,6 +3109,19 @@
                     </div>
                 </div>
 
+                <div class="mtg-modos" role="group" aria-label="Modo de trabalho">
+                    <button type="button" id="mtg-modo-manual" class="ativo"
+                            onclick="mudarModoTrabalhoDaMontagem('manual')" aria-pressed="true">
+                        <strong>1. Reposição manual</strong>
+                        <span>Informe exatamente as células que precisam ser refeitas.</span>
+                    </button>
+                    <button type="button" id="mtg-modo-planejamento"
+                            onclick="mudarModoTrabalhoDaMontagem('planejamento')" aria-pressed="false">
+                        <strong>2. Planejamento recomendado</strong>
+                        <span>Combine tiragens e calcule composições para aproveitar a folha.</span>
+                    </button>
+                </div>
+
                 <!-- O compositor -->
                 <div class="card mtg-card-compositor">
                     <div class="mtg-compositor">
@@ -3233,12 +3246,13 @@
                                     <button type="button" id="mtg-zoom-100" onclick="zoomDaMontagem('100')" title="Tamanho real">100%</button>
                                 </div>
 
-                                <div class="mtg-menu">
-                                    <button type="button" class="btn btn-secondary btn-sm" id="mtg-ordenar" disabled>
+                                <div class="mtg-menu" id="mtg-menu-ordenar">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="mtg-ordenar" disabled
+                                            onclick="alternarMenuOrdenacaoDaMontagem()" aria-expanded="false" aria-controls="mtg-menu-ordenar-lista">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h12M3 18h6"/></svg>
                                         Ordenar
                                     </button>
-                                    <div class="mtg-menu-lista">
+                                    <div class="mtg-menu-lista" id="mtg-menu-ordenar-lista">
                                         <button type="button" onclick="ordenarMontagem('modelo')">Agrupar por modelo</button>
                                         <button type="button" onclick="ordenarMontagem('pedido')">Agrupar por pedido</button>
                                     </div>
@@ -3291,6 +3305,7 @@
                         <div class="card mtg-numero-card" id="mtg-numero"></div>
 
                         <div class="card mtg-saida-card">
+                            <div class="mtg-confirmacao" id="mtg-confirmacao" role="status" aria-live="polite"></div>
                             <div class="mtg-faces">
                                 <label for="mtg-face">Faces da impressão</label>
                                 <p id="mtg-face-aviso" role="status">Adicione um modelo para escolher as faces.</p>
@@ -4367,11 +4382,11 @@
     <script src="foto-lib.js?v=873"></script>
     <script src="gerenciador-fotos.js?v=873"></script>
     <script src="editor-foto.js?v=873"></script>
-    <script src="script.js?v=874"></script>
+    <script src="script.js?v=876"></script>
     <script src="ideal-control.js?v=873"></script>
     <script src="criador-arte.js?v=873"></script>
     <script src="/pedido.js?v=873"></script>
-    <script src="montagem.js?v=873"></script>
+    <script src="montagem.js?v=876"></script>
     <script src="acabamento.js?v=873"></script>
     <script src="avisos.js?v=873"></script>
 

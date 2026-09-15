@@ -6,12 +6,18 @@ frentes do mesmo dia: as artes passaram a ser montadas pelas **mesmas funções 
 tela do Pedido** (§6), a folha virou um **kanban de células** (arrastar, repetir,
 tirar) e a tela inteira foi **redesenhada** — a folha montada tomou o lugar
 nobre, passou a ser desenhada na grade de verdade do formato, e o número do
-modelo ganhou controle de posição, rotação, tamanho e cor (§5). No mesmo dia ela
+modelo ganhou controle de posição, rotação, tamanho e cor (§5). Em 15/09/2026,
+uma revisão profunda separou os fluxos de **Reposição manual** e **Planejamento
+recomendado**, tornou a compatibilidade física completa, acrescentou uma
+barreira canônica antes da geração e passou a recuperar o rascunho local por
+24 horas. No mesmo dia ela
 ganhou o **aproveitamento da folha**: com dois modelos ou mais, a tela sugere
 quantas células de cada um a folha deve levar para gastar o mínimo de papel
 (§5).
 
-Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (a tela inteira),
+Arquivos: [`frontend/montagem.js`](../frontend/montagem.js) (módulo de domínio
+isolado de DOM/estado, seguido pelo estado e interface no mesmo asset para a
+entrega permanecer compatível com as estações),
 [`frontend/pedido.js`](../frontend/pedido.js) (`arteDoModeloParaFolha` e
 `arteParaOMotor`, o construtor de arte que as duas telas dividem),
 [`frontend/script.js`](../frontend/script.js) (`rotacaoDaFolhaDoFormato`),
@@ -135,16 +141,18 @@ código.
 ### O que pode dividir a folha
 
 O usuário abriu o pedido dizendo que a única condição seria o mesmo **formato**.
-Apontada a diferença, ele decidiu em 29/08/2026 manter **quatro**:
+A operação mostrou que a identidade física precisa ser completa. Desde
+15/09/2026 a montagem confere:
 
 | Confere | Por quê |
 |---|---|
 | **Formato** | a grade da folha |
-| **Cor** | a folha é de um material só — Triband azul e Triband dourado não saem da mesma passagem |
+| **Material/cor** | a folha é de um material só — Triband azul e Triband dourado não saem da mesma passagem |
 | **Saída** | é o tamanho da folha física |
-| **Face** | o verso da folha existe ou não existe |
+| **Bloco** | Multi-Artes não pode misturar quantidades de folhas por bloco |
+| **Paginação** | frente, duplex e duplex único descrevem passagens diferentes |
 
-Três dessas não são preferência: são impossibilidade física.
+Essas travas não são preferências: descrevem a mesma passagem física.
 
 **O que NÃO impede**, e de propósito:
 
@@ -159,7 +167,7 @@ Três dessas não são preferência: são impossibilidade física.
 | | Escolhido | Quando |
 |---|---|---|
 | Como escolher a célula | pedido → modelo → posições, **acumulando** | 29/08 |
-| Quais pedidos a tela oferece | os **impressos nos últimos 30 dias**, mais busca por número | 29/08 |
+| Quais pedidos a tela oferece | pedidos **Em produção**, mais busca por número | 15/09 |
 | Senha da gerência | **não** — é trabalho normal do operador | 29/08 |
 | Repetir célula (⧉) | a **mesma peça**, impressa duas vezes, logo abaixo | 03/09 |
 | Tirar célula (×) | só aquela; as outras do modelo ficam | 03/09 |
@@ -170,6 +178,19 @@ Três dessas não são preferência: são impossibilidade física.
 ---
 
 ## 5. A tela
+
+### Dois modos, duas intenções (15/09/2026)
+
+- **Reposição manual** é o padrão: o operador escolhe modelos e informa as
+  posições exatas. O otimizador não altera nem disputa espaço com esse fluxo.
+- **Planejamento recomendado** compara tiragens, combinações e repetições. Só
+  nesse modo marcar modelos aplica/recalcula a proposta de folha.
+
+O botão ativo usa `aria-pressed`, e linhas, amostras de cor, remoção e menu de
+ordenação podem ser operados por teclado. Entradas de posição são
+transacionais: se houver qualquer trecho inválido, nada é acrescentado. Uma
+faixa manual é limitada a 5.000 células para que um erro como
+`1-999999999` não congele a aba.
 
 **Ela abre vazia, e é aí que precisa se explicar.** O operador chega com uma
 folha estragada na mão, não com a documentação lida: o estado vazio diz o que a
@@ -182,6 +203,16 @@ aceita. Um campo a menos, e o estado sai do que ele já fez.
 **A recusa aparece ao escolher o modelo, não ao clicar em Adicionar** — descobrir
 que a cor não bate depois de digitar quinze posições é fazer o operador trabalhar
 à toa. E ela diz o que fazer, não só o que está errado.
+
+**A conferência para gerar fica junto da saída.** Ela resume pedidos, modelos,
+células, formato, material/cor, saída, bloco e faces. O botão de PDF só é
+habilitado quando a barreira canônica aceita o estado inteiro. O arquivo leva
+os números dos pedidos, a quantidade de modelos, data e hora no nome.
+
+**O rascunho é local e temporário.** Folha, modelos, modo, faces, zoom, número
+e plano aplicado são guardados no `localStorage` por até 24 horas. Ao abrir a
+tela, o mesmo validador da geração confere o rascunho; estado órfão, fora da
+tiragem ou fisicamente incompatível é descartado, nunca restaurado à força.
 
 **O selo é o mesmo do Pedido**, com a mesma regra de cor: verde quando a folha
 fecha certo, amarelo quando sobra célula. O amarelo é reservado à sobra.
@@ -207,7 +238,7 @@ A tela passou a ter duas colunas:
   (pedido → modelo → posições), o selo, a lista de modelos, o painel do número
   e o destino do PDF.
 
-A folha rola **dentro** do card (`max-height: calc(100vh - 340px)`): sem isso
+A folha rola **dentro** do card (`max-height: calc(100vh - 300px)`): sem isso
 uma montagem de várias folhas empurrava a página inteira para baixo e escondia
 os controles do lado — defeito visto na primeira revisão em tela.
 
@@ -249,15 +280,13 @@ inventar um papel.
 
 ### Dois campos para escolher o pedido, e não um
 
-O seletor lista os **impressos nos últimos 30 dias** — refazer célula é sobre
-material que acabou de sair, e a fila inteira encheria a lista de pedidos sem
-nada a repor. Ao lado dele há um campo de **número**, para o pedido antigo que
-voltou do cliente.
+O seletor lista pedidos **Em produção** que tenham modelo do formato escolhido.
+Ao lado dele há um campo de **número**, para chegar diretamente a um pedido sem
+percorrer a lista.
 
 São dois campos porque um `<select>` não se digita: a primeira versão prometia
 *"escolha ou digite o número"* dentro do seletor, e essa era uma promessa que a
-tela não cumpria. (O rótulo do seletor voltou a prometer isso numa versão
-seguinte, por descuido; desde 03/09 ele diz "Impressos nos últimos 30 dias…".)
+tela não cumpria. Os dois controles continuam separados e têm funções literais.
 
 > ⚠️ **O `montagem.js` precisa estar na lista de sincronismo da estação**
 > (`security_config.py`). O `index.html` que a estação baixa já pede o script;
@@ -454,6 +483,12 @@ sobra, proporcional à tiragem: o papel daquela folha já está comprado, e deix
 a célula vazia desperdiça igual sem entregar nada. Vira peça a mais, e a coluna
 **Sobra** diz quantas — silenciar isso seria imprimir código que ninguém pediu.
 
+As buscas mais caras usam um orçamento fixo de operações, e não milissegundos.
+Assim, duas estações recebem o mesmo resultado para a mesma entrada. Estados já
+visitados no equilíbrio não são revisitados, o que também impede ciclos. Se o
+orçamento terminar, a tela chama o resultado de **melhor resultado encontrado**,
+sem prometer ótimo matemático que não foi demonstrado.
+
 #### Os três caminhos, e por que o arriscado continua na tela
 
 O usuário pediu que **os três** ficassem oferecidos. Eles diferem no que a
@@ -571,10 +606,23 @@ por pedido e faz, para cada um: carrega os bancos, garante o CSV, monta as
 artes daquele pedido; só então passa ao próximo. As artes saem na ordem dos
 **modelos** (a do `multi_artes`), não na dos pedidos.
 
+A mesma disciplina vale ao abrir o seletor com vários pedidos: os candidatos
+são materializados imediatamente depois de carregar o banco do respectivo
+pedido. As estruturas globais representam um pedido por vez; quatro cargas em
+paralelo podiam atribuir ao primeiro candidato a tiragem/variabilidade do banco
+que terminasse por último.
+
 Antes de ir ao motor, três recusas com a saída na frase: banco que não se
 conseguiu ler (`pedidosComBancoDesconhecido`), numeração que pede banco e
 chegou sem linha (`bancoVazioNoPayload`), e célula cuja posição passou da
 tiragem da arte pronta (`celulasForaDaTiragem`).
+
+Além delas, `validarMontagemParaGerar` é a barreira única usada pelo resumo,
+rascunho e payload. Ela recusa modelo duplicado, célula sem modelo, posição
+inválida ou acima da tiragem, modelo sem célula e identidade física incompleta.
+`posicoesCombinadas` também lança erro para célula órfã; o antigo deslocamento
+zero silencioso deixou de existir. Imediatamente antes do motor, tiragem e
+classificação variável são recalculadas e comparadas ao plano aplicado.
 
 ### Uma nota sobre fontes
 
@@ -648,7 +696,7 @@ Duas coisas que só a captura de tela mostrou, na revisão do redesenho:
   `02`. Conserto: `_mtgEspacoDoNumero` calcula quantos píxeis o rótulo precisa
   recuar, e o recuo da célula passou a ser dinâmico.
 - A folha crescia sem limite e empurrava a página inteira, escondendo a coluna
-  de apoio. Conserto: `max-height: calc(100vh - 340px)`, e a folha rola dentro
+  de apoio. Conserto: `max-height: calc(100vh - 300px)`, e a folha rola dentro
   do card.
 
 ---
@@ -661,9 +709,9 @@ Duas coisas que só a captura de tela mostrou, na revisão do redesenho:
   da gráfica. Sem agente respondendo, a resposta ao operador é que não dá.
 - **Não sabe sozinha o que estragou.** Quem viu o papel foi o operador; a tela é
   onde ele diz.
-- **Não tem permissão própria no menu.** `nav-montagem` não está em
-  `PERM_NAV_MAP`, e por isso aparece para todo perfil logado no site. Apontado
-  na análise de 03/09; fora do escopo do que foi pedido naquele dia.
+- **Não tem uma permissão nova no banco.** O menu e a view obedecem à permissão
+  existente `perm_producao_view`, coerente com Pedido e produção, sem criar uma
+  migração apenas para esconder a navegação.
 
 ---
 
@@ -671,8 +719,8 @@ Duas coisas que só a captura de tela mostrou, na revisão do redesenho:
 
 | Harness | Verificações | O que trava |
 |---|---|---|
-| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 241 | o núcleo: posições digitadas, compatibilidade, a **tradução das posições** (células × modelos), os três gestos do kanban, o lugar da célula na folha, a geometria e os zooms, o desfazer, completar e ordenar, o saneamento do número, o preparo das artes **pedido a pedido**, o payload, o **aproveitamento da folha** |
-| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 162 | a tela desenhada num Chrome de verdade: lista, selo, trava, a folha na **grade do formato**, ⧉, ×, o arrasto com os eventos nativos, a seleção e o teclado, **o número medido no elemento desenhado**, layout, o **painel do aproveitamento** com os três caminhos, **a entrega do arquivo** |
+| [`tests/montagem_harness.js`](../tests/montagem_harness.js) | 3.569 | o núcleo: parser transacional e limitado, matriz física, validador canônico, tradução sem órfãos, gestos, geometria, preparo serial, payload e planejamento determinístico |
+| [`tests/montagem_tela_harness.js`](../tests/montagem_tela_harness.js) | 245 | Chrome real: modos, entrada transacional, conferência para gerar, rascunho íntegro/inválido, lista, trava, folha, teclado, número medido, planejamento, geração concorrente, faces e entrega |
 
 [`tests/test_montagem.py`](../tests/test_montagem.py) roda os dois e acrescenta
 o que só se lê no código-fonte: que a Montagem chama o construtor do Pedido e
