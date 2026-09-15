@@ -20,6 +20,7 @@ def test_pagina_nova_esta_no_menu_e_tem_recursos_proprios():
     assert '/producao-por-cor.css?v=' in html
     assert '/producao-por-cor.js?v=' in html
     assert 'id="ppc-product-select"' in html
+    assert '<option value="">Selecione um produto</option>' in html
     assert "Ordem de envio" not in html[html.index('id="view-producao-cor"'):html.index('id="view-pedido"')]
 
 
@@ -37,6 +38,16 @@ def test_filtro_exige_produto_e_cor():
     )
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
     assert "OK:" in resultado.stdout
+
+
+def test_a_lista_so_aceita_modelo_aguardando_e_abre_com_carga_completa():
+    pagina = _ler("frontend/producao-por-cor.js")
+    assert "&& modeloEstaAguardando(record)" in pagina
+    assert ".filter(modeloEstaAguardando)" in pagina
+    assert "typeof window.pedidoNaGrafica === 'function' && window.pedidoNaGrafica(order)" in pagina
+    assert "return inFactory && !alreadyLeft" in pagina
+    assert "item._dbLoaded === true" in pagina
+    assert "fullItem = await loadFullItem(itemId, osId)" in pagina
 
 
 def test_status_reutiliza_o_mesmo_caminho_do_painel_de_producao():

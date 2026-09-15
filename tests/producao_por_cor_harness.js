@@ -17,9 +17,10 @@ vm.runInContext(source, sandbox, { filename: 'producao-por-cor.js' });
 
 const filter = sandbox.window.ProducaoPorCorUtils.modelosDoFiltro;
 const records = [
-    { id: 1, productKey: 'produto-a', colorKey: 'amarela' },
-    { id: 2, productKey: 'produto-a', colorKey: 'azul' },
-    { id: 3, productKey: 'produto-b', colorKey: 'amarela' },
+    { id: 1, productKey: 'produto-a', colorKey: 'amarela', status: 'Aguardando' },
+    { id: 2, productKey: 'produto-a', colorKey: 'azul', status: 'Aguardando' },
+    { id: 3, productKey: 'produto-b', colorKey: 'amarela', status: 'Aguardando' },
+    { id: 4, productKey: 'produto-a', colorKey: 'amarela', status: 'Impresso' },
 ];
 const result = filter(records, 'produto-a', 'amarela');
 if (result.length !== 1 || result[0].id !== 1) {

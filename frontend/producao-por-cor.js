@@ -26,10 +26,20 @@
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
+    function printStatus(value) {
+        return typeof normalizarStatusImpressao === 'function'
+            ? normalizarStatusImpressao(value) : (value || 'Aguardando');
+    }
+
+    function modeloEstaAguardando(record) {
+        return printStatus(record && record.status) === 'Aguardando';
+    }
+
     function modelosDoFiltro(records, productKey, colorKey) {
         return (records || []).filter(record =>
             String(record.productKey) === String(productKey)
-            && String(record.colorKey) === String(colorKey));
+            && String(record.colorKey) === String(colorKey)
+            && modeloEstaAguardando(record));
     }
 
     function colorInfo(model, catalog) {
@@ -78,7 +88,7 @@
         if (typeof window.loadOrdens === 'function') await window.loadOrdens();
         const currentState = appState();
         const orders = ((currentState && currentState.ordens) || []).filter(order => {
-            const inFactory = typeof window.pedidoNaGrafica !== 'function' || window.pedidoNaGrafica(order);
+            const inFactory = typeof window.pedidoNaGrafica === 'function' && window.pedidoNaGrafica(order);
             const alreadyLeft = typeof window.pedidoJaPassouDaGrafica === 'function' && window.pedidoJaPassouDaGrafica(order);
             return inFactory && !alreadyLeft;
         });
@@ -129,12 +139,13 @@
                 status: model.status_impressao || model.status_producao || 'Aguardando',
                 block: model.bloco,
             };
-        }).filter(record => record.osId !== null && record.osId !== undefined);
+        }).filter(record => record.osId !== null && record.osId !== undefined)
+            .filter(modeloEstaAguardando);
     }
 
     function products() {
         const map = new Map();
-        local.records.forEach(record => {
+        local.records.filter(modeloEstaAguardando).forEach(record => {
             if (!map.has(record.productKey)) map.set(record.productKey, record.productLabel);
         });
         return Array.from(map, ([key, label]) => ({ key, label }))
@@ -143,7 +154,7 @@
 
     function colorsForProduct() {
         const map = new Map();
-        local.records.filter(record => record.productKey === local.productKey).forEach(record => {
+        local.records.filter(record => record.productKey === local.productKey && modeloEstaAguardando(record)).forEach(record => {
             const current = map.get(record.colorKey) || { key: record.colorKey, label: record.colorLabel, swatch: record.colorSwatch, count: 0 };
             current.count += 1;
             map.set(record.colorKey, current);
@@ -177,15 +188,21 @@
         const select = byId('ppc-product-select');
         if (!select) return;
         const list = products();
-        if (!list.some(product => product.key === local.productKey)) local.productKey = list[0] ? list[0].key : '';
-        select.innerHTML = list.length
-            ? list.map(product => `<option value="${esc(product.key)}" ${product.key === local.productKey ? 'selected' : ''}>${esc(product.label)}</option>`).join('')
-            : '<option value="">Nenhum produto na produção</option>';
+        if (!list.some(product => product.key === local.productKey)) local.productKey = '';
+        const placeholder = list.length ? 'Selecione um produto' : 'Nenhum produto aguardando';
+        select.innerHTML = `<option value="" ${local.productKey ? '' : 'selected'}>${placeholder}</option>`
+            + list.map(product => `<option value="${esc(product.key)}" ${product.key === local.productKey ? 'selected' : ''}>${esc(product.label)}</option>`).join('');
     }
 
     function renderColors() {
+        if (!local.productKey) {
+            local.colorKey = '';
+            const target = byId('ppc-color-list');
+            if (target) target.innerHTML = '<div class="ppc-message">Selecione um produto.</div>';
+            return;
+        }
         const list = colorsForProduct();
-        if (!list.some(color => color.key === local.colorKey)) local.colorKey = list[0] ? list[0].key : '';
+        if (!list.some(color => color.key === local.colorKey)) local.colorKey = '';
         const target = byId('ppc-color-list');
         if (!target) return;
         target.innerHTML = list.length ? list.map(color => `
@@ -213,13 +230,18 @@
         const subtitle = byId('ppc-list-subtitle');
         const summary = byId('ppc-summary');
         if (title) title.textContent = product ? product.label : 'Modelos';
-        if (subtitle) subtitle.textContent = color ? `${color.label} · somente modelos deste produto e desta cor` : 'Selecione uma cor.';
+        if (subtitle) subtitle.textContent = color ? `${color.label} · somente modelos aguardando deste produto e desta cor` : 'Selecione uma cor.';
         if (summary) summary.textContent = filtered.length ? `${filtered.length} modelo${filtered.length === 1 ? '' : 's'}` : '';
 
         if (!filtered.length) {
             if (body) body.innerHTML = '';
             if (wrap) wrap.hidden = true;
-            if (message) { message.hidden = false; message.textContent = local.loading ? 'Carregando…' : 'Nenhum modelo encontrado para este produto e esta cor.'; }
+            if (message) {
+                message.hidden = false;
+                message.textContent = local.loading ? 'Carregando…'
+                    : (!local.productKey ? 'Selecione um produto.'
+                        : (!local.colorKey ? 'Selecione uma cor.' : 'Nenhum modelo aguardando para este produto e esta cor.'));
+            }
             return;
         }
         if (message) message.hidden = true;
@@ -278,6 +300,33 @@
         }
     }
 
+    async function waitForItemLoad(osId, timeoutMs = 10000) {
+        const started = Date.now();
+        const currentState = appState();
+        while (currentState && currentState._loadingOSItens && currentState._loadingOSItens[osId]) {
+            if (Date.now() - started >= timeoutMs) throw new Error('Tempo excedido ao carregar o modelo.');
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+
+    async function loadFullItem(itemId, osId) {
+        await waitForItemLoad(osId);
+        await window.loadOSItens(osId);
+        await waitForItemLoad(osId);
+        let items = typeof window.getOSItens === 'function' ? window.getOSItens(osId) : [];
+        let item = items.find(candidate => String(candidate.id) === String(itemId));
+        if (item && item._dbLoaded === true) return item;
+
+        // Se outra abertura havia deixado apenas a pré-carga global, pede a
+        // carga completa novamente e só então permite que a imposição escolha
+        // entre a arte do modelo e a cor. É o mesmo item usado pelo Pedido.
+        await window.loadOSItens(osId);
+        await waitForItemLoad(osId);
+        items = typeof window.getOSItens === 'function' ? window.getOSItens(osId) : [];
+        item = items.find(candidate => String(candidate.id) === String(itemId));
+        return item && item._dbLoaded === true ? item : null;
+    }
+
     async function openModel(itemId, osId) {
         if (String(local.openItemId) === String(itemId) && typeof window.fecharJanelaDoModelo === 'function') {
             window.fecharJanelaDoModelo();
@@ -287,10 +336,14 @@
             if (typeof window.toast === 'function') window.toast('Janela de Pedido indisponível.', 'error');
             return;
         }
-        await window.loadOSItens(osId);
-        const items = typeof window.getOSItens === 'function' ? window.getOSItens(osId) : [];
-        if (!items.some(item => String(item.id) === String(itemId))) {
-            if (typeof window.toast === 'function') window.toast('Modelo não encontrado no pedido.', 'error');
+        let fullItem = null;
+        try {
+            fullItem = await loadFullItem(itemId, osId);
+        } catch (error) {
+            console.error('[Produção por Cor] Falha ao carregar modelo completo:', error);
+        }
+        if (!fullItem) {
+            if (typeof window.toast === 'function') window.toast('Não foi possível carregar a arte completa deste modelo.', 'error');
             return;
         }
         local.openItemId = itemId;
@@ -310,8 +363,7 @@
                 closeOpenModel();
                 local.productKey = product.value;
                 local.colorKey = '';
-                renderColors();
-                renderModels();
+                render();
             });
         }
         if (colors && !colors.dataset.ppcBound) {
@@ -341,7 +393,7 @@
                 const sharedItem = items.find(item => String(item.id) === String(select.dataset.statusItem));
                 const record = local.records.find(item => String(item.modelId) === String(select.dataset.statusItem));
                 if (record && sharedItem) record.status = sharedItem.status_impressao || sharedItem.impressao || record.status;
-                renderModels();
+                render();
             });
         }
         if (refreshButton && !refreshButton.dataset.ppcBound) {
@@ -352,6 +404,9 @@
 
     function openPage() {
         local.active = true;
+        closeOpenModel();
+        local.productKey = '';
+        local.colorKey = '';
         bind();
         refresh();
     }
@@ -385,7 +440,7 @@
         const detail = event.detail || {};
         const record = local.records.find(item => String(item.modelId) === String(detail.itemId));
         if (record) record.status = detail.status;
-        if (local.active) renderModels();
+        if (local.active) render();
     });
 
     window.ProducaoPorCorPainel = { abrir: openPage, sair: leavePage, atualizar: refresh };
