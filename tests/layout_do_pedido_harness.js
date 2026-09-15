@@ -162,11 +162,27 @@ function extrairFuncao(src, nome) {
     const j = SCRIPT.indexOf('id="briefing-nome-${osId}"');
     const campos = SCRIPT.slice(SCRIPT.lastIndexOf('<div class="card-header"', j), SCRIPT.indexOf('${obsAccordionHtml}', j));
     ok(campos.indexOf('Briefing Base do Evento') > 0 && campos.indexOf('Preenchido pelo comercial') > 0, 'o titulo e o subtitulo curto');
+    const iPendencias = campos.indexOf('id="briefing-pendencias-${osId}"');
+    ok(iPendencias > 0 && iPendencias < campos.indexOf('id="briefing-nome-${osId}"'),
+        'Informacoes pendentes fica no topo do Briefing Base');
+    ok(/<details id="briefing-pendencias-\$\{osId\}"[^>]*painelPendenciasBriefingEstaAberto\(osId\)[^>]*ontoggle="manterPainelPendenciasBriefing/.test(campos),
+        'o campo abre e fecha e conserva o estado aberto durante novas renderizacoes');
+    ok(campos.indexOf('salvarInformacoesPendentesBriefing') > 0,
+        'o texto pendente usa a rotina de salvamento persistente');
     for (const id of ['briefing-nome-${osId}', 'briefing-data-${osId}', 'briefing-local-${osId}']) {
         ok(campos.indexOf('id="' + id + '"') > 0, 'o campo ' + id + ' continua');
     }
     ok((campos.match(/color: #fbbf24/g) || []).length === 3, 'nome, data e local saem no amarelo claro');
     ok(campos.indexOf("${uniqueProducts.length} ${uniqueProducts.length === 1 ? 'produto' : 'produtos'}") > 0, 'o titulo das observacoes conta os produtos');
+
+    const salvar = extrairFuncao(SCRIPT, 'salvarInformacoesPendentesBriefing');
+    ok(salvar.indexOf('saveBriefingField(osIntId, null, valor, true, CHAVE_INFORMACOES_PENDENTES)') > 0,
+        'as informacoes pendentes sao gravadas em pedidos_artes.observacoes');
+    ok(/const CHAVE_INFORMACOES_PENDENTES = '__informacoes_pendentes';/.test(SCRIPT),
+        'a observacao geral tem chave propria e nao colide com observacoes por produto');
+    const atualizar = extrairFuncao(SCRIPT, 'updateBriefingUI');
+    ok(atualizar.indexOf('pendenciasValor.trim()') > 0 && atualizar.indexOf('pendenciasPainel.open = painelPendenciasBriefingEstaAberto(osId)') > 0,
+        'texto ja salvo abre o painel e o estado escolhido e reaplicado');
 })();
 
 if (falhas) { console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.'); process.exit(1); }

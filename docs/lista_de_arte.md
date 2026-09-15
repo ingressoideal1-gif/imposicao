@@ -797,6 +797,13 @@ com faixa verde-água — o nome do produto em branco, a quantidade como selo
 tela, 0,95rem e entrelinha 1,55. Os ids (`briefing-nome-*`, `briefing-obs-item-*`)
 e o `saveBriefingField` são os de sempre.
 
+No topo do **Briefing Base do Evento**, o painel recolhível **Informações
+pendentes** guarda observações gerais que ainda precisam ser fornecidas ou
+confirmadas. O texto é salvo em `pedidos_artes.observacoes`, na chave reservada
+`__informacoes_pendentes`. O painel permanece aberto durante novas renderizações
+depois que o usuário o abre; ao carregar um pedido que já possui texto salvo,
+ele também abre automaticamente.
+
 O `tests/layout_do_pedido_harness.js` trava a ordem das partes, os onze
 botões pelo que chamam, a regra da orientação e o ícone do PDF.
 

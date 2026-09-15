@@ -34278,6 +34278,15 @@ function renderAmostrasOSItens(osId) {
                             <div style="font-size: 0.78rem; color: var(--text-dim);">Preenchido pelo comercial</div>
                         </div>
                         <div class="card-body" style="padding: 14px 16px 16px 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <details id="briefing-pendencias-${osId}" ${painelPendenciasBriefingEstaAberto(osId) ? 'open' : ''} ontoggle="manterPainelPendenciasBriefing('${escapeJsAttr(osId)}', this.open)" style="border: 1px solid rgba(239,68,68,0.45); border-radius: 9px; overflow: hidden; background: rgba(127,29,29,0.10);">
+                                <summary style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #fca5a5; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;">
+                                    <span style="display: flex; align-items: center; gap: 7px;"><i class="fa-solid fa-circle-exclamation"></i> Informações pendentes</span>
+                                    <span id="briefing-pendencias-resumo-${osId}" style="color: var(--text-dim); font-size: 0.72rem; font-weight: 600; text-transform: none; letter-spacing: 0;">Adicionar observações</span>
+                                </summary>
+                                <div style="padding: 0 12px 12px 12px;">
+                                    <textarea id="briefing-pendencias-texto-${osId}" oninput="salvarInformacoesPendentesBriefing('${osNum}', '${escapeJsAttr(osId)}', this.value)" rows="4" style="width: 100%; border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.55; resize: vertical; background: rgba(10,15,30,0.7); color: #f8fafc;" placeholder="Anote aqui as informações que ainda precisam ser fornecidas ou confirmadas..."></textarea>
+                                </div>
+                            </details>
                             <div class="form-group" style="margin: 0; gap: 5px;">
                                 <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
                                 <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="margin-top: 0; color: #fbbf24; font-size: 1.05rem; font-weight: 700; padding: 9px 14px;" placeholder="Nome do Evento">
@@ -39331,6 +39340,31 @@ function clearAmostrasOS() {
 
 // --- Funções de Briefing e Designers (Tabela: pedidos_artes) ---
 
+const CHAVE_INFORMACOES_PENDENTES = '__informacoes_pendentes';
+
+function manterPainelPendenciasBriefing(osId, aberto) {
+    if (!state.briefingPendenciasAbertas) state.briefingPendenciasAbertas = {};
+    state.briefingPendenciasAbertas[String(osId)] = aberto === true;
+}
+
+function painelPendenciasBriefingEstaAberto(osId) {
+    return !!(state.briefingPendenciasAbertas && state.briefingPendenciasAbertas[String(osId)] === true);
+}
+
+function atualizarResumoPendenciasBriefing(osId, valor) {
+    const resumo = document.getElementById(`briefing-pendencias-resumo-${osId}`);
+    if (resumo) resumo.textContent = String(valor || '').trim() ? 'Com observações' : 'Adicionar observações';
+}
+
+function salvarInformacoesPendentesBriefing(osIntId, osId, valor) {
+    manterPainelPendenciasBriefing(osId, true);
+    atualizarResumoPendenciasBriefing(osId, valor);
+    saveBriefingField(osIntId, null, valor, true, CHAVE_INFORMACOES_PENDENTES);
+}
+
+window.manterPainelPendenciasBriefing = manterPainelPendenciasBriefing;
+window.salvarInformacoesPendentesBriefing = salvarInformacoesPendentesBriefing;
+
 async function loadBriefingBase(osId, osIntId) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
@@ -40192,6 +40226,18 @@ function updateBriefingUI(osId, osIntId) {
     
     // Atualiza observações por produto (accordion) agrupando pelo produto pai
     const obsObj = data.observacoes || {};
+    const pendenciasValor = typeof obsObj[CHAVE_INFORMACOES_PENDENTES] === 'string'
+        ? obsObj[CHAVE_INFORMACOES_PENDENTES] : '';
+    const pendenciasEl = document.getElementById(`briefing-pendencias-texto-${osId}`);
+    const pendenciasPainel = document.getElementById(`briefing-pendencias-${osId}`);
+    if (pendenciasEl) pendenciasEl.value = pendenciasValor;
+    if (!state.briefingPendenciasAbertas) state.briefingPendenciasAbertas = {};
+    if (!(String(osId) in state.briefingPendenciasAbertas) && pendenciasValor.trim()) {
+        state.briefingPendenciasAbertas[String(osId)] = true;
+    }
+    if (pendenciasPainel) pendenciasPainel.open = painelPendenciasBriefingEstaAberto(osId);
+    atualizarResumoPendenciasBriefing(osId, pendenciasValor);
+
     const itens = state.osItens[osId] || [];
     let uniqueProductsSet = new Set();
     
