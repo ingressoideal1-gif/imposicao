@@ -4017,7 +4017,10 @@ function recolherJanelaParaCasa() {
     const janela = janelaDeVisualizacao();
     const casa = document.getElementById('ped-preview-home');
     if (!janela || !casa) return;
-    if (janela.parentElement !== casa) casa.appendChild(janela);
+    const externa = window.PedidoJanelaExterna;
+    const deveContinuarExterna = externa && typeof externa.manterForaDaCasa === 'function'
+        && externa.manterForaDaCasa();
+    if (!deveContinuarExterna && janela.parentElement !== casa) casa.appendChild(janela);
 
     // A linha-abrigo vazia nao fica na tabela: ela abriria um vao sem motivo.
     document.querySelectorAll('#ped-os-queue-body tr.linha-da-janela')
@@ -4051,6 +4054,17 @@ function moverJanelaParaModelo(itemId, opts = {}) {
     const { rolar = false } = opts;
     const janela = janelaDeVisualizacao();
     if (!janela) return false;                    // producao.html nao tem a janela
+    const externa = window.PedidoJanelaExterna;
+    const hostExterno = externa && typeof externa.obterHost === 'function'
+        ? externa.obterHost(itemId, opts) : null;
+    if (hostExterno) {
+        hostExterno.appendChild(janela);
+        janela.style.display = 'block';
+        if (rolar && typeof hostExterno.scrollIntoView === 'function') {
+            setTimeout(() => hostExterno.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+        }
+        return true;
+    }
     const linha = document.getElementById(`ped-queue-row-${itemId}`);
     if (!linha || linha.style.display === 'none') return false;
 
@@ -4139,6 +4153,8 @@ function fecharJanelaDoModelo() {
     // fechar uma janela sem liberacao continua custando o caminho barato.
     const haviaLiberacao = !!state.modeloLiberado;
     state.modeloLiberado = null;
+    const externa = window.PedidoJanelaExterna;
+    if (externa && typeof externa.aoFechar === 'function') externa.aoFechar();
     recolherJanelaParaCasa();
     const janela = janelaDeVisualizacao();
     if (janela) janela.style.display = 'none';
@@ -4262,7 +4278,12 @@ async function enviarParaPedido(itemId, osId) {
     // `showView` direto, e NAO um clique no botao do menu: o clique no menu
     // agora significa "quero a pagina inicial da tela" e fecha a janela do
     // modelo — o que desfaria exatamente o que esta funcao acabou de fazer.
-    if (typeof window.showView === 'function') {
+    const externa = window.PedidoJanelaExterna;
+    const manterViewAtual = externa && typeof externa.manterViewAtual === 'function'
+        && externa.manterViewAtual(item.id, osId);
+    if (manterViewAtual) {
+        moverJanelaParaModelo(item.id, { rolar: true });
+    } else if (typeof window.showView === 'function') {
         window.showView('view-pedido');
     } else {
         const navBtn = document.querySelector('[data-view="view-pedido"]');

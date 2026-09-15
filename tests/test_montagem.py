@@ -52,8 +52,8 @@ def test_o_dominio_e_isolado_sem_criar_dependencia_de_versao_do_agente():
     seguranca = _ler("security_config.py")
     assert '"montagem-dominio.js"' not in seguranca
     script = _ler("frontend/script.js")
-    assert "perm_producao_view:    ['nav-lista-impressao', 'nav-montagem']" in script
-    assert "perm_producao_view:    ['view-lista-impressao', 'view-montagem']" in script
+    assert "perm_producao_view:    ['nav-lista-impressao', 'nav-producao-cor', 'nav-montagem']" in script
+    assert "perm_producao_view:    ['view-lista-impressao', 'view-producao-cor', 'view-montagem']" in script
     montagem = _ler("frontend/montagem.js")
     assert "const MontagemDominio = (() =>" in montagem
     assert "return Object.freeze({ posicoes, validar, posicoesCombinadas })" in montagem

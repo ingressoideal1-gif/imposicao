@@ -21620,7 +21620,7 @@ const PERM_NAV_MAP = {
     perm_imposicao_view:   ['nav-imposicao'],
     perm_pedidos_view:     ['nav-pedido'],
     perm_amostras_view:    ['nav-amostras'],
-    perm_producao_view:    ['nav-lista-impressao', 'nav-montagem'],
+    perm_producao_view:    ['nav-lista-impressao', 'nav-producao-cor', 'nav-montagem'],
     perm_acabamento_view:  ['nav-acabamento'],
     perm_lista_arte_view:  ['nav-lista-arte'],
     perm_impressoras_view: ['nav-impressoras'],
@@ -21643,7 +21643,7 @@ const PERM_VIEW_MAP = {
     perm_imposicao_view:   ['view-imposicao'],
     perm_pedidos_view:     ['view-pedido'],
     perm_amostras_view:    ['view-amostras'],
-    perm_producao_view:    ['view-lista-impressao', 'view-montagem'],
+    perm_producao_view:    ['view-lista-impressao', 'view-producao-cor', 'view-montagem'],
     perm_acabamento_view:  ['view-acabamento'],
     perm_lista_arte_view:  ['view-lista-arte'],
     perm_impressoras_view: ['view-impressoras'],
@@ -31067,6 +31067,9 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             }
             avisarCorrecaoDeArte(novoStatus);
             renderOrdens();
+            window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
+                detail: { itemId, osId, status: novoStatus }
+            }));
             return;
         }
 
@@ -31116,6 +31119,9 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
 
         toast(`Impressão atualizada: ${novoStatus}`, 'success');
         renderOrdens();
+        window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
+            detail: { itemId, osId, status: novoStatus }
+        }));
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
         const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
@@ -32835,6 +32841,12 @@ window.showView = function(viewId) {
         return;
     }
 
+    const viewAnterior = document.querySelector('.view-section.active');
+    if (viewAnterior && viewAnterior.id === 'view-producao-cor' && viewId !== 'view-producao-cor'
+        && window.ProducaoPorCorPainel) {
+        window.ProducaoPorCorPainel.sair();
+    }
+
     // Fechar o Drawer Menu ao mudar de tela
     if (typeof window.toggleDrawer === 'function') {
         window.toggleDrawer(false);
@@ -32871,6 +32883,9 @@ window.showView = function(viewId) {
     }
  else if (viewId === 'view-lista-impressao') {
         loadOrdens();
+    }
+    else if (viewId === 'view-producao-cor' && window.ProducaoPorCorPainel) {
+        window.ProducaoPorCorPainel.abrir();
     }
 
     if (viewId === 'view-imposicao') {
