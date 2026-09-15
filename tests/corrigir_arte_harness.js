@@ -266,9 +266,9 @@ function pedidoNaProducao(extra) {
 // --- 6. O PRONTO do designer devolve para Aguardando -------------------------
 
 (function oProntoLiberaAImpressao() {
-    const i = SCRIPT.indexOf('const liberaImpressao = status ===');
+    const i = SCRIPT.indexOf('const decisaoInternaPronta = status ===');
     ok(i > 0, 'a liberacao pelo PRONTO existe');
-    const trecho = SCRIPT.slice(i, i + 700);
+    const trecho = SCRIPT.slice(i, i + 1900);
     ok(trecho.indexOf('modeloEmCorrecaoDeArte(itemParaLiberar)') > 0,
         'so libera modelo que estava em correcao');
     ok(trecho.indexOf('cliente-amostras-itens-container') > 0,
@@ -282,7 +282,7 @@ function pedidoNaProducao(extra) {
     // `status_impressao` e o card le `impressao`. Deixar um para tras faz a
     // tela dizer "Corrigir Arte" ate o proximo F5, e o pedido fica no card
     // errado.
-    const i = SCRIPT.indexOf('if (liberaImpressao) {');
+    const i = SCRIPT.indexOf('// Os DOIS nomes do mesmo dado');
     ok(i > 0, 'o bloco que atualiza a memoria existe');
     const trecho = SCRIPT.slice(i, i + 1400);
     ok(trecho.indexOf('itemParaLiberar.status_impressao') > 0, 'atualiza status_impressao');
@@ -362,9 +362,9 @@ function pedidoNaProducao(extra) {
 (function oProntoDesseModeloAprovaAArteSozinho() {
     // Regra do usuario, 04/09/2026: a arte ja tinha sido aprovada uma vez, e o
     // conserto pedido pela producao nao recomeca o ciclo do cliente.
-    const i = SCRIPT.indexOf('if (liberaImpressao) {');
+    const i = SCRIPT.indexOf('const decisaoInternaPronta = status ===');
     ok(i > 0, 'o bloco do PRONTO existe');
-    const trecho = SCRIPT.slice(i, i + 1200);
+    const trecho = SCRIPT.slice(i, i + 2200);
     ok(trecho.indexOf("gravar.amostra_status = 'APROVADA'") > 0,
         'o PRONTO grava a arte como APROVADA, e nao como PRONTO');
     ok(trecho.indexOf("gravar.status_impressao = 'Aguardando'") > 0,
@@ -390,6 +390,18 @@ function pedidoNaProducao(extra) {
         'o card do modelo ja mostra a arte aprovada, sem F5');
     ok(trecho.indexOf("globalDoModelo.status_arte = 'APROVADA'") > 0,
         'e a Lista de Arte tira o pedido do card "Em Arte" junto');
+})();
+
+(function statusDeModeloExigeConfirmacaoExata() {
+    const inicio = SCRIPT.indexOf('async function saveAmostraToDB(');
+    const fim = SCRIPT.indexOf('\n}', inicio);
+    const f = SCRIPT.slice(inicio, fim + 2);
+    ok(f.indexOf("const gravacaoCriticaDeStatus = 'status_arte' in dbData || 'status_impressao' in dbData") > 0,
+        'save central reconhece gravações críticas de status');
+    ok(f.indexOf('&& !gravacaoCriticaDeStatus') > 0,
+        'status não usa o fallback amplo que atualiza qualquer linha do pedido');
+    ok(f.indexOf("throw new Error('o banco não confirmou status_arte do modelo')") > 0,
+        'status_arte só avança depois do valor devolvido pelo banco');
 })();
 
 // --- Resultado ---------------------------------------------------------------

@@ -88,8 +88,9 @@ const FUNCAO = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
 (function aSolicitacaoDoClienteEGravadaNaNossaTabela() {
     const j = SCRIPT.indexOf("obsObj['correcao_entrega_faturamento']");
     ok(j > 0, 'a solicitacao do cliente e guardada na chave propria');
-    const trecho = SCRIPT.slice(j, j + 900);
-    ok(/from\('pedidos_artes'\)/.test(trecho), 'em pedidos_artes');
+    const trecho = SCRIPT.slice(j, j + 1300);
+    ok(/atualizarPedidoArteConfirmado\(numInt,\s*\{/.test(trecho),
+        'usa gravacao confirmada em pedidos_artes');
     ok(/entrega_dados: 'CORRIGIR'/.test(trecho), 'junto com o status CORRIGIR');
 })();
 

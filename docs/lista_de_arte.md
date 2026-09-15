@@ -43,6 +43,25 @@ move o pedido para o card **Pendente**. O mesmo acontece ao usar **Voltar para
 Atendimento** quando nem todos os modelos estão prontos. O botão explícito fica
 oculto quando o pedido pertence a outro card.
 
+### Confirmação e reconciliação dos status
+
+As ações que mudam `pedidos_artes.status` ou `entrega_dados` aguardam a resposta
+do PostgREST e só anunciam sucesso quando o banco devolve ao menos uma linha com
+os valores solicitados. Resposta `data: []`, recusa de RLS ou valor divergente é
+falha visível; a memória da tela não avança nesses casos.
+
+Ao sair de **Corrigir Arte**, o painel consulta novamente o modelo persistido.
+Se o banco ainda tiver `status_impressao = Corrigir Arte`, a mesma operação grava
+`status_impressao = Aguardando` e `status_arte = APROVADA`, filtrando por ID do
+modelo e número do pedido e exigindo exatamente uma linha confirmada.
+
+A carga da Lista de Arte também executa
+`reconciliarStatusPersistidosDaListaArte`. Ela revisa pedidos ativos e pedidos
+que saíram da Arte ainda carregando um status de correção. Assim, uma gravação
+interrompida ou feita por uma aba antiga é recalculada a partir de
+`pedidos_modelos` e `entrega_dados`, sem percorrer o histórico normal de pedidos
+concluídos.
+
 ### Quais palavras tiram um pedido da arte
 
 `pedidoSaiuDaArte` compara `status` e `status_interno` com `SINAIS_SAIU_DA_ARTE`.

@@ -63,21 +63,23 @@ async function testarRetornoDaCorrecaoComModeloLegado() {
     const atualizacoes = [];
     const banco = {
         from() {
+            const consulta = { payload: null };
             return {
-                payload: null,
                 select() { return this; },
-                update(payload) { this.payload = payload; return this; },
-                eq() {
-                    if (!this.payload) return this;
-                    atualizacoes.push(this.payload);
-                    Object.assign(linha, this.payload);
-                    return Promise.resolve({ error: null });
-                },
-                order() { return Promise.resolve({ data: [linha], error: null }); }
+                update(payload) { consulta.payload = payload; return this; },
+                eq() { return this; },
+                order() { return Promise.resolve({ data: [linha], error: null }); },
+                single() {
+                    atualizacoes.push(consulta.payload);
+                    Object.assign(linha, consulta.payload);
+                    return Promise.resolve({ data: { ...linha }, error: null });
+                }
             };
         }
     };
-    const ctx = { supabaseClient: banco, state: { modelosGlobais: { 20942: [] }, todasArtes: [] } };
+    const ctx = { supabaseClient: banco, state: {
+        modelosGlobais: { 20942: [{ status_arte: 'APROVADA_CLIENTE' }] }, todasArtes: []
+    } };
     vm.createContext(ctx);
     vm.runInContext(
         trechoConst('ARTE_REPROVADOS') + '\n' +
@@ -96,8 +98,107 @@ async function testarRetornoDaCorrecaoComModeloLegado() {
     if (atualizacoes.length !== 2) throw new Error('esperava duas atualizações consolidadas');
 }
 
-testarRetornoDaCorrecaoComModeloLegado().then(() => {
-    console.log('status pedidos_artes: 15 casos OK');
+async function testarConfirmacaoDaGravacao() {
+    const montar = resposta => ({
+        from() {
+            return {
+                update() { return this; },
+                eq() { return this; },
+                select() { return Promise.resolve(resposta); }
+            };
+        }
+    });
+    for (const resposta of [
+        { data: [], error: null },
+        { data: null, error: { message: 'RLS recusou' } }
+    ]) {
+        const ctx = { supabaseClient: montar(resposta) };
+        vm.createContext(ctx);
+        vm.runInContext(trechoFuncao('atualizarPedidoArteConfirmado')
+            + '\nthis.atualizar = atualizarPedidoArteConfirmado;', ctx);
+        let falhou = false;
+        try { await ctx.atualizar(22192, { entrega_dados: 'APROVADO' }); }
+        catch (_) { falhou = true; }
+        igual(falhou, true, 'resposta vazia ou recusada não vira sucesso');
+    }
+}
+
+async function testarReconciliacaoComModelosDoBanco() {
+    const linha = {
+        id: 'arte-22192', status: 'Corrigir Dados', entrega_dados: 'APROVADO',
+        observacoes: { status_antes_correcao_dados: 'Dados Pendentes' }
+    };
+    let consultouModelos = 0;
+    const banco = {
+        from(tabela) {
+            if (tabela === 'pedidos_modelos') {
+                return {
+                    select() { return this; },
+                    eq() {
+                        consultouModelos++;
+                        return Promise.resolve({ data: [{ id: 1, status_arte: 'APROVADA_CLIENTE' }], error: null });
+                    }
+                };
+            }
+            const q = { payload: null };
+            return {
+                select() { return this; }, update(p) { q.payload = p; return this; }, eq() { return this; },
+                order() { return Promise.resolve({ data: [linha], error: null }); },
+                single() { Object.assign(linha, q.payload); return Promise.resolve({ data: { ...linha }, error: null }); }
+            };
+        }
+    };
+    const ctx = { supabaseClient: banco, state: { modelosGlobais: {}, todasArtes: [] } };
+    vm.createContext(ctx);
+    vm.runInContext(
+        trechoConst('ARTE_REPROVADOS') + '\n' + trechoConst('ARTE_APROVADOS') + '\n'
+        + trechoFuncao('calcularStatusConsolidadoPedidoArte') + '\n'
+        + trechoFuncao('sincronizarStatusConsolidadoPedidoArte') + '\n'
+        + 'this.sincronizar = sincronizarStatusConsolidadoPedidoArte;', ctx);
+    igual(await ctx.sincronizar(22192), 'APROVADO', 'reconcilia com modelos persistidos');
+    igual(consultouModelos, 1, 'consulta modelos quando a memória está vazia');
+    igual(linha.status, 'APROVADO', 'remove Corrigir Dados persistido');
+}
+
+async function testarReconciliacaoDaLista() {
+    const chamadas = [];
+    const ctx = {
+        supabaseClient: {},
+        state: {
+            ordens: [
+                { id: 'vibe_1', numero: 1 },
+                { id: 'vibe_2', numero: 2, status_interno: 'EM PRODUCAO' },
+                { id: 'vibe_3', numero: 3, status_interno: 'EM PRODUCAO' },
+                { id: 'vibe_4', numero: 4, status_interno: 'CANCELADO' }
+            ],
+            todasArtes: [
+                { id_int: 2, status: 'Em Alteração' },
+                { id_int: 3, status: 'APROVADO' }
+            ],
+            modelosGlobais: { 1: [{ id: 11 }], 2: [{ id: 22 }] }
+        },
+        temSessaoDoSupabase: async () => true,
+        pedidoCancelado: os => os.status_interno === 'CANCELADO',
+        pedidoSaiuDaArte: os => os.status_interno === 'EM PRODUCAO',
+        sincronizarStatusConsolidadoPedidoArte: async (numero, modelos) => chamadas.push([numero, modelos.length]),
+        console: { warn() {} }
+    };
+    vm.createContext(ctx);
+    vm.runInContext(trechoFuncao('reconciliarStatusPersistidosDaListaArte')
+        + '\nthis.reconciliar = reconciliarStatusPersistidosDaListaArte;', ctx);
+    const resultado = await ctx.reconciliar();
+    igual(resultado.verificados, 2, 'reconcilia ativos e correções que saíram da arte');
+    igual(JSON.stringify(chamadas), JSON.stringify([[1, 1], [2, 1]]),
+        'não varre concluídos normais nem cancelados');
+}
+
+Promise.all([
+    testarRetornoDaCorrecaoComModeloLegado(),
+    testarConfirmacaoDaGravacao(),
+    testarReconciliacaoComModelosDoBanco(),
+    testarReconciliacaoDaLista()
+]).then(() => {
+    console.log('status pedidos_artes: 22 casos OK');
 }).catch(erro => {
     console.error(erro);
     process.exit(1);

@@ -25598,7 +25598,45 @@ async function sincronizarStatusOrdensDinamico() {
     }
 
     await sincronizarPedidosProntosParaEnvio();
+    await reconciliarStatusPersistidosDaListaArte();
 }
+
+/**
+ * Repara estados consolidados deixados por uma gravação interrompida ou por
+ * uma aba antiga. Limita-se aos pedidos ainda na Arte e aos que saíram dela
+ * carregando um status de correção; não percorre todo o histórico concluído.
+ */
+async function reconciliarStatusPersistidosDaListaArte() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return { verificados: 0, falhas: 0 };
+    if (!await temSessaoDoSupabase()) return { verificados: 0, falhas: 0 };
+
+    const statusDeCorrecao = ['CORRIGIR DADOS', 'CORRIGIR ARTE', 'EM ALTERAÇÃO', 'EM ALTERACAO'];
+    const candidatos = (state.ordens || []).filter(os => {
+        if (!os || pedidoCancelado(os)) return false;
+        const numero = parseInt(os.numero || os.id_int, 10);
+        if (isNaN(numero)) return false;
+        const arte = (state.todasArtes || []).find(a => parseInt(a.id_int, 10) === numero);
+        const statusArte = String(arte && arte.status || '').trim().toUpperCase();
+        return !pedidoSaiuDaArte(os) || statusDeCorrecao.includes(statusArte);
+    });
+
+    const falhas = [];
+    for (const os of candidatos) {
+        const numero = parseInt(os.numero || os.id_int, 10);
+        try {
+            const modelos = (state.modelosGlobais && state.modelosGlobais[numero]) || [];
+            await sincronizarStatusConsolidadoPedidoArte(numero, modelos);
+        } catch (e) {
+            falhas.push({ pedido: numero, erro: e && (e.message || e) });
+        }
+    }
+    if (falhas.length) {
+        console.warn('[Arte] Falha ao reconciliar status consolidados:', falhas);
+        throw new Error('não foi possível reconciliar ' + falhas.length + ' status da Lista de Arte');
+    }
+    return { verificados: candidatos.length, falhas: 0 };
+}
+window.reconciliarStatusPersistidosDaListaArte = reconciliarStatusPersistidosDaListaArte;
 
 /**
  * Regra: pedido cujos modelos estão TODOS prontos no banco passa a "Enviar Arte".
@@ -29040,6 +29078,38 @@ function calcularStatusConsolidadoPedidoArte(modelos, entregaStatus, statusAtual
     return statusAtual || null;
 }
 
+/**
+ * Atualiza todas as linhas de `pedidos_artes` do pedido e só aceita sucesso
+ * quando o PostgREST devolve pelo menos uma linha com os valores solicitados.
+ * Um UPDATE com `data: []` não é persistência confirmada.
+ */
+async function atualizarPedidoArteConfirmado(numero, payload) {
+    const numInt = parseInt(numero, 10);
+    if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('pedido ou banco inválido para atualizar o status da arte');
+    }
+    const { data, error } = await supabaseClient
+        .from('pedidos_artes')
+        .update(payload)
+        .eq('id_int', numInt)
+        .select('id, status, entrega_dados, observacoes');
+    if (error) throw error;
+    if (!data || data.length === 0) throw new Error('o banco não confirmou nenhuma linha de pedidos_artes');
+    const divergente = data.some(linha => Object.entries(payload).some(([campo, valor]) => {
+        if (valor && typeof valor === 'object') {
+            const recebido = linha[campo];
+            if (!recebido || typeof recebido !== 'object') return true;
+            const chaves = Object.keys(valor);
+            return Object.keys(recebido).length !== chaves.length
+                || chaves.some(chave => JSON.stringify(recebido[chave]) !== JSON.stringify(valor[chave]));
+        }
+        return linha[campo] !== valor;
+    }));
+    if (divergente) throw new Error('o banco devolveu um status de arte diferente do solicitado');
+    return data;
+}
+window.atualizarPedidoArteConfirmado = atualizarPedidoArteConfirmado;
+
 async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
     const numInt = parseInt(numero, 10);
     if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
@@ -29067,7 +29137,20 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
     const statusAtual = String(artes[0].status || '').trim().toUpperCase() === 'CORRIGIR DADOS'
         ? (obsMaisRecente.status_antes_correcao_dados || artes[0].status)
         : artes[0].status;
-    const listaModelos = modelos || ((state.modelosGlobais && state.modelosGlobais[numInt]) || []);
+    let listaModelos = Array.isArray(modelos) && modelos.length
+        ? modelos
+        : ((state.modelosGlobais && state.modelosGlobais[numInt]) || []);
+    // A correção de Entrega/Faturamento pode ser concluída antes de os modelos
+    // entrarem na memória desta aba. Nesse caso a decisão vem do banco, não de
+    // uma lista vazia que deixaria `Corrigir Dados` parado indefinidamente.
+    if (!listaModelos.length) {
+        const { data: modelosPersistidos, error: erroModelos } = await supabaseClient
+            .from('pedidos_modelos')
+            .select('id, status_arte, status_impressao')
+            .eq('id_int', numInt);
+        if (erroModelos) throw erroModelos;
+        listaModelos = modelosPersistidos || [];
+    }
     const novoStatus = calcularStatusConsolidadoPedidoArte(listaModelos, entrega, statusAtual);
     if (!novoStatus) return null;
 
@@ -29083,11 +29166,30 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
             }
         }
         if (Object.keys(payload).length === 0) continue;
-        const { error: erroUpdate } = await supabaseClient
+        const { data: linhaConfirmada, error: erroUpdate } = await supabaseClient
             .from('pedidos_artes')
             .update(payload)
-            .eq('id', arte.id);
+            .eq('id', arte.id)
+            .eq('id_int', numInt)
+            .select('id, status, entrega_dados, observacoes')
+            .single();
         if (erroUpdate) throw erroUpdate;
+        if (!linhaConfirmada || String(linhaConfirmada.id) !== String(arte.id)) {
+            throw new Error('o banco não confirmou a linha consolidada de pedidos_artes');
+        }
+        for (const [campo, valor] of Object.entries(payload)) {
+            let igual;
+            if (valor && typeof valor === 'object') {
+                const recebido = linhaConfirmada[campo];
+                const chaves = Object.keys(valor);
+                igual = !!recebido && typeof recebido === 'object'
+                    && Object.keys(recebido).length === chaves.length
+                    && chaves.every(chave => JSON.stringify(recebido[chave]) === JSON.stringify(valor[chave]));
+            } else {
+                igual = linhaConfirmada[campo] === valor;
+            }
+            if (!igual) throw new Error('o banco não confirmou ' + campo + ' em pedidos_artes');
+        }
     }
     (state.todasArtes || []).filter(a => a.id_int === numInt).forEach(a => { a.status = novoStatus; });
     return novoStatus;
@@ -33077,10 +33179,7 @@ async function clienteAprovarEntregaDados(osId, osNum) {
         await garantirLinhaDePedidoArte(numInt);
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            await supabaseClient
-                .from('pedidos_artes')
-                .update({ entrega_dados: 'APROVADO' })
-                .eq('id_int', numInt);
+            await atualizarPedidoArteConfirmado(numInt, { entrega_dados: 'APROVADO' });
             await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
@@ -33153,13 +33252,10 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
                 } catch (cErr) {}
             }
 
-            await supabaseClient
-                .from('pedidos_artes')
-                .update({
-                    entrega_dados: 'CORRIGIR',
-                    observacoes: obsObj
-                })
-                .eq('id_int', numInt);
+            await atualizarPedidoArteConfirmado(numInt, {
+                entrega_dados: 'CORRIGIR',
+                observacoes: obsObj
+            });
             await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
@@ -33192,10 +33288,7 @@ async function marcarEntregaDadosCorrigido(osId, osNum) {
         await garantirLinhaDePedidoArte(numInt);
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            await supabaseClient
-                .from('pedidos_artes')
-                .update({ entrega_dados: 'APROVADO' })
-                .eq('id_int', numInt);
+            await atualizarPedidoArteConfirmado(numInt, { entrega_dados: 'APROVADO' });
             await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
@@ -34812,15 +34905,7 @@ async function gravarPedidoComoPendenteInformacao(osId, os) {
         const linhaExiste = await garantirLinhaDePedidoArte(numero);
         if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
 
-        const { data: linhasAtualizadas, error: erroArte } = await supabaseClient
-            .from('pedidos_artes')
-            .update({ status: novoStatus })
-            .eq('id_int', numero)
-            .select('id');
-        if (erroArte) throw erroArte;
-        if (!linhasAtualizadas || linhasAtualizadas.length === 0) {
-            throw new Error('O status consolidado da arte não foi atualizado.');
-        }
+        await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
 
         if (String(osId).startsWith('vibe_')) {
             const { error } = await supabaseClient
@@ -34934,6 +35019,13 @@ async function voltarParaAtendimento() {
 
         await substituirPendenteInformacao(os, novoStatus);
 
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const numero = parseInt(os && (os.numero || os.id_int));
+            const linhaExiste = await garantirLinhaDePedidoArte(numero);
+            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
+        }
+
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
 
@@ -35014,6 +35106,13 @@ async function voltarParaArte() {
         if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
         await substituirPendenteInformacao(os, novoStatus);
 
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const numero = parseInt(os && (os.numero || os.id_int));
+            const linhaExiste = await garantirLinhaDePedidoArte(numero);
+            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
+        }
+
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
 
@@ -35064,6 +35163,13 @@ window.reprovarArteAdmin = async function(osId) {
     try {
         const os = state.ordens.find(o => o.id === osId);
 
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const numero = parseInt(os && (os.numero || os.id_int));
+            const linhaExiste = await garantirLinhaDePedidoArte(numero);
+            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
+        }
+
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
 
@@ -35099,6 +35205,13 @@ window.voltarParaArteFromLista = async function(osId) {
     try {
         const os = state.ordens.find(o => o.id === osId);
         if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const numero = parseInt(os && (os.numero || os.id_int));
+            const linhaExiste = await garantirLinhaDePedidoArte(numero);
+            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
+        }
 
         gravarStatusOverride(osId, novoStatus);
 
@@ -35141,9 +35254,7 @@ window.alterarEntregaDadosStatus = async function(osIntNum, currentStatus) {
 
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            await supabaseClient.from('pedidos_artes')
-                .update({ entrega_dados: valToSave })
-                .eq('id_int', numInt);
+            await atualizarPedidoArteConfirmado(numInt, { entrega_dados: valToSave });
             await sincronizarStatusConsolidadoPedidoArte(numInt);
         }
 
@@ -36089,6 +36200,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             return;
         }
 
+        const gravacaoCriticaDeStatus = 'status_arte' in dbData || 'status_impressao' in dbData;
+        const colunasDeConfirmacao = gravacaoCriticaDeStatus
+            ? 'id, status_arte, status_impressao'
+            : 'id';
+
         // 1. Atualizar em pedidos_modelos (se não for item virtual não carregado)
         if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
             console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', itemLocal.id);
@@ -36108,6 +36224,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
         
         let updatedCount = 0;
+        let linhaConfirmada = null;
 
         // A) Tentar update por _pedidoModeloId ou ID do item
         if (modeloId && modeloId !== '') {
@@ -36116,10 +36233,14 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .from('pedidos_modelos')
                 .update(dbData)
                 .eq('id', queryModeloId)
-                .select('id');
+                .select(colunasDeConfirmacao);
 
             if (!error && updateResult && updateResult.length > 0) {
+                if (gravacaoCriticaDeStatus && updateResult.length !== 1) {
+                    throw new Error('a gravação de status atingiu mais de um modelo por ID');
+                }
                 updatedCount = updateResult.length;
+                linhaConfirmada = updateResult[0];
                 console.log('[SAVE] OK por ID -> pedidos_modelos id=', queryModeloId, dbData);
             } else if (error) {
                 console.error('[SAVE] Erro pedidos_modelos por ID:', error.message);
@@ -36133,9 +36254,13 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .from('pedidos_modelos')
                 .update(dbData)
                 .eq('id_produto_proposta_origem', propOrigemId)
-                .select('id');
+                .select(colunasDeConfirmacao);
             if (!err && res && res.length > 0) {
+                if (gravacaoCriticaDeStatus && res.length !== 1) {
+                    throw new Error('a gravação de status encontrou mais de um modelo de origem');
+                }
                 updatedCount = res.length;
+                linhaConfirmada = res[0];
                 itemLocal._pedidoModeloId = res[0].id;
                 console.log('[SAVE] OK por id_produto_proposta_origem=', propOrigemId, dbData);
             }
@@ -36152,16 +36277,20 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .update(dbData)
                 .eq('id_int', osNum)
                 .eq('ordem', itemOrdem)
-                .select('id');
+                .select(colunasDeConfirmacao);
             if (!err && res && res.length > 0) {
+                if (gravacaoCriticaDeStatus && res.length !== 1) {
+                    throw new Error('a gravação de status encontrou mais de um modelo na mesma ordem');
+                }
                 updatedCount = res.length;
+                linhaConfirmada = res[0];
                 itemLocal._pedidoModeloId = res[0].id;
                 console.log('[SAVE] OK por id_int + ordem=', osNum, itemOrdem, dbData);
             }
         }
 
         // D) Tentar update por id_int (qualquer linha da OS)
-        if (updatedCount === 0 && !isNaN(osNum)) {
+        if (updatedCount === 0 && !isNaN(osNum) && !gravacaoCriticaDeStatus) {
             const { data: res, error: err } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dbData)
@@ -36169,6 +36298,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .select('id');
             if (!err && res && res.length > 0) {
                 updatedCount = res.length;
+                linhaConfirmada = res[0];
                 itemLocal._pedidoModeloId = res[0].id;
                 console.log('[SAVE] OK por id_int=', osNum, dbData);
             }
@@ -36189,13 +36319,34 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             const { data: insData, error: insErr } = await vibeClient
                 .from('pedidos_modelos')
                 .insert([insertPayload])
-                .select('id');
+                .select(colunasDeConfirmacao);
             if (!insErr && insData && insData.length > 0) {
+                if (gravacaoCriticaDeStatus && insData.length !== 1) {
+                    throw new Error('a criação do status confirmou mais de um modelo');
+                }
                 updatedCount = insData.length;
+                linhaConfirmada = insData[0];
                 if (itemLocal) itemLocal._pedidoModeloId = insData[0].id;
                 console.log('[SAVE] INSERT OK em pedidos_modelos id=', insData[0].id, insertPayload);
             } else if (insErr) {
                 console.error('[SAVE] Erro INSERT em pedidos_modelos:', insErr.message);
+            }
+        }
+
+        if (updatedCount === 0) {
+            throw new Error('o banco não confirmou nenhum modelo atualizado');
+        }
+        if (gravacaoCriticaDeStatus) {
+            if (!linhaConfirmada) throw new Error('o banco não devolveu o modelo atualizado');
+            if ('status_arte' in dbData
+                && String(linhaConfirmada.status_arte || '').trim().toUpperCase()
+                    !== String(dbData.status_arte || '').trim().toUpperCase()) {
+                throw new Error('o banco não confirmou status_arte do modelo');
+            }
+            if ('status_impressao' in dbData
+                && normalizarStatusImpressao(linhaConfirmada.status_impressao)
+                    !== normalizarStatusImpressao(dbData.status_impressao)) {
+                throw new Error('o banco não confirmou status_impressao do modelo');
             }
         }
 
@@ -38725,6 +38876,65 @@ window.onItemArteRemove = onItemArteRemove;
 window.saveAmostraToDB = saveAmostraToDB;
 window.editCustomNumeracao = editCustomNumeracao;
 
+async function buscarModeloPersistidoDaDecisao(itemId, osId) {
+    const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    const numero = parseInt(String(osId).replace('vibe_', ''), 10);
+    const cliente = (typeof vibeClient !== 'undefined' && vibeClient)
+        || (typeof supabaseClient !== 'undefined' && supabaseClient);
+    if (!item || !cliente || isNaN(numero)) return null;
+
+    const modeloId = item._pedidoModeloId || item.id;
+    const colunas = 'id, id_int, id_produto_proposta_origem, status_arte, status_impressao';
+    let consulta = cliente.from('pedidos_modelos').select(colunas).eq('id_int', numero);
+    if (modeloId && !String(modeloId).startsWith('vibe_')) {
+        const id = /^\d+$/.test(String(modeloId)) ? parseInt(modeloId, 10) : modeloId;
+        const { data, error } = await consulta.eq('id', id).maybeSingle();
+        if (error) throw error;
+        if (data) return data;
+    }
+
+    const origem = item.id_produto_proposta_origem || itemId;
+    if (!origem || !/^\d+$/.test(String(origem))) return null;
+    const { data, error } = await cliente
+        .from('pedidos_modelos')
+        .select(colunas)
+        .eq('id_int', numero)
+        .eq('id_produto_proposta_origem', parseInt(origem, 10))
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+async function salvarSaidaCorrecaoArteConfirmada(modelo, observacao) {
+    const cliente = (typeof vibeClient !== 'undefined' && vibeClient)
+        || (typeof supabaseClient !== 'undefined' && supabaseClient);
+    if (!cliente || !modelo || !modelo.id || !modelo.id_int) {
+        throw new Error('não foi possível identificar exatamente o modelo em Corrigir Arte');
+    }
+    const payload = {
+        status_impressao: 'Aguardando',
+        status_arte: 'APROVADA',
+        observacao_arte: observacao || null
+    };
+    const { data, error } = await cliente
+        .from('pedidos_modelos')
+        .update(payload)
+        .eq('id', modelo.id)
+        .eq('id_int', modelo.id_int)
+        .select('id, id_int, status_impressao, status_arte')
+        .single();
+    if (error) throw error;
+    if (!data || String(data.id) !== String(modelo.id)
+        || normalizarStatusImpressao(data.status_impressao) !== 'Aguardando'
+        || String(data.status_arte || '').trim().toUpperCase() !== 'APROVADA') {
+        throw new Error('o banco não confirmou a saída de Corrigir Arte');
+    }
+    return data;
+}
+
+window.buscarModeloPersistidoDaDecisao = buscarModeloPersistidoDaDecisao;
+window.salvarSaidaCorrecaoArteConfirmada = salvarSaidaCorrecaoArteConfirmada;
+
 window.toggleImpNumEditButtons = function() {
     const num1 = document.getElementById('imp-numeracao');
     const btn1 = document.getElementById('btn-edit-imp-num-1');
@@ -39004,9 +39214,16 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         // Só o PRONTO do painel: o APROVAR do link do cliente também chega
         // aqui, e o cliente não é quem destrava a impressora.
         const itemParaLiberar = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
-        const liberaImpressao = status === 'PRONTO'
-            && state.amostrasContainerId !== 'cliente-amostras-itens-container'
-            && modeloEmCorrecaoDeArte(itemParaLiberar);
+        const decisaoInternaPronta = status === 'PRONTO'
+            && state.amostrasContainerId !== 'cliente-amostras-itens-container';
+        // O banco é a última palavra. Duas ocorrências reais deixaram
+        // `Corrigir Arte` preso porque a memória da aba não trazia essa marca
+        // no instante do clique em PRONTO.
+        const modeloPersistido = decisaoInternaPronta
+            ? await buscarModeloPersistidoDaDecisao(itemId, osId)
+            : null;
+        const liberaImpressao = decisaoInternaPronta
+            && (modeloEmCorrecaoDeArte(itemParaLiberar) || modeloEmCorrecaoDeArte(modeloPersistido));
         if (liberaImpressao) {
             gravar.status_impressao = 'Aguardando';
             // A ARTE VOLTA **APROVADA**, e não "PRONTO/aguardando cliente"
@@ -39020,7 +39237,11 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             gravar.amostra_status = 'APROVADA';
         }
 
-        await saveAmostraToDB(itemId, osId, gravar);
+        if (liberaImpressao) {
+            await salvarSaidaCorrecaoArteConfirmada(modeloPersistido, obs);
+        } else {
+            await saveAmostraToDB(itemId, osId, gravar);
+        }
 
         if (liberaImpressao) {
             // Os DOIS nomes do mesmo dado, e nos dois lugares em que ele mora:
@@ -41103,9 +41324,11 @@ async function marcarEstagioDaArteNoErp(numero, palavra) {
             return !atual || ESTAGIOS_QUE_A_ARTE_PRONTA_SUBSTITUI.includes(atual);
         });
         if (!podeSubstituirTodas) return;
-        await supabaseClient.from('pedidos_artes').update({ status: palavra }).eq('id_int', n);
+        await atualizarPedidoArteConfirmado(n, { status: palavra });
+        return true;
     } catch (e) {
         console.warn('[Arte] Não consegui gravar o estágio no ERP:', e.message || e);
+        return false;
     }
 }
 
@@ -41173,7 +41396,12 @@ async function prepararLinkDaArtePronta(osId, numero) {
         state.linksClienteData[osId].status_arte = 'Enviar Arte';
     }
 
-    await marcarEstagioDaArteNoErp(numero, 'Enviar Arte');
+    const statusConsolidadoSalvo = await marcarEstagioDaArteNoErp(numero, 'Enviar Arte');
+    if (!statusConsolidadoSalvo) {
+        return { ok: false, link: null, falhas: [{
+            nome: 'Status da arte', motivo: 'pedidos_artes não confirmou Enviar Arte'
+        }] };
+    }
 
     return { ok: true, link: link, falhas: [] };
 }

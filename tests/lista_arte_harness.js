@@ -512,8 +512,8 @@ function classificarComArte(statusDaArte, extra) {
     const fim = SCRIPT.indexOf('\n}', inicio);
     const funcao = SCRIPT.slice(inicio, fim + 2);
     ok(inicio > 0, 'existe a gravacao consolidada de Pendente Informacao');
-    ok(/\.from\('pedidos_artes'\)[\s\S]*?\.update\(\{ status: novoStatus \}\)[\s\S]*?\.eq\('id_int', numero\)/.test(funcao),
-        'Pendente Informacao e gravado em pedidos_artes.status para o pedido');
+    ok(/await atualizarPedidoArteConfirmado\(numero, \{ status: novoStatus \}\)/.test(funcao),
+        'Pendente Informacao usa a gravacao confirmada de pedidos_artes.status');
     ok(/async function marcarPendenteInformacao\([\s\S]*?classificarPedidoNaArte\(os\)\.fila !== 'fila'/.test(SCRIPT),
         'o botao so aceita pedidos do card Em Arte');
     ok(/if \(!todasProntas\) \{[\s\S]{0,180}?await gravarPedidoComoPendenteInformacao\(osId, os\);/.test(SCRIPT),

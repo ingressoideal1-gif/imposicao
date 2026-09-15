@@ -220,6 +220,58 @@ async function main() {
     ok(semModeloReprovado.chamadas.toasts.some(t => t.tipo === 'error'),
         'pedido sem alvo informa como marcar o modelo');
 
+    // A memória pode chegar sem `Corrigir Arte`; a saída deve consultar o
+    // modelo persistido antes de decidir se limpa a trava da impressão.
+    const modeloNoBanco = {
+        id: 1002001, id_int: 22001, id_produto_proposta_origem: 77,
+        status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE'
+    };
+    const clienteLeitura = {
+        from() {
+            return {
+                select() { return this; }, eq() { return this; },
+                maybeSingle() { return Promise.resolve({ data: modeloNoBanco, error: null }); }
+            };
+        }
+    };
+    const stateLeitura = { osItens: { vibe_22001: [{ id: 77, _pedidoModeloId: 1002001,
+        status_impressao: 'Aguardando' }] } };
+    const buscar = new Function('state', 'vibeClient', 'supabaseClient',
+        extrairFuncao('buscarModeloPersistidoDaDecisao') + '\nreturn buscarModeloPersistidoDaDecisao;')(
+        stateLeitura, clienteLeitura, clienteLeitura);
+    const persistido = await buscar(77, 'vibe_22001');
+    ok(persistido.status_impressao === 'Corrigir Arte',
+        'consulta o Corrigir Arte persistido mesmo com memoria desatualizada');
+
+    function montarSaida(resposta) {
+        const chamada = {};
+        const cliente = { from(tabela) { chamada.tabela = tabela; return {
+            update(payload) { chamada.payload = payload; return this; },
+            eq(campo, valor) { (chamada.filtros ||= []).push([campo, valor]); return this; },
+            select(colunas) { chamada.select = colunas; return this; },
+            single() { return Promise.resolve(resposta); }
+        }; } };
+        const salvar = new Function('vibeClient', 'supabaseClient', 'normalizarStatusImpressao',
+            extrairFuncao('salvarSaidaCorrecaoArteConfirmada') + '\nreturn salvarSaidaCorrecaoArteConfirmada;')(
+            cliente, cliente, valor => valor);
+        return { salvar, chamada };
+    }
+    const saidaOk = montarSaida({ data: { id: 1002001, id_int: 22001,
+        status_impressao: 'Aguardando', status_arte: 'APROVADA' }, error: null });
+    await saidaOk.salvar(modeloNoBanco, 'corrigida');
+    ok(JSON.stringify(saidaOk.chamada.filtros) === JSON.stringify([['id', 1002001], ['id_int', 22001]]),
+        'saida de Corrigir Arte protege modelo e pedido');
+    ok(saidaOk.chamada.payload.status_impressao === 'Aguardando'
+        && saidaOk.chamada.payload.status_arte === 'APROVADA',
+        'saida grava os dois status na mesma operacao');
+
+    for (const resposta of [{ data: null, error: null }, { data: null, error: { message: 'RLS' } }]) {
+        const saida = montarSaida(resposta);
+        let falhou = false;
+        try { await saida.salvar(modeloNoBanco, 'corrigida'); } catch (_) { falhou = true; }
+        ok(falhou, 'saida sem confirmacao nao vira sucesso');
+    }
+
     for (const nome of ['voltarParaArte', 'voltarParaArteFromLista']) {
         const fonte = nome === 'voltarParaArte'
             ? extrairFuncao(nome)
