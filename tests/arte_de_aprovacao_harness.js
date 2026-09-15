@@ -286,7 +286,7 @@ function montarLote(mundo) {
 })();
 
 (function oGerarLinkEsperaOPreparoAntesDeCopiar() {
-    const i = SCRIPT.indexOf('async function gerarLinkCliente');
+    const i = SCRIPT.indexOf('async function gerarLinkCliente(');
     ok(i > 0, 'o gerarLinkCliente continua existindo');
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
 
@@ -307,7 +307,7 @@ function montarLote(mundo) {
 })();
 
 (function seAArteNaoAtualizarOLinkNaoSai() {
-    const i = SCRIPT.indexOf('async function gerarLinkCliente');
+    const i = SCRIPT.indexOf('async function gerarLinkCliente(');
     const trecho = SCRIPT.slice(i, SCRIPT.indexOf('\n}', i));
     const bloco = trecho.slice(trecho.indexOf('!preparo.ok'), trecho.indexOf('!preparo.ok') + 700);
     ok(/return;/.test(bloco), 'falha na arte interrompe o Gerar Link', bloco.slice(0, 160));

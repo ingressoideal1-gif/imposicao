@@ -25754,7 +25754,11 @@ async function carregarOrdensDados() {
                         renderOrdens();
                     }).catch(e => console.warn('Erro ao sincronizar status:', e));
 
-                    await Promise.all([pagamentos, status]);
+                    const links = garantirLinksDosPedidosNaListaArte().then(() => {
+                        renderOrdens();
+                    }).catch(e => console.warn('Erro ao antecipar links da Lista de Arte:', e));
+
+                    await Promise.all([pagamentos, status, links]);
                     return true;
                 }
             }
@@ -25900,8 +25904,9 @@ async function carregarOrdensDados() {
         await sincronizarStatusOrdensDinamico();
         const modelos = carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
         const pagamentos = carregarPagamentosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro pagamentos:', e));
+        const links = garantirLinksDosPedidosNaListaArte().then(() => renderOrdens()).catch(e => console.warn('Erro ao antecipar links da Lista de Arte:', e));
         renderOrdens();
-        await Promise.all([modelos, pagamentos]);
+        await Promise.all([modelos, pagamentos, links]);
         return true;
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -25959,8 +25964,11 @@ async function carregarLinksExistentes() {
             if (error.code === '42P01') return; // tabela ainda não existe
             throw error;
         }
-        if (!state.linksCliente) state.linksCliente = {};
-        if (!state.linksClienteData) state.linksClienteData = {};
+        // A leitura bem-sucedida é a fotografia completa dos links ativos. Não
+        // preserve URL antiga em memória: ela impediria a recriação automática
+        // de um pedido cujo registro deixou de estar ativo no banco.
+        state.linksCliente = {};
+        state.linksClienteData = {};
         const base = CLIENTE_BASE_URL;
         (data || []).forEach(row => {
             state.linksCliente[row.os_id] = `${base}/cliente/${row.numero_pedido}-${row.token}`;
@@ -29141,11 +29149,9 @@ function classificarPedidoNaArte(os) {
     // não a existência do link.
     //
     // Até 31/08/2026 a pergunta aqui era "tem link?", e ela funcionava porque o
-    // link só nascia quando o atendente decidia mandar. Nesse dia o link passou
-    // a nascer junto com a arte pronta (ver `prepararLinkDaArtePronta`), e a
-    // pergunta antiga marcaria como "Aguard. Aprovação" todo pedido que o
-    // designer terminasse — o mesmo defeito da palavra `AGUARDANDO`, que
-    // corrigimos de manhã, entrando por outra porta.
+    // link só nascia quando o atendente decidia mandar. A URL agora nasce na
+    // primeira carga da Lista de Arte, antes de haver arte pronta. Por isso a
+    // existência do link não pode mover o pedido para "Aguard. Aprovação".
     //
     // `cliente_abriu_em` é carimbado pelo BANCO, no primeiro gesto do cliente na
     // tela do link, e zerado quando a arte é refeita. O contador `acessos` não
@@ -30697,30 +30703,22 @@ function renderOrdens() {
                                 const isReprovada = stUp === 'REPROVADA' || stUp === 'REPROVADO' || stUp === 'REPROVADA_CLIENTE';
                                 const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA' || stUp === 'DADOS PENDENTES';
                                 const isArtePronta = st === 'Arte Pronta' || st === 'Enviar Arte' || st === 'Enviar ARTE';
-                                const isAguardando = st === 'Em Aprovação' || st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
                                 const isAlterado = stUp === 'EM ALTERAÇÃO' || stUp === 'EM ALTERACAO' || st === 'Em Alteração';
 
                                 // 1) Botão de link
-                                if (isArtePronta) {
-                                    // Arte pronta para envio: Gerar (1ª vez) ou Reenviar (se já tem link)
-                                    // "Copiar", e não "Enviar": desde 31/08/2026 o link já nasce
-                    // com a arte pronta, então o que resta ao atendente é levá-lo
-                    // ao cliente. "Gerar" sobrevive para o pedido antigo, que
-                    // ficou sem link porque foi marcado pronto antes da mudança.
-                    const labelLink = linkSalvo ? '🔗 Copiar Link' : '🔗 Gerar Link';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
-                                } else if (isAlterado) {
+                                if (isAlterado && linkSalvo) {
                                     // Arte alterada/corrigida: sempre mostrar opção de reenviar com nova imagem
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', true, this)" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
+                                } else if (isArtePronta && linkSalvo) {
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">🔗 Copiar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="window.open('${escapeJsAttr(linkSalvo)}','${ABA_DO_CLIENTE}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
                                         <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${escapeJsAttr(os.id)}', '${escapeJsAttr(os.numero)}', '${escapeJsAttr(linkSalvo)}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
-                                } else if (isAguardando || isEntregaAlterada) {
-                                    const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;cursor:pointer;">🔗 Gerar Link</button>`);
+                                } else {
+                                    btns.push(`<button class="btn btn-sm" disabled title="O link está sendo criado automaticamente" style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.10);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);border-radius:6px;opacity:0.75;cursor:wait;">⏳ Gerando Link</button>`);
                                 }
 
 
@@ -34903,7 +34901,8 @@ window.marcarPendenteInformacao = marcarPendenteInformacao;
  * - Se TODOS os modelos estiverem PRONTO → 'Enviar Arte' (mas normalmente isso
  *   já foi feito automaticamente por decisionAmostraItem)
  * - Se parcial ou nenhum → 'Pendente Informação'
- * Não gera link automaticamente — link é gerado manualmente pelo botão na lista.
+ * O link já deve existir desde a primeira carga da Lista de Arte. Ao devolver,
+ * esta ação prepara as imagens no mesmo registro e preserva o token.
  */
 async function voltarParaAtendimento() {
     const osId = state.amostrasOSAtivo;
@@ -34963,8 +34962,8 @@ async function voltarParaAtendimento() {
         }
 
         if (todasProntas && os) {
-            // O link nasce AGORA, junto com a arte pronta — o atendente não
-            // precisa mais lembrar de gerá-lo. Pedido do usuário em 31/08/2026.
+            // A URL já nasceu na primeira carga da Lista de Arte. Agora são
+            // preparadas as imagens no mesmo registro, preservando o token.
             //
             // O status continua "Enviar Arte": quem o move para
             // "Aguard. Aprovação" é o cliente, quando olha a arte.
@@ -40887,8 +40886,11 @@ async function getOrCreateLinkCliente(osId, numero) {
         throw new Error('Supabase não configurado.');
     }
     if (!osId || !/^\d+$/.test(String(numero))) throw new Error('Número do pedido inválido.');
-    let registro = await buscarLinkClienteAtivo(osId);
     const os = (state.ordens || []).find(o => o.id === osId);
+    // A linha que recebe decisões do cliente é preparada antes de expor a URL.
+    // A falha continua sem bloquear o token, mas a tentativa ocorre primeiro.
+    await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
+    let registro = await buscarLinkClienteAtivo(osId);
     if (!registro) {
         const { data, error } = await supabaseClient
             .from('pedidos_links_cliente')
@@ -40913,9 +40915,67 @@ async function getOrCreateLinkCliente(osId, numero) {
         }
     }
     const link = memorizarLinkCliente(osId, numero, registro);
-    await garantirLinhaDePedidoArte(os ? (os.numero || numero) : numero);
     return link;
 }
+
+function linkPrecisaPrepararArte(os, registro) {
+    if (!registro) return true;
+    if (registro.arte_pronta_em) return false;
+    const status = String(os && (os.status_calculado || os.status) || registro.status_arte || '').trim().toUpperCase();
+    const etapasQueJaConfirmamEnvio = [
+        'EM APROVAÇÃO', 'EM APROVACAO', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO',
+        'AGUARDANDO_APROVACAO', 'APROVADO', 'APROVADA', 'APROVADA_CLIENTE',
+        'DADOS PENDENTES', 'CORRIGIR DADOS', 'APR PARCIAL'
+    ];
+    return !etapasQueJaConfirmamEnvio.includes(status);
+}
+
+// Todo pedido ativo ganha o token na primeira carga possível da Lista de Arte.
+// A criação antecipada não prepara imagens nem muda status; quando a arte fica
+// pronta, `prepararLinkDaArtePronta` reutiliza este mesmo registro e token.
+let _geracaoAntecipadaDeLinks = null;
+function garantirLinksDosPedidosNaListaArte() {
+    if (_geracaoAntecipadaDeLinks) return _geracaoAntecipadaDeLinks;
+
+    _geracaoAntecipadaDeLinks = (async () => {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) return { criados: 0, falhas: 0 };
+        if (!await temSessaoDoSupabase()) return { criados: 0, falhas: 0 };
+
+        const pedidosSemLink = (state.ordens || []).filter(os => {
+            const numero = os && (os.numero || os.id_int);
+            return os && os.id && /^\d+$/.test(String(numero || ''))
+                && !pedidoCancelado(os) && !pedidoSaiuDaArte(os)
+                && !(state.linksCliente && state.linksCliente[os.id]);
+        });
+        if (pedidosSemLink.length === 0) return { criados: 0, falhas: 0 };
+
+        let proximo = 0;
+        let criados = 0;
+        const falhas = [];
+        const trabalhar = async () => {
+            while (proximo < pedidosSemLink.length) {
+                const os = pedidosSemLink[proximo++];
+                try {
+                    await getOrCreateLinkCliente(os.id, os.numero || os.id_int);
+                    criados++;
+                } catch (e) {
+                    falhas.push({ pedido: os.numero || os.id_int, erro: e && (e.message || e) });
+                }
+            }
+        };
+        const quantidadeDeTrabalhadores = Math.min(4, pedidosSemLink.length);
+        await Promise.all(Array.from({ length: quantidadeDeTrabalhadores }, () => trabalhar()));
+
+        if (falhas.length) console.warn('[Links] Não foi possível antecipar todos os links:', falhas);
+        console.log(`[Links] Geração antecipada concluída: ${criados} link(s), ${falhas.length} falha(s).`);
+        return { criados, falhas: falhas.length };
+    })().finally(() => {
+        _geracaoAntecipadaDeLinks = null;
+    });
+
+    return _geracaoAntecipadaDeLinks;
+}
+window.garantirLinksDosPedidosNaListaArte = garantirLinksDosPedidosNaListaArte;
 
 async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     const novoStatus = 'Aguard. Aprovação';
@@ -40977,7 +41037,7 @@ async function gerarLinkClienteBanner() {
             let linkUrl;
             try {
                 const existente = await buscarLinkClienteAtivo(activeOSId);
-                if (existente) {
+                if (existente && !linkPrecisaPrepararArte(os, existente)) {
                     linkUrl = memorizarLinkCliente(activeOSId, osNum, existente);
                 } else {
                     const preparo = await prepararLinkDaArtePronta(activeOSId, osNum);
@@ -41057,17 +41117,17 @@ async function marcarEstagioDaArteNoErp(numero, palavra) {
  * devolve o pedido ao atendimento (`voltarParaAtendimento`) e quando se reenvia
  * depois de uma alteração (`gerarLinkCliente`).
  *
- * ## Por que o link nasce aqui, e não na hora de enviar (31/08/2026)
+ * ## Por que a arte é preparada aqui, antes do envio
  *
- * Pedido do usuário: *"quando o designer marcar a arte pronta e voltar o pedido
- * para o atendente, o status deve permanecer como Enviar arte, mas o link já
- * deverá ser gerado neste momento"*.
+ * O token e a URL podem existir desde a primeira carga da Lista de Arte. Esta
+ * função reutiliza esse registro e só então associa a versão pronta ao link.
  *
  * O ganho que não estava no pedido: até aqui, "Enviar Arte" de um pedido `vibe_`
  * sem link era gravado em `pedidos_links_cliente` — que não tinha linha — e o
  * UPDATE não acertava nada. O que sobrava era o `gravarStatusOverride`, que é
  * **localStorage**. O designer marcava pronto na máquina dele e o atendente, em
- * outra, podia não ver. Criando a linha aqui, o estágio passa a morar no banco.
+ * outra, podia não ver. A linha antecipada mantém o estágio no banco desde a
+ * primeira oportunidade.
  *
  * ## O zeramento é a parte que não pode faltar
  *
@@ -41171,7 +41231,10 @@ async function gerarLinkCliente(osId, numero, reenviar = false, botao = null) {
         if (!reenviar) {
             toast('Consultando o link do cliente...', 'info');
             const existente = await buscarLinkClienteAtivo(osId);
-            if (existente) finalUrl = memorizarLinkCliente(osId, numero, existente);
+            const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+            if (existente && !linkPrecisaPrepararArte(os, existente)) {
+                finalUrl = memorizarLinkCliente(osId, numero, existente);
+            }
         }
         // Copiar um link existente é somente leitura: não regenera imagens,
         // não apaga a abertura do cliente e não regride o status da aprovação.

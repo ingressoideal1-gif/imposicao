@@ -36,7 +36,8 @@ function extrair(nome, async = false) {
                 }})})})
             };
             async function buscarLinkClienteAtivo(id) {
-                return opcoes.link ? {os_id:id,numero_pedido:11,token:'abc123',ativo:true} : null;
+                return opcoes.link ? {os_id:id,numero_pedido:11,token:'abc123',ativo:true,
+                    status_arte:'Aguard. Aprovação',arte_pronta_em:'2026-09-01'} : null;
             }
             async function prepararLinkDaArtePronta() {
                 window.preparos++;
@@ -51,6 +52,7 @@ function extrair(nome, async = false) {
             };
             ${transporte}
             ${extrair('memorizarLinkCliente')}
+            ${extrair('linkPrecisaPrepararArte')}
             ${extrair('buscarDadosEmailCliente',true)}
             ${extrair('montarMensagemEmailCliente')}
             ${extrair('mostrarSucessoEnvioEmail')}

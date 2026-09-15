@@ -26,7 +26,7 @@ const servidor = http.createServer((_req, res) => {
         pagina.on('request', req => req.url().startsWith(origem + '/') ? req.continue() : req.abort());
         await pagina.goto(origem, { waitUntil: 'domcontentloaded' });
         await pagina.addScriptTag({ content: `
-            const state = { ordens: [] };
+            const state = { ordens: [{id:'vibe_987654',numero:'987654',status:'Aguard. Aprovação'}] };
             const supabaseClient = {};
             const CLIENTE_BASE_URL = window.location.origin;
             const linksClienteEmAndamento = new Set();
@@ -35,10 +35,12 @@ const servidor = http.createServer((_req, res) => {
             function _mostrarIconeEmailNaLinha() { window.popups++; }
             async function buscarLinkClienteAtivo() {
                 await new Promise(resolve => setTimeout(resolve, 30));
-                return { os_id: 'vibe_987654', numero_pedido: '987654', token: 'abc123', ativo: true };
+                return { os_id: 'vibe_987654', numero_pedido: '987654', token: 'abc123', ativo: true,
+                    status_arte: 'Aguard. Aprovação', arte_pronta_em: '2026-09-01' };
             }
             async function prepararLinkDaArtePronta() { throw new Error('Cópia não deve preparar arte'); }
             ${extrair('memorizarLinkCliente')}
+            ${extrair('linkPrecisaPrepararArte')}
             ${extrair('copiarTextoDoLinkCliente')}
             ${extrair('gerarLinkCliente')}
         ` });

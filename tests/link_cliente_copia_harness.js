@@ -71,6 +71,7 @@ function montar(opcoes = {}) {
         linksClienteEmAndamento: new Set()
     });
     for (const nome of ['buscarLinkClienteAtivo', 'memorizarLinkCliente', 'getOrCreateLinkCliente',
+        'linkPrecisaPrepararArte',
         'prepararLinkDaArtePronta', 'copiarTextoDoLinkCliente', 'gerarLinkCliente', 'copiarLinkClienteModal']) {
         vm.runInContext(extrair(nome), ctx);
     }
@@ -242,6 +243,54 @@ teste('preparação bem sucedida preserva token e confirma carimbo', async () =>
     assert.equal(log.snapshots, 1);
     assert.equal(state.linksClienteData[OS].cliente_abriu_em, null);
     assert.equal(log.erp, 1);
+});
+
+teste('link antecipado mantém o token e prepara a arte antes da primeira cópia', async () => {
+    const linkAntecipado = { ...registro(), status_arte: 'Em Arte', arte_pronta_em: null,
+        cliente_abriu_em: null };
+    const { ctx, log, state } = montar({ respostas: [{ data: linkAntecipado }] });
+    state.ordens[0].status = 'Em Arte';
+    state.linksClienteData[OS] = linkAntecipado;
+    await ctx.gerarLinkCliente(OS, NUMERO);
+    assert.equal(log.preparo, 1);
+    assert.deepEqual(log.copias, [URL_LINK]);
+});
+
+teste('Lista de Arte antecipa links uma vez e preserva os existentes', async () => {
+    const { ctx, state } = montar();
+    state.ordens = [
+        { id: 'vibe_novo', numero: '100', status: 'Em Arte' },
+        { id: OS, numero: NUMERO, status: 'Em Arte' },
+        { id: 'vibe_concluido', numero: '200', status_interno: 'EM PRODUCAO' },
+        { id: 'vibe_cancelado', numero: '300', status_interno: 'CANCELADO' }
+    ];
+    const gerados = [];
+    let liberar;
+    const espera = new Promise(resolve => { liberar = resolve; });
+    ctx.temSessaoDoSupabase = async () => true;
+    ctx.pedidoCancelado = os => os.status_interno === 'CANCELADO';
+    ctx.pedidoSaiuDaArte = os => os.status_interno === 'EM PRODUCAO';
+    ctx.getOrCreateLinkCliente = async (osId, numero) => {
+        gerados.push([osId, numero]);
+        await espera;
+        return 'https://painel.example/cliente/' + numero + '-novo123';
+    };
+    vm.runInContext('let _geracaoAntecipadaDeLinks = null;\n' + extrair('garantirLinksDosPedidosNaListaArte'), ctx);
+
+    const primeira = ctx.garantirLinksDosPedidosNaListaArte();
+    const segunda = ctx.garantirLinksDosPedidosNaListaArte();
+    assert.equal(primeira, segunda, 'cliques/cargas concorrentes compartilham a mesma geração');
+    liberar();
+    const resultado = await primeira;
+    assert.equal(resultado.criados, 1);
+    assert.equal(resultado.falhas, 0);
+    assert.deepEqual(gerados, [['vibe_novo', '100']]);
+});
+
+teste('carregamento da Lista de Arte aguarda a geração antecipada', async () => {
+    assert.ok((fonte.match(/garantirLinksDosPedidosNaListaArte\(\)\.then/g) || []).length >= 2);
+    assert.ok(/Promise\.all\(\[pagamentos, status, links\]\)/.test(fonte));
+    assert.ok(/Promise\.all\(\[modelos, pagamentos, links\]\)/.test(fonte));
 });
 
 (async () => {

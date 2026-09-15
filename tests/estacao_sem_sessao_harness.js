@@ -95,9 +95,9 @@ function montar(nome, banco, state, overrides) {
     const window = { location: { origin: 'https://ideal-imposition.vercel.app' } };
     const gravarStatusOverride = (osId, status) => overrides.push({ osId, status });
     return new Function(
-        'supabaseClient', 'console', 'state', 'window', 'gravarStatusOverride',
+        'supabaseClient', 'console', 'state', 'window', 'gravarStatusOverride', 'marcarEstagioDaArteNoErp',
         FONTE_COMPARTILHADA + '\n' + recortarAsync(nome) + '\nreturn ' + nome + ';'
-    )(banco, { log() {}, warn() {}, error() {} }, state, window, gravarStatusOverride);
+    )(banco, { log() {}, warn() {}, error() {} }, state, window, gravarStatusOverride, async () => null);
 }
 
 const DADOS = {

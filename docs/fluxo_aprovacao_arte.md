@@ -668,7 +668,8 @@ descobrem depois de o material estar impresso.
 > **O alarme não acende sem link do cliente.** Sem linha em `pedidos_artes`
 > nunca houve link, é pedido que a gráfica tocou por dentro, e cobrar dele uma
 > conferência que ninguém pediu seria alarme falso na tela inteira. Quem cria a
-> linha é o painel, ao gerar o link (`garantirLinhaDePedidoArte`).
+> linha é o painel, na primeira carga do pedido na Lista de Arte
+> (`garantirLinhaDePedidoArte`).
 
 > [!IMPORTANT]
 > **Ele mora na Lista de Arte, e em lugar nenhum além dela.** Um marcador igual
@@ -802,8 +803,8 @@ falhou.
 > lança.
 >
 > Hoje quem cria a linha é `garantirLinhaDePedidoArte`, chamada por
-> `getOrCreateLinkCliente` — no painel, com usuário logado, no momento em que o
-> pedido vai para o cliente. Quem grava do lado do cliente é
+> `getOrCreateLinkCliente` — no painel, com usuário logado, na primeira carga em
+> que o pedido aparece no fluxo ativo da Lista de Arte. Quem grava do lado do cliente é
 > `gravarCorrecaoDoCliente`, que pede as linhas afetadas de volta e **devolve o
 > resultado**; se não gravou, o cliente vê um aviso com o número do pedido em vez
 > de "Pedido Aprovado com Sucesso".

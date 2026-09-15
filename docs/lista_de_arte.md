@@ -77,7 +77,7 @@ Antes dessa revisão a lista tinha só produção, impressão e finalizada — e
 isso pedido já em trânsito ou no acabamento continuava ocupando a tela do
 designer.
 
-### O link nasce com a arte pronta, e quem move o pedido é o cliente (31/08/2026)
+### O link nasce na primeira carga da Lista de Arte, e quem move o pedido é o cliente
 
 Pedido do usuário: *"quando o designer marcar a arte pronta e voltar o pedido para o
 atendente, o status deve permanecer como Enviar arte, mas o link já deverá ser gerado
@@ -88,7 +88,7 @@ O que mudou:
 
 | Antes | Agora |
 |---|---|
-| O atendente clicava **Gerar Link** | O link nasce no `voltarParaAtendimento`, junto com a arte pronta |
+| O atendente clicava **Gerar Link** | O token e a URL nascem automaticamente assim que o pedido aparece na Lista de Arte |
 | Gerar o link já marcava "Aguard. Aprovação" | O status fica em **Enviar Arte** até o cliente olhar |
 | A classificação perguntava "tem link?" (`temLinkGerado`) | Pergunta "o cliente olhou?" (`cliente_abriu_em`) |
 | O botão da linha dizia "Enviar Link" | Diz **Copiar Link** |
@@ -111,17 +111,16 @@ junto com `arte_pronta_em`. Sem isso, o pedido que voltou de uma alteração sal
 "Aguard. Aprovação" com a abertura da versão anterior — o cliente nunca teria visto a arte
 corrigida, e a tela diria que sim.
 
-**O ganho que não estava no pedido.** Antes, "Enviar Arte" de um pedido `vibe_` sem link
-era gravado em `pedidos_links_cliente` — que não tinha linha — e o UPDATE não acertava
-nada. O que sobrava era o `gravarStatusOverride`, que é **localStorage**: o designer
-marcava pronto na máquina dele e o atendente, em outra, podia não ver. Criando a linha do
-link nesse momento, o estágio passa a morar no banco.
+**A criação antecipada não gera imagens.** `garantirLinksDosPedidosNaListaArte` cria apenas
+o registro, o token e a URL dos pedidos que ainda estão no fluxo ativo da Arte. Faz isso
+com até quatro pedidos por vez e compartilha a mesma execução entre cargas concorrentes.
+Quando a arte fica pronta, `prepararLinkDaArtePronta` gera as imagens e carimba a nova
+versão no registro já existente. `getOrCreateLinkCliente` sempre reutiliza o token ativo,
+inclusive após alterações e reenvios; portanto o endereço não muda durante o processo.
 
-**Uma borda que continua.** O `sincronizarPedidosProntosParaEnvio` — a varredura que marca
-"Enviar Arte" quando todos os modelos estão PRONTO no banco — **não** cria link. Ela roda
-sobre a lista inteira a cada carga, e criar links ali significaria regenerar a arte de
-aprovação de dezenas de pedidos de uma vez. Para esses, o botão **Gerar Link** continua
-sendo a saída.
+Enquanto a primeira criação ainda está em andamento, a linha mostra **Gerando Link**.
+Assim que o banco confirma o registro, a lista é redesenhada com os controles para abrir,
+copiar ou enviar o mesmo link. Copiar deixou de ser um gatilho necessário para criá-lo.
 
 **A URL pronta para o ERP.** A coluna `pedidos_links_cliente.link` traz o endereço
 completo, e é **gerada** pelo banco a partir de `numero_pedido` e `token`

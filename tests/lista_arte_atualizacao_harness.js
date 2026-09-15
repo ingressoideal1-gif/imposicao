@@ -31,6 +31,7 @@ function ambiente() {
         carregarArtesGlobais: async () => {}, carregarLinksExistentes: async () => {},
         carregarTemposNoCard: async () => {}, loadUsuarios: async () => {},
         carregarModelosGlobais: async () => {}, carregarPagamentosGlobais: async () => {},
+        garantirLinksDosPedidosNaListaArte: async () => ({ criados: 0, falhas: 0 }),
         sincronizarStatusOrdensDinamico: async () => {},
         renderOrdens() { chamadas.render++; }, toast() { chamadas.erros++; },
         fetch: async () => {
