@@ -35,14 +35,28 @@ function editarCampoEntrega(campo, valor) {
     }
 }
 
-function cpfDaEntregaValido(valor) {
-    const cpf = String(valor || '').replace(/\D/g, '');
-    if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
-    for (let n = 9; n <= 10; n++) {
+function documentoDoRecebedorValido(valor) {
+    const documento = String(valor || '').replace(/\D/g, '');
+    if (!/^\d{11}(\d{3})?$/.test(documento) || /^(\d)\1+$/.test(documento)) return false;
+    if (documento.length === 11) {
+        for (let n = 9; n <= 10; n++) {
+            let soma = 0;
+            for (let i = 0; i < n; i++) soma += Number(documento[i]) * (n + 1 - i);
+            const digito = (soma * 10 % 11) % 10;
+            if (digito !== Number(documento[n])) return false;
+        }
+        return true;
+    }
+    const pesos = [
+        [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+        [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    ];
+    for (let etapa = 0; etapa < 2; etapa++) {
         let soma = 0;
-        for (let i = 0; i < n; i++) soma += Number(cpf[i]) * (n + 1 - i);
-        const digito = (soma * 10 % 11) % 10;
-        if (digito !== Number(cpf[n])) return false;
+        for (let i = 0; i < pesos[etapa].length; i++) soma += Number(documento[i]) * pesos[etapa][i];
+        const resto = soma % 11;
+        const digito = resto < 2 ? 0 : 11 - resto;
+        if (digito !== Number(documento[12 + etapa])) return false;
     }
     return true;
 }
@@ -65,7 +79,7 @@ async function buscarCepEntrega() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-        // Só o CEP é enviado ao serviço. Nome e CPF permanecem no pedido.
+        // Só o CEP é enviado ao serviço. Nome e documento permanecem no pedido.
         const resposta = await fetch('https://viacep.com.br/ws/' + cep + '/json/', { signal: controller.signal });
         if (!resposta.ok) throw new Error('consulta');
         const endereco = await resposta.json();
@@ -93,10 +107,10 @@ function formularioEnderecoEntrega() {
     const confirmado = window.portalConfirmacoes.entrega === true;
     const alterando = r.alterando;
     const bloqueado = !alterando || window.portalGravandoConfirmacao || clienteState.pedidoFinalizado;
-    const rotulos = { recebedor: 'Recebedor', cpf_recebedor: 'CPF do recebedor', cep: 'CEP',
+    const rotulos = { recebedor: 'Recebedor', cpf_recebedor: 'CPF ou CNPJ do recebedor', cep: 'CEP',
         endereco: 'Endereço', numero: 'Número (ou S/N)', complemento: 'Complemento (opcional)',
         bairro: 'Bairro', cidade: 'Cidade', uf: 'UF' };
-    const limites = { recebedor: 150, cpf_recebedor: 14, cep: 9, endereco: 200, numero: 20,
+    const limites = { recebedor: 150, cpf_recebedor: 18, cep: 9, endereco: 200, numero: 20,
         complemento: 150, bairro: 100, cidade: 100, uf: 2 };
     const campos = CAMPOS_ENTREGA.map(k => '<label style="display:block;margin:12px 0">'
         + escapeHtml(rotulos[k]) + '<input id="entrega-' + k + '" class="portal-caixa-de-texto" '
@@ -212,8 +226,8 @@ async function persistirEnderecoEntrega() {
         throw new Error('Digite o CEP e use Buscar endereço pelo CEP antes de confirmar.');
     if (!/^\d{8}$/.test(valores.cep))
         throw new Error('Use Alterar para informar e consultar o CEP da entrega.');
-    if (!valores.recebedor || !cpfDaEntregaValido(valores.cpf_recebedor))
-        throw new Error('Informe o nome do recebedor e um CPF válido.');
+    if (!valores.recebedor || !documentoDoRecebedorValido(valores.cpf_recebedor))
+        throw new Error('Informe o recebedor e um CPF ou CNPJ válido.');
     if (['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !valores[k]))
         throw new Error('Complete endereço, número (ou S/N) e bairro antes de confirmar.');
     const { data, error } = await supabaseClient.rpc('link_cliente_salvar_entrega', {
@@ -236,6 +250,8 @@ window.formularioEnderecoEntrega = formularioEnderecoEntrega;
 window.persistirEnderecoEntrega = persistirEnderecoEntrega;
 window.editarCampoEntrega = editarCampoEntrega;
 window.buscarCepEntrega = buscarCepEntrega;
+window.documentoDoRecebedorValido = documentoDoRecebedorValido;
+window.cpfDaEntregaValido = documentoDoRecebedorValido;
 window.cartaoDeDecisaoEntrega = cartaoDeDecisaoEntrega;
 window.abrirEnderecosEntrega = abrirEnderecosEntrega;
 window.fecharEnderecosEntrega = fecharEnderecosEntrega;

@@ -343,7 +343,7 @@ function enderecoEmLinhas(endereco, cliente) {
     const linhas = [
         { rotulo: 'Recebedor', valor: recebedor || 'Não informado',
           falta: !recebedor, daNota: herdado && !(endereco.recebedor || '').trim() },
-        { rotulo: 'CPF do recebedor', valor: cpf || 'Não informado',
+        { rotulo: 'CPF ou CNPJ do recebedor', valor: cpf || 'Não informado',
           falta: !cpf, daNota: herdado && !(endereco.cpf_recebedor || '').trim() },
         { rotulo: 'Endereço', valor: rua ? rua + ', ' + (numero || 'S/N') : '' },
         { rotulo: 'Complemento', valor: (endereco.complemento || '').trim() },

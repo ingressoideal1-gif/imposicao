@@ -154,3 +154,13 @@ pelo cache (`cliente.html`, três módulos do cliente, `style.css`, `index.html`
 `producao.html`) conferiram por SHA-256 normalizado nos dois domínios: 14 de 14.
 A primeira comparação automática ainda encontrou um arquivo da versão anterior;
 a publicação não foi repetida e a conferência posterior comprovou a propagação.
+
+## Documento do recebedor
+
+O campo antes rotulado “CPF do recebedor” passa a aceitar **CPF ou CNPJ do
+recebedor**. O navegador remove a máscara e valida os dígitos verificadores de
+documentos com 11 ou 14 dígitos. A RPC repete a validação antes de gravar e
+recusa sequências repetidas, tamanho inválido ou dígito incorreto. A coluna
+existente `cpf_recebedor` foi preservada para compatibilidade; não houve mudança
+de schema. Os testes cobrem CPF e CNPJ válidos, dígitos incorretos e sequências
+repetidas nos dois lados.

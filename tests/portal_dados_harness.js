@@ -287,7 +287,7 @@ const linkDoMapa = carregar('linkDoMapa');
     });
     const rotulos = linhas.map(l => l.rotulo);
     ok(rotulos[0] === 'Recebedor', 'quem recebe vem primeiro, mesmo vazio', rotulos);
-    ok(rotulos[1] === 'CPF do recebedor', 'e o CPF logo depois', rotulos);
+    ok(rotulos[1] === 'CPF ou CNPJ do recebedor', 'e o documento logo depois', rotulos);
     ok(linhas[0].valor === 'Não informado', 'com o aviso no lugar do nome', linhas[0]);
     ok(linhas[1].valor === 'Não informado', 'e no lugar do CPF', linhas[1]);
     ok(linhas[0].falta === true && linhas[1].falta === true,

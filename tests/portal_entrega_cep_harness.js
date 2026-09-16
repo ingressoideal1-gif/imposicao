@@ -36,6 +36,9 @@ async function main() {
     assert.ok(c.formularioEnderecoEntrega().includes('id="entrega-recebedor"'));
     assert.equal(c.cpfDaEntregaValido('11111111111'), false);
     assert.equal(c.cpfDaEntregaValido('529.982.247-25'), true);
+    assert.equal(c.documentoDoRecebedorValido('11.222.333/0001-81'), true);
+    assert.equal(c.documentoDoRecebedorValido('11.222.333/0001-82'), false);
+    assert.equal(c.documentoDoRecebedorValido('11.111.111/1111-11'), false);
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('portal-correcao-entrega'));
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('Desfazer'));
     assert.ok(c.cartaoDeDecisaoEntrega().includes('Ver endereços cadastrados'));
