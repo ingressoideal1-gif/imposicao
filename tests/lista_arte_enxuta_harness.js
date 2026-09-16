@@ -221,7 +221,7 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
 
     const tds = literais + porFuncao.length;
     ok(ths === tds, 'a linha tem uma celula para cada titulo', 'th=' + ths + ' td=' + tds);
-    ok(ths === 10, 'que sao dez: Preview, Tempo e Pagamento entre as antigas', ths);
+    ok(ths === 11, 'onze colunas, incluindo o prazo de entrega do ERP', ths);
 })();
 
 (function oPreviewDaListaEOMesmoDoPainelDeProducao() {

@@ -26354,13 +26354,23 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 if (osError) throw osError;
                 (osData || []).forEach(linha => {
                     if (!linha) return;
-                    if (linha.data_termino) prazosPorPedido[String(linha.id_int)] = linha.data_termino;
+                    if (linha.data_termino) prazosPorPedido[String(linha.id_int)] = comporPrazoDoERP(linha.data_termino, null);
                     const codigo = (linha.codigo_rastreamento || '').trim();
                     if (codigo) rastreioPorPedido[String(linha.id_int)] = codigo;
                 });
             }
         } catch (oe) {
             console.warn('[Vibecode] Não foi possível ler propostas_os (prazo de entrega):', oe.message || oe);
+        }
+
+        // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
+        try {
+            const horasPorPedido = await carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido));
+            for (const id of Object.keys(prazosPorPedido)) {
+                prazosPorPedido[id] = comporPrazoDoERP(prazosPorPedido[id], horasPorPedido[id]);
+            }
+        } catch (he) {
+            console.warn('[Vibecode] Não foi possível ler a hora do prazo:', he.message || he);
         }
 
         // pedidosComerciais ignorado/tabela 'pedidos' inexistente
@@ -28020,14 +28030,35 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 // -------------------------------------------------------------------------------
 
 /**
- * Prazo do pedido como Date, ou null se ausente/inválido.
- *
- * A origem é `propostas_os.data_termino`, que chega como `2026-08-21T00:00:00`
- * — sem fuso, e por isso lida como meia-noite LOCAL, que é o que se quer. Uma
- * data pura (`2026-08-21`, sem hora) o JavaScript leria como meia-noite UTC, e
- * no Brasil isso vira 21h do dia anterior: o pedido apareceria vencendo um dia
- * antes. A hora é acrescentada aqui para esse caso não morder.
+ * Junta a data de propostas_os.data_termino com propostas_os_setores.hora.
+ * A meia-noite de data_termino não informa a hora. Sem hora do setor, só data;
+ * sem data, nenhum prazo. Não recalcular a hora pela categoria de frete atual.
  */
+function comporPrazoDoERP(data, hora) {
+    if (!data) return null;
+    const dia = String(data).match(/^\d{4}-\d{2}-\d{2}/);
+    if (!dia) return null;
+    const horario = typeof hora === 'string' && hora.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/);
+    return horario ? `${dia[0]}T${horario[1]}:${horario[2]}:00` : dia[0];
+}
+
+async function carregarHorasDosPrazos(client, ids) {
+    const horas = {};
+    // Até quatro setores por pedido; lotes pequenos evitam o limite de linhas da API.
+    for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await client.from('propostas_os_setores')
+            .select('id_int, hora').in('id_int', ids.slice(i, i + 100));
+        if (error) throw error;
+        for (const linha of data || []) {
+            if (linha && linha.hora != null && horas[String(linha.id_int)] == null) {
+                horas[String(linha.id_int)] = linha.hora;
+            }
+        }
+    }
+    return horas;
+}
+
+/** Lê o prazo em hora local, evitando que uma data pura recue um dia no Brasil. */
 function _prazoDoPedido(os) {
     if (!os || !os.prazo_entrega) return null;
     let texto = os.prazo_entrega;
@@ -28039,11 +28070,8 @@ function _prazoDoPedido(os) {
 /**
  * Atrasado = o DIA do prazo já passou.
  *
- * Era "data E hora anteriores ao momento atual", e fazia sentido enquanto o
- * prazo era inventado com hora do dia junto. `data_termino` é data pura: chega
- * sempre à meia-noite, então comparar por instante pintaria de vermelho, o dia
- * inteiro, todo pedido que vence HOJE — que é justamente o que o operador
- * precisa distinguir do que ele já perdeu.
+ * A exibição da hora do ERP preserva a regra existente dos filtros e cores:
+ * pedidos com prazo hoje permanecem em Para Hoje, independentemente da hora.
  */
 function pedidoEstaAtrasado(os) {
     const prazo = _prazoDoPedido(os);
@@ -30782,6 +30810,7 @@ function renderOrdens() {
                         </td>
                         <td style="text-align: center; vertical-align: middle;">${previewDaArteDoPedidoHtml(os)}</td>
                         ${celulaDeTempoHtml(os)}
+                        <td style="text-align: center; vertical-align: middle;">${formatPrazoBadge(os)}</td>
                         <td style="text-align: center; vertical-align: middle;">${entregaHtml}</td>
                         <td style="text-align: center;">
                             ${getStatusBadge(os.status_calculado || os.status)}
@@ -31096,14 +31125,14 @@ function formatPrazoBadge(os) {
     const dia = String(prazo.getDate()).padStart(2, '0');
     const mes = String(prazo.getMonth() + 1).padStart(2, '0');
     const semHora = typeof os.prazo_entrega === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(os.prazo_entrega);
-    const hora = semHora ? '--:--' : `${String(prazo.getHours()).padStart(2, '0')}:${String(prazo.getMinutes()).padStart(2, '0')}`;
+    const hora = semHora ? '' : ` ${String(prazo.getHours()).padStart(2, '0')}:${String(prazo.getMinutes()).padStart(2, '0')}`;
     const completa = semHora
         ? `${prazo.toLocaleDateString('pt-BR')} — hora não informada`
         : prazo.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
 
     return `<span title="${titulo} — ${completa}" style="display:inline-block; background:${cor};`
         + ` color:#ffffff; font-weight:800; font-size:1rem; padding:4px 14px; border-radius:6px;`
-        + ` box-shadow:0 3px 8px rgba(0,0,0,0.35); letter-spacing:0.02em; white-space:nowrap;">${dia}/${mes} ${hora}</span>`;
+        + ` box-shadow:0 3px 8px rgba(0,0,0,0.35); letter-spacing:0.02em; white-space:nowrap;">${dia}/${mes}${hora}</span>`;
 }
 window.formatPrazoBadge = formatPrazoBadge;
 

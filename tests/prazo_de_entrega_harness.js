@@ -133,7 +133,7 @@ const AMANHA = comoOVibeGrava(diasDeHoje(1));
         'a hora e os minutos ficam visiveis, com zeros a esquerda');
     ok(badge('2026-09-11T00:00:00').includes('>11/09 00:00</span>'),
         'meia-noite registrada e exibida');
-    ok(badge('2026-09-11').includes('>11/09 --:--</span>'),
+    ok(badge('2026-09-11').includes('>11/09</span>'),
         'data sem hora nao inventa horario');
     ok(badge(null).includes('>--</span>') && badge('invalido').includes('>--</span>'),
         'prazo ausente ou invalido continua sem estimativa');
