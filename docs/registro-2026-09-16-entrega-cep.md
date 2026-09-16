@@ -164,3 +164,13 @@ recusa sequências repetidas, tamanho inválido ou dígito incorreto. A coluna
 existente `cpf_recebedor` foi preservada para compatibilidade; não houve mudança
 de schema. Os testes cobrem CPF e CNPJ válidos, dígitos incorretos e sequências
 repetidas nos dois lados.
+
+RPC instalada com hash de corpo `e4d2ec31304690bc9f45bc6856c5f47f`;
+execução por `anon`, validação de CPF/CNPJ e rejeição de token inválido foram
+confirmadas. A definição anterior ficou no arquivo temporário de recuperação
+`documento-recebedor-recuperacao.sql`.
+
+Frontend publicado como **v889**, commit
+`8660ce67f6ae38b4c747838f69d465c3f48ced4b`. O check do Cloudflare Pages passou,
+e `cliente.html`, `cliente-dados.js` e `cliente-entrega-form.js` conferiram nos
+dois domínios (6 de 6) após a propagação. Nenhum pedido real foi alterado.
