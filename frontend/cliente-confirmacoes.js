@@ -212,6 +212,11 @@ function cartaoDeFinalizacao() {
     const icone = (nome, px, cor) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '');
 
     if (clienteState.pedidoFinalizado) {
+        if (window.portalConfirmacoes.entrega === false || window.portalConfirmacoes.faturamento === false) {
+            return '<div class="portal-cartao"><div class="portal-aviso atencao">'
+                + icone('alerta', 16, '#f59e0b')
+                + ' Recebemos sua solicitação de correção. Aguarde o contato do seu atendente.</div></div>';
+        }
         return '<div class="portal-cartao"><div class="portal-aviso ok">'
              + icone('check', 16, '#22c55e')
              + ' Tudo certo! Recebemos sua aprovação e a conferência dos seus dados. '
@@ -258,7 +263,7 @@ function cartaoDeFinalizacao() {
 /** Uma decisão do cliente. Redesenha as duas abas: o cartão do fim é o mesmo. */
 window.decidirDados = async function (qual, confirmou) {
     if (!Object.prototype.hasOwnProperty.call(ROTULO_DA_ABA, qual)
-        || window.portalGravandoConfirmacao) return;
+        || window.portalGravandoConfirmacao || state.portalGravandoArte || state.arteSeguindoSozinho) return;
     const c = window.portalConfirmacoes;
     if (c[qual] === confirmou) {
         if (confirmou === true) abrirSecao(SECOES[SECOES.indexOf(qual) + 1]);
@@ -309,7 +314,7 @@ window.desfazerDecisao = function (qual) {
  * decisão sobrescreva as observações enquanto a correção está sendo salva.
  */
 window.salvarCorrecaoDeDados = async function (qual) {
-    if (window.portalGravandoConfirmacao) return;
+    if (window.portalGravandoConfirmacao || state.portalGravandoArte || state.arteSeguindoSozinho) return;
     const campo = document.getElementById('portal-correcao-' + qual);
     const recibo = document.getElementById('portal-recibo-' + qual);
     const texto = campo ? campo.value.trim() : '';
@@ -319,7 +324,9 @@ window.salvarCorrecaoDeDados = async function (qual) {
         return;
     }
 
-    window.portalConfirmacoes[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'] = texto;
+    if (!Object.prototype.hasOwnProperty.call(ROTULO_DA_ABA, qual)) return;
+    const chaveTexto = qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento';
+    const proxima = Object.assign({}, window.portalConfirmacoes, { [chaveTexto]: texto });
     if (recibo) recibo.textContent = 'Salvando...';
 
     window.portalGravandoConfirmacao = qual;
@@ -328,13 +335,21 @@ window.salvarCorrecaoDeDados = async function (qual) {
         gravacao = await gravarCorrecaoDoCliente(
             parseInt(clienteState.numero),
             {
-                entrega: window.portalConfirmacoes.textoEntrega,
-                faturamento: window.portalConfirmacoes.textoFaturamento
+                entrega: proxima.textoEntrega,
+                faturamento: proxima.textoFaturamento
             },
-            null   // a decisão da aba já foi gravada no clique em Alterar
+            proxima.entrega === false || proxima.faturamento === false ? 'CORRIGIR'
+                : proxima.entrega === true && proxima.faturamento === true ? 'APROVADO' : '',
+            Object.assign({}, proxima, { finalizado: false })
         );
+        if (gravacao.ok) {
+            window.portalConfirmacoes[chaveTexto] = texto;
+            clienteState.pedidoFinalizado = false;
+        }
+        window.portalErroConfirmacao[qual] = !gravacao.ok;
     } catch (e) {
         gravacao = { ok: false };
+        window.portalErroConfirmacao[qual] = true;
     } finally {
         window.portalGravandoConfirmacao = false;
     }
@@ -342,104 +357,85 @@ window.salvarCorrecaoDeDados = async function (qual) {
     if (recibo) {
         recibo.innerHTML = gravacao.ok
             ? '✅ Correção salva.'
-            : '⚠️ Não conseguimos salvar agora. Você ainda pode finalizar; '
-              + 'depois avise seu atendimento sobre o pedido nº '
+            : '⚠️ Não conseguimos salvar agora. Tente novamente antes de finalizar. '
+              + 'Se precisar, avise seu atendimento sobre o pedido nº '
               + escapeHtml(String(clienteState.numero || '')) + '.';
     }
 };
 
-/**
- * O fim do caminho: grava o selo, escreve no chat do parceiro e mostra o
- * resultado.
- *
- * O `insert` no chat manda `autor_nome`, e não `remetente_nome`: a segunda não
- * existe naquela tabela, e o PostgREST recusa a linha inteira. Foi assim que
- * todas as nossas mensagens sumiram por meses, caladas — o supabase-js não
- * lança, então só olhando o `.error` se descobre.
- */
+/** Finaliza no banco em uma transação; só o recibo confirmado libera a tela. */
 window.finalizarNoPortal = async function () {
-    if (window.portalGravandoConfirmacao) return;
+    if (window.portalGravandoConfirmacao || state.portalGravandoArte
+        || state.arteSeguindoSozinho || clienteState.pedidoFinalizado) return;
+    const c = window.portalConfirmacoes;
+    const dados = window.portalDados || {};
+    const itens = (state.osItens && state.osItens[clienteState.osId]) || [];
+    if (!itens.length || !itens.every(i => i.amostra_status === 'APROVADA')
+        || typeof c.entrega !== 'boolean' || typeof c.faturamento !== 'boolean'
+        || (c.entrega !== false && entregaExigeRecebedor(dados.endereco, dados.cliente, dados.pedido, dados.frete))) {
+        redesenharSecao('entrega');
+        redesenharSecao('faturamento');
+        avisoDeFinalizacao('alerta', '#f59e0b', 'Ainda há conferências pendentes',
+            'Confira suas artes e os dados de Entrega e Nota antes de finalizar.');
+        return;
+    }
+    // Não perder texto digitado que ainda não teve confirmação de gravação.
+    for (const qual of ['entrega', 'faturamento']) {
+        const campo = document.getElementById('portal-correcao-' + qual);
+        const texto = c[qual === 'entrega' ? 'textoEntrega' : 'textoFaturamento'];
+        if (c[qual] === false && (window.portalErroConfirmacao[qual]
+            || (campo && campo.value.trim() !== texto))) {
+            avisoDeFinalizacao('alerta', '#f59e0b', 'Salve sua correção',
+                'Use Salvar correção e aguarde a confirmação antes de finalizar.');
+            return;
+        }
+    }
+
+    const precisaAtencao = c.entrega === false || c.faturamento === false;
+    const statusEsperado = precisaAtencao ? 'Corrigir Dados' : 'APROVADO';
+    const seloEsperado = precisaAtencao ? 'CORRIGIR' : 'APROVADO';
     window.portalGravandoConfirmacao = 'finalizar';
     const botao = document.getElementById('portal-btn-finalizar');
     if (botao) { botao.disabled = true; botao.textContent = '⏳ Finalizando...'; }
-
-    const c = window.portalConfirmacoes;
-    const precisaAtencao = (c.entrega === false || c.faturamento === false);
-
-    let mensagem = '✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.';
-    if (precisaAtencao) {
-        mensagem = '⚠️ O CLIENTE REPORTOU DADOS INCORRETOS:';
-        if (c.entrega === false) mensagem += '\n\n[ENTREGA] ' + (c.textoEntrega || '(sem detalhes)');
-        if (c.faturamento === false) mensagem += '\n\n[FATURAMENTO] ' + (c.textoFaturamento || '(sem detalhes)');
-    }
-
-    let gravacao;
+    let falhou = false;
     try {
-        gravacao = await gravarCorrecaoDoCliente(
-            parseInt(clienteState.numero),
-            { entrega: c.entrega === false ? (c.textoEntrega || '(sem detalhes)') : '',
-              faturamento: c.faturamento === false ? (c.textoFaturamento || '(sem detalhes)') : '' },
-            precisaAtencao ? 'CORRIGIR' : 'APROVADO',
-            Object.assign({}, c, { finalizado: true })
-        );
-    } catch (e) {
-        gravacao = { ok: false, erro: e.message || String(e) };
-    }
-
-    try {
-        const { error: erroChat } = await supabaseClient.from('propostas_chat').insert({
-            id_int: parseInt(clienteState.numero),
-            tipo: 'PRODUCAO',
-            setor: 'Cliente',
-            visivel_externo: true,
-            mensagem: mensagem,
-            autor_nome: 'Cliente (aprovação online)'
+        const { data, error } = await supabaseClient.rpc('link_cliente_finalizar', {
+            p_numero: String(clienteState.numero),
+            p_token: clienteState.token,
+            p_confirmacoes: {
+                entrega: c.entrega, faturamento: c.faturamento,
+                textoEntrega: c.entrega === false ? (c.textoEntrega || '(sem detalhes)') : '',
+                textoFaturamento: c.faturamento === false ? (c.textoFaturamento || '(sem detalhes)') : ''
+            }
         });
-        if (erroChat) console.warn('[portal] o chat do parceiro recusou a mensagem:', erroChat.message || erroChat);
-    } catch (e) { console.warn('[portal] falha ao registrar no chat do parceiro:', e); }
-
-    try {
-        const osId = clienteState.osId;
-        if (osId && osId.startsWith('vibe_')) {
-            await gravarStatusDoLink('APROVADO');
-        } else if (osId) {
-            await supabaseClient.from('producao_ordens_servico').update({ status: 'APROVADO' }).eq('id', osId);
+        if (error || !data || data.ok !== true || data.finalizado !== true
+            || String(data.numero) !== String(clienteState.numero)
+            || data.status !== statusEsperado || data.entrega_dados !== seloEsperado) {
+            throw new Error('A finalização não foi confirmada pelo banco.');
         }
+        clienteState.pedidoFinalizado = true;
+        clienteState.statusArte = data.status;
+        clienteState.entregaStatus = data.entrega_dados;
+        pintarSeloDoStatus(data.status);
     } catch (e) {
-        console.warn('[portal] não foi possível gravar o status do pedido:', e);
+        falhou = true;
+        clienteState.pedidoFinalizado = false;
+    } finally {
+        window.portalGravandoConfirmacao = false;
+        if (botao) { botao.disabled = false; botao.textContent = 'Finalizar pedido'; }
+        redesenharSecao('entrega');
+        redesenharSecao('faturamento');
+        atualizarPainelDoPedido();
     }
-
-    window.portalGravandoConfirmacao = false;
-    clienteState.pedidoFinalizado = true;
-    clienteState.statusArte = precisaAtencao ? 'Corrigir Dados' : 'APROVADO';
-    pintarSeloDoStatus(clienteState.statusArte);
-
-    // ORDEM IMPORTA: redesenhar PRIMEIRO, avisar depois.
-    //
-    // `redesenharSecao` reescreve o `innerHTML` da seção aberta. Feito depois do
-    // aviso, ele apagava o aviso no mesmo instante — e o que sumia era
-    // justamente a mensagem que mais precisa ser lida: a de que a conferência
-    // NÃO foi gravada, com o número do pedido para o cliente informar ao
-    // atendimento.
-    redesenharSecao('entrega');
-    redesenharSecao('faturamento');
-    atualizarPainelDoPedido();
-
-    // Dizer "aprovado" quando a solicitação não entrou no banco é o pior dos
-    // mundos: o cliente vai embora tranquilo e ninguém nunca leu o que ele
-    // escreveu. Aqui ele fica sabendo, e fica sabendo o que fazer.
-    if (!gravacao.ok) {
-        console.error('[portal] a solicitação NÃO foi gravada:', gravacao.erro);
-        avisoDeFinalizacao('alerta', '#f59e0b', 'Não conseguimos registrar sua conferência',
-            'Sua aprovação de arte foi salva, mas <b>a conferência dos dados de entrega e '
-            + 'faturamento não pôde ser gravada agora</b>.<br><br>Por favor, <b>entre em contato '
-            + 'com o seu atendente</b> e informe o pedido nº '
-            + escapeHtml(String(clienteState.numero || '')) + '.');
+    // O aviso precisa vir depois do redesenho para permanecer na tela.
+    if (falhou) {
+        avisoDeFinalizacao('alerta', '#f59e0b', 'Não conseguimos confirmar a finalização',
+            'Tente novamente. Se o problema continuar, reabra o link para conferir os dados '
+            + 'ou entre em contato com seu atendente.');
     } else if (precisaAtencao) {
-        avisoDeFinalizacao('check', '#22c55e', 'Pedido finalizado',
-            'Recebemos sua aprovação e sua solicitação de correção. '
-            + '<b style="color: #f97316;">Como você pediu alteração nos dados, aguarde o contato '
-            + 'do seu atendente.</b>');
+        avisoDeFinalizacao('alerta', '#f59e0b', 'Correção encaminhada',
+            'Recebemos sua aprovação das artes e sua solicitação de correção. '
+            + '<b>Aguarde o contato do seu atendente.</b>');
     } else {
         avisoDeFinalizacao('check', '#22c55e', 'Pedido finalizado',
             'Recebemos sua aprovação e a conferência dos seus dados. '

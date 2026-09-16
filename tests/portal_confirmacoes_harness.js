@@ -65,21 +65,25 @@ function bancoFalso(linhas) {
         from() {
             const q = { _op: null, _payload: null, _id: null };
             q.select = function () {
+                if (this._op === 'insert') {
+                    log.inserts++;
+                    const linha = Object.assign({ id: 'novo' }, this._payload);
+                    linhas[linha.id_int] = linha;
+                    return Promise.resolve({ data: [linha], error: null });
+                }
                 if (this._op === 'update') {
                     const alvo = linhas[this._id];
                     if (!alvo) return Promise.resolve({ data: [], error: null });
                     Object.assign(alvo, this._payload);
                     log.updates++;
-                    return Promise.resolve({ data: [{ id: alvo.id }], error: null });
+                    return Promise.resolve({ data: [{ ...alvo, id_int: alvo.id_int ?? this._id }], error: null });
                 }
                 this._op = 'select';
                 return this;
             };
             q.update = function (payload) { this._op = 'update'; this._payload = payload; return this; };
             q.insert = function (payload) {
-                log.inserts++;
-                linhas[payload.id_int] = Object.assign({ id: 'novo' }, payload);
-                return Promise.resolve({ error: null });
+                this._op = 'insert'; this._payload = payload; return this;
             };
             q.eq = function (_col, val) { this._id = val; return this; };
             q.order = function () { return this; };
