@@ -1,7 +1,7 @@
 # Entrega no Link do Cliente: recebedor e endereço por CEP
 
 Implementação local na branch `fix/portal-entrega-cep`, baseada em `ea668659` (v884).
-Funções SQL instaladas e verificadas no Supabase; frontend validado para publicação v885.
+Funções SQL instaladas e verificadas no Supabase; frontend publicado e conferido como v885.
 Checkout operacional preservado. Instalação em transação única, sem alteração de registros.
 Hash do corpo da leitura: `e6d88cf7d9242a76dfd933b5e034f79a`; gravação: `f54861afc573fbca02729b8f14a68e3a`.
 Execução como anon confirmada; token inválido rejeitado. Backup de definição em
@@ -83,3 +83,23 @@ ações nesta visita; a proteção de snapshot do endereço detecta conflitos an
 Não foram alteradas as permissões legadas de confirmação direta em `pedidos_artes`.
 Mudança do destino não recalcula frete, valores ou prazo: as regras comerciais existentes
 continuam sendo responsabilidade do fluxo de atendimento.
+
+
+## Publicação concluída
+
+- SQL: commit `18063e20`, instalado antes do frontend em transação única.
+- Frontend: commit `5138eadf079e07a9447c3ccaffbb91e603c44454`, tag `v885`.
+- Cloudflare Pages: check desse commit concluído com sucesso.
+- `cliente.html`, `cliente-entrega-form.js`, `cliente-entrega.js` e
+  `cliente-confirmacoes.js` comparados por SHA-256 normalizado (BOM/CRLF) com os locais
+  em `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`: 8 de 8 conferem.
+- A verificação imediata do publicador registrou divergência durante propagação;
+  a integração não foi repetida. A conferência independente posterior confirmou todos os arquivos.
+- Checkout operacional preservado. Nenhum pedido real usado para teste de gravação.
+
+Hashes finais dos arquivos publicados:
+
+- `cliente.html`: `6fcea1ae417879e6fcc06bed2739f896ae62f7feb04a42a44438a7fefb6a76cf`
+- `cliente-entrega-form.js`: `808c93921f1e62a75b00bd632ac77e6e14c9834054cde1909d689932d5a6b1d5`
+- `cliente-entrega.js`: `9ff1b14d9802621e7b3b07171c0893f0cd838d35f424170ecdd64b8745ec80e2`
+- `cliente-confirmacoes.js`: `87dd36785709bb5d12ff506326ee02522039e4e212fe48ad31af9d6b9d27ea0a`
