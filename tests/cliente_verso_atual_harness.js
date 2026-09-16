@@ -1,4 +1,4 @@
-// Regressão: numeração só frente com verso_tipo antigo no modelo.
+// Regressões: numeração só frente com verso_tipo antigo e duplex_unico no portal.
 // Código real, dados sintéticos e persistência simulada; nenhuma rede.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,13 +17,14 @@ function extrair(src, nome) {
 }
 const contexto = { window: {} };
 vm.createContext(contexto);
-vm.runInContext(extrair(painel, 'temVerso') + extrair(painel, 'isNumeracaoDuplex'), contexto);
-const { isNumeracaoDuplex } = contexto;
+vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal'), contexto);
+const { numeracaoTemVersoNoPortal } = contexto;
+const isNumeracaoDuplex = numeracaoTemVersoNoPortal;
 const { reconciliarCorNumDoModelo } = require('../frontend/cor-numeracao-do-modelo.js');
 const inicioMap = cliente.indexOf('itensCarregados = prodItems.map(item => {');
 const fimMap = cliente.indexOf('\n                });', inicioMap);
 assert.ok(inicioMap > 0 && fimMap > inicioMap);
-const mapear = new Function('prodItems', 'state', 'reconciliarCorNumDoModelo', 'isNumeracaoDuplex',
+const mapear = new Function('prodItems', 'state', 'reconciliarCorNumDoModelo', 'numeracaoTemVersoNoPortal',
     'const propData = []; const osId = "os-teste"; let itensCarregados;\n'
     + cliente.slice(inicioMap, fimMap) + '\n}); return itensCarregados[0];');
 const frente = { id: 'n1', name: 'Personalizada', is_custom: true,
@@ -37,7 +38,7 @@ function carregar(tipo, num) {
     const item = bruto(tipo);
     const antes = structuredClone(item);
     const result = mapear([item], { cores: [], numeracoes: num ? [num] : [] },
-        reconciliarCorNumDoModelo, isNumeracaoDuplex);
+        reconciliarCorNumDoModelo, numeracaoTemVersoNoPortal);
     assert.deepEqual(item, antes, 'abrir o portal não modifica o registro original');
     assert.equal(result.arte_url, item.arte_url);
     assert.equal(result.verso_arte_url, item.verso_arte_url, 'preservar o arquivo do verso');

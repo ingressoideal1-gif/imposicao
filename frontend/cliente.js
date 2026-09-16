@@ -1213,6 +1213,21 @@ async function gravarStatusDoLink(status) {
 }
 
 /**
+ * Decide o verso usando apenas dados e funções carregados pela página do
+ * cliente. `isNumeracaoDuplex` mora em `script.js`, que não faz parte do
+ * portal; depender daquele global fazia `duplex_unico` cair no fallback antigo
+ * e o HTML nem criava a área do verso.
+ */
+function numeracaoTemVersoNoPortal(numObj) {
+    if (!numObj) return false;
+    const modo = String(numObj.print_mode || 'front').trim().toLowerCase();
+    if (modo === 'duplex' || modo === 'duplex_unico') return true;
+    if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
+    const nome = String(numObj.name || numObj.tipo || '').toLowerCase();
+    return nome.includes('verso') || nome.includes('duplex') || nome.includes('frente e verso');
+}
+
+/**
  * Busca `elements` e `csv_data` SÓ das numerações que este pedido usa, e as
  * mescla no catálogo leve que já está em `state.numeracoes`.
  *
@@ -1452,7 +1467,7 @@ async function initClientePage(numero, token) {
 
                     const resolvedNumId = idsDoBanco.numId || (prop ? prop.amostra_num_id : null);
                     const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
-                    const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && ((typeof temVerso === 'function' ? temVerso(matchedNum.print_mode) : matchedNum.print_mode === 'duplex') || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
+                    const numIsDuplex = numeracaoTemVersoNoPortal(matchedNum);
                     // 'Frente' faltava nesta lista: o operador grava exatamente esse
                     // valor ao trocar para uma numeração só frente, e sem ele o
                     // cliente continuava vendo o bloco de verso.
