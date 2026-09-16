@@ -174,3 +174,27 @@ Frontend publicado como **v889**, commit
 `8660ce67f6ae38b4c747838f69d465c3f48ced4b`. O check do Cloudflare Pages passou,
 e `cliente.html`, `cliente-dados.js` e `cliente-entrega-form.js` conferiram nos
 dois domínios (6 de 6) após a propagação. Nenhum pedido real foi alterado.
+
+## Incidente do pedido 22247: repetição após confirmação
+
+O pedido apresentou “O banco não confirmou a gravação do endereço”. A inspeção
+sem expor dados pessoais confirmou uma única cópia de endereço criada pelo
+portal, vinculada à proposta, com campos obrigatórios e CNPJ completos. A única
+linha de arte já tinha `entrega_dados=APROVADO` e `confirmacoes_portal.entrega=true`;
+o pedido ainda não estava finalizado.
+
+A causa era a ordem das verificações na RPC: a trava contra editar uma entrega
+confirmada executava antes da identificação de uma repetição idêntica. Assim,
+uma resposta perdida ou uma nova tentativa recebia erro apesar de o endereço e
+a confirmação já estarem persistidos.
+
+Correção instalada no commit `e5a1032a`: dados idênticos ao endereço atual
+retornam o recibo existente, inclusive depois da confirmação. Qualquer valor
+diferente continua bloqueado até o cliente usar **Alterar**. O teste PostgreSQL
+descartável prende os dois casos. No Supabase, o corpo instalado tem hash
+`03922ed8be46d40932f0f0bcc4920ea5`.
+
+A verificação positiva do pedido 22247 foi executada em transação revertida:
+repetição idêntica retornou sucesso e uma mudança sintética do número foi
+recusada. Nenhum campo do pedido foi alterado por essa validação. A definição
+anterior ficou em `repeticao-endereco-recuperacao.sql` no diretório temporário.
