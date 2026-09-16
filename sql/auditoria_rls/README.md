@@ -80,6 +80,8 @@ Endpoints utilizados pelo coletor: [identificação do projeto](https://supabase
 
 ## Proposta de restrição de pagamentos
 
+Revisão 05: `05_pagamentos_sem_truncate_anon.sql` também foi aplicada e pós-verificada. Retira apenas TRUNCATE de anon em pagamentos, preservando todos os demais ACLs. O aplicador dedicado `ferramentas/aplicar_restricao_truncate_pagamentos_rls.ps1` segue as mesmas barreiras de snapshot, hash e recibos. Não reaplicar migrações aplicadas; ver `docs/aplicacao-rls-truncate-2026-09-16.md`.
+
 Para disponibilizar a credencial nesta sessão Windows sem colocá-la em `.env` ou na conversa, execute `& .\ferramentas\configurar_acesso_rls.ps1`. Use token restrito ao e-deal, com `project_admin_read` e acesso ao banco necessário à tarefa (`database_read` para coleta; `database_write` para a aplicação autorizada). O script valida apenas a identificação e salva um arquivo novo protegido por DPAPI em `%LOCALAPPDATA%\IdealImposition\rls`. O coletor pode usá-lo com `-Executar -CredencialProtegida <caminho.clixml>`. Nunca versionar esse arquivo. A aplicação de SQL continua separada da coleta.
 
 `03_pagamentos_sem_delete_anon.proposta.sql` é a proposta histórica que abortou antes do REVOKE por grants de coluna presentes no baseline. Foi substituída por `04_pagamentos_sem_delete_anon.sql`, aplicada e verificada em produção. Não reaplicar nenhuma delas automaticamente. O aplicador `ferramentas/aplicar_restricao_pagamentos_rls.ps1` confere hash do SQL, salva baseline e recibos e verifica o resultado; sem `-Executar`, mostra apenas prévia. Veja `docs/aplicacao-rls-2026-09-16.md` para evidências, recuperação e limitações. O coletor continua estritamente somente leitura.

@@ -1,6 +1,9 @@
 # HTTP simulado; credencial sintetica DPAPI; nenhum acesso remoto.
+param([ValidateSet('DELETE','TRUNCATE')][string]$Operacao='DELETE')
 $ErrorActionPreference='Stop'
 $aplicadorTeste=Join-Path (Split-Path -Parent $PSScriptRoot) 'ferramentas\aplicar_restricao_pagamentos_rls.ps1'
+if ($Operacao -eq 'TRUNCATE') { $aplicadorTeste=Join-Path (Split-Path -Parent $PSScriptRoot) 'ferramentas\aplicar_restricao_truncate_pagamentos_rls.ps1' }
+$global:operacaoAplicacao=$Operacao
 $baseTeste=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $pastaTeste=Join-Path $baseTeste ('imposition-aplicacao-rls-'+[Guid]::NewGuid().ToString('N'))
 $global:cenarioAplicacao='sucesso'
@@ -17,12 +20,14 @@ function Invoke-RestMethod {
     $b=[Text.Encoding]::UTF8.GetString($Body)|ConvertFrom-Json
     if ($b.read_only -eq $false) {
         $global:escritasAplicacao++
-        if ($b.query -notmatch "SET imposition.pagamentos_delete_anon_revisado = 'sim';" -or $b.query -notmatch 'REVOKE DELETE ON TABLE public.pagamentos_v2 FROM anon;') {throw 'SQL inesperado'}
+        $nomeOperacao=$global:operacaoAplicacao.ToLowerInvariant()
+        if ($b.query -notmatch "SET imposition.pagamentos_${nomeOperacao}_anon_revisado = 'sim';" -or $b.query -notmatch "REVOKE $global:operacaoAplicacao ON TABLE public.pagamentos_v2 FROM anon;") {throw 'SQL inesperado'}
         if ($global:cenarioAplicacao -eq 'falha-envio') {throw 'token-sintetico-aplicacao'}
         return @()
     }
     if ($b.query -match 'AS auditoria_rls;') { return [pscustomobject]@{auditoria_rls=@{formato='imposition-rls-v1';contexto=@{projeto='vwbtitjlpelrcnsytzqw';ambiente='producao';read_only=$true}}} }
     if ($b.query -match 'AS auditoria_buckets;') { return [pscustomobject]@{auditoria_buckets=@{formato='imposition-rls-buckets-v1';projeto='vwbtitjlpelrcnsytzqw';ambiente='producao';read_only=$true}} }
+    if ($global:operacaoAplicacao -eq 'TRUNCATE') { return [pscustomobject]@{anon_le=$true;anon_esvazia=($global:cenarioAplicacao -eq 'verificacao-divergente');autenticado_esvazia=$true;backend_esvazia=$true} }
     return [pscustomobject]@{anon_le=$true;anon_exclui=($global:cenarioAplicacao -eq 'verificacao-divergente');autenticado_exclui=$true;backend_exclui=$true}
 }
 try {
@@ -45,7 +50,8 @@ try {
         if (($cenario -eq 'sucesso') -eq $falhou) {throw "Resultado inesperado: $cenario"}
         $esperado=if ($cenario -eq 'alvo-errado') {0} else {1}
         if ($global:escritasAplicacao -ne $esperado) {throw 'Escrita repetida ou alvo errado'}
-        if ($cenario -eq 'sucesso' -and @(Get-ChildItem -LiteralPath $destino -Filter '*resultado-pagamentos.json').Count -ne 1) {throw 'Recibo ausente'}
+        $filtro=if ($Operacao -eq 'TRUNCATE') {'*resultado-truncate-pagamentos.json'} else {'*resultado-pagamentos.json'}
+        if ($cenario -eq 'sucesso' -and @(Get-ChildItem -LiteralPath $destino -Filter $filtro).Count -ne 1) {throw 'Recibo ausente'}
     }
     Write-Output 'Aplicador: previa, sucesso, alvo errado, falha HTTP e verificacao divergente aprovados; sem rede.'
 } finally {

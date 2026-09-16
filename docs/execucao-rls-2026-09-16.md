@@ -1,5 +1,7 @@
 # Execução do plano RLS — 16/09/2026
 
+**Segunda etapa concluída:** às 08:10 -03:00, revisão 05 retirou TRUNCATE de anon em pagamentos; comparação completa de metadados confirmou apenas essa alteração. Ver `aplicacao-rls-truncate-2026-09-16.md` e o roteiro `validacao-erp-sem-codigo-rls.md`.
+
 **Estado atual:** credencial validada; revisão 04 aplicada em produção e pós-verificada às 08:05 -03:00. Foi removido somente DELETE de anon em pagamentos. A revisão 03 abortou previamente por grants de coluna; o relatório foi corrigido. O usuário confirmou que não há acesso ao código ERP. Os registros abaixo são históricos; para resultado, evidências e pendências atuais, ver `aplicacao-rls-2026-09-16.md`.
 
 Pedido: executar o plano de segurança preservando usabilidade. Alvo confirmado pelo usuário: e-deal, produção da gráfica, ref `vwbtitjlpelrcnsytzqw`.
