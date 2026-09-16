@@ -270,7 +270,9 @@ window.decidirDados = async function (qual, confirmou) {
         return;
     }
     const dados = window.portalDados || {};
-    if (qual === 'entrega' && confirmou === true
+    const salvarEndereco = qual === 'entrega' && confirmou === true
+        && typeof persistirEnderecoEntrega === 'function' && !ehRetirada(dados.pedido, dados.frete);
+    if (!salvarEndereco && qual === 'entrega' && confirmou === true
         && entregaExigeRecebedor(dados.endereco, dados.cliente, dados.pedido, dados.frete)) return;
 
     const proxima = Object.assign({}, c, { [qual]: confirmou });
@@ -282,6 +284,7 @@ window.decidirDados = async function (qual, confirmou) {
     redesenharSecao('entrega');
     redesenharSecao('faturamento');
     try {
+        if (salvarEndereco) await persistirEnderecoEntrega();
         const gravacao = await gravarCorrecaoDoCliente(parseInt(clienteState.numero), {
             entrega: proxima.entrega === false ? (proxima.textoEntrega || '(sem detalhes)') : '',
             faturamento: proxima.faturamento === false ? (proxima.textoFaturamento || '(sem detalhes)') : ''
@@ -291,6 +294,7 @@ window.decidirDados = async function (qual, confirmou) {
         clienteState.entregaStatus = selo;
         clienteState.pedidoFinalizado = false;
     } catch (e) {
+        if (salvarEndereco) dadosDoFormularioEntrega().erro = e.message;
         window.portalErroConfirmacao[qual] = true;
     } finally {
         window.portalGravandoConfirmacao = false;

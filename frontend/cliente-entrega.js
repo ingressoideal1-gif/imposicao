@@ -393,7 +393,6 @@ function desenharSecaoEntrega() {
     if (!secao) return;
 
     const dados = window.portalDados || {};
-    const cliente = dados.cliente || null;
     const destino = enderecoDeEntrega(dados);
 
     // ── Retirada: o endereço é o da gráfica, com o mapa ─────────────────────
@@ -428,69 +427,12 @@ function desenharSecaoEntrega() {
         return;
     }
 
-    // ── Entrega no endereço do pedido ───────────────────────────────────────
-    const endereco = enderecoEmLinhas(destino.endereco, cliente);
-
-    // Nota de pessoa jurídica não empresta recebedor: aí o nome e o CPF de quem
-    // recebe passam a ser obrigatórios, e a confirmação fica travada até o
-    // cliente informar. A trava vem com a saída escrita ao lado — é a regra
-    // desta casa: nada trava sem dizer o que fazer.
-    const exige = entregaExigeRecebedor(destino.endereco, cliente, dados.pedido, dados.frete);
-    const faltando = endereco.filter(l => l.falta).length;
-
-    // O que falta vira uma LINHA COM O BOTÃO AO LADO, e não um aviso que manda
-    // procurar outro botão.
-    //
-    // Até 25/08/2026 os dois avisos abaixo terminavam em "toque em ALTERAR
-    // abaixo" -- e o ALTERAR fica noutro cartão, mais para baixo, depois de sete
-    // linhas de endereço. A trava tinha a saída escrita, que é a regra desta
-    // casa, mas a saída ficava a uma rolagem de distância do aviso.
-    //
-    // O botão daqui faz exatamente o que o ALTERAR faz (`decidirDados` com
-    // `false`): abre a caixa de texto do cartão de decisão. Mesma porta, na
-    // altura de quem leu o problema.
-    const faltaComBotao = (titulo, explicacao) =>
-        '<div class="portal-falta">'
-        + iconeDaEntrega('alerta', 20, '#f97316')
-        + '<span class="portal-falta-texto"><b>' + escapeHtml(titulo) + '</b>'
-        + explicacao + '</span>'
-        + '<button type="button" class="portal-falta-botao" '
-        + 'onclick="decidirDados(\'entrega\', false)">Informar</button>'
-        + '</div>';
-
-    let aviso = '';
-    if (exige) {
-        aviso = faltaComBotao('Falta quem vai receber',
-            'A nota deste pedido é de empresa (CNPJ), e a transportadora entrega na mão de '
-            + 'uma pessoa — ela pede o nome e o CPF de quem recebe.');
-    } else if (faltando) {
-        aviso = faltaComBotao(faltando > 1 ? 'Faltam o nome e o CPF de quem recebe' : 'Falta um dado de quem recebe',
-            'É o que a transportadora pede na hora da entrega.');
-    }
-
-    // O endereço que veio do cadastro, e não da escolha do pedido, se anuncia:
-    // metade dos pedidos não traz endereço escolhido, e o cliente precisa saber
-    // que aquilo é o principal do cadastro dele, e não uma decisão que alguém
-    // tomou para este pedido.
-    if (destino.endereco && destino.endereco.do_cadastro) {
-        aviso = '<div class="portal-aviso calmo">Este é o <b>endereço principal</b> do seu '
-              + 'cadastro. Se a entrega for em outro lugar, toque em <b>Alterar</b> abaixo '
-              + 'e informe.</div>' + aviso;
-    }
-
     const chegada = cartaoDeChegada(dados);
-
-    secao.innerHTML =
-        chegada
-        + cartaoDeLinhas(tituloDoCartao('entrega', 'Endereço de entrega'), endereco,
-            'O endereço de entrega ainda não foi definido neste pedido. '
-            + 'Toque em Alterar abaixo e escreva o endereço, ou fale com seu atendimento.',
-            aviso)
+    secao.innerHTML = chegada
+        + formularioEnderecoEntrega()
         + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
             envioSemOsPrazos(dados, !!chegada), '')
-        + cartaoDeDecisao('entrega', exige
-            ? 'Informe o nome e o CPF de quem vai receber antes de confirmar.'
-            : null)
+        + cartaoDeDecisao('entrega')
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

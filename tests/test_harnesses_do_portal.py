@@ -34,6 +34,7 @@ HARNESSES = [
     "portal_confirmacoes_harness.js",
     "portal_orcamento_harness.js",
     "portal_persistencia_harness.js",
+    "portal_entrega_cep_harness.js",
 ]
 
 
