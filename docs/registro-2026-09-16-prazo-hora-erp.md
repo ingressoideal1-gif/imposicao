@@ -27,7 +27,28 @@ A leitura real autorizada do pedido 22192 retornou data_termino
 `2026-09-16T00:00:00`. A consulta de setores usando acesso público retornou `[]`;
 isso não prova inexistência de setores nem confirma a hora no contexto autenticado.
 O usuário informou `16:00`. Pendente conferir esse pedido com a sessão do painel.
-Nenhuma política, dado compartilhado ou backend foi alterado. Sem publicação.
+Nenhuma política, dado compartilhado ou backend foi alterado.
 
-Recuperação: a alteração está isolada no worktree acima, ainda sem commit; não
-exige restaurar o checkout operacional. Para revisão, usar `git diff` nesse worktree.
+## Publicação executada
+
+Autorizada pelo usuário com “executar”. Publicada como **v888**, commit
+`392b8a36`, integrado por fast-forward em `origin/main` pelo `entrega-segura.ps1`.
+A tag `v888` aponta para essa entrega. Cloudflare Pages concluiu com sucesso.
+
+A primeira conferência encontrou arquivos antigos durante a propagação. Sem
+repetir o deploy, a consulta posterior confirmou os três arquivos nos dois
+domínios (`imposition.ai-ideal.com.br` e `imposicao.pages.dev`): **6/6 iguais**.
+SHA-256 com normalização de BOM e quebras de linha:
+
+- `index.html`: `a8611a5b48fdc2fd0059623dcbbfd0e0df1bc5ebf3bf9eae95a097516d0487e4`
+- `producao.html`: `7b523a7df52c9e3767deeb9b61183d01c0637c9fe704adea452eeeb5695e80df`
+- `script.js`: `0826ba5e8f76e13e0882cde2906f593bd6ab7b5de901222164402c076edc796a`
+
+Os cinco harnesses passaram, incluindo 249 verificações existentes e a regressão
+da leitura/composição ERP. Sintaxe e revisão de whitespace também passaram.
+Permanece pendente a conferência do pedido 22192 na sessão autenticada do painel.
+Não houve instalação ou distribuição do NewProd.
+
+Recuperação: se necessária e autorizada, reverter o commit `392b8a36` em nova
+branch, validar e publicar com nova versão de cache. Não restaurar nem descartar
+alterações do checkout operacional. Para revisão: `git show 392b8a36`.
