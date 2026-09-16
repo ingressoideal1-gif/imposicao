@@ -17,8 +17,10 @@ function extrair(src, nome) {
 }
 const contexto = { window: {} };
 vm.createContext(contexto);
-vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal') + extrair(cliente, 'deveDesenharVersoAoVivo'), contexto);
-const { numeracaoTemVersoNoPortal, deveDesenharVersoAoVivo } = contexto;
+vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal')
+    + extrair(cliente, 'deveDesenharVersoAoVivo')
+    + extrair(cliente, 'arteDaFaceParaComposicao'), contexto);
+const { numeracaoTemVersoNoPortal, deveDesenharVersoAoVivo, arteDaFaceParaComposicao } = contexto;
 const isNumeracaoDuplex = numeracaoTemVersoNoPortal;
 const { reconciliarCorNumDoModelo } = require('../frontend/cor-numeracao-do-modelo.js');
 const inicioMap = cliente.indexOf('itensCarregados = prodItems.map(item => {');
@@ -78,6 +80,9 @@ assert.ok(htmlDuplex.includes('amostra-item-canvas-verso-0'));
 // pois a imagem estática não recebe os elementos atuais da numeração.
 const pdfDuplex = { ...carregar('Frente', { ...frente, print_mode: 'duplex_unico' }), modo_pdf: true };
 assert.equal(deveDesenharVersoAoVivo(pdfDuplex), true);
+assert.equal(arteDaFaceParaComposicao(pdfDuplex, 'back'), pdfDuplex.verso_amostra_arte_base64,
+    'verso paginado compõe sobre a amostra atual, não sobre arquivo bruto antigo');
+assert.equal(arteDaFaceParaComposicao(pdfDuplex, 'front'), pdfDuplex.arte_url);
 const htmlPdfDuplex = htmlArte(pdfDuplex, 0, { ...ctx, desenhoAoVivo: false, versoAoVivo: true });
 assert.ok(htmlPdfDuplex.includes('amostra-pdf-canvas-0'), 'frente mantém o folheador PDF');
 assert.ok(htmlPdfDuplex.includes('amostra-item-canvas-verso-0'), 'verso PDF é composto ao vivo');

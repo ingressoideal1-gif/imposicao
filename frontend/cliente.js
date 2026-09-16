@@ -1234,7 +1234,19 @@ function numeracaoTemVersoNoPortal(numObj) {
  * canvas normal para compor a arte separada com os elementos da numeração.
  */
 function deveDesenharVersoAoVivo(item) {
-    return !!(item && item.modo_pdf && item.verso && item.verso_arte_url);
+    return !!(item && item.modo_pdf && item.verso
+        && (item.verso_amostra_arte_base64 || item.verso_arte_url));
+}
+
+/** A amostra é a face atual aprovada; o arquivo bruto pode conservar arte antiga. */
+function arteDaFaceParaComposicao(item, face) {
+    if (face === 'back') {
+        if (item && item.modo_pdf && item.verso_amostra_arte_base64) {
+            return item.verso_amostra_arte_base64;
+        }
+        return item && item.verso_arte_url;
+    }
+    return item && item.arte_url;
 }
 
 /**
@@ -3141,7 +3153,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const arteInput = container ? container.querySelector(`#${inputId}`) : null;
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    const faceArteUrl = arteDaFaceParaComposicao(item, face);
     const hasSavedArte = !!faceArteUrl;
 
     // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio
