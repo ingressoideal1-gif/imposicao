@@ -32,11 +32,6 @@ BEGIN
     PERFORM id FROM public.pedidos_artes WHERE id_int = p_numero::bigint ORDER BY id FOR UPDATE;
     SELECT * INTO STRICT v_arte FROM public.pedidos_artes WHERE id_int = p_numero::bigint
      ORDER BY created_at DESC NULLS LAST, id DESC LIMIT 1;
-    IF EXISTS (SELECT 1 FROM public.pedidos_artes WHERE id_int = p_numero::bigint AND (
-        entrega_dados = 'APROVADO'
-        OR observacoes->'confirmacoes_portal'->'entrega' = 'true'::jsonb
-        OR observacoes->'confirmacoes_portal'->'finalizado' = 'true'::jsonb
-    )) THEN RAISE EXCEPTION 'desfaça a confirmação antes de editar a entrega'; END IF;
     SELECT * INTO STRICT v_prop FROM public.propostas WHERE id_int = p_numero::bigint FOR UPDATE;
     IF v_prop.id_cliente IS NULL THEN RAISE EXCEPTION 'pedido sem cliente'; END IF;
     v_portal := public.link_cliente_pedido(p_numero, p_token);
@@ -95,6 +90,14 @@ BEGIN
     IF (coalesce(nullif(v_atual, 'null'::jsonb), '{}'::jsonb) - 'do_cadastro') = p_endereco THEN
         RETURN jsonb_build_object('ok',true,'numero',p_numero,'endereco',v_atual);
     END IF;
+    -- Uma resposta pode se perder depois do COMMIT. Nesse caso, repetir os
+    -- mesmos dados acima devolve recibo mesmo que a confirmação já tenha sido
+    -- gravada. Somente uma tentativa de MUDAR o endereço confirmado é barrada.
+    IF EXISTS (SELECT 1 FROM public.pedidos_artes WHERE id_int = p_numero::bigint AND (
+        entrega_dados = 'APROVADO'
+        OR observacoes->'confirmacoes_portal'->'entrega' = 'true'::jsonb
+        OR observacoes->'confirmacoes_portal'->'finalizado' = 'true'::jsonb
+    )) THEN RAISE EXCEPTION 'use Alterar antes de modificar a entrega'; END IF;
     IF v_atual IS DISTINCT FROM coalesce(p_anterior,'null'::jsonb) THEN
         RAISE EXCEPTION 'o endereço mudou; reabra o link antes de salvar';
     END IF;

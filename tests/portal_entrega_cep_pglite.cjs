@@ -81,7 +81,10 @@ async function main() {
         // Simula a confirmação que só ocorre depois de salvar o endereço.
         await db.exec(`UPDATE pedidos_artes SET entrega_dados='APROVADO',
             observacoes='{"confirmacoes_portal":{"entrega":true,"faturamento":true,"selo":"APROVADO","finalizado":false}}' WHERE id_int=123`);
-        await assert.rejects(salvar({ ...novo, numero: '20' }, atual), /desfaça/);
+        const repeticaoConfirmada = await salvar();
+        assert.equal(repeticaoConfirmada.rows[0].recibo.ok, true, 'repetição idêntica recebe recibo mesmo após confirmar');
+        assert.equal((await db.query('SELECT count(*)::int AS n FROM enderecos')).rows[0].n, 1);
+        await assert.rejects(salvar({ ...novo, numero: '20' }, atual), /use Alterar/);
         const fim = await db.query(`SELECT link_cliente_finalizar('123','teste',
             '{"entrega":true,"faturamento":true,"textoEntrega":"","textoFaturamento":""}') AS r`);
         assert.equal(fim.rows[0].r.finalizado, true);
