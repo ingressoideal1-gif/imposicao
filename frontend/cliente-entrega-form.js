@@ -12,8 +12,7 @@ function dadosDoFormularioEntrega() {
         CAMPOS_ENTREGA.forEach(k => { rascunhoEntrega.valores[k] = String(anterior[k] || ''); });
         rascunhoEntrega.valores.recebedor ||= fisica ? dados.cliente.nome || '' : '';
         rascunhoEntrega.valores.cpf_recebedor ||= fisica ? dados.cliente.documento || '' : '';
-        // O cliente digita o CEP para conferir o destino, mesmo havendo endereço cadastrado.
-        if (window.portalConfirmacoes.entrega !== true) rascunhoEntrega.valores.cep = '';
+        // O CEP cadastrado fica visível; sua edição só é liberada por Alterar.
     }
     return rascunhoEntrega;
 }
@@ -22,6 +21,7 @@ function editarCampoEntrega(campo, valor) {
     if (!CAMPOS_ENTREGA.includes(campo) || window.portalGravandoConfirmacao
         || window.portalConfirmacoes.entrega === true || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
+    if (campo === 'cep' && window.portalConfirmacoes.entrega !== false) return;
     r.valores[campo] = valor;
     r.erro = '';
     if (campo === 'cep') {
@@ -44,7 +44,7 @@ function cpfDaEntregaValido(valor) {
 }
 
 async function buscarCepEntrega() {
-    if (window.portalGravandoConfirmacao || window.portalConfirmacoes.entrega === true
+    if (window.portalGravandoConfirmacao || window.portalConfirmacoes.entrega !== false
         || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
     const cep = r.valores.cep.replace(/\D/g, '');
@@ -65,7 +65,7 @@ async function buscarCepEntrega() {
         const resposta = await fetch('https://viacep.com.br/ws/' + cep + '/json/', { signal: controller.signal });
         if (!resposta.ok) throw new Error('consulta');
         const endereco = await resposta.json();
-        if (sequencia !== consultaEntrega) return;
+        if (sequencia !== consultaEntrega || window.portalConfirmacoes.entrega !== false) return;
         if (endereco.erro || String(endereco.cep || '').replace(/\D/g, '') !== cep
             || !endereco.localidade || !/^[A-Z]{2}$/.test(endereco.uf || '')) throw new Error('cep');
         Object.assign(r.valores, {
@@ -87,6 +87,7 @@ async function buscarCepEntrega() {
 function formularioEnderecoEntrega() {
     const r = dadosDoFormularioEntrega();
     const confirmado = window.portalConfirmacoes.entrega === true;
+    const alterando = window.portalConfirmacoes.entrega === false;
     const bloqueado = confirmado || window.portalGravandoConfirmacao || clienteState.pedidoFinalizado;
     const rotulos = { recebedor: 'Recebedor', cpf_recebedor: 'CPF do recebedor', cep: 'CEP',
         endereco: 'Endereço', numero: 'Número (ou S/N)', complemento: 'Complemento (opcional)',
@@ -98,11 +99,14 @@ function formularioEnderecoEntrega() {
         + 'style="display:block;width:100%;box-sizing:border-box" type="text" maxlength="' + limites[k] + '" '
         + (['cep', 'cpf_recebedor'].includes(k) ? 'inputmode="numeric" ' : '')
         + (['cidade', 'uf'].includes(k) ? 'readonly ' : '')
+        + (k === 'cep' && !alterando ? 'disabled ' : '')
         + 'value="' + escapeHtml(r.valores[k]) + '" oninput="editarCampoEntrega(\'' + k + '\',this.value)"></label>'
-        + (k === 'cep' && !confirmado ? '<button type="button" class="portal-botao" onclick="buscarCepEntrega()" '
+        + (k === 'cep' && alterando ? '<button type="button" class="portal-botao" onclick="buscarCepEntrega()" '
             + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CEP...' : 'Buscar endereço pelo CEP') + '</button>' : '')).join('');
     return '<div class="portal-cartao"><h2>Endereço de entrega</h2>'
-        + (!confirmado ? '<p>Digite o CEP, busque o endereço e complete os dados de quem vai receber. Informe rua e bairro se o CEP abranger toda a cidade.</p>' : '')
+        + (!confirmado ? '<p>' + (alterando
+            ? 'Digite o CEP, busque o endereço e complete os dados de quem vai receber. Informe rua e bairro se o CEP abranger toda a cidade.'
+            : 'Confira os dados de entrega. Para editar o CEP, use Alterar abaixo.') + '</p>' : '')
         + (r.anterior && r.anterior.cep && !confirmado ? '<p>CEP cadastrado: ' + escapeHtml(r.anterior.cep) + '</p>' : '')
         + '<fieldset style="border:0;padding:0;margin:0;min-width:0" ' + (bloqueado ? 'disabled' : '') + '>' + campos + '</fieldset>'
         + (r.erro ? '<p role="alert" class="portal-aviso atencao">' + escapeHtml(r.erro) + '</p>' : '') + '</div>';
@@ -113,8 +117,10 @@ async function persistirEnderecoEntrega() {
     const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, r.valores[k].trim()]));
     valores.cep = valores.cep.replace(/\D/g, '');
     valores.cpf_recebedor = valores.cpf_recebedor.replace(/\D/g, '');
-    if (r.buscando || !r.consultado || r.consultado !== valores.cep)
+    if (window.portalConfirmacoes.entrega === false && (r.buscando || !r.consultado || r.consultado !== valores.cep))
         throw new Error('Digite o CEP e use Buscar endereço pelo CEP antes de confirmar.');
+    if (!/^\d{8}$/.test(valores.cep))
+        throw new Error('Use Alterar para informar e consultar o CEP da entrega.');
     if (!valores.recebedor || !cpfDaEntregaValido(valores.cpf_recebedor))
         throw new Error('Informe o nome do recebedor e um CPF válido.');
     if (['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !valores[k]))

@@ -35,6 +35,10 @@ const raiz = path.resolve(__dirname, '..');
         for (const name of ['cliente-confirmacoes.js','cliente-entrega-form.js'])
             await page.addScriptTag({ content: fs.readFileSync(path.join(raiz,'frontend',name),'utf8') });
         await page.evaluate(() => redesenharSecao('entrega'));
+        assert.equal(await page.$eval('#entrega-cep', e => e.matches(':disabled')), true);
+        assert.equal(await page.$('[onclick="buscarCepEntrega()"]'), null);
+        await page.click('[onclick="decidirDados(\'entrega\', false)"]');
+        await page.waitForFunction(() => !document.getElementById('entrega-cep').matches(':disabled'));
         await page.type('#entrega-recebedor', 'Pessoa Teste');
         await page.type('#entrega-cpf_recebedor', '52998224725');
         await page.type('#entrega-cep', '01001000');

@@ -103,3 +103,16 @@ Hashes finais dos arquivos publicados:
 - `cliente-entrega-form.js`: `808c93921f1e62a75b00bd632ac77e6e14c9834054cde1909d689932d5a6b1d5`
 - `cliente-entrega.js`: `9ff1b14d9802621e7b3b07171c0893f0cd838d35f424170ecdd64b8745ec80e2`
 - `cliente-confirmacoes.js`: `87dd36785709bb5d12ff506326ee02522039e4e212fe48ad31af9d6b9d27ea0a`
+
+
+## Ajuste solicitado: CEP somente após Alterar
+
+O CEP cadastrado permanece visível e desabilitado na conferência inicial. O botão
+Buscar endereço pelo CEP aparece somente depois de a solicitação **Alterar** ter
+sido persistida. A confirmação do endereço já cadastrado dispensa nova consulta.
+Durante alteração, a busca por CEP continua obrigatória antes de confirmar.
+Recebedor e CPF continuam editáveis enquanto a entrega não estiver confirmada.
+
+Testes de regressão verificam bloqueio inicial, confirmação sem consultar API,
+liberação após Alterar, manutenção do bloqueio quando essa gravação falha e cliques
+reais no navegador móvel. Não requer nova migração SQL.

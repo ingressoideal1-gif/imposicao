@@ -26,6 +26,7 @@ function ambiente() {
     return { c, chamadas };
 }
 async function preencher(c) {
+    c.portalConfirmacoes.entrega = false;
     c.editarCampoEntrega('cep', '01001-000');
     await c.buscarCepEntrega();
     for (const campo of ['recebedor', 'cpf_recebedor', 'numero']) c.editarCampoEntrega(campo, endereco[campo]);
@@ -51,7 +52,7 @@ async function main() {
     await preencher(c);
     c.gravarCorrecaoDoCliente = async () => ({ ok: false });
     await c.decidirDados('entrega', true);
-    assert.equal(c.portalConfirmacoes.entrega, null, 'salvar endereço não antecipa confirmação');
+    assert.equal(c.portalConfirmacoes.entrega, false, 'salvar endereço não antecipa confirmação');
     assert.ok(c.portalDados.endereco);
     assert.ok(!chamadas.some(x => x.startsWith('avanco')));
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
@@ -64,7 +65,7 @@ async function main() {
         await preencher(c);
         c.supabaseClient.rpc = async () => ({ data: recibo });
         await c.decidirDados('entrega', true);
-        assert.equal(c.portalConfirmacoes.entrega, null);
+        assert.equal(c.portalConfirmacoes.entrega, false);
         assert.equal(c.portalDados.endereco, null);
         assert.deepEqual(chamadas, []);
     }
@@ -84,6 +85,7 @@ async function main() {
 
     ({ c, chamadas } = ambiente());
     let responder;
+    c.portalConfirmacoes.entrega = false;
     c.fetch = () => new Promise(resolve => { responder = resolve; });
     c.editarCampoEntrega('cep', '01001000');
     const busca = c.buscarCepEntrega();
@@ -102,9 +104,31 @@ async function main() {
     const salvando = c.decidirDados('entrega', true);
     await c.decidirDados('entrega', true);
     assert.equal(chamadas.length, 1);
-    assert.equal(c.portalConfirmacoes.entrega, null);
+    assert.equal(c.portalConfirmacoes.entrega, false);
     concluir(); await salvando;
     assert.equal(c.portalConfirmacoes.entrega, true);
+    ({ c, chamadas } = ambiente());
+    c.portalDados.endereco = { ...endereco };
+    let consultas = 0;
+    c.fetch = async () => { consultas++; throw new Error('consulta indevida'); };
+    assert.equal(c.dadosDoFormularioEntrega().valores.cep, endereco.cep);
+    c.editarCampoEntrega('cep', '22222222');
+    await c.buscarCepEntrega();
+    assert.equal(c.dadosDoFormularioEntrega().valores.cep, endereco.cep);
+    assert.equal(consultas, 0, 'CEP bloqueado não consulta API');
+    await c.decidirDados('entrega', true);
+    assert.equal(c.portalConfirmacoes.entrega, true, 'endereço cadastrado confirma sem redigitar CEP');
+    assert.equal(consultas, 0);
+
+    ({ c, chamadas } = ambiente());
+    c.gravarCorrecaoDoCliente = async () => ({ ok: false });
+    await c.decidirDados('entrega', false);
+    c.editarCampoEntrega('cep', '01001000');
+    assert.equal(c.dadosDoFormularioEntrega().valores.cep, '', 'falha ao solicitar alteração mantém CEP bloqueado');
+    c.gravarCorrecaoDoCliente = async () => ({ ok: true });
+    await c.decidirDados('entrega', false);
+    c.editarCampoEntrega('cep', '01001000');
+    assert.equal(c.dadosDoFormularioEntrega().valores.cep, '01001000', 'Alterar habilita CEP');
     console.log('OK: formulário, CEP, CPF, concorrência, falhas de recibo e avanço após as duas gravações.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
