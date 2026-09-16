@@ -146,3 +146,11 @@ permanece `SECURITY DEFINER`, executável por `anon`, rejeitou token inválido e
 confirmada com hash de corpo `2bed9c5ff5007d453e70a2db7da2e9de`. A definição
 anterior para recuperação ficou fora do repositório no diretório temporário da
 entrega (`enderecos-modal-recuperacao.sql`). Nenhum pedido real foi aberto ou alterado.
+
+Frontend publicado como **v887**, commit
+`ebc7bb71649d64059ccc7ef9311d1ca07e53435d`. O check do Cloudflare Pages foi
+concluído com sucesso. Após a propagação, os sete arquivos afetados pelo código e
+pelo cache (`cliente.html`, três módulos do cliente, `style.css`, `index.html` e
+`producao.html`) conferiram por SHA-256 normalizado nos dois domínios: 14 de 14.
+A primeira comparação automática ainda encontrou um arquivo da versão anterior;
+a publicação não foi repetida e a conferência posterior comprovou a propagação.
