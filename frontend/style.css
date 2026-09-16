@@ -3899,6 +3899,34 @@ input[type=number] {
 .portal-par-de-botoes { display: flex; gap: 10px; margin-top: 14px; }
 .portal-par-de-botoes .portal-botao { flex: 1; }
 
+.portal-modal-enderecos {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 40px);
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+}
+.portal-modal-enderecos::backdrop { background: rgba(15, 23, 42, .62); }
+.portal-modal-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.portal-modal-cabecalho h2 { margin: 0; }
+.portal-modal-fechar { border: 0; background: transparent; color: var(--text); font-size: 30px; cursor: pointer; }
+.portal-lista-enderecos { display: grid; gap: 10px; margin: 18px 0; max-height: 55vh; overflow: auto; }
+.portal-endereco-opcao {
+    display: grid;
+    gap: 4px;
+    width: 100%;
+    padding: 14px;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+}
+.portal-endereco-opcao:hover, .portal-endereco-opcao:focus-visible { border-color: var(--blue); }
+
 .portal-caixa-de-texto {
     width: 100%;
     margin: 12px 0 10px;

@@ -432,7 +432,7 @@ function desenharSecaoEntrega() {
         + formularioEnderecoEntrega()
         + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
             envioSemOsPrazos(dados, !!chegada), '')
-        + cartaoDeDecisao('entrega')
+        + cartaoDeDecisaoEntrega()
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

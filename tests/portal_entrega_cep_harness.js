@@ -26,7 +26,7 @@ function ambiente() {
     return { c, chamadas };
 }
 async function preencher(c) {
-    c.portalConfirmacoes.entrega = false;
+    await c.liberarEdicaoEntrega();
     c.editarCampoEntrega('cep', '01001-000');
     await c.buscarCepEntrega();
     for (const campo of ['recebedor', 'cpf_recebedor', 'numero']) c.editarCampoEntrega(campo, endereco[campo]);
@@ -36,6 +36,9 @@ async function main() {
     assert.ok(c.formularioEnderecoEntrega().includes('id="entrega-recebedor"'));
     assert.equal(c.cpfDaEntregaValido('11111111111'), false);
     assert.equal(c.cpfDaEntregaValido('529.982.247-25'), true);
+    assert.ok(!c.cartaoDeDecisaoEntrega().includes('portal-correcao-entrega'));
+    assert.ok(!c.cartaoDeDecisaoEntrega().includes('Desfazer'));
+    assert.ok(c.cartaoDeDecisaoEntrega().includes('Ver endereços cadastrados'));
     await c.decidirDados('entrega', true);
     assert.equal(c.portalConfirmacoes.entrega, null);
     assert.deepEqual(chamadas, []);
@@ -52,7 +55,7 @@ async function main() {
     await preencher(c);
     c.gravarCorrecaoDoCliente = async () => ({ ok: false });
     await c.decidirDados('entrega', true);
-    assert.equal(c.portalConfirmacoes.entrega, false, 'salvar endereço não antecipa confirmação');
+    assert.equal(c.portalConfirmacoes.entrega, null, 'salvar endereço não antecipa confirmação');
     assert.ok(c.portalDados.endereco);
     assert.ok(!chamadas.some(x => x.startsWith('avanco')));
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
@@ -65,7 +68,7 @@ async function main() {
         await preencher(c);
         c.supabaseClient.rpc = async () => ({ data: recibo });
         await c.decidirDados('entrega', true);
-        assert.equal(c.portalConfirmacoes.entrega, false);
+        assert.equal(c.portalConfirmacoes.entrega, null);
         assert.equal(c.portalDados.endereco, null);
         assert.deepEqual(chamadas, []);
     }
@@ -84,8 +87,18 @@ async function main() {
     assert.equal(c.dadosDoFormularioEntrega().buscando, false);
 
     ({ c, chamadas } = ambiente());
+    c.portalDados.enderecos_entrega = [{ ...endereco, endereco: 'Rua Cadastrada', numero: '44', tipo_endereco: 'PRINCIPAL' }];
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Rua Cadastrada');
+    assert.equal(c.dadosDoFormularioEntrega().valores.numero, '44');
+    assert.equal(c.dadosDoFormularioEntrega().consultado, endereco.cep);
+    assert.deepEqual(chamadas, [], 'selecionar apenas carrega; ainda não grava');
+    await c.decidirDados('entrega', true);
+    assert.deepEqual(chamadas, ['link_cliente_salvar_entrega', 'confirmacao', 'avanco:faturamento']);
+
+    ({ c, chamadas } = ambiente());
     let responder;
-    c.portalConfirmacoes.entrega = false;
+    await c.liberarEdicaoEntrega();
     c.fetch = () => new Promise(resolve => { responder = resolve; });
     c.editarCampoEntrega('cep', '01001000');
     const busca = c.buscarCepEntrega();
@@ -104,7 +117,7 @@ async function main() {
     const salvando = c.decidirDados('entrega', true);
     await c.decidirDados('entrega', true);
     assert.equal(chamadas.length, 1);
-    assert.equal(c.portalConfirmacoes.entrega, false);
+    assert.equal(c.portalConfirmacoes.entrega, null);
     concluir(); await salvando;
     assert.equal(c.portalConfirmacoes.entrega, true);
     ({ c, chamadas } = ambiente());
@@ -121,12 +134,13 @@ async function main() {
     assert.equal(consultas, 0);
 
     ({ c, chamadas } = ambiente());
+    c.portalConfirmacoes.entrega = true;
     c.gravarCorrecaoDoCliente = async () => ({ ok: false });
-    await c.decidirDados('entrega', false);
+    await c.liberarEdicaoEntrega();
     c.editarCampoEntrega('cep', '01001000');
     assert.equal(c.dadosDoFormularioEntrega().valores.cep, '', 'falha ao solicitar alteração mantém CEP bloqueado');
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
-    await c.decidirDados('entrega', false);
+    await c.liberarEdicaoEntrega();
     c.editarCampoEntrega('cep', '01001000');
     assert.equal(c.dadosDoFormularioEntrega().valores.cep, '01001000', 'Alterar habilita CEP');
     console.log('OK: formulário, CEP, CPF, concorrência, falhas de recibo e avanço após as duas gravações.');

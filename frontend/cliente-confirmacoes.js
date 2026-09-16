@@ -291,6 +291,9 @@ window.decidirDados = async function (qual, confirmou) {
         }, selo, proxima);
         if (!gravacao.ok) throw new Error(gravacao.erro || 'Falha ao salvar');
         Object.assign(c, proxima);
+        if (qual === 'entrega' && confirmou === true && typeof concluirEdicaoEntrega === 'function') {
+            concluirEdicaoEntrega();
+        }
         clienteState.entregaStatus = selo;
         clienteState.pedidoFinalizado = false;
     } catch (e) {

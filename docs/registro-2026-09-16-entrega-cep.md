@@ -119,3 +119,30 @@ reais no navegador móvel. Não requer nova migração SQL.
 
 Ajuste publicado como **v886**, commit `8624a2e1ad3a8706d7f43634711391910e78ebc6`.
 Cloudflare Pages concluído com sucesso; HTML e formulário conferidos nos dois domínios.
+
+## Fluxo direto e endereços cadastrados
+
+A Entrega deixa de usar a caixa “Escreva o que precisa ser corrigido”, o botão
+“Salvar correção” e o link “Desfazer”. Esses controles continuam na Nota, onde
+uma divergência ainda depende do atendimento. Na Entrega, o fluxo passa a ser:
+
+1. campos bloqueados para conferência;
+2. **Alterar** libera os campos sem marcar o pedido como `CORRIGIR`;
+3. **Confirmar** valida, grava o endereço, persiste a confirmação e bloqueia os campos;
+4. qualquer falha mantém a edição aberta e não avança.
+
+**Ver endereços cadastrados** abre um modal com endereços do cliente comercial
+vinculado à proposta. A seleção apenas carrega o formulário; a gravação continua
+dependendo de Confirmar. Cópias exclusivas criadas pelo portal para outros pedidos
+não aparecem. O endereço exclusivo do pedido atual permanece elegível. A opção
+**Informar outro endereço** preserva recebedor/CPF e limpa os campos do destino.
+
+Essa lista é incluída pela RPC de leitura sob `enderecos_entrega`; não concede
+leitura direta à tabela e não mistura o cliente de faturamento quando ele difere
+do cliente comercial do pedido.
+
+Revisão SQL instalada no Supabase antes do frontend, commit `3fc01280`. A função
+permanece `SECURITY DEFINER`, executável por `anon`, rejeitou token inválido e foi
+confirmada com hash de corpo `2bed9c5ff5007d453e70a2db7da2e9de`. A definição
+anterior para recuperação ficou fora do repositório no diretório temporário da
+entrega (`enderecos-modal-recuperacao.sql`). Nenhum pedido real foi aberto ou alterado.

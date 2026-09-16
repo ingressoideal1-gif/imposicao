@@ -16,15 +16,19 @@ const raiz = path.resolve(__dirname, '..');
         await page.setContent('<html lang="pt-BR"><body><main id="secao-entrega" style="max-width:650px;margin:auto"></main></body></html>');
         await page.addStyleTag({ content: fs.readFileSync(path.join(raiz,'frontend/style.css'),'utf8').replace(/^@import[^\r\n]*$/gm, '') });
         await page.evaluate(() => {
-            window.portalDados = { endereco: null, cliente: null, pedido: { frete_escolhido: 'PAC' } };
+            window.portalDados = { endereco: null, cliente: null, pedido: { frete_escolhido: 'PAC' }, enderecos_entrega: [
+                { tipo_endereco: 'PRINCIPAL', recebedor: 'Pessoa Cadastrada', cpf_recebedor: '52998224725',
+                  cep: '01001000', endereco: 'Rua Cadastrada', numero: '80', complemento: '', bairro: 'Centro', cidade: 'São Paulo', uf: 'SP' }
+            ] };
             window.clienteState = { numero: '123', token: 'teste', pedidoFinalizado: false };
             window.state = {};
             window.SECOES = ['entrega','faturamento'];
             window.escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
             window.tipoDaPessoa = () => 'juridica';
+            window.cepEmMascara = valor => String(valor || '').replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2');
             window.ehRetirada = () => false;
             window.redesenharSecao = qual => {
-                if (qual === 'entrega') document.getElementById('secao-entrega').innerHTML = formularioEnderecoEntrega() + cartaoDeDecisao('entrega');
+                if (qual === 'entrega') document.getElementById('secao-entrega').innerHTML = formularioEnderecoEntrega() + cartaoDeDecisaoEntrega();
             };
             window.atualizarPainelDoPedido = () => {};
             window.abrirSecao = qual => { window.avancou = qual; };
@@ -37,8 +41,19 @@ const raiz = path.resolve(__dirname, '..');
         await page.evaluate(() => redesenharSecao('entrega'));
         assert.equal(await page.$eval('#entrega-cep', e => e.matches(':disabled')), true);
         assert.equal(await page.$('[onclick="buscarCepEntrega()"]'), null);
-        await page.click('[onclick="decidirDados(\'entrega\', false)"]');
+        await page.click('[onclick="liberarEdicaoEntrega()"]');
         await page.waitForFunction(() => !document.getElementById('entrega-cep').matches(':disabled'));
+        await page.click('[onclick="abrirEnderecosEntrega()"]');
+        await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open);
+        await page.click('[onclick="selecionarEnderecoEntrega(0)"]');
+        await page.waitForFunction(() => document.getElementById('entrega-endereco').value === 'Rua Cadastrada');
+        assert.equal(await page.$eval('#entrega-numero', e => e.value), '80');
+        await page.evaluate(() => informarOutroEnderecoEntrega());
+        await page.evaluate(() => {
+            editarCampoEntrega('recebedor', '');
+            editarCampoEntrega('cpf_recebedor', '');
+            redesenharSecao('entrega');
+        });
         await page.type('#entrega-recebedor', 'Pessoa Teste');
         await page.type('#entrega-cpf_recebedor', '52998224725');
         await page.type('#entrega-cep', '01001000');
