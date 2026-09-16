@@ -16,7 +16,7 @@ DECLARE
     v_atual jsonb;
     v_gravado jsonb;
     v_chave text;
-    v_cpf text;
+    v_documento text;
     v_soma integer;
     v_n integer;
     v_i integer;
@@ -50,7 +50,7 @@ BEGIN
            OR p_endereco->>v_chave IS DISTINCT FROM btrim(p_endereco->>v_chave)
            OR (v_chave <> 'complemento' AND btrim(p_endereco->>v_chave) = '')
            OR length(p_endereco->>v_chave) > (CASE v_chave
-               WHEN 'recebedor' THEN 150 WHEN 'cpf_recebedor' THEN 11 WHEN 'cep' THEN 8
+               WHEN 'recebedor' THEN 150 WHEN 'cpf_recebedor' THEN 14 WHEN 'cep' THEN 8
                WHEN 'endereco' THEN 200 WHEN 'numero' THEN 20 WHEN 'complemento' THEN 150
                WHEN 'uf' THEN 2 ELSE 100 END) THEN
             RAISE EXCEPTION 'campo de entrega inválido: %', v_chave;
@@ -61,19 +61,35 @@ BEGIN
             'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO') THEN
         RAISE EXCEPTION 'CEP ou UF inválido';
     END IF;
-    v_cpf := p_endereco->>'cpf_recebedor';
-    IF v_cpf !~ '^[0-9]{11}$' OR v_cpf = repeat(substr(v_cpf,1,1),11) THEN
-        RAISE EXCEPTION 'CPF inválido';
+    v_documento := p_endereco->>'cpf_recebedor';
+    IF v_documento !~ '^([0-9]{11}|[0-9]{14})$'
+       OR v_documento = repeat(substr(v_documento,1,1),length(v_documento)) THEN
+        RAISE EXCEPTION 'CPF ou CNPJ inválido';
     END IF;
-    FOR v_n IN 9..10 LOOP
-        v_soma := 0;
-        FOR v_i IN 1..v_n LOOP
-            v_soma := v_soma + substr(v_cpf,v_i,1)::integer * (v_n + 2 - v_i);
+    IF length(v_documento) = 11 THEN
+        FOR v_n IN 9..10 LOOP
+            v_soma := 0;
+            FOR v_i IN 1..v_n LOOP
+                v_soma := v_soma + substr(v_documento,v_i,1)::integer * (v_n + 2 - v_i);
+            END LOOP;
+            IF mod(mod(v_soma * 10,11),10) <> substr(v_documento,v_n+1,1)::integer THEN
+                RAISE EXCEPTION 'CPF inválido';
+            END IF;
         END LOOP;
-        IF mod(mod(v_soma * 10,11),10) <> substr(v_cpf,v_n+1,1)::integer THEN
-            RAISE EXCEPTION 'CPF inválido';
-        END IF;
-    END LOOP;
+    ELSE
+        -- CNPJ: dois dígitos, com pesos 5..2/9..2 e 6..2/9..2.
+        FOR v_n IN 1..2 LOOP
+            v_soma := 0;
+            FOR v_i IN 1..(11 + v_n) LOOP
+                v_soma := v_soma + substr(v_documento,v_i,1)::integer *
+                    CASE WHEN v_i <= (3 + v_n) THEN (5 + v_n - v_i) ELSE (13 + v_n - v_i) END;
+            END LOOP;
+            IF (CASE WHEN mod(v_soma,11) < 2 THEN 0 ELSE 11 - mod(v_soma,11) END)
+                <> substr(v_documento,12+v_n,1)::integer THEN
+                RAISE EXCEPTION 'CNPJ inválido';
+            END IF;
+        END LOOP;
+    END IF;
     v_atual := v_portal->'endereco';
     -- Repetir após perda da resposta não cria outro endereço.
     IF (coalesce(nullif(v_atual, 'null'::jsonb), '{}'::jsonb) - 'do_cadastro') = p_endereco THEN

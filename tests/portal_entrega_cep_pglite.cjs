@@ -36,8 +36,15 @@ async function main() {
             'SELECT link_cliente_salvar_entrega($1,$2,$3::jsonb,$4::jsonb) AS recibo', ['123',token,JSON.stringify(valor),JSON.stringify(anterior)]);
         await assert.rejects(salvar(novo, null, 'invalido'));
         await assert.rejects(salvar({ ...novo, cpf_recebedor: '11111111111' }));
+        await assert.rejects(salvar({ ...novo, cpf_recebedor: '11222333000182' }));
+        await assert.rejects(salvar({ ...novo, cpf_recebedor: '11111111111111' }));
         await assert.rejects(salvar({ ...novo, numero: '' }));
         await assert.rejects(salvar({ ...novo, cep: '123' }));
+        await db.exec('BEGIN');
+        const comCnpj = { ...novo, cpf_recebedor: '11222333000181', numero: '11' };
+        const cnpj = await salvar(comCnpj);
+        assert.equal(cnpj.rows[0].recibo.endereco.cpf_recebedor, '11222333000181');
+        await db.exec('ROLLBACK');
         await db.exec('SET ROLE anon');
         const { rows } = await salvar();
         await db.exec('RESET ROLE');
@@ -79,7 +86,7 @@ async function main() {
             '{"entrega":true,"faturamento":true,"textoEntrega":"","textoFaturamento":""}') AS r`);
         assert.equal(fim.rows[0].r.finalizado, true);
         assert.equal((await db.query('SELECT status_arte FROM pedidos_links_cliente')).rows[0].status_arte, 'APROVADO');
-        console.log('OK: SQL em memória — autenticação, CPF, campos, isolamento, repetição, conflito, rollback e finalização integrada.');
+        console.log('OK: SQL em memória — autenticação, CPF/CNPJ, campos, isolamento, repetição, conflito, rollback e finalização integrada.');
     } finally { await db.close(); }
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
