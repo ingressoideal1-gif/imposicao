@@ -40,3 +40,11 @@ def test_o_harness_do_prazo_de_entrega_passa():
     )
     assert r.returncode == 0, "o harness falhou:" + (r.stdout or "") + (r.stderr or "")
     assert "OK:" in (r.stdout or ""), "o harness nao relatou sucesso:" + (r.stdout or "")
+
+
+def test_data_e_hora_do_erp():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "prazo_hora_erp_harness.js")],
+        cwd=RAIZ, timeout=30, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
