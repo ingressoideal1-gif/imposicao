@@ -17,8 +17,8 @@ function extrair(src, nome) {
 }
 const contexto = { window: {} };
 vm.createContext(contexto);
-vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal'), contexto);
-const { numeracaoTemVersoNoPortal } = contexto;
+vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal') + extrair(cliente, 'deveDesenharVersoAoVivo'), contexto);
+const { numeracaoTemVersoNoPortal, deveDesenharVersoAoVivo } = contexto;
 const isNumeracaoDuplex = numeracaoTemVersoNoPortal;
 const { reconciliarCorNumDoModelo } = require('../frontend/cor-numeracao-do-modelo.js');
 const inicioMap = cliente.indexOf('itensCarregados = prodItems.map(item => {');
@@ -73,6 +73,15 @@ assert.ok(htmlFrente.includes('amostra-item-canvas-0'));
 assert.ok(!htmlFrente.includes('amostra-item-canvas-verso-0'));
 const htmlDuplex = htmlArte(carregar('Frente', { ...frente, print_mode: 'duplex_unico' }), 0, ctx);
 assert.ok(htmlDuplex.includes('amostra-item-canvas-verso-0'));
+
+// PDF paginado: a frente conserva o folheador e o verso ganha canvas próprio,
+// pois a imagem estática não recebe os elementos atuais da numeração.
+const pdfDuplex = { ...carregar('Frente', { ...frente, print_mode: 'duplex_unico' }), modo_pdf: true };
+assert.equal(deveDesenharVersoAoVivo(pdfDuplex), true);
+const htmlPdfDuplex = htmlArte(pdfDuplex, 0, { ...ctx, desenhoAoVivo: false, versoAoVivo: true });
+assert.ok(htmlPdfDuplex.includes('amostra-pdf-canvas-0'), 'frente mantém o folheador PDF');
+assert.ok(htmlPdfDuplex.includes('amostra-item-canvas-verso-0'), 'verso PDF é composto ao vivo');
+assert.ok(!htmlPdfDuplex.includes('amostra-item-img-verso-0'), 'verso não usa snapshot estático');
 
 // Troca pelo seletor: verificar o payload real e a preservação dos originais.
 function selecionar(tipo, num) {

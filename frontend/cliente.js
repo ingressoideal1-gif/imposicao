@@ -317,6 +317,7 @@ function cabecalhoModeloCliente(item, idx, chip, corSelecionada) {
 
 function blocoDeArteDoCliente(item, idx, ctx) {
     const desenhoAoVivo = ctx.desenhoAoVivo;
+    const versoAoVivo = ctx.versoAoVivo;
     const arteVisivel = ctx.arteVisivel;
     const versoVisivel = ctx.versoVisivel;
     const paginaCsv = ctx.paginaCsv;
@@ -361,8 +362,8 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoVisivel ? 'none' : 'block'};">
+                                ${desenhoAoVivo || versoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoAoVivo || versoVisivel ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
                                 </div>
@@ -611,6 +612,7 @@ function renderAmostrasOSItens(osId) {
         const arteVisivel = temArteVisivel(item);
         const versoVisivel = !!item.verso_amostra_arte_base64
             && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
+        const versoAoVivo = deveDesenharVersoAoVivo(item);
 
         const ehCliente = state.amostrasContainerId === 'cliente-amostras-itens-container';
 
@@ -618,7 +620,7 @@ function renderAmostrasOSItens(osId) {
         // ele é um `const` declarado dentro do cartão, e lê-lo aqui em cima cai
         // na zona morta temporal -- a seção da arte deixava de desenhar inteira,
         // com um `icone is not defined` no console.
-        const ctxDaArte = { desenhoAoVivo, arteVisivel, versoVisivel, paginaCsv, ampliar: '' };
+        const ctxDaArte = { desenhoAoVivo, versoAoVivo, arteVisivel, versoVisivel, paginaCsv, ampliar: '' };
 
         // ── O cartão do modelo, na página do cliente ────────────────────────
         //
@@ -1225,6 +1227,14 @@ function numeracaoTemVersoNoPortal(numObj) {
     if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
     const nome = String(numObj.name || numObj.tipo || '').toLowerCase();
     return nome.includes('verso') || nome.includes('duplex') || nome.includes('frente e verso');
+}
+
+/**
+ * No PDF paginado, a frente fica no folheador. O verso continua precisando do
+ * canvas normal para compor a arte separada com os elementos da numeração.
+ */
+function deveDesenharVersoAoVivo(item) {
+    return !!(item && item.modo_pdf && item.verso && item.verso_arte_url);
 }
 
 /**
@@ -3057,12 +3067,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // "Página 1 / 1" e as setas paravam de andar — o cliente ficava sem como
     // conferir as outras 24 peças antes de aprovar (pedido 21408, 01/09/2026).
     //
-    // Aqui o verso nem precisa do folheador: nesta página ele já tem imagem
-    // própria (`amostra-item-img-verso-N`, alimentada por
-    // `verso_amostra_arte_base64`). Por isso a face `back` sai antes de encostar
-    // no visualizador — e, como em modo PDF ela chega sem canvas, sai da função
-    // inteira, sem cair na composição multicamada, que estouraria no `canvas`
-    // nulo. O painel ganhou esta mesma guarda em 31/08/2026; esta cópia não.
+    // O verso não usa o folheador: ele segue pelo canvas normal para compor o
+    // arquivo separado com os elementos atuais da numeração. Assim ele não
+    // substitui o estado paginado da frente e também não depende de um snapshot
+    // antigo, que pode ter sido salvo antes da numeração.
     const usaVisualizadorPaginado = !!(itemForPdf && itemForPdf.modo_pdf)
         && !(face === 'back' && itemForPdf.verso);
 
