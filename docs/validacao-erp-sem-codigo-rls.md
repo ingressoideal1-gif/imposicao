@@ -1,6 +1,6 @@
-# Validação RLS sem acesso ao código do ERP
+# Validação RLS com o mantenedor do ERP
 
-O usuário informou que o código do ERP não está disponível. Isso não impede a revisão de metadados nem as contenções já aplicadas; impede comprovar sozinho a compatibilidade de todas as mudanças. Este roteiro está preparado para revisão pelo mantenedor, não foi enviado a terceiros.
+Não temos acesso direto ao código do ERP, mas o próprio mantenedor confirmou que pode responder cada contrato. Ele também determinou que qualquer novo REVOKE, ENABLE RLS ou DDL em tabela usada pelo ERP deve ser apresentado e aguardar seu ok. Essa regra passa a valer para as próximas mudanças. O retorno específico sobre bancos e tabelas `producao_*` está registrado em `resposta-mantenedor-erp-bancos-2026-09-16.md`.
 
 ## Evidência mínima por fluxo
 
@@ -34,4 +34,4 @@ Esta busca é literal e não é inventário exaustivo de chamadas dinâmicas ou 
 4. Publicar os consumidores compatíveis; revogar por domínio com baseline, transação e pós-verificação. Migrações não podem ser testes contra produção.
 5. Validar operação após implantação sem testar exclusão/limpeza em dados reais. Recuperação deve corrigir o consumidor ou suspender o recurso específico; não reabrir escrita anônima em lote.
 
-As permissões de execução da tarefa já foram dadas. Os itens acima são evidências e contratos necessários para preservar funcionalidade, não pedidos de nova autorização.
+As permissões gerais da tarefa já foram dadas. Para tabelas usadas pelo ERP, o mantenedor acrescentou uma aprovação de janela por alteração, depois da apresentação do alvo e impacto. Os itens acima também são evidências necessárias para preservar funcionalidade.
