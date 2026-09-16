@@ -116,3 +116,6 @@ Recebedor e CPF continuam editáveis enquanto a entrega não estiver confirmada.
 Testes de regressão verificam bloqueio inicial, confirmação sem consultar API,
 liberação após Alterar, manutenção do bloqueio quando essa gravação falha e cliques
 reais no navegador móvel. Não requer nova migração SQL.
+
+Ajuste publicado como **v886**, commit `8624a2e1ad3a8706d7f43634711391910e78ebc6`.
+Cloudflare Pages concluído com sucesso; HTML e formulário conferidos nos dois domínios.
