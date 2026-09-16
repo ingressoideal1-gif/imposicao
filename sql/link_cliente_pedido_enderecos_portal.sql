@@ -300,6 +300,32 @@ BEGIN
             -- apresentar como escolha dele.
             'do_cadastro',   v_end_do_cadastro
         ) END,
+        -- Opções do mesmo cliente comercial do pedido. Endereços criados pelo
+        -- portal para outros pedidos ficam de fora; o endereço deste pedido
+        -- permanece disponível caso já seja uma cópia exclusiva.
+        'enderecos_entrega', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'tipo_endereco', COALESCE(NULLIF(btrim(e.tipo_endereco), ''), 'Endereço cadastrado'),
+                'recebedor', e.recebedor,
+                'cpf_recebedor', e.cpf_recebedor,
+                'endereco', e.endereco,
+                'numero', e.numero,
+                'complemento', e.complemento,
+                'bairro', e.bairro,
+                'cidade', e.cidade,
+                'uf', e.uf,
+                'cep', e.cep
+            ) ORDER BY
+                CASE WHEN e.id::text = v_prop.id_endereco_ent THEN 0
+                     WHEN upper(btrim(COALESCE(e.tipo_endereco, ''))) = 'PRINCIPAL' THEN 1
+                     ELSE 2 END,
+                e.data_criacao DESC NULLS LAST, e.id
+            )
+              FROM enderecos e
+             WHERE e.id_cliente = v_prop.id_cliente
+               AND (COALESCE(e.obs, '') NOT LIKE 'portal-entrega-pedido:%'
+                    OR e.id::text = v_prop.id_endereco_ent)
+        ), '[]'::jsonb),
         -- O endereço do CNPJ que vai na nota. SEM `recebedor` e sem
         -- `cpf_recebedor`: aqueles dois são de quem recebe o PACOTE, e não têm o
         -- que fazer numa nota fiscal — repeti-los aqui só confundiria as duas
