@@ -9,7 +9,26 @@ Após a preparação abaixo, o usuário autorizou `executar`.
 - O token antigo de configuração retornou `Unauthorized`; a sessão já autenticada da CLI permitiu a operação, sem trocar credenciais ou exibi-las.
 - Aplicado `sql/link_cliente_finalizar.sql`: uma função nova e seus grants, em transação. **Zero pedidos alterados e nenhuma mensagem enviada pela migração.**
 - Verificação posterior: corpo instalado idêntico ao arquivo local, MD5 `a950d4ceb0a6f1754124d92a398a6277`; `SECURITY DEFINER`; `search_path=pg_catalog, public`; execução permitida a `anon`/`authenticated`, sem grant a `PUBLIC`. Chamada negativa como `anon` com número/token deliberadamente inexistentes foi recusada, dentro de transação encerrada por rollback.
-- Publicação do frontend: próxima etapa, após registrar separadamente a entrega de banco. O fluxo `entrega-segura.ps1` não admite escopo misto; nenhum SQL será executado por esse fluxo.
+- Entrega de banco registrada separadamente no commit `bc298fd4`. O fluxo `entrega-segura.ps1` não admite escopo misto; nenhum SQL foi executado por esse fluxo.
+- Frontend publicado como **v884**, commit `19e438c0542aa6182432d6fa73ded45fd1e30440`, branch `fix/portal-persistencia-finalizacao`. Simulação e publicação pelo `entrega-segura.ps1`, com integração direta autorizada e tag `v884`. Os 764 casos/verificações passaram novamente, antes e depois do ajuste de cache em `cliente.html`.
+- Cloudflare Pages confirmou sucesso para o commit da entrega. A primeira comparação pública ainda recebeu arquivos anteriores e o script encerrou com `FALHA_APOS_INTEGRACAO`. Nenhum push/deploy foi repetido por isso: a conferência posterior com cache-buster e normalização de BOM/CRLF confirmou **ALL_MATCH=True nos dois domínios**, após propagação.
+- Verificação HTTP da RPC pelo mesmo acesso público do portal: função acessível, chamada com número/token deliberadamente inexistentes recusada (`P0002`). Não foram usadas credenciais de cliente nem links reais nessa validação.
+
+### Comprovação pública e recuperação
+
+Domínios: `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`.
+
+| Arquivo | SHA-256 normalizado, igual local/público nos dois domínios |
+|---|---|
+| `cliente.html` | `9619321a7576cbb18f28bd256fd545a000e836d3c352abe5ac2f2fe248c80597` |
+| `cliente.js` | `69a882c72cd6356d8429c680b383dcb361a0a1d1d8bc959a2a059bbde554d7f3` |
+| `cliente-confirmacoes.js` | `4d7f81d1cf9cabb433957064121a9029e0ad22155fffdfe4a007ade533900e3c` |
+
+Check do commit: [Cloudflare Pages](https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/c0120381-9950-400a-89a0-a5dd2f8759d0).
+
+Recuperação: a referência anterior do frontend é `v883`. Se necessário e autorizado, reverter o commit funcional `19e438c0` em um novo commit, publicar com nova versão de cache e comprovar os assets. A RPC aditiva pode permanecer instalada sem consumidor; avaliar sua remoção somente depois de retirar o frontend novo. Nenhuma recuperação deve desfazer decisões de clientes automaticamente.
+
+Limites finais: os testes positivos da finalização ocorreram somente no banco sintético; em produção foram verificados esquema, instalação, permissões, definição e recusa de token inválido. Não se aprovou pedido real para testar, não se enviou chat real e não houve alteração de NewProd/Edge Functions. O PGlite usado no teste é PostgreSQL 18.3; o destino é PostgreSQL 17.4, cujo esquema e instalação foram conferidos separadamente. Não foi alegada equivalência de todos os triggers reais com o banco sintético.
 
 As seções seguintes registram a preparação anterior à autorização. As pendências de ambiente SQL ali descritas foram resolvidas acima.
 
