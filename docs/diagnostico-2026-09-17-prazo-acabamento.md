@@ -49,3 +49,29 @@ real `GET http://127.0.0.1:9000/api/peso-setores/22192` confirmou setor LASER e
 no banco, mudança de RLS ou novo instalador foi necessária.
 Limite: uma consulta por pedido com data no NewProd; chamadas limitadas a quatro
 simultâneas. Falhas individuais não impedem as horas dos demais pedidos.
+
+## Entrega e verificação final
+
+- Frontend **v893**, commit `6319cc91`, integrado em main e tag v893 publicada.
+- Cloudflare Pages concluiu. A primeira comparação detectou propagação pendente;
+  nova consulta, sem repetir deploy, confirmou index.html, producao.html e script.js
+  nos dois domínios (imposition.ai-ideal.com.br e imposicao.pages.dev): 6/6 iguais.
+- Os mesmos três arquivos foram sincronizados no painel desta instalação em
+  `C:\Users\Junior\AppData\Local\NewProd Agent\painel`, sem reiniciar o agente.
+  Backup anterior em `C:\ProjetosLocais\CodexBackups\prazo-newprod-20260917-074841\painel-antes-v893`.
+  Comparação via HTTP local na porta 9000 confirmou os três arquivos servidos.
+- Verificação integrada de leitura real: extraiu as funções do script servido pelo
+  NewProd, consultou a data de 22192 e sua hora pela rota autenticada existente;
+  resultado `2026-09-16T16:00:00`, badge `16/09 16:00`. Nenhuma escrita no pedido.
+- 237 testes Deno, checagem de tipos de acesso-estacao, 844 verificações do
+  Acabamento, 27 de prazo, 14 de ordenação e regressão do carregamento ERP passaram.
+  A regressão cobre o caminho local sem sessão, falha individual e concorrência.
+
+A aba já aberta precisa ser recarregada; não houve inspeção visual da sessão do
+operador. Outras estações recebem o painel pelo sincronismo normal do NewProd.
+Não foi necessário novo instalador. Dados, RLS e regras de peso ficaram intactos.
+
+Recuperação, se necessária e autorizada: reverter o frontend `6319cc91` e publicar
+com nova versão de cache; restaurar a função usando o código preservado no backup
+acima. A versão anterior do frontend tolera a coluna hora adicional da rota.
+O checkout operacional e suas alterações preexistentes permanecem preservados.
