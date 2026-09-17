@@ -149,14 +149,13 @@
 
     function code39(texto) {
         var codigo = String(texto).toUpperCase();
-        var soma = 0;
-        for (var i = 0; i < codigo.length; i++) soma += C39_VAL[codigo[i]];
-        var resto = soma % 43;
-        for (var ch in C39_VAL) {
-            if (C39_VAL[ch] === resto) { codigo += ch; break; }
-        }
         var partes = [C39_EDGE];
-        for (var k = 0; k < codigo.length; k++) partes.push(C39_MAP[codigo[k]]);
+        for (var k = 0; k < codigo.length; k++) {
+            if (!Object.prototype.hasOwnProperty.call(C39_VAL, codigo[k])) {
+                throw new Error('caractere ' + codigo[k] + ' fora do Code 39');
+            }
+            partes.push(C39_MAP[codigo[k]]);
+        }
         partes.push(C39_EDGE);
         return partes.join(C39_MIDDLE);
     }

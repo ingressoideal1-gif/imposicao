@@ -992,6 +992,13 @@ def _modulos_do_barcode(data: str, barcode_format: str = "code128") -> str:
                 
         data = clean_data
 
+    # Code 39 aceita um caractere de verificacao opcional. A biblioteca o
+    # acrescenta por padrao, mas o elemento BARCODE representa o mesmo conteudo
+    # dos demais elementos sequenciais (TEXT/QR). No pedido 22305, por exemplo,
+    # o QR de 100001 era lido como 100001 e o Code 39 como 1000012. Codificar
+    # sem o checksum opcional preserva literalmente o valor configurado.
+    if fmt == "code39":
+        return barcode.get_barcode_class(fmt)(data, add_checksum=False).build()[0]
     return barcode.get(fmt, data).build()[0]
 
 

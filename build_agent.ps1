@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
+Set-Location $PSScriptRoot
 
 Write-Host "--- INICIANDO BUILD DO AGENTE LOCAL WINDOWS ---" -ForegroundColor Cyan
 
