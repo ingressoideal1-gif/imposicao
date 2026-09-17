@@ -88,9 +88,11 @@
         if (typeof window.loadOrdens === 'function') await window.loadOrdens();
         const currentState = appState();
         const orders = ((currentState && currentState.ordens) || []).filter(order => {
+            const ignored = typeof window.pedidoIgnoradoNosPaineis === 'function'
+                && window.pedidoIgnoradoNosPaineis(order);
             const inFactory = typeof window.pedidoNaGrafica === 'function' && window.pedidoNaGrafica(order);
             const alreadyLeft = typeof window.pedidoJaPassouDaGrafica === 'function' && window.pedidoJaPassouDaGrafica(order);
-            return inFactory && !alreadyLeft;
+            return !ignored && inFactory && !alreadyLeft;
         });
         const numbers = orders.map(orderNumber).filter(Number.isFinite);
         const modelsClient = typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;

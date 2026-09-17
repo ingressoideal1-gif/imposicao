@@ -320,6 +320,7 @@
 
     function pedidosEmProducao() {
         return (estado().ordens || [])
+            .filter(os => !fn('pedidoIgnoradoNosPaineis') || !fn('pedidoIgnoradoNosPaineis')(os))
             .filter(ehDeProducao)
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
     }
@@ -348,6 +349,7 @@
 
     function pedidosDoPainel() {
         const todos = (estado().ordens || [])
+            .filter(os => !fn('pedidoIgnoradoNosPaineis') || !fn('pedidoIgnoradoNosPaineis')(os))
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
 
         // ── O botão "Expedição" é ARQUIVO, e vê tudo o que já saiu ───────────

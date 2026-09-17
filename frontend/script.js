@@ -25612,7 +25612,7 @@ async function reconciliarStatusPersistidosDaListaArte() {
 
     const statusDeCorrecao = ['CORRIGIR DADOS', 'CORRIGIR ARTE', 'EM ALTERAÇÃO', 'EM ALTERACAO'];
     const candidatos = (state.ordens || []).filter(os => {
-        if (!os || pedidoCancelado(os)) return false;
+        if (!os || pedidoCancelado(os) || pedidoIgnoradoNosPaineis(os)) return false;
         const numero = parseInt(os.numero || os.id_int, 10);
         if (isNaN(numero)) return false;
         const arte = (state.todasArtes || []).find(a => parseInt(a.id_int, 10) === numero);
@@ -25663,7 +25663,9 @@ async function sincronizarPedidosProntosParaEnvio() {
     const PRONTOS = ['PRONTO', 'AGUARDANDO_CLIENTE'];
 
     try {
-        const osParaVerificar = state.ordens.filter(os => !IGNORAR.includes((os.status || '').trim().toUpperCase()));
+        const osParaVerificar = state.ordens.filter(os =>
+            !pedidoIgnoradoNosPaineis(os)
+            && !IGNORAR.includes((os.status || '').trim().toUpperCase()));
         if (osParaVerificar.length === 0) return;
 
         const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
@@ -28801,6 +28803,28 @@ function pedidoSaiuDaArte(os) {
 }
 
 /**
+ * O pedido foi marcado para não participar das filas operacionais.
+ *
+ * `pedidos_artes.status` é o estado consolidado do pedido. Quando ele recebe
+ * "Ignorar", o pedido continua existindo no estado para os demais fluxos, mas
+ * não pode aparecer na Lista de Arte, Produção ou Acabamento. A comparação é
+ * tolerante a caixa e espaços para não depender da grafia exata do banco.
+ */
+function pedidoIgnoradoNosPaineis(osOuNumero) {
+    const numero = parseInt(
+        osOuNumero && typeof osOuNumero === 'object'
+            ? (osOuNumero.numero ?? osOuNumero.id_int)
+            : osOuNumero,
+        10
+    );
+    if (isNaN(numero)) return false;
+    return (state.todasArtes || []).some(arte =>
+        parseInt(arte && arte.id_int, 10) === numero
+        && String(arte.status || '').trim().toUpperCase() === 'IGNORAR');
+}
+window.pedidoIgnoradoNosPaineis = pedidoIgnoradoNosPaineis;
+
+/**
  * Os status em que o pedido está NA gráfica — o chão de fábrica.
  *
  * É a lista positiva que a Fila de Produção e o Painel do Acabamento usam para
@@ -30132,6 +30156,7 @@ function renderOrdens() {
     // saem da tela inicial — fica dita aqui, e não dependendo de ninguém
     // lembrar dela ao acrescentar um status novo à lista.
     let ordensImpressao = state.ordens.filter(os => {
+        if (typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os)) return false;
         if (pedidoJaPassouDaGrafica(os)) return false;
         return pedidoNaGrafica(os);
     });
@@ -30192,7 +30217,9 @@ function renderOrdens() {
     // da fila, porque são trabalho a fazer.
     const listaEhDosImpressos = (state.filtroPrazo || 'geral') === 'impressos';
     const baseImpressao = listaEhDosImpressos
-        ? state.ordens.filter(os => pedidoTotalmenteImpresso(os))
+        ? state.ordens.filter(os =>
+            !(typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os))
+            && pedidoTotalmenteImpresso(os))
         : ordensImpressao;
 
     // --- Aplicar Filtros (Busca, Setor e Status) ---
@@ -30247,6 +30274,7 @@ function renderOrdens() {
     let ordensConcluidosArte = [];
 
     state.ordens.forEach(os => {
+        if (typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os)) return;
         const c = classificarPedidoNaArte(os);
 
         // O status_calculado é gravado no pedido porque a tabela da Lista de
