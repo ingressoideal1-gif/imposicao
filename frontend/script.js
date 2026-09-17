@@ -28044,6 +28044,27 @@ function comporPrazoDoERP(data, hora) {
 
 async function carregarHorasDosPrazos(client, ids) {
     const horas = {};
+    // O login local do NewProd não cria sessão Supabase. A tabela dos setores
+    // fica invisível ao anon; na estação, usar a rota autenticada pelo agente.
+    if (typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
+        let proximo = 0;
+        async function carregarProximo() {
+            while (proximo < ids.length) {
+                const id = String(ids[proximo++]);
+                try {
+                    const resposta = await fetch(`/api/peso-setores/${encodeURIComponent(id)}`);
+                    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+                    const corpo = await resposta.json();
+                    const linha = (corpo.setores || []).find(setor => setor && setor.hora != null);
+                    if (linha) horas[id] = linha.hora;
+                } catch (erro) {
+                    console.warn('[Prazo] Não foi possível ler a hora pela estação:', id, erro.message || erro);
+                }
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(4, ids.length) }, () => carregarProximo()));
+        return horas;
+    }
     // Até quatro setores por pedido; lotes pequenos evitam o limite de linhas da API.
     for (let i = 0; i < ids.length; i += 100) {
         const { data, error } = await client.from('propostas_os_setores')

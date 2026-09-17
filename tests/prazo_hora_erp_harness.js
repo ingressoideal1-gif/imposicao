@@ -69,6 +69,34 @@ function client(os, setores, error = null) {
     const hours = await api.carregarHorasDosPrazos(paged, many.map(row => row.id_int));
     assert.equal(Object.keys(hours).length, 251);
     assert.equal(paged.calls.length, 3);
+    // NewProd: login local não pode depender da leitura anônima do Supabase.
+    const avisos = [];
+    let ativas = 0, maxAtivas = 0;
+    const chamadas = [];
+    const fetchLocal = async url => {
+        chamadas.push(url);
+        ativas++;
+        maxAtivas = Math.max(maxAtivas, ativas);
+        await new Promise(resolve => setTimeout(resolve, 1));
+        ativas--;
+        if (url.endsWith('/2')) return { ok: false, status: 502 };
+        return { ok: true, json: async () => ({ setores: url.endsWith('/3')
+            ? [{ hora: null }]
+            : [{ hora: null }, { hora: '16:00:00' }, { hora: '16:00:00' }] }) };
+    };
+    const local = new Function('SERVIDA_PELA_NUVEM', 'fetch', 'console',
+        extract('carregarHorasDosPrazos') + '\nreturn carregarHorasDosPrazos;')(
+        false, fetchLocal, { warn: (...args) => avisos.push(args) });
+    const proibido = { from() { throw new Error('NewProd não pode consultar anon'); } };
+    const locais = await local(proibido, [1, 2, 3, 4, 5, 6]);
+    assert.equal(locais[1], '16:00:00');
+    assert.equal(locais[2], undefined);
+    assert.equal(locais[3], undefined);
+    assert.equal(locais[6], '16:00:00');
+    assert.equal(avisos.length, 1);
+    assert.equal(chamadas.length, 6);
+    assert.ok(maxAtivas <= 4);
+    assert.deepEqual(await local(proibido, []), {});
     assert.match(source.slice(source.indexOf('tbodyArte.innerHTML = arteNaTela.map')), /formatPrazoBadge\(os\)/);
     console.log('OK: prazo do ERP, setores, ausencia, falha e lotes.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
