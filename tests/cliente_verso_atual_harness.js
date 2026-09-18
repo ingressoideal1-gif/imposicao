@@ -67,8 +67,10 @@ for (const num of [
     assert.equal(carregar('Frente', num).verso, true, 'verso legítimo permanece');
 }
 // O HTML efetivamente entregue ao cliente deixa de criar o bloco do verso.
-const htmlArte = new Function(extrair(cliente, 'blocoDeArteDoCliente')
-    + '\nreturn blocoDeArteDoCliente;')();
+const htmlArte = new Function('pdfParesNoPortal', 'pdfCopiaNoPortal', extrair(cliente, 'blocoDeArteDoCliente')
+    + '\nreturn blocoDeArteDoCliente;')(
+        item => item?.amostra_num_id === 'pair-num',
+        item => item?.amostra_num_id === 'copy-num');
 const ctx = { desenhoAoVivo: true, arteVisivel: true, versoVisivel: true, paginaCsv: false };
 const htmlFrente = htmlArte(carregar('FRENTE E VERSO', frente), 0, ctx);
 assert.ok(htmlFrente.includes('amostra-item-canvas-0'));
@@ -87,6 +89,17 @@ const htmlPdfDuplex = htmlArte(pdfDuplex, 0, { ...ctx, desenhoAoVivo: false, ver
 assert.ok(htmlPdfDuplex.includes('amostra-pdf-canvas-0'), 'frente mantém o folheador PDF');
 assert.ok(htmlPdfDuplex.includes('amostra-item-canvas-verso-0'), 'verso PDF é composto ao vivo');
 assert.ok(!htmlPdfDuplex.includes('amostra-item-img-verso-0'), 'verso não usa snapshot estático');
+const pdfPares = { ...carregar('Frente', frente), modo_pdf: true,
+    amostra_num_id: 'pair-num', verso: false };
+const htmlPdfPares = htmlArte(pdfPares, 0, { ...ctx, desenhoAoVivo: false, versoAoVivo: false });
+assert.ok(htmlPdfPares.includes('amostra-pdf-canvas-0')
+    && htmlPdfPares.includes('amostra-item-canvas-verso-0'),
+    'PDF em pares tem duas janelas mesmo sem arquivo separado do verso');
+const pdfCopia = { ...pdfPares, amostra_num_id: 'copy-num' };
+const htmlPdfCopia = htmlArte(pdfCopia, 0, { ...ctx, desenhoAoVivo: false, versoAoVivo: false });
+assert.ok(htmlPdfCopia.includes('amostra-pdf-canvas-0')
+    && htmlPdfCopia.includes('amostra-item-canvas-verso-0'),
+    'Duplicar para Verso tem duas janelas mesmo sem arquivo separado');
 
 // Troca pelo seletor: verificar o payload real e a preservação dos originais.
 function selecionar(tipo, num) {

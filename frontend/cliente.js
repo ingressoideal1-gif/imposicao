@@ -325,7 +325,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
     // no style.css. Pendurado na moldura, ele caía sobre o folheador.
     const ampliar = ctx.ampliar || '';
 
-    return (item.verso ? `
+    return ((item.verso || pdfParesNoPortal(item) || pdfCopiaNoPortal(item)) ? `
                         <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
@@ -362,10 +362,10 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                ${desenhoAoVivo || versoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                ${desenhoAoVivo || versoAoVivo || pdfParesNoPortal(item) || pdfCopiaNoPortal(item) ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
                                 <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoAoVivo || versoVisivel ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">${pdfParesNoPortal(item) ? 'O verso vem da página par do PDF' : pdfCopiaNoPortal(item) ? 'O verso repete a página da frente' : 'Arte do verso ainda não enviada'}</p>
                                 </div>
                             </div>
 
@@ -1223,10 +1223,24 @@ async function gravarStatusDoLink(status) {
 function numeracaoTemVersoNoPortal(numObj) {
     if (!numObj) return false;
     const modo = String(numObj.print_mode || 'front').trim().toLowerCase();
-    if (modo === 'duplex' || modo === 'duplex_unico') return true;
+    if (modo === 'duplex' || modo === 'duplex_unico' || modo === 'pdf_odd_even' || modo === 'pdf_duplicate_back') return true;
     if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
     const nome = String(numObj.name || numObj.tipo || '').toLowerCase();
     return nome.includes('verso') || nome.includes('duplex') || nome.includes('frente e verso');
+}
+
+function pdfParesNoPortal(item) {
+    if (!item) return false;
+    const id = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_odd_even';
+}
+
+function pdfCopiaNoPortal(item) {
+    if (!item) return false;
+    const id = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_duplicate_back';
 }
 
 /**
@@ -3068,6 +3082,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
+    if (face === 'back' && itemForPdf?.modo_pdf
+        && (pdfParesNoPortal(itemForPdf) || pdfCopiaNoPortal(itemForPdf))) return;
 
     // O folheador de páginas é da FRENTE, e só dela.
     //
@@ -3839,7 +3855,10 @@ async function initPdfViewer(idx, pdfUrl, osId) {
             arrayBuffer = await proxyResponse.arrayBuffer();
         }
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages, pdfUrl, osId: osId || clienteState.osId };
+        const item = (state.osItens[osId || clienteState.osId] || [])[idx];
+        const totalPages = pdfParesNoPortal(item) ? Math.floor(pdf.numPages / 2) : pdf.numPages;
+        if (!totalPages) throw new Error('O PDF não contém um par completo de páginas.');
+        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages, pdfUrl, osId: osId || clienteState.osId };
         await renderPdfViewerPage(idx, 1);
     } catch (err) {
         console.error('[PDF Viewer Cliente] Erro:', err);
@@ -3903,7 +3922,9 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
                 }
             }
         }
-        const page = await vs.pdf.getPage(pageNum);
+        const emPares = pdfParesNoPortal(item);
+        const emCopia = pdfCopiaNoPortal(item);
+        const page = await vs.pdf.getPage(emPares ? pageNum * 2 - 1 : pageNum);
         const viewport = page.getViewport({ scale: 2.0 });
         const destino = document.getElementById(`amostra-pdf-canvas-${idx}`);
         if (!destino || !atual()) return;
@@ -3940,14 +3961,52 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 
+        let versoPronto = null;
+        if (emPares || emCopia) {
+            const paginaVerso = await vs.pdf.getPage(emPares ? pageNum * 2 : pageNum);
+            const viewportVerso = paginaVerso.getViewport({ scale: 2.0 });
+            versoPronto = document.createElement('canvas');
+            versoPronto.width = viewportVerso.width;
+            versoPronto.height = viewportVerso.height;
+            const ctxVerso = versoPronto.getContext('2d');
+            await paginaVerso.render({ canvasContext: ctxVerso, viewport: viewportVerso }).promise;
+            if (!atual()) return;
+            if (num && num.elements && num.elements.length > 0) {
+                drawNumeracaoElementsOverCanvas(ctxVerso, num, item, pageNum,
+                    versoPronto.width, versoPronto.height, 'back');
+            }
+        }
+
         if (!atual()) return;
         destino.width = canvas.width; destino.height = canvas.height;
         destino.getContext('2d').drawImage(canvas, 0, 0);
         destino.style.display = 'block';
+        if (versoPronto) {
+            const destinoVerso = document.getElementById(`amostra-item-canvas-verso-${idx}`);
+            if (!destinoVerso) throw new Error('A janela do verso não está disponível.');
+            destinoVerso.width = versoPronto.width;
+            destinoVerso.height = versoPronto.height;
+            destinoVerso.getContext('2d').drawImage(versoPronto, 0, 0);
+            destinoVerso.style.display = 'block';
+            const vazioVerso = document.getElementById(`amostra-item-empty-verso-${idx}`);
+            if (vazioVerso) vazioVerso.style.display = 'none';
+        }
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';
         const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
-        if (info) info.textContent = `Página ${pageNum} / ${vs.totalPages}`;
+        if (info) {
+            const quantidade = Number(item?.qtd ?? item?.quantidade);
+            const esperado = quantidade * (emPares ? 2 : 1);
+            const divergencia = (emPares || emCopia) && (!Number.isSafeInteger(quantidade) || quantidade < 1
+                || vs.pdf.numPages !== esperado);
+            info.textContent = divergencia
+                ? `⚠ PDF com ${vs.pdf.numPages} páginas; esperado: ${esperado} (${quantidade} peças). Confira com a gráfica.`
+                : emPares
+                    ? `Peça ${pageNum} / ${vs.totalPages} · frente p. ${pageNum * 2 - 1} · verso p. ${pageNum * 2}`
+                    : emCopia
+                        ? `Peça ${pageNum} / ${vs.totalPages} · frente e verso p. ${pageNum}`
+                    : `Página ${pageNum} / ${vs.totalPages}`;
+        }
         const empty = document.getElementById(`amostra-item-empty-${idx}`);
         if (empty) empty.style.display = 'none';
         const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
@@ -3978,7 +4037,7 @@ function pdfViewerNextPage(idx) {
 }
 
 // ========== NUMERAÇÃO OVERLAY SOBRE PDF (Cliente) ==========
-function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
+function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight, face = 'front') {
     if (!ctx || !num || !num.elements || !num.elements.length) return;
 
     let fmt = null;
@@ -3997,7 +4056,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     ) || 1;
 
     num.elements.forEach(el => {
-        if (el.face === 'back') return;
+        if (face === 'back' ? el.face !== 'back' : el.face === 'back') return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;

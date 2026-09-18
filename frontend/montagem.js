@@ -453,6 +453,7 @@ function modoDoModeloNaMontagem(item) {
         ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
     const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
     const modo = String((num && num.print_mode) || '').trim().toLowerCase();
+    if (modo === 'pdf_odd_even' || modo === 'pdf_duplicate_back') return modo;
     if (['front', 'duplex', 'duplex_unico'].includes(modo)) return modo;
     const legado = String(item.verso_tipo || '').trim().toUpperCase();
     return item.verso === true || (legado && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(legado))
@@ -1391,6 +1392,9 @@ function celulasForaDaTiragem(celulas, modelos, artes) {
  */
 function modoDaFolhaDaMontagem(modelos) {
     const modos = new Set((modelos || []).map(m => modoDaPecaNaMontagem(m.peca)));
+    if (modos.has('pdf_odd_even') || modos.has('pdf_duplicate_back')) {
+        throw new Error('Este modo especial de PDF frente e verso deve ser gerado um modelo por vez na janela Pedido.');
+    }
     if (modos.size > 1) {
         throw new Error('A montagem contém modelos com faces ou paginações diferentes. Separe os modelos antes de gerar.');
     }

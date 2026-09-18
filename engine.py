@@ -1047,8 +1047,8 @@ def _salvar_pdf(doc, out_name):
 # parse_elements e o QR do verso some da folha, sem erro nenhum no log.
 
 def tem_verso(print_mode) -> bool:
-    """Este trabalho imprime dos dois lados? (`duplex` ou `duplex_unico`)"""
-    return str(print_mode or "front").strip().lower() in ("duplex", "duplex_unico")
+    """Este trabalho imprime dos dois lados, independentemente da paginação?"""
+    return str(print_mode or "front").strip().lower() in ("duplex", "duplex_unico", "pdf_odd_even", "pdf_duplicate_back")
 
 
 def verso_unico(print_mode) -> bool:
@@ -1089,7 +1089,8 @@ class ImpositionConfig:
                  entregar_por_bloco: bool = False,
                  arte_escala_h: float = 100.0,
                  arte_escala_v: float = 100.0,
-                 base_file_verso: str = None):
+                 base_file_verso: str = None,
+                 pdf_expected_items: int | None = None):
 
         self.base_file = base_file
         # Arte separada do verso: anexada no `_load_base_as_pdf` quando preciso.
@@ -1102,6 +1103,7 @@ class ImpositionConfig:
         self.saida = saida
         self.layout_schema = layout_schema
         self.print_mode = print_mode
+        self.pdf_expected_items = pdf_expected_items
         self.rotate_page = rotate_page
         self.numeracao_2 = numeracao_2
         self.multi_artes = multi_artes or []
@@ -1227,6 +1229,50 @@ class ImpositionConfig:
         self.refazer_repetir = bool(refazer_repetir)
         self.refazer_celulas = validas if self.refazer_repetir else list(dict.fromkeys(validas))
         
+        if numeracao and numeracao.get("print_mode") == "pdf_odd_even":
+            if layout_schema != "pdf_multiple" or print_mode != "duplex" or self.multi_artes:
+                raise ValueError("PDF Ímpar Frente e Verso Par exige Pdf Paginado individual e impressão frente e verso.")
+            if not base_file or not str(base_file).lower().endswith(".pdf") or base_file_verso:
+                raise ValueError("PDF Ímpar Frente e Verso Par exige um único PDF original, sem arquivo de verso separado.")
+            try:
+                expected = int(pdf_expected_items)
+            except (TypeError, ValueError):
+                expected = 0
+            if expected < 1 or str(pdf_expected_items) != str(expected):
+                raise ValueError("A quantidade esperada de peças do PDF deve ser um inteiro positivo.")
+            try:
+                with fitz.open(base_file) as paired_doc:
+                    actual_pages = len(paired_doc)
+            except Exception as ex:
+                raise ValueError("Não foi possível abrir o PDF original para conferir os pares de páginas.") from ex
+            if actual_pages != expected * 2:
+                raise ValueError(
+                    f"O PDF tem {actual_pages} páginas; são necessárias exatamente {expected * 2} "
+                    f"({expected} frentes e {expected} versos).")
+
+        modo_da_numeracao = numeracao.get("print_mode") if numeracao else None
+        if print_mode == "pdf_duplicate_back" and modo_da_numeracao != "pdf_duplicate_back":
+            raise ValueError("Duplicar para Verso exige a numeração correspondente vinculada ao modelo.")
+        if modo_da_numeracao == "pdf_duplicate_back":
+            if layout_schema != "pdf_multiple" or print_mode != "pdf_duplicate_back" or self.multi_artes:
+                raise ValueError("Duplicar para Verso exige Pdf Paginado individual e o modo de impressão correspondente.")
+            if not base_file or not str(base_file).lower().endswith(".pdf") or base_file_verso:
+                raise ValueError("Duplicar para Verso exige um único PDF original, sem arquivo de verso separado.")
+            try:
+                expected = int(pdf_expected_items)
+            except (TypeError, ValueError):
+                expected = 0
+            if expected < 1 or str(pdf_expected_items) != str(expected):
+                raise ValueError("A quantidade esperada de peças do PDF deve ser um inteiro positivo.")
+            try:
+                with fitz.open(base_file) as source_doc:
+                    actual_pages = len(source_doc)
+            except Exception as ex:
+                raise ValueError("Não foi possível abrir o PDF original para conferir as páginas.") from ex
+            if actual_pages != expected:
+                raise ValueError(
+                    f"O PDF tem {actual_pages} páginas; são necessárias exatamente {expected} páginas, uma por peça.")
+
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
             try:
@@ -3491,7 +3537,7 @@ class ImpositionEngine:
                         # cada página do arquivo é uma peça, e o verso está em
                         # outro arquivo. Só o `duplex` clássico salta de dois em
                         # dois, porque ali as páginas ímpares são o verso.
-                        if is_duplex and not verso_unico(cfg.print_mode):
+                        if cfg.print_mode == "duplex":
                             page_idx_front = (item_index * 2) if current_doc_base and (item_index * 2) < len(current_doc_base) else 0
                         else:
                             page_idx_front = item_index if current_doc_base and item_index < len(current_doc_base) else 0
@@ -3710,7 +3756,9 @@ class ImpositionEngine:
                             item_local_idx = int(item_index)
 
                         # Determinar a página base de verso no PDF de entrada
-                        if verso_unico(cfg.print_mode):
+                        if cfg.print_mode == "pdf_duplicate_back" and cfg.layout_schema == "pdf_multiple":
+                            page_idx_back = item_index if current_doc_base and item_index < len(current_doc_base) else None
+                        elif verso_unico(cfg.print_mode):
                             # FxVersoUnico: uma página só, anexada ao fim, e as N
                             # peças dividem a MESMA origem. A numeração de face
                             # `back` continua variando: o que se repete é a arte,
@@ -4052,7 +4100,7 @@ class ImpositionEngine:
         if cfg.layout_schema == "pdf_multiple":
             # FxVersoUnico: uma página por peça, sem o salto de dois em dois — o
             # verso não ocupa página neste arquivo.
-            if verso_unico(cfg.print_mode):
+            if cfg.print_mode in ("duplex_unico", "pdf_duplicate_back"):
                 page_idx_front = local_idx if current_doc_base and local_idx < len(current_doc_base) else 0
             else:
                 page_idx_front = local_idx * 2 if current_doc_base and (local_idx * 2) < len(current_doc_base) else 0
@@ -4198,7 +4246,9 @@ class ImpositionEngine:
         val2 = item_data["val2"]
         local_idx = item_data["local_idx"]
 
-        if verso_unico(cfg.print_mode):
+        if cfg.print_mode == "pdf_duplicate_back" and cfg.layout_schema == "pdf_multiple":
+            page_idx_back = local_idx if current_doc_base and local_idx < len(current_doc_base) else None
+        elif verso_unico(cfg.print_mode):
             # FxVersoUnico: índice fixo, o mesmo para todas as peças desta arte.
             page_idx_back = self._pagina_do_verso_unico(item_data, cfg, current_doc_base)
         elif cfg.layout_schema == "pdf_multiple":

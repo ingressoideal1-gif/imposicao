@@ -10,7 +10,7 @@ let verificacoes = 0;
 function ambiente(arquivo, opcoes = {}) {
     const fonte = fs.readFileSync(path.join(raiz, 'frontend', arquivo), 'utf8');
     // O bloco contem ifs internos: começa na condição temVerso, não no append.
-    const a = fonte.lastIndexOf('    if (temVerso(payload.print_mode))', fonte.indexOf("formData.append('file_verso'"));
+    const a = fonte.lastIndexOf('    if (temVerso(payload.print_mode) && !pdfPares && !pdfCopia)', fonte.indexOf("formData.append('file_verso'"));
     const b = fonte.indexOf('\n    }', fonte.indexOf("formData.append('file_verso'")) + 6;
     const chamadas = [], enviados = [], erros = [];
     const item = {id:'1000930', arte_url:'https://exemplo.invalid/frente.pdf',
@@ -19,7 +19,7 @@ function ambiente(arquivo, opcoes = {}) {
         pedArtVersoFile:new File(['ANTIGO'], 'antigo.pdf'),
         impArtVersoFile:new File(['OUTRO'], 'outro.pdf')};
     const contexto = {state:estado,payload:{print_mode:opcoes.modo || 'duplex',formato:{has_cover:true}},
-        isPedTab:opcoes.pedido !== false,isMultiSelected:false,schema:'cut_stack',
+        isPedTab:opcoes.pedido !== false,isMultiSelected:false,schema:'cut_stack',pdfPares:false,pdfCopia:false,
         Blob,File,Response,AbortController,Uint8Array,TextDecoder,
         setTimeout:opcoes.setTimeout || setTimeout,clearTimeout,
         temVerso:m=>['duplex','duplex_unico'].includes(m),

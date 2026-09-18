@@ -76,6 +76,7 @@ function Get-ChaveServico {
         Le a SUPABASE_SERVICE_KEY do .env.local. Devolve $null se nao achar.
     #>
     param([Parameter(Mandatory)][string]$Raiz)
+    if ($env:SUPABASE_SERVICE_KEY) { return $env:SUPABASE_SERVICE_KEY }
     $arquivo = Join-Path $Raiz ".env.local"
     if (-not (Test-Path $arquivo)) { return $null }
     foreach ($linha in (Get-Content -Encoding UTF8 $arquivo)) {
@@ -492,7 +493,12 @@ git commit -m "chore(agente): versao $Versao"
 git tag -a "agente-v$Versao" -m (Get-MensagemTag -Versao $Versao -Notas $Notas)
 $tagCriada = ($LASTEXITCODE -eq 0)
 
-git push origin main
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ATENCAO: o manifesto esta publicado, mas o commit da versao nao subiu para main." -ForegroundColor Red
+    Write-Host "  Confira origin/main antes de repetir: git push origin HEAD:main" -ForegroundColor Yellow
+    exit 1
+}
 if ($tagCriada) {
     git push origin "agente-v$Versao"
     $tagCriada = ($LASTEXITCODE -eq 0)

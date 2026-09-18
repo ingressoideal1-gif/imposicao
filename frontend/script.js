@@ -5010,7 +5010,7 @@ function initCanvas() {
  */
 function temVerso(printMode) {
     const m = String(printMode || 'front').trim().toLowerCase();
-    return m === 'duplex' || m === 'duplex_unico';
+    return m === 'duplex' || m === 'duplex_unico' || m === 'pdf_odd_even' || m === 'pdf_duplicate_back';
 }
 window.temVerso = temVerso;
 
@@ -5019,8 +5019,75 @@ function versoUnico(printMode) {
 }
 window.versoUnico = versoUnico;
 
+function pdfImparFrenteVersoParDoModelo(item) {
+    if (!item) return false;
+    const id = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_odd_even';
+}
+window.pdfImparFrenteVersoParDoModelo = pdfImparFrenteVersoParDoModelo;
+
+function pdfDuplicarParaVersoDoModelo(item) {
+    if (!item) return false;
+    const id = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_duplicate_back';
+}
+window.pdfDuplicarParaVersoDoModelo = pdfDuplicarParaVersoDoModelo;
+
+function validarPdfDuplicarParaVerso(item, schema, numeracaoId, pdfDoc) {
+    if (!pdfDuplicarParaVersoDoModelo(item)) return null;
+    if (!item.modo_pdf || schema !== 'pdf_multiple') {
+        return 'Duplicar para Verso exige Modo PDF e regra Pdf Paginado.';
+    }
+    const id = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    if (String(numeracaoId || '') !== String(id || '')) {
+        return 'A numeração selecionada não é a numeração Duplicar para Verso deste modelo.';
+    }
+    const quantidade = Number(item.qtd ?? item.quantidade);
+    if (!Number.isSafeInteger(quantidade) || quantidade < 1) {
+        return 'A quantidade de peças do modelo deve ser um inteiro positivo.';
+    }
+    if (!pdfDoc || !Number.isSafeInteger(pdfDoc.numPages)) {
+        return 'Aguarde o carregamento do PDF original antes de gerar.';
+    }
+    if (pdfDoc.numPages !== quantidade) {
+        return `O PDF tem ${pdfDoc.numPages} páginas; Duplicar para Verso exige exatamente ${quantidade} páginas, uma por peça.`;
+    }
+    return null;
+}
+window.validarPdfDuplicarParaVerso = validarPdfDuplicarParaVerso;
+
+function validarPdfImparFrenteVersoPar(item, schema, numeracaoId, pdfDoc) {
+    if (!pdfImparFrenteVersoParDoModelo(item)) return null;
+    if (!item.modo_pdf || schema !== 'pdf_multiple') {
+        return 'PDF Ímpar Frente e Verso Par exige Modo PDF e regra Pdf Paginado.';
+    }
+    const id = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    if (String(numeracaoId || '') !== String(id || '')) {
+        return 'A numeração selecionada não é a numeração PDF Ímpar Frente e Verso Par deste modelo.';
+    }
+    const quantidade = Number(item.qtd ?? item.quantidade);
+    if (!Number.isSafeInteger(quantidade) || quantidade < 1) {
+        return 'A quantidade de peças do modelo deve ser um inteiro positivo.';
+    }
+    if (!pdfDoc || !Number.isSafeInteger(pdfDoc.numPages)) {
+        return 'Aguarde o carregamento do PDF original antes de gerar.';
+    }
+    const esperadas = quantidade * 2;
+    if (pdfDoc.numPages !== esperadas) {
+        return `O PDF tem ${pdfDoc.numPages} páginas; este modelo exige exatamente ${esperadas} páginas (${quantidade} frentes e ${quantidade} versos).`;
+    }
+    return null;
+}
+window.validarPdfImparFrenteVersoPar = validarPdfImparFrenteVersoPar;
+
 /**
- * Qual dos três Modos de Impressão vale para um modelo do pedido.
+ * Qual Modo de Impressão vale para um modelo do pedido.
  *
  * O nome diz VERSO e não IMPRESSÃO porque `modoDeImpressaoDoModelo` já existe
  * neste arquivo desde antes, e responde outra coisa: sequencial ou blocado.
@@ -5036,6 +5103,7 @@ function modoDeVersoDoModelo(item) {
     // redesenho de card — resolver o banco aqui seria trabalho pago à toa.
     const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
     const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
+    if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
     if (versoUnico(num && num.print_mode)) return 'duplex_unico';
     if (temVerso(num && num.print_mode)) return 'duplex';
     const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
@@ -10757,7 +10825,8 @@ function drawPreview() {
 
 
 
-            let activePdfDoc = (isBack && state.impArtVersoPdfDoc) ? state.impArtVersoPdfDoc : state.impArtPdfDoc;
+            let activePdfDoc = (isBack && state.printMode !== 'pdf_duplicate_back' && state.impArtVersoPdfDoc)
+                ? state.impArtVersoPdfDoc : state.impArtPdfDoc;
 
             let activeImage = state.impArtImage;
 
@@ -12010,9 +12079,9 @@ function onImpNumeracaoSelect() {
         if (num && num.print_mode) {
             const printModeSelect = document.getElementById('imp-print-mode');
             if (printModeSelect) {
-                printModeSelect.value = num.print_mode;
+                printModeSelect.value = num.print_mode === 'pdf_odd_even' ? 'duplex' : num.print_mode;
                 if (typeof onImposicaoPrintModeChange === 'function') {
-                    onImposicaoPrintModeChange(num.print_mode);
+                    onImposicaoPrintModeChange(printModeSelect.value);
                 }
             }
         }
@@ -12847,6 +12916,33 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
 
+    const itemPdfPares = activeItem
+        ? (state.osItens[activeItem.osId] || []).find(i => String(i.id) === String(activeItem.itemId))
+        : null;
+    if (isMultiSelected && state.selectedOSItems.some(s => {
+        const item = (state.osItens[s.osId] || []).find(i => String(i.id) === String(s.itemId));
+        return pdfImparFrenteVersoParDoModelo(item) || pdfDuplicarParaVersoDoModelo(item);
+    })) {
+        return toast('Os modos especiais de PDF frente e verso exigem um modelo por vez.', 'error');
+    }
+    const pdfPares = pdfImparFrenteVersoParDoModelo(itemPdfPares);
+    const pdfCopia = pdfDuplicarParaVersoDoModelo(itemPdfPares);
+    const numSelecionada = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if ((numSelecionada?.print_mode === 'pdf_odd_even' && !pdfPares)
+        || (numSelecionada?.print_mode === 'pdf_duplicate_back' && !pdfCopia)
+        || (state.printMode === 'pdf_duplicate_back' && !pdfCopia)) {
+        return toast('Vincule a numeração do modo PDF frente e verso ao modelo antes de gerar.', 'error');
+    }
+    if (pdfPares || pdfCopia) {
+        // O formato pode ter outra regra padrão; neste modo o PDF do modelo é a fonte da paginação.
+        schema = 'pdf_multiple';
+        const pdfDoc = isPedTab ? state.pedArtPdfDoc : state.impArtPdfDoc;
+        const erro = pdfPares
+            ? validarPdfImparFrenteVersoPar(itemPdfPares, schema, numId, pdfDoc)
+            : validarPdfDuplicarParaVerso(itemPdfPares, schema, numId, pdfDoc);
+        if (erro) return toast(erro, 'error');
+    }
+
     // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usuário para manter o gesto ativo)
 
     let directoryHandle = null;
@@ -13155,7 +13251,8 @@ window.runImposition = async function (mode, returnBlob = false) {
         _diag_schema: schema,
         _diag_cut_stack_mode: (isMultiSelected || state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent'),
 
-        print_mode: state.printMode,
+        print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back' : state.printMode,
+        ...((pdfPares || pdfCopia) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
 
         rotate_page: rotatePage,
 
@@ -13228,7 +13325,7 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Um modelo sozinho manda as artes como uploads separados. Ambos os modos
     // duplex precisam do verso; no FxVerso o motor usa este arquivo quando a
     // frente tem uma pagina, preservando PDFs que ja trazem as duas faces.
-    if (temVerso(payload.print_mode)) {
+    if (temVerso(payload.print_mode) && !pdfPares && !pdfCopia) {
         let versoFile = isPedTab ? state.pedArtVersoFile : state.impArtVersoFile;
         if (!isMultiSelected && schema !== 'multi_artes') {
             try {
@@ -18843,6 +18940,8 @@ window.numeracaoEhDuplex = numeracaoEhDuplex;
  */
 function rotuloDoModoDeImpressao(num) {
     const m = String((num && num.print_mode) || 'front').trim().toLowerCase();
+    if (m === 'pdf_odd_even') return 'PDF Ímpar Frente e Verso Par';
+    if (m === 'pdf_duplicate_back') return 'Duplicar para Verso';
     if (m === 'duplex_unico') return 'FxVersoUnico';
     return m === 'duplex' ? 'FxVerso' : 'Frente';
 }
@@ -20045,7 +20144,11 @@ function atualizarOpcoesDoModelo() {
         if (nota) {
 
             nota.textContent = travadoPorPdf
-                ? '🔒 Modo PDF: cada página do arquivo é um ingresso, e a regra é imposta. Para mudar, desligue o Modo PDF na tela de arte do modelo.'
+                ? (pdfImparFrenteVersoParDoModelo(item)
+                    ? '🔒 Modo PDF: páginas ímpares são frentes e pares são versos; cada par é uma peça. O arquivo deve ter exatamente o dobro das páginas da quantidade do modelo.'
+                    : pdfDuplicarParaVersoDoModelo(item)
+                        ? '🔒 Modo PDF: cada página é uma peça e será repetida no verso. O PDF deve ter exatamente a quantidade de páginas do modelo.'
+                        : '🔒 Modo PDF: cada página do arquivo é um ingresso, e a regra é imposta. Para mudar, desligue o Modo PDF na tela de arte do modelo.')
                 : '';
 
             nota.style.display = travadoPorPdf ? 'block' : 'none';
@@ -33608,7 +33711,7 @@ window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDad
  * paginado e o verso e um arquivo de uma pagina so.
  */
 function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
-    return (item.verso ? `
+    return ((item.verso || pdfImparFrenteVersoParDoModelo(item) || pdfDuplicarParaVersoDoModelo(item)) ? `
                         <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
                             <!-- Janela vertical (formato mais alto que largo): as duas
                                  faces lado a lado. Janela horizontal: uma abaixo da outra.
@@ -33641,7 +33744,7 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                                 `}
                                 <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.modo_pdf && item.arte_url ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">${item.modo_pdf ? 'PDF Multi-Página — envie a arte da frente' : 'Sem Frente'}</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">${item.modo_pdf ? (pdfImparFrenteVersoParDoModelo(item) ? 'Envie um PDF com frente ímpar e verso par' : pdfDuplicarParaVersoDoModelo(item) ? 'Envie um PDF com uma página por peça' : 'PDF Multi-Página — envie a arte da frente') : 'Sem Frente'}</p>
                                 </div>
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
@@ -33649,7 +33752,7 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                                 <canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                                 <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">${pdfImparFrenteVersoParDoModelo(item) ? 'O verso vem da página par do PDF' : pdfDuplicarParaVersoDoModelo(item) ? 'O verso repete a página da frente' : 'Sem Verso'}</p>
                                 </div>
                             </div>
                             </div>
@@ -36887,8 +36990,23 @@ function atualizarEstadoDoPdf(idx, item, situacao, viewer = null) {
         formato: 'Selecione o formato para visualizar o PDF.',
         imagem: 'Prévia estática — a paginação depende do PDF original.'
     };
-    if (info) info.textContent = pronto
-        ? `Página ${viewer.currentPage} / ${viewer.totalPages}` : mensagens[situacao];
+    if (info) {
+        const emPares = pronto && pdfImparFrenteVersoParDoModelo(item);
+        const emCopia = pronto && pdfDuplicarParaVersoDoModelo(item);
+        const quantidade = Number(item?.qtd ?? item?.quantidade);
+        const paginasEsperadas = quantidade * (emPares ? 2 : 1);
+        const divergencia = (emPares || emCopia) && (!Number.isSafeInteger(quantidade) || quantidade < 1
+            || viewer.pdfSourcePages !== paginasEsperadas);
+        info.textContent = divergencia
+            ? `⚠ PDF com ${viewer.pdfSourcePages} páginas; esperado: ${paginasEsperadas} (${quantidade} peças). Corrija antes de imprimir.`
+            : pronto
+            ? (emPares
+                ? `Peça ${viewer.currentPage} / ${viewer.totalPages} · frente p. ${viewer.currentPage * 2 - 1} · verso p. ${viewer.currentPage * 2}`
+                : emCopia
+                    ? `Peça ${viewer.currentPage} / ${viewer.totalPages} · frente e verso p. ${viewer.currentPage}`
+                : `Página ${viewer.currentPage} / ${viewer.totalPages}`)
+            : mensagens[situacao];
+    }
     const retry = document.getElementById(`amostra-pdf-retry-${idx}`);
     if (retry) retry.style.display = situacao === 'erro' ? 'inline-block' : 'none';
     atualizarCaixaDeEscalaDaArte(idx, item);
@@ -36941,7 +37059,10 @@ async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
             return;
         }
         solicitacao.pdf = pdf;
-        solicitacao.totalPages = pdf.numPages;
+        const emPares = pdfImparFrenteVersoParDoModelo(item);
+        solicitacao.totalPages = emPares ? Math.floor(pdf.numPages / 2) : pdf.numPages;
+        solicitacao.pdfSourcePages = pdf.numPages;
+        if (!solicitacao.totalPages) throw new Error('O PDF não contém um par completo de páginas.');
         
         await renderPdfViewerPage(key, 1, idx);
     } catch (err) {
@@ -36962,7 +37083,7 @@ async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
     return solicitacao.carregando;
 }
 
-function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
+function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight, face = 'front') {
     if (!ctx || !num || !num.elements || !num.elements.length) return;
 
     let fmt = null;
@@ -36981,7 +37102,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     ) || 1;
 
     num.elements.forEach(el => {
-        if (el.face === 'back') return;
+        if (face === 'back' ? el.face !== 'back' : el.face === 'back') return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;
@@ -37192,7 +37313,10 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
     }
     
     try {
-        const page = await viewerState.pdf.getPage(pageNum);
+        const itemDaPagina = (state.osItens[viewerState.osId] || [])[viewerState.idx];
+        const emPares = pdfImparFrenteVersoParDoModelo(itemDaPagina);
+        const emCopia = pdfDuplicarParaVersoDoModelo(itemDaPagina);
+        const page = await viewerState.pdf.getPage(emPares ? (pageNum * 2 - 1) : pageNum);
         if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
         const scale = 2.0;
         const viewport = page.getViewport({ scale });
@@ -37318,6 +37442,41 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvas.width, canvas.height);
         }
 
+        if (emPares || emCopia) {
+            const versoCanvas = document.getElementById(`amostra-item-canvas-verso-${idx}`);
+            if (!versoCanvas) throw new Error('A janela de visualização do verso não está disponível.');
+            const paginaVerso = await viewerState.pdf.getPage(emPares ? pageNum * 2 : pageNum);
+            if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
+            const viewportVerso = paginaVerso.getViewport({ scale });
+            if (versoCanvas._pdfRenderTask) {
+                versoCanvas._pdfRenderTask.cancel();
+                try { await versoCanvas._pdfRenderTask.promise; } catch (_) { /* desenho anterior cancelado */ }
+            }
+            versoCanvas.width = Math.max(1, Math.round(larguraCelula));
+            versoCanvas.height = Math.max(1, Math.round(alturaCelula));
+            const ctxVerso = versoCanvas.getContext('2d');
+            ctxVerso.fillStyle = '#ffffff';
+            ctxVerso.fillRect(0, 0, versoCanvas.width, versoCanvas.height);
+            const tarefaVerso = paginaVerso.render({
+                canvasContext: ctxVerso,
+                viewport: viewportVerso,
+                transform: [esc.h / 100, 0, 0, esc.v / 100,
+                    (larguraCelula - viewportVerso.width * esc.h / 100) / 2,
+                    (alturaCelula - viewportVerso.height * esc.v / 100) / 2],
+            });
+            versoCanvas._pdfRenderTask = tarefaVerso;
+            try { await tarefaVerso.promise; }
+            finally { if (versoCanvas._pdfRenderTask === tarefaVerso) versoCanvas._pdfRenderTask = null; }
+            if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
+            if (num && num.elements && num.elements.length > 0) {
+                drawNumeracaoElementsOverCanvas(ctxVerso, num, item, pageNum,
+                    versoCanvas.width, versoCanvas.height, 'back');
+            }
+            versoCanvas.style.display = 'block';
+            const vazioVerso = document.getElementById(`amostra-item-empty-verso-${idx}`);
+            if (vazioVerso) vazioVerso.style.display = 'none';
+        }
+
         canvas.style.display = 'block';
 
         // Update navigation
@@ -37330,7 +37489,11 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         atualizarCaixaDeEscalaDaArte(idx, item, container);
 
         const pageInfo = document.getElementById(`amostra-pdf-page-info-${idx}`);
-        if (pageInfo) pageInfo.textContent = `Página ${pageNum} / ${viewerState.totalPages}`;
+        if (pageInfo) pageInfo.textContent = emPares
+            ? `Peça ${pageNum} / ${viewerState.totalPages} · frente p. ${pageNum * 2 - 1} · verso p. ${pageNum * 2}`
+            : emCopia
+                ? `Peça ${pageNum} / ${viewerState.totalPages} · frente e verso p. ${pageNum}`
+            : `Página ${pageNum} / ${viewerState.totalPages}`;
         
         // Hide empty state
         const empty = document.getElementById(`amostra-item-empty-${idx}`);
@@ -37577,6 +37740,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
+    if (face === 'back' && itemForPdf?.modo_pdf
+        && (pdfImparFrenteVersoParDoModelo(itemForPdf) || pdfDuplicarParaVersoDoModelo(itemForPdf))) return;
     if (!canvas && !(itemForPdf && itemForPdf.modo_pdf)) return;
 
     // O visualizador paginado é da FRENTE. Num modelo com verso, o verso tem

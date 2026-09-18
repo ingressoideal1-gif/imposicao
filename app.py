@@ -1531,6 +1531,7 @@ async def impose_file(
             layout_schema=data.get("schema", "sequential"),
             csv_data=csv_data,
             print_mode=print_mode_val,
+            pdf_expected_items=data.get("pdf_expected_items"),
             numeracao_2=numeracao_2,
             rotate_page=data.get("rotate_page", False),
             multi_artes=multi_artes_list,
