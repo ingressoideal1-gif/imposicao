@@ -26303,7 +26303,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_arte_base64, arte_url')
+                .select('id, id_int, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -26330,8 +26330,8 @@ async function carregarModelosGlobais() {
 }
 
 /**
- * Avisa quando dois modelos do mesmo pedido caem na mesma coluna do pool do
- * QR Ideal.
+ * Avisa quando dois modelos que USAM QR Ideal no mesmo pedido caem na mesma
+ * coluna do pool. Modelos sem o elemento nao participam da conferencia.
  *
  * Dois modelos cujos `id` diferem em exatamente 100 recebem os MESMOS códigos,
  * e como o número do pedido gravado no QR é o mesmo para os dois, nada os
@@ -26340,28 +26340,58 @@ async function carregarModelosGlobais() {
  * pedido inteiro — é aqui que dá para avisar antes de alguém imprimir.
  */
 function conferirColunasQrIdealDosPedidos() {
-    if (typeof window.conferirColunasQrIdeal !== 'function') return;
+    if (typeof window.conferirColunasQrIdeal !== 'function'
+        || typeof window.classificarModelosQrIdeal !== 'function') return;
     const avisados = [];
+    const inconclusivos = [];
     Object.keys(state.modelosGlobais || {}).forEach((pedido) => {
-        const modelos = (state.modelosGlobais[pedido] || []).map(m => m.id);
-        if (modelos.length < 2) return;
-        const choques = window.conferirColunasQrIdeal(pedido, modelos);
+        const classificacao = window.classificarModelosQrIdeal(
+            state.modelosGlobais[pedido] || [], state.numeracoes || []
+        );
+        const modelos = classificacao.ativos;
+        const choques = modelos.length < 2
+            ? [] : window.conferirColunasQrIdeal(pedido, modelos);
         choques.forEach(c => avisados.push(
             `pedido ${pedido}, coluna ${c.coluna}: modelos ${c.modelos.join(' e ')}`
         ));
+
+        // Nao chama ausencia de dado de "seguro": se uma numeracao vinculada
+        // nao estiver legivel no catalogo e puder colidir com outra candidata,
+        // o operador recebe uma mensagem de verificacao, nao uma falsa certeza.
+        const possiveis = modelos.concat(classificacao.desconhecidos);
+        if (classificacao.desconhecidos.length && possiveis.length > 1) {
+            const desconhecidos = new Set(classificacao.desconhecidos);
+            window.conferirColunasQrIdeal(pedido, possiveis).forEach(c => {
+                if (c.modelos.some(m => desconhecidos.has(String(m)))) {
+                    inconclusivos.push(
+                        `pedido ${pedido}, coluna ${c.coluna}: modelos ${c.modelos.join(' e ')}`
+                    );
+                }
+            });
+        }
     });
-    if (!avisados.length) return;
-    console.warn('[QR Ideal] choque de coluna:', avisados);
+    if (!avisados.length && !inconclusivos.length) return;
+    if (avisados.length) console.warn('[QR Ideal] choque de coluna:', avisados);
     // Chamava `showToast`, que nao existe em lugar nenhum do frontend -- a
     // funcao de aviso deste projeto chama-se `toast`. O guard `typeof` fazia
     // a chamada falhar em silencio, e o operador nunca via este aviso: so o
     // console. Achado na auditoria da documentacao de 15/08/2026, que dizia
     // "o painel avisa sobre o pedido inteiro" e nao avisava.
-    toast(
-        `⚠️ QR Ideal — ${avisados.join('; ')}. Estes modelos gerariam ingressos ` +
-        `com o mesmo código no mesmo evento. Não imprimir com QR Ideal antes de resolver.`,
-        'error'
-    );
+    if (avisados.length) {
+        toast(
+            `⚠️ QR Ideal — ${avisados.join('; ')}. Estes modelos gerariam ingressos ` +
+            `com o mesmo código no mesmo evento. Não imprimir com QR Ideal antes de resolver.`,
+            'error'
+        );
+    }
+    if (inconclusivos.length) {
+        console.warn('[QR Ideal] conferencia inconclusiva:', inconclusivos);
+        toast(
+            `⚠️ QR Ideal — não foi possível verificar a numeração de ${inconclusivos.join('; ')}. ` +
+            `Recarregue o catálogo antes de imprimir com QR Ideal.`,
+            'warning'
+        );
+    }
 }
 
 

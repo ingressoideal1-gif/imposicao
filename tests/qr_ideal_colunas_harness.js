@@ -12,8 +12,21 @@ const comando = process.argv[2];
 const pedido = process.argv[3];
 const arg = process.argv[4];
 
-if (comando === 'coluna') {
+// O entrega-segura executa harnesses JS alterados diretamente para detectar
+// falhas de carga. Sem comando, carregar o modulo com sucesso ja e o teste.
+if (!comando) {
+    process.exitCode = 0;
+} else if (comando === 'coluna') {
     process.stdout.write(String(modulo.colunaQrIdeal(pedido, arg)));
 } else {
-    process.stdout.write(JSON.stringify(modulo.conferirColunasQrIdeal(pedido, arg.split(','))));
+    if (comando === 'classificar') {
+        // Base64 evita que o cmd.exe/PowerShell remova as aspas do JSON no
+        // Windows antes de o argumento chegar ao Node.
+        const entrada = JSON.parse(Buffer.from(process.argv[3], 'base64').toString('utf8'));
+        process.stdout.write(JSON.stringify(modulo.classificarModelosQrIdeal(
+            entrada.modelos, entrada.numeracoes
+        )));
+    } else {
+        process.stdout.write(JSON.stringify(modulo.conferirColunasQrIdeal(pedido, arg.split(','))));
+    }
 }

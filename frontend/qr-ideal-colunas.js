@@ -46,13 +46,58 @@
         return choques;
     }
 
+    /**
+     * Separa os modelos que realmente usam QR Ideal dos que nao puderam ser
+     * conferidos. Modelo sem numeracao vinculada nao usa QR Ideal; numeracao
+     * vinculada que nao chegou ao catalogo (ou chegou corrompida) e desconhecida.
+     */
+    function classificarModelosQrIdeal(modelos, numeracoes) {
+        var porId = {};
+        (numeracoes || []).forEach(function (n) {
+            if (n && n.id !== null && typeof n.id !== 'undefined') {
+                porId[String(n.id)] = n;
+            }
+        });
+
+        var ativos = [];
+        var desconhecidos = [];
+        (modelos || []).forEach(function (m) {
+            if (!m || m.id === null || typeof m.id === 'undefined') return;
+            var numId = m.amostra_num_id || m.numeracao_id;
+            // Sem numeracao escolhida nao existe elemento QR Ideal para imprimir.
+            if (numId === null || typeof numId === 'undefined' || numId === '') return;
+
+            var num = porId[String(numId)];
+            if (!num) {
+                desconhecidos.push(String(m.id));
+                return;
+            }
+
+            var elementos = num.elements;
+            if (typeof elementos === 'string') {
+                try { elementos = JSON.parse(elementos); }
+                catch (_) { elementos = null; }
+            }
+            if (!Array.isArray(elementos)) {
+                desconhecidos.push(String(m.id));
+                return;
+            }
+            if (elementos.some(function (el) { return el && el.type === 'QR_IDEAL'; })) {
+                ativos.push(String(m.id));
+            }
+        });
+        return { ativos: ativos, desconhecidos: desconhecidos };
+    }
+
     escopo.colunaQrIdeal = colunaQrIdeal;
     escopo.conferirColunasQrIdeal = conferirColunasQrIdeal;
+    escopo.classificarModelosQrIdeal = classificarModelosQrIdeal;
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
             colunaQrIdeal: colunaQrIdeal,
-            conferirColunasQrIdeal: conferirColunasQrIdeal
+            conferirColunasQrIdeal: conferirColunasQrIdeal,
+            classificarModelosQrIdeal: classificarModelosQrIdeal
         };
     }
 })(typeof window !== 'undefined' ? window : globalThis);
