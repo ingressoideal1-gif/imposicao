@@ -67,13 +67,23 @@ Também em 19/09/2026:
   `e456e6c0c98147ebf6e60a09898ee09296c0dc277aae065a19f474097b3cb21d`;
 - o arquivo público foi baixado e conferido antes da ativação de `latest.json`;
 - tag `agente-v1.2.335` enviada ao GitHub;
-- a estação `PC-JR-HOME` confirmou `NewProd 1.2.335` pela rota local e pelo
-  heartbeat.
+- as estações `PC-JR-HOME` e `GUSTAVO-PROD` confirmaram `NewProd 1.2.335` por
+  heartbeat; `PC-JR-HOME` também confirmou a versão pela rota local.
 
-O snapshot da frota ainda não permite fechar `anon`: uma estação vista no dia
-permaneceu em `1.2.334`, outra não informou versão e as demais só tinham
-heartbeat anterior, em versões `1.2.333` ou mais antigas. Elas devem atualizar
-e reportar `1.2.335` antes da retirada de `SELECT`.
+O snapshot da frota ainda não permite fechar `anon`: uma estação ativa não
+informou versão e as demais só tinham heartbeat anterior, em versões `1.2.333`
+ou mais antigas. É preciso confirmar quais delas usam bancos de pedidos e obter
+heartbeat em `1.2.335` das estações aplicáveis antes da retirada de `SELECT`.
+
+Um novo snapshot somente de metadados, coletado em 19/09/2026 sem alterar o
+banco, confirmou:
+
+- `pagamentos_v2` com RLS ativa e `anon` sem `INSERT`, `UPDATE`, `DELETE` ou
+  `TRUNCATE`;
+- `producao_ordens_servico` com RLS ativa, sem privilégios efetivos para
+  `anon` e com policy para `authenticated`;
+- `pedidos_bancos` e `pedidos_modelos_banco` ainda sem RLS, sem policies e com
+  privilégios amplos de `anon`, inclusive leitura e escrita.
 
 ## Efeito na usabilidade
 
@@ -90,10 +100,9 @@ estações que usam bancos de pedidos.
 
 ## Ordem segura de implantação
 
-1. Integrar este commit à revisão atual do painel, resolvendo os pontos em que
-   `painel/index.ts` e `acesso-estacao/index.ts` também receberam as rotas de
-   propostas. **Pendente de integração do PR; a branch já está atualizada com
-   `origin/main`.**
+1. Integrar a implementação à revisão atual do painel, preservando as rotas de
+   propostas que também alteraram `painel/index.ts` e
+   `acesso-estacao/index.ts`. **Concluído no PR `#55`.**
 2. Implantar primeiro as duas Edge Functions. **Concluído em 19/09/2026.**
 3. Validar com dados sintéticos ou pedido de teste:
    - usuário web com `perm_amostras_view` consulta somente o `id_int` pedido;
@@ -105,7 +114,7 @@ estações que usam bancos de pedidos.
    **Concluído em `v900`.**
 5. Gerar e instalar a versão do NewProd nas estações; confirmar por versão e
    heartbeat, além de uma leitura real controlada. **Versão `1.2.335` publicada;
-   uma estação confirmada, demais estações pendentes.**
+   duas estações confirmadas, demais estações aplicáveis pendentes.**
 6. Conferir `pg_stat_statements`: as tabelas não devem mais receber consultas
    `anon` do painel ou das estações atualizadas.
 7. Avisar o mantenedor com alvo, efeito e janela. Aguardar o aceite expresso.
