@@ -55,3 +55,19 @@ def test_o_choque_de_coluna_chega_ao_operador_pelo_toast():
         "o aviso esta atras de um `typeof` guard; se a funcao sumir, o choque volta a "
         "falhar em silencio em vez de estourar onde alguem veja"
     )
+
+
+def test_o_aviso_so_confere_modelos_que_usam_qr_ideal():
+    """O painel precisa conhecer a numeração vinculada e inspecionar seus
+    elementos; comparar todos os IDs do pedido recria o falso positivo."""
+    corpo = (FRONT / "script.js").read_text(encoding="utf-8")
+    assert re.search(
+        r"\.select\('[^']*nome_modelo, amostra_num_id, amostra_arte_base64",
+        corpo,
+    ), "a consulta global nao traz amostra_num_id"
+
+    m = re.search(r"function conferirColunasQrIdealDosPedidos\(\)\s*\{.*?\n\}", corpo, re.S)
+    assert m, "conferirColunasQrIdealDosPedidos nao existe mais"
+    assert "classificarModelosQrIdeal" in m.group(0), (
+        "o aviso voltou a comparar modelos sem conferir o elemento QR_IDEAL"
+    )

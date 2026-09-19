@@ -14,6 +14,10 @@ $harness = Join-Path $PSScriptRoot "qr_ideal_colunas_harness.js"
 
 Describe "Coluna do QR Ideal no navegador" {
 
+    function EmBase64([string] $texto) {
+        [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($texto))
+    }
+
     It "calcula a coluna do exemplo canonico (72 - 22 = 50)" {
         (node $harness "coluna" "20272" "1000022").Trim() | Should Be "50"
     }
@@ -49,5 +53,20 @@ Describe "Coluna do QR Ideal no navegador" {
 
     It "ignora modelo vazio em vez de inventar uma coluna" {
         (node $harness "conferir" "20272" "1000022,,1000023").Trim() | Should Be "[]"
+    }
+
+    It "ignora modelos cuja numeracao nao tem QR Ideal" {
+        $entrada = '{"modelos":[{"id":1001195,"amostra_num_id":7},{"id":1001095,"amostra_num_id":8}],"numeracoes":[{"id":7,"elements":[{"type":"TEXT"}]},{"id":8,"elements":[{"type":"QR"}]}]}'
+        (node $harness "classificar" (EmBase64 $entrada)).Trim() | Should Be '{"ativos":[],"desconhecidos":[]}'
+    }
+
+    It "inclui somente os modelos que realmente usam QR Ideal" {
+        $entrada = '{"modelos":[{"id":1001195,"amostra_num_id":7},{"id":1001095,"amostra_num_id":8}],"numeracoes":[{"id":7,"elements":[{"type":"QR_IDEAL"}]},{"id":8,"elements":[{"type":"TEXT"}]}]}'
+        (node $harness "classificar" (EmBase64 $entrada)).Trim() | Should Be '{"ativos":["1001195"],"desconhecidos":[]}'
+    }
+
+    It "nao trata numeracao ausente do catalogo como segura" {
+        $entrada = '{"modelos":[{"id":1001195,"amostra_num_id":999}],"numeracoes":[]}'
+        (node $harness "classificar" (EmBase64 $entrada)).Trim() | Should Be '{"ativos":[],"desconhecidos":["1001195"]}'
     }
 }
