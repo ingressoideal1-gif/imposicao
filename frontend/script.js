@@ -2004,7 +2004,7 @@ async function loadAll() {
 
     try {
 
-        const [fmts, nums, sais, cores, modelos, vibeProdutos] = await Promise.all([
+        const [fmts, nums, sais, cores, modelos, vibeProdutos, vibeProdutoFotos] = await Promise.all([
             api('GET', '/formatos'),
             api('GET', '/numeracoes'),
             api('GET', '/saidas'),
@@ -2020,6 +2020,23 @@ async function loadAll() {
                 })
                 .catch(err => {
                     console.error('[loadAll] Exception ao buscar produtos:', err);
+                    return [];
+                }),
+            (typeof vibeClient !== 'undefined' && vibeClient
+                ? vibeClient.from('vw_produto_fotos')
+                    .select('id_produto,foto_id,url,nome_produto,posicao')
+                    .order('id_produto', { ascending: true })
+                    .order('posicao', { ascending: true })
+                : Promise.resolve({ data: [] }))
+                .then(r => {
+                    if (r && r.error) {
+                        console.warn('[loadAll] Fotos dos produtos indisponiveis:', r.error);
+                        return [];
+                    }
+                    return (r && r.data) || [];
+                })
+                .catch(err => {
+                    console.warn('[loadAll] Falha ao buscar fotos dos produtos:', err);
                     return [];
                 })
         ]);
@@ -2042,13 +2059,24 @@ async function loadAll() {
 
         state.modelosImposicao = modelos || [];
         state.produtosGlobais = vibeProdutos || [];
+        state.produtoFotosPorId = {};
+        (vibeProdutoFotos || []).forEach(foto => {
+            const chave = String(foto && foto.id_produto);
+            if (!chave || chave === 'undefined' || !foto.url) return;
+            if (!state.produtoFotosPorId[chave]) state.produtoFotosPorId[chave] = [];
+            state.produtoFotosPorId[chave].push(foto);
+        });
 
         // Os itens podem ter sido mapeados antes desta linha — é o caso comum,
         // porque as OS carregam por conta própria. Sem este reparo eles ficam
         // sem setor para sempre e os filtros de setor não devolvem nada.
         const _reparados = repararSetoresDosItens();
+        const _prateleiraReparados = repararProdutosPrateleiraDosItens();
         if (_reparados) {
             console.log(`[loadAll] Setor preenchido em ${_reparados} item(ns) mapeado(s) antes dos produtos chegarem.`);
+        }
+        if (_prateleiraReparados) {
+            console.log(`[loadAll] Regra de prateleira aplicada em ${_prateleiraReparados} modelo(s).`);
         }
 
         // O limiar da sobra e a lista de produtos que podem dividir folha entre
@@ -26303,7 +26331,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
+                .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -26320,8 +26348,10 @@ async function carregarModelosGlobais() {
             m.arte_url = m.arte_url || '';
             m.ordem = m.ordem !== undefined ? m.ordem : null;
             m.modelo = m.nome_modelo || '';
+            aplicarRegraProdutoPrateleira(m);
             state.modelosGlobais[m.id_int].push(m);
         });
+        await sincronizarAprovacaoProdutosPrateleira(todosModelos);
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
         conferirColunasQrIdealDosPedidos();
     } catch (e) {
@@ -26418,6 +26448,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         }
 
         if (!produtos || produtos.length === 0) return false;
+        state.produtosPropostaGlobais = produtos;
 
         // Buscar propostas (tabela pai) se existir e for acessível
         //
@@ -26697,7 +26728,7 @@ function mapVibecodeProdutoToOSItem(p, osId) {
     // Extrair formato da descrição (ex: "25×2cm" → "Mobi")
     const formato = p.modelo_descri || 'Mobi';
 
-    return {
+    const itemMapeado = {
         id: `vibe_item_${p.id}`,
         os_id: osId,
         setor: setor,
@@ -26750,6 +26781,8 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         _vibe_id_produto: p.id_produto,
         _nome_original: p.nome_produto
     };
+    aplicarRegraProdutoPrateleira(itemMapeado);
+    return itemMapeado;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26806,6 +26839,109 @@ function repararSetoresDosItens() {
 }
 window.repararSetoresDosItens = repararSetoresDosItens;
 
+/** Resolve o codigo comercial do produto de qualquer representacao de modelo. */
+function idProdutoDoItem(item) {
+    if (!item) return null;
+    const direto = item._vibe_id_produto ?? item.id_produto ?? item.produto_id;
+    if (direto !== null && direto !== undefined && direto !== '') return direto;
+    const origem = item.id_produto_proposta_origem;
+    if (origem === null || origem === undefined || origem === '') return null;
+    const proposta = (state.produtosPropostaGlobais || [])
+        .find(p => String(p.id) === String(origem));
+    return proposta ? proposta.id_produto : null;
+}
+
+/** Foto principal cadastrada na view, sempre a menor posicao disponivel. */
+function fotoPrincipalDoProduto(idProduto) {
+    const fotos = (state.produtoFotosPorId && state.produtoFotosPorId[String(idProduto)]) || [];
+    return fotos.slice().sort((a, b) => (Number(a.posicao) || 999999) - (Number(b.posicao) || 999999))[0] || null;
+}
+
+/**
+ * Produtos de prateleira nao possuem arte para aprovacao. A foto e apenas a
+ * imagem comercial do cadastro e fica em campo separado para nunca ser salva
+ * como amostra_arte_base64/arte_url.
+ */
+function aplicarRegraProdutoPrateleira(item) {
+    const idProduto = idProdutoDoItem(item);
+    if (idProduto === null || idProduto === undefined || idProduto === '') return false;
+    const produto = (state.produtosGlobais || [])
+        .find(p => String(p.id_produto) === String(idProduto));
+    if (!produto || produto.is_estoque !== true) return false;
+
+    const foto = fotoPrincipalDoProduto(idProduto);
+    if (item._status_arte_persistido === undefined) item._status_arte_persistido = item.status_arte || '';
+    item._produto_prateleira = true;
+    item._foto_produto_url = foto ? foto.url : '';
+    item._foto_produto_id = foto ? foto.foto_id : null;
+    item.amostra_arte_base64 = null;
+    item.verso_amostra_arte_base64 = null;
+    item.arte_url = null;
+    item.verso_arte_url = null;
+    item.url_arquivo_arte = null;
+    item.url_arquivo_arte_verso = null;
+    item.url_arquivo = null;
+    item.verso_url_arquivo = null;
+    item.amostra_status = 'APROVADA';
+    item.status_arte = 'APROVADA';
+    item.aprovacao = 'APROVADA';
+    return true;
+}
+
+/**
+ * Persiste APROVADA somente nos modelos inequivocamente ligados a produto de
+ * prateleira. Cada UPDATE usa id + id_int e exige exatamente uma linha de volta.
+ */
+async function sincronizarAprovacaoProdutosPrateleira(modelos) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return { atualizados: 0, falhas: 0 };
+    if (!await temSessaoDoSupabase()) return { atualizados: 0, falhas: 0 };
+
+    const pendentes = (modelos || []).filter(modelo => {
+        aplicarRegraProdutoPrateleira(modelo);
+        return modelo && modelo._produto_prateleira
+            && String(modelo._status_arte_persistido || '').trim().toUpperCase() !== 'APROVADA';
+    });
+    let atualizados = 0;
+    const falhas = [];
+    for (const modelo of pendentes) {
+        const { data, error } = await supabaseClient
+            .from('pedidos_modelos')
+            .update({ status_arte: 'APROVADA' })
+            .eq('id', modelo.id)
+            .eq('id_int', modelo.id_int)
+            .select('id,id_int,status_arte');
+        const linhas = data || [];
+        if (error || linhas.length !== 1
+            || String(linhas[0].id) !== String(modelo.id)
+            || String(linhas[0].id_int) !== String(modelo.id_int)
+            || linhas[0].status_arte !== 'APROVADA') {
+            falhas.push({ id: modelo.id, id_int: modelo.id_int, erro: error && error.message });
+            continue;
+        }
+        modelo._status_arte_persistido = 'APROVADA';
+        atualizados++;
+    }
+    if (falhas.length) console.warn('[Prateleira] Falha ao confirmar aprovacao de modelos:', falhas);
+    return { atualizados, falhas: falhas.length };
+}
+
+/** Reaplica a regra depois que catalogo, fotos ou modelos chegam fora de ordem. */
+function repararProdutosPrateleiraDosItens() {
+    let alterados = 0;
+    Object.values(state.osItens || {}).forEach(itens => (itens || []).forEach(item => {
+        if (aplicarRegraProdutoPrateleira(item)) alterados++;
+    }));
+    Object.values(state.modelosGlobais || {}).forEach(modelos => (modelos || []).forEach(modelo => {
+        if (aplicarRegraProdutoPrateleira(modelo)) alterados++;
+    }));
+    return alterados;
+}
+window.idProdutoDoItem = idProdutoDoItem;
+window.fotoPrincipalDoProduto = fotoPrincipalDoProduto;
+window.aplicarRegraProdutoPrateleira = aplicarRegraProdutoPrateleira;
+window.sincronizarAprovacaoProdutosPrateleira = sincronizarAprovacaoProdutosPrateleira;
+window.repararProdutosPrateleiraDosItens = repararProdutosPrateleiraDosItens;
+
 /**
  * Carrega os itens de uma OS específica
  */
@@ -26853,9 +26989,17 @@ async function loadOSItens(osId) {
                     state.osItens[osId] = data.map(item => {
                         const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
                         
-                        // Remapear o status_arte do banco para o amostra_status usado pela UI
+                        const idProdutoDoModelo = prop ? prop.id_produto : (item.id_produto || null);
+                        const produtoDoModelo = idProdutoDoModelo == null ? null : (state.produtosGlobais || [])
+                            .find(pg => String(pg.id_produto) === String(idProdutoDoModelo));
+                        const produtoEhPrateleira = !!(produtoDoModelo && produtoDoModelo.is_estoque === true);
+
+                        // Remapear o status_arte do banco para o amostra_status usado pela UI.
+                        // Prateleira nao aguarda arte: nasce aprovada independentemente do
+                        // status legado que ainda esteja gravado no modelo.
                         let statusFrontend = 'PENDENTE';
-                        if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
+                        if (produtoEhPrateleira) statusFrontend = 'APROVADA';
+                        else if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
                         else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
                         else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
 
@@ -26928,9 +27072,9 @@ async function loadOSItens(osId) {
                             amostra_num_id: resolvedNumId || null,
                             // Um produto pode ter varios modelos. Sua ultima arte
                             // nao pertence automaticamente aos modelos novos/vazios.
-                            amostra_arte_base64: item.amostra_arte_base64 || null,
+                            amostra_arte_base64: produtoEhPrateleira ? null : (item.amostra_arte_base64 || null),
                             verso_amostra_arte_base64: item.verso_amostra_arte_base64 || null,
-                            arte_url: item.arte_url || item.url_arquivo_arte || item.url_arquivo || null,
+                            arte_url: produtoEhPrateleira ? null : (item.arte_url || item.url_arquivo_arte || item.url_arquivo || null),
                             verso_arte_url: item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo || null,
                             url_arquivo_arte: item.url_arquivo_arte || item.arte_url || null,
                             url_arquivo_arte_verso: item.url_arquivo_arte_verso || item.verso_arte_url || null,
@@ -26946,6 +27090,7 @@ async function loadOSItens(osId) {
                             })() || item.setor || '',   // sem setor_pcp = sem setor, nunca PVC
                             _dbLoaded: true
                         };
+                        aplicarRegraProdutoPrateleira(mapped);
                         return mapped;
                     });
                     // Resolver amostra_cor_id / amostra_num_id por nome agora que a lista existe.
@@ -26974,7 +27119,7 @@ async function loadOSItens(osId) {
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (pp.tipo_numeracao || null);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (pp.gabarito_operacional || null);
 
-                        return {
+                        const mapped = {
                             id: pp.id,
                             id_int: pp.id_int,
                             nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
@@ -27007,8 +27152,11 @@ async function loadOSItens(osId) {
                                 const prodObj = vibeProdId ? (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(vibeProdId)) : null;
                                 return prodObj ? (prodObj.setor_pcp || '') : '';
                             })() || '',   // sem setor_pcp = sem setor, nunca PVC
-                            _dbLoaded: true
+                            _dbLoaded: true,
+                            _vibe_id_produto: pp.id_produto || null
                         };
+                        aplicarRegraProdutoPrateleira(mapped);
+                        return mapped;
                     });
 
                     // Auto-criar registros em pedidos_modelos para que salvamentos futuros funcionem
@@ -30242,12 +30390,13 @@ function previewDaArteDoPedidoHtml(os) {
         return m ? parseInt(m[0], 10) : 999999;
     };
 
-    const candidatosComImagem = todosCandidatos.filter(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url));
+    const candidatosComImagem = todosCandidatos.filter(m => m && (m._foto_produto_url || m.amostra_arte_base64 || m.arte_url || m.pdf_url));
     candidatosComImagem.sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
 
     const modeloPreviewItem = candidatosComImagem[0];
-    let previewSrc = modeloPreviewItem ? (modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
-    if (!previewSrc && state.todasArtes) {
+    let previewSrc = modeloPreviewItem ? (modeloPreviewItem._foto_produto_url || modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
+    const previewEhProduto = !!(modeloPreviewItem && modeloPreviewItem._produto_prateleira && modeloPreviewItem._foto_produto_url);
+    if (!previewSrc && state.todasArtes && !todosCandidatos.some(m => m && m._produto_prateleira)) {
         const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
         if (arteGlobal && (arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64)) {
             previewSrc = arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64;
@@ -30275,8 +30424,8 @@ function previewDaArteDoPedidoHtml(os) {
             previewHtml = `
                 <img src="${previewSrc}" 
                      style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
-                     onclick="event.stopPropagation(); abrirLightboxImagem('${previewSrc}', 'Arte do pedido')" 
-                     title="Clique para ampliar a arte" />
+                     onclick="event.stopPropagation(); abrirLightboxImagem('${previewSrc}', '${previewEhProduto ? 'Foto do produto' : 'Arte do pedido'}')"
+                     title="${previewEhProduto ? 'Foto do produto de prateleira' : 'Clique para ampliar a arte'}" />
             `;
         }
     }
@@ -33778,6 +33927,21 @@ window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDad
  * paginado e o verso e um arquivo de uma pagina so.
  */
 function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
+    if (item && item._produto_prateleira) {
+        const foto = item._foto_produto_url || '';
+        return foto ? `
+            <div style="width:100%; text-align:center; padding:12px;">
+                <img id="amostra-item-img-${idx}" src="${foto}" alt="Foto do produto"
+                     style="max-width:100%; max-height:450px; object-fit:contain; margin:0 auto; display:block; box-shadow:var(--shadow); background:#fff; cursor:zoom-in;"
+                     onclick="abrirLightboxImagem('${foto}', 'Foto do produto')" />
+                <div style="margin-top:8px; color:var(--green); font-size:0.82rem; font-weight:800;">PRODUTO DE PRATELEIRA · APROVADO</div>
+            </div>` : `
+            <div style="width:100%; text-align:center; padding:24px; color:var(--text-dim);">
+                <div style="font-size:2.5rem; margin-bottom:8px;">📦</div>
+                <div style="font-weight:800; color:var(--green);">PRODUTO DE PRATELEIRA · APROVADO</div>
+                <div style="font-size:0.82rem; margin-top:6px;">Foto não cadastrada ou indisponível.</div>
+            </div>`;
+    }
     return ((item.verso || pdfImparFrenteVersoParDoModelo(item) || pdfDuplicarParaVersoDoModelo(item)) ? `
                         <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
                             <!-- Janela vertical (formato mais alto que largo): as duas
