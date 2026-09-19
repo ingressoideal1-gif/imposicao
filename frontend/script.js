@@ -38798,6 +38798,9 @@ async function renderItemAmostraCombinada(idx, osId) {
 
 async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente') {
     if (!supabaseClient) return;
+    // Produto de prateleira nao tem arte para compor. Gerar canvas aqui cria
+    // uma miniatura branca e substitui a foto comercial no Link do Cliente.
+    if (item && item._produto_prateleira) return;
     if (!canvas || typeof canvas.toBlob !== 'function') {
         const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
         if (pdfCanvas && typeof pdfCanvas.toBlob === 'function' && pdfCanvas.width > 0) {
@@ -38839,6 +38842,10 @@ async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente'
 // Versão promisificada do snapshot — aguarda upload completar antes de resolver
 function snapshotAmostraSync(idx, osId, item, canvas, face) {
     return new Promise((resolve) => {
+        if (item && item._produto_prateleira) {
+            resolve();
+            return;
+        }
         if (!canvas || canvas.width === 0 || canvas.height === 0) {
             const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
             if (pdfCanvas && pdfCanvas.width > 0) {
@@ -38924,6 +38931,14 @@ const ESCALA_DA_AMOSTRA = 150 / 25.4;
  */
 async function regenerarAmostraDoModelo(osId, item, idx, S) {
     S = S || ESCALA_DA_AMOSTRA;
+    // Prateleira usa a foto cadastrada, nunca um render de cor/numero/arte.
+    // Reaplica e confirma a URL porque esta rotina tambem e chamada ao marcar
+    // o modelo pronto e pode encontrar um snapshot branco legado no banco.
+    if (aplicarRegraProdutoPrateleira(item)) {
+        const resultado = await sincronizarAprovacaoProdutosPrateleira([item]);
+        if (resultado.falhas) throw new Error('não consegui salvar a foto do produto como amostra');
+        return !!item._foto_produto_url;
+    }
     if (item.modo_pdf) return false;
 
     resolveItemCorNumIds(item, idx);

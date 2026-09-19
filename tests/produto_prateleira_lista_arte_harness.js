@@ -101,6 +101,12 @@ const api = new Function('state', 'window', fonteBase
     );
     ok(reparo >= 0 && sincronizacaoDepoisDoReparo > reparo,
         'corrida catalogo/modelos persiste a foto depois do reparo');
+    ok(SCRIPT.includes('if (item && item._produto_prateleira) return;'),
+        'snapshot assincrono nao sobrescreve foto com canvas branco');
+    ok(SCRIPT.includes('if (item && item._produto_prateleira) {\n            resolve();'),
+        'snapshot sincronizado nao sobrescreve foto com canvas branco');
+    ok(SCRIPT.includes('if (aplicarRegraProdutoPrateleira(item)) {\n        const resultado = await sincronizarAprovacaoProdutosPrateleira([item]);'),
+        'regeneracao preserva e confirma foto comercial');
 
     if (falhas) process.exit(1);
     console.log('OK: ' + total + ' verificacoes de produto de prateleira passaram.');
