@@ -87,8 +87,9 @@ const STATUS_MODELO_EM_ALTERACAO_PARA_PEDIDO = [
 function calcularStatusConsolidadoPedidoArteCliente(itens, entregaStatus, statusAtual) {
     const normalizar = valor => String(valor || '').trim().toUpperCase();
     const entrega = normalizar(entregaStatus);
+    // O status do modelo confirmado no banco vence os espelhos de versões antigas.
     const estados = (itens || []).map(item => [
-        normalizar(item.status_arte), normalizar(item.amostra_status), normalizar(item.aprovacao)
+        normalizar(item.status_arte || item.amostra_status || item.aprovacao)
     ].filter(Boolean));
 
     if (entrega === 'CORRIGIR') return 'Corrigir Dados';
@@ -111,14 +112,16 @@ function calcularStatusConsolidadoPedidoArteCliente(itens, entregaStatus, status
 }
 
 async function sincronizarStatusConsolidadoPedidoArteCliente(numPedInt, itens, entregaInformada) {
-    if (!numPedInt || isNaN(numPedInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
+    if (!numPedInt || isNaN(numPedInt) || typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Não foi possível confirmar o pedido no banco. Tente novamente.');
+    }
     const { data: artes, error } = await supabaseClient
         .from('pedidos_artes')
         .select('id, status, entrega_dados, observacoes')
         .eq('id_int', numPedInt)
         .order('created_at', { ascending: false });
     if (error) throw error;
-    if (!artes || artes.length === 0) return null;
+    if (!artes || artes.length === 0) throw new Error('O pedido não tem registro de arte. Avise seu atendimento.');
 
     const entrega = entregaInformada !== undefined
         ? entregaInformada
@@ -134,32 +137,43 @@ async function sincronizarStatusConsolidadoPedidoArteCliente(numPedInt, itens, e
         ? (obsMaisRecente.status_antes_correcao_dados || artes[0].status)
         : artes[0].status;
     const novoStatus = calcularStatusConsolidadoPedidoArteCliente(itens || [], entrega, statusAtual);
-    if (!novoStatus) return null;
+    if (!novoStatus) throw new Error('Não foi possível determinar o status do pedido.');
 
-    const { error: erroUpdate } = await supabaseClient
+    const { data: gravadas, error: erroUpdate } = await supabaseClient
         .from('pedidos_artes')
         .update({ status: novoStatus })
-        .eq('id_int', numPedInt);
+        .eq('id_int', numPedInt)
+        .select('id, id_int, status');
     if (erroUpdate) throw erroUpdate;
+    if (!Array.isArray(gravadas) || gravadas.length !== artes.length
+        || !artes.every(a => gravadas.some(g => String(g.id) === String(a.id)
+            && String(g.id_int) === String(numPedInt) && g.status === novoStatus))) {
+        throw new Error('O status do pedido não foi confirmado. Tente novamente.');
+    }
     return novoStatus;
 }
 window.calcularStatusConsolidadoPedidoArteCliente = calcularStatusConsolidadoPedidoArteCliente;
 window.sincronizarStatusConsolidadoPedidoArteCliente = sincronizarStatusConsolidadoPedidoArteCliente;
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Sem conexão com o banco. Tente novamente.');
+    }
 
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
-        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId);
-        return;
+        throw new Error('Modelo não encontrado. Reabra o link antes de aprovar.');
     }
 
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
 
     if (!modeloId || modeloId === '') {
-        console.warn('[SAVE] modeloId esta vazio, ignorando update no banco');
-        return;
+        throw new Error('Modelo sem identificação no banco. Avise seu atendimento.');
+    }
+    const numeroPedido = Number(clienteState.numero);
+    if (!Number.isSafeInteger(numeroPedido) || numeroPedido <= 0 || osId !== clienteState.osId
+        || (itemLocal.id_int != null && Number(itemLocal.id_int) !== numeroPedido)) {
+        throw new Error('O modelo não corresponde ao pedido deste link.');
     }
 
     try {
@@ -190,36 +204,28 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             return;
         }
 
-        // SE O ID FOR UM ITEM VIRTUAL (Vibecode Fallback), no salvar em pedidos_modelos!
-        // Itens virtuais so gerados pelo carregarVibeOrders e no tm _dbLoaded = true
+        // Uma decisão do cliente exige um modelo persistido; cache local não é recibo.
         if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
-            console.log('[SAVE] Ignorando pedidos_modelos para ID virtual:', modeloId);
-            Object.assign(itemLocal, dataToUpdate);
-            // Salvar tambm no localStorage para persistncia na sesso
-            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
-            const cacheKey = itemLocal.id; // Ex: vibe_item_1224
-            if (!overrides[cacheKey]) overrides[cacheKey] = {};
-            Object.assign(overrides[cacheKey], dataToUpdate);
-            localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
-            return;
+            throw new Error('Aguarde o carregamento do modelo antes de aprovar.');
         }
 
-        const { data: updateResult, error } = await vibeClient
+        const { data: updateResult, error } = await supabaseClient
             .from('pedidos_modelos')
             .update(dbData)
             .eq('id', modeloId)
-            .select('id');
+            .eq('id_int', numeroPedido)
+            .select(['id', 'id_int', ...Object.keys(dbData)].join(', '));
         
         if (error) {
             console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
             throw error;
         }
 
-        const rowsUpdated = updateResult ? updateResult.length : 0;
-        if (rowsUpdated === 0) {
-            console.warn('[SAVE] 0 linhas atualizadas! id=', modeloId);
-        } else {
-            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+        const gravado = Array.isArray(updateResult) && updateResult.length === 1 && updateResult[0];
+        if (!gravado || String(gravado.id) !== String(modeloId)
+            || Number(gravado.id_int) !== numeroPedido
+            || !Object.keys(dbData).every(campo => JSON.stringify(gravado[campo]) === JSON.stringify(dbData[campo]))) {
+            throw new Error('A decisão sobre o modelo não foi confirmada. Tente novamente.');
         }
 
         Object.assign(itemLocal, dataToUpdate);
@@ -311,6 +317,7 @@ function cabecalhoModeloCliente(item, idx, chip, corSelecionada) {
 
 function blocoDeArteDoCliente(item, idx, ctx) {
     const desenhoAoVivo = ctx.desenhoAoVivo;
+    const versoAoVivo = ctx.versoAoVivo;
     const arteVisivel = ctx.arteVisivel;
     const versoVisivel = ctx.versoVisivel;
     const paginaCsv = ctx.paginaCsv;
@@ -318,7 +325,7 @@ function blocoDeArteDoCliente(item, idx, ctx) {
     // no style.css. Pendurado na moldura, ele caía sobre o folheador.
     const ampliar = ctx.ampliar || '';
 
-    return (item.verso ? `
+    return ((item.verso || pdfParesNoPortal(item) || pdfCopiaNoPortal(item)) ? `
                         <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
@@ -355,10 +362,10 @@ function blocoDeArteDoCliente(item, idx, ctx) {
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                ${desenhoAoVivo ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoVisivel ? 'none' : 'block'};">
+                                ${desenhoAoVivo || versoAoVivo || pdfParesNoPortal(item) || pdfCopiaNoPortal(item) ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${desenhoAoVivo || versoAoVivo || versoVisivel ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">${pdfParesNoPortal(item) ? 'O verso vem da página par do PDF' : pdfCopiaNoPortal(item) ? 'O verso repete a página da frente' : 'Arte do verso ainda não enviada'}</p>
                                 </div>
                             </div>
 
@@ -605,6 +612,7 @@ function renderAmostrasOSItens(osId) {
         const arteVisivel = temArteVisivel(item);
         const versoVisivel = !!item.verso_amostra_arte_base64
             && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
+        const versoAoVivo = deveDesenharVersoAoVivo(item);
 
         const ehCliente = state.amostrasContainerId === 'cliente-amostras-itens-container';
 
@@ -612,7 +620,7 @@ function renderAmostrasOSItens(osId) {
         // ele é um `const` declarado dentro do cartão, e lê-lo aqui em cima cai
         // na zona morta temporal -- a seção da arte deixava de desenhar inteira,
         // com um `icone is not defined` no console.
-        const ctxDaArte = { desenhoAoVivo, arteVisivel, versoVisivel, paginaCsv, ampliar: '' };
+        const ctxDaArte = { desenhoAoVivo, versoAoVivo, arteVisivel, versoVisivel, paginaCsv, ampliar: '' };
 
         // ── O cartão do modelo, na página do cliente ────────────────────────
         //
@@ -1191,22 +1199,68 @@ let clienteState = {
  * A função do banco exige o par, aceita só os três valores que esta página
  * escreve, e devolve `false` quando o par não confere.
  *
- * ## Por que a falha é silenciosa
- *
- * Do mesmo jeito que era antes: os três pontos de chamada já engoliam o erro de
- * propósito, para que uma recusa do banco não trave o cliente no meio da
- * aprovação. O que ele fez continua gravado nas outras tabelas; o status é
- * espelho, e o painel o recalcula.
+ * Uma recusa ou resposta diferente de `true` interrompe o avanço. O cliente
+ * pode tentar novamente, sem receber uma confirmação baseada só na memória.
  */
 async function gravarStatusDoLink(status) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return false;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Sem conexão com o banco.');
     const { data, error } = await supabaseClient.rpc('link_cliente_status', {
         p_numero: clienteState.numero,
         p_token: clienteState.token,
         p_status: status
     });
     if (error) throw error;
-    return data === true;
+    if (data !== true) throw new Error('O status do link não foi confirmado. Reabra o link e tente novamente.');
+    return true;
+}
+
+/**
+ * Decide o verso usando apenas dados e funções carregados pela página do
+ * cliente. `isNumeracaoDuplex` mora em `script.js`, que não faz parte do
+ * portal; depender daquele global fazia `duplex_unico` cair no fallback antigo
+ * e o HTML nem criava a área do verso.
+ */
+function numeracaoTemVersoNoPortal(numObj) {
+    if (!numObj) return false;
+    const modo = String(numObj.print_mode || 'front').trim().toLowerCase();
+    if (modo === 'duplex' || modo === 'duplex_unico' || modo === 'pdf_odd_even' || modo === 'pdf_duplicate_back') return true;
+    if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
+    const nome = String(numObj.name || numObj.tipo || '').toLowerCase();
+    return nome.includes('verso') || nome.includes('duplex') || nome.includes('frente e verso');
+}
+
+function pdfParesNoPortal(item) {
+    if (!item) return false;
+    const id = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_odd_even';
+}
+
+function pdfCopiaNoPortal(item) {
+    if (!item) return false;
+    const id = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+    return !!num && num.print_mode === 'pdf_duplicate_back';
+}
+
+/**
+ * No PDF paginado, a frente fica no folheador. O verso continua precisando do
+ * canvas normal para compor a arte separada com os elementos da numeração.
+ */
+function deveDesenharVersoAoVivo(item) {
+    return !!(item && item.modo_pdf && item.verso
+        && (item.verso_amostra_arte_base64 || item.verso_arte_url));
+}
+
+/** A amostra é a face atual aprovada; o arquivo bruto pode conservar arte antiga. */
+function arteDaFaceParaComposicao(item, face) {
+    if (face === 'back') {
+        if (item && item.modo_pdf && item.verso_amostra_arte_base64) {
+            return item.verso_amostra_arte_base64;
+        }
+        return item && item.verso_arte_url;
+    }
+    return item && item.arte_url;
 }
 
 /**
@@ -1449,7 +1503,7 @@ async function initClientePage(numero, token) {
 
                     const resolvedNumId = idsDoBanco.numId || (prop ? prop.amostra_num_id : null);
                     const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
-                    const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && ((typeof temVerso === 'function' ? temVerso(matchedNum.print_mode) : matchedNum.print_mode === 'duplex') || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
+                    const numIsDuplex = numeracaoTemVersoNoPortal(matchedNum);
                     // 'Frente' faltava nesta lista: o operador grava exatamente esse
                     // valor ao trocar para uma numeração só frente, e sem ele o
                     // cliente continuava vendo o bloco de verso.
@@ -1574,6 +1628,7 @@ async function initClientePage(numero, token) {
         // consulta direta a `pedidos_artes` com a chave anônima.
         const numInt = parseInt(linkData.numero_pedido || linkData.id_int || numero);
         const seloEntrega = portal && portal.entrega && portal.entrega.entrega_dados;
+        clienteState.entregaStatus = seloEntrega || '';
         if (seloEntrega) {
             if (!state.todasArtes) state.todasArtes = [];
             const globalArte = state.todasArtes.find(a => String(a.id_int) === String(numInt));
@@ -1612,8 +1667,13 @@ async function initClientePage(numero, token) {
 }
 
 async function clienteFinalizarFluxo(fluxoTipo) {
+    if (state.portalGravandoArte || window.portalGravandoConfirmacao) return;
     const osId = clienteState.osId;
     const itens = state.osItens[osId] || [];
+    if (!itens.length) {
+        toast('Aguarde o carregamento das artes antes de continuar.', 'warning');
+        return;
+    }
     if (fluxoTipo === 'APROVAR_TUDO' && itens.some(item => problemaDoBancoCliente(item, numDoItem(item)))) {
         toast('Aguarde a composição dos dados de todas as artes antes de aprovar.', 'warning');
         return;
@@ -1625,6 +1685,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
         btnAprovar.textContent = '⏳ Processando...';
     }
 
+    state.portalGravandoArte = true;
     try {
         if (fluxoTipo === 'APROVAR_TUDO') {
             // NOTA: Não mudamos o status da OS para APROVADO aqui.
@@ -1632,7 +1693,11 @@ async function clienteFinalizarFluxo(fluxoTipo) {
 
             // Para cada item, salvar status como APROVADA no banco (Execução paralela)
             const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
-            await Promise.all(savePromises);
+            // Aguarda também as demais respostas em caso de falha parcial;
+            // a nova tentativa não pode disputar com gravações ainda em voo.
+            const resultados = await Promise.allSettled(savePromises);
+            const falha = resultados.find(r => r.status === 'rejected');
+            if (falha) throw falha.reason;
 
             // Registra autoria por arte; o status da tabela é consolidado por pedido logo abaixo.
             const artesPromises = itens.map(async (item) => {
@@ -1675,22 +1740,18 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             abrirSecao('entrega');
         } 
         else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
-            // Salvar status global da OS no Supabase para REPROVADO (Laranja, rótulo "Arte em Andamento")
-            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
-            try {
-                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    if (osId.startsWith('vibe_')) {
-                        await gravarStatusDoLink('Em Alteração');
-                    } else {
-                        const { error } = await supabaseClient
-                            .from('producao_ordens_servico')
-                            .update({ status: 'Em Alteração' }).eq('id', osId);
-                        if (error) throw error;
-                    }
-
+            // Não fechar a decisão na tela quando o pedido/link recusou a escrita.
+            await gravarStatusDoLink('Em Alteração');
+            if (!osId.startsWith('vibe_')) {
+                const { data, error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: 'Em Alteração' }).eq('id', osId)
+                    .select('id, status');
+                if (error) throw error;
+                if (!Array.isArray(data) || data.length !== 1
+                    || String(data[0].id) !== String(osId) || data[0].status !== 'Em Alteração') {
+                    throw new Error('A solicitação de alteração não foi confirmada. Tente novamente.');
                 }
-            } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS para correcao (pode ser restricao de RLS):', osErr);
             }
 
             // Coletar observações das alterações de cada item reprovado
@@ -1727,6 +1788,8 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             btnAprovar.disabled = false;
             btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? '✅ FINALIZAR E APROVAR PEDIDO COMPLETO' : '⚠️ SOLICITAR ALTERAÇÃO DE ARTE';
         }
+    } finally {
+        state.portalGravandoArte = false;
     }
 }
 
@@ -1744,9 +1807,8 @@ async function clienteAprovarTudo() {
  * com `[]`. O supabase-js também não lança, então o `try/catch` em volta era
  * enfeite: o cliente via "tudo certo" e o texto dele nunca tinha existido.
  *
- * Aqui as linhas afetadas voltam do banco (`.select('id')` depois do update) e o
- * resultado é DEVOLVIDO para quem chamou olhar. Ninguém mais pode dizer ao
- * cliente que gravou sem ter gravado.
+ * Aqui as linhas afetadas e os campos gravados voltam do banco. O resultado
+ * é conferido e DEVOLVIDO para quem chamou, inclusive na criação da linha.
  *
  * O `insert` do fim é tentativa de última hora, e normalmente NÃO passa: esta
  * página roda como `anon` e a RLS de `pedidos_artes` recusa criação vindo daqui
@@ -1781,7 +1843,8 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
     if (typeof obs === 'string') {
         try { obs = JSON.parse(obs); } catch (e) { obs = {}; }
     }
-    if (typeof obs !== 'object' || !obs) obs = {};
+    if (typeof obs !== 'object' || !obs || Array.isArray(obs)) obs = {};
+    obs = JSON.parse(JSON.stringify(obs));
     if (String(statusEntrega || '').trim().toUpperCase() === 'CORRIGIR'
         && existente && String(existente.status || '').trim().toUpperCase() !== 'CORRIGIR DADOS'
         && !obs.status_antes_correcao_dados && existente.status) {
@@ -1842,21 +1905,35 @@ async function gravarCorrecaoDoCliente(numPedInt, texto, statusEntrega, confirma
         ) : null;
     if (statusConsolidado) campos.status = statusConsolidado;
 
+    // Compara o recibo com o que foi solicitado, inclusive a decisão por aba.
+    const iguais = (a, b) => {
+        if (a === b) return true;
+        if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+        const chaves = Object.keys(a);
+        return chaves.length === Object.keys(b).length && chaves.every(k => iguais(a[k], b[k]));
+    };
+    const confirmado = data => Array.isArray(data) && data.length > 0
+        && (!existente || data.some(linha => String(linha.id) === String(existente.id)))
+        && data.every(linha => linha.id != null && Number(linha.id_int) === Number(numPedInt)
+            && Object.keys(campos).every(campo => iguais(linha[campo], campos[campo])));
+    const colunas = ['id', 'id_int', ...Object.keys(campos)].join(', ');
     if (existente) {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
             .update(campos)
             .eq('id_int', numPedInt)
-            .select('id');
+            .select(colunas);
         if (error) return { ok: false, erro: error.message || String(error) };
-        if (!data || data.length === 0) return { ok: false, erro: 'nenhuma linha foi gravada' };
+        if (!confirmado(data)) return { ok: false, erro: 'a gravação da conferência não foi confirmada' };
         return { ok: true };
     }
 
-    const { error } = await supabaseClient
+    const { data, error } = await supabaseClient
         .from('pedidos_artes')
-        .insert(Object.assign({ id_int: numPedInt }, campos));
+        .insert(Object.assign({ id_int: numPedInt }, campos))
+        .select(colunas);
     if (error) return { ok: false, erro: error.message || String(error) };
+    if (!confirmado(data) || data.length !== 1) return { ok: false, erro: 'a criação da conferência não foi confirmada' };
     return { ok: true };
 }
 
@@ -2243,6 +2320,7 @@ async function seguirSozinhoSeAprovouTudo(osId) {
 }
 
 async function decisionAmostraItem(itemId, osId, status) {
+    if (state.portalGravandoArte || state.arteSeguindoSozinho || window.portalGravandoConfirmacao) return;
     const itemBanco = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
     if (status === 'APROVADA' && problemaDoBancoCliente(itemBanco, numDoItem(itemBanco))) {
         toast('Confira o aviso de carregamento da arte antes de aprovar.', 'warning');
@@ -2257,6 +2335,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         return;
     }
     
+    state.portalGravandoArte = true;
     try {
         await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
         
@@ -2342,6 +2421,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         // tocá-lo — um passo a mais para dizer de novo o que ele acabou de
         // dizer modelo a modelo.
         if (vaiSeguirSozinho) {
+            state.portalGravandoArte = false;
             await seguirSozinhoSeAprovouTudo(osId);
         }
 
@@ -2387,6 +2467,8 @@ async function decisionAmostraItem(itemId, osId, status) {
     } catch (err) {
         console.error('Erro na decisão do item:', err);
         toast('Erro ao registrar decisão: ' + err.message, 'error');
+    } finally {
+        state.portalGravandoArte = false;
     }
 }
 
@@ -3000,6 +3082,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
+    if (face === 'back' && itemForPdf?.modo_pdf
+        && (pdfParesNoPortal(itemForPdf) || pdfCopiaNoPortal(itemForPdf))) return;
 
     // O folheador de páginas é da FRENTE, e só dela.
     //
@@ -3011,12 +3095,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // "Página 1 / 1" e as setas paravam de andar — o cliente ficava sem como
     // conferir as outras 24 peças antes de aprovar (pedido 21408, 01/09/2026).
     //
-    // Aqui o verso nem precisa do folheador: nesta página ele já tem imagem
-    // própria (`amostra-item-img-verso-N`, alimentada por
-    // `verso_amostra_arte_base64`). Por isso a face `back` sai antes de encostar
-    // no visualizador — e, como em modo PDF ela chega sem canvas, sai da função
-    // inteira, sem cair na composição multicamada, que estouraria no `canvas`
-    // nulo. O painel ganhou esta mesma guarda em 31/08/2026; esta cópia não.
+    // O verso não usa o folheador: ele segue pelo canvas normal para compor o
+    // arquivo separado com os elementos atuais da numeração. Assim ele não
+    // substitui o estado paginado da frente e também não depende de um snapshot
+    // antigo, que pode ter sido salvo antes da numeração.
     const usaVisualizadorPaginado = !!(itemForPdf && itemForPdf.modo_pdf)
         && !(face === 'back' && itemForPdf.verso);
 
@@ -3087,7 +3169,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const arteInput = container ? container.querySelector(`#${inputId}`) : null;
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    const faceArteUrl = arteDaFaceParaComposicao(item, face);
     const hasSavedArte = !!faceArteUrl;
 
     // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio
@@ -3707,7 +3789,9 @@ async function renderItemAmostraCombinada(idx, osId) {
 }
 
 function saveAmostraItemObs(itemId, osId, obs) {
-    saveAmostraToDB(itemId, osId, { amostra_obs: obs });
+    return saveAmostraToDB(itemId, osId, { amostra_obs: obs }).catch(e => {
+        toast('Não foi possível salvar a observação: ' + e.message, 'error');
+    });
 }
 
 /**
@@ -3771,7 +3855,10 @@ async function initPdfViewer(idx, pdfUrl, osId) {
             arrayBuffer = await proxyResponse.arrayBuffer();
         }
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages, pdfUrl, osId: osId || clienteState.osId };
+        const item = (state.osItens[osId || clienteState.osId] || [])[idx];
+        const totalPages = pdfParesNoPortal(item) ? Math.floor(pdf.numPages / 2) : pdf.numPages;
+        if (!totalPages) throw new Error('O PDF não contém um par completo de páginas.');
+        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages, pdfUrl, osId: osId || clienteState.osId };
         await renderPdfViewerPage(idx, 1);
     } catch (err) {
         console.error('[PDF Viewer Cliente] Erro:', err);
@@ -3835,7 +3922,9 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
                 }
             }
         }
-        const page = await vs.pdf.getPage(pageNum);
+        const emPares = pdfParesNoPortal(item);
+        const emCopia = pdfCopiaNoPortal(item);
+        const page = await vs.pdf.getPage(emPares ? pageNum * 2 - 1 : pageNum);
         const viewport = page.getViewport({ scale: 2.0 });
         const destino = document.getElementById(`amostra-pdf-canvas-${idx}`);
         if (!destino || !atual()) return;
@@ -3872,14 +3961,52 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 
+        let versoPronto = null;
+        if (emPares || emCopia) {
+            const paginaVerso = await vs.pdf.getPage(emPares ? pageNum * 2 : pageNum);
+            const viewportVerso = paginaVerso.getViewport({ scale: 2.0 });
+            versoPronto = document.createElement('canvas');
+            versoPronto.width = viewportVerso.width;
+            versoPronto.height = viewportVerso.height;
+            const ctxVerso = versoPronto.getContext('2d');
+            await paginaVerso.render({ canvasContext: ctxVerso, viewport: viewportVerso }).promise;
+            if (!atual()) return;
+            if (num && num.elements && num.elements.length > 0) {
+                drawNumeracaoElementsOverCanvas(ctxVerso, num, item, pageNum,
+                    versoPronto.width, versoPronto.height, 'back');
+            }
+        }
+
         if (!atual()) return;
         destino.width = canvas.width; destino.height = canvas.height;
         destino.getContext('2d').drawImage(canvas, 0, 0);
         destino.style.display = 'block';
+        if (versoPronto) {
+            const destinoVerso = document.getElementById(`amostra-item-canvas-verso-${idx}`);
+            if (!destinoVerso) throw new Error('A janela do verso não está disponível.');
+            destinoVerso.width = versoPronto.width;
+            destinoVerso.height = versoPronto.height;
+            destinoVerso.getContext('2d').drawImage(versoPronto, 0, 0);
+            destinoVerso.style.display = 'block';
+            const vazioVerso = document.getElementById(`amostra-item-empty-verso-${idx}`);
+            if (vazioVerso) vazioVerso.style.display = 'none';
+        }
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';
         const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
-        if (info) info.textContent = `Página ${pageNum} / ${vs.totalPages}`;
+        if (info) {
+            const quantidade = Number(item?.qtd ?? item?.quantidade);
+            const esperado = quantidade * (emPares ? 2 : 1);
+            const divergencia = (emPares || emCopia) && (!Number.isSafeInteger(quantidade) || quantidade < 1
+                || vs.pdf.numPages !== esperado);
+            info.textContent = divergencia
+                ? `⚠ PDF com ${vs.pdf.numPages} páginas; esperado: ${esperado} (${quantidade} peças). Confira com a gráfica.`
+                : emPares
+                    ? `Peça ${pageNum} / ${vs.totalPages} · frente p. ${pageNum * 2 - 1} · verso p. ${pageNum * 2}`
+                    : emCopia
+                        ? `Peça ${pageNum} / ${vs.totalPages} · frente e verso p. ${pageNum}`
+                    : `Página ${pageNum} / ${vs.totalPages}`;
+        }
         const empty = document.getElementById(`amostra-item-empty-${idx}`);
         if (empty) empty.style.display = 'none';
         const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
@@ -3910,7 +4037,7 @@ function pdfViewerNextPage(idx) {
 }
 
 // ========== NUMERAÇÃO OVERLAY SOBRE PDF (Cliente) ==========
-function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
+function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight, face = 'front') {
     if (!ctx || !num || !num.elements || !num.elements.length) return;
 
     let fmt = null;
@@ -3929,7 +4056,11 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     ) || 1;
 
     num.elements.forEach(el => {
-        if (el.face === 'back') return;
+        const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
+        const visivel = face === 'back'
+            ? (elFace === 'back' || elFace === 'both')
+            : (elFace === 'front' || elFace === 'both');
+        if (!visivel) return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;

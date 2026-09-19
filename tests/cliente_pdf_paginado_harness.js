@@ -94,9 +94,9 @@ async function rodarAsDuasFaces(arquivo) {
     }
 
     const fn = new Function(
-        'state', 'document', 'pdfViewerState', 'initPdfViewer', 'renderPdfViewerPage',
+        'state', 'document', 'pdfViewerState', 'initPdfViewer', 'renderPdfViewerPage', 'pdfParesNoPortal', 'pdfCopiaNoPortal',
         corpo + '\nreturn drawAmostraFace;'
-    )(state, document, pdfViewerState, initPdfViewer, renderPdfViewerPage);
+    )(state, document, pdfViewerState, initPdfViewer, renderPdfViewerPage, () => false, () => false);
 
     const fmt = { width_mm: 105, height_mm: 148 };
     const S = 150 / 25.4;

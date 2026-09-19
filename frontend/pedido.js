@@ -38,7 +38,7 @@ function arteParaImpor(url) {
  */
 function temVerso(printMode) {
     const m = String(printMode || 'front').trim().toLowerCase();
-    return m === 'duplex' || m === 'duplex_unico';
+    return m === 'duplex' || m === 'duplex_unico' || m === 'pdf_odd_even' || m === 'pdf_duplicate_back';
 }
 window.temVerso = temVerso;
 
@@ -48,7 +48,7 @@ function versoUnico(printMode) {
 window.versoUnico = versoUnico;
 
 /**
- * Qual dos três Modos de Impressão vale para um modelo do pedido.
+ * Qual Modo de Impressão vale para um modelo do pedido.
  *
  * O nome diz VERSO e não IMPRESSÃO porque `modoDeImpressaoDoModelo` já existe
  * no script.js desde antes, e responde outra coisa: sequencial ou blocado.
@@ -61,6 +61,7 @@ window.versoUnico = versoUnico;
 function modoDeVersoDoModelo(item) {
     const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
     const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
+    if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
     if (versoUnico(num && num.print_mode)) return 'duplex_unico';
     if (temVerso(num && num.print_mode)) return 'duplex';
     const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
@@ -309,11 +310,16 @@ function aplicarTravaModoPdf(ativo) {
         nota = document.createElement('span');
         nota.id = 'ped-schema-lock-note';
         nota.style.cssText = 'font-size: 0.78rem; color: var(--amber); font-weight: 600; display: none;';
-        nota.textContent = '🔒 Modo PDF: cada página do arquivo é um ingresso';
         nota.title = 'Para mudar a regra, desligue o Modo PDF na tela de arte do modelo.';
         sel.insertAdjacentElement('afterend', nota);
     }
 
+    const item = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    nota.textContent = typeof pdfImparFrenteVersoParDoModelo === 'function' && pdfImparFrenteVersoParDoModelo(item)
+        ? '🔒 Modo PDF: páginas ímpares são frentes e pares são versos; cada par é uma peça.'
+        : typeof pdfDuplicarParaVersoDoModelo === 'function' && pdfDuplicarParaVersoDoModelo(item)
+            ? '🔒 Modo PDF: cada página é uma peça e será repetida no verso.'
+        : '🔒 Modo PDF: cada página do arquivo é um ingresso';
     if (ativo && sel.value !== 'pdf_multiple') {
         sel.value = 'pdf_multiple';
         sel.dispatchEvent(new Event('change'));
@@ -2560,6 +2566,8 @@ function drawPedPreview() {
             } else if (state.printMode === 'duplex') {
                 const pVerso = pFrente + 1;
                 rotulo = (totalPaginas && pVerso > totalPaginas) ? `p. ${pFrente}` : `p. ${pFrente} / ${pVerso}`;
+            } else if (state.printMode === 'pdf_duplicate_back') {
+                rotulo = `p. ${pFrente} / cópia`;
             } else {
                 rotulo = `p. ${pFrente}`;
             }
@@ -3025,7 +3033,7 @@ function onPedNumeracaoSelect() {
         if (num && num.print_mode) {
             const printModeSelect = document.getElementById('ped-print-mode');
             if (printModeSelect) {
-                printModeSelect.value = num.print_mode;
+                printModeSelect.value = num.print_mode === 'pdf_odd_even' ? 'duplex' : num.print_mode;
             }
         }
     }
@@ -6030,6 +6038,33 @@ window.runPedImposition = async function (mode, isRefazer) {
         tempMultiArtes = state.selectedOSItems.map(s => arteDoModeloParaFolha(s, numId));
     }
 
+    const itemPdfPares = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    if (isMultiSelected && state.selectedOSItems.some(s => {
+        const item = (state.osItens[s.osId] || []).find(i => String(i.id) === String(s.itemId));
+        return (typeof pdfImparFrenteVersoParDoModelo === 'function'
+            && pdfImparFrenteVersoParDoModelo(item))
+            || (typeof pdfDuplicarParaVersoDoModelo === 'function'
+                && pdfDuplicarParaVersoDoModelo(item));
+    })) {
+        return desistir('Os modos especiais de PDF frente e verso exigem um modelo por vez.');
+    }
+    const pdfPares = !isMultiSelected && typeof pdfImparFrenteVersoParDoModelo === 'function'
+        && pdfImparFrenteVersoParDoModelo(itemPdfPares);
+    const pdfCopia = !isMultiSelected && typeof pdfDuplicarParaVersoDoModelo === 'function'
+        && pdfDuplicarParaVersoDoModelo(itemPdfPares);
+    const numSelecionada = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if ((numSelecionada?.print_mode === 'pdf_odd_even' && !pdfPares)
+        || (numSelecionada?.print_mode === 'pdf_duplicate_back' && !pdfCopia)
+        || (state.printMode === 'pdf_duplicate_back' && !pdfCopia)) {
+        return desistir('Vincule a numeração do modo PDF frente e verso ao modelo antes de gerar.');
+    }
+    if (pdfPares || pdfCopia) {
+        const erro = pdfPares
+            ? validarPdfImparFrenteVersoPar(itemPdfPares, schema, numId, state.pedArtPdfDoc)
+            : validarPdfDuplicarParaVerso(itemPdfPares, schema, numId, state.pedArtPdfDoc);
+        if (erro) return desistir(erro);
+    }
+
     const rotateEl = document.getElementById('ped-rotate-page');
     const rotatePage = rotateEl ? (parseInt(rotateEl.value) || 0) : 0;
 
@@ -6302,7 +6337,8 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         schema,
 
-        print_mode: state.printMode,
+        print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back' : state.printMode,
+        ...((pdfPares || pdfCopia) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
 
         rotate_page: rotatePage,
 
@@ -6397,7 +6433,7 @@ window.runPedImposition = async function (mode, isRefazer) {
     // Um modelo sozinho manda as artes como uploads separados. Ambos os modos
     // duplex precisam do verso; no FxVerso o motor usa este arquivo quando a
     // frente tem uma pagina, preservando PDFs que ja trazem as duas faces.
-    if (temVerso(payload.print_mode)) {
+    if (temVerso(payload.print_mode) && !pdfPares && !pdfCopia) {
         let versoFile = isPedTab ? state.pedArtVersoFile : state.impArtVersoFile;
         if (!isMultiSelected && schema !== 'multi_artes') {
             try {

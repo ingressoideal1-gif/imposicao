@@ -48,6 +48,14 @@ function bancoFalso(linhas, erros) {
         from() {
             const q = { _op: null, _payload: null, _id: null };
             q.select = function () {
+                if (this._op === 'insert') {
+                    if (erros.insert) return Promise.resolve({ data: null, error: { message: erros.insert } });
+                    log.inserts++;
+                    log.ultimoInsert = this._payload;
+                    const linha = Object.assign({ id: 'novo-' + this._payload.id_int }, this._payload);
+                    linhas[linha.id_int] = linha;
+                    return Promise.resolve({ data: [linha], error: null });
+                }
                 if (this._op === 'update') {
                     if (erros.update) return Promise.resolve({ data: null, error: { message: erros.update } });
                     const alvo = linhas[this._id];
@@ -56,7 +64,7 @@ function bancoFalso(linhas, erros) {
                     Object.assign(alvo, this._payload);
                     log.updates++;
                     log.ultimoUpdate = this._payload;
-                    return Promise.resolve({ data: [{ id: alvo.id }], error: null });
+                    return Promise.resolve({ data: [{ ...alvo, id_int: alvo.id_int ?? this._id }], error: null });
                 }
                 this._op = 'select';
                 return this;
@@ -70,12 +78,9 @@ function bancoFalso(linhas, erros) {
             };
             q.update = function (payload) { this._op = 'update'; this._payload = payload; return this; };
             q.insert = function (payload) {
-                if (erros.insert) return Promise.resolve({ data: null, error: { message: erros.insert } });
-                log.inserts++;
-                log.ultimoInsert = payload;
-                linhas[payload.id_int] = Object.assign({ id: 'novo-' + payload.id_int }, payload);
-                return Promise.resolve({ data: null, error: null });
+                this._op = 'insert'; this._payload = payload; return this;
             };
+            q.then = function (resolve, reject) { return this.select().then(resolve, reject); };
             return q;
         },
     };
@@ -216,8 +221,7 @@ function montar(linhas, erros) {
     ok(/gravarCorrecaoDoCliente/.test(salvar),
         'o botao "Salvar Correcao" grava no banco, nao so numa variavel da tela');
 
-    // Falhar ao gravar nao pode prender o cliente na tela: ele precisa poder
-    // finalizar assim mesmo, sabendo que aquele texto nao entrou.
+    // Falhar libera uma nova tentativa, sem confirmar a finalização.
     ok(/finally\s*\{\s*window\.portalGravandoConfirmacao = false/.test(salvar),
         'falha ao gravar libera a trava para tentar novamente');
     ok(/gravacao\.ok\s*$|gravacao\.ok\s*\?/m.test(salvar),
@@ -225,7 +229,7 @@ function montar(linhas, erros) {
 
     // O botao final tem de avisar quem nao conseguiu gravar, com a saida.
     const finalizar = CONFIRMACOES.slice(CONFIRMACOES.indexOf('window.finalizarNoPortal'));
-    ok(/if \(!gravacao\.ok\)[\s\S]{0,400}avisoDeFinalizacao/.test(finalizar),
+    ok(/if \(falhou\)[\s\S]{0,400}avisoDeFinalizacao/.test(finalizar),
         'o botao final avisa o cliente quando a conferencia nao foi gravada');
     ok(/entre em contato[\s\S]{0,200}atendente/i.test(finalizar),
         'e diz o que fazer -- nenhuma trava deste projeto fica sem saida');
@@ -234,8 +238,8 @@ function montar(linhas, erros) {
     // e derruba a linha inteira.
     ok(!/remetente_nome:/.test(CLIENTE + CONFIRMACOES),
         'a pagina do cliente nao manda mais `remetente_nome` para propostas_chat');
-    ok(/error: erroChat/.test(CONFIRMACOES),
-        'e olha o erro do chat em vez de engolir (o supabase-js nao lanca)');
+    ok(/rpc\('link_cliente_finalizar'/.test(finalizar) && /if \(error \|\|/.test(finalizar),
+        'a transação devolve falhas de status e chat para a tela');
 })();
 
 // ─── 8. A linha nasce no painel, porque na tela do cliente a RLS nao deixa ───

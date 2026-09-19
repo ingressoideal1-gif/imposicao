@@ -70,6 +70,20 @@ def _padrao_do_motor(fmt, dado):
     return _modulos_do_barcode(dado, fmt)
 
 
+def test_code39_preserva_literalmente_a_numeracao_do_qr():
+    """Pedido 22305: QR e Barcode sequenciais precisam carregar o mesmo valor."""
+    dado = "100001"
+    esperado = barcode.get_barcode_class("code39")(
+        dado, add_checksum=False
+    ).build()[0]
+
+    assert barcode.get("code39", dado).get_fullcode() == "1000012", (
+        "a regressao depende do checksum que python-barcode acrescenta por padrao"
+    )
+    assert _padrao_do_motor("code39", dado) == esperado
+    assert _padroes_do_navegador([("code39", dado)]) == [esperado]
+
+
 def test_o_modulo_existe_e_nao_depende_de_nada():
     with open(MODULO, encoding="utf-8") as f:
         texto = f.read()

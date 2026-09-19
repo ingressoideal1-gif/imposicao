@@ -47,6 +47,34 @@ const { pedidoSaiuDaArte } = new Function(
     extrairConst('SINAIS_SAIU_DA_ARTE') + '\n' + extrair('pedidoSaiuDaArte')
     + '\nreturn { pedidoSaiuDaArte };')();
 
+const estadoIgnorar = { todasArtes: [] };
+const { pedidoIgnoradoNosPaineis } = new Function('state', 'window',
+    extrair('pedidoIgnoradoNosPaineis')
+    + '\nreturn { pedidoIgnoradoNosPaineis };')(estadoIgnorar, {});
+
+(function statusIgnorarRetiraOPedidoDosPaineis() {
+    estadoIgnorar.todasArtes = [
+        { id_int: 21001, status: 'Ignorar' },
+        { id_int: 21002, status: 'Em Arte' },
+        { id_int: 21003, status: '  IGNORAR  ' },
+    ];
+    ok(pedidoIgnoradoNosPaineis({ numero: '21001' }), 'Ignorar retira o pedido dos paineis');
+    ok(pedidoIgnoradoNosPaineis({ id_int: 21003 }), 'Ignorar aceita caixa e espacos');
+    ok(!pedidoIgnoradoNosPaineis({ numero: 21002 }), 'outro status continua nos paineis');
+    ok(!pedidoIgnoradoNosPaineis({ numero: 99999 }), 'pedido sem linha Ignorar continua nos paineis');
+
+    const ACABAMENTO = fs.readFileSync(path.join(RAIZ, 'frontend', 'acabamento.js'), 'utf8');
+    const POR_COR = fs.readFileSync(path.join(RAIZ, 'frontend', 'producao-por-cor.js'), 'utf8');
+    ok(SCRIPT.includes("typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os)) return;"),
+        'Lista de Arte exclui pedido Ignorar');
+    ok(SCRIPT.includes("typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os))"),
+        'historico Impresso exclui pedido Ignorar');
+    ok(ACABAMENTO.includes("fn('pedidoIgnoradoNosPaineis')(os)"),
+        'Acabamento exclui pedido Ignorar');
+    ok(POR_COR.includes('window.pedidoIgnoradoNosPaineis(order)'),
+        'Producao por Cor exclui pedido Ignorar');
+})();
+
 // ─── Quem saiu da arte ───────────────────────────────────────────────────────
 
 (function oStatusInternoDeProducaoTiraDaArte() {

@@ -77,11 +77,11 @@ function pesoValido(bruto: unknown): number | null {
   return Math.round(n * 1000) / 1000;
 }
 
-/** As linhas de um pedido, so com o que a tela usa. */
+/** Peso/status e hora prevista do ERP; a hora é somente leitura. */
 export async function lerPesos(pedidoIdInt: number): Promise<unknown[]> {
   const linhas = (await banco(
     "GET",
-    `${TABELA}?id_int=eq.${pedidoIdInt}&select=setor,peso_real_kg,status_producao`,
+    `${TABELA}?id_int=eq.${pedidoIdInt}&select=setor,peso_real_kg,status_producao,hora`,
   )) ?? [];
   return linhas;
 }

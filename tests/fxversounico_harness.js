@@ -192,11 +192,11 @@ const api = new Function('state', 'window',
     // o `renderPdfViewerPage` desistia no canvas que nao existe, e as setas
     // nunca apareciam. No FxVersoUnico ser as duas coisas e a REGRA: a frente e
     // um PDF paginado e o verso e um arquivo de uma pagina so.
-    const bloco = new Function('item', 'idx', 'osId', 'escalaArteHtml',
+    const bloco = new Function('item', 'idx', 'osId', 'escalaArteHtml', 'pdfImparFrenteVersoParDoModelo', 'pdfDuplicarParaVersoDoModelo',
         extrairFuncao(SCRIPT, 'blocoDeArteDoModelo')
         + '\nreturn blocoDeArteDoModelo(item, idx, osId, escalaArteHtml);');
 
-    const html = (item) => bloco(item, 0, 'os-1', '');
+    const html = (item) => bloco(item, 0, 'os-1', '', () => false, () => false);
 
     const comVersoEPdf = html({ verso: true, verso_tipo: 'FxVerso', modo_pdf: true, arte_url: 'x.pdf' });
     ok(comVersoEPdf.includes('id="amostra-pdf-nav-0"'),

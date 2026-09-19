@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
+Set-Location $PSScriptRoot
 
 Write-Host "--- COMPILANDO INSTALADOR .MSI DO NEWPROD AGENT ---" -ForegroundColor Cyan
 
@@ -89,7 +89,7 @@ Write-Host "`nEtapa 1/2: Compilando XML (.wxs -> .wixobj)..." -ForegroundColor G
 # LOCAL_AGENT_VERSION em app.py — o MSI usa esse campo para decidir se o
 # upgrade se aplica, e o frontend compara o valor reportado pelo agente.
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.2.332.msi"
+$msiOutput = "dist\NewProd_Setup_v1.2.334.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 
 if (Test-Path $msiOutput) {

@@ -146,7 +146,12 @@ def test_o_fundo_branco_continua():
 def test_cada_simbologia_desenha_o_padrao_da_biblioteca(fmt, dado):
     """O desenho tem de ser o codigo, nao um padrao qualquer que pareca um."""
     import barcode
-    esperado = barcode.get(fmt, dado).build()[0]
+    if fmt == "code39":
+        esperado = barcode.get_barcode_class(fmt)(
+            dado, add_checksum=False
+        ).build()[0]
+    else:
+        esperado = barcode.get(fmt, dado).build()[0]
 
     doc, page = _desenhar(_el(barcode_format=fmt, fixed_value=dado))
     pix = page.get_pixmap(dpi=1200, colorspace=fitz.csGRAY)

@@ -619,6 +619,35 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     return amb;
 }
 
+(function prazoDoAcabamentoSegueProducao() {
+    const nomes = ['comporPrazoDoERP', '_prazoDoPedido', 'pedidoEstaAtrasado',
+        'pedidoEhParaHoje', 'formatPrazoBadge'];
+    const fonte = nomes.map(nome => {
+        const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+        if (inicio < 0) throw new Error('Funcao de prazo ausente: ' + nome);
+        return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+    }).join('\n');
+    const prazo = new Function(fonte + '\nreturn { comporPrazoDoERP, formatPrazoBadge };')();
+    const os = pedido(9001, null, {
+        prazo_entrega: prazo.comporPrazoDoERP('2026-09-16T00:00:00', '16:00:00'),
+    });
+    const amb = ambienteComPedidos([os], { 9001: [] });
+    amb.janela.formatPrazoBadge = prazo.formatPrazoBadge;
+    amb.painel.render();
+    const html = () => amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html().includes(prazo.formatPrazoBadge(os)), 'Acabamento usa o mesmo badge real da Producao');
+    ok(html().includes('>16/09 16:00</span>'), 'lista do Acabamento mostra a hora do ERP');
+    os.prazo_entrega = prazo.comporPrazoDoERP('2026-09-16T00:00:00', '15:30:00');
+    amb.janela.renderOrdens();
+    ok(html().includes('>16/09 15:30</span>'), 'recarregar pedidos atualiza a hora no Acabamento');
+    os.prazo_entrega = prazo.comporPrazoDoERP('2026-09-16T00:00:00', null);
+    amb.painel.render();
+    ok(html().includes('>16/09</span>'), 'sem hora do ERP, Acabamento mostra somente a data');
+    os.prazo_entrega = null;
+    amb.painel.render();
+    ok(html().includes(prazo.formatPrazoBadge(os)), 'sem data, Acabamento mostra prazo ausente');
+})();
+
 // Quem tira o pedido da lista de trabalho e o ENVIO A EXPEDICAO, e nao o
 // estagio (regra do usuario, 24/08/2026). Ate aqui bastava o ultimo modelo
 // virar "Pronto" para o pedido sumir sozinho -- e sumia justamente quando ainda

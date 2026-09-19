@@ -123,13 +123,15 @@ const SEM_NADA = { arte_url: 'https://x/arte.pdf', amostra_arte_base64: '', modo
 
 // ─── 3. Onde a decisao esta ligada na tela ───────────────────────────────────
 
-(function asTresEscolhasDeCanvasSeguemODesenhoAoVivo() {
-    // Frente e verso da peca com verso, e a peca de uma face so. Se alguma
+(function asEscolhasDeCanvasSeguemODesenhoAoVivo() {
+    // Frente e peca de uma face so. O verso do PDF usa canvas proprio. Se alguma
     // ficasse presa no `paginaCsv`, o `<img>` quebrado voltaria por ali.
     const escolhas = CLIENTE.match(/\$\{\w+ \? `<canvas id="amostra-item-canvas/g) || [];
-    ok(escolhas.length === 3, 'sao tres lugares que escolhem canvas ou imagem', escolhas);
+    ok(escolhas.length === 2, 'frente e peca unica escolhem canvas ou imagem', escolhas);
     const comDesenho = CLIENTE.match(/\$\{desenhoAoVivo \? `<canvas id="amostra-item-canvas/g) || [];
-    ok(comDesenho.length === 3, 'e os tres seguem o desenho ao vivo', comDesenho);
+    ok(comDesenho.length === 2, 'ambas seguem o desenho ao vivo', comDesenho);
+    ok(CLIENTE.includes('desenhoAoVivo || versoAoVivo || pdfParesNoPortal(item) || pdfCopiaNoPortal(item) ? `<canvas id="amostra-item-canvas-verso-'),
+        'verso paginado usa canvas mesmo sem imagem separada');
 })();
 
 (function oSeletorDeIngressosContinuaSoOndeHaBanco() {

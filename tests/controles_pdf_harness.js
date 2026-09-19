@@ -17,6 +17,8 @@ function extrair(nome) {
         page.on('pageerror', e => erros.push(e.message));
         await page.setContent('<main></main>');
         await page.addScriptTag({ content: [
+            'pdfImparFrenteVersoParDoModelo', 'validarPdfImparFrenteVersoPar',
+            'pdfDuplicarParaVersoDoModelo', 'validarPdfDuplicarParaVerso',
             'blocoDeArteDoModelo', 'modeloEstaAprovado', 'bloqueioDeModeloAprovado',
             'toggleModoPdf', 'escalaDaArteDoModelo', 'atualizarCaixaDeEscalaDaArte',
             'formatoDoModelo', 'salvarEscalaDaArte', 'pdfViewerAindaAtual',
@@ -200,6 +202,49 @@ function extrair(nome) {
             await drawAmostraFace(novo, 'front', null, null, state.formatos[0], null, null, 0, 'os-1', 1);
             ok(info().includes('original') && botoes()[0].disabled && botoes()[1].disabled, 'Modo PDF novo permanece sem original');
             ok(cargasNovas === 0 && gravacoes.length === gravacoesAntesDoNovo, 'Previa vazia nao faz downloads nem grava arte');
+
+            const emPares = { id: 'modelo-pares', modo_pdf: true, arte_url: 'pares.pdf',
+                formato_id: 'f1', amostra_num_id: 'num-pares', qtd: 2 };
+            state.osItens['os-1'] = [emPares];
+            state.numeracoes = [{ id: 'num-pares', print_mode: 'pdf_odd_even', elements: [] }];
+            document.querySelector('main').innerHTML = blocoDeArteDoModelo(emPares, 0, 'os-1', escala, false);
+            ok(!!el('amostra-pdf-canvas-0') && !!el('amostra-item-canvas-verso-0'),
+                'Modo de pares apresenta as duas janelas sem arte de verso separada');
+            ok(validarPdfImparFrenteVersoPar(emPares, 'pdf_multiple', 'num-pares', { numPages: 4 }) === null,
+                'Quatro paginas formam exatamente duas pecas');
+            ok(validarPdfImparFrenteVersoPar(emPares, 'pdf_multiple', 'num-pares', { numPages: 3 }).includes('exatamente 4'),
+                'Pagina orfa bloqueia geracao');
+            ok(validarPdfImparFrenteVersoPar(emPares, 'cut_stack', 'num-pares', { numPages: 4 }).includes('Pdf Paginado'),
+                'Outra regra de paginacao e rejeitada');
+            window.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+            await initPdfViewer('os-1_0', emPares.arte_url, 'os-1', 0);
+            ok(info().includes('Peça 1 / 2') && el('amostra-pdf-canvas-0').dataset.pagina === '1'
+                && el('amostra-item-canvas-verso-0').dataset.pagina === '2',
+                'Primeira peca mostra pagina impar na frente e par no verso');
+            await pdfViewerNextPage(0, 'os-1');
+            ok(info().includes('Peça 2 / 2') && el('amostra-pdf-canvas-0').dataset.pagina === '3'
+                && el('amostra-item-canvas-verso-0').dataset.pagina === '4',
+                'Folhear avanca as duas faces juntas');
+
+            const emCopia = { id: 'modelo-copia', modo_pdf: true, arte_url: 'copia.pdf',
+                formato_id: 'f1', amostra_num_id: 'num-copia', qtd: 4 };
+            state.osItens['os-1'] = [emCopia];
+            state.numeracoes = [{ id: 'num-copia', print_mode: 'pdf_duplicate_back', elements: [] }];
+            document.querySelector('main').innerHTML = blocoDeArteDoModelo(emCopia, 0, 'os-1', escala, false);
+            ok(!!el('amostra-pdf-canvas-0') && !!el('amostra-item-canvas-verso-0'),
+                'Duplicar para Verso cria as duas janelas sem upload separado');
+            ok(validarPdfDuplicarParaVerso(emCopia, 'pdf_multiple', 'num-copia', { numPages: 4 }) === null,
+                'Quatro paginas correspondem a quatro pecas');
+            ok(validarPdfDuplicarParaVerso(emCopia, 'pdf_multiple', 'num-copia', { numPages: 3 }).includes('exatamente 4'),
+                'Pagina faltante bloqueia a geracao');
+            await initPdfViewer('os-1_0', emCopia.arte_url, 'os-1', 0);
+            ok(info().includes('Peça 1 / 4') && el('amostra-pdf-canvas-0').dataset.pagina === '1'
+                && el('amostra-item-canvas-verso-0').dataset.pagina === '1',
+                'Primeira peca repete sua pagina no verso');
+            await pdfViewerNextPage(0, 'os-1');
+            ok(info().includes('Peça 2 / 4') && el('amostra-pdf-canvas-0').dataset.pagina === '2'
+                && el('amostra-item-canvas-verso-0').dataset.pagina === '2',
+                'Folhear mantem frente e verso na mesma pagina original');
             return total;
         });
         if (erros.length) throw new Error(erros.join('\n'));

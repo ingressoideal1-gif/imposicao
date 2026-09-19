@@ -125,6 +125,8 @@ PAINEL_ARQUIVOS = [
     "ideal-control.js",
     "script.js",
     "pedido.js",
+    "producao-por-cor.css",
+    "producao-por-cor.js",
     # A tela do Painel do Acabamento (20/08/2026). Ela mora em arquivo
     # proprio, e o `index.html` que a estacao baixa ja tem a tag <script>
     # apontando para ela: sem este nome aqui, a estacao serviria a pagina
@@ -153,6 +155,7 @@ PAINEL_ARQUIVOS = [
     "cliente-dados.js",
     "cliente-shell.js",
     "cliente-confirmacoes.js",
+    "cliente-entrega-form.js",
     "cliente-entrega.js",
     "cliente-faturamento.js",
     "cliente-orcamento.js",
