@@ -37102,7 +37102,11 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     ) || 1;
 
     num.elements.forEach(el => {
-        if (face === 'back' ? el.face !== 'back' : el.face === 'back') return;
+        const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
+        const visivel = face === 'back'
+            ? (elFace === 'back' || elFace === 'both')
+            : (elFace === 'front' || elFace === 'both');
+        if (!visivel) return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;

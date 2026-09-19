@@ -36,3 +36,9 @@ Data: 18/09/2026. Registro de encerramento da implementação e publicação.
 - A publicação do manifesto não comprova que uma estação instalou a versão. Na retomada, verificar heartbeat/versão instalada do NewProd e gerar uma amostra física frente e verso antes de considerar a impressão operacional validada.
 - Para recuperar a web, partir da tag `v896` e do commit anterior `7c9b6c53`; reverter a mudança funcional em novo commit, atualizar o cache, publicar e conferir novamente os arquivos públicos. Para recuperar o agente, compilar o código anterior da tag `agente-v1.2.333` com um **número novo maior que 1.2.334**; não sobrescrever o MSI já publicado nem reduzir a versão, pois as estações ignoram versões menores.
 - As 12 falhas preexistentes da suíte completa merecem tarefas próprias. A falha intermitente de `test_temp_manager.py` deve ser observada se voltar a ocorrer.
+
+## Correção de visualização em 19/09/2026
+
+No pedido 22302, modelo 1001125, a janela do verso abriu a página correta do PDF, mas não mostrou a numeração compartilhada. O filtro novo aceitava no verso somente elementos com `face: back`; elementos com `face: both` ou sem face explícita, que pelo contrato existente pertencem às duas faces, eram descartados somente na prévia. O motor de impressão já preservava a numeração no verso.
+
+Os visualizadores do painel e do portal passaram a usar a mesma regra de faces do restante do sistema: `front` somente na frente, `back` somente no verso, `both` e face ausente nas duas janelas. A regressão `test_pdf_duplex_preview_numbering.py` reproduziu a ausência antes da correção e confirmou os quatro casos depois dela. A bateria focada foi repetida com **161 testes aprovados**. Publicação web preparada como `v897`; nenhuma nova versão do NewProd é necessária porque o motor não mudou.
