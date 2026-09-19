@@ -5100,7 +5100,9 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mtg-campo .form-control { min-width: 0; width: 100%; }
 .mtg-campo-modelos { position: relative; }
-.mtg-modelo-fonte { display: none !important; }
+.mtg-modelo-fonte, .mtg-modelos-multi[hidden] { display: none !important; }
+.mtg-ajustes { margin: 12px 0; }
+.mtg-ajustes > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .mtg-modelos-multi { position: relative; }
 .mtg-modelos-trigger {
     position: relative; padding-right: 34px; text-align: left; cursor: pointer;

@@ -14,7 +14,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=902">
+    <link rel="stylesheet" href="/style.css?v=908">
     <link rel="stylesheet" href="/producao-por-cor.css?v=897">
     <script src="pdf-lib.min.js?v=897"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -3211,8 +3211,8 @@
                         </div>
 
                         <div class="mtg-campo mtg-campo-modelos" style="flex: 1 1 300px; min-width: 0;">
-                            <label for="mtg-modelos-trigger">Modelo aguardando <span id="mtg-modelo-face" class="mtg-face-modelo" hidden></span></label>
-                            <div class="mtg-modelos-multi" id="mtg-modelos-multi">
+                            <label id="mtg-label-modelo" for="mtg-modelo">Modelo aguardando <span id="mtg-modelo-face" class="mtg-face-modelo" hidden></span></label>
+                            <div class="mtg-modelos-multi" id="mtg-modelos-multi" hidden>
                                 <button type="button" id="mtg-modelos-trigger" class="form-control mtg-modelos-trigger"
                                         onclick="alternarSeletorDeModelosDaMontagem()" disabled
                                         aria-expanded="false" aria-controls="mtg-modelos-painel">
@@ -3238,8 +3238,8 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Fonte interna para o fluxo de posição individual e compatibilidade legada. -->
-                            <select id="mtg-modelo" class="form-control mtg-modelo-fonte" onchange="onMontagemModeloChange()" disabled tabindex="-1" aria-hidden="true">
+                            <!-- Modelo ativo da reposição manual; a seleção múltipla serve ao planejamento. -->
+                            <select id="mtg-modelo" class="form-control" onchange="onMontagemModeloChange()" disabled title="Adicione as posições e troque de modelo para continuar na mesma folha.">
                                 <option value="">&mdash;</option>
                             </select>
                         </div>
@@ -4450,7 +4450,7 @@
     <script src="criador-arte.js?v=897"></script>
     <script src="/pedido.js?v=897"></script>
     <script src="/producao-por-cor.js?v=897"></script>
-    <script src="montagem.js?v=897"></script>
+    <script src="montagem.js?v=908"></script>
     <script src="acabamento.js?v=897"></script>
     <script src="avisos.js?v=897"></script>
 

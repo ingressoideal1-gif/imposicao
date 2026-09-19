@@ -2099,6 +2099,17 @@ function _mtgRenderSeletorDeModelos() {
     const recs = document.getElementById('mtg-modelos-recomendacoes');
     const carregar = document.getElementById('mtg-modelos-carregar');
     if (!painel || !trigger || !opcoes || !recs || !carregar) return;
+    const manual = m.modoTrabalho !== 'planejamento';
+    const seletor = document.getElementById('mtg-modelo');
+    const multi = document.getElementById('mtg-modelos-multi');
+    if (multi) multi.hidden = manual;
+    if (seletor) {
+        seletor.classList.toggle('mtg-modelo-fonte', !manual);
+        seletor.tabIndex = manual ? 0 : -1;
+        seletor.setAttribute('aria-hidden', manual ? 'false' : 'true');
+    }
+    const rotulo = document.getElementById('mtg-label-modelo');
+    if (rotulo) rotulo.htmlFor = manual ? 'mtg-modelo' : 'mtg-modelos-trigger';
     const candidatos = m.modelosDisponiveis || [];
     const marcados = new Set(m.modelosMarcados || []);
     const controlados = new Set(m.modelosDoSeletor || []);
@@ -2932,11 +2943,11 @@ function _mtgRenderSugestao() {
             : `Aplicar o recomendado &mdash; ${nomeRecomendado}, ${planoRecomendado.impressoes} impress&otilde;es`}
         </button>` : '';
     const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>'
-        + botaoRecomendado + controles + `
+        + botaoRecomendado + `<details class="mtg-ajustes"><summary>Ajustar montagens e repetições</summary>${controles}</details>` + `
       <div class="mtg-sug-atual" id="mtg-aproveitamento-atual" aria-live="polite">
         <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
           ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
-        <table class="mtg-sug-tabela"><thead><tr><th>Pedido</th><th>Modelo / nome</th>
+        <details class="mtg-ajustes"><summary>Conferir produção por modelo</summary><table class="mtg-sug-tabela"><thead><tr><th>Pedido</th><th>Modelo / nome</th>
           <th class="num">Tiragem</th><th class="num">Células</th><th class="num">Repetições</th>
           <th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>
           ${atual.itens.map(m => `<tr><td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
@@ -2944,7 +2955,7 @@ function _mtgRenderSugestao() {
             <td class="num">${m.qtd || '—'}</td><td class="num">${m.celulas}</td>
             <td class="num">${escapeHtml(m.repeticoesTexto || '—')}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
             <td class="num">${m.sobra == null ? '—' : m.sobra}</td></tr>`).join('')}
-        </tbody></table>
+        </tbody></table></details>
         <p>${instrucaoAtual}</p>
         <p class="mtg-dica">Repetições mostram quantas vezes imprimir cada montagem em que o modelo aparece. Reimprimir repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
       </div>`;
@@ -2968,8 +2979,9 @@ function _mtgRenderSugestao() {
         com o mesmo total de impressões, a preferência é distribuir as sobras entre os modelos.</p>
       ${sugerido ? `<p class="mtg-sug-melhoria"><strong>Melhor resultado encontrado:</strong> usar ${sugerido.quantidade} montagens reduz de ${solicitado.impressoes} para ${sugerido.impressoes} impressões, economizando ${economia}.</p>`
         : `<p class="mtg-dica">A busca determinística não encontrou quantidade maior, até ${MTG_MAX_MONTAGENS_SUGERIDAS}, que reduza o total de impressões respeitando o mínimo informado.</p>`}
-      ${_mtgPlanoHtml(sug, solicitado, nomeSolicitado)}
-      ${sugerido ? _mtgPlanoHtml(sug, sugerido, 'Melhor resultado encontrado') : ''}
+      ${recomendado !== 'distribuir' ? _mtgPlanoHtml(sug, planoRecomendado, 'Plano recomendado') : ''}
+      <details class="mtg-ajustes"><summary>Outras opções de distribuição</summary>
+      ${sugerido || recomendado === 'distribuir' ? _mtgPlanoHtml(sug, solicitado, nomeSolicitado) : ''}
 
       <div class="mtg-sug-botoes">
         <button type="button" class="btn-secondary"
@@ -2977,7 +2989,7 @@ function _mtgRenderSugestao() {
         <button type="button" class="btn-secondary" ${semDistribuir ? 'disabled' : ''}
                 title="${semDistribuir ? escapeHtml(motivoTravado) : ''}"
                 onclick="aplicarSugestaoDaMontagem('distribuir')">Distribuir em ${sug.folhas} folhas</button>
-      </div>
+      </div></details>
 
       <p class="mtg-dica" style="margin:10px 0 0;">${recTravado
         ? '<strong>' + escapeHtml(motivoTravado) + '</strong> Aqui a folha repetida também não '

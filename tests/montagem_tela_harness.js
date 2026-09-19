@@ -1785,6 +1785,38 @@ const PECAS = [
     ok(multiModelos.fonteOculta,
        'o seletor antigo permanece apenas como fonte interna e não duplica o controle na tela');
 
+    const manualMulti = await aba.evaluate(async () => {
+        const detalhes = Array.from(document.querySelectorAll('#mtg-sugestao details'));
+        const recolhidos = detalhes.length >= 3 && detalhes.every(d => !d.open);
+        state.montagem = montagemVazia();
+        encherFormatosDaMontagem(); encherPedidosDaMontagem();
+        document.getElementById('mtg-formato').value = 'F1';
+        await onMontagemFormatoChange();
+        const sel = document.getElementById('mtg-modelo');
+        const visivel = getComputedStyle(sel).display !== 'none' && sel.tabIndex === 0
+            && document.getElementById('mtg-modelos-multi').hidden;
+        sel.value = 'aa::CA'; sel.dispatchEvent(new Event('change'));
+        document.getElementById('mtg-posicoes').value = '2,4';
+        document.getElementById('mtg-add').click();
+        sel.value = 'bb::CB'; sel.dispatchEvent(new Event('change'));
+        document.getElementById('mtg-posicoes').value = '3';
+        document.getElementById('mtg-add').click();
+        const celulas = state.montagem.celulas.map(c => c.osId + ':' + c.itemId + ':' + c.pos);
+        sel.value = 'aa::CV'; sel.dispatchEvent(new Event('change'));
+        document.getElementById('mtg-posicoes').value = '1';
+        onMontagemPosicoesChange();
+        const incompatibilidade = document.getElementById('mtg-add').disabled;
+        adicionarNaMontagem();
+        return { recolhidos, visivel, celulas, incompatibilidade,
+            preservou: state.montagem.celulas.length === 3 };
+    });
+    ok(manualMulti.visivel, 'reposição manual oferece seletor de modelo visível e acessível', manualMulti);
+    ok(manualMulti.celulas.join() === 'aa:CA:2,aa:CA:4,bb:CB:3',
+       'trocar de modelo pelo controle visível adiciona posições ao pedido correto e preserva as anteriores', manualMulti);
+    ok(manualMulti.incompatibilidade && manualMulti.preservou,
+       'reposição manual mantém bloqueio de modelo incompatível sem alterar células', manualMulti);
+    ok(manualMulti.recolhidos, 'planejamento recolhe ajustes, conferência e alternativas', manualMulti);
+
     const pendentes = await aba.evaluate(async () => {
         state.montagem = montagemVazia();
         state.ordens = [{ id: 'regressao', numero: 99999, status_interno: 'EM PRODUCAO',
