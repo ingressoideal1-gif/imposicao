@@ -44,6 +44,7 @@
  * descobriria antes da portaria. Ela mora em `_compartilhado/pedidos.ts`.
  */
 import { banco, contar } from "../_compartilhado/banco.ts";
+import { operarBancosPedido, operadorLocalBancos } from "../_compartilhado/bancos_pedido.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
@@ -198,6 +199,19 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     if (req.method !== "GET") recusaDeRotaDesconhecida(req.method);
     await conferirAgente(req);
     return ok(await acessosLocais());
+  }
+
+  if (p[0] === "bancos-pedido" && p.length === 2) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    await conferirAgente(req);
+    const operador = await operadorLocalBancos(req.headers.get("x-operador-codigo"));
+    let corpo: unknown;
+    try {
+      corpo = await req.json();
+    } catch {
+      throw new Recusa(422, "corpo invalido: esperava JSON");
+    }
+    return ok(await operarBancosPedido(p[1], corpo, operador));
   }
 
   // A estacao cadastra fonte no catalogo COMPARTILHADO, e isso e decisao de
