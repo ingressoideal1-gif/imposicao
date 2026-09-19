@@ -3912,10 +3912,10 @@ input[type=number] {
 .portal-modal-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .portal-modal-cabecalho h2 { margin: 0; }
 .portal-modal-fechar { border: 0; background: transparent; color: var(--text); font-size: 30px; cursor: pointer; }
-.portal-lista-enderecos { display: grid; gap: 10px; margin: 18px 0; max-height: 55vh; overflow: auto; }
+.portal-lista-enderecos { display: grid; gap: 12px; margin: 18px 0; max-height: 55vh; overflow: auto; }
 .portal-endereco-opcao {
     display: grid;
-    gap: 4px;
+    gap: 5px;
     width: 100%;
     padding: 14px;
     text-align: left;
@@ -3923,9 +3923,50 @@ input[type=number] {
     border-radius: 10px;
     background: var(--bg);
     color: var(--text);
-    cursor: pointer;
 }
 .portal-endereco-opcao:hover, .portal-endereco-opcao:focus-visible { border-color: var(--blue); }
+.portal-endereco-opcao .portal-botao { margin-top: 8px; justify-self: start; }
+.portal-endereco-tipo, .portal-entrega-legenda {
+    color: var(--text-dim);
+    font-size: .76rem;
+    font-weight: 750;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+}
+.portal-endereco-linha { margin-top: 4px; font-weight: 700; }
+.portal-entrega-resumo { display: grid; gap: 12px; }
+.portal-entrega-resumo > h2 { margin-bottom: 2px; }
+.portal-entrega-bloco {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+}
+.portal-entrega-bloco > div { display: grid; gap: 3px; min-width: 0; }
+.portal-entrega-bloco strong { font-size: 1rem; overflow-wrap: anywhere; }
+.portal-entrega-bloco span:not(.portal-entrega-icone, .portal-entrega-legenda) { color: var(--text-dim); overflow-wrap: anywhere; }
+.portal-entrega-icone {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(22, 163, 74, .1);
+}
+.portal-entrega-recebedor .portal-entrega-icone { background: rgba(37, 99, 235, .1); }
+.portal-entrega-etapa { margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.portal-entrega-etapa h3 { margin: 0 0 6px; }
+.portal-entrega-campo { display: grid; gap: 6px; margin: 12px 0; font-weight: 650; }
+.portal-entrega-campos-duplos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.portal-modal-acoes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 16px; }
+
+@media (max-width: 520px) {
+    .portal-entrega-campos-duplos { grid-template-columns: 1fr; gap: 0; }
+    .portal-modal-acoes .portal-botao { flex: 1 1 140px; }
+}
 
 .portal-caixa-de-texto {
     width: 100%;

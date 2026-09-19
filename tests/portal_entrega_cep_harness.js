@@ -12,10 +12,20 @@ function ambiente() {
         portalDados: { endereco: null, cliente: null, pedido: { frete_escolhido: 'PAC' } },
         clienteState: { numero: '123', token: 'sintetico', osId: 'vibe_123', pedidoFinalizado: false },
         state: {}, escapeHtml: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
+        documentoEmMascara: documento => {
+            const d = String(documento || '').replace(/\D/g, '');
+            if (d.length === 11) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+            if (d.length === 14) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
+            return String(documento || '').trim();
+        },
+        cepEmMascara: cep => String(cep || '').replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2'),
         tipoDaPessoa: () => 'juridica', ehRetirada: pedido => pedido.frete_escolhido === 'RETIRADA',
         entregaExigeRecebedor: () => true, redesenharSecao: () => {}, atualizarPainelDoPedido: () => {},
         abrirSecao: s => chamadas.push('avanco:' + s), SECOES: ['entrega', 'faturamento'],
-        fetch: async () => ({ ok: true, json: async () => ({ cep: '01001-000', logradouro: 'Praça de teste', bairro: 'Centro', localidade: 'São Paulo', uf: 'SP' }) }),
+        fetch: async url => ({ ok: true, json: async () => String(url).includes('/cnpj/')
+            ? { cnpj: '11222333000181', razao_social: 'Empresa Recebedora', cep: '01001000',
+                logradouro: 'Avenida Oficial', numero: '55', complemento: 'Sala 2', bairro: 'Centro', municipio: 'São Paulo', uf: 'SP' }
+            : { cep: '01001-000', logradouro: 'Praça de teste', bairro: 'Centro', localidade: 'São Paulo', uf: 'SP' } }),
         gravarCorrecaoDoCliente: async () => { chamadas.push('confirmacao'); return { ok: true }; },
         supabaseClient: { rpc: async (nome, args) => { chamadas.push(nome); return { data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }; } }
     };
@@ -26,14 +36,18 @@ function ambiente() {
     return { c, chamadas };
 }
 async function preencher(c) {
-    await c.liberarEdicaoEntrega();
+    await c.informarOutroEnderecoEntrega();
+    c.editarCampoEntrega('recebedor', endereco.recebedor);
+    c.editarCampoEntrega('cpf_recebedor', endereco.cpf_recebedor);
+    await c.continuarDocumentoEntrega();
     c.editarCampoEntrega('cep', '01001-000');
     await c.buscarCepEntrega();
-    for (const campo of ['recebedor', 'cpf_recebedor', 'numero']) c.editarCampoEntrega(campo, endereco[campo]);
+    c.editarCampoEntrega('numero', endereco.numero);
+    c.usarNovoEnderecoEntrega();
 }
 async function main() {
     let { c, chamadas } = ambiente();
-    assert.ok(c.formularioEnderecoEntrega().includes('id="entrega-recebedor"'));
+    assert.ok(!c.formularioEnderecoEntrega().includes('<input'), 'endereço principal é somente leitura');
     assert.equal(c.cpfDaEntregaValido('11111111111'), false);
     assert.equal(c.cpfDaEntregaValido('529.982.247-25'), true);
     assert.equal(c.documentoDoRecebedorValido('11.222.333/0001-81'), true);
@@ -41,7 +55,8 @@ async function main() {
     assert.equal(c.documentoDoRecebedorValido('11.111.111/1111-11'), false);
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('portal-correcao-entrega'));
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('Desfazer'));
-    assert.ok(c.cartaoDeDecisaoEntrega().includes('Ver endereços cadastrados'));
+    assert.ok(c.cartaoDeDecisaoEntrega().includes('Meus Endereços'));
+    assert.ok(!c.cartaoDeDecisaoEntrega().includes('>Alterar<'));
     await c.decidirDados('entrega', true);
     assert.equal(c.portalConfirmacoes.entrega, null);
     assert.deepEqual(chamadas, []);
@@ -51,6 +66,7 @@ async function main() {
     assert.deepEqual(chamadas, ['link_cliente_salvar_entrega', 'confirmacao', 'avanco:faturamento']);
     assert.equal(c.portalConfirmacoes.entrega, true);
     assert.equal(c.portalDados.endereco.recebedor, endereco.recebedor);
+    assert.equal(c.portalDados.enderecos_entrega[0].recebedor, endereco.recebedor, 'novo endereço entra em Meus Endereços');
     c.editarCampoEntrega('numero', '999');
     assert.equal(c.dadosDoFormularioEntrega().valores.numero, '10', 'confirmado não é editável');
 
@@ -90,7 +106,16 @@ async function main() {
     assert.equal(c.dadosDoFormularioEntrega().buscando, false);
 
     ({ c, chamadas } = ambiente());
-    c.portalDados.enderecos_entrega = [{ ...endereco, endereco: 'Rua Cadastrada', numero: '44', tipo_endereco: 'PRINCIPAL' }];
+    c.portalDados.enderecos_entrega = [
+        { ...endereco, endereco: 'Rua Cadastrada', numero: '44', tipo_endereco: 'PRINCIPAL' },
+        { ...endereco, recebedor: 'Empresa Recebedora', cpf_recebedor: '11222333000181',
+            endereco: 'Avenida Cadastrada', numero: '55', tipo_endereco: 'ENTREGA' }
+    ];
+    const modal = c.cartaoDeDecisaoEntrega();
+    assert.ok(modal.includes('<strong>Pessoa Teste</strong>'));
+    assert.ok(modal.includes('529.982.247-25'));
+    assert.ok(modal.includes('<strong>Empresa Recebedora</strong>'));
+    assert.ok(modal.includes('11.222.333/0001-81'));
     await c.selecionarEnderecoEntrega(0);
     assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Rua Cadastrada');
     assert.equal(c.dadosDoFormularioEntrega().valores.numero, '44');
@@ -101,7 +126,10 @@ async function main() {
 
     ({ c, chamadas } = ambiente());
     let responder;
-    await c.liberarEdicaoEntrega();
+    await c.informarOutroEnderecoEntrega();
+    c.editarCampoEntrega('recebedor', 'Pessoa Teste');
+    c.editarCampoEntrega('cpf_recebedor', '52998224725');
+    await c.continuarDocumentoEntrega();
     c.fetch = () => new Promise(resolve => { responder = resolve; });
     c.editarCampoEntrega('cep', '01001000');
     const busca = c.buscarCepEntrega();
@@ -123,6 +151,21 @@ async function main() {
     assert.equal(c.portalConfirmacoes.entrega, null);
     concluir(); await salvando;
     assert.equal(c.portalConfirmacoes.entrega, true);
+
+    ({ c, chamadas } = ambiente());
+    await c.informarOutroEnderecoEntrega();
+    c.editarCampoEntrega('cpf_recebedor', '11222333000181');
+    await c.continuarDocumentoEntrega();
+    assert.equal(c.dadosDoFormularioEntrega().valores.recebedor, 'Empresa Recebedora');
+    assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Avenida Oficial');
+    assert.equal(c.dadosDoFormularioEntrega().valores.numero, '55');
+    assert.equal(c.dadosDoFormularioEntrega().origemCnpj, true);
+    c.editarCampoEntrega('endereco', 'Endereço adulterado');
+    assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Avenida Oficial', 'endereço do CNPJ não é editável');
+    assert.ok(c.cartaoDeDecisaoEntrega().includes('Este endereço veio do cadastro do CNPJ'));
+    c.usarNovoEnderecoEntrega();
+    assert.ok(c.formularioEnderecoEntrega().includes('Avenida Oficial, 55'));
+
     ({ c, chamadas } = ambiente());
     c.portalDados.endereco = { ...endereco };
     let consultas = 0;
@@ -138,14 +181,13 @@ async function main() {
 
     ({ c, chamadas } = ambiente());
     c.portalConfirmacoes.entrega = true;
+    c.portalDados.enderecos_entrega = [{ ...endereco }];
     c.gravarCorrecaoDoCliente = async () => ({ ok: false });
-    await c.liberarEdicaoEntrega();
-    c.editarCampoEntrega('cep', '01001000');
-    assert.equal(c.dadosDoFormularioEntrega().valores.cep, '', 'falha ao solicitar alteração mantém CEP bloqueado');
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(c.dadosDoFormularioEntrega().alterando, false, 'falha ao desfazer mantém seleção bloqueada');
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
-    await c.liberarEdicaoEntrega();
-    c.editarCampoEntrega('cep', '01001000');
-    assert.equal(c.dadosDoFormularioEntrega().valores.cep, '01001000', 'Alterar habilita CEP');
-    console.log('OK: formulário, CEP, CPF, concorrência, falhas de recibo e avanço após as duas gravações.');
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(c.dadosDoFormularioEntrega().alterando, true, 'selecionar outro endereço desfaz a confirmação anterior');
+    console.log('OK: endereço somente leitura, Meus Endereços, CPF/CEP, CNPJ bloqueado e gravação confirmada.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

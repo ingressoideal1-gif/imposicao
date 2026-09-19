@@ -10,7 +10,8 @@ function dadosDoFormularioEntrega() {
         const fisica = dados.cliente && tipoDaPessoa(dados.cliente.documento) === 'fisica';
         rascunhoEntrega = {
             valores: {}, consultado: '', buscando: false, erro: '', anterior: dados.endereco || null,
-            alterando: window.portalConfirmacoes.entrega === false
+            alterando: window.portalConfirmacoes.entrega === false,
+            telaEnderecos: 'lista', documentoLiberado: false, origemCnpj: false
         };
         CAMPOS_ENTREGA.forEach(k => { rascunhoEntrega.valores[k] = String(anterior[k] || ''); });
         rascunhoEntrega.valores.recebedor ||= fisica ? dados.cliente.nome || '' : '';
@@ -26,12 +27,105 @@ function editarCampoEntrega(campo, valor) {
     if (!CAMPOS_ENTREGA.includes(campo) || window.portalGravandoConfirmacao
         || !dadosDoFormularioEntrega().alterando || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
+    if (r.origemCnpj && ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf'].includes(campo)) return;
     r.valores[campo] = valor;
     r.erro = '';
+    if (campo === 'cpf_recebedor') {
+        consultaEntrega++;
+        r.documentoLiberado = false;
+        r.origemCnpj = false;
+        r.consultado = '';
+        r.buscando = false;
+        ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf']
+            .forEach(k => { r.valores[k] = ''; });
+    }
     if (campo === 'cep') {
         consultaEntrega++;
         r.consultado = '';
         r.buscando = false;
+    }
+}
+
+function tipoDoDocumentoEntrega(valor) {
+    const documento = String(valor || '').replace(/\D/g, '');
+    if (!documentoDoRecebedorValido(documento)) return '';
+    return documento.length === 14 ? 'cnpj' : 'cpf';
+}
+
+function reabrirMeusEnderecos() {
+    redesenharSecao('entrega');
+    setTimeout(abrirEnderecosEntrega, 0);
+}
+
+function atualizarTelaDaEntrega() {
+    if (dadosDoFormularioEntrega().telaEnderecos === 'novo') reabrirMeusEnderecos();
+    else redesenharSecao('entrega');
+}
+
+async function continuarDocumentoEntrega() {
+    if (window.portalGravandoConfirmacao || clienteState.pedidoFinalizado) return;
+    const r = dadosDoFormularioEntrega();
+    const documento = r.valores.cpf_recebedor.replace(/\D/g, '');
+    const tipo = tipoDoDocumentoEntrega(documento);
+    r.erro = '';
+    if (!tipo) {
+        r.erro = 'Informe um CPF ou CNPJ válido para continuar.';
+        reabrirMeusEnderecos();
+        return;
+    }
+    r.valores.cpf_recebedor = documento;
+    r.documentoLiberado = true;
+    r.origemCnpj = tipo === 'cnpj';
+    if (tipo === 'cpf') {
+        reabrirMeusEnderecos();
+        return;
+    }
+
+    const sequencia = ++consultaEntrega;
+    r.buscando = true;
+    reabrirMeusEnderecos();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+        const resposta = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + documento,
+            { signal: controller.signal });
+        if (!resposta.ok) throw new Error('consulta');
+        const cadastro = await resposta.json();
+        if (sequencia !== consultaEntrega || r.valores.cpf_recebedor !== documento) return;
+        const cnpjRecebido = String(cadastro.cnpj || '').replace(/\D/g, '');
+        const endereco = {
+            cep: String(cadastro.cep || '').replace(/\D/g, ''),
+            endereco: String(cadastro.logradouro || '').trim(),
+            numero: String(cadastro.numero || '').trim(),
+            complemento: String(cadastro.complemento || '').trim(),
+            bairro: String(cadastro.bairro || '').trim(),
+            cidade: String(cadastro.municipio || '').trim(),
+            uf: String(cadastro.uf || '').trim().toUpperCase()
+        };
+        if (cnpjRecebido !== documento || !/^\d{8}$/.test(endereco.cep)
+            || ['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !endereco[k])
+            || !/^[A-Z]{2}$/.test(endereco.uf)) {
+            throw new Error('incompleto');
+        }
+        Object.assign(r.valores, endereco);
+        if (!r.valores.recebedor.trim()) {
+            r.valores.recebedor = String(cadastro.razao_social || cadastro.nome_fantasia || '').trim();
+        }
+        r.consultado = endereco.cep;
+    } catch (e) {
+        if (sequencia === consultaEntrega) {
+            r.documentoLiberado = false;
+            r.origemCnpj = false;
+            r.erro = e && e.message === 'incompleto'
+                ? 'O cadastro deste CNPJ não possui um endereço completo. Fale com seu atendimento.'
+                : 'Não foi possível consultar o CNPJ agora. Confira o número e tente novamente.';
+        }
+    } finally {
+        clearTimeout(timeout);
+        if (sequencia === consultaEntrega) {
+            r.buscando = false;
+            reabrirMeusEnderecos();
+        }
     }
 }
 
@@ -65,17 +159,18 @@ async function buscarCepEntrega() {
     if (window.portalGravandoConfirmacao || !dadosDoFormularioEntrega().alterando
         || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
+    if (!r.documentoLiberado || r.origemCnpj) return;
     const cep = r.valores.cep.replace(/\D/g, '');
     const sequencia = ++consultaEntrega;
     r.consultado = '';
     r.erro = '';
     if (!/^\d{8}$/.test(cep)) {
         r.erro = 'Informe um CEP com 8 dígitos.';
-        redesenharSecao('entrega');
+        atualizarTelaDaEntrega();
         return;
     }
     r.buscando = true;
-    redesenharSecao('entrega');
+    atualizarTelaDaEntrega();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -97,35 +192,32 @@ async function buscarCepEntrega() {
         clearTimeout(timeout);
         if (sequencia === consultaEntrega) {
             r.buscando = false;
-            redesenharSecao('entrega');
+            atualizarTelaDaEntrega();
         }
     }
 }
 
 function formularioEnderecoEntrega() {
     const r = dadosDoFormularioEntrega();
-    const confirmado = window.portalConfirmacoes.entrega === true;
-    const alterando = r.alterando;
-    const bloqueado = !alterando || window.portalGravandoConfirmacao || clienteState.pedidoFinalizado;
-    const rotulos = { recebedor: 'Recebedor', cpf_recebedor: 'CPF ou CNPJ do recebedor', cep: 'CEP',
-        endereco: 'Endereço', numero: 'Número (ou S/N)', complemento: 'Complemento (opcional)',
-        bairro: 'Bairro', cidade: 'Cidade', uf: 'UF' };
-    const limites = { recebedor: 150, cpf_recebedor: 18, cep: 9, endereco: 200, numero: 20,
-        complemento: 150, bairro: 100, cidade: 100, uf: 2 };
-    const campos = CAMPOS_ENTREGA.map(k => '<label style="display:block;margin:12px 0">'
-        + escapeHtml(rotulos[k]) + '<input id="entrega-' + k + '" class="portal-caixa-de-texto" '
-        + 'style="display:block;width:100%;box-sizing:border-box" type="text" maxlength="' + limites[k] + '" '
-        + (['cep', 'cpf_recebedor'].includes(k) ? 'inputmode="numeric" ' : '')
-        + (['cidade', 'uf'].includes(k) ? 'readonly ' : '')
-        + 'value="' + escapeHtml(r.valores[k]) + '" oninput="editarCampoEntrega(\'' + k + '\',this.value)"></label>'
-        + (k === 'cep' && alterando ? '<button type="button" class="portal-botao" onclick="buscarCepEntrega()" '
-            + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CEP...' : 'Buscar endereço pelo CEP') + '</button>' : '')).join('');
-    return '<div class="portal-cartao"><h2>Endereço de entrega</h2>'
-        + (!confirmado ? '<p>' + (alterando
-            ? 'Digite o CEP, busque o endereço e complete os dados de quem vai receber. Informe rua e bairro se o CEP abranger toda a cidade.'
-            : 'Confira os dados de entrega. Para modificar qualquer campo, use Alterar.') + '</p>' : '')
-        + '<fieldset style="border:0;padding:0;margin:0;min-width:0" ' + (bloqueado ? 'disabled' : '') + '>' + campos + '</fieldset>'
-        + (r.erro ? '<p role="alert" class="portal-aviso atencao">' + escapeHtml(r.erro) + '</p>' : '') + '</div>';
+    const v = r.valores;
+    const rua = [v.endereco, v.numero].filter(Boolean).join(', ');
+    const local = [v.bairro, [v.cidade, v.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+    const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
+    return '<div class="portal-cartao portal-entrega-resumo"><h2>Endereço de entrega</h2>'
+        + '<div class="portal-entrega-bloco portal-entrega-recebedor">'
+        + '<span class="portal-entrega-icone">' + icone('pessoa', 22, '#2563eb') + '</span>'
+        + '<div><span class="portal-entrega-legenda">Recebedor</span>'
+        + '<strong>' + escapeHtml(v.recebedor || 'Não informado') + '</strong>'
+        + '<span>' + escapeHtml(documentoEmMascara(v.cpf_recebedor) || 'CPF ou CNPJ não informado') + '</span></div></div>'
+        + '<div class="portal-entrega-bloco">'
+        + '<span class="portal-entrega-icone">' + icone('pin', 22, '#16a34a') + '</span>'
+        + '<div><span class="portal-entrega-legenda">Destino</span>'
+        + '<strong>' + escapeHtml(rua || 'Endereço não informado') + '</strong>'
+        + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
+        + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
+        + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
+        + (r.alterando ? '<div class="portal-aviso calmo">Endereço selecionado. Confirme abaixo para salvar no pedido.</div>' : '')
+        + '</div>';
 }
 
 function enderecosCadastradosEntrega() {
@@ -134,23 +226,82 @@ function enderecosCadastradosEntrega() {
 }
 
 function modalEnderecosEntrega() {
+    const r = dadosDoFormularioEntrega();
+    if (r.telaEnderecos === 'novo') return modalNovoEnderecoEntrega();
     const enderecos = enderecosCadastradosEntrega();
     const cartoes = enderecos.length ? enderecos.map((e, indice) => {
         const linha = [e.endereco, e.numero].filter(Boolean).join(', ');
         const cidade = [e.bairro, e.cidade, e.uf].filter(Boolean).join(' · ');
-        return '<button type="button" class="portal-endereco-opcao" onclick="selecionarEnderecoEntrega(' + indice + ')">'
-            + '<b>' + escapeHtml(e.tipo_endereco || 'Endereço cadastrado') + '</b>'
-            + '<span>' + escapeHtml(linha || 'Endereço sem logradouro') + '</span>'
-            + '<span>' + escapeHtml(cidade) + '</span>'
-            + '<span>CEP ' + escapeHtml(cepEmMascara(e.cep || '')) + '</span>'
-            + '</button>';
+        const recebedor = String(e.recebedor || '').trim();
+        const documento = documentoEmMascara(e.cpf_recebedor || '');
+        return '<div class="portal-endereco-opcao">'
+            + '<span class="portal-endereco-tipo">' + escapeHtml(e.tipo_endereco || 'Endereço cadastrado') + '</span>'
+            + '<strong>' + escapeHtml(recebedor || 'Recebedor não informado') + '</strong>'
+            + '<span>' + escapeHtml(documento || 'CPF ou CNPJ não informado') + '</span>'
+            + '<span class="portal-endereco-linha">' + escapeHtml(linha || 'Endereço sem logradouro') + '</span>'
+            + (cidade ? '<span>' + escapeHtml(cidade) + '</span>' : '')
+            + '<span>CEP ' + escapeHtml(cepEmMascara(e.cep || '') || 'não informado') + '</span>'
+            + '<button type="button" class="portal-botao" onclick="selecionarEnderecoEntrega(' + indice + ')">Selecionar</button>'
+            + '</div>';
     }).join('') : '<p class="portal-vazio">Não há outro endereço cadastrado para este cliente.</p>';
     return '<dialog id="portal-modal-enderecos" class="portal-modal-enderecos">'
-        + '<div class="portal-modal-cabecalho"><h2>Endereços cadastrados</h2>'
+        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Entrega</span><h2>Meus Endereços</h2></div>'
         + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharEnderecosEntrega()">×</button></div>'
         + '<div class="portal-lista-enderecos">' + cartoes + '</div>'
-        + '<button type="button" class="portal-botao" onclick="informarOutroEnderecoEntrega()">Informar outro endereço</button>'
+        + '<button type="button" class="portal-botao principal" onclick="informarOutroEnderecoEntrega()">Adicionar novo endereço</button>'
         + '</dialog>';
+}
+
+function campoNovoEndereco(campo, rotulo, opcoes = {}) {
+    const r = dadosDoFormularioEntrega();
+    const bloqueado = opcoes.bloqueado || r.buscando;
+    return '<label class="portal-entrega-campo"><span>' + escapeHtml(rotulo) + '</span>'
+        + '<input id="entrega-' + campo + '" class="portal-caixa-de-texto" type="text" '
+        + (opcoes.maxlength ? 'maxlength="' + opcoes.maxlength + '" ' : '')
+        + (opcoes.numerico ? 'inputmode="numeric" ' : '')
+        + (bloqueado ? 'readonly ' : '')
+        + 'value="' + escapeHtml(r.valores[campo]) + '" '
+        + (bloqueado ? '' : 'oninput="editarCampoEntrega(\'' + campo + '\',this.value)"') + '></label>';
+}
+
+function modalNovoEnderecoEntrega() {
+    const r = dadosDoFormularioEntrega();
+    const tipo = tipoDoDocumentoEntrega(r.valores.cpf_recebedor);
+    let etapaEndereco = '';
+    if (r.documentoLiberado && tipo === 'cpf') {
+        etapaEndereco = '<div class="portal-entrega-etapa"><h3>2. Endereço</h3><p>Informe o CEP e complete os dados da entrega.</p>'
+            + campoNovoEndereco('cep', 'CEP', { maxlength: 9, numerico: true })
+            + '<button type="button" class="portal-botao" onclick="buscarCepEntrega()" '
+            + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CEP...' : 'Buscar endereço pelo CEP') + '</button>'
+            + campoNovoEndereco('endereco', 'Endereço', { maxlength: 200 })
+            + '<div class="portal-entrega-campos-duplos">'
+            + campoNovoEndereco('numero', 'Número (ou S/N)', { maxlength: 20 })
+            + campoNovoEndereco('complemento', 'Complemento (opcional)', { maxlength: 150 }) + '</div>'
+            + campoNovoEndereco('bairro', 'Bairro', { maxlength: 100 })
+            + '<div class="portal-entrega-campos-duplos">'
+            + campoNovoEndereco('cidade', 'Cidade', { bloqueado: true })
+            + campoNovoEndereco('uf', 'UF', { bloqueado: true }) + '</div></div>';
+    } else if (r.documentoLiberado && tipo === 'cnpj' && r.buscando) {
+        etapaEndereco = '<div class="portal-entrega-etapa"><p class="portal-aviso calmo">Consultando o endereço cadastrado para este CNPJ...</p></div>';
+    } else if (r.documentoLiberado && tipo === 'cnpj' && r.consultado) {
+        etapaEndereco = '<div class="portal-entrega-etapa"><h3>2. Endereço cadastrado no CNPJ</h3>'
+            + '<p class="portal-aviso calmo">Este endereço veio do cadastro do CNPJ e não pode ser editado.</p>'
+            + formularioEnderecoEntrega() + '</div>';
+    }
+    const podeUsar = r.documentoLiberado && !!r.consultado && !r.buscando;
+    return '<dialog id="portal-modal-enderecos" class="portal-modal-enderecos">'
+        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Meus Endereços</span><h2>Novo endereço</h2></div>'
+        + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharEnderecosEntrega()">×</button></div>'
+        + '<div class="portal-entrega-etapa"><h3>1. Quem vai receber?</h3>'
+        + campoNovoEndereco('recebedor', 'Nome do recebedor', { maxlength: 150 })
+        + campoNovoEndereco('cpf_recebedor', 'CPF ou CNPJ do recebedor', { maxlength: 18, numerico: true })
+        + (!r.documentoLiberado ? '<button type="button" class="portal-botao principal" onclick="continuarDocumentoEntrega()" '
+            + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CNPJ...' : 'Continuar') + '</button>' : '')
+        + '</div>' + etapaEndereco
+        + (r.erro ? '<p role="alert" class="portal-aviso atencao">' + escapeHtml(r.erro) + '</p>' : '')
+        + '<div class="portal-modal-acoes"><button type="button" class="portal-botao" onclick="voltarListaEnderecosEntrega()">Voltar</button>'
+        + (podeUsar ? '<button type="button" class="portal-botao principal" onclick="usarNovoEnderecoEntrega()">Usar este endereço</button>' : '')
+        + '</div></dialog>';
 }
 
 function abrirEnderecosEntrega() {
@@ -185,6 +336,9 @@ async function selecionarEnderecoEntrega(indice) {
     const r = dadosDoFormularioEntrega();
     CAMPOS_ENTREGA.forEach(k => { r.valores[k] = String(escolhido[k] || ''); });
     r.consultado = r.valores.cep.replace(/\D/g, '');
+    r.documentoLiberado = true;
+    r.origemCnpj = r.valores.cpf_recebedor.replace(/\D/g, '').length === 14;
+    r.telaEnderecos = 'lista';
     r.erro = '';
     fecharEnderecosEntrega();
     redesenharSecao('entrega');
@@ -193,8 +347,40 @@ async function selecionarEnderecoEntrega(indice) {
 async function informarOutroEnderecoEntrega() {
     if (!(await liberarEdicaoEntrega())) return;
     const r = dadosDoFormularioEntrega();
-    ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf'].forEach(k => { r.valores[k] = ''; });
+    CAMPOS_ENTREGA.forEach(k => { r.valores[k] = ''; });
     r.consultado = '';
+    r.documentoLiberado = false;
+    r.origemCnpj = false;
+    r.telaEnderecos = 'novo';
+    r.erro = '';
+    reabrirMeusEnderecos();
+}
+
+function voltarListaEnderecosEntrega() {
+    const r = dadosDoFormularioEntrega();
+    consultaEntrega++;
+    r.buscando = false;
+    r.erro = '';
+    r.telaEnderecos = 'lista';
+    reabrirMeusEnderecos();
+}
+
+function usarNovoEnderecoEntrega() {
+    const r = dadosDoFormularioEntrega();
+    const documento = r.valores.cpf_recebedor.replace(/\D/g, '');
+    const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, String(r.valores[k] || '').trim()]));
+    if (!r.documentoLiberado || !r.consultado || r.buscando
+        || !valores.recebedor || !documentoDoRecebedorValido(documento)
+        || !/^\d{8}$/.test(valores.cep.replace(/\D/g, ''))
+        || ['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !valores[k])) {
+        r.erro = 'Complete os dados obrigatórios antes de usar este endereço.';
+        reabrirMeusEnderecos();
+        return;
+    }
+    r.valores.cpf_recebedor = documento;
+    r.valores.cep = valores.cep.replace(/\D/g, '');
+    r.telaEnderecos = 'lista';
+    r.erro = '';
     fecharEnderecosEntrega();
     redesenharSecao('entrega');
 }
@@ -211,9 +397,8 @@ function cartaoDeDecisaoEntrega() {
         + '<button type="button" class="portal-botao' + (confirmado ? ' principal' : '') + '" '
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'entrega\', true)">'
         + icone('check', 17) + (gravando === 'entrega' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar') + '</button>'
-        + '<button type="button" class="portal-botao" ' + (gravando || r.alterando ? 'disabled ' : '')
-        + 'onclick="liberarEdicaoEntrega()">' + icone('lapis', 17) + (r.alterando ? 'Alterando' : 'Alterar') + '</button></div>'
-        + '<button type="button" class="portal-botao" style="margin-top:10px;width:100%" onclick="abrirEnderecosEntrega()">Ver endereços cadastrados</button>'
+        + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '')
+        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Meus Endereços</button></div>'
         + '</div>' + modalEnderecosEntrega();
 }
 
@@ -238,6 +423,11 @@ async function persistirEnderecoEntrega() {
         || !data.endereco || CAMPOS_ENTREGA.some(k => data.endereco[k] !== valores[k]))
         throw new Error('O banco não confirmou a gravação do endereço. Tente novamente.');
     window.portalDados.endereco = data.endereco;
+    const cadastrados = enderecosCadastradosEntrega();
+    const jaExiste = cadastrados.some(e => CAMPOS_ENTREGA.every(k => String(e[k] || '') === valores[k]));
+    if (!jaExiste) {
+        window.portalDados.enderecos_entrega = [Object.assign({ tipo_endereco: 'ENTREGA' }, valores), ...cadastrados];
+    }
     r.anterior = data.endereco;
     r.erro = '';
 }
@@ -250,6 +440,7 @@ window.formularioEnderecoEntrega = formularioEnderecoEntrega;
 window.persistirEnderecoEntrega = persistirEnderecoEntrega;
 window.editarCampoEntrega = editarCampoEntrega;
 window.buscarCepEntrega = buscarCepEntrega;
+window.continuarDocumentoEntrega = continuarDocumentoEntrega;
 window.documentoDoRecebedorValido = documentoDoRecebedorValido;
 window.cpfDaEntregaValido = documentoDoRecebedorValido;
 window.cartaoDeDecisaoEntrega = cartaoDeDecisaoEntrega;
@@ -258,4 +449,6 @@ window.fecharEnderecosEntrega = fecharEnderecosEntrega;
 window.liberarEdicaoEntrega = liberarEdicaoEntrega;
 window.selecionarEnderecoEntrega = selecionarEnderecoEntrega;
 window.informarOutroEnderecoEntrega = informarOutroEnderecoEntrega;
+window.voltarListaEnderecosEntrega = voltarListaEnderecosEntrega;
+window.usarNovoEnderecoEntrega = usarNovoEnderecoEntrega;
 window.concluirEdicaoEntrega = concluirEdicaoEntrega;

@@ -90,6 +90,8 @@ const TRACOS_DOS_ICONES = {
              + '<circle cx="6" cy="17.5" r="1.8"></circle><circle cx="17" cy="17.5" r="1.8"></circle>',
     pin:       '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"></path>'
              + '<circle cx="12" cy="10" r="2.5"></circle>',
+    pessoa:    '<circle cx="12" cy="8" r="3.5"></circle>'
+             + '<path d="M5 21a7 7 0 0 1 14 0"></path>',
     impressora:'<path d="M6 9V3h12v6"></path>'
              + '<rect x="3" y="9" width="18" height="8" rx="2"></rect>'
              + '<path d="M6 15h12v6H6z"></path>',

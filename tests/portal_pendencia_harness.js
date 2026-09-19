@@ -194,7 +194,7 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
     // para campo faltando no cadastro. Reusar o nome punha o cartao novo em
     // `flex-direction: row` -- titulo, texto e botao lado a lado, cada um numa
     // coluna estreita. Aconteceu, e foi visto na tela antes de publicar.
-    ok(/formularioEnderecoEntrega\(\)/.test(ENTREGA), 'a aba de Entrega preenche os dados diretamente no formulário');
+    ok(/formularioEnderecoEntrega\(\)/.test(ENTREGA), 'a aba de Entrega mostra o resumo somente leitura do endereço');
     ok(!/portal-cartao portal-falta'/.test(CLIENTE), 'e o cartao novo nao usa aquela classe');
     ok(/portal-cartao portal-pendencia'/.test(CLIENTE), 'ele tem classe propria');
     ok(/\.portal-pendencia\s*\{/.test(CSS), 'com regra propria no CSS');
