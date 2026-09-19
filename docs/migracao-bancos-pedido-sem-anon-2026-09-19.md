@@ -33,8 +33,25 @@ painel autenticado e o NewProd da estação.
 - Não há mais acesso direto a `pedidos_bancos` ou `pedidos_modelos_banco` no
   diretório `frontend/`.
 
-Nenhuma função foi implantada, nenhum frontend foi publicado, nenhum agente foi
-instalado e nenhum privilégio foi alterado nesta etapa.
+## Implantação das rotas
+
+Em 19/09/2026, as duas Edge Functions foram implantadas de forma aditiva:
+
+- `painel`: versão 247, `verify_jwt=true`, hash do bundle iniciado por
+  `195cab84f50d`;
+- `acesso-estacao`: versão 250, `verify_jwt=false`, hash do bundle iniciado por
+  `1b90c0bc2c64`; a função continua exigindo `ACESSO_AGENTE_SEGREDO` antes de
+  validar o operador ou ler o corpo.
+
+A primeira tentativa com o token de auditoria protegido por DPAPI recebeu 403,
+por falta de permissão para publicar funções. A sessão já autenticada do
+Supabase CLI possuía o papel necessário e concluiu os dois deploys. A listagem
+posterior confirmou ambas como `ACTIVE`. Chamadas sem credenciais devolveram
+401: `painel` recusou por falta de Authorization e `acesso-estacao` recusou por
+segredo do agente inválido.
+
+O frontend ainda não foi publicado, o agente não foi instalado e nenhum
+privilégio das tabelas foi alterado nesta etapa.
 
 ## Efeito na usabilidade
 
@@ -53,8 +70,9 @@ estações que usam bancos de pedidos.
 
 1. Integrar este commit à revisão atual do painel, resolvendo os pontos em que
    `painel/index.ts` e `acesso-estacao/index.ts` também receberam as rotas de
-   propostas.
-2. Implantar primeiro as duas Edge Functions.
+   propostas. **Pendente de integração do PR; a branch já está atualizada com
+   `origin/main`.**
+2. Implantar primeiro as duas Edge Functions. **Concluído em 19/09/2026.**
 3. Validar com dados sintéticos ou pedido de teste:
    - usuário web com `perm_amostras_view` consulta somente o `id_int` pedido;
    - usuário sem a permissão recebe 403;
