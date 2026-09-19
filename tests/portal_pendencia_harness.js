@@ -200,6 +200,15 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
     ok(/\.portal-pendencia\s*\{/.test(CSS), 'com regra propria no CSS');
 })();
 
+(function oEnvioVemAntesDoEnderecoDeEntrega() {
+    const inicio = ENTREGA.indexOf('const chegada = cartaoDeChegada(dados);');
+    const fim = ENTREGA.indexOf("registrarSecao('entrega'", inicio);
+    const desenho = ENTREGA.slice(inicio, fim);
+    ok(inicio >= 0 && fim > inicio, 'encontrou o desenho da entrega comum');
+    ok(desenho.indexOf("tituloDoCartao('caminhao', 'Envio')") < desenho.indexOf('formularioEnderecoEntrega()'),
+        'o box Envio aparece acima do box Endereço de entrega');
+})();
+
 (function osDoisCaminhosDaAbaDaArteExistem() {
     ok(/cartaoDoQueFaltaNaArte\(true\)/.test(CLIENTE), 'o cartao ambar entra no modo so-leitura');
     ok(/cartaoDoQueFaltaNaArte\(false\)/.test(CLIENTE), 'e e limpo no modo de aprovacao');

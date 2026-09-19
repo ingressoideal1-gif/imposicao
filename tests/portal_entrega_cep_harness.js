@@ -9,7 +9,8 @@ function ambiente() {
     const chamadas = [];
     const c = { console, setTimeout, clearTimeout, AbortController,
         document: { getElementById: () => null },
-        portalDados: { endereco: null, cliente: null, pedido: { frete_escolhido: 'PAC' } },
+        portalDados: { endereco: null, cliente: { nome: endereco.recebedor, documento: endereco.cpf_recebedor },
+            pedido: { frete_escolhido: 'PAC' } },
         clienteState: { numero: '123', token: 'sintetico', osId: 'vibe_123', pedidoFinalizado: false },
         state: {}, escapeHtml: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
         documentoEmMascara: documento => {
@@ -37,9 +38,9 @@ function ambiente() {
 }
 async function preencher(c) {
     await c.informarOutroEnderecoEntrega();
-    c.editarCampoEntrega('recebedor', endereco.recebedor);
     c.editarCampoEntrega('cpf_recebedor', endereco.cpf_recebedor);
     await c.continuarDocumentoEntrega();
+    assert.equal(c.dadosDoFormularioEntrega().valores.recebedor, endereco.recebedor);
     c.editarCampoEntrega('cep', '01001-000');
     await c.buscarCepEntrega();
     c.editarCampoEntrega('numero', endereco.numero);
@@ -69,6 +70,30 @@ async function main() {
     assert.equal(c.portalDados.enderecos_entrega[0].recebedor, endereco.recebedor, 'novo endereço entra em Meus Endereços');
     c.editarCampoEntrega('numero', '999');
     assert.equal(c.dadosDoFormularioEntrega().valores.numero, '10', 'confirmado não é editável');
+
+    ({ c, chamadas } = ambiente());
+    await c.informarOutroEnderecoEntrega();
+    let formulario = c.cartaoDeDecisaoEntrega();
+    assert.ok(formulario.includes('1. CPF ou CNPJ'));
+    assert.ok(!formulario.includes('Nome do recebedor'), 'nome so aparece depois da consulta do documento');
+    c.editarCampoEntrega('cpf_recebedor', endereco.cpf_recebedor);
+    await c.continuarDocumentoEntrega();
+    formulario = c.cartaoDeDecisaoEntrega();
+    assert.match(formulario, /id="entrega-recebedor"[^>]*readonly/);
+    assert.match(formulario, /id="entrega-endereco"[^>]*readonly/);
+    const nomeConsultado = c.dadosDoFormularioEntrega().valores.recebedor;
+    const ruaConsultada = c.dadosDoFormularioEntrega().valores.endereco;
+    c.editarCampoEntrega('recebedor', 'Nome adulterado');
+    c.editarCampoEntrega('endereco', 'Rua adulterada');
+    assert.equal(c.dadosDoFormularioEntrega().valores.recebedor, nomeConsultado);
+    assert.equal(c.dadosDoFormularioEntrega().valores.endereco, ruaConsultada);
+
+    ({ c, chamadas } = ambiente());
+    await c.informarOutroEnderecoEntrega();
+    c.editarCampoEntrega('cpf_recebedor', '11144477735');
+    await c.continuarDocumentoEntrega();
+    assert.equal(c.dadosDoFormularioEntrega().documentoLiberado, false);
+    assert.match(c.dadosDoFormularioEntrega().erro, /não localizado/);
 
     ({ c, chamadas } = ambiente());
     await preencher(c);
@@ -127,7 +152,6 @@ async function main() {
     ({ c, chamadas } = ambiente());
     let responder;
     await c.informarOutroEnderecoEntrega();
-    c.editarCampoEntrega('recebedor', 'Pessoa Teste');
     c.editarCampoEntrega('cpf_recebedor', '52998224725');
     await c.continuarDocumentoEntrega();
     c.fetch = () => new Promise(resolve => { responder = resolve; });

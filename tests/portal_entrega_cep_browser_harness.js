@@ -67,19 +67,34 @@ const raiz = path.resolve(__dirname, '..');
         await page.click('[onclick="informarOutroEnderecoEntrega()"]');
         await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open
             && document.getElementById('entrega-cpf_recebedor'));
-        await page.type('#entrega-recebedor', 'Pessoa Teste');
         await page.type('#entrega-cpf_recebedor', '52998224725');
         assert.equal(await page.$('#entrega-cep'), null, 'CEP só aparece depois do documento válido');
         await page.click('[onclick="continuarDocumentoEntrega()"]');
         await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open
             && document.getElementById('entrega-cep'));
+        await page.click('#entrega-cep');
+        await page.keyboard.down('Control'); await page.keyboard.press('A'); await page.keyboard.up('Control');
         await page.type('#entrega-cep', '01001000');
         await page.click('[onclick="buscarCepEntrega()"]');
-        await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open
-            && document.getElementById('entrega-cidade').value === 'São Paulo');
+        await page.waitForFunction(() => !dadosDoFormularioEntrega().buscando);
+        const estadoBusca = await page.evaluate(() => ({
+            erro: dadosDoFormularioEntrega().erro,
+            consultado: dadosDoFormularioEntrega().consultado,
+            cep: dadosDoFormularioEntrega().valores.cep,
+            cidade: dadosDoFormularioEntrega().valores.cidade
+        }));
+        assert.deepEqual(estadoBusca, { erro: '', consultado: '01001000', cep: '01001000', cidade: 'São Paulo' });
+        await page.waitForSelector('[onclick="usarNovoEnderecoEntrega()"]');
+        await page.click('#entrega-numero');
+        await page.keyboard.down('Control'); await page.keyboard.press('A'); await page.keyboard.up('Control');
         await page.type('#entrega-numero','25');
         await page.type('#entrega-complemento','Portaria');
-        assert.equal(await page.$eval('#entrega-recebedor', e => e.value), 'Pessoa Teste');
+        assert.equal(await page.$eval('#entrega-recebedor', e => e.value), 'Pessoa Cadastrada');
+        assert.equal(await page.$eval('#entrega-recebedor', e => e.readOnly), true);
+        assert.equal(await page.$eval('#entrega-endereco', e => e.readOnly), true);
+        assert.equal(await page.$eval('#entrega-bairro', e => e.readOnly), true);
+        assert.equal(await page.$eval('#entrega-cidade', e => e.readOnly), true);
+        assert.equal(await page.$eval('#entrega-uf', e => e.readOnly), true);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'sem rolagem horizontal no celular');
         await page.click('[onclick="usarNovoEnderecoEntrega()"]');
         await page.waitForFunction(() => document.getElementById('secao-entrega').textContent.includes('Rua de teste, 25'));

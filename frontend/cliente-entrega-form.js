@@ -27,7 +27,8 @@ function editarCampoEntrega(campo, valor) {
     if (!CAMPOS_ENTREGA.includes(campo) || window.portalGravandoConfirmacao
         || !dadosDoFormularioEntrega().alterando || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
-    if (r.origemCnpj && ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf'].includes(campo)) return;
+    const editaveis = r.documentoLiberado ? ['cep', 'numero', 'complemento'] : ['cpf_recebedor'];
+    if (!editaveis.includes(campo) || (r.origemCnpj && campo !== 'cpf_recebedor')) return;
     r.valores[campo] = valor;
     r.erro = '';
     if (campo === 'cpf_recebedor') {
@@ -77,6 +78,30 @@ async function continuarDocumentoEntrega() {
     r.documentoLiberado = true;
     r.origemCnpj = tipo === 'cnpj';
     if (tipo === 'cpf') {
+        const cadastro = enderecosCadastradosEntrega().find(e =>
+            String(e.cpf_recebedor || '').replace(/\D/g, '') === documento);
+        const cliente = window.portalDados && window.portalDados.cliente;
+        const ehTitular = cliente
+            && String(cliente.documento || '').replace(/\D/g, '') === documento;
+        if (!cadastro && !ehTitular) {
+            r.documentoLiberado = false;
+            r.erro = 'CPF não localizado nos cadastros deste cliente.';
+            reabrirMeusEnderecos();
+            return;
+        }
+        r.valores.recebedor = String((cadastro && cadastro.recebedor)
+            || (ehTitular && cliente.nome) || '').trim();
+        if (!r.valores.recebedor) {
+            r.documentoLiberado = false;
+            r.erro = 'O cadastro deste CPF não possui nome do recebedor.';
+            reabrirMeusEnderecos();
+            return;
+        }
+        if (cadastro) {
+            ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf']
+                .forEach(k => { r.valores[k] = String(cadastro[k] || ''); });
+            r.consultado = r.valores.cep.replace(/\D/g, '');
+        }
         reabrirMeusEnderecos();
         return;
     }
@@ -269,15 +294,17 @@ function modalNovoEnderecoEntrega() {
     const tipo = tipoDoDocumentoEntrega(r.valores.cpf_recebedor);
     let etapaEndereco = '';
     if (r.documentoLiberado && tipo === 'cpf') {
-        etapaEndereco = '<div class="portal-entrega-etapa"><h3>2. Endereço</h3><p>Informe o CEP e complete os dados da entrega.</p>'
+        etapaEndereco = '<div class="portal-entrega-etapa"><h3>2. Recebedor e endereço</h3>'
+            + '<p>O nome vem do cadastro do CPF. Informe o CEP para carregar o endereço.</p>'
+            + campoNovoEndereco('recebedor', 'Nome do recebedor', { bloqueado: true, maxlength: 150 })
             + campoNovoEndereco('cep', 'CEP', { maxlength: 9, numerico: true })
             + '<button type="button" class="portal-botao" onclick="buscarCepEntrega()" '
             + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CEP...' : 'Buscar endereço pelo CEP') + '</button>'
-            + campoNovoEndereco('endereco', 'Endereço', { maxlength: 200 })
+            + campoNovoEndereco('endereco', 'Endereço', { bloqueado: true, maxlength: 200 })
             + '<div class="portal-entrega-campos-duplos">'
             + campoNovoEndereco('numero', 'Número (ou S/N)', { maxlength: 20 })
             + campoNovoEndereco('complemento', 'Complemento (opcional)', { maxlength: 150 }) + '</div>'
-            + campoNovoEndereco('bairro', 'Bairro', { maxlength: 100 })
+            + campoNovoEndereco('bairro', 'Bairro', { bloqueado: true, maxlength: 100 })
             + '<div class="portal-entrega-campos-duplos">'
             + campoNovoEndereco('cidade', 'Cidade', { bloqueado: true })
             + campoNovoEndereco('uf', 'UF', { bloqueado: true }) + '</div></div>';
@@ -292,9 +319,10 @@ function modalNovoEnderecoEntrega() {
     return '<dialog id="portal-modal-enderecos" class="portal-modal-enderecos">'
         + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Meus Endereços</span><h2>Novo endereço</h2></div>'
         + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharEnderecosEntrega()">×</button></div>'
-        + '<div class="portal-entrega-etapa"><h3>1. Quem vai receber?</h3>'
-        + campoNovoEndereco('recebedor', 'Nome do recebedor', { maxlength: 150 })
-        + campoNovoEndereco('cpf_recebedor', 'CPF ou CNPJ do recebedor', { maxlength: 18, numerico: true })
+        + '<div class="portal-entrega-etapa"><h3>1. CPF ou CNPJ</h3>'
+        + campoNovoEndereco('cpf_recebedor', 'CPF ou CNPJ do recebedor', {
+            maxlength: 18, numerico: true, bloqueado: r.documentoLiberado
+        })
         + (!r.documentoLiberado ? '<button type="button" class="portal-botao principal" onclick="continuarDocumentoEntrega()" '
             + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CNPJ...' : 'Continuar') + '</button>' : '')
         + '</div>' + etapaEndereco

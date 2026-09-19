@@ -2,6 +2,14 @@
 -- Endereços exclusivos de pedidos não alteram a alternativa do cadastro/nota.
 -- Sem consultas de verificação em dados reais.
 BEGIN;
+CREATE TABLE IF NOT EXISTS public.clientes_faturamento_portal (
+    id bigserial PRIMARY KEY,
+    id_cliente_titular integer NOT NULL,
+    id_cliente_faturamento integer NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id_cliente_titular, id_cliente_faturamento)
+);
+REVOKE ALL ON TABLE public.clientes_faturamento_portal FROM PUBLIC, anon, authenticated;
 CREATE OR REPLACE FUNCTION public.link_cliente_pedido(
     p_numero text,
     p_token  text
@@ -285,6 +293,39 @@ BEGIN
                                      v_cli.email),
             'telefone',     COALESCE(NULLIF(v_cli.whatsapp_1, ''), v_cli.telefone_fixo)
         ) END,
+        -- Cadastros fiscais que pertencem ao cliente comercial deste pedido.
+        -- O titular e o faturado atual entram mesmo antes de existir um vinculo;
+        -- os proximos cadastros passam a ser lembrados pela tabela aditiva acima.
+        'cadastros_faturamento', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'id_cliente', c.id_cliente,
+                'nome', COALESCE(NULLIF(c.nome, ''), c.fantasia),
+                'documento', c.documento,
+                'ins_estadual', c.ins_estadual,
+                'email', COALESCE(NULLIF(c.email_financeiro, ''), NULLIF(c.email_contato, ''), c.email),
+                'telefone', COALESCE(NULLIF(c.whatsapp_1, ''), c.telefone_fixo),
+                'endereco', CASE WHEN e.id IS NULL THEN NULL ELSE jsonb_build_object(
+                    'endereco', e.endereco, 'numero', e.numero, 'complemento', e.complemento,
+                    'bairro', e.bairro, 'cidade', e.cidade, 'uf', e.uf, 'cep', e.cep
+                ) END
+            ) ORDER BY CASE WHEN c.id_cliente = COALESCE(v_prop.id_faturado, v_prop.id_cliente) THEN 0 ELSE 1 END,
+                c.id_cliente)
+            FROM public.clientes c
+            LEFT JOIN LATERAL (
+                SELECT ee.* FROM public.enderecos ee
+                 WHERE ee.id_cliente = c.id_cliente
+                   AND coalesce(ee.obs, '') NOT LIKE 'portal-entrega-pedido:%'
+                 ORDER BY CASE WHEN upper(btrim(coalesce(ee.tipo_endereco, ''))) = 'PRINCIPAL' THEN 0 ELSE 1 END,
+                          ee.data_criacao DESC NULLS LAST, ee.id
+                 LIMIT 1
+            ) e ON true
+            WHERE c.id_cliente IN (
+                SELECT v_prop.id_cliente WHERE v_prop.id_cliente IS NOT NULL
+                UNION SELECT v_prop.id_faturado WHERE v_prop.id_faturado IS NOT NULL
+                UNION SELECT f.id_cliente_faturamento FROM public.clientes_faturamento_portal f
+                      WHERE f.id_cliente_titular = v_prop.id_cliente
+            )
+        ), '[]'::jsonb),
         'endereco', CASE WHEN v_end.id IS NULL THEN NULL ELSE jsonb_build_object(
             'recebedor',     v_end.recebedor,
             'cpf_recebedor', v_end.cpf_recebedor,

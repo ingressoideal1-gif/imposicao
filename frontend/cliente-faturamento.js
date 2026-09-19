@@ -91,14 +91,9 @@ function desenharSecaoFaturamento() {
     if (!secao) return;
 
     const dados = window.portalDados;
-    const linhas = linhasDoFaturamento(dados && dados.cliente,
-                                       dados && dados.endereco_faturamento);
-
     secao.innerHTML =
-        cartaoDeLinhas(tituloDoCartao('nota', 'Dados para a nota fiscal'), linhas,
-            'Os dados de faturamento ainda não foram cadastrados neste pedido. '
-            + 'Toque em Alterar abaixo e escreva os dados corretos, ou fale com seu atendimento.')
-        + cartaoDeDecisao('faturamento')
+        resumoFaturamento()
+        + cartaoDeDecisaoFaturamento()
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

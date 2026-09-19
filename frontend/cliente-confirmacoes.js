@@ -272,6 +272,8 @@ window.decidirDados = async function (qual, confirmou) {
     const dados = window.portalDados || {};
     const salvarEndereco = qual === 'entrega' && confirmou === true
         && typeof persistirEnderecoEntrega === 'function' && !ehRetirada(dados.pedido, dados.frete);
+    const salvarFaturamento = qual === 'faturamento' && confirmou === true
+        && typeof persistirFaturamento === 'function';
     if (!salvarEndereco && qual === 'entrega' && confirmou === true
         && entregaExigeRecebedor(dados.endereco, dados.cliente, dados.pedido, dados.frete)) return;
 
@@ -285,6 +287,7 @@ window.decidirDados = async function (qual, confirmou) {
     redesenharSecao('faturamento');
     try {
         if (salvarEndereco) await persistirEnderecoEntrega();
+        if (salvarFaturamento) await persistirFaturamento();
         const gravacao = await gravarCorrecaoDoCliente(parseInt(clienteState.numero), {
             entrega: proxima.entrega === false ? (proxima.textoEntrega || '(sem detalhes)') : '',
             faturamento: proxima.faturamento === false ? (proxima.textoFaturamento || '(sem detalhes)') : ''
