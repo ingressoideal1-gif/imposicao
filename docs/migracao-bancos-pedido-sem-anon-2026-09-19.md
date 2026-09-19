@@ -50,8 +50,30 @@ posterior confirmou ambas como `ACTIVE`. Chamadas sem credenciais devolveram
 401: `painel` recusou por falta de Authorization e `acesso-estacao` recusou por
 segredo do agente inválido.
 
-O frontend ainda não foi publicado, o agente não foi instalado e nenhum
-privilégio das tabelas foi alterado nesta etapa.
+Naquele ponto, o frontend e o agente ainda não tinham sido publicados. Nenhum
+privilégio das tabelas foi alterado.
+
+## Publicação do consumidor
+
+Também em 19/09/2026:
+
+- PR `#55` integrado em `main` no commit `d7b25f06`;
+- Cloudflare Pages concluiu a publicação com sucesso;
+- o domínio público entregou `index.html` e `script.js?v=900` com os mesmos
+  hashes normalizados de `origin/main`;
+- o JavaScript público apresentou zero chamadas diretas a `pedidos_bancos` ou
+  `pedidos_modelos_banco`;
+- NewProd `1.2.335` publicado em arquivo novo, com 156.028.928 bytes e SHA-256
+  `e456e6c0c98147ebf6e60a09898ee09296c0dc277aae065a19f474097b3cb21d`;
+- o arquivo público foi baixado e conferido antes da ativação de `latest.json`;
+- tag `agente-v1.2.335` enviada ao GitHub;
+- a estação `PC-JR-HOME` confirmou `NewProd 1.2.335` pela rota local e pelo
+  heartbeat.
+
+O snapshot da frota ainda não permite fechar `anon`: uma estação vista no dia
+permaneceu em `1.2.334`, outra não informou versão e as demais só tinham
+heartbeat anterior, em versões `1.2.333` ou mais antigas. Elas devem atualizar
+e reportar `1.2.335` antes da retirada de `SELECT`.
 
 ## Efeito na usabilidade
 
@@ -80,8 +102,10 @@ estações que usam bancos de pedidos.
    - banco e modelo de pedidos diferentes recebem 404;
    - criação, alteração, vínculo, desvínculo e exclusão retornam a linha gravada.
 4. Publicar o frontend web e conferir o arquivo entregue com cache-buster.
+   **Concluído em `v900`.**
 5. Gerar e instalar a versão do NewProd nas estações; confirmar por versão e
-   heartbeat, além de uma leitura real controlada.
+   heartbeat, além de uma leitura real controlada. **Versão `1.2.335` publicada;
+   uma estação confirmada, demais estações pendentes.**
 6. Conferir `pg_stat_statements`: as tabelas não devem mais receber consultas
    `anon` do painel ou das estações atualizadas.
 7. Avisar o mantenedor com alvo, efeito e janela. Aguardar o aceite expresso.
