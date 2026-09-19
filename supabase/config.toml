@@ -525,3 +525,8 @@ verify_jwt = true
 # A falha e FECHADA: sem o segredo configurado, a funcao recusa tudo com 503, em
 # vez de virar porta aberta por esquecimento.
 verify_jwt = false
+
+[functions.consulta-documento-entrega]
+# Publica porque o cliente abre o link do pedido sem login. A propria funcao
+# exige numero + token ativo, limita tentativas e nunca devolve a chave CPFHub.
+verify_jwt = false

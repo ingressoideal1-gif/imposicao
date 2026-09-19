@@ -28,7 +28,15 @@ function ambiente() {
                 logradouro: 'Avenida Oficial', numero: '55', complemento: 'Sala 2', bairro: 'Centro', municipio: 'São Paulo', uf: 'SP' }
             : { cep: '01001-000', logradouro: 'Praça de teste', bairro: 'Centro', localidade: 'São Paulo', uf: 'SP' } }),
         gravarCorrecaoDoCliente: async () => { chamadas.push('confirmacao'); return { ok: true }; },
-        supabaseClient: { rpc: async (nome, args) => { chamadas.push(nome); return { data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }; } }
+        supabaseClient: {
+            rpc: async (nome, args) => { chamadas.push(nome); return { data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }; },
+            functions: { invoke: async (nome, opcoes) => {
+                const d = opcoes.body.documento;
+                if (d.length === 11) return { data: { ok: true, tipo: 'cpf', cpf: d, nome: 'Pessoa Teste' }, error: null };
+                return { data: { ok: true, tipo: 'cnpj', cnpj: d, nome: 'Empresa Recebedora', cep: '01001000',
+                    endereco: 'Avenida Oficial', numero: '55', complemento: 'Sala 2', bairro: 'Centro', cidade: 'São Paulo', uf: 'SP' }, error: null };
+            } }
+        }
     };
     c.window = c;
     vm.createContext(c);
@@ -90,10 +98,11 @@ async function main() {
 
     ({ c, chamadas } = ambiente());
     await c.informarOutroEnderecoEntrega();
+    c.supabaseClient.functions.invoke = async () => ({ data: null, error: { message: 'não encontrado' } });
     c.editarCampoEntrega('cpf_recebedor', '11144477735');
     await c.continuarDocumentoEntrega();
     assert.equal(c.dadosDoFormularioEntrega().documentoLiberado, false);
-    assert.match(c.dadosDoFormularioEntrega().erro, /não localizado/);
+    assert.match(c.dadosDoFormularioEntrega().erro, /consultar o nome/);
 
     ({ c, chamadas } = ambiente());
     await preencher(c);

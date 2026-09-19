@@ -60,7 +60,8 @@ function resumoFaturamento() {
 
 function campoFaturamento(campo, rotulo, opcoes = {}) {
     const r = dadosDoFormularioFaturamento();
-    const bloqueado = opcoes.bloqueado || r.buscando || (r.origemCnpj && campo !== 'documento');
+    const bloqueado = opcoes.bloqueado || r.buscando || (campo === 'nome' && r.documentoLiberado)
+        || (r.origemCnpj && campo !== 'documento');
     return '<label class="portal-entrega-campo"><span>' + escapeHtml(rotulo) + '</span><input '
         + 'class="portal-caixa-de-texto" type="text" ' + (opcoes.numerico ? 'inputmode="numeric" ' : '')
         + (opcoes.maxlength ? 'maxlength="' + opcoes.maxlength + '" ' : '') + (bloqueado ? 'readonly ' : '')
@@ -89,9 +90,11 @@ function formularioCadastroFaturamento() {
             + campoFaturamento('uf', 'UF', { bloqueado: !r.origemCnpj }) + '</div></div>';
     }
     return '<div class="portal-entrega-etapa"><h3>1. CPF ou CNPJ</h3>'
-        + campoFaturamento('documento', 'CPF ou CNPJ', { maxlength: 18, numerico: true, bloqueado: !r.novo })
+        + campoFaturamento('documento', 'CPF ou CNPJ', {
+            maxlength: 18, numerico: true, bloqueado: !r.novo || r.documentoLiberado
+        })
         + (!r.documentoLiberado ? '<button type="button" class="portal-botao principal" onclick="continuarDocumentoFaturamento()">'
-            + (r.buscando ? 'Consultando CNPJ...' : 'Continuar') + '</button>' : '') + '</div>' + dados;
+            + (r.buscando ? 'Consultando...' : 'Continuar') + '</button>' : '') + '</div>' + dados;
 }
 
 function modalMeusDados() {
@@ -190,7 +193,8 @@ function voltarMeusDados() { const r = dadosDoFormularioFaturamento(); consultaF
 
 function editarCampoFaturamento(campo, valor) {
     const r = dadosDoFormularioFaturamento();
-    if (!CAMPOS_FATURAMENTO.includes(campo) || r.origemCnpj || r.buscando) return;
+    if (!CAMPOS_FATURAMENTO.includes(campo) || r.origemCnpj || r.buscando
+        || (campo === 'nome' && r.documentoLiberado)) return;
     r.valores[campo] = valor; r.erro = '';
     if (campo === 'documento') { r.documentoLiberado = false; r.consultado = ''; }
     if (campo === 'cep') r.consultado = '';
@@ -201,22 +205,25 @@ async function continuarDocumentoFaturamento() {
     const documento = r.valores.documento.replace(/\D/g, '');
     const tipo = tipoDoDocumentoEntrega(documento);
     if (!tipo) { r.erro = 'Informe um CPF ou CNPJ válido para continuar.'; atualizarTelaFaturamento(true); return; }
-    r.valores.documento = documento; r.documentoLiberado = true; r.origemCnpj = tipo === 'cnpj'; r.erro = '';
-    if (tipo === 'cpf') { atualizarTelaFaturamento(true); return; }
+    r.valores.documento = documento; r.documentoLiberado = false; r.origemCnpj = tipo === 'cnpj'; r.erro = '';
     r.buscando = true; atualizarTelaFaturamento(true); const seq = ++consultaFaturamento;
     try {
-        const resp = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + documento);
-        if (!resp.ok) throw new Error('consulta');
-        const c = await resp.json();
-        if (seq !== consultaFaturamento || String(c.cnpj || '').replace(/\D/g, '') !== documento) return;
-        Object.assign(r.valores, { nome: c.razao_social || '', ins_estadual: '', email: c.email || '', telefone: c.ddd_telefone_1 || '',
-            cep: String(c.cep || '').replace(/\D/g, ''), endereco: c.logradouro || '', numero: c.numero || '',
-            complemento: c.complemento || '', bairro: c.bairro || '', cidade: c.municipio || '', uf: c.uf || '' });
-        if (!r.valores.nome || !/^\d{8}$/.test(r.valores.cep) || ['endereco','numero','bairro','cidade','uf'].some(k => !r.valores[k])) throw new Error('incompleto');
+        const c = await consultarDocumentoNoPortal(documento);
+        if (seq !== consultaFaturamento) return;
+        r.valores.nome = String(c.nome || '').trim();
+        if (!r.valores.nome) throw new Error('incompleto');
+        r.documentoLiberado = true;
+        if (tipo === 'cpf') { r.consultado = ''; return; }
+        Object.assign(r.valores, { ins_estadual: '', email: '', telefone: '',
+            cep: String(c.cep || '').replace(/\D/g, ''), endereco: c.endereco || '', numero: c.numero || '',
+            complemento: c.complemento || '', bairro: c.bairro || '', cidade: c.cidade || '', uf: c.uf || '' });
+        if (!/^\d{8}$/.test(r.valores.cep) || ['endereco','numero','bairro','cidade','uf'].some(k => !r.valores[k])) throw new Error('incompleto');
         r.consultado = r.valores.cep;
     } catch (e) {
-        if (seq === consultaFaturamento) { r.documentoLiberado = false; r.origemCnpj = false; r.erro = e.message === 'incompleto'
-            ? 'O cadastro deste CNPJ não possui dados completos.' : 'Não foi possível consultar o CNPJ agora. Tente novamente.'; }
+        if (seq === consultaFaturamento) { r.documentoLiberado = false; r.origemCnpj = false;
+            r.erro = tipo === 'cpf' ? 'Não foi possível consultar o nome deste CPF agora. Tente novamente.'
+                : e.message === 'incompleto' ? 'O cadastro deste CNPJ não possui dados completos.'
+                    : 'Não foi possível consultar o CNPJ agora. Tente novamente.'; }
     } finally { if (seq === consultaFaturamento) { r.buscando = false; atualizarTelaFaturamento(true); } }
 }
 

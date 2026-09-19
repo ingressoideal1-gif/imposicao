@@ -63,6 +63,18 @@ function atualizarTelaDaEntrega() {
     else redesenharSecao('entrega');
 }
 
+async function consultarDocumentoNoPortal(documento) {
+    if (!supabaseClient || !supabaseClient.functions || typeof supabaseClient.functions.invoke !== 'function') {
+        throw new Error('consulta indisponível');
+    }
+    const { data, error } = await supabaseClient.functions.invoke('consulta-documento-entrega', {
+        body: { numero: String(clienteState.numero), token: clienteState.token, documento }
+    });
+    if (error || !data || data.ok !== true || data.cpf && data.cpf !== documento
+        || data.cnpj && data.cnpj !== documento) throw new Error('consulta');
+    return data;
+}
+
 async function continuarDocumentoEntrega() {
     if (window.portalGravandoConfirmacao || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
@@ -75,78 +87,47 @@ async function continuarDocumentoEntrega() {
         return;
     }
     r.valores.cpf_recebedor = documento;
-    r.documentoLiberado = true;
     r.origemCnpj = tipo === 'cnpj';
-    if (tipo === 'cpf') {
-        const cadastro = enderecosCadastradosEntrega().find(e =>
-            String(e.cpf_recebedor || '').replace(/\D/g, '') === documento);
-        const cliente = window.portalDados && window.portalDados.cliente;
-        const ehTitular = cliente
-            && String(cliente.documento || '').replace(/\D/g, '') === documento;
-        if (!cadastro && !ehTitular) {
-            r.documentoLiberado = false;
-            r.erro = 'CPF não localizado nos cadastros deste cliente.';
-            reabrirMeusEnderecos();
-            return;
-        }
-        r.valores.recebedor = String((cadastro && cadastro.recebedor)
-            || (ehTitular && cliente.nome) || '').trim();
-        if (!r.valores.recebedor) {
-            r.documentoLiberado = false;
-            r.erro = 'O cadastro deste CPF não possui nome do recebedor.';
-            reabrirMeusEnderecos();
-            return;
-        }
-        if (cadastro) {
-            ['cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf']
-                .forEach(k => { r.valores[k] = String(cadastro[k] || ''); });
-            r.consultado = r.valores.cep.replace(/\D/g, '');
-        }
-        reabrirMeusEnderecos();
-        return;
-    }
-
     const sequencia = ++consultaEntrega;
     r.buscando = true;
     reabrirMeusEnderecos();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-        const resposta = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + documento,
-            { signal: controller.signal });
-        if (!resposta.ok) throw new Error('consulta');
-        const cadastro = await resposta.json();
+        const cadastro = await consultarDocumentoNoPortal(documento);
         if (sequencia !== consultaEntrega || r.valores.cpf_recebedor !== documento) return;
-        const cnpjRecebido = String(cadastro.cnpj || '').replace(/\D/g, '');
+        r.valores.recebedor = String(cadastro.nome || '').trim();
+        if (!r.valores.recebedor) throw new Error('incompleto');
+        r.documentoLiberado = true;
+        if (tipo === 'cpf') {
+            r.consultado = '';
+            return;
+        }
         const endereco = {
             cep: String(cadastro.cep || '').replace(/\D/g, ''),
-            endereco: String(cadastro.logradouro || '').trim(),
+            endereco: String(cadastro.endereco || '').trim(),
             numero: String(cadastro.numero || '').trim(),
             complemento: String(cadastro.complemento || '').trim(),
             bairro: String(cadastro.bairro || '').trim(),
-            cidade: String(cadastro.municipio || '').trim(),
+            cidade: String(cadastro.cidade || '').trim(),
             uf: String(cadastro.uf || '').trim().toUpperCase()
         };
-        if (cnpjRecebido !== documento || !/^\d{8}$/.test(endereco.cep)
+        if (!/^\d{8}$/.test(endereco.cep)
             || ['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !endereco[k])
             || !/^[A-Z]{2}$/.test(endereco.uf)) {
             throw new Error('incompleto');
         }
         Object.assign(r.valores, endereco);
-        if (!r.valores.recebedor.trim()) {
-            r.valores.recebedor = String(cadastro.razao_social || cadastro.nome_fantasia || '').trim();
-        }
         r.consultado = endereco.cep;
     } catch (e) {
         if (sequencia === consultaEntrega) {
             r.documentoLiberado = false;
             r.origemCnpj = false;
-            r.erro = e && e.message === 'incompleto'
-                ? 'O cadastro deste CNPJ não possui um endereço completo. Fale com seu atendimento.'
-                : 'Não foi possível consultar o CNPJ agora. Confira o número e tente novamente.';
+            r.erro = tipo === 'cpf'
+                ? 'Não foi possível consultar o nome deste CPF agora. Confira o número e tente novamente.'
+                : e && e.message === 'incompleto'
+                    ? 'O cadastro deste CNPJ não possui um endereço completo. Fale com seu atendimento.'
+                    : 'Não foi possível consultar o CNPJ agora. Confira o número e tente novamente.';
         }
     } finally {
-        clearTimeout(timeout);
         if (sequencia === consultaEntrega) {
             r.buscando = false;
             reabrirMeusEnderecos();
@@ -470,6 +451,7 @@ window.editarCampoEntrega = editarCampoEntrega;
 window.buscarCepEntrega = buscarCepEntrega;
 window.continuarDocumentoEntrega = continuarDocumentoEntrega;
 window.documentoDoRecebedorValido = documentoDoRecebedorValido;
+window.consultarDocumentoNoPortal = consultarDocumentoNoPortal;
 window.cpfDaEntregaValido = documentoDoRecebedorValido;
 window.cartaoDeDecisaoEntrega = cartaoDeDecisaoEntrega;
 window.abrirEnderecosEntrega = abrirEnderecosEntrega;

@@ -20,12 +20,20 @@ const contexto = {
         portalGravandoConfirmacao: false
     },
     clienteState: { numero: 123, token: 'token', pedidoFinalizado: false },
-    supabaseClient: { rpc: async (nome, args) => { chamadas.push([nome, args]); return { data: { ok: true, id_cliente: 21,
-        cliente: { nome: 'Empresa Exemplo', documento: '11222333000181' }, endereco_faturamento: { cep: '01310100' }, cadastros_faturamento: [] }, error: null }; } },
+    supabaseClient: {
+        rpc: async (nome, args) => { chamadas.push([nome, args]); return { data: { ok: true, id_cliente: 21,
+            cliente: { nome: 'Empresa Exemplo', documento: '11222333000181' }, endereco_faturamento: { cep: '01310100' }, cadastros_faturamento: [] }, error: null }; },
+        functions: { invoke: async (nome, opcoes) => ({ data: {
+            ok: true, tipo: 'cpf', cpf: opcoes.body.documento, nome: 'Nome Consultado pela API'
+        }, error: null }) }
+    },
     escapeHtml: x => String(x == null ? '' : x), documentoEmMascara: x => String(x || ''), cepEmMascara: x => String(x || ''),
     tipoDaPessoa: d => String(d || '').replace(/\D/g, '').length === 11 ? 'fisica' : 'juridica',
     tipoDoDocumentoEntrega: d => [11, 14].includes(String(d || '').replace(/\D/g, '').length)
         ? (String(d || '').replace(/\D/g, '').length === 11 ? 'cpf' : 'cnpj') : '',
+    consultarDocumentoNoPortal: async documento => ({
+        ok: true, tipo: 'cpf', cpf: documento, nome: 'Nome Consultado pela API'
+    }),
     redesenharSecao() {}, decidirDados: async () => {}, iconeCliente: () => '',
     document: { getElementById: () => null }
 };
@@ -42,6 +50,12 @@ assert.ok(cartao.includes('editarCadastroFaturamento(0)'));
 assert.ok(!cartao.includes('editarCadastroFaturamento(1)'), 'CNPJ nao oferece edicao');
 
 (async () => {
+    await contexto.window.novoCadastroFaturamento();
+    contexto.window.editarCampoFaturamento('documento', '52998224725');
+    await contexto.window.continuarDocumentoFaturamento();
+    assert.equal(contexto.window.dadosDoFormularioFaturamento().valores.nome, 'Nome Consultado pela API');
+    assert.equal(contexto.window.dadosDoFormularioFaturamento().documentoLiberado, true);
+    assert.match(contexto.window.cartaoDeDecisaoFaturamento(), /Nome completo<\/span><input[^>]*readonly/);
     await contexto.window.selecionarCadastroFaturamento(1);
     await contexto.window.persistirFaturamento();
     assert.equal(chamadas[0][0], 'link_cliente_salvar_faturamento');

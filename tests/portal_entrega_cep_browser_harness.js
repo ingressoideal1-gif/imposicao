@@ -44,7 +44,15 @@ const raiz = path.resolve(__dirname, '..');
                     logradouro: 'Avenida Paulista', numero: '100', complemento: 'Conjunto 10',
                     bairro: 'Bela Vista', municipio: 'São Paulo', uf: 'SP' }
                 : { cep: '01001-000', logradouro: 'Rua de teste', bairro: 'Centro', localidade: 'São Paulo', uf: 'SP' } });
-            window.supabaseClient = { rpc: async (nome, args) => ({ data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }) };
+            window.supabaseClient = {
+                rpc: async (nome, args) => ({ data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }),
+                functions: { invoke: async (nome, opcoes) => {
+                    const d = opcoes.body.documento;
+                    if (d.length === 11) return { data: { ok: true, tipo: 'cpf', cpf: d, nome: 'Pessoa Cadastrada' }, error: null };
+                    return { data: { ok: true, tipo: 'cnpj', cnpj: d, nome: 'Empresa Oficial', cep: '01310930',
+                        endereco: 'Avenida Paulista', numero: '100', complemento: 'Conjunto 10', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP' }, error: null };
+                } }
+            };
         });
         for (const name of ['cliente-confirmacoes.js','cliente-entrega-form.js'])
             await page.addScriptTag({ content: fs.readFileSync(path.join(raiz,'frontend',name),'utf8') });
