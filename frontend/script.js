@@ -1150,23 +1150,65 @@ window.idIntDoPedido = idIntDoPedido;
  * modelo dele segue pelo caminho de sempre — que e o caso de 100% dos pedidos
  * ate a Etapa 2 existir. Ver `docs/superpowers/plans/2026-08-27-peca-e-banco-etapa-1.md`.
  */
+function codigoDoOperadorDaEstacao() {
+    try {
+        const sessao = JSON.parse(sessionStorage.getItem('newprod_acesso_local') || 'null');
+        return String(sessao && sessao.codigo || '').trim().toUpperCase();
+    } catch (_) { return ''; }
+}
+
+async function chamarBancosPedido(acao, corpo) {
+    const local = window.location.hostname === 'localhost'
+        || window.location.hostname === '127.0.0.1'
+        || window.location.protocol === 'file:';
+    let url;
+    const headers = { 'Content-Type': 'application/json' };
+    if (local) {
+        url = `${API_BASE_URL}/api/bancos-pedido/${acao}`;
+        const codigo = codigoDoOperadorDaEstacao();
+        if (!codigo) throw new Error('Entre novamente com o código do operador para acessar o banco do pedido.');
+        headers['X-Operador-Codigo'] = codigo;
+    } else {
+        const sessao = await supabaseClient.auth.getSession();
+        if (sessao && sessao.error) throw new Error('Não foi possível validar sua sessão. Entre novamente.');
+        const token = sessao && sessao.data && sessao.data.session && sessao.data.session.access_token;
+        if (!token) throw new Error('Entre na sua conta do painel para acessar o banco do pedido.');
+        url = `${API_PAINEL}/api/bancos-pedido/${acao}`;
+        headers.Authorization = 'Bearer ' + token;
+    }
+    const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(corpo || {}) });
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        let detalhe = dados.detail || dados.error || `servidor respondeu ${resp.status}`;
+        if (typeof detalhe === 'string' && detalhe.trim().startsWith('{')) {
+            try { detalhe = JSON.parse(detalhe).detail || detalhe; } catch (_) { /* texto normal */ }
+        }
+        throw new Error(String(detalhe));
+    }
+    return dados;
+}
+window.chamarBancosPedido = chamarBancosPedido;
+
+function idIntDoBancoOuModelo(bancoId, modeloId) {
+    const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(bancoId || ''));
+    if (banco && banco.id_int) return Number(banco.id_int);
+    for (const [osId, itens] of Object.entries(state.osItens || {})) {
+        const item = (itens || []).find(it => it && String(it.id) === String(modeloId || ''));
+        if (item) return Number(item.id_int || idIntDoPedido(osId));
+    }
+    return null;
+}
+
 async function carregarBancosDoPedidoNovo(osId, idInt) {
     if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
     if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
     if (typeof supabaseClient === 'undefined' || !supabaseClient || !idInt) return 0;
 
-    const { data: bancos, error: e1 } = await supabaseClient
-        .from('pedidos_bancos').select('*').eq('id_int', idInt);
-    if (e1) throw e1;
-    state.bancosDoPedido = bancos || [];
+    const resposta = await chamarBancosPedido('consultar', { id_int: idInt });
+    state.bancosDoPedido = resposta.bancos || [];
     if (!state.bancosDoPedido.length) { state.vinculosDeBanco = {}; return 0; }
-
-    const ids = state.bancosDoPedido.map(b => b.id);
-    const { data: vinculos, error: e2 } = await supabaseClient
-        .from('pedidos_modelos_banco').select('*').in('banco_id', ids);
-    if (e2) throw e2;
     const mapa = {};
-    (vinculos || []).forEach(v => { if (v && v.modelo_id) mapa[String(v.modelo_id)] = v; });
+    (resposta.vinculos || []).forEach(v => { if (v && v.modelo_id) mapa[String(v.modelo_id)] = v; });
     state.vinculosDeBanco = mapa;
     return state.bancosDoPedido.length;
 }
@@ -1351,11 +1393,11 @@ window.fontePelaChave = fontePelaChave;
 async function salvarLinhasDaFonte(fonte, rows) {
     if (!fonte) return;
     if (fonte.tipo === 'banco') {
-        const { error } = await supabaseClient.from('pedidos_bancos')
-            .update({ csv_data: rows, updated_at: new Date().toISOString() })
-            .eq('id', fonte.id);
-        if (error) throw error;
         const b = (state.bancosDoPedido || []).find(x => String(x.id) === String(fonte.id));
+        if (!b || !b.id_int) throw new Error('Não sei de qual pedido é este banco.');
+        await chamarBancosPedido('atualizar', {
+            id_int: b.id_int, banco_id: fonte.id, csv_data: rows
+        });
         if (b) b.csv_data = rows;
         return;
     }
@@ -1392,7 +1434,7 @@ async function criarBancoDoPedido(idInt, nome, headers, rows, filename, csvUrl) 
     if (!Array.isArray(rows) || !rows.length) throw new Error('O arquivo não tem nenhuma linha.');
     if (window.CsvEditor) window.CsvEditor.garantirIds(rows);
 
-    const { data, error } = await supabaseClient.from('pedidos_bancos').insert({
+    const resposta = await chamarBancosPedido('criar', {
         id_int: idInt,
         nome: String(nome || filename || 'banco').slice(0, 120),
         csv_filename: String(filename || ''),
@@ -1401,8 +1443,8 @@ async function criarBancoDoPedido(idInt, nome, headers, rows, filename, csvUrl) 
         // O link da planilha fica no banco: e ele que o "🔄 Planilha" usa para
         // trazer o conteudo de novo, meses depois.
         csv_url: String(csvUrl || '')
-    }).select().single();
-    if (error) throw error;
+    });
+    const data = resposta.banco;
 
     if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
     state.bancosDoPedido.push(data);
@@ -1421,30 +1463,29 @@ async function ligarModeloAoBanco(itemId, bancoId, mapa) {
     if (!supabaseClient) throw new Error('Sem conexão com o banco.');
     if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
     const chave = String(itemId);
+    const idInt = idIntDoBancoOuModelo(bancoId || (state.vinculosDeBanco[chave] || {}).banco_id, itemId);
+    if (!idInt) throw new Error('Não sei de qual pedido é este modelo.');
 
     if (!bancoId) {
-        const { error } = await supabaseClient.from('pedidos_modelos_banco')
-            .delete().eq('modelo_id', itemId);
-        if (error) throw error;
+        await chamarBancosPedido('vincular', { id_int: idInt, modelo_id: itemId, banco_id: null });
         delete state.vinculosDeBanco[chave];
         return null;
     }
 
-    const linha = { modelo_id: itemId, banco_id: bancoId, csv_mapa: mapa || null };
-    const { data, error } = await supabaseClient.from('pedidos_modelos_banco')
-        .upsert(linha, { onConflict: 'modelo_id' }).select().single();
-    if (error) throw error;
+    const resposta = await chamarBancosPedido('vincular', {
+        id_int: idInt, modelo_id: itemId, banco_id: bancoId, csv_mapa: mapa || null
+    });
+    const data = resposta.vinculo;
     state.vinculosDeBanco[chave] = data;
     return data;
 }
 window.ligarModeloAoBanco = ligarModeloAoBanco;
 
 async function carregarBancosDoPedido(osId, aoChegar) {
-    // Os bancos proprios do pedido primeiro. Se a consulta falhar — tabela
-    // ainda nao criada, rede fora — o pedido segue pelo caminho de sempre, que
-    // e o comportamento correto: ausencia de vinculo significa banco de dentro
-    // da numeracao.
-    try { await carregarBancosDoPedidoNovo(osId, idIntDoPedido(osId)); } catch (e) { /* segue */ }
+    // Ausencia real vem como listas vazias. Falha de autorizacao ou rede precisa
+    // subir: tratar falha como ausencia faria um modelo ligado ao banco cair na
+    // numeracao sequencial e imprimir outro dado sem aviso.
+    await carregarBancosDoPedidoNovo(osId, idIntDoPedido(osId));
 
     const faltando = numeracoesSemBancoBaixado(osId);
     let baixadas = 0;
@@ -17915,12 +17956,12 @@ window.abrirBancoDoPedidoPorId = function (bancoId, osId) {
             }
             try {
                 const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(fonte.id));
-                const { error } = await supabaseClient.from('pedidos_bancos').update({
+                if (!banco || !banco.id_int) throw new Error('Não sei de qual pedido é este banco.');
+                await chamarBancosPedido('atualizar', {
+                    id_int: banco.id_int, banco_id: fonte.id,
                     csv_data: rows, csv_headers: headers,
-                    csv_filename: filename || fonte.filename,
-                    updated_at: new Date().toISOString()
-                }).eq('id', fonte.id);
-                if (error) throw error;
+                    csv_filename: filename || fonte.filename
+                });
                 if (banco) { banco.csv_data = rows; banco.csv_headers = headers; banco.csv_filename = filename || banco.csv_filename; }
 
                 // Renomear coluna arrasta o MAPA de cada modelo, e não os
@@ -18193,8 +18234,7 @@ async function excluirBancosNaoUsados(osId) {
         + '\n\nIsso não altera nenhuma numeração nem os bancos em uso.')) return;
     try {
         for (const b of soltos) {
-            const { error } = await supabaseClient.from('pedidos_bancos').delete().eq('id', b.id);
-            if (error) throw error;
+            await chamarBancosPedido('excluir', { id_int: b.id_int, banco_id: b.id });
             state.bancosDoPedido = (state.bancosDoPedido || []).filter(x => String(x.id) !== String(b.id));
         }
         toast(soltos.length + ' banco(s) excluído(s).', 'success');
@@ -18210,10 +18250,9 @@ async function renomearBancoDoPedido(bancoId, osId) {
     const nome = campo ? String(campo.value || '').trim() : '';
     if (!nome) { toast('O nome não pode ficar vazio.', 'error'); return; }
     try {
-        const { error } = await supabaseClient.from('pedidos_bancos')
-            .update({ nome, updated_at: new Date().toISOString() }).eq('id', bancoId);
-        if (error) throw error;
         const b = (state.bancosDoPedido || []).find(x => String(x.id) === String(bancoId));
+        if (!b || !b.id_int) throw new Error('Não sei de qual pedido é este banco.');
+        await chamarBancosPedido('atualizar', { id_int: b.id_int, banco_id: bancoId, nome });
         if (b) b.nome = nome;
         toast('Banco renomeado para "' + nome + '".', 'success');
         renderAmostrasOSItens(osId);   // o "Vem de:" de cada card mostra o nome novo
@@ -18239,8 +18278,7 @@ async function excluirBancoDoPedido(bancoId, osId) {
         + ' linha(s)) deste pedido?\n\nIsso não altera nenhuma numeração — apaga só este banco.')) return;
 
     try {
-        const { error } = await supabaseClient.from('pedidos_bancos').delete().eq('id', bancoId);
-        if (error) throw error;
+        await chamarBancosPedido('excluir', { id_int: b.id_int, banco_id: bancoId });
         state.bancosDoPedido = (state.bancosDoPedido || []).filter(x => String(x.id) !== String(bancoId));
         toast('Banco "' + (b.nome || 'banco') + '" excluído.', 'success');
         renderAmostrasOSItens(osId);   // redesenha o box e os cards
@@ -18420,12 +18458,11 @@ async function atualizarBancoDaPlanilha(bancoId, osId) {
             }
         });
 
-        const { error } = await supabaseClient.from('pedidos_bancos').update({
+        await chamarBancosPedido('atualizar', {
+            id_int: banco.id_int, banco_id: bancoId,
             csv_data: rows, csv_headers: headers,
-            csv_filename: filename || banco.csv_filename,
-            updated_at: new Date().toISOString()
-        }).eq('id', bancoId);
-        if (error) throw error;
+            csv_filename: filename || banco.csv_filename
+        });
 
         banco.csv_data = rows;
         banco.csv_headers = headers;

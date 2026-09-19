@@ -671,6 +671,23 @@ def remove_fonte(fonte_id: str, user: dict = Depends(get_current_user)):
     return {"status": "success"}
 
 
+@app.post("/api/bancos-pedido/{acao}")
+async def bancos_do_pedido_pela_estacao(
+        acao: str, request: Request, user: dict = Depends(get_current_user)):
+    """Porta local para bancos; identidade e autorizacao sao refeitas na nuvem."""
+    if acao not in {"consultar", "criar", "atualizar", "excluir", "vincular"}:
+        raise HTTPException(status_code=404, detail="Acao de bancos desconhecida")
+    try:
+        dados = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Corpo invalido: esperava JSON")
+    codigo = request.headers.get("x-operador-codigo") or ""
+    try:
+        return db.operar_bancos_pedido(acao, dados, codigo)
+    except Exception as e:
+        raise _repassar_recusa(e, "acessar os bancos do pedido")
+
+
 # ─── O peso por setor, para o painel servido pela estacao ────────────────────
 #
 # O Painel do Acabamento grava o peso em `propostas_os_setores`, tabela do
@@ -777,7 +794,7 @@ def _repassar_recusa(e, oque: str):
         except Exception:
             pass
         return HTTPException(
-            status_code=e.code if e.code in (400, 401, 404, 422) else 502,
+            status_code=e.code if e.code in (400, 401, 403, 404, 409, 422) else 502,
             detail=corpo or f"o servidor recusou ({e.code})")
     return HTTPException(status_code=502, detail=f"Nao deu para {oque}: {e}")
 

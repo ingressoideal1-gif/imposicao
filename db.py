@@ -1283,6 +1283,35 @@ def _catalogo_pela_funcao(metodo: str, caminho: str, corpo: dict = None):
         return json.loads(texto) if texto.strip() else None
 
 
+def operar_bancos_pedido(acao: str, corpo: dict, codigo_operador: str):
+    """Repassa bancos do pedido para a Edge Function sem expor service_role."""
+    import acesso_publicacao
+
+    segredo = acesso_publicacao._segredo()
+    if not segredo:
+        raise RuntimeError(
+            "ACESSO_AGENTE_SEGREDO ausente: a estacao nao pode acessar bancos "
+            "do pedido sem a porta autenticada.")
+    codigo = str(codigo_operador or "").strip().upper()
+    if not codigo:
+        raise RuntimeError("Entre novamente com o codigo do operador.")
+
+    url = f"{acesso_publicacao._base()}/api/acesso/bancos-pedido/{acao}"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(corpo or {}).encode("utf-8"),
+        method="POST",
+        headers={
+            "X-Agente-Segredo": segredo,
+            "X-Operador-Codigo": codigo,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        texto = resp.read().decode("utf-8")
+        return json.loads(texto) if texto.strip() else None
+
+
 def save_catalogo_fonte(fonte_data: dict) -> dict:
     """Salva uma fonte no catálogo compartilhado e na cópia em disco.
 
