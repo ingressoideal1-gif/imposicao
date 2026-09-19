@@ -2,6 +2,27 @@
 let rascunhoEntrega = null;
 let consultaEntrega = 0;
 const CAMPOS_ENTREGA = ['recebedor', 'cpf_recebedor', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
+const AVISO_FRETE_ENDERECO_PAGO = 'Este pedido já possui uma cobrança paga. A alteração de endereço gerará uma diferença no valor do frete e será cobrada à parte.';
+
+function cidadeDaEntregaNormalizada(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function pedidoPossuiCobrancaPaga() {
+    const pagamentos = (window.portalDados && window.portalDados.pagamentos) || [];
+    return Array.isArray(pagamentos) && pagamentos.some(p => typeof cobrancaPaga === 'function'
+        ? cobrancaPaga(p)
+        : String(p && p.status || '').trim().toUpperCase() === 'PAID');
+}
+
+function confirmarMudancaDeCidadePaga(novaCidade) {
+    const r = dadosDoFormularioEntrega();
+    const cidadeAtual = cidadeDaEntregaNormalizada(r.anterior && r.anterior.cidade);
+    const cidadeNova = cidadeDaEntregaNormalizada(novaCidade);
+    if (!pedidoPossuiCobrancaPaga() || !cidadeAtual || !cidadeNova || cidadeAtual === cidadeNova) return true;
+    return typeof window.confirm === 'function' && window.confirm(AVISO_FRETE_ENDERECO_PAGO);
+}
 
 function dadosDoFormularioEntrega() {
     if (!rascunhoEntrega) {
@@ -265,6 +286,7 @@ function campoNovoEndereco(campo, rotulo, opcoes = {}) {
         + '<input id="entrega-' + campo + '" class="portal-caixa-de-texto" type="text" '
         + (opcoes.maxlength ? 'maxlength="' + opcoes.maxlength + '" ' : '')
         + (opcoes.numerico ? 'inputmode="numeric" ' : '')
+        + (opcoes.obrigatorio ? 'required aria-required="true" ' : '')
         + (bloqueado ? 'readonly ' : '')
         + 'value="' + escapeHtml(r.valores[campo]) + '" '
         + (bloqueado ? '' : 'oninput="editarCampoEntrega(\'' + campo + '\',this.value)"') + '></label>';
@@ -283,7 +305,7 @@ function modalNovoEnderecoEntrega() {
             + (r.buscando ? 'disabled' : '') + '>' + (r.buscando ? 'Consultando CEP...' : 'Buscar endereço pelo CEP') + '</button>'
             + campoNovoEndereco('endereco', 'Endereço', { bloqueado: true, maxlength: 200 })
             + '<div class="portal-entrega-campos-duplos">'
-            + campoNovoEndereco('numero', 'Número (ou S/N)', { maxlength: 20 })
+            + campoNovoEndereco('numero', 'Número (ou S/N)', { maxlength: 20, obrigatorio: true })
             + campoNovoEndereco('complemento', 'Complemento (opcional)', { maxlength: 150 }) + '</div>'
             + campoNovoEndereco('bairro', 'Bairro', { bloqueado: true, maxlength: 100 })
             + '<div class="portal-entrega-campos-duplos">'
@@ -341,7 +363,8 @@ async function liberarEdicaoEntrega() {
 
 async function selecionarEnderecoEntrega(indice) {
     const escolhido = enderecosCadastradosEntrega()[indice];
-    if (!escolhido || !(await liberarEdicaoEntrega())) return;
+    if (!escolhido || !confirmarMudancaDeCidadePaga(escolhido.cidade)
+        || !(await liberarEdicaoEntrega())) return;
     const r = dadosDoFormularioEntrega();
     CAMPOS_ENTREGA.forEach(k => { r.valores[k] = String(escolhido[k] || ''); });
     r.consultado = r.valores.cep.replace(/\D/g, '');
@@ -386,6 +409,7 @@ function usarNovoEnderecoEntrega() {
         reabrirMeusEnderecos();
         return;
     }
+    if (!confirmarMudancaDeCidadePaga(valores.cidade)) return;
     r.valores.cpf_recebedor = documento;
     r.valores.cep = valores.cep.replace(/\D/g, '');
     r.telaEnderecos = 'lista';
@@ -462,3 +486,5 @@ window.informarOutroEnderecoEntrega = informarOutroEnderecoEntrega;
 window.voltarListaEnderecosEntrega = voltarListaEnderecosEntrega;
 window.usarNovoEnderecoEntrega = usarNovoEnderecoEntrega;
 window.concluirEdicaoEntrega = concluirEdicaoEntrega;
+window.pedidoPossuiCobrancaPaga = pedidoPossuiCobrancaPaga;
+window.confirmarMudancaDeCidadePaga = confirmarMudancaDeCidadePaga;

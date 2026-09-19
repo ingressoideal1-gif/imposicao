@@ -9,6 +9,11 @@ GRAVACAO = (RAIZ / "sql" / "link_cliente_salvar_faturamento.sql").read_text(enco
 def test_leitura_lista_somente_cadastros_vinculados_ao_cliente_do_pedido():
     assert "'cadastros_faturamento'" in LEITURA
     assert "id_cliente_titular = v_prop.id_cliente" in LEITURA
+    assert "FROM public.clientes_socios cs" in LEITURA
+    assert "cs.id_cliente_principal = v_prop.id_cliente" in LEITURA
+    assert "cs.id_cliente_socio" in LEITURA
+    assert "('faturamento','vinculo_comercial')" in LEITURA
+    assert "'tipo_relacao'" in LEITURA
     assert "REVOKE ALL ON TABLE public.clientes_faturamento_portal" in LEITURA
 
 
@@ -16,6 +21,9 @@ def test_gravacao_exige_link_ativo_e_confere_vinculo_anterior():
     assert "token = p_token AND ativo IS TRUE FOR UPDATE" in GRAVACAO
     assert "COALESCE(v_prop.id_faturado, v_prop.id_cliente) IS DISTINCT FROM p_anterior_id" in GRAVACAO
     assert "cadastro fiscal não pertence a este cliente" in GRAVACAO
+    assert "FROM public.clientes_socios s" in GRAVACAO
+    assert "s.id_cliente_principal = v_prop.id_cliente" in GRAVACAO
+    assert "s.id_cliente_socio = v_id" in GRAVACAO
 
 
 def test_cnpj_existente_nao_e_editado_e_cpf_nao_troca_documento():

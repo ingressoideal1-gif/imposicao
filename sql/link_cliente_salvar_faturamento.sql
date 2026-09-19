@@ -118,6 +118,10 @@ BEGIN
         v_id := p_id_cliente;
         IF v_id IS NULL OR NOT (
             v_id IN (v_prop.id_cliente, COALESCE(v_prop.id_faturado, v_prop.id_cliente))
+            OR EXISTS (SELECT 1 FROM public.clientes_socios s
+                        WHERE s.id_cliente_principal = v_prop.id_cliente
+                          AND s.id_cliente_socio = v_id
+                          AND lower(btrim(coalesce(s.tipo_relacao, ''))) IN ('faturamento','vinculo_comercial'))
             OR EXISTS (SELECT 1 FROM public.clientes_faturamento_portal f
                         WHERE f.id_cliente_titular = v_prop.id_cliente AND f.id_cliente_faturamento = v_id)
         ) THEN RAISE EXCEPTION 'cadastro fiscal não pertence a este cliente'; END IF;

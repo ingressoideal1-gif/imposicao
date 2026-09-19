@@ -301,6 +301,13 @@ BEGIN
                 'id_cliente', c.id_cliente,
                 'nome', COALESCE(NULLIF(c.nome, ''), c.fantasia),
                 'documento', c.documento,
+                'tipo_relacao', COALESCE((
+                    SELECT cs.tipo_relacao FROM public.clientes_socios cs
+                     WHERE cs.id_cliente_principal = v_prop.id_cliente
+                       AND cs.id_cliente_socio = c.id_cliente
+                       AND lower(btrim(coalesce(cs.tipo_relacao, ''))) IN ('faturamento','vinculo_comercial')
+                     ORDER BY cs.id LIMIT 1
+                ), CASE WHEN c.id_cliente = v_prop.id_cliente THEN 'Titular' ELSE 'Cadastro fiscal' END),
                 'ins_estadual', c.ins_estadual,
                 'email', COALESCE(NULLIF(c.email_financeiro, ''), NULLIF(c.email_contato, ''), c.email),
                 'telefone', COALESCE(NULLIF(c.whatsapp_1, ''), c.telefone_fixo),
@@ -322,6 +329,9 @@ BEGIN
             WHERE c.id_cliente IN (
                 SELECT v_prop.id_cliente WHERE v_prop.id_cliente IS NOT NULL
                 UNION SELECT v_prop.id_faturado WHERE v_prop.id_faturado IS NOT NULL
+                UNION SELECT cs.id_cliente_socio FROM public.clientes_socios cs
+                      WHERE cs.id_cliente_principal = v_prop.id_cliente
+                        AND lower(btrim(coalesce(cs.tipo_relacao, ''))) IN ('faturamento','vinculo_comercial')
                 UNION SELECT f.id_cliente_faturamento FROM public.clientes_faturamento_portal f
                       WHERE f.id_cliente_titular = v_prop.id_cliente
             )

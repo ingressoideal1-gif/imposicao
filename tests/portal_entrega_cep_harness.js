@@ -7,7 +7,7 @@ const endereco = { recebedor: 'Pessoa Teste', cpf_recebedor: '52998224725', cep:
     endereco: 'Praça de teste', numero: '10', complemento: '', bairro: 'Centro', cidade: 'São Paulo', uf: 'SP' };
 function ambiente() {
     const chamadas = [];
-    const c = { console, setTimeout, clearTimeout, AbortController,
+    const c = { console, setTimeout, clearTimeout, AbortController, confirm: () => true,
         document: { getElementById: () => null },
         portalDados: { endereco: null, cliente: { nome: endereco.recebedor, documento: endereco.cpf_recebedor },
             pedido: { frete_escolhido: 'PAC' } },
@@ -89,6 +89,11 @@ async function main() {
     formulario = c.cartaoDeDecisaoEntrega();
     assert.match(formulario, /id="entrega-recebedor"[^>]*readonly/);
     assert.match(formulario, /id="entrega-endereco"[^>]*readonly/);
+    assert.match(formulario, /id="entrega-numero"[^>]*required[^>]*aria-required="true"/,
+        'número ou S/N é obrigatório');
+    c.usarNovoEnderecoEntrega();
+    assert.match(c.dadosDoFormularioEntrega().erro, /dados obrigatórios/,
+        'não permite usar endereço sem número ou S/N');
     const nomeConsultado = c.dadosDoFormularioEntrega().valores.recebedor;
     const ruaConsultada = c.dadosDoFormularioEntrega().valores.endereco;
     c.editarCampoEntrega('recebedor', 'Nome adulterado');
@@ -221,6 +226,34 @@ async function main() {
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
     await c.selecionarEnderecoEntrega(0);
     assert.equal(c.dadosDoFormularioEntrega().alterando, true, 'selecionar outro endereço desfaz a confirmação anterior');
+
+    ({ c, chamadas } = ambiente());
+    c.portalDados.endereco = { ...endereco, cidade: 'São Paulo' };
+    c.portalDados.pagamentos = [{ status: 'PAID' }, { status: 'A_RECEBER' }];
+    c.portalDados.enderecos_entrega = [
+        { ...endereco, cidade: '  SAO   PAULO ' },
+        { ...endereco, cidade: 'Campinas' }
+    ];
+    let avisos = [];
+    c.confirm = texto => { avisos.push(texto); return false; };
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(avisos.length, 0, 'mesma cidade não exibe aviso mesmo com cobrança paga');
+    assert.equal(c.dadosDoFormularioEntrega().valores.cidade, '  SAO   PAULO ');
+    await c.selecionarEnderecoEntrega(1);
+    assert.equal(avisos.length, 1, 'cidade diferente exibe aviso quando há cobrança paga');
+    assert.equal(avisos[0], 'Este pedido já possui uma cobrança paga. A alteração de endereço gerará uma diferença no valor do frete e será cobrada à parte.');
+    assert.equal(c.dadosDoFormularioEntrega().valores.cidade, '  SAO   PAULO ', 'cancelar mantém o endereço selecionado');
+    c.confirm = texto => { avisos.push(texto); return true; };
+    await c.selecionarEnderecoEntrega(1);
+    assert.equal(c.dadosDoFormularioEntrega().valores.cidade, 'Campinas', 'confirmar permite mudar a cidade');
+
+    ({ c, chamadas } = ambiente());
+    c.portalDados.endereco = { ...endereco, cidade: 'São Paulo' };
+    c.portalDados.pagamentos = [{ status: 'A_RECEBER' }];
+    c.portalDados.enderecos_entrega = [{ ...endereco, cidade: 'Campinas' }];
+    c.confirm = texto => { throw new Error('não deveria avisar sem cobrança paga: ' + texto); };
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(c.dadosDoFormularioEntrega().valores.cidade, 'Campinas', 'sem cobrança paga permite outra cidade');
     console.log('OK: endereço somente leitura, Meus Endereços, CPF/CEP, CNPJ bloqueado e gravação confirmada.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

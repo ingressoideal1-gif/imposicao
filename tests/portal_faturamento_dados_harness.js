@@ -13,7 +13,7 @@ const contexto = {
             endereco_faturamento: { cep: '01001000', endereco: 'Praça da Sé', numero: 'S/N', bairro: 'Sé', cidade: 'São Paulo', uf: 'SP' },
             cadastros_faturamento: [
                 { id_cliente: 20, nome: 'Maria', documento: '52998224725', endereco: { cep: '01001000', endereco: 'Praça da Sé', numero: 'S/N', bairro: 'Sé', cidade: 'São Paulo', uf: 'SP' } },
-                { id_cliente: 21, nome: 'Empresa Exemplo', documento: '11222333000181', endereco: { cep: '01310100', endereco: 'Avenida Paulista', numero: '1000', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP' } }
+                { id_cliente: 21, nome: 'Empresa Exemplo', documento: '11222333000181', tipo_relacao: 'Vínculo comercial', endereco: { cep: '01310100', endereco: 'Avenida Paulista', numero: '1000', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP' } }
             ]
         },
         portalConfirmacoes: { faturamento: null }, portalErroConfirmacao: { faturamento: false },
@@ -48,6 +48,7 @@ assert.ok(!cartao.includes('>Alterar<'));
 assert.ok(cartao.includes('selecionarCadastroFaturamento(0)'));
 assert.ok(cartao.includes('editarCadastroFaturamento(0)'));
 assert.ok(!cartao.includes('editarCadastroFaturamento(1)'), 'CNPJ nao oferece edicao');
+assert.ok(cartao.includes('Vínculo comercial'), 'mostra o tipo de vínculo fiscal vindo do ERP');
 
 (async () => {
     await contexto.window.novoCadastroFaturamento();
@@ -62,5 +63,12 @@ assert.ok(!cartao.includes('editarCadastroFaturamento(1)'), 'CNPJ nao oferece ed
     assert.equal(chamadas[0][1].p_id_cliente, 21);
     assert.equal(chamadas[0][1].p_novo, false);
     assert.equal(contexto.window.portalDados.pedido.id_cliente, 21);
+
+    const r = contexto.window.dadosDoFormularioFaturamento();
+    Object.assign(r, { alterando: true, novo: false, origemCnpj: true, idCliente: 21, anteriorId: 21 });
+    const antes = chamadas.length;
+    await contexto.window.persistirFaturamento();
+    assert.equal(chamadas.length, antes, 'mesmo CNPJ somente leitura não gera atualização redundante');
+    assert.equal(r.alterando, false);
     console.log('OK: Nota com Confirmar, Meus Dados, CPF editavel, CNPJ leitura e RPC confirmada.');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -114,7 +114,7 @@ function modalMeusDados() {
         const linha = [e.endereco, e.numero].filter(Boolean).join(', ');
         const cpf = tipoDaPessoa(c.documento) === 'fisica';
         return '<div class="portal-endereco-opcao"><span class="portal-endereco-tipo">'
-            + escapeHtml(cpf ? 'Pessoa física' : 'Pessoa jurídica') + '</span><strong>'
+            + escapeHtml(c.tipo_relacao || (cpf ? 'Pessoa física' : 'Pessoa jurídica')) + '</span><strong>'
             + escapeHtml(c.nome || 'Nome não informado') + '</strong><span>'
             + escapeHtml(documentoEmMascara(c.documento) || 'Documento não informado') + '</span>'
             + '<span class="portal-endereco-linha">' + escapeHtml(linha || 'Endereço não informado') + '</span>'
@@ -254,6 +254,13 @@ function usarCadastroFaturamento() {
 async function persistirFaturamento() {
     const r = dadosDoFormularioFaturamento();
     if (!r.alterando) return;
+    // Selecionar novamente o mesmo CNPJ nao altera dado algum: CNPJ e endereco
+    // sao somente leitura. Nesse caso a etapa seguinte precisa registrar apenas
+    // a confirmacao, sem submeter uma atualizacao fiscal redundante ao ERP.
+    if (!r.novo && r.origemCnpj && String(r.idCliente) === String(r.anteriorId)) {
+        r.alterando = false;
+        return;
+    }
     const cadastro = Object.fromEntries(CAMPOS_FATURAMENTO.map(k => [k, String(r.valores[k] || '').trim()]));
     cadastro.documento = cadastro.documento.replace(/\D/g, ''); cadastro.cep = cadastro.cep.replace(/\D/g, '');
     const { data, error } = await supabaseClient.rpc('link_cliente_salvar_faturamento', {
