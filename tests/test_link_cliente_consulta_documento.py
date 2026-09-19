@@ -38,3 +38,11 @@ def test_segredo_e_lido_do_vault_e_nao_embutido_no_sql():
     assert "vault.decrypted_secrets" in fonte
     assert "name = 'cpfhub_token'" in fonte
     assert "x-api-key" not in fonte
+
+
+def test_edge_aceita_o_token_historico_de_doze_caracteres():
+    fonte = (RAIZ / "supabase" / "functions" / "consulta-documento-entrega" / "index.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "token.length < 20" not in fonte
+    assert "!token || token.length > 200" in fonte

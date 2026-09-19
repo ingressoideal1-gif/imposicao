@@ -25,7 +25,10 @@ Deno.serve(async (req: Request) => {
     const numero = String(entrada?.numero ?? "").trim();
     const token = String(entrada?.token ?? "").trim();
     const documento = somenteDigitos(entrada?.documento);
-    if (!/^\d+$/.test(numero) || token.length < 20 || token.length > 200 ||
+    // Os links historicos do portal usam tokens de 12 caracteres. A prova de
+    // validade e a comparacao exata numero+token feita pela RPC; aqui basta
+    // recusar valor vazio ou excessivo antes de chegar ao banco.
+    if (!/^[1-9]\d*$/.test(numero) || !token || token.length > 200 ||
       (!cpfValido(documento) && !cnpjValido(documento))) {
       throw new ErroConsulta(400, "dados invalidos");
     }
