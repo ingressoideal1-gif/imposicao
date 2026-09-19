@@ -26871,10 +26871,15 @@ function aplicarRegraProdutoPrateleira(item) {
 
     const foto = fotoPrincipalDoProduto(idProduto);
     if (item._status_arte_persistido === undefined) item._status_arte_persistido = item.status_arte || '';
+    if (item._amostra_arte_persistida === undefined) {
+        item._amostra_arte_persistida = item.amostra_arte_base64 || '';
+    }
     item._produto_prateleira = true;
     item._foto_produto_url = foto ? foto.url : '';
     item._foto_produto_id = foto ? foto.foto_id : null;
-    item.amostra_arte_base64 = null;
+    // O produto continua sem ARTE editavel, mas a foto comercial vira sua
+    // previa persistida. O portal do cliente le exatamente este campo.
+    item.amostra_arte_base64 = foto ? foto.url : null;
     item.verso_amostra_arte_base64 = null;
     item.arte_url = null;
     item.verso_arte_url = null;
@@ -26898,27 +26903,35 @@ async function sincronizarAprovacaoProdutosPrateleira(modelos) {
 
     const pendentes = (modelos || []).filter(modelo => {
         aplicarRegraProdutoPrateleira(modelo);
-        return modelo && modelo._produto_prateleira
-            && String(modelo._status_arte_persistido || '').trim().toUpperCase() !== 'APROVADA';
+        if (!modelo || !modelo._produto_prateleira) return false;
+        const statusPendente = String(modelo._status_arte_persistido || '').trim().toUpperCase() !== 'APROVADA';
+        const previaPendente = !!modelo._foto_produto_url
+            && String(modelo._amostra_arte_persistida || '') !== String(modelo._foto_produto_url);
+        return statusPendente || previaPendente;
     });
     let atualizados = 0;
     const falhas = [];
     for (const modelo of pendentes) {
+        const payload = { status_arte: 'APROVADA' };
+        if (modelo._foto_produto_url) payload.amostra_arte_base64 = modelo._foto_produto_url;
         const { data, error } = await supabaseClient
             .from('pedidos_modelos')
-            .update({ status_arte: 'APROVADA' })
+            .update(payload)
             .eq('id', modelo.id)
             .eq('id_int', modelo.id_int)
-            .select('id,id_int,status_arte');
+            .select('id,id_int,status_arte,amostra_arte_base64');
         const linhas = data || [];
         if (error || linhas.length !== 1
             || String(linhas[0].id) !== String(modelo.id)
             || String(linhas[0].id_int) !== String(modelo.id_int)
-            || linhas[0].status_arte !== 'APROVADA') {
+            || linhas[0].status_arte !== 'APROVADA'
+            || (payload.amostra_arte_base64
+                && linhas[0].amostra_arte_base64 !== payload.amostra_arte_base64)) {
             falhas.push({ id: modelo.id, id_int: modelo.id_int, erro: error && error.message });
             continue;
         }
         modelo._status_arte_persistido = 'APROVADA';
+        if (payload.amostra_arte_base64) modelo._amostra_arte_persistida = payload.amostra_arte_base64;
         atualizados++;
     }
     if (falhas.length) console.warn('[Prateleira] Falha ao confirmar aprovacao de modelos:', falhas);

@@ -54,7 +54,8 @@ const api = new Function('state', 'window', fonteBase
     ok(item._foto_produto_url === 'https://foto/Dseg.jpg', 'usa a foto de menor posicao');
     ok(item._foto_produto_id === 1, 'conserva o foto_id escolhido');
     ok(item.status_arte === 'APROVADA' && item.amostra_status === 'APROVADA', 'modelo fica aprovado');
-    ok(item.arte_url === null && item.amostra_arte_base64 === null, 'arte e amostra nao sao carregadas');
+    ok(item.arte_url === null, 'produto de prateleira continua sem arte editavel');
+    ok(item.amostra_arte_base64 === 'https://foto/Dseg.jpg', 'foto comercial vira a previa persistida');
 
     const sobDemanda = { id_produto_proposta_origem: 78, status_arte: 'PENDENTE', arte_url: 'arte.jpg' };
     ok(!api.aplicarRegraProdutoPrateleira(sobDemanda), 'produto sob demanda fica fora da regra');
@@ -76,7 +77,7 @@ const api = new Function('state', 'window', fonteBase
         eq(campo, valor) { chamadas.push(['eq', campo, valor]); return this; },
         async select(campos) {
             chamadas.push(['select', campos]);
-            return { data: [{ id: 1001, id_int: 22001, status_arte: 'APROVADA' }], error: null };
+            return { data: [{ id: 1001, id_int: 22001, status_arte: 'APROVADA', amostra_arte_base64: 'https://foto/Dseg.jpg' }], error: null };
         },
     };
     const supabaseClient = { from(tabela) { chamadas.push(['from', tabela]); return consulta; } };
@@ -90,6 +91,8 @@ const api = new Function('state', 'window', fonteBase
     ok(resultado.atualizados === 1 && resultado.falhas === 0, 'persistencia aprovada e confirmada');
     ok(chamadas.some(c => c[0] === 'eq' && c[1] === 'id' && c[2] === 1001), 'UPDATE filtra pelo id do modelo');
     ok(chamadas.some(c => c[0] === 'eq' && c[1] === 'id_int' && c[2] === 22001), 'UPDATE filtra pelo numero do pedido');
+    ok(chamadas.some(c => c[0] === 'update' && c[1].amostra_arte_base64 === 'https://foto/Dseg.jpg'),
+        'UPDATE grava a foto em amostra_arte_base64 para o portal');
 
     ok(SCRIPT.includes("from('vw_produto_fotos')"), 'frontend consulta a view correta');
 
