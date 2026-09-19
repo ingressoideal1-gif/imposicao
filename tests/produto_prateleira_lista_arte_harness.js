@@ -95,6 +95,12 @@ const api = new Function('state', 'window', fonteBase
         'UPDATE grava a foto em amostra_arte_base64 para o portal');
 
     ok(SCRIPT.includes("from('vw_produto_fotos')"), 'frontend consulta a view correta');
+    const reparo = SCRIPT.indexOf('const _prateleiraReparados = repararProdutosPrateleiraDosItens();');
+    const sincronizacaoDepoisDoReparo = SCRIPT.indexOf(
+        'await sincronizarAprovacaoProdutosPrateleira(_modelosPrateleiraReparados);', reparo
+    );
+    ok(reparo >= 0 && sincronizacaoDepoisDoReparo > reparo,
+        'corrida catalogo/modelos persiste a foto depois do reparo');
 
     if (falhas) process.exit(1);
     console.log('OK: ' + total + ' verificacoes de produto de prateleira passaram.');

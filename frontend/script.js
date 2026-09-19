@@ -2072,6 +2072,15 @@ async function loadAll() {
         // sem setor para sempre e os filtros de setor não devolvem nada.
         const _reparados = repararSetoresDosItens();
         const _prateleiraReparados = repararProdutosPrateleiraDosItens();
+        // As OS e os modelos podem terminar antes do catalogo/fotos deste
+        // Promise.all. Nesse caso a regra visual e reparada acima, mas a foto
+        // ainda precisa ser persistida para o Link do Cliente, que consulta
+        // pedidos_modelos diretamente e nao compartilha este state.
+        const _modelosPrateleiraReparados = Object.values(state.modelosGlobais || {})
+            .reduce((todos, modelosDoPedido) => todos.concat(modelosDoPedido || []), []);
+        if (_modelosPrateleiraReparados.length) {
+            await sincronizarAprovacaoProdutosPrateleira(_modelosPrateleiraReparados);
+        }
         if (_reparados) {
             console.log(`[loadAll] Setor preenchido em ${_reparados} item(ns) mapeado(s) antes dos produtos chegarem.`);
         }
@@ -26858,9 +26867,9 @@ function fotoPrincipalDoProduto(idProduto) {
 }
 
 /**
- * Produtos de prateleira nao possuem arte para aprovacao. A foto e apenas a
- * imagem comercial do cadastro e fica em campo separado para nunca ser salva
- * como amostra_arte_base64/arte_url.
+ * Produtos de prateleira nao possuem arte para aprovacao. A foto comercial e
+ * persistida como amostra_arte_base64 para o portal, sem virar arte editavel
+ * em arte_url.
  */
 function aplicarRegraProdutoPrateleira(item) {
     const idProduto = idProdutoDoItem(item);
