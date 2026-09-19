@@ -70,10 +70,16 @@ Também em 19/09/2026:
 - as estações `PC-JR-HOME` e `GUSTAVO-PROD` confirmaram `NewProd 1.2.335` por
   heartbeat; `PC-JR-HOME` também confirmou a versão pela rota local.
 
-O snapshot da frota ainda não permite fechar `anon`: uma estação ativa não
-informou versão e as demais só tinham heartbeat anterior, em versões `1.2.333`
-ou mais antigas. É preciso confirmar quais delas usam bancos de pedidos e obter
-heartbeat em `1.2.335` das estações aplicáveis antes da retirada de `SELECT`.
+O snapshot da frota ainda não permite fechar `anon`. É preciso confirmar quais
+estações usam bancos de pedidos e obter heartbeat em `1.2.335` das estações
+aplicáveis antes da retirada de `SELECT`.
+
+Uma nova consulta às 09:31 (horário de Brasília) tornou o bloqueio mais
+preciso. Além de `PC-JR-HOME` e `GUSTAVO-PROD` em `1.2.335`, seis estações
+operacionais com sinal recente ainda estavam abaixo da versão necessária:
+`LAPTOP-9BSK81S0` em `1.2.334`; `LASER-04`, `LASER-01`, `LASER-02`, `TEX-01` e
+`FLEXO` em `1.2.333`. `CESAR-CPD`, sem versão, e `PRD-ACABAMENTO` são instalações
+de teste já classificadas pelo inventário e não entram nesse bloqueio.
 
 Um novo snapshot somente de metadados, coletado em 19/09/2026 sem alterar o
 banco, confirmou:
@@ -84,6 +90,21 @@ banco, confirmou:
   `anon` e com policy para `authenticated`;
 - `pedidos_bancos` e `pedidos_modelos_banco` ainda sem RLS, sem policies e com
   privilégios amplos de `anon`, inclusive leitura e escrita.
+
+## Baseline de tráfego
+
+Às 09:34 (horário de Brasília), foi salvo um baseline agregado de
+`pg_stat_statements`, sem texto de consulta, parâmetros ou linhas comerciais.
+Desde o reset das estatísticas em 31/08/2026, ele encontrou 25 chamadas e 250
+linhas associadas a `pedidos_bancos`, e 27 chamadas e 280 linhas associadas a
+`pedidos_modelos_banco`, todas atribuídas a `postgres`; a coleta de metadados
+também aparece separadamente como `supabase_read_only_user`.
+
+Esta versão da extensão não oferece `last_exec_time`. Além disso, a atribuição a
+`postgres` não distingue a Edge Function/RPC de outras execuções privilegiadas.
+Logo, os totais não provam ausência de tráfego anônimo depois da publicação. O
+arquivo é somente o marco inicial: uma coleta posterior deve comparar o aumento
+das chamadas depois que as estações aplicáveis estiverem em `1.2.335`.
 
 ## Efeito na usabilidade
 
