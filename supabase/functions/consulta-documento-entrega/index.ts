@@ -18,7 +18,13 @@ async function hashDocumento(documento: string): Promise<string> {
 
 Deno.serve(async (req: Request) => {
   const origem = origemPermitida(req.headers.get("origin"));
-  if (req.method === "OPTIONS") return respostaDePreflight(origem, "POST, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return respostaDePreflight(
+      origem,
+      "POST, OPTIONS",
+      "apikey,authorization,content-type,x-client-info",
+    );
+  }
   try {
     if (req.method !== "POST") throw new ErroConsulta(405, "metodo nao permitido");
     const entrada = await req.json().catch(() => null);

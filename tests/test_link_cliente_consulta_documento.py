@@ -46,3 +46,10 @@ def test_edge_aceita_o_token_historico_de_doze_caracteres():
     )
     assert "token.length < 20" not in fonte
     assert "!token || token.length > 200" in fonte
+
+
+def test_preflight_aceita_os_cabecalhos_enviados_pelo_cliente_supabase():
+    fonte = (RAIZ / "supabase" / "functions" / "consulta-documento-entrega" / "index.ts").read_text(
+        encoding="utf-8"
+    )
+    assert '"apikey,authorization,content-type,x-client-info"' in fonte
