@@ -145,6 +145,15 @@ estações que usam bancos de pedidos.
    novo; a proposta `06_bancos_conter_escrita_anon.proposta.sql` mantém SELECT e
    não é o fechamento final.
 
+A proposta final revisável está em
+`sql/auditoria_rls/07_bancos_fechar_anon_e_habilitar_rls.proposta.sql`. Ela não
+foi aplicada. O arquivo exige um marcador explícito da janela, confere dono,
+estado de RLS, ausência de policies, ACLs, papéis e a RPC pública protegida por
+token antes de retirar todos os privilégios de `anon` e habilitar RLS. Qualquer
+divergência aborta a transação inteira. Seis cenários sintéticos passaram em
+PGlite/PostgreSQL 17; isso não substitui novo snapshot, aceite do mantenedor e
+validação posterior em produção.
+
 ## Recuperação
 
 - Antes do fechamento das tabelas: reverter frontend/agente para a versão
