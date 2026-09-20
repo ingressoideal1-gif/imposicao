@@ -5907,3 +5907,66 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
  #view-ideal-control .ic-ingresso > :last-child { grid-column: 1 / -1; }
  #view-ideal-control .ic-dialogo { padding: 14px; }
 }
+
+/* Dashboard da Lista de Arte */
+.dashboard-arte {
+    margin: 4px 0 24px;
+    padding: 24px;
+    border: 1px solid rgba(139, 92, 246, .28);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 0 0, rgba(139, 92, 246, .12), transparent 32%),
+        linear-gradient(145deg, rgba(15, 23, 42, .96), rgba(8, 15, 29, .98));
+    box-shadow: 0 20px 55px rgba(2, 6, 23, .28);
+}
+.dashboard-arte[hidden] { display: none !important; }
+.dashboard-arte-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.dashboard-arte-topo h2 { margin: 3px 0 5px; color: #fff; font-size: clamp(1.35rem, 2vw, 1.85rem); }
+.dashboard-arte-topo p { margin: 0; color: var(--text-dim); font-size: .86rem; }
+.dashboard-arte-sobretitulo { color: #a78bfa; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.dashboard-arte-periodos { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: rgba(15, 23, 42, .72); }
+.dashboard-arte-periodo { border: 0; border-radius: 7px; padding: 8px 13px; background: transparent; color: var(--text-dim); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.dashboard-arte-periodo:hover { color: #fff; background: rgba(148, 163, 184, .1); }
+.dashboard-arte-periodo.ativo { color: #fff; background: #7c3aed; box-shadow: 0 4px 14px rgba(124, 58, 237, .3); }
+.dashboard-arte-kpis { display: grid; grid-template-columns: repeat(6, minmax(145px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.dashboard-arte-kpi { min-width: 0; padding: 16px; border: 1px solid rgba(148, 163, 184, .16); border-radius: 13px; background: rgba(30, 41, 59, .48); }
+.dashboard-arte-kpi-destaque { border-color: rgba(139, 92, 246, .45); background: linear-gradient(145deg, rgba(124, 58, 237, .2), rgba(30, 41, 59, .52)); }
+.dashboard-arte-kpi-label { display: block; min-height: 30px; color: var(--text-dim); font-size: .7rem; font-weight: 750; letter-spacing: .055em; line-height: 1.35; text-transform: uppercase; }
+.dashboard-arte-kpi-valor { display: block; margin-top: 7px; color: #fff; font-size: 1.55rem; font-weight: 850; letter-spacing: -.03em; }
+.dashboard-arte-kpi-nota { display: block; margin-top: 4px; color: #94a3b8; font-size: .7rem; line-height: 1.35; }
+.dashboard-arte-grade { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); gap: 14px; margin-top: 14px; }
+.dashboard-arte-painel { min-width: 0; padding: 18px; border: 1px solid rgba(148, 163, 184, .16); border-radius: 14px; background: rgba(15, 23, 42, .62); }
+.dashboard-arte-painel h3 { margin: 0; color: #f8fafc; font-size: .95rem; }
+.dashboard-arte-painel-sub { margin: 4px 0 16px; color: var(--text-dim); font-size: .73rem; }
+.dashboard-arte-barras { display: grid; grid-template-columns: repeat(var(--dashboard-colunas, 7), minmax(32px, 1fr)); align-items: end; gap: 8px; min-height: 190px; padding-top: 12px; }
+.dashboard-arte-barra-col { display: flex; min-width: 0; height: 176px; flex-direction: column; align-items: center; justify-content: flex-end; gap: 7px; }
+.dashboard-arte-barra-valor { color: #e2e8f0; font-size: .7rem; font-weight: 800; }
+.dashboard-arte-barra-trilho { display: flex; width: min(34px, 78%); height: 124px; align-items: flex-end; overflow: hidden; border-radius: 8px 8px 3px 3px; background: rgba(148, 163, 184, .1); }
+.dashboard-arte-barra { width: 100%; min-height: 3px; border-radius: 8px 8px 3px 3px; background: linear-gradient(180deg, #a78bfa, #6d28d9); box-shadow: 0 0 18px rgba(139, 92, 246, .28); }
+.dashboard-arte-barra-label { overflow: hidden; width: 100%; color: #94a3b8; font-size: .65rem; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-arte-fluxo { display: grid; gap: 11px; }
+.dashboard-arte-fluxo-linha { display: grid; grid-template-columns: minmax(90px, 1fr) 2.1fr auto; gap: 9px; align-items: center; font-size: .76rem; }
+.dashboard-arte-fluxo-trilho { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .12); }
+.dashboard-arte-fluxo-barra { height: 100%; border-radius: inherit; }
+.dashboard-arte-tabela-wrap { overflow-x: auto; }
+.dashboard-arte-tabela { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.dashboard-arte-tabela th { padding: 9px 10px; color: #94a3b8; border-bottom: 1px solid var(--border); font-size: .66rem; letter-spacing: .04em; text-align: right; text-transform: uppercase; white-space: nowrap; }
+.dashboard-arte-tabela th:first-child, .dashboard-arte-tabela td:first-child { text-align: left; }
+.dashboard-arte-tabela td { padding: 11px 10px; color: #e2e8f0; border-bottom: 1px solid rgba(148, 163, 184, .09); text-align: right; white-space: nowrap; }
+.dashboard-arte-tabela tbody tr:last-child td { border-bottom: 0; }
+.dashboard-arte-posicao { display: inline-flex; width: 23px; height: 23px; margin-right: 7px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(139, 92, 246, .16); color: #c4b5fd; font-size: .68rem; font-weight: 800; }
+.dashboard-arte-cobertura { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 13px 15px; border: 1px solid rgba(245, 158, 11, .25); border-radius: 11px; background: rgba(245, 158, 11, .07); color: #cbd5e1; font-size: .74rem; line-height: 1.5; }
+.dashboard-arte-cobertura strong { color: #fbbf24; }
+.dashboard-arte-vazio { padding: 26px 14px; color: var(--text-dim); text-align: center; }
+@media(max-width:1350px) { .dashboard-arte-kpis { grid-template-columns: repeat(3, minmax(145px, 1fr)); } }
+@media(max-width:900px) { .dashboard-arte-grade { grid-template-columns: minmax(0, 1fr); } }
+@media(max-width:680px) {
+    .dashboard-arte { padding: 16px; }
+    .dashboard-arte-topo { flex-direction: column; }
+    .dashboard-arte-periodos { width: 100%; }
+    .dashboard-arte-periodo { flex: 1; }
+    .dashboard-arte-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-arte-kpi { padding: 13px; }
+    .dashboard-arte-barras { gap: 4px; overflow-x: auto; }
+    .dashboard-arte-barra-col { min-width: 34px; }
+}
