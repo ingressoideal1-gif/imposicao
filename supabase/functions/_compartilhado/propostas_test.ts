@@ -13,6 +13,30 @@ async function recusa(status: number, f: () => Promise<unknown>) {
 }
 const leitor = { perm_pedidos_view: true };
 
+Deno.test("nome fantasia: cliente comercial vence o faturado sem alterar dados fiscais", async () => {
+  const propostas = [
+    { id_int: 1, id_cliente: 10, id_faturado: 99, cliente: "RAZAO UM" },
+    { id_int: 2, id_cliente: 20, cliente: "RAZAO DOIS" },
+    { id_int: 3, id_cliente: 30, cliente: "Nome legado" },
+  ];
+  const resultado = await operarPropostas("consultar", { tipo: "lista" }, leitor, async (_m, caminho) => {
+    if (caminho.startsWith("propostas?")) return propostas.map(p => ({ ...p }));
+    igual(caminho, "clientes?id_cliente=in.(10,20,30)&select=id_cliente,fantasia,nome");
+    return [{ id_cliente: 10, fantasia: " Loja Sol ", nome: "RAZAO UM" },
+      { id_cliente: 20, fantasia: " ", nome: "RAZAO DOIS" }];
+  });
+  igual(resultado[0].cliente_exibicao, "Loja Sol");
+  igual(resultado[0].cliente, "RAZAO UM");
+  igual(resultado[0].id_faturado, 99);
+  igual(resultado[1].cliente_exibicao, "RAZAO DOIS");
+  igual(resultado[2].cliente, "Nome legado");
+  const indisponivel = await operarPropostas("consultar", { tipo: "lista" }, leitor, async (_m, caminho) => {
+    if (caminho.startsWith("propostas?")) return propostas;
+    throw new Error("cadastro indisponivel");
+  });
+  igual(indisponivel, propostas);
+});
+
 Deno.test("cadastro: contato preserva vendedor e a exigencia de cadastro do envio atual", async () => {
   const pedido = { cliente: "Cliente teste", vendedor: "Atendente teste", id_cliente: 7 };
   const r = await operarPropostas("cadastro", { pedido: 11, escopo: "contato", exigir_cadastro: true }, leitor,

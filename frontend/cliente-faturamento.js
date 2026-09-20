@@ -36,7 +36,7 @@ function linhasDoFaturamento(cliente, enderecoDaNota) {
     if (!cliente) return [];
 
     const linhas = [
-        { rotulo: 'Nome / Razão social', valor: (cliente.nome || '').trim(), forte: true },
+        { rotulo: 'Cliente', valor: String(cliente.fantasia || cliente.nome_fantasia || cliente.nome || '').trim(), forte: true },
         { rotulo: 'CPF / CNPJ', valor: typeof documentoEmMascara === 'function'
             ? documentoEmMascara(cliente.documento) : (cliente.documento || '').trim() }
     ];

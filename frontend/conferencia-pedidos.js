@@ -5,6 +5,10 @@
     var $ = function (id) { return document.getElementById(id); };
     var geracao = 0;
 
+    function nomeDoCliente(c) {
+        return String(c && (c.fantasia || c.nome_fantasia || c.nome || c.razao_social) || '').trim() || 'Cliente';
+    }
+
     function limpar() {
         geracao++;
         if ($('conferencia-resultado')) { $('conferencia-resultado').replaceChildren(); }
@@ -61,7 +65,7 @@
 
     function listaPedidos(dados) {
         var caixa = $('conferencia-resultado');
-        if (dados.cliente) { texto(caixa, 'h2', dados.cliente.nome || 'Cliente'); }
+        if (dados.cliente) { texto(caixa, 'h2', nomeDoCliente(dados.cliente)); }
         var pedidos = dados.pedidos || [];
         if (!pedidos.length) { texto(caixa, 'p', 'Nenhum pedido nesta consulta. Você também pode buscar pelo número do pedido.'); }
         pedidos.forEach(function (p) {
@@ -76,7 +80,7 @@
     function detalhe(p) {
         var caixa = $('conferencia-resultado');
         texto(caixa, 'h2', 'Pedido ' + p.pedido);
-        texto(caixa, 'p', 'Cliente: ' + (p.cliente && p.cliente.nome || 'Não vinculado'));
+        texto(caixa, 'p', 'Cliente: ' + (p.cliente ? nomeDoCliente(p.cliente) : 'Não vinculado'));
         texto(caixa, 'p', p.evento ? 'Evento: ' + p.evento.nome_evento + ' · ' + p.evento.status : 'O cliente ainda não carregou este pedido em um evento.');
         var pub = p.publicacao || {};
         texto(caixa, 'p', 'Códigos publicados: ' + Number(pub.total_credenciais || 0).toLocaleString('pt-BR'));
@@ -128,7 +132,7 @@
         return consultar('/clientes?busca=' + encodeURIComponent(valor), function (r) {
             var caixa = $('conferencia-resultado');
             (r.clientes || []).forEach(function (c) {
-                botao(caixa, c.nome, function () { consultar('/clientes/' + c.id_cliente, listaPedidos); });
+                botao(caixa, nomeDoCliente(c), function () { consultar('/clientes/' + c.id_cliente, listaPedidos); });
             });
             if (!(r.clientes || []).length) { texto(caixa, 'p', 'Nenhum cliente encontrado.'); }
             texto(caixa, 'p', 'Até 30 resultados. Refine o nome se necessário.');

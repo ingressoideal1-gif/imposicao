@@ -464,3 +464,10 @@ window.entregaExigeRecebedor = entregaExigeRecebedor;
 window.ehRetirada = ehRetirada;
 window.enderecoDeEntrega = enderecoDeEntrega;
 window.linkDoMapa = linkDoMapa;
+/** Nome de exibicao: fantasia primeiro; razao social/nome civil so na falta. */
+function nomePreferencialClientePortal(cliente, fallback) {
+    const fantasia = String(cliente && (cliente.fantasia || cliente.nome_fantasia) || '').trim();
+    const razao = String(cliente && (cliente.nome || cliente.razao_social) || '').trim();
+    return fantasia || razao || String(fallback || '').trim();
+}
+window.nomePreferencialClientePortal = nomePreferencialClientePortal;

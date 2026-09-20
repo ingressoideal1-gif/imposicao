@@ -70,6 +70,11 @@
     }
 
     async function selectInBatches(client, table, columns, values, column = 'id_int') {
+        if (table === 'propostas') {
+            const { data, error } = await window.consultarPropostas({ tipo: 'numeros', numeros: values });
+            if (error) throw error;
+            return data || [];
+        }
         const rows = [];
         const unique = values === null ? null : Array.from(new Set(values.filter(Number.isFinite)));
         const batches = unique === null ? [null] : [];
@@ -132,6 +137,15 @@
             loadCatalog('numeracoes'),
             selectInBatches(productsClient, 'propostas', 'id,id_int,cliente,status_interno,id_cliente,id_faturado', missingNumbers),
         ]);
+
+        if (typeof window.aplicarNomesPreferenciaisDasPropostas === 'function') {
+            await window.aplicarNomesPreferenciaisDasPropostas(productsClient, missingOrders);
+            missingOrders.forEach(order => {
+                if (typeof window.nomePreferencialDaProposta === 'function') {
+                    order.cliente = window.nomePreferencialDaProposta(order);
+                }
+            });
+        }
 
         missingOrders.forEach(order => orders.push({ ...order, id: `vibe_${order.id_int}`, numero: order.id_int }));
         // A janela compartilhada precisa encontrar o pedido pelo mesmo id.

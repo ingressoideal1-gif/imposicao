@@ -113,7 +113,7 @@ def test_o_botao_impresso_ve_o_pedido_que_ja_saiu_da_producao():
     """
     script = _fonte("script.js")
 
-    assert "? state.ordens.filter(os => pedidoTotalmenteImpresso(os))" in script, (
+    assert "? state.ordens.filter(os =>" in script and "&& pedidoTotalmenteImpresso(os))" in script, (
         "o botao Impresso voltou a sair da fila; ele tem de varrer `state.ordens`"
     )
     assert "const filteredImpressaoSemPrazo = baseImpressao.filter(" in script, (

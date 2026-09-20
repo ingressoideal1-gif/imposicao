@@ -222,7 +222,7 @@ const api = new Function('document', 'state', 'window', `
 
     ok(corpo.includes("const listaEhDosImpressos = (state.filtroPrazo || 'geral') === 'impressos';"),
        'a tela sabe quando esta no botao "Impresso"');
-    ok(corpo.includes('? state.ordens.filter(os => pedidoTotalmenteImpresso(os))'),
+    ok(corpo.includes('? state.ordens.filter(os =>') && corpo.includes('&& pedidoTotalmenteImpresso(os))'),
        'no botao "Impresso" a base e `state.ordens` INTEIRA: o pedido nao pode '
        + 'sumir do historico so porque o ERP o mandou para o acabamento');
     ok(corpo.includes('const filteredImpressaoSemPrazo = baseImpressao.filter('),

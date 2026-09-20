@@ -42,8 +42,10 @@ Deno.test("busca da grafica exige papel interno e so consulta clientes", async (
       assertEquals((await chamar("Cliente&limit=999")).status, 200);
       const query = new URL(urls[1]).searchParams;
       assertEquals(query.get("limit"), "30");
-      assertEquals(query.get("select"), "id_cliente,nome");
-      assertEquals(query.get("nome"), "ilike.*Clientelimit=999*");
+      assertEquals(query.get("select"), "id_cliente,nome,fantasia");
+      assertEquals(query.get("or"),
+        "(nome.ilike.*Clientelimit=999*,fantasia.ilike.*Clientelimit=999*)");
+      assertEquals(query.get("order"), "fantasia.asc.nullslast,nome.asc");
       assertEquals((await chamar("*")).status, 422);
     }
   } finally {

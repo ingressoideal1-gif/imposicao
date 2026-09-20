@@ -147,6 +147,25 @@ export async function operarPropostas(acao: string, entrada: unknown, operador: 
   }
   const linhas = await consultar("GET", `propostas?${q}`);
   if (!Array.isArray(linhas)) throw new Recusa(503, "resposta invalida ao consultar pedidos");
+  // A identidade comercial serve apenas à exibição. O titular fiscal e os
+  // campos originais da proposta permanecem literais.
+  const ids = [...new Set(linhas.map((p) => p.id_cliente ?? p.id_faturado)
+    .filter((id) => /^[0-9]+$/.test(String(id)) && Number(id) > 0).map(Number))];
+  const nomes = new Map<number, string>();
+  try {
+    for (let i = 0; i < ids.length; i += 200) {
+      const clientes = await consultar("GET", `clientes?id_cliente=in.(${ids.slice(i, i + 200).join(",")})&select=id_cliente,fantasia,nome`);
+      if (!Array.isArray(clientes)) throw new Error("cadastro indisponivel");
+      clientes.forEach((c) => nomes.set(Number(c.id_cliente), String(c.fantasia ?? "").trim() || String(c.nome ?? "").trim()));
+    }
+  } catch {
+    // Falha na apresentação não oculta pedidos nem expõe erros do cadastro.
+    return linhas;
+  }
+  linhas.forEach((p) => {
+    const nome = nomes.get(Number(p.id_cliente ?? p.id_faturado));
+    if (nome) p.cliente_exibicao = nome;
+  });
   return linhas;
 }
 

@@ -169,7 +169,8 @@ async function testarReconciliacaoDaLista() {
                 { id: 'vibe_1', numero: 1 },
                 { id: 'vibe_2', numero: 2, status_interno: 'EM PRODUCAO' },
                 { id: 'vibe_3', numero: 3, status_interno: 'EM PRODUCAO' },
-                { id: 'vibe_4', numero: 4, status_interno: 'CANCELADO' }
+                { id: 'vibe_4', numero: 4, status_interno: 'CANCELADO' },
+                { id: 'vibe_5', numero: 5, ignorado: true }
             ],
             todasArtes: [
                 { id_int: 2, status: 'Em Alteração' },
@@ -178,6 +179,7 @@ async function testarReconciliacaoDaLista() {
             modelosGlobais: { 1: [{ id: 11 }], 2: [{ id: 22 }] }
         },
         temSessaoDoSupabase: async () => true,
+        pedidoIgnoradoNosPaineis: os => os.ignorado === true,
         pedidoCancelado: os => os.status_interno === 'CANCELADO',
         pedidoSaiuDaArte: os => os.status_interno === 'EM PRODUCAO',
         sincronizarStatusConsolidadoPedidoArte: async (numero, modelos) => chamadas.push([numero, modelos.length]),

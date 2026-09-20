@@ -37,6 +37,7 @@ function fixture() {
         renderOrdens() {}, toast: (...args) => notices.push(args),
         localStorage: { getItem: () => null, setItem() {} },
     };
+    ctx.consultarPropostas = async ({ numeros }) => ({ data: tables.propostas.filter(p => numeros.includes(p.id_int)), error: null });
     ctx.window = ctx;
     ctx.addEventListener = (type, handler) => { events[type] = handler; };
     ctx.dispatchEvent = event => { calls.push(event); if (events[event.type]) events[event.type](event); };

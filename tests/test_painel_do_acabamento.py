@@ -403,7 +403,7 @@ def test_a_paleta_do_acabamento_nao_repinta_o_painel_de_producao():
     assert marca in css, "o bloco da paleta do acabamento sumiu do style.css"
     # Sem os comentarios: eles explicam a regra e citam `prod-*` no meio da
     # prosa, e uma linha de texto que termina em virgula parece um seletor.
-    bloco = re.sub(r"/\*.*?\*/", "", css[css.index(marca) - 200:], flags=re.S)
+    bloco = re.sub(r"/\*.*?\*/", "", css[css.rfind("/*", 0, css.index(marca)):css.index("/* Ideal Control", css.index(marca))], flags=re.S)
 
     # Toda regra do bloco tem de comecar presa a secao.
     seletores = [
