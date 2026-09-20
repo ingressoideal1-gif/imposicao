@@ -64,7 +64,8 @@ function modoDeVersoDoModelo(item) {
     if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
     if (versoUnico(num && num.print_mode)) return 'duplex_unico';
     if (temVerso(num && num.print_mode)) return 'duplex';
-    const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
+    const tipo = String(item?.verso_tipo || '').trim().toUpperCase();
+    const temVersoNoErp = !!(item && (item.verso === true || (tipo && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(tipo))));
     return temVersoNoErp ? 'duplex' : 'front';
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
@@ -642,7 +643,8 @@ function drawPedPreview() {
     if (typeof previaFicouPronta === 'function') previaFicouPronta();
 
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
-    const activeItem = state.activeOSItem;
+    const activeItem = (state.selectedOSItems || []).length > 1
+        ? state.selectedOSItems[0] : state.activeOSItem;
     atualizarIndicadorModeloComVerso(activeItem
         ? (state.osItens[activeItem.osId] || []).find(i => String(i.id) === String(activeItem.itemId))
         : null);
@@ -705,118 +707,18 @@ function drawPedPreview() {
     if (state.selectedOSItems && state.selectedOSItems.length > 1) {
         isMultiSelected = true;
         schema = 'multi_artes';
-        tempMultiArtes = state.selectedOSItems.map(s => {
-            const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
-            const qt = sItem ? (parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0))) : 0;
-            
-            const corObj = sItem && sItem.amostra_cor_id
-                ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
-                : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
-            // So arte de verdade vai ao motor. A amostra de aprovacao e a Cor
-            // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
-            // trabalho sai so com numeracao, que e o correto e o que sempre foi.
-            //
-            // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
-            // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
-            // no papel — se exibisse a amostra, prometeria o que nao sai.
-            const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
-
-            const wantsDuplex = sItem ? temVerso(modoDeVersoDoModelo(sItem)) : false;
-            const itemArteVersoUrl = (sItem && wantsDuplex)
-                ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
-                : null;
-
-            let pdfDoc = null;
-            if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {
-                pdfDoc = state.multiArtesPdfCache[itemArteUrl];
-            } else if (itemArteUrl && !state.multiArtesPdfLoading[itemArteUrl]) {
-                // A MARCA DE "CARREGANDO" SAI QUANDO A TENTATIVA TERMINA (02/09/2026).
-                //
-                // Ela existe para o mesmo download nao disparar varias vezes, e
-                // nunca era apagada. No sucesso isso nao aparecia -- o cache
-                // acima responde antes. No ERRO, a arte nao entrava no cache, a
-                // marca bloqueava qualquer nova tentativa, e aquela arte ficava
-                // fora da folha pelo resto da sessao, sem aviso nenhum.
-                //
-                // Reproduzido com a rede falhando UMA vez: seis redesenhos em 12
-                // segundos, e a segunda arte nunca voltou. So o F5 destravava.
-                //
-                // `finally`, no molde que este arquivo ja usa para as paginas do
-                // PDF. O redesenho continua so no caminho de sucesso: chamado no
-                // `catch`, cada falha dispararia outra tentativa, em laco.
-                state.multiArtesPdfLoading[itemArteUrl] = true;
-                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                }
-                fetch(itemArteUrl).then(r => r.arrayBuffer()).then(buf => {
-                    return pdfjsLib.getDocument({ data: buf }).promise;
-                }).then(doc => {
-                    state.multiArtesPdfCache[itemArteUrl] = doc;
-                    return medirArteDaFolhaCombinada(itemArteUrl, doc);
-                }).then(() => {
-                    if (typeof drawPedPreview === 'function') drawPedPreview();
-                }).catch(e => {
-                    console.error('Error fetching PDF for multi arte preview:', e);
-                }).finally(() => { delete state.multiArtesPdfLoading[itemArteUrl]; });
-            }
-
-            let pdfVersoDoc = null;
-            if (itemArteVersoUrl && state.multiArtesPdfCache[itemArteVersoUrl]) {
-                pdfVersoDoc = state.multiArtesPdfCache[itemArteVersoUrl];
-            } else if (itemArteVersoUrl && !state.multiArtesPdfLoading[itemArteVersoUrl]) {
-                state.multiArtesPdfLoading[itemArteVersoUrl] = true;
-                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                }
-                fetch(itemArteVersoUrl).then(r => r.arrayBuffer()).then(buf => {
-                    return pdfjsLib.getDocument({ data: buf }).promise;
-                }).then(doc => {
-                    state.multiArtesPdfCache[itemArteVersoUrl] = doc;
-                    return medirArteDaFolhaCombinada(itemArteVersoUrl, doc);
-                }).then(() => {
-                    if (typeof drawPedPreview === 'function') drawPedPreview();
-                }).catch(e => {
-                    console.error('Error fetching PDF VERSO for multi arte preview:', e);
-                }).finally(() => { delete state.multiArtesPdfLoading[itemArteVersoUrl]; });
-            }
-
-            return {
-                qtd: qt,
-                // O que a prévia desenha deitado na borda da célula tem de ser o
-                // que sai no papel: o NÚMERO do modelo, e só quando a opção do
-                // modelo está marcada. Até 18/08/2026 vinha `sItem.produto` e
-                // aparecia sempre — a tela mostrava um texto que a impressão não
-                // tinha, e escondia a decisão de imprimir o número.
-                nome: (sItem && typeof imprimeNumeroDoModelo === 'function' && imprimeNumeroDoModelo(sItem))
-                    ? String(sItem.modelo || '')
-                    : '',
-                num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
-                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
-                has_raw_file: false,
-                is_selected: true,
-                amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
-                pdfDoc: pdfDoc,
-                pdfVersoDoc: pdfVersoDoc,
-                _itemId: s.itemId,
-                _osId: s.osId,
-                // O tamanho da PAGINA de cada arte, em pontos. E o que faz a
-                // folha combinada desenhar a arte no tamanho do arquivo, como o
-                // motor faz, em vez de esticada ate a celula. Ver
-                // `medirArteDaFolhaCombinada`.
-                artWidth: (state.multiArtesPdfTamanho[itemArteUrl] || {}).w,
-                artHeight: (state.multiArtesPdfTamanho[itemArteUrl] || {}).h,
-                artVersoWidth: (state.multiArtesPdfTamanho[itemArteVersoUrl] || {}).w,
-                artVersoHeight: (state.multiArtesPdfTamanho[itemArteVersoUrl] || {}).h,
-                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
-                // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
-                // coluna do pool por modelo; sem isto o motor recusa a folha.
-                modelo: s.itemId || (sItem ? sItem.id : null)
-            };
+        tempMultiArtes = state.selectedOSItems.map(sel => {
+            const arte = arteDoModeloParaFolha(sel, numId);
+            const motor = arteParaOMotor(arte, true);
+            return Object.assign(arte, {
+                qtd: motor.qtd, numeracao: motor.numeracao,
+                numeracao_2: motor.numeracao_2, nome: motor.nome
+            });
         });
     }
 
     const printModeEl = document.getElementById('ped-print-mode');
-    if (printModeEl) {
+    if (printModeEl && !isMultiSelected) {
         state.printMode = printModeEl.value;
     } else if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
@@ -829,6 +731,30 @@ function drawPedPreview() {
     const canvas = document.getElementById('ped-preview-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const problema = state.pedidoSelecaoCarregando ? 'Carregando o modelo selecionado…'
+        : state.pedidoSelecaoErro || (typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null);
+    const titulo = document.getElementById('ped-preview-modelo');
+    if (titulo && isMultiSelected) {
+        titulo.textContent = 'Modelos ' + tempMultiArtes.map(a => {
+            const item = (state.osItens[a._osId] || []).find(it => String(it.id) === String(a._itemId));
+            return item?.modelo || a._itemId;
+        }).join(', ');
+    } else if (titulo && activeItem) {
+        const item = (state.osItens[activeItem.osId] || []).find(it => String(it.id) === String(activeItem.itemId));
+        titulo.textContent = [item?.modelo, item?.produto || item?.nome_modelo].filter(Boolean).join(' · ');
+    }
+    if (problema) {
+        canvas.width = 800; canvas.height = 160;
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 800, 160);
+        ctx.fillStyle = '#b45309'; ctx.font = '14px sans-serif';
+        ctx.fillText(problema, 16, 70, 768);
+        const badge = document.getElementById('ped-preview-sheet-num');
+        if (badge) badge.textContent = 'Confira a seleção';
+        window.currentAssemblySets = null;
+        window.pedRefazerTotalFolhas = 0;
+        window.pedRefazerTotalCelulas = 0;
+        return;
+    }
 
     if (!fmtId || !saiId) {
         canvas.width = 300;
@@ -1116,21 +1042,25 @@ function drawPedPreview() {
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
 
-    // ─── A LISTA DE MULTI-ARTES SÓ VALE EM MULTI-ARTES ─────────────────────────
-    // `state.impMultiArtes` é preenchida pelo painel de Multi-Artes e **nunca é
-    // limpa** — não há um único ponto no projeto que a esvazie. Consultá-la fora
-    // desse esquema fazia um trabalho anterior da sessão contaminar o seguinte:
-    // as poses cujo índice caísse na faixa de quantidade da primeira arte passavam
-    // a buscar a numeração DA ARTE (`num1_id`), que não existe mais, e desenhavam
-    // nenhum elemento. Como a faixa começa no índice 0, era sempre a primeira pose
-    // da folha que saía sem numeração — na tela, porque o payload do motor só leva
-    // multi_artes quando o esquema é multi_artes, e por isso o papel saía certo.
-    //
-    // `isMultiSelected` já força `schema = 'multi_artes'` mais acima, então esta
-    // condição cobre os dois casos. É o mesmo gate que o script.js sempre usou.
-    const artesMultiAtivas = (schema === 'multi_artes')
-        ? ((isMultiSelected ? tempMultiArtes : state.impMultiArtes) || [])
-        : [];
+    // Seleção combinada também pode ser sequencial ou blocada. A lista avulsa
+    // da Imposição continua restrita ao seu esquema, sem vazar entre trabalhos.
+    const artesMultiAtivas = isMultiSelected ? tempMultiArtes
+        : (schema === 'multi_artes' ? (state.impMultiArtes || []) : []);
+    const blocagemCombinada = isMultiSelected && typeof blocagemDaSelecao === 'function'
+        ? blocagemDaSelecao() : null;
+    const modoCutStack = blocagemCombinada
+        ? modoCutStackDaSelecao()
+        : (document.getElementById('ped-cutstack-mode')?.value || 'independent');
+    if (blocagemCombinada) {
+        const folhas = document.getElementById('ped-sheets-per-block');
+        const modo = document.getElementById('ped-cutstack-mode');
+        if (folhas) folhas.value = blocagemCombinada.folhas;
+        if (modo) modo.value = modoCutStack;
+    }
+    if (schema === 'cut_stack' && modoCutStack === 'strict_assembly') {
+        // Mesma ordenação estável que o motor usa antes de construir os blocos.
+        artesMultiAtivas.sort((a, b) => (parseInt(b.qtd) || 0) - (parseInt(a.qtd) || 0));
+    }
 
     let is_strict_mode = false;
     let stack_size = 50;
@@ -1148,8 +1078,11 @@ function drawPedPreview() {
     window.currentAssemblySets = null;
 
     if (schema === "cut_stack" || schema === "multi_artes") {
-        const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
-        stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
+        const cutstackMode = modoCutStack;
+        const folhasDoBloco = blocagemCombinada ? blocagemCombinada.folhas
+            : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50);
+        stack_size = folhasDoBloco * (cutstackMode === 'strict_assembly' ? 1
+            : (parseInt(document.getElementById('ped-block-depth')?.value) || 1));
         // A FOLHA SOMADA NÃO É PILHA (02/09/2026).
         //
         // `multi_artes` saiu daqui. O motor o trata como esquema próprio, sem
@@ -1358,7 +1291,7 @@ function drawPedPreview() {
                 item_arte_index = undefined;
                 origemDaCelula = fonte;
             } else if (schema === "cut_stack" || schema === "multi_artes") {
-                const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
+                const cutstackMode = modoCutStack;
                 // O ESQUEMA DECIDE ANTES DO MODO DE CUT STACK (02/09/2026).
                 //
                 // É a ordem do motor: lá o `multi_artes` é um caso próprio do
@@ -1658,9 +1591,11 @@ function drawPedPreview() {
 
              if (multiArteItem) {
 
-                const pdfDoModelo = isBack && multiArteItem.pdfVersoDoc
+                const pdfDoModelo = isBack && (multiArteItem.pdfVersoDoc || multiArteItem.pdf_verso_url)
                     ? multiArteItem.pdfVersoDoc : multiArteItem.pdfDoc;
 
+                // Ausência/carregamento nunca autoriza usar a arte do modelo aberto.
+                activePdfDoc = pdfDoModelo || null;
                 if (pdfDoModelo) {
 
                     activePdfDoc = pdfDoModelo;
@@ -1675,8 +1610,11 @@ function drawPedPreview() {
 
                 }
 
-                activeImage = null; 
-
+                activeImage = null;
+                if (!pdfDoModelo) {
+                    gctx.fillStyle = '#b45309'; gctx.font = '12px sans-serif';
+                    gctx.fillText('Arte indisponível / carregando', -cw / 2 + 4, 0, cw - 8);
+                }
             }
 
 
@@ -2113,9 +2051,7 @@ function drawPedPreview() {
                 if (schema === "multi_artes" || isMultiSelected) {
                     if (multiArteItem) {
                         effectiveStart = multiArteItem.start !== undefined ? multiArteItem.start : start;
-                        if (typeof item_local_index !== 'undefined') {
-                            val_index = item_local_index;
-                        }
+                        val_index = multiArteLocalIndex;
                     }
                 }
                 const val = effectiveStart + val_index;
@@ -2142,7 +2078,7 @@ function drawPedPreview() {
                     // antes deste arquivo (mesma dependência da drawImageContain).
                     if (!mostrarLayout && typeof elementoSoLayout === 'function' && elementoSoLayout(el)) return;
 
-                    const printMode = document.getElementById('ped-print-mode')?.value || 'front';
+                    const printMode = state.printMode || 'front';
 
                     let effectiveFace = el.face || 'both';
 
@@ -4162,6 +4098,7 @@ window.previaFicouPronta = previaFicouPronta;
  * delas — e isso e' uma troca de classe.
  */
 function fecharJanelaDoModelo() {
+    if (window.isImposing) return;
     state.activeOSItem = null;
 
     // FECHAR A JANELA TRANCA OS CAMPOS DE NOVO. E' o alcance que o usuario
@@ -4212,6 +4149,8 @@ async function alternarModeloAberto(itemId, osId) {
 window.alternarModeloAberto = alternarModeloAberto;
 
 async function enviarParaPedido(itemId, osId, contexto = {}) {
+    if (window.isImposing || (state.pedidoSelecaoCarregando && !contexto.aindaAtual)) return;
+    state.pedidoSelecaoErro = null;
     const aindaAtual = contexto.aindaAtual || (() => true);
     const tarefas = [];
     const agendar = (fn, ms) => {
@@ -4568,7 +4507,8 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
 }
 window.enviarParaPedido = enviarParaPedido;
 
-window.togglePedItemSelection = function(itemId, osId) {
+window.togglePedItemSelection = async function(itemId, osId) {
+    if (window.isImposing) return toast('Aguarde a geração terminar para mudar a seleção.', 'info');
     if (!state.selectedOSItems) state.selectedOSItems = [];
     
     const itens = state.osItens[osId] || [];
@@ -4611,8 +4551,27 @@ window.togglePedItemSelection = function(itemId, osId) {
         state.selectedOSItems.push({ itemId, osId });
     }
 
+    state.pedidoSelecaoErro = null;
     renderPedOSQueue();
     if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
+    const unico = state.selectedOSItems.length === 1 ? state.selectedOSItems[0] : null;
+    if (unico && (String(state.activeOSItem?.itemId) !== String(unico.itemId)
+        || String(state.activeOSItem?.osId) !== String(unico.osId))) {
+        const carga = {};
+        state.pedidoSelecaoCarregando = carga;
+        const aindaAtual = () => state.pedidoSelecaoCarregando === carga
+            && state.selectedOSItems.length === 1
+            && String(state.selectedOSItems[0].itemId) === String(unico.itemId)
+            && String(state.selectedOSItems[0].osId) === String(unico.osId);
+        try { await enviarParaPedido(unico.itemId, unico.osId, { aindaAtual }); }
+        catch (e) {
+            if (state.pedidoSelecaoCarregando === carga) {
+                state.pedidoSelecaoErro = 'Não foi possível carregar o modelo selecionado. Abra-o novamente.';
+                toast(state.pedidoSelecaoErro, 'error');
+            }
+        }
+        finally { if (state.pedidoSelecaoCarregando === carga) state.pedidoSelecaoCarregando = null; }
+    }
     drawPedPreview();
 };
 
@@ -5724,6 +5683,7 @@ window.editPedidoCustomNumeracao = async function(fieldId) {
  */
 function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
     const comPrevia = !opcoes || opcoes.comPrevia !== false;
+    if (!state.multiArtesPdfTamanho) state.multiArtesPdfTamanho = {};
     if (!state.multiArtesPdfCache) state.multiArtesPdfCache = {};
     if (!state.multiArtesPdfLoading) state.multiArtesPdfLoading = {};
     const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
@@ -5758,6 +5718,8 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
             return pdfjsLib.getDocument({ data: buf }).promise;
         }).then(doc => {
             state.multiArtesPdfCache[itemArteUrl] = doc;
+            return medirArteDaFolhaCombinada(itemArteUrl, doc);
+        }).then(() => {
             if (typeof drawPedPreview === 'function') drawPedPreview();
         }).catch(e => {
             console.error('Error fetching PDF for multi arte preview:', e);
@@ -5776,6 +5738,8 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
             return pdfjsLib.getDocument({ data: buf }).promise;
         }).then(doc => {
             state.multiArtesPdfCache[itemArteVersoUrl] = doc;
+            return medirArteDaFolhaCombinada(itemArteVersoUrl, doc);
+        }).then(() => {
             if (typeof drawPedPreview === 'function') drawPedPreview();
         }).catch(e => {
             console.error('Error fetching PDF VERSO for multi arte preview:', e);
@@ -5830,6 +5794,10 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         nome_color: '#000000',
         pdfDoc: pdfDoc,
         pdfVersoDoc: pdfVersoDoc,
+        artWidth: state.multiArtesPdfTamanho[itemArteUrl]?.w,
+        artHeight: state.multiArtesPdfTamanho[itemArteUrl]?.h,
+        artVersoWidth: state.multiArtesPdfTamanho[itemArteVersoUrl]?.w,
+        artVersoHeight: state.multiArtesPdfTamanho[itemArteVersoUrl]?.h,
         bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
         // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
         // coluna do pool por modelo; sem isto o motor recusa a folha.
@@ -5863,6 +5831,11 @@ function arteParaOMotor(arte, isMultiSelected) {
         numArte = resolverNumeracaoParaModelo(numArte, itArte);
     }
 
+    // O motor lê numeracao.start. Copiar evita alterar o cadastro compartilhado
+    // e funciona também com versões já instaladas do agente.
+    if (isMultiSelected && numArte && Number.isFinite(Number(arte.start))) {
+        numArte = Object.assign({}, numArte, { start: Number(arte.start) });
+    }
     let qtdArte = arte.qtd;
 
     if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId
@@ -5946,15 +5919,19 @@ function arteParaOMotor(arte, isMultiSelected) {
 window.arteParaOMotor = arteParaOMotor;
 
 window.runPedImposition = async function (mode, isRefazer) {
+    if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
+    if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
+    const selecaoInicial = JSON.stringify(state.selectedOSItems || []);
+    const ativoInicial = JSON.stringify(state.activeOSItem || null);
+    // A confirmação pertence aos modelos capturados antes dos carregamentos.
+    const alvosDoTrabalho = (isRefazer ? [] : alvosDaImpressao((state.selectedOSItems || []).length > 1));
+    const selecaoAindaAtual = () => selecaoInicial === JSON.stringify(state.selectedOSItems || [])
+        && ativoInicial === JSON.stringify(state.activeOSItem || null);
     const validarContexto = window.PedidoJanelaExterna?.validarGeracao?.();
     if (validarContexto && !validarContexto()) {
         toast('Aguarde o modelo terminar de carregar antes de gerar ou imprimir.', 'warning');
         return;
     }
-    // A confirmação pertence ao trabalho iniciado, mesmo se o operador sair
-    // da lista enquanto o motor devolve os lotes daquele modelo.
-    const alvosDaJanelaExterna = validarContexto ? alvosDaImpressao(false) : null;
-
     // A gemea da linha que abre o `runImposition` no script.js. Sao duas telas
     // de imposicao, e toda regra de impressao precisa das duas -- esta garante
     // que o banco de dados das numeracoes esteja em maos antes do payload.
@@ -6023,6 +6000,9 @@ window.runPedImposition = async function (mode, isRefazer) {
     }
 
     if (window.isImposing) return;
+    if (!selecaoAindaAtual()) return toast('A seleção mudou durante o carregamento. Confira e tente novamente.', 'warning');
+    const erroSelecao = typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null;
+    if (erroSelecao) return toast(erroSelecao, 'warning');
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
     // agora, não um PDF vazio três minutos depois.
@@ -6085,6 +6065,10 @@ window.runPedImposition = async function (mode, isRefazer) {
         schema = (typeof esquemaDaSelecaoCombinada === 'function')
             ? esquemaDaSelecaoCombinada()
             : 'cut_stack';
+        const primeiro = itensDaImposicao(true)[0];
+        fmtId = primeiro.formato_id;
+        saiId = primeiro.saida_id || state.formatos.find(f => String(f.id) === String(fmtId))?.default_saida_id;
+        numId = primeiro.amostra_num_id || primeiro.numeracao_id;
         tempMultiArtes = state.selectedOSItems.map(s => arteDoModeloParaFolha(s, numId));
     }
 
@@ -6176,7 +6160,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     
 
-    if (schema !== 'multi_artes' && schema !== 'pdf_multiple') {
+    if (!isMultiSelected && schema !== 'multi_artes' && schema !== 'pdf_multiple') {
 
         if (start > end) return desistir('Número inicial deve ser menor que o final.');
 
@@ -6184,9 +6168,10 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
 
-    const formato = state.formatos.find(f => f.id === fmtId);
+    const formato = state.formatos.find(f => String(f.id) === String(fmtId));
 
-    const saida = state.saidas.find(s => s.id === saiId);
+    const saida = state.saidas.find(s => String(s.id) === String(saiId));
+    if (!formato || !saida) return desistir('Formato ou saída não encontrado.');
 
 
 
@@ -6255,6 +6240,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
     if (validarContexto && !validarContexto()) return desistir(null);
+    if (!selecaoAindaAtual()) return desistir('A seleção mudou. Confira e gere novamente.');
 
     let numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
@@ -6389,7 +6375,8 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         schema,
 
-        print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back' : state.printMode,
+        print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back'
+            : isMultiSelected ? modoDeVersoDoModelo(itensDaImposicao(true)[0]) : state.printMode,
         ...((pdfPares || pdfCopia) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
 
         rotate_page: rotatePage,
@@ -6536,7 +6523,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         total = state.printMode === 'duplex' ? Math.ceil(totalPages / 2) : totalPages;
 
-    } else if (schema === 'multi_artes') {
+    } else if (schema === 'multi_artes' || isMultiSelected) {
 
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
         total = artesList.reduce((acc, a) => acc + (parseInt(a.qtd) || 0), 0);
@@ -6756,6 +6743,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         // O destino e sempre a estacao: endereco direto, sem a Vercel no caminho.
         // Se nao houvesse estacao, o ramo `else` da sondagem ja teria lancado.
         if (validarContexto && !validarContexto()) return;
+        if (!selecaoAindaAtual()) return toast('A seleção mudou. Confira e gere novamente.', 'warning');
         const urlImpose = `${baseUrl}/api/impose`;
 
         const res = await fetch(urlImpose, {
@@ -6923,7 +6911,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 if (overlay) overlay.classList.remove('active');
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
                 // (ou continua não estando). Ver a nota do bloco abaixo.
-                const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
+                const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                 const ok = entrega.finalizar({ interrompido: cancelouNoMeio });
                 if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 return;
@@ -6937,7 +6925,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // depois de refazer três folhas confunde e leva a status errado.
                 // Com vários modelos na folha, os alvos são todos os marcados —
                 // ver alvosDaImpressao().
-                const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
+                const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                 if (typeof sendPrintJobDirect === 'function') {
                     const ok = await sendPrintJobDirect(printBlobQueue);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -6972,7 +6960,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
                     // Mesma razão do caminho por stream: refazer não muda status.
-                    const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
+                    const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                     if (typeof sendPrintJobDirect === 'function') {
                         const ok = await sendPrintJobDirect(multiBlobs);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -7018,7 +7006,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
             if (overlay) overlay.classList.remove('active');
-            const alvoImpressao = alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected);
+            const alvoImpressao = alvosDoTrabalho;
             if (typeof sendPrintJobDirect === 'function') {
                 const queue = [{ name: defaultFilename, blob }];
                 const ok = await sendPrintJobDirect(queue);

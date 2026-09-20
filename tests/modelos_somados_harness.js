@@ -158,7 +158,7 @@ const PAISES = [
         'saida diferente impede');
     ok(/frente/.test(api.porQueNaoCombina(base, modelo('B', 10, { verso_tipo: 'FxVerso' })) || ''),
         'frente-e-verso com so-frente impede');
-    ok(/Pdf/.test(api.porQueNaoCombina(base, modelo('B', 10, { modo_pdf: true })) || ''),
+    ok(/pdf/i.test(api.porQueNaoCombina(base, modelo('B', 10, { modo_pdf: true })) || ''),
         'modo Pdf Paginado impede');
 
     // "SÓ FRENTE" e "Frente" sao a mesma coisa: os dois modelos do 20495 usam
@@ -204,8 +204,8 @@ const PAISES = [
         /const wantsDuplex = sItem \? temVerso\(modoDeVersoDoModelo\(sItem\)\) : false;/g) || [];
     const decisoesScript = SCRIPT.match(
         /const wantsDuplex = sItem \? temVerso\(modoDeVersoDoModelo\(sItem\)\) : false;/g) || [];
-    ok(decisoesPedido.length === 2,
-        'as duas montagens do Pedido decidem o verso pela numeracao e pelo ERP', decisoesPedido.length);
+    ok(decisoesPedido.length === 1 && PEDIDO.includes('const arte = arteDoModeloParaFolha(sel, numId);'),
+        'a previa e o payload compartilham o construtor que resolve o verso', decisoesPedido.length);
     ok(decisoesScript.length === 1,
         'a tela Imposicao decide o verso pela mesma regra', decisoesScript.length);
 })();
@@ -221,7 +221,9 @@ const PAISES = [
 // script.js; abrir um pedido pela aba Pedido não limpava nada.
 
 const apiSel = new Function('state', 'window',
-    extrairFuncao(SCRIPT, 'problemaNaSelecao') + '\nreturn { problemaNaSelecao };');
+    ['temVerso', 'versoUnico', 'modoDeVersoDoModelo', 'modoDeImpressaoDoModelo',
+     'blocagemDoModelo', 'porQueNaoCombina', 'problemaNaSelecao']
+        .map(n => extrairFuncao(SCRIPT, n)).join('\n') + '\nreturn { problemaNaSelecao };');
 
 (function selecaoQueCruzaPedidos() {
     const st = {
@@ -234,7 +236,9 @@ const apiSel = new Function('state', 'window',
     const api = apiSel(st, global.window);
 
     st.selectedOSItems = [{ itemId: '1000277', osId: 'os-20495' }];
-    ok(api.problemaNaSelecao() === null, 'um modelo so nunca e problema');
+    ok(/Abra o modelo/.test(api.problemaNaSelecao()), 'um marcado exige a janela correspondente');
+    st.activeOSItem = { itemId: '1000277', osId: 'os-20495' };
+    ok(api.problemaNaSelecao() === null, 'um marcado e aberto passa');
 
     st.selectedOSItems = [
         { itemId: '1000277', osId: 'os-20495' },

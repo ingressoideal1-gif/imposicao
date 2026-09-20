@@ -386,16 +386,16 @@ async function statusFixture(response) {
     });
     await check('confirmação conserva o alvo iniciado após mudar modelo e seleção', async () => {
         const f = fixture(); await f.start(); await f.api.openModel(11, 'vibe_1');
-        const start = pedido.indexOf('    const alvosDaJanelaExterna =');
+        const start = pedido.indexOf('    const alvosDoTrabalho =');
         const end = pedido.indexOf(';', start) + 1;
-        vm.runInContext(`const validarContexto = () => true; ${pedido.slice(start, end)}`, f.ctx);
+        vm.runInContext(`const isRefazer = false; ${pedido.slice(start, end)}`, f.ctx);
         f.ctx.state.activeOSItem = { itemId: 22, osId: 'vibe_2' };
         f.ctx.state.selectedOSItems = [{ itemId: 33, osId: 'vibe_3' }];
-        for (const branch of pedido.matchAll(/const alvoImpressao = .*alvosDaJanelaExterna.*;/g)) {
+        for (const branch of pedido.matchAll(/const alvoImpressao = .*alvosDoTrabalho.*;/g)) {
             const target = vm.runInContext(`(() => { const isRefazer = false, isMultiSelected = false; ${branch[0]} return alvoImpressao; })()`, f.ctx);
             assert.equal(target.length, 1); assert.equal(target[0].itemId, 11); assert.equal(target[0].osId, 'vibe_1');
         }
-        assert.equal([...pedido.matchAll(/const alvoImpressao = .*alvosDaJanelaExterna.*;/g)].length, 4);
+        assert.equal([...pedido.matchAll(/const alvoImpressao = .*alvosDoTrabalho.*;/g)].length, 4);
     });
     console.log(`OK: ${checks} cenários de regressão de Produção por Cor.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

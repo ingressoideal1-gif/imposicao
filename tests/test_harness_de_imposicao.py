@@ -19,6 +19,8 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 HARNESSES = [
+    "impressao_combinada_harness.js",  # previa completa e payload dos modelos selecionados
+    "impressao_combinada_fluxo_harness.js",  # geracao e confirmacao com transporte simulado
     "csv_fatia_do_modelo_harness.js",   # a fatia do banco por modelo
     "modelos_somados_harness.js",       # somar modelos aproveitando a folha
     "aproveitamento_harness.js",        # medir a sobra e achar quem fecha a folha

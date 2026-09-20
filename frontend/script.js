@@ -5184,7 +5184,8 @@ function modoDeVersoDoModelo(item) {
     if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
     if (versoUnico(num && num.print_mode)) return 'duplex_unico';
     if (temVerso(num && num.print_mode)) return 'duplex';
-    const temVersoNoErp = !!(item && (item.verso === true || (item.verso_tipo && item.verso_tipo !== 'Frente')));
+    const tipo = String(item?.verso_tipo || '').trim().toUpperCase();
+    const temVersoNoErp = !!(item && (item.verso === true || (tipo && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(tipo))));
     return temVersoNoErp ? 'duplex' : 'front';
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
@@ -21311,7 +21312,7 @@ function porQueNaoCombina(a, b) {
 
     const cor = x => String(x.cor || x.padrao || '').toLowerCase().trim();
 
-    const face = x => (x.verso_tipo && x.verso_tipo !== 'Frente' && x.verso_tipo !== 'SÓ FRENTE') ? 'verso' : 'frente';
+    const face = x => temVerso(modoDeVersoDoModelo(x)) ? 'verso' : 'frente';
 
     if (cor(a) !== cor(b)) return 'a cor do material é outra';
 
@@ -21321,7 +21322,16 @@ function porQueNaoCombina(a, b) {
 
     if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
 
-    if (!!a.modo_pdf !== !!b.modo_pdf) return 'um está em modo Pdf Paginado e o outro não';
+    if (a.modo_pdf || b.modo_pdf) return 'PDF Paginado exige um modelo por vez para preservar todas as páginas';
+    const modoPdfEspecial = item => {
+        const id = item.amostra_num_id || item.numeracao_id;
+        const modo = (state.numeracoes || []).find(n => String(n.id) === String(id))?.print_mode;
+        return modo === 'pdf_odd_even' || modo === 'pdf_duplicate_back';
+    };
+    if (modoPdfEspecial(a) || modoPdfEspecial(b)) return 'os modos especiais de PDF frente e verso exigem um modelo por vez';
+    if ((parseInt(a.bloco) || 0) !== (parseInt(b.bloco) || 0)) return 'a quantidade de folhas por bloco é diferente';
+    const blocoA = blocagemDoModelo(a), blocoB = blocagemDoModelo(b);
+    if (blocoA.folhas !== blocoB.folhas || blocoA.modo !== blocoB.modo) return 'as opções de blocagem são diferentes';
 
     // A folha combinada tem UM Modo de Impressão só, e o `face()` acima não
     // separa os dois modos de verso: um FxVerso e um FxVersoUnico juntos
@@ -21364,7 +21374,11 @@ function problemaNaSelecao() {
 
     const sel = state.selectedOSItems || [];
 
-    if (sel.length < 2) return null;
+    if (!sel.length) return null;
+    if (sel.length === 1 && (String(sel[0].itemId) !== String(state.activeOSItem?.itemId)
+        || String(sel[0].osId) !== String(state.activeOSItem?.osId))) {
+        return 'Abra o modelo marcado para conferir e imprimir a seleção.';
+    }
 
     const pedidos = Array.from(new Set(sel.map(s => String(s.osId))));
 
@@ -21397,6 +21411,11 @@ function problemaNaSelecao() {
 
     }
 
+    const itens = sel.map(s => (state.osItens[s.osId] || []).find(i => String(i.id) === String(s.itemId)));
+    for (const item of itens.slice(1)) {
+        const motivo = porQueNaoCombina(itens[0], item);
+        if (motivo) return 'Seleção incompatível: ' + motivo + '.';
+    }
     return null;
 
 }

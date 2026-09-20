@@ -46,7 +46,7 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
                // "numeracaoDoModelo is not defined" antes da primeira conta.
                'numeracaoDoModelo',
                'quantidadeDoModelo', 'itemAtivoDoPedido', 'itensDaImposicao',
-               'rotuloDoModelo', 'porQueNaoCombina', 'modoDeImpressaoDoModelo',
+               'rotuloDoModelo', 'porQueNaoCombina', 'modoDeImpressaoDoModelo', 'blocagemDoModelo',
                // Os tres Modos de Impressao (31/08/2026): o porQueNaoCombina
                // separa FxVerso de FxVersoUnico, que o `face()` dele nao ve.
                'temVerso', 'versoUnico', 'modoDeVersoDoModelo',
