@@ -524,7 +524,17 @@ function montarAmbiente() {
 
     // `supabaseClient` chega como parametro: o arquivo pergunta por ele com
     // `typeof`, e sem o parametro isso seria um ReferenceError aqui.
-    new Function('window', 'document', 'supabaseClient', FONTE)(janela, documento, banco);
+    const consultarPropostas = async consulta => {
+        if (consulta.tipo !== 'encerrados_teste') throw new Error('consulta inesperada');
+        return { data: banco._encerradosTeste, error: null };
+    };
+    const definirStatusProposta = async (pedido, status) => {
+        banco._propostasGravadas.push({ payload: { status_interno: status }, filtros: { id_int: pedido } });
+        if (banco._erroAoExpedir) throw banco._erroAoExpedir;
+        return { id_int: pedido, status_interno: status };
+    };
+    new Function('window', 'document', 'supabaseClient', 'consultarPropostas', 'definirStatusProposta', FONTE)(
+        janela, documento, banco, consultarPropostas, definirStatusProposta);
 
     return { janela, documento, elementos, banco, painel: janela.AcabamentoPainel };
 }

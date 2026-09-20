@@ -64,31 +64,32 @@ e `tests/test_link_cliente_copia.py`.
 A correção inicialmente ficou local. Nessa etapa não houve commit, push, deploy, SQL remoto ou
 alteração de credenciais, permissões, dependências e regras de aprovação.
 A validação não equivale a testar Safari/iPhone ou a sessão real que apresentou
-o problema. O domínio da coluna SQL gerada `link` e a migração de hospedagem não
-foram alterados nesta tarefa.
+o problema. A versão integrada preservou CLIENTE_BASE_URL e o domínio público oficial.
+O domínio da coluna SQL gerada `link` não foi alterado nesta tarefa.
 
-## Preparação da publicação autorizada
+## Publicação confirmada
 
-Após o pedido explícito de publicar, a correção foi transportada para o worktree
-`imposicao-copia-link-cliente`, branch `fix/copia-link-cliente`, sobre `origin/main`
-em `b8a716e2`. Foi aplicado somente o diff desta tarefa, preservando as mudanças
-locais anteriores e as correções já publicadas no portal.
+Após autorização explícita do usuário, a correção foi publicada por worktree
+isolado `imposicao-copia-link-cliente`, preservando as outras alterações da pasta
+original e usando a versão atual de `origin/main` como base.
 
-- A integração preserva `CLIENTE_BASE_URL` e o domínio oficial
-  `https://imposition.ai-ideal.com.br`, inclusive ao compartilhar pela estação.
-- `index.html` e `producao.html` passam a carregar `script.js?v=836` para renovar
-  o cache do arquivo alterado. Nenhuma versão do agente foi modificada.
-- O harness de domínio foi adaptado à confirmação da criação e às funções
-  extraídas. O harness da estação não carregava `CLIENTE_BASE_URL` e já falhava
-  contra `origin/main`; a montagem foi corrigida sem retirar suas verificações.
-- Durante a preparação, C: ficou sem espaço. Somente as cópias de `tools/` do
-  worktree recém-criado foram retiradas por sparse checkout, liberando cerca de
-  114 MB. O teste cuja gravação foi interrompida foi recuperado de Git e corrigido.
-  A pasta original não foi limpa ou restaurada.
-- A versão integrada passou em 79 testes pytest, incluindo os 65 arquivos de
-  sintaxe JavaScript, domínio oficial, rotas Cloudflare, cópia em Chrome e as
-  regressões do portal. `git diff --check` passou.
+- PR: https://github.com/ingressoideal1-gif/imposicao/pull/13
+- Commit integrado: `60fd94b2e1579569618e6a934e50d8acb982d15d`.
+- A integração preserva `CLIENTE_BASE_URL` e o domínio oficial, incluindo links
+  copiados pelo painel local. O script passou a `script.js?v=836` no painel e na
+  página de produção.
+- 79 testes passaram na versão integrada, incluindo sintaxe de 65 arquivos JS,
+  domínio, rotas Cloudflare e os cenários de cópia. Um harness antigo da estação
+  foi ajustado para carregar a constante de domínio; sua falha foi reproduzida
+  contra `origin/main` antes da correção.
+- Verificação pública: `/`, `/producao` e `/script.js?v=836` responderam HTTP 200
+  no domínio oficial, com servidor Cloudflare. As duas páginas referenciam v836.
+- O JavaScript público coincide integralmente com o arquivo validado, normalizando
+  apenas CRLF/LF. SHA-256 normalizado:
+  `804538747af4fcb52b3c6e74b7999523289160d4d4e4fa6600b158270ae51524`.
+- Nenhum link real foi aberto e nenhum pedido, aprovação ou SQL remoto foi alterado.
 
-A entrega depende do merge, da implantação automática e da confirmação HTTP do
-JavaScript e das páginas no domínio oficial. Nenhum link real de cliente é aberto
-nessa verificação, para não registrar visualização ou alterar a aprovação.
+Durante a preparação, C: ficou sem espaço. Foram retiradas apenas as cópias
+descartáveis de `tools/` do novo worktree, por sparse checkout, e recuperado de Git
+um teste cuja gravação foi interrompida. A validação completa selecionada passou
+depois dessa recuperação. A pasta original foi preservada.

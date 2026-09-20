@@ -29,12 +29,14 @@ function extrair(nome, async = false) {
             function toast(msg) { window.avisos.push(msg); }
             const supabaseClient = {
                 auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})},
-                from:tabela=>({select:()=>({eq:()=>({limit:async limite=>{
-                    if (limite !== 2) throw new Error('Consulta direta deve recusar ambiguidades');
-                    if (opcoes.erroCadastro) return {error:{message:'falha sintetica'}};
-                    return {data:tabela==='propostas' ? [{id_faturado:22,vendedor:'Atendente Exemplo'}] : [{email_financeiro:opcoes.email}]};
-                }})})})
+                from:()=>{throw new Error('Cadastro deve usar o transporte autenticado');}
             };
+            async function requisitarPropostas(acao, corpo) {
+                if (acao !== 'cadastro' || corpo.pedido !== 11 || corpo.escopo !== 'contato' || corpo.exigir_cadastro !== true)
+                    throw new Error('Envio direto deve exigir cadastro inequivoco');
+                if (opcoes.erroCadastro) throw new Error('falha sintetica');
+                return {vendedor:'Atendente Exemplo',cliente:{email_financeiro:opcoes.email}};
+            }
             async function buscarLinkClienteAtivo(id) {
                 return opcoes.link ? {os_id:id,numero_pedido:11,token:'abc123',ativo:true,
                     status_arte:'Aguard. Aprovação',arte_pronta_em:'2026-09-01'} : null;

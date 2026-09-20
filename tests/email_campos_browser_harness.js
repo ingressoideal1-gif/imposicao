@@ -50,8 +50,13 @@ function extrair(nome) {
             window.vendedorProposta = 'Alexandre Almeida';
             const supabaseClient = {
                 auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})},
-                from:()=>({select:()=>({eq:()=>({limit:async()=>({data:[{vendedor:window.vendedorProposta}]})})})})
+                from:()=>{throw new Error('Cadastro deve usar o transporte autenticado');}
             };
+            async function requisitarPropostas(acao, corpo) {
+                if (acao !== 'cadastro' || corpo.pedido !== 11 || corpo.escopo !== 'contato')
+                    throw new Error('Consulta de contato invalida');
+                return {vendedor:window.vendedorProposta,cliente:null};
+            }
             function abrirModalConfigEmail() {}
             function toast() {}
             const state = {ordens:[{id:'vibe_11',numero:11,cliente:'Cliente de Exemplo'}],todasArtes:[],osItens:{}};

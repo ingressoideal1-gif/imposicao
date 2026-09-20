@@ -1,0 +1,79 @@
+[
+  {
+    "nome": "texto_com_acento_e_lf",
+    "envelope": {
+      "versao": "imposition-portal-v1",
+      "operacao": "link_cliente_confirmar_dados",
+      "link_id": "00000000-0000-0000-0000-000000000001",
+      "pedido": "42",
+      "entrada": {
+        "aba": "entrega",
+        "confirmado": false,
+        "correcao": "Portão B\nRua das Flores, 10"
+      }
+    },
+    "canonico": "{\"entrada\":{\"aba\":\"entrega\",\"confirmado\":false,\"correcao\":\"Portão B\\nRua das Flores, 10\"},\"link_id\":\"00000000-0000-0000-0000-000000000001\",\"operacao\":\"link_cliente_confirmar_dados\",\"pedido\":\"42\",\"versao\":\"imposition-portal-v1\"}",
+    "sha256_hex": "58910ca2550e846c05c0d3ab584b693e5258bbf6ce7c0a999090eba5a764fec8"
+  },
+  {
+    "nome": "texto_vazio",
+    "envelope": {
+      "versao": "imposition-portal-v1",
+      "operacao": "link_cliente_confirmar_dados",
+      "link_id": "00000000-0000-0000-0000-000000000001",
+      "pedido": "42",
+      "entrada": {
+        "aba": "entrega",
+        "confirmado": false,
+        "correcao": ""
+      }
+    },
+    "canonico": "{\"entrada\":{\"aba\":\"entrega\",\"confirmado\":false,\"correcao\":\"\"},\"link_id\":\"00000000-0000-0000-0000-000000000001\",\"operacao\":\"link_cliente_confirmar_dados\",\"pedido\":\"42\",\"versao\":\"imposition-portal-v1\"}",
+    "sha256_hex": "a62303480b58c802f3f8566379d2c48da58493773145eb1b9dd3af5a1645e9ae"
+  },
+  {
+    "nome": "texto_null",
+    "envelope": {
+      "versao": "imposition-portal-v1",
+      "operacao": "link_cliente_confirmar_dados",
+      "link_id": "00000000-0000-0000-0000-000000000001",
+      "pedido": "42",
+      "entrada": {
+        "aba": "entrega",
+        "confirmado": false,
+        "correcao": null
+      }
+    },
+    "canonico": "{\"entrada\":{\"aba\":\"entrega\",\"confirmado\":false,\"correcao\":null},\"link_id\":\"00000000-0000-0000-0000-000000000001\",\"operacao\":\"link_cliente_confirmar_dados\",\"pedido\":\"42\",\"versao\":\"imposition-portal-v1\"}",
+    "sha256_hex": "1f8c0d944c27b08a5c0740a78cb9af25b26ec9a6af2cdb9a4dc4efe3ed8d0d4f"
+  },
+  {
+    "nome": "finalizar",
+    "envelope": {
+      "versao": "imposition-portal-v1",
+      "operacao": "link_cliente_finalizar",
+      "link_id": "00000000-0000-0000-0000-000000000001",
+      "pedido": "42",
+      "entrada": {}
+    },
+    "canonico": "{\"entrada\":{},\"link_id\":\"00000000-0000-0000-0000-000000000001\",\"operacao\":\"link_cliente_finalizar\",\"pedido\":\"42\",\"versao\":\"imposition-portal-v1\"}",
+    "sha256_hex": "a02f92aa28e1bdd4cb498d520d232ece2c898e330d5cbe69266d8ec41f9dfef1"
+  },
+  {
+    "nome": "decidir_arte",
+    "envelope": {
+      "versao": "imposition-portal-v1",
+      "operacao": "link_cliente_decidir_arte",
+      "link_id": "00000000-0000-0000-0000-000000000001",
+      "pedido": "42",
+      "entrada": {
+        "modelo_id": "00000000-0000-0000-0000-000000000003",
+        "versao_arte": "2",
+        "decisao": "aprovar",
+        "observacao": null
+      }
+    },
+    "canonico": "{\"entrada\":{\"decisao\":\"aprovar\",\"modelo_id\":\"00000000-0000-0000-0000-000000000003\",\"observacao\":null,\"versao_arte\":\"2\"},\"link_id\":\"00000000-0000-0000-0000-000000000001\",\"operacao\":\"link_cliente_decidir_arte\",\"pedido\":\"42\",\"versao\":\"imposition-portal-v1\"}",
+    "sha256_hex": "bbf5ad2b35b62a06cb6dc3202116d5a2ad9f0087334bfba6ee66c77b12aa464d"
+  }
+]

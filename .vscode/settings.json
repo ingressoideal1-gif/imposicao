@@ -117,5 +117,6 @@
     "*.spec": "python",
     "*.wxs": "xml",
     "*.iss": "ini"
-  }
+  },
+  "git.ignoreLimitWarning": true
 }

@@ -1970,14 +1970,7 @@ def excluir_acesso_local(acesso_id):
 
 
 def get_email_config() -> dict:
-    """Busca configurações salvas do servidor SMTP de e-mail."""
-    if IS_SUPABASE_ACTIVE:
-        try:
-            res = _supabase_request("GET", "configuracoes_email?id=eq.default")
-            if res and len(res) > 0:
-                return res[0]
-        except Exception as e:
-            print(f"[db] get_email_config Supabase erro: {e}")
+    """SMTP pertence à estação; credenciais não são publicadas no Supabase."""
     db_data = _get_db()
     return db_data.get("email_config", {})
 
@@ -1985,46 +1978,74 @@ def get_email_config() -> dict:
 def save_email_config(config: dict) -> bool:
     """Salva configurações do servidor SMTP de e-mail."""
     config["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    if IS_SUPABASE_ACTIVE:
-        try:
-            config["id"] = "default"
-            body = json.dumps(config).encode('utf-8')
-            url = f"{SUPABASE_URL}/rest/v1/configuracoes_email?on_conflict=id"
-            headers = _headers()
-            headers['Content-Type'] = 'application/json'
-            headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
-            req = urllib.request.Request(url, data=body, headers=headers, method='POST')
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                print(f"[db] save_email_config Supabase: {resp.status}")
-        except Exception as e:
-            print(f"[db] save_email_config Supabase erro: {e}")
-
     db_data = _get_db()
     db_data["email_config"] = config
     _save_db(db_data)
     return True
 
 
+def validar_email_config(config: dict) -> dict:
+    import re
+    if not isinstance(config, dict):
+        raise ValueError("Configuração SMTP inválida.")
+    campos = ('email_remetente', 'nome_remetente', 'host', 'user', 'password')
+    resultado = {k: str(config.get(k) or '') for k in campos}
+    for k in campos:
+        if k != 'password':
+            resultado[k] = resultado[k].strip()
+        if '\r' in resultado[k] or '\n' in resultado[k]:
+            raise ValueError("Os campos SMTP não podem conter quebras de linha.")
+    if not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+', resultado['email_remetente']):
+        raise ValueError("Informe um e-mail remetente válido.")
+    if not resultado['host'] or any(c.isspace() for c in resultado['host']) or '://' in resultado['host']:
+        raise ValueError("Informe o host SMTP da hospedagem, sem http:// ou https://.")
+    try:
+        resultado['port'] = int(config.get('port', 587))
+        if not 1 <= resultado['port'] <= 65535:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ValueError("Informe uma porta SMTP entre 1 e 65535.") from None
+    resultado['user'] = resultado['user'] or resultado['email_remetente']
+    if not resultado['password'] or resultado['password'] == '******':
+        raise ValueError("Informe a senha SMTP da hospedagem.")
+    resultado['use_tls'] = config.get('use_tls', True) is not False
+    resultado['use_ssl'] = config.get('use_ssl', False) is True or resultado['port'] == 465
+    return resultado
+
+
 def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: str = None, smtp_config: dict = None) -> dict:
     """Realiza o disparo de e-mail via servidor SMTP (TLS/SSL)."""
     import smtplib
+    import ssl
+    import re
+    from html import escape
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
 
     config = smtp_config or get_email_config()
-    email_remetente = config.get("email_remetente") or os.getenv("SMTP_EMAIL_REMETENTE") or "atendimento@ingressoideal.com.br"
+    email_remetente = config.get("email_remetente") or os.getenv("SMTP_EMAIL_REMETENTE") or "contato@ingressoideal.com.br"
     nome_remetente = config.get("nome_remetente") or os.getenv("SMTP_NOME_REMETENTE") or "Ingresso Ideal"
     host = config.get("host") or os.getenv("SMTP_HOST")
-    port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
+    port = config.get("port") or os.getenv("SMTP_PORT") or 587
     user = config.get("user") or os.getenv("SMTP_USER") or email_remetente
     password = config.get("password") or os.getenv("SMTP_PASSWORD")
     use_tls = config.get("use_tls", True)
-    use_ssl = config.get("use_ssl", False) or port == 465
+    use_ssl = config.get("use_ssl", False)
 
     if not host or not user or not password:
         return {"ok": False, "error": "Servidor SMTP não configurado. Por favor, cadastre o e-mail remetente e as credenciais nas configurações de e-mail do sistema."}
 
+    server = None
     try:
+        validado = validar_email_config(dict(email_remetente=email_remetente, nome_remetente=nome_remetente,
+            host=host, port=port, user=user, password=password, use_tls=use_tls, use_ssl=use_ssl))
+        port = validado['port']
+        host, user = validado['host'], validado['user']
+        email_remetente, nome_remetente = validado['email_remetente'], validado['nome_remetente']
+        if not isinstance(to_email, str) or not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+', to_email):
+            raise ValueError("Informe um destinatário válido.")
+        if not isinstance(subject, str) or not subject.strip() or '\r' in subject or '\n' in subject:
+            raise ValueError("Informe um assunto válido, sem quebras de linha.")
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = f"{nome_remetente} <{email_remetente}>"
@@ -2037,23 +2058,41 @@ def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: str 
         elif body_text:
             # Converter quebras de linha em <br> para HTML limpo
             html_content = f"""<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
-                {body_text.replace(chr(10), '<br>')}
+                {escape(body_text).replace(chr(10), '<br>')}
             </div>"""
             msg.attach(MIMEText(html_content, "html", "utf-8"))
 
         if use_ssl or port == 465:
-            server = smtplib.SMTP_SSL(host, port, timeout=15)
+            server = smtplib.SMTP_SSL(host, port, timeout=15, context=ssl.create_default_context())
         else:
             server = smtplib.SMTP(host, port, timeout=15)
             if use_tls:
-                server.starttls()
+                server.starttls(context=ssl.create_default_context())
 
         server.login(user, password)
-        server.sendmail(email_remetente, [to_email], msg.as_string())
-        server.quit()
+        recusados = server.sendmail(email_remetente, [to_email], msg.as_string())
+        if recusados:
+            return {"ok": False, "error": "A hospedagem recusou o destinatário. Confira o endereço do cliente."}
 
-        return {"ok": True, "message": f"E-mail enviado com sucesso para {to_email}!"}
-    except Exception as e:
-        print(f"[SMTP Error] Erro ao enviar e-mail para {to_email}:", e)
+        return {"ok": True, "message": f"E-mail aceito pelo servidor SMTP para {to_email}."}
+    except ValueError as e:
         return {"ok": False, "error": str(e)}
-
+    except smtplib.SMTPAuthenticationError:
+        return {"ok": False, "error": "A hospedagem recusou o login SMTP. Confira usuário e senha."}
+    except smtplib.SMTPRecipientsRefused:
+        return {"ok": False, "error": "A hospedagem recusou o destinatário."}
+    except (TimeoutError, smtplib.SMTPServerDisconnected):
+        return {"ok": False, "error": "A conexão SMTP foi interrompida. O envio não pôde ser confirmado; confira a caixa de e-mail antes de repetir."}
+    except OSError:
+        return {"ok": False, "error": "Não foi possível conectar ao SMTP. Confira host, porta, conexão segura e acesso à rede."}
+    except Exception:
+        return {"ok": False, "error": "A hospedagem recusou a operação SMTP. Confira o remetente e as opções de conexão."}
+    finally:
+        if server is not None:
+            try:
+                server.quit()
+            except Exception:
+                try:
+                    server.close()
+                except Exception:
+                    pass

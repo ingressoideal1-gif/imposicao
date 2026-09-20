@@ -47,6 +47,8 @@ import { banco, contar } from "../_compartilhado/banco.ts";
 import { operarBancosPedido, operadorLocalBancos } from "../_compartilhado/bancos_pedido.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
+import { operarFundo } from "../_compartilhado/fundo.ts";
+import { operarPropostas, operadorLocalPropostas } from "../_compartilhado/propostas.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { conferirSenha } from "../_compartilhado/senha_liberacao.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
@@ -212,6 +214,24 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       throw new Recusa(422, "corpo invalido: esperava JSON");
     }
     return ok(await operarBancosPedido(p[1], corpo, operador));
+  }
+
+  if (p[0] === "fundo" && p.length === 2 && ["publicar", "remover"].includes(p[1])) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    await conferirAgente(req);
+    const operador = await operadorLocalPropostas(req.headers.get("x-operador-codigo"));
+    let corpo: unknown;
+    try { corpo = await req.json(); } catch { throw new Recusa(422, "corpo invalido: esperava JSON"); }
+    return ok(await operarFundo(p[1], corpo, operador, "Operador da estacao"));
+  }
+
+  if (p[0] === "propostas" && p.length === 2 && ["consultar", "status", "cadastro", "pagamentos"].includes(p[1])) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    await conferirAgente(req);
+    const operador = await operadorLocalPropostas(req.headers.get("x-operador-codigo"));
+    let corpo: unknown;
+    try { corpo = await req.json(); } catch { throw new Recusa(422, "corpo invalido: esperava JSON"); }
+    return ok(await operarPropostas(p[1], corpo, operador));
   }
 
   // A estacao cadastra fonte no catalogo COMPARTILHADO, e isso e decisao de

@@ -466,7 +466,9 @@ def test_o_encerrado_como_teste_e_lido_por_fora_do_carregamento_da_producao():
     js = _ler("frontend/acabamento.js")
 
     assert "carregarEncerradosComoTeste" in js
-    assert "'encerrado_teste_em', 'is', null" in js, (
+    assert "consultarPropostas({ tipo: 'encerrados_teste' })" in js
+    propostas_api = _ler("supabase/functions/_compartilhado/propostas.ts")
+    assert 'q.set("encerrado_teste_em", "not.is.null")' in propostas_api, (
         "o filtro tem de ser do lado do banco, e nao trazer 8 mil propostas"
     )
     assert "encerradosTeste.has(String(os.numero))" in js, (
@@ -684,24 +686,25 @@ def test_a_escrita_na_tabela_do_parceiro_e_estreita():
         for a in alvos
     })
     assert tabelas == ["pedidos_modelos", "producao_volume_itens", "producao_volumes",
-                       "propostas", "propostas_os_setores"], (
+                       "propostas_os_setores"], (
         "o acabamento escreve em tabela inesperada: " + ", ".join(tabelas)
     )
+    assert "definirStatusProposta(idInt, 'EXPEDICAO')" in js
 
     # As duas que entraram em 23/08/2026 sao NOSSAS -- prefixo `producao_`. Foi
     # a decisao do usuario naquele dia: os volumes ficam do nosso lado, e a
     # excecao aberta na tabela do parceiro continua sendo so a do peso.
     do_parceiro = [t for t in tabelas if not t.startswith("producao_")]
-    assert do_parceiro == ["pedidos_modelos", "propostas", "propostas_os_setores"], (
+    assert do_parceiro == ["pedidos_modelos", "propostas_os_setores"], (
         "um recurso novo alargou a escrita em tabela do parceiro: " + ", ".join(do_parceiro)
     )
 
     # `propostas` entrou em 21/08/2026 com o botao EXPEDICAO, e a escrita ali e a
     # mais estreita que existe: uma coluna, um valor. E a tabela PRINCIPAL do
     # parceiro -- qualquer outra coluna aqui e alargar a excecao sem pedir.
-    escritas = re.findall(r"\.from\('propostas'\)\s*\.update\(([^)]*)\)", js)
-    assert escritas == ["{ status_interno: 'EXPEDICAO' }"], (
-        "a escrita em propostas deixou de ser so o status_interno: " + ", ".join(escritas)
+    escritas = re.findall(r"definirStatusProposta\(idInt, '([^']+)'\)", js)
+    assert escritas == ["EXPEDICAO"], (
+        "a escrita de propostas pelo servico deixou de ser so expedicao: " + ", ".join(escritas)
     )
 
 

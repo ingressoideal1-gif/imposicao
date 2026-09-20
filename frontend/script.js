@@ -9425,10 +9425,7 @@ async function pedidosQueUsamNumeracao(numId) {
 
     if (faltam.length && typeof supabaseClient !== 'undefined' && supabaseClient) {
         try {
-            const { data, error } = await supabaseClient
-                .from('propostas')
-                .select('id_int, created_at, cliente')
-                .in('id_int', faltam);
+            const { data, error } = await consultarPropostas({ tipo: 'numeros', numeros: faltam });
             if (error) throw error;
             (data || []).forEach(linha => {
                 const reg = porPedido.get(String(linha.id_int));
@@ -25986,11 +25983,7 @@ async function carregarOrdensDados() {
         let propostasComerciais = [];
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             try {
-                const { data: propData, error: propError } = await supabaseClient
-                    .from('propostas')
-                    .select('id_int, cliente, vendedor, status_interno, id_cliente, id_faturado')
-                    .order('id_int', { ascending: false })
-                    .limit(2000);
+                const { data: propData, error: propError } = await consultarPropostas({ tipo: 'lista' }, 2000);
                 if (!propError && propData) {
                     propostasComerciais = propData;
                 }
@@ -26251,18 +26244,8 @@ async function carregarPagamentosGlobais() {
 
     try {
         const numeros = state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
-        const bloco = 200;
-        let todas = [];
-
-        for (let i = 0; i < numeros.length; i += bloco) {
-            const { data, error } = await supabaseClient
-                .from('pagamentos_v2')
-                .select('id_int, status')
-                .in('id_int', numeros.slice(i, i + bloco))
-                .neq('status', 'CANCELADO');
-            if (error) throw error;
-            if (data) todas = todas.concat(data);
-        }
+        const { data: todas, error } = await consultarPropostas({ tipo: 'numeros', numeros }, undefined, 'pagamentos');
+        if (error) throw error;
 
         state.pagamentosGlobais = {};
         todas.forEach(c => {
@@ -26485,7 +26468,6 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // A terceira é consulta por STATUS, e não por lista de números: é
         // justamente a que descobre pedido que nenhuma das outras duas conhece.
         let propostas = [];
-        const COLUNAS_PROPOSTA = 'id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado, frete_escolhido';
         try {
             const idsComProduto = produtos.map(p => p.id_int).filter(Boolean);
             const idsComArte = (state.todasArtes || []).filter(arteFoiLancada).map(a => a.id_int).filter(Boolean);
@@ -26497,10 +26479,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             });
 
             if (uniqueIdInts.length > 0) {
-                const { data: propData, error: propError } = await vibeClient
-                    .from('propostas')
-                    .select(COLUNAS_PROPOSTA)
-                    .in('id_int', uniqueIdInts);
+                const { data: propData, error: propError } = await consultarPropostas({ tipo: 'numeros', numeros: uniqueIdInts });
                 if (!propError) guardar(propData);
             }
 
@@ -26510,11 +26489,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             // resposta num teto de linhas, e se um dia esta consulta encostar
             // nele o que fica de fora tem de ser o pedido mais antigo — não o
             // que a gráfica está fabricando hoje. São 82 pedidos em 01/09/2026.
-            const { data: naGraficaData, error: naGraficaErr } = await vibeClient
-                .from('propostas')
-                .select(COLUNAS_PROPOSTA)
-                .in('status_interno', SINAIS_SAIU_DA_ARTE)
-                .order('id_int', { ascending: false });
+            const { data: naGraficaData, error: naGraficaErr } = await consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE });
             if (!naGraficaErr) guardar(naGraficaData);
 
             propostas = [...porNumero.values()];
@@ -29305,10 +29280,7 @@ async function ressincronizarStatusInterno() {
 
     let linhas = null;
     try {
-        const { data, error } = await supabaseClient
-            .from('propostas')
-            .select('id_int, status_interno')
-            .in('id_int', numeros);
+        const { data, error } = await consultarPropostas({ tipo: 'numeros', numeros });
         if (error) throw error;
         linhas = data;
     } catch (e) {
@@ -33765,30 +33737,9 @@ async function loadDadosEntregaInterno(osId, osNum) {
     if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
     try {
-        // 1. Buscar dados da proposta, clientes e enderecos
-        const { data: propData } = await supabaseClient
-            .from('propostas')
-            .select('id_faturado, id_cliente, id_endereco_ent')
-            .eq('id_int', numInt)
-            .limit(1);
-
-        let cli = null;
-        let end = null;
-
-        if (propData && propData.length > 0) {
-            const prop = propData[0];
-            const idCli = prop.id_faturado || prop.id_cliente;
-            const idEnd = prop.id_endereco_ent;
-
-            if (idCli) {
-                const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(1);
-                if (cliData && cliData.length > 0) cli = cliData[0];
-            }
-            if (idEnd) {
-                const { data: endData } = await supabaseClient.from('enderecos').select('*').eq('id', idEnd).limit(1);
-                if (endData && endData.length > 0) end = endData[0];
-            }
-        }
+        const cadastro = await requisitarPropostas('cadastro', { pedido: numInt });
+        const cli = cadastro.cliente;
+        const end = cadastro.endereco;
 
         // 2. Buscar observações / solicitação de alteração do cliente em pedidos_artes
         const { data: paData } = await supabaseClient
@@ -33926,6 +33877,7 @@ async function loadDadosEntregaInterno(osId, osNum) {
         }
     } catch (e) {
         console.error('Erro ao carregar detalhes de entrega interno:', e);
+        if (container) container.textContent = 'N\u00e3o foi poss\u00edvel carregar os dados. Tente novamente.';
     }
 }
 
@@ -35756,9 +35708,7 @@ window.liberarParaProducao = async function(osId) {
             // Atualizar na proposta o status_interno
             const numInt = os ? parseInt(os.numero) : null;
             if (numInt) {
-                await supabaseClient.from('propostas')
-                    .update({ status_interno: 'EM PRODUCAO' })
-                    .eq('id_int', numInt);
+                await definirStatusProposta(numInt, 'EM PRODUCAO');
             }
 
             // Atualizar status da OS de arte
@@ -40740,11 +40690,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
 
     if ((nomeVazio || numeroCliente == null) && currentNumInt && !isNaN(currentNumInt)) {
         try {
-            const { data: pProp } = await supabaseClient
-                .from('propostas')
-                .select('cliente, id_cliente, id_faturado')
-                .eq('id_int', currentNumInt)
-                .maybeSingle();
+            const { data: pProp } = await consultarPropostas({ tipo: 'numeros', numeros: [currentNumInt] }, 1).then(r => ({ ...r, data: r.data && r.data[0] }));
             if (pProp) {
                 if (pProp.cliente && nomeVazio) {
                     clienteNome = pProp.cliente;
@@ -40775,26 +40721,13 @@ async function loadUltimosPedidos(osId, clienteNome) {
         // 1a. Pelo número do cliente no ERP (inclui o de faturamento).
         const idsDoCliente = [...new Set([numeroCliente, idFaturado].filter(v => v != null))];
         if (idsDoCliente.length) {
-            const filtro = idsDoCliente
-                .map(id => `id_cliente.eq.${id},id_faturado.eq.${id}`)
-                .join(',');
-            const { data, error } = await supabaseClient
-                .from('propostas')
-                .select('id_int, created_at, cliente')
-                .or(filtro)
-                .order('created_at', { ascending: false })
-                .limit(1000);
+            const { data, error } = await consultarPropostas({ tipo: 'clientes', clientes: idsDoCliente }, 1000);
             if (!error) guardar(data);
         }
 
         // 1b. E pelo nome, para não perder a proposta antiga sem número.
         if (clienteNome && clienteNome.trim()) {
-            const { data, error } = await supabaseClient
-                .from('propostas')
-                .select('id_int, created_at, cliente')
-                .ilike('cliente', `%${clienteNome.trim()}%`)
-                .order('created_at', { ascending: false })
-                .limit(1000);
+            const { data, error } = await consultarPropostas({ tipo: 'nome', nome: clienteNome.trim() }, 1000);
             if (!error) guardar(data);
         }
 
@@ -42287,31 +42220,18 @@ async function buscarDadosEmailCliente(osId, numero, exigirCadastro = false) {
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && !isNaN(numInt)) {
         try {
-            const { data: propData, error: propError } = await supabaseClient
-                .from('propostas')
-                .select('*')
-                .eq('id_int', numInt)
-                .limit(exigirCadastro ? 2 : 1);
-
-            if (exigirCadastro && (propError || propData?.length !== 1)) throw new Error('Não foi possível confirmar o cadastro deste pedido. Atualize a página e tente novamente.');
-
-            if (propData && propData.length > 0) {
-                const prop = propData[0];
-                atendente = typeof prop.vendedor === 'string' ? prop.vendedor : '';
-                if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
-                const idCli = prop.id_faturado || prop.id_cliente;
-                if (idCli) {
-                    const { data: cliData, error: cliError } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(exigirCadastro ? 2 : 1);
-                    if (exigirCadastro && (cliError || cliData?.length !== 1)) throw new Error('Não foi possível confirmar o cadastro do cliente. Confira o cadastro antes de enviar.');
-                    if (cliData && cliData.length > 0) {
-                        const cli = cliData[0];
-                        clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
-                        if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
-                    }
-                }
+            const cadastro = await requisitarPropostas('cadastro', {
+                pedido: numInt, escopo: 'contato', exigir_cadastro: exigirCadastro
+            });
+            atendente = typeof cadastro.vendedor === 'string' ? cadastro.vendedor : '';
+            if (!clienteNome) clienteNome = cadastro.nome || '';
+            const cli = cadastro.cliente;
+            if (cli) {
+                clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
+                if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
             }
         } catch (errCli) {
-            if (exigirCadastro) throw errCli;
+            if (exigirCadastro) throw new Error('Não foi possível confirmar o cadastro deste pedido. Confira o cadastro antes de enviar.');
             console.warn('[Email Modal] Erro ao buscar dados do cliente:', errCli);
         }
     }
@@ -47061,15 +46981,12 @@ window.publicarFundo = async function () {
             .upload(caminho, blob, { contentType: 'image/jpeg', upsert: true });
         if (envio.error) throw envio.error;
 
-        const quem = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || null;
-        const r = await supabaseClient.rpc('publicar_fundo_do_pwa', {
-            p_arquivo: caminho,
-            p_veu: _fundoVeu,
-            p_enquadramento: _fundoEnquadramento,
-            p_versao: versao,
-            p_por: quem,
+        await requisitarFundo('publicar', {
+            arquivo: caminho,
+            veu: _fundoVeu,
+            enquadramento: _fundoEnquadramento,
+            versao,
         });
-        if (r.error) throw r.error;
 
         if (typeof toast === 'function') {
             toast(`Fundo publicado — ${Math.round(blob.size / 1024)} KB, qualidade ${Math.round(q * 100)}%.`, 'success');
@@ -47080,10 +46997,7 @@ window.publicarFundo = async function () {
         await carregarFundoAtual();
     } catch (e) {
         const recado = (e && e.message) || String(e);
-        fundoErro(
-            /publicar_fundo_do_pwa|does not exist|schema cache/i.test(recado)
-                ? 'A tabela do fundo ainda não existe. Rode o arquivo sql/fundo_do_pwa.sql no editor SQL do Supabase e tente de novo.'
-                : 'Não deu para publicar: ' + recado);
+        fundoErro('Não deu para publicar: ' + recado);
     } finally {
         if (botao) { botao.disabled = false; botao.textContent = antes; }
     }
@@ -47094,8 +47008,7 @@ window.removerFundo = async function () {
     // fundo que ele já tinha, e o histórico continua respondendo o que esteve
     // no ar — que é o que permite voltar atrás depois.
     try {
-        const r = await supabaseClient.rpc('remover_fundo_do_pwa');
-        if (r.error) throw r.error;
+        await requisitarFundo('remover');
         if (typeof toast === 'function') toast('Fundo retirado do ar.', 'success');
         await carregarFundoAtual();
     } catch (e) {

@@ -143,6 +143,67 @@ function urlDeEscritaDeFontes(sufixo) {
     return `${base}/api/fontes${sufixo || ''}`;
 }
 
+// Propostas não usam mais o PostgREST do navegador. Cada operação é validada
+// na nuvem; sem sessão Vibe, somente a estação com operador identificado atende.
+async function requisitarPropostas(acao, corpo, recurso = 'propostas') {
+    const sessao = supabaseClient ? await supabaseClient.auth.getSession() : null;
+    if (sessao && sessao.error) throw sessao.error;
+    const token = sessao && sessao.data && sessao.data.session && sessao.data.session.access_token;
+    const headers = { 'Content-Type': 'application/json' };
+    let base;
+    if (token) {
+        base = API_PAINEL;
+        headers.Authorization = 'Bearer ' + token;
+    } else {
+        if (SERVIDA_PELA_NUVEM) throw new Error('Entre no Vibe para acessar esta funcionalidade.');
+        const operador = window._acessoLocal;
+        if (!operador || !operador.codigo) throw new Error('Entre com o codigo do operador na estacao.');
+        base = '';
+        headers['X-Operador-Codigo'] = operador.codigo;
+    }
+    const res = await fetch(`${base}/api/${recurso}/${acao}`, {
+        method: 'POST', headers, body: JSON.stringify(corpo)
+    });
+    let dados;
+    try { dados = await res.json(); } catch { throw new Error('Resposta invalida do servico.'); }
+    if (!res.ok) throw new Error(typeof dados.detail === 'string' ? dados.detail : 'Nao foi possivel acessar esta funcionalidade.');
+    return dados;
+}
+
+async function requisitarFundo(acao, corpo = {}) {
+    return requisitarPropostas(acao, corpo, 'fundo');
+}
+
+async function consultarPropostas(consulta, limiteTotal, acao = 'consultar') {
+    try {
+        const consultas = [];
+        if (consulta.tipo === 'numeros') {
+            const ids = [...new Set(consulta.numeros)];
+            for (let i = 0; i < ids.length; i += 200) consultas.push({ ...consulta, numeros: ids.slice(i, i + 200) });
+        } else consultas.push(consulta);
+        const todas = [];
+        for (const c of consultas) {
+            let offset = 0;
+            while (limiteTotal === undefined || todas.length < limiteTotal) {
+                const limite = Math.min(500, limiteTotal === undefined ? 500 : limiteTotal - todas.length);
+                const linhas = await requisitarPropostas(acao, acao === 'pagamentos' ? { numeros: c.numeros, offset, limite } : { ...c, offset, limite });
+                if (!Array.isArray(linhas)) throw new Error('Resposta invalida ao consultar pedidos.');
+                if (!linhas.length) break;
+                todas.push(...linhas);
+                offset += linhas.length;
+            }
+        }
+        return { data: todas, error: null };
+    } catch (error) {
+        // Não retornar lote parcial nem tentar anon quando a rota recusa.
+        return { data: null, error };
+    }
+}
+
+async function definirStatusProposta(pedido, status) {
+    return requisitarPropostas('status', { pedido, status });
+}
+
 // ─── Toda chamada ao motor leva a sessão junto ───────────────────────────────
 //
 // Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia

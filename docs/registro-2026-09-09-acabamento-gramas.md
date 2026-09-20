@@ -25,6 +25,30 @@ com `pytest -n 0`. Esse recorte inclui o harness funcional completo e a
 conferência dos campos reais no navegador. `node --check` e `git diff --check`
 também passaram. A captura local confirmou visualmente a senha mascarada.
 
-Entrega local: sem publicação, instalação de agente ou acesso a dados reais.
-As alterações anteriores do workspace foram preservadas. A confirmação na
-estação com a balança física depende da disponibilização desta versão.
+## Publicação em 09/09/2026
+
+Publicação autorizada pelo usuário e concluída no site. PR #26:
+https://github.com/ingressoideal1-gif/imposicao/pull/26
+
+- Worktree isolado: `../imposicao-acabamento-gramas`, baseado em `95e13d4f`.
+- Commit da correção: `faf66cdbff79e77cd82c6c83a0d8b39d3cbd435e`.
+- Merge em main: `eaf606951195061aedc83c3b64ab3e67aa0cd99a`.
+- Cloudflare Pages: prévia e produção concluídas com `success`.
+- Os mesmos 17 testes passaram também na cópia isolada para publicação.
+- GET público de `https://imposition.ai-ideal.com.br/`: HTTP 200, HTML
+  idêntico ao validado, incluindo `acabamento.js?v=834`.
+- GET público de `/acabamento.js?v=834`: HTTP 200, JavaScript idêntico ao
+  validado. Comparação com normalização de CRLF para LF.
+- SHA-256 do HTML normalizado:
+  `40c2c9187573534bf81cda0e25273fb6ff44beca5c05bcb0717212e5fe3eb2c2`.
+- SHA-256 do JavaScript normalizado:
+  `614f6344f500b04a20528b6f47b7fe818d10e84e2e43a2a7a75f933e4e7a548e`.
+
+As alterações anteriores do workspace foram preservadas e não entraram no PR.
+Não houve acesso a dados reais, migração, build ou instalação do agente Windows.
+A confirmação com a balança física continua pendente. O painel empacotado no
+agente depende de atualização própria; esta entrega publicou o site.
+
+Recuperação: reverter o commit do PR #26 por um novo commit e publicar pelo
+mesmo fluxo, usando nova referência de cache para o asset revertido.
+Este complemento de evidência pós-publicação ficou registrado localmente.

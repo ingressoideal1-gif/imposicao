@@ -1450,10 +1450,7 @@
     async function carregarEncerradosComoTeste() {
         try {
             if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-            const { data, error } = await supabaseClient
-                .from('propostas')
-                .select('id_int')
-                .not('encerrado_teste_em', 'is', null);
+            const { data, error } = await consultarPropostas({ tipo: 'encerrados_teste' });
             if (error) throw error;
             tela.encerradosTeste = new Set((data || [])
                 .map(p => String(p.id_int))
@@ -3845,10 +3842,7 @@
                 if (!(await temSessaoDoSupabase())) {
                     throw new Error('esta tela está sem sessão do Vibe');
                 }
-                const { error } = await supabaseClient.from('propostas')
-                    .update({ status_interno: 'EXPEDICAO' })
-                    .eq('id_int', idInt);
-                if (error) throw error;
+                await definirStatusProposta(idInt, 'EXPEDICAO');
             }
 
             // A tela anda junto: o pedido some da fila do acabamento, que é o
