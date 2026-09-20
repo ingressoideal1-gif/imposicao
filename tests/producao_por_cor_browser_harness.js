@@ -39,7 +39,7 @@ const extract = name => {
             window.pedidoJaPassouDaGrafica = () => false;
             window.supabaseClient = { from(table) { return { select() { return this; }, in() { return this; }, order() { return this; },
                 range(offset) { return Promise.resolve({ data: offset ? [] : table === 'pedidos_modelos'
-                    ? [11, 12, 21, 31].map(id => ({ id, id_int: id < 20 ? 1 : 2, id_produto_proposta_origem: id === 31 ? 101 : (id === 21 ? 100 : 99), nome_modelo: `Modelo ${id}`, status_impressao: id === 31 ? 'Impresso' : 'Aguardando', amostra_cor_id: 5 }))
+                    ? [11, 12, 21, 31].map(id => ({ id, id_int: id < 20 ? 1 : 2, id_produto_proposta_origem: id === 31 ? 101 : (id === 21 ? 100 : 99), nome_modelo: `Modelo ${id}`, status_impressao: id === 31 ? 'Impresso' : id === 21 ? null : 'Aguardando', status_producao: 'PENDENTE', amostra_cor_id: 5 }))
                     : [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' },
                         { id: 100, id_int: 2, id_produto: 10, nome_produto: 'Produto fora da gráfica' },
                         { id: 101, id_int: 2, id_produto: 11, nome_produto: 'Produto só impresso' }] }); } }; } };

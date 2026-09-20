@@ -34,6 +34,10 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
     function printStatus(value) {
+        // Modelos criados pelo fluxo compartilhado nascem sem status_impressao
+        // e com status_producao=PENDENTE. O painel os mostra como Aguardando;
+        // esse valor legado não pode excluir seu produto desta lista.
+        if (norm(value) === 'pendente') return 'Aguardando';
         return typeof normalizarStatusImpressao === 'function'
             ? normalizarStatusImpressao(value) : (value || 'Aguardando');
     }
@@ -327,8 +331,7 @@
         if (wrap) wrap.hidden = false;
         body.innerHTML = filtered.map(record => {
             const open = String(record.modelId) === String(local.openItemId);
-            const normalizedStatus = typeof window.normalizarStatusImpressao === 'function'
-                ? window.normalizarStatusImpressao(record.status) : record.status;
+            const normalizedStatus = printStatus(record.status);
             return `
                 <tr class="ppc-model-row ${open ? 'open' : ''}" data-item-id="${esc(record.modelId)}" data-os-id="${esc(record.osId)}">
                     <td class="ppc-order">#${esc(record.orderNumber)}</td>

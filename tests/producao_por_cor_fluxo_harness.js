@@ -85,6 +85,31 @@ async function statusFixture(response) {
     return { ...f, filters };
 }
 (async () => {
+    await check('30 produtos com impressão vazia e produção PENDENTE entram por cor e abrem', async () => {
+        const f = fixture();
+        f.tables.pedidos_modelos = [];
+        f.tables.produtos_proposta = [];
+        f.ctx.state.cores.push({ id: 7, name: 'Vermelho' });
+        for (let product = 1; product <= 30; product++) {
+            f.tables.produtos_proposta.push({ id: product, id_int: 1, id_produto: product, nome_produto: `Produto ${product}` });
+            for (const color of [5, 7]) f.tables.pedidos_modelos.push(model(product * 10 + color, 1, {
+                id_produto_proposta_origem: product, status_impressao: product === 1 && color === 5 ? 'Aguardando' : null,
+                status_producao: product % 2 ? 'PENDENTE' : ' pendente ',
+                amostra_cor_id: color, padrao: color === 5 ? 'Azul' : 'Vermelho',
+            }));
+        }
+        f.tables.pedidos_modelos.push(model(999, 1, { status_impressao: 'Impresso', status_producao: 'PENDENTE' }),
+            model(998, 1, { status_impressao: 'Corrigir Arte', status_producao: 'PENDENTE' }));
+        await f.api.openPage();
+        assert.equal(f.api.local.records.length, 60);
+        assert.equal((f.elements.get('ppc-product-select').innerHTML.match(/value="id:/g) || []).length, 30);
+        f.api.local.productKey = 'id:1'; f.api.local.colorKey = 'id:7'; f.api.render();
+        assert(f.elements.get('ppc-color-list').innerHTML.includes('Vermelho'));
+        assert.equal(f.ctx.ProducaoPorCorUtils.modelosDoFiltro(f.api.local.records, 'id:1', 'id:7').length, 1);
+        await f.api.openModel(17, 'vibe_1');
+        assert(f.calls.some(call => call.open && call.open[0] === 17));
+        assert.equal(f.ctx.PedidoJanelaExterna.validarGeracao()(), true);
+    });
     await check('dropdown informa carga em andamento e falha na preparação da janela', async () => {
         const f = fixture(); const pending = deferred();
         f.ctx.loadOrdens = () => pending.promise;
