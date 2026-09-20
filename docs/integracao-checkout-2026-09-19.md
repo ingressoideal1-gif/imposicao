@@ -1,5 +1,7 @@
 # Integração dos rascunhos locais — 19/09/2026
 
+> Etapa encerrada: consulte a [publicação e sincronização final das sessões](sessoes-em-dia-2026-09-20.md), web v917 e NewProd 1.2.336.
+
 > Atualização de 20/09: a integração foi transportada para o checkout principal e atualizada com a base v916. Use `C:\ProjetosLocais\ideal-imposition`. Consulte [o registro atual e o backup](checkout-principal-atualizado-2026-09-20.md). O texto abaixo registra a etapa anterior.
 
 Integração local concluída na pasta `C:\ProjetosLocais\ideal-imposition-atualizado-20260919`, branch `manutencao/checkout-atualizado-20260919`. Base final: `ab914f7f68eba89ed7828404ce85bd444d7a90b6`, igual a `origin/main` na conferência final. As alterações da integração estão sem commit e sem publicação.

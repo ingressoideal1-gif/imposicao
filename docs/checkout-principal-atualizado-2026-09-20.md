@@ -1,5 +1,9 @@
 # Checkout principal atualizado — 20/09/2026
 
+> Registro da primeira etapa. A integração foi posteriormente commitada,
+> publicada e sincronizada em todas as worktrees; veja a
+> [consolidação final das sessões](sessoes-em-dia-2026-09-20.md).
+
 A pasta de trabalho voltou a ser `C:\ProjetosLocais\ideal-imposition`, branch `main`. A base avançou de `a306ff06` para `d538bc72` (v916), incorporando os 181 commits que faltavam. A integração local revisada em 19/09 foi reaplicada sobre essa base sem conflitos.
 
 As alterações locais restantes pertencem à integração revisada, não aos rascunhos antigos aplicados sobre código de 05/09. A publicação dessas mudanças continua separada da atualização do checkout. Não houve push, deploy, build, migração remota ou envio real de e-mail.
