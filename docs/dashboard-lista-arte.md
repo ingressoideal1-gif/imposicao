@@ -10,10 +10,11 @@ O card **Dashboard** é o primeiro card da Lista de Arte e troca a tabela operac
 - Pedidos em arte agora e idade média do backlog.
 - Pedidos em alteração e aguardando aprovação agora.
 - Finalizações diárias, distribuição atual do fluxo e volume recebido.
-- Ranking por designer: finalizados, modelos, média, mediana, SLA, carga ativa, alterações e aprovações.
-- Produção por modelo: pedidos, itens e tempo médio dos pedidos que contêm o modelo.
+- Ranking por designer: finalizados, produtos, média, mediana, SLA, carga ativa, alterações e aprovações.
+- Ranking por atendente: finalizados, produtos, média, mediana, SLA, carga ativa, pendências e aprovações.
+- Produção por produto: pedidos, linhas de produto, quantidade e tempo médio dos pedidos que contêm o produto.
 
-O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `pedidos_artes`, `pedidos_modelos` e `imposition_tempo_no_card`, já carregados pela Lista de Arte.
+O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `pedidos_artes`, `produtos_proposta` e `imposition_tempo_no_card`, já carregados pela Lista de Arte. A quantidade é a `qtd` comercial original, sem divisão ou conversão.
 
 ## Regra de confiabilidade
 
@@ -29,7 +30,7 @@ Para uma avaliação mais justa e completa, criar em tarefa própria um históri
 - aprovação na primeira versão e número médio de revisões;
 - prazo cumprido por designer e por complexidade do pedido;
 - devolução da produção por erro de arte;
-- capacidade por quantidade de modelos, páginas e itens, evitando comparar apenas volume bruto;
+- capacidade por quantidade de produtos, modelos, páginas e itens, evitando comparar apenas volume bruto;
 - equilíbrio de distribuição da fila e tempo até a primeira ação;
 - tendências semanais consistentes mesmo depois de o pedido sair das listas atuais.
 

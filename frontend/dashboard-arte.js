@@ -57,6 +57,11 @@
         return arte.designer_nome || 'Não atribuído';
     }
 
+    function nomeAtendente(os, obterAtendente) {
+        const atribuido = obterAtendente ? obterAtendente(os) : '';
+        return atribuido || os.vendedor || 'Não atribuído';
+    }
+
     function segundosEmArteAgora(registro, agoraMs) {
         if (!registro || registro.card !== 'fila' || !registro.desde) return null;
         const desde = new Date(registro.desde).getTime();
@@ -74,8 +79,14 @@
         inicioAnterior.setDate(inicioAnterior.getDate() - dias);
         const fimAnterior = new Date(inicio);
         const filtroDesigner = String(entrada.filtroDesigner || '');
+        const filtroAtendente = String(entrada.filtroAtendente || '');
         const tempos = entrada.tempos || {};
-        const modelos = entrada.modelos || {};
+        const produtosPorPedido = {};
+        (entrada.produtos || []).forEach(produto => {
+            const chave = String(produto.id_int);
+            if (!produtosPorPedido[chave]) produtosPorPedido[chave] = [];
+            produtosPorPedido[chave].push(produto);
+        });
         const artesPorPedido = {};
 
         (entrada.artes || []).forEach(arte => {
@@ -86,7 +97,9 @@
         const pedidos = (entrada.ordens || []).filter(os => {
             if (!os || os.ignorado) return false;
             const designer = nomeDesigner(os, artesPorPedido, entrada.obterDesigner);
-            return !filtroDesigner || designer === filtroDesigner;
+            const atendente = nomeAtendente(os, entrada.obterAtendente);
+            return (!filtroDesigner || designer === filtroDesigner)
+                && (!filtroAtendente || atendente === filtroAtendente);
         }).map(os => {
             const chave = String(os.numero);
             const reg = tempos[chave] || tempos[parseInt(chave, 10)] || null;
@@ -98,7 +111,7 @@
             const conclusao = fila === 'concluidos' && !cancelado && reg && reg.card === 'concluidos'
                 && reg.desde && reg.saiu_da_fila_em ? new Date(reg.saiu_da_fila_em) : null;
             const duracao = conclusao ? numero(reg.credito_segundos) : null;
-            const listaModelos = modelos[chave] || modelos[parseInt(chave, 10)] || [];
+            const listaProdutos = produtosPorPedido[chave] || [];
             return {
                 os,
                 chave,
@@ -107,7 +120,8 @@
                 conclusao: conclusao && Number.isFinite(conclusao.getTime()) ? conclusao : null,
                 duracao,
                 designer: nomeDesigner(os, artesPorPedido, entrada.obterDesigner),
-                modelos: listaModelos,
+                atendente: nomeAtendente(os, entrada.obterAtendente),
+                produtos: listaProdutos,
                 tempoAtual: segundosEmArteAgora(reg, agoraMs)
             };
         });
@@ -156,7 +170,7 @@
             // do recorte; não deve criar uma linha zerada no ranking.
             if (p.fila === 'concluidos' && !dentro(p.conclusao)) return;
             if (!porDesigner[p.designer]) {
-                porDesigner[p.designer] = { designer: p.designer, concluidos: 0, duracoes: [], ativos: 0, alteracoes: 0, aprovacao: 0, modelos: 0 };
+                porDesigner[p.designer] = { designer: p.designer, concluidos: 0, duracoes: [], ativos: 0, alteracoes: 0, aprovacao: 0, produtos: 0 };
             }
             const item = porDesigner[p.designer];
             if (p.fila === 'fila') item.ativos++;
@@ -164,7 +178,7 @@
             if (String(p.os.status_calculado || '').toUpperCase() === 'EM ALTERAÇÃO') item.alteracoes++;
             if (dentro(p.conclusao)) {
                 item.concluidos++;
-                item.modelos += p.modelos.length;
+                item.produtos += p.produtos.length;
                 if (p.duracao !== null) item.duracoes.push(p.duracao);
             }
         });
@@ -174,32 +188,63 @@
             ativos: item.ativos,
             alteracoes: item.alteracoes,
             aprovacao: item.aprovacao,
-            modelos: item.modelos,
+            produtos: item.produtos,
             media: media(item.duracoes),
             mediana: mediana(item.duracoes),
             sla: item.duracoes.length ? item.duracoes.filter(v => v <= SLA_SEGUNDOS).length / item.duracoes.length * 100 : null,
             cobertura: item.duracoes.length
         })).sort((a, b) => b.concluidos - a.concluidos || (a.media ?? Infinity) - (b.media ?? Infinity) || a.designer.localeCompare(b.designer));
 
-        const porModelo = {};
+        const porAtendente = {};
+        pedidos.forEach(p => {
+            if (p.fila === 'concluidos' && !dentro(p.conclusao)) return;
+            if (!porAtendente[p.atendente]) {
+                porAtendente[p.atendente] = { atendente: p.atendente, concluidos: 0, duracoes: [], ativos: 0, pendentes: 0, aprovacao: 0, produtos: 0 };
+            }
+            const item = porAtendente[p.atendente];
+            if (p.fila === 'fila') item.ativos++;
+            if (p.fila === 'pendente') item.pendentes++;
+            if (p.fila === 'aprovacao') item.aprovacao++;
+            if (dentro(p.conclusao)) {
+                item.concluidos++;
+                item.produtos += p.produtos.length;
+                if (p.duracao !== null) item.duracoes.push(p.duracao);
+            }
+        });
+        const atendentes = Object.values(porAtendente).map(item => ({
+            atendente: item.atendente,
+            concluidos: item.concluidos,
+            ativos: item.ativos,
+            pendentes: item.pendentes,
+            aprovacao: item.aprovacao,
+            produtos: item.produtos,
+            media: media(item.duracoes),
+            mediana: mediana(item.duracoes),
+            sla: item.duracoes.length ? item.duracoes.filter(v => v <= SLA_SEGUNDOS).length / item.duracoes.length * 100 : null
+        })).sort((a, b) => b.concluidos - a.concluidos || (a.media ?? Infinity) - (b.media ?? Infinity) || a.atendente.localeCompare(b.atendente));
+
+        const porProduto = {};
         concluidos.forEach(p => {
-            const nomesNoPedido = new Set((p.modelos || []).map(m => String(m.nome_modelo || m.modelo || '').trim() || 'Sem modelo informado'));
-            if (!nomesNoPedido.size) nomesNoPedido.add('Sem modelo informado');
+            const nomesNoPedido = new Set((p.produtos || []).map(produto => String(produto.nome_produto || '').trim() || 'Sem produto informado'));
+            if (!nomesNoPedido.size) nomesNoPedido.add('Sem produto informado');
             nomesNoPedido.forEach(nome => {
-                if (!porModelo[nome]) porModelo[nome] = { modelo: nome, pedidos: 0, unidades: 0, duracoes: [] };
-                const item = porModelo[nome];
+                if (!porProduto[nome]) porProduto[nome] = { produto: nome, pedidos: 0, itens: 0, quantidade: 0, duracoes: [] };
+                const item = porProduto[nome];
+                const produtosDoNome = (p.produtos || []).filter(produto => (String(produto.nome_produto || '').trim() || 'Sem produto informado') === nome);
                 item.pedidos++;
-                item.unidades += (p.modelos || []).filter(m => (String(m.nome_modelo || m.modelo || '').trim() || 'Sem modelo informado') === nome).length || 1;
+                item.itens += produtosDoNome.length || 1;
+                item.quantidade += produtosDoNome.reduce((soma, produto) => soma + numero(produto.qtd), 0);
                 if (p.duracao !== null) item.duracoes.push(p.duracao);
             });
         });
-        const modelosResumo = Object.values(porModelo).map(item => ({
-            modelo: item.modelo,
+        const produtosResumo = Object.values(porProduto).map(item => ({
+            produto: item.produto,
             pedidos: item.pedidos,
-            unidades: item.unidades,
+            itens: item.itens,
+            quantidade: item.quantidade,
             media: media(item.duracoes),
             cobertura: item.duracoes.length
-        })).sort((a, b) => b.pedidos - a.pedidos || a.modelo.localeCompare(b.modelo)).slice(0, 12);
+        })).sort((a, b) => b.pedidos - a.pedidos || b.quantidade - a.quantidade || a.produto.localeCompare(b.produto)).slice(0, 12);
 
         return {
             dias,
@@ -220,7 +265,8 @@
             pontos,
             fluxo,
             designers,
-            modelos: modelosResumo
+            atendentes,
+            produtos: produtosResumo
         };
     }
 
@@ -257,38 +303,52 @@
     function tabelaDesigners(itens) {
         if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum designer atribuído no recorte atual.</div>';
         return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Designer</th><th>Finalizados</th><th>Modelos</th><th>Tempo médio</th><th>Mediana</th><th>Até 2h</th><th>Em arte</th><th>Alteração</th><th>Aprovação</th></tr></thead>
+            <thead><tr><th>Designer</th><th>Finalizados</th><th>Produtos</th><th>Tempo médio</th><th>Mediana</th><th>Até 2h</th><th>Em arte</th><th>Alteração</th><th>Aprovação</th></tr></thead>
             <tbody>${itens.map((item, indice) => `<tr>
                 <td><span class="dashboard-arte-posicao">${indice + 1}</span><strong>${escapar(item.designer)}</strong></td>
-                <td>${item.concluidos}</td><td>${item.modelos}</td><td>${tempo(item.media)}</td><td>${tempo(item.mediana)}</td>
+                <td>${item.concluidos}</td><td>${item.produtos}</td><td>${tempo(item.media)}</td><td>${tempo(item.mediana)}</td>
                 <td>${percentual(item.sla)}</td><td>${item.ativos}</td><td>${item.alteracoes}</td><td>${item.aprovacao}</td>
             </tr>`).join('')}</tbody></table></div>`;
     }
 
-    function tabelaModelos(itens) {
-        if (!itens.length) return '<div class="dashboard-arte-vazio">Ainda não há modelos finalizados com data confiável neste período.</div>';
+    function tabelaProdutos(itens) {
+        if (!itens.length) return '<div class="dashboard-arte-vazio">Ainda não há produtos finalizados com data confiável neste período.</div>';
         return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Modelo</th><th>Pedidos</th><th>Itens</th><th>Tempo médio do pedido</th></tr></thead>
-            <tbody>${itens.map(item => `<tr><td><strong>${escapar(item.modelo)}</strong></td><td>${item.pedidos}</td><td>${item.unidades}</td><td>${tempo(item.media)}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Produto</th><th>Pedidos</th><th>Itens</th><th>Quantidade</th><th>Tempo médio do pedido</th></tr></thead>
+            <tbody>${itens.map(item => `<tr><td><strong>${escapar(item.produto)}</strong></td><td>${item.pedidos}</td><td>${item.itens}</td><td>${item.quantidade.toLocaleString('pt-BR')}</td><td>${tempo(item.media)}</td></tr>`).join('')}</tbody>
         </table></div>`;
+    }
+
+    function tabelaAtendentes(itens) {
+        if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum atendente atribuído no recorte atual.</div>';
+        return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
+            <thead><tr><th>Atendente</th><th>Finalizados</th><th>Produtos</th><th>Tempo médio</th><th>Mediana</th><th>Até 2h</th><th>Em arte</th><th>Pendências</th><th>Aprovação</th></tr></thead>
+            <tbody>${itens.map((item, indice) => `<tr>
+                <td><span class="dashboard-arte-posicao">${indice + 1}</span><strong>${escapar(item.atendente)}</strong></td>
+                <td>${item.concluidos}</td><td>${item.produtos}</td><td>${tempo(item.media)}</td><td>${tempo(item.mediana)}</td>
+                <td>${percentual(item.sla)}</td><td>${item.ativos}</td><td>${item.pendentes}</td><td>${item.aprovacao}</td>
+            </tr>`).join('')}</tbody></table></div>`;
     }
 
     function renderDashboardArte() {
         const raiz = document.getElementById('dashboard-arte-conteudo');
         if (!raiz || typeof state === 'undefined') return;
         const filtroDesigner = document.getElementById('os-filter-designer')?.value || '';
+        const filtroAtendente = document.getElementById('os-filter-atendente')?.value || '';
         const ordens = (state.ordens || []).map(os => Object.assign({}, os, {
             ignorado: typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os)
         }));
         const metricas = calcularMetricasDashboardArte({
             ordens,
             artes: state.todasArtes || [],
-            modelos: state.modelosGlobais || {},
+            produtos: state.produtosPropostaGlobais || [],
             tempos: state.temposNoCard || {},
             dias: periodoDias,
             filtroDesigner,
+            filtroAtendente,
             agora: new Date(),
-            obterDesigner: os => typeof getOSDesigner === 'function' ? getOSDesigner(os.id, os.numero) : ''
+            obterDesigner: os => typeof getOSDesigner === 'function' ? getOSDesigner(os.id, os.numero) : '',
+            obterAtendente: os => typeof getOSVendedor === 'function' ? getOSVendedor(os.id) : (os.vendedor || '')
         });
 
         document.querySelectorAll('.dashboard-arte-periodo').forEach(botao => {
@@ -299,7 +359,8 @@
         const periodoTexto = document.getElementById('dashboard-arte-periodo-texto');
         if (periodoTexto) {
             const intervalo = periodoDias === 1 ? 'hoje' : `nos últimos ${periodoDias} dias`;
-            periodoTexto.textContent = `${filtroDesigner || 'Toda a equipe'} · resultados ${intervalo}.`;
+            const recorte = [filtroDesigner, filtroAtendente].filter(Boolean).join(' · ') || 'Toda a equipe';
+            periodoTexto.textContent = `${recorte} · resultados ${intervalo}.`;
         }
 
         const maiorPonto = Math.max(1, ...metricas.pontos.map(p => p.valor));
@@ -343,9 +404,15 @@
             </article>
 
             <article class="dashboard-arte-painel" style="margin-top:14px">
-                <h3>Produção por modelo</h3>
-                <p class="dashboard-arte-painel-sub">Até 12 modelos com mais pedidos finalizados no período. O tempo pertence ao pedido que contém o modelo.</p>
-                ${tabelaModelos(metricas.modelos)}
+                <h3>Desempenho por atendente</h3>
+                <p class="dashboard-arte-painel-sub">Produção vinculada ao atendente e situação atual dos pedidos sob sua responsabilidade.</p>
+                ${tabelaAtendentes(metricas.atendentes)}
+            </article>
+
+            <article class="dashboard-arte-painel" style="margin-top:14px">
+                <h3>Produção por produto</h3>
+                <p class="dashboard-arte-painel-sub">Até 12 produtos com mais pedidos finalizados no período. Quantidade mantém o valor comercial original do item.</p>
+                ${tabelaProdutos(metricas.produtos)}
             </article>
 
             <div class="dashboard-arte-cobertura"><span>ℹ️</span><span><strong>Cobertura dos tempos: ${metricas.cobertura} de ${metricas.concluidos.length} finalizado(s).</strong>
