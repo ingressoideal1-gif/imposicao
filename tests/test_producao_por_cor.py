@@ -41,13 +41,12 @@ def test_filtro_exige_produto_e_cor():
 
 
 def test_a_lista_so_aceita_modelo_aguardando_e_abre_com_carga_completa():
-    pagina = _ler("frontend/producao-por-cor.js")
-    assert "&& modeloEstaAguardando(record)" in pagina
-    assert ".filter(modeloEstaAguardando)" in pagina
-    assert "typeof window.pedidoNaGrafica === 'function' && window.pedidoNaGrafica(order)" in pagina
-    assert "return inFactory && !alreadyLeft" in pagina
-    assert "item._dbLoaded === true" in pagina
-    assert "fullItem = await loadFullItem(itemId, osId)" in pagina
+    resultado = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "producao_por_cor_fluxo_harness.js")],
+        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert "cenários de regressão" in resultado.stdout
 
 
 def test_status_reutiliza_o_mesmo_caminho_do_painel_de_producao():
@@ -59,7 +58,16 @@ def test_status_reutiliza_o_mesmo_caminho_do_painel_de_producao():
     assert "pedidos-modelo-status-impressao" in principal
     assert ".insert(" not in pagina
     assert ".upsert(" not in pagina
-    assert ".delete(" not in pagina
+    # Set.delete remove apenas a trava local de status; não é exclusão no banco.
+    assert ".from(" not in pagina[pagina.index("async function changeStatus("):]
+
+
+def test_janela_externa_no_navegador_preserva_identidade_e_fecha_apos_status():
+    resultado = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "producao_por_cor_browser_harness.js")],
+        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=45,
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
 
 
 def test_janela_do_pedido_tem_adaptador_opcional_e_preserva_o_padrao():

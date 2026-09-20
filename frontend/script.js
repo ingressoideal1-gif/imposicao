@@ -31573,23 +31573,22 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             if (!confirmado) {
                 await loadOSItens(osId);
                 renderOrdens();
-                return;
+                return false;
             }
             avisarCorrecaoDeArte(novoStatus);
             renderOrdens();
             window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
                 detail: { itemId, osId, status: novoStatus }
             }));
-            return;
-        }
-
-        if (itemId && itemId.toString().startsWith('vibe_item_')) {
-            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
-            impOverrides[itemId] = novoStatus;
-            localStorage.setItem('vibe_item_impressao_overrides', JSON.stringify(impOverrides));
+            return true;
         }
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const os = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+            const numero = os ? (os.numero || os.id_int) : String(osId).replace(/^vibe_/, '');
+            if (!/^\d+$/.test(String(numero)) || !itemId || String(itemId).startsWith('vibe_item_')) {
+                throw new Error('Registro do modelo e pedido não confirmado. Atualize a lista.');
+            }
             const isNumericId = /^\d+$/.test(String(itemId).trim());
             let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
             if (isNumericId) {
@@ -31597,8 +31596,15 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             } else {
                 query = query.eq('id', itemId);
             }
-            const { error } = await query;
+            const { data, error } = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao');
             if (error) throw error;
+            if (!Array.isArray(data) || data.length !== 1
+                || String(data[0].id) !== String(itemId).trim()
+                || String(data[0].id_int) !== String(Number(numero))
+                || !String(data[0].status_impressao || '').trim()
+                || normalizarStatusImpressao(data[0].status_impressao) !== normalizarStatusImpressao(novoStatus)) {
+                throw new Error('O banco não confirmou exatamente o modelo, pedido e status solicitados.');
+            }
         } else {
             const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
                 method: 'PUT',
@@ -31606,6 +31612,12 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 body: JSON.stringify({ status_impressao: novoStatus })
             });
             if (!res.ok) throw new Error('Falha ao atualizar');
+        }
+
+        if (itemId && itemId.toString().startsWith('vibe_item_')) {
+            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
+            impOverrides[itemId] = novoStatus;
+            localStorage.setItem('vibe_item_impressao_overrides', JSON.stringify(impOverrides));
         }
 
         // Atualizar estado local
@@ -31632,12 +31644,14 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
         window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
             detail: { itemId, osId, status: novoStatus }
         }));
+        return true;
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
         const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
         toast('Erro ao atualizar impressão: ' + errMessage, 'error');
         // Recarregar para reverter
         await loadOSItens(osId);
+        return false;
     }
 }
 
@@ -31737,7 +31751,7 @@ async function confirmarImpressaoModelos(alvos) {
     }
 
     for (const a of lista) {
-        await updateItemImpressao(a.itemId, a.osId, 'IMPRESSO');
+        if (await updateItemImpressao(a.itemId, a.osId, 'IMPRESSO') === false) return false;
     }
     // Folha que juntou pedidos diferentes deixa registro. Só depois do status:
     // é a confirmação do operador que torna a impressão um fato.
@@ -32098,7 +32112,10 @@ const globalFuzzyMatch = (a, b) => {
  * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
  * com matching inteligente de formato, cor e numeração
  */
-async function enviarParaImposicao(itemId, osId, switchTab = true) {
+async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}) {
+    const aindaAtual = contexto.aindaAtual || (() => true);
+    const agendar = (fn, ms) => setTimeout(() => { if (aindaAtual()) fn(); }, ms);
+    if (!aindaAtual()) return;
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return toast('Item não encontrado.', 'error');
@@ -32124,6 +32141,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     // As demais continuam chegando pela tela de Amostras, em segundo plano, e
     // a mescla preserva o que ja desceu.
     await recarregarNumeracoesDoPedido(osId, { comBanco: false });
+    if (!aindaAtual()) return;
 
     // O banco das numeracoes DESTE trabalho, antes de qualquer conta da tela.
     // Sem ele o `updatePedSummary` leria `csv_data === undefined`, concluiria
@@ -32133,6 +32151,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     // numeracao do modelo ANTERIOR neste ponto.
     if (typeof garantirCsvDoTrabalho === 'function') {
         await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho(null));
+        if (!aindaAtual()) return;
     }
 
     // A janela do Pedido tambem precisa do banco que pertence ao PEDIDO, nao
@@ -32142,6 +32161,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     // mesmo banco, portanto a carga precisa terminar antes de preencher a tela.
     if (typeof garantirBancosDoTrabalho === 'function') {
         await garantirBancosDoTrabalho([osId]);
+        if (!aindaAtual()) return;
     }
 
     // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
@@ -32235,7 +32255,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         const resolvedSaidaId = item.saida_id || (formatoObj ? formatoObj.default_saida_id : null) || (state.saidas && state.saidas[0] ? state.saidas[0].id : null);
 
         if (resolvedSaidaId) {
-            setTimeout(() => {
+            agendar(() => {
                 const saidaSelect = document.getElementById('imp-saida');
                 if (saidaSelect) {
                     saidaSelect.value = resolvedSaidaId;
@@ -32251,7 +32271,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     }
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
-    setTimeout(() => {
+    agendar(() => {
         // Ver o comentario em `runImposition`: a coluna do ERP e
         // `amostra_num_id`. Sem o fallback, este matching automatico refazia o
         // trabalho de adivinhar a numeracao de um item que JA tinha uma
@@ -32277,14 +32297,14 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     }, 300);
 
     // --- PREENCHER FAIXA DE NUMERAÇÃO ---
-    setTimeout(() => {
+    agendar(() => {
         const numStart = document.getElementById('imp-start');
         const numEnd = document.getElementById('imp-end');
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
     }, 400);
 
-    setTimeout(() => {
+    agendar(() => {
         const printMode = document.getElementById('imp-print-mode');
         if (printMode) {
             printMode.value = modoDeVersoDoModelo(item);
@@ -32311,10 +32331,10 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
-    setTimeout(() => { renderImpOSQueue(); }, 600);
+    agendar(() => { renderImpOSQueue(); }, 600);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    setTimeout(async () => {
+    if (!contexto.aindaAtual) agendar(async () => {
         // Prioridade 1: arte_url do próprio item
         // Prioridade 2: pdf_base64 da cor correspondente
         const arteUrl = item.arte_url || null;
@@ -32353,7 +32373,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                         impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
                         impInfo.style.display = 'block';
                     }
-                    setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
+                    agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
                 })
                 .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
                 
@@ -32379,7 +32399,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                                 pdfjsLib.getDocument({ data: arrayBuffer }).promise
                                     .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
                                     .then(() => {
-                                    setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
+                                    agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
                                 }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da arte:', e));
                             });
                         }
@@ -32421,7 +32441,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                     pdfjsLib.getDocument({ data: bytesV }).promise
                         .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
                         .then(() => {
-                        setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
+                        agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
                     }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da cor:', e));
                 }
                 
@@ -32430,7 +32450,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                     impInfo.textContent = `✅ ${filename} (Carregado da Cor)`;
                     impInfo.style.display = 'block';
                 }
-                setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
+                agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
                 console.log(`[OS→Imp] Arte base64 carregada via Cor "${corObj.name}"`);
             } catch (e) {
                 console.error('[OS→Imp] Erro ao carregar PDF base64 da cor:', e);
@@ -32447,7 +32467,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             if (impInfo) {
                 impInfo.style.display = 'none';
             }
-            setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
+            agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
             console.warn(`[OS→Imp] Nenhuma arte ou gabarito de cor encontrado para item ${item.id}`);
         }
     }, 700);

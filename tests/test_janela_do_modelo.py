@@ -118,6 +118,6 @@ def test_o_menu_traz_a_pagina_inicial_do_pedido():
 
     pedido = _ler("frontend/pedido.js")
     corpo = pedido[pedido.index("async function enviarParaPedido("):]
-    corpo = corpo[:corpo.index("setTimeout(")]
+    corpo = corpo[:corpo.index("window.enviarParaPedido")]
     assert "window.showView('view-pedido')" in corpo, \
         "enviarParaPedido voltou a navegar clicando no menu — e o menu fecha a janela"

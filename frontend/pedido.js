@@ -435,7 +435,8 @@ async function medirArteDaFolhaCombinada(url, doc) {
 }
 window.medirArteDaFolhaCombinada = medirArteDaFolhaCombinada;
 
-async function loadPedArtFile(file) {
+async function loadPedArtFile(file, aindaAtual = () => true) {
+    if (!aindaAtual()) return;
     state.pedArtFile = file;
 
     const ext = file.name.split('.').pop().toLowerCase();
@@ -445,7 +446,7 @@ async function loadPedArtFile(file) {
         if (ext === 'pdf') {
 
             if (typeof pdfjsLib === 'undefined') {
-
+                if (arguments.length > 1) throw new Error('PDF.js não disponível.');
                 return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
 
             }
@@ -455,8 +456,10 @@ async function loadPedArtFile(file) {
                 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
             const arrayBuffer = await file.arrayBuffer();
+            if (!aindaAtual()) return;
 
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            if (!aindaAtual()) return;
 
             
 
@@ -471,6 +474,7 @@ async function loadPedArtFile(file) {
 
 
             const page = await pdf.getPage(1);
+            if (!aindaAtual()) return;
 
             const vp = page.getViewport({ scale: 1 });
 
@@ -491,6 +495,7 @@ async function loadPedArtFile(file) {
             octx.fillRect(0, 0, off.width, off.height);
 
             await page.render({ canvasContext: octx, viewport: page.getViewport({ scale }) }).promise;
+            if (!aindaAtual()) return;
 
 
 
@@ -547,12 +552,14 @@ async function loadPedArtFile(file) {
             img.src = URL.createObjectURL(file);
 
             await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+            if (!aindaAtual()) return;
 
             
 
             // Obter o DPI da imagem a partir dos metadados
 
             const dpi = await getDpi(file);
+            if (!aindaAtual()) return;
 
             
 
@@ -569,6 +576,7 @@ async function loadPedArtFile(file) {
         updatePedSummary(); // Recalcular sumário e forçar redesenho do preview
 
     } catch (e) {
+        if (!aindaAtual()) return;
 
         toast('Erro ao carregar arte: ' + e.message, 'error');
 
@@ -581,6 +589,7 @@ async function loadPedArtFile(file) {
         state.pedArtPagesRendering = {};
 
         updatePedSummary();
+        if (arguments.length > 1) throw e;
 
     }
 
@@ -4202,7 +4211,18 @@ async function alternarModeloAberto(itemId, osId) {
 }
 window.alternarModeloAberto = alternarModeloAberto;
 
-async function enviarParaPedido(itemId, osId) {
+async function enviarParaPedido(itemId, osId, contexto = {}) {
+    const aindaAtual = contexto.aindaAtual || (() => true);
+    const tarefas = [];
+    const agendar = (fn, ms) => {
+        if (!contexto.aindaAtual) return setTimeout(fn, ms);
+        const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
+            try { if (aindaAtual()) await fn(); resolve(); } catch (error) { reject(error); }
+        }, ms));
+        tarefas.push(tarefa);
+        return tarefa;
+    };
+    if (!aindaAtual()) return;
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
     const item = itens.find(i => String(i.id) === String(itemId)) || itens[0];
     if (!item) return toast('Item não encontrado.', 'error');
@@ -4270,6 +4290,7 @@ async function enviarParaPedido(itemId, osId) {
         // Inicializar painel lateral de driver de impressão
         if (typeof initPedPrintPanel === 'function') {
             initPedPrintPanel().then(() => {
+                if (!aindaAtual()) return;
                 const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
                 if (prodId && typeof loadPrintConfigForProduct === 'function') {
                     loadPrintConfigForProduct(prodId);
@@ -4304,7 +4325,9 @@ async function enviarParaPedido(itemId, osId) {
     // switchTab=false para não mudar a aba
     // ====================================================================
     if (typeof enviarParaImposicao === 'function') {
-        await enviarParaImposicao(item.id, osId, false);
+        if (contexto.aindaAtual) await enviarParaImposicao(item.id, osId, false, contexto);
+        else await enviarParaImposicao(item.id, osId, false);
+        if (!aindaAtual()) return;
     }
 
     // O formato do modelo só está CERTO em #ped-formato a partir daqui — é o
@@ -4318,7 +4341,7 @@ async function enviarParaPedido(itemId, osId) {
     if (typeof atualizarBandejaCapaMiolo === 'function') atualizarBandejaCapaMiolo();
 
     // --- PREENCHER FAIXA DE NUMERAÇÃO (ped-start / ped-end) ---
-    setTimeout(() => {
+    agendar(() => {
         const numStart = document.getElementById('ped-start');
         const numEnd = document.getElementById('ped-end');
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
@@ -4337,7 +4360,7 @@ async function enviarParaPedido(itemId, osId) {
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃO + BLOCOS ---
-    setTimeout(() => {
+    agendar(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
             printMode.value = modoDeVersoDoModelo(item);
@@ -4375,10 +4398,10 @@ async function enviarParaPedido(itemId, osId) {
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
-    setTimeout(() => { renderPedOSQueue(); }, 600);
+    agendar(() => { renderPedOSQueue(); }, 600);
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
-    setTimeout(() => {
+    agendar(() => {
         let numId = item.numeracao_id;
         const fmtSelect = document.getElementById('ped-formato');
         const formatoId = fmtSelect ? fmtSelect.value : null;
@@ -4402,7 +4425,7 @@ async function enviarParaPedido(itemId, osId) {
     }, 500);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    setTimeout(async () => {
+    agendar(async () => {
         const arteUrl = item.arte_url || null;
         const corObj = item.amostra_cor_id
             ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
@@ -4411,6 +4434,7 @@ async function enviarParaPedido(itemId, osId) {
         // Só quando a arte vai sair da cor: o catálogo não traz o PDF.
         if (!arteUrl && corObj && typeof window.garantirPdfDaCor === 'function') {
             await window.garantirPdfDaCor(corObj);
+            if (!aindaAtual()) return;
         }
         
         if (arteUrl) {
@@ -4418,39 +4442,46 @@ async function enviarParaPedido(itemId, osId) {
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            fetch(arteUrl)
+            await fetch(arteUrl)
                 .then(res => {
                     const ct = res.headers.get('content-type') || '';
                     return res.blob().then(blob => ({ blob, ct }));
                 })
-                .then(({ blob, ct }) => {
+                .then(async ({ blob, ct }) => {
+                    if (!aindaAtual()) return;
                     const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
                     const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
-                    if (!isPdf && !isImg) return;
+                    if (!isPdf && !isImg) {
+                        if (contexto.aindaAtual) throw new Error('A arte recebida não é PDF nem imagem.');
+                        return;
+                    }
                     const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
                     state.expectedArteName = filename;
-                    loadPedArtFile(file);
+                    await loadPedArtFile(file, aindaAtual);
+                    if (!aindaAtual()) return;
                     
                     const pedInfo = document.getElementById('ped-file-info');
                     if (pedInfo) {
                         pedInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
                         pedInfo.style.display = 'block';
                     }
-                    setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+                    agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
                 })
-                .catch(err => console.warn('[OS→Ped] Erro ao baixar arte via URL:', err));
+                .catch(err => { console.warn('[OS→Ped] Erro ao baixar arte via URL:', err); if (contexto.aindaAtual) throw err; });
+            if (!aindaAtual()) return;
                 
             // Carregar Verso se houver
             guardarPdfDoVersoDaPrevia(null);   // zera o doc e a medida da pagina
             state.pedArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                fetch(item.verso_arte_url)
+                await fetch(item.verso_arte_url)
                     .then(res => {
                         const ct = res.headers.get('content-type') || '';
                         return res.blob().then(blob => ({ blob, ct }));
                     })
-                    .then(({ blob, ct }) => {
+                    .then(async ({ blob, ct }) => {
+                        if (!aindaAtual()) return;
                         const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
                         // O ARQUIVO, e nao so o documento da previa: um modelo
                         // sozinho nao passa por `multi_artes` e manda a arte como
@@ -4458,16 +4489,17 @@ async function enviarParaPedido(itemId, osId) {
                         // chegaria ao motor sem verso nenhum (31/08/2026).
                         state.pedArtVersoFile = new File([blob], filenameV, { type: ct || 'application/pdf' });
                         if (isPdf && typeof pdfjsLib !== 'undefined') {
-                            blob.arrayBuffer().then(arrayBuffer => {
-                                pdfjsLib.getDocument({ data: arrayBuffer }).promise
-                                    .then(pdfV => guardarPdfDoVersoDaPrevia(pdfV))
+                            return blob.arrayBuffer().then(arrayBuffer => {
+                                if (!aindaAtual()) return;
+                                return pdfjsLib.getDocument({ data: arrayBuffer }).promise
+                                    .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaPrevia(pdfV); })
                                     .then(() => {
-                                    setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
-                                }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da arte:', e));
+                                    agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
+                                }).catch(e => { console.error('[OS→Ped] Erro ao carregar PDF de verso da arte:', e); if (contexto.aindaAtual) throw e; });
                             });
                         }
                     })
-                    .catch(err => console.warn('[OS→Ped] Erro ao baixar arte de verso via URL:', err));
+                    .catch(err => { console.warn('[OS→Ped] Erro ao baixar arte de verso via URL:', err); if (contexto.aindaAtual) throw err; });
             }
         } else if (corObj && corObj.pdf_base64) {
             state.isColorTemplate = true;
@@ -4480,7 +4512,8 @@ async function enviarParaPedido(itemId, osId) {
                 const filename = corObj.pdf_filename || `${corObj.name}.pdf`;
                 const file = new File([blob], filename, { type: 'application/pdf' });
                 state.expectedArteName = filename;
-                loadPedArtFile(file);
+                await loadPedArtFile(file, aindaAtual);
+                if (!aindaAtual()) return;
                 
                 // Carregar Verso da Cor se for Duplex
                 guardarPdfDoVersoDaPrevia(null);   // zera o doc e a medida da pagina
@@ -4497,21 +4530,23 @@ async function enviarParaPedido(itemId, osId) {
                         corObj.pdf_verso_filename || `${corObj.name}_verso.pdf`,
                         { type: 'application/pdf' }
                     );
-                    pdfjsLib.getDocument({ data: bytesV }).promise
-                        .then(pdfV => guardarPdfDoVersoDaPrevia(pdfV))
+                    await pdfjsLib.getDocument({ data: bytesV }).promise
+                        .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaPrevia(pdfV); })
                         .then(() => {
-                        setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
-                    }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da cor:', e));
+                        agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
+                    }).catch(e => { console.error('[OS→Ped] Erro ao carregar PDF de verso da cor:', e); if (contexto.aindaAtual) throw e; });
                 }
+                if (!aindaAtual()) return;
                 
                 const pedInfo = document.getElementById('ped-file-info');
                 if (pedInfo) {
                     pedInfo.textContent = `✅ ${filename} (Carregado da Cor)`;
                     pedInfo.style.display = 'block';
                 }
-                setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+                agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
             } catch (e) {
                 console.error('[OS→Ped] Erro ao carregar PDF base64 da cor:', e);
+                if (contexto.aindaAtual) throw e;
             }
         } else {
             state.isColorTemplate = false;
@@ -4522,9 +4557,10 @@ async function enviarParaPedido(itemId, osId) {
             state.pedArtImage = null;
             const pedInfo = document.getElementById('ped-file-info');
             if (pedInfo) pedInfo.style.display = 'none';
-            setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+            agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
         }
     }, 700);
+    if (contexto.aindaAtual) await Promise.all(tarefas);
 }
 window.enviarParaPedido = enviarParaPedido;
 
@@ -5906,6 +5942,14 @@ function arteParaOMotor(arte, isMultiSelected) {
 window.arteParaOMotor = arteParaOMotor;
 
 window.runPedImposition = async function (mode, isRefazer) {
+    const validarContexto = window.PedidoJanelaExterna?.validarGeracao?.();
+    if (validarContexto && !validarContexto()) {
+        toast('Aguarde o modelo terminar de carregar antes de gerar ou imprimir.', 'warning');
+        return;
+    }
+    // A confirmação pertence ao trabalho iniciado, mesmo se o operador sair
+    // da lista enquanto o motor devolve os lotes daquele modelo.
+    const alvosDaJanelaExterna = validarContexto ? alvosDaImpressao(false) : null;
 
     // A gemea da linha que abre o `runImposition` no script.js. Sao duas telas
     // de imposicao, e toda regra de impressao precisa das duas -- esta garante
@@ -5931,6 +5975,8 @@ window.runPedImposition = async function (mode, isRefazer) {
             return;
         }
     }
+
+    if (validarContexto && !validarContexto()) return;
 
     // A mesma trava, do lado do banco que e do PEDIDO (27/08/2026): vinculo cujo
     // banco nao chegou imprimiria numero no lugar do nome, sem avisar.
@@ -6204,6 +6250,8 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
 
+    if (validarContexto && !validarContexto()) return desistir(null);
+
     let numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     // Um modelo so tambem le o banco do PEDIDO (28/08/2026), como no script.js:
@@ -6405,27 +6453,9 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
     const formData = new FormData();
-    const isPedTab = document.getElementById('view-pedido')?.classList.contains('active');
-    let selectedFile = null;
-    if (isPedTab) {
-        if (state.pedArtFile) {
-            selectedFile = state.pedArtFile;
-        } else {
-            const pedFile = document.getElementById('ped-file');
-            if (pedFile && pedFile.files.length > 0) {
-                selectedFile = pedFile.files[0];
-            }
-        }
-    } else {
-        if (state.impArtFile) {
-            selectedFile = state.impArtFile;
-        } else {
-            const impFile = document.getElementById('imp-file');
-            if (impFile && impFile.files.length > 0) {
-                selectedFile = impFile.files[0];
-            }
-        }
-    }
+    // Esta função gera a janela do Pedido, inclusive quando ela está hospedada
+    // em Produção por Cor. A view ativa não muda a origem da arte da janela.
+    const selectedFile = state.pedArtFile || document.getElementById('ped-file')?.files?.[0] || null;
     if (selectedFile) {
         formData.append('file', selectedFile);
     }
@@ -6434,7 +6464,7 @@ window.runPedImposition = async function (mode, isRefazer) {
     // duplex precisam do verso; no FxVerso o motor usa este arquivo quando a
     // frente tem uma pagina, preservando PDFs que ja trazem as duas faces.
     if (temVerso(payload.print_mode) && !pdfPares && !pdfCopia) {
-        let versoFile = isPedTab ? state.pedArtVersoFile : state.impArtVersoFile;
+        let versoFile = state.pedArtVersoFile;
         if (!isMultiSelected && schema !== 'multi_artes') {
             try {
                 if (typeof prepararVersoDoTrabalho !== 'function') {
@@ -6521,6 +6551,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
 
+    if (validarContexto && !validarContexto()) return desistir(null);
     overlay.classList.add('active');
 
     sub.textContent = `Gerando ${total.toLocaleString('pt-BR')} itens...`;
@@ -6720,6 +6751,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         // O destino e sempre a estacao: endereco direto, sem a Vercel no caminho.
         // Se nao houvesse estacao, o ramo `else` da sondagem ja teria lancado.
+        if (validarContexto && !validarContexto()) return;
         const urlImpose = `${baseUrl}/api/impose`;
 
         const res = await fetch(urlImpose, {
@@ -6887,7 +6919,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 if (overlay) overlay.classList.remove('active');
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
                 // (ou continua não estando). Ver a nota do bloco abaixo.
-                const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
+                const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
                 const ok = entrega.finalizar({ interrompido: cancelouNoMeio });
                 if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 return;
@@ -6901,7 +6933,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // depois de refazer três folhas confunde e leva a status errado.
                 // Com vários modelos na folha, os alvos são todos os marcados —
                 // ver alvosDaImpressao().
-                const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
+                const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
                 if (typeof sendPrintJobDirect === 'function') {
                     const ok = await sendPrintJobDirect(printBlobQueue);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -6936,7 +6968,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
                     // Mesma razão do caminho por stream: refazer não muda status.
-                    const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
+                    const alvoImpressao = isRefazer ? [] : (alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected));
                     if (typeof sendPrintJobDirect === 'function') {
                         const ok = await sendPrintJobDirect(multiBlobs);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -6982,7 +7014,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
             if (overlay) overlay.classList.remove('active');
-            const alvoImpressao = alvosDaImpressao(isMultiSelected);
+            const alvoImpressao = alvosDaJanelaExterna || alvosDaImpressao(isMultiSelected);
             if (typeof sendPrintJobDirect === 'function') {
                 const queue = [{ name: defaultFilename, blob }];
                 const ok = await sendPrintJobDirect(queue);

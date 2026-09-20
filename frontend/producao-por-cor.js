@@ -1,8 +1,8 @@
 /*
  * Produção por Cor
  *
- * Módulo independente. Ele só lê os modelos ao abrir a view e delega toda
- * imposição e toda gravação de status às funções já usadas pelo Pedido.
+ * Lista modelos por produto/cor e usa a janela compartilhada do Pedido.
+ * A carga de pedidos e as gravações continuam nos caminhos comuns do painel.
  */
 (function () {
     'use strict';
@@ -16,6 +16,13 @@
         colorKey: '',
         openItemId: null,
         openOSId: null,
+        error: '',
+        opening: 0,
+        refreshId: 0,
+        savedSelection: null,
+        ready: false,
+        refreshPending: false,
+        statusBusy: new Set(),
     };
 
     const byId = id => document.getElementById(id);
@@ -42,12 +49,13 @@
             && modeloEstaAguardando(record));
     }
 
-    function colorInfo(model, catalog) {
+    function colorInfo(model, catalog, product) {
         let resolved = null;
         if (typeof reconciliarCorNumDoModelo === 'function') {
             try { resolved = reconciliarCorNumDoModelo(model, catalog || [], []); } catch (_) {}
         }
-        const colorId = (resolved && resolved.corId) || model.amostra_cor_id || null;
+        const colorId = (resolved && resolved.corId) || model.amostra_cor_id || model.id_cor || model.cor_id
+            || (product && (product.amostra_cor_id || product.id_cor)) || null;
         const color = colorId
             ? (catalog || []).find(item => String(item.id) === String(colorId))
             : (catalog || []).find(item => norm(item.name || item.nome) === norm(model.padrao || model.cor));
@@ -61,31 +69,42 @@
         return Number.parseInt(order && (order.numero || order.id_int), 10);
     }
 
-    async function selectInBatches(client, table, columns, values) {
+    async function selectInBatches(client, table, columns, values, column = 'id_int') {
         const rows = [];
         const unique = Array.from(new Set(values.filter(Number.isFinite)));
         for (let start = 0; start < unique.length; start += 100) {
             const batch = unique.slice(start, start + 100);
-            const { data, error } = await client.from(table).select(columns).in('id_int', batch);
-            if (error) throw error;
-            rows.push(...(data || []));
+            // O limite do servidor vale para LINHAS, não para pedidos.
+            // Avança pelo tamanho recebido inclusive quando o servidor reduz a página.
+            for (let offset = 0; ; ) {
+                const { data, error } = await client.from(table).select(columns).in(column, batch)
+                    .order('id', { ascending: true }).range(offset, offset + 199);
+                if (error) throw error;
+                if (!Array.isArray(data)) throw new Error('Resposta incompleta ao carregar modelos.');
+                if (!data.length) break;
+                rows.push(...data);
+                offset += data.length;
+            }
         }
         return rows;
     }
 
-    async function loadCatalogColors() {
+    async function loadCatalog(name) {
         const currentState = appState();
-        if (currentState && Array.isArray(currentState.cores) && currentState.cores.length) {
-            return currentState.cores;
+        if (currentState && Array.isArray(currentState[name]) && currentState[name].length) {
+            return currentState[name];
         }
         if (typeof window.api === 'function') {
-            try { return (await window.api('GET', '/cores')) || []; } catch (_) {}
+            const rows = await window.api('GET', `/${name}`);
+            if (Array.isArray(rows)) return rows;
         }
-        return [];
+        throw new Error(`Não foi possível carregar o catálogo de ${name}.`);
     }
 
     async function loadRecords() {
-        if (typeof window.loadOrdens === 'function') await window.loadOrdens();
+        if (typeof window.loadOrdens !== 'function' || await window.loadOrdens() === false) {
+            throw new Error('Não foi possível atualizar os pedidos. Tente atualizar a lista novamente.');
+        }
         const currentState = appState();
         const orders = ((currentState && currentState.ordens) || []).filter(order => {
             const ignored = typeof window.pedidoIgnoradoNosPaineis === 'function'
@@ -100,12 +119,13 @@
             ? vibeClient : modelsClient;
         if (!modelsClient || !productsClient) throw new Error('Banco de dados não disponível.');
 
-        const [models, products, colors] = await Promise.all([
+        const [models, products, colors, numbering] = await Promise.all([
             selectInBatches(modelsClient, 'pedidos_modelos',
-                'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', numbers),
+                'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,amostra_num_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', numbers),
             selectInBatches(productsClient, 'produtos_proposta',
-                'id,id_int,id_produto,nome_produto,modelo_descri,amostra_cor_id', numbers),
-            loadCatalogColors(),
+                'id,id_int,id_produto,nome_produto,modelo_descri,amostra_cor_id,amostra_num_id', numbers),
+            loadCatalog('cores'),
+            loadCatalog('numeracoes'),
         ]);
 
         local.colors = colors;
@@ -114,15 +134,35 @@
             `${product.id_int}:${product.id}`,
             product,
         ]));
+        // Modelos órfãos podem ter identidade própria. Só eles precisam da
+        // linha completa, sem presumir colunas opcionais no schema remoto.
+        const orphans = models.filter(model => !productMap.has(`${model.id_int}:${model.id_produto_proposta_origem}`));
+        if (orphans.length) {
+            const full = await selectInBatches(modelsClient, 'pedidos_modelos', '*',
+                orphans.map(model => Number(model.id)).filter(Number.isFinite), 'id');
+            const byModel = new Map(full.map(model => [String(model.id), model]));
+            orphans.forEach(model => Object.assign(model, byModel.get(String(model.id)) || {}));
+        }
 
         return models.map(model => {
             const order = orderMap.get(String(model.id_int));
             const product = productMap.get(`${model.id_int}:${model.id_produto_proposta_origem}`) || null;
-            const productLabel = (product && product.nome_produto) || model.nome_modelo || 'Produto sem nome';
-            const productId = product && product.id_produto;
+            const productId = (product && product.id_produto) ?? model.id_produto ?? model.produto_id;
+            const catalogProduct = ((currentState && currentState.produtosGlobais) || [])
+                .find(item => productId != null && String(item.id_produto) === String(productId));
+            const productLabel = (product && product.nome_produto)
+                || (catalogProduct && (catalogProduct.nome_produto || catalogProduct.nome || catalogProduct.name))
+                || (productId != null ? `Produto #${productId}` : `Produto não identificado · pedido #${model.id_int}`);
             const productKey = productId !== null && productId !== undefined && productId !== ''
-                ? `id:${productId}` : `nome:${norm(productLabel)}`;
-            const color = colorInfo({ ...model, amostra_cor_id: model.amostra_cor_id || (product && product.amostra_cor_id) }, colors);
+                ? `id:${productId}` : `origem:${model.id_int}:${model.id_produto_proposta_origem || model.id}`;
+            const color = colorInfo(model, colors, product);
+            const ids = typeof reconciliarCorNumDoModelo === 'function'
+                ? reconciliarCorNumDoModelo(model, colors, numbering) : { numId: model.amostra_num_id };
+            const numId = ids.numId || (product && product.amostra_num_id);
+            const num = numbering.find(item => String(item.id) === String(numId));
+            const back = num && typeof window.isNumeracaoDuplex === 'function'
+                ? (window.isNumeracaoDuplex(num) ? 'FxVerso' : 'Frente')
+                : (['FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(model.verso_tipo) ? 'FxVerso' : 'Frente');
             return {
                 modelId: model.id,
                 osId: order && order.id,
@@ -137,7 +177,7 @@
                 modelLabel: model.nome_modelo || (product && product.modelo_descri) || `Modelo ${model.id}`,
                 quantity: model.quantidade || 0,
                 numbering: [model.numeracao_inicio, model.numeracao_fim].filter(v => v !== null && v !== undefined && v !== '').join(' – ') || (model.gabarito_operacional || '—'),
-                back: model.verso_tipo || 'Frente',
+                back,
                 status: model.status_impressao || model.status_producao || 'Aguardando',
                 block: model.bloco,
             };
@@ -166,8 +206,10 @@
 
     function formatDate(value) {
         if (!value) return '—';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.split('-').reverse().join('/');
         const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? esc(value) : date.toLocaleDateString('pt-BR');
+        return Number.isNaN(date.getTime()) ? esc(value)
+            : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     }
 
     function safeWindowBeforeRender() {
@@ -215,6 +257,7 @@
     }
 
     function renderModels() {
+        if (!local.active) return;
         safeWindowBeforeRender();
         const filtered = modelosDoFiltro(local.records, local.productKey, local.colorKey)
             .slice().sort((a, b) => {
@@ -223,6 +266,9 @@
                     || Number(a.orderNumber) - Number(b.orderNumber)
                     || a.modelLabel.localeCompare(b.modelLabel, 'pt-BR');
             });
+        if (local.openItemId && !filtered.some(record => String(record.modelId) === String(local.openItemId))) {
+            closeOpenModel();
+        }
         const product = products().find(item => item.key === local.productKey);
         const color = colorsForProduct().find(item => item.key === local.colorKey);
         const body = byId('ppc-model-list');
@@ -235,14 +281,14 @@
         if (subtitle) subtitle.textContent = color ? `${color.label} · somente modelos aguardando deste produto e desta cor` : 'Selecione uma cor.';
         if (summary) summary.textContent = filtered.length ? `${filtered.length} modelo${filtered.length === 1 ? '' : 's'}` : '';
 
-        if (!filtered.length) {
+        if (local.error || local.loading || !filtered.length) {
             if (body) body.innerHTML = '';
             if (wrap) wrap.hidden = true;
             if (message) {
                 message.hidden = false;
-                message.textContent = local.loading ? 'Carregando…'
+                message.textContent = local.error || (local.loading ? 'Carregando…'
                     : (!local.productKey ? 'Selecione um produto.'
-                        : (!local.colorKey ? 'Selecione uma cor.' : 'Nenhum modelo aguardando para este produto e esta cor.'));
+                        : (!local.colorKey ? 'Selecione uma cor.' : 'Nenhum modelo aguardando para este produto e esta cor.')));
             }
             return;
         }
@@ -258,7 +304,7 @@
                     <td class="ppc-model-name">${esc(record.modelLabel)}</td>
                     <td class="ppc-muted">${esc(record.client)}</td><td>${esc(record.quantity)}</td>
                     <td>${esc(record.numbering)}</td><td>${esc(record.back)}</td><td>${formatDate(record.deadline)}</td>
-                    <td><select class="ppc-status" data-status-item="${esc(record.modelId)}" data-status-os="${esc(record.osId)}">
+                    <td><select class="ppc-status" ${local.statusBusy.has(String(record.modelId)) ? 'disabled' : ''} data-status-item="${esc(record.modelId)}" data-status-os="${esc(record.osId)}">
                         <option value="Aguardando" ${normalizedStatus === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                         <option value="Impresso" ${normalizedStatus === 'Impresso' ? 'selected' : ''}>Impresso</option>
                         <option value="Corrigir Arte" ${normalizedStatus === 'Corrigir Arte' ? 'selected' : ''}>Corrigir Arte</option>
@@ -270,35 +316,49 @@
     }
 
     function render() {
+        if (!local.active) return;
         renderProducts();
         renderColors();
         renderModels();
     }
 
     function closeOpenModel() {
+        local.opening += 1;
+        local.ready = false;
         if (local.openItemId && typeof window.fecharJanelaDoModelo === 'function') {
             window.fecharJanelaDoModelo();
         }
+        local.openItemId = null;
+        local.openOSId = null;
+        safeWindowBeforeRender();
     }
 
     async function refresh() {
-        if (local.loading) return;
+        if (!local.active || local.loading) return;
+        if (local.statusBusy.size) { local.refreshPending = true; return; }
+        local.refreshPending = false;
+        const request = ++local.refreshId;
+        closeOpenModel();
         local.loading = true;
+        local.error = '';
         renderModels();
         const refreshButton = byId('ppc-refresh');
         if (refreshButton) refreshButton.disabled = true;
         try {
-            local.records = await loadRecords();
-            render();
+            const records = await loadRecords();
+            if (!local.active || request !== local.refreshId) return;
+            local.records = records;
         } catch (error) {
             console.error('[Produção por Cor] Falha ao carregar:', error);
-            const message = byId('ppc-message');
-            const wrap = byId('ppc-table-wrap');
-            if (wrap) wrap.hidden = true;
-            if (message) { message.hidden = false; message.textContent = `Não foi possível carregar: ${error.message || error}`; }
+            if (!local.active || request !== local.refreshId) return;
+            local.records = [];
+            local.error = `Não foi possível carregar: ${error.message || error}`;
         } finally {
-            local.loading = false;
-            if (refreshButton) refreshButton.disabled = false;
+            if (request === local.refreshId) {
+                local.loading = false;
+                if (refreshButton) refreshButton.disabled = false;
+                render();
+            }
         }
     }
 
@@ -330,28 +390,80 @@
     }
 
     async function openModel(itemId, osId) {
+        if (!local.active || local.loading || local.error || local.statusBusy.size) return;
+        const record = modelosDoFiltro(local.records, local.productKey, local.colorKey)
+            .find(item => String(item.modelId) === String(itemId) && String(item.osId) === String(osId));
+        if (!record) return;
         if (String(local.openItemId) === String(itemId) && typeof window.fecharJanelaDoModelo === 'function') {
-            window.fecharJanelaDoModelo();
+            closeOpenModel();
             return;
         }
         if (typeof window.loadOSItens !== 'function' || typeof window.enviarParaPedido !== 'function') {
             if (typeof window.toast === 'function') window.toast('Janela de Pedido indisponível.', 'error');
             return;
         }
+        closeOpenModel();
+        const request = local.opening;
+        const aindaAtual = () => local.active && request === local.opening && modeloEstaAguardando(record);
         let fullItem = null;
         try {
             fullItem = await loadFullItem(itemId, osId);
         } catch (error) {
             console.error('[Produção por Cor] Falha ao carregar modelo completo:', error);
         }
+        if (!aindaAtual()) return;
         if (!fullItem) {
             if (typeof window.toast === 'function') window.toast('Não foi possível carregar a arte completa deste modelo.', 'error');
             return;
         }
+        record.status = fullItem.status_impressao || fullItem.impressao || fullItem.status_producao || 'Aguardando';
+        if (!modeloEstaAguardando(record)) { render(); return; }
+        const shared = appState();
+        shared.selectedOSItems = [];
+        shared.combinacaoEntrePedidos = false;
+        shared.pedArtFile = null;
+        shared.pedArtVersoFile = null;
+        const fileInput = byId('ped-file');
+        if (fileInput) fileInput.value = '';
         local.openItemId = itemId;
         local.openOSId = osId;
         renderModels();
-        await window.enviarParaPedido(itemId, osId);
+        try {
+            await window.enviarParaPedido(itemId, osId, { aindaAtual });
+            if (aindaAtual()) local.ready = true;
+        } catch (error) {
+            if (!aindaAtual()) return;
+            closeOpenModel();
+            if (typeof window.toast === 'function') window.toast(`Não foi possível abrir o modelo: ${error.message || error}`, 'error');
+        }
+    }
+
+    async function changeStatus(select) {
+        const itemId = select.dataset.statusItem;
+        const osId = select.dataset.statusOs;
+        if (!local.active || local.loading || local.error || local.statusBusy.has(String(itemId))) return;
+        const record = local.records.find(item => String(item.modelId) === String(itemId) && String(item.osId) === String(osId));
+        if (!record) return;
+        const status = select.value;
+        const pageRequest = local.refreshId;
+        local.statusBusy.add(String(itemId));
+        select.disabled = true;
+        try {
+            const item = await loadFullItem(itemId, osId);
+            if (!item) throw new Error('Modelo não carregado. Atualize a lista e tente novamente.');
+            // Sair da página durante a carga não deve disparar uma gravação atrasada.
+            if (!local.active || pageRequest !== local.refreshId || !local.records.includes(record)) return;
+            const confirmed = await window.updateItemImpressao(itemId, osId, status);
+            if (confirmed === true) record.status = printStatus(status);
+        } catch (error) {
+            if (typeof window.toast === 'function') window.toast(error.message || String(error), 'error');
+        } finally {
+            local.statusBusy.delete(String(itemId));
+            select.disabled = false;
+            select.value = printStatus(record.status);
+            render();
+            if (local.active && local.refreshPending && !local.statusBusy.size) await refresh();
+        }
     }
 
     function bind() {
@@ -388,14 +500,7 @@
             body.addEventListener('change', async event => {
                 const select = event.target.closest('.ppc-status');
                 if (!select || typeof window.updateItemImpressao !== 'function') return;
-                select.disabled = true;
-                await window.updateItemImpressao(select.dataset.statusItem, select.dataset.statusOs, select.value);
-                select.disabled = false;
-                const items = typeof window.getOSItens === 'function' ? window.getOSItens(select.dataset.statusOs) : [];
-                const sharedItem = items.find(item => String(item.id) === String(select.dataset.statusItem));
-                const record = local.records.find(item => String(item.modelId) === String(select.dataset.statusItem));
-                if (record && sharedItem) record.status = sharedItem.status_impressao || sharedItem.impressao || record.status;
-                render();
+                await changeStatus(select);
             });
         }
         if (refreshButton && !refreshButton.dataset.ppcBound) {
@@ -405,23 +510,45 @@
     }
 
     function openPage() {
+        if (!local.active) {
+            const shared = appState();
+            local.savedSelection = shared ? {
+                selectedOSItems: shared.selectedOSItems,
+                combinacaoEntrePedidos: shared.combinacaoEntrePedidos,
+                pedidoAberto: shared.pedidoAberto,
+            } : null;
+            if (typeof window.fecharJanelaDoModelo === 'function') window.fecharJanelaDoModelo();
+            if (shared) { shared.selectedOSItems = []; shared.combinacaoEntrePedidos = false; }
+        }
         local.active = true;
         closeOpenModel();
         local.productKey = '';
         local.colorKey = '';
         bind();
-        refresh();
+        return refresh();
     }
 
     function leavePage() {
         if (!local.active) return;
+        closeOpenModel();
         local.active = false;
-        if (local.openItemId && typeof window.fecharJanelaDoModelo === 'function') window.fecharJanelaDoModelo();
-        local.openItemId = null;
-        local.openOSId = null;
+        local.refreshId += 1;
+        local.loading = false;
+        const shared = appState();
+        if (shared && local.savedSelection) Object.assign(shared, local.savedSelection);
+        local.savedSelection = null;
     }
 
     window.PedidoJanelaExterna = {
+        validarGeracao() {
+            if (!local.active) return null;
+            const request = local.opening;
+            return () => local.active && local.ready && request === local.opening
+                && !local.loading && !local.error && !local.statusBusy.size
+                && String(appState().activeOSItem?.itemId) === String(local.openItemId)
+                && String(appState().activeOSItem?.osId) === String(local.openOSId)
+                && !(appState().selectedOSItems || []).length;
+        },
         obterHost(itemId) {
             if (!local.active || String(local.openItemId) !== String(itemId)) return null;
             return document.querySelector(`.ppc-window-host[data-item-id="${CSS.escape(String(itemId))}"]`);
@@ -432,15 +559,18 @@
         },
         aoFechar() {
             if (!local.active) return;
+            local.opening += 1;
+            local.ready = false;
             local.openItemId = null;
             local.openOSId = null;
-            setTimeout(renderModels, 0);
+            setTimeout(() => { if (local.active) renderModels(); }, 0);
         },
     };
 
     window.addEventListener('pedidos-modelo-status-impressao', event => {
         const detail = event.detail || {};
-        const record = local.records.find(item => String(item.modelId) === String(detail.itemId));
+        const record = local.records.find(item => String(item.modelId) === String(detail.itemId)
+            && String(item.osId) === String(detail.osId));
         if (record) record.status = detail.status;
         if (local.active) render();
     });
