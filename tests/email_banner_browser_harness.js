@@ -55,6 +55,7 @@ function extrair(nome, async = false) {
             ${transporte}
             ${extrair('memorizarLinkCliente')}
             ${extrair('linkPrecisaPrepararArte')}
+            ${extrair('nomePreferencialDoCliente')}
             ${extrair('buscarDadosEmailCliente',true)}
             ${extrair('montarMensagemEmailCliente')}
             ${extrair('mostrarSucessoEnvioEmail')}
