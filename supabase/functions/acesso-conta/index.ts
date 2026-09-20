@@ -430,8 +430,13 @@ async function minhaConta(usuario: { id: string }): Promise<any> {
   if (ids.length) {
     clientes = ((await banco(
       "GET",
-      `clientes?id_cliente=in.(${ids.join(",")})&select=id_cliente,nome`,
-    )) ?? []).map((c: any) => ({ id_cliente: Number(c.id_cliente), nome: c.nome ?? "" }));
+      `clientes?id_cliente=in.(${ids.join(",")})&select=id_cliente,nome,fantasia`,
+    )) ?? []).map((c: any) => ({
+      id_cliente: Number(c.id_cliente),
+      nome: String(c.fantasia || c.nome || "").trim(),
+      fantasia: c.fantasia ?? "",
+      razao_social: c.nome ?? "",
+    }));
   }
   return { clientes, precisa_trocar_senha: await contaPrecisaTrocarSenha(usuario.id) };
 }

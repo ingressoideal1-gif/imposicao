@@ -271,12 +271,13 @@ async function clienteDoPedido(pedidoIdInt: number): Promise<any> {
   if (!idCliente) return null;
   const c = ((await banco(
     "GET",
-    `clientes?id_cliente=eq.${idCliente}&select=id_cliente,nome,email,email_contato`,
+    `clientes?id_cliente=eq.${idCliente}&select=id_cliente,nome,fantasia,email,email_contato`,
   )) ?? [])[0];
   if (!c) return null;
   return {
     id_cliente: idCliente,
     nome: c?.nome ?? "",
+    fantasia: c?.fantasia ?? "",
     email: String(c?.email || c?.email_contato || "").trim().toLowerCase(),
     contas: await contasDoCliente(idCliente),
   };
@@ -608,8 +609,9 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   if (metodo === "GET" && p.length === 1 && p[0] === "clientes") {
     const busca = String(q.get("busca") ?? "").trim().replace(/[%_*(),&]/g, "").slice(0, 64);
     if (busca.length < 2) throw new Recusa(422, "digite pelo menos duas letras do cliente");
-    const clientes = (await banco("GET", "clientes?select=id_cliente,nome&nome=ilike.*" +
-      encodeURIComponent(busca) + "*&order=nome.asc&limit=30")) ?? [];
+    const termo = encodeURIComponent(`*${busca}*`);
+    const clientes = (await banco("GET", "clientes?select=id_cliente,nome,fantasia&or=(nome.ilike." +
+      termo + ",fantasia.ilike." + termo + ")&order=fantasia.asc.nullslast,nome.asc&limit=30")) ?? [];
     return ok({ clientes });
   }
   if (metodo === "GET" && p.length === 2 && p[0] === "clientes") {

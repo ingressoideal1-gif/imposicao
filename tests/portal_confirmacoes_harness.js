@@ -255,7 +255,7 @@ const ENDERECO_DA_NOTA = {
     // de um rotulo explicando.
     const l = linhasDoFaturamento({ nome: 'X', documento: '14302058000102' }, ENDERECO_DA_NOTA);
     const rotulos = l.map(x => x.rotulo);
-    ok(rotulos[0] === 'Nome / Razão social', 'o nome abre o cartao', rotulos);
+    ok(rotulos[0] === 'Cliente', 'o nome preferencial abre o cartao', rotulos);
     ok(rotulos[1] === 'CPF / CNPJ', 'depois o documento', rotulos);
     ok(rotulos[2] === 'Endereço', 'e o endereco vem logo em seguida', rotulos);
     ok(rotulos.indexOf('Inscrição estadual') > rotulos.indexOf('CEP'),

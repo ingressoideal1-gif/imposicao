@@ -4,6 +4,13 @@ let consultaFaturamento = 0;
 const CAMPOS_FATURAMENTO = ['nome', 'documento', 'ins_estadual', 'email', 'telefone',
     'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
 
+function nomeDeExibicaoNoCadastroFaturamento(cliente, fallback) {
+    if (typeof nomePreferencialClientePortal === 'function') {
+        return nomePreferencialClientePortal(cliente, fallback);
+    }
+    return String(cliente && (cliente.fantasia || cliente.nome_fantasia || cliente.nome) || fallback || '').trim();
+}
+
 function cadastroAtualFaturamento() {
     const dados = window.portalDados || {};
     return Object.assign({}, dados.cliente || {}, dados.endereco_faturamento || {});
@@ -16,6 +23,7 @@ function dadosDoFormularioFaturamento() {
         rascunhoFaturamento = {
             valores: {}, idCliente: dados.pedido && dados.pedido.id_cliente,
             anteriorId: dados.pedido && dados.pedido.id_cliente,
+            fantasia: String(atual.fantasia || '').trim(),
             alterando: false, novo: false, tela: 'lista', documentoLiberado: false,
             origemCnpj: false, buscando: false, consultado: '', erro: ''
         };
@@ -42,7 +50,7 @@ function resumoFaturamento() {
     return '<div class="portal-cartao portal-entrega-resumo"><h2>Dados para a nota fiscal</h2>'
         + '<div class="portal-entrega-bloco portal-entrega-recebedor"><span class="portal-entrega-icone">'
         + icone('pessoa', 22, '#2563eb') + '</span><div><span class="portal-entrega-legenda">Titular da nota</span>'
-        + '<strong>' + escapeHtml(v.nome || 'Não informado') + '</strong>'
+        + '<strong>' + escapeHtml(r.fantasia || v.nome || 'Não informado') + '</strong>'
         + '<span>' + escapeHtml(documentoEmMascara(v.documento) || 'CPF ou CNPJ não informado') + '</span>'
         + (v.ins_estadual ? '<span>Inscrição estadual: ' + escapeHtml(v.ins_estadual) + '</span>' : '')
         + (v.email ? '<span>' + escapeHtml(v.email) + '</span>' : '')
@@ -115,7 +123,7 @@ function modalMeusDados() {
         const cpf = tipoDaPessoa(c.documento) === 'fisica';
         return '<div class="portal-endereco-opcao"><span class="portal-endereco-tipo">'
             + escapeHtml(c.tipo_relacao || (cpf ? 'Pessoa física' : 'Pessoa jurídica')) + '</span><strong>'
-            + escapeHtml(c.nome || 'Nome não informado') + '</strong><span>'
+            + escapeHtml(nomeDeExibicaoNoCadastroFaturamento(c, 'Nome não informado')) + '</strong><span>'
             + escapeHtml(documentoEmMascara(c.documento) || 'Documento não informado') + '</span>'
             + '<span class="portal-endereco-linha">' + escapeHtml(linha || 'Endereço não informado') + '</span>'
             + '<div class="portal-par-de-botoes"><button type="button" class="portal-botao" onclick="selecionarCadastroFaturamento(' + i + ')">Selecionar</button>'
@@ -160,6 +168,7 @@ function copiarCadastroFaturamento(c) {
     const e = c.endereco || {};
     CAMPOS_FATURAMENTO.forEach(k => { r.valores[k] = String((Object.prototype.hasOwnProperty.call(c, k) ? c[k] : e[k]) || ''); });
     r.idCliente = c.id_cliente;
+    r.fantasia = String(c.fantasia || '').trim();
     r.documentoLiberado = true;
     r.origemCnpj = tipoDaPessoa(c.documento) === 'juridica';
     r.consultado = String(e.cep || '').replace(/\D/g, '');
@@ -185,7 +194,7 @@ async function novoCadastroFaturamento() {
     const r = dadosDoFormularioFaturamento();
     CAMPOS_FATURAMENTO.forEach(k => { r.valores[k] = ''; });
     Object.assign(r, { idCliente: null, novo: true, tela: 'editar', documentoLiberado: false,
-        origemCnpj: false, consultado: '', erro: '' });
+        origemCnpj: false, consultado: '', erro: '', fantasia: '' });
     atualizarTelaFaturamento(true);
 }
 

@@ -62,6 +62,12 @@
         dashboard: null      // so existe depois de alguem pedir
     };
 
+    function nomeDoCliente(c) {
+        var fantasia = String(c && (c.fantasia || c.nome_fantasia) || '').trim();
+        var razao = String(c && (c.nome || c.razao_social) || '').trim();
+        return fantasia || razao || (c && c.id_cliente != null ? 'Cliente ' + c.id_cliente : 'Cliente');
+    }
+
     var $ = function (id) { return document.getElementById(id); };
 
     // Apenas apresentação: os nós existentes mantêm seus IDs e ouvintes.
@@ -204,7 +210,7 @@
         $('ic-orientacao').hidden = !!p || $('ic-carregando').style.display !== 'none'
             || $('ic-vazio').style.display !== 'none';
         if (c) {
-            $('ic-resumo-nome').textContent = c.nome || ('Cliente ' + c.id_cliente);
+            $('ic-resumo-nome').textContent = nomeDoCliente(c);
             $('ic-resumo-dados').textContent = '#' + c.id_cliente + (c.email ? ' · ' + c.email : '');
             $('ic-resumo-acesso').textContent = (c.contas || []).length ? 'Acesso liberado' : 'Acesso ainda não liberado';
         } else {
@@ -534,9 +540,8 @@
         $('ic-carregando').style.display = 'none';
         $('ic-cliente-secao').style.display = '';
 
-        $('ic-cliente-nome').textContent = c.nome || ('Cliente ' + c.id_cliente);
+        $('ic-cliente-nome').textContent = nomeDoCliente(c);
         $('ic-cliente-dados').textContent = 'Cliente ' + c.id_cliente
-            + (c.fantasia && c.fantasia !== c.nome ? ' · ' + c.fantasia : '')
             + (c.email ? ' · ' + c.email : '');
 
         var caixa = $('ic-cliente-pedidos');
@@ -932,7 +937,7 @@
         atualizarLayout();
         if (!c) { return; }
 
-        $('ic-acesso-cliente').textContent = c.nome + ' (cliente ' + c.id_cliente + ')'
+        $('ic-acesso-cliente').textContent = nomeDoCliente(c) + ' (cliente ' + c.id_cliente + ')'
             + (c.email ? ' · ' + c.email : '');
 
         var contas = $('ic-acesso-contas');
@@ -1114,7 +1119,7 @@
         // pode não ser este.
         var pedidoAlvo = estado.pedido;
         var clienteAlvo = c.id_cliente;
-        var nomeAlvo = c.nome;
+        var nomeAlvo = nomeDoCliente(c);
 
         $('ic-acesso-liberar').disabled = true;
         aviso.style.display = 'none';

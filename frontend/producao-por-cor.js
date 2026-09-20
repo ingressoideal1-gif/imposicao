@@ -133,6 +133,15 @@
             selectInBatches(productsClient, 'propostas', 'id,id_int,cliente,status_interno,id_cliente,id_faturado', missingNumbers),
         ]);
 
+        if (typeof window.aplicarNomesPreferenciaisDasPropostas === 'function') {
+            await window.aplicarNomesPreferenciaisDasPropostas(productsClient, missingOrders);
+            missingOrders.forEach(order => {
+                if (typeof window.nomePreferencialDaProposta === 'function') {
+                    order.cliente = window.nomePreferencialDaProposta(order);
+                }
+            });
+        }
+
         missingOrders.forEach(order => orders.push({ ...order, id: `vibe_${order.id_int}`, numero: order.id_int }));
         // A janela compartilhada precisa encontrar o pedido pelo mesmo id.
         // Só acrescenta metadados realmente retornados, sem inventar pedidos.

@@ -70,6 +70,7 @@ DECLARE
     v_num      bigint;
     v_prop     propostas%ROWTYPE;
     v_cli      clientes%ROWTYPE;
+    v_cli_comercial clientes%ROWTYPE;
     v_end      enderecos%ROWTYPE;
     v_end_fat  enderecos%ROWTYPE;   -- o endereço do CNPJ da nota (ver abaixo)
     v_os       propostas_os%ROWTYPE;
@@ -105,6 +106,15 @@ BEGIN
       FROM propostas p
      WHERE p.id_int = v_num
      LIMIT 1;
+
+    -- Identidade exibida no portal: o cliente comercial, com fantasia antes
+    -- da razao social. O cadastro faturado continua separado em `v_cli`.
+    IF v_prop.id_cliente IS NOT NULL THEN
+        SELECT c.* INTO v_cli_comercial
+          FROM clientes c
+         WHERE c.id_cliente = v_prop.id_cliente
+         LIMIT 1;
+    END IF;
 
     -- `id_faturado` vence `id_cliente` quando existe: são quase sempre o mesmo,
     -- mas divergem de verdade -- o pedido 20940 é do cliente 43520 e fatura no
@@ -303,7 +313,9 @@ BEGIN
             'numero',           v_link.numero_pedido,
             'os_id',            v_link.os_id,
             'status_arte',      v_link.status_arte,
-            'cliente',          v_prop.cliente,
+            'cliente',          COALESCE(NULLIF(btrim(v_cli_comercial.fantasia), ''),
+                                         NULLIF(btrim(v_cli_comercial.nome), ''),
+                                         v_prop.cliente),
             'valor_total',      v_prop.valor_total,
             'valor_frete',      v_prop.valor_frete,
             'frete_escolhido',  v_prop.frete_escolhido,
@@ -326,6 +338,7 @@ BEGIN
         -- quarenta e três.
         'cliente', CASE WHEN v_cli.id IS NULL THEN NULL ELSE jsonb_build_object(
             'nome',         COALESCE(NULLIF(v_cli.nome, ''), v_cli.fantasia),
+            'fantasia',     NULLIF(btrim(v_cli.fantasia), ''),
             'documento',    v_cli.documento,
             'ins_estadual', v_cli.ins_estadual,
             'email',        COALESCE(NULLIF(v_cli.email_financeiro, ''),

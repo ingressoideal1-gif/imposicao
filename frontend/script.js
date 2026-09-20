@@ -9427,14 +9427,15 @@ async function pedidosQueUsamNumeracao(numId) {
         try {
             const { data, error } = await supabaseClient
                 .from('propostas')
-                .select('id_int, created_at, cliente')
+                .select('id_int, created_at, cliente, id_cliente, id_faturado')
                 .in('id_int', faltam);
             if (error) throw error;
+            await aplicarNomesPreferenciaisDasPropostas(supabaseClient, data || []);
             (data || []).forEach(linha => {
                 const reg = porPedido.get(String(linha.id_int));
                 if (!reg) return;
                 reg.data = linha.created_at || null;
-                reg.cliente = reg.cliente || linha.cliente || '';
+                reg.cliente = reg.cliente || nomePreferencialDaProposta(linha);
             });
         } catch (e) {
             console.warn('[Numerações] Não deu para buscar a data dos pedidos:', e.message || e);
@@ -25665,6 +25666,66 @@ if (!state.produtosCombinaveis) state.produtosCombinaveis = new Set();
 // tem o seu. Ver limiarDoProduto().
 if (!state.limiaresPorProduto) state.limiaresPorProduto = {};
 
+/**
+ * Nome usado para identificar o cliente em telas e listas.
+ *
+ * `clientes.nome` e a razao social/nome civil; `clientes.fantasia` e o nome
+ * pelo qual o cliente deve aparecer para a operacao. A razao social so entra
+ * quando o nome fantasia nao existe. Campos de formulario continuam usando
+ * `nome`, pois ali o dado fiscal precisa permanecer literal.
+ */
+function nomePreferencialDoCliente(cliente, fallback = '') {
+    const fantasia = String(cliente && (cliente.fantasia || cliente.nome_fantasia) || '').trim();
+    const razaoSocial = String(cliente && (cliente.nome || cliente.razao_social) || '').trim();
+    return fantasia || razaoSocial || String(fallback || '').trim();
+}
+window.nomePreferencialDoCliente = nomePreferencialDoCliente;
+
+function nomePreferencialDaProposta(proposta, fallback = '') {
+    return String(proposta && proposta.cliente_exibicao || '').trim()
+        || String(proposta && (proposta.cliente || proposta.cliente_nome || proposta.dados_cliente) || '').trim()
+        || String(fallback || '').trim();
+}
+window.nomePreferencialDaProposta = nomePreferencialDaProposta;
+
+/**
+ * Resolve os nomes de uma lista de propostas em lotes, sem uma consulta por
+ * pedido. O cliente comercial (`id_cliente`) vence o faturado: quem paga pode
+ * ser outra empresa, mas o nome da lista continua sendo o dono do pedido.
+ */
+async function aplicarNomesPreferenciaisDasPropostas(clienteBanco, propostas) {
+    if (!clienteBanco || !Array.isArray(propostas) || !propostas.length) return propostas || [];
+
+    const ids = [...new Set(propostas
+        .map(p => p && (p.id_cliente ?? p.id_faturado))
+        .filter(id => id !== null && id !== undefined && String(id).trim() !== '')
+        .map(String))];
+    if (!ids.length) return propostas;
+
+    const porId = new Map();
+    try {
+        for (let i = 0; i < ids.length; i += 200) {
+            const { data, error } = await clienteBanco
+                .from('clientes')
+                .select('id_cliente, fantasia, nome')
+                .in('id_cliente', ids.slice(i, i + 200));
+            if (error) throw error;
+            (data || []).forEach(c => porId.set(String(c.id_cliente), nomePreferencialDoCliente(c)));
+        }
+    } catch (e) {
+        console.warn('[Clientes] Nao foi possivel priorizar os nomes fantasia:', e && (e.message || e));
+        return propostas;
+    }
+
+    propostas.forEach(p => {
+        const id = p && (p.id_cliente ?? p.id_faturado);
+        const preferencial = id === null || id === undefined ? '' : porId.get(String(id));
+        if (preferencial) p.cliente_exibicao = preferencial;
+    });
+    return propostas;
+}
+window.aplicarNomesPreferenciaisDasPropostas = aplicarNomesPreferenciaisDasPropostas;
+
 // -------------------------------------------------------------------------------
 // STATUS ADIANTADO DESTA MÁQUINA (vibe_status_overrides)
 //
@@ -25993,6 +26054,7 @@ async function carregarOrdensDados() {
                     .limit(2000);
                 if (!propError && propData) {
                     propostasComerciais = propData;
+                    await aplicarNomesPreferenciaisDasPropostas(supabaseClient, propostasComerciais);
                 }
             } catch (err) {
                 console.warn('[Supabase] Falha ao carregar tabela propostas:', err);
@@ -26036,7 +26098,7 @@ async function carregarOrdensDados() {
                 
                 // Sobrescrever cliente e vendedor usando a tabela propostas
                 const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
-                const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || '';
+                const clienteProposta = nomePreferencialDaProposta(propReal, os.cliente || '');
                 const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || '';
                 
                 return {
@@ -26071,7 +26133,7 @@ async function carregarOrdensDados() {
                     const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
                     
                     const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
-                    const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || '';
+                    const clienteProposta = nomePreferencialDaProposta(propReal, os.cliente || '');
                     const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || '';
                     
                     return {
@@ -26518,6 +26580,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             if (!naGraficaErr) guardar(naGraficaData);
 
             propostas = [...porNumero.values()];
+            await aplicarNomesPreferenciaisDasPropostas(vibeClient, propostas);
         } catch (pe) {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
@@ -26611,7 +26674,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
 
             // Mapear campos com fallbacks determinísticos
-            const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || '';
+            const cliente = nomePreferencialDaProposta(propReal);
             const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
             const nascimento = createdAt || propReal?.created_at || null;
             const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || nascimento;
@@ -33859,7 +33922,7 @@ async function loadDadosEntregaInterno(osId, osNum) {
         if (container) {
             let cliHtml = cli ? `
                 <div style="font-size: 0.86rem; line-height: 1.5; color: var(--text);">
-                    <strong>Razão Social/Nome:</strong> ${cli.nome || cli.fantasia || '--'}<br>
+                    <strong>Cliente:</strong> ${escapeHtml(nomePreferencialDoCliente(cli, '--'))}<br>
                     <strong>CPF/CNPJ:</strong> ${cli.documento || '--'}<br>
                     ${cli.ins_estadual ? `<strong>I.E.:</strong> ${cli.ins_estadual}<br>` : ''}
                     <strong>E-mail:</strong> ${cli.email_financeiro || cli.email_contato || cli.email || '--'}<br>
@@ -40746,9 +40809,11 @@ async function loadUltimosPedidos(osId, clienteNome) {
                 .eq('id_int', currentNumInt)
                 .maybeSingle();
             if (pProp) {
-                if (pProp.cliente && nomeVazio) {
-                    clienteNome = pProp.cliente;
-                    if (currentOS) currentOS.cliente = pProp.cliente;
+                await aplicarNomesPreferenciaisDasPropostas(supabaseClient, [pProp]);
+                const nomePreferencial = nomePreferencialDaProposta(pProp);
+                if (nomePreferencial && nomeVazio) {
+                    clienteNome = nomePreferencial;
+                    if (currentOS) currentOS.cliente = nomePreferencial;
                 }
                 if (numeroCliente == null) numeroCliente = pProp.id_cliente ?? null;
                 if (idFaturado == null) idFaturado = pProp.id_faturado ?? null;
@@ -40780,7 +40845,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
                 .join(',');
             const { data, error } = await supabaseClient
                 .from('propostas')
-                .select('id_int, created_at, cliente')
+                .select('id_int, created_at, cliente, id_cliente, id_faturado')
                 .or(filtro)
                 .order('created_at', { ascending: false })
                 .limit(1000);
@@ -40791,7 +40856,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
         if (clienteNome && clienteNome.trim()) {
             const { data, error } = await supabaseClient
                 .from('propostas')
-                .select('id_int, created_at, cliente')
+                .select('id_int, created_at, cliente, id_cliente, id_faturado')
                 .ilike('cliente', `%${clienteNome.trim()}%`)
                 .order('created_at', { ascending: false })
                 .limit(1000);
@@ -40800,6 +40865,8 @@ async function loadUltimosPedidos(osId, clienteNome) {
 
         let pedidos = [...porNumeroDoPedido.values()]
             .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        await aplicarNomesPreferenciaisDasPropostas(supabaseClient, pedidos);
+        pedidos.forEach(p => { p.cliente = nomePreferencialDaProposta(p); });
 
         // O pedido aberto tem de estar na lista, sempre: é por ele que se
         // volta depois de espiar outro.
@@ -42306,7 +42373,7 @@ async function buscarDadosEmailCliente(osId, numero, exigirCadastro = false) {
                     if (cliData && cliData.length > 0) {
                         const cli = cliData[0];
                         clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
-                        if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
+                        clienteNome = nomePreferencialDoCliente(cli, clienteNome);
                     }
                 }
             }
