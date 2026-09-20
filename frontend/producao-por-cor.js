@@ -118,47 +118,30 @@
             throw new Error('Não foi possível atualizar os pedidos. Tente atualizar a lista novamente.');
         }
         const currentState = appState();
-        const orders = ((currentState && currentState.ordens) || []).slice();
+        const orders = ((currentState && currentState.ordens) || []).filter(order => {
+            if (typeof window.pedidoIgnoradoNosPaineis === 'function' && window.pedidoIgnoradoNosPaineis(order)) return false;
+            if (window.pedidoJaPassouDaGrafica(order)) return false;
+            return window.pedidoNaGrafica(order);
+        });
         const modelsClient = typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;
         const productsClient = (typeof vibeClient !== 'undefined' && vibeClient)
             ? vibeClient : modelsClient;
         if (!modelsClient || !productsClient) throw new Error('Banco de dados não disponível.');
 
-        // A origem do dropdown são os modelos, não a fila/status do pedido.
-        // Percorre todas as páginas visíveis à sessão, inclusive pedidos que
-        // não entraram no cache global limitado dos painéis.
+        // Mesma fila base do Painel de Produção. Só consulta modelos dos
+        // pedidos dessa fila, preservando a paginação e o status PENDENTE.
         const allModels = await selectInBatches(modelsClient, 'pedidos_modelos',
-            'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,amostra_num_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', null);
+            'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,amostra_num_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', orders.map(orderNumber));
         const models = allModels.filter(model => modeloEstaAguardando({
             status: model.status_impressao || model.status_producao || 'Aguardando',
         }));
         const numbers = models.map(model => Number(model.id_int)).filter(Number.isFinite);
-        const knownOrders = new Set(orders.map(order => String(orderNumber(order))));
-        const missingNumbers = numbers.filter(number => !knownOrders.has(String(number)));
-        const [products, colors, numbering, missingOrders] = await Promise.all([
+        const [products, colors, numbering] = await Promise.all([
             selectInBatches(productsClient, 'produtos_proposta',
                 'id,id_int,id_produto,nome_produto,modelo_descri,amostra_cor_id,amostra_num_id', numbers),
             loadCatalog('cores'),
             loadCatalog('numeracoes'),
-            selectInBatches(productsClient, 'propostas', 'id,id_int,cliente,status_interno,id_cliente,id_faturado', missingNumbers),
         ]);
-
-        if (typeof window.aplicarNomesPreferenciaisDasPropostas === 'function') {
-            await window.aplicarNomesPreferenciaisDasPropostas(productsClient, missingOrders);
-            missingOrders.forEach(order => {
-                if (typeof window.nomePreferencialDaProposta === 'function') {
-                    order.cliente = window.nomePreferencialDaProposta(order);
-                }
-            });
-        }
-
-        missingOrders.forEach(order => orders.push({ ...order, id: `vibe_${order.id_int}`, numero: order.id_int }));
-        // A janela compartilhada precisa encontrar o pedido pelo mesmo id.
-        // Só acrescenta metadados realmente retornados, sem inventar pedidos.
-        if (currentState) {
-            const currentNumbers = new Set((currentState.ordens || []).map(order => String(orderNumber(order))));
-            currentState.ordens = (currentState.ordens || []).concat(orders.filter(order => !currentNumbers.has(String(orderNumber(order)))));
-        }
 
         local.colors = colors;
         const orderMap = new Map(orders.map(order => [String(orderNumber(order)), order]));
@@ -197,7 +180,7 @@
                 : (['FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(model.verso_tipo) ? 'FxVerso' : 'Frente');
             return {
                 modelId: model.id,
-                osId: order ? order.id : `vibe_${model.id_int}`,
+                osId: order && order.id,
                 orderNumber: model.id_int,
                 client: (order && order.cliente) || '—',
                 deadline: order && (order.prazo_entrega || order.prazo),

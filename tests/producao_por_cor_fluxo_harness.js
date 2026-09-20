@@ -138,35 +138,38 @@ async function statusFixture(response) {
         assert.equal(f.ctx.state.pedidoAberto.osId, 'vibe_2');
         assert.equal(f.ctx.state.activeOSItem, null);
     });
-    await check('dropdown inclui todos os produtos com modelos aguardando, independente da fila do pedido', async () => {
+    await check('dropdown inclui somente pedidos da fila do Painel de Produção', async () => {
         const f = fixture();
         f.ctx.state.ordens.push(...[
             { id: 'vibe_2', numero: 2, status_interno: 'EXPEDICAO' },
             { id: 'vibe_3', numero: 3, status_interno: 'ENTREGUE' },
             { id: 'vibe_4', numero: 4, status_interno: 'EM PRODUCAO', ignorado: true },
             { id: 'vibe_5', numero: 5, status_interno: 'EM ARTE' },
+            { id: 'vibe_6', numero: 6, status_interno: 'EM ACABAMENTO' },
         ]);
         f.tables.pedidos_modelos.push(model(12, 1, { status_impressao: 'IMPRESSO' }), model(13, 1, { status_impressao: 'CORRIGIR_ARTE' }), model(21, 2), model(31, 3), model(41, 4), model(51, 5));
-        for (const number of [2, 3, 4, 5]) f.tables.produtos_proposta.push({ id: 99, id_int: number, id_produto: number, nome_produto: `Produto ${number}` });
+        f.tables.pedidos_modelos.push(model(61, 6, { status_impressao: null, status_producao: 'PENDENTE' }));
+        for (const number of [2, 3, 4, 5, 6]) f.tables.produtos_proposta.push({ id: 99, id_int: number, id_produto: number, nome_produto: `Produto ${number}` });
         await f.api.openPage();
-        assert.deepEqual(Array.from(f.api.local.records, row => row.modelId), [11, 21, 31, 41, 51]);
+        assert.deepEqual(Array.from(f.api.local.records, row => row.modelId), [11, 61]);
         const options = f.elements.get('ppc-product-select').innerHTML;
-        for (const number of [2, 3, 4, 5, 9]) assert(options.includes(`value="id:${number}"`));
+        for (const number of [6, 9]) assert(options.includes(`value="id:${number}"`));
+        for (const number of [2, 3, 4, 5]) assert(!options.includes(`value="id:${number}"`));
         assert.equal(f.api.local.productKey, '');
     });
-    await check('produto de pedido fora do cache aparece e seu modelo pode abrir', async () => {
+    await check('pedido ausente do painel não é acrescentado nem tem seu modelo aberto', async () => {
         const f = fixture();
         f.tables.pedidos_modelos.push(model(71, 7));
         f.tables.produtos_proposta.push({ id: 99, id_int: 7, id_produto: 77, nome_produto: 'Produto fora do cache' });
         f.tables.propostas.push({ id: 700, id_int: 7, cliente: 'Cliente sintético', status_interno: 'EM ARTE' });
         await f.api.openPage();
-        assert(f.elements.get('ppc-product-select').innerHTML.includes('Produto fora do cache'));
-        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 1);
+        assert(!f.elements.get('ppc-product-select').innerHTML.includes('Produto fora do cache'));
+        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 0);
         f.api.local.productKey = 'id:77'; f.api.local.colorKey = 'id:5';
         await f.api.openModel(71, 'vibe_7');
-        assert(f.calls.some(call => call.open && call.open[0] === 71 && call.open[1] === 'vibe_7'));
+        assert(!f.calls.some(call => call.open && call.open[0] === 71 && call.open[1] === 'vibe_7'));
         await f.api.refresh();
-        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 1);
+        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 0);
     });
     await check('troca produto/cor fecha janela e invalida abertura pendente', async () => {
         const f = fixture(); await f.start(); const d = deferred();

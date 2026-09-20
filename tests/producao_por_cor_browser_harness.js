@@ -66,13 +66,10 @@ const extract = name => {
         await tab.addScriptTag({ content: code });
         // Reabertura/restauração da seção sem chamar o hook do roteador:
         // a própria página deve iniciar a carga e vincular Atualizar lista.
-        await tab.waitForFunction(() => document.querySelectorAll('#ppc-product-select option').length === 3);
+        await tab.waitForFunction(() => document.querySelectorAll('#ppc-product-select option').length === 2);
         assert.equal(await tab.evaluate(() => orderLoads), 1);
         assert.equal(await tab.$eval('#ppc-product-select', el => el.value), '');
-        assert.deepEqual(await tab.$$eval('#ppc-product-select option', rows => rows.map(row => row.value)), ['', 'id:9', 'id:10']);
-        await tab.select('#ppc-product-select', 'id:10');
-        await tab.click('[data-color-key="id:5"]');
-        assert.equal(await tab.$eval('.ppc-model-row', row => row.dataset.itemId), '21');
+        assert.deepEqual(await tab.$$eval('#ppc-product-select option', rows => rows.map(row => row.value)), ['', 'id:9']);
         await tab.select('#ppc-product-select', 'id:9');
         await tab.click('[data-color-key="id:5"]');
         assert.equal(await tab.$$eval('.ppc-model-row', rows => rows.length), 2);
