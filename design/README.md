@@ -8,6 +8,7 @@ As telas desenhadas antes de virarem código. Cada `.dc.html` é um quadro; o
 | `Main.dc.html` | a Montagem em uso |
 | `Vazia.dc.html` | como a tela abre |
 | `Recusa.dc.html` | quando uma célula não combina |
+| `producao-por-cor-preview.dc.html` | prévia navegável da fila agrupada por cor e produto |
 
 O arquivo montado (`montagem.html`, 2,4 MB) **não é versionado**: ele tem o
 editor inteiro embutido e se refaz do zero a partir destes arquivos. Para

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prévia — Produção por Cor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --bg: #080d18;
+      --panel: #111a2b;
+      --panel-2: #18243a;
+      --panel-3: #202e47;
+      --line: rgba(148, 163, 184, .18);
+      --text: #edf3fb;
+      --muted: #91a0b8;
+      --dim: #617089;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #f87171;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .app { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+    .sidebar {
+      padding: 22px 14px;
+      background: #090e19;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; font-weight: 800; }
+    .brand-mark { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(135deg, #2563eb, #7c3aed); font-size: 12px; }
+    .nav-label { margin: 12px 12px 4px; color: #53627b; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-item { padding: 10px 12px; border-radius: 9px; color: #8f9db2; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+    .nav-item.active { color: #dbeafe; background: rgba(59, 130, 246, .14); box-shadow: inset 3px 0 #3b82f6; font-weight: 700; }
+    .nav-icon { width: 20px; text-align: center; }
+    .prototype-chip { margin-top: auto; padding: 10px 12px; border: 1px solid rgba(245, 158, 11, .3); border-radius: 9px; color: #fbbf24; background: rgba(245, 158, 11, .08); font-size: 11px; line-height: 1.45; }
+
+    main { min-width: 0; padding: 24px; background: radial-gradient(circle at 15% 0, rgba(59, 130, 246, .08), transparent 30%), var(--bg); }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 25px; letter-spacing: -.025em; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .station { padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); font-size: 12px; background: rgba(255,255,255,.03); }
+    .dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,.7); }
+
+    .notice { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; padding: 10px 13px; border: 1px solid rgba(96,165,250,.25); border-radius: 10px; background: rgba(59,130,246,.08); color: #bfdbfe; font-size: 12px; }
+    .toolbar { display: grid; grid-template-columns: minmax(280px, 520px) minmax(240px, 1fr); gap: 12px; margin-bottom: 14px; align-items: end; }
+    .product-picker { display: flex; flex-direction: column; gap: 6px; }
+    .product-picker label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .product-picker select { width: 100%; padding: 11px 38px 11px 13px; border: 1px solid rgba(96,165,250,.48); border-radius: 10px; outline: 0; background: var(--panel); color: var(--text); font-weight: 750; cursor: pointer; }
+    .product-picker select:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+    .picker-hint { padding: 10px 13px; border: 1px solid var(--line); border-radius: 10px; background: rgba(17,26,43,.7); color: var(--muted); font-size: 11px; line-height: 1.35; }
+
+    .workspace { display: grid; grid-template-columns: 230px minmax(620px, 1fr); gap: 14px; min-height: calc(100vh - 185px); }
+    .panel { border: 1px solid var(--line); border-radius: 13px; background: rgba(17,26,43,.92); overflow: hidden; }
+    .panel-head { padding: 13px 14px; border-bottom: 1px solid var(--line); background: rgba(32,46,71,.55); }
+    .eyebrow { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .11em; font-weight: 800; }
+    .panel-title { margin-top: 3px; font-size: 13px; font-weight: 800; }
+
+    .color-list { padding: 8px; display: flex; flex-direction: column; gap: 7px; }
+    .color-card { width: 100%; text-align: left; border: 1px solid transparent; border-radius: 10px; padding: 10px; background: transparent; cursor: pointer; display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 9px; }
+    .color-card:hover { background: rgba(255,255,255,.035); }
+    .color-card.active { background: rgba(59,130,246,.12); border-color: rgba(96,165,250,.4); }
+    .color-card > span:nth-child(2) { min-width: 0; }
+    .swatch { width: 12px; height: 36px; border-radius: 5px; border: 1px solid rgba(255,255,255,.28); }
+    .color-name { display: block; font-size: 13px; font-weight: 800; }
+    .color-meta { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .count { min-width: 28px; height: 24px; display: grid; place-items: center; padding: 0 7px; border-radius: 20px; background: var(--panel-3); color: #cbd5e1; font-size: 11px; font-weight: 800; }
+
+    .content-panel { display: flex; flex-direction: column; }
+    .content-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .current-color { display: flex; align-items: center; gap: 10px; }
+    .current-dot { width: 18px; height: 18px; border-radius: 6px; border: 1px solid rgba(255,255,255,.35); }
+    .current-name { font-weight: 850; font-size: 16px; }
+    .current-summary { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .select-all { border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 7px 10px; cursor: pointer; color: #cbd5e1; font-size: 11px; font-weight: 750; }
+    .content-actions { display: flex; align-items: center; gap: 8px; }
+    .selection-count { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .groups { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+    .product { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: rgba(8,13,24,.35); }
+    .product-head { width: 100%; border: 0; background: rgba(32,46,71,.62); padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; }
+    .chevron { color: var(--dim); font-size: 10px; transition: transform .15s; }
+    .product.collapsed .chevron { transform: rotate(-90deg); }
+    .product-name { font-size: 12px; font-weight: 850; }
+    .product-summary { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .product.collapsed .model-list { display: none; }
+    .model-list { display: flex; flex-direction: column; }
+    .model-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 10px 12px; border-top: 1px solid rgba(148,163,184,.12); cursor: pointer; }
+    .model-row:hover { background: rgba(255,255,255,.025); }
+    .model-row.open { background: rgba(59,130,246,.08); box-shadow: inset 3px 0 #3b82f6; }
+    .model-row.blocked { opacity: .62; }
+    .model-row input { width: 16px; height: 16px; accent-color: #3b82f6; }
+    .model-main { min-width: 0; }
+    .model-line-1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .model-name { font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { border-radius: 20px; padding: 2px 7px; font-size: 9px; font-weight: 850; white-space: nowrap; }
+    .badge.ready { background: rgba(34,197,94,.13); color: #86efac; }
+    .badge.blocked { background: rgba(248,113,113,.12); color: #fca5a5; }
+    .badge.printed { background: rgba(148,163,184,.12); color: #aab6c8; }
+    .model-line-2 { margin-top: 4px; color: var(--muted); font-size: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .separator { color: #46556c; }
+    .due { text-align: right; }
+    .due-label { color: var(--dim); font-size: 9px; text-transform: uppercase; font-weight: 800; }
+    .due-value { margin-top: 3px; font-size: 10px; font-weight: 800; color: #d2dbea; }
+    .due-value.late { color: #fca5a5; }
+    .empty { padding: 38px; text-align: center; color: var(--muted); font-size: 12px; }
+
+    .imposition-window { border-top: 1px solid rgba(96,165,250,.4); border-bottom: 1px solid rgba(96,165,250,.35); background: #0d1627; padding: 10px; }
+    .imp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 9px 11px; }
+    .imp-title { font-size: 12px; font-weight: 850; }
+    .imp-title strong { color: #60a5fa; }
+    .imp-paper { padding: 4px 8px; border-radius: 20px; background: rgba(34,197,94,.1); color: #86efac; border: 1px solid rgba(34,197,94,.22); font-size: 9px; font-weight: 800; white-space: nowrap; }
+    .product-models-box { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin-bottom: 9px; }
+    .product-models-title { padding: 7px 9px; background: rgba(32,46,71,.7); color: var(--muted); font-size: 9px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+    .product-models-scroll { overflow-x: auto; }
+    .product-models-table { width: 100%; border-collapse: collapse; font-size: 9px; white-space: nowrap; }
+    .product-models-table th { padding: 6px 7px; color: var(--dim); text-align: left; text-transform: uppercase; font-size: 8px; background: rgba(8,13,24,.48); }
+    .product-models-table td { padding: 6px 7px; border-top: 1px solid rgba(148,163,184,.1); color: var(--muted); }
+    .product-models-table tr { cursor: pointer; }
+    .product-models-table tbody tr:hover { background: rgba(255,255,255,.035); }
+    .product-models-table tr.active { background: rgba(59,130,246,.12); }
+    .product-models-table tr.active td { color: #dbeafe; }
+    .mini-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 4px; border: 1px solid rgba(255,255,255,.3); vertical-align: -1px; }
+    .imp-body { display: grid; grid-template-columns: 128px minmax(180px, 1fr) 154px; gap: 9px; }
+    .imp-column { border: 1px solid var(--line); border-radius: 9px; background: rgba(17,26,43,.78); padding: 9px; min-width: 0; }
+    .imp-label { display: block; margin-bottom: 4px; color: var(--dim); font-size: 8px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+    .imp-control { margin-bottom: 8px; }
+    .imp-control select, .imp-control input { width: 100%; height: 27px; border: 1px solid var(--line); border-radius: 6px; background: #172238; color: #dbe5f2; padding: 3px 6px; font-size: 9px; }
+    .sheet-badge { display: block; margin-bottom: 8px; border-radius: 6px; padding: 5px; text-align: center; background: rgba(20,184,166,.12); color: #5eead4; font-size: 9px; font-weight: 850; }
+    .segmented { display: flex; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+    .segmented button { flex: 1; padding: 6px 3px; border: 0; background: rgba(255,255,255,.03); color: var(--muted); font-size: 8px; cursor: pointer; }
+    .segmented button.active { background: #2563eb; color: white; }
+    .imp-note { color: var(--dim); font-size: 8px; line-height: 1.45; }
+    .sheet-area { min-height: 242px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, rgba(59,130,246,.08), transparent 65%), #09101d; }
+    .paper { width: 178px; height: 226px; padding: 9px; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 4px; background: #f3f4f6; border-radius: 3px; box-shadow: 0 8px 25px rgba(0,0,0,.5); transform: rotate(-1deg); }
+    .paper-cell { border: 1px dashed #94a3b8; border-radius: 2px; background: linear-gradient(135deg, color-mix(in srgb, var(--model-color) 30%, white), white); display: grid; place-items: center; color: #233049; text-align: center; font-size: 6px; font-weight: 800; overflow: hidden; }
+    .jg-demo { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-bottom: 7px; }
+    .jg-demo-title { padding: 7px; background: rgba(32,46,71,.7); font-size: 9px; font-weight: 800; }
+    .jg-demo-body { padding: 7px; }
+    .action-row { display: flex; gap: 5px; }
+    .demo-action { flex: 1; padding: 7px 4px; border: 0; border-radius: 6px; font-size: 8px; font-weight: 850; opacity: .48; cursor: not-allowed; }
+    .demo-action.pdf { background: linear-gradient(135deg,#a78bfa,#7c3aed); }
+    .demo-action.print { background: linear-gradient(135deg,#34d399,#059669); }
+    .lock-note { padding: 7px; border-radius: 6px; color: #fcd34d; background: rgba(245,158,11,.07); font-size: 8px; line-height: 1.4; }
+    .sync-note { margin-top: 7px; padding: 7px; border-radius: 6px; color: #93c5fd; background: rgba(59,130,246,.08); border: 1px solid rgba(96,165,250,.18); font-size: 8px; line-height: 1.4; }
+
+    @media (max-width: 1120px) {
+      .app { grid-template-columns: 76px minmax(0, 1fr); }
+      .brand span, .nav-item span:not(.nav-icon), .nav-label, .prototype-chip { display: none; }
+      .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+      .nav-item { justify-content: center; }
+      .workspace { grid-template-columns: 200px minmax(520px, 1fr); }
+    }
+    @media (max-width: 760px) {
+      .app { display: block; }
+      .sidebar { display: none; }
+      main { padding: 14px; }
+      .page-head, .toolbar { display: flex; flex-direction: column; }
+      .station { align-self: stretch; }
+      .workspace { display: flex; flex-direction: column; }
+      .color-list { display: grid; grid-template-columns: repeat(2, 1fr); }
+      .model-row { grid-template-columns: 26px minmax(0, 1fr); }
+      .due { display: none; }
+      .imp-body { grid-template-columns: 1fr; }
+      .sheet-area { min-height: 270px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">II</div><span>Ideal Imposition</span></div>
+      <div class="nav-label">Produção</div>
+      <div class="nav-item"><span class="nav-icon">📋</span><span>Painel de Produção</span></div>
+      <div class="nav-item active"><span class="nav-icon">🎨</span><span>Produção por Cor</span></div>
+      <div class="nav-item"><span class="nav-icon">✂️</span><span>Acabamento</span></div>
+      <div class="nav-item"><span class="nav-icon">🖨️</span><span>Impressoras</span></div>
+      <div class="nav-label">Consulta</div>
+      <div class="nav-item"><span class="nav-icon">📦</span><span>Pedidos</span></div>
+      <div class="prototype-chip"><strong>Prévia navegável</strong><br>Dados simulados. Nenhuma impressão ou gravação será executada.</div>
+    </aside>
+
+    <main>
+      <header class="page-head">
+        <div>
+          <h1>Produção por Cor</h1>
+          <p class="subtitle">Escolha um produto, confira suas cores e prepare uma cor inteira em sequência.</p>
+        </div>
+        <div class="station"><span class="dot"></span>Estação <strong>LASER-01</strong> · somente demonstração</div>
+      </header>
+
+      <div class="notice"><span>ⓘ</span><span>Esta tela usa informações fictícias. Busca, filtros e seleção funcionam apenas para avaliar o fluxo visual.</span></div>
+
+      <div class="toolbar">
+        <div class="product-picker">
+          <label for="product-select">Produto</label>
+          <select id="product-select" aria-label="Escolher produto"></select>
+        </div>
+        <div class="picker-hint">As cores abaixo pertencem somente ao produto escolhido. Cada linha continua identificando o pedido e o modelo original.</div>
+      </div>
+
+      <section class="workspace">
+        <aside class="panel">
+          <div class="panel-head"><div class="eyebrow">Cores do produto</div><div class="panel-title" id="color-product-name"></div></div>
+          <div class="color-list" id="color-list"></div>
+        </aside>
+
+        <section class="panel content-panel">
+          <div class="content-head">
+            <div class="current-color"><span class="current-dot" id="current-dot"></span><div><div class="current-name" id="current-name"></div><div class="current-summary" id="current-summary"></div></div></div>
+            <div class="content-actions"><span class="selection-count" id="selection-count">0 selecionados</span><button class="select-all" id="select-all" type="button">Selecionar imprimíveis</button></div>
+          </div>
+          <div class="groups" id="groups"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const models = [
+      { id: 1, color: 'Amarela', hex: '#f2cf36', product: 'Pulseira Mobi', sector: 'FLEXO', order: '21931', model: '1001023 · Pista', client: 'Festival Aurora', qty: 2000, format: '25 x 2 cm', print: 'Frente', due: 'Hoje · 15:00', status: 'ready' },
+      { id: 2, color: 'Amarela', hex: '#f2cf36', product: 'Pulseira Mobi', sector: 'FLEXO', order: '21942', model: '1001048 · Camarote', client: 'Arena Norte', qty: 1500, format: '25 x 2 cm', print: 'FxVerso', due: 'Hoje · 17:30', status: 'ready' },
+      { id: 3, color: 'Amarela', hex: '#f2cf36', product: 'Pulseira Tyvek', sector: 'FLEXO', order: '21946', model: '1001056 · Visitante', client: 'Expo Center', qty: 3200, format: '25 x 2 cm', print: 'Frente', due: 'Amanhã · 10:00', status: 'ready' },
+      { id: 4, color: 'Amarela', hex: '#f2cf36', product: 'Credencial PVC', sector: 'PVC', order: '21937', model: '1001031 · Staff', client: 'Congresso Prisma', qty: 800, format: '90 x 140 mm', print: 'FxVerso', due: 'Hoje · 14:00', status: 'blocked' },
+      { id: 5, color: 'Amarela', hex: '#f2cf36', product: 'Credencial PVC', sector: 'PVC', order: '21928', model: '1001012 · Organização', client: 'Summit Brasil', qty: 350, format: '90 x 140 mm', print: 'Frente', due: 'Ontem · 18:00', status: 'ready', late: true },
+      { id: 6, color: 'Azul', hex: '#3484d8', product: 'Pulseira Mobi', sector: 'FLEXO', order: '21941', model: '1001044 · Pista Premium', client: 'Arena Norte', qty: 1800, format: '25 x 2 cm', print: 'Frente', due: 'Hoje · 18:00', status: 'ready' },
+      { id: 7, color: 'Azul', hex: '#3484d8', product: 'Ingresso Couchê', sector: 'LASER', order: '21934', model: '1001028 · Lote 2', client: 'Clube Horizonte', qty: 4200, format: '5 x 15 cm', print: 'FxVerso', due: 'Amanhã · 09:00', status: 'ready' },
+      { id: 8, color: 'Azul', hex: '#3484d8', product: 'Credencial PVC', sector: 'PVC', order: '21925', model: '1001003 · Expositor', client: 'Expo Center', qty: 420, format: '90 x 140 mm', print: 'Frente', due: 'Hoje · 12:00', status: 'printed' },
+      { id: 9, color: 'Azul', hex: '#3484d8', product: 'Cordão 15 mm', sector: 'TÊXTIL', order: '21950', model: '1001064 · Patrocinador', client: 'Fórum Tech', qty: 650, format: '15 mm', print: 'Frente', due: 'Amanhã · 15:00', status: 'ready' },
+      { id: 10, color: 'Branca', hex: '#e8edf2', product: 'Pulseira Mobi', sector: 'FLEXO', order: '21948', model: '1001060 · Geral', client: 'Parque das Águas', qty: 5000, format: '25 x 2 cm', print: 'Frente', due: 'Amanhã · 11:00', status: 'ready' },
+      { id: 11, color: 'Branca', hex: '#e8edf2', product: 'Ingresso Térmico', sector: 'LASER', order: '21939', model: '1001038 · Sessão 20h', client: 'Teatro Central', qty: 900, format: '8 x 20 cm', print: 'Frente', due: 'Hoje · 16:00', status: 'ready' },
+      { id: 12, color: 'Branca', hex: '#e8edf2', product: 'Credencial PVC', sector: 'PVC', order: '21922', model: '1000994 · Imprensa', client: 'Fórum Tech', qty: 120, format: '90 x 140 mm', print: 'FxVerso', due: 'Hoje · 13:30', status: 'blocked' },
+      { id: 13, color: 'Vermelha', hex: '#d64a4a', product: 'Pulseira Tyvek', sector: 'FLEXO', order: '21945', model: '1001052 · Acesso Total', client: 'Festival Aurora', qty: 750, format: '25 x 2 cm', print: 'Frente', due: 'Amanhã · 13:00', status: 'ready' },
+      { id: 14, color: 'Vermelha', hex: '#d64a4a', product: 'Credencial PVC', sector: 'PVC', order: '21933', model: '1001026 · Produção', client: 'Clube Horizonte', qty: 220, format: '90 x 140 mm', print: 'FxVerso', due: 'Hoje · 19:00', status: 'ready' }
+    ];
+
+    const state = { product: 'Pulseira Mobi', color: 'Amarela', selected: new Set(), expandedAnchorId: 1, activeModelId: 1 };
+    const statusText = { ready: 'Aguardando', blocked: 'Corrigir Arte', printed: 'Impresso' };
+    const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const productModels = product => models.filter(model => model.product === product);
+    const colorModels = (product, color) => productModels(product).filter(model => model.color === color);
+    const visibleModels = () => colorModels(state.product, state.color);
+    const printable = model => model.status === 'ready';
+
+    function renderProductSelect() {
+      const products = [...new Set(models.map(model => model.product))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const select = document.getElementById('product-select');
+      select.innerHTML = products.map(product => {
+        const list = productModels(product);
+        const colors = new Set(list.map(model => model.color)).size;
+        return `<option value="${esc(product)}" ${state.product === product ? 'selected' : ''}>${esc(product)} · ${colors} ${colors === 1 ? 'cor' : 'cores'} · ${list.length} modelos</option>`;
+      }).join('');
+      select.onchange = () => {
+        state.product = select.value;
+        state.color = productModels(state.product)[0].color;
+        state.selected.clear();
+        state.expandedAnchorId = null;
+        state.activeModelId = null;
+        render();
+      };
+    }
+
+    function renderColors() {
+      const colors = [...new Set(productModels(state.product).map(model => model.color))];
+      document.getElementById('color-product-name').textContent = state.product;
+      document.getElementById('color-list').innerHTML = colors.map(color => {
+        const list = colorModels(state.product, color);
+        const sample = list[0];
+        const pending = list.filter(printable).length;
+        const quantity = list.reduce((sum, model) => sum + model.qty, 0);
+        return `<button class="color-card ${state.color === color ? 'active' : ''}" type="button" data-color="${esc(color)}"><span class="swatch" style="background:${sample.hex}"></span><span><span class="color-name">${esc(color)}</span><span class="color-meta">${pending} imprimíveis · ${quantity.toLocaleString('pt-BR')} un.</span></span><span class="count">${list.length}</span></button>`;
+      }).join('');
+      document.querySelectorAll('[data-color]').forEach(button => button.onclick = () => { state.color = button.dataset.color; state.selected.clear(); state.expandedAnchorId = null; state.activeModelId = null; render(); });
+    }
+
+    function renderGroups() {
+      const list = visibleModels();
+      const sample = colorModels(state.product, state.color)[0];
+      document.getElementById('current-dot').style.background = sample.hex;
+      document.getElementById('current-name').textContent = state.color;
+      const quantity = list.reduce((sum, model) => sum + model.qty, 0);
+      document.getElementById('current-summary').textContent = `${state.product} · ${list.length} modelos · ${quantity.toLocaleString('pt-BR')} unidades`;
+
+      const groups = list.reduce((all, model) => { (all[model.product] ||= []).push(model); return all; }, {});
+      const entries = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'pt-BR'));
+      document.getElementById('groups').innerHTML = entries.length ? entries.map(([product, items]) => {
+        const total = items.reduce((sum, item) => sum + item.qty, 0);
+        return `<article class="product"><button class="product-head" type="button"><span class="chevron">▼</span><span class="product-name">${esc(product)}</span><span class="product-summary">${items.length} modelos · ${total.toLocaleString('pt-BR')} un.</span></button><div class="model-list">${items.map(model => modelRow(model)).join('')}</div></article>`;
+      }).join('') : '<div class="empty">Nenhum modelo encontrado neste recorte.</div>';
+
+      document.querySelectorAll('.product-head').forEach(button => button.onclick = () => button.closest('.product').classList.toggle('collapsed'));
+      document.querySelectorAll('[data-model]').forEach(input => {
+        input.onclick = event => event.stopPropagation();
+        input.onchange = () => { const id = Number(input.dataset.model); input.checked ? state.selected.add(id) : state.selected.delete(id); renderSelection(); };
+      });
+      document.querySelectorAll('[data-open-model]').forEach(row => row.onclick = () => {
+        const id = Number(row.dataset.openModel);
+        const closing = state.expandedAnchorId === id;
+        state.expandedAnchorId = closing ? null : id;
+        state.activeModelId = closing ? null : id;
+        renderGroups();
+      });
+      document.querySelectorAll('[data-product-model]').forEach(row => row.onclick = event => {
+        event.stopPropagation();
+        state.activeModelId = Number(row.dataset.productModel);
+        renderGroups();
+      });
+      document.querySelectorAll('[data-status-model]').forEach(select => select.onchange = event => {
+        event.stopPropagation();
+        const model = models.find(item => item.id === Number(select.dataset.statusModel));
+        if (!model) return;
+        model.status = select.value;
+        if (!printable(model)) state.selected.delete(model.id);
+        renderGroups();
+        renderSelection();
+      });
+      document.querySelectorAll('.imposition-window').forEach(windowEl => windowEl.onclick = event => event.stopPropagation());
+    }
+
+    function modelRow(model) {
+      const disabled = !printable(model);
+      const isOpen = state.expandedAnchorId === model.id;
+      const active = productModels(state.product).find(item => item.id === state.activeModelId) || model;
+      return `<div class="model-row ${disabled ? 'blocked' : ''} ${isOpen ? 'open' : ''}" data-open-model="${model.id}" title="Abrir a janela de imposição abaixo deste modelo"><div><input type="checkbox" data-model="${model.id}" ${state.selected.has(model.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="Selecionar ${esc(model.model)}"></div><div class="model-main"><div class="model-line-1"><span class="model-name">${esc(model.model)}</span><span class="badge ${model.status}">${statusText[model.status]}</span><span style="color:#60a5fa;font-size:9px;">${isOpen ? '▲ Fechar imposição' : '▼ Abrir imposição'}</span></div><div class="model-line-2"><span>Pedido ${model.order}</span><span class="separator">·</span><span>${esc(model.client)}</span><span class="separator">·</span><span>${model.qty.toLocaleString('pt-BR')} un.</span><span class="separator">·</span><span>${esc(model.format)}</span><span class="separator">·</span><span>${model.print}</span></div></div><div class="due"><div class="due-label">Prazo</div><div class="due-value ${model.late ? 'late' : ''}">${model.late ? '⚠ ' : ''}${model.due}</div></div></div>${isOpen ? impositionWindow(active) : ''}`;
+    }
+
+    function impositionWindow(active) {
+      // A lista interna obedece ao mesmo recorte da tela: produto + cor.
+      // Um modelo do produto selecionado, mas de outra cor, pertence a outra
+      // leva de impressao e nao pode aparecer nesta janela.
+      const all = colorModels(state.product, state.color);
+      const code = active.model.split(' · ')[0];
+      const name = active.model.split(' · ')[1] || active.model;
+      const block = active.product.includes('PVC') ? 25 : 50;
+      const numbering = name.toLocaleLowerCase('pt-BR').includes('camarote') ? 'CAMAROTE' : 'SEQUENCIAL';
+      const modelRows = all.map(model => `<tr class="${model.id === active.id ? 'active' : ''}" data-product-model="${model.id}"><td>${model.order}</td><td><strong>${esc(model.model)}</strong></td><td><span class="mini-swatch" style="background:${model.hex}"></span>${model.color}</td><td>${model.qty.toLocaleString('pt-BR')}</td><td>${model.format}</td><td>${model.print}</td><td>${statusText[model.status]}</td></tr>`).join('');
+      const cells = Array.from({ length: 8 }, (_, index) => `<div class="paper-cell">${esc(name)}<br>${index + 1}</div>`).join('');
+      return `<div class="imposition-window">
+        <div class="imp-head"><div class="imp-title">👁️ Pré-visualização — <strong>${esc(active.model)}</strong> · Pedido ${active.order}</div><div class="imp-paper">${Math.ceil(active.qty / 8)} folhas · 8 por folha</div></div>
+        <div class="product-models-box"><div class="product-models-title">Modelos de ${esc(state.product)} na cor ${esc(state.color)} — clique para trocar o modelo ativo</div><div class="product-models-scroll"><table class="product-models-table"><thead><tr><th>Pedido</th><th>Modelo</th><th>Cor</th><th>QTD</th><th>Formato</th><th>Verso</th><th>Status</th></tr></thead><tbody>${modelRows}</tbody></table></div></div>
+        <div class="imp-body">
+          <div class="imp-column">
+            <span class="sheet-badge">Folha 1 de ${Math.ceil(active.qty / 8)}</span>
+            <div class="imp-control"><label class="imp-label">Folha</label><input type="number" value="1" min="1"></div>
+            <div class="imp-control"><label class="imp-label">Face</label><div class="segmented"><button type="button" class="active">Frente</button><button type="button">Verso</button></div></div>
+            <div class="imp-control"><label class="imp-label">Amostra</label><label style="display:flex;gap:6px;align-items:center;font-size:9px;color:var(--muted);"><input type="checkbox" style="width:auto;height:auto;"> Mostrar cor</label></div>
+            <div class="imp-control"><label class="imp-label">Modo de impressão</label><div class="segmented"><button type="button" class="active">Sequencial</button><button type="button">Blocado</button></div></div>
+            <div class="imp-note">A prévia representa as mesmas escolhas do Pedido. Nenhuma alteração é salva neste protótipo.</div>
+          </div>
+          <div class="imp-column sheet-area"><div class="paper" style="--model-color:${active.hex}">${cells}</div></div>
+          <div class="imp-column">
+            <div class="jg-demo"><div class="jg-demo-title">🖨 Imprimir e PDF</div><div class="jg-demo-body"><div class="action-row"><button type="button" class="demo-action pdf" disabled>📄 PDF</button><button type="button" class="demo-action print" disabled>🖨 Imprimir</button></div></div></div>
+            <div class="jg-demo"><div class="jg-demo-title">📁 Hot Folder</div><div class="jg-demo-body imp-note">Nenhuma pasta selecionada</div></div>
+            <div class="jg-demo"><div class="jg-demo-title">⚙ Configuração</div><div class="jg-demo-body">
+              <div class="imp-control"><label class="imp-label">Formato</label><input value="${esc(active.format)}" readonly></div>
+              <div class="imp-control"><label class="imp-label">Numeração</label><select><option>${numbering}</option></select></div>
+              <div class="imp-control"><label class="imp-label">QTD / NI / NF</label><input value="${active.qty} / 1 / ${active.qty}" readonly></div>
+              <div class="imp-control"><label class="imp-label">Bloco / Verso</label><input value="${block} / ${active.print}" readonly></div>
+              <div class="imp-control"><label class="imp-label">Status de impressão</label><select data-status-model="${active.id}"><option value="ready" ${active.status === 'ready' ? 'selected' : ''}>Aguardando</option><option value="printed" ${active.status === 'printed' ? 'selected' : ''}>Impresso</option><option value="blocked" ${active.status === 'blocked' ? 'selected' : ''}>Corrigir Arte</option></select></div>
+            </div></div>
+            <div class="lock-note">🔒 Campos sensíveis seguem a trava da gerência na tela real.</div>
+            <div class="sync-note">↻ Status único e compartilhado: na versão real, marcar aqui como <b>Impresso</b> atualizará o mesmo modelo no Painel de Produção.</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function selectedModels() { return models.filter(model => state.selected.has(model.id)); }
+    function renderSelection() {
+      const selected = selectedModels();
+      document.getElementById('selection-count').textContent = `${selected.length} ${selected.length === 1 ? 'selecionado' : 'selecionados'}`;
+    }
+
+    function render() { renderProductSelect(); renderColors(); renderGroups(); renderSelection(); }
+    document.getElementById('select-all').onclick = () => {
+      const ids = visibleModels().filter(printable).map(model => model.id);
+      const allSelected = ids.length > 0 && ids.every(id => state.selected.has(id));
+      ids.forEach(id => allSelected ? state.selected.delete(id) : state.selected.add(id));
+      renderGroups(); renderSelection();
+    };
+
+    render();
+  </script>
+</body>
+</html>
