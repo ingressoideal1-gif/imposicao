@@ -1,0 +1,82 @@
+[
+  {
+    "Domain": "https://imposition.ai-ideal.com.br",
+    "File": "index.html",
+    "Match": true,
+    "LocalHash": "3215811b894e5a09ef9a54c501002723ccb3f44be0880f22e7afa762ab4ba5ba",
+    "PublicHash": "3215811b894e5a09ef9a54c501002723ccb3f44be0880f22e7afa762ab4ba5ba",
+    "Url": "https://imposition.ai-ideal.com.br/index.html?v=923&_verificacao=1789918976901"
+  },
+  {
+    "Domain": "https://imposition.ai-ideal.com.br",
+    "File": "cliente.html",
+    "Match": true,
+    "LocalHash": "310dc8f390aa7c74ed27b9a80b3ac1a058fe500336be8af88d8bf1cf4dfb278c",
+    "PublicHash": "310dc8f390aa7c74ed27b9a80b3ac1a058fe500336be8af88d8bf1cf4dfb278c",
+    "Url": "https://imposition.ai-ideal.com.br/cliente.html?v=923&_verificacao=1789918977993"
+  },
+  {
+    "Domain": "https://imposition.ai-ideal.com.br",
+    "File": "controle.html",
+    "Match": true,
+    "LocalHash": "4ff159151ad667d0ca1aa1951f5015279143a6fb4e658aca2d431d4c7a61c305",
+    "PublicHash": "4ff159151ad667d0ca1aa1951f5015279143a6fb4e658aca2d431d4c7a61c305",
+    "Url": "https://imposition.ai-ideal.com.br/controle.html?v=923&_verificacao=1789918978299"
+  },
+  {
+    "Domain": "https://imposition.ai-ideal.com.br",
+    "File": "producao.html",
+    "Match": true,
+    "LocalHash": "4e4200d4528c3f4ea22d6807ff79aa30cf88fa209fb809e10290566c1d598293",
+    "PublicHash": "4e4200d4528c3f4ea22d6807ff79aa30cf88fa209fb809e10290566c1d598293",
+    "Url": "https://imposition.ai-ideal.com.br/producao.html?v=923&_verificacao=1789918978632"
+  },
+  {
+    "Domain": "https://imposition.ai-ideal.com.br",
+    "File": "pedido.js",
+    "Match": true,
+    "LocalHash": "72e142874b8d2ec09b27c92cc542ebd748ff3048c689cdf0f43fadba50463e9a",
+    "PublicHash": "72e142874b8d2ec09b27c92cc542ebd748ff3048c689cdf0f43fadba50463e9a",
+    "Url": "https://imposition.ai-ideal.com.br/pedido.js?v=923&_verificacao=1789918978944"
+  },
+  {
+    "Domain": "https://imposicao.pages.dev",
+    "File": "index.html",
+    "Match": true,
+    "LocalHash": "3215811b894e5a09ef9a54c501002723ccb3f44be0880f22e7afa762ab4ba5ba",
+    "PublicHash": "3215811b894e5a09ef9a54c501002723ccb3f44be0880f22e7afa762ab4ba5ba",
+    "Url": "https://imposicao.pages.dev/index.html?v=923&_verificacao=1789918979609"
+  },
+  {
+    "Domain": "https://imposicao.pages.dev",
+    "File": "cliente.html",
+    "Match": true,
+    "LocalHash": "310dc8f390aa7c74ed27b9a80b3ac1a058fe500336be8af88d8bf1cf4dfb278c",
+    "PublicHash": "310dc8f390aa7c74ed27b9a80b3ac1a058fe500336be8af88d8bf1cf4dfb278c",
+    "Url": "https://imposicao.pages.dev/cliente.html?v=923&_verificacao=1789918979885"
+  },
+  {
+    "Domain": "https://imposicao.pages.dev",
+    "File": "controle.html",
+    "Match": true,
+    "LocalHash": "4ff159151ad667d0ca1aa1951f5015279143a6fb4e658aca2d431d4c7a61c305",
+    "PublicHash": "4ff159151ad667d0ca1aa1951f5015279143a6fb4e658aca2d431d4c7a61c305",
+    "Url": "https://imposicao.pages.dev/controle.html?v=923&_verificacao=1789918980054"
+  },
+  {
+    "Domain": "https://imposicao.pages.dev",
+    "File": "producao.html",
+    "Match": true,
+    "LocalHash": "4e4200d4528c3f4ea22d6807ff79aa30cf88fa209fb809e10290566c1d598293",
+    "PublicHash": "4e4200d4528c3f4ea22d6807ff79aa30cf88fa209fb809e10290566c1d598293",
+    "Url": "https://imposicao.pages.dev/producao.html?v=923&_verificacao=1789918980228"
+  },
+  {
+    "Domain": "https://imposicao.pages.dev",
+    "File": "pedido.js",
+    "Match": true,
+    "LocalHash": "72e142874b8d2ec09b27c92cc542ebd748ff3048c689cdf0f43fadba50463e9a",
+    "PublicHash": "72e142874b8d2ec09b27c92cc542ebd748ff3048c689cdf0f43fadba50463e9a",
+    "Url": "https://imposicao.pages.dev/pedido.js?v=923&_verificacao=1789918980381"
+  }
+]
