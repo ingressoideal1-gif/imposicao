@@ -26880,6 +26880,9 @@ function aplicarRegraProdutoPrateleira(item) {
 
     const foto = fotoPrincipalDoProduto(idProduto);
     if (item._status_arte_persistido === undefined) item._status_arte_persistido = item.status_arte || '';
+    if (item._status_impressao_persistido === undefined) {
+        item._status_impressao_persistido = item.status_impressao || item.impressao || '';
+    }
     if (item._amostra_arte_persistida === undefined) {
         item._amostra_arte_persistida = item.amostra_arte_base64 || '';
     }
@@ -26899,12 +26902,15 @@ function aplicarRegraProdutoPrateleira(item) {
     item.amostra_status = 'APROVADA';
     item.status_arte = 'APROVADA';
     item.aprovacao = 'APROVADA';
+    item.status_impressao = 'IMPRESSO';
+    item.impressao = 'Impresso';
     return true;
 }
 
 /**
- * Persiste APROVADA somente nos modelos inequivocamente ligados a produto de
- * prateleira. Cada UPDATE usa id + id_int e exige exatamente uma linha de volta.
+ * Persiste APROVADA e IMPRESSO somente nos modelos inequivocamente ligados a
+ * produto de prateleira. Cada UPDATE usa id + id_int e exige exatamente uma
+ * linha de volta.
  */
 async function sincronizarAprovacaoProdutosPrateleira(modelos) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return { atualizados: 0, falhas: 0 };
@@ -26914,32 +26920,37 @@ async function sincronizarAprovacaoProdutosPrateleira(modelos) {
         aplicarRegraProdutoPrateleira(modelo);
         if (!modelo || !modelo._produto_prateleira) return false;
         const statusPendente = String(modelo._status_arte_persistido || '').trim().toUpperCase() !== 'APROVADA';
+        const impressaoPendente = String(modelo._status_impressao_persistido || '').trim().toUpperCase() !== 'IMPRESSO';
         const previaPendente = !!modelo._foto_produto_url
             && String(modelo._amostra_arte_persistida || '') !== String(modelo._foto_produto_url);
-        return statusPendente || previaPendente;
+        return statusPendente || impressaoPendente || previaPendente;
     });
     let atualizados = 0;
     const falhas = [];
     for (const modelo of pendentes) {
-        const payload = { status_arte: 'APROVADA' };
+        const payload = { status_arte: 'APROVADA', status_impressao: 'IMPRESSO' };
         if (modelo._foto_produto_url) payload.amostra_arte_base64 = modelo._foto_produto_url;
         const { data, error } = await supabaseClient
             .from('pedidos_modelos')
             .update(payload)
             .eq('id', modelo.id)
             .eq('id_int', modelo.id_int)
-            .select('id,id_int,status_arte,amostra_arte_base64');
+            .select('id,id_int,status_arte,status_impressao,amostra_arte_base64');
         const linhas = data || [];
         if (error || linhas.length !== 1
             || String(linhas[0].id) !== String(modelo.id)
             || String(linhas[0].id_int) !== String(modelo.id_int)
             || linhas[0].status_arte !== 'APROVADA'
+            || String(linhas[0].status_impressao || '').trim().toUpperCase() !== 'IMPRESSO'
             || (payload.amostra_arte_base64
                 && linhas[0].amostra_arte_base64 !== payload.amostra_arte_base64)) {
             falhas.push({ id: modelo.id, id_int: modelo.id_int, erro: error && error.message });
             continue;
         }
         modelo._status_arte_persistido = 'APROVADA';
+        modelo._status_impressao_persistido = 'IMPRESSO';
+        modelo.status_impressao = 'IMPRESSO';
+        modelo.impressao = 'Impresso';
         if (payload.amostra_arte_base64) modelo._amostra_arte_persistida = payload.amostra_arte_base64;
         atualizados++;
     }
