@@ -25,15 +25,17 @@ const extract = name => {
           <div id="ped-preview-card-container"><canvas id="ped-preview-canvas" width="20" height="20"></canvas>
           <input id="ped-print-copies" value="7"></div></div></body></html>`);
         await tab.evaluate(() => {
-            window.state = { ordens: [{ id: 'vibe_1', numero: 1 }], osItens: {}, cores: [{ id: 5, name: 'Azul' }],
+            window.state = { ordens: [{ id: 'vibe_1', numero: 1 }, { id: 'vibe_2', numero: 2, status_interno: 'EM ARTE' }], osItens: {}, cores: [{ id: 5, name: 'Azul' }],
                 numeracoes: [{ id: 6 }], selectedOSItems: [{ itemId: 999, osId: 'vibe_1' }] };
             window.loadOrdens = async () => true;
-            window.pedidoNaGrafica = () => true;
+            window.pedidoNaGrafica = order => order.numero === 1;
             window.pedidoJaPassouDaGrafica = () => false;
             window.supabaseClient = { from(table) { return { select() { return this; }, in() { return this; }, order() { return this; },
                 range(offset) { return Promise.resolve({ data: offset ? [] : table === 'pedidos_modelos'
-                    ? [11, 12].map(id => ({ id, id_int: 1, id_produto_proposta_origem: 99, nome_modelo: `Modelo ${id}`, status_impressao: 'Aguardando', amostra_cor_id: 5 }))
-                    : [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' }] }); } }; } };
+                    ? [11, 12, 21, 31].map(id => ({ id, id_int: id < 20 ? 1 : 2, id_produto_proposta_origem: id === 31 ? 101 : (id === 21 ? 100 : 99), nome_modelo: `Modelo ${id}`, status_impressao: id === 31 ? 'Impresso' : 'Aguardando', amostra_cor_id: 5 }))
+                    : [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' },
+                        { id: 100, id_int: 2, id_produto: 10, nome_produto: 'Produto fora da gráfica' },
+                        { id: 101, id_int: 2, id_produto: 11, nome_produto: 'Produto só impresso' }] }); } }; } };
             window.loadOSItens = async () => { state.osItens.vibe_1 = [11, 12].map(id => ({ id, _dbLoaded: true, status_impressao: 'Aguardando' })); };
             window.getOSItens = id => state.osItens[id] || [];
             window.enviarParaPedido = async (itemId, osId) => {
@@ -53,6 +55,10 @@ const extract = name => {
         await tab.addScriptTag({ content: code });
         await tab.evaluate(() => ProducaoPorCorPainel.abrir());
         assert.equal(await tab.$eval('#ppc-product-select', el => el.value), '');
+        assert.deepEqual(await tab.$$eval('#ppc-product-select option', rows => rows.map(row => row.value)), ['', 'id:9', 'id:10']);
+        await tab.select('#ppc-product-select', 'id:10');
+        await tab.click('[data-color-key="id:5"]');
+        assert.equal(await tab.$eval('.ppc-model-row', row => row.dataset.itemId), '21');
         await tab.select('#ppc-product-select', 'id:9');
         await tab.click('[data-color-key="id:5"]');
         assert.equal(await tab.$$eval('.ppc-model-row', rows => rows.length), 2);

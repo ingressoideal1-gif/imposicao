@@ -71,14 +71,16 @@
 
     async function selectInBatches(client, table, columns, values, column = 'id_int') {
         const rows = [];
-        const unique = Array.from(new Set(values.filter(Number.isFinite)));
-        for (let start = 0; start < unique.length; start += 100) {
-            const batch = unique.slice(start, start + 100);
+        const unique = values === null ? null : Array.from(new Set(values.filter(Number.isFinite)));
+        const batches = unique === null ? [null] : [];
+        for (let start = 0; unique && start < unique.length; start += 100) batches.push(unique.slice(start, start + 100));
+        for (const batch of batches) {
             // O limite do servidor vale para LINHAS, não para pedidos.
             // Avança pelo tamanho recebido inclusive quando o servidor reduz a página.
             for (let offset = 0; ; ) {
-                const { data, error } = await client.from(table).select(columns).in(column, batch)
-                    .order('id', { ascending: true }).range(offset, offset + 199);
+                let query = client.from(table).select(columns);
+                if (batch !== null) query = query.in(column, batch);
+                const { data, error } = await query.order('id', { ascending: true }).range(offset, offset + 199);
                 if (error) throw error;
                 if (!Array.isArray(data)) throw new Error('Resposta incompleta ao carregar modelos.');
                 if (!data.length) break;
@@ -106,27 +108,38 @@
             throw new Error('Não foi possível atualizar os pedidos. Tente atualizar a lista novamente.');
         }
         const currentState = appState();
-        const orders = ((currentState && currentState.ordens) || []).filter(order => {
-            const ignored = typeof window.pedidoIgnoradoNosPaineis === 'function'
-                && window.pedidoIgnoradoNosPaineis(order);
-            const inFactory = typeof window.pedidoNaGrafica === 'function' && window.pedidoNaGrafica(order);
-            const alreadyLeft = typeof window.pedidoJaPassouDaGrafica === 'function' && window.pedidoJaPassouDaGrafica(order);
-            return !ignored && inFactory && !alreadyLeft;
-        });
-        const numbers = orders.map(orderNumber).filter(Number.isFinite);
+        const orders = ((currentState && currentState.ordens) || []).slice();
         const modelsClient = typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;
         const productsClient = (typeof vibeClient !== 'undefined' && vibeClient)
             ? vibeClient : modelsClient;
         if (!modelsClient || !productsClient) throw new Error('Banco de dados não disponível.');
 
-        const [models, products, colors, numbering] = await Promise.all([
-            selectInBatches(modelsClient, 'pedidos_modelos',
-                'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,amostra_num_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', numbers),
+        // A origem do dropdown são os modelos, não a fila/status do pedido.
+        // Percorre todas as páginas visíveis à sessão, inclusive pedidos que
+        // não entraram no cache global limitado dos painéis.
+        const allModels = await selectInBatches(modelsClient, 'pedidos_modelos',
+            'id,id_int,id_produto_proposta_origem,nome_modelo,quantidade,status_impressao,status_producao,status_arte,padrao,amostra_cor_id,amostra_num_id,gabarito_operacional,numeracao_inicio,numeracao_fim,verso_tipo,bloco', null);
+        const models = allModels.filter(model => modeloEstaAguardando({
+            status: model.status_impressao || model.status_producao || 'Aguardando',
+        }));
+        const numbers = models.map(model => Number(model.id_int)).filter(Number.isFinite);
+        const knownOrders = new Set(orders.map(order => String(orderNumber(order))));
+        const missingNumbers = numbers.filter(number => !knownOrders.has(String(number)));
+        const [products, colors, numbering, missingOrders] = await Promise.all([
             selectInBatches(productsClient, 'produtos_proposta',
                 'id,id_int,id_produto,nome_produto,modelo_descri,amostra_cor_id,amostra_num_id', numbers),
             loadCatalog('cores'),
             loadCatalog('numeracoes'),
+            selectInBatches(productsClient, 'propostas', 'id,id_int,cliente,status_interno,id_cliente,id_faturado', missingNumbers),
         ]);
+
+        missingOrders.forEach(order => orders.push({ ...order, id: `vibe_${order.id_int}`, numero: order.id_int }));
+        // A janela compartilhada precisa encontrar o pedido pelo mesmo id.
+        // Só acrescenta metadados realmente retornados, sem inventar pedidos.
+        if (currentState) {
+            const currentNumbers = new Set((currentState.ordens || []).map(order => String(orderNumber(order))));
+            currentState.ordens = (currentState.ordens || []).concat(orders.filter(order => !currentNumbers.has(String(orderNumber(order)))));
+        }
 
         local.colors = colors;
         const orderMap = new Map(orders.map(order => [String(orderNumber(order)), order]));
@@ -165,7 +178,7 @@
                 : (['FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(model.verso_tipo) ? 'FxVerso' : 'Frente');
             return {
                 modelId: model.id,
-                osId: order && order.id,
+                osId: order ? order.id : `vibe_${model.id_int}`,
                 orderNumber: model.id_int,
                 client: (order && order.cliente) || '—',
                 deadline: order && (order.prazo_entrega || order.prazo),

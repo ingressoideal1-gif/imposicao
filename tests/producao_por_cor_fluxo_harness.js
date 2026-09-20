@@ -26,7 +26,7 @@ function fixture() {
             addEventListener() {}, style: {} });
     }
     const events = {}, calls = [], notices = [];
-    const tables = { pedidos_modelos: [model()], produtos_proposta: [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' }] };
+    const tables = { pedidos_modelos: [model()], propostas: [], produtos_proposta: [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' }] };
     const ctx = {
         state: { ordens: [{ id: 'vibe_1', numero: 1, status_interno: 'EM PRODUCAO' }], osItens: {},
             cores: [{ id: 5, name: 'Azul' }], numeracoes: [{ id: 6, name: 'Duplex', print_mode: 'FxVerso' }], selectedOSItems: [] },
@@ -51,7 +51,7 @@ function fixture() {
         let column, values;
         return { select() { return this; }, in(c, v) { column = c; values = v; return this; },
             order() { return this; }, async range(start, end) {
-                const rows = tables[table].filter(row => values.some(value => String(value) === String(row[column])));
+                const rows = tables[table].filter(row => !values || values.some(value => String(value) === String(row[column])));
                 return { data: rows.slice(start, end + 1), error: null };
             } };
     } };
@@ -98,15 +98,35 @@ async function statusFixture(response) {
         assert.equal(f.ctx.state.pedidoAberto.osId, 'vibe_2');
         assert.equal(f.ctx.state.activeOSItem, null);
     });
-    await check('mesma elegibilidade: aguardando, produção, sem Ignorar/expedição/entregue', async () => {
+    await check('dropdown inclui todos os produtos com modelos aguardando, independente da fila do pedido', async () => {
         const f = fixture();
         f.ctx.state.ordens.push(...[
             { id: 'vibe_2', numero: 2, status_interno: 'EXPEDICAO' },
             { id: 'vibe_3', numero: 3, status_interno: 'ENTREGUE' },
             { id: 'vibe_4', numero: 4, status_interno: 'EM PRODUCAO', ignorado: true },
+            { id: 'vibe_5', numero: 5, status_interno: 'EM ARTE' },
         ]);
-        f.tables.pedidos_modelos.push(model(12, 1, { status_impressao: 'IMPRESSO' }), model(13, 1, { status_impressao: 'CORRIGIR_ARTE' }), model(21, 2), model(31, 3), model(41, 4));
-        const rows = await f.api.loadRecords(); assert.equal(rows.length, 1); assert.equal(rows[0].modelId, 11);
+        f.tables.pedidos_modelos.push(model(12, 1, { status_impressao: 'IMPRESSO' }), model(13, 1, { status_impressao: 'CORRIGIR_ARTE' }), model(21, 2), model(31, 3), model(41, 4), model(51, 5));
+        for (const number of [2, 3, 4, 5]) f.tables.produtos_proposta.push({ id: 99, id_int: number, id_produto: number, nome_produto: `Produto ${number}` });
+        await f.api.openPage();
+        assert.deepEqual(Array.from(f.api.local.records, row => row.modelId), [11, 21, 31, 41, 51]);
+        const options = f.elements.get('ppc-product-select').innerHTML;
+        for (const number of [2, 3, 4, 5, 9]) assert(options.includes(`value="id:${number}"`));
+        assert.equal(f.api.local.productKey, '');
+    });
+    await check('produto de pedido fora do cache aparece e seu modelo pode abrir', async () => {
+        const f = fixture();
+        f.tables.pedidos_modelos.push(model(71, 7));
+        f.tables.produtos_proposta.push({ id: 99, id_int: 7, id_produto: 77, nome_produto: 'Produto fora do cache' });
+        f.tables.propostas.push({ id: 700, id_int: 7, cliente: 'Cliente sintético', status_interno: 'EM ARTE' });
+        await f.api.openPage();
+        assert(f.elements.get('ppc-product-select').innerHTML.includes('Produto fora do cache'));
+        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 1);
+        f.api.local.productKey = 'id:77'; f.api.local.colorKey = 'id:5';
+        await f.api.openModel(71, 'vibe_7');
+        assert(f.calls.some(call => call.open && call.open[0] === 71 && call.open[1] === 'vibe_7'));
+        await f.api.refresh();
+        assert.equal(f.ctx.state.ordens.filter(order => order.id === 'vibe_7').length, 1);
     });
     await check('troca produto/cor fecha janela e invalida abertura pendente', async () => {
         const f = fixture(); await f.start(); const d = deferred();
