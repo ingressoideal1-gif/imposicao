@@ -1815,6 +1815,11 @@
 
                 <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
                 <div class="stats-grid">
+                    <div class="stat-card clickable-card" id="card-stat-dashboard-arte" onclick="setFiltroFilaArte('dashboard')" style="cursor: pointer; transition: all 0.2s ease;" title="Abrir o dashboard de desempenho da equipe de arte">
+                        <div class="stat-card-title">Dashboard</div>
+                        <div class="stat-card-value" style="color: #a78bfa;">📊</div>
+                        <div class="stat-card-icon">↗</div>
+                    </div>
                     <div class="stat-card clickable-card" id="card-stat-pedidos-todos" onclick="setFiltroFilaArte('todos')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir todos os pedidos pendentes (exceto Aprovados)">
                         <div class="stat-card-title">TODOS</div>
                         <div class="stat-card-value cyan" id="stat-pedidos-todos-arte" style="color: #06b6d4;">0</div>
@@ -1849,8 +1854,24 @@
 
 
 
+                <section id="dashboard-arte" class="dashboard-arte" hidden aria-labelledby="dashboard-arte-titulo">
+                    <div class="dashboard-arte-topo">
+                        <div>
+                            <span class="dashboard-arte-sobretitulo">Desempenho da equipe</span>
+                            <h2 id="dashboard-arte-titulo">Dashboard de Arte</h2>
+                            <p id="dashboard-arte-periodo-texto">Indicadores dos pedidos acompanhados pela Lista de Arte.</p>
+                        </div>
+                        <div class="dashboard-arte-periodos" role="group" aria-label="Período do dashboard">
+                            <button type="button" class="dashboard-arte-periodo" data-dias="1" onclick="setPeriodoDashboardArte(1)">Hoje</button>
+                            <button type="button" class="dashboard-arte-periodo" data-dias="7" onclick="setPeriodoDashboardArte(7)">7 dias</button>
+                            <button type="button" class="dashboard-arte-periodo" data-dias="30" onclick="setPeriodoDashboardArte(30)">30 dias</button>
+                        </div>
+                    </div>
+                    <div id="dashboard-arte-conteudo"></div>
+                </section>
+
                 <!-- Tabela de OS de Arte -->
-                <div class="card">
+                <div class="card" id="lista-arte-tabela-card">
                     <div class="card-header">
                         <span class="card-title" id="titulo-tabela-arte"><span class="icon">📋</span> Fila de Arte</span>
                         <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
@@ -2135,6 +2156,7 @@
     <script src="/gerenciador-fotos.js?v=897"></script>
     <script src="/editor-foto.js?v=897"></script>
     <script src="/script.js?v=916"></script>
+    <script src="/dashboard-arte.js?v=917"></script>
     <script src="/criador-arte.js?v=897"></script>
     <script src="/pedido.js?v=914"></script>
 

@@ -30645,13 +30645,16 @@ function renderOrdens() {
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
     if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalConcluidosArte;
 
-    // Seleção da fila ativa ('fila', 'todos', 'aprovacao' ou 'aprovados')
+    // Seleção da fila ativa. O dashboard usa os mesmos pedidos já classificados,
+    // mas troca a tabela por uma visão analítica sem alterar nenhuma fila.
     const activeFilaTipo = state.filtroFilaTipo || 'fila';
     let baseOrdensArte = ordensFilaArte;
     let listaEhDosConcluidos = false;
 
 
-    if (state.filtroStatusArte === 'Aprovada') {
+    if (activeFilaTipo === 'dashboard') {
+        baseOrdensArte = [];
+    } else if (state.filtroStatusArte === 'Aprovada') {
         baseOrdensArte = ordensAprovados;
     } else if (state.filtroStatusArte) {
         // state.ordens não: traria de volta os pedidos que já saíram da arte.
@@ -30705,6 +30708,7 @@ function renderOrdens() {
         thTempoEl.textContent = listaEhDosConcluidos ? 'Entrou em Produção' : 'Tempo';
     }
 
+    const cardDashboardEl = document.getElementById('card-stat-dashboard-arte');
     const cardTodosEl = document.getElementById('card-stat-pedidos-todos');
     const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
     const cardPendenteEl = document.getElementById('card-stat-pedidos-pendente');
@@ -30713,6 +30717,7 @@ function renderOrdens() {
     const cardConcluidosEl = document.getElementById('card-stat-pedidos-concluidos');
 
     const cardsDaListaArte = [
+        { el: cardDashboardEl, tipo: 'dashboard', cor: '#8b5cf6', rgb: '139, 92, 246' },
         { el: cardTodosEl, tipo: 'todos', cor: '#06b6d4', rgb: '6, 182, 212' },
         { el: cardFilaEl, tipo: 'fila', cor: '#3b82f6', rgb: '59, 130, 246' },
         { el: cardPendenteEl, tipo: 'pendente', cor: '#ef4444', rgb: '239, 68, 68' },
@@ -30730,6 +30735,17 @@ function renderOrdens() {
         card.el.style.border = card.tipo === 'pendente' && !selecionado ? '1px solid #ef4444' : '';
         card.el.style.boxShadow = '';
     });
+
+    const dashboardArteEl = document.getElementById('dashboard-arte');
+    const tabelaArteCardEl = document.getElementById('lista-arte-tabela-card');
+    const detalheArteEl = document.getElementById('os-detail-card-arte');
+    const dashboardAtivo = activeFilaTipo === 'dashboard';
+    if (dashboardArteEl) dashboardArteEl.hidden = !dashboardAtivo;
+    if (tabelaArteCardEl) tabelaArteCardEl.style.display = dashboardAtivo ? 'none' : '';
+    if (detalheArteEl && dashboardAtivo) detalheArteEl.style.display = 'none';
+    if (dashboardAtivo && typeof window.renderDashboardArte === 'function') {
+        window.renderDashboardArte();
+    }
 
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
     let filteredArte = baseOrdensArte.filter(os => {
