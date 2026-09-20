@@ -212,11 +212,14 @@
     function colorsForProduct() {
         const map = new Map();
         local.records.filter(record => record.productKey === local.productKey && modeloEstaAguardando(record)).forEach(record => {
-            const current = map.get(record.colorKey) || { key: record.colorKey, label: record.colorLabel, swatch: record.colorSwatch, count: 0 };
+            const current = map.get(record.colorKey) || { key: record.colorKey, label: record.colorLabel, swatch: record.colorSwatch, count: 0, orders: new Set(), units: 0 };
             current.count += 1;
+            current.orders.add(String(record.orderNumber));
+            const quantity = Number(record.quantity);
+            if (Number.isFinite(quantity)) current.units += quantity;
             map.set(record.colorKey, current);
         });
-        return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+        return Array.from(map.values()).sort((a, b) => b.units - a.units || a.label.localeCompare(b.label, 'pt-BR'));
     }
 
     function formatDate(value) {
@@ -270,7 +273,12 @@
         target.innerHTML = list.length ? list.map(color => `
             <button type="button" class="ppc-color-button ${color.key === local.colorKey ? 'active' : ''}" data-color-key="${esc(color.key)}">
                 <span class="ppc-swatch" style="--ppc-swatch:${esc(color.swatch)}"></span>
-                <span>${esc(color.label)}</span><span class="ppc-count">${color.count}</span>
+                <span>${esc(color.label)}</span>
+                <span class="ppc-count">
+                    <span>${color.orders.size.toLocaleString('pt-BR')} ${color.orders.size === 1 ? 'pedido' : 'pedidos'}</span>
+                    <span>${color.count.toLocaleString('pt-BR')} ${color.count === 1 ? 'modelo' : 'modelos'}</span>
+                    <span>${color.units.toLocaleString('pt-BR')} ${color.units === 1 ? 'unidade' : 'unidades'}</span>
+                </span>
             </button>`).join('') : '<div class="ppc-message">Nenhuma cor para este produto.</div>';
     }
 

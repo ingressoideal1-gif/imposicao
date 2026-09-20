@@ -116,7 +116,7 @@
 
 #view-producao-cor .ppc-color-button {
     display: grid;
-    grid-template-columns: 17px minmax(0, 1fr) auto;
+    grid-template-columns: 17px minmax(0, 1fr);
     align-items: center;
     gap: 9px;
     width: 100%;
@@ -144,8 +144,16 @@
 }
 
 #view-producao-cor .ppc-count {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
     color: #8da0b8;
     font-size: .75rem;
+}
+
+#view-producao-cor .ppc-count span {
+    white-space: nowrap;
 }
 
 #view-producao-cor .ppc-message {

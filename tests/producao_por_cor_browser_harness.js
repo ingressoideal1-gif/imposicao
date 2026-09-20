@@ -27,6 +27,7 @@ const extract = name => {
           ${section.replace('class="view-section"', 'class="view-section active"')}<div id="ped-preview-home">
           <div id="ped-preview-card-container"><canvas id="ped-preview-canvas" width="20" height="20"></canvas>
           <input id="ped-print-copies" value="7"></div></div></body></html>`);
+        await tab.addStyleTag({ content: fs.readFileSync(path.join(root, 'frontend/producao-por-cor.css'), 'utf8') });
         await tab.evaluate(() => {
             window.state = { ordens: [{ id: 'vibe_1', numero: 1 }, { id: 'vibe_2', numero: 2, status_interno: 'EM ARTE' }], osItens: {}, cores: [{ id: 5, name: 'Azul' }],
                 numeracoes: [{ id: 6 }], selectedOSItems: [{ itemId: 999, osId: 'vibe_1' }] };
@@ -39,7 +40,7 @@ const extract = name => {
             window.pedidoJaPassouDaGrafica = () => false;
             window.supabaseClient = { from(table) { return { select() { return this; }, in() { return this; }, order() { return this; },
                 range(offset) { return Promise.resolve({ data: offset ? [] : table === 'pedidos_modelos'
-                    ? [11, 12, 21, 31].map(id => ({ id, id_int: id < 20 ? 1 : 2, id_produto_proposta_origem: id === 31 ? 101 : (id === 21 ? 100 : 99), nome_modelo: `Modelo ${id}`, status_impressao: id === 31 ? 'Impresso' : id === 21 ? null : 'Aguardando', status_producao: 'PENDENTE', amostra_cor_id: 5 }))
+                    ? [11, 12, 21, 31].map(id => ({ id, id_int: id < 20 ? 1 : 2, id_produto_proposta_origem: id === 31 ? 101 : (id === 21 ? 100 : 99), nome_modelo: `Modelo ${id}`, status_impressao: id === 31 ? 'Impresso' : id === 21 ? null : 'Aguardando', status_producao: 'PENDENTE', amostra_cor_id: 5, quantidade: id === 11 ? 100 : 200 }))
                     : [{ id: 99, id_int: 1, id_produto: 9, nome_produto: 'Produto A' },
                         { id: 100, id_int: 2, id_produto: 10, nome_produto: 'Produto fora da gráfica' },
                         { id: 101, id_int: 2, id_produto: 11, nome_produto: 'Produto só impresso' }] }); } }; } };
@@ -71,16 +72,21 @@ const extract = name => {
         assert.equal(await tab.$eval('#ppc-product-select', el => el.value), '');
         assert.deepEqual(await tab.$$eval('#ppc-product-select option', rows => rows.map(row => row.value)), ['', 'id:9']);
         await tab.select('#ppc-product-select', 'id:9');
+        assert.deepEqual(await tab.$$eval('.ppc-count span', nodes => nodes.map(node => node.textContent.trim())), ['1 pedido', '2 modelos', '300 unidades']);
         await tab.click('[data-color-key="id:5"]');
         assert.equal(await tab.$$eval('.ppc-model-row', rows => rows.length), 2);
-        await tab.click('.ppc-model-row[data-item-id="11"]');
+        await tab.click('.ppc-model-row[data-item-id="11"] .ppc-model-name');
         await tab.waitForSelector('.ppc-window-host #ped-preview-card-container');
         assert.equal(await tab.evaluate(() => document.getElementById('ped-preview-card-container') === originalPreview), true);
         assert.equal(await tab.$eval('#ped-print-copies', el => el.value), '7');
-        await tab.click('.ppc-model-row[data-item-id="12"]');
+        await tab.click('.ppc-model-row[data-item-id="12"] .ppc-model-name');
         await tab.waitForSelector('.ppc-window-host[data-item-id="12"] #ped-preview-card-container');
+        // O fechamento anterior agenda um render; aguarda a transição antes
+        // de interagir com o select para não disparar change num nó removido.
+        await tab.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         await tab.select('[data-status-item="12"]', 'Impresso');
         await tab.waitForFunction(() => !document.querySelector('.ppc-model-row[data-item-id="12"]'));
+        assert.deepEqual(await tab.$$eval('.ppc-count span', nodes => nodes.map(node => node.textContent.trim())), ['1 pedido', '1 modelo', '100 unidades']);
         assert.equal(await tab.evaluate(() => state.activeOSItem), null);
         assert.equal(await tab.evaluate(() => originalPreview.parentElement.id), 'ped-preview-home');
         assert.equal(await tab.$eval('#ped-print-copies', el => el.value), '7');

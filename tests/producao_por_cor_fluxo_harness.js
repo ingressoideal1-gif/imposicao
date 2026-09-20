@@ -85,6 +85,29 @@ async function statusFixture(response) {
     return { ...f, filters };
 }
 (async () => {
+    await check('cores somam unidades, contam pedidos distintos e ordenam por total decrescente', async () => {
+        const f = fixture(); await f.start();
+        const base = f.api.local.records[0];
+        f.api.local.records = [
+            { ...base, modelId: 1, orderNumber: 1, quantity: '200' },
+            { ...base, modelId: 2, orderNumber: 1, quantity: 300 },
+            { ...base, modelId: 3, orderNumber: 2, quantity: 100 },
+            { ...base, modelId: 4, orderNumber: 3, quantity: 2000, colorKey: 'red', colorLabel: 'Vermelho' },
+            { ...base, modelId: 5, orderNumber: 3, quantity: 2000, colorKey: 'yellow', colorLabel: 'Amarelo' },
+            { ...base, modelId: 6, quantity: 90000, status: 'Impresso' },
+            { ...base, modelId: 7, quantity: 90000, status: 'Corrigir Arte' },
+            { ...base, modelId: 8, quantity: 90000, productKey: 'outro' },
+        ];
+        f.api.render();
+        const html = f.elements.get('ppc-color-list').innerHTML;
+        assert(html.indexOf('Amarelo') < html.indexOf('Vermelho'));
+        assert(html.indexOf('Vermelho') < html.indexOf('Azul'));
+        const blue = html.slice(html.indexOf('data-color-key="id:5"'));
+        assert(blue.includes('2 pedidos')); assert(blue.includes('3 modelos')); assert(blue.includes('600 unidades'));
+        assert(html.includes('2.000 unidades')); assert(!html.includes('90.000'));
+        f.api.local.records[0].status = 'Impresso'; f.api.render();
+        assert(f.elements.get('ppc-color-list').innerHTML.includes('400 unidades'));
+    });
     await check('30 produtos com impressão vazia e produção PENDENTE entram por cor e abrem', async () => {
         const f = fixture();
         f.tables.pedidos_modelos = [];
