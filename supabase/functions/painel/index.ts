@@ -30,13 +30,15 @@
  * usuario e o dono da grafica a edita ao vivo. O papel e o rotulo do seletor; a
  * grade e a origem da verdade.
  */
-import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { operarBancosPedido } from "../_compartilhado/bancos_pedido.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
 import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
+import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
+import { operarFundo } from "../_compartilhado/fundo.ts";
+import { operarPropostas } from "../_compartilhado/propostas.ts";
 import { recusaDeRotaDesconhecida, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
 import {
   limparItemOs,
@@ -267,6 +269,18 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     }
     const quem = await quemChama(req);
     return ok(await operarEmailArtes(p[1], req.method === "GET" ? {} : await corpoJson(), quem));
+  }
+
+  if (p[0] === "fundo" && p.length === 2 && ["publicar", "remover"].includes(p[1])) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const quem = await quemChama(req);
+    return ok(await operarFundo(p[1], await corpoJson(), quem.permissoes, quem.email || quem.id));
+  }
+
+  if (p[0] === "propostas" && p.length === 2 && ["consultar", "status", "cadastro", "pagamentos"].includes(p[1])) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const quem = await quemChama(req);
+    return ok(await operarPropostas(p[1], await corpoJson(), quem.permissoes));
   }
 
   // ── /user/permissions ──

@@ -172,11 +172,13 @@ const { pedidoEstaPago, contarCobrancas } = REGRA;
 (function aConsultaTrazSoOQueAColunaPrecisa() {
     const carga = SCRIPT.slice(SCRIPT.indexOf('async function carregarPagamentosGlobais'));
     const corpo = carga.slice(0, carga.indexOf('\n}\n'));
-    ok(/select\('id_int, status'\)/.test(corpo),
+    const servidor = fs.readFileSync(path.join(RAIZ, 'supabase/functions/_compartilhado/propostas.ts'), 'utf8');
+    const transporte = fs.readFileSync(path.join(RAIZ, 'frontend/supabase-config.js'), 'utf8');
+    ok(/select=id_int,status&/.test(servidor) && /undefined, 'pagamentos'/.test(corpo),
         'so id_int e status: link de cobranca e pix nao se espalham por listagem');
-    ok(/neq\('status', 'CANCELADO'\)/.test(corpo),
+    ok(/status=neq.CANCELADO/.test(servidor),
         'a cancelada fica de fora ja na consulta');
-    ok(/slice\(i, i \+ bloco\)/.test(corpo),
+    ok(/ids.slice\(i, i \+ 200\)/.test(transporte),
         'em blocos: o .in() vira URL, e a Lista de Arte abre com milhares de pedidos');
 })();
 

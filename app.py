@@ -49,6 +49,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
+from propostas_api import router as propostas_router
+app.include_router(propostas_router)
 
 import security_config
 # alias: dentro de _embed_system_fonts ja existe um dict local chamado font_cache
@@ -2188,21 +2190,32 @@ async def get_email_config_endpoint():
     safe_config = { **config }
     if "password" in safe_config and safe_config["password"]:
         safe_config["has_password"] = True
-        safe_config["password"] = "******"
+    safe_config.pop("password", None)
     return {"ok": True, "config": safe_config}
 
 @app.post("/api/email/config")
 async def save_email_config_endpoint(request: Request):
     data = await request.json()
     existing = db.get_email_config()
-    if data.get("password") == "******" and "password" in existing:
-        data["password"] = existing["password"]
-    ok = db.save_email_config(data)
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Configuração SMTP inválida.")
+    if not data.get("password") or data.get("password") == "******":
+        data["password"] = existing.get("password", "")
+    try:
+        data = db.validar_email_config(data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    try:
+        ok = db.save_email_config(data)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Não foi possível salvar a configuração na estação.") from None
     return {"ok": ok}
 
 @app.post("/api/email/enviar")
 async def send_email_endpoint(request: Request):
     data = await request.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Dados de e-mail inválidos.")
     to_email = data.get("to")
     subject = data.get("subject")
     body_text = data.get("body_text", "")
@@ -2212,17 +2225,22 @@ async def send_email_endpoint(request: Request):
     if not to_email or not subject:
         raise HTTPException(status_code=400, detail="Destinatário e Assunto são obrigatórios.")
 
-    if not custom_config or not custom_config.get("host"):
-        db_config = db.get_email_config()
-        if custom_config:
-            if not custom_config.get("password") or custom_config.get("password") == "******":
-                custom_config["password"] = db_config.get("password")
-            merged = { **db_config, **custom_config }
-            custom_config = merged
-        else:
-            custom_config = db_config
+    if custom_config is not None and not isinstance(custom_config, dict):
+        raise HTTPException(status_code=400, detail="Configuração SMTP inválida.")
+    if any(not isinstance(v, str) for v in (to_email, subject, body_text, body_html)):
+        raise HTTPException(status_code=400, detail="Os campos do e-mail devem ser texto.")
+    db_config = db.get_email_config()
+    if custom_config:
+        if not custom_config.get("password") or custom_config.get("password") == "******":
+            custom_config["password"] = db_config.get("password")
+        if 'port' in custom_config and 'use_ssl' not in custom_config:
+            custom_config['use_ssl'] = str(custom_config['port']) == '465'
+        custom_config = { **db_config, **custom_config }
+    else:
+        custom_config = db_config
 
-    result = db.send_email_smtp(to_email, subject, body_text, body_html, custom_config)
+    from starlette.concurrency import run_in_threadpool
+    result = await run_in_threadpool(db.send_email_smtp, to_email, subject, body_text, body_html, custom_config)
     if not result.get("ok"):
         raise HTTPException(status_code=500, detail=result.get("error", "Erro ao enviar e-mail."))
 
@@ -2233,5 +2251,3 @@ async def send_email_endpoint(request: Request):
 # caminho absoluto, então servir daqui a cópia embutida enquanto /app serve a
 # sincronizada faria a página nova carregar o script velho.
 app.mount("/", StaticFiles(directory=_PAINEL_DIR, html=True), name="root_frontend")
-
-

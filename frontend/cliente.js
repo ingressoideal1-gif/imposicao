@@ -1818,6 +1818,8 @@ async function clienteAprovarTudo() {
  *
  * `texto` vazio apaga a correcao anterior -- é o cliente que voltou atrás e
  * confirmou os dados. `statusEntrega` nulo deixa `entrega_dados` como está.
+ * `confirmacoes` guarda as decisões independentes do portal; selo vazio remove
+ * a aprovação conjunta ao desfazer uma delas, preservando a outra decisão.
  *
  * @returns {Promise<{ok: boolean, erro?: string}>}
  */

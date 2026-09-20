@@ -1,0 +1,119 @@
+﻿Arquivo,Tipo,resultado
+.gitignore,Versionado,integrado: merge de tres vias revisado
+.vscode/launch.json,Versionado,mantido_atual: rascunho inseria texto conta e invalidava JSONC
+.vscode/settings.json,Versionado,integrado: merge de tres vias revisado
+agent_tray.spec,Versionado,versao_historica_superada
+agent_worker.py,Versionado,versao_historica_superada
+app.py,Versionado,integrado: merge de tres vias revisado
+color_profiles.py,Versionado,ja_integrado
+db.py,Versionado,integrado: merge de tres vias revisado
+docs/status_da_arte_para_o_erp.md,Versionado,mantido_atual: mudancas locais ja contempladas na versao atual
+engine.py,Versionado,versao_historica_superada
+ferramentas/estacoes.py,Versionado,ja_integrado
+frontend/acabamento.js,Versionado,integrado: merge de tres vias revisado
+frontend/cliente-confirmacoes.js,Versionado,versao_historica_superada
+frontend/cliente-shell.js,Versionado,mantido_atual: mudancas locais ja contempladas na versao atual
+frontend/cliente.html,Versionado,mantido_atual: mudancas locais ja contempladas na versao atual
+frontend/cliente.js,Versionado,integrado: preservadas correcoes atuais nos conflitos; rotas novas combinadas
+frontend/index.html,Versionado,mantido_atual: mudancas locais ja contempladas na versao atual
+frontend/pedido.js,Versionado,versao_historica_superada
+frontend/qr-ideal-colunas.js,Versionado,ja_integrado
+frontend/script.js,Versionado,integrado: preservadas correcoes atuais nos conflitos; rotas novas combinadas
+frontend/supabase-config.js,Versionado,integrado: merge de tres vias revisado
+frontend/texto-ajuste.js,Versionado,ja_integrado
+print_service.py,Versionado,ja_integrado
+sql/link_marca_quando_o_cliente_abre.sql,Versionado,ja_integrado
+supabase/functions/acesso-estacao/index.ts,Versionado,integrado: preservadas correcoes atuais nos conflitos; rotas novas combinadas
+supabase/functions/painel/index.ts,Versionado,integrado: preservadas correcoes atuais nos conflitos; rotas novas combinadas
+tests/QrIdealColunas.Tests.ps1,Versionado,ja_integrado
+tests/acabamento_harness.js,Versionado,integrado: merge de tres vias revisado
+tests/arte_de_aprovacao_harness.js,Versionado,versao_historica_superada
+tests/correcao_do_cliente_harness.js,Versionado,versao_historica_superada
+tests/historico_de_artes_harness.js,Versionado,integrado: merge de tres vias revisado
+tests/lista_arte_harness.js,Versionado,ja_integrado
+tests/pagamento_do_pedido_harness.js,Versionado,integrado: merge de tres vias revisado
+tests/portal_confirmacoes_harness.js,Versionado,versao_historica_superada
+tests/portal_pendencia_harness.js,Versionado,versao_historica_superada
+tests/qr_ideal_colunas_harness.js,Versionado,ja_integrado
+tests/test_aviso_de_choque_de_coluna.py,Versionado,ja_integrado
+tests/test_engine_altura_do_texto.py,Versionado,ja_integrado
+tests/test_engine_opacidade_arte.py,Versionado,ja_integrado
+tests/test_engine_sangria.py,Versionado,ja_integrado
+tests/test_escala_da_arte.py,Versionado,ja_integrado
+tests/test_painel_do_acabamento.py,Versionado,integrado: merge de tres vias revisado
+.claude/settings.local.json,Nao rastreado,pessoal_preservado
+AGENTS.md,Nao rastreado,integrado: arquivo local ausente na base atual
+agente.md,Nao rastreado,integrado: arquivo local ausente na base atual
+design/cliente-modelo-1100.png,Nao rastreado,integrado: arquivo local ausente na base atual
+design/cliente-modelo-320.png,Nao rastreado,integrado: arquivo local ausente na base atual
+design/cliente-modelo-390.png,Nao rastreado,integrado: arquivo local ausente na base atual
+design/preview-cliente-modelo-celular-2026-09-08.png,Nao rastreado,integrado: arquivo local ausente na base atual
+design/preview-cliente-modelo-desktop-2026-09-08.png,Nao rastreado,integrado: arquivo local ausente na base atual
+design/preview-texto-banco-dados-2026-09-09.png,Nao rastreado,ja_integrado
+docs/adendo-vibe-restricoes-portal-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/analise-plano-rls-supabase-2026-09-16.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/auditoria-cloudflare-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/contrato-idempotencia-portal-v1.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/diagnostico-2026-09-09-pedido-21826-artes.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/diagnostico-2026-09-09-pedido-21894-paginacao.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/diagnostico-2026-09-09-pedido-21894-verso.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/encerramento-2026-09-09-retomada-2026-09-10.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/encerramento-2026-09-10-retomada-2026-09-11.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/encerramento-2026-09-11-retomada-2026-09-12.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/entrega-propostas-sem-anon-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/idempotencia-portal-v1-vetores.json,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/inventario-supabase-acessos-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/newprod-1.2.324-cloudflare-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/pendencias-contratuais-vibe-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/plano-2026-09-09-paginacao-banco-portal.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/plano-execucao-supabase-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/preparacao-adaptacao-supabase-2026-09-07.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/registro-2026-09-05-email-artes.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/registro-2026-09-06-vercel-e-documentacao.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/registro-2026-09-08-copia-link-cliente.md,Nao rastreado,integrado: complemento historico de publicacao; nao e verificacao atual
+docs/registro-2026-09-08-email-artes-nuvem.md,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+docs/registro-2026-09-08-recorte-celulas.md,Nao rastreado,ja_integrado
+docs/registro-2026-09-09-acabamento-gramas.md,Nao rastreado,integrado: complemento historico de publicacao; nao e verificacao atual
+docs/registro-2026-09-09-newprod-temporarios.md,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+docs/registro-2026-09-09-pedido-avulso-21824.md,Nao rastreado,integrado: arquivo local ausente na base atual
+docs/registro-2026-09-09-texto-banco-dados.md,Nao rastreado,ja_integrado
+docs/sincronizacao-google-drive.md,Nao rastreado,integrado: arquivo local ausente na base atual
+ferramentas/analisar_temporarios.ps1,Nao rastreado,ja_integrado
+ferramentas/sincronizar-drive.ps1,Nao rastreado,integrado: arquivo local ausente na base atual
+lembrete-ti-smtp-2026-09-08.ics,Nao rastreado,"preservado_na_origem: lembrete pessoal vencido, sem importar calendario"
+newprod_temp.py,Nao rastreado,ja_integrado
+propostas_api.py,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/diagnostico_dominio_links_cliente.sql,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/preservar_pedido_avulso.sql,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/preview_status_consolidado_pedidos_artes.sql,Nao rastreado,ja_integrado
+sql/recuperar_parcialmente_pedido_21824.sql,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/revisao_vibe/20260907_fundo_apenas_backend.down.sql,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/revisao_vibe/20260907_fundo_apenas_backend.up.sql,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/revisao_vibe/README.md,Nao rastreado,integrado: arquivo local ausente na base atual
+sql/status_consolidado_pedidos_artes.sql,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+sql/verificar_status_consolidado_pedidos_artes.sql,Nao rastreado,ja_integrado
+supabase/functions/_compartilhado/email_artes.ts,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+supabase/functions/_compartilhado/email_artes_test.ts,Nao rastreado,versao_historica_superada
+supabase/functions/_compartilhado/fundo.ts,Nao rastreado,integrado: arquivo local ausente na base atual
+supabase/functions/_compartilhado/fundo_test.ts,Nao rastreado,integrado: arquivo local ausente na base atual
+supabase/functions/_compartilhado/propostas.ts,Nao rastreado,integrado: arquivo local ausente na base atual
+supabase/functions/_compartilhado/propostas_test.ts,Nao rastreado,integrado: arquivo local ausente na base atual
+supabase/functions/_compartilhado/smtp_artes.ts,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+supabase/functions/_compartilhado/smtp_artes_test.ts,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+supabase/functions/painel/email_test.ts,Nao rastreado,versao_historica_superada
+tests/acabamento_gramas_browser_harness.js,Nao rastreado,ja_integrado
+tests/email_envio_harness.js,Nao rastreado,versao_historica_superada
+tests/idempotencia_portal_v1_harness.js,Nao rastreado,integrado: arquivo local ausente na base atual
+tests/link_cliente_copia_browser_harness.js,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+tests/link_cliente_copia_harness.js,Nao rastreado,"mantido_atual: evolucao publicada supera rascunho; sem reverter SMTP, links ou SQL aplicado"
+tests/pedido_avulso_regressao.py,Nao rastreado,integrado: arquivo local ausente na base atual
+tests/propostas_sem_anon_harness.js,Nao rastreado,integrado: arquivo local ausente na base atual
+tests/status_pedidos_artes_harness.js,Nao rastreado,versao_historica_superada
+tests/test_email_envio.py,Nao rastreado,integrado: arquivo local ausente na base atual
+tests/test_engine_recorte_celula.py,Nao rastreado,ja_integrado
+tests/test_link_cliente_copia.py,Nao rastreado,ja_integrado
+tests/test_propostas_sem_anon.py,Nao rastreado,integrado: arquivo local ausente na base atual
+tests/test_status_pedidos_artes.py,Nao rastreado,versao_historica_superada
+tests/test_temp_manager.py,Nao rastreado,ja_integrado
+tests/test_texto_banco.py,Nao rastreado,ja_integrado
+tests/texto_banco_browser_harness.js,Nao rastreado,ja_integrado

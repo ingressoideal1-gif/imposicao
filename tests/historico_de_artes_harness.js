@@ -284,7 +284,7 @@ const api = new Function('document', 'state', 'window', `
     ok(i > 0, 'achei o loadOrdensFromVibecode');
     const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n/**', i + 10));
 
-    ok(corpo.includes(".in('status_interno', SINAIS_SAIU_DA_ARTE)"),
+    ok(corpo.includes("consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE })"),
        'as propostas sao lidas TAMBEM por status: e a unica consulta que '
        + 'descobre o pedido que nao tem produto nem arte');
     ok(corpo.includes('(propostas || []).forEach(pr =>'),
@@ -376,10 +376,10 @@ const api = new Function('document', 'state', 'window', `
     ok(i > 0, 'achei o loadUltimosPedidos');
     const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n/**', i));
 
-    ok(corpo.includes('id_cliente.eq.'),
+    ok(corpo.includes("consultarPropostas({ tipo: 'clientes', clientes: idsDoCliente }"),
        'o historico e buscado pelo NUMERO do cliente: so pelo nome traria o '
        + 'pedido de outro cliente de nome parecido');
-    ok(corpo.includes(".ilike('cliente'"),
+    ok(corpo.includes("consultarPropostas({ tipo: 'nome', nome: clienteNome.trim() }"),
        'e tambem pelo nome, para nao perder a proposta antiga sem numero');
     ok(corpo.includes('id_faturado'),
        'o numero de faturamento entra junto -- os dois divergem de verdade');
