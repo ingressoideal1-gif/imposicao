@@ -4311,6 +4311,10 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     const manterViewAtual = externa && typeof externa.manterViewAtual === 'function'
         && externa.manterViewAtual(item.id, osId);
     if (manterViewAtual) {
+        // showView('view-pedido') prepara a fila antes da resolução abaixo:
+        // converte o formato ERP do produto para o id interno e aplica a saída.
+        // A janela externa precisa da mesma etapa, sem trocar de página.
+        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
         moverJanelaParaModelo(item.id, { rolar: true });
     } else if (typeof window.showView === 'function') {
         window.showView('view-pedido');

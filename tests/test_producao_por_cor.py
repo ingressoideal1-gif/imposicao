@@ -78,6 +78,14 @@ def test_janela_do_pedido_tem_adaptador_opcional_e_preserva_o_padrao():
     assert "casa.appendChild(janela)" in pedido
 
 
+def test_abertura_por_cor_repete_formato_e_saida_do_painel():
+    resultado = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "producao_por_cor_formato_saida_harness.js")],
+        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=45,
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+
 def test_permissao_de_producao_protege_menu_e_view_novos():
     principal = _ler("frontend/script.js")
     assert "perm_producao_view:    ['nav-lista-impressao', 'nav-producao-cor', 'nav-montagem']" in principal
