@@ -7,6 +7,7 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
 const code = fs.readFileSync(path.join(root, 'frontend/producao-por-cor.js'), 'utf8');
 const pedido = fs.readFileSync(path.join(root, 'frontend/pedido.js'), 'utf8').replace(/\r\n/g, '\n');
+const main = fs.readFileSync(path.join(root, 'frontend/script.js'), 'utf8').replace(/\r\n/g, '\n');
 const extract = name => {
     const start = pedido.indexOf(`function ${name}(`);
     assert(start >= 0, name);
@@ -21,13 +22,19 @@ const extract = name => {
         await tab.setRequestInterception(true);
         tab.on('request', request => request.abort());
         const section = html.slice(html.indexOf('<section id="view-producao-cor"'), html.indexOf('<!-- VIEW: PEDIDO'));
-        await tab.setContent(`<html><body>${section}<div id="ped-preview-home">
+        await tab.setContent(`<html><body><button class="nav-btn" data-view="view-producao-cor" id="nav-producao-cor">Produção por Cor</button>
+          <section id="view-lista-impressao" class="view-section"></section>
+          ${section.replace('class="view-section"', 'class="view-section active"')}<div id="ped-preview-home">
           <div id="ped-preview-card-container"><canvas id="ped-preview-canvas" width="20" height="20"></canvas>
           <input id="ped-print-copies" value="7"></div></div></body></html>`);
         await tab.evaluate(() => {
             window.state = { ordens: [{ id: 'vibe_1', numero: 1 }, { id: 'vibe_2', numero: 2, status_interno: 'EM ARTE' }], osItens: {}, cores: [{ id: 5, name: 'Azul' }],
                 numeracoes: [{ id: 6 }], selectedOSItems: [{ itemId: 999, osId: 'vibe_1' }] };
-            window.loadOrdens = async () => true;
+            window.orderLoads = 0;
+            Object.defineProperty(window, 'localStorage', { value: { setItem() {}, removeItem() {} } });
+            window.podeAbrirView = () => true;
+            window.ativarBotaoDoMenu = () => {};
+            window.loadOrdens = async () => { window.orderLoads++; return true; };
             window.pedidoNaGrafica = order => order.numero === 1;
             window.pedidoJaPassouDaGrafica = () => false;
             window.supabaseClient = { from(table) { return { select() { return this; }, in() { return this; }, order() { return this; },
@@ -52,8 +59,15 @@ const extract = name => {
             canvas.getContext('2d').fillRect(0, 0, 20, 20);
         });
         await tab.addScriptTag({ content: ['janelaDeVisualizacao', 'recolherJanelaParaCasa', 'moverJanelaParaModelo', 'pintarLinhaAberta', 'fecharJanelaDoModelo'].map(extract).join('\n') });
+        const routerStart = main.indexOf('window.showView = function(viewId)');
+        const navStart = main.indexOf("document.querySelectorAll('.nav-btn').forEach(btn => {");
+        await tab.addScriptTag({ content: main.slice(routerStart, main.indexOf('\n};', routerStart) + 3)
+            + '\n' + main.slice(navStart, main.indexOf('\n});', navStart) + 4) });
         await tab.addScriptTag({ content: code });
-        await tab.evaluate(() => ProducaoPorCorPainel.abrir());
+        // Reabertura/restauração da seção sem chamar o hook do roteador:
+        // a própria página deve iniciar a carga e vincular Atualizar lista.
+        await tab.waitForFunction(() => document.querySelectorAll('#ppc-product-select option').length === 3);
+        assert.equal(await tab.evaluate(() => orderLoads), 1);
         assert.equal(await tab.$eval('#ppc-product-select', el => el.value), '');
         assert.deepEqual(await tab.$$eval('#ppc-product-select option', rows => rows.map(row => row.value)), ['', 'id:9', 'id:10']);
         await tab.select('#ppc-product-select', 'id:10');
@@ -73,11 +87,25 @@ const extract = name => {
         assert.equal(await tab.evaluate(() => state.activeOSItem), null);
         assert.equal(await tab.evaluate(() => originalPreview.parentElement.id), 'ped-preview-home');
         assert.equal(await tab.$eval('#ped-print-copies', el => el.value), '7');
-        await tab.evaluate(() => ProducaoPorCorPainel.sair());
+        await tab.evaluate(() => document.getElementById('view-producao-cor').classList.remove('active'));
+        await tab.waitForFunction(() => state.selectedOSItems[0]?.itemId === 999);
         assert.equal(await tab.evaluate(() => state.selectedOSItems[0].itemId), 999);
-        await tab.evaluate(() => ProducaoPorCorPainel.abrir());
+        await tab.click('#nav-producao-cor');
+        await tab.waitForFunction(() => !document.getElementById('ppc-product-select').disabled);
         assert.equal(await tab.$eval('#ppc-product-select', el => el.value), '');
         assert.equal(await tab.evaluate(() => document.getElementById('ped-preview-card-container') === originalPreview), true);
+        assert.deepEqual(errors, []);
+        const loads = await tab.evaluate(() => orderLoads);
+        await tab.click('#ppc-refresh');
+        await tab.waitForFunction(expected => orderLoads === expected && !document.getElementById('ppc-product-select').disabled, {}, loads + 1);
+        // O roteador legado usa display em vez da classe active.
+        await tab.evaluate(() => {
+            const view = document.getElementById('view-producao-cor');
+            view.classList.remove('active'); view.style.display = 'none';
+        });
+        await tab.waitForFunction(() => state.selectedOSItems[0]?.itemId === 999);
+        await tab.evaluate(() => { document.getElementById('view-producao-cor').style.display = 'block'; });
+        await tab.waitForFunction(expected => orderLoads === expected && !document.getElementById('ppc-product-select').disabled, {}, loads + 2);
         assert.deepEqual(errors, []);
         console.log('OK: navegador offline — filtros, janela real, troca de modelo, status, saída e reentrada.');
     } finally { await browser.close(); }

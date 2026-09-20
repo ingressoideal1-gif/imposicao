@@ -85,6 +85,20 @@ async function statusFixture(response) {
     return { ...f, filters };
 }
 (async () => {
+    await check('dropdown informa carga em andamento e falha na preparação da janela', async () => {
+        const f = fixture(); const pending = deferred();
+        f.ctx.loadOrdens = () => pending.promise;
+        const opening = f.api.openPage();
+        assert.equal(f.elements.get('ppc-product-select').disabled, true);
+        assert(f.elements.get('ppc-product-select').innerHTML.includes('Carregando produtos'));
+        pending.resolve(true); await opening;
+        assert.equal(f.elements.get('ppc-product-select').disabled, false);
+        f.api.leavePage();
+        f.ctx.fecharJanelaDoModelo = () => { throw new Error('Falha simulada na janela'); };
+        await f.api.openPage();
+        assert(f.elements.get('ppc-product-select').innerHTML.includes('Falha ao carregar produtos'));
+        assert(f.elements.get('ppc-message').textContent.includes('Falha simulada na janela'));
+    });
     await check('entrada neutra; seleção anterior isolada e restaurada na saída', async () => {
         const f = fixture(); const selected = [{ itemId: 11, osId: 'vibe_1' }, { itemId: 12, osId: 'vibe_1' }];
         f.ctx.state.selectedOSItems = selected;

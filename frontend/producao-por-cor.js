@@ -71,6 +71,7 @@
 
     async function selectInBatches(client, table, columns, values, column = 'id_int') {
         if (table === 'propostas') {
+            if (!values.length) return [];
             const { data, error } = await window.consultarPropostas({ tipo: 'numeros', numeros: values });
             if (error) throw error;
             return data || [];
@@ -260,7 +261,10 @@
         if (!select) return;
         const list = products();
         if (!list.some(product => product.key === local.productKey)) local.productKey = '';
-        const placeholder = list.length ? 'Selecione um produto' : 'Nenhum produto aguardando';
+        const placeholder = local.loading ? 'Carregando produtos…'
+            : local.error ? 'Falha ao carregar produtos'
+                : list.length ? 'Selecione um produto' : 'Nenhum produto aguardando';
+        select.disabled = local.loading || !!local.error || !list.length;
         select.innerHTML = `<option value="" ${local.productKey ? '' : 'selected'}>${placeholder}</option>`
             + list.map(product => `<option value="${esc(product.key)}" ${product.key === local.productKey ? 'selected' : ''}>${esc(product.label)}</option>`).join('');
     }
@@ -368,7 +372,7 @@
         closeOpenModel();
         local.loading = true;
         local.error = '';
-        renderModels();
+        render();
         const refreshButton = byId('ppc-refresh');
         if (refreshButton) refreshButton.disabled = true;
         try {
@@ -532,27 +536,40 @@
         }
         if (refreshButton && !refreshButton.dataset.ppcBound) {
             refreshButton.dataset.ppcBound = '1';
-            refreshButton.addEventListener('click', refresh);
+            refreshButton.addEventListener('click', () => local.active ? refresh() : openPage());
         }
     }
 
-    function openPage() {
-        if (!local.active) {
-            const shared = appState();
-            local.savedSelection = shared ? {
-                selectedOSItems: shared.selectedOSItems,
-                combinacaoEntrePedidos: shared.combinacaoEntrePedidos,
-                pedidoAberto: shared.pedidoAberto,
-            } : null;
-            if (typeof window.fecharJanelaDoModelo === 'function') window.fecharJanelaDoModelo();
-            if (shared) { shared.selectedOSItems = []; shared.combinacaoEntrePedidos = false; }
+    async function openPage() {
+        try {
+            if (!local.active) {
+                const shared = appState();
+                local.savedSelection = shared ? {
+                    selectedOSItems: shared.selectedOSItems,
+                    combinacaoEntrePedidos: shared.combinacaoEntrePedidos,
+                    pedidoAberto: shared.pedidoAberto,
+                } : null;
+                if (typeof window.fecharJanelaDoModelo === 'function') window.fecharJanelaDoModelo();
+                if (shared) { shared.selectedOSItems = []; shared.combinacaoEntrePedidos = false; }
+            }
+            local.active = true;
+            closeOpenModel();
+            local.productKey = '';
+            local.colorKey = '';
+            bind();
+            return await refresh();
+        } catch (error) {
+            // Falha ao preparar a janela compartilhada também precisa aparecer;
+            // antes ocorria antes do try de refresh e deixava o select estático.
+            local.active = true;
+            local.loading = false;
+            local.records = [];
+            local.openItemId = null;
+            local.openOSId = null;
+            local.error = `Não foi possível abrir Produção por Cor: ${error.message || error}`;
+            console.error('[Produção por Cor] Falha ao abrir:', error);
+            render();
         }
-        local.active = true;
-        closeOpenModel();
-        local.productKey = '';
-        local.colorKey = '';
-        bind();
-        return refresh();
     }
 
     function leavePage() {
@@ -604,4 +621,23 @@
 
     window.ProducaoPorCorPainel = { abrir: openPage, sair: leavePage, atualizar: refresh };
     window.ProducaoPorCorUtils = { modelosDoFiltro };
+
+    // A tela pode ser restaurada/ativada por outro caminho de navegação.
+    // Vincular o botão e acompanhar a seção real evita uma página visível
+    // com o dropdown estático e sem sequer iniciar a carga.
+    function acompanharVisibilidade() {
+        const view = byId('view-producao-cor');
+        if (!view) return;
+        bind();
+        const sync = () => {
+            const visible = view.style.display !== 'none'
+                && (view.classList.contains('active') || view.style.display === 'block');
+            if (visible && !local.active) openPage();
+            else if (!visible && local.active) leavePage();
+        };
+        new MutationObserver(sync).observe(view, { attributes: true, attributeFilter: ['class', 'style'] });
+        sync();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', acompanharVisibilidade, { once: true });
+    else acompanharVisibilidade();
 }());
