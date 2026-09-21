@@ -34852,7 +34852,12 @@ function renderAmostrasOSItens(osId) {
                         <span class="badge badge-teal" style="font-size: 0.72rem; white-space: nowrap;">${prod.quantidade || 0} un.</span>
                     </div>
                     <div style="padding: 10px;">
-                        <textarea id="briefing-obs-item-${prod.id}" oninput="saveBriefingField('${osNum}', null, this.value, true, '${prod.id}')" rows="3" style="width: 100%; border: 1px solid rgba(148,163,184,0.35); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.55; resize: vertical; background: rgba(10,15,30,0.7); color: #f8fafc;" placeholder="Observações específicas para este produto..."></textarea>
+                        <div id="briefing-obs-preview-${prod.id}" class="briefing-obs-leitura"></div>
+                        <details class="briefing-obs-edicao">
+                            <summary>Editar observações como texto</summary>
+                            <p>A edição substitui a formatação original por texto, mantendo as quebras de linha.</p>
+                            <textarea id="briefing-obs-item-${prod.id}" aria-label="Observações do produto" oninput="atualizarLeituraObservacaoBriefing('${prod.id}', this.value, false); saveBriefingField('${osNum}', null, this.value, true, '${prod.id}')" rows="6" style="width: 100%; border: 1px solid rgba(148,163,184,0.35); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.55; resize: vertical; background: rgba(10,15,30,0.7); color: #f8fafc;" placeholder="Observações específicas para este produto..."></textarea>
+                        </details>
                     </div>
                 </div>
             `;
@@ -40997,6 +41002,64 @@ function irParaPaginaUltimosPedidos(osId, pagina) {
 }
 window.irParaPaginaUltimosPedidos = irParaPaginaUltimosPedidos;
 
+// Reconstrói apenas a formatação de texto; HTML do ERP nunca entra diretamente no painel.
+function criarConteudoObservacaoBriefing(valor, permitirHtml = true) {
+    const texto = String(valor ?? '');
+    const conteudo = document.createElement('div');
+    if (!permitirHtml || !/<\/?[a-z][^>]*>/i.test(texto)) {
+        conteudo.textContent = texto;
+        return { conteudo, texto };
+    }
+    const origem = document.createElement('template');
+    origem.innerHTML = texto;
+    const permitidas = new Set(['P', 'DIV', 'SPAN', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'SUB', 'SUP', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'FONT']);
+    const ignoradas = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'TEMPLATE']);
+    function copiar(no, destino) {
+        if (no.nodeType === 3) {
+            destino.appendChild(document.createTextNode(no.textContent));
+            return;
+        }
+        if (no.nodeType !== 1 || ignoradas.has(no.tagName)) return;
+        let alvo = destino;
+        if (permitidas.has(no.tagName)) {
+            alvo = document.createElement(no.tagName === 'FONT' ? 'span' : no.tagName.toLowerCase());
+            // Somente propriedades tipográficas; sem URLs, classes, eventos ou posicionamento.
+            for (const prop of ['color', 'background-color', 'font-weight', 'font-style', 'text-decoration-line', 'text-align']) {
+                const valorCss = no.style.getPropertyValue(prop);
+                if (valorCss && !/url\s*\(|var\s*\(/i.test(valorCss)) alvo.style.setProperty(prop, valorCss);
+            }
+            if (no.tagName === 'FONT' && no.hasAttribute('color')) alvo.style.color = no.getAttribute('color');
+            if (no.tagName === 'OL' && /^-?\d+$/.test(no.getAttribute('start') || '')) alvo.setAttribute('start', no.getAttribute('start'));
+            destino.appendChild(alvo);
+        }
+        no.childNodes.forEach(filho => copiar(filho, alvo));
+    }
+    origem.content.childNodes.forEach(no => copiar(no, conteudo));
+    function comoTexto(no) {
+        if (no.nodeType === 3) return no.textContent;
+        if (no.tagName === 'BR' || no.tagName === 'HR') return '\n';
+        let resultado = Array.from(no.childNodes, comoTexto).join('');
+        if (no.tagName === 'LI') {
+            const numero = Number(no.parentElement.getAttribute('start') || 1) + Array.from(no.parentElement.children).indexOf(no);
+            resultado = (no.parentElement.tagName === 'OL' ? `${numero}. ` : '• ') + resultado;
+        }
+        if (/^(P|DIV|LI|UL|OL|BLOCKQUOTE|PRE|H[1-6]|TR)$/.test(no.tagName) && !resultado.endsWith('\n')) resultado += '\n';
+        if (/^(TD|TH)$/.test(no.tagName)) resultado += '\t';
+        return resultado;
+    }
+    return { conteudo, texto: Array.from(conteudo.childNodes, comoTexto).join('').replace(/\n$/, '') };
+}
+
+function atualizarLeituraObservacaoBriefing(prodId, valor, permitirHtml = true) {
+    const resultado = criarConteudoObservacaoBriefing(valor, permitirHtml);
+    const preview = document.getElementById(`briefing-obs-preview-${prodId}`);
+    if (preview) {
+        preview.replaceChildren(...resultado.conteudo.childNodes);
+        if (!preview.textContent.trim() && !preview.querySelector('hr')) preview.textContent = 'Sem observações para este produto.';
+    }
+    return resultado.texto;
+}
+
 function updateBriefingUI(osId, osIntId) {
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
     const data = state.pedidosArtesData[osIntId] || {};
@@ -41041,13 +41104,7 @@ function updateBriefingUI(osId, osIntId) {
                 else if (`item_${prodId}` in obsObj) val = obsObj[`item_${prodId}`];
                 else val = item.observacoes || '';
                 
-                if (typeof val === 'string' && val.includes('<')) {
-                    const tmp = document.createElement('div');
-                    tmp.innerHTML = val;
-                    val = tmp.textContent || tmp.innerText || '';
-                }
-                
-                obsEl.value = val.trim();
+                obsEl.value = atualizarLeituraObservacaoBriefing(prodId, val);
             }
         }
     });
