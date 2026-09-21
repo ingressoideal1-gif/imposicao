@@ -1,0 +1,120 @@
+{
+  "frontend_version": "v925",
+  "frontend_commit": "89dfdd87e62bf2fe4b0408913073cddc3eee8fd7",
+  "engine_commit": "9168d3ed",
+  "public_assets": [
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "index.html",
+      "local_sha256": "9e08d76f5c293f2aa7de298caa5f1909e4350ae9f04b3c3c9158aed59be12f5d",
+      "public_sha256": "9e08d76f5c293f2aa7de298caa5f1909e4350ae9f04b3c3c9158aed59be12f5d",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "producao.html",
+      "local_sha256": "6328232adfa98c354eb97f62939416ead5140b7da119bab5b2e998073daa35b4",
+      "public_sha256": "6328232adfa98c354eb97f62939416ead5140b7da119bab5b2e998073daa35b4",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "cliente.html",
+      "local_sha256": "f207916cd291c76cc7ac21bbb5dc7dc854f3ebc13fecfa785b29cc675ce47f4b",
+      "public_sha256": "f207916cd291c76cc7ac21bbb5dc7dc854f3ebc13fecfa785b29cc675ce47f4b",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "controle.html",
+      "local_sha256": "b2ce9eeea57d8c9b757f09ce20089c0f959d2676bddc5b8a76ba11bc35367176",
+      "public_sha256": "b2ce9eeea57d8c9b757f09ce20089c0f959d2676bddc5b8a76ba11bc35367176",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "script.js",
+      "local_sha256": "54ebf5b03020912c54624882bef0a6bcee8e3a9cb7959adb758e3a5f2981c4eb",
+      "public_sha256": "54ebf5b03020912c54624882bef0a6bcee8e3a9cb7959adb758e3a5f2981c4eb",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "pedido.js",
+      "local_sha256": "bff6e91e4ec30eaee33cb316e0fb08a19bf1b6d726168c35282f9580c49e06a7",
+      "public_sha256": "bff6e91e4ec30eaee33cb316e0fb08a19bf1b6d726168c35282f9580c49e06a7",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "montagem.js",
+      "local_sha256": "9a3920c0dfa243911000d62ff8832d30ac9266ac88566fc40be0ad765adcf723",
+      "public_sha256": "9a3920c0dfa243911000d62ff8832d30ac9266ac88566fc40be0ad765adcf723",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "index.html",
+      "local_sha256": "9e08d76f5c293f2aa7de298caa5f1909e4350ae9f04b3c3c9158aed59be12f5d",
+      "public_sha256": "9e08d76f5c293f2aa7de298caa5f1909e4350ae9f04b3c3c9158aed59be12f5d",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "producao.html",
+      "local_sha256": "6328232adfa98c354eb97f62939416ead5140b7da119bab5b2e998073daa35b4",
+      "public_sha256": "6328232adfa98c354eb97f62939416ead5140b7da119bab5b2e998073daa35b4",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "cliente.html",
+      "local_sha256": "f207916cd291c76cc7ac21bbb5dc7dc854f3ebc13fecfa785b29cc675ce47f4b",
+      "public_sha256": "f207916cd291c76cc7ac21bbb5dc7dc854f3ebc13fecfa785b29cc675ce47f4b",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "controle.html",
+      "local_sha256": "b2ce9eeea57d8c9b757f09ce20089c0f959d2676bddc5b8a76ba11bc35367176",
+      "public_sha256": "b2ce9eeea57d8c9b757f09ce20089c0f959d2676bddc5b8a76ba11bc35367176",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "script.js",
+      "local_sha256": "54ebf5b03020912c54624882bef0a6bcee8e3a9cb7959adb758e3a5f2981c4eb",
+      "public_sha256": "54ebf5b03020912c54624882bef0a6bcee8e3a9cb7959adb758e3a5f2981c4eb",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "pedido.js",
+      "local_sha256": "bff6e91e4ec30eaee33cb316e0fb08a19bf1b6d726168c35282f9580c49e06a7",
+      "public_sha256": "bff6e91e4ec30eaee33cb316e0fb08a19bf1b6d726168c35282f9580c49e06a7",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "montagem.js",
+      "local_sha256": "9a3920c0dfa243911000d62ff8832d30ac9266ac88566fc40be0ad765adcf723",
+      "public_sha256": "9a3920c0dfa243911000d62ff8832d30ac9266ac88566fc40be0ad765adcf723",
+      "match": true
+    }
+  ],
+  "agent": {
+    "version": "1.2.337",
+    "size": 156057600,
+    "sha256": "0b356ce85645ede269cfa5ce9067120a6ce4ebb99ac892a11b289a3bf3188bf2",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.337.msi",
+    "verified_at": "2026-09-21T13:09:45.305695+00:00",
+    "public_msi_match": true,
+    "manifest_match": true
+  },
+  "verified_at": "2026-09-21T13:10:42.396749+00:00",
+  "stations_24h_by_version": {
+    "1.2.336": 8,
+    "None": 1
+  },
+  "physical_print_verified": false
+}
