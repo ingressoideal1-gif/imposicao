@@ -5992,4 +5992,9 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .briefing-obs-leitura > :last-child { margin-bottom: 0; }
 .briefing-obs-edicao { margin-top: 10px; }
 .briefing-obs-edicao summary { cursor: pointer; color: #5eead4; font-size: .8rem; }
-.briefing-obs-edicao p { color: var(--text-dim); font-size: .75rem; margin: 8px 0; }
+.briefing-obs-edicao > p { color: var(--text-dim); font-size: .75rem; margin: 8px 0; }
+.briefing-obs-ferramentas { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.briefing-obs-ferramentas label { display: flex; align-items: center; gap: 5px; color: var(--text); font-size: .8rem; }
+.briefing-obs-ferramentas button, .briefing-obs-ferramentas select { padding: 7px 9px; border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: #f8fafc; cursor: pointer; font: inherit; }
+.briefing-obs-ferramentas button:focus-visible, .briefing-obs-ferramentas select:focus-visible, .briefing-obs-editor:focus { outline: 2px solid #14b8a6; outline-offset: 2px; }
+.briefing-obs-editor { min-height: 130px; }
