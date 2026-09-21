@@ -39,7 +39,7 @@ function ok(cond, oque, extra) {
 
 const iCriar = SCRIPT.indexOf('function criarEntregaDeImpressao(');
 const iFimCriar = SCRIPT.indexOf('\nwindow.criarEntregaDeImpressao', iCriar);
-const iEnviar = SCRIPT.indexOf('async function sendPrintJobDirect(queue) {');
+const iEnviar = SCRIPT.indexOf('async function sendPrintJobDirect(');
 const iFimEnviar = SCRIPT.indexOf('\n}', SCRIPT.indexOf('throw e;', iEnviar)) + 2;
 const iSpool = SCRIPT.indexOf('function nomeParaSpool(');
 const iFimSpool = SCRIPT.indexOf('\n}', iSpool) + 2;
@@ -91,6 +91,7 @@ function montarCenario(opcoes) {
     };
 
     const toasts = [];
+    const opcoesEnviadas = [];
     const enviados = [];       // o que chegou ao destino, na ordem
     const temporizadores = [];
 
@@ -118,6 +119,7 @@ function montarCenario(opcoes) {
         if (String(url).includes('/api/print/submit')) {
             ok(url === 'http://127.0.0.1:9000/api/print/submit', 'PDF vai para NewProd, nunca para o site', url);
             enviados.push(init.body.campos.file);
+            opcoesEnviadas.push(JSON.parse(init.body.campos.options));
             return { ok: true, text: async () => '' };
         }
         if (String(url).includes('/api/hotfolder/conferir')) {
@@ -141,7 +143,7 @@ function montarCenario(opcoes) {
         'http://127.0.0.1:9000', console
     );
 
-    return { criar, janela, doc, toasts, enviados, botoes, campos };
+    return { criar, janela, doc, toasts, enviados, opcoesEnviadas, botoes, campos };
 }
 
 // ─── 1. O destino e conferido ANTES de o papel ser gerado ──────────────────
@@ -312,6 +314,18 @@ function montarCenario(opcoes) {
     ok(/ped-print-reverse/.test(trecho),
        'a impressao reversa desliga o corte em lotes: invertida por lote, a tiragem '
        + 'sai na ordem errada', trecho);
+})();
+
+(async function faceUnicaNoDriver() {
+    const c = montarCenario({campos: {
+        'ped-hotfolder-path': {value: ''},
+        'ped-print-printer': {value: 'Sintetica'},
+        'ped-print-duplex': {value: '2'},
+    }});
+    await c.criar.sendPrintJobDirect([{name: 'verso.pdf', blob: {}}], {apenasUmaFace: true});
+    ok(c.opcoesEnviadas[0].duplex === 1, 'face única usa simplex na entrega ao driver');
+    await c.criar.sendPrintJobDirect([{name: 'ambas.pdf', blob: {}}]);
+    ok(c.opcoesEnviadas[1].duplex === 2, 'trabalho seguinte preserva o duplex configurado');
 })();
 
 // ─── Fim ───────────────────────────────────────────────────────────────────

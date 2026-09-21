@@ -2994,6 +2994,53 @@ function onPedNumeracaoSelect() {
     updatePedSummary();
 }
 
+// Escolha local do trabalho: não altera o modo nem a numeração do modelo.
+function atualizarFacesDeImpressaoDoPedido() {
+    const box = document.getElementById('ped-print-faces');
+    if (!box) return;
+    const chave = JSON.stringify([state.activeOSItem, state.selectedOSItems, state.printMode]);
+    const comVerso = temVerso(state.printMode);
+    if (box.dataset.selecao !== chave || !comVerso) {
+        for (const face of ['front', 'back']) {
+            const campo = document.getElementById('ped-print-only-' + face);
+            if (campo) campo.checked = false;
+        }
+    }
+    box.dataset.selecao = chave;
+    box.hidden = !comVerso;
+}
+
+function selecionarFaceDeImpressaoDoPedido(face) {
+    const campo = document.getElementById('ped-print-only-' + face);
+    const outro = document.getElementById('ped-print-only-' + (face === 'front' ? 'back' : 'front'));
+    if (campo?.checked && outro) outro.checked = false;
+}
+
+function faceDeImpressaoDoPedido() {
+    if (!temVerso(state.printMode)) return 'both';
+    if (document.getElementById('ped-print-only-front')?.checked) return 'front';
+    if (document.getElementById('ped-print-only-back')?.checked) return 'back';
+    return 'both';
+}
+
+async function selecionarFacesDoPdfDoPedido(blob, face, modo, arquivo = {}) {
+    if (face === 'both') return blob;
+    // Capas de identificação são arquivos auxiliares de uma face, fora do miolo.
+    if (['capa', 'contracapa'].includes(arquivo.file_type)
+        || /_set\d+(?:_\d+)?_(?:01_capa|03_contracapa)\.pdf$/i.test(arquivo.name || '')) return blob;
+    if (!temVerso(modo)) throw new Error('Este trabalho não possui verso. Confira o modelo selecionado.');
+    if (!window.PDFLib?.PDFDocument) throw new Error('Não foi possível carregar o leitor de PDF. Recarregue o painel.');
+    const pdf = await window.PDFLib.PDFDocument.load(await blob.arrayBuffer());
+    const total = pdf.getPageCount();
+    if (!total || total % 2) throw new Error('O PDF não contém pares completos de frente e verso. Nenhuma face deste arquivo foi entregue.');
+    // Remover no original preserva o catálogo, inclusive OutputIntent/ICC.
+    const paridade = face === 'back' ? 1 : 0;
+    for (let i = total - 1; i >= 0; i--) {
+        if (i % 2 !== paridade) pdf.removePage(i);
+    }
+    return new Blob([await pdf.save()], { type: 'application/pdf' });
+}
+
 function updatePedSummary() {
 
     const fmtSelect = document.getElementById('ped-formato');
@@ -3218,6 +3265,7 @@ function updatePedSummary() {
     const printModeEl = document.getElementById('ped-print-mode');
 
     state.printMode = printModeEl ? printModeEl.value : 'front';
+    atualizarFacesDeImpressaoDoPedido();
 
     
 
@@ -6245,7 +6293,10 @@ window.runPedImposition = async function (mode, isRefazer) {
     // trabalho original: sem ele, refazer 3 folhas gravava por cima do PDF da
     // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
     const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
-    const defaultFilename = `${baseFilename}${refazer.sufixo || ''}.pdf`;
+    const faceDoTrabalho = faceDeImpressaoDoPedido();
+    const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both' };
+    const sufixoFace = faceDoTrabalho === 'both' ? '' : faceDoTrabalho === 'front' ? '_frente' : '_verso';
+    const defaultFilename = `${baseFilename}${refazer.sufixo || ''}${sufixoFace}.pdf`;
 
     if (window.showDirectoryPicker && mode !== 'print') {
         try {
@@ -6872,7 +6923,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                                 const binStr = atob(fileObj.data);
                                 const bytes = new Uint8Array(binStr.length);
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                                const fBlob = new Blob([bytes], {type: "application/pdf"});
+                                const fBlob = await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, fileObj);
                                 arquivosRecebidos++;
 
                                 // ATE ONDE JA SAIU PAPEL (27/08/2026).
@@ -6911,7 +6962,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                                         // hot folder) acontece aqui, no primeiro
                                         // lote — antes esperava o trabalho
                                         // inteiro para só então reclamar.
-                                        entrega = criarEntregaDeImpressao();
+                                        entrega = criarEntregaDeImpressao(opcoesDeFace);
                                         if (!entrega) {
                                             throw new Error('Escolha a impressora ou a pasta do HOT FOLDER antes de imprimir.');
                                         }
@@ -6938,6 +6989,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                                     await fallbackDownload();
                                 }
                             } catch (e) {
+                                if (faceDoTrabalho !== 'both') throw e;
                                 console.error("Erro ao processar arquivo do stream:", e);
                                 toast(`Erro ao salvar arquivo do lote: ${e.message}`, 'error');
                             }
@@ -6980,7 +7032,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // ver alvosDaImpressao().
                 const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                 if (typeof sendPrintJobDirect === 'function') {
-                    const ok = await sendPrintJobDirect(printBlobQueue);
+                    const ok = await sendPrintJobDirect(printBlobQueue, opcoesDeFace);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
                     if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 } else {
@@ -7002,12 +7054,12 @@ window.runPedImposition = async function (mode, isRefazer) {
             const data = await res.json();
             if (data.type === "multi_file") {
                 // Converter todos em blobs
-                const multiBlobs = data.files.map(f => {
+                const multiBlobs = await Promise.all(data.files.map(async f => {
                     const binStr = atob(f.data);
                     const bytes = new Uint8Array(binStr.length);
                     for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    return { name: f.name, blob: new Blob([bytes], {type: "application/pdf"}) };
-                });
+                    return { name: f.name, blob: await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, f) };
+                }));
 
                 if (mode === 'print') {
                     if (overlay) overlay.classList.remove('active');
@@ -7015,7 +7067,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     // Mesma razão do caminho por stream: refazer não muda status.
                     const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                     if (typeof sendPrintJobDirect === 'function') {
-                        const ok = await sendPrintJobDirect(multiBlobs);
+                        const ok = await sendPrintJobDirect(multiBlobs, opcoesDeFace);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
                         if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                     } else {
@@ -7054,7 +7106,7 @@ window.runPedImposition = async function (mode, isRefazer) {
             }
         }
 
-        const blob = await res.blob();
+        const blob = await selecionarFacesDoPdfDoPedido(await res.blob(), faceDoTrabalho, payload.print_mode);
 
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
@@ -7062,7 +7114,7 @@ window.runPedImposition = async function (mode, isRefazer) {
             const alvoImpressao = alvosDoTrabalho;
             if (typeof sendPrintJobDirect === 'function') {
                 const queue = [{ name: defaultFilename, blob }];
-                const ok = await sendPrintJobDirect(queue);
+                const ok = await sendPrintJobDirect(queue, opcoesDeFace);
                 // Não marca sozinho: pergunta ao operador antes de mudar o status
                 if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
             } else {

@@ -28,7 +28,7 @@ function fixture(options={}) {
         showDirectoryPicker:async()=>({getFileHandle:async name=>({createWritable:async()=>({
             write:async blob=>calls.saved.push({name,blob}),close:async()=>{},
         })})}),
-        sendPrintJobDirect:async jobs=>{calls.printed.push(...jobs);return true;},
+        sendPrintJobDirect:async (jobs, options)=>{calls.printOptions=options;calls.printed.push(...jobs);return true;},
         confirmarImpressaoModelos:async targets=>calls.confirmed.push(JSON.parse(JSON.stringify(targets))),
         fetch:async (url,request)=>{
             if(url.endsWith('/api/version')) return {ok:true,json:async()=>({capabilities:options.oldAgent?[]:['multi_artes_pdf_duplex_unico']})};
@@ -36,10 +36,14 @@ function fixture(options={}) {
             assert.equal(url,'http://localhost:8080/api/impose');
             calls.requests.push(JSON.parse(request.body.get('payload')));
             if(options.changeAfterSend){c.state.selectedOSItems=[];c.state.activeOSItem={itemId:'outro',osId:'outro'};}
+            if(options.response) return options.response;
             return {ok:true,headers:{get:()=> 'application/pdf'},blob:async()=>new Blob(['pdf-sintetico'])};
         },
     });
     vm.runInContext(extract(main,'nomeDosModelosCombinados'),c);
+    vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
+    const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
+    vm.runInContext(pedido.slice(faceStart,pedido.indexOf('\n}',faceStart)+2),c);
     vm.runInContext(section('runPedImposition'),c);
     return {c,elements,items,calls};
 }
@@ -126,6 +130,28 @@ async function tests() {
     await changedWhileLoading.c.runPedImposition('print');
     assert.equal(changedWhileLoading.calls.requests.length,0);
     assert(changedWhileLoading.calls.notices.some(n=>String(n[0]).includes('seleção mudou')));
+    const PDFLib = require('pdf-lib');
+    const doc = await PDFLib.PDFDocument.create();
+    for (let i=0; i<4; i++) doc.addPage([200+i, 300]);
+    const bytes = await doc.save();
+    for (const kind of ['pdf', 'json', 'stream']) for (const mode of ['pdf', 'print']) for (const face of ['front', 'back']) {
+        const file = {name:'sintetico.pdf',data:Buffer.from(bytes).toString('base64')};
+        const text = new TextEncoder().encode('event: file\ndata: '+JSON.stringify(file)+'\n\n');
+        let read = false;
+        const response = {ok:true, headers:{get:()=>kind==='pdf'?'application/pdf':kind==='json'?'application/json':'text/event-stream'},
+            blob:async()=>new Blob([bytes]), json:async()=>({type:'multi_file',files:[file]}),
+            body:{getReader:()=>({read:async()=>read?{done:true}:(read=true,{done:false,value:text})})}};
+        const x=fixture({paginadoDuplex:true,response});
+        x.c.PDFLib=PDFLib; x.c.TextDecoder=TextDecoder; x.c.atob=atob;
+        x.c.state.printMode='duplex_unico';
+        x.elements['ped-print-only-'+face]={checked:true};
+        await x.c.runPedImposition(mode);
+        const delivered=mode==='print'?x.calls.printed:x.calls.saved;
+        assert.equal(delivered.length,1,JSON.stringify(x.calls.notices));
+        const result=await PDFLib.PDFDocument.load(await delivered[0].blob.arrayBuffer());
+        assert.deepEqual(result.getPages().map(p=>p.getWidth()),face==='front'?[200,202]:[201,203]);
+        if(mode==='print') assert.equal(x.calls.printOptions.apenasUmaFace,true);
+    }
     console.log('OK: PDF/impressao, alvo congelado, refazer, bloqueios e troca assincrona de selecao');
 }
 tests().catch(e=>{console.error(e);process.exitCode=1;});
