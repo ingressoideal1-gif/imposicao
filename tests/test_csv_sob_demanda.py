@@ -151,11 +151,13 @@ def test_os_bancos_do_pedido_chegam_em_segundo_plano():
     PEDIDO: quem abre o A e pula para o B nao pode ficar sem os bancos do B.
     """
     fonte = _ler("frontend/script.js")
-    i = fonte.index("function renderAmostrasOSItens(osId)")
-    corpo = fonte[i:i + 4000]
+    i = fonte.index("function renderAmostrasOSItens(")
+    corpo = fonte[i:fonte.index("\n}", i)]
     assert "state._bancosEmVoo" in corpo, "o render nao busca os bancos que faltam"
     assert "carregarBancosDoPedido(targetOSId)" in corpo
-    assert "renderAmostrasOSItens(osId)" in corpo, "e nao redesenha quando eles chegam"
+    assert "renderAmostrasOSItens(osId, { atualizarDados: true })" in corpo, (
+        "a chegada dos bancos deve atualizar os controles sem destruir os cards"
+    )
 
 
 def test_o_card_diz_que_esta_baixando_em_vez_de_acusar_o_operador():

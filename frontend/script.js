@@ -1488,9 +1488,20 @@ async function carregarBancosDoPedido(osId, aoChegar) {
     await carregarBancosDoPedidoNovo(osId, idIntDoPedido(osId));
 
     const faltando = numeracoesSemBancoBaixado(osId);
+    const falhas = state._falhasCsvAmostra || (state._falhasCsvAmostra = {});
     let baixadas = 0;
     for (const num of faltando) {
-        try { await garantirCsvDaNumeracao(num); } catch (e) { /* segue */ }
+        if (falhas[num.id] > Date.now()) continue;
+        try { await garantirCsvDaNumeracao(num); } catch (e) {
+            console.warn('[Amostras] Falha ao carregar numeração:', num.id, e);
+        }
+        // garantirCsvDaNumeracao também pode devolver sem lançar após falha.
+        // undefined é "não carregado"; null é ausência confirmada pelo banco.
+        if (num.csv_data === undefined) {
+            falhas[num.id] = Date.now() + 30000;
+            continue;
+        }
+        delete falhas[num.id];
         baixadas++;
         if (typeof aoChegar === 'function') { try { aoChegar(num, baixadas, faltando.length); } catch (e) {} }
     }
@@ -17563,12 +17574,15 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container, osId) {
     if (nome) nome.textContent = num.csv_filename || 'banco.csv';
 
     if (baixando) {
+        const falhou = !!state._falhasCsvAmostra?.[num.id];
         const contaEmEspera = container.querySelector(`#csv-conta-${idx}`);
-        if (contaEmEspera) contaEmEspera.textContent = 'carregando…';
+        if (contaEmEspera) contaEmEspera.textContent = falhou ? 'não carregado' : 'carregando…';
         const bEspera = container.querySelector(`#btn-csv-fatia-${idx}`);
         if (bEspera) {
             bEspera.disabled = true;
-            bEspera.title = 'Baixando o banco de dados desta numeração…';
+            bEspera.title = falhou
+                ? 'Não foi possível carregar o banco. Aguarde alguns instantes e reabra o pedido para tentar novamente.'
+                : 'Baixando o banco de dados desta numeração…';
             bEspera.style.color = '';
             bEspera.style.borderColor = '';
         }
@@ -25857,15 +25871,20 @@ async function reconciliarStatusPersistidosDaListaArte() {
     });
 
     const falhas = [];
-    for (const os of candidatos) {
-        const numero = parseInt(os.numero || os.id_int, 10);
-        try {
-            const modelos = (state.modelosGlobais && state.modelosGlobais[numero]) || [];
-            await sincronizarStatusConsolidadoPedidoArte(numero, modelos);
-        } catch (e) {
-            falhas.push({ pedido: numero, erro: e && (e.message || e) });
+    let proximo = 0;
+    const trabalhar = async () => {
+        while (proximo < candidatos.length) {
+            const os = candidatos[proximo++];
+            const numero = parseInt(os.numero || os.id_int, 10);
+            try {
+                const modelos = (state.modelosGlobais && state.modelosGlobais[numero]) || [];
+                await sincronizarStatusConsolidadoPedidoArte(numero, modelos);
+            } catch (e) {
+                falhas.push({ pedido: numero, erro: e && (e.message || e) });
+            }
         }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, candidatos.length) }, trabalhar));
     if (falhas.length) {
         console.warn('[Arte] Falha ao reconciliar status consolidados:', falhas);
         throw new Error('não foi possível reconciliar ' + falhas.length + ' status da Lista de Arte');
@@ -26380,18 +26399,24 @@ async function carregarModelosGlobais() {
     try {
         const todosNumeros = state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
         const chunkSize = 200;
-        let todosModelos = [];
-        
-        for (let i = 0; i < todosNumeros.length; i += chunkSize) {
-            const chunk = todosNumeros.slice(i, i + chunkSize);
-            const { data, error } = await supabaseClient
-                .from('pedidos_modelos')
-                .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
-                .in('id_int', chunk);
-                
-            if (error) throw error;
-            if (data) todosModelos = todosModelos.concat(data);
-        }
+        const lotes = [];
+        let proximo = 0;
+        const trabalhar = async () => {
+            while (proximo < todosNumeros.length) {
+                const inicio = proximo;
+                proximo += chunkSize;
+                const chunk = todosNumeros.slice(inicio, inicio + chunkSize);
+                const { data, error } = await supabaseClient
+                    .from('pedidos_modelos')
+                    .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
+                    .in('id_int', chunk);
+                if (error) throw error;
+                lotes[inicio / chunkSize] = data || [];
+            }
+        };
+        // Limite pequeno: não disparar uma consulta por pedido nem saturar a rede.
+        await Promise.all(Array.from({ length: Math.min(3, Math.ceil(todosNumeros.length / chunkSize)) }, trabalhar));
+        const todosModelos = lotes.flat();
         
         state.modelosGlobais = {};
         todosModelos.forEach(m => {
@@ -26966,33 +26991,38 @@ async function sincronizarAprovacaoProdutosPrateleira(modelos) {
     });
     let atualizados = 0;
     const falhas = [];
-    for (const modelo of pendentes) {
-        const payload = { status_arte: 'APROVADA', status_impressao: 'IMPRESSO' };
-        if (modelo._foto_produto_url) payload.amostra_arte_base64 = modelo._foto_produto_url;
-        const { data, error } = await supabaseClient
-            .from('pedidos_modelos')
-            .update(payload)
-            .eq('id', modelo.id)
-            .eq('id_int', modelo.id_int)
-            .select('id,id_int,status_arte,status_impressao,amostra_arte_base64');
-        const linhas = data || [];
-        if (error || linhas.length !== 1
-            || String(linhas[0].id) !== String(modelo.id)
-            || String(linhas[0].id_int) !== String(modelo.id_int)
-            || linhas[0].status_arte !== 'APROVADA'
-            || String(linhas[0].status_impressao || '').trim().toUpperCase() !== 'IMPRESSO'
-            || (payload.amostra_arte_base64
-                && linhas[0].amostra_arte_base64 !== payload.amostra_arte_base64)) {
-            falhas.push({ id: modelo.id, id_int: modelo.id_int, erro: error && error.message });
-            continue;
+    let proximo = 0;
+    const trabalhar = async () => {
+        while (proximo < pendentes.length) {
+            const modelo = pendentes[proximo++];
+            const payload = { status_arte: 'APROVADA', status_impressao: 'IMPRESSO' };
+            if (modelo._foto_produto_url) payload.amostra_arte_base64 = modelo._foto_produto_url;
+            const { data, error } = await supabaseClient
+                .from('pedidos_modelos')
+                .update(payload)
+                .eq('id', modelo.id)
+                .eq('id_int', modelo.id_int)
+                .select('id,id_int,status_arte,status_impressao,amostra_arte_base64');
+            const linhas = data || [];
+            if (error || linhas.length !== 1
+                || String(linhas[0].id) !== String(modelo.id)
+                || String(linhas[0].id_int) !== String(modelo.id_int)
+                || linhas[0].status_arte !== 'APROVADA'
+                || String(linhas[0].status_impressao || '').trim().toUpperCase() !== 'IMPRESSO'
+                || (payload.amostra_arte_base64
+                    && linhas[0].amostra_arte_base64 !== payload.amostra_arte_base64)) {
+                falhas.push({ id: modelo.id, id_int: modelo.id_int, erro: error && error.message });
+                continue;
+            }
+            modelo._status_arte_persistido = 'APROVADA';
+            modelo._status_impressao_persistido = 'IMPRESSO';
+            modelo.status_impressao = 'IMPRESSO';
+            modelo.impressao = 'Impresso';
+            if (payload.amostra_arte_base64) modelo._amostra_arte_persistida = payload.amostra_arte_base64;
+            atualizados++;
         }
-        modelo._status_arte_persistido = 'APROVADA';
-        modelo._status_impressao_persistido = 'IMPRESSO';
-        modelo.status_impressao = 'IMPRESSO';
-        modelo.impressao = 'Impresso';
-        if (payload.amostra_arte_base64) modelo._amostra_arte_persistida = payload.amostra_arte_base64;
-        atualizados++;
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, pendentes.length) }, trabalhar));
     if (falhas.length) console.warn('[Prateleira] Falha ao confirmar aprovacao de modelos:', falhas);
     return { atualizados, falhas: falhas.length };
 }
@@ -27035,18 +27065,16 @@ async function loadOSItens(osId) {
         if (needsFullLoad) {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const queryNum = parseInt(os.numero);
-                const { data, error } = await supabaseClient
-                    .from('pedidos_modelos')
-                    .select('*')
-                    .eq('id_int', queryNum)
-                    .order('ordem', { ascending: true });
+                const [modelosResult, produtosResult] = await Promise.all([
+                    supabaseClient.from('pedidos_modelos').select('*')
+                        .eq('id_int', queryNum).order('ordem', { ascending: true }),
+                    supabaseClient.from('produtos_proposta').select('*').eq('id_int', queryNum)
+                ]);
+                const { data, error } = modelosResult;
                 if (error) throw error;
                 
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
-                const { data: propData } = await supabaseClient
-                    .from('produtos_proposta')
-                    .select('*')
-                    .eq('id_int', queryNum);
+                const { data: propData } = produtosResult;
                 
                 if (data && data.length > 0) {
                     // Trocas que o pedido impos por cima do que estava escolhido.
@@ -34136,7 +34164,7 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
 }
 window.blocoDeArteDoModelo = blocoDeArteDoModelo;
 
-function renderAmostrasOSItens(osId) {
+function renderAmostrasOSItens(osId, opcoes = {}) {
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
     const targetOSId = os ? os.id : osId;
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
@@ -34148,6 +34176,7 @@ function renderAmostrasOSItens(osId) {
     const avulsa = document.getElementById('amostra-combinada-avulsa');
 
     if (!os || !container) return;
+    if (opcoes.atualizarDados && container.dataset.amostrasOsId !== String(targetOSId)) return;
 
     // Esta decisão pertence ao atendimento enquanto o pedido ainda está no
     // card Em Arte. Nos demais cards o botão não representa uma transição
@@ -34176,10 +34205,8 @@ function renderAmostrasOSItens(osId) {
     // enquanto o A ainda busca não pode ficar sem a conferência do B.
     // ── Os bancos de dados das numeracoes deste pedido ──
     //
-    // Mesmo desenho da cobertura de glifos logo abaixo, e pela mesma razao:
-    // segurar o desenho dos cards pela rede deixaria a tela em branco. No
-    // 21202 sao 22 MB de CSV; os cards saem agora, com o banco de quem ja
-    // tem, e a tela se redesenha a cada banco que chega.
+    // Não segurar os cards pela rede. Quando os dados chegam, atualizar avisos,
+    // controles e prévias visíveis sem reconstruir as janelas e o briefing.
     //
     // A trava e por PEDIDO: quem abre o A e pula para o B nao pode ficar sem
     // os bancos do B.
@@ -34191,7 +34218,7 @@ function renderAmostrasOSItens(osId) {
     // QUAL pedido esta carregado entra na conta.
     state._bancosEmVoo = state._bancosEmVoo || {};
     const trocouDePedido = state._bancosPedidoDe !== targetOSId;
-    if (containerId === 'amostras-itens-container'
+    if (!opcoes.atualizarDados && containerId === 'amostras-itens-container'
         && typeof carregarBancosDoPedido === 'function'
         && !state._bancosEmVoo[targetOSId]
         && (trocouDePedido || numeracoesSemBancoBaixado(targetOSId).length)) {
@@ -34200,7 +34227,7 @@ function renderAmostrasOSItens(osId) {
         // ofereceria, no card de B, um banco que nao é daquele trabalho.
         if (trocouDePedido) { state.bancosDoPedido = []; state.vinculosDeBanco = {}; }
         const solta = () => { delete state._bancosEmVoo[targetOSId]; };
-        carregarBancosDoPedido(targetOSId).then(quantas => {
+        carregarBancosDoPedido(targetOSId).then(() => {
             solta();
             // So marca como carregado se o numero do pedido era conhecido na
             // hora: sem ele a busca dos bancos volta vazia sem consultar nada, e
@@ -34208,15 +34235,14 @@ function renderAmostrasOSItens(osId) {
             // operador sair e voltar. Os itens chegam depois do primeiro
             // desenho, entao isto acontece de verdade.
             if (idIntDoPedido(targetOSId)) state._bancosPedidoDe = targetOSId;
-            // Redesenhar SO quando chegou alguma coisa. Redesenhar por
-            // "troquei de pedido" faria laco justamente no caso acima, em que a
-            // marca nao e posta: desenho -> busca -> desenho -> busca.
-            if (quantas || (state.bancosDoPedido || []).length) renderAmostrasOSItens(osId);
+            // Também mostrar falha/ausência. A atualização parcial não inicia
+            // outra carga e não apaga as edições nem os canvases existentes.
+            renderAmostrasOSItens(osId, { atualizarDados: true });
         }).catch(solta);
     }
 
     state._coberturaEmVoo = state._coberturaEmVoo || {};
-    if (containerId === 'amostras-itens-container'
+    if (!opcoes.atualizarDados && containerId === 'amostras-itens-container'
         && typeof window.garantirCoberturas === 'function'
         && !state._coberturaEmVoo[targetOSId]) {
         const nomes = fontesDosModelosDoPedido(targetOSId);
@@ -34227,7 +34253,7 @@ function renderAmostrasOSItens(osId) {
                 catalogo: typeof catalogoFontes === 'function' ? catalogoFontes() : [],
             }).then(novas => {
                 solta();
-                if (novas && novas.length) renderAmostrasOSItens(osId);
+                if (novas && novas.length) renderAmostrasOSItens(osId, { atualizarDados: true });
             }).catch(solta);
         }
     }
@@ -34780,11 +34806,13 @@ function renderAmostrasOSItens(osId) {
                     <div class="amostra-decisao-panel" style="padding: 12px 14px; gap: 10px;">
                         ${faixaCorrigirArte}
                         ${faixaModeloTravado}
+                        <div data-amostra-avisos="${idx}" style="display:contents;">
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
                         ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
+                        </div>
                         <div style="display: grid; grid-template-columns: minmax(0, 1fr) 176px; gap: 12px; align-items: stretch;">
                         <div class="form-group" style="margin-bottom: 0; gap: 6px;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em;">Anotações / Observações de Alteração</label>
@@ -34802,7 +34830,7 @@ function renderAmostrasOSItens(osId) {
                                 </button>
                                 `
                                 : `
-                                <button class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco || travaDeGlifo ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : (travaDeGlifo ? `title="${escapeHtml(semGlifo.texto)}"` : ''))}>
+                                <button data-amostra-pronto="${idx}" class="btn" style="font-weight: 700; height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' || travaDeCelulas || travaDeBanco || travaDeGlifo ? 'disabled' : ''} ${travaDeCelulas ? `title="${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}"` : (travaDeBanco ? `title="${escapeHtml(bancoIncompleto.texto)}"` : (travaDeGlifo ? `title="${escapeHtml(semGlifo.texto)}"` : ''))}>
                                     🎨 MARCAR PRONTO
                                 </button>
                                 ${podeAprovarPeloPainel ? `
@@ -35195,7 +35223,12 @@ function renderAmostrasOSItens(osId) {
         `;
     }
 
+    if (opcoes.atualizarDados) {
+        atualizarDadosDosCardsAmostra(targetOSId, container, finalHtml, itens);
+        return;
+    }
     container.innerHTML = entregaCardHtml + finalHtml;
+    container.dataset.amostrasOsId = String(targetOSId);
 
     // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
     travarCardsDeModelosAprovados(container);
@@ -35213,13 +35246,39 @@ function renderAmostrasOSItens(osId) {
         loadDadosEntregaInterno(osId, osNum);
     }
 
-    // O box de bancos vive dentro do HTML recem-escrito: preenche agora, com o
-    // que ja esta na memoria. Quando os bancos descem da rede, o
-    // carregarBancosDoPedido redesenha a tela inteira e ele enche de novo.
+    // O box de bancos nasce com o que está na memória; a chegada dos bancos
+    // atualiza esse box e os controles sem substituir o HTML das amostras.
     desenharBoxDeBancos(osId);
 
     setTimeout(() => { desenharCardsAoAparecer(osId, itens, container); }, 50);
+}
 
+/** Chegada de bancos/fontes: usa os mesmos avisos/travas do template, sem
+ * destruir canvases, uploads, observações ou disparar as consultas do briefing.
+ */
+function atualizarDadosDosCardsAmostra(osId, container, html, itens) {
+    if (container.dataset.amostrasOsId !== String(osId)) return;
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    template.content.querySelectorAll('[data-amostra-avisos]').forEach(novo => {
+        const atual = container.querySelector(`[data-amostra-avisos="${novo.dataset.amostraAvisos}"]`);
+        if (atual && atual.innerHTML !== novo.innerHTML) atual.innerHTML = novo.innerHTML;
+    });
+    template.content.querySelectorAll('[data-amostra-pronto]').forEach(novo => {
+        const atual = container.querySelector(`[data-amostra-pronto="${novo.dataset.amostraPronto}"]`);
+        if (!atual) return;
+        atual.disabled = novo.disabled;
+        if (novo.hasAttribute('title')) atual.setAttribute('title', novo.getAttribute('title'));
+        else atual.removeAttribute('title');
+    });
+    desenharBoxDeBancos(osId);
+    itens.forEach((item, idx) => {
+        const num = numeracaoDoModelo(item);
+        atualizarNavCsvDaAmostra(idx, item, num, container, osId);
+        atualizarBotoesCsvDaAmostra(idx, item, num, container, osId);
+    });
+    travarCardsDeModelosAprovados(container);
+    desenharCardsAoAparecer(osId, itens, container);
 }
 
 /** O modelo tem algo para desenhar? A mesma pergunta do laço antigo, com nome. */
@@ -38062,6 +38121,38 @@ function repintarAssinantesDoPreload(elementos) {
     });
 }
 
+/** Reutiliza só a camada PDF; numeração e composição continuam sendo redesenhadas.
+ * Promessas em voo são compartilhadas. Falhas saem do cache para permitir retry.
+ * O limite inclui strings das chaves e bitmaps; canvases em uso nunca são zerados.
+ */
+async function rasterDaAmostra(chave, desenhar) {
+    const cache = rasterDaAmostra.cache || (rasterDaAmostra.cache = []);
+    const existente = cache.find(e => e.chave.length === chave.length
+        && e.chave.every((valor, i) => valor === chave[i]));
+    if (existente) {
+        cache.splice(cache.indexOf(existente), 1);
+        cache.push(existente);
+        return existente.promessa;
+    }
+    const entrada = { chave, bytes: chave.reduce((n, v) => n + (typeof v === 'string' ? v.length * 2 : 0), 0) };
+    const limitar = () => {
+        let bytes = cache.reduce((n, e) => n + e.bytes, 0);
+        while (cache.length > 12 || bytes > 64 * 1024 * 1024) bytes -= cache.shift().bytes;
+    };
+    entrada.promessa = Promise.resolve().then(desenhar).then(canvas => {
+        entrada.bytes += canvas.width * canvas.height * 4;
+        limitar();
+        return canvas;
+    }).catch(erro => {
+        const i = cache.indexOf(entrada);
+        if (i >= 0) cache.splice(i, 1);
+        throw erro;
+    });
+    cache.push(entrada);
+    limitar();
+    return entrada.promessa;
+}
+
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
     // Esperar as fontes da numeração antes de desenhar. Aqui dá para aguardar
     // de verdade (função async), então não há redesenho: sai certo de primeira.
@@ -38200,27 +38291,34 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         try {
             const hasVersoFile = (face === 'back' && cor.pdf_verso_base64);
             const rawPdfData = hasVersoFile ? cor.pdf_verso_base64 : cor.pdf_base64;
-            const base64Data = rawPdfData.includes('base64,') ? rawPdfData.split('base64,')[1] : rawPdfData;
-            const binStr = atob(base64Data);
-            const bytes = new Uint8Array(binStr.length);
-            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            const offCanvas = await rasterDaAmostra(['cor', rawPdfData, face, !!hasVersoFile, fmt.width_mm, S], async () => {
+                const base64Data = rawPdfData.includes('base64,') ? rawPdfData.split('base64,')[1] : rawPdfData;
+                const binStr = atob(base64Data);
+                const bytes = new Uint8Array(binStr.length);
+                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
 
-            const loadingTask = pdfjsLib.getDocument({ data: bytes });
-            const pdf = await loadingTask.promise;
+                const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                try {
+                    const pdf = await loadingTask.promise;
             
-            // Usar página 2 se for verso e o PDF tiver 2 ou mais páginas e não tivermos arquivo de verso separado
-            const pageNum = (face === 'back' && !hasVersoFile && pdf.numPages >= 2) ? 2 : 1;
-            const page = await pdf.getPage(pageNum);
+                    // Usar página 2 se for verso e o PDF tiver 2 ou mais páginas e não tivermos arquivo de verso separado
+                    const pageNum = (face === 'back' && !hasVersoFile && pdf.numPages >= 2) ? 2 : 1;
+                    const page = await pdf.getPage(pageNum);
 
-            const viewport = page.getViewport({ scale: 1.0 });
-            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
-            const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+                    const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
 
-            const offCanvas = document.createElement('canvas');
-            offCanvas.width = scaledViewport.width;
-            offCanvas.height = scaledViewport.height;
-            const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = scaledViewport.width;
+                    offCanvas.height = scaledViewport.height;
+                    const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                    await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+                    return offCanvas;
+                } finally { await loadingTask.destroy(); }
+            });
+            if (_desatualizado()) return;
 
             const dx = (finalWidth - offCanvas.width) / 2;
             const dy = (finalHeight - offCanvas.height) / 2;
@@ -38265,59 +38363,69 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             if (isPdf && typeof pdfjsLib !== 'undefined') {
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                 
-                let bytes;
-                if (hasArte) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    bytes = new Uint8Array(arrayBuffer);
-                } else {
-                    if (faceArteUrl.startsWith('http') || faceArteUrl.startsWith('/')) {
-                        const bufferData = await fetchPdfBytes(faceArteUrl);
-                        bytes = new Uint8Array(bufferData);
+                const escalaCache = escalaDaArteDoModelo(item);
+                const identidadeArte = item._cacheArteAmostra || (item._cacheArteAmostra = Symbol());
+                const offCanvas = await rasterDaAmostra(['arte', hasArte ? file : faceArteUrl,
+                    identidadeArte, face, S, escalaCache.h, escalaCache.v], async () => {
+                    let bytes;
+                    if (hasArte) {
+                        const arrayBuffer = await file.arrayBuffer();
+                        bytes = new Uint8Array(arrayBuffer);
                     } else {
-                        const base64Data = faceArteUrl.includes('base64,') ? faceArteUrl.split('base64,')[1] : faceArteUrl;
-                        const binStr = atob(base64Data);
-                        bytes = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                        if (faceArteUrl.startsWith('http') || faceArteUrl.startsWith('/')) {
+                            const bufferData = await fetchPdfBytes(faceArteUrl);
+                            bytes = new Uint8Array(bufferData);
+                        } else {
+                            const base64Data = faceArteUrl.includes('base64,') ? faceArteUrl.split('base64,')[1] : faceArteUrl;
+                            const binStr = atob(base64Data);
+                            bytes = new Uint8Array(binStr.length);
+                            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                        }
                     }
-                }
 
-                const loadingTask = pdfjsLib.getDocument({ data: bytes });
-                const pdf = await loadingTask.promise;
-                const page = await pdf.getPage(1);
+                    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                    try {
+                        const pdf = await loadingTask.promise;
+                        const page = await pdf.getPage(1);
 
-                // A arte em PDF entra no TAMANHO REAL dela, centrada na peca, e o
-                // que passar da peca fica de fora. E o que a impressora faz:
-                // engine.py abre a arte em PDF e a coloca na celula com o rect
-                // do tamanho da PROPRIA PAGINA (`base_w`/`base_h`), nunca
-                // reduzida para caber. Encolher aqui fazia a tela mostrar a arte
-                // menor do que ela sai no papel, com uma faixa branca em volta
-                // que o papel nao tem -- foi o que o usuario viu em 18/08/2026
-                // comparando a janela com a impressao.
-                //
-                // A pagina do PDF vem em PONTOS (2,8346 pt = 1 mm) e o canvas
-                // tem S pixels por milimetro: a escala do tamanho real e
-                // S / 2,8346. Arte em IMAGEM continua encaixando proporcional-
-                // mente (ramo abaixo), porque e isso que o motor faz com ela em
-                // `_load_base_as_pdf`.
-                const escalaTamanhoReal = S / 2.8346;
-                const scaledViewport = page.getViewport({ scale: escalaTamanhoReal });
+                        // A arte em PDF entra no TAMANHO REAL dela, centrada na peca, e o
+                        // que passar da peca fica de fora. E o que a impressora faz:
+                        // engine.py abre a arte em PDF e a coloca na celula com o rect
+                        // do tamanho da PROPRIA PAGINA (`base_w`/`base_h`), nunca
+                        // reduzida para caber. Encolher aqui fazia a tela mostrar a arte
+                        // menor do que ela sai no papel, com uma faixa branca em volta
+                        // que o papel nao tem -- foi o que o usuario viu em 18/08/2026
+                        // comparando a janela com a impressao.
+                        //
+                        // A pagina do PDF vem em PONTOS (2,8346 pt = 1 mm) e o canvas
+                        // tem S pixels por milimetro: a escala do tamanho real e
+                        // S / 2,8346. Arte em IMAGEM continua encaixando proporcional-
+                        // mente (ramo abaixo), porque e isso que o motor faz com ela em
+                        // `_load_base_as_pdf`.
+                        const escalaTamanhoReal = S / 2.8346;
+                        const scaledViewport = page.getViewport({ scale: escalaTamanhoReal });
 
-                // A ESCALA DA ARTE DO MODELO (31/08/2026). Multiplica o tamanho
-                // real, cada eixo por conta própria; 100/100 é exatamente o
-                // desenho de antes. O `transform` do pdf.js desenha já na medida
-                // final — nada é ampliado depois, então a arte continua nítida.
-                const escA = escalaDaArteDoModelo(item);
-                const fx = escA.h / 100, fy = escA.v / 100;
+                        // A ESCALA DA ARTE DO MODELO (31/08/2026). Multiplica o tamanho
+                        // real, cada eixo por conta própria; 100/100 é exatamente o
+                        // desenho de antes. O `transform` do pdf.js desenha já na medida
+                        // final — nada é ampliado depois, então a arte continua nítida.
+                        const escA = escalaCache;
+                        const fx = escA.h / 100, fy = escA.v / 100;
 
-                const offCanvas = document.createElement('canvas');
-                offCanvas.width = Math.round(scaledViewport.width * fx);
-                offCanvas.height = Math.round(scaledViewport.height * fy);
-                const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                await page.render({
-                    canvasContext: offCtx,
-                    viewport: scaledViewport,
-                    ...(fx === 1 && fy === 1 ? {} : { transform: [fx, 0, 0, fy, 0, 0] }),
-                }).promise;
+                        const offCanvas = document.createElement('canvas');
+                        offCanvas.width = Math.round(scaledViewport.width * fx);
+                        offCanvas.height = Math.round(scaledViewport.height * fy);
+                        const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                        await page.render({
+                            canvasContext: offCtx,
+                            viewport: scaledViewport,
+                            ...(fx === 1 && fy === 1 ? {} : { transform: [fx, 0, 0, fy, 0, 0] }),
+                        }).promise;
+
+                        return offCanvas;
+                    } finally { await loadingTask.destroy(); }
+                });
+                if (_desatualizado()) return;
 
                 // Centralizada na peça, como o motor faz. O que passar da peça é
                 // aparado pelo canvas do grupo — no papel, pela célula.

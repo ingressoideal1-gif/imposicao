@@ -100,7 +100,7 @@ def test_a_linha_de_botoes_e_desenhada_por_render_amostras_os_itens():
     acompanha o pedido aberto -- e some com ele."""
     js = _ler("frontend/script.js")
 
-    i = js.index("function renderAmostrasOSItens(osId) {")
+    i = js.index("function renderAmostrasOSItens(")
     j = js.index("const itemsHtml = itens.map(", i)
     trecho = js[i:j]
     assert "renderAcoesEmLoteDoPedido(" in trecho, (

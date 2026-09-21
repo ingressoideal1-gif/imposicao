@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.join(__dirname, '..');
-const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
+const puppeteer = require('puppeteer');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 
 let total = 0, falhas = 0;

@@ -137,9 +137,12 @@ function mundo(opts) {
     // `window` vazio ela devolveria null em silencio -- que foi exatamente o que
     // aconteceu na primeira versao deste arnes.
     const janela = { CsvEditor: { COL_ID: '__id', expandirIds: EXPANDIR } };
+    // Este harness cobre o CSV da numeração; os bancos próprios do pedido
+    // têm harness separado. A dependência já existia na função de produção.
     const api = new Function('window', 'state', 'supabaseClient', 'document', 'console',
+        'carregarBancosDoPedidoNovo', 'idIntDoPedido',
         CODIGO + '\nreturn { ' + NOMES.join(', ') + ' };'
-    )(janela, state, supabaseClient, document, { warn() {} });
+    )(janela, state, supabaseClient, document, { warn() {} }, async () => 0, () => 1);
     return { api, consultas, state, janela };
 }
 

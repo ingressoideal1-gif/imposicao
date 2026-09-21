@@ -33,6 +33,7 @@ function ambiente() {
         carregarModelosGlobais: async () => {}, carregarPagamentosGlobais: async () => {},
         garantirLinksDosPedidosNaListaArte: async () => ({ criados: 0, falhas: 0 }),
         sincronizarStatusOrdensDinamico: async () => {},
+        nomePreferencialDaProposta: (proposta, fallback) => fallback,
         renderOrdens() { chamadas.render++; }, toast() { chamadas.erros++; },
         fetch: async () => {
             chamadas.fetch++;

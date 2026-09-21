@@ -46,7 +46,7 @@ def test_o_laco_que_desenhava_todos_saiu():
 
     # A `renderAmostrasOSItens` tem quase mil linhas; a janela vai ate a proxima
     # declaracao de funcao na coluna zero, e nao a um numero de caracteres.
-    i = fonte.index("function renderAmostrasOSItens(osId)")
+    i = fonte.index("function renderAmostrasOSItens(")
     fim = fonte.index("\nfunction ", i + 10)
     corpo = fonte[i:fim]
 
