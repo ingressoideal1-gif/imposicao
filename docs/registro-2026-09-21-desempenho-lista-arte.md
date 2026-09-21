@@ -34,8 +34,28 @@ Foram ajustadas referências de assinatura nos testes e resolução de Puppeteer
 
 Ambiente utilizado: Node existente; Puppeteer de `C:\ProjetosLocais\ideal-imposition\node_modules`; Python/pytest do ambiente já instalado em `C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition\venv\Scripts\python.exe`. Nenhum acesso a serviços reais foi necessário.
 
-## Entrega e retomada
+## Estado antes da publicação
 
 Somente implementação local: sem commit, push, publicação, build ou instalação do agente. Não há medição de velocidade, memória ou tráfego na estação real, nem aceitação de impressão física. PDF.js e serviços foram simulados nos novos testes; o Chromium executou o DOM e os canvases reais.
 
 Para publicar, integrar somente esta alteração sobre a versão vigente, repetir as validações afetadas pela integração, versionar os assets e seguir a verificação pública de entrega. Depois medir abertura de pedidos, rolagem e atualização de frente/verso na estação. As alterações locais são reversíveis pelo diff desta branch, sem tocar no trabalho operacional preexistente.
+
+## Entrega segura concluída — v929
+
+Publicação autorizada pelo usuário com “entrega segura” e executada em 21/09/2026. `origin/main` estava em `570b4662`, sem avanço a integrar. A simulação passou; a publicação revalidou os harnesses após versionar `script.js?v=929` em `index.html` e `producao.html`.
+
+- Commit do frontend: `340675074b92e2327a3073ed5d48a16aa16a2999`, integrado em `origin/main`.
+- Tag anotada `v929`, conferida no remoto e apontando para esse commit.
+- Cloudflare Pages confirmou sucesso no deployment `0ddb43c3-6fd9-4ccc-b3cc-319d8b149624`.
+- O script encerrou a primeira conferência com `FALHA_APOS_INTEGRACAO`: o edge ainda devolvia os arquivos anteriores. Não foi repetida a publicação. Após aguardar a propagação, a conferência de leitura com cache-buster confirmou **ALL_MATCH=True**, nas seis comparações, por volta de 18:27 (America/Sao_Paulo).
+- Resultado operacional da entrega web: **publicada e verificada** em `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`.
+
+SHA-256, normalizando somente BOM e quebras de linha, iguais no local e em ambos os domínios:
+
+| Arquivo | SHA-256 |
+| --- | --- |
+| `index.html` (`/`) | `4eac8aa3a8a12c560539fec29201842fe9d0d12b268bdf84941312207b1fd07e` |
+| `producao.html` | `166dd3199c3d94cab0ada47e54004641e48bb9dbbfc036ecce77636a8726fb97` |
+| `script.js?v=929` | `4b26e46ef0f69ea2f63e17fc055928fe585feb3ca3e88c7e661c5810278b6a2f` |
+
+Escopo entregue: frontend web, testes e documentação. Não houve SQL, build/distribuição do NewProd ou instalação em estações. Não há comprovação de velocidade na estação ou impressão física. Para uma aba web que estava aberta, recarregar a página para buscar a nova versão; o painel embarcado no agente depende de entrega própria. Próxima verificação operacional: abrir um pedido grande, rolar os modelos e atualizar frente/verso, medindo o ganho na estação.
