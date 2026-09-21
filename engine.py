@@ -1107,6 +1107,15 @@ class ImpositionConfig:
         self.rotate_page = rotate_page
         self.numeracao_2 = numeracao_2
         self.multi_artes = multi_artes or []
+        if any(a.get("modo_pdf") for a in self.multi_artes):
+            if (print_mode != "duplex_unico"
+                    or layout_schema not in ("sequential", "multi_artes", "cut_stack")
+                    or any(not a.get("modo_pdf") or a.get("print_mode") != print_mode
+                           for a in self.multi_artes)):
+                raise ValueError("A combinação paginada exige FxVersoUnico em todos os modelos.")
+            if any(not a.get("pdf_url") or not a.get("pdf_verso_url")
+                   or a.get("local_path") for a in self.multi_artes):
+                raise ValueError("A combinação paginada exige PDF de frente e verso por modelo.")
         self.cut_stack_mode = cut_stack_mode
         self.sheets_per_block = sheets_per_block
         self.block_depth = block_depth
@@ -3043,6 +3052,7 @@ class ImpositionEngine:
                 # para cada item do `multi_map`: é o que `_pagina_do_verso_unico`
                 # lê na hora de desenhar a célula de verso.
                 art_verso_page_idx = None
+                art_front_pages = None
 
                 try:
                     if not cfg.multi_artes and doc_base:
@@ -3054,6 +3064,7 @@ class ImpositionEngine:
                         art_doc = _load_art_as_pdf(local_path, is_url=False)
                     elif pdf_url:
                         art_doc = _load_art_as_pdf(pdf_url, is_url=True)
+                        art_front_pages = len(art_doc) if art_doc else None
                         if pdf_verso_url and art_doc:
                             chave_verso = (pdf_url, pdf_verso_url)
                             if chave_verso in versos_mesclados:
@@ -3097,8 +3108,20 @@ class ImpositionEngine:
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
+                if art.get("modo_pdf") and (not art_doc or art_verso_page_idx is None
+                        or physical_qtd <= 0 or physical_qtd != art_front_pages):
+                    # Conferir antes de renderizar/entregar qualquer lote. Nunca
+                    # completar falta de páginas repetindo silenciosamente a 1.
+                    for cached_doc in pdf_cache.values():
+                        if not cached_doc.is_closed:
+                            cached_doc.close()
+                    raise ValueError(
+                        f"Modelo {art.get('modelo', model_idx)}: PDF/verso indisponível "
+                        "ou quantidade de páginas diferente da combinação. Recarregue as artes.")
+
                 for i in range(physical_qtd):
                     multi_map.append({
+                        "modo_pdf": bool(art.get("modo_pdf")),
                         "doc_base": art_doc,
                         "elements": art_els,
                         "val1": n1 + i,
@@ -3532,7 +3555,9 @@ class ImpositionEngine:
                         item_local_idx = int(item_index)
                         # arte_nome = arte_data.get("nome", "") # Nome was removed from multi_artes!
 
-                    if cfg.layout_schema == "pdf_multiple":
+                    if arte_data.get("modo_pdf"):
+                        page_idx_front = item_local_idx
+                    elif cfg.layout_schema == "pdf_multiple":
                         # No FxVersoUnico a frente anda 1 a 1, igual ao simplex:
                         # cada página do arquivo é uma peça, e o verso está em
                         # outro arquivo. Só o `duplex` clássico salta de dois em
@@ -4097,7 +4122,9 @@ class ImpositionEngine:
         val2 = item_data["val2"]
         local_idx = item_data["local_idx"]
 
-        if cfg.layout_schema == "pdf_multiple":
+        if item_data.get("modo_pdf"):
+            page_idx_front = local_idx
+        elif cfg.layout_schema == "pdf_multiple":
             # FxVersoUnico: uma página por peça, sem o salto de dois em dois — o
             # verso não ocupa página neste arquivo.
             if cfg.print_mode in ("duplex_unico", "pdf_duplicate_back"):

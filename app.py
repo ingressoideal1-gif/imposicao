@@ -349,7 +349,8 @@ def read_root():
 @app.get("/api/version")
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
-    return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4"}
+    return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
+            "capabilities": ["multi_artes_pdf_duplex_unico"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
