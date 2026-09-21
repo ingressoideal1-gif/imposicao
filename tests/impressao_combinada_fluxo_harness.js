@@ -12,7 +12,7 @@ const section = name => {
     return pedido.slice(start, pedido.indexOf('\n};', start) + 3);
 };
 function fixture(options={}) {
-    const {sandbox:c, elements, items} = scenario('blocado','aproveitar',[4,4,4],{context:true});
+    const {sandbox:c, elements, items} = scenario('blocado','aproveitar',[4,4,4],{context:true,paginadoDuplex:options.paginadoDuplex});
     const el = value => ({value,style:{},classList:{add(){},remove(){}},checked:false});
     for (const [id,value] of Object.entries({
         'ped-formato':'f','ped-saida':'s','ped-numeracao':'n96','ped-start':'960','ped-end':'963',
@@ -31,6 +31,7 @@ function fixture(options={}) {
         sendPrintJobDirect:async jobs=>{calls.printed.push(...jobs);return true;},
         confirmarImpressaoModelos:async targets=>calls.confirmed.push(JSON.parse(JSON.stringify(targets))),
         fetch:async (url,request)=>{
+            if(url.endsWith('/api/version')) return {ok:true,json:async()=>({capabilities:options.oldAgent?[]:['multi_artes_pdf_duplex_unico']})};
             if(request?.method==='GET')return {ok:true};
             assert.equal(url,'http://localhost:8080/api/impose');
             calls.requests.push(JSON.parse(request.body.get('payload')));
@@ -89,6 +90,42 @@ async function tests() {
     await f.c.runPedImposition('print');assert.equal(f.calls.requests.length,0);
     resolve();await loading;assert.equal(f.c.state.activeOSItem.itemId,'97');
     assert.equal(f.c.state.pedidoSelecaoCarregando,null);
+    for(const mode of ['pdf','print']) {
+        const pag=fixture({paginadoDuplex:true});
+        await pag.c.runPedImposition(mode);
+        assert.equal(pag.calls.requests.length,1,JSON.stringify(pag.calls.notices));
+        assert.equal(pag.calls.requests[0].print_mode,'duplex_unico');
+        assert(pag.calls.requests[0].multi_artes.every(a=>a.modo_pdf && a.qtd===4));
+        assert.equal(pag.calls.printed.length,mode==='print'?1:0);
+    }
+    const old=fixture({paginadoDuplex:true,oldAgent:true});
+    await old.c.runPedImposition('print');
+    assert.equal(old.calls.requests.length,0);assert.equal(old.calls.printed.length,0);
+    assert(old.calls.notices.some(n=>String(n[0]).includes('Atualize o NewProd')));
+    assert.equal(old.c.isImposing,false);
+    const missing=fixture({paginadoDuplex:true});
+    missing.items[1].verso_arte_url=null;
+    await missing.c.runPedImposition('print');
+    assert.equal(missing.calls.requests.length,0);
+    assert(missing.calls.notices.some(n=>String(n[0]).includes('arquivo de verso')));
+    const downloading=fixture({paginadoDuplex:true});
+    delete downloading.c.state.multiArtesPdfCache.mock97;
+    let downloaded=false;
+    downloading.c.fetch=async()=>{downloaded=true;return {ok:false};};
+    await downloading.c.runPedImposition('print');
+    assert(downloaded);assert.equal(downloading.calls.requests.length,0);
+    assert(downloading.calls.notices.some(n=>String(n[0]).includes('carregar uma arte')));
+    const changedWhileLoading=fixture({paginadoDuplex:true});
+    delete changedWhileLoading.c.state.multiArtesPdfCache.mock97;
+    changedWhileLoading.c.fetch=async()=>{
+        changedWhileLoading.c.state.selectedOSItems=[];
+        return {ok:true,arrayBuffer:async()=>new ArrayBuffer(0)};
+    };
+    changedWhileLoading.c.pdfjsLib={getDocument:()=>({promise:Promise.resolve({numPages:4})})};
+    changedWhileLoading.c.medirArteDaFolhaCombinada=async()=>{};
+    await changedWhileLoading.c.runPedImposition('print');
+    assert.equal(changedWhileLoading.calls.requests.length,0);
+    assert(changedWhileLoading.calls.notices.some(n=>String(n[0]).includes('seleção mudou')));
     console.log('OK: PDF/impressao, alvo congelado, refazer, bloqueios e troca assincrona de selecao');
 }
 tests().catch(e=>{console.error(e);process.exitCode=1;});

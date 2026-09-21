@@ -258,7 +258,7 @@ function limitarCachePaginas(pdfDoc) {
  * O elemento é criado sob demanda para valer no index.html e no producao.html sem
  * duplicar marcação.
  */
-function atualizarAvisoPaginacao(schema, totalItens) {
+function atualizarAvisoPaginacao(schema, totalItens, artes) {
     const canvas = document.getElementById('ped-preview-canvas');
     if (!canvas) return;
 
@@ -272,6 +272,12 @@ function atualizarAvisoPaginacao(schema, totalItens) {
         canvas.insertAdjacentElement('beforebegin', aviso);
     }
 
+    if (artes?.some(a => a.modo_pdf)) {
+        const diferentes = artes.filter(a => a.qtd !== a.qtd_pedida);
+        aviso.textContent = diferentes.map(a => `Modelo ${a.modelo}: PDF com ${a.qtd} peça(s), pedido com ${a.qtd_pedida}.`).join(' ');
+        aviso.style.display = diferentes.length ? 'block' : 'none';
+        return;
+    }
     const item = state.activeOSItem
         ? (state.osItens[state.activeOSItem.osId] || []).find(i => String(i.id) === String(state.activeOSItem.itemId))
         : null;
@@ -732,7 +738,9 @@ function drawPedPreview() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const problema = state.pedidoSelecaoCarregando ? 'Carregando o modelo selecionado…'
-        : state.pedidoSelecaoErro || (typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null);
+        : state.pedidoSelecaoErro || (typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null)
+            || (tempMultiArtes?.some(a => a.modo_pdf && (!a.pdfDoc || !a.pdfVersoDoc))
+                ? 'Carregue o PDF de frente e o verso de todos os modelos paginados.' : null);
     const titulo = document.getElementById('ped-preview-modelo');
     if (titulo && isMultiSelected) {
         titulo.textContent = 'Modelos ' + tempMultiArtes.map(a => {
@@ -1211,7 +1219,7 @@ function drawPedPreview() {
         (schema === 'pdf_multiple' && state.pedArtPdfDoc)
             ? `${folhaLabel} · ${state.pedArtPdfDoc.numPages} páginas do PDF · ${poses_per_sheet} por folha`
             : folhaLabel;
-    atualizarAvisoPaginacao(schema, total_items);
+    atualizarAvisoPaginacao(schema, total_items, tempMultiArtes);
 
     // A conta da sobra sai DAQUI na aba Pedido, e não do Sumário.
     //
@@ -1699,7 +1707,8 @@ function drawPedPreview() {
                         // Na folha combinada, o verso separado usa sua pagina 1;
                         // sem ele, preservamos a pagina 2 do PDF de duas faces.
                         const pageNum = isMultiArtePdf
-                            ? ((isBack && !isMultiArteVersoSeparado) ? 2 : 1)
+                            ? (multiArteItem.modo_pdf ? (isBack ? 1 : multiArteLocalIndex + 1)
+                                : ((isBack && !isMultiArteVersoSeparado) ? 2 : 1))
                             : pdfDaFace.pagina;
 
 
@@ -5753,7 +5762,10 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
 
     return {
-        qtd: qt,
+        qtd: sItem?.modo_pdf ? (pdfDoc?.numPages || 0) : qt,
+        qtd_pedida: qt,
+        modo_pdf: !!sItem?.modo_pdf,
+        print_mode: sItem ? modoDeVersoDoModelo(sItem) : 'front',
         nome: sItem ? sItem.modelo : '',
         // Se este número chega ao papel ou não. Fica separado de `nome`
         // porque `nome` também alimenta as mensagens da tela ("o modelo
@@ -5805,6 +5817,29 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
     };
 }
 window.arteDoModeloParaFolha = arteDoModeloParaFolha;
+
+// A contagem do arquivo define a tiragem paginada, como na geração individual.
+// Não depende de a prévia ter terminado seus downloads antes do clique.
+function carregarPdfsDaCombinacaoPaginada(selecao) {
+    const artes = selecao.map(s => arteDoModeloParaFolha(s, null, { comPrevia: false }));
+    const urls = new Set();
+    for (const arte of artes) {
+        if (!arte.modo_pdf) continue;
+        if (!arte.pdf_url || !arte.pdf_verso_url) {
+            return Promise.reject(new Error(`Modelo ${arte.modelo}: informe o PDF de frente e o arquivo de verso.`));
+        }
+        urls.add(arte.pdf_url); urls.add(arte.pdf_verso_url);
+    }
+    return Promise.all([...urls].map(async url => {
+        if (state.multiArtesPdfCache[url]) return;
+        const resposta = await fetch(url);
+        if (!resposta.ok) throw new Error('Não foi possível carregar uma arte da combinação paginada.');
+        const doc = await pdfjsLib.getDocument({ data: await resposta.arrayBuffer() }).promise;
+        if (!doc.numPages) throw new Error('PDF sem páginas na combinação.');
+        state.multiArtesPdfCache[url] = doc;
+        await medirArteDaFolhaCombinada(url, doc);
+    }));
+}
 
 /**
  * A arte como o MOTOR a recebe: numeracao resolvida pelo banco do pedido, a
@@ -5865,7 +5900,9 @@ function arteParaOMotor(arte, isMultiSelected) {
 
     return {
 
-        qtd: qtdArte,
+        qtd: arte.modo_pdf ? arte.qtd : qtdArte,
+        modo_pdf: !!arte.modo_pdf,
+        print_mode: arte.print_mode,
 
         pdf_url: arte.pdf_url,
 
@@ -6003,6 +6040,13 @@ window.runPedImposition = async function (mode, isRefazer) {
     if (!selecaoAindaAtual()) return toast('A seleção mudou durante o carregamento. Confira e tente novamente.', 'warning');
     const erroSelecao = typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null;
     if (erroSelecao) return toast(erroSelecao, 'warning');
+    if ((state.selectedOSItems || []).length > 1 && itensDaImposicao(true).some(i => i.modo_pdf)) {
+        try { await carregarPdfsDaCombinacaoPaginada(state.selectedOSItems.slice()); }
+        catch (e) { return toast(e.message, 'error'); }
+        if (window.isImposing) return;
+        if (!selecaoAindaAtual()) return toast('A seleção mudou durante o carregamento. Confira e tente novamente.', 'warning');
+        drawPedPreview();
+    }
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
     // agora, não um PDF vazio três minutos depois.
@@ -6745,6 +6789,15 @@ window.runPedImposition = async function (mode, isRefazer) {
         if (validarContexto && !validarContexto()) return;
         if (!selecaoAindaAtual()) return toast('A seleção mudou. Confira e gere novamente.', 'warning');
         const urlImpose = `${baseUrl}/api/impose`;
+
+        if (payloadMultiArtes.some(a => a.modo_pdf)) {
+            const versao = await fetch(`${baseUrl}/api/version`, { method: 'GET', signal: impositionAbortController.signal });
+            const info = versao.ok ? await versao.json() : null;
+            if (!info?.capabilities?.includes('multi_artes_pdf_duplex_unico')) {
+                throw new Error('Atualize o NewProd desta estação para combinar PDFs paginados com FxVersoUnico.');
+            }
+            if (!selecaoAindaAtual()) throw new Error('A seleção mudou. Confira e gere novamente.');
+        }
 
         const res = await fetch(urlImpose, {
 

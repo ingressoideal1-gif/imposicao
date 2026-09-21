@@ -4190,6 +4190,9 @@ async function prepararArtesDaMontagem(modelos) {
             }
 
             const atual = pecaDaMontagem(it);
+            if (it.modo_pdf) {
+                throw new Error('Combine PDFs paginados pela janela do Pedido no Painel de Produção. A Montagem manual não pagina essas artes.');
+            }
             const mudou = porQueNaoCabeNaMontagem(m.peca, atual);
             if (mudou) throw new Error('O modelo ' + m.itemId + ' mudou desde a montagem: ' + mudou + '. Remova e adicione o modelo novamente.');
 

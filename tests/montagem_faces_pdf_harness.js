@@ -77,6 +77,9 @@ async function testar() {
     contexto.state.ordens[0].status_interno = 'EXPEDICAO';
     await assert.rejects(contexto.prepararArtesDaMontagem([{ osId: 'A', itemId: 'M', peca: verso }]), /precisa estar Em produção/);
     contexto.state.ordens[0].status_interno = 'EM PRODUCAO';
+    item.modo_pdf = true;
+    await assert.rejects(contexto.prepararArtesDaMontagem([{ osId: 'A', itemId: 'M', peca: verso }]), /janela do Pedido/);
+    item.modo_pdf = false;
 
     // Banco de outro pedido no intervalo assíncrono nunca chega à arte.
     contexto.garantirBancosDoTrabalho = async () => { contexto.state._bancosPedidoDe = 'B'; };

@@ -12731,6 +12731,9 @@ window.textoDoCancelamento = textoDoCancelamento;
 let impositionAbortController = null;
 window.isImposing = false;
 window.runImposition = async function (mode, returnBlob = false) {
+    if ((state.selectedOSItems || []).length > 1 && itensDaImposicao(true).some(i => i.modo_pdf)) {
+        return toast('Gere a combinação de PDFs paginados pela janela do Pedido no Painel de Produção.', 'warning');
+    }
     if (window.isImposing) return;
     window.isImposing = true;
     try {
@@ -21322,7 +21325,12 @@ function porQueNaoCombina(a, b) {
 
     if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
 
-    if (a.modo_pdf || b.modo_pdf) return 'PDF Paginado exige um modelo por vez para preservar todas as páginas';
+    if (!!a.modo_pdf !== !!b.modo_pdf) return 'um modelo é PDF Paginado e o outro não';
+    if (a.modo_pdf && (modoDeVersoDoModelo(a) !== 'duplex_unico'
+        || modoDeVersoDoModelo(b) !== 'duplex_unico')) {
+        return 'a combinação de PDF Paginado exige FxVersoUnico em todos os modelos';
+    }
+    if (modoDeVersoDoModelo(a) !== modoDeVersoDoModelo(b)) return 'os modos de impressão são diferentes';
     const modoPdfEspecial = item => {
         const id = item.amostra_num_id || item.numeracao_id;
         const modo = (state.numeracoes || []).find(n => String(n.id) === String(id))?.print_mode;

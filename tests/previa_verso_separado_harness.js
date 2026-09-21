@@ -61,7 +61,7 @@ ok(PEDIDO.includes('const pdfDaFace = pdfDaFaceNaPreviaPedido(isBack, schema, it
     'drawPedPreview usa a selecao testada');
 ok(PEDIDO.includes("const pdfDoModelo = isBack && (multiArteItem.pdfVersoDoc || multiArteItem.pdf_verso_url)"),
     'multi-artes escolhe o documento separado do verso');
-ok(PEDIDO.includes("? ((isBack && !isMultiArteVersoSeparado) ? 2 : 1)"),
+ok(PEDIDO.includes(": ((isBack && !isMultiArteVersoSeparado) ? 2 : 1)"),
     'multi-artes usa pagina 1 do verso separado e pagina 2 do PDF embutido');
 
 if (falhas) process.exit(1);

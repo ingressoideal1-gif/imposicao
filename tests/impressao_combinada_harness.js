@@ -46,6 +46,16 @@ function scenario(mode, bar, quantities, options = {}) {
     multiArtesPdfTamanho:Object.fromEntries(items.map(x=>[x.arte_url,{w:141.73,h:85.038}])),
     previewFace:options.back?'back':'front',printMode:options.back?'duplex':'front'};
   if(options.paginado) items.forEach(x=>x.modo_pdf=true);
+  if(options.paginadoDuplex) {
+    items.forEach((x,i)=>{
+      x.modo_pdf=true; x.verso_arte_url='back'+x.id;
+      state.numeracoes[i].print_mode='duplex_unico';
+      const count=options.paginas?.[i] ?? quantities[i];
+      state.multiArtesPdfCache[x.arte_url]={numPages:count,pagesCache:Object.fromEntries(
+        Array.from({length:count},(_,j)=>['page_'+(j+1),{tag:x.id+'F'+(j+1)}]))};
+      state.multiArtesPdfCache[x.verso_arte_url]={numPages:1,pagesCache:{page_1:{tag:x.id+'V'}}};
+    });
+  }
   if(options.blockMismatch) items[1].bloco=100;
   if(options.special) state.numeracoes[1].print_mode=options.special;
   if(options.separateBack) { items.forEach(x=>{x.verso_arte_url='back'+x.id;state.multiArtesPdfCache[x.verso_arte_url]=pdf(x.id+'S');}); }
@@ -61,7 +71,7 @@ function scenario(mode, bar, quantities, options = {}) {
   sandbox.window=sandbox;
   sandbox.desenharTextoAjustado=(_ctx,_el,label)=>records.push({vdp:label});
   const scriptFns=['esquemaDaSelecaoCombinada','modoDeImpressaoDaSelecao','modoDeImpressaoDoModelo','modoSomaFolha','itensDaImposicao','itemAtivoDoPedido','temVerso','versoUnico','modoDeVersoDoModelo','escalaDaArteDoModelo','escalaDaArteDoTrabalho','blocagemDaSelecao','blocagemDoModelo','modoCutStackDaSelecao','porQueNaoCombina','problemaNaSelecao','alvosDaImpressao','numeracaoIdDoItem'];
-  const pedidoFns=['pdfDaFaceNaPreviaPedido','numeracaoDaArteNaPreviaPedido','buildStrictAssemblySets','arteDoModeloParaFolha','arteParaOMotor','drawPedPreview'];
+  const pedidoFns=['pdfDaFaceNaPreviaPedido','numeracaoDaArteNaPreviaPedido','buildStrictAssemblySets','arteDoModeloParaFolha','arteParaOMotor','carregarPdfsDaCombinacaoPaginada','drawPedPreview'];
   const code=scriptFns.map(n=>extract(s,n)).concat(pedidoFns.map(n=>extract(p,n))).join('\n');
   vm.createContext(sandbox);vm.runInContext(code,sandbox);vm.runInContext('drawPedPreview()',sandbox);
   if (options.context) return {sandbox,elements,items};
@@ -104,6 +114,16 @@ function regression() {
     const back=scenario('blocado','aproveitar',[4,4,4],{back:true,separateBack:true,missingBack:true});
     assert.deepEqual(arts(back),['96SF','96SF','98SF']);
     console.log('OK: regressao da previa combinada, numeracao, escalas, selecao, verso e bloqueios');
+    const pag=scenario('sequencial','separado',[7,12,4],{paginadoDuplex:true,page:2});
+    assert.deepEqual(arts(pag),['96F5','96F6','96F7','97F1']);
+    assert.deepEqual(arts(scenario('sequencial','separado',[7,12,4],{paginadoDuplex:true,page:2,back:true})),['96V','96V','96V','97V']);
+    const parcial=scenario('sequencial','separado',[9,24,16],{paginadoDuplex:true,paginas:[7,12,4]});
+    assert.deepEqual(parcial.payload.map(a=>a.qtd),[7,12,4]);
+    assert(parcial.payload.every(a=>a.modo_pdf && a.print_mode==='duplex_unico'));
+    const missingPag=scenario('sequencial','separado',[7,12,4],{paginadoDuplex:true,missingBack:true});
+    assert.equal(arts(missingPag).length,0);
+    const incompatible=scenario('sequencial','separado',[7,12,4],{paginadoDuplex:true,special:'duplex'});
+    assert.equal(arts(incompatible).length,0);
 }
 function matrix() {
     const results=[];
@@ -114,6 +134,9 @@ function matrix() {
         ['blocado','separado',[20,4,8],{savedBlock:8,depth:2}],
         ['blocado','separado',[20,4,8],{savedBlock:2}],
         ['blocado','aproveitar',[4,4,4],{ticket:3}],
+        ['sequencial','separado',[7,12,4],{paginadoDuplex:true}],
+        ['blocado','aproveitar',[7,12,4],{paginadoDuplex:true}],
+        ['blocado','separado',[7,12,4],{paginadoDuplex:true,savedBlock:2}],
     ]) {
         const first=scenario(mode,bar,q,extra);
         const sizes=first.sets?.map(s=>s.sheets)||[Math.ceil(q.reduce((a,b)=>a+b,0)/4)];
