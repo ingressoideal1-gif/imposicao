@@ -339,6 +339,10 @@
      */
     function colunaDeIdentidade() {
         if (colunaId && cfg.headers.indexOf(colunaId) !== -1) return colunaId;
+        // O nome do arquivo da foto identifica a linha durante a conferência.
+        if (cfg.headers.indexOf(cfg.coluna) !== -1 && cfg.rows.some(function (r) {
+            return r && r[cfg.coluna] != null && String(r[cfg.coluna]).trim();
+        })) return cfg.coluna;
         for (var k = 0; k < cfg.headers.length; k++) {
             if (cfg.headers[k] === cfg.coluna) continue;
             for (var i = 0; i < cfg.rows.length; i++) {
@@ -423,7 +427,7 @@
             <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
                 <label class="gf-tag">Identificar a linha pela coluna</label>
                 <select class="gf-sel" onchange="window.__gfColunaId(this.value)">
-                    ${cfg.headers.filter(function (h) { return h !== cfg.coluna; })
+                    ${cfg.headers
                 .map(function (h) { return `<option value="${esc(h)}" ${colunaDeIdentidade() === h ? 'selected' : ''}>${esc(h)}</option>`; }).join('')}
                 </select>
             </span>
