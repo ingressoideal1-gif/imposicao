@@ -43,7 +43,8 @@ function atualizarTelaFaturamento(reabrir) {
 }
 
 function resumoFaturamento() {
-    const v = dadosDoFormularioFaturamento().valores;
+    const r = dadosDoFormularioFaturamento();
+    const v = r.valores;
     const rua = [v.endereco, v.numero].filter(Boolean).join(', ');
     const local = [v.bairro, [v.cidade, v.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
@@ -61,7 +62,7 @@ function resumoFaturamento() {
         + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
         + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
         + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
-        + (dadosDoFormularioFaturamento().alterando
+        + (r.alterando
             ? '<div class="portal-aviso calmo">Cadastro selecionado. Confirme abaixo para usar estes dados na nota.</div>' : '')
         + '</div>';
 }

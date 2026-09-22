@@ -41,6 +41,36 @@ contexto.window.window = contexto.window;
 vm.createContext(contexto);
 vm.runInContext(codigo, contexto);
 
+// Renderiza a secao real: o teste apenas do modal nao detecta falhas no resumo.
+const codigoSecao = fs.readFileSync('frontend/cliente-faturamento.js', 'utf8');
+for (const cliente of [
+    { nome: 'Empresa Teste', fantasia: 'Loja Teste', documento: '00000000000000' },
+    { nome: 'Empresa Teste', fantasia: '  ', documento: '00000000000000' },
+    null
+]) {
+    const secao = { innerHTML: '' };
+    const c = {
+        ...contexto,
+        window: { ...contexto.window, portalDados: {
+            pedido: { id_cliente: 20 }, cliente,
+            endereco_faturamento: cliente ? { endereco: 'Rua Teste', numero: '10' } : null
+        } },
+        document: { getElementById: id => id === 'secao-faturamento' ? secao : null },
+        registrarSecao() {}, cartaoDeFinalizacao: () => '', botaoDeAjuda: () => ''
+    };
+    vm.createContext(c);
+    vm.runInContext(codigo, c);
+    vm.runInContext(codigoSecao, c);
+    c.window.desenharSecaoFaturamento();
+    assert.ok(secao.innerHTML.includes('<strong>'
+        + (cliente ? cliente.fantasia.trim() || cliente.nome : 'Não informado') + '</strong>'));
+    assert.ok(secao.innerHTML.includes(cliente ? cliente.documento : 'CPF ou CNPJ não informado'));
+    assert.ok(secao.innerHTML.includes(cliente ? 'Rua Teste, 10' : 'Endereço não informado'));
+    assert.ok(secao.innerHTML.includes('Meus Dados'));
+    assert.ok(secao.innerHTML.includes('Confirmar'));
+}
+assert.equal(chamadas.length, 0, 'exibir os dados nao grava o cadastro');
+
 const cartao = contexto.window.cartaoDeDecisaoFaturamento();
 assert.ok(cartao.includes('Confirmar'));
 assert.ok(cartao.includes('Meus Dados'));
