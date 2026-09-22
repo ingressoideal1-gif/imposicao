@@ -97,9 +97,17 @@ function ambiente() {
         assert.equal(ultimaPintura,c.state.pagamentosGlobais,'complemento rápido também é desenhado');
     }
     {
+        const {c} = ambiente(); let liberarRelogios;
+        c.carregarTemposNoCard=()=>new Promise(resolve=>{ liberarRelogios=resolve; });
+        const carga=c.loadOrdens(); await tick();
+        assert.equal(c.renders,0,'não registra transições com relógios da carga anterior');
+        liberarRelogios(); assert.equal(await carga,true);
+        assert(c.renders>0);
+    }
+    {
         const {c} = ambiente();
         const pendentes={}; const chamadas={};
-        for (const nome of ['carregarPagamentosGlobais','sincronizarStatusOrdensDinamico','garantirLinksDosPedidosNaListaArte','carregarTemposNoCard']) {
+        for (const nome of ['carregarPagamentosGlobais','sincronizarStatusOrdensDinamico','garantirLinksDosPedidosNaListaArte']) {
             chamadas[nome]=0;
             c[nome]=()=>{ chamadas[nome]++; return new Promise(r=>{pendentes[nome]=r;}); };
         }

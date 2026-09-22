@@ -22,7 +22,9 @@ Não houve consulta a pedidos reais, medição de rede na estação ou alteraç�
   carga anterior. Erro de produtos/propostas não é interpretado como lista vazia.
 - A interface indica carregamento ou falha e oferece Tentar novamente.
 - Modelos continuam necessários para o primeiro desenho, preservando critérios
-  de classificação. Pagamentos, relógios e manutenções existentes rodam depois,
+  de classificação. Relógios também são lidos antes do desenho, pois o desenho
+  registra transições de etapa e não deve calcular crédito com uma fotografia antiga.
+  Pagamentos e manutenções existentes rodam depois,
   com uma execução simultânea por tipo; não prendem a leitura principal nem
   são reiniciados às cegas enquanto uma execução anterior está pendente.
 - A reconciliação e as gravações existentes não tiveram suas regras alteradas.

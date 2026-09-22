@@ -26050,7 +26050,6 @@ function completarDadosDaLista() {
     iniciarComplementoLista('pagamentos', carregarPagamentosGlobais);
     iniciarComplementoLista('status', sincronizarStatusOrdensDinamico);
     iniciarComplementoLista('links', garantirLinksDosPedidosNaListaArte);
-    iniciarComplementoLista('tempos', carregarTemposNoCard);
 }
 
 function loadOrdens() {
@@ -26090,6 +26089,8 @@ async function carregarOrdensDados() {
         const promises = [
             carregarArtesGlobais(true),
             carregarLinksExistentes(true),
+            // O desenho registra transições: precisa da fotografia atual dos relógios.
+            carregarTemposNoCard(),
             loadUsuarios(true)
         ];
         
