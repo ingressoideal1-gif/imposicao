@@ -34881,19 +34881,23 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     </div>
                     <div style="padding: 10px;">
                         <div id="briefing-obs-preview-${prod.id}" class="briefing-obs-leitura"></div>
-                        <details class="briefing-obs-edicao">
+                        <details class="briefing-obs-edicao" ontoggle="if(this.open) BriefingEditor.abrir(this)">
                             <summary>Editar e destacar observações</summary>
-                            <p>Selecione o trecho para destacar. Sem seleção, o destaque será aplicado a todo o texto. Alterações salvas automaticamente.</p>
+                            <p>Selecione o trecho e escolha o destaque. Para alterar o texto inteiro, use Selecionar tudo.</p>
                             <div class="briefing-obs-ferramentas" role="group" aria-label="Formatação das observações">
-                                <button type="button" onmousedown="event.preventDefault()" onclick="formatarObservacaoBriefing('${prod.id}', 'bold')" title="Aplicar ou remover negrito"><strong>Negrito</strong></button>
-                                <label>Tamanho <select aria-label="Tamanho da fonte" onchange="formatarObservacaoBriefing('${prod.id}', 'fontSize', this.value); this.value = ''">
-                                    <option value="">Escolher</option><option value="3">Normal</option><option value="4">Grande</option><option value="5">Maior</option>
+                                <button type="button" data-acao="bold" aria-pressed="false" onmousedown="event.preventDefault()" onclick="BriefingEditor.formatar(this, 'bold')"><strong>Negrito</strong></button>
+                                <label>Tamanho <select aria-label="Tamanho da fonte" onchange="BriefingEditor.formatar(this, 'size', this.value)">
+                                    <option value="">Escolher</option><option value="16px">Normal</option><option value="18px">Grande</option><option value="24px">Maior</option>
                                 </select></label>
-                                <label>Cor <select aria-label="Cor do texto" onchange="formatarObservacaoBriefing('${prod.id}', 'foreColor', this.value); this.value = ''">
+                                <label>Cor <select aria-label="Cor do texto" onchange="BriefingEditor.formatar(this, 'color', this.value)">
                                     <option value="">Escolher</option><option value="#1e293b">Padrão</option><option value="#b91c1c">Vermelho</option><option value="#1d4ed8">Azul</option><option value="#047857">Verde</option><option value="#7e22ce">Roxo</option><option value="#92400e">Laranja</option>
                                 </select></label>
+                                <button type="button" onmousedown="event.preventDefault()" onclick="BriefingEditor.selecionarTudo(this)">Selecionar tudo</button>
+                                <button type="button" onmousedown="event.preventDefault()" onclick="BriefingEditor.historico(this, 'undo')">Desfazer</button>
+                                <button type="button" onmousedown="event.preventDefault()" onclick="BriefingEditor.historico(this, 'redo')">Refazer</button>
                             </div>
-                            <div id="briefing-obs-item-${prod.id}" class="briefing-obs-leitura briefing-obs-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Observações do produto" data-os-num="${osNum}" data-prod-id="${prod.id}" onmouseup="guardarSelecaoObservacaoBriefing(this)" onkeyup="guardarSelecaoObservacaoBriefing(this)" oninput="salvarEdicaoObservacaoBriefing(this)" onpaste="colarObservacaoBriefing(event, this)" ondrop="event.preventDefault()"></div>
+                            <div id="briefing-obs-item-${prod.id}" class="briefing-obs-editor" data-os-num="${osNum}" data-prod-id="${prod.id}"></div>
+                            <span class="briefing-obs-aviso" role="status" aria-live="polite"></span>
                         </details>
                     </div>
                 </div>
@@ -41181,47 +41185,6 @@ function atualizarLeituraObservacaoBriefing(prodId, valor, permitirHtml = true) 
     return resultado.texto;
 }
 
-function guardarSelecaoObservacaoBriefing(editor) {
-    const selecao = window.getSelection();
-    if (!selecao.rangeCount) return;
-    const faixa = selecao.getRangeAt(0);
-    if (editor.contains(faixa.commonAncestorContainer)) editor._briefingSelecao = faixa.cloneRange();
-}
-
-function salvarEdicaoObservacaoBriefing(editor) {
-    guardarSelecaoObservacaoBriefing(editor);
-    const seguro = criarConteudoObservacaoBriefing(editor.innerHTML).conteudo.innerHTML;
-    atualizarLeituraObservacaoBriefing(editor.dataset.prodId, seguro);
-    saveBriefingField(editor.dataset.osNum, null, seguro, true, editor.dataset.prodId);
-}
-
-function formatarObservacaoBriefing(prodId, comando, valor = null) {
-    if (!['bold', 'fontSize', 'foreColor'].includes(comando)) return;
-    const editor = document.getElementById(`briefing-obs-item-${prodId}`);
-    if (!editor) return;
-    editor.focus();
-    const selecao = window.getSelection();
-    let faixa = editor._briefingSelecao;
-    if (!faixa || faixa.collapsed || !editor.contains(faixa.commonAncestorContainer)) {
-        faixa = document.createRange();
-        faixa.selectNodeContents(editor);
-    }
-    selecao.removeAllRanges();
-    selecao.addRange(faixa);
-    // Comandos nativos preservam listas, parágrafos e o histórico de desfazer do editor.
-    document.execCommand(comando, false, valor);
-    salvarEdicaoObservacaoBriefing(editor);
-}
-
-function colarObservacaoBriefing(evento, editor) {
-    evento.preventDefault();
-    const html = evento.clipboardData.getData('text/html');
-    const texto = evento.clipboardData.getData('text/plain');
-    const seguro = criarConteudoObservacaoBriefing(html || texto, !!html).conteudo.innerHTML;
-    document.execCommand('insertHTML', false, seguro);
-    salvarEdicaoObservacaoBriefing(editor);
-}
-
 function updateBriefingUI(osId, osIntId) {
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
     const data = state.pedidosArtesData[osIntId] || {};
@@ -41266,13 +41229,7 @@ function updateBriefingUI(osId, osIntId) {
                 else if (`item_${prodId}` in obsObj) val = obsObj[`item_${prodId}`];
                 else val = item.observacoes || '';
                 
-                // Uma atualização assíncrona não deve apagar a edição em andamento.
-                if (document.activeElement !== obsEl) {
-                    const conteudo = criarConteudoObservacaoBriefing(val).conteudo;
-                    obsEl.replaceChildren(...conteudo.childNodes);
-                    obsEl._briefingSelecao = null;
-                    atualizarLeituraObservacaoBriefing(prodId, val);
-                }
+                BriefingEditor.carregar(obsEl, val);
             }
         }
     });

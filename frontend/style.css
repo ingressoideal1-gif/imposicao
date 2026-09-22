@@ -5998,3 +5998,12 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .briefing-obs-ferramentas button, .briefing-obs-ferramentas select { padding: 7px 9px; border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: #f8fafc; cursor: pointer; font: inherit; }
 .briefing-obs-ferramentas button:focus-visible, .briefing-obs-ferramentas select:focus-visible, .briefing-obs-editor:focus { outline: 2px solid #14b8a6; outline-offset: 2px; }
 .briefing-obs-editor { min-height: 130px; }
+.briefing-obs-editor.ql-container { border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; color: #1e293b; font: inherit; }
+.briefing-obs-editor .ql-editor { min-height: 160px; max-height: 480px; overflow-y: auto; padding: 12px 14px; font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
+.briefing-obs-editor .ql-editor p { color: inherit; font-size: inherit; margin: 0; }
+.briefing-obs-editor .ql-editor.ql-blank::before { color: #64748b; }
+.briefing-obs-editor .ql-editor:focus { outline: 2px solid #14b8a6; outline-offset: -2px; border-radius: 8px; }
+.briefing-obs-editor .ql-editor table { border-collapse: collapse; width: 100%; }
+.briefing-obs-editor .ql-editor td { border: 1px solid #99f6e4; padding: 4px 8px; }
+.briefing-obs-ferramentas button[aria-pressed="true"] { background: #0f766e; border-color: #5eead4; }
+.briefing-obs-aviso { display: block; margin-top: 8px; color: #cbd5e1; font-size: .78rem; min-height: 1.4em; }
