@@ -37,9 +37,32 @@ uma falha preexistente foi reproduzida no HEAD base. Essa verificação recorta
 `enviarParaPedido` no primeiro `setTimeout`, antes da linha que efetivamente
 trava o modelo, e por isso não encontra a instrução. Não foi alterada nesta tarefa.
 
-Entrega local no worktree `C:/ProjetosLocais/ideal-imposition-quantidade-erp`.
-Sem publicação, alteração remota ou correção do registro 1001056.
+Implementação no worktree `C:/ProjetosLocais/ideal-imposition-quantidade-erp`.
+Publicação v933 concluída conforme a comprovação abaixo. Sem alteração de dados
+remotos ou correção do registro 1001056.
 O 8 persistido continua exigindo reconciliação com a origem efetiva da tela do
 ERP e/ou auditoria. Recarregar `pedidos_modelos` ainda retorna 8 nesse caso;
 a correção de cache não repara o dado de origem nem comprova sincronização com
 outra fonte. Não há prova de quantidade física impressa.
+
+## Publicação autorizada e comprovada
+
+Após o pedido explícito "publicar", o fluxo `entrega-segura.ps1 publicar
+-Escopo Frontend -Integracao Direta` integrou o commit
+`bcf793cb1ebbaaea28ff4790fa5d69978fc52d7c`, tag `v933`, em `origin/main`.
+Os dois harnesses foram executados novamente pelo fluxo antes do commit,
+incluindo as 52 verificações da fila. Nenhuma dependência foi instalada.
+
+Cloudflare Pages confirmou sucesso no deploy
+`4620a136-7874-4a5c-8ed2-1204c2460e98`. A primeira comparação ainda encontrou
+arquivos anteriores e o script informou `FALHA_APOS_INTEGRACAO`. Não houve
+nova publicação: depois da propagação, a conferência independente com query
+única em cada URL confirmou 12/12 hashes SHA-256 normalizados iguais ao local.
+
+Domínios: `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`.
+Arquivos em cada um: `/`, `/producao.html`, `/cliente.html`, `/controle.html`,
+`/pedido.js?v=933` e `/script.js?v=933`.
+
+Evidência: [comparação pública v933](evidencias/quantidade-erp-v933-public-verification.json).
+Estado final da entrega web: `PUBLICADA_E_VERIFICADA`.
+O checkout operacional foi preservado. NewProd não foi distribuído.

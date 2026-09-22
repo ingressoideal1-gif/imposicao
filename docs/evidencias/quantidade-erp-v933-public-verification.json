@@ -1,0 +1,103 @@
+{
+  "version": "v933",
+  "commit": "bcf793cb1ebbaaea28ff4790fa5d69978fc52d7c",
+  "checked_at": "2026-09-22T15:31:00.5156349+00:00",
+  "results": [
+    {
+      "url": "https://imposition.ai-ideal.com.br/cliente.html?_verificacao=1790091054891",
+      "asset": "/cliente.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "fb5f2044ecf127d6fb003cff06ab9e738733c4b5d490699df70069b3124f105d",
+      "public_sha256": "fb5f2044ecf127d6fb003cff06ab9e738733c4b5d490699df70069b3124f105d"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/controle.html?_verificacao=1790091055508",
+      "asset": "/controle.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "6cc916e13f0f156308c4f827c2292903e17a5922d539079286eb88afde7edc04",
+      "public_sha256": "6cc916e13f0f156308c4f827c2292903e17a5922d539079286eb88afde7edc04"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/?_verificacao=1790091055980",
+      "asset": "/",
+      "status": 200,
+      "match": true,
+      "local_sha256": "4f620e91b7b91497ad596fd3898e1c6a067524c40865156062153e032cf5b6a8",
+      "public_sha256": "4f620e91b7b91497ad596fd3898e1c6a067524c40865156062153e032cf5b6a8"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/pedido.js?v=933&_verificacao=1790091056583",
+      "asset": "/pedido.js?v=933",
+      "status": 200,
+      "match": true,
+      "local_sha256": "7f773e415c56462ce43a3f4bc35334aecbdfe664f1574e4547889bbee44d723c",
+      "public_sha256": "7f773e415c56462ce43a3f4bc35334aecbdfe664f1574e4547889bbee44d723c"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/producao.html?_verificacao=1790091057144",
+      "asset": "/producao.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "856a92a3efde786bb8ded7646ec56ec27f7e3e6c97c2afa459ec558d951196bb",
+      "public_sha256": "856a92a3efde786bb8ded7646ec56ec27f7e3e6c97c2afa459ec558d951196bb"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/script.js?v=933&_verificacao=1790091057702",
+      "asset": "/script.js?v=933",
+      "status": 200,
+      "match": true,
+      "local_sha256": "2ecdcd1d3e1734653a7c3b82fa213bf59b529c9768415309bdaa94ad7e5f28f7",
+      "public_sha256": "2ecdcd1d3e1734653a7c3b82fa213bf59b529c9768415309bdaa94ad7e5f28f7"
+    },
+    {
+      "url": "https://imposicao.pages.dev/cliente.html?_verificacao=1790091058786",
+      "asset": "/cliente.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "fb5f2044ecf127d6fb003cff06ab9e738733c4b5d490699df70069b3124f105d",
+      "public_sha256": "fb5f2044ecf127d6fb003cff06ab9e738733c4b5d490699df70069b3124f105d"
+    },
+    {
+      "url": "https://imposicao.pages.dev/controle.html?_verificacao=1790091059062",
+      "asset": "/controle.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "6cc916e13f0f156308c4f827c2292903e17a5922d539079286eb88afde7edc04",
+      "public_sha256": "6cc916e13f0f156308c4f827c2292903e17a5922d539079286eb88afde7edc04"
+    },
+    {
+      "url": "https://imposicao.pages.dev/?_verificacao=1790091059273",
+      "asset": "/",
+      "status": 200,
+      "match": true,
+      "local_sha256": "4f620e91b7b91497ad596fd3898e1c6a067524c40865156062153e032cf5b6a8",
+      "public_sha256": "4f620e91b7b91497ad596fd3898e1c6a067524c40865156062153e032cf5b6a8"
+    },
+    {
+      "url": "https://imposicao.pages.dev/pedido.js?v=933&_verificacao=1790091059528",
+      "asset": "/pedido.js?v=933",
+      "status": 200,
+      "match": true,
+      "local_sha256": "7f773e415c56462ce43a3f4bc35334aecbdfe664f1574e4547889bbee44d723c",
+      "public_sha256": "7f773e415c56462ce43a3f4bc35334aecbdfe664f1574e4547889bbee44d723c"
+    },
+    {
+      "url": "https://imposicao.pages.dev/producao.html?_verificacao=1790091059765",
+      "asset": "/producao.html",
+      "status": 200,
+      "match": true,
+      "local_sha256": "856a92a3efde786bb8ded7646ec56ec27f7e3e6c97c2afa459ec558d951196bb",
+      "public_sha256": "856a92a3efde786bb8ded7646ec56ec27f7e3e6c97c2afa459ec558d951196bb"
+    },
+    {
+      "url": "https://imposicao.pages.dev/script.js?v=933&_verificacao=1790091059999",
+      "asset": "/script.js?v=933",
+      "status": 200,
+      "match": true,
+      "local_sha256": "2ecdcd1d3e1734653a7c3b82fa213bf59b529c9768415309bdaa94ad7e5f28f7",
+      "public_sha256": "2ecdcd1d3e1734653a7c3b82fa213bf59b529c9768415309bdaa94ad7e5f28f7"
+    }
+  ]
+}
