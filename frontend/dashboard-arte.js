@@ -18,6 +18,16 @@
     };
 
     let periodoDias = 7;
+    let paginaArtesProntas = 1;
+    let assinaturaArtesProntas = '';
+    const ARTES_PRONTAS_POR_PAGINA = 50;
+    const STATUS_DE_ARTE_PRONTA = new Set([
+        'ENVIAR ARTE', 'ARTE PRONTA',
+        'EM APROVAÇÃO', 'EM APROVACAO', 'AGUARDANDO_APROVACAO',
+        'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO',
+        'DADOS PENDENTES', 'APROVADO', 'APROVADA',
+        'ARTE APROVADA', 'ARTE_APROVADA'
+    ]);
 
     function numero(valor) {
         const n = Number(valor);
@@ -69,6 +79,13 @@
         return Math.max(0, Math.floor((agoraMs - desde) / 1000) + numero(registro.credito_segundos));
     }
 
+    function pedidoTemArtePronta(pedido) {
+        if (!pedido || pedido.cancelado) return false;
+        if (pedido.fila === 'concluidos' || pedido.fila === 'aprovados') return true;
+        const status = String(pedido.os.status_calculado || pedido.os.status || '').trim().toUpperCase();
+        return STATUS_DE_ARTE_PRONTA.has(status);
+    }
+
     function calcularMetricasDashboardArte(entrada) {
         const agora = new Date(entrada.agora || Date.now());
         const agoraMs = agora.getTime();
@@ -80,6 +97,7 @@
         const fimAnterior = new Date(inicio);
         const filtroDesigner = String(entrada.filtroDesigner || '');
         const filtroAtendente = String(entrada.filtroAtendente || '');
+        const buscaArtePronta = String(entrada.buscaArtePronta || '').trim().toLocaleLowerCase('pt-BR');
         const tempos = entrada.tempos || {};
         const produtosPorPedido = {};
         (entrada.produtos || []).forEach(produto => {
@@ -138,6 +156,13 @@
             const data = new Date(p.os.created_at || p.os.data_liberacao || '');
             return Number.isFinite(data.getTime()) && dentro(data);
         }).length;
+        const artesProntas = pedidos.filter(pedidoTemArtePronta).filter(p => {
+            if (!buscaArtePronta) return true;
+            const produtosDoPedido = (p.produtos || []).map(produto => produto.nome_produto || '').join(' ');
+            return [p.chave, p.os.cliente, p.os.cliente_nome, p.designer, p.atendente,
+                p.os.status_calculado, p.os.status, produtosDoPedido]
+                .some(valor => String(valor || '').toLocaleLowerCase('pt-BR').includes(buscaArtePronta));
+        }).sort((a, b) => numero(b.os.numero) - numero(a.os.numero));
 
         const pontos = [];
         for (let i = 0; i < dias; i++) {
@@ -257,6 +282,7 @@
             ativos,
             alteracoes: pedidos.filter(p => String(p.os.status_calculado || '').toUpperCase() === 'EM ALTERAÇÃO').length,
             emAprovacao: pedidos.filter(p => p.fila === 'aprovacao').length,
+            artesProntas,
             media: media(duracoes),
             mediana: mediana(duracoes),
             mediaBacklog: media(temposAtivos),
@@ -330,11 +356,42 @@
             </tr>`).join('')}</tbody></table></div>`;
     }
 
+    function statusDaArtePronta(pedido) {
+        if (pedido.fila === 'concluidos') return 'Concluído';
+        if (pedido.fila === 'aprovados') return 'Aprovado';
+        return pedido.os.status_calculado || pedido.os.status || 'Arte pronta';
+    }
+
+    function tabelaArtesProntas(itens, total, pagina, totalPaginas) {
+        if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum pedido com arte pronta encontrado neste recorte.</div>';
+        const linhas = itens.map(pedido => {
+            const produtos = [...new Set((pedido.produtos || []).map(produto => String(produto.nome_produto || '').trim()).filter(Boolean))];
+            return `<tr>
+                <td><strong>#${escapar(pedido.os.numero)}</strong></td>
+                <td>${escapar(pedido.os.cliente || pedido.os.cliente_nome || '--')}</td>
+                <td>${escapar(produtos.join(', ') || '--')}</td>
+                <td>${escapar(pedido.designer)}</td>
+                <td>${escapar(pedido.atendente)}</td>
+                <td><span class="badge">${escapar(statusDaArtePronta(pedido))}</span></td>
+            </tr>`;
+        }).join('');
+        const anterior = pagina > 1
+            ? `<button type="button" class="btn btn-sm btn-ghost" onclick="irParaPaginaArtesProntas(${pagina - 1})">← Anteriores</button>` : '';
+        const proxima = pagina < totalPaginas
+            ? `<button type="button" class="btn btn-sm btn-ghost" onclick="irParaPaginaArtesProntas(${pagina + 1})">Próximos →</button>` : '';
+        return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Produto</th><th>Designer</th><th>Atendente</th><th>Status</th></tr></thead>
+            <tbody>${linhas}</tbody>
+        </table></div>
+        <div class="dashboard-arte-paginacao">${anterior}<span>Página <strong>${pagina}</strong> de <strong>${totalPaginas}</strong> · ${total} pedido(s)</span>${proxima}</div>`;
+    }
+
     function renderDashboardArte() {
         const raiz = document.getElementById('dashboard-arte-conteudo');
         if (!raiz || typeof state === 'undefined') return;
         const filtroDesigner = document.getElementById('os-filter-designer')?.value || '';
         const filtroAtendente = document.getElementById('os-filter-atendente')?.value || '';
+        const buscaArtePronta = document.getElementById('os-search-arte')?.value || '';
         const ordens = (state.ordens || []).map(os => Object.assign({}, os, {
             ignorado: typeof pedidoIgnoradoNosPaineis === 'function' && pedidoIgnoradoNosPaineis(os)
         }));
@@ -346,6 +403,7 @@
             dias: periodoDias,
             filtroDesigner,
             filtroAtendente,
+            buscaArtePronta,
             agora: new Date(),
             obterDesigner: os => typeof getOSDesigner === 'function' ? getOSDesigner(os.id, os.numero) : '',
             obterAtendente: os => typeof getOSVendedor === 'function' ? getOSVendedor(os.id) : (os.vendedor || '')
@@ -366,6 +424,15 @@
         const maiorPonto = Math.max(1, ...metricas.pontos.map(p => p.valor));
         const maiorFluxo = Math.max(1, ...metricas.fluxo.map(p => p.valor));
         const colunas = Math.min(metricas.pontos.length, 30);
+        const novaAssinatura = JSON.stringify([filtroDesigner, filtroAtendente, buscaArtePronta]);
+        if (assinaturaArtesProntas !== novaAssinatura) {
+            assinaturaArtesProntas = novaAssinatura;
+            paginaArtesProntas = 1;
+        }
+        const totalPaginasArtesProntas = Math.max(1, Math.ceil(metricas.artesProntas.length / ARTES_PRONTAS_POR_PAGINA));
+        paginaArtesProntas = Math.min(Math.max(1, paginaArtesProntas), totalPaginasArtesProntas);
+        const inicioArtesProntas = (paginaArtesProntas - 1) * ARTES_PRONTAS_POR_PAGINA;
+        const artesProntasNaPagina = metricas.artesProntas.slice(inicioArtesProntas, inicioArtesProntas + ARTES_PRONTAS_POR_PAGINA);
         raiz.innerHTML = `
             <div class="dashboard-arte-kpis">
                 ${kpi('Pedidos finalizados', metricas.concluidos.length, variacao(metricas.concluidos.length, metricas.concluidosAnteriores.length), true)}
@@ -415,6 +482,12 @@
                 ${tabelaProdutos(metricas.produtos)}
             </article>
 
+            <article class="dashboard-arte-painel" id="dashboard-arte-pedidos-prontos" style="margin-top:14px">
+                <h3>Pedidos com arte pronta</h3>
+                <p class="dashboard-arte-painel-sub">${metricas.artesProntas.length} pedido(s), independentemente do período selecionado e incluindo os que já foram concluídos.</p>
+                ${tabelaArtesProntas(artesProntasNaPagina, metricas.artesProntas.length, paginaArtesProntas, totalPaginasArtesProntas)}
+            </article>
+
             <div class="dashboard-arte-cobertura"><span>ℹ️</span><span><strong>Cobertura dos tempos: ${metricas.cobertura} de ${metricas.concluidos.length} finalizado(s).</strong>
                 O dashboard só contabiliza como finalização a transição observada saindo de “Em Arte”; pedidos históricos descobertos já concluídos não viram produção do dia. “Em alteração” é a carga atual; uma taxa histórica de retrabalho exigirá registrar cada transição.</span></div>`;
     }
@@ -424,7 +497,14 @@
         renderDashboardArte();
     }
 
-    global.DashboardArte = { calcularMetricasDashboardArte, segundosEmArteAgora, media, mediana };
+    function irParaPaginaArtesProntas(pagina) {
+        paginaArtesProntas = Math.max(1, parseInt(pagina, 10) || 1);
+        renderDashboardArte();
+        document.getElementById('dashboard-arte-pedidos-prontos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    global.DashboardArte = { calcularMetricasDashboardArte, segundosEmArteAgora, pedidoTemArtePronta, media, mediana };
     global.renderDashboardArte = renderDashboardArte;
     global.setPeriodoDashboardArte = setPeriodoDashboardArte;
+    global.irParaPaginaArtesProntas = irParaPaginaArtesProntas;
 })(typeof window !== 'undefined' ? window : globalThis);

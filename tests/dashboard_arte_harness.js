@@ -10,7 +10,8 @@ const ordens = [
     { id: 'a', numero: 100, vendedor: 'Carla', _fila_arte: 'concluidos', status_calculado: 'APROVADO', created_at: '2026-09-20T08:00:00-03:00' },
     { id: 'b', numero: 101, vendedor: 'Carla', _fila_arte: 'concluidos', status_calculado: 'APROVADO', created_at: '2026-09-13T08:00:00-03:00' },
     { id: 'c', numero: 102, vendedor: 'Diego', _fila_arte: 'fila', status_calculado: 'Em Alteração', created_at: '2026-09-20T12:00:00-03:00' },
-    { id: 'd', numero: 103, vendedor: 'Diego', _fila_arte: 'concluidos', status_calculado: 'CANCELADA', created_at: '2026-09-20T10:00:00-03:00' }
+    { id: 'd', numero: 103, vendedor: 'Diego', _fila_arte: 'concluidos', status_calculado: 'CANCELADA', created_at: '2026-09-20T10:00:00-03:00' },
+    { id: 'e', numero: 104, vendedor: 'Carla', _fila_arte: 'fila', status_calculado: 'Enviar Arte', created_at: '2026-09-20T14:00:00-03:00' }
 ];
 const tempos = {
     100: { card: 'concluidos', desde: '2026-09-20T10:00:00-03:00', saiu_da_fila_em: '2026-09-20T10:00:00-03:00', credito_segundos: 5400 },
@@ -23,12 +24,14 @@ const artes = [
     { id_int: 100, designer_nome: 'Ana' },
     { id_int: 101, designer_nome: 'Ana' },
     { id_int: 102, designer_nome: 'Bia' },
-    { id_int: 103, designer_nome: 'Bia' }
+    { id_int: 103, designer_nome: 'Bia' },
+    { id_int: 104, designer_nome: 'Ana' }
 ];
 const produtos = [
     { id_int: 100, nome_produto: 'Ingresso', qtd: 500 },
     { id_int: 100, nome_produto: 'Ingresso', qtd: 250 },
-    { id_int: 102, nome_produto: 'Credencial', qtd: 80 }
+    { id_int: 102, nome_produto: 'Credencial', qtd: 80 },
+    { id_int: 104, nome_produto: 'Pulseira', qtd: 1000 }
 ];
 
 const metricas = calcular({ ordens, tempos, artes, produtos, dias: 1, agora });
@@ -37,13 +40,16 @@ assert.strictEqual(metricas.concluidos[0].chave, '100');
 assert.strictEqual(metricas.media, 5400, 'usa o tempo acumulado em Em Arte');
 assert.strictEqual(metricas.mediana, 5400);
 assert.strictEqual(Math.round(metricas.sla), 100, 'pedido de 90 minutos cumpre SLA de 2 horas');
-assert.strictEqual(metricas.ativos.length, 1);
+assert.strictEqual(metricas.ativos.length, 2);
 assert.strictEqual(metricas.mediaBacklog, 9000, 'idade atual inclui crédito anterior e trecho corrente');
 assert.strictEqual(metricas.alteracoes, 1);
 assert.strictEqual(metricas.pontos[0].valor, 1);
 assert.strictEqual(metricas.produtos[0].produto, 'Ingresso');
 assert.strictEqual(metricas.produtos[0].itens, 2);
 assert.strictEqual(metricas.produtos[0].quantidade, 750, 'soma qtd sem dividir ou converter');
+assert.deepStrictEqual(metricas.artesProntas.map(item => item.chave), ['104', '101', '100'],
+    'lista pronta inclui envio e histórico concluído sem depender do relógio');
+assert.ok(!metricas.artesProntas.some(item => item.chave === '103'), 'cancelamento não entra nas artes prontas');
 
 const ana = metricas.designers.find(item => item.designer === 'Ana');
 assert.strictEqual(ana.concluidos, 1);
@@ -60,5 +66,9 @@ assert.strictEqual(filtradas.ativos.length, 1);
 const porAtendente = calcular({ ordens, tempos, artes, produtos, dias: 7, agora, filtroAtendente: 'Diego' });
 assert.strictEqual(porAtendente.pedidos.length, 2, 'filtro do atendente também recorta o dashboard');
 assert.strictEqual(porAtendente.ativos.length, 1);
+
+const buscaHistorico = calcular({ ordens, tempos, artes, produtos, dias: 1, agora, buscaArtePronta: '101' });
+assert.deepStrictEqual(buscaHistorico.artesProntas.map(item => item.chave), ['101'],
+    'busca encontra concluído histórico fora das métricas do período');
 
 console.log('dashboard_arte_harness: ok');

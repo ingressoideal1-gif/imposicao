@@ -13,6 +13,7 @@ O card **Dashboard** é o primeiro card da Lista de Arte e troca a tabela operac
 - Ranking por designer: finalizados, produtos, média, mediana, SLA, carga ativa, alterações e aprovações.
 - Ranking por atendente: finalizados, produtos, média, mediana, SLA, carga ativa, pendências e aprovações.
 - Produção por produto: pedidos, linhas de produto, quantidade e tempo médio dos pedidos que contêm o produto.
+- Lista histórica de pedidos com arte pronta, independente do período do dashboard e incluindo pedidos já concluídos. Cancelados e ignorados não entram; busca, designer e atendente continuam filtrando a lista.
 
 O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `pedidos_artes`, `produtos_proposta` e `imposition_tempo_no_card`, já carregados pela Lista de Arte. A quantidade é a `qtd` comercial original, sem divisão ou conversão.
 
@@ -21,6 +22,8 @@ O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `ped
 Uma linha histórica encontrada pela primeira vez já em `concluidos` recebe um `desde`, mas não comprova quando o trabalho terminou. Por isso, uma finalização só entra nas métricas quando `imposition_tempo_no_card.saiu_da_fila_em` prova que o painel observou a saída de `Em Arte`. Cancelamentos não contam como produtividade.
 
 O indicador de alteração é uma fotografia atual, não uma taxa histórica de retrabalho. O banco atual guarda apenas o último card de cada pedido, não todas as transições.
+
+A lista de artes prontas não depende de `saiu_da_fila_em`: ela mostra o conjunto operacional completo. Entram pedidos em Enviar Arte, Em Aprovação, aprovados e concluídos, mesmo quando a conclusão ocorreu antes do início do relógio. O carimbo continua obrigatório apenas para métricas de produtividade por período.
 
 ## Evoluções recomendadas
 

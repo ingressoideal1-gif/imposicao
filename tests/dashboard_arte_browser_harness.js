@@ -27,6 +27,7 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
         await page.setContent(`<!doctype html><meta charset="utf-8"><body style="background:#080f1d;color:#fff;margin:24px">
             <select id="os-filter-designer"><option value="">Todos</option><option>Ana</option><option>Bia</option></select>
             <select id="os-filter-atendente"><option value="">Todos</option><option>Carla</option><option>Diego</option></select>
+            <input id="os-search-arte" value="">
             ${dashboardHtml}</body>`);
         await page.addStyleTag({ path: path.join(raiz, 'frontend', 'style.css') });
         await page.addScriptTag({ content: `
@@ -34,11 +35,11 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
             const iso = (dias, horas) => new Date(agora.getTime() - dias * 86400000 - horas * 3600000).toISOString();
             const state = {
                 ordens: [
-                    {id:'1',numero:1,vendedor:'Carla',_fila_arte:'concluidos',status_calculado:'APROVADO',created_at:iso(0,7)},
-                    {id:'2',numero:2,vendedor:'Diego',_fila_arte:'concluidos',status_calculado:'APROVADO',created_at:iso(1,5)},
+                    {id:'1',numero:1,cliente:'Cliente Um',vendedor:'Carla',_fila_arte:'concluidos',status_calculado:'APROVADO',created_at:iso(0,7)},
+                    {id:'2',numero:2,cliente:'Cliente Dois',vendedor:'Diego',_fila_arte:'concluidos',status_calculado:'APROVADO',created_at:iso(1,5)},
                     {id:'3',numero:3,vendedor:'Carla',_fila_arte:'fila',status_calculado:'Em Arte',created_at:iso(0,3)},
                     {id:'4',numero:4,vendedor:'Diego',_fila_arte:'fila',status_calculado:'Em Alteração',created_at:iso(0,4)},
-                    {id:'5',numero:5,vendedor:'Carla',_fila_arte:'aprovacao',status_calculado:'Em Aprovação',created_at:iso(2,2)}
+                    {id:'5',numero:5,cliente:'Cliente Cinco',vendedor:'Carla',_fila_arte:'aprovacao',status_calculado:'Em Aprovação',created_at:iso(2,2)}
                 ],
                 todasArtes: [
                     {id_int:1,designer_nome:'Ana'},{id_int:2,designer_nome:'Bia'},
@@ -67,7 +68,8 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
         });
 
         assert.equal(await page.$$eval('.dashboard-arte-kpi', els => els.length), 6, 'seis indicadores principais');
-        assert.equal(await page.$$eval('.dashboard-arte-tabela', els => els.length), 3, 'tabelas por designer, atendente e produto');
+        assert.equal(await page.$$eval('.dashboard-arte-tabela', els => els.length), 4, 'inclui tabela de todos os pedidos com arte pronta');
+        assert.equal(await page.$$eval('#dashboard-arte-pedidos-prontos tbody tr', els => els.length), 3, 'lista prontos e concluídos');
         assert.ok(await page.$$eval('.dashboard-arte-barra-col', els => els.length) >= 7, 'série diária desenhada');
         assert.match(await page.$eval('#dashboard-arte-periodo-texto', el => el.textContent), /Toda a equipe/);
 
@@ -78,6 +80,7 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
         await page.select('#os-filter-atendente', 'Carla');
         await page.evaluate(() => renderDashboardArte());
         assert.match(await page.$eval('#dashboard-arte-periodo-texto', el => el.textContent), /Ana · Carla/);
+        assert.equal(await page.$$eval('#dashboard-arte-pedidos-prontos tbody tr', els => els.length), 2, 'filtros também recortam artes prontas');
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         const largura = await page.$eval('#dashboard-arte', el => ({ scroll: el.scrollWidth, client: el.clientWidth }));
