@@ -5395,7 +5395,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('QTD')}
                             <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="Qtd"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"${travaCampo}
+                                readonly aria-readonly="true" data-trancado="1" title="Quantidade definida pelo ERP"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -7404,6 +7404,7 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
 }
 
 async function pedQueueUpdateField(itemId, osId, field, value) {
+    if (field === 'qtd' || field === 'quantidade') return;
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;

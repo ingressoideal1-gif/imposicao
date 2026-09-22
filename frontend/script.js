@@ -27131,8 +27131,41 @@ window.sincronizarAprovacaoProdutosPrateleira = sincronizarAprovacaoProdutosPrat
 window.repararProdutosPrateleiraDosItens = repararProdutosPrateleiraDosItens;
 
 /**
- * Carrega os itens de uma OS específica
+ * Atualiza a tiragem por modelo sem substituir artes e amostras em memória.
  */
+async function atualizarQuantidadesDoERP(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) return;
+    const { data, error } = await supabaseClient.from('pedidos_modelos')
+        .select('id,quantidade,numeracao_inicio,numeracao_fim')
+        .eq('id_int', Number(numero));
+    if (error) throw error;
+    // Valida o conjunto antes de modificar o cache. Vazio não confirma tiragem.
+    const pares = itens.map(item => {
+        const linhas = (data || []).filter(m => String(m.id) === String(item._pedidoModeloId || item.id));
+        const modelo = linhas[0];
+        if (linhas.length !== 1 || modelo.quantidade == null
+                || !Number.isSafeInteger(Number(modelo.quantidade)) || Number(modelo.quantidade) < 0) {
+            throw new Error('Não foi possível confirmar a quantidade do modelo ' + item.id + ' no ERP.');
+        }
+        return [item, modelo];
+    });
+    for (const [item, modelo] of pares) {
+        const aplicar = destino => {
+            destino.qtd = Number(modelo.quantidade);
+            destino.quantidade = Number(modelo.quantidade);
+            destino.num_inicial = destino.numeracao_inicio = modelo.numeracao_inicio;
+            destino.num_final = destino.numeracao_fim = modelo.numeracao_fim;
+        };
+        aplicar(item);
+        for (const copia of (state.modelosGlobais?.[numero] || [])) {
+            if (String(copia.id) === String(modelo.id)) aplicar(copia);
+        }
+    }
+}
+
+/** Carrega os itens de uma OS específica. */
 async function loadOSItens(osId) {
     try {
         if (!state._loadingOSItens) state._loadingOSItens = {};
@@ -27247,7 +27280,7 @@ async function loadOSItens(osId) {
                             gabarito_operacional: resolvedGabarito,
                             numeracao_id: resolvedNumId || null,
                             tipo_numeracao: item.tipo_numeracao || item.gabarito_operacional || null,
-                            qtd: item.quantidade || item.qtd || 0,
+                            qtd: item.quantidade ?? item.qtd ?? 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
                             verso: itemVerso,
@@ -27397,6 +27430,9 @@ async function loadOSItens(osId) {
                 }
             }
         }
+
+        // Mesmo com artes/amostras em cache, a tiragem continua vindo do ERP.
+        if (!needsFullLoad && os.numero) await atualizarQuantidadesDoERP(osId, os.numero);
 
         // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
         if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
@@ -32023,6 +32059,8 @@ function matchNumeracao(numText, formatoId) {
  * Auto-salva um campo do item da OS (formato_id, cor_id, numeracao_id)
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
+    // A quantidade de cada modelo pertence ao ERP, inclusive depois da arte pronta.
+    if (field === 'qtd' || field === 'quantidade') return;
     try {
         if (state.osItens[osId]) {
             const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
@@ -32156,6 +32194,7 @@ window.agendarRedesenhoDasFilas = agendarRedesenhoDasFilas;
  * Salva um campo do item ativo atualmente selecionado na imposição
  */
 async function saveActiveOSItemField(field, value) {
+    if (field === 'qtd' || field === 'quantidade') return;
     if (state.activeOSItem) {
         const { itemId, osId } = state.activeOSItem;
         const itens = state.osItens[osId] || [];
@@ -32240,14 +32279,13 @@ function onImposicaoSaidaChange(value) {
 window.onImposicaoSaidaChange = onImposicaoSaidaChange;
 
 function onImposicaoStartInput(value) {
+    // Faixa deste PDF/trabalho: não altera o modelo comercial.
     updateImpSummary();
-    saveActiveOSItemField('num_inicial', value);
 }
 window.onImposicaoStartInput = onImposicaoStartInput;
 
 function onImposicaoEndInput(value) {
     updateImpSummary();
-    saveActiveOSItemField('num_final', value);
 }
 window.onImposicaoEndInput = onImposicaoEndInput;
 
@@ -33115,7 +33153,7 @@ function renderImpOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">QTD</span>
                             <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
-                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                                readonly aria-readonly="true" title="Quantidade definida pelo ERP"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -33343,6 +33381,7 @@ function impQueueUpdateNum(itemId, osId, numId) {
 
 /** Atualiza um campo genérico (NI, NF, QTD ou Numeração) do item */
 async function impQueueUpdateField(itemId, osId, field, value) {
+    if (field === 'qtd' || field === 'quantidade') return;
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
@@ -36745,6 +36784,10 @@ function resolveItemCorNumIds(item, itemIdx = null) {
 window.resolveItemCorNumIds = resolveItemCorNumIds;
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
+    // Salvar uma arte não pode devolver ao ERP uma quantidade antiga do cache.
+    dataToUpdate = { ...dataToUpdate };
+    delete dataToUpdate.qtd;
+    delete dataToUpdate.quantidade;
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));

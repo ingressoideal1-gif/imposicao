@@ -16,7 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const RAIZ = path.dirname(__dirname);
-const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
+const puppeteer = require('puppeteer');
 
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
@@ -469,13 +469,15 @@ function cenario(quantos, comCamarote) {
         const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
         sel.dispatchEvent(ev);
         return {
-            liberada: !trancado(linhaLiberada, 'Cor', 'select') && !trancado(linhaLiberada, 'Quantidade', 'input'),
+            liberada: !trancado(linhaLiberada, 'Cor', 'select'),
+            quantidadeDoERP: trancado(linhaLiberada, 'Quantidade', 'input') && linhaLiberada.querySelector('td[title="Quantidade"] input').readOnly,
             outraContinuaTravada: trancado(outra, 'Cor', 'select'),
             abriu: !ev.defaultPrevented,
             cadeadoAberto: !!linhaLiberada.querySelector('.ped-cadeado.liberado'),
         };
     });
     ok(liberado.liberada, 'com a senha aceita, os campos daquele modelo abrem', liberado);
+    ok(liberado.quantidadeDoERP, 'quantidade continua somente leitura mesmo com senha da gerencia', liberado);
     ok(liberado.abriu, 'e o seletor volta a abrir a lista', liberado);
     ok(liberado.outraContinuaTravada,
        'mas SO daquele modelo: a linha vizinha continua travada', liberado);
