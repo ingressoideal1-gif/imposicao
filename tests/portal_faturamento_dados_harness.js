@@ -63,7 +63,7 @@ for (const cliente of [
     vm.runInContext(codigoSecao, c);
     c.window.desenharSecaoFaturamento();
     assert.ok(secao.innerHTML.includes('<strong>'
-        + (cliente ? cliente.fantasia.trim() || cliente.nome : 'Não informado') + '</strong>'));
+        + (cliente ? cliente.nome : 'Não informado') + '</strong>'));
     assert.ok(secao.innerHTML.includes(cliente ? cliente.documento : 'CPF ou CNPJ não informado'));
     assert.ok(secao.innerHTML.includes(cliente ? 'Rua Teste, 10' : 'Endereço não informado'));
     assert.ok(secao.innerHTML.includes('Meus Dados'));
