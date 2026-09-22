@@ -100,13 +100,52 @@ function casadaDe(r, nome) {
     ok(r.semFoto.length === 1 && r.semFoto[0] === 1, 'a linha sem foto aparece pelo indice', r);
 })();
 
-// ─── 7. Sugestao aproximada: oferece, nunca aplica ────────────────────────────
+// ─── 7. Aproximacao: melhor par unico pode ser associado ─────────────────────
 
 (function sugestao() {
     const linhas = [{ Nome: 'Ana Cristina' }];
     const r = lib.casarFotos([arq('ana cristna.jpg')], linhas, ['Nome']);
-    ok(r.casadas.length === 0, 'parecido nao e igual: nao casa sozinho', r);
-    ok(r.ambiguas.length === 1 && r.ambiguas[0].regra === 'sugestao', 'vira sugestao', r.ambiguas);
+    ok(r.casadas.length === 1, 'uma letra faltando casa automaticamente', r);
+    ok(r.casadas[0]?.regra === 'aproximado', 'identifica a associacao aproximada', r);
+})();
+
+(function aproximacaoComExtensao() {
+    const r = lib.casarFotos([arq('ana cristna.jpg')], [{ Foto: 'Ana Cristina.jpeg' }], ['Foto']);
+    ok(r.casadas.length === 1, 'compara nomes sem extensao nos dois lados', r);
+})();
+
+(function extensaoDuplicadaPedeConfirmacao() {
+    [['Bruno.png.png', 'Bruno.png'], ['Bruno.png', 'Bruno.png.png'], ['ana cristina.jpg.jpg', 'ana cristina.jpg']].forEach(([arquivo, valor]) => {
+        const r = lib.casarFotos([arq(arquivo)], [{ Foto: valor }], ['Foto']);
+        ok(r.casadas.length === 0, 'extensao duplicada nao associa automaticamente: ' + arquivo, r);
+        ok(r.ambiguas.length === 1 && r.ambiguas[0].linhas[0] === 0, 'extensao duplicada oferece a linha para confirmar', r);
+    });
+})();
+
+(function empateAproximado() {
+    const linhas = [{ Foto: 'mariana.jpg' }, { Foto: 'mariane.jpg' }];
+    const r = lib.casarFotos([arq('mariani.jpg')], linhas, ['Foto']);
+    ok(r.casadas.length === 0, 'empate entre pessoas exige conferencia', r);
+    const disputa = lib.casarFotos([arq('mariani.jpg'), arq('mariano.jpg')], [linhas[0]], ['Foto']);
+    ok(disputa.casadas.length === 0, 'empate entre fotos exige conferencia', disputa);
+})();
+
+(function melhorParIndependeDaOrdem() {
+    const arquivos = [arq('ana cristna.jpg'), arq('ana cristin.jpg')];
+    const linhas = [{ Foto: 'ana cristina.jpg' }, { Foto: 'ana cristino.jpg' }];
+    const assinatura = r => r.casadas.map(c => c.arquivo + ':' + c.linha).sort();
+    const a = lib.casarFotos(arquivos, linhas, ['Foto']);
+    const b = lib.casarFotos(arquivos.slice().reverse(), linhas, ['Foto']);
+    ok(JSON.stringify(assinatura(a)) === JSON.stringify(assinatura(b)), 'ordem do lote nao desempata', { a, b });
+})();
+
+(function limitesAproximados() {
+    [['foto12345.jpg', 'foto12346.jpg'], ['12345.jpg', '12346.jpg'], ['ana.jpg', 'anu.jpg'], ['zelia.jpg', 'bruno.jpg']].forEach(([arquivo, valor]) => {
+        const r = lib.casarFotos([arq(arquivo)], [{ Foto: valor }], ['Foto']);
+        ok(r.casadas.length === 0, 'nao aproxima codigo diferente, nome curto ou distante: ' + arquivo, r);
+    });
+    const r = lib.casarFotos([arq('ana cristna.jpg')], [{ Foto: 'ana cristina.jpg', __ativo: false }], ['Foto']);
+    ok(r.casadas.length === 0, 'aproximacao respeita linha inativa', r);
 })();
 
 // ─── 8. Varias colunas: a primeira que resolver vale ──────────────────────────

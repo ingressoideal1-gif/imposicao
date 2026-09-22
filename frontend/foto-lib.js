@@ -147,13 +147,23 @@
     // `CPF 123.456.789-00.png`, `IMG_4471.jpg`. É a etapa em que todo sistema do
     // mercado — BarTender, NiceLabel, cardPresso, Express Badging — resolve o
     // que dá por nome de arquivo e joga o resto numa lista para o operador
-    // resolver na mão. A regra inegociável: **na dúvida, não escolher**. Uma
-    // credencial com a foto trocada só é descoberta pelo cliente.
+    // resolver na mão. Nomes aproximados podem casar quando o melhor par é
+    // único dos dois lados; empates continuam para conferência.
 
     var SEM_EXT = /\.(jpe?g|png|webp|bmp|gif|tiff?|heic|heif)$/i;
 
     function semExtensao(nome) {
         return String(nome || '').replace(SEM_EXT, '');
+    }
+
+    function temExtensaoDuplicada(nome) {
+        return SEM_EXT.test(semExtensao(nome));
+    }
+
+    function semExtensoes(nome) {
+        var atual = String(nome || ''), anterior;
+        do { anterior = atual; atual = semExtensao(atual); } while (atual !== anterior);
+        return atual;
     }
 
     function normalizarTexto(txt) {
@@ -182,7 +192,7 @@
         }
     ];
 
-    /** Distância de edição, limitada — só para sugerir, nunca para casar. */
+    /** Distância de edição para comparar nomes aproximados. */
     function distancia(a, b) {
         if (a === b) return 0;
         if (!a.length || !b.length) return Math.max(a.length, b.length);
@@ -277,29 +287,66 @@
             });
         });
 
-        // Sugestão aproximada para o que sobrou dos dois lados. Oferece, nunca aplica.
+        // Aceita pequenas diferenças quando arquivo e linha se preferem
+        // mutuamente. Calcula todos os pares antes de consumir qualquer um:
+        // a ordem do lote não pode decidir quem recebe a foto.
+        var pares = [];
+        Object.keys(arqLivre).forEach(function (ak) {
+            var a = arqLivre[ak];
+            if (temExtensaoDuplicada(a.nome)) return;
+            var alvo = normalizarTexto(semExtensao(a.nome));
+            if (alvo.length < 5 || !/[a-z]/.test(alvo)) return;
+            Object.keys(linLivre).forEach(function (lk) {
+                var l = linLivre[lk], melhorD = Infinity;
+                cols.forEach(function (col) {
+                    if (temExtensaoDuplicada(l.ref && l.ref[col])) return;
+                    var valor = normalizarTexto(semExtensao(l.ref && l.ref[col]));
+                    if (valor.length < 5 || !/[a-z]/.test(valor)) return;
+                    if (soDigitos(alvo) !== soDigitos(valor)) return;
+                    var limite = Math.min(3, Math.floor(Math.max(alvo.length, valor.length) * 0.25));
+                    if (Math.abs(alvo.length - valor.length) > limite) return;
+                    var d = distancia(alvo, valor);
+                    if (d <= limite) melhorD = Math.min(melhorD, d);
+                });
+                if (melhorD < Infinity) pares.push({ a: a, l: l, d: melhorD });
+            });
+        });
+        pares.forEach(function (p) {
+            var concorrente = pares.some(function (outro) {
+                return outro !== p && (outro.a === p.a || outro.l === p.l) && outro.d <= p.d;
+            });
+            if (concorrente) return;
+            casadas.push({ arquivo: p.a.nome, ref: p.a.ref, linha: p.l.i, regra: 'aproximado' });
+            delete arqLivre[p.a.i];
+            delete linLivre[p.l.i];
+        });
+
+        // O que não tem um melhor par único continua como sugestão manual.
         var sobrando = Object.keys(arqLivre).map(function (k) { return arqLivre[k]; });
         var semFoto = Object.keys(linLivre).map(function (k) { return linLivre[k]; });
 
         sobrando.slice().forEach(function (a) {
             var alvo = normalizarTexto(semExtensao(a.nome));
             if (!alvo) return;
-            var melhor = null, melhorD = Infinity;
+            var melhor = null, melhorD = Infinity, extensaoDuplicada = false;
             semFoto.forEach(function (l) {
                 cols.forEach(function (col) {
                     var v = l.ref ? l.ref[col] : null;
                     if (v == null || v === '') return;
-                    var d = distancia(alvo, normalizarTexto(v));
-                    if (d < melhorD) { melhorD = d; melhor = l; }
+                    var duplicada = (temExtensaoDuplicada(a.nome) || temExtensaoDuplicada(v)) &&
+                        normalizarTexto(semExtensoes(a.nome)) === normalizarTexto(semExtensoes(v));
+                    var d = distancia(alvo, normalizarTexto(semExtensao(v)));
+                    if (duplicada) d = 0;
+                    if (d < melhorD) { melhorD = d; melhor = l; extensaoDuplicada = duplicada; }
                 });
             });
             // Até 20% de diferença, e nunca mais que 3 caracteres: além disso
             // não é erro de digitação, é outra pessoa.
             var limite = Math.min(3, Math.floor(alvo.length * 0.2) + 1);
-            if (melhor && melhorD > 0 && melhorD <= limite) {
+            if (melhor && (extensaoDuplicada || (melhorD > 0 && melhorD <= limite))) {
                 ambiguas.push({
                     regra: 'sugestao',
-                    motivo: 'nome parecido, não idêntico',
+                    motivo: extensaoDuplicada ? 'nome igual com extensão duplicada' : 'nome parecido, não idêntico',
                     candidatos: [{ arquivo: a.nome, ref: a.ref }],
                     linhas: [melhor.i]
                 });
