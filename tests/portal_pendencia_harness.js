@@ -161,8 +161,8 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
 // ─── 4. A tela: quem chama quem ──────────────────────────────────────────────
 
 (function montarPortalPerguntaOndeAbrir() {
-    ok(/const abertura = secaoDeAbertura\(statusArte, inicial\);/.test(SHELL),
-        'montarPortal decide a abertura inclusive com hash');
+    ok(/const abertura = jaVisitada \? inicial : secaoDeAbertura\(statusArte, inicial\);/.test(SHELL),
+        'primeira visita aplica as etapas; F5 conserva a aba já visitada');
     ok(/anunciarAberturaAutomatica\(abertura\)/.test(SHELL),
         'e avisa o cliente quando ela nao e a Arte');
     ok(/if \(abertura !== inicial\)/.test(SHELL),

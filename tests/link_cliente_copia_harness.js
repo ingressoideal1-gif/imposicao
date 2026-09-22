@@ -287,10 +287,28 @@ teste('Lista de Arte antecipa links uma vez e preserva os existentes', async () 
     assert.deepEqual(gerados, [['vibe_novo', '100']]);
 });
 
-teste('carregamento da Lista de Arte aguarda a geração antecipada', async () => {
-    assert.ok((fonte.match(/garantirLinksDosPedidosNaListaArte\(\)\.then/g) || []).length >= 2);
-    assert.ok(/Promise\.all\(\[pagamentos, status, links\]\)/.test(fonte));
-    assert.ok(/Promise\.all\(\[modelos, pagamentos, links\]\)/.test(fonte));
+teste('carregamento da Lista de Arte agenda links como complemento sem duplicar tarefas', async () => {
+    // A carga atual é progressiva. Exercitar o agendador real substitui a
+    // antiga exigência textual de bloquear a lista em Promise.all.
+    const ctx = vm.createContext({ console, _cargaOrdensEmAndamento: false,
+        renderOrdens() {}, carregarPagamentosGlobais: async () => {},
+        sincronizarStatusOrdensDinamico: async () => {} });
+    let chamadas = 0, liberar;
+    ctx.garantirLinksDosPedidosNaListaArte = () => {
+        chamadas++;
+        return new Promise(resolve => { liberar = resolve; });
+    };
+    vm.runInContext(extrair('iniciarComplementoLista') + '\n' + extrair('completarDadosDaLista'), ctx);
+    ctx.completarDadosDaLista();
+    ctx.completarDadosDaLista();
+    await Promise.resolve();
+    assert.equal(chamadas, 1);
+    const pendente = ctx.iniciarComplementoLista.pendentes.get('links');
+    assert.ok(pendente);
+    liberar();
+    await pendente;
+    assert.equal(ctx.iniciarComplementoLista.pendentes.has('links'), false);
+    assert.ok(/completarDadosDaLista\(\);/.test(fonte), 'a carga dispara os complementos');
 });
 
 (async () => {

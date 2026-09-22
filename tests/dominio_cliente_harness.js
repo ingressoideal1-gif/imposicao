@@ -28,6 +28,7 @@ const base = source.match(/const CLIENTE_BASE_URL = '[^']+';/)[0];
                 state: { ordens: [] },
                 supabaseClient: { from: () => query },
                 temSessaoDoSupabase: async () => true,
+                lerDadosLista: async consulta => await consulta,
                 garantirLinhaDePedidoArte: async () => {},
                 generateClientToken: () => 'abc123',
             });

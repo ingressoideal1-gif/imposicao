@@ -111,7 +111,7 @@ function registrarSecao(nome, desenhista) {
  * Abre uma seção. Não recarrega a página nem refaz consulta: os dados das cinco
  * abas vieram de uma chamada só, e estão em `window.portalDados`.
  */
-function abrirSecao(nome) {
+function abrirSecao(nome, opcoes = {}) {
     if (!secaoValida(nome)) nome = 'arte';
     secaoAtual = nome;
 
@@ -142,11 +142,16 @@ function abrirSecao(nome) {
         }
     }
 
-    // `replaceState` e não `location.hash`: trocar o hash direto empilha uma
-    // entrada no histórico por aba visitada, e o botão Voltar do celular
-    // passaria a percorrer abas em vez de sair da página.
+    // Cada aba visitada entra no histórico sem alterar pedido, token ou query.
+    // Inicialização e Voltar/Avançar só substituem a entrada já existente.
     if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', window.location.pathname + '#' + nome);
+        const anterior = window.history.state || {};
+        const substituir = opcoes.substituir || anterior.idealPortalSecao === nome;
+        const novo = { ...anterior, idealPortalSecao: nome };
+        try {
+            window.history[substituir ? 'replaceState' : 'pushState'](novo, '',
+                window.location.pathname + window.location.search + '#' + nome);
+        } catch (e) { console.warn('[portal] Histórico indisponível:', e.name); }
     }
 
     // A rolagem volta ao topo: a aba nova começa do começo.
@@ -441,11 +446,21 @@ function montarPortal(statusArte) {
         botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
     });
 
-    // Uma etapa já concluída avança também quando ficou gravada no hash.
+    // A primeira visita segue a próxima etapa; F5 mantém a aba visitada nesta entrada.
     const doHash = (window.location.hash || '').replace('#', '');
     const inicial = secaoValida(doHash) ? doHash : 'arte';
-    const abertura = secaoDeAbertura(statusArte, inicial);
-    abrirSecao(abertura);
+    const jaVisitada = window.history?.state?.idealPortalSecao === inicial;
+    const abertura = jaVisitada ? inicial : secaoDeAbertura(statusArte, inicial);
+    abrirSecao(abertura, { substituir: true });
+    if (!window._portalHistoricoLigado) {
+        window._portalHistoricoLigado = true;
+        const restaurarAba = () => {
+            const nome = (window.location.hash || '').slice(1);
+            abrirSecao(secaoValida(nome) ? nome : 'arte', { substituir: true });
+        };
+        window.addEventListener('popstate', restaurarAba);
+        window.addEventListener('hashchange', restaurarAba);
+    }
     if (abertura !== inicial) anunciarAberturaAutomatica(abertura);
 
     const barra = document.getElementById('portal-abas');

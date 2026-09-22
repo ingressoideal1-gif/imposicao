@@ -4199,6 +4199,7 @@ async function alternarModeloAberto(itemId, osId) {
 
     if (jaAberto) {
         fecharJanelaDoModelo();
+        window.NavegacaoPainel?.registrar('view-pedido');
         return;
     }
     await enviarParaPedido(itemId, osId);
@@ -4206,12 +4207,13 @@ async function alternarModeloAberto(itemId, osId) {
 window.alternarModeloAberto = alternarModeloAberto;
 
 async function enviarParaPedido(itemId, osId, contexto = {}) {
+    if (typeof podeAbrirView === 'function' && !podeAbrirView('view-pedido')) return;
     if (window.isImposing || (state.pedidoSelecaoCarregando && !contexto.aindaAtual)) return;
     state.pedidoSelecaoErro = null;
-    const aindaAtual = contexto.aindaAtual || (() => true);
+    const aindaAtual = contexto.aindaAtual || window.NavegacaoPainel?.iniciarAcao() || (() => true);
     const tarefas = [];
     const agendar = (fn, ms) => {
-        if (!contexto.aindaAtual) return setTimeout(fn, ms);
+        if (!contexto.aindaAtual) return setTimeout(() => { if (aindaAtual()) fn(); }, ms);
         const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
             try { if (aindaAtual()) await fn(); resolve(); } catch (error) { reject(error); }
         }, ms));
@@ -4220,7 +4222,8 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     };
     if (!aindaAtual()) return;
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
-    const item = itens.find(i => String(i.id) === String(itemId)) || itens[0];
+    const item = itens.find(i => String(i.id) === String(itemId))
+        || (!contexto.restaurandoNavegacao ? itens[0] : null);
     if (!item) return toast('Item não encontrado.', 'error');
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
@@ -4310,8 +4313,11 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
         // showView('view-pedido') prepara a fila antes da resolução abaixo:
         // converte o formato ERP do produto para o id interno e aplica a saída.
         // A janela externa precisa da mesma etapa, sem trocar de página.
-        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+        if (typeof renderPedOSQueue === 'function') renderPedOSQueue({ somenteLeitura: !!contexto.restaurandoNavegacao });
         moverJanelaParaModelo(item.id, { rolar: true });
+    } else if (window.NavegacaoPainel) {
+        if (contexto.restaurandoNavegacao) window.NavegacaoPainel.exibir('view-pedido', aindaAtual);
+        else window.NavegacaoPainel.concluir('view-pedido', aindaAtual);
     } else if (typeof window.showView === 'function') {
         window.showView('view-pedido');
     } else {
@@ -4325,8 +4331,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     // switchTab=false para não mudar a aba
     // ====================================================================
     if (typeof enviarParaImposicao === 'function') {
-        if (contexto.aindaAtual) await enviarParaImposicao(item.id, osId, false, contexto);
-        else await enviarParaImposicao(item.id, osId, false);
+        await enviarParaImposicao(item.id, osId, false, { ...contexto, aindaAtual });
         if (!aindaAtual()) return;
     }
 
@@ -4398,7 +4403,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
-    agendar(() => { renderPedOSQueue(); }, 600);
+    agendar(() => { renderPedOSQueue({ somenteLeitura: !!contexto.restaurandoNavegacao }); }, 600);
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
     agendar(() => {
@@ -4406,7 +4411,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
         const fmtSelect = document.getElementById('ped-formato');
         const formatoId = fmtSelect ? fmtSelect.value : null;
         
-        if (!numId && item.numeracao) {
+        if (!contexto.restaurandoNavegacao && !numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
                 autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
@@ -4907,7 +4912,8 @@ window.filtrarFilaPorCor = filtrarFilaPorCor;
 
 
 
-function renderPedOSQueue() {
+function renderPedOSQueue(opcoes = {}) {
+    const somenteLeitura = opcoes.somenteLeitura || window.NavegacaoPainel?.restaurando();
     const container = document.getElementById( 'ped-os-queue' );
     const wrapper = document.getElementById( 'ped-os-queue-body' );
     if (!container || !wrapper) return;
@@ -5005,7 +5011,7 @@ function renderPedOSQueue() {
         let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
         
         // If there's a forced formato, auto-apply it to all items if missing
-        if (formatoPadraoId) {
+        if (formatoPadraoId && !somenteLeitura) {
             groupItens.forEach(item => {
                 if (String(item.formato_id) !== String(formatoPadraoId)) {
                     item.formato_id = formatoPadraoId;

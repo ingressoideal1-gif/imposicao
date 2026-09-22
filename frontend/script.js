@@ -2113,6 +2113,7 @@ async function loadAll() {
             console.log('[loadAll] Re-renderizando fila de pedidos após carregar produtos...');
             renderPedOSQueue();
         }
+        window.NavegacaoPainel?.dadosProntos();
 
     } catch (e) {
 
@@ -2310,13 +2311,7 @@ async function saveFmt() {
 
         // Redirecionar para Lista Formatos
 
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-        ativarBotaoDoMenu('view-lista-formatos');
-
-        document.getElementById('view-lista-formatos').classList.add('active');
+        window.showView('view-lista-formatos');
 
     } catch (e) { toast(e.message, 'error'); }
 
@@ -2324,7 +2319,8 @@ async function saveFmt() {
 
 
 
-function editFmt(id) {
+function editFmt(id, contexto = {}) {
+    if (!podeAbrirView('view-formatos')) return;
 
     const f = state.formatos.find(x => x.id === id);
 
@@ -2334,13 +2330,9 @@ function editFmt(id) {
 
     // Ativar view de formatos para edição
 
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-    ativarBotaoDoMenu('view-formatos');
-
-    document.getElementById('view-formatos').classList.add('active');
+    document.getElementById('fmt-id').value = f.id;
+    if (contexto.restaurandoNavegacao) window.NavegacaoPainel.exibir('view-formatos', contexto.aindaAtual);
+    else window.showView('view-formatos');
 
 
 
@@ -3390,7 +3382,8 @@ window.saveCor = saveCor;
 
 
 
-async function editCor(id) {
+async function editCor(id, contexto = {}) {
+    if (!podeAbrirView('view-cores')) return;
 
     const c = state.cores.find(x => x.id === id);
 
@@ -3400,7 +3393,9 @@ async function editCor(id) {
 
     // Redirecionar para a página Cores (de cadastro) ao editar
 
-    window.showView('view-cores');
+    document.getElementById('cor-id').value = c.id;
+    if (contexto.restaurandoNavegacao) window.NavegacaoPainel.exibir('view-cores', contexto.aindaAtual);
+    else window.showView('view-cores');
 
 
 
@@ -4157,13 +4152,7 @@ window.novaNumeracao = function () {
 
     cancelNumEdit();
 
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-    ativarBotaoDoMenu('view-numeracao');
-
-    document.getElementById('view-numeracao').classList.add('active');
+    window.showView('view-numeracao');
 
 };
 
@@ -4177,7 +4166,9 @@ window.novaNumeracao = function () {
 // verdade so. Quem chama escreve no DOM logo depois (o `#num-name` do clone),
 // entao o `await` do lado de la nao e enfeite: sem ele essas linhas correriam
 // antes de este preencher a tela.
-async function editNumeracao(id) {
+async function editNumeracao(id, contexto = {}) {
+    if (!podeAbrirView('view-numeracao')) return;
+    const aindaAtual = contexto.aindaAtual || window.NavegacaoPainel?.iniciarAcao() || (() => true);
 
     const n = state.numeracoes.find(x => String(x.id) === String(id));
 
@@ -4187,18 +4178,15 @@ async function editNumeracao(id) {
     }
 
     await garantirCsvDaNumeracao(n);
+    if (!aindaAtual()) return;
 
 
 
     // Ativar view de numeração
 
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-    ativarBotaoDoMenu('view-numeracao');
-
-    document.getElementById('view-numeracao').classList.add('active');
+    document.getElementById('num-id').value = n.id;
+    if (contexto.restaurandoNavegacao) window.NavegacaoPainel.exibir('view-numeracao', contexto.aindaAtual);
+    else window.showView('view-numeracao');
 
     // Descartar a arte de fundo da numeração aberta antes desta — sem isso,
     // editar a numeração B logo depois da A mostrava o canvas de B com a arte de A.
@@ -10161,10 +10149,7 @@ if (customState) {
         toast('Numeração customizada salva e aplicada ao pedido!', 'success');
     }
 } else {
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-    ativarBotaoDoMenu('view-catalogo');
-    document.getElementById('view-catalogo').classList.add('active');
+    window.showView('view-catalogo');
 }
 
         // Quem chamou pode precisar do id do que acabou de ser gravado — é o
@@ -21948,6 +21933,10 @@ window.telaInicialDoUsuario = telaInicialDoUsuario;
  */
 function abrirTelaInicial(role) {
     const alvo = telaInicialDoUsuario(role);
+    if (alvo && window.NavegacaoPainel) {
+        window.NavegacaoPainel.iniciar(alvo);
+        return;
+    }
     if (alvo && typeof window.showView === 'function') window.showView(alvo);
 }
 window.abrirTelaInicial = abrirTelaInicial;
@@ -22605,6 +22594,7 @@ window.handleSignOut = async function() {
     try {
         // Na estação a sessão é local; sem limpar aqui, o reload entraria de novo
         // com o mesmo operador e o botão Sair não sairia de nada.
+        window.NavegacaoPainel?.encerrarSessao();
         sessionStorage.removeItem(CHAVE_SESSAO_LOCAL);
         if (supabaseClient && supabaseClient.auth) {
             await supabaseClient.auth.signOut();
@@ -22618,6 +22608,7 @@ window.handleSignOut = async function() {
 
 // ──── Mostrar login overlay ───────────────────────────────────────────────
 function showLoginOverlay() {
+    window.NavegacaoPainel?.suspender();
     // Criar overlay dinâmico se não existir
     let overlay = document.getElementById('auth-overlay');
     if (!overlay) {
@@ -22707,6 +22698,7 @@ window.handleGoogleLogin = async function() {
     const btn = document.getElementById('btn-google-login');
     if (btn) btn.disabled = true;
     try {
+        window.NavegacaoPainel?.guardarRetornoLogin();
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: window.location.origin + window.location.pathname }
@@ -22895,6 +22887,7 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
 }
 
 function mostrarLoginLocal(liberarUICompleta) {
+    window.NavegacaoPainel?.suspender();
     let overlay = document.getElementById('auth-overlay-local');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -22955,6 +22948,7 @@ window.handleLoginLocal = async function(e) {
         const sessao = sessaoDoLogin(data, codigo);
         // sessionStorage e não localStorage: fechou o navegador, pede de novo. Numa
         // estação compartilhada, a sessão não pode sobreviver ao turno.
+        window.NavegacaoPainel?.encerrarSessao();
         sessionStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(sessao));
 
         document.getElementById('auth-overlay-local')?.classList.remove('active');
@@ -29309,6 +29303,7 @@ let _linkDiretoJaAberto = false;
  * Produção, e mandá-lo para a Lista de Arte mostraria uma lista sem ele.
  */
 function abrirPedidoDoLinkDireto() {
+    if (window.NavegacaoPainel?.ativa()) return;
     if (_linkDiretoJaAberto) return;
     const numero = pedidoDoLinkDireto();
     if (!numero) return;
@@ -32194,6 +32189,7 @@ window.agendarRedesenhoDasFilas = agendarRedesenhoDasFilas;
  * Salva um campo do item ativo atualmente selecionado na imposição
  */
 async function saveActiveOSItemField(field, value) {
+    if (window.NavegacaoPainel?.restaurando()) return;
     if (field === 'qtd' || field === 'quantidade') return;
     if (state.activeOSItem) {
         const { itemId, osId } = state.activeOSItem;
@@ -32331,6 +32327,11 @@ const globalFuzzyMatch = (a, b) => {
  */
 async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}) {
     const aindaAtual = contexto.aindaAtual || (() => true);
+    const mudarCampo = elemento => {
+        const disparar = () => elemento.dispatchEvent(new Event('change'));
+        if (contexto.restaurandoNavegacao && window.NavegacaoPainel) window.NavegacaoPainel.semGravacao(disparar);
+        else disparar();
+    };
     const agendar = (fn, ms) => setTimeout(() => { if (aindaAtual()) fn(); }, ms);
     if (!aindaAtual()) return;
     const itens = state.osItens[osId] || [];
@@ -32426,7 +32427,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
         }
         if (produtoObj && produtoObj.id_formato) {
             formatoId = produtoObj.id_formato;
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            if (!contexto.restaurandoNavegacao) autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
             console.log(`[OS→Imp] Formato matched via Produto "${produtoObj.nomeReal}" → ${formatoId}`);
         }
     }
@@ -32443,7 +32444,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     if (!formatoId && item.formato) {
         formatoId = matchFormato(item.formato);
         if (formatoId) {
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            if (!contexto.restaurandoNavegacao) autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
             console.log(`[OS→Imp] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
         }
     }
@@ -32458,13 +32459,13 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
         const fmtSelect = document.getElementById('imp-formato');
         if (fmtSelect) {
             fmtSelect.value = formatoId;
-            fmtSelect.dispatchEvent(new Event('change'));
+            mudarCampo(fmtSelect);
         }
         const pedFmtSelect = document.getElementById('ped-formato');
         if (pedFmtSelect) {
             if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
             pedFmtSelect.value = formatoId;
-            pedFmtSelect.dispatchEvent(new Event('change'));
+            mudarCampo(pedFmtSelect);
         }
 
         // Tentar match da Saída via Formato ou primeiro registro disponível
@@ -32476,12 +32477,12 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                 const saidaSelect = document.getElementById('imp-saida');
                 if (saidaSelect) {
                     saidaSelect.value = resolvedSaidaId;
-                    saidaSelect.dispatchEvent(new Event('change'));
+                    mudarCampo(saidaSelect);
                 }
                 const pedSaidaSelect = document.getElementById('ped-saida');
                 if (pedSaidaSelect) {
                     pedSaidaSelect.value = resolvedSaidaId;
-                    pedSaidaSelect.dispatchEvent(new Event('change'));
+                    mudarCampo(pedSaidaSelect);
                 }
             }, 100);
         }
@@ -32497,7 +32498,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
         if (!numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
-                autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
+                if (!contexto.restaurandoNavegacao) autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
                 console.log(`[OS→Imp] Numeração matched: "${item.numeracao}" → ${numId}`);
             }
         }
@@ -32507,7 +32508,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                 const opt = numSelect.querySelector(`option[value="${numId}"]`);
                 if (opt) {
                     numSelect.value = numId;
-                    numSelect.dispatchEvent(new Event('change'));
+                    mudarCampo(numSelect);
                 }
             }
         }
@@ -32525,13 +32526,13 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
         const printMode = document.getElementById('imp-print-mode');
         if (printMode) {
             printMode.value = modoDeVersoDoModelo(item);
-            printMode.dispatchEvent(new Event('change'));
+            mudarCampo(printMode);
         }
         if (item.blocos && item.blocos !== 'N') {
             const schemaSelect = document.getElementById('imp-schema');
             if (schemaSelect) {
                 schemaSelect.value = 'cut_stack';
-                schemaSelect.dispatchEvent(new Event('change'));
+                mudarCampo(schemaSelect);
             }
         }
         // Modo PDF vence blocos, e por isso vem depois: cada página do arquivo é um
@@ -32540,7 +32541,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
             const schemaSelect = document.getElementById('imp-schema');
             if (schemaSelect && schemaSelect.value !== 'pdf_multiple') {
                 schemaSelect.value = 'pdf_multiple';
-                schemaSelect.dispatchEvent(new Event('change'));
+                mudarCampo(schemaSelect);
             }
         }
         updateImpSummary();
@@ -32548,7 +32549,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
-    agendar(() => { renderImpOSQueue(); }, 600);
+    agendar(() => { renderImpOSQueue({ somenteLeitura: !!contexto.restaurandoNavegacao }); }, 600);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
     if (!contexto.aindaAtual) agendar(async () => {
@@ -32704,12 +32705,16 @@ function voltarAoPainelDeProducao() {
 window.voltarAoPainelDeProducao = voltarAoPainelDeProducao;
 
 async function abrirImposicaoDoPedido(osId, numeroOS) {
+    if (!podeAbrirView('view-pedido')) return;
+    const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     await loadOSItens(osId);
+    if (!aindaAtual()) return;
     // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
     // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
     // gemea no `enviarParaImposicao`.
     await recarregarNumeracoesDoPedido(osId, { comBanco: false });
+    if (!aindaAtual()) return;
 
     const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     const realOsId = osObj ? osObj.id : osId;
@@ -32795,7 +32800,8 @@ window.getPrimeiroModeloDaOS = getPrimeiroModeloDaOS;
 /**
  * Renderiza a fila de itens pendentes da OS na view de Imposição
  */
-function renderImpOSQueue() {
+function renderImpOSQueue(opcoes = {}) {
+    const somenteLeitura = opcoes.somenteLeitura || window.NavegacaoPainel?.restaurando();
     const container = document.getElementById( 'imp-os-queue' );
     const wrapper = document.getElementById( 'imp-os-queue-body' );
     if (!container || !wrapper) return;
@@ -32942,7 +32948,7 @@ function renderImpOSQueue() {
         let boxSaiSel = groupItens[0].saida_id || '';
         
         // If there's a forced formato, auto-apply it to all items if missing
-        if (formatoPadraoId) {
+        if (formatoPadraoId && !somenteLeitura) {
             groupItens.forEach(item => {
                 if (String(item.formato_id) !== String(formatoPadraoId)) {
                     item.formato_id = formatoPadraoId;
@@ -33600,8 +33606,8 @@ window.showView = function(viewId) {
         window.toggleDrawer(false);
     }
 
-    // Salvar no localStorage para persistir após F5
-    localStorage.setItem('activeView', viewId);
+    // A posição pertence ao histórico desta aba. Não altera o link público.
+    if (!document.getElementById(viewId)) return;
 
     // Trocar a view ativa
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
@@ -33621,6 +33627,8 @@ window.showView = function(viewId) {
 
     // Ativar o nav-btn correspondente, e abrir o grupo em que ele mora
     ativarBotaoDoMenu(viewId);
+
+    window.NavegacaoPainel?.registrar(viewId);
 
     // Hooks: carregar dados ao abrir certas views
     if (viewId === 'view-lista-arte') {
@@ -33724,6 +33732,8 @@ window.getOSItens = getOSItens;
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
  */
 async function navigateToAmostrasFromOS(osId) {
+    if (!podeAbrirView('view-amostras')) { avisarFaltaPermissao('view-amostras'); return; }
+    const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
     try {
         console.log('[Nav] navigateToAmostrasFromOS chamado com osId:', osId);
 
@@ -33741,6 +33751,7 @@ async function navigateToAmostrasFromOS(osId) {
             }
         }
 
+        if (!aindaAtual()) return;
         if (!os) {
             toast('Pedido não encontrado (ID: ' + osId + ')', 'error');
             return;
@@ -33766,6 +33777,7 @@ async function navigateToAmostrasFromOS(osId) {
             }
         }
 
+        if (!aindaAtual()) return;
         console.log('[Nav] Carregando itens da OS...');
         try {
             await loadOSItens(realOSId);
@@ -33781,7 +33793,9 @@ async function navigateToAmostrasFromOS(osId) {
         // dados chegam depois, um por um, e o `renderAmostrasOSItens`
         // redesenha conforme chegam -- o mesmo desenho da cobertura de
         // glifos, que ja resolvia este problema ali dentro.
+        if (!aindaAtual()) return;
         await recarregarNumeracoesDoPedido(realOSId, { comBanco: false });
+        if (!aindaAtual()) return;
         console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
 
         // Salvar o ID do pedido ativo na tela de Amostras
@@ -33789,7 +33803,9 @@ async function navigateToAmostrasFromOS(osId) {
 
         // Navegar para a view de Amostras
         console.log('[Nav] Navegando para view-amostras...');
-        if (typeof window.showView === 'function') {
+        if (window.NavegacaoPainel) {
+            window.NavegacaoPainel.concluir('view-amostras', aindaAtual);
+        } else if (typeof window.showView === 'function') {
             window.showView('view-amostras');
         } else if (typeof showView === 'function') {
             showView('view-amostras');
@@ -33804,6 +33820,7 @@ async function navigateToAmostrasFromOS(osId) {
         console.log('[Nav] Renderizando itens da OS...');
         // Renderizar os cards de itens com pequeno delay para garantir que o DOM está ativo
         setTimeout(() => {
+            if (!aindaAtual()) return;
             try {
                 renderAmostrasOSItens(realOSId);
                 console.log('[Nav] renderAmostrasOSItens concluído.');
