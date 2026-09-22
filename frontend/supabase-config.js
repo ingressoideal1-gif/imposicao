@@ -145,7 +145,7 @@ function urlDeEscritaDeFontes(sufixo) {
 
 // Propostas não usam mais o PostgREST do navegador. Cada operação é validada
 // na nuvem; sem sessão Vibe, somente a estação com operador identificado atende.
-async function requisitarPropostas(acao, corpo, recurso = 'propostas') {
+async function requisitarPropostas(acao, corpo, recurso = 'propostas', sinal = undefined) {
     const sessao = supabaseClient ? await supabaseClient.auth.getSession() : null;
     if (sessao && sessao.error) throw sessao.error;
     const token = sessao && sessao.data && sessao.data.session && sessao.data.session.access_token;
@@ -162,7 +162,7 @@ async function requisitarPropostas(acao, corpo, recurso = 'propostas') {
         headers['X-Operador-Codigo'] = operador.codigo;
     }
     const res = await fetch(`${base}/api/${recurso}/${acao}`, {
-        method: 'POST', headers, body: JSON.stringify(corpo)
+        method: 'POST', headers, body: JSON.stringify(corpo), signal: sinal
     });
     let dados;
     try { dados = await res.json(); } catch { throw new Error('Resposta invalida do servico.'); }
@@ -174,7 +174,7 @@ async function requisitarFundo(acao, corpo = {}) {
     return requisitarPropostas(acao, corpo, 'fundo');
 }
 
-async function consultarPropostas(consulta, limiteTotal, acao = 'consultar') {
+async function consultarPropostas(consulta, limiteTotal, acao = 'consultar', sinal = undefined) {
     try {
         const consultas = [];
         if (consulta.tipo === 'numeros') {
@@ -182,16 +182,28 @@ async function consultarPropostas(consulta, limiteTotal, acao = 'consultar') {
             for (let i = 0; i < ids.length; i += 200) consultas.push({ ...consulta, numeros: ids.slice(i, i + 200) });
         } else consultas.push(consulta);
         const todas = [];
-        for (const c of consultas) {
+        const lerLote = async (c) => {
+            const lote = [];
             let offset = 0;
-            while (limiteTotal === undefined || todas.length < limiteTotal) {
-                const limite = Math.min(500, limiteTotal === undefined ? 500 : limiteTotal - todas.length);
-                const linhas = await requisitarPropostas(acao, acao === 'pagamentos' ? { numeros: c.numeros, offset, limite } : { ...c, offset, limite });
+            while (limiteTotal === undefined || todas.length + lote.length < limiteTotal) {
+                if (sinal?.aborted) throw new Error('Consulta de pedidos cancelada.');
+                const limite = Math.min(500, limiteTotal === undefined ? 500 : limiteTotal - todas.length - lote.length);
+                const linhas = await requisitarPropostas(acao, acao === 'pagamentos' ? { numeros: c.numeros, offset, limite } : { ...c, offset, limite }, 'propostas', sinal);
                 if (!Array.isArray(linhas)) throw new Error('Resposta invalida ao consultar pedidos.');
                 if (!linhas.length) break;
-                todas.push(...linhas);
+                lote.push(...linhas);
                 offset += linhas.length;
             }
+            return lote;
+        };
+        // Só leituras independentes em paralelo. Com limite total, conserva o recorte sequencial.
+        const largura = limiteTotal === undefined ? 3 : 1;
+        for (let i = 0; i < consultas.length; i += largura) {
+            const lotes = await Promise.allSettled(consultas.slice(i, i + largura).map(lerLote));
+            const falha = lotes.find(r => r.status === 'rejected');
+            if (falha) throw falha.reason;
+            lotes.forEach(r => todas.push(...r.value));
+            if (limiteTotal !== undefined && todas.length >= limiteTotal) break;
         }
         return { data: todas, error: null };
     } catch (error) {

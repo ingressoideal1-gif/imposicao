@@ -25,6 +25,7 @@ function ambiente() {
         window: { location: { hostname: 'localhost' } },
         document: { hidden: false, getElementById: id => id === 'view-lista-arte' ? lista : null },
         console: { log() {}, warn() {}, error() {} },
+        setTimeout, clearTimeout, AbortController, mostrarEstadoCargaLista() {},
         setInterval: (fn, ms) => { intervalos.push({ fn, ms }); },
         atualizarRelogiosDaLista() {}, ressincronizarStatusInterno() {},
         conferirNovosPedidosDoUsuario() { chamadas.avisos++; },
@@ -44,7 +45,8 @@ function ambiente() {
     vm.runInContext([
         fonte.match(/let _cargaOrdensEmAndamento = null;/)[0],
         fonte.match(/let _relogioDaListaLigado = false;/)[0],
-        ...['loadOrdens', 'carregarOrdensDados', 'atualizarListaArteAutomaticamente',
+        ...['lerDadosLista', 'iniciarComplementoLista', 'completarDadosDaLista',
+            'loadOrdens', 'carregarOrdensDados', 'atualizarListaArteAutomaticamente',
             'ligarRelogioDaLista'].map(extrair),
     ].join('\n'), ctx);
     ctx.ligarRelogioDaLista();
@@ -99,7 +101,7 @@ function ambiente() {
     assert.equal(chamadas.fetch, 5, 'falha não deixa a trava presa');
     assert.equal(chamadas.avisos, 5);
 
-    // Caminho principal: a trava cobre pagamentos e sincronização após o primeiro desenho.
+    // Caminho principal: pagamentos pendentes não prendem as próximas leituras.
     const vibe = ambiente();
     vibe.ctx.vibeClient = { from: () => ({ select: () => ({ order: async () => {
         vibe.chamadas.produtos++;
@@ -111,15 +113,17 @@ function ambiente() {
     };
     const pagamento = pendente();
     const iniciouPagamento = pendente();
-    vibe.ctx.carregarPagamentosGlobais = () => { iniciouPagamento.resolver(); return pagamento.promessa; };
+    let cargasPagamento = 0;
+    vibe.ctx.carregarPagamentosGlobais = () => { cargasPagamento++; iniciouPagamento.resolver(); return pagamento.promessa; };
     const primeira = vibe.tick();
     await iniciouPagamento.promessa;
-    await vibe.tick();
-    assert.equal(vibe.chamadas.produtos, 1);
-    pagamento.resolver();
     await primeira;
     await vibe.tick();
-    assert.equal(vibe.chamadas.produtos, 2);
+    assert.equal(vibe.chamadas.produtos, 2, 'uma nova leitura não espera manutenção');
+    assert.equal(cargasPagamento, 1, 'a manutenção pendente não é duplicada');
+    pagamento.resolver();
+    await vibe.tick();
+    assert.equal(vibe.chamadas.produtos, 3);
     assert.equal(vibe.chamadas.fetch, 0, 'não cai no fallback quando o Vibecode responde');
     console.log('OK: atualização em 60 s, pausa fora da tela, dados novos, concorrência com botão, cargas complementares e recuperação de falha.');
 })().catch(e => { console.error(e); process.exit(1); });

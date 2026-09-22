@@ -181,7 +181,8 @@ async function navegador() {
 async function modelos() {
     let ativas = 0, max = 0;
     const liberacoes = [], lotes = [];
-    const ctx = { console: { log() {}, warn() {} },
+    const ctx = { console: { log() {}, warn() {} }, setTimeout, clearTimeout, AbortController,
+        renderOrdens() {},
         state: { ordens: Array.from({ length: 650 }, (_, i) => ({ numero: i + 1 })) },
         normalizarStatusImpressao: v => v, aplicarRegraProdutoPrateleira() {},
         sincronizarAprovacaoProdutosPrateleira: async () => {}, conferirColunasQrIdealDosPedidos() {},
@@ -192,7 +193,7 @@ async function modelos() {
             }));
         } }) }) }
     };
-    vm.createContext(ctx); vm.runInContext(extrair('carregarModelosGlobais'), ctx);
+    vm.createContext(ctx); vm.runInContext('let _cargaOrdensEmAndamento = null;\n' + ['lerDadosLista', 'iniciarComplementoLista', 'carregarModelosGlobais'].map(extrair).join('\n'), ctx);
     const carga = ctx.carregarModelosGlobais();
     assert.equal(lotes.length, 3, 'três lotes começam em paralelo');
     liberacoes.splice(0).reverse().forEach(r => r()); await tick();

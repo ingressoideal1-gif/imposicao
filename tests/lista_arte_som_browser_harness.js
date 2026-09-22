@@ -41,7 +41,7 @@ function extrair(nome) {
             window.avisos = [];
             function toast(texto) { avisos.push(texto); }
             function classificarPedidoNaArte(os) { return { fila: os.fila || 'fila', statusCalculado: os.status || 'Em Arte' }; }
-            ${['loadUsuarios', 'nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
+            ${['lerDadosLista', 'loadUsuarios', 'nomeDoUsuarioLogadoEm', 'getLoggedInDesignerName', 'getLoggedInAtendenteName',
                 'getOSDesigner', 'getOSVendedor'].map(extrair).join('\n')}
             ${fonte.slice(fonte.indexOf('const _avisosArtePorUsuario ='), fonte.indexOf('let _relogioDaListaLigado ='))}
             window.tons = 0;

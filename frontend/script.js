@@ -25985,20 +25985,101 @@ async function sincronizarPedidosProntosParaEnvio() {
  * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
  */
 let _cargaOrdensEmAndamento = null;
+// O prazo pertence à leitura, não à função que aplica os dados no estado.
+// Assim uma resposta atrasada não consegue sobrescrever a próxima tentativa.
+async function lerDadosLista(consulta, etapa, prazoMs = 30000) {
+    const controle = new AbortController();
+    let relogio;
+    try {
+        const resposta = typeof consulta === 'function' ? consulta(controle.signal)
+            : typeof consulta?.abortSignal === 'function' ? consulta.abortSignal(controle.signal) : consulta;
+        return await Promise.race([
+            Promise.resolve(resposta),
+            new Promise((_, reject) => {
+                relogio = setTimeout(() => {
+                    const erro = new Error(`A leitura de ${etapa} demorou mais que o esperado. Tente atualizar novamente.`);
+                    erro.code = 'LISTA_LEITURA_TIMEOUT';
+                    reject(erro);
+                    controle.abort();
+                }, prazoMs);
+            })
+        ]);
+    } finally {
+        clearTimeout(relogio);
+    }
+}
+
+function mostrarEstadoCargaLista(mensagem, erro = false) {
+    const lista = document.getElementById('view-lista-arte');
+    if (!lista) return;
+    let aviso = document.getElementById('lista-arte-estado-carga');
+    if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'lista-arte-estado-carga';
+        aviso.setAttribute('role', 'status');
+        aviso.style.cssText = 'padding:10px 14px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;color:var(--text);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+        aviso.appendChild(document.createElement('span'));
+        const tentar = document.createElement('button');
+        tentar.className = 'btn btn-secondary btn-sm';
+        tentar.textContent = 'Tentar novamente';
+        tentar.onclick = () => loadOrdens();
+        aviso.appendChild(tentar);
+        lista.prepend(aviso);
+    }
+    aviso.hidden = !mensagem;
+    aviso.style.display = mensagem ? 'flex' : 'none';
+    aviso.firstChild.textContent = mensagem || '';
+    aviso.lastChild.hidden = !erro;
+}
+
+function iniciarComplementoLista(nome, executar) {
+    // Uma manutenção lenta não bloqueia as leituras e não é duplicada no retry.
+    const pendentes = iniciarComplementoLista.pendentes ||= new Map();
+    if (pendentes.has(nome)) return pendentes.get(nome);
+    const tarefa = Promise.resolve().then(executar).then(() => {
+        if (_cargaOrdensEmAndamento) iniciarComplementoLista.redesenhoPendente = true;
+        else renderOrdens();
+    })
+        .catch(e => console.warn(`[Lista de Arte] ${nome}:`, e))
+        .finally(() => pendentes.delete(nome));
+    pendentes.set(nome, tarefa);
+    return tarefa;
+}
+
+function completarDadosDaLista() {
+    iniciarComplementoLista('pagamentos', carregarPagamentosGlobais);
+    iniciarComplementoLista('status', sincronizarStatusOrdensDinamico);
+    iniciarComplementoLista('links', garantirLinksDosPedidosNaListaArte);
+    iniciarComplementoLista('tempos', carregarTemposNoCard);
+}
+
 function loadOrdens() {
     // O botão, a abertura da tela e o relógio compartilham a mesma consulta.
     if (!_cargaOrdensEmAndamento) {
+        mostrarEstadoCargaLista(state.ordens?.length
+            ? 'Atualizando pedidos… Os dados anteriores permanecem disponíveis.'
+            : 'Carregando pedidos…');
         _cargaOrdensEmAndamento = carregarOrdensDados().then(ok => {
-            if (ok) conferirNovosPedidosDoUsuario();
+            if (ok) {
+                mostrarEstadoCargaLista('');
+                conferirNovosPedidosDoUsuario();
+            }
             return ok;
         }).finally(() => {
             _cargaOrdensEmAndamento = null;
+            if (iniciarComplementoLista.redesenhoPendente) {
+                iniciarComplementoLista.redesenhoPendente = false;
+                renderOrdens();
+            }
         });
     }
     return _cargaOrdensEmAndamento;
 }
 
 async function carregarOrdensDados() {
+    const anteriores = { ordens: state.ordens, osItens: state.osItens,
+        modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
+        todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData };
     try {
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
         // Isso economiza uma consulta lenta que sempre falharia.
@@ -26007,10 +26088,9 @@ async function carregarOrdensDados() {
 
         // Disparar buscas iniciais em paralelo (incluindo loadUsuarios para não bloquear o início)
         const promises = [
-            carregarArtesGlobais(),
-            carregarLinksExistentes(),
-            carregarTemposNoCard(),
-            loadUsuarios()
+            carregarArtesGlobais(true),
+            carregarLinksExistentes(true),
+            loadUsuarios(true)
         ];
         
         // Se o Vibecode estiver ativo, carregamos os produtos em paralelo (excluindo campos de imagem base64 pesados que causavam travamentos)
@@ -26020,14 +26100,19 @@ async function carregarOrdensDados() {
                 .from('produtos_proposta')
                 .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs, amostra_arte_base64, arte_url')
                 .order('created_at', { ascending: false });
-            promises.push(vibeProdutosPromise);
+            promises.push(lerDadosLista(vibeProdutosPromise, 'produtos'));
         }
         
-        const results = await Promise.all(promises);
+        // Espera todas encerrarem antes de liberar retry; nenhum escritor de estado fica órfão.
+        const encerradas = await Promise.allSettled(promises);
+        const falha = encerradas.find(r => r.status === 'rejected');
+        if (falha) throw falha.reason;
+        const results = encerradas.map(r => r.value);
         
         // Se o Vibecode estiver ativo, a resposta de produtos está na lista de resultados
         if (typeof vibeClient !== 'undefined' && vibeClient && vibeProdutosPromise) {
             const produtosResult = results[results.length - 1] || { data: [] };
+            if (produtosResult.error) throw produtosResult.error;
             const produtos = produtosResult.data || [];
             
             if (produtos.length > 0) {
@@ -26035,27 +26120,17 @@ async function carregarOrdensDados() {
                 // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
                 const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos);
                 if (loaded) {
-                    await carregarModelosGlobais().catch(e => console.warn('Erro ao carregar modelos globais:', e));
+                    await carregarModelosGlobais(true);
                     renderOrdens();
 
                     // A coluna Pagamento chega depois do primeiro desenho, de
                     // propósito: ela é informação de apoio, e segurar a tabela
                     // por ela atrasaria a lista que o atendimento abre de manhã.
                     // Enquanto não chega, a célula mostra o traço.
-                    const pagamentos = carregarPagamentosGlobais().then(() => renderOrdens())
-                        .catch(e => console.warn('Erro ao carregar pagamentos:', e));
-
-                    const status = sincronizarStatusOrdensDinamico().then(() => {
-                        renderOrdens();
-                    }).catch(e => console.warn('Erro ao sincronizar status:', e));
-
-                    const links = garantirLinksDosPedidosNaListaArte().then(() => {
-                        renderOrdens();
-                    }).catch(e => console.warn('Erro ao antecipar links da Lista de Arte:', e));
-
-                    await Promise.all([pagamentos, status, links]);
+                    completarDadosDaLista();
                     return true;
                 }
+                throw new Error('Não foi possível atualizar os pedidos do ERP. A lista anterior foi preservada.');
             }
             console.log('[OS] Vibecode sem dados, tentando fallback...');
         }
@@ -26064,7 +26139,7 @@ async function carregarOrdensDados() {
         let propostasComerciais = [];
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             try {
-                const { data: propData, error: propError } = await consultarPropostas({ tipo: 'lista' }, 2000);
+                const { data: propData, error: propError } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'lista' }, 2000, 'consultar', sinal), 'propostas', 90000);
                 if (!propError && propData) {
                     propostasComerciais = propData;
                     await aplicarNomesPreferenciaisDasPropostas(supabaseClient, propostasComerciais);
@@ -26076,10 +26151,10 @@ async function carregarOrdensDados() {
 
         // Fonte 2: Supabase do Imposition (Banco único do Vibecode)
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient
+            const { data, error } = await lerDadosLista(supabaseClient
                 .from('producao_ordens_servico')
                 .select('*, producao_os_itens(*)')
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false }), 'pedidos');
             if (error) throw error;
 
             let ordensFiltradas = data || [];
@@ -26136,9 +26211,9 @@ async function carregarOrdensDados() {
             });
         } else {
             // Fonte 3: API local (FastAPI)
-            const res = await fetch(`${API_BASE_URL}/api/ordens`);
+            const res = await lerDadosLista(sinal => fetch(`${API_BASE_URL}/api/ordens`, { signal: sinal }), 'pedidos locais');
             if (res.ok) {
-                const localData = await res.json();
+                const localData = await lerDadosLista(res.json(), 'resposta dos pedidos locais');
                 const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
                 
                 const mappedLocalData = localData.map(os => {
@@ -26190,18 +26265,17 @@ async function carregarOrdensDados() {
                     state.ordens = mappedLocalData;
                 }
             } else {
-                state.ordens = [];
+                throw new Error('Não foi possível ler os pedidos locais (HTTP ' + res.status + ').');
             }
         }
-        await sincronizarStatusOrdensDinamico();
-        const modelos = carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
-        const pagamentos = carregarPagamentosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro pagamentos:', e));
-        const links = garantirLinksDosPedidosNaListaArte().then(() => renderOrdens()).catch(e => console.warn('Erro ao antecipar links da Lista de Arte:', e));
+        await carregarModelosGlobais(true);
         renderOrdens();
-        await Promise.all([modelos, pagamentos, links]);
+        completarDadosDaLista();
         return true;
     } catch (e) {
+        Object.assign(state, anteriores);
         console.error('Erro ao carregar OS:', e);
+        mostrarEstadoCargaLista('Não foi possível atualizar os pedidos. ' + e.message, true);
         toast('Erro ao carregar Ordens de Serviço: ' + e.message, 'error');
         return false;
     }
@@ -26244,14 +26318,14 @@ async function temSessaoDoSupabase() {
 // Dominio publico dos links de aprovacao, inclusive no painel local ou legado.
 const CLIENTE_BASE_URL = 'https://imposition.ai-ideal.com.br';
 
-async function carregarLinksExistentes() {
+async function carregarLinksExistentes(exigirSucesso = false) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-    if (!await temSessaoDoSupabase()) return;
     try {
-        const { data, error } = await supabaseClient
+        if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) return;
+        const { data, error } = await lerDadosLista(supabaseClient
             .from('pedidos_links_cliente')
             .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
-            .eq('ativo', true);
+            .eq('ativo', true), 'links');
         if (error) {
             if (error.code === '42P01') return; // tabela ainda não existe
             throw error;
@@ -26268,6 +26342,7 @@ async function carregarLinksExistentes() {
         });
         console.log(`[Links] ${(data || []).length} link(s) de cliente carregado(s).`);
     } catch (e) {
+        if (exigirSucesso) throw e;
         console.warn('[Links] Erro ao carregar links existentes:', e.message);
     }
 }
@@ -26276,13 +26351,13 @@ async function carregarLinksExistentes() {
  * Busca a tabela pedidos_artes de forma global (simplificada) para 
  * montar as estatísticas reais na Lista de Arte sem depender de cliques individuais.
  */
-async function carregarArtesGlobais() {
+async function carregarArtesGlobais(exigirSucesso = false) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await lerDadosLista(supabaseClient
             .from('pedidos_artes')
             .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false }), 'artes');
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
             throw error;
@@ -26290,6 +26365,7 @@ async function carregarArtesGlobais() {
         state.todasArtes = data || [];
         console.log(`[Artes] ${state.todasArtes.length} registros de arte carregados globalmente.`);
     } catch (e) {
+        if (exigirSucesso) throw e;
         console.warn('[Artes] Erro ao carregar artes globais:', e.message);
     }
 }
@@ -26326,7 +26402,7 @@ async function carregarPagamentosGlobais() {
 
     try {
         const numeros = state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
-        const { data: todas, error } = await consultarPropostas({ tipo: 'numeros', numeros }, undefined, 'pagamentos');
+        const { data: todas, error } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'numeros', numeros }, undefined, 'pagamentos', sinal), 'pagamentos', 90000);
         if (error) throw error;
 
         state.pagamentosGlobais = {};
@@ -26392,7 +26468,7 @@ function celulaDePagamentoHtml(os) {
          + `{className:'badge badge-teal', textContent:'✅ PAGO'}));"></td>`;
 }
 
-async function carregarModelosGlobais() {
+async function carregarModelosGlobais(exigirSucesso = false) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     if (!state.ordens || state.ordens.length === 0) return;
 
@@ -26406,16 +26482,18 @@ async function carregarModelosGlobais() {
                 const inicio = proximo;
                 proximo += chunkSize;
                 const chunk = todosNumeros.slice(inicio, inicio + chunkSize);
-                const { data, error } = await supabaseClient
+                const { data, error } = await lerDadosLista(supabaseClient
                     .from('pedidos_modelos')
                     .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
-                    .in('id_int', chunk);
+                    .in('id_int', chunk), 'modelos');
                 if (error) throw error;
                 lotes[inicio / chunkSize] = data || [];
             }
         };
         // Limite pequeno: não disparar uma consulta por pedido nem saturar a rede.
-        await Promise.all(Array.from({ length: Math.min(3, Math.ceil(todosNumeros.length / chunkSize)) }, trabalhar));
+        const resultados = await Promise.allSettled(Array.from({ length: Math.min(3, Math.ceil(todosNumeros.length / chunkSize)) }, trabalhar));
+        const falha = resultados.find(r => r.status === 'rejected');
+        if (falha) throw falha.reason;
         const todosModelos = lotes.flat();
         
         state.modelosGlobais = {};
@@ -26431,10 +26509,11 @@ async function carregarModelosGlobais() {
             aplicarRegraProdutoPrateleira(m);
             state.modelosGlobais[m.id_int].push(m);
         });
-        await sincronizarAprovacaoProdutosPrateleira(todosModelos);
+        iniciarComplementoLista('prateleira', () => sincronizarAprovacaoProdutosPrateleira(todosModelos));
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
         conferirColunasQrIdealDosPedidos();
     } catch (e) {
+        if (exigirSucesso) throw e;
         console.warn('[Modelos] Erro ao carregar modelos globais:', e.message);
     }
 }
@@ -26515,10 +26594,10 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
     try {
         let produtos = produtosPreloaded;
         if (!produtos) {
-            const { data, error } = await vibeClient
+            const { data, error } = await lerDadosLista(vibeClient
                 .from('produtos_proposta')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false }), 'dados do ERP');
 
             if (error) {
                 console.error('[Vibecode] Erro ao ler produtos_proposta:', error);
@@ -26528,7 +26607,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         }
 
         if (!produtos || produtos.length === 0) return false;
-        state.produtosPropostaGlobais = produtos;
+
 
         // Buscar propostas (tabela pai) se existir e for acessível
         //
@@ -26567,8 +26646,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             });
 
             if (uniqueIdInts.length > 0) {
-                const { data: propData, error: propError } = await consultarPropostas({ tipo: 'numeros', numeros: uniqueIdInts });
-                if (!propError) guardar(propData);
+                const { data: propData, error: propError } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'numeros', numeros: uniqueIdInts }, undefined, 'consultar', sinal), 'propostas', 90000);
+                if (propError) throw propError;
+                guardar(propData);
             }
 
             // Quem o ERP já mandou para a gráfica, tendo produto ou não.
@@ -26577,13 +26657,14 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             // resposta num teto de linhas, e se um dia esta consulta encostar
             // nele o que fica de fora tem de ser o pedido mais antigo — não o
             // que a gráfica está fabricando hoje. São 82 pedidos em 01/09/2026.
-            const { data: naGraficaData, error: naGraficaErr } = await consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE });
-            if (!naGraficaErr) guardar(naGraficaData);
+            const { data: naGraficaData, error: naGraficaErr } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE }, undefined, 'consultar', sinal), 'status dos pedidos', 90000);
+            if (naGraficaErr) throw naGraficaErr;
+            guardar(naGraficaData);
 
             propostas = [...porNumero.values()];
             await aplicarNomesPreferenciaisDasPropostas(vibeClient, propostas);
         } catch (pe) {
-            console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
+            throw pe;
         }
 
         // O PRAZO DE ENTREGA mora em `propostas_os.data_termino`.
@@ -26623,10 +26704,10 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 ...propostas.map(pr => pr.id_int),
             ].filter(Boolean))];
             if (idsParaPrazo.length > 0) {
-                const { data: osData, error: osError } = await vibeClient
+                const { data: osData, error: osError } = await lerDadosLista(vibeClient
                     .from('propostas_os')
                     .select('id_int, data_termino, codigo_rastreamento')
-                    .in('id_int', idsParaPrazo);
+                    .in('id_int', idsParaPrazo), 'dados do ERP');
                 if (osError) throw osError;
                 (osData || []).forEach(linha => {
                     if (!linha) return;
@@ -26636,16 +26717,18 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 });
             }
         } catch (oe) {
+            if (oe.code === 'LISTA_LEITURA_TIMEOUT') throw oe;
             console.warn('[Vibecode] Não foi possível ler propostas_os (prazo de entrega):', oe.message || oe);
         }
 
         // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
         try {
-            const horasPorPedido = await carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido));
+            const horasPorPedido = await lerDadosLista(carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido)), 'horários dos prazos');
             for (const id of Object.keys(prazosPorPedido)) {
                 prazosPorPedido[id] = comporPrazoDoERP(prazosPorPedido[id], horasPorPedido[id]);
             }
         } catch (he) {
+            if (he.code === 'LISTA_LEITURA_TIMEOUT') throw he;
             console.warn('[Vibecode] Não foi possível ler a hora do prazo:', he.message || he);
         }
 
@@ -26758,6 +26841,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         });
 
         // Converter para array ordenado por número (desc)
+        state.produtosPropostaGlobais = produtos;
+        state.osItens = { ...state.osItens };
         state.ordens = Object.values(grouped).sort((a, b) => b.numero - a.numero);
 
         // Pré-carregar itens no formato esperado pelo Imposition
@@ -27801,23 +27886,24 @@ const DESIGNERS_LISTA = [
 /**
  * Carrega a lista de usuários da tabela usuarios do Supabase e separa por setor (Designer vs Atendente)
  */
-async function loadUsuarios() {
+async function loadUsuarios(exigirSucesso = false) {
     try {
         if (!supabaseClient) {
             console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
             return;
         }
-        const { data, error } = await supabaseClient
+        const { data, error } = await lerDadosLista(supabaseClient
             .from('usuarios')
-            .select('user_id, nome_usuario, email, setor');
+            .select('user_id, nome_usuario, email, setor'), 'usuários');
 
         if (error) {
             console.error("Erro ao carregar usuários da tabela usuarios:", error);
             // Fallback para producao_usuarios caso usuarios falhe
-            const { data: fallbackData } = await supabaseClient
+            const { data: fallbackData, error: fallbackError } = await lerDadosLista(supabaseClient
                 .from('producao_usuarios')
                 .select('nome')
-                .eq('ativo', true);
+                .eq('ativo', true), 'usuários');
+            if (fallbackError) throw fallbackError;
             if (fallbackData && fallbackData.length > 0) {
                 usuariosSupabase = fallbackData.map(u => u.nome).filter(Boolean);
             }
@@ -27867,6 +27953,7 @@ async function loadUsuarios() {
             populateAtendenteFilter();
         }
     } catch (err) {
+        if (exigirSucesso) throw err;
         console.error("Exceção ao carregar usuários:", err);
     }
 }
@@ -29879,11 +29966,11 @@ const TEMPO_VOLTA_SEM_PERDER_SEG = 60 * 60;
 async function carregarTemposNoCard() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     if (!state.temposNoCard) state.temposNoCard = {};
-    if (!await temSessaoDoSupabase()) { state.temposNoCardAtivo = false; return; }
     try {
-        const { data, error } = await supabaseClient
+        if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) { state.temposNoCardAtivo = false; return; }
+        const { data, error } = await lerDadosLista(supabaseClient
             .from('imposition_tempo_no_card')
-            .select('id_int, card, desde, credito_segundos, saiu_da_fila_em');
+            .select('id_int, card, desde, credito_segundos, saiu_da_fila_em'), 'tempos dos pedidos');
         if (error) {
             if (error.code === '42P01') { state.temposNoCardAtivo = false; return; }
             throw error;
@@ -33497,9 +33584,8 @@ window.showView = function(viewId) {
 
     // Hooks: carregar dados ao abrir certas views
     if (viewId === 'view-lista-arte') {
-        state.todasArtes = null;
-        state.modelosGlobais = null;
         if (!state.filtroFilaTipo) state.filtroFilaTipo = 'fila';
+        renderOrdens();
         loadOrdens();
     }
  else if (viewId === 'view-lista-impressao') {
