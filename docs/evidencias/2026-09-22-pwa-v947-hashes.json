@@ -1,0 +1,114 @@
+[
+  {
+    "url": "https://imposition.ai-ideal.com.br/?v=947&_verificacao=1790131085162013800",
+    "file": "index.html",
+    "local": "3dbc56d5c0a6111c1bf550448aa36dddc05d69035743bfbd322f562c539ddd1c",
+    "public": "3dbc56d5c0a6111c1bf550448aa36dddc05d69035743bfbd322f562c539ddd1c",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/controle.html?v=947&_verificacao=1790131085162572600",
+    "file": "controle.html",
+    "local": "f25cc5df913d9247474487d4a0ddbdf0164c89bbefffa1df359e2635d4b7818a",
+    "public": "f25cc5df913d9247474487d4a0ddbdf0164c89bbefffa1df359e2635d4b7818a",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/lista-eventos.js?v=947&_verificacao=1790131085162893500",
+    "file": "lista-eventos.js",
+    "local": "f538c07298103b44def8ec4980ef8f00481a2e22fcbce2f160be1dabd118bdf5",
+    "public": "f538c07298103b44def8ec4980ef8f00481a2e22fcbce2f160be1dabd118bdf5",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/meus-pedidos.js?v=947&_verificacao=1790131085163195700",
+    "file": "meus-pedidos.js",
+    "local": "76b849446671df4a25bcda1f45d0b43e1d61dcce5c61d4efe46fda2db2c056f9",
+    "public": "76b849446671df4a25bcda1f45d0b43e1d61dcce5c61d4efe46fda2db2c056f9",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/portaria.html?v=947&_verificacao=1790131085163615200",
+    "file": "portaria.html",
+    "local": "258a2eaabaab7fb0b9e35cd98472d5c1fadf98e25dc457a0b068dae7d05d2ea5",
+    "public": "258a2eaabaab7fb0b9e35cd98472d5c1fadf98e25dc457a0b068dae7d05d2ea5",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/reiniciar.html?v=947&_verificacao=1790131085163784600",
+    "file": "reiniciar.html",
+    "local": "6f2528bc929f6af945060c9d12838b462d3efc92419bd936a4271c834163351f",
+    "public": "6f2528bc929f6af945060c9d12838b462d3efc92419bd936a4271c834163351f",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/reiniciar.js?v=947&_verificacao=1790131085645250900",
+    "file": "reiniciar.js",
+    "local": "453dea5430b9123ca3dab68f479bc33b45a72437524e6d366f6b4140036777e9",
+    "public": "453dea5430b9123ca3dab68f479bc33b45a72437524e6d366f6b4140036777e9",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/sw.js?v=947&_verificacao=1790131085670814500",
+    "file": "sw.js",
+    "local": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+    "public": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/?v=947&_verificacao=1790131085672780000",
+    "file": "index.html",
+    "local": "3dbc56d5c0a6111c1bf550448aa36dddc05d69035743bfbd322f562c539ddd1c",
+    "public": "3dbc56d5c0a6111c1bf550448aa36dddc05d69035743bfbd322f562c539ddd1c",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/controle.html?v=947&_verificacao=1790131085673961700",
+    "file": "controle.html",
+    "local": "f25cc5df913d9247474487d4a0ddbdf0164c89bbefffa1df359e2635d4b7818a",
+    "public": "f25cc5df913d9247474487d4a0ddbdf0164c89bbefffa1df359e2635d4b7818a",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/lista-eventos.js?v=947&_verificacao=1790131085810317300",
+    "file": "lista-eventos.js",
+    "local": "f538c07298103b44def8ec4980ef8f00481a2e22fcbce2f160be1dabd118bdf5",
+    "public": "f538c07298103b44def8ec4980ef8f00481a2e22fcbce2f160be1dabd118bdf5",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/meus-pedidos.js?v=947&_verificacao=1790131085811230900",
+    "file": "meus-pedidos.js",
+    "local": "76b849446671df4a25bcda1f45d0b43e1d61dcce5c61d4efe46fda2db2c056f9",
+    "public": "76b849446671df4a25bcda1f45d0b43e1d61dcce5c61d4efe46fda2db2c056f9",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/portaria.html?v=947&_verificacao=1790131085825383700",
+    "file": "portaria.html",
+    "local": "258a2eaabaab7fb0b9e35cd98472d5c1fadf98e25dc457a0b068dae7d05d2ea5",
+    "public": "258a2eaabaab7fb0b9e35cd98472d5c1fadf98e25dc457a0b068dae7d05d2ea5",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/reiniciar.html?v=947&_verificacao=1790131085968177600",
+    "file": "reiniciar.html",
+    "local": "6f2528bc929f6af945060c9d12838b462d3efc92419bd936a4271c834163351f",
+    "public": "6f2528bc929f6af945060c9d12838b462d3efc92419bd936a4271c834163351f",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/reiniciar.js?v=947&_verificacao=1790131085971724600",
+    "file": "reiniciar.js",
+    "local": "453dea5430b9123ca3dab68f479bc33b45a72437524e6d366f6b4140036777e9",
+    "public": "453dea5430b9123ca3dab68f479bc33b45a72437524e6d366f6b4140036777e9",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/sw.js?v=947&_verificacao=1790131085974115500",
+    "file": "sw.js",
+    "local": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+    "public": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+    "match": true
+  }
+]

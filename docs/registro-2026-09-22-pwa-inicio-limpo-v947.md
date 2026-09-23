@@ -44,3 +44,11 @@ na instalação que abrir a nova versão; o navegador separado do PWA possui seu
 próprios dados. Os dados locais apagados não são recuperáveis. Eventos e ingressos
 no servidor permanecem disponíveis para carregar pelo QR. Voltar o frontend não
 restaura os dados locais; não reaplicar a limpeza em releases futuros.
+
+## Publicação confirmada
+
+- Commit funcional `86fe734e`, tag `v947`, enviado à main.
+- Cloudflare Pages completed/success; depois da propagação, 16/16 hashes
+  normalizados coincidiram nos dois domínios, com cache-buster.
+- Evidência: `docs/evidencias/2026-09-22-pwa-v947-hashes.json`.
+- Checkout operacional preservado. Uso físico no iPhone ainda não observado.
