@@ -62,3 +62,13 @@ preserva os hashes preparados, pois sal e algoritmo continuam compatíveis.
 Não apagar credenciais para reverter a interface. A base permanece privada.
 Após início da preparação, mudança de numeração que afete códigos exige
 conferência da gráfica; dados descritivos do evento podem ser atualizados.
+
+## Publicação confirmada
+
+- Commit funcional `3cf2ddccc11cd08c0bc21e4e6e0a99bc2cc64340`, tag `v946`, enviado à main.
+- Cloudflare Pages: completed / success.
+- Após propagação, 26/26 comparações SHA-256 normalizadas, com cache-buster,
+  coincidiram nos domínios `imposition.ai-ideal.com.br` e `imposicao.pages.dev`.
+- Evidência: `docs/evidencias/2026-09-22-ideal-control-v946-hashes.json`.
+- Rota publicada de preparação recusou QR desconhecido com HTTP 403.
+- Nenhum teste físico de iPhone ou ingresso impresso foi realizado.

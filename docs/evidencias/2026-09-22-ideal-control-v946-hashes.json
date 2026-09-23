@@ -1,0 +1,184 @@
+[
+  {
+    "url": "https://imposition.ai-ideal.com.br/?v=946&_verificacao=1790129467902897200",
+    "file": "index.html",
+    "local": "f28b77836bf0962913ba80525e10a534d72cc3e7f6865c21ac875e5248a0fb05",
+    "public": "f28b77836bf0962913ba80525e10a534d72cc3e7f6865c21ac875e5248a0fb05",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/chaveiro.js?v=946&_verificacao=1790129467903486300",
+    "file": "chaveiro.js",
+    "local": "f694dfb2abedfd8e8003e4a61396abe2b98e09f78405f7bf3211bd9988e24a72",
+    "public": "f694dfb2abedfd8e8003e4a61396abe2b98e09f78405f7bf3211bd9988e24a72",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/conta.js?v=946&_verificacao=1790129467903876200",
+    "file": "conta.js",
+    "local": "3dd1489a59b2e3a275c05b0574f8076f22851d95279fc9ad46f0023c0958249f",
+    "public": "3dd1489a59b2e3a275c05b0574f8076f22851d95279fc9ad46f0023c0958249f",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/controle.html?v=946&_verificacao=1790129467904199800",
+    "file": "controle.html",
+    "local": "56440a5af0040e9ce01c2a1797b6e2e3563ea541771ac42d56f0d23c4398db06",
+    "public": "56440a5af0040e9ce01c2a1797b6e2e3563ea541771ac42d56f0d23c4398db06",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/controle.js?v=946&_verificacao=1790129467904491800",
+    "file": "controle.js",
+    "local": "0be1901839b599e2ec94903822b84562a5d9a12e210c8a8ed0b226bf7f772271",
+    "public": "0be1901839b599e2ec94903822b84562a5d9a12e210c8a8ed0b226bf7f772271",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/lista-eventos.js?v=946&_verificacao=1790129467904892100",
+    "file": "lista-eventos.js",
+    "local": "2e7f85518fd5c319a1dd46801d564d5ea99d288d8576116f67a3247f62795084",
+    "public": "2e7f85518fd5c319a1dd46801d564d5ea99d288d8576116f67a3247f62795084",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/menu-geral.js?v=946&_verificacao=1790129468563421600",
+    "file": "menu-geral.js",
+    "local": "8ac30e0e8079a83b5293cfa1748f667ef416da5b8619d14bfcb7bcaddc125350",
+    "public": "8ac30e0e8079a83b5293cfa1748f667ef416da5b8619d14bfcb7bcaddc125350",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/portaria-sincronismo.js?v=946&_verificacao=1790129468563873800",
+    "file": "portaria-sincronismo.js",
+    "local": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+    "public": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/portaria.html?v=946&_verificacao=1790129468592534200",
+    "file": "portaria.html",
+    "local": "0a48ad208bb9b5a51b0bcc999f415532b202f2fccd9771393b93a319b711c7a4",
+    "public": "0a48ad208bb9b5a51b0bcc999f415532b202f2fccd9771393b93a319b711c7a4",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/portaria.js?v=946&_verificacao=1790129468608760000",
+    "file": "portaria.js",
+    "local": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+    "public": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/qr-evento-envio.js?v=946&_verificacao=1790129468688753700",
+    "file": "qr-evento-envio.js",
+    "local": "bc3e9cf1e1131e8ff27fbd75ef378d589b063257aef45ae1427530e82d27bbb9",
+    "public": "bc3e9cf1e1131e8ff27fbd75ef378d589b063257aef45ae1427530e82d27bbb9",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/qr-evento.js?v=946&_verificacao=1790129468756411600",
+    "file": "qr-evento.js",
+    "local": "99ec344fbac319c9453a401e31bc021d12ffbf264ea65cf8b46f60d83e243019",
+    "public": "99ec344fbac319c9453a401e31bc021d12ffbf264ea65cf8b46f60d83e243019",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ic/reiniciar.html?v=946&_verificacao=1790129468934714700",
+    "file": "reiniciar.html",
+    "local": "bd0527f0490079d5c3fed14f642ac4b067ccc69f8b3a3a710edd6b2ea180ae67",
+    "public": "bd0527f0490079d5c3fed14f642ac4b067ccc69f8b3a3a710edd6b2ea180ae67",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/?v=946&_verificacao=1790129468984665800",
+    "file": "index.html",
+    "local": "f28b77836bf0962913ba80525e10a534d72cc3e7f6865c21ac875e5248a0fb05",
+    "public": "f28b77836bf0962913ba80525e10a534d72cc3e7f6865c21ac875e5248a0fb05",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/chaveiro.js?v=946&_verificacao=1790129468984796800",
+    "file": "chaveiro.js",
+    "local": "f694dfb2abedfd8e8003e4a61396abe2b98e09f78405f7bf3211bd9988e24a72",
+    "public": "f694dfb2abedfd8e8003e4a61396abe2b98e09f78405f7bf3211bd9988e24a72",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/conta.js?v=946&_verificacao=1790129469037621900",
+    "file": "conta.js",
+    "local": "3dd1489a59b2e3a275c05b0574f8076f22851d95279fc9ad46f0023c0958249f",
+    "public": "3dd1489a59b2e3a275c05b0574f8076f22851d95279fc9ad46f0023c0958249f",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/controle.html?v=946&_verificacao=1790129469049050500",
+    "file": "controle.html",
+    "local": "56440a5af0040e9ce01c2a1797b6e2e3563ea541771ac42d56f0d23c4398db06",
+    "public": "56440a5af0040e9ce01c2a1797b6e2e3563ea541771ac42d56f0d23c4398db06",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/controle.js?v=946&_verificacao=1790129469118393700",
+    "file": "controle.js",
+    "local": "0be1901839b599e2ec94903822b84562a5d9a12e210c8a8ed0b226bf7f772271",
+    "public": "0be1901839b599e2ec94903822b84562a5d9a12e210c8a8ed0b226bf7f772271",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/lista-eventos.js?v=946&_verificacao=1790129469118682600",
+    "file": "lista-eventos.js",
+    "local": "2e7f85518fd5c319a1dd46801d564d5ea99d288d8576116f67a3247f62795084",
+    "public": "2e7f85518fd5c319a1dd46801d564d5ea99d288d8576116f67a3247f62795084",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/menu-geral.js?v=946&_verificacao=1790129469177519000",
+    "file": "menu-geral.js",
+    "local": "8ac30e0e8079a83b5293cfa1748f667ef416da5b8619d14bfcb7bcaddc125350",
+    "public": "8ac30e0e8079a83b5293cfa1748f667ef416da5b8619d14bfcb7bcaddc125350",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/portaria-sincronismo.js?v=946&_verificacao=1790129469187820400",
+    "file": "portaria-sincronismo.js",
+    "local": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+    "public": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/portaria.html?v=946&_verificacao=1790129469238672900",
+    "file": "portaria.html",
+    "local": "0a48ad208bb9b5a51b0bcc999f415532b202f2fccd9771393b93a319b711c7a4",
+    "public": "0a48ad208bb9b5a51b0bcc999f415532b202f2fccd9771393b93a319b711c7a4",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/portaria.js?v=946&_verificacao=1790129469306105600",
+    "file": "portaria.js",
+    "local": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+    "public": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/qr-evento-envio.js?v=946&_verificacao=1790129469320397100",
+    "file": "qr-evento-envio.js",
+    "local": "bc3e9cf1e1131e8ff27fbd75ef378d589b063257aef45ae1427530e82d27bbb9",
+    "public": "bc3e9cf1e1131e8ff27fbd75ef378d589b063257aef45ae1427530e82d27bbb9",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/qr-evento.js?v=946&_verificacao=1790129469320686400",
+    "file": "qr-evento.js",
+    "local": "99ec344fbac319c9453a401e31bc021d12ffbf264ea65cf8b46f60d83e243019",
+    "public": "99ec344fbac319c9453a401e31bc021d12ffbf264ea65cf8b46f60d83e243019",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ic/reiniciar.html?v=946&_verificacao=1790129469329532800",
+    "file": "reiniciar.html",
+    "local": "bd0527f0490079d5c3fed14f642ac4b067ccc69f8b3a3a710edd6b2ea180ae67",
+    "public": "bd0527f0490079d5c3fed14f642ac4b067ccc69f8b3a3a710edd6b2ea180ae67",
+    "match": true
+  }
+]
