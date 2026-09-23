@@ -3,12 +3,14 @@
     'use strict';
     window.qrEventoEnvio = { montar: function (dialogo, pedir, eventoAtual) {
         var bloco = document.createElement('section');
+        bloco.className = 'ic-qr-evento-entrega';
         bloco.innerHTML = '<hr><h3>2. Carregar o evento</h3><p>Depois de instalar, abra o aplicativo e toque em “Ler QR do evento”. No mesmo celular, use “Importar da galeria”.</p>'
-            + '<p data-qr-nome></p><button type="button" data-qr-gerar>Gerar QR do evento</button>'
+            + '<p data-qr-nome></p><button class="btn btn-primary" type="button" data-qr-gerar>Gerar QR do evento</button>'
             + '<div data-qr-resultado hidden><canvas width="600" height="700" style="width:100%;max-width:300px"></canvas>'
-            + '<p><button type="button" data-qr-baixar>Baixar QR</button> <button type="button" data-qr-enviar>Compartilhar QR</button></p></div>'
-            + '<p><button type="button" data-qr-revogar>Revogar QRs deste evento</button></p>'
-            + '<p>Envie somente a quem deve acessar este evento. A edição usa a senha de 6 números do celular. Revogar o QR impede novas ativações; para desligar celulares já ativados, use Aparelhos.</p>'
+            + '<p><button class="btn btn-secondary" type="button" data-qr-baixar>Baixar QR</button> <button class="btn btn-secondary" type="button" data-qr-enviar>Compartilhar QR</button></p></div>'
+            + '<p><button class="btn btn-outline" type="button" data-qr-mensagem>Copiar instruções para o cliente</button></p>'
+            + '<details><summary>Gerenciar QRs já enviados</summary><p><button class="btn btn-sm btn-danger" type="button" data-qr-revogar>Revogar QRs deste evento</button></p>'
+            + '<p>Envie somente a quem deve acessar este evento. A edição usa a senha de 6 números do celular. Revogar o QR impede novas ativações; para desligar celulares já ativados, use Celulares e senhas.</p></details>'
             + '<p role="status" data-qr-aviso></p>';
         dialogo.appendChild(bloco);
         var buscar = function (s) { return bloco.querySelector(s); };
@@ -18,8 +20,9 @@
             var ev = eventoAtual();
             if (!ev || !alvo || alvo.id !== ev.id) { resultado.hidden = true; imagem = null; }
             alvo = ev;
-            buscar('[data-qr-nome]').textContent = ev ? ev.nome_evento : 'Abra um pedido e prepare o evento para gerar seu QR.';
-            buscar('[data-qr-gerar]').disabled = ocupado || !ev;
+            buscar('[data-qr-nome]').textContent = ev ? (ev.nome_evento || 'Evento') + (ev.status !== 'ativo' ? ' · evento inativo ou finalizado; confira a aba Evento.' : '') : 'Abra um pedido e prepare o evento para gerar seu QR.';
+            buscar('[data-qr-gerar]').disabled = ocupado || !ev || ev.status !== 'ativo';
+            buscar('[data-qr-mensagem]').disabled = !ev;
             buscar('[data-qr-revogar]').disabled = ocupado || !ev;
         }
         function baixar() {
@@ -27,6 +30,16 @@
             var a = document.createElement('a');
             a.href = imagem; a.download = 'ideal-control-qr-evento.png'; a.click();
         }
+        buscar('[data-qr-mensagem]').onclick = async function () {
+            var ev = eventoAtual(); if (!ev) return;
+            var mensagem = 'Ideal Control — ' + (ev.nome_evento || 'Evento') + '\n'
+                + '1. Instale o aplicativo: https://imposition.ai-ideal.com.br/ic/\n'
+                + '2. No primeiro uso, escolha uma senha de edição de 6 números. Cada celular tem sua própria senha.\n'
+                + '3. Abra o aplicativo e toque em “Ler QR do evento”. Se a imagem chegou neste celular, use “Importar da galeria”.\n'
+                + '4. Aguarde o carregamento completo do evento com internet antes de usar na portaria.';
+            try { await navigator.clipboard.writeText(mensagem); aviso.textContent = 'Instruções copiadas. Cole na conversa e anexe a imagem do QR deste evento.'; }
+            catch (_) { aviso.textContent = 'Não foi possível copiar. Envie o link de instalação e a imagem do QR com as orientações acima.'; }
+        };
         buscar('[data-qr-baixar]').onclick = baixar;
         buscar('[data-qr-enviar]').onclick = async function () {
             if (!imagem) return;
@@ -38,7 +51,7 @@
             } else { baixar(); aviso.textContent = 'QR baixado. Anexe a imagem à conversa do cliente junto com o link de instalação.'; }
         };
         buscar('[data-qr-gerar]').onclick = async function () {
-            atualizar(); if (!alvo || ocupado) return;
+            atualizar(); if (!alvo || ocupado || alvo.status !== 'ativo') return;
             var ev = alvo; ocupado = true; atualizar(); aviso.textContent = 'Gerando QR…';
             resultado.hidden = true; imagem = null;
             try {

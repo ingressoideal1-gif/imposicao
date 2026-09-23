@@ -15,9 +15,9 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=940">
-    <link rel="stylesheet" href="/producao-por-cor.css?v=940">
-    <script src="pdf-lib.min.js?v=940"></script>
+    <link rel="stylesheet" href="/style.css?v=941">
+    <link rel="stylesheet" href="/producao-por-cor.css?v=941">
+    <script src="pdf-lib.min.js?v=941"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3639,7 +3639,7 @@
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>Ideal Control</h1>
-                        <p>Do pedido ao evento: clientes, setores e portaria em um só lugar.</p>
+                        <p>Prepare o evento, envie os dois QRs e acompanhe os celulares do cliente.</p>
                     </div>
                 </div>
 
@@ -3685,8 +3685,8 @@
                     <div id="ic-cliente-pedidos" class="ic-cliente-pedidos"></div>
                     <p id="ic-cliente-sem-pedido" class="ic-ajuda" style="display:none;">
                         Este cliente ainda não tem nenhum pedido com modelo cadastrado no
-                        ERP. Use Gerenciar acesso — quando o pedido for publicado,
-                        ele carrega no aplicativo e o evento nasce ali.
+                        ERP. O aplicativo já pode ser instalado pelo QR único. Quando houver
+                        um pedido preparado, envie também o QR do evento.
                     </p>
                     <!-- Pedido sem modelo no ERP nao entra na lista: nao ha o que
                          configurar nele, e o botao abriria em erro. Dizer quantos
@@ -3825,7 +3825,7 @@
 
                     <!-- Aparelhos -->
                     <div id="ic-aparelhos-secao" style="display:none;">
-                        <h3 class="ic-secao-titulo">Aparelhos da portaria</h3>
+                        <h3 class="ic-secao-titulo">Celulares do evento e senhas de edição</h3>
                         <div id="ic-aparelhos"></div>
                     </div>
 
@@ -3856,7 +3856,7 @@
                      QR de instalacao (um so, generico). Decisao de 17/08/2026:
                      o QR do Pedido saiu; a conta do cliente e que traz os pedidos. -->
                 <div id="ic-acesso-secao" style="display:none;">
-                    <h3 class="ic-secao-titulo">Acesso do cliente</h3>
+                    <h3 class="ic-secao-titulo">Conta por e-mail · opcional</h3>
                     <div class="card" style="padding:14px 16px;margin-bottom:20px;">
                         <p id="ic-acesso-cliente" style="margin:0 0 8px;font-weight:600;"></p>
                         <div id="ic-acesso-contas" class="ic-dim" style="margin-bottom:12px;"></div>
@@ -3873,10 +3873,10 @@
                              hash dela, como no codigo de pareamento do
                              aparelho. Por isso a caixa diz isso em texto. -->
                         <div id="ic-acesso-senha" class="card ic-codigo-caixa" style="display:none;">
-                            <h4 style="margin:0 0 6px;">Senha provisória — anote e passe ao cliente</h4>
+                            <h4 style="margin:0 0 6px;">Senha provisória da conta por e-mail</h4>
                             <p class="ic-ajuda" style="margin-bottom:10px;">
                                 Ela aparece <strong>uma vez só</strong>. No primeiro acesso o
-                                cliente escolhe a senha dele.
+                                cliente escolhe a senha da conta. A senha de edição de 6 números é definida separadamente em cada celular.
                             </p>
                             <div id="ic-acesso-senha-valor" class="ic-codigo-valor"></div>
                             <button id="ic-acesso-senha-copiar" class="btn btn-sm btn-outline"
@@ -4444,51 +4444,51 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=940"></script>
-    <script src="/supabase-config.js?v=940"></script>
-    <script src="mapas.js?v=940"></script>
-    <script src="cor-numeracao-do-modelo.js?v=940"></script>
+    <script src="/banco-nao-responde.js?v=941"></script>
+    <script src="/supabase-config.js?v=941"></script>
+    <script src="mapas.js?v=941"></script>
+    <script src="cor-numeracao-do-modelo.js?v=941"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=940"></script>
-    <script src="logo-do-frete.js?v=940"></script>
+    <script src="banco-do-modelo.js?v=941"></script>
+    <script src="logo-do-frete.js?v=941"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=940"></script>
-    <script src="arte-de-impressao.js?v=940"></script>
-    <script src="qr-canvas.js?v=940"></script>
-    <script src="barcode-canvas.js?v=940"></script>
+    <script src="pagamento-do-pedido.js?v=941"></script>
+    <script src="arte-de-impressao.js?v=941"></script>
+    <script src="qr-canvas.js?v=941"></script>
+    <script src="barcode-canvas.js?v=941"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=940"></script>
-    <script src="fonte-canvas.js?v=940"></script>
+    <script src="numero-da-pagina.js?v=941"></script>
+    <script src="fonte-canvas.js?v=941"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=940"></script>
-    <script src="fonte-nome.js?v=940"></script>
-    <script src="qr-ideal-colunas.js?v=940"></script>
-    <script src="csv-editor.js?v=940"></script>
-    <script src="amostra-modal.js?v=940"></script>
-    <script src="texto-ajuste.js?v=940"></script>
-    <script src="foto-lib.js?v=940"></script>
-    <script src="gerenciador-fotos.js?v=940"></script>
-    <script src="editor-foto.js?v=940"></script>
+    <script src="fonte-glifos.js?v=941"></script>
+    <script src="fonte-nome.js?v=941"></script>
+    <script src="qr-ideal-colunas.js?v=941"></script>
+    <script src="csv-editor.js?v=941"></script>
+    <script src="amostra-modal.js?v=941"></script>
+    <script src="texto-ajuste.js?v=941"></script>
+    <script src="foto-lib.js?v=941"></script>
+    <script src="gerenciador-fotos.js?v=941"></script>
+    <script src="editor-foto.js?v=941"></script>
     <script src="/vendor/quill-2.0.3/quill.js"></script>
-    <script src="/briefing-editor.js?v=940"></script>
-    <script src="navegacao-painel.js?v=940"></script>
-    <script src="script.js?v=940"></script>
-    <script src="dashboard-arte.js?v=940"></script>
-    <script src="qr-evento-envio.js?v=940"></script>
-    <script src="ideal-control.js?v=940"></script>
-    <script src="criador-arte.js?v=940"></script>
-    <script src="/pedido.js?v=940"></script>
-    <script src="/producao-por-cor.js?v=940"></script>
-    <script src="montagem.js?v=940"></script>
-    <script src="acabamento.js?v=940"></script>
-    <script src="avisos.js?v=940"></script>
+    <script src="/briefing-editor.js?v=941"></script>
+    <script src="navegacao-painel.js?v=941"></script>
+    <script src="script.js?v=941"></script>
+    <script src="dashboard-arte.js?v=941"></script>
+    <script src="qr-evento-envio.js?v=941"></script>
+    <script src="ideal-control.js?v=941"></script>
+    <script src="criador-arte.js?v=941"></script>
+    <script src="/pedido.js?v=941"></script>
+    <script src="/producao-por-cor.js?v=941"></script>
+    <script src="montagem.js?v=941"></script>
+    <script src="acabamento.js?v=941"></script>
+    <script src="avisos.js?v=941"></script>
 
 
 

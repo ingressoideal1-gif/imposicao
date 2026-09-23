@@ -5841,6 +5841,22 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 #view-ideal-control .ic-pedido-do-cliente { white-space: normal; display: block; line-height: 1.6; padding: 10px 12px; }
 #view-ideal-control .ic-pedido-do-cliente[aria-current=true] { background: rgba(45,212,191,.12); border-color: #2dd4bf; color: var(--text); }
 #view-ideal-control #ic-instalacao-abrir { white-space: normal; line-height: 1.5; }
+#view-ideal-control .ic-entrega { padding: 18px; margin: 0 0 20px; border-color: rgba(45,212,191,.4); background: rgba(45,212,191,.05); }
+#view-ideal-control .ic-entrega h3 { margin: 0 0 8px; font-size: 1.05rem; }
+#view-ideal-control .ic-entrega .btn { margin: 4px 8px 0 0; white-space: normal; }
+#view-ideal-control .ic-entrega-passos { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px 28px; padding-left: 22px; margin: 16px 0; font-size: .85rem; line-height: 1.6; }
+#view-ideal-control .ic-qr-evento-entrega .btn { white-space: normal; margin: 4px 0; }
+#view-ideal-control .ic-qr-evento-entrega hr { border: 0; border-top: 1px solid var(--border); margin: 22px 0; }
+#view-ideal-control .ic-qr-evento-entrega h3 { font-size: 1.05rem; margin: 0 0 10px; }
+#view-ideal-control .ic-qr-evento-entrega p { font-size: .85rem; line-height: 1.6; margin: 10px 0; }
+#view-ideal-control .ic-qr-evento-entrega [role=status]:empty { display: none; }
+#view-ideal-control .ic-qr-evento-entrega summary { cursor: pointer; margin-top: 18px; color: var(--text-dim); }
+#view-ideal-control .ic-qr-evento-entrega [data-qr-nome] { font-weight: 600; }
+@media(max-width:760px) {
+ #view-ideal-control .ic-entrega-passos { grid-template-columns: minmax(0,1fr); gap: 8px; }
+ #view-ideal-control .page-header { flex-wrap: wrap; gap: 12px; }
+}
+
 #view-ideal-control #ic-titulo { font-size: 1.4rem !important; line-height: 1.35; margin: 0 0 12px !important; }
 #view-ideal-control .ic-selos { gap: 6px; margin-bottom: 18px; }
 #view-ideal-control .ic-abas { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 18px; }

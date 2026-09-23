@@ -5,7 +5,7 @@
  * do painel. A diferença que importa é a porta: aqui não há senha de evento
  * nenhuma. Quem está logado como ADM ou Atendimento configura qualquer
  * pedido, porque o trabalho da gráfica é **entregar o Ideal Control já
- * pré-configurado** — o cliente recebe o QR do Pedido e encontra os setores
+ * pré-configurado** — o cliente recebe o QR do evento e encontra os setores
  * com nome de portaria, horário e aparelhos prontos, em vez de uma tela em
  * branco.
  *
@@ -140,10 +140,10 @@
             if (estado.clienteAberto) { abrirCliente(estado.clienteAberto.id_cliente); }
         };
         lateral.appendChild($('ic-cliente-secao'));
-        var instalar = texto(lateral, 'button', 'Enviar ao cliente · Instalação e evento', 'btn btn-sm btn-outline');
+        var instalar = texto(view.querySelector('.page-header'), 'button', 'Instalação e QRs', 'btn btn-outline');
         instalar.id = 'ic-instalacao-abrir';
         instalar.type = 'button';
-        instalar.hidden = true;
+        instalar.hidden = false;
         var principal = texto(workspace, 'div', '', 'ic-principal');
         principal.appendChild($('ic-carregando'));
         principal.appendChild($('ic-vazio'));
@@ -165,7 +165,7 @@
             gatilho.onclick = function () { aviso.textContent = ''; d.showModal(); };
             return d;
         }
-        var acessoDialogo = dialogo('ic-acesso-dialogo', 'Acesso do cliente', acesso);
+        var acessoDialogo = dialogo('ic-acesso-dialogo', 'Conta por e-mail · opcional', acesso);
         var instalacaoDialogo = dialogo('ic-instalacao-dialogo', 'Instalação e QR do evento', instalar);
         // O QR genérico fica separado da concessão de acesso e da senha.
         var cardAcesso = $('ic-acesso-secao').querySelector('.card');
@@ -173,18 +173,32 @@
         while (divisoria.nextSibling) { instalacaoDialogo.appendChild(divisoria.nextSibling); }
         divisoria.remove();
         var tituloQr = document.createElement('h3');
-        tituloQr.textContent = '1. Instalar o aplicativo · igual para todos';
-        instalacaoDialogo.insertBefore(tituloQr, instalacaoDialogo.firstChild);
+        tituloQr.textContent = '1. Instalar o aplicativo';
+        $('ic-qr-instalacao').previousElementSibling.previousElementSibling.replaceWith(tituloQr);
+        texto(instalacaoDialogo, 'p', 'No primeiro uso, cada celular define sua senha de edição com 6 números. Depois, o cliente lê ou importa o QR do evento. Não precisa criar conta.', 'ic-ajuda');
+        desenharQrInstalacao(urlInstalacao);
         layout.atualizarQr = window.qrEventoEnvio.montar(instalacaoDialogo, pedir, function () {
             return estado.painel && estado.painel.evento;
         });
         acessoDialogo.appendChild($('ic-acesso-secao'));
 
         $('ic-conteudo').appendChild($('ic-vinculo-aviso'));
+        var entrega = texto($('ic-conteudo'), 'div', '', 'card ic-entrega');
+        entrega.id = 'ic-entrega';
+        texto(entrega, 'h3', 'Entregar o evento ao cliente');
+        texto(entrega, 'p', '', 'ic-ajuda').id = 'ic-entrega-situacao';
+        var passos = texto(entrega, 'ol', '', 'ic-entrega-passos');
+        ['Instalar o aplicativo pelo QR único.', 'Definir a senha de 6 números neste celular.', 'Ler ou importar o QR do evento no aplicativo.'].forEach(function (t) { texto(passos, 'li', t); });
+        var enviar = texto(entrega, 'button', 'Enviar instalação e QR do evento', 'btn btn-primary');
+        enviar.id = 'ic-enviar-evento'; enviar.type = 'button';
+        enviar.onclick = function () { instalar.click(); };
+        var celulares = texto(entrega, 'button', 'Celulares e senhas', 'btn btn-outline');
+        celulares.type = 'button'; celulares.onclick = function () { $('ic-aba-aparelhos').click(); };
+
         var itens = [
             ['setores', 'Setores', ['ic-setores-secao']],
             ['modelos', 'Modelos', ['ic-modelos']],
-            ['aparelhos', 'Aparelhos', ['ic-aparelhos-secao']],
+            ['aparelhos', 'Celulares e senhas', ['ic-aparelhos-secao']],
             ['publico', 'Público', ['ic-dashboard-secao']],
             ['evento', 'Evento', ['ic-evento-secao', 'ic-vinculo-secao']]
         ].map(function (item) {
@@ -198,6 +212,7 @@
         });
         abas($('ic-conteudo'), 'ic-aba', itens, layout.aba, function (chave) {
             layout.aba = chave;
+            if (chave !== 'aparelhos') document.querySelectorAll('#ic-aparelhos .ic-aparelho').forEach(function (el) { if (el._ocultarSenha) el._ocultarSenha(); });
             atualizarLayout();
         });
         // A reconciliação continua acessível junto aos setores; a desvinculação
@@ -213,7 +228,7 @@
         if (layout.atualizarQr) layout.atualizarQr();
         $('ic-workspace').classList.toggle('ic-sem-cliente', !c);
         $('ic-cliente-resumo').hidden = !c;
-        $('ic-instalacao-abrir').hidden = !c;
+        $('ic-instalacao-abrir').hidden = false;
         $('ic-orientacao').hidden = !!p || $('ic-carregando').style.display !== 'none'
             || $('ic-vazio').style.display !== 'none';
         if (c) {
@@ -221,7 +236,7 @@
             $('ic-resumo-dados').textContent = '#' + c.id_cliente + (c.email ? ' · ' + c.email : '');
             $('ic-resumo-acesso').textContent = (c.contas || []).length ? 'Conta do cliente disponível' : 'O cliente pode carregar o evento pelo QR';
         } else {
-            ['ic-acesso-dialogo', 'ic-instalacao-dialogo'].forEach(function (id) {
+            ['ic-acesso-dialogo'].forEach(function (id) {
                 if ($(id).open) { $(id).close(); }
             });
         }
@@ -233,6 +248,13 @@
             b.setAttribute('aria-current', String(b.id === 'ic-pedido-' + estado.pedido));
         });
         if (!p) { return; }
+        var entregaEv = p.evento;
+        $('ic-enviar-evento').disabled = !entregaEv || entregaEv.status !== 'ativo';
+        $('ic-entrega-situacao').textContent = !entregaEv
+            ? 'Prepare o evento a partir deste pedido para emitir seu QR. O QR de instalação já está disponível no topo.'
+            : entregaEv.status !== 'ativo'
+                ? 'Evento inativo ou finalizado. Confira a situação na aba Evento antes de enviar novos acessos.'
+                : (entregaEv.nome_evento || 'Evento') + ' · ' + numero((p.aparelhos || []).length) + ' celular(es) cadastrado(s). Confira os setores e os ingressos publicados antes do envio.';
         $('ic-sem-evento').hidden = layout.aba === 'modelos';
         $('ic-setores-vazio').textContent = p.evento && !(p.setores || []).length
             ? 'Nenhum setor neste evento. Confira os modelos e use Conferir os setores acima.' : '';
@@ -964,8 +986,7 @@
         contas.innerHTML = '';
         var lista = c.contas || [];
         if (!lista.length) {
-            texto(contas, 'div', 'Sem acesso ainda. Confira o e-mail abaixo e toque '
-                  + 'em "Liberar acesso".');
+            texto(contas, 'div', 'Nenhuma conta por e-mail. O acesso pelo QR do evento já funciona sem conta. Use este cadastro somente se o cliente precisar do acesso por e-mail.');
         }
         lista.forEach(function (ct) { contas.appendChild(linhaDeConta(ct)); });
 
@@ -1944,6 +1965,7 @@
 
     function desenharAparelhos() {
         var caixa = $('ic-aparelhos');
+        caixa.querySelectorAll('.ic-aparelho').forEach(function (el) { if (el._ocultarSenha) el._ocultarSenha(); });
         caixa.innerHTML = '';
         var ev = estado.painel.evento;
         $('ic-aparelhos-secao').style.display = ev ? '' : 'none';
@@ -1952,19 +1974,14 @@
         var lista = estado.painel.aparelhos || [];
         lista.forEach(function (a) { caixa.appendChild(cartaoDeAparelho(a)); });
 
-        // Como nasce um aparelho HOJE. O formulario "Criar um aparelho" saiu em
-        // 18/08/2026 junto com o codigo de seis caracteres: a tela que o pedia
-        // foi removida da portaria em 16/08, e o codigo gerado aqui nao tinha
-        // mais onde ser digitado. Sem esta frase no lugar, quem procurasse o
-        // botao acharia que a tela quebrou.
         var comoCriar = document.createElement('div');
         comoCriar.className = 'card ic-aparelho';
         comoCriar.id = 'ic-como-criar-aparelho';
-        texto(comoCriar, 'h4', 'Como entra um aparelho novo');
-        texto(comoCriar, 'p', 'Quem põe um aparelho no ar é o próprio cliente, no '
-              + 'celular: ele abre o Ideal Control, toca na barra do evento e digita '
-              + 'a senha da conta dele. O nome que ele escolher vale para esse '
-              + 'celular em todos os eventos.', 'ic-ajuda');
+        texto(comoCriar, 'h4', 'Adicionar um celular');
+        texto(comoCriar, 'p', 'No celular, o cliente instala o aplicativo, define sua senha de 6 números e toca em “Ler QR do evento”. Se recebeu a imagem no mesmo celular, usa “Importar da galeria”. Cada celular tem sua própria senha.', 'ic-ajuda');
+        texto(comoCriar, 'p', 'Consulte a senha no cartão do celular para ajudar o cliente. Aparelhos do acesso antigo podem não ter senha por celular. Pausar impede novas validações online; um aparelho offline precisa sincronizar para receber a mudança.', 'ic-ajuda');
+        var enviarQr = texto(comoCriar, 'button', 'Abrir os QRs para envio', 'btn btn-sm btn-outline');
+        enviarQr.type = 'button'; enviarQr.onclick = function () { $('ic-instalacao-abrir').click(); };
         if (!lista.length) {
             texto(comoCriar, 'p', 'Este evento ainda não tem nenhum aparelho.', 'ic-dim');
         }
@@ -1978,19 +1995,31 @@
         var senhaEdicao = texto(el, 'button', 'Consultar senha de edição', 'btn btn-sm btn-outline');
         senhaEdicao.type = 'button';
         var senhaAviso = texto(el, 'p', '', 'ic-ajuda');
+        senhaAviso.setAttribute('role', 'status');
+        var senhaVisivel = false, consulta = 0, timer;
+        function ocultarSenha() {
+            consulta += 1; clearTimeout(timer); senhaVisivel = false;
+            senhaAviso.textContent = ''; senhaEdicao.textContent = 'Consultar senha de edição';
+            senhaEdicao.disabled = false;
+        }
         senhaEdicao.onclick = function () {
-            if (senhaAviso.textContent) { senhaAviso.textContent = ''; return; }
-            senhaEdicao.disabled = true;
+            if (senhaVisivel) { ocultarSenha(); return; }
+            var atual = ++consulta;
+            senhaEdicao.disabled = true; senhaAviso.textContent = 'Consultando…';
             pedir('/aparelhos/' + a.id + '/senha-edicao', { method: 'POST' }).then(function (r) {
-                if (!el.isConnected) return;
-                senhaAviso.textContent = 'Senha de edição deste celular: ' + r.pin;
-                setTimeout(function () { senhaAviso.textContent = ''; }, 30000);
-            }).catch(function (e) { senhaAviso.textContent = e.message; })
-                .finally(function () { senhaEdicao.disabled = false; });
+                if (!el.isConnected || atual !== consulta) return;
+                if (!r || !/^[0-9]{6}$/.test(r.pin) || r.aparelho_id !== a.id) throw new Error('A consulta não confirmou a senha deste celular. Tente novamente.');
+                senhaVisivel = true;
+                senhaAviso.textContent = 'Senha de edição deste celular: ' + r.pin + ' · será ocultada em 30 segundos.';
+                senhaEdicao.textContent = 'Ocultar senha';
+                timer = setTimeout(ocultarSenha, 30000);
+            }).catch(function (e) { if (el.isConnected && atual === consulta) senhaAviso.textContent = e.message; })
+                .finally(function () { if (atual === consulta) senhaEdicao.disabled = false; });
         };
+        el._ocultarSenha = ocultarSenha;
         texto(el, 'span', (a.status === 'ativo' ? 'Ativo'
                            : (a.status === 'pausado' ? 'Pausado' : 'Desligado'))
-              + ' · ' + (a.pareado ? 'já pareado' : 'nunca pareado')
+              + ' · ' + (a.pareado ? 'ativado' : 'aguardando ativação')
               + ' · visto ' + quando(a.ultimo_visto), 'ic-dim');
 
         var nome = campo(el, 'Nome do aparelho', 'text', 'ic-ap-nome-' + a.id, a.nome);
