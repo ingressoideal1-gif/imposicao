@@ -34750,6 +34750,10 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                 </div>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' || !String(item.variacoes_texto || '').trim() ? '' : `
+                    <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text); overflow-wrap: anywhere;">
+                        <strong>Variações:</strong> ${escapeHtml(String(item.variacoes_texto).trim())}
+                    </div>`}
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div style="display: flex; gap: 12px; align-items: flex-start;">
