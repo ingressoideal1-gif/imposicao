@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=952">
+    <link rel="stylesheet" href="/style.css?v=953">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <script src="pdf-lib.min.js?v=948"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -1904,6 +1904,7 @@
                                 <!-- ── CENTRO: a previa, com o espaco inteiro ─────────────── -->
                                 <div class="ped-preview-canvas-container ped-janela-centro">
                                     <canvas id="ped-preview-canvas"></canvas>
+                                    <div id="ped-preview-variacoes" class="ped-preview-variacoes" style="display:none;"></div>
                                 </div>
 
                                 <!-- ── DIREITA: as acoes, separadas por tipo ──────────────── -->
@@ -2299,7 +2300,6 @@
 
                                 </div><!-- /ped-janela-direita -->
                             </div><!-- /ped-janela-corpo -->
-                            <div id="ped-preview-variacoes" class="ped-preview-variacoes" style="display:none;"></div>
                         </div>
                     </div>
                     </div><!-- /ped-preview-home -->

@@ -4730,7 +4730,9 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 }
 
 .ped-preview-variacoes {
-    margin: 10px 14px 14px;
+    box-sizing: border-box;
+    width: 100%;
+    margin-top: auto;
     padding: 10px 12px;
     border-left: 3px solid #fbbf24;
     border-radius: 6px;
@@ -4739,6 +4741,9 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     font-size: 0.85rem;
     line-height: 1.5;
     overflow-wrap: anywhere;
+}
+.ped-preview-variacoes span {
+    font-size: 1.05rem;
 }
 
 /* Os numeros da imposicao viram fichas na propria linha do titulo. O
@@ -4792,6 +4797,9 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 /* A previa fica com o centro inteiro: e' ela que o operador confere. */
 .ped-janela-centro {
     flex: 1;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
     min-width: 0;
     overflow: auto;
     padding: 14px;
