@@ -1,0 +1,44 @@
+[
+  {
+    "url": "https://imposition.ai-ideal.com.br/?v=943&_verificacao=1790125824581569300",
+    "file": "index.html",
+    "local": "49998bc23e85e7cf12a787449ded6b6b17e9ca5674f69c98a97752d68db68b17",
+    "public": "49998bc23e85e7cf12a787449ded6b6b17e9ca5674f69c98a97752d68db68b17",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/ideal-control.js?v=943&_verificacao=1790125824582250500",
+    "file": "ideal-control.js",
+    "local": "85ea8b66486b252e33d1ed0829145c172bccdc2b4fde40eab4d7c49b6d47215f",
+    "public": "85ea8b66486b252e33d1ed0829145c172bccdc2b4fde40eab4d7c49b6d47215f",
+    "match": true
+  },
+  {
+    "url": "https://imposition.ai-ideal.com.br/qr-evento-envio.js?v=943&_verificacao=1790125824582749400",
+    "file": "qr-evento-envio.js",
+    "local": "1b33d5123bc76e2de3d1dc629bee8d2002311780865d11c68cf8529d98beff3e",
+    "public": "1b33d5123bc76e2de3d1dc629bee8d2002311780865d11c68cf8529d98beff3e",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/?v=943&_verificacao=1790125824583183800",
+    "file": "index.html",
+    "local": "49998bc23e85e7cf12a787449ded6b6b17e9ca5674f69c98a97752d68db68b17",
+    "public": "49998bc23e85e7cf12a787449ded6b6b17e9ca5674f69c98a97752d68db68b17",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/ideal-control.js?v=943&_verificacao=1790125824591442300",
+    "file": "ideal-control.js",
+    "local": "85ea8b66486b252e33d1ed0829145c172bccdc2b4fde40eab4d7c49b6d47215f",
+    "public": "85ea8b66486b252e33d1ed0829145c172bccdc2b4fde40eab4d7c49b6d47215f",
+    "match": true
+  },
+  {
+    "url": "https://imposicao.pages.dev/qr-evento-envio.js?v=943&_verificacao=1790125824607028300",
+    "file": "qr-evento-envio.js",
+    "local": "1b33d5123bc76e2de3d1dc629bee8d2002311780865d11c68cf8529d98beff3e",
+    "public": "1b33d5123bc76e2de3d1dc629bee8d2002311780865d11c68cf8529d98beff3e",
+    "match": true
+  }
+]
