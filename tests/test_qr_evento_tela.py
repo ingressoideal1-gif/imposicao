@@ -157,3 +157,9 @@ def test_download_paginado_so_libera_leitura_depois_do_sincronismo():
     r = subprocess.run(["node", "tests/qr_evento_download_harness.cjs"], cwd=Path(__file__).resolve().parents[1],
                        capture_output=True, encoding="utf-8", timeout=40)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_evento_antecipado_sincroniza_ingressos_sem_trocar_qr():
+    r = subprocess.run(["node", "tests/ideal_control_antecipado_harness.cjs"], cwd=Path(__file__).resolve().parents[1],
+                       capture_output=True, encoding="utf-8", timeout=40)
+    assert r.returncode == 0, r.stdout + r.stderr

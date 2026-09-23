@@ -214,6 +214,21 @@ async function entrar(corpo: any): Promise<Response> {
   });
 }
 
+/** Marca leve da publicação: não expõe códigos nem dados das credenciais. */
+async function publicacaoDoEvento(eventoId: string) {
+  const pedidos: any[] = [];
+  for (let offset = 0;; offset += 1000) {
+    const lote = (await banco("GET", `producao_acesso_pedidos?evento_id=eq.${eventoId}` +
+      `&select=pedido_id_int,publicado_em,total_credenciais&order=pedido_id_int.asc&limit=1000&offset=${offset}`)) ?? [];
+    pedidos.push(...lote);
+    if (lote.length < 1000) break;
+  }
+  return {
+    versao: JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
+    concluida: pedidos.length > 0 && pedidos.every(p => p.publicado_em && Number(p.total_credenciais) > 0),
+  };
+}
+
 /** A carga do evento: tudo o que o aparelho precisa para decidir sem rede. */
 async function faixa(
   cabecalho: string | null,
@@ -221,6 +236,7 @@ async function faixa(
 ): Promise<Response> {
   const aparelho = await aparelhoDoToken(cabecalho);
   const eventoId = aparelho.evento_id;
+  const publicacao = await publicacaoDoEvento(eventoId);
   const desde = Math.max(0, parseInt(desdeBruto ?? "0") || 0);
 
   const evento = ((await banco(
@@ -287,6 +303,7 @@ async function faixa(
       nome: aparelho.nome,
       setores: await setoresDoAparelho(aparelho.id),
     },
+    publicacao,
     sais,
     setores,
     bloqueios,
@@ -596,6 +613,7 @@ async function sincronizar(
     // Booleano, e nao o texto do status, pelo mesmo motivo do `/faixa`: quem le
     // decide sem rede e nao pode ficar sabendo dos valores do banco.
     evento: { ativo: evento.status === "ativo" },
+    publicacao: await publicacaoDoEvento(eventoId),
     setores,
     bloqueios,
     entradas,

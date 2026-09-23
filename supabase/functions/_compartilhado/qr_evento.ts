@@ -5,18 +5,16 @@ import { instalacao } from "./pin_instalacao.ts";
 
 const segredoValido = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
 
-async function conferirPronto(eventoId: string, exigirIngressos = true): Promise<void> {
+async function conferirPronto(eventoId: string): Promise<void> {
   const eventos = await banco("GET", "producao_acesso_eventos?id=eq." + eventoId + "&select=id,status");
   if (eventos?.length !== 1 || eventos[0].status !== "ativo") throw new Recusa(403, "Evento inativo ou indisponível. Peça à gráfica para conferir.");
   const setores = await banco("GET", "producao_acesso_setores?evento_id=eq." + eventoId + "&status=eq.ativo&select=id&limit=1");
   if (!setores?.length) throw new Recusa(409, "Este evento ainda não tem setores ativos. Peça à gráfica para preparar os setores antes de enviar o QR.");
-  if (!exigirIngressos) return;
-  const ingressos = await banco("GET", "producao_acesso_credenciais?evento_id=eq." + eventoId + "&status=eq.ativo&select=id&limit=1");
-  if (!ingressos?.length) throw new Recusa(409, "Este evento ainda não tem ingressos publicados e ativos. Peça à gráfica para publicar os ingressos antes de carregar o evento.");
+
 }
 
 export async function emitirQrEvento(eventoId: string, autor: string): Promise<any> {
-  await conferirPronto(eventoId, false);
+  await conferirPronto(eventoId);
   const segredo = tokenNovo();
   const hash = await hashDoToken(segredo);
   const linhas = await banco("POST", "producao_acesso_convites_evento", {

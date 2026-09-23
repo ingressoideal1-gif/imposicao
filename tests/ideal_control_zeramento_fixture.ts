@@ -92,11 +92,14 @@ async function fixture(withOld: boolean) {
   tables.producao_acesso_dispositivos = [{ id: A, evento_id: E, nome: "Aparelho sintetico", status: "ativo", token_hash: await hashDoToken(TOKEN) }];
   tables.producao_acesso_setores = [{ id: S, evento_id: E, nome: "Setor de teste", status: "ativo", tipo_uso: "unico", bloqueado: false, abre_em: null, fecha_em: null }];
   tables.producao_acesso_bloqueios = [];
+  tables.producao_acesso_pedidos = [{evento_id:E,pedido_id_int:123,publicado_em:oldMoment,total_credenciais:2}];
   tables.producao_acesso_leituras = withOld ? [structuredClone(reading)] : [];
   tables.producao_acesso_entradas_unicas = withOld ? [{ credencial_id: C, evento_id: E, setor_id: S, dispositivo_id: A, momento: oldMoment }] : [];
   return {
     token: TOKEN, reading,
     carga: { evento: { id: E, nome: "Confirmacao sintetica", sal: SAL, ativo: true },
+      publicacao: {versao:JSON.stringify([[123,oldMoment,2]]),concluida:true},
+      publicacao_baixada: JSON.stringify([[123,oldMoment,2]]),
       aparelho: { id: A, nome: "Aparelho sintetico", setores: [S] }, sais: {},
       setores: [{ id: S, nome: "Setor de teste", quantidade: 2, tipo_uso: "unico", bloqueado: false, abre_em: null, fecha_em: null }],
       bloqueios: [], credenciais: [

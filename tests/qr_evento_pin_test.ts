@@ -137,16 +137,15 @@ Deno.test("HTTP: portaria exige token para editar e gráfica exige papel para co
   } finally { Deno.serve = original; }
 });
 
-Deno.test("QR: permite emitir antes da publicação e informa a pendência ao carregar", async () => {
+Deno.test("QR: consulta e ativa celular sem ingressos, preservando PIN e convite", async () => {
   reset(); semIngressos = true;
+  await registrarPin({chave:KEY,pin:PIN});
   const qr = await emitirQrEvento(E, I);
-  assert(convite && qr.conteudo.startsWith("IDEAL-CONTROL-EVENTO:1:"));
-  try { await usarQrEvento({segredo:qr.conteudo.split(":")[2]},false); throw new Error("aceitou vazio"); }
-  catch (e) { assert(e instanceof Recusa && e.status === 409 && e.message.includes("ingressos publicados")); }
-  assert(!chamadas.some(r=>r.t === "rpc/producao_acesso_ativar_qr_evento" && r.c.p_token_hash));
-  semIngressos = false;
-  const consulta = await usarQrEvento({segredo:qr.conteudo.split(":")[2]},false);
-  assert(consulta.evento.id === E);
+  const segredo = qr.conteudo.split(":")[2];
+  assert((await usarQrEvento({segredo},false)).evento.id === E);
+  const r = await usarQrEvento({segredo,token:TOKEN,nome:"Celular",navegador:"sintetico",chave:KEY},true);
+  assert(r.evento.id === E && r.aparelho.id === A);
+  assert(!chamadas.some(r=>r.t === "producao_acesso_credenciais"));
   assert(chamadas.filter(r=>r.t === "producao_acesso_convites_evento" && r.method === "POST").length === 1);
 });
 Deno.test("QR: sem setores não emite; convite inválido não revela preparação", async () => {

@@ -41,7 +41,7 @@
             evento = r.evento;
             dialogo.querySelector('[data-evento-nome]').textContent = evento.nome;
             dialogo.querySelector('[data-evento-confirmar]').hidden = false;
-            aviso.textContent = 'Confirme para baixar os ingressos e as configurações deste evento.';
+            aviso.textContent = 'Confirme para carregar o evento e suas configurações. Se os ingressos ainda não foram publicados, serão sincronizados depois.';
         } catch (e) { aviso.textContent = e.message; }
         finally { ocupado = false; }
     }

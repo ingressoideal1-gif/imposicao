@@ -115,4 +115,4 @@ def test_grafica_gera_qr_decodificavel_antes_de_publicar_ingressos():
             escritas:_chamadas.filter(c=>c.metodo==='POST' && c.caminho.endsWith('/qr')).length};
     """)
     assert r['habilitado'] and r['visivel'] and r['decodificado'] and r['escritas'] == 1
-    assert 'após a publicação dos ingressos' in r['mensagem']
+    assert 'Os ingressos serão sincronizados após a publicação' in r['mensagem']

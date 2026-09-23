@@ -133,6 +133,7 @@
             nova.entradas_zeradas_em = novidade.entradas_zeradas_em;
         }
 
+        if (novidade.publicacao) nova.publicacao = copiaRasa(novidade.publicacao);
         if (novidade.evento) nova.evento = mesclar(base.evento, novidade.evento);
 
         if (novidade.setores && novidade.setores.length) {

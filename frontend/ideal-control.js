@@ -182,7 +182,7 @@
             if (!p || !p.evento) return null;
             var pendencia = !(p.setores || []).length ? 'Prepare os setores antes de gerar o QR.' : '';
             var aviso = p.publicacao && Number(p.publicacao.total_credenciais) === 0
-                ? 'Você já pode gerar o QR. O carregamento no celular ficará disponível após a publicação dos ingressos.' : '';
+                ? 'O QR já carrega o evento para configuração. Os ingressos serão sincronizados após a publicação.' : '';
             return Object.assign({}, p.evento, { pendencia_qr: pendencia, aviso_qr: aviso });
         });
         acessoDialogo.appendChild($('ic-acesso-secao'));

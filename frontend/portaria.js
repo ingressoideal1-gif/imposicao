@@ -327,30 +327,63 @@
 
     // ── A carga ─────────────────────────────────────────────────────────────
 
+    var baixandoCarga = false;
+    function prontoParaLer() {
+        var c = estado.carga;
+        return !baixandoCarga && c && (c.credenciais || []).length > 0 &&
+            (!c.publicacao || (c.publicacao.concluida && c.publicacao_baixada === c.publicacao.versao));
+    }
+    function atualizarProntidao() {
+        var pronto = prontoParaLer(), aviso = $('evento-salvo-offline');
+        if (aviso) aviso.textContent = pronto ? 'Pronto para uso offline.'
+            : estado.carga && estado.carga.publicacao && estado.carga.publicacao.concluida
+                ? 'Ingressos publicados. Conecte à internet para concluir o download neste celular.'
+                : 'Aguardando publicação dos ingressos. O evento já pode ser configurado. Conecte à internet para sincronizar.';
+        $('btn-digitar').disabled = !pronto;
+        $('btn-conferir').disabled = !pronto;
+        if (!pronto) {
+            $('btn-toque').classList.add('sumindo');
+            if (window.portariaCamera) window.portariaCamera.desligar();
+        }
+    }
     function baixarCarga() {
+        if (baixandoCarga) return Promise.resolve();
+        baixandoCarga = true;
+        if (window.portariaCamera) window.portariaCamera.desligar();
         mostrar('carregando');
         var acumulada = null;
         function pagina(desde) {
             return api('/faixa?desde=' + desde).then(function (p) {
                 if (!acumulada) acumulada = p;
-                else acumulada.credenciais = acumulada.credenciais.concat(p.credenciais);
+                else {
+                    if (JSON.stringify(p.publicacao) !== JSON.stringify(acumulada.publicacao)) throw new Error('A publicação mudou durante o download. Tente novamente.');
+                    acumulada.credenciais = acumulada.credenciais.concat(p.credenciais);
+                }
                 $('carregando-conta').textContent =
                     acumulada.credenciais.length.toLocaleString('pt-BR') + ' ingressos';
                 if (p.proxima !== null && p.proxima !== undefined) return pagina(p.proxima);
                 var porQr = localStorage.getItem('ideal_qr_baixar') === acumulada.evento.id;
                 // O QR exige uma carga completa antes de liberar a leitura.
-                var preparar = porQr ? novidadesParaPrimeiraCarga(acumulada) : Promise.resolve(acumulada);
+                var marca = acumulada.publicacao && acumulada.publicacao.versao;
+                var preparar = (porQr || acumulada.publicacao) ? novidadesParaPrimeiraCarga(acumulada) : Promise.resolve(acumulada);
                 return preparar.then(function (pronta) {
+                    if (pronta.publicacao && pronta.publicacao.versao !== marca) throw new Error('A publicação mudou durante o download. Tente novamente.');
+                    pronta.publicacao_baixada = marca || null;
                     acumulada = pronta;
-                    return porQr ? D.gravarEventoPreparado(pronta) : D.gravarCarga(pronta);
+                    return (porQr || pronta.publicacao) ? D.gravarEventoPreparado(pronta) : D.gravarCarga(pronta);
                 }).then(function () {
                     if (porQr) localStorage.removeItem('ideal_qr_baixar');
                     estado.carga = acumulada;
+                    baixandoCarga = false;
                     entrarEmLeitura();
                 });
             });
         }
-        return pagina(0);
+        return pagina(0).catch(function (e) {
+            baixandoCarga = false;
+            if (estado.carga) entrarEmLeitura();
+            throw e;
+        });
     }
 
     function novidadesParaPrimeiraCarga(carga) {
@@ -376,6 +409,7 @@
     }
 
     function ligarCamera() {
+        if (!prontoParaLer()) return;
         if (!window.portariaCamera) return;
         // O rotulo volta ao repouso a cada abertura: a lanterna se apaga junto
         // com a camera, e um botao dizendo "acesa" com a luz apagada e pior do
@@ -413,6 +447,7 @@
      * ja e o toque, e pedir outro seria dois toques para o mesmo gesto.
      */
     function comecarALer() {
+        if (!prontoParaLer()) { atualizarProntidao(); return; }
         if (!somDestravado) {
             $('btn-toque').classList.remove('sumindo');
             return;   // a camera abre no toque, junto com o som
@@ -430,6 +465,7 @@
         }).join(' · ');
         atualizarContador();
         mostrar('lendo');
+        atualizarProntidao();
         ligarSincronismo();
         comecarALer();
     }
@@ -536,18 +572,22 @@
     /** Guarda o que a rota leve trouxe, sem perder nada do que ja havia. */
     function aplicarNovidades(novidade) {
         var S = window.portariaSincronismo;
-        if (!S || !novidade) return Promise.resolve();
+        if (!S || !novidade || baixandoCarga) return Promise.resolve();
         var eventoId = estado.carga && estado.carga.evento && estado.carga.evento.id;
         var entradasAntes = estado.entradasDesdeOSincronismo;
         return D.gravarNovidades(novidade, eventoId).then(function (nova) {
             // O estado em memória só avança depois do commit do IndexedDB.
             if (!estado.carga || estado.carga.evento.id !== eventoId) return;
             estado.carga = nova;
+            atualizarProntidao();
             // O servidor ja enxerga o que este aparelho vinha somando a mao:
             // continuar somando contaria as mesmas pessoas duas vezes. Leitura
             // feita sem sinal entra na conta assim que a fila subir e o
             // sincronismo seguinte a contar.
             estado.entradasDesdeOSincronismo = Math.max(0, estado.entradasDesdeOSincronismo - entradasAntes);
+            if (nova.publicacao && nova.publicacao.concluida && nova.publicacao_baixada !== nova.publicacao.versao) {
+                return D.contarFila().then(function (n) { if (!n) return baixarCarga(); });
+            }
             return atualizarContador();
         });
     }
@@ -605,6 +645,7 @@
 
     function validarTexto(texto, setorEscolhido) {
         var carga = estado.carga;
+        if (!prontoParaLer()) { atualizarProntidao(); return Promise.resolve(); }
         // A escolha de setor passa por fora do silencio, de proposito: o texto e
         // exatamente o que a camera acabou de ler, e o porteiro acabou de tocar
         // no botao. Sem esta saida, a propria escolha dele cairia no silencio e
@@ -909,7 +950,10 @@
         }).then(function () { sincronizando = false; });
     }
 
-    window.addEventListener('online', sincronizar);
+    window.addEventListener('online', function () { sincronizar(); puxarNovidades(); });
+    setInterval(function () {
+        if (estado.token && estado.carga && !prontoParaLer() && !baixandoCarga && navigator.onLine) puxarNovidades();
+    }, 30000);
     setInterval(sincronizar, 30000);
 
     // ── Amarração da tela ───────────────────────────────────────────────────
