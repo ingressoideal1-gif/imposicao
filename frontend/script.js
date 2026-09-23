@@ -34617,6 +34617,9 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
         const numOpts = filteredNumeracoes.map(n =>
             opcaoDeNumeracaoDoModelo(n, idCliente, String(n.id) === String(resolvedNumId))
         ).join('');
+        const numeracaoSelecionada = resolvedNumId
+            ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
+        const modoDaNumeracao = numeracaoSelecionada ? rotuloDoModoDeImpressao(numeracaoSelecionada) : '—';
         // Aprovar pelo painel e privilegio de ADM e Atendimento; o papel pode
         // ainda estar em viagem no primeiro desenho — sem ele, o botao nao nasce.
         const podeAprovarPeloPainel = papelAtual() === 'admin' || papelAtual() === 'atendimento';
@@ -34759,7 +34762,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap;">
                     <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                     <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.74rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo"> <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i> <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span> </span>
-                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<span class="badge" style="font-size: 0.72rem;">Modo de impressão: ${modoDeImpressaoDoModelo(item) === 'blocado' ? 'Blocado' : 'Sequencial'}</span>`}
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<span class="badge" id="amostra-item-print-mode-${idx}" style="font-size: 0.72rem;">Modo de impressão: ${modoDaNumeracao}</span>`}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span id="selos-arte-${idx}" style="display: contents;">${selosDeArteCompartilhada}</span>
@@ -36154,6 +36157,8 @@ function onItemNumSelect(idx, osId, itemId) {
     const numId = numSelect.value;
     const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
     const numNome = numObj ? numObj.name : null;
+    const modoBadge = document.getElementById(`amostra-item-print-mode-${idx}`);
+    if (modoBadge) modoBadge.textContent = `Modo de impressão: ${numObj ? rotuloDoModoDeImpressao(numObj) : '—'}`;
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     
     let versoStateChanged = false;
