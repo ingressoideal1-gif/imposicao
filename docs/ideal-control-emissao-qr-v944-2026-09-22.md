@@ -14,3 +14,9 @@ A v943 bloqueou indevidamente a emissão do convite quando ainda não havia ingr
 12 testes Deno e 14 testes de navegador aprovados. O novo teste gera e decodifica o QR da tela para um evento sem ingressos. O teste de backend confirma emissão, aviso de pendência e reutilização do mesmo QR após publicar. Setor ausente, autorização e revogação seguem cobertos. Sintaxe JS e tipos das funções aprovados.
 
 Nenhum ingresso, PDF ou impressão de produção foi gerado. Isso corrige a emissão; a carga completa do pedido 19521 ainda depende dos ingressos publicados.
+
+## Entrega confirmada
+
+Commit `8077c3dd`, tag `v944`, main atualizado sem força. Cloudflare Pages completed/success. Seis de seis hashes normalizados corresponderam nos dois domínios públicos para index.html, ideal-control.js e qr-evento-envio.js, com cache-buster.
+
+Funções ACTIVE: acesso-interno v257 (verify_jwt=true), portaria v255 (verify_jwt=false). Evidência em `docs/evidencias/ideal-control-v944-public-verification.json`.
