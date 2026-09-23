@@ -262,7 +262,7 @@
 .gf-btn.primario:disabled{opacity:.45;cursor:not-allowed}
 .gf-drop{border:2px dashed #334155;border-radius:10px;padding:34px;text-align:center;color:#94a3b8;cursor:pointer}
 .gf-drop.sobre{border-color:#3b82f6;background:rgba(59,130,246,.08);color:#e2e8f0}
-.gf-pilhas{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:16px}
+.gf-pilhas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px;margin-top:16px}
 .gf-pilha{background:#0f172a;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;min-height:160px}
 .gf-pilha h3{margin:0;padding:10px 12px;font-size:12px;font-weight:600;border-bottom:1px solid #1e293b;
   display:flex;justify-content:space-between;align-items:center}
@@ -271,7 +271,11 @@
 .gf-item:hover{background:#1e293b}
 .gf-item.sel{background:#1d4ed8}
 .gf-item img{width:30px;height:38px;object-fit:cover;border-radius:3px;background:#1e293b;flex:none}
-.gf-item .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gf-item .txt{min-width:0;overflow:hidden;overflow-wrap:anywhere}
+.gf-match{display:grid;grid-template-columns:30px minmax(0,1fr) 12px minmax(0,1fr);align-items:center;gap:7px}
+.gf-match .gf-match-lado{min-width:0;overflow-wrap:anywhere}
+.gf-match .gf-match-lado b{font-size:11px}
+.gf-match .gf-match-seta{color:#64748b}
 .gf-tag{font-size:10px;color:#64748b}
 .gf-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px}
 .gf-card{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:8px;text-align:center}
@@ -449,6 +453,13 @@
         return fotos.find(function (f) { return f.nome === nome; }) || null;
     }
 
+    function tipoDeCasamento(regra) {
+        if (regra === 'aproximado') return '≈ Aproximada';
+        if (regra === 'manual') return '✋ Manual';
+        if (['exato', 'sem-extensao', 'normalizado', 'digitos'].indexOf(regra) !== -1) return '✅ Exata';
+        return '◻ Tipo não registrado';
+    }
+
     function pilhaCasadas(r) {
         return `
         <div class="gf-pilha">
@@ -456,9 +467,21 @@
             <div class="lista">
                 ${r.casadas.length ? r.casadas.map(function (c) {
             var f = fotoDe(c.arquivo);
-            return `<div class="gf-item" onclick="window.__gfDesfazer('${esc(c.arquivo)}')" title="clique para desfazer">
+            var linha = cfg.rows[c.linha] || {};
+            var valor = c.coluna ? String(linha[c.coluna] == null ? '' : linha[c.coluna]).trim() : '';
+            var id = identidadeDaLinha(c.linha);
+            var coluna = c.coluna || id.coluna;
+            var textoBanco = c.coluna ? (valor || 'vazio') : id.valor;
+            var avisoOrigem = c.coluna ? '' : 'Coluna do casamento não registrada';
+            return `<div class="gf-item gf-match" onclick="window.__gfDesfazer('${esc(c.arquivo)}')" title="clique para desfazer">
                         <img src="${f ? f.url : ''}" alt="">
-                        <div class="txt">${esc(rotuloDaLinha(c.linha))}<br><span class="gf-tag">${esc(c.arquivo)} · ${esc(c.regra)}</span></div>
+                        <div class="gf-match-lado"><span class="gf-rot">foto</span><br><b>${esc(c.arquivo)}</b></div>
+                        <span class="gf-match-seta">→</span>
+                        <div class="gf-match-lado" title="${esc(coluna)}: ${esc(textoBanco)}${avisoOrigem ? ' · ' + esc(avisoOrigem) : ''}">
+                            <span class="gf-rot">${esc(tipoDeCasamento(c.regra))} · linha ${c.linha + 1}</span><br>
+                            <b>${esc(coluna)}: ${esc(textoBanco)}</b>
+                            ${avisoOrigem ? `<br><span class="gf-rot">${esc(avisoOrigem)}</span>` : ''}
+                        </div>
                     </div>`;
         }).join('') : '<div class="gf-vazio">nenhuma ainda</div>'}
             </div>
@@ -496,7 +519,7 @@
                                         </div>
                                         <div class="gf-seta">↔</div>
                                         <div class="gf-lado">
-                                            <span class="gf-rot">${esc(id.coluna)} · linha ${li + 1}</span>
+                                            <span class="gf-rot">❓ Ambígua · ${esc(id.coluna)} · linha ${li + 1}</span>
                                             <b>${esc(id.valor)}</b>
                                             ${extras.map(function (e) {
                         return `<span class="gf-rot">${esc(e.coluna)}: ${esc(e.valor)}</span>`;
@@ -1115,6 +1138,8 @@
                 if (!linha.__fotos) linha.__fotos = {};
                 linha.__fotos[cfg.coluna] = {
                     ref: f.hash, url: url, arquivo: f.nome,
+                    coluna_casamento: c.coluna || null,
+                    regra_casamento: c.regra,
                     cx: +e.cx.toFixed(4), cy: +e.cy.toFixed(4),
                     zoom: +e.zoom.toFixed(3), rot: e.rot || 0,
                     dpi: window.dpiNaJanela(f.w, f.h, cfg.janela.w_mm, cfg.janela.h_mm, cfg.janela.fit, e.zoom)
@@ -1327,7 +1352,8 @@
                 });
             }
             casadas.push({
-                arquivo: nome, linha: i, regra: 'no banco',
+                arquivo: nome, linha: i, regra: meta.regra_casamento || 'no banco',
+                coluna: meta.coluna_casamento || '',
                 enq: {
                     cx: typeof meta.cx === 'number' ? meta.cx : 0.5,
                     cy: typeof meta.cy === 'number' ? meta.cy : 0.4,

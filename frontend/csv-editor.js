@@ -1974,6 +1974,11 @@
                 r[COL_FOTOS][novo] = r[COL_FOTOS][antigo];
                 delete r[COL_FOTOS][antigo];
             }
+            if (r[COL_FOTOS] && typeof r[COL_FOTOS] === 'object') {
+                Object.values(r[COL_FOTOS]).forEach(meta => {
+                    if (meta && meta.coluna_casamento === antigo) meta.coluna_casamento = novo;
+                });
+            }
         });
         ed.larguras[novo] = ed.larguras[antigo];
         delete ed.larguras[antigo];

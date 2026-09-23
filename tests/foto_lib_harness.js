@@ -107,6 +107,7 @@ function casadaDe(r, nome) {
     const r = lib.casarFotos([arq('ana cristna.jpg')], linhas, ['Nome']);
     ok(r.casadas.length === 1, 'uma letra faltando casa automaticamente', r);
     ok(r.casadas[0]?.regra === 'aproximado', 'identifica a associacao aproximada', r);
+    ok(r.casadas[0]?.coluna === 'Nome', 'identifica a coluna da associacao aproximada', r);
 })();
 
 (function aproximacaoComExtensao() {
@@ -154,6 +155,10 @@ function casadaDe(r, nome) {
     const linhas = [{ Nome: 'Ana', CPF: '11122233344' }];
     const r = lib.casarFotos([arq('11122233344.jpg')], linhas, ['Foto', 'Nome', 'CPF']);
     ok(r.casadas.length === 1, 'casa pela coluna que resolver', r);
+    ok(r.casadas[0].coluna === 'CPF', 'informa a coluna que gerou o casamento', r.casadas);
+
+    const repetida = lib.casarFotos([arq('ana.jpg')], [{ Nome: 'ana.jpg', Apelido: 'ana.jpg' }], ['Nome', 'Apelido']);
+    ok(repetida.casadas[0].coluna === 'Nome', 'se duas colunas casam, informa a primeira da ordem', repetida.casadas);
 })();
 
 // ─── 9. Linha desmarcada nao entra no lote ────────────────────────────────────

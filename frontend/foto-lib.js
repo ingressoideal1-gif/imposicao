@@ -241,7 +241,7 @@
         lins.forEach(function (l) { linLivre[l.i] = l; });
 
         REGRAS.forEach(function (regra) {
-            var porChaveArq = {}, porChaveLin = {};
+            var porChaveArq = {}, porChaveLin = {}, colunaPorChaveLin = {};
 
             Object.keys(arqLivre).forEach(function (k) {
                 var a = arqLivre[k];
@@ -258,6 +258,8 @@
                     var c = regra.chave(v);
                     if (!c) return;
                     var lista = porChaveLin[c] || (porChaveLin[c] = []);
+                    var origens = colunaPorChaveLin[c] || (colunaPorChaveLin[c] = {});
+                    if (!Object.prototype.hasOwnProperty.call(origens, l.i)) origens[l.i] = col;
                     if (lista.indexOf(l) === -1) lista.push(l);
                 });
             });
@@ -268,7 +270,8 @@
                 if (!as.length || !ls.length) return;
 
                 if (as.length === 1 && ls.length === 1) {
-                    casadas.push({ arquivo: as[0].nome, ref: as[0].ref, linha: ls[0].i, regra: regra.nome });
+                    casadas.push({ arquivo: as[0].nome, ref: as[0].ref, linha: ls[0].i,
+                        regra: regra.nome, coluna: colunaPorChaveLin[chave][ls[0].i] });
                     delete arqLivre[as[0].i];
                     delete linLivre[ls[0].i];
                     return;
@@ -297,7 +300,7 @@
             var alvo = normalizarTexto(semExtensao(a.nome));
             if (alvo.length < 5 || !/[a-z]/.test(alvo)) return;
             Object.keys(linLivre).forEach(function (lk) {
-                var l = linLivre[lk], melhorD = Infinity;
+                var l = linLivre[lk], melhorD = Infinity, melhorCol = '';
                 cols.forEach(function (col) {
                     if (temExtensaoDuplicada(l.ref && l.ref[col])) return;
                     var valor = normalizarTexto(semExtensao(l.ref && l.ref[col]));
@@ -306,9 +309,9 @@
                     var limite = Math.min(3, Math.floor(Math.max(alvo.length, valor.length) * 0.25));
                     if (Math.abs(alvo.length - valor.length) > limite) return;
                     var d = distancia(alvo, valor);
-                    if (d <= limite) melhorD = Math.min(melhorD, d);
+                    if (d <= limite && d < melhorD) { melhorD = d; melhorCol = col; }
                 });
-                if (melhorD < Infinity) pares.push({ a: a, l: l, d: melhorD });
+                if (melhorD < Infinity) pares.push({ a: a, l: l, d: melhorD, coluna: melhorCol });
             });
         });
         pares.forEach(function (p) {
@@ -316,7 +319,8 @@
                 return outro !== p && (outro.a === p.a || outro.l === p.l) && outro.d <= p.d;
             });
             if (concorrente) return;
-            casadas.push({ arquivo: p.a.nome, ref: p.a.ref, linha: p.l.i, regra: 'aproximado' });
+            casadas.push({ arquivo: p.a.nome, ref: p.a.ref, linha: p.l.i,
+                regra: 'aproximado', coluna: p.coluna });
             delete arqLivre[p.a.i];
             delete linLivre[p.l.i];
         });
