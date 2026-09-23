@@ -44,4 +44,27 @@ Recuperação da entrega: restaurar o corpo anterior versionado em `sql/ideal_co
 
 Após obter v948, abrir olho → Ler QR do evento e ler novamente o QR do pedido 22066. Usar a senha já cadastrada naquele celular. Atualizar o painel Ideal Control do Imposition e consultar a senha no aparelho recuperado. Se houver fila pendente ou aparelho pausado, tratar a condição indicada sem limpar os dados.
 
-Publicação web e verificação dos arquivos públicos: registrar abaixo após propagação. Aceitação física no iPhone permanece pendente.
+## Publicação confirmada
+
+- Frontend **v948**, commit funcional `1f4d303d`, integrado em `main`; Cloudflare Pages concluiu com sucesso.
+- Edge `portaria` **258**, status ACTIVE, `verify_jwt=false` (autenticação própria do aparelho preservada).
+- Após propagação, **20/20** comparações SHA-256 normalizadas coincidiram com os arquivos locais, com cache-buster, em `imposition.ai-ideal.com.br` e `imposicao.pages.dev`.
+- As primeiras leituras ainda serviam a versão anterior durante a propagação; a conferência foi repetida, sem republicação desnecessária.
+- Checkout operacional preservado. Trabalho em `C:\ProjetosLocais\ideal-imposition-ideal-control-qr-pronto`.
+- Aceitação física no iPhone e recuperação efetiva da instalação do usuário permanecem pendentes. Nenhum aparelho real foi criado/excluído durante a correção.
+
+### Hashes públicos confirmados em ambos os domínios
+
+| Arquivo | SHA-256 normalizado |
+|---|---|
+
+| index.html | `45b1c72f090dcfcfe6d46c532ad1d0b8602441ccb44ce48cb368c12c6acdde49` |
+| controle.html | `154ee7a40ddc4faa096d50f80e5cebfd55b44f785db531031b580576dfdc0678` |
+| lista-eventos.js | `ec4822e5f9a96568080520bd3331850d70e417fa82b9fb759f094ae546902586` |
+| controle.js | `b5c4256522cc86beaa3821f6688bfb6a5fdb4a8c79478774cf7aee6e58bb184d` |
+| qr-evento.js | `4c368bd6093811633567b9b7f69156da6e8da0cf3074ab3d3b82724a879a40a3` |
+| pin-instalacao.js | `90ab0b0dab9aa87068399a475ea15a36336530df7de0dd70ca262862668f6906` |
+| portaria.html | `0f842dcb81209817025715f7368c641495912a41b606c3e97e88d4c6d4896b32` |
+| reiniciar.html | `f1a70a14ed0ae7319415c5fb2ac0a0955c785a3d71844744f0cdbf2c3ac76e66` |
+| reiniciar.js | `453dea5430b9123ca3dab68f479bc33b45a72437524e6d366f6b4140036777e9` |
+| sw.js | `6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d` |
