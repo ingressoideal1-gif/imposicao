@@ -346,6 +346,67 @@ def test_sem_elemento_foto_nao_confere_nada():
     eng._conferir_e_aquecer_fotos()  # nao levanta
 
 
+def test_folha_combinada_confere_a_foto_de_cada_modelo(foto_metades):
+    # A numeracao geral tem oito linhas e FOTO sem coluna, mas o multi_map
+    # imprime somente as numeracoes das artes. Era o falso erro do pedido 22241.
+    eng = _engine_fake([{"type": "FOTO", "csv_column": ""}], [{} for _ in range(8)])
+    eng.cfg.multi_artes = [
+        {"modelo": "A", "qtd": 1, "numeracao": {
+            "elements": [dict(EL_FOTO, csv_column="FOTOS")],
+            "csv_data": [{"FOTOS": "ana.jpg", "__fotos": {"FOTOS": {"url": foto_metades}}}],
+        }},
+        {"modelo": "B", "qtd": 1, "numeracao": {"elements": [{"type": "TEXT"}]}},
+    ]
+    eng._conferir_e_aquecer_fotos()
+
+
+def test_folha_combinada_acusa_so_foto_realmente_pendente(foto_metades):
+    eng = _engine_fake([], [])
+    eng.cfg.multi_artes = [
+        {"modelo": "A", "qtd": 1, "numeracao": {
+            "elements": [dict(EL_FOTO, csv_column="FOTOS")],
+            "csv_data": [{"FOTOS": foto_metades}, {"FOTOS": "nao_impresso.jpg"}],
+        }},
+        {"modelo": "B", "qtd": 2, "numeracao": {
+            "elements": [dict(EL_FOTO, csv_column="FOTOS")],
+            "csv_data": [{"FOTOS": "desmarcado.jpg", "__ativo": False},
+                         {"FOTOS": foto_metades}, {"FOTOS": "pendente.jpg"}],
+        }},
+    ]
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    msg = str(ex.value)
+    assert "1 linha(s)" in msg
+    assert "modelo B, linha 2 (coluna 'FOTOS')" in msg
+    assert "pendente.jpg" in msg
+    assert "nao_impresso.jpg" not in msg
+    assert "desmarcado.jpg" not in msg
+
+
+def test_folha_combinada_recusa_foto_sem_linha_do_modelo():
+    eng = _engine_fake([], [])
+    eng.cfg.multi_artes = [{"modelo": "A", "qtd": 2, "numeracao": {
+        "elements": [dict(EL_FOTO, csv_column="FOTOS")],
+        "csv_data": [{"FOTOS": ""}],
+    }}]
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    msg = str(ex.value)
+    assert "modelo A, linha 2 (coluna 'FOTOS'): linha do banco ausente" in msg
+
+
+def test_folha_combinada_sem_banco_proprio_usa_offset_global(foto_metades):
+    eng = _engine_fake([], [{"Foto": foto_metades}, {"Foto": "pendente.jpg"}])
+    eng.cfg.multi_artes = [
+        {"modelo": modelo, "qtd": 1, "numeracao": {"elements": [EL_FOTO]}}
+        for modelo in ("A", "B")
+    ]
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    assert "1 linha(s)" in str(ex.value)
+    assert "modelo B, linha 1" in str(ex.value)
+
+
 def test_valor_cru_da_coluna_tambem_serve(foto_metades):
     """Sem __fotos, o caminho escrito na propria coluna vale — como no BarTender."""
     el, linha = _el(foto_metades)

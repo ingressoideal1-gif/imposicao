@@ -1563,48 +1563,75 @@ class ImpositionEngine:
             local existe para nao pagar.
         """
         cfg = self.cfg
-        els = [e for e in (getattr(cfg, "elements", None) or []) if e.get("type") == "FOTO"]
-        if not els:
-            return
-        linhas = getattr(cfg, "csv_data", None) or []
-        if not linhas:
+        if getattr(cfg, "multi_artes", None):
+            # O render usa os elementos e a linha de CADA arte do multi_map.
+            # A numeracao geral do trabalho nao e desenhada nessa folha.
+            grupos = []
+            inicio = 0
+            for indice, arte in enumerate(cfg.multi_artes):
+                qtd = int(arte.get("qtd", 0))
+                numeros = (arte.get("numeracao"), arte.get("numeracao_2"))
+                els = [e for num in numeros if num for e in (num.get("elements") or [])
+                       if e.get("type") == "FOTO" and not _so_layout(e)]
+                banco = (numeros[0] or {}).get("csv_data") or None
+                if banco:
+                    banco = [r for r in banco if r.get("__ativo", True) is not False]
+                if els and qtd > 0:
+                    # Mesmo fallback e mesmos limites usados por _linha_do_banco.
+                    linhas = [banco[i] if banco and i < len(banco) else
+                              (cfg.csv_data[inicio + i] if not banco and cfg.csv_data
+                               and inicio + i < len(cfg.csv_data) else None)
+                              for i in range(qtd)]
+                    grupos.append((els, linhas, str(arte.get("modelo") or arte.get("nome") or indice + 1)))
+                inicio += qtd
+        else:
+            els = [e for e in (getattr(cfg, "elements", None) or []) if e.get("type") == "FOTO"]
+            grupos = [(els, getattr(cfg, "csv_data", None) or [], "")] if els else []
+        if not grupos:
             return
 
         faltando = []
         origens = []
-        for i, linha in enumerate(linhas, start=1):
-            for el in els:
-                col = el.get("csv_column", "")
-                meta = _foto_da_linha(el, linha)
-                origem = str((meta or {}).get("url") or "").strip()
-
-                if not origem:
-                    # Distinguir "celula vazia" de "celula com um nome escrito"
-                    # nao e preciosismo: sao dois trabalhos diferentes. A primeira
-                    # espera uma foto; a segunda ja tem a foto em algum lugar e o
-                    # que falta e ligar as duas pelo Gerenciador.
-                    bruto = str((linha or {}).get(col, "") or "").strip()
-                    faltando.append((
-                        i, col,
-                        f"a celula tem '{bruto[:60]}', que e so um nome de arquivo — "
-                        "nao um endereco nem um caminho" if bruto else "celula vazia"
-                    ))
+        for els, linhas, modelo in grupos:
+            for i, linha in enumerate(linhas, start=1):
+                if linha is None:
+                    for el in els:
+                        faltando.append((modelo, i, el.get("csv_column", ""),
+                                         "linha do banco ausente"))
                     continue
+                for el in els:
+                    col = el.get("csv_column", "")
+                    meta = _foto_da_linha(el, linha)
+                    origem = str((meta or {}).get("url") or "").strip()
 
-                # Modo BarTender: o caminho tem de existir NESTA estacao. Conferir
-                # agora e a diferenca entre uma lista de pendencias e uma tiragem
-                # que morre no meio.
-                if not origem.lower().startswith(("http", "data:")) and not os.path.exists(origem):
-                    # Cortar pelo COMECO: num caminho longo o que identifica a
-                    # pendencia e o nome do arquivo, que fica no fim.
-                    curto = origem if len(origem) <= 80 else "..." + origem[-80:]
-                    faltando.append((i, col, f"arquivo nao encontrado: '{curto}'"))
-                    continue
+                    if not origem:
+                        # Distinguir "celula vazia" de "celula com um nome escrito"
+                        # nao e preciosismo: sao dois trabalhos diferentes. A primeira
+                        # espera uma foto; a segunda ja tem a foto em algum lugar e o
+                        # que falta e ligar as duas pelo Gerenciador.
+                        bruto = str((linha or {}).get(col, "") or "").strip()
+                        faltando.append((
+                            modelo, i, col,
+                            f"a celula tem '{bruto[:60]}', que e so um nome de arquivo — "
+                            "nao um endereco nem um caminho" if bruto else "celula vazia"
+                        ))
+                        continue
 
-                origens.append(origem)
+                    # Modo BarTender: o caminho tem de existir NESTA estacao. Conferir
+                    # agora e a diferenca entre uma lista de pendencias e uma tiragem
+                    # que morre no meio.
+                    if not origem.lower().startswith(("http", "data:")) and not os.path.exists(origem):
+                        # Cortar pelo COMECO: num caminho longo o que identifica a
+                        # pendencia e o nome do arquivo, que fica no fim.
+                        curto = origem if len(origem) <= 80 else "..." + origem[-80:]
+                        faltando.append((modelo, i, col, f"arquivo nao encontrado: '{curto}'"))
+                        continue
+
+                    origens.append(origem)
 
         if faltando:
-            amostra = "; ".join(f"linha {i} (coluna '{c}'): {m}" for i, c, m in faltando[:10])
+            amostra = "; ".join(f"{f'modelo {modelo}, ' if modelo else ''}linha {i} (coluna '{c}'): {m}"
+                                 for modelo, i, c, m in faltando[:10])
             resto = f"; e mais {len(faltando) - 10}" if len(faltando) > 10 else ""
             raise ValueError(
                 f"{len(faltando)} linha(s) do banco estao sem foto utilizavel - {amostra}{resto}. "
