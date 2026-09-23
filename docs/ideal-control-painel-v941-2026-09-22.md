@@ -28,6 +28,6 @@ Sem mudanças em SQL, Edge Functions, permissões ou regras de negócio. Não ho
 
 ## Publicação e recuperação
 
-Publicação e comparação dos arquivos públicos nos dois domínios serão registradas após a propagação. Recuperação: reverter somente os arquivos desta adaptação, preservando as funções e o banco da versão 940.
+Commit funcional `e5b903a0`, tag `v941`, integrados em `origin/main`. Cloudflare Pages confirmou sucesso no deployment `05bdb3b6-bb3d-4799-bfb7-3860d2a2d565`. Após propagação, 12/12 hashes SHA-256 normalizados conferiram nos domínios `imposition.ai-ideal.com.br` e `imposicao.pages.dev`: index, cliente, produção, CSS e os dois módulos alterados. Evidência: `evidencias/ideal-control-v941-public-verification.json`. Recuperação: reverter somente os arquivos desta adaptação, preservando as funções e o banco da versão 940.
 
 A conferência de navegador usa dados sintéticos; o aceite com celulares físicos e evento real permanece separado desta publicação.
