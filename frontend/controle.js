@@ -68,7 +68,10 @@
     }
 
     function carregarPainel() {
-        return AcessoConta.pedir('/eventos/' + estado.evento_id, { headers: cabecalhos() })
+        var pedirPainel = window.pinInstalacao && window.pinInstalacao.aparelho(estado.evento_id)
+            ? function (caminho, opcoes) { return window.pinInstalacao.pedir(estado.evento_id, caminho, opcoes); }
+            : AcessoConta.pedir;
+        return pedirPainel('/eventos/' + estado.evento_id, { headers: cabecalhos() })
             .then(function (p) { estado.painel = p; desenhar(); return p; })
             .catch(function (e) {
                 // Sessão vencida ou rede caindo no meio do carregamento: sem
@@ -1707,6 +1710,13 @@
      * síncrono escaparia deste encadeamento inteiro.
      */
     function sessaoOuLogin(evento_id) {
+        if (window.pinInstalacao && window.pinInstalacao.aparelho(evento_id)) {
+            return window.pinInstalacao.autorizar(evento_id).then(function (e) {
+                estado.evento_id = evento_id;
+                guardarElevacao({ token: e.token, expira_em: e.expira_em, evento_id: evento_id });
+                return { sessao: null, elevacao: e };
+            });
+        }
         return Promise.resolve().then(function () {
             return AcessoConta.sessao();
         }).then(function (s) {
@@ -1914,6 +1924,7 @@
                 // em "Meus Pedidos" e depois em "← Voltar" devolvia a casa com
                 // a elevacao de 15 minutos de pe e a sessao relampago ainda
                 // aberta, num celular que fica com o porteiro.
+                var qr = $('bloco-qr-evento'); if (qr) qr.classList.add('sumindo');
                 $('lista').classList.add('sumindo');
                 $('bloco-novo-evento').classList.add('sumindo');
                 if (nome) { $('nome-evento-titulo').textContent = nome; }
@@ -1957,6 +1968,7 @@
      * há erro a mostrar, porque não houve promessa nenhuma ao dono.
      */
     function trocarPeloBilheteDaConta(evento_id) {
+        if (window.pinInstalacao && window.pinInstalacao.aparelho(evento_id)) return Promise.resolve();
         // Já há bilhete DESTE evento (o `restaurarElevacao` acabou de lê-lo, ou
         // o `receberElevacao` o entregou): nada a trocar, e uma chamada a menos.
         if (elevado()) { return Promise.resolve(); }
@@ -2002,6 +2014,8 @@
      * minutos morre junto.
      */
     function fecharEngrenagem() {
+        if (window.pinInstalacao) window.pinInstalacao.encerrar();
+        var qr = $('bloco-qr-evento'); if (qr) qr.classList.remove('sumindo');
         guardarElevacao(null);
         $('engrenagem').classList.add('sumindo');
         $('lista').classList.remove('sumindo');
@@ -2186,6 +2200,7 @@
     }
 
     function sairDaConfiguracao() {
+        if (window.pinInstalacao) window.pinInstalacao.encerrar();
         guardarElevacao(null);
         desenhar();
     }
@@ -2198,9 +2213,15 @@
 
     // Substituíveis pelo teste de navegador, que não tem backend.
     function _pedir(caminho, opcoes) {
+        if (window.pinInstalacao && window.pinInstalacao.aparelho(estado.evento_id)) {
+            return window.pinInstalacao.pedir(estado.evento_id, caminho, opcoes);
+        }
         return (window.Controle._pedirParaTeste || AcessoConta.pedir)(caminho, opcoes);
     }
     function _pedirSenha() {
+        if (window.pinInstalacao && window.pinInstalacao.aparelho(estado.evento_id)) {
+            window.pinInstalacao.encerrar();
+        }
         if (window.Controle._pedirSenhaParaTeste) {
             return window.Controle._pedirSenhaParaTeste();
         }

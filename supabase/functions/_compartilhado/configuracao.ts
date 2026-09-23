@@ -214,43 +214,16 @@ export async function aplicarEvento(eventoId: string, corpo: any): Promise<any> 
  *
  * ## Por que a ordem importa
  *
- * Apaga primeiro, carimba por ultimo. O carimbo e o que manda os portoes
- * esquecerem o que ja baixaram; se ele existisse antes de as linhas sairem, o
- * celular esvaziaria a lista local e o sincronismo seguinte a encheria de novo
- * com as mesmas entradas -- o dono veria o contador voltar sozinho. Falhando no
- * meio, nada foi carimbado e apertar de novo termina o servico: os tres passos
- * sao repetiveis.
+ * A RPC apaga e carimba na mesma transação, coordenada com o recebimento de
+ * leituras. Assim um envio em voo não repõe o que o dono acabou de zerar.
  */
 export async function zerarEntradas(eventoId: string): Promise<any> {
-  await banco(
-    "DELETE",
-    `producao_acesso_entradas_unicas?evento_id=eq.${eventoId}`,
-    undefined,
-    "return=minimal",
-  );
-  await banco(
-    "DELETE",
-    `producao_acesso_leituras?evento_id=eq.${eventoId}`,
-    undefined,
-    "return=minimal",
-  );
-
-  // `now()` e o relogio do BANCO, e nao o desta funcao, de proposito -- o mesmo
-  // motivo do `momento` da tabela de falhas de pareamento. O aparelho compara
-  // esta marca com a que guardou, e uma marca vinda de um relogio diferente do
-  // que carimba as linhas poderia cair antes de entradas que ela deveria
-  // apagar.
-  //
-  // `return=representation` (o padrao do `banco()` para PATCH) e o que devolve o
-  // instante escolhido pelo banco. Sem ele nao haveria o que responder, e a tela
-  // teria de perguntar de novo so para saber a hora.
-  const linha = ((await banco(
-    "PATCH",
-    `producao_acesso_eventos?id=eq.${eventoId}&select=entradas_zeradas_em`,
-    { entradas_zeradas_em: "now()" },
-  )) ?? [])[0];
-
-  return { ok: true, zerado_em: linha?.entradas_zeradas_em ?? null };
+  const linhas = await banco("POST", "rpc/producao_acesso_zerar_entradas", { p_evento_id: eventoId });
+  if (!Array.isArray(linhas) || linhas.length !== 1 || !linhas[0]?.zerado_em ||
+      !Number.isFinite(Date.parse(linhas[0].zerado_em))) {
+    throw new Error("O banco não confirmou a marca do zeramento.");
+  }
+  return { ok: true, zerado_em: linhas[0].zerado_em };
 }
 
 /**
@@ -350,7 +323,7 @@ export function faixa(corpo: any, quantidade: number): [number, number] {
   return [de, ate];
 }
 
-export async function aplicarBloqueio(setor: any, corpo: any, autorId: string): Promise<any> {
+export async function aplicarBloqueio(setor: any, corpo: any, autorId: string | null): Promise<any> {
   const [de, ate] = faixa(corpo, Number(setor.quantidade ?? 0));
   // Obrigatorio, e e a razao de tudo isto existir: um bloqueio sem motivo
   // aparece na portaria como "recusado" e ninguem sabe o que dizer para a

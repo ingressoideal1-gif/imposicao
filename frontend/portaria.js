@@ -337,13 +337,34 @@
                 $('carregando-conta').textContent =
                     acumulada.credenciais.length.toLocaleString('pt-BR') + ' ingressos';
                 if (p.proxima !== null && p.proxima !== undefined) return pagina(p.proxima);
-                return D.gravarCarga(acumulada).then(function () {
+                var porQr = localStorage.getItem('ideal_qr_baixar') === acumulada.evento.id;
+                // O QR exige uma carga completa antes de liberar a leitura.
+                var preparar = porQr ? novidadesParaPrimeiraCarga(acumulada) : Promise.resolve(acumulada);
+                return preparar.then(function (pronta) {
+                    acumulada = pronta;
+                    return porQr ? D.gravarEventoPreparado(pronta) : D.gravarCarga(pronta);
+                }).then(function () {
+                    if (porQr) localStorage.removeItem('ideal_qr_baixar');
                     estado.carga = acumulada;
                     entrarEmLeitura();
                 });
             });
         }
         return pagina(0);
+    }
+
+    function novidadesParaPrimeiraCarga(carga) {
+        function pagina(desde) {
+            return api('/sincronizar' + (desde ? '?desde=' + encodeURIComponent(desde) : '')).then(function (p) {
+                carga = window.portariaSincronismo.aplicar(carga, p);
+                if (p.proxima_desde) {
+                    if (p.proxima_desde === desde) throw new Error('O download das entradas não avançou.');
+                    return pagina(p.proxima_desde);
+                }
+                return carga;
+            });
+        }
+        return pagina(null);
     }
 
     function marcarLanterna(acesa) {
@@ -516,22 +537,17 @@
     function aplicarNovidades(novidade) {
         var S = window.portariaSincronismo;
         if (!S || !novidade) return Promise.resolve();
-        var nova = S.aplicar(estado.carga, novidade);
-        estado.carga = nova;
-        var deFora = {};
-        (novidade.entradas || []).forEach(function (e) {
-            if (e && e.credencial_id && e.momento) deFora[e.credencial_id] = e.momento;
-        });
-        return D.gravarCarga(nova).then(function () {
-            return D.gravarEntradas(deFora);
-        }).then(function () {
-            return D.gravarTotais(novidade.totais || {});
-        }).then(function () {
+        var eventoId = estado.carga && estado.carga.evento && estado.carga.evento.id;
+        var entradasAntes = estado.entradasDesdeOSincronismo;
+        return D.gravarNovidades(novidade, eventoId).then(function (nova) {
+            // O estado em memória só avança depois do commit do IndexedDB.
+            if (!estado.carga || estado.carga.evento.id !== eventoId) return;
+            estado.carga = nova;
             // O servidor ja enxerga o que este aparelho vinha somando a mao:
             // continuar somando contaria as mesmas pessoas duas vezes. Leitura
             // feita sem sinal entra na conta assim que a fila subir e o
             // sincronismo seguinte a contar.
-            estado.entradasDesdeOSincronismo = 0;
+            estado.entradasDesdeOSincronismo = Math.max(0, estado.entradasDesdeOSincronismo - entradasAntes);
             return atualizarContador();
         });
     }
@@ -743,8 +759,10 @@
     function registrar(leitura) {
         // Somada aqui, e nao ao pintar: e a leitura GRAVADA que conta. Zerada a
         // cada sincronismo, quando o numero do servidor passa a incluir esta.
-        if (leitura.resultado === 'permitido') estado.entradasDesdeOSincronismo += 1;
-        return D.enfileirar(leitura).then(atualizarContador)
+        return D.enfileirar(leitura).then(function (vigente) {
+            if (vigente !== false && leitura.resultado === 'permitido') estado.entradasDesdeOSincronismo += 1;
+            return atualizarContador();
+        })
             .then(function () { sincronizar(); });
     }
 

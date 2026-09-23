@@ -30,10 +30,10 @@ def test_decidir_abertura_e_pura():
             comSessao: window.conta.decidirAbertura({ access_token: 'x' }, false),
         };
     """)
-    assert saida == {"semNada": "entrar", "comAparelho": "lista", "comSessao": "lista"}
+    assert saida == {"semNada": "lista", "comAparelho": "lista", "comSessao": "lista"}
 
 
-def test_sem_aparelho_e_sem_sessao_a_casa_abre_na_tela_de_entrar():
+def test_sem_aparelho_e_sem_sessao_a_casa_oferece_o_qr():
     saida = _no_navegador(DESVIO + """
         localStorage.clear();
         window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
@@ -46,8 +46,8 @@ def test_sem_aparelho_e_sem_sessao_a_casa_abre_na_tela_de_entrar():
             texto: entrar.textContent,
         };
     """)
-    assert saida["entrarVisivel"] is True
-    assert saida["listaVisivel"] is False and saida["barraVisivel"] is False
+    assert saida["entrarVisivel"] is False
+    assert saida["listaVisivel"] is True and saida["barraVisivel"] is True
     assert "Peça à gráfica" in saida["texto"], "quem nao tem acesso precisa saber a quem pedir"
     assert "Esqueci minha senha" in saida["texto"]
 
@@ -267,13 +267,12 @@ def _sair_com_chaveiro(semear):
     """)
 
 
-def test_sair_da_conta_sem_aparelho_devolve_a_tela_de_entrar():
-    """Sem conta e sem aparelho nao sobra casa nenhuma: a tela de entrar e o
-    unico lugar util."""
+def test_sair_da_conta_sem_aparelho_devolve_a_casa_com_qr():
+    """Sem conta, a casa permite carregar um evento pelo QR."""
     saida = _sair_com_chaveiro("")
     assert saida["saiu"] is True
-    assert saida["entrarVisivel"] is True
-    assert saida["listaVisivel"] is False
+    assert saida["entrarVisivel"] is False
+    assert saida["listaVisivel"] is True
 
 
 def test_sair_da_conta_com_aparelho_no_chaveiro_deixa_a_lista():
@@ -318,6 +317,7 @@ def test_o_olho_nao_abre_o_menu_por_baixo_da_tela_de_entrar():
         localStorage.clear();
         window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
         await window.listaEventos.recarregar();
+        window.conta.mostrarEntrar();
         document.getElementById('btn-menu-geral').click();
         await new Promise(r => setTimeout(r, 80));
         const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');

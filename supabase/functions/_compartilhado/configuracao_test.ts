@@ -242,139 +242,39 @@ Deno.test("setor: desbloquear apaga o motivo junto", async () => {
   assertEquals(r.gravado, ["bloqueado", "bloqueado_motivo"]);
 });
 
-// ── Zerar as entradas ───────────────────────────────────────────────────────
-//
-// `zerarEntradas` e a unica funcao deste modulo que DESTROI dado, e o que ela
-// NAO toca importa tanto quanto o que ela apaga. Isso nao da para conferir pelo
-// valor de retorno -- so olhando as idas ao banco.
-
+// ── Zerar as entradas: a transação é executada pela RPC do banco. ───────────
 const MARCA = "2026-08-16T23:10:00+00:00";
 
-/** Uma ida ao banco, como o dublê a viu. */
-interface Ida {
-  metodo: string;
-  caminho: string;
-  corpo: string;
-}
-
-/**
- * O mesmo dublê de `comBancoDeMesa`, mas ANOTANDO cada ida.
- *
- * E o unico jeito de provar uma ausencia: que as credenciais, os setores e os
- * aparelhos continuam onde estao depois de zerar. Um teste sobre o valor de
- * retorno nunca reprovaria um DELETE a mais.
- */
-async function anotandoAsIdasAoBanco<T>(
-  tarefa: () => Promise<T>,
-): Promise<{ resultado: T; idas: Ida[] }> {
-  const idas: Ida[] = [];
+async function comRespostaDoZeramento(resposta: unknown, status = 200) {
   Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
   Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mesa");
-  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
-    const metodo = init?.method ?? "GET";
-    idas.push({
-      metodo,
-      caminho: String(url).replace("https://banco.de.mesa/rest/v1/", ""),
-      corpo: String(init?.body ?? ""),
-    });
-    // O PATCH volta com a linha, como o `return=representation` de verdade: e
-    // dela que sai o `zerado_em` da resposta. Um 204 aqui esconderia que a
-    // funcao depende da representacao para ter o que responder.
-    if (metodo === "PATCH") {
-      return Promise.resolve(
-        new Response(JSON.stringify([{ entradas_zeradas_em: MARCA }]), {
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    }
-    return Promise.resolve(new Response(null, { status: 204 }));
+  const idas: { url: string; corpo: any }[] = [];
+  globalThis.fetch = (async (url: any, init?: RequestInit) => {
+    idas.push({ url: String(url), corpo: JSON.parse(String(init?.body)) });
+    return new Response(JSON.stringify(resposta), { status });
   }) as typeof fetch;
   try {
-    return { resultado: await tarefa(), idas };
-  } finally {
-    globalThis.fetch = fetchDeVerdade;
-  }
+    const resultado = await zerarEntradas("11111111-1111-4111-8111-111111111111");
+    return { resultado, idas };
+  } finally { globalThis.fetch = fetchDeVerdade; }
 }
 
-Deno.test("zerar: apaga as entradas unicas E as leituras", async () => {
-  // As duas, e nao uma. `entradas_unicas` e o que decide a corrida entre dois
-  // portoes; `leituras` e de onde sai o numero na tela. Apagar so a primeira
-  // deixaria o contador cheio; so a segunda deixaria `ja_entrou` barrando quem
-  // entrou no teste.
-  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  const apagados = idas.filter((i) => i.metodo === "DELETE").map((i) => i.caminho);
-  assertEquals(
-    apagados.some((c) => c.startsWith("producao_acesso_entradas_unicas?evento_id=eq.e1")),
-    true,
-    `nao apagou as entradas unicas: ${JSON.stringify(apagados)}`,
-  );
-  assertEquals(
-    apagados.some((c) => c.startsWith("producao_acesso_leituras?evento_id=eq.e1")),
-    true,
-    `nao apagou as leituras: ${JSON.stringify(apagados)}`,
-  );
+Deno.test("zerar: confirma a marca persistida pela RPC e o evento exato", async () => {
+  const { resultado, idas } = await comRespostaDoZeramento([{ zerado_em: MARCA }]);
+  assertEquals(resultado, { ok: true, zerado_em: MARCA });
+  assertEquals(idas, [{ url: "https://banco.de.mesa/rest/v1/rpc/producao_acesso_zerar_entradas",
+    corpo: { p_evento_id: "11111111-1111-4111-8111-111111111111" } }]);
 });
 
-Deno.test("zerar: NAO apaga credenciais, setores nem aparelhos", async () => {
-  // E a escolha do usuario, e cada uma tem um custo proprio se for quebrada:
-  // sem as credenciais o portao recusa TODO MUNDO como `desconhecido`; sem os
-  // setores nao ha onde a leitura cair; sem os aparelhos o dono pareia os
-  // celulares de novo, um a um, com o evento prestes a comecar.
-  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  for (const tabela of [
-    "producao_acesso_credenciais",
-    "producao_acesso_setores",
-    "producao_acesso_dispositivos",
-    "producao_acesso_dispositivo_setores",
-    "producao_acesso_bloqueios",
-    "producao_acesso_pedidos",
-  ]) {
-    assertEquals(
-      idas.some((i) => i.metodo === "DELETE" && i.caminho.startsWith(tabela)),
-      false,
-      `zerar apagou ${tabela}, e nao devia`,
-    );
+Deno.test("zerar: resposta vazia, ambígua ou sem marca válida não confirma sucesso", async () => {
+  for (const resposta of [null, [], [{}], [{ zerado_em: null }],
+    [{ zerado_em: "invalido" }], [{ zerado_em: MARCA }, { zerado_em: MARCA }]]) {
+    await assertRejects(() => comRespostaDoZeramento(resposta), Error);
   }
 });
 
-Deno.test("zerar: nunca apaga sem dizer de QUAL evento", async () => {
-  // Um DELETE sem filtro no PostgREST apaga a tabela inteira -- as entradas de
-  // todos os clientes da grafica, de todos os eventos, com um clique so.
-  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  for (const i of idas.filter((x) => x.metodo === "DELETE")) {
-    assertEquals(
-      i.caminho.includes("evento_id=eq.e1"),
-      true,
-      `DELETE sem o evento no filtro: ${i.caminho}`,
-    );
-  }
-});
-
-Deno.test("zerar: carimba a marca DEPOIS de apagar, e nao antes", async () => {
-  // A marca e o que manda os portoes esquecerem o que baixaram. Carimbada
-  // antes, o celular esvaziaria a lista local e o sincronismo seguinte a
-  // encheria de novo com as MESMAS entradas -- o dono veria o contador voltar
-  // sozinho e nao teria como entender por que.
-  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  const ultimoDelete = idas.map((i) => i.metodo).lastIndexOf("DELETE");
-  const carimbo = idas.findIndex(
-    (i) => i.metodo === "PATCH" && i.caminho.startsWith("producao_acesso_eventos"),
-  );
-  assertEquals(carimbo > ultimoDelete, true, "a marca foi gravada antes de apagar");
-});
-
-Deno.test("zerar: a marca e o relogio do BANCO", async () => {
-  // `now()` e nao um instante calculado aqui: o aparelho COMPARA esta marca com
-  // a que guardou, e um relogio diferente do que carimba as linhas poderia cair
-  // antes de entradas que ela deveria apagar.
-  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  const patch = idas.find((i) => i.metodo === "PATCH");
-  assertEquals(JSON.parse(patch!.corpo), { entradas_zeradas_em: "now()" });
-});
-
-Deno.test("zerar: devolve o instante, para a tela nao ter de perguntar de novo", async () => {
-  const { resultado } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
-  assertEquals(resultado.zerado_em, MARCA);
+Deno.test("zerar: RPC ausente ou falha de transação não usa deletes separados", async () => {
+  await assertRejects(() => comRespostaDoZeramento({ message: "RPC ausente" }, 404), Error);
 });
 
 Deno.test("setor: `bloqueado` que nao e booleano nao passa", async () => {

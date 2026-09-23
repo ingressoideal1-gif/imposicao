@@ -458,6 +458,7 @@ async function rodar(caso) {
             Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
             await window.portariaDeposito.limpar();
             window.portaria.estado.carga = c.carga;
+            await window.portariaDeposito.gravarCarga(c.carga);
             window.portaria.estado.token = 'token-de-teste';
             await window.portariaDeposito.enfileirar({
                 id_local: 'fila-antiga', momento: '2026-08-20T21:00:00Z',

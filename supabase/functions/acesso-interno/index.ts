@@ -24,6 +24,8 @@
  * dele e ele precisa administrar. O sal do evento tambem nao sai.
  */
 import { banco, contar } from "../_compartilhado/banco.ts";
+import { emitirQrEvento, revogarQrEvento } from "../_compartilhado/qr_evento.ts";
+import { consultarPinDaGrafica } from "../_compartilhado/pin_instalacao.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, quemConfigura } from "../_compartilhado/sessao.ts";
 import {
@@ -306,7 +308,7 @@ async function aparelho(aparelhoId: string): Promise<any> {
 async function evento(eventoId: string): Promise<any> {
   const linha = ((await banco(
     "GET",
-    `producao_acesso_eventos?id=eq.${uuid(eventoId, "evento")}&select=id,nome_evento`,
+    `producao_acesso_eventos?id=eq.${uuid(eventoId, "evento")}&select=id,nome_evento,status`,
   )) ?? [])[0];
   if (!linha) throw new Recusa(404, "evento nao encontrado");
   return linha;
@@ -598,6 +600,19 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   // conferencia acontece ANTES de qualquer leitura, para que um id invalido
   // de quem nao pode nem chegue a virar consulta.
   const quem = await quemConfigura(req.headers.get("authorization"));
+
+  if (metodo === "POST" && p.length === 3 && p[0] === "aparelhos" && p[2] === "senha-edicao") {
+    const r = ok(await consultarPinDaGrafica(uuid(p[1], "aparelho"), quem.id));
+    r.headers.set("Cache-Control", "no-store");
+    return r;
+  }
+
+  if (p.length === 3 && p[0] === "eventos" && p[2] === "qr" && (metodo === "POST" || metodo === "DELETE")) {
+    const ev = await evento(p[1]);
+    if (metodo === "DELETE") return ok(await revogarQrEvento(ev.id));
+    if (ev.status !== "ativo") throw new Recusa(409, "Ative e prepare o evento antes de gerar o QR.");
+    return ok(await emitirQrEvento(ev.id, quem.id));
+  }
 
   if (metodo === "GET" && p.length === 1 && p[0] === "pedidos") {
     const limite = q.has("limite") ? inteiro(q.get("limite"), "query", "limite") : 50;

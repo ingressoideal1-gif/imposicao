@@ -19,6 +19,10 @@
  * responder diferente conta a um estranho o que existe do outro lado.
  */
 import { hashCodigo, hashDoToken, tokenNovo } from "../_compartilhado/hash.ts";
+import { usarQrEvento } from "../_compartilhado/qr_evento.ts";
+import { Recusa } from "../_compartilhado/sessao.ts";
+import { registrarPin, elevarPin } from "../_compartilhado/pin_instalacao.ts";
+import { editarComPin } from "../_compartilhado/edicao_pin.ts";
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { iguaisEmTempoConstante, rotaPedida } from "./puro.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
@@ -142,7 +146,7 @@ async function aparelhoDoToken(cabecalho: string | null): Promise<any> {
   const achados = (await banco(
     "GET",
     `producao_acesso_dispositivos?token_hash=eq.${hash}&status=eq.ativo` +
-      `&select=id,evento_id,nome`,
+      `&select=id,evento_id,nome,instalacao_id`,
   )) ?? [];
   if (!achados.length) throw erro(401, "aparelho nao pareado ou revogado");
   return achados[0];
@@ -443,6 +447,18 @@ async function entrada(cabecalho: string | null, corpo: any): Promise<Response> 
           `&select=dispositivo_id,momento`,
       )) ?? [])[0];
 
+      if (!dono) {
+        // Um zeramento concorrente pode descartar uma entrada anterior à
+        // marca. Isso não é "já entrou": nenhuma reserva atual existe.
+        const ev = ((await banco("GET", `producao_acesso_eventos?id=eq.${aparelho.evento_id}` +
+          "&select=entradas_zeradas_em")) ?? [])[0];
+        if (ev?.entradas_zeradas_em &&
+            Date.parse(corpo.momento) <= Date.parse(ev.entradas_zeradas_em)) {
+          return ok({ primeira: true, resultado, motivo, anterior: null, zerada: true });
+        }
+        throw new Error("O banco não confirmou a reserva da entrada.");
+      }
+
       // Se a linha e deste aparelho, ele ganhou -- inclusive quando ele proprio
       // ja tinha ganhado antes e esta reenviando. Isso e de proposito: o mesmo
       // aparelho reenviando a mesma leitura nao pode virar recusa, e a chave
@@ -620,6 +636,20 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return respostaDePreflight(origem, "GET, POST, OPTIONS");
 
   try {
+    if (req.method === "POST" && ["registrar-pin", "elevar-pin", "editar-pin"].includes(rota)) {
+      let corpo;
+      try { corpo = await req.json(); } catch { return comCors(erro(422, "Dados inválidos."), origem); }
+      const r = rota === "registrar-pin" ? await registrarPin(corpo)
+        : rota === "elevar-pin" ? await elevarPin(corpo, await aparelhoDoToken(auth))
+        : await editarComPin(corpo, await aparelhoDoToken(auth));
+      const resposta = ok(r); resposta.headers.set("Cache-Control", "no-store");
+      return comCors(resposta, origem);
+    }
+    if (req.method === "POST" && (rota === "consultar-qr-evento" || rota === "ativar-qr-evento")) {
+      let corpo;
+      try { corpo = await req.json(); } catch { return comCors(erro(422, "QR inválido."), origem); }
+      return comCors(ok(await usarQrEvento(corpo, rota === "ativar-qr-evento")), origem);
+    }
     if (req.method === "POST" && rota === "entrar") {
       return comCors(await entrar(await req.json()), origem);
     }
@@ -645,6 +675,7 @@ Deno.serve(async (req: Request) => {
     // "erro de rede" em vez de "aparelho nao pareado" -- que e a diferenca
     // entre ele saber o que fazer e ficar olhando para o celular.
     if (e instanceof Response) return comCors(e, origem);
+    if (e instanceof Recusa) return comCors(erro(e.status, e.detail), origem);
     // Defeito nosso. O detalhe vai para o log da funcao, e NAO para o corpo da
     // resposta: mensagem de erro interno na tela do porteiro nao ajuda ele e
     // conta a um estranho como o servidor esta montado por dentro.

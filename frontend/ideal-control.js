@@ -130,7 +130,7 @@
         texto(resumo, 'h2', '').id = 'ic-resumo-nome';
         texto(resumo, 'p', '', 'ic-dim').id = 'ic-resumo-dados';
         texto(resumo, 'p', '', 'ic-ajuda').id = 'ic-resumo-acesso';
-        var acesso = texto(resumo, 'button', 'Gerenciar acesso', 'btn btn-sm btn-primary');
+        var acesso = texto(resumo, 'button', 'Conta do cliente · opcional', 'btn btn-sm btn-outline');
         acesso.id = 'ic-acesso-abrir';
         acesso.type = 'button';
         var pedidos = texto(resumo, 'button', 'Ver todos os pedidos', 'btn btn-sm btn-outline');
@@ -140,7 +140,7 @@
             if (estado.clienteAberto) { abrirCliente(estado.clienteAberto.id_cliente); }
         };
         lateral.appendChild($('ic-cliente-secao'));
-        var instalar = texto(lateral, 'button', 'Aplicativo do cliente · QR e link', 'btn btn-sm btn-outline');
+        var instalar = texto(lateral, 'button', 'Enviar ao cliente · Instalação e evento', 'btn btn-sm btn-outline');
         instalar.id = 'ic-instalacao-abrir';
         instalar.type = 'button';
         instalar.hidden = true;
@@ -166,12 +166,18 @@
             return d;
         }
         var acessoDialogo = dialogo('ic-acesso-dialogo', 'Acesso do cliente', acesso);
-        var instalacaoDialogo = dialogo('ic-instalacao-dialogo', 'Aplicativo do cliente', instalar);
+        var instalacaoDialogo = dialogo('ic-instalacao-dialogo', 'Instalação e QR do evento', instalar);
         // O QR genérico fica separado da concessão de acesso e da senha.
         var cardAcesso = $('ic-acesso-secao').querySelector('.card');
         var divisoria = cardAcesso.querySelector(':scope > hr');
         while (divisoria.nextSibling) { instalacaoDialogo.appendChild(divisoria.nextSibling); }
         divisoria.remove();
+        var tituloQr = document.createElement('h3');
+        tituloQr.textContent = '1. Instalar o aplicativo · igual para todos';
+        instalacaoDialogo.insertBefore(tituloQr, instalacaoDialogo.firstChild);
+        layout.atualizarQr = window.qrEventoEnvio.montar(instalacaoDialogo, pedir, function () {
+            return estado.painel && estado.painel.evento;
+        });
         acessoDialogo.appendChild($('ic-acesso-secao'));
 
         $('ic-conteudo').appendChild($('ic-vinculo-aviso'));
@@ -204,6 +210,7 @@
     function atualizarLayout() {
         if (!layout.pronto) { return; }
         var p = estado.painel, c = estado.clienteAberto;
+        if (layout.atualizarQr) layout.atualizarQr();
         $('ic-workspace').classList.toggle('ic-sem-cliente', !c);
         $('ic-cliente-resumo').hidden = !c;
         $('ic-instalacao-abrir').hidden = !c;
@@ -212,7 +219,7 @@
         if (c) {
             $('ic-resumo-nome').textContent = nomeDoCliente(c);
             $('ic-resumo-dados').textContent = '#' + c.id_cliente + (c.email ? ' · ' + c.email : '');
-            $('ic-resumo-acesso').textContent = (c.contas || []).length ? 'Acesso liberado' : 'Acesso ainda não liberado';
+            $('ic-resumo-acesso').textContent = (c.contas || []).length ? 'Conta do cliente disponível' : 'O cliente pode carregar o evento pelo QR';
         } else {
             ['ic-acesso-dialogo', 'ic-instalacao-dialogo'].forEach(function (id) {
                 if ($(id).open) { $(id).close(); }
@@ -914,6 +921,19 @@
             window.renderQRCodeOnCtx(ctx, url, canvas.width / 2, canvas.height / 2, lado);
         }
         $('ic-qr-copiar').onclick = function () { copiar(url, 'Link copiado.'); };
+        var baixar = $('ic-qr-instalar-baixar');
+        if (!baixar) {
+            baixar = document.createElement('button'); baixar.id = 'ic-qr-instalar-baixar';
+            baixar.type = 'button'; baixar.className = 'btn btn-sm btn-ghost';
+            baixar.textContent = 'Baixar QR de instalação'; $('ic-qr-copiar').after(baixar);
+        }
+        baixar.onclick = function () {
+            var imagem = document.createElement('canvas'); imagem.width = 600; imagem.height = 600;
+            var contexto = imagem.getContext('2d'); contexto.fillStyle = '#fff'; contexto.fillRect(0, 0, 600, 600);
+            window.renderQRCodeOnCtx(contexto, url, 300, 300, 520);
+            var link = document.createElement('a'); link.download = 'ideal-control-instalacao.png';
+            link.href = imagem.toDataURL('image/png'); link.click();
+        };
     }
 
     /**
@@ -1955,6 +1975,19 @@
         var el = document.createElement('div');
         el.className = 'card ic-aparelho';
         texto(el, 'h4', a.nome);
+        var senhaEdicao = texto(el, 'button', 'Consultar senha de edição', 'btn btn-sm btn-outline');
+        senhaEdicao.type = 'button';
+        var senhaAviso = texto(el, 'p', '', 'ic-ajuda');
+        senhaEdicao.onclick = function () {
+            if (senhaAviso.textContent) { senhaAviso.textContent = ''; return; }
+            senhaEdicao.disabled = true;
+            pedir('/aparelhos/' + a.id + '/senha-edicao', { method: 'POST' }).then(function (r) {
+                if (!el.isConnected) return;
+                senhaAviso.textContent = 'Senha de edição deste celular: ' + r.pin;
+                setTimeout(function () { senhaAviso.textContent = ''; }, 30000);
+            }).catch(function (e) { senhaAviso.textContent = e.message; })
+                .finally(function () { senhaEdicao.disabled = false; });
+        };
         texto(el, 'span', (a.status === 'ativo' ? 'Ativo'
                            : (a.status === 'pausado' ? 'Pausado' : 'Desligado'))
               + ' · ' + (a.pareado ? 'já pareado' : 'nunca pareado')

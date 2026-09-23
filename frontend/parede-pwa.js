@@ -57,6 +57,7 @@
     var promptGuardado = null;
 
     function montar(modo) {
+        if (document.getElementById('parede-pwa')) return;
         var parede = document.createElement('div');
         parede.id = 'parede-pwa';
         // Estilo inline, e nao no `controle.css`: esta parede precisa aparecer
@@ -103,9 +104,7 @@
 
         var frase = document.createElement('p');
         frase.setAttribute('style', 'font-size:.98rem;line-height:1.55;color:#9aa6bb;margin:0;max-width:34ch;');
-        frase.textContent = 'O aparelho trabalha sem internet, e para '
-            + 'isso ele precisa estar instalado neste celular. É rápido e não '
-            + 'ocupa espaço.';
+        frase.textContent = 'Instale uma vez. Depois, abra o aplicativo, crie a senha de 6 números deste celular e toque em “Ler QR do evento”.';
         parede.appendChild(frase);
 
         if (modo === 'iphone') {
@@ -118,8 +117,7 @@
                 'font-size:1rem;line-height:1.5;margin:8px 0 0;max-width:36ch;'
                 + 'padding:14px 16px;border-radius:14px;'
                 + 'background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.3);');
-            passos.textContent = 'Toque em Compartilhar, na barra de baixo do '
-                + 'Safari, e escolha "Adicionar à Tela de Início".';
+            passos.textContent = 'Abra este link no Safari. Toque em Compartilhar e escolha "Adicionar à Tela de Início". Depois, abra o Ideal Control pelo ícone criado.';
             parede.appendChild(passos);
         } else {
             var botao = document.createElement('button');
@@ -131,9 +129,17 @@
                 + 'border-radius:12px;color:#04201c;cursor:pointer;min-height:54px;'
                 + 'background:linear-gradient(135deg,#2dd4bf,#14b8a6 55%,#0ea5a0);'
                 + 'box-shadow:0 12px 26px -12px rgba(20,184,166,.8),inset 0 1px 0 rgba(255,255,255,.22);');
-            botao.addEventListener('click', function () {
+            botao.addEventListener('click', async function () {
                 if (!promptGuardado) { return; }
-                promptGuardado.prompt();
+                var convite = promptGuardado; promptGuardado = null;
+                botao.disabled = true;
+                try {
+                    await convite.prompt();
+                    var escolha = await convite.userChoice;
+                    botao.textContent = escolha && escolha.outcome === 'accepted'
+                        ? 'Abra o Ideal Control pelo ícone instalado'
+                        : 'Para tentar novamente, recarregue esta página';
+                } catch (e) { botao.textContent = 'Recarregue a página para instalar'; }
             });
             parede.appendChild(botao);
         }
@@ -180,6 +186,18 @@
         window.addEventListener('beforeinstallprompt', function (ev) {
             ev.preventDefault();
             promptGuardado = ev;
+            var antiga = document.getElementById('parede-pwa');
+            if (antiga) antiga.remove();
+            decidirEMontar();
+        });
+
+        window.addEventListener('appinstalled', function () {
+            promptGuardado = null;
+            var parede = document.getElementById('parede-pwa');
+            if (parede) {
+                var botao = parede.querySelector('button');
+                if (botao) { botao.disabled = true; botao.textContent = 'Abra o Ideal Control pelo ícone instalado'; }
+            }
         });
 
         setTimeout(decidirEMontar, 1500);

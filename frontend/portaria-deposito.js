@@ -74,9 +74,11 @@
             return new Promise(function (ok, erro) {
                 var t = b.transaction(nomes, modo);
                 var resultado;
-                tarefa(t, function (v) { resultado = v; });
                 t.oncomplete = function () { ok(resultado); };
                 t.onerror = function () { erro(t.error); };
+                t.onabort = function () { erro(t.error || new Error('Gravação local cancelada.')); };
+                try { tarefa(t, function (v) { resultado = v; }); }
+                catch (e) { t.abort(); erro(e); }
             });
         });
     }
@@ -85,6 +87,7 @@
         return comLoja('carga', 'readwrite', function (loja) {
             loja.clear();                 // substitui a carga INTEIRA
             loja.put(carga, 'unica');
+            loja.put(carga.entradas_zeradas_em || null, 'zeramento');
         });
     }
 
@@ -95,6 +98,87 @@
         });
     }
 
+    // Primeira carga por QR: só anuncia pronta depois de gravar o evento,
+    // as entradas e os totais juntos. Uma fila pendente impede a troca.
+    function gravarEventoPreparado(cargaNova) {
+        return comLojas(['carga', 'entradas', 'totais', 'fila'], 'readwrite', function (t) {
+            var conta = t.objectStore('fila').count();
+            conta.onsuccess = function () {
+                if (conta.result) { t.abort(); return; }
+                var carga = t.objectStore('carga'), entradas = t.objectStore('entradas'), totais = t.objectStore('totais');
+                carga.clear(); entradas.clear(); totais.clear();
+                carga.put(cargaNova, 'unica');
+                carga.put(cargaNova.entradas_zeradas_em || null, 'zeramento');
+                Object.keys(cargaNova.entradas || {}).forEach(function (id) { entradas.put(cargaNova.entradas[id], id); });
+                Object.keys(cargaNova.totais || {}).forEach(function (id) { totais.put(cargaNova.totais[id], id); });
+            };
+        });
+    }
+
+    function antesDoZeramento(momento, marca) {
+        var limite = Date.parse(marca);
+        return !isNaN(limite) && Date.parse(momento) <= limite;
+    }
+
+    // Carga, entradas e totais passam a representar o mesmo sincronismo, ou
+    // nenhuma loja muda. A fila continua até o servidor confirmar seu recebimento.
+    function gravarNovidades(novidade, eventoId) {
+        return comLojas(['carga', 'entradas', 'totais'], 'readwrite', function (t, devolver) {
+            var carga = t.objectStore('carga');
+            var pedido = carga.get('unica');
+            pedido.onsuccess = function () {
+                try {
+                    var atual = pedido.result;
+                    if (!atual || !atual.evento || atual.evento.id !== eventoId) {
+                        throw new Error('O evento do aparelho mudou durante o sincronismo.');
+                    }
+                    var marcaAtual = Date.parse(atual.entradas_zeradas_em);
+                    var marcaRecebida = Date.parse(novidade.entradas_zeradas_em);
+                    // Resposta iniciada antes de um zeramento já aplicado.
+                    if (!isNaN(marcaAtual) && (isNaN(marcaRecebida) || marcaRecebida < marcaAtual)) {
+                        devolver(atual);
+                        return;
+                    }
+                    var nova = window.portariaSincronismo.aplicar(atual, novidade);
+                    var marca = nova.entradas_zeradas_em;
+                    var entradas = t.objectStore('entradas');
+                    function juntarEntradas() {
+                        (novidade.entradas || []).forEach(function (e) {
+                            if (!e || !e.credencial_id || !e.momento || antesDoZeramento(e.momento, marca)) return;
+                            var existente = entradas.get(e.credencial_id);
+                            existente.onsuccess = function () {
+                                if (!existente.result || Date.parse(e.momento) < Date.parse(existente.result)) {
+                                    entradas.put(e.momento, e.credencial_id);
+                                }
+                            };
+                        });
+                    }
+                    if (!isNaN(Date.parse(marca))) {
+                        var cursor = entradas.openCursor();
+                        cursor.onsuccess = function () {
+                            var item = cursor.result;
+                            if (item) {
+                                if (antesDoZeramento(item.value, marca)) item.delete();
+                                item.continue();
+                            } else juntarEntradas();
+                        };
+                    } else juntarEntradas();
+                    // Reaplicar a marca também repara cargas gravadas pela versão
+                    // antiga, que zerava o mapa da carga mas deixava a loja intacta.
+                    Object.keys(nova.entradas || {}).forEach(function (id) {
+                        if (antesDoZeramento(nova.entradas[id], marca)) delete nova.entradas[id];
+                    });
+                    var totais = t.objectStore('totais');
+                    if (!isNaN(marcaRecebida) && (isNaN(marcaAtual) || marcaRecebida > marcaAtual)) totais.clear();
+                    Object.keys(novidade.totais || {}).forEach(function (id) { totais.put(novidade.totais[id], id); });
+                    carga.put(nova, 'unica');
+                    carga.put(marca || null, 'zeramento');
+                    devolver(nova);
+                } catch (e) { t.abort(); }
+            };
+        });
+    }
+
     function enfileirar(leitura) {
         // MESMA transacao para `fila` e `entradas`: se o app morrer entre
         // gravar a leitura na fila e marcar a entrada -- celular ligado horas
@@ -102,11 +186,19 @@
         // juntas. Duas transacoes separadas deixariam a leitura na fila sem a
         // marca de entrada, e depois que a fila subisse e fosse removida essa
         // credencial nunca apareceria em `entradasPermitidas()`.
-        return comLojas(['fila', 'entradas'], 'readwrite', function (t) {
+        return comLojas(['carga', 'fila', 'entradas'], 'readwrite', function (t, devolver) {
             t.objectStore('fila').put(leitura);   // `keyPath: id_local` ignora o repetido
-            if (leitura.resultado === 'permitido' && leitura.credencial_id) {
-                t.objectStore('entradas').put(leitura.momento, leitura.credencial_id);
-            }
+            // Uma chave leve evita clonar milhares de credenciais por leitura.
+            var marca = t.objectStore('carga').get('zeramento');
+            marca.onsuccess = function () {
+                // Uma leitura em voo não pode recriar a entrada que um
+                // sincronismo concorrente acabou de zerar.
+                var zerada = antesDoZeramento(leitura.momento, marca.result);
+                if (!zerada && leitura.resultado === 'permitido' && leitura.credencial_id) {
+                    t.objectStore('entradas').put(leitura.momento, leitura.credencial_id);
+                }
+                devolver(!zerada);
+            };
         });
     }
 
@@ -230,7 +322,9 @@
     }
 
     window.portariaDeposito = {
+        gravarEventoPreparado: gravarEventoPreparado,
         gravarCarga: gravarCarga, lerCarga: lerCarga,
+        gravarNovidades: gravarNovidades,
         enfileirar: enfileirar, lerFila: lerFila,
         removerDaFila: removerDaFila, contarFila: contarFila,
         entradasPermitidas: entradasPermitidas, gravarEntradas: gravarEntradas,

@@ -55,6 +55,8 @@ const ARQUIVOS = [
     'meus-pedidos.js?v=' + VERSAO,
     'conferencia-pedidos.js?v=' + VERSAO,
     'carregar-pedido.js?v=' + VERSAO,
+    'qr-evento.js?v=' + VERSAO,
+    'pin-instalacao.js?v=' + VERSAO,
     // O evento acontecendo (04/09/2026). Fora desta lista, o aplicativo
     // INSTALADO abriria a casa e o botao "Ao vivo" nao faria nada -- sem erro
     // visivel, que e o pior modo de faltar.

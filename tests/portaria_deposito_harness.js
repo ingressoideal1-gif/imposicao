@@ -32,6 +32,7 @@ async function rodar(caso) {
     // IndexedDB precisa de origem de verdade: `about:blank` tem origem opaca.
     await page.goto('http://localhost/portaria-deposito-test');
     await page.addScriptTag({ path: path.join(REPO, 'frontend', 'portaria-deposito.js') });
+    await page.addScriptTag({ path: path.join(REPO, 'frontend', 'portaria-sincronismo.js') });
 
     const ok = await page.evaluate(() => typeof window.portariaDeposito === 'object');
     if (!ok) {

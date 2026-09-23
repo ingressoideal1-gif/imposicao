@@ -216,7 +216,7 @@ def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False,
         '<link rel="stylesheet" href="/style.css"></head><body>'
         '<main class="main-content">' + _secao_do_index() + '</main>'
         + config +
-        '<script src="/ideal-control.js"></script></body></html>'
+        '<script src="/qr-evento-envio.js"></script><script src="/ideal-control.js"></script></body></html>'
     )
 
     driver = f"""
@@ -228,7 +228,7 @@ const HOSPEDEIRA = {json.dumps(hospedeira)};
 const PAINEL = {json.dumps(PAINEL_FALSO)};
 
 const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
-                '.html': 'text/html' }};
+                '.html': 'text/html', '.png': 'image/png' }};
 
 (async () => {{
   const browser = await puppeteer.launch({{ args: ['--no-sandbox'] }});
@@ -236,6 +236,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   await page.setViewport({{ width: {viewport[0]}, height: {viewport[1]} }});
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
+  page.on('requestfailed', r => erros.push('recurso: ' + new URL(r.url()).pathname.slice(0, 180)));
   page.on('console', m => {{
     if (m.type() !== 'error') return;
     // `[ideal-control]` e diagnostico DELIBERADO: a tela tratou o erro, mostrou
@@ -262,7 +263,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
     const arquivo = path.join(REPO, 'frontend', nome);
     if (nome && fs.existsSync(arquivo) && TIPOS[path.extname(nome)]) {{
       return req.respond({{ status: 200, contentType: TIPOS[path.extname(nome)],
-                           body: fs.readFileSync(arquivo, 'utf8') }});
+                           body: fs.readFileSync(arquivo) }});
     }}
     // Os dois pedidos que o navegador faz sozinho e que nao tem nada a ver
     // com esta tela: a fonte do Google (um `@import` do style.css) e o
