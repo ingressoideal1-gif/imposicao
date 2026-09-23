@@ -22,3 +22,9 @@ Recuperação da função: extrair somente a definição original de producao_ac
 - 159 testes Python distintos abrangendo portaria, sincronismo, depósito, PWA, entrega, QR e zeramento. Primeira execução: 156 passaram, 3 falharam. Restaurado caminho legado sem sincronismo extra e atualizada fixture de zeramento para representar seus ingressos publicados; os 3 passaram na repetição direcionada. Cenário antecipado também repetido e aprovado após os ajustes.
 - Navegador real com rede simulada: evento vazio configurável, sem enfileirar leituras, publicação posterior, falha na segunda página, repetição, carga completa persistida e mesmo token.
 - Tipos Edge, sintaxe JS e revisão de diff. Não equivale a teste físico no iPhone.
+
+## Publicação confirmada
+
+Commit funcional `3170578d`, tag `v945`, main atualizado sem força. Funções ACTIVE: portaria v256 (verify_jwt=false), acesso-interno v258 (verify_jwt=true). Cloudflare Pages completed/success; após propagação, 16/16 comparações normalizadas com cache-buster corresponderam nos dois domínios públicos. Evidência: `docs/evidencias/ideal-control-v945-public-verification.json`.
+
+No iPhone, atualizar o aplicativo para v945 antes de usar o novo fluxo. Nenhuma reinstalação, apagamento de PIN ou exclusão de evento é necessária por esta mudança. O teste físico no aparelho do usuário permanece não realizado.
