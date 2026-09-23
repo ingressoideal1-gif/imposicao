@@ -91,3 +91,17 @@ def test_resposta_pin_atrasada_nao_revela_senha_apos_trocar_aba():
         return {limpo:!document.getElementById('ic-aparelhos').textContent.includes('042815')};
     """)
     assert r['limpo']
+
+
+def test_grafica_nao_gera_qr_sem_ingressos_publicados():
+    r = _no_navegador(SERVIDOR + """
+        PAINEL.publicacao.total_credenciais=0;
+        await IdealControl.abrirPedido(19521);
+        document.getElementById('ic-enviar-evento').click();
+        document.querySelector('[data-qr-gerar]').click();
+        return {bloqueado:document.querySelector('[data-qr-gerar]').disabled,
+            mensagem:document.querySelector('[data-qr-nome]').textContent,
+            escritas:_chamadas.filter(c=>c.metodo==='POST' && c.caminho.endsWith('/qr')).length};
+    """)
+    assert r['bloqueado'] and r['escritas'] == 0
+    assert 'Nenhum ingresso publicado' in r['mensagem']

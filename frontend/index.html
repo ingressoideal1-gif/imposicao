@@ -15,9 +15,9 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=941">
-    <link rel="stylesheet" href="/producao-por-cor.css?v=941">
-    <script src="pdf-lib.min.js?v=941"></script>
+    <link rel="stylesheet" href="/style.css?v=943">
+    <link rel="stylesheet" href="/producao-por-cor.css?v=943">
+    <script src="pdf-lib.min.js?v=943"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3681,11 +3681,10 @@
                 <div id="ic-cliente-secao" style="display:none;">
                     <h2 id="ic-cliente-nome" style="margin:0 0 4px;font-size:1.15rem;"></h2>
                     <p id="ic-cliente-dados" class="ic-dim" style="margin:0 0 12px;"></p>
-                    <h3 class="ic-secao-titulo">Pedidos deste cliente</h3>
+                    <h3 class="ic-secao-titulo">Pedidos aptos ao controle de acesso</h3>
                     <div id="ic-cliente-pedidos" class="ic-cliente-pedidos"></div>
                     <p id="ic-cliente-sem-pedido" class="ic-ajuda" style="display:none;">
-                        Este cliente ainda não tem nenhum pedido com modelo cadastrado no
-                        ERP. O aplicativo já pode ser instalado pelo QR único. Quando houver
+                        Este cliente ainda não tem pedidos aptos ao controle de acesso. O aplicativo já pode ser instalado pelo QR único. Quando houver
                         um pedido preparado, envie também o QR do evento.
                     </p>
                     <!-- Pedido sem modelo no ERP nao entra na lista: nao ha o que
@@ -4444,51 +4443,51 @@
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
-    <script src="/banco-nao-responde.js?v=941"></script>
-    <script src="/supabase-config.js?v=941"></script>
-    <script src="mapas.js?v=941"></script>
-    <script src="cor-numeracao-do-modelo.js?v=941"></script>
+    <script src="/banco-nao-responde.js?v=943"></script>
+    <script src="/supabase-config.js?v=943"></script>
+    <script src="mapas.js?v=943"></script>
+    <script src="cor-numeracao-do-modelo.js?v=943"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
-    <script src="banco-do-modelo.js?v=941"></script>
-    <script src="logo-do-frete.js?v=941"></script>
+    <script src="banco-do-modelo.js?v=943"></script>
+    <script src="logo-do-frete.js?v=943"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=941"></script>
-    <script src="arte-de-impressao.js?v=941"></script>
-    <script src="qr-canvas.js?v=941"></script>
-    <script src="barcode-canvas.js?v=941"></script>
+    <script src="pagamento-do-pedido.js?v=943"></script>
+    <script src="arte-de-impressao.js?v=943"></script>
+    <script src="qr-canvas.js?v=943"></script>
+    <script src="barcode-canvas.js?v=943"></script>
     <!-- O numero que cada pagina da visualizacao combinada mostra. Carrega
          antes de quem desenha a amostra: o painel e a tela de Pedido. -->
-    <script src="numero-da-pagina.js?v=941"></script>
-    <script src="fonte-canvas.js?v=941"></script>
+    <script src="numero-da-pagina.js?v=943"></script>
+    <script src="fonte-canvas.js?v=943"></script>
     <!-- `fonte-glifos.js` antes de quem desenha e de quem trava: ele diz
          quais caracteres a fonte REALMENTE tem. Sem ele, a tela mostra o
          nome inteiro (o navegador troca de fonte no caractere que falta) e
          o papel sai com buraco -- ver o cabecalho do proprio arquivo. -->
-    <script src="fonte-glifos.js?v=941"></script>
-    <script src="fonte-nome.js?v=941"></script>
-    <script src="qr-ideal-colunas.js?v=941"></script>
-    <script src="csv-editor.js?v=941"></script>
-    <script src="amostra-modal.js?v=941"></script>
-    <script src="texto-ajuste.js?v=941"></script>
-    <script src="foto-lib.js?v=941"></script>
-    <script src="gerenciador-fotos.js?v=941"></script>
-    <script src="editor-foto.js?v=941"></script>
+    <script src="fonte-glifos.js?v=943"></script>
+    <script src="fonte-nome.js?v=943"></script>
+    <script src="qr-ideal-colunas.js?v=943"></script>
+    <script src="csv-editor.js?v=943"></script>
+    <script src="amostra-modal.js?v=943"></script>
+    <script src="texto-ajuste.js?v=943"></script>
+    <script src="foto-lib.js?v=943"></script>
+    <script src="gerenciador-fotos.js?v=943"></script>
+    <script src="editor-foto.js?v=943"></script>
     <script src="/vendor/quill-2.0.3/quill.js"></script>
-    <script src="/briefing-editor.js?v=941"></script>
-    <script src="navegacao-painel.js?v=941"></script>
-    <script src="script.js?v=941"></script>
-    <script src="dashboard-arte.js?v=941"></script>
-    <script src="qr-evento-envio.js?v=941"></script>
-    <script src="ideal-control.js?v=941"></script>
-    <script src="criador-arte.js?v=941"></script>
-    <script src="/pedido.js?v=941"></script>
-    <script src="/producao-por-cor.js?v=941"></script>
-    <script src="montagem.js?v=941"></script>
-    <script src="acabamento.js?v=941"></script>
-    <script src="avisos.js?v=941"></script>
+    <script src="/briefing-editor.js?v=943"></script>
+    <script src="navegacao-painel.js?v=943"></script>
+    <script src="script.js?v=943"></script>
+    <script src="dashboard-arte.js?v=943"></script>
+    <script src="qr-evento-envio.js?v=943"></script>
+    <script src="ideal-control.js?v=943"></script>
+    <script src="criador-arte.js?v=943"></script>
+    <script src="/pedido.js?v=943"></script>
+    <script src="/producao-por-cor.js?v=943"></script>
+    <script src="montagem.js?v=943"></script>
+    <script src="acabamento.js?v=943"></script>
+    <script src="avisos.js?v=943"></script>
 
 
 

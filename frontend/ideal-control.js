@@ -133,7 +133,7 @@
         var acesso = texto(resumo, 'button', 'Conta do cliente · opcional', 'btn btn-sm btn-outline');
         acesso.id = 'ic-acesso-abrir';
         acesso.type = 'button';
-        var pedidos = texto(resumo, 'button', 'Ver todos os pedidos', 'btn btn-sm btn-outline');
+        var pedidos = texto(resumo, 'button', 'Ver pedidos aptos', 'btn btn-sm btn-outline');
         pedidos.id = 'ic-cliente-todos';
         pedidos.type = 'button';
         pedidos.onclick = function () {
@@ -178,7 +178,12 @@
         texto(instalacaoDialogo, 'p', 'No primeiro uso, cada celular define sua senha de edição com 6 números. Depois, o cliente lê ou importa o QR do evento. Não precisa criar conta.', 'ic-ajuda');
         desenharQrInstalacao(urlInstalacao);
         layout.atualizarQr = window.qrEventoEnvio.montar(instalacaoDialogo, pedir, function () {
-            return estado.painel && estado.painel.evento;
+            var p = estado.painel;
+            if (!p || !p.evento) return null;
+            var pendencia = !(p.setores || []).length ? 'Prepare os setores antes de gerar o QR.'
+                : p.publicacao && Number(p.publicacao.total_credenciais) === 0
+                    ? 'Nenhum ingresso publicado. Publique os ingressos deste pedido antes de gerar o QR do evento.' : '';
+            return Object.assign({}, p.evento, { pendencia_qr: pendencia });
         });
         acessoDialogo.appendChild($('ic-acesso-secao'));
 
@@ -578,18 +583,13 @@
         var pedidos = r.pedidos || [];
         $('ic-cliente-sem-pedido').style.display = pedidos.length ? 'none' : '';
 
-        // Quantos ficaram de fora, e por quê. Desde 04/09/2026 esta lista traz
-        // TODOS os pedidos do cliente; o único que não entra é o que não tem
-        // modelo no ERP, e omiti-lo calado faria o atendente procurar por ele.
-        var semModelo = Number(r.sem_modelo || 0);
+        var excluidos = Number(r.sem_modelo || 0) + Number(r.sem_controle || 0);
         var aviso = $('ic-cliente-sem-modelo');
         if (aviso) {
-            aviso.style.display = semModelo ? '' : 'none';
-            aviso.textContent = semModelo === 1
-                ? 'Mais 1 pedido deste cliente ainda não tem modelo cadastrado no ERP — '
-                  + 'não há o que configurar nele.'
-                : ('Mais ' + semModelo + ' pedidos deste cliente ainda não têm modelo '
-                   + 'cadastrado no ERP — não há o que configurar neles.');
+            aviso.style.display = excluidos ? '' : 'none';
+            aviso.textContent = excluidos + (excluidos === 1 ? ' pedido não exibido' : ' pedidos não exibidos')
+                + ': sem modelo com quantidade positiva e QR Ideal, QR ou código de barras '
+                + 'ligado à numeração. Códigos fixos ou de coluna CSV não habilitam o controle.';
         }
 
         pedidos.forEach(function (p) {

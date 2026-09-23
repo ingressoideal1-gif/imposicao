@@ -20,8 +20,8 @@
             var ev = eventoAtual();
             if (!ev || !alvo || alvo.id !== ev.id) { resultado.hidden = true; imagem = null; }
             alvo = ev;
-            buscar('[data-qr-nome]').textContent = ev ? (ev.nome_evento || 'Evento') + (ev.status !== 'ativo' ? ' · evento inativo ou finalizado; confira a aba Evento.' : '') : 'Abra um pedido e prepare o evento para gerar seu QR.';
-            buscar('[data-qr-gerar]').disabled = ocupado || !ev || ev.status !== 'ativo';
+            buscar('[data-qr-nome]').textContent = ev ? (ev.nome_evento || 'Evento') + (ev.pendencia_qr ? ' · ' + ev.pendencia_qr : '') + (ev.status !== 'ativo' ? ' · evento inativo ou finalizado; confira a aba Evento.' : '') : 'Abra um pedido e prepare o evento para gerar seu QR.';
+            buscar('[data-qr-gerar]').disabled = ocupado || !ev || ev.status !== 'ativo' || !!ev.pendencia_qr;
             buscar('[data-qr-mensagem]').disabled = !ev;
             buscar('[data-qr-revogar]').disabled = ocupado || !ev;
         }
@@ -51,7 +51,7 @@
             } else { baixar(); aviso.textContent = 'QR baixado. Anexe a imagem à conversa do cliente junto com o link de instalação.'; }
         };
         buscar('[data-qr-gerar]').onclick = async function () {
-            atualizar(); if (!alvo || ocupado || alvo.status !== 'ativo') return;
+            atualizar(); if (!alvo || ocupado || alvo.status !== 'ativo' || alvo.pendencia_qr) return;
             var ev = alvo; ocupado = true; atualizar(); aviso.textContent = 'Gerando QR…';
             resultado.hidden = true; imagem = null;
             try {

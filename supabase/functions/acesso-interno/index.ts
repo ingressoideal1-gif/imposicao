@@ -349,11 +349,18 @@ async function ingressosDoSetor(
  */
 async function pedidosComControle(limite: number): Promise<any[]> {
   const teto = Math.max(1, Math.min(Number(limite) || 50, 200));
-  const pedidos = (await banco(
-    "GET",
-    "producao_acesso_pedidos?select=pedido_id_int,evento_id,publicado_em," +
-      `total_credenciais,created_at&order=created_at.desc&limit=${teto}`,
-  )) ?? [];
+  const pedidos: any[] = [];
+  for (let offset = 0; pedidos.length < teto; offset += 200) {
+    const lote = (await banco(
+      "GET",
+      "producao_acesso_pedidos?select=pedido_id_int,evento_id,publicado_em," +
+        `total_credenciais,created_at&order=created_at.desc,pedido_id_int.desc&limit=200&offset=${offset}`,
+    )) ?? [];
+    const peso = await pesoDosPedidos(lote.map((p: any) => Number(p.pedido_id_int)));
+    pedidos.push(...lote.filter((p: any) => peso[String(p.pedido_id_int)]?.aptos > 0)
+      .slice(0, teto - pedidos.length));
+    if (lote.length < 200) break;
+  }
 
   const ids = [...new Set(
     pedidos.filter((p: any) => p.evento_id).map((p: any) => String(p.evento_id)),
@@ -392,8 +399,8 @@ async function pedidosComControle(limite: number): Promise<any[]> {
  */
 async function pesoDosPedidos(
   ids: number[],
-): Promise<Record<string, { modelos: number; quantidade: number }>> {
-  const conta: Record<string, { modelos: number; quantidade: number }> = {};
+): Promise<Record<string, { modelos: number; quantidade: number; aptos: number }>> {
+  const conta: Record<string, { modelos: number; quantidade: number; aptos: number }> = {};
   const LOTE = 40;
   const PAGINA = 1000;
   for (let i = 0; i < ids.length; i += LOTE) {
@@ -402,13 +409,27 @@ async function pesoDosPedidos(
     for (;;) {
       const linhas = (await banco(
         "GET",
-        `pedidos_modelos?id_int=in.(${lote})&select=id_int,quantidade` +
+        `pedidos_modelos?id_int=in.(${lote})&select=id_int,quantidade,amostra_num_id` +
           `&order=id.asc&limit=${PAGINA}&offset=${de}`,
       )) ?? [];
+      const numeracoes: Record<string, unknown> = {};
+      const idsNum = [...new Set<string>(linhas.map((m: any) =>
+        idDeNumeracao(m.amostra_num_id)).filter(Boolean) as string[])];
+      for (let n = 0; n < idsNum.length; n += 40) {
+        const lista = idsNum.slice(n, n + 40).map((id) => `"${id}"`).join(",");
+        for (const num of (await banco("GET",
+          `producao_numeracoes?id=in.(${lista})&select=id,elements`)) ?? []) {
+          numeracoes[String(num.id)] = num.elements;
+        }
+      }
       for (const m of linhas) {
         const k = String(m.id_int);
-        conta[k] ??= { modelos: 0, quantidade: 0 };
+        conta[k] ??= { modelos: 0, quantidade: 0, aptos: 0 };
         conta[k].modelos += 1;
+        const elementos = numeracoes[idDeNumeracao(m.amostra_num_id) ?? ""];
+        if (Number(m.quantidade) > 0 && Array.isArray(elementos) && numeracaoDoModelo(elementos)) {
+          conta[k].aptos += 1;
+        }
         conta[k].quantidade += Number(m.quantidade ?? 0);
       }
       if (linhas.length < PAGINA) break;
@@ -426,22 +447,10 @@ async function pesoDosPedidos(
  * lado -- o numero do pedido ele teria de perguntar, e o cliente muitas vezes
  * nao tem.
  *
- * ## TODOS os pedidos, e nao so os que ja subiram (04/09/2026)
- *
- * Ate hoje esta lista saia de `producao_acesso_pedidos` -- ou seja, so os
- * pedidos que JA passaram pela publicacao do controle de acesso. O efeito era
- * silencioso e ruim: o cliente 11406 tem quatro pedidos com modelo, e a tela
- * mostrava um. Os outros tres existiam, tinham numeracao, e nao havia caminho
- * nenhum ate eles por esta tela.
- *
- * Decisao do usuario, no mesmo dia: "todos os pedidos devem ficar disponiveis
- * para visualizacao e edicao pelo menu ideal control". Entao a lista passa a
- * sair das PROPOSTAS do cliente, e o que veio do controle vira enfeite de cada
- * linha -- `no_controle`, o evento, o quanto ja foi publicado.
- *
- * Fica de fora so o pedido sem modelo nenhum no ERP, que `painelDoPedido`
- * recusa com 404 por nao ter o que configurar. Quantos sao vai em
- * `sem_modelo`, para a tela poder dizer isso em vez de simplesmente omitir.
+ * Desde 22/09/2026, listar apenas pedidos com modelo de quantidade positiva
+ * e numeracao legivel pela portaria, usando a regra compartilhada da publicacao.
+ * A publicacao pode estar pendente: a grafica ainda precisa preparar o evento.
+ * Sem modelo e sem codigo elegivel sao contabilizados separadamente.
  */
 /**
  * Faz nascer o evento de um pedido, pela tela da grafica.
@@ -527,11 +536,13 @@ async function painelDoCliente(idCliente: number): Promise<any> {
   }
 
   let semModelo = 0;
+  let semControle = 0;
   const pedidos: any[] = [];
   for (const p of propostas) {
     const chave = String(p.id_int);
     const q = peso[chave];
     if (!q) { semModelo += 1; continue; }
+    if (!q.aptos) { semControle += 1; continue; }
     const a = doControle[chave];
     pedidos.push({
       pedido_id_int: Number(p.id_int),
@@ -579,6 +590,7 @@ async function painelDoCliente(idCliente: number): Promise<any> {
     },
     pedidos,
     sem_modelo: semModelo,
+    sem_controle: semControle,
   };
 }
 

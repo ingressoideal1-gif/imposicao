@@ -12,8 +12,9 @@ Deno.env.set("SUPABASE_URL", "https://banco-sintetico.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "sintetico-sem-validade");
 Deno.env.set("IDEAL_CONTROL_PIN_CHAVE", "11".repeat(32));
 Deno.env.set("ACESSO_ELEVACAO_SEGREDO", "segredo-sintetico-para-testes");
+let semIngressos = false, semSetores = false;
 let dados: any, convite: any, chamadas: any[], aparelho: any, falharEmissao = false, papel = "admin";
-function reset() { dados = null; convite = null; chamadas = []; falharEmissao = false; papel = "admin"; aparelho = { id: A, evento_id: E, instalacao_id: I, status: "ativo", nome: "Celular sintético" }; }
+function reset() { semIngressos = false; semSetores = false; dados = null; convite = null; chamadas = []; falharEmissao = false; papel = "admin"; aparelho = { id: A, evento_id: E, instalacao_id: I, status: "ativo", nome: "Celular sintético" }; }
 function assert(v: unknown, msg = "asserção falhou"): asserts v { if (!v) throw new Error(msg); }
 async function recusa(f: () => Promise<any>, status?: number) {
   try { await f(); } catch (e) { if (status) assert(e instanceof Recusa && e.status === status); return; }
@@ -41,8 +42,9 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
       ? { evento: { id: E, nome: "Evento sintético" }, ...(c.p_token_hash ? { aparelho: { id: A, nome: "Celular sintético" } } : {}) } : null;
   } else if (t === "imposition_user_permissions") r = [{ user_id: I, role: papel }];
   else if (t === "producao_acesso_dispositivos") r = [aparelho];
-  else if (t === "producao_acesso_setores") r = [];
-  else if (t === "producao_acesso_eventos") r = [{ id: E, ...c }];
+  else if (t === "producao_acesso_setores") r = u.searchParams.get("status") === "eq.ativo" && !semSetores ? [{id:S}] : [];
+  else if (t === "producao_acesso_credenciais") r = semIngressos ? [] : [{id:A}];
+  else if (t === "producao_acesso_eventos") r = [{ id: E, status: "ativo", ...c }];
   else if (t === "producao_acesso_auditoria_pin") r = [{ id: S, ...c }];
   else throw new Error("chamada inesperada: " + t);
   return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
@@ -133,4 +135,20 @@ Deno.test("HTTP: portaria exige token para editar e gráfica exige papel para co
     assert(resposta.status === 200 && resposta.headers.get("Cache-Control") === "no-store");
     assert((await resposta.json()).pin === PIN);
   } finally { Deno.serve = original; }
+});
+
+Deno.test("QR: sem ingressos não emite convite e informa a causa na leitura", async () => {
+  reset(); semIngressos = true;
+  await recusa(() => emitirQrEvento(E, I), 409);
+  assert(!convite);
+  semIngressos = false; const qr = await emitirQrEvento(E, I);
+  semIngressos = true;
+  try { await usarQrEvento({segredo:qr.conteudo.split(":")[2]},false); throw new Error("aceitou vazio"); }
+  catch (e) { assert(e instanceof Recusa && e.status === 409 && e.message.includes("ingressos publicados")); }
+  assert(!chamadas.some(r=>r.t === "rpc/producao_acesso_ativar_qr_evento" && r.c.p_token_hash));
+});
+Deno.test("QR: sem setores não emite; convite inválido não revela preparação", async () => {
+  reset(); semSetores = true; await recusa(() => emitirQrEvento(E,I),409); assert(!convite);
+  chamadas = []; await recusa(() => usarQrEvento({segredo:KEY},false),403);
+  assert(chamadas.length === 1 && chamadas[0].t === "rpc/producao_acesso_ativar_qr_evento");
 });
