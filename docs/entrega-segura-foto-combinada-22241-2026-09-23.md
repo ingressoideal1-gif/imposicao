@@ -17,9 +17,17 @@
 - MSI local: ProductVersion `1.2.338.0`, 156.160.000 bytes, SHA-256 `0742f3130175b9f317b928d7744a108d56778060140dfac09f249689eaa290fb`.
 - A tabela de arquivos do MSI inclui `NewProd.exe` (140.985.186 bytes) e `qr_ideal_pool.bin` (24.000.000 bytes). O arquivo PyInstaller inclui `engine`, `agent_version`, `acesso_segredo`, `win32ui.pyd` e as DLLs MFC/VCRUNTIME de que ele depende. Nenhum valor de segredo foi exibido.
 
+## Publicacao em 23/09/2026
+
+- Commit do codigo e da versao: `2452f99c635b63c5292a7e6348fea94ef386d151`, enviado a `origin/main` por fast-forward e confirmado por `git ls-remote`.
+- Antes do envio, o bucket `agent-releases` informou limite de 209.715.200 bytes e o nome `NewProd_Setup_v1.2.338.msi` respondeu `NoSuchKey`.
+- O MSI foi enviado para `agent-releases/NewProd_Setup_v1.2.338.msi`. Um download pela URL publica simples retornou 156.160.000 bytes e SHA-256 `0742f3130175b9f317b928d7744a108d56778060140dfac09f249689eaa290fb`, iguais ao arquivo local.
+- So depois dessa comparacao, `latest.json` foi ativado. As consultas publicas simples e com cache buster responderam 200 e trouxeram `version=1.2.338`, a URL esperada, `size=156160000` e o SHA-256 acima.
+- Nenhum arquivo de `frontend/` foi alterado neste release.
+
 ## Limites e retomada
 
 - Nao houve consulta atual aos dados do pedido nem captura do payload real. A reproducao local prova o mecanismo da falsa pendencia, mas nao comprova que todas as fotos do pedido estejam associadas.
 - O build usou o ambiente virtual, o pool e a configuracao de segredo existentes no checkout legado, sob a autorizacao dada para executar a simulacao local. Nao foi copiado `.env.local` para o worktree. O build gerou `acesso_segredo.py` (ignorado pelo Git) e copiou o pool para `dist/` para embuti-los no pacote local. A limpeza do arquivo gerado foi rejeitada pela revisao automatica de seguranca; ele permanece no worktree e nao deve ser adicionado ao Git.
-- Nenhum commit, push, upload ou ativacao de `latest.json` foi feito. Para publicar, seguir a ordem: integrar a fonte validada, conferir cota e ausencia do objeto, enviar o MSI sem sobrescrever, baixar pela URL publica e comparar tamanho/SHA-256, so entao atualizar `latest.json` e conferir com cache buster.
+- A tag `agente-v1.2.338` registra o commit final desta evidencia no Git.
 - A instalacao na estacao, heartbeat da versao nova e impressao fisica do pedido sao verificacoes separadas. Nao foram executadas.
