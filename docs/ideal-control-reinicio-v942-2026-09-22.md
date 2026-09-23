@@ -16,10 +16,10 @@ O usuário informou PWA v834, solicitou não preservar eventos, autorizou perder
 
 ## Validação e limites
 
-`tests/reiniciar_celular_harness.cjs`: quatro cenários em Chrome/IndexedDB reais com rede sintética: cancelamento, indisponibilidade de rede, limpeza completa (incluindo PIN/sessão) e bloqueio no navegador não instalado. Todos aprovados. A limpeza preservou chaves e caches fora do escopo. Testes adicionais de QR/PIN, sintaxe e atualização comum executados antes da publicação.
+`tests/reiniciar_celular_harness.cjs`: quatro cenários em Chrome/IndexedDB reais com rede sintética: cancelamento, indisponibilidade de rede, limpeza completa (incluindo PIN/sessão) e bloqueio no navegador não instalado. Todos aprovados. A limpeza preservou chaves e caches fora do escopo. 85 testes adicionais de QR/PIN, sintaxe e atualização comum aprovados antes da publicação.
 
 A fase de IndexedDB é atômica. Falha nas etapas seguintes é mostrada e permite repetir; os dados já apagados não são recuperáveis. Outras telas do aplicativo devem estar fechadas. Teste automatizado não comprova execução no iPhone do usuário.
 
 Para sair da v834: no ícone instalado, usar **Atualizar o aplicativo** com internet; na versão nova, tocar na ação de apagar eventos e cadastrar nova senha. Não é possível limpar remotamente o armazenamento privado do iPhone a partir do computador.
 
-Publicação e hashes serão registrados após propagação. Recuperação de código: reverter os arquivos desta entrega; dados locais que o usuário apagar não têm recuperação por esse processo.
+Publicado pelo commit `39a07f45`, tag `v942`. Cloudflare Pages confirmou sucesso no deployment `8ecd2697-eb69-429c-a55e-829c2c287f56`. Após propagação, 12/12 hashes normalizados conferiram nos dois domínios operacionais, incluindo a casa, a portaria, a página e o script de reinicialização, PIN e QR. Evidências em `evidencias/ideal-control-v942-public-verification.json`. Recuperação de código: reverter os arquivos desta entrega; dados locais que o usuário apagar não têm recuperação por esse processo.
