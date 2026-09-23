@@ -3876,6 +3876,24 @@ async function initPdfViewer(idx, pdfUrl, osId) {
  */
 const pdfRenderQueue = {};
 
+function formatoDaAmostraPdfNoPortal(item, num) {
+    const formatos = state.formatos || [];
+    const cor = (state.cores || []).find(c => String(c.id) === String(item?.amostra_cor_id));
+    for (const id of [num?.formato_id, cor?.formato_id, item?.formato_id]) {
+        const fmt = formatos.find(f => String(f.id) === String(id));
+        if (fmt && Number(fmt.width_mm) > 0 && Number(fmt.height_mm) > 0) return fmt;
+    }
+    return null;
+}
+
+function escalaDaArtePdfNoPortal(item) {
+    const valor = bruto => {
+        const n = parseFloat(bruto);
+        return Number.isFinite(n) && n > 0 ? Math.min(400, Math.max(1, n)) : 100;
+    };
+    return { h: valor(item?.arte_escala_h), v: valor(item?.arte_escala_v) };
+}
+
 function renderPdfViewerPage(idx, pageNum) {
     const viewer = pdfViewerState[idx];
     const solicitacao = viewer ? (viewer._solicitacaoBanco = (viewer._solicitacaoBanco || 0) + 1) : 0;
@@ -3930,11 +3948,33 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
         const viewport = page.getViewport({ scale: 2.0 });
         const destino = document.getElementById(`amostra-pdf-canvas-${idx}`);
         if (!destino || !atual()) return;
+        const fmt = formatoDaAmostraPdfNoPortal(item, num);
+        if (!fmt) {
+            destino.style.display = 'none';
+            const destinoVerso = document.getElementById(`amostra-item-canvas-verso-${idx}`);
+            if (destinoVerso) destinoVerso.style.display = 'none';
+            const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+            if (nav) nav.style.display = 'none';
+            const vazioPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
+            if (vazioPdf) {
+                vazioPdf.textContent = 'Sem formato para visualizar esta amostra. Confira com a gráfica.';
+                vazioPdf.style.display = 'block';
+            }
+            return;
+        }
+        const escala = escalaDaArtePdfNoPortal(item);
+        const larguraCelula = fmt.width_mm * 2.8346 * 2;
+        const alturaCelula = fmt.height_mm * 2.8346 * 2;
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = Math.max(1, Math.round(larguraCelula));
+        canvas.height = Math.max(1, Math.round(alturaCelula));
         const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport,
+            transform: [escala.h / 100, 0, 0, escala.v / 100,
+                (larguraCelula - viewport.width * escala.h / 100) / 2,
+                (alturaCelula - viewport.height * escala.v / 100) / 2] }).promise;
         if (!atual()) return;
         if (num && num.elements && num.elements.length > 0) {
             // A arte dos elementos SVG/PDF e aguardada antes de desenhar: esta funcao
@@ -3960,7 +4000,7 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
             // com uma genérica e assim fica.
             await garantirFontesCarregadas(fontesDosElementos(num.elements));
             if (!atual()) return;
-            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
+            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvas.width, canvas.height);
         }
 
         let versoPronto = null;
@@ -3968,10 +4008,15 @@ async function desenharPaginaDoPdf(idx, pageNum, solicitacao) {
             const paginaVerso = await vs.pdf.getPage(emPares ? pageNum * 2 : pageNum);
             const viewportVerso = paginaVerso.getViewport({ scale: 2.0 });
             versoPronto = document.createElement('canvas');
-            versoPronto.width = viewportVerso.width;
-            versoPronto.height = viewportVerso.height;
+            versoPronto.width = canvas.width;
+            versoPronto.height = canvas.height;
             const ctxVerso = versoPronto.getContext('2d');
-            await paginaVerso.render({ canvasContext: ctxVerso, viewport: viewportVerso }).promise;
+            ctxVerso.fillStyle = '#ffffff';
+            ctxVerso.fillRect(0, 0, versoPronto.width, versoPronto.height);
+            await paginaVerso.render({ canvasContext: ctxVerso, viewport: viewportVerso,
+                transform: [escala.h / 100, 0, 0, escala.v / 100,
+                    (larguraCelula - viewportVerso.width * escala.h / 100) / 2,
+                    (alturaCelula - viewportVerso.height * escala.v / 100) / 2] }).promise;
             if (!atual()) return;
             if (num && num.elements && num.elements.length > 0) {
                 drawNumeracaoElementsOverCanvas(ctxVerso, num, item, pageNum,
