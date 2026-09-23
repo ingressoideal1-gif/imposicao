@@ -1,6 +1,40 @@
 from test_controle_tela import _no_navegador
 
 
+def test_celular_qr_nao_pode_pausar_ou_excluir_a_si_mesmo_na_tela():
+    r = _no_navegador("""
+        Controle.estado.sessao={access_token:'sintetico'};
+        Controle.estado.evento_id='ev-1';
+        await Controle.carregarPainel();
+        chaveiro.guardar({evento_id:'ev-1',aparelho_id:'a1',por_qr:true,token:'sintetico'});
+        Controle.estado.elevacao={token:'sintetico',expira_em:Math.floor(Date.now()/1000)+900};
+        Controle.desenhar();
+        return {pausar:document.getElementById('aparelho-pausar-a1').disabled,
+            excluir:document.getElementById('aparelho-excluir-a1').disabled,
+            renomear:document.getElementById('aparelho-renomear-a1').disabled};
+    """)
+    assert r == dict(pausar=True, excluir=True, renomear=False)
+
+
+def test_vinculo_recusado_avisa_sem_apagar_dados_e_recuperacao_atualiza():
+    r = _no_navegador("""
+        const id='11111111-1111-4111-8111-111111111111';
+        chaveiro.guardar({evento_id:id,nome_evento:'Antigo',token:'sintetico',por_qr:true});
+        let recusado=true;
+        window.fetch=async()=>recusado ? new Response('{}',{status:401}) : new Response(JSON.stringify({evento:{id,nome_evento:'Atualizado',status:'ativo'}}));
+        await listaEventos.carregar(null);
+        const aviso=document.getElementById('aviso-vinculos').textContent;
+        const token=chaveiro.procurar(id).token;
+        document.querySelector('#aviso-vinculos button').click();
+        const qr=document.getElementById('qr-evento-dialogo').open;
+        document.querySelector('[data-evento-fechar]').click();
+        recusado=false; await listaEventos.carregar(null);
+        return {aviso,token,qr,oculto:document.getElementById('aviso-vinculos').hidden,nome:chaveiro.procurar(id).nome_evento};
+    """)
+    assert 'vínculo' in r['aviso'] and r['token'] == 'sintetico' and r['qr']
+    assert r['oculto'] and r['nome'] == 'Atualizado'
+
+
 def test_tela_inicial_nao_restaura_historico_da_conta_nem_vinculo_antigo():
     r = _no_navegador("""
         localStorage.clear();

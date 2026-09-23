@@ -96,6 +96,16 @@ Deno.test("QR: aleatório, não contém senha; hash persistido e ausência de li
   assert(!JSON.stringify(convite).includes(r.conteudo.split(":")[2]));
   falharEmissao = true; await recusa(() => emitirQrEvento(E, I));
 });
+
+Deno.test("PIN: impede excluir ou pausar o proprio aparelho antes de qualquer escrita", async () => {
+  reset(); await registrarPin({ chave: KEY, pin: PIN });
+  const b = await elevarPin({ chave: KEY, pin: PIN }, aparelho);
+  for (const [metodo, corpo] of [["DELETE", null], ["PATCH", {status:"pausado"}]]) {
+    chamadas = [];
+    await recusa(() => editarComPin({chave:KEY,elevacao:b.token,caminho:"/aparelhos/"+A,metodo,corpo},aparelho),409);
+    assert(chamadas.every(r => r.method === "GET"), "autoexclusao nao deve gravar");
+  }
+});
 Deno.test("QR: consulta, ativação vinculada à instalação e revogação", async () => {
   reset(); await registrarPin({ chave: KEY, pin: PIN });
   const r = await emitirQrEvento(E, I), segredo = r.conteudo.split(":")[2];

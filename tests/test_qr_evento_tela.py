@@ -30,6 +30,43 @@ PREPARAR = r"""
     const until = async f => { for(let i=0;i<100;i++){if(f())return;await tick();}throw new Error('timeout'); };
 """
 
+
+def test_reler_qr_revalida_vinculo_salvo_e_preserva_identidade_da_instalacao():
+    r = _no_navegador(PREPARAR + r"""
+        localStorage.setItem('ideal_control_pin_configurado','synthetic');
+        localStorage.setItem('ideal_control_instalacao','cd'.repeat(32));
+        chaveiro.guardar({evento_id:E,por_qr:true,token:'ef'.repeat(32),aparelho_id:'excluido'});
+        localStorage.setItem('ideal_qr_ativacao:'+E,'outro-token');
+        let assumed;
+        aparelhoAqui.assumir=async(token,nome,dados)=>{assumed=dados;};
+        virarPortao.abrir=async()=>{throw new Error('Nao reutilizar vinculo sem conferir');};
+        document.getElementById('btn-ler-qr-evento').click();
+        await qrEvento.ler('IDEAL-CONTROL-EVENTO:1:'+SECRET);
+        document.querySelector('[data-evento-carregar]').click(); await until(()=>assumed);
+        const call=requests.find(r=>r.url.endsWith('/ativar-qr-evento')).c;
+        return {recovered:assumed.aparelho_id===A,token:call.token==='ef'.repeat(32),
+            installation:call.chave==='cd'.repeat(32),registrations:requests.filter(r=>r.url.endsWith('/registrar-pin')).length};
+    """)
+    assert r == dict(recovered=True, token=True, installation=True, registrations=0)
+
+
+def test_pin_vinculo_excluido_orienta_qr_sem_pedir_senha_novamente():
+    r = _no_navegador(PREPARAR + r"""
+        localStorage.setItem('ideal_control_pin_configurado','synthetic');
+        localStorage.setItem('ideal_control_instalacao','cd'.repeat(32));
+        chaveiro.guardar({evento_id:E,por_qr:true,token:'ef'.repeat(32),aparelho_id:A});
+        const base=window.fetch;
+        window.fetch=async(url,op)=>String(url).endsWith('/editar-pin')
+            ? new Response(JSON.stringify({detail:'aparelho nao pareado ou revogado'}),{status:401}) : base(url,op);
+        const action=pinInstalacao.pedir(E,'/eventos/'+E).catch(e=>e.message);
+        await until(()=>document.querySelector('input[name=pin]'));
+        document.querySelector('input[name=pin]').value='042815';
+        document.querySelector('[data-pin-salvar]').click();
+        return {message:await action,dialogs:document.querySelectorAll('input[name=pin]').length,
+            auth:requests.filter(r=>r.url.endsWith('/elevar-pin')).length};
+    """)
+    assert 'Ler QR do evento' in r['message'] and r['dialogs'] == 0 and r['auth'] == 1
+
 def test_primeiro_uso_senha_seis_digitos_sem_persistir_pin():
     r = _no_navegador(PREPARAR + r"""
         const pronto = pinInstalacao.preparar(); await until(()=>document.querySelector('input[name=pin]'));

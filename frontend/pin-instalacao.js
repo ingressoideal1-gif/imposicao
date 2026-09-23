@@ -17,7 +17,13 @@
         if (token) h.Authorization = 'Bearer ' + token;
         var r = await fetch(BASE + '/' + rota, { method: 'POST', headers: h, body: JSON.stringify(dados) });
         var corpo = await r.json();
-        if (!r.ok) { var e = new Error(corpo.detail || 'Não foi possível conferir a senha.'); e.status = r.status; throw e; }
+        if (!r.ok) {
+            var vinculo = r.status === 401 && corpo.detail === 'aparelho nao pareado ou revogado';
+            var e = new Error(vinculo
+                ? 'O vínculo deste celular com o evento está indisponível. No menu do olho, use Ler QR do evento novamente. Se o celular estiver pausado, peça à gráfica para retomá-lo.'
+                : (corpo.detail || 'Não foi possível conferir a senha.'));
+            e.status = r.status; e.vinculoIndisponivel = vinculo; throw e;
+        }
         return corpo;
     }
     function aparelho(eventoId) {
@@ -83,7 +89,7 @@
         var dados = { chave: chave(), elevacao: b.token, caminho: caminho, metodo: o.method || 'GET', corpo: o.body ? JSON.parse(o.body) : null };
         try { return await rede('editar-pin', dados, a.token); }
         catch (e) {
-            if (e.status !== 401) throw e;
+            if (e.status !== 401 || e.vinculoIndisponivel) throw e;
             delete bilhetes[eventoId]; b = await autorizar(eventoId, true); dados.elevacao = b.token;
             return rede('editar-pin', dados, a.token);
         }

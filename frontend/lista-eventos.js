@@ -550,6 +550,25 @@
      * servidor deixaria o porteiro sem lista por causa de um 4G ruim.
      */
     var carregamento = 0, eventosDaConta = [];
+    var vinculosIndisponiveis = {};
+    function mostrarVinculosIndisponiveis() {
+        var aviso = $('aviso-vinculos');
+        if (!aviso) {
+            aviso = document.createElement('p'); aviso.id = 'aviso-vinculos';
+            aviso.className = 'aviso'; aviso.setAttribute('role', 'status');
+            $('erro-arranque').insertAdjacentElement('afterend', aviso);
+        }
+        var nomes = window.chaveiro.listar().filter(function (p) { return vinculosIndisponiveis[p.evento_id] === p.token; })
+            .map(function (p) { return p.nome_evento || 'Evento'; });
+        aviso.hidden = !nomes.length;
+        aviso.textContent = nomes.length ? nomes.join(', ') + ': o vínculo deste celular está indisponível. Leia o QR do evento novamente. Se estiver pausado, peça à gráfica para retomá-lo. ' : '';
+        if (nomes.length) {
+            var botao = document.createElement('button'); botao.type = 'button';
+            botao.textContent = 'Ler QR do evento';
+            botao.onclick = function () { $('btn-ler-qr-evento').click(); };
+            aviso.appendChild(botao);
+        }
+    }
     async function atualizarDadosCarregados(rodada) {
         if (!navigator.onLine) return;
         var lista = window.chaveiro.listar();
@@ -561,15 +580,20 @@
                 var r = await fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria/evento', {
                     headers: {Authorization: 'Bearer ' + p.token}, cache: 'no-store', signal: abortar.signal
                 });
-                if (!r.ok) continue;
+                if (!r.ok) {
+                    if (r.status === 401 && rodada === carregamento) vinculosIndisponiveis[p.evento_id] = p.token;
+                    continue;
+                }
                 var dados = await r.json();
                 if (rodada === carregamento && dados.evento && dados.evento.id === p.evento_id) {
+                    delete vinculosIndisponiveis[p.evento_id];
                     window.chaveiro.atualizarEvento(dados.evento, p.token);
                     eventosDaConta = eventosDaConta.map(function (ev) { return ev.id === dados.evento.id ? Object.assign({}, ev, dados.evento) : ev; });
                 }
             } catch (_) { /* Offline/falha: conservar os últimos dados confirmados. */ }
             finally { clearTimeout(tempo); }
         }
+        if (rodada === carregamento) mostrarVinculosIndisponiveis();
     }
 
     function carregar(sessao) {

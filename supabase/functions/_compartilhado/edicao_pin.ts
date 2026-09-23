@@ -28,6 +28,10 @@ export async function editarComPin(c: any, aparelho: any): Promise<any> {
     if (!recurso) throw new Recusa(403, "Pedido de outro evento ou indisponível.");
   } else throw new Recusa(404, "Operação indisponível.");
   if (metodo === "GET" && tipo === "eventos" && partes.length === 2) return await painel(id);
+  if (tipo === "aparelhos" && id === aparelho.id &&
+      (metodo === "DELETE" || (metodo === "PATCH" && c.corpo?.status && c.corpo.status !== "ativo"))) {
+    throw new Recusa(409, "Este celular está sendo usado para editar. Peça à gráfica para pausá-lo ou excluí-lo pelo Imposition.");
+  }
   let executar: (() => Promise<any>) | undefined;
   if (tipo === "pedidos" && partes.length === 3 && metodo === "POST" && acao === "desvincular") executar = () => desvincularPedido(Number(id), aparelho.evento_id);
   if (tipo === "pedidos" && partes.length === 3 && metodo === "POST" && acao === "sincronizar-setores") executar = () => sincronizarSetores(Number(id), aparelho.evento_id);

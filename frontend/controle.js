@@ -161,7 +161,7 @@
             });
         document.querySelectorAll('#engrenagem button.so-com-senha, #engrenagem .so-com-senha button')
             .forEach(function (el) {
-                if (el.getAttribute('aria-busy') !== 'true') { el.disabled = leitura; }
+                if (el.getAttribute('aria-busy') !== 'true') { el.disabled = leitura || el.hasAttribute('data-preservar-vinculo'); }
             });
     }
 
@@ -1650,6 +1650,17 @@
         btnExcluir.className = 'opcao-aparelho so-com-senha perigo';
         btnExcluir.id = 'aparelho-excluir-' + a.id;
         btnExcluir.textContent = 'Excluir';
+        if (meu && meu.por_qr && meu.aparelho_id === a.id) {
+            btnPausar.disabled = true;
+            btnExcluir.disabled = true;
+            btnPausar.setAttribute('data-preservar-vinculo', '');
+            btnExcluir.setAttribute('data-preservar-vinculo', '');
+            btnPausar.title = btnExcluir.title = 'Para pausar ou excluir este celular, use o painel da gráfica.';
+            var ajudaVinculo = document.createElement('p');
+            ajudaVinculo.className = 'config-ajuda';
+            ajudaVinculo.textContent = 'Para pausar ou excluir este celular, peça à gráfica. Ele mantém seu acesso às configurações.';
+            opcoes.appendChild(ajudaVinculo);
+        }
         btnExcluir.addEventListener('click', function () {
             // Confirmação, e não senha de novo: a elevação já cobre isso. O que
             // falta avisar é o tamanho do estrago — excluir desliga o aparelho

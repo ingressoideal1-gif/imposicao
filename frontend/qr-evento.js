@@ -99,19 +99,16 @@
                 if (typeof preparado.concluida !== 'boolean') throw new Error('Não foi possível confirmar a preparação dos ingressos.');
             } while (!preparado.concluida);
             var salvo = window.chaveiro.procurar(evento.id);
-            if (salvo && salvo.token) {
-                localStorage.setItem('ideal_qr_baixar', evento.id);
-                await window.virarPortao.abrir(evento.id); return;
-            }
             var nome = dialogo.querySelector('[data-evento-aparelho]').value.trim();
             if (!nome || nome.length > 60) throw new Error('Dê um nome a este celular (até 60 caracteres).');
             // Só o token do aparelho é persistido. Repetir após falha de rede não cria outro aparelho.
             var chave = 'ideal_qr_ativacao:' + evento.id;
-            var token = localStorage.getItem(chave) || aleatorio();
+            var token = (salvo && salvo.token) || localStorage.getItem(chave) || aleatorio();
             localStorage.setItem(chave, token);
             aviso.textContent = 'Ativando este celular…';
             var r = await pedir('ativar-qr-evento', { segredo: segredo, token: token, nome: nome, navegador: window.AcessoConta.navegadorId(), chave: window.pinInstalacao.chave() });
             if (r.evento.id !== evento.id || !r.aparelho || !r.aparelho.id) throw new Error('Resposta incompatível com o evento escolhido.');
+            window.pinInstalacao.encerrar();
             await conferirFila();
             window.chaveiro.guardarNomeDoAparelho(nome);
             localStorage.setItem('ideal_qr_baixar', r.evento.id);
