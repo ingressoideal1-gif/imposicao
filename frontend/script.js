@@ -34307,6 +34307,16 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
 }
 window.blocoDeArteDoModelo = blocoDeArteDoModelo;
 
+function formatarVariacoesDoModelo(texto) {
+    return String(texto || '').split(/\s*•\s*/).map(parte => {
+        const separador = parte.indexOf(':');
+        if (separador < 0) return escapeHtml(parte.trim());
+        const rotulo = parte.slice(0, separador + 1).trim();
+        const valor = parte.slice(separador + 1).trim();
+        return `${escapeHtml(rotulo)} <span style="color: #fbbf24; font-weight: 700;">${escapeHtml(valor)}</span>`;
+    }).filter(Boolean).join(' • ');
+}
+
 function renderAmostrasOSItens(osId, opcoes = {}) {
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
     const targetOSId = os ? os.id : osId;
@@ -34752,7 +34762,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' || !String(item.variacoes_texto || '').trim() ? '' : `
                     <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text); overflow-wrap: anywhere;">
-                        <strong>Variações:</strong> ${escapeHtml(String(item.variacoes_texto).trim())}
+                        <strong>Variações:</strong> ${formatarVariacoesDoModelo(item.variacoes_texto)}
                     </div>`}
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div style="display: flex; flex-direction: column; gap: 12px;">
