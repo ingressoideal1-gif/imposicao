@@ -2,6 +2,7 @@ import { banco } from "./banco.ts";
 import { hashDoToken, tokenNovo } from "./hash.ts";
 import { Recusa } from "./sessao.ts";
 import { instalacao } from "./pin_instalacao.ts";
+import { prepararEvento } from "./preparacao_nuvem.ts";
 
 const segredoValido = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
 
@@ -35,7 +36,7 @@ export async function revogarQrEvento(eventoId: string): Promise<any> {
   return { revogados: linhas.length };
 }
 
-export async function usarQrEvento(corpo: any, ativar: boolean): Promise<any> {
+export async function usarQrEvento(corpo: any, ativar: boolean, preparar = false): Promise<any> {
   if (!segredoValido(corpo?.segredo)) throw new Recusa(422, "QR do evento inválido.");
   if (ativar && (!segredoValido(corpo?.token) || typeof corpo?.nome !== "string" ||
       !corpo.nome.trim() || corpo.nome.trim().length > 60 ||
@@ -47,6 +48,7 @@ export async function usarQrEvento(corpo: any, ativar: boolean): Promise<any> {
   const consulta = await banco("POST", "rpc/producao_acesso_ativar_qr_evento", { p_segredo_hash: hash });
   if (!consulta?.evento?.id) throw new Recusa(403, "QR indisponível, revogado ou evento inativo. Peça à gráfica para conferir.");
   await conferirPronto(consulta.evento.id);
+  if (preparar) return await prepararEvento(consulta.evento.id);
   if (!ativar) return consulta;
   const r = await banco("POST", "rpc/producao_acesso_ativar_qr_evento", {
     p_segredo_hash: hash,

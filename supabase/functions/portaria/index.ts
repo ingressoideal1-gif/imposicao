@@ -214,6 +214,15 @@ async function entrar(corpo: any): Promise<Response> {
   });
 }
 
+/** Dados públicos do evento, limitados ao token deste aparelho. */
+async function dadosDoEvento(cabecalho: string | null): Promise<Response> {
+  const aparelho = await aparelhoDoToken(cabecalho);
+  const evento = ((await banco("GET", `producao_acesso_eventos?id=eq.${aparelho.evento_id}` +
+    "&select=id,nome_evento,data_evento,local_evento,status")) ?? [])[0];
+  if (!evento) return erro(409, "evento nao existe mais");
+  return ok({evento: {id:evento.id, nome_evento:evento.nome_evento, data_evento:evento.data_evento, local_evento:evento.local_evento, status:evento.status}});
+}
+
 /** Marca leve da publicação: não expõe códigos nem dados das credenciais. */
 async function publicacaoDoEvento(eventoId: string) {
   const pedidos: any[] = [];
@@ -241,7 +250,7 @@ async function faixa(
 
   const evento = ((await banco(
     "GET",
-    `producao_acesso_eventos?id=eq.${eventoId}&select=id,nome_evento,sal,status`,
+    `producao_acesso_eventos?id=eq.${eventoId}&select=id,nome_evento,data_evento,local_evento,sal,status`,
   )) ?? [])[0];
   if (!evento) return erro(409, "evento nao existe mais");
 
@@ -293,6 +302,7 @@ async function faixa(
     evento: {
       id: evento.id,
       nome: evento.nome_evento,
+      data_evento: evento.data_evento, local_evento: evento.local_evento, status: evento.status,
       sal: evento.sal,
       // Booleano, e nao o texto do status: quem le e o `portaria-validacao.js`,
       // que decide sem rede e nao pode ficar sabendo dos valores do banco.
@@ -553,14 +563,14 @@ async function sincronizar(
 
   const evento = ((await banco(
     "GET",
-    `producao_acesso_eventos?id=eq.${eventoId}&select=id,status,entradas_zeradas_em`,
+    `producao_acesso_eventos?id=eq.${eventoId}&select=id,nome_evento,data_evento,local_evento,status,entradas_zeradas_em`,
   )) ?? [])[0];
   if (!evento) return erro(409, "evento nao existe mais");
 
   const setores = (await banco(
     "GET",
     `producao_acesso_setores?evento_id=eq.${eventoId}&status=eq.ativo` +
-      `&select=id,bloqueado,bloqueado_motivo,abre_em,fecha_em,tipo_uso&order=nome.asc`,
+      `&select=id,nome,quantidade,bloqueado,bloqueado_motivo,abre_em,fecha_em,tipo_uso&order=nome.asc`,
   )) ?? [];
   const bloqueios = (await banco(
     "GET",
@@ -612,7 +622,10 @@ async function sincronizar(
   return ok({
     // Booleano, e nao o texto do status, pelo mesmo motivo do `/faixa`: quem le
     // decide sem rede e nao pode ficar sabendo dos valores do banco.
-    evento: { ativo: evento.status === "ativo" },
+    evento: { id: evento.id, nome: evento.nome_evento, data_evento: evento.data_evento,
+      local_evento: evento.local_evento, status: evento.status, ativo: evento.status === "ativo" },
+    aparelho: { id: aparelho.id, nome: aparelho.nome, setores: await setoresDoAparelho(aparelho.id) },
+    setores_completos: true,
     publicacao: await publicacaoDoEvento(eventoId),
     setores,
     bloqueios,
@@ -663,14 +676,17 @@ Deno.serve(async (req: Request) => {
       const resposta = ok(r); resposta.headers.set("Cache-Control", "no-store");
       return comCors(resposta, origem);
     }
-    if (req.method === "POST" && (rota === "consultar-qr-evento" || rota === "ativar-qr-evento")) {
+    if (req.method === "POST" && ["consultar-qr-evento", "ativar-qr-evento", "preparar-qr-evento"].includes(rota)) {
       let corpo;
       try { corpo = await req.json(); } catch { return comCors(erro(422, "QR inválido."), origem); }
-      return comCors(ok(await usarQrEvento(corpo, rota === "ativar-qr-evento")), origem);
+      const resposta = ok(await usarQrEvento(corpo, rota === "ativar-qr-evento", rota === "preparar-qr-evento"));
+      resposta.headers.set("Cache-Control", "no-store");
+      return comCors(resposta, origem);
     }
     if (req.method === "POST" && rota === "entrar") {
       return comCors(await entrar(await req.json()), origem);
     }
+    if (req.method === "GET" && rota === "evento") return comCors(await dadosDoEvento(auth), origem);
     if (req.method === "GET" && rota === "faixa") {
       return comCors(await faixa(auth, url.searchParams.get("desde")), origem);
     }

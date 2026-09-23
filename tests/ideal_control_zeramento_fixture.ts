@@ -91,6 +91,7 @@ async function fixture(withOld: boolean) {
   tables.producao_acesso_eventos = [{ id: E, status: "ativo", entradas_zeradas_em: null }];
   tables.producao_acesso_dispositivos = [{ id: A, evento_id: E, nome: "Aparelho sintetico", status: "ativo", token_hash: await hashDoToken(TOKEN) }];
   tables.producao_acesso_setores = [{ id: S, evento_id: E, nome: "Setor de teste", status: "ativo", tipo_uso: "unico", bloqueado: false, abre_em: null, fecha_em: null }];
+  tables.producao_acesso_dispositivo_setores = [{dispositivo_id:A,setor_id:S}];
   tables.producao_acesso_bloqueios = [];
   tables.producao_acesso_pedidos = [{evento_id:E,pedido_id_int:123,publicado_em:oldMoment,total_credenciais:2}];
   tables.producao_acesso_leituras = withOld ? [structuredClone(reading)] : [];

@@ -72,7 +72,19 @@
             ? function (caminho, opcoes) { return window.pinInstalacao.pedir(estado.evento_id, caminho, opcoes); }
             : AcessoConta.pedir;
         return pedirPainel('/eventos/' + estado.evento_id, { headers: cabecalhos() })
-            .then(function (p) { estado.painel = p; desenhar(); return p; })
+            .then(function (p) {
+                var anterior = estado.painel && estado.painel.evento;
+                if (jaDesenhouEvento && anterior && anterior.id === p.evento.id) {
+                    [['campo-nome-evento','nome_evento'],['campo-local','local_evento'],['campo-data','data_evento']].forEach(function (par) {
+                        var campo = $(par[0]), data = par[1] === 'data_evento';
+                        var antes = data ? deISOParaCampo(anterior[par[1]]) : (anterior[par[1]] || '');
+                        if (campo && campo.value === antes) campo.value = data ? deISOParaCampo(p.evento[par[1]]) : (p.evento[par[1]] || '');
+                    });
+                }
+                estado.painel = p;
+                if (window.chaveiro && window.chaveiro.atualizarEvento) window.chaveiro.atualizarEvento(p.evento);
+                desenhar(); return p;
+            })
             .catch(function (e) {
                 // Sessão vencida ou rede caindo no meio do carregamento: sem
                 // isto a tela fica do jeito que estava — muda, sem o dono

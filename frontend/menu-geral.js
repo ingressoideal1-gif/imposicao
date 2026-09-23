@@ -61,7 +61,7 @@
      * cima dos eventos finalizados, oferecendo os pedidos do cliente numa tela
      * que nao e a dos pedidos.
      */
-    var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
+    var DA_TELA_INICIAL = ['lista'];
 
     function mostrarInicial(mostrar) {
         DA_TELA_INICIAL.forEach(function (id) {
@@ -137,6 +137,7 @@
         var mp = $('meus-pedidos');
         if (mp) { mp.classList.add('sumindo'); }
         $('menu-geral').classList.remove('sumindo');
+        ['bloco-novo-evento', 'bloco-qr-evento'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('sumindo'); });
         mostrarInicial(false);
         // As duas linhas de rodape do menu, atualizadas TOCA A TOCA -- e nao
         // uma vez so no arranque, porque `versao-do-app` ainda nao existe

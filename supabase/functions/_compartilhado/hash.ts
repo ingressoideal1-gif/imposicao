@@ -1,9 +1,9 @@
 /**
  * O MESMO hash do `qr_ideal.py` e do `frontend/qr-ideal-hash.js`.
  *
- * A nuvem nunca guarda o codigo do QR Ideal -- guarda o hash dele. O celular da
- * portaria confere calculando o hash do que leu e procurando na faixa que
- * baixou, montada pelo agente em Python.
+ * As credenciais guardam somente o hash. A base mestra fica em Storage privado,
+ * acessível apenas pelo serviço que prepara os ingressos. O celular confere o
+ * hash do que leu na faixa baixada; nunca recebe a base mestra.
  *
  * Se esta funcao divergir das outras duas em qualquer detalhe, TODO ingresso do
  * evento e recusado na portaria. Nao ha como perceber antes: nao aparece no

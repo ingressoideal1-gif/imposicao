@@ -31,21 +31,17 @@
         var porId = {};
 
         (doChaveiro || []).forEach(function (p) {
-            if (!p || !p.evento_id) { return; }
+            if (!p || !p.evento_id || p.status === "finalizado") { return; }
             porId[p.evento_id] = {
                 id: p.evento_id,
                 nome: p.nome_evento || 'Evento',
-                // Sem a conta nao da para saber se o evento foi desligado. Um
-                // "inativo" chutado na barra seria pior que silencio: o dono
-                // desligaria um portao que esta trabalhando.
-                ativo: true,
+                // Estado mais recente confirmado pelo token deste aparelho.
+                ativo: !p.status || p.status === 'ativo',
                 ehAparelho: true,
                 nomeAparelho: p.nome_portao || '',
-                // O chaveiro (celular sem rede) nao guarda data nem local --
-                // so a conta sabe disso. Sem elas o subtitulo da barra ainda
-                // mostra "le neste aparelho", que e o que importa aqui.
-                data: null,
-                local: '',
+                // Data e local permanecem disponíveis também sem rede.
+                data: p.data_evento || null,
+                local: p.local_evento || '',
                 // Quantos entraram so a conta sabe. Sem rede, a barra mostra o
                 // que importa no portao -- "le neste aparelho" -- e cala sobre
                 // o resto, em vez de escrever um zero que seria mentira.
@@ -540,7 +536,32 @@
      * lista sai com o que houver -- prender a tela inteira na resposta do
      * servidor deixaria o porteiro sem lista por causa de um 4G ruim.
      */
+    var carregamento = 0, eventosDaConta = [];
+    async function atualizarDadosCarregados(rodada) {
+        if (!navigator.onLine) return;
+        var lista = window.chaveiro.listar();
+        for (var i = 0; i < lista.length; i++) {
+            var p = lista[i];
+            if (!p || !p.token) continue;
+            var abortar = new AbortController(), tempo = setTimeout(function () { abortar.abort(); }, 8000);
+            try {
+                var r = await fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria/evento', {
+                    headers: {Authorization: 'Bearer ' + p.token}, cache: 'no-store', signal: abortar.signal
+                });
+                if (!r.ok) continue;
+                var dados = await r.json();
+                if (rodada === carregamento && dados.evento && dados.evento.id === p.evento_id) {
+                    window.chaveiro.atualizarEvento(dados.evento, p.token);
+                    eventosDaConta = eventosDaConta.map(function (ev) { return ev.id === dados.evento.id ? Object.assign({}, ev, dados.evento) : ev; });
+                }
+            } catch (_) { /* Offline/falha: conservar os últimos dados confirmados. */ }
+            finally { clearTimeout(tempo); }
+        }
+    }
+
     function carregar(sessao) {
+        var rodada = ++carregamento;
+        if (!sessao) eventosDaConta = [];
         var doChaveiro = window.chaveiro.listar();
         desenhar(unir(doChaveiro, []));      // a tela ja aparece, sem esperar
         // Sem a conta nao ha finalizado nenhum a mostrar: quem sabe que um
@@ -562,12 +583,18 @@
             if (sessao) { window.conta.conferirSenhaProvisoria(sessao); }
         }
 
-        if (!sessao) { return Promise.resolve(); }
-        return window.AcessoConta.pedir('/meus-eventos', {
+        var atualizacao = atualizarDadosCarregados(rodada);
+        if (!sessao) return atualizacao.then(function () {
+            if (rodada === carregamento) desenhar(unir(window.chaveiro.listar(), []));
+        });
+        return atualizacao.then(function () { return window.AcessoConta.pedir('/meus-eventos', {
             headers: { Authorization: 'Bearer ' + sessao.access_token }
-        }).then(function (d) {
+        }); }).then(function (d) {
+            if (rodada !== carregamento) return;
             var eventos = d.eventos || [];
-            desenhar(unir(doChaveiro, eventos));
+            eventosDaConta = eventos;
+            eventos.forEach(function (ev) { window.chaveiro.atualizarEvento(ev); });
+            desenhar(unir(window.chaveiro.listar(), eventos));
             desenharFinalizados(finalizados(eventos));
         }).catch(function () {
             // A lista do chaveiro ja esta na tela. Aqui so avisamos que o resto
@@ -658,6 +685,21 @@
             return carregar(s);
         });
     }
+
+    var atualizandoAutomatico = false;
+    function atualizarAoVoltar() {
+        if (document.hidden || !navigator.onLine || atualizandoAutomatico || !$('eventos')) return;
+        atualizandoAutomatico = true;
+        var rodada = carregamento;
+        return atualizarDadosCarregados(rodada).then(function () {
+            if (rodada !== carregamento) return;
+            desenhar(unir(window.chaveiro.listar(), eventosDaConta));
+            desenharFinalizados(finalizados(eventosDaConta));
+        }).finally(function () { atualizandoAutomatico = false; });
+    }
+    window.addEventListener('online', atualizarAoVoltar);
+    document.addEventListener('visibilitychange', atualizarAoVoltar);
+    setInterval(atualizarAoVoltar, 30000);
 
     window.listaEventos = {
         unir: unir, finalizados: finalizados,

@@ -19,6 +19,7 @@ PREPARAR = r"""
         let body;
         if (url.endsWith('/registrar-pin')) body = {id:'installation-synthetic'};
         else if (url.endsWith('/consultar-qr-evento')) body = {evento:{id:E,nome:'Evento sintético'}};
+        else if (url.endsWith('/preparar-qr-evento')) body = {concluida:true,prontos:1500,total:1500};
         else if (url.endsWith('/ativar-qr-evento')) body = {evento:{id:E,nome:'Evento sintético'},aparelho:{id:A,nome:c.nome}};
         else if (url.endsWith('/elevar-pin')) body = {token:'synthetic-elevation',expira_em:Math.floor(Date.now()/1000)+900};
         else if (url.endsWith('/editar-pin')) body = {ok:true};
@@ -88,6 +89,34 @@ def test_fila_pendente_impede_ativacao_e_camera_negada_oferece_galeria():
         return {camera,blocked:!requests.some(r=>r.url.endsWith('/ativar-qr-evento')),count:await portariaDeposito.contarFila()};
     """)
     assert "galeria" in r["camera"] and r["blocked"] and r["count"] == 1
+
+
+def test_preparacao_retoma_apos_falha_e_so_ativa_apos_todos_ingressos():
+    r = _no_navegador(PREPARAR + r"""
+        localStorage.setItem('ideal_control_pin_configurado','synthetic');
+        localStorage.setItem('ideal_control_instalacao','cd'.repeat(32));
+        const baseFetch=window.fetch; let tentativas=0, assumidos=0, ativouAntes=false;
+        window.fetch=async (url,opts)=>{
+            if(String(url).endsWith('/preparar-qr-evento')) {
+                tentativas++;
+                if(tentativas===1) return new Response(JSON.stringify({detail:'Falha sintética. Tente novamente.'}),{status:503});
+                return new Response(JSON.stringify({concluida:tentativas>=3,prontos:tentativas>=3?1500:100,total:1500}));
+            }
+            if(String(url).endsWith('/ativar-qr-evento') && tentativas<3) ativouAntes=true;
+            return baseFetch(url,opts);
+        };
+        aparelhoAqui.assumir=async()=>{assumidos++;};
+        document.getElementById('btn-ler-qr-evento').click();
+        await qrEvento.ler('IDEAL-CONTROL-EVENTO:1:'+SECRET);
+        const btn=document.querySelector('[data-evento-carregar]'); btn.click();
+        await until(()=>!btn.disabled);
+        const falha=document.querySelector('[data-evento-aviso]').textContent;
+        const semAtivar=assumidos===0;
+        btn.click(); await until(()=>assumidos===1);
+        return {tentativas,semAtivar,falha,ativouAntes};
+    """)
+    assert r['tentativas'] == 3 and r['semAtivar'] and not r['ativouAntes']
+    assert 'Falha sintética' in r['falha']
 
 def test_pin_libera_edicao_somente_apos_senha_e_sair_exige_novamente():
     r = _no_navegador(PREPARAR + r"""

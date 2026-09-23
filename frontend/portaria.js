@@ -339,9 +339,10 @@
             : estado.carga && estado.carga.publicacao && estado.carga.publicacao.concluida
                 ? 'Ingressos publicados. Conecte à internet para concluir o download neste celular.'
                 : 'Aguardando publicação dos ingressos. O evento já pode ser configurado. Conecte à internet para sincronizar.';
-        $('btn-digitar').disabled = !pronto;
-        $('btn-conferir').disabled = !pronto;
-        if (!pronto) {
+        var podeCapturar = !!estado.carga && !baixandoCarga;
+        $('btn-digitar').disabled = !podeCapturar;
+        $('btn-conferir').disabled = !podeCapturar;
+        if (!podeCapturar) {
             $('btn-toque').classList.add('sumindo');
             if (window.portariaCamera) window.portariaCamera.desligar();
         }
@@ -409,7 +410,7 @@
     }
 
     function ligarCamera() {
-        if (!prontoParaLer()) return;
+        if (!estado.carga || baixandoCarga) return;
         if (!window.portariaCamera) return;
         // O rotulo volta ao repouso a cada abertura: a lanterna se apaga junto
         // com a camera, e um botao dizendo "acesa" com a luz apagada e pior do
@@ -447,7 +448,7 @@
      * ja e o toque, e pedir outro seria dois toques para o mesmo gesto.
      */
     function comecarALer() {
-        if (!prontoParaLer()) { atualizarProntidao(); return; }
+        if (!estado.carga || baixandoCarga) { atualizarProntidao(); return; }
         if (!somDestravado) {
             $('btn-toque').classList.remove('sumindo');
             return;   // a camera abre no toque, junto com o som
@@ -456,13 +457,19 @@
         ligarCamera();
     }
 
-    function entrarEmLeitura() {
+    function atualizarDadosDoTopo() {
         var c = estado.carga;
+        if (!c) return;
+        if (window.chaveiro && window.chaveiro.atualizarEvento) window.chaveiro.atualizarEvento(c.evento, estado.token);
         $('topo-aparelho').textContent = c.aparelho.nome;
         $('topo-setores').textContent = c.aparelho.setores.map(function (id) {
             var s = setorPorId(c, id);
             return s ? s.nome : id;
         }).join(' · ');
+    }
+
+    function entrarEmLeitura() {
+        atualizarDadosDoTopo();
         atualizarContador();
         mostrar('lendo');
         atualizarProntidao();
@@ -579,6 +586,7 @@
             // O estado em memória só avança depois do commit do IndexedDB.
             if (!estado.carga || estado.carga.evento.id !== eventoId) return;
             estado.carga = nova;
+            atualizarDadosDoTopo();
             atualizarProntidao();
             // O servidor ja enxerga o que este aparelho vinha somando a mao:
             // continuar somando contaria as mesmas pessoas duas vezes. Leitura
@@ -645,7 +653,18 @@
 
     function validarTexto(texto, setorEscolhido) {
         var carga = estado.carga;
-        if (!prontoParaLer()) { atualizarProntidao(); return Promise.resolve(); }
+        if (!prontoParaLer()) {
+            if (window.portariaCamera) window.portariaCamera.desligar();
+            $('resposta-caixa').className = 'resposta porta';
+            $('resposta-marca').textContent = '…';
+            $('resposta-titulo').textContent = carga && carga.publicacao && carga.publicacao.concluida
+                ? 'AGUARDANDO DOWNLOAD' : 'AGUARDANDO PUBLICAÇÃO';
+            $('resposta-detalhe').textContent = 'Código recebido. Os ingressos precisam estar disponíveis neste celular para conferir a entrada.';
+            $('resposta-grande').textContent = '';
+            $('resposta-motivo').textContent = 'Conecte à internet para sincronizar e tente a leitura novamente.';
+            mostrar('resposta');
+            return Promise.resolve();
+        }
         // A escolha de setor passa por fora do silencio, de proposito: o texto e
         // exatamente o que a camera acabou de ler, e o porteiro acabou de tocar
         // no botao. Sem esta saida, a propria escolha dele cairia no silencio e
@@ -951,8 +970,9 @@
     }
 
     window.addEventListener('online', function () { sincronizar(); puxarNovidades(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) puxarNovidades(); });
     setInterval(function () {
-        if (estado.token && estado.carga && !prontoParaLer() && !baixandoCarga && navigator.onLine) puxarNovidades();
+        if (estado.token && estado.carga && !baixandoCarga && navigator.onLine && !document.hidden) puxarNovidades();
     }, 30000);
     setInterval(sincronizar, 30000);
 
@@ -1062,7 +1082,7 @@
             return;
         }
         D.lerCarga().then(function (c) {
-            if (c) { estado.carga = c; entrarEmLeitura(); sincronizar(); }
+            if (c) { estado.carga = c; entrarEmLeitura(); sincronizar(); puxarNovidades(); }
             else {
                 baixarCarga().catch(function () {
                     avisar('Não deu para baixar o evento neste aparelho. '

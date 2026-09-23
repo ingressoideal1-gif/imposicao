@@ -12,11 +12,15 @@ Deno.test("faixa e sincronismo sinalizam publicação pendente e concluída sem 
    const u=new URL(String(input));assert(u.hostname==="sintetico.invalid");
    const t=u.pathname.split('/').pop();let rows:any[]=[];
    if(t==="producao_acesso_dispositivos")rows=[{id:A,evento_id:E,status:"ativo",nome:"Teste"}];
-   else if(t==="producao_acesso_eventos")rows=[{id:E,status:"ativo",nome_evento:"Teste",sal:"ab".repeat(32)}];
+   else if(t==="producao_acesso_eventos")rows=[{id:E,status:"ativo",nome_evento:"Nome atualizado",data_evento:"2026-10-01T12:00:00Z",local_evento:"Local atualizado",sal:"ab".repeat(32)}];
    else if(t==="producao_acesso_pedidos")rows=[{pedido_id_int:123,publicado_em:published?"2026-09-22T12:00:00Z":null,total_credenciais:published?2:0,sal:"cd".repeat(32)}];
    return Promise.resolve(new Response(JSON.stringify(rows),{headers:{"Content-Range":"*/0"}}));
   }) as typeof fetch;
   await import("../supabase/functions/portaria/index.ts");
+  const eventoRes=await handler!(new Request("https://sintetico.invalid/portaria/evento",{headers:{Authorization:"Bearer sintetico"}}));
+  const evento=(await eventoRes.json()).evento;
+  assert(evento.nome_evento === "Nome atualizado" && !('sal' in evento));
+  assert((await handler!(new Request("https://sintetico.invalid/portaria/evento"))).status===401);
   let previous="";
   for(published of [false,true]) {
    let mark="";
@@ -24,6 +28,7 @@ Deno.test("faixa e sincronismo sinalizam publicação pendente e concluída sem 
     const res=await handler!(new Request("https://sintetico.invalid/portaria/"+route,{headers:{Authorization:"Bearer sintetico"}}));
     assert(res.status===200);const r=await res.json();
     assert(r.publicacao.concluida===published);
+    assert(r.evento.nome === "Nome atualizado" && r.evento.local_evento === "Local atualizado");
     assert(!r.publicacao.versao.includes("sal"));
     if(mark)assert(mark===r.publicacao.versao);mark=r.publicacao.versao;
    }

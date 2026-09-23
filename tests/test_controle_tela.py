@@ -3284,7 +3284,7 @@ def test_o_botao_da_casa_vazia_abre_os_eventos_finalizados():
 # ── O menu geral, atras do olho do cabecalho ────────────────────────────────
 
 
-def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
+def test_o_olho_abre_o_menu_com_meus_pedidos_e_tira_a_lista_do_caminho():
     """A barra do topo fica FORA do `#lista` de propósito -- o porteiro não tem
     conta, e ela precisa aparecer acima do login. Sem escondê-la junto, ela
     sobrava em cima dos eventos finalizados, oferecendo "Meus Pedidos" numa tela
@@ -3305,9 +3305,7 @@ def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
     """)
     assert saida["menuAberto"] is True
     assert saida["listaSumiu"] is True
-    assert saida["novoEventoSumiu"] is True, (
-        'a barra "Meus Pedidos" sobrou por cima do menu'
-    )
+    assert saida["novoEventoSumiu"] is False, 'Meus Pedidos deve ficar dentro do menu do olho'
 
 
 def test_o_olho_ALTERNA_e_o_voltar_tambem_traz_a_tela_inicial_de_volta():

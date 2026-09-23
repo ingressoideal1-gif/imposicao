@@ -136,7 +136,10 @@
         if (novidade.publicacao) nova.publicacao = copiaRasa(novidade.publicacao);
         if (novidade.evento) nova.evento = mesclar(base.evento, novidade.evento);
 
-        if (novidade.setores && novidade.setores.length) {
+        if (novidade.aparelho) nova.aparelho = mesclar(base.aparelho, novidade.aparelho);
+        if (novidade.setores_completos && Array.isArray(novidade.setores)) {
+            nova.setores = novidade.setores.map(copiaRasa);
+        } else if (novidade.setores && novidade.setores.length) {
             nova.setores = mesclarSetores(base.setores, novidade.setores);
         }
 

@@ -106,6 +106,19 @@
         return limpo;
     }
 
+    // Mescla somente dados de apresentação; nunca substitui identidade ou token.
+    function atualizarEvento(evento, tokenEsperado) {
+        if (!evento || !evento.id) return;
+        var p = procurar(evento.id);
+        if (!p || (tokenEsperado && p.token !== tokenEsperado)) return;
+        var nomes = {nome_evento: 'nome_evento', data_evento: 'data_evento', local_evento: 'local_evento', status: 'status'};
+        Object.keys(nomes).forEach(function (k) {
+            if (Object.prototype.hasOwnProperty.call(evento, k)) p[k] = evento[k];
+        });
+        if (Object.prototype.hasOwnProperty.call(evento, 'nome')) p.nome_evento = evento.nome;
+        guardar(p);
+    }
+
     function esquecer(evento_id) {
         return escrever(listar().filter(function (p) {
             return p && p.evento_id !== evento_id;
@@ -189,7 +202,7 @@
     }
 
     window.chaveiro = {
-        listar: listar, procurar: procurar, guardar: guardar,
+        listar: listar, procurar: procurar, guardar: guardar, atualizarEvento: atualizarEvento,
         esquecer: esquecer, carregado: carregado, carregar: carregar,
         migrar: migrar,
         nomeDoAparelho: nomeDoAparelho, guardarNomeDoAparelho: guardarNomeDoAparelho

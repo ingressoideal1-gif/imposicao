@@ -4,7 +4,7 @@
     window.qrEventoEnvio = { montar: function (dialogo, pedir, eventoAtual) {
         var bloco = document.createElement('section');
         bloco.className = 'ic-qr-evento-entrega';
-        bloco.innerHTML = '<hr><h3>2. Carregar o evento</h3><p>Depois de instalar, abra o aplicativo e toque em “Ler QR do evento”. No mesmo celular, use “Importar da galeria”.</p>'
+        bloco.innerHTML = '<hr><h3>2. Carregar o evento</h3><p>Depois de instalar, abra o menu do olho e toque em “Ler QR do evento”. No mesmo celular, use “Importar da galeria”.</p>'
             + '<p data-qr-nome></p><button class="btn btn-primary" type="button" data-qr-gerar>Gerar QR do evento</button>'
             + '<div data-qr-resultado hidden><canvas width="600" height="700" style="width:100%;max-width:300px"></canvas>'
             + '<p><button class="btn btn-secondary" type="button" data-qr-baixar>Baixar QR</button> <button class="btn btn-secondary" type="button" data-qr-enviar>Compartilhar QR</button></p></div>'
@@ -35,7 +35,7 @@
             var mensagem = 'Ideal Control — ' + (ev.nome_evento || 'Evento') + '\n'
                 + '1. Instale o aplicativo: https://imposition.ai-ideal.com.br/ic/\n'
                 + '2. No primeiro uso, escolha uma senha de edição de 6 números. Cada celular tem sua própria senha.\n'
-                + '3. Abra o aplicativo e toque em “Ler QR do evento”. Se a imagem chegou neste celular, use “Importar da galeria”.\n'
+                + '3. Abra o menu do olho e toque em “Ler QR do evento”. Se a imagem chegou neste celular, use “Importar da galeria”.\n'
                 + '4. Aguarde o carregamento completo do evento com internet antes de usar na portaria.';
             try { await navigator.clipboard.writeText(mensagem); aviso.textContent = 'Instruções copiadas. Cole na conversa e anexe a imagem do QR deste evento.'; }
             catch (_) { aviso.textContent = 'Não foi possível copiar. Envie o link de instalação e a imagem do QR com as orientações acima.'; }

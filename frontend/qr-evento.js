@@ -41,7 +41,7 @@
             evento = r.evento;
             dialogo.querySelector('[data-evento-nome]').textContent = evento.nome;
             dialogo.querySelector('[data-evento-confirmar]').hidden = false;
-            aviso.textContent = 'Confirme para carregar o evento e suas configurações. Se os ingressos ainda não foram publicados, serão sincronizados depois.';
+            aviso.textContent = 'Confirme para preparar e baixar todos os ingressos neste celular.';
         } catch (e) { aviso.textContent = e.message; }
         finally { ocupado = false; }
     }
@@ -92,8 +92,15 @@
         try {
             await window.pinInstalacao.preparar();
             await conferirFila();
+            var preparado;
+            do {
+                aviso.textContent = preparado ? 'Preparando ingressos: ' + preparado.prontos + ' de ' + preparado.total + '…' : 'Preparando os ingressos do evento…';
+                preparado = await pedir('preparar-qr-evento', { segredo: segredo });
+                if (typeof preparado.concluida !== 'boolean') throw new Error('Não foi possível confirmar a preparação dos ingressos.');
+            } while (!preparado.concluida);
             var salvo = window.chaveiro.procurar(evento.id);
             if (salvo && salvo.token) {
+                localStorage.setItem('ideal_qr_baixar', evento.id);
                 await window.virarPortao.abrir(evento.id); return;
             }
             var nome = dialogo.querySelector('[data-evento-aparelho]').value.trim();

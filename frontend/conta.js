@@ -63,7 +63,7 @@
     // senao o login nasceria por cima da caixa com a senha do dono digitada
     // dentro --, e contar como "esta na frente" quando ela fecha, para a tela
     // inicial nao voltar POR BAIXO dele.
-    var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento', 'bloco-qr-evento'];
+    var DA_TELA_INICIAL = ['lista'];
     var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos', 'caixa-carregar',
                       'ao-vivo', 'conferencia-pedidos'];
     // TUDO o que pode estar na frente da tela inicial -- os estados de fora e

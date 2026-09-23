@@ -22,7 +22,7 @@
     <!-- A fonte da identidade visual, pre-carregada para a tela nao trocar de
          letra depois de aberta. Local, e no pre-cache do service worker. -->
     <link rel="preload" href="ideal-control.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="controle.css?v=945">
+    <link rel="stylesheet" href="controle.css?v=946">
 <style>
 .ic-qr-dialogo { width: min(440px, calc(100% - 32px)); max-height: 90dvh; overflow: auto; border: 1px solid #475569; border-radius: 16px; background: #111827; color: #f8fafc; padding: 20px; }
 .ic-qr-dialogo::backdrop { background: #000b; }
@@ -70,17 +70,7 @@
          evento carregado), esta é a única coisa que aparece na tela. -->
     <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
 
-    <!-- A barra "Novo Evento" virou "Meus Pedidos" em 17/08/2026: nao ha mais
-         QR do Pedido para ler. Um evento nasce de um pedido impresso, e os
-         pedidos vem da conta do cliente. Duas portas para a mesma acao: a barra
-         e o rotulo em texto, o `+` fecha a coluna da direita.
-
-         Continua ACIMA do login, e fora dele: o porteiro nao tem conta, e a
-         tela inteira -- barra inclusive -- precisa aparecer acima dele. -->
-    <div id="bloco-qr-evento" class="cartao">
-        <button id="btn-ler-qr-evento" type="button">Ler QR do evento</button>
-        <p class="config-ajuda">Leia pela câmera ou importe a imagem enviada pela gráfica. É preciso internet para baixar o evento pela primeira vez.</p>
-    </div>
+    <!-- Ações de carregar evento e pedidos ficam no menu do olho. -->
     <dialog id="qr-evento-dialogo" class="ic-qr-dialogo">
         <h2>Carregar evento</h2>
         <button type="button" data-evento-camera>Abrir câmera</button>
@@ -94,13 +84,6 @@
         <p role="status" data-evento-aviso></p>
         <button type="button" data-evento-fechar>Voltar</button>
     </dialog>
-    <div class="linha-evento" id="bloco-novo-evento">
-        <button id="btn-meus-pedidos" class="barra-evento destaque">
-            <span class="nome-evento">Meus Pedidos</span>
-        </button>
-        <button id="btn-meus-pedidos-mais" class="botao-engrenagem"
-                aria-label="Meus Pedidos" title="Meus Pedidos">+</button>
-    </div>
 
     <!-- Envolve a lista inteira para a engrenagem poder escondê-la de uma vez.
 
@@ -119,7 +102,7 @@
         <div id="sem-eventos" class="aviso sumindo">
             <p>Nenhum evento aqui ainda.</p>
             <ol class="passos">
-                <li>Toque em <strong>Meus Pedidos</strong></li>
+                <li>Abra o menu do olho e toque em <strong>Meus Pedidos</strong></li>
                 <li>Carregue um pedido que a gráfica já imprimiu</li>
                 <li>Diga se este aparelho vai ler os ingressos</li>
             </ol>
@@ -313,6 +296,19 @@
 
     <div id="menu-geral" class="sumindo">
         <button id="btn-voltar-menu" class="secundario" type="button">← Voltar</button>
+        <h1 class="rotulo-secao">Ideal Control</h1>
+    <div id="bloco-qr-evento" class="cartao">
+        <button id="btn-ler-qr-evento" type="button">Ler QR do evento</button>
+        <p class="config-ajuda">Leia pela câmera ou importe a imagem enviada pela gráfica. É preciso internet para baixar o evento pela primeira vez.</p>
+    </div>
+    <div class="linha-evento" id="bloco-novo-evento">
+        <button id="btn-meus-pedidos" class="barra-evento destaque">
+            <span class="nome-evento">Meus Pedidos</span>
+        </button>
+        <button id="btn-meus-pedidos-mais" class="botao-engrenagem"
+                aria-label="Meus Pedidos" title="Meus Pedidos">+</button>
+    </div>
+
 
         <!-- OS EVENTOS QUE JÁ ACABARAM.
 
@@ -706,13 +702,13 @@
      terceiro significa que quem controlar aquele endereco controla o portao.
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
-<script src="supabase-js.min.js?v=945"></script>
+<script src="supabase-js.min.js?v=946"></script>
 <!-- ANTES do supabase-config.js: a barra que avisa "o banco nao esta
      respondendo" conta o tempo das chamadas ao banco, e o carimbo de
      sessao de la precisa ficar por cima dela. -->
-<script src="banco-nao-responde.js?v=945"></script>
-<script src="supabase-config.js?v=945"></script>
-<script src="acesso-conta.js?v=945"></script>
+<script src="banco-nao-responde.js?v=946"></script>
+<script src="supabase-config.js?v=946"></script>
+<script src="acesso-conta.js?v=946"></script>
 
 <!-- O FUNDO DA CASA: a foto de evento que o ADM publica.
 
@@ -725,33 +721,33 @@
      leitor de QR trabalham a cada quadro, e a tela inteira ja e
      significado -- verde passou, vermelho nao entra, laranja e outra
      porta. -->
-<script src="fundo-do-app.js?v=945"></script>
+<script src="fundo-do-app.js?v=946"></script>
 
 <!-- Leitura do QR de evento e importação da galeria: qr-evento.js. -->
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
-<script src="aparelho.js?v=945"></script>
+<script src="aparelho.js?v=946"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=945"></script>
+<script src="sw-registro.js?v=946"></script>
 
 <!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
-<script src="chaveiro.js?v=945"></script>
-<script src="pin-instalacao.js?v=945"></script>
-<script src="jsqr.min.js?v=945"></script>
-<script src="qr-evento.js?v=945"></script>
+<script src="chaveiro.js?v=946"></script>
+<script src="pin-instalacao.js?v=946"></script>
+<script src="jsqr.min.js?v=946"></script>
+<script src="qr-evento.js?v=946"></script>
 <!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
      de trocar de evento, o "virar portão" precisa saber quantas leituras ainda
      não subiram. Sem este arquivo, aquela conta lança e o toque na barra do
      evento não faz absolutamente nada — sem erro na tela, sem uma palavra. Foi
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
-<script src="portaria-deposito.js?v=945"></script>
-<script src="lista-eventos.js?v=945"></script>
+<script src="portaria-deposito.js?v=946"></script>
+<script src="lista-eventos.js?v=946"></script>
 <!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
@@ -760,30 +756,30 @@
      enquanto uma chamada de rede corre. ANTES do `conta.js` de proposito: e
      ele quem usa `window.botaoEspera` primeiro, no "Entrar" e no "Salvar a
      senha". -->
-<script src="botao-espera.js?v=945"></script>
-<script src="conta.js?v=945"></script>
+<script src="botao-espera.js?v=946"></script>
+<script src="conta.js?v=946"></script>
 <!-- O olho de mostrar/ocultar senha, ao lado de cada campo de senha da casa.
      Depois do `conta.js` por estilo -- ele nao depende de nenhum dos scripts
      acima, so do DOM que o proprio `controle.html` ja declarou. -->
-<script src="mostrar-senha.js?v=945"></script>
+<script src="mostrar-senha.js?v=946"></script>
 <!-- "Meus Pedidos": a lista dos pedidos já impressos e o Carregar. Depois do
      `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
      tem evento nenhum. -->
-<script src="meus-pedidos.js?v=945"></script>
-<script src="conferencia-pedidos.js?v=945"></script>
+<script src="meus-pedidos.js?v=946"></script>
+<script src="conferencia-pedidos.js?v=946"></script>
 <!-- A caixa do Carregar: a ficha da arte, a senha, e a pergunta do aparelho.
      Depois do `meus-pedidos.js` porque é de lá que ela é aberta, e ela devolve
      a lista de pedidos ao fechar. -->
-<script src="carregar-pedido.js?v=945"></script>
+<script src="carregar-pedido.js?v=946"></script>
 <!-- O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatório" depois. É a
      tela que a lista de eventos abre pelo botão do meio da linha, e a lista de
      finalizados pelo toque na linha inteira. -->
-<script src="ao-vivo.js?v=945"></script>
-<script src="caixa-confirmar.js?v=945"></script>
-<script src="menu-geral.js?v=945"></script>
-<script src="fila-presa.js?v=945"></script>
-<script src="virar-portao.js?v=945"></script>
-<script src="controle.js?v=945"></script>
-<script src="parede-pwa.js?v=945"></script>
+<script src="ao-vivo.js?v=946"></script>
+<script src="caixa-confirmar.js?v=946"></script>
+<script src="menu-geral.js?v=946"></script>
+<script src="fila-presa.js?v=946"></script>
+<script src="virar-portao.js?v=946"></script>
+<script src="controle.js?v=946"></script>
+<script src="parede-pwa.js?v=946"></script>
 </body>
 </html>
