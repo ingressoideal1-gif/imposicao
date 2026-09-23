@@ -1,13 +1,26 @@
-/* Reinicialização local explícita. Não faz chamadas de escrita no servidor. */
+/* Reinício local. A geração qr-nuvem-947 limpa uma vez os dados de desenvolvimento
+   cuja perda foi autorizada. Esta geração NÃO acompanha as próximas versões. */
 (function () {
     'use strict';
     var botao = document.getElementById('reiniciar');
+    var MARCA = 'ideal_control_fluxo_local', FLUXO = 'qr-nuvem-947';
+    if (!botao) {
+        if (!/^\/ic(?:\/|$)/.test(location.pathname)) return;
+        try { if (localStorage.getItem(MARCA) === FLUXO) return; } catch (_) {}
+        // Navegar para uma página isolada evita que callbacks da conta antiga
+        // regravem dados enquanto a limpeza acontece.
+        document.documentElement.style.visibility = 'hidden';
+        document.addEventListener('DOMContentLoaded', function (e) { e.stopImmediatePropagation(); }, true);
+        location.replace('/ic/reiniciar.html?fluxo=' + FLUXO);
+        return;
+    }
+    var automatico = new URLSearchParams(location.search).get('fluxo') === FLUXO;
     var confirmar = document.getElementById('confirmar');
     var resultado = document.getElementById('resultado');
     var instalado = navigator.standalone === true
         || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     var ocupado = false;
-    if (!instalado) {
+    if (!instalado && !automatico) {
         resultado.textContent = 'Abra o Ideal Control pelo ícone instalado. No rodapé, toque em “Atualizar o aplicativo” e depois em “Apagar eventos e cadastrar nova senha”. Um navegador pode ter dados separados do aplicativo.';
         confirmar.disabled = true;
     }
@@ -30,13 +43,13 @@
         });
     }
     function chaveDoAplicativo(k) {
-        return /^(ideal_control_|ideal_portaria_|ideal_qr_)/.test(k)
+        return /^(ideal_control_|ideal_portaria_|ideal_qr_|ideal_fundo_)/.test(k)
             || k === 'acesso_navegador_id'
             || k === 'sb-vwbtitjlpelrcnsytzqw-auth-token'
             || k === 'sb-vwbtitjlpelrcnsytzqw-auth-token-code-verifier';
     }
     botao.onclick = async function () {
-        if (!instalado || !confirmar.checked || ocupado) return;
+        if ((!instalado && !automatico) || (!confirmar.checked && !automatico) || ocupado) return;
         ocupado = true; botao.disabled = true; confirmar.disabled = true;
         resultado.textContent = 'Verificando a versão atual…';
         try {
@@ -61,9 +74,10 @@
             if (window.caches) {
                 var nomes = await caches.keys();
                 await Promise.all(nomes.filter(function (n) {
-                    return n.startsWith('ideal-control-') || n.startsWith('portaria-');
+                    return n.startsWith('ideal-control-') || n.startsWith('portaria-') || n === 'ideal-fundo-v1';
                 }).map(function (n) { return caches.delete(n); }));
             }
+            localStorage.setItem(MARCA, FLUXO);
             resultado.textContent = 'Dados locais apagados. Abrindo o cadastro da nova senha…';
             location.replace(alvo);
         } catch (e) {
@@ -72,4 +86,11 @@
             ocupado = false; confirmar.disabled = false; botao.disabled = !confirmar.checked;
         }
     };
+    if (automatico) {
+        document.querySelector('h1').textContent = 'Preparando o novo Ideal Control';
+        confirmar.checked = true;
+        confirmar.closest('label').hidden = true;
+        botao.textContent = 'Tentar novamente';
+        botao.onclick();
+    }
 })();

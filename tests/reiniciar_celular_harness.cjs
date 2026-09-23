@@ -5,7 +5,7 @@ const puppeteer = require('puppeteer');
 (async () => {
     const browser = await puppeteer.launch({headless: true});
     try {
-        for (const caso of ['cancelar', 'sem-rede', 'limpar', 'navegador']) {
+        for (const caso of ['cancelar', 'sem-rede', 'limpar', 'navegador', 'automatico']) {
             const context = await browser.createBrowserContext();
             const page = await context.newPage();
             const erros = [];
@@ -19,7 +19,7 @@ const puppeteer = require('puppeteer');
                 const u = new URL(req.url());
                 if (u.pathname === '/ic/controle.html') {
                     return req.respond({status: caso === 'sem-rede' ? 503 : 200,
-                        contentType: 'text/html', body: '<button id="btn-ler-qr-evento">QR</button>'});
+                        contentType: 'text/html', body: '<head><script src="reiniciar.js?v=947"></script></head><button id="btn-ler-qr-evento">QR</button>'});
                 }
                 if (u.pathname === '/ic/reiniciar.html' || u.pathname === '/ic/reiniciar.js') {
                     const file = path.join('frontend', path.basename(u.pathname));
@@ -43,7 +43,12 @@ const puppeteer = require('puppeteer');
                 });
                 for (const nome of ['ideal-control-834','portaria-1','ideal-fundo-v1','outro-cache']) await caches.open(nome);
             });
-            if (caso === 'limpar' || caso === 'sem-rede') {
+            if (caso === 'automatico') {
+                await page.goto('http://localhost/ic/controle.html', {waitUntil:'load'}).catch(e=>{
+                    if(!e.message.includes('ERR_ABORTED'))throw e;
+                });
+                await page.waitForFunction(()=>location.pathname==='/ic/controle.html' && localStorage.getItem('ideal_control_fluxo_local')==='qr-nuvem-947');
+            } else if (caso === 'limpar' || caso === 'sem-rede') {
                 await page.click('#confirmar');
                 if (caso === 'limpar') {
                     await Promise.all([page.waitForNavigation({waitUntil:'load'}),page.click('#reiniciar')]);
@@ -63,11 +68,16 @@ const puppeteer = require('puppeteer');
                 });
                 return {keys:Object.keys(localStorage),sessao:sessionStorage.length,quantidades,caches:await caches.keys()};
             });
-            if(caso==='limpar') {
-                assert.deepEqual(estado.keys,['outro-modulo']);
+            if(caso==='limpar' || caso==='automatico') {
+                assert.deepEqual(estado.keys.sort(),['ideal_control_fluxo_local','outro-modulo']);
                 assert.equal(estado.sessao,0);
                 assert.deepEqual(estado.quantidades,[0,0,0,0]);
-                assert.deepEqual(estado.caches.sort(),['ideal-fundo-v1','outro-cache']);
+                assert.deepEqual(estado.caches.sort(),['outro-cache']);
+                if(caso==='automatico') {
+                    await page.evaluate(()=>localStorage.setItem('ideal_control_portoes','evento novo'));
+                    await page.reload({waitUntil:'load'});
+                    assert.equal(await page.evaluate(()=>localStorage.getItem('ideal_control_portoes')),'evento novo');
+                }
             } else {
                 assert.equal(estado.keys.length,8);
                 assert.deepEqual(estado.quantidades,[1,1,1,1]);

@@ -31,7 +31,7 @@
         var porId = {};
 
         (doChaveiro || []).forEach(function (p) {
-            if (!p || !p.evento_id || p.status === "finalizado") { return; }
+            if (!p || !p.evento_id || !p.token || (p.status && p.status !== 'ativo')) { return; }
             porId[p.evento_id] = {
                 id: p.evento_id,
                 nome: p.nome_evento || 'Evento',
@@ -51,7 +51,7 @@
 
         (daConta || []).forEach(function (ev) {
             if (!ev || !ev.id) { return; }
-            if (ev.status === 'finalizado') {
+            if (ev.status && ev.status !== 'ativo') {
                 // Finalizado sai de "Meus Eventos" — ele tem lista própria,
                 // logo abaixo. Sai INCLUSIVE quando este aparelho ainda tem a
                 // chave dele no chaveiro: o servidor é a origem da verdade, e
@@ -61,6 +61,9 @@
                 return;
             }
             var ja = porId[ev.id];
+            // A conta complementa os eventos deste celular; não importa o
+            // histórico para a tela inicial. Outros pedidos ficam no menu.
+            if (!ja) return;
             porId[ev.id] = {
                 id: ev.id,
                 // O servidor vence a copia do chaveiro. Regra deste projeto: o
@@ -113,11 +116,12 @@
      */
     function finalizados(daConta) {
         var linhas = (daConta || []).filter(function (ev) {
-            return ev && ev.id && ev.status === 'finalizado';
+            return ev && ev.id && ['finalizado', 'encerrado', 'inativo'].indexOf(ev.status) !== -1;
         }).map(function (ev) {
             return {
                 id: ev.id,
                 nome: ev.nome_evento || 'Evento',
+                status: ev.status,
                 data: ev.data_evento || null,
                 // `|| 0` e nao "sem numero": um evento finalizado sem nenhuma
                 // entrada e um caso real -- o teste que nunca virou festa.
@@ -130,6 +134,15 @@
             return a.nome.localeCompare(b.nome, 'pt-BR');
         });
         return linhas;
+    }
+
+    function historico(daConta) {
+        var eventos = {};
+        window.chaveiro.listar().forEach(function (p) {
+            if (p && p.evento_id && p.token) eventos[p.evento_id] = Object.assign({}, p, {id: p.evento_id});
+        });
+        (daConta || []).forEach(function (ev) { if (ev && ev.id) eventos[ev.id] = ev; });
+        return finalizados(Object.keys(eventos).map(function (id) { return eventos[id]; }));
     }
 
     // ── Os icones, desenhados aqui ──────────────────────────────────────────
@@ -351,10 +364,7 @@
         caixa.classList.toggle('sumindo', !mostrar);
         var frase = $('quantos-finalizados');
         if (!frase || !mostrar) { return; }
-        frase.textContent = quantosFinalizados === 1
-            ? 'Você tem 1 evento finalizado. Para usá-lo de novo, reabra ele.'
-            : 'Você tem ' + quantosFinalizados + ' eventos finalizados. '
-              + 'Para usar um deles de novo, reabra ele.';
+        frase.textContent = 'Eventos encerrados ou inativados estão em Meus Pedidos, no menu do olho.';
     }
 
     function desenhar(linhas) {
@@ -430,6 +440,7 @@
         var detalhe = document.createElement('span');
         detalhe.className = 'detalhe-finalizado';
         var partes = [];
+        partes.push(ev.status === 'encerrado' || ev.status === 'inativo' ? 'Inativado' : 'Encerrado');
         var data = dataCurta(ev.data);
         if (data) { partes.push(data); }
         partes.push(quantosEntraram(ev.entradas));
@@ -453,6 +464,8 @@
             window.aoVivo.abrir(ev.id, ev.nome);
         });
         linha.appendChild(relatorio);
+
+        if (ev.status && ev.status !== 'finalizado') return linha;
 
         var reabrir = document.createElement('button');
         reabrir.type = 'button';
@@ -566,7 +579,7 @@
         desenhar(unir(doChaveiro, []));      // a tela ja aparece, sem esperar
         // Sem a conta nao ha finalizado nenhum a mostrar: quem sabe que um
         // evento acabou e o servidor.
-        desenharFinalizados([]);
+        desenharFinalizados(historico([]));
 
         // A casa abre na tela de entrar quando nao ha nada que sirva de casa:
         // sem aparelho no chaveiro e sem sessao. Com aparelho, a lista basta.
@@ -585,7 +598,10 @@
 
         var atualizacao = atualizarDadosCarregados(rodada);
         if (!sessao) return atualizacao.then(function () {
-            if (rodada === carregamento) desenhar(unir(window.chaveiro.listar(), []));
+            if (rodada === carregamento) {
+                desenhar(unir(window.chaveiro.listar(), []));
+                desenharFinalizados(historico([]));
+            }
         });
         return atualizacao.then(function () { return window.AcessoConta.pedir('/meus-eventos', {
             headers: { Authorization: 'Bearer ' + sessao.access_token }
@@ -595,7 +611,7 @@
             eventosDaConta = eventos;
             eventos.forEach(function (ev) { window.chaveiro.atualizarEvento(ev); });
             desenhar(unir(window.chaveiro.listar(), eventos));
-            desenharFinalizados(finalizados(eventos));
+            desenharFinalizados(historico(eventos));
         }).catch(function () {
             // A lista do chaveiro ja esta na tela. Aqui so avisamos que o resto
             // nao veio -- silencio faria o dono achar que perdeu um evento.
@@ -650,7 +666,7 @@
     function arrancar() {
         if (!$('eventos')) { return Promise.resolve(); }
 
-        window.chaveiro.migrar();
+        // Não restaurar os vínculos do fluxo antigo de um portão por aparelho.
         explicarVoltaDaPortaria();
 
         // Aqui e nao no `recarregar()`: um ouvinte a mais no mesmo botao faria
@@ -658,7 +674,7 @@
         var verFinalizados = $('btn-ver-finalizados');
         if (verFinalizados) {
             verFinalizados.addEventListener('click', function () {
-                if (window.menuGeral) { window.menuGeral.abrir(); }
+                if (window.meusPedidos) { window.meusPedidos.abrir(); }
             });
         }
 
@@ -694,7 +710,7 @@
         return atualizarDadosCarregados(rodada).then(function () {
             if (rodada !== carregamento) return;
             desenhar(unir(window.chaveiro.listar(), eventosDaConta));
-            desenharFinalizados(finalizados(eventosDaConta));
+            desenharFinalizados(historico(eventosDaConta));
         }).finally(function () { atualizandoAutomatico = false; });
     }
     window.addEventListener('online', atualizarAoVoltar);
@@ -702,6 +718,7 @@
     setInterval(atualizarAoVoltar, 30000);
 
     window.listaEventos = {
+        atualizarHistorico: atualizarAoVoltar,
         unir: unir, finalizados: finalizados,
         desenhar: desenhar, desenharFinalizados: desenharFinalizados,
         carregar: carregar, recarregar: recarregar, arrancar: arrancar,

@@ -93,9 +93,9 @@ def test_evento_que_esta_nas_duas_fontes_aparece_uma_vez_e_verde():
     assert linhas[0]["ehAparelho"] is True
 
 
-def test_evento_so_da_conta_aparece_com_a_luz_apagada():
+def test_evento_so_da_conta_nao_reaparece_na_tela_inicial():
     linhas = unir([], [E2])
-    assert linhas[0]["ehAparelho"] is False
+    assert linhas == []
 
 
 def test_evento_so_do_chaveiro_aparece_verde_SEM_a_conta():
@@ -124,8 +124,8 @@ def test_o_nome_da_conta_vence_o_do_chaveiro():
 
 
 def test_evento_inativo_e_marcado_em_texto():
-    linhas = unir([], [dict(E2, status="encerrado")])
-    assert linhas[0]["ativo"] is False
+    linhas = unir([dict(P, evento_id="e-2")], [dict(E2, status="encerrado")])
+    assert linhas == []
 
 
 # ── Os eventos que ja acabaram ──────────────────────────────────────────────
@@ -139,7 +139,7 @@ F1 = {"id": "e-9", "nome_evento": "Baile do Hawaii", "status": "finalizado",
 
 
 def test_evento_finalizado_SAI_de_meus_eventos():
-    linhas = unir([], [E1, F1])
+    linhas = unir([P], [E1, F1])
     assert [l["id"] for l in linhas] == ["e-1"]
 
 
@@ -176,7 +176,8 @@ def test_a_lista_de_finalizados_vem_do_mais_recente_para_o_mais_antigo():
 
 
 def test_evento_ativo_nao_entra_na_lista_de_finalizados():
-    assert finalizados([E1, dict(E2, status="encerrado")]) == []
+    assert finalizados([E1]) == []
+    assert finalizados([dict(E2, status="encerrado")])[0]["id"] == "e-2"
 
 
 # ── A tela ──────────────────────────────────────────────────────────────────
@@ -283,31 +284,29 @@ def test_evento_inativo_vai_para_o_FIM_da_lista():
     Um evento desligado no meio da lista rouba a posicao do que esta
     acontecendo agora, e quem procura com pressa -- de pe, no portao -- toca no
     errado."""
-    ordem = [e["id"] for e in unir([], [
+    ordem = [e["id"] for e in unir([dict(P, evento_id="a"), dict(P, evento_id="z")], [
         {"id": "a", "nome_evento": "AAA", "status": "encerrado"},
         {"id": "z", "nome_evento": "ZZZ", "status": "ativo"},
     ])]
-    assert ordem == ["z", "a"], "o inativo passou na frente de um evento ativo"
+    assert ordem == ["z"], "evento inativo deve aparecer no histórico"
 
 
 def test_o_inativo_vai_para_o_fim_mesmo_sendo_portao_deste_aparelho():
     """A luz verde nao segura um evento desligado no topo: portao de evento
     inativo nao le nada, entao a posicao de honra e um convite ao engano."""
-    ordem = [e["id"] for e in unir([P], [
+    ordem = [e["id"] for e in unir([P, dict(P, evento_id="z")], [
         {"id": "e-1", "nome_evento": "Click", "status": "encerrado"},
         {"id": "z", "nome_evento": "ZZZ", "status": "ativo"},
     ])]
-    assert ordem == ["z", "e-1"]
+    assert ordem == ["z"]
 
 
-def test_entre_ativos_o_portao_deste_aparelho_continua_em_cima():
-    """A regra de 16/08/2026 nao morreu -- ela so passou a valer DENTRO dos
-    ativos."""
+def test_entre_ativos_so_aparece_o_evento_carregado_neste_aparelho():
     ordem = [e["id"] for e in unir([P], [
         {"id": "a", "nome_evento": "AAA", "status": "ativo"},
         {"id": "e-1", "nome_evento": "Click", "status": "ativo"},
     ])]
-    assert ordem == ["e-1", "a"], "o portao deste aparelho perdeu o topo"
+    assert ordem == ["e-1"], "o histórico da conta voltou para a tela inicial"
 
 
 def test_a_luz_do_evento_inativo_e_vermelha_e_vence_o_verde():
@@ -346,7 +345,7 @@ def test_os_finalizados_sairam_da_tela_inicial_e_foram_para_o_menu():
     # O `#menu-geral` abre DEPOIS de o `#lista` fechar, entao tudo que estiver
     # depois dele esta fora da tela inicial. E o que se quer provar.
     assert html.index('id="lista"') < html.index('id="menu-geral"')
-    assert html.index('id="bloco-finalizados"') > html.index('id="menu-geral"'), (
+    assert html.index('id="meus-pedidos"') < html.index('id="bloco-finalizados"') < html.index('id="menu-geral"'), (
         "os eventos finalizados continuam dentro da tela inicial"
     )
 
@@ -381,7 +380,7 @@ def test_unir_traz_data_e_local_do_evento_da_conta():
     """`local_evento` e novo no select do servidor -- sem ele passar por
     `unir()`, o subtitulo da barra nunca teria o que mostrar."""
     ev = dict(E1, data_evento="2026-09-12T22:00:00Z", local_evento="Arena")
-    linhas = unir([], [ev])
+    linhas = unir([P], [ev])
     assert linhas[0]["data"] == "2026-09-12T22:00:00Z"
     assert linhas[0]["local"] == "Arena"
 
@@ -454,8 +453,8 @@ def test_a_casa_vazia_ensina_os_tres_passos():
     assert "Nenhum evento aqui ainda" in bloco
     assert bloco.count("<li>") == 3
     assert "Meus Pedidos" in bloco
-    assert "gráfica já imprimiu" in bloco
-    assert "este aparelho vai ler os ingressos" in bloco
+    assert "Ler QR do evento" in bloco
+    assert "download dos ingressos" in bloco
     assert 'class="aviso' in bloco, "a caixa perdeu o estilo de aviso"
 
 # ── A saida da casa vazia ───────────────────────────────────────────────────
@@ -473,14 +472,14 @@ def test_a_casa_vazia_conta_os_eventos_finalizados():
     r = _sequencia(("desenhar", [[]]),
                    ("desenharFinalizados", [[_final("a"), _final("b"), _final("c")]]))
     assert r["saidaEscondida"] is False
-    assert "3 eventos finalizados" in r["saidaTexto"]
-    assert "reabra" in r["saidaTexto"].lower(), "sem dizer o que fazer, so informa"
+    assert "Meus Pedidos" in r["saidaTexto"]
+    assert "menu do olho" in r["saidaTexto"].lower()
 
 
 def test_um_finalizado_so_fala_no_singular():
     r = _sequencia(("desenhar", [[]]),
                    ("desenharFinalizados", [[_final("a")]]))
-    assert "1 evento finalizado." in r["saidaTexto"]
+    assert "Meus Pedidos" in r["saidaTexto"]
 
 
 def test_sem_finalizado_nenhum_a_saida_nao_aparece():
@@ -504,7 +503,7 @@ def test_a_casa_vazia_traz_o_botao_que_leva_aos_finalizados():
     assert 'id="tem-finalizados"' in bloco
     assert 'id="quantos-finalizados"' in bloco
     assert 'id="btn-ver-finalizados"' in bloco
-    assert "Ver eventos finalizados" in bloco
+    assert "Meus Pedidos" in bloco
     assert 'class="sumindo"' in bloco, "a saida nasce escondida; quem a mostra e o JS"
 
 
@@ -516,7 +515,7 @@ def test_a_casa_vazia_traz_o_botao_que_leva_aos_finalizados():
 
 
 def test_unir_traz_quantos_entraram_do_evento_da_conta():
-    linhas = unir([], [dict(E1, entradas=412)])
+    linhas = unir([P], [dict(E1, entradas=412)])
     assert linhas[0]["entradas"] == 412
 
 

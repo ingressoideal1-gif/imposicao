@@ -1,6 +1,20 @@
 from test_controle_tela import _no_navegador
 
 
+def test_tela_inicial_nao_restaura_historico_da_conta_nem_vinculo_antigo():
+    r = _no_navegador("""
+        localStorage.clear();
+        localStorage.setItem('ideal_portaria_token','token-antigo');
+        localStorage.setItem('ideal_portaria_evento','evento-antigo');
+        AcessoConta.sessao=async()=>({access_token:'sessao-sintetica'});
+        conta.conferirSenhaProvisoria=()=>{};
+        AcessoConta.pedir=async()=>({eventos:[{id:'evento-antigo',nome_evento:'PEDIDO ANTIGO',status:'ativo'}]});
+        await listaEventos.arrancar();
+        return {lista:document.querySelector('#eventos').textContent,chaves:chaveiro.listar()};
+    """)
+    assert 'PEDIDO ANTIGO' not in r['lista'] and r['chaves'] == []
+
+
 def test_lista_qr_atualiza_nome_data_local_sem_login_e_preserva_token():
     r = _no_navegador("""
         const id='11111111-1111-4111-8111-111111111111';

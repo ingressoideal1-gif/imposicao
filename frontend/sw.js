@@ -38,6 +38,8 @@ const CACHE = 'ideal-control-' + VERSAO;
 // o que as paginas pedem. Um `'/portaria.js'` guardaria um endereco que
 // ninguem visita.
 const ARQUIVOS = [
+    'reiniciar.html',
+    'reiniciar.js?v=' + VERSAO,
     // A casa. `'./'` e o endereco que o `start_url` do manifesto abre.
     './',
     'controle.html',
