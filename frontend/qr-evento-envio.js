@@ -20,7 +20,7 @@
             var ev = eventoAtual();
             if (!ev || !alvo || alvo.id !== ev.id) { resultado.hidden = true; imagem = null; }
             alvo = ev;
-            buscar('[data-qr-nome]').textContent = ev ? (ev.nome_evento || 'Evento') + (ev.pendencia_qr ? ' · ' + ev.pendencia_qr : '') + (ev.status !== 'ativo' ? ' · evento inativo ou finalizado; confira a aba Evento.' : '') : 'Abra um pedido e prepare o evento para gerar seu QR.';
+            buscar('[data-qr-nome]').textContent = ev ? (ev.nome_evento || 'Evento') + (ev.pendencia_qr ? ' · ' + ev.pendencia_qr : ev.aviso_qr ? ' · ' + ev.aviso_qr : '') + (ev.status !== 'ativo' ? ' · evento inativo ou finalizado; confira a aba Evento.' : '') : 'Abra um pedido e prepare o evento para gerar seu QR.';
             buscar('[data-qr-gerar]').disabled = ocupado || !ev || ev.status !== 'ativo' || !!ev.pendencia_qr;
             buscar('[data-qr-mensagem]').disabled = !ev;
             buscar('[data-qr-revogar]').disabled = ocupado || !ev;

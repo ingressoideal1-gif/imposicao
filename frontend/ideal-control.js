@@ -180,10 +180,10 @@
         layout.atualizarQr = window.qrEventoEnvio.montar(instalacaoDialogo, pedir, function () {
             var p = estado.painel;
             if (!p || !p.evento) return null;
-            var pendencia = !(p.setores || []).length ? 'Prepare os setores antes de gerar o QR.'
-                : p.publicacao && Number(p.publicacao.total_credenciais) === 0
-                    ? 'Nenhum ingresso publicado. Publique os ingressos deste pedido antes de gerar o QR do evento.' : '';
-            return Object.assign({}, p.evento, { pendencia_qr: pendencia });
+            var pendencia = !(p.setores || []).length ? 'Prepare os setores antes de gerar o QR.' : '';
+            var aviso = p.publicacao && Number(p.publicacao.total_credenciais) === 0
+                ? 'Você já pode gerar o QR. O carregamento no celular ficará disponível após a publicação dos ingressos.' : '';
+            return Object.assign({}, p.evento, { pendencia_qr: pendencia, aviso_qr: aviso });
         });
         acessoDialogo.appendChild($('ic-acesso-secao'));
 

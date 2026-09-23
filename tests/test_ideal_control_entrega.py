@@ -93,15 +93,26 @@ def test_resposta_pin_atrasada_nao_revela_senha_apos_trocar_aba():
     assert r['limpo']
 
 
-def test_grafica_nao_gera_qr_sem_ingressos_publicados():
-    r = _no_navegador(SERVIDOR + """
+def test_grafica_gera_qr_decodificavel_antes_de_publicar_ingressos():
+    r = _no_navegador("""
+        for(const name of ['qrcode-generator.min.js','qr-canvas.js','jsqr.min.js']) {
+            await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='/'+name;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});
+        }
+    """ + SERVIDOR + """
         PAINEL.publicacao.total_credenciais=0;
         await IdealControl.abrirPedido(19521);
+        const conteudo='IDEAL-CONTROL-EVENTO:1:'+'ab'.repeat(32);
+        __respostas['/eventos/'+PAINEL.evento.id+'/qr']={conteudo};
         document.getElementById('ic-enviar-evento').click();
-        document.querySelector('[data-qr-gerar]').click();
-        return {bloqueado:document.querySelector('[data-qr-gerar]').disabled,
+        await document.querySelector('[data-qr-gerar]').onclick();
+        const c=document.querySelector('[data-qr-resultado] canvas');
+        const data=c.getContext('2d').getImageData(0,0,c.width,c.height);
+        const qr=jsQR(data.data,c.width,c.height);
+        return {habilitado:!document.querySelector('[data-qr-gerar]').disabled,
             mensagem:document.querySelector('[data-qr-nome]').textContent,
+            visivel:!document.querySelector('[data-qr-resultado]').hidden,
+            decodificado:qr && qr.data===conteudo,
             escritas:_chamadas.filter(c=>c.metodo==='POST' && c.caminho.endsWith('/qr')).length};
     """)
-    assert r['bloqueado'] and r['escritas'] == 0
-    assert 'Nenhum ingresso publicado' in r['mensagem']
+    assert r['habilitado'] and r['visivel'] and r['decodificado'] and r['escritas'] == 1
+    assert 'após a publicação dos ingressos' in r['mensagem']

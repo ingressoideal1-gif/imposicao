@@ -137,15 +137,17 @@ Deno.test("HTTP: portaria exige token para editar e gráfica exige papel para co
   } finally { Deno.serve = original; }
 });
 
-Deno.test("QR: sem ingressos não emite convite e informa a causa na leitura", async () => {
+Deno.test("QR: permite emitir antes da publicação e informa a pendência ao carregar", async () => {
   reset(); semIngressos = true;
-  await recusa(() => emitirQrEvento(E, I), 409);
-  assert(!convite);
-  semIngressos = false; const qr = await emitirQrEvento(E, I);
-  semIngressos = true;
+  const qr = await emitirQrEvento(E, I);
+  assert(convite && qr.conteudo.startsWith("IDEAL-CONTROL-EVENTO:1:"));
   try { await usarQrEvento({segredo:qr.conteudo.split(":")[2]},false); throw new Error("aceitou vazio"); }
   catch (e) { assert(e instanceof Recusa && e.status === 409 && e.message.includes("ingressos publicados")); }
   assert(!chamadas.some(r=>r.t === "rpc/producao_acesso_ativar_qr_evento" && r.c.p_token_hash));
+  semIngressos = false;
+  const consulta = await usarQrEvento({segredo:qr.conteudo.split(":")[2]},false);
+  assert(consulta.evento.id === E);
+  assert(chamadas.filter(r=>r.t === "producao_acesso_convites_evento" && r.method === "POST").length === 1);
 });
 Deno.test("QR: sem setores não emite; convite inválido não revela preparação", async () => {
   reset(); semSetores = true; await recusa(() => emitirQrEvento(E,I),409); assert(!convite);
