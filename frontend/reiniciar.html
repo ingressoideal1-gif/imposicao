@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="theme-color" content="#0a0f1e">
+    <title>Reiniciar este celular — Ideal Control</title>
+    <style>
+        body{margin:0;background:#0a0f1e;color:#eef2f8;font:16px/1.6 system-ui,sans-serif}
+        main{max-width:520px;margin:40px auto;padding:24px}h1{font-size:1.6rem}
+        button,a{font:inherit}button{padding:14px 18px;border:0;border-radius:10px;background:#2dd4bf;color:#04201c;font-weight:700;width:100%;cursor:pointer}
+        button:disabled{opacity:.55;cursor:default}a{color:#5eead4}label{display:block;margin:24px 0}
+        #resultado{white-space:pre-line}small{color:#aab6ca}
+    </style>
+</head>
+<body><main>
+    <p>Ideal Control</p><h1>Reiniciar este celular</h1>
+    <p>Serão apagados deste aplicativo os eventos baixados, as leituras ainda não enviadas, a senha de edição e o acesso salvo. A perda das leituras pendentes é definitiva.</p>
+    <p>Depois, você cadastrará uma nova senha de 6 números e carregará o evento pelo QR. Os registros já enviados ao servidor permanecem.</p>
+    <p>Feche outras telas do Ideal Control neste celular antes de continuar. Mantenha a internet ligada.</p>
+    <label><input id="confirmar" type="checkbox"> Quero apagar esses dados deste celular e começar novamente.</label>
+    <button id="reiniciar" disabled>Apagar dados e começar novamente</button>
+    <p id="resultado" role="status" aria-live="polite"></p>
+    <p><a id="voltar" href="controle.html">Voltar sem apagar</a></p>
+    <small>Use esta tela dentro do aplicativo instalado para limpar os dados dele.</small>
+</main><script src="reiniciar.js?v=942"></script></body>
+</html>

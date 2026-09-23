@@ -258,6 +258,8 @@ PAINEL_ARQUIVOS = [
     "carregar-pedido.js",
     "qr-evento.js",
     "pin-instalacao.js",
+    "reiniciar.html",
+    "reiniciar.js",
     "qr-evento-envio.js",
     # O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatorio" depois
     # (04/09/2026). Sai junto porque a lista de eventos passou a ter o botao que
