@@ -34741,6 +34741,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap;">
                     <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                     <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.74rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo"> <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i> <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span> </span>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<span class="badge" style="font-size: 0.72rem;">Modo de impressão: ${modoDeImpressaoDoModelo(item) === 'blocado' ? 'Blocado' : 'Sequencial'}</span>`}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span id="selos-arte-${idx}" style="display: contents;">${selosDeArteCompartilhada}</span>
