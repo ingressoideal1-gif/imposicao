@@ -651,6 +651,12 @@ function drawPedPreview() {
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
     const activeItem = (state.selectedOSItems || []).length > 1
         ? state.selectedOSItems[0] : state.activeOSItem;
+    const modeloDaJanela = state.activeOSItem
+        ? (state.osItens[state.activeOSItem.osId] || []).find(i => String(i.id) === String(state.activeOSItem.itemId))
+        : null;
+    if (typeof atualizarVariacoesNaJanelaDoModelo === 'function') {
+        atualizarVariacoesNaJanelaDoModelo((state.selectedOSItems || []).length > 1 ? null : modeloDaJanela);
+    }
     atualizarIndicadorModeloComVerso(activeItem
         ? (state.osItens[activeItem.osId] || []).find(i => String(i.id) === String(activeItem.itemId))
         : null);
@@ -4157,6 +4163,7 @@ window.previaFicouPronta = previaFicouPronta;
 function fecharJanelaDoModelo() {
     if (window.isImposing) return;
     state.activeOSItem = null;
+    if (typeof atualizarVariacoesNaJanelaDoModelo === 'function') atualizarVariacoesNaJanelaDoModelo(null);
 
     // FECHAR A JANELA TRANCA OS CAMPOS DE NOVO. E' o alcance que o usuario
     // definiu para a senha da gerencia: liberado o modelo, ele fica liberado
@@ -4253,6 +4260,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
         const codigo = item.modelo ? String(item.modelo) + ' · ' : '';
         nomeNoCabecalho.textContent = codigo + (item.produto || item.nome_modelo || 'modelo');
     }
+    if (typeof atualizarVariacoesNaJanelaDoModelo === 'function') atualizarVariacoesNaJanelaDoModelo(item);
 
     // O realce da linha e' imediato: o operador ve o clique valer sem esperar
     // o carregamento. A janela vai junto, se a fila ja estiver desenhada.

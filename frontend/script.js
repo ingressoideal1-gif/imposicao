@@ -34317,6 +34317,14 @@ function formatarVariacoesDoModelo(texto) {
     }).filter(Boolean).join(' • ');
 }
 
+function atualizarVariacoesNaJanelaDoModelo(item) {
+    const faixa = document.getElementById('ped-preview-variacoes');
+    if (!faixa) return;
+    const texto = String(item?.variacoes_texto || '').trim();
+    faixa.style.display = texto ? 'block' : 'none';
+    faixa.innerHTML = texto ? `<strong>Variações:</strong> ${formatarVariacoesDoModelo(texto)}` : '';
+}
+
 function renderAmostrasOSItens(osId, opcoes = {}) {
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
     const targetOSId = os ? os.id : osId;

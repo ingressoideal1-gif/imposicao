@@ -4729,6 +4729,18 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     padding-bottom: 10px;
 }
 
+.ped-preview-variacoes {
+    margin: 10px 14px 14px;
+    padding: 10px 12px;
+    border-left: 3px solid #fbbf24;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
 /* Os numeros da imposicao viram fichas na propria linha do titulo. O
    `updatePedSummary` acende esta caixa com `display: grid`, e por isso o
    layout tem de ser resolvido pelo grid — nao por flex. */
