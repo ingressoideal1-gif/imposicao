@@ -43,4 +43,19 @@ Build autorizado pelo pedido de publicação e concluído com PyInstaller 6.20.0
 - Bytes de index, helper de arte, Pedido, script e Montagem embutidos iguais aos arquivos locais. `win32ui.pyd`, MFC e ambas VCRUNTIME presentes na pasta do runtime.
 - LASER-01 consultada em 24/09 às 20h00 BRT: último heartbeat às 18h14, agente 1.2.338 e painel 957. Não confirma conexão atual nem atualização.
 
-Publicação, instalação e piloto físico ainda pendentes neste registro pré-envio.
+## Publicação confirmada — 24/09/2026, 20h03 BRT
+
+- Commit `c1179649bcfa30beb39c2865e21d375452dad4c8` integrado em `origin/main` por fast-forward. Tags `v958` e `agente-v1.2.339` publicadas nesse commit.
+- Cloudflare Pages: conclusão `success`, deployment `2c7f8dcc-2046-46fb-880d-b563166efaaf`.
+- Oito arquivos em cada domínio (`imposicao.pages.dev` e `imposition.ai-ideal.com.br`): 16/16 hashes normalizados coincidiram com a fonte após propagação. A primeira conferência, enquanto o deploy ainda corria, detectou a versão anterior; a nova conferência confirmou o conteúdo atualizado.
+- MSI enviado com nome novo. Download público simples retornou 156.176.384 bytes e SHA-256 `0ebc0b7e0fc9f87ff125d01e755f68bcb03c21a76fa068311c3f9f178403d775`, iguais ao arquivo local.
+- Somente após essa prova, `latest.json` foi ativado e relido com cache buster: versão 1.2.339, URL, tamanho e hash conferem.
+- Evidências: [web](evidencias/integridade-v958-web-publico.json), [MSI](evidencias/integridade-v958-msi-publico.json), [manifesto](evidencias/integridade-v958-manifesto.json).
+
+## Pendências operacionais e retomada
+
+LASER-01 relida às 20h03 BRT: permanece o heartbeat das 18h14 com agente 1.2.338 e painel 957. Não foi confirmada instalação da versão nova; nenhum trabalho foi enviado à impressora nesta entrega.
+
+Na estação, usar **Atualizar agora** no NewProd, confirmar 1.2.339, reabrir o painel v958 e verificar a capacidade `integridade_impressao_v1`. Depois gerar uma prova do pedido 22599 e conferir arte/numeração por face no PDF e no papel antes da tiragem. Falha de preparação deve bloquear sem enviar; falha após envio parcial exige retomada explícita. Este piloto permanece pendente.
+
+Fonte, painel público, MSI e manifesto estão publicados e verificados. Instalação, capacidade realmente em execução e aceitação física são verificações separadas ainda não concluídas.

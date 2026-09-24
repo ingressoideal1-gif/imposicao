@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-09-24T23:03:50.106946+00:00",
+  "version": "1.2.339",
+  "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.339.msi",
+  "sha256": "0ebc0b7e0fc9f87ff125d01e755f68bcb03c21a76fa068311c3f9f178403d775",
+  "size": 156176384,
+  "notes": "Valida todos os dados e artes antes da geracao; interrompe no primeiro erro e exige retomada explicita. Atualize o painel para v958."
+}

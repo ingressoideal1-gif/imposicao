@@ -2,7 +2,7 @@
 
 Data: 24/09/2026. Autorização: “EXECUTAR”, após aprovação do plano.
 Base: `4b3e391c`, área isolada `C:\ProjetosLocais\ideal-imposition-analise-22599`.
-Estado: implementação e testes locais; sem commit, publicação, instalação ou impressão real.
+Estado desta etapa: implementação e testes locais. A publicação posterior de v958 / NewProd 1.2.339 foi concluída e está registrada em [entrega segura](entrega-segura-2026-09-24-integridade-impressao.md); instalação na LASER-01 e impressão física permanecem pendentes.
 
 ## Comportamento implementado
 
