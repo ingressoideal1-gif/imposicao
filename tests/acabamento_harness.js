@@ -975,6 +975,25 @@ function ambienteComPedidoAberto() {
     return amb;
 }
 
+(function variacoesFicamNaJanelaDoModeloCerto() {
+    const amb = ambienteComPedidoAberto();
+    amb.janela.state.osItens['os-200'][0].variacoes_texto = 'Acabamento: Brilho • Impressão: Só Frente';
+    amb.janela.formatarVariacoesDoModelo = texto => texto.replace('Brilho', '<span style="color: #fbbf24;">Brilho</span>');
+    amb.painel.abrirPedido('os-200');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok((html.match(/class="acab-amostra-variacoes"/g) || []).length === 1,
+       'a faixa aparece apenas no modelo que tem variacoes');
+    ok(html.includes('Variações:</strong> Acabamento: <span style="color: #fbbf24;">Brilho</span>'),
+       'a janela usa o destaque amarelo da Lista de Arte');
+
+    delete amb.janela.formatarVariacoesDoModelo;
+    amb.janela.state.osItens['os-200'][0].variacoes_texto = 'Acabamento: <img src=x onerror=alert(1)>';
+    amb.painel.abrirPedido('os-200');
+    const semFormatador = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(semFormatador.includes('&lt;img src=x onerror=alert(1)&gt;') && !semFormatador.includes('<img src=x onerror=alert(1)>'),
+       'a faixa escapa texto do banco mesmo se o formatador compartilhado faltar');
+})();
+
 (function oPedidoAbertoESomenteLeitura() {
     const amb = ambienteComPedidoAberto();
     amb.painel.abrirPedido('os-200');

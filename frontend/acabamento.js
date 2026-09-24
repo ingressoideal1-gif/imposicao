@@ -1615,6 +1615,13 @@
             || /\.pdf($|\?)/i.test(s);
     }
 
+    function faixaDeVariacoesDoModelo(item) {
+        const texto = String(item && item.variacoes_texto || '').trim();
+        if (!texto) return '';
+        const formatar = fn('formatarVariacoesDoModelo');
+        return `<div class="acab-amostra-variacoes" onclick="event.stopPropagation()"><strong>Variações:</strong> ${formatar ? formatar(texto) : esc(texto)}</div>`;
+    }
+
     /**
      * A janela da amostra: a pilha de botões é o PISO, não o teto.
      *
@@ -1647,6 +1654,7 @@
      */
     function amostraHtml(item, idAmostra) {
         const { src, aprovada } = amostraDoModelo(item);
+        const faixaVariacoes = faixaDeVariacoesDoModelo(item);
         // Sem `max-width`: a amostra ocupa a metade que é dela, e quem manda no
         // tamanho é a coluna. Pedido do usuário em 20/08/2026.
         // `flex: 1 1 0` e não `1 1 auto`, e isto não é detalhe de estilo: com
@@ -1658,25 +1666,32 @@
         const moldura = 'width: 100%; flex: 1 1 0; min-height: ' + ALTURA_DA_JANELA + 'px;'
             + ' position: relative;'
             + ' border: 1px dashed rgba(76,200,240,0.26); background: rgba(76,200,240,0.06);'
-            + ' display: flex; align-items: center; justify-content: center;';
+            + ' display: flex; align-items: center; justify-content: center;'
+            + (faixaVariacoes ? ' flex-direction: column; align-items: stretch; justify-content: flex-end;' : '');
         const caixa = 'display: flex; flex-direction: column; gap: 6px; width: 100%;'
             + ' flex: 1 1 auto; min-height: 0;';
 
         if (!src) {
             return `<div style="${caixa}">
-                        <div style="${moldura} color: var(--text-dim); flex-direction: column; gap: 6px; text-align: center; padding: 12px;">
-                            <span style="font-size: 1.8rem;">🖼️</span>
-                            <span style="font-size: 0.78rem;">Sem amostra enviada ao cliente</span>
+                        <div style="${moldura} color: var(--text-dim); flex-direction: column; text-align: center; padding: 12px;">
+                            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;">
+                                <span style="font-size: 1.8rem;">🖼️</span>
+                                <span style="font-size: 0.78rem;">Sem amostra enviada ao cliente</span>
+                            </div>
+                            ${faixaVariacoes}
                         </div>
                     </div>`;
         }
 
         if (ehPdf(src)) {
             return `<div style="${caixa}">
-                        <div style="${moldura} flex-direction: column; gap: 8px; color: #4cc8f0; cursor: pointer; text-align: center; padding: 12px;"
+                        <div style="${moldura} flex-direction: column; color: #4cc8f0; cursor: pointer; text-align: center; padding: 12px;"
                              onclick="window.open('${escJs(src)}', '_blank')" title="Amostra em PDF — clique para abrir o arquivo">
-                            <span style="font-size: 2rem;">📄</span>
-                            <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
+                            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                <span style="font-size: 2rem;">📄</span>
+                                <span style="font-size: 0.78rem; font-weight: 700;">Amostra em PDF — abrir arquivo</span>
+                            </div>
+                            ${faixaVariacoes}
                         </div>
                     </div>`;
         }
@@ -1701,7 +1716,8 @@
                     <img id="${idAmostra}" src="${esc(src)}" alt="Amostra do modelo"
                          style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block;"
                          onclick="AcabamentoPainel.ampliar('${escJs(idAmostra)}')" title="${esc(legenda)}" />
-                    <span style="${ESTILO_LEGENDA_DENTRO}">🔍 ${esc(legenda)}</span>
+                    <span style="${ESTILO_LEGENDA_DENTRO}${faixaVariacoes ? ' top: 0; bottom: auto;' : ''}">🔍 ${esc(legenda)}</span>
+                    ${faixaVariacoes}
                 </div>
             </div>`;
     }
@@ -7571,6 +7587,7 @@
             overlay.innerHTML = `
                 <img id="acab-lightbox-img" alt="Amostra ampliada"
                      style="width: 90vw; height: 84vh; object-fit: contain;" />
+                <div id="acab-lightbox-variacoes" class="acab-amostra-variacoes" style="display: none; position: absolute; left: 5vw; right: 5vw; bottom: 14px; width: auto; max-height: 20vh;"></div>
                 <button type="button" title="Fechar (Esc)"
                         style="position: absolute; top: 14px; right: 18px; z-index: 1; background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.35); color: #ffffff; border-radius: 8px; padding: 6px 14px; font-size: 1rem; font-weight: 700; cursor: pointer;">✕ Fechar</button>`;
             overlay.addEventListener('click', fecharLightbox);
@@ -7581,6 +7598,12 @@
         }
         const alvo = document.getElementById('acab-lightbox-img');
         if (alvo) alvo.src = img.src;
+        const faixa = img.parentElement && img.parentElement.querySelector('.acab-amostra-variacoes');
+        const faixaAmpliada = document.getElementById('acab-lightbox-variacoes');
+        if (faixaAmpliada) {
+            faixaAmpliada.innerHTML = faixa ? faixa.innerHTML : '';
+            faixaAmpliada.style.display = faixa ? 'block' : 'none';
+        }
         overlay.style.display = 'flex';
     }
 
