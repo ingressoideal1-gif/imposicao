@@ -114,6 +114,7 @@ function montarCenario(opcoes) {
         if (String(url).includes('/api/hotfolder/drop')) {
             const nome = init.body.campos.file;
             enviados.push(nome);
+            if (opcoes.falhar) return { ok: false, status: 503, json: async () => ({detail:'falha simulada'}) };
             return { ok: true, json: async () => ({ path: 'C:\\HOT\\' + nome }) };
         }
         if (String(url).includes('/api/print/submit')) {
@@ -133,14 +134,14 @@ function montarCenario(opcoes) {
     const criar = new Function(
         'window', 'document', 'toast', 'fetch', 'FormData', 'setTimeout',
         'processPrintQueueOptions', 'nomeObjetoStorage',
-        '_conferirConsumoHotFolder', 'AGENTE_LOCAL_URL', 'console',
+        '_conferirConsumoHotFolder', 'AGENTE_LOCAL_URL', 'console', 'hashArquivoImpressao',
         FONTE_ENTREGA + '\nreturn { criarEntregaDeImpressao, sendPrintJobDirect };'
     )(
         janela, doc, (msg, tipo) => toasts.push({ msg, tipo }), fetchFalso, FormDataFalsa,
         (fn, ms) => { temporizadores.push(fn); return 1; },
         async (fila) => fila, (n) => n,
         function (caminhos) { if (caminhos && caminhos.length) enviados.push('__CONFERIU__'); },
-        'http://127.0.0.1:9000', console
+        'http://127.0.0.1:9000', console, async () => 'a'.repeat(64)
     );
 
     return { criar, janela, doc, toasts, enviados, opcoesEnviadas, botoes, campos };
@@ -337,3 +338,15 @@ setTimeout(() => {
     }
     console.log(`OK: ${total} verificacoes da entrega imediata passaram.`);
 }, 50);
+
+(async function falhaParaNoPrimeiroArquivo() {
+    const c = montarCenario({ falhar: true });
+    const e = c.criar.criarEntregaDeImpressao();
+    let falhou = false;
+    try { await e.entregar([{ name:'primeiro.pdf',blob:'b1' },{ name:'segundo.pdf',blob:'b2' }]); }
+    catch (_) { falhou = true; }
+    ok(falhou && c.enviados.length === 1, 'falha interrompe antes do segundo envio');
+    ok(!e.finalizar({ interrompido:true }), 'falha não conclui como sucesso');
+    try { await e.entregar([{ name:'terceiro.pdf',blob:'b3' }]); } catch (_) {}
+    ok(c.enviados.length === 1, 'objeto interrompido não pode voltar a enviar');
+})().catch(e => { console.error(e); process.exitCode = 1; });

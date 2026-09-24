@@ -1113,8 +1113,8 @@ class ImpositionConfig:
                     or any(not a.get("modo_pdf") or a.get("print_mode") != print_mode
                            for a in self.multi_artes)):
                 raise ValueError("A combinação paginada exige FxVersoUnico em todos os modelos.")
-            if any(not a.get("pdf_url") or not a.get("pdf_verso_url")
-                   or a.get("local_path") for a in self.multi_artes):
+            if any(not (a.get("pdf_url") or a.get("local_path"))
+                   or not (a.get("pdf_verso_url") or a.get("local_verso_path")) for a in self.multi_artes):
                 raise ValueError("A combinação paginada exige PDF de frente e verso por modelo.")
         self.cut_stack_mode = cut_stack_mode
         self.sheets_per_block = sheets_per_block
@@ -1301,8 +1301,7 @@ class ImpositionConfig:
                 else:
                     self.total_items = 1
             except Exception as ex:
-                print(f"Erro ao contar paginas do PDF: {ex}")
-                self.total_items = 1
+                raise ValueError("Não foi possível confirmar as páginas do PDF antes da impressão") from ex
         elif layout_schema == "multi_artes" or (self.multi_artes and len(self.multi_artes) > 0):
             self.total_items = 0
             for a in self.multi_artes:
@@ -1405,12 +1404,15 @@ class TriggerList(list):
         self.callback = callback
 
     def append(self, item):
-        super().append(item)
+        # Só publicar arquivos fechados e legíveis; erro de entrega para o produtor.
+        with fitz.open(item["path"]) as documento:
+            if not documento.is_pdf or documento.needs_pass or documento.is_repaired or len(documento) == 0:
+                raise ValueError("PDF de saída inválido; entrega interrompida")
+            for pagina in documento:
+                pagina.get_contents()
         if self.callback:
-            try:
-                self.callback(item)
-            except Exception as e:
-                print(f"[TriggerList] Erro no callback: {e}")
+            self.callback(item)
+        super().append(item)
 
 def _folhas_por_set_da_tela(set_definitions, bloco):
     """Quantas folhas tem cada set COMO A TELA CONTA (02/09/2026).
@@ -1434,7 +1436,8 @@ def _folhas_por_set_da_tela(set_definitions, bloco):
 class ImpositionEngine:
     def __init__(self, config: ImpositionConfig, on_file_generated=None):
         self.cfg = config
-        self._url_cache = {}
+        from integridade_impressao import RecursosDoTrabalho
+        self._url_cache = RecursosDoTrabalho()
         self.on_file_generated = on_file_generated
         self.generated_files = TriggerList(on_file_generated)
         # Quantas folhas ja foram ENTREGUES (nao so geradas). E o que a tela diz
@@ -1446,6 +1449,43 @@ class ImpositionEngine:
         self._font_buffer_cache: dict = {}
         self._font_work = None
         self._embedded_font_paths = {}
+
+    def _preparar_elementos_obrigatorios(self):
+        """Valida todos os recursos antes da primeira folha, inclusive de modelos tardios."""
+        cfg = self.cfg
+        grupos = [(cfg.elements, cfg.csv_data or [], cfg.total_items)]
+        for arte in cfg.multi_artes:
+            for chave in ("numeracao", "numeracao_2"):
+                num = arte.get(chave) or {}
+                grupos.append((num.get("elements") or [], (arte.get("numeracao") or {}).get("csv_data") or [], int(arte.get("qtd", 0))))
+        for elementos, linhas, quantidade in grupos:
+            linhas = [r for r in linhas if r.get("__ativo", True) is not False]
+            for el in elementos:
+                if _so_layout(el) or el.get("type") == "METADATA":
+                    continue
+                tipo = el.get("type")
+                if el.get("source") == "database" and not el.get("fixed"):
+                    coluna = el.get("csv_column")
+                    if not coluna or len(linhas) < quantidade:
+                        raise ValueError("Banco obrigatório ausente, coluna não definida ou quantidade de linhas insuficiente")
+                    if tipo != "FOTO" and any(coluna not in r for r in linhas[:quantidade]):
+                        raise ValueError("Coluna obrigatória ausente em uma linha do banco")
+                if tipo in ("SVG", "PDF") and not el.get("svg_content" if tipo == "SVG" else "pdf_content"):
+                    raise ValueError(f"Elemento {tipo} sem conteúdo obrigatório")
+                fonte_url = el.get("arquivo_url") or el.get("font_url")
+                if fonte_url and not el.get("_font_data"):
+                    el["_font_data"] = base64.b64encode(self._get_url_bytes(fonte_url)).decode("ascii")
+                if el.get("_font_data"):
+                    try:
+                        fitz.Font(fontbuffer=base64.b64decode(el["_font_data"], validate=True))
+                    except Exception as erro:
+                        raise ValueError("Fonte obrigatória inválida") from erro
+                if tipo in ("SVG", "PDF"):
+                    # O mesmo parser e render do trabalho; documento descartável, sem entrega.
+                    copia = dict(el, _x=cfg.item_w / 2, _y=cfg.item_h / 2)
+                    with fitz.open() as teste:
+                        pagina = teste.new_page(width=cfg.item_w, height=cfg.item_h)
+                        self._render_element(pagina, copia, 0, 0, 1, linhas[0] if linhas else None)
 
     def _folhas_por_lote(self, cfg, refazendo):
         """De quantas folhas e cada lote entregue enquanto o trabalho e gerado.
@@ -1499,6 +1539,8 @@ class ImpositionEngine:
     def _get_url_bytes(self, url: str) -> bytes:
         if url in self._url_cache:
             return self._url_cache[url]
+        if getattr(self, "_recursos_confirmados", False):
+            raise ValueError("Recurso não preparado antes da impressão")
         import urllib.request
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=30) as response:
@@ -1520,27 +1562,7 @@ class ImpositionEngine:
         if origem.startswith("data:"):
             dados = base64.b64decode(origem.split(",", 1)[-1])
         elif origem.startswith("http"):
-            cam = _foto_cache_path(origem)
-            dados = None
-            if cam and os.path.exists(cam):
-                try:
-                    with open(cam, "rb") as f:
-                        dados = f.read()
-                except Exception:
-                    dados = None
-            if dados is None:
-                dados = self._get_url_bytes(origem)
-                if cam:
-                    # Escrita em dois passos: um cache pela metade, deixado para
-                    # tras por uma queda de energia, viraria foto corrompida no
-                    # papel na proxima tiragem.
-                    try:
-                        tmp = cam + ".parcial"
-                        with open(tmp, "wb") as f:
-                            f.write(dados)
-                        os.replace(tmp, cam)
-                    except Exception:
-                        pass
+            dados = self._get_url_bytes(origem)
         else:
             with open(origem, "rb") as f:
                 dados = f.read()
@@ -1653,20 +1675,17 @@ class ImpositionEngine:
         if len(unicas) == 1:
             self._aquecer_uma_foto(unicas[0])
             return
-        try:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                list(pool.map(self._aquecer_uma_foto, unicas))
-        except Exception:
-            # Falha no aquecimento nao e falha de impressao: o render busca de
-            # novo e, ai sim, com a mensagem completa do que deu errado.
-            pass
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(self._aquecer_uma_foto, unicas))
 
     def _aquecer_uma_foto(self, origem: str):
         try:
-            self._get_foto_bytes(origem)
-        except Exception:
-            pass
+            dados = self._get_foto_bytes(origem)
+            with Image.open(io.BytesIO(dados)) as imagem:
+                imagem.verify()
+        except Exception as erro:
+            raise ValueError("Não foi possível validar uma foto obrigatória antes da impressão") from erro
 
     def _abrir_arquivo_como_pdf(self, caminho: str) -> fitz.Document:
         """Abre UM arquivo (PDF, JPG, PNG) como documento fitz com dimensões físicas precisas.
@@ -1678,7 +1697,11 @@ class ImpositionEngine:
         if not caminho:
             return None
         if caminho.lower().endswith(".pdf"):
-            return fitz.open(caminho)
+            doc = fitz.open(caminho)
+            if doc.needs_pass or not len(doc) or doc.is_repaired:
+                doc.close()
+                raise ValueError("PDF de arte inválido, protegido ou incompleto")
+            return doc
 
         # Imagem → converter para PDF temporário em memória ajustando ao tamanho do item
         img = Image.open(caminho)
@@ -1722,10 +1745,14 @@ class ImpositionEngine:
         sai por `show_pdf_page`, vetorial, igual à frente.
         """
         doc = self._abrir_arquivo_como_pdf(self.cfg.base_file)
-        if doc is None:
-            return None
-
         verso_path = getattr(self.cfg, "base_file_verso", None)
+        if doc is None:
+            if not verso_path or not tem_verso(self.cfg.print_mode):
+                return None
+            # Frente intencionalmente vazia; o verso é uma dependência independente.
+            doc = fitz.open()
+            doc.new_page(width=self.cfg.item_w, height=self.cfg.item_h)
+
         unico = verso_unico(self.cfg.print_mode)
         anexar_verso = tem_verso(self.cfg.print_mode) and (unico or len(doc) == 1)
         if verso_path and anexar_verso:
@@ -1740,17 +1767,12 @@ class ImpositionEngine:
                     # exatamente onde o insert_pdf vai colar a página.
                     self.cfg.verso_page_idx = len(doc)
                     doc.insert_pdf(verso_doc, from_page=0, to_page=0)
-                elif not unico:
+                else:
                     raise ValueError("Arquivo de arte do verso vazio")
             except Exception as ex:
-                if not unico:
-                    doc.close()
-                    raise ValueError("Nao foi possivel carregar a arte do verso. "
-                                     "Confira o arquivo e gere novamente.") from ex
-                # Sem verso, a célula de verso sai vazia — melhor que derrubar o
-                # trabalho inteiro da frente por causa do arquivo de trás.
-                self.cfg.verso_page_idx = None
-                print(f"[engine] FxVersoUnico: falha ao anexar o verso ({verso_path}): {ex}")
+                doc.close()
+                raise ValueError("Nao foi possivel carregar a arte do verso. "
+                                 "Confira o arquivo e gere novamente.") from ex
             finally:
                 if verso_doc is not None:
                     verso_doc.close()
@@ -2213,7 +2235,7 @@ class ImpositionEngine:
                     # recusa espaço, e o nome precisa ser único por arquivo.
                     font_name = _nome_de_fonte_para_pdf(family, font_bytes)
                 except Exception as ex:
-                    print(f"[engine] Erro ao usar fonte embutida: {ex}")
+                    raise ValueError("Fonte embutida inválida; impressão bloqueada") from ex
 
             # 2. Tentar baixar a fonte do Catálogo Web se URL fornecida
             if not font_file:
@@ -2295,9 +2317,7 @@ class ImpositionEngine:
                     if os.path.isfile(font_file):
                         insert_kwargs["fontfile"] = font_file
                     else:
-                        # Arquivo nao existe mais — usar fonte padrao
-                        insert_kwargs["fontname"] = "hebo" if is_bold else "helv"
-                        font_file = None
+                        raise ValueError("Fonte preparada indisponível; impressão interrompida") from _fe
 
             # A ultima defesa contra o nome furado. Fica FORA do try acima de
             # proposito: o que ele protege e o registro da fonte, e um aviso
@@ -2725,12 +2745,16 @@ class ImpositionEngine:
             return self._process()
         finally:
             self._fechar_fontes_temporarias()
+            if hasattr(getattr(self, "_url_cache", None), "close"):
+                self._url_cache.close()
 
     def _process(self):
         cfg = self.cfg
         # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
         # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.
         self._conferir_e_aquecer_fotos()
+        self._preparar_elementos_obrigatorios()
+        self._recursos_confirmados = True
         # E antes de qualquer papel tambem: duas artes da mesma folha nao podem
         # dividir a coluna do pool do QR Ideal. Sem elemento QR_IDEAL, sai na
         # primeira linha.
@@ -2871,7 +2895,7 @@ class ImpositionEngine:
         
         is_duplex = tem_verso(cfg.print_mode)
         if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
-            if any(art.get("pdf_verso_url") for art in cfg.multi_artes):
+            if any(art.get("pdf_verso_url") or art.get("local_verso_path") for art in cfg.multi_artes):
                 is_duplex = True
 
         # Preparar mapa de Multi-Artes
@@ -2983,12 +3007,16 @@ class ImpositionEngine:
                         try:
                             doc = fitz.open("pdf", pdf_bytes)
                             if getattr(doc, "is_pdf", False):
+                                if doc.needs_pass or doc.is_repaired or not len(doc):
+                                    doc.close()
+                                    raise ValueError("PDF de arte incompleto ou protegido")
                                 pdf_cache[file_path] = doc
                                 return doc
                             doc.close()
                         except Exception:
-                            pass
-                            
+                            if b"%PDF-" in pdf_bytes[:1024]:
+                                raise
+
                         # Falhou, pode ser uma imagem. Extrair dimensoes e criar PDF envelopando a imagem.
                         try:
                             doc = fitz.open("img", pdf_bytes)
@@ -3015,11 +3043,15 @@ class ImpositionEngine:
                         try:
                             doc = fitz.open(file_path)
                             if getattr(doc, "is_pdf", False):
+                                if doc.needs_pass or doc.is_repaired or not len(doc):
+                                    doc.close()
+                                    raise ValueError("PDF de arte incompleto ou protegido")
                                 return doc
                             doc.close()
                         except Exception:
-                            pass
-                            
+                            if str(file_path).lower().endswith(".pdf"):
+                                raise
+
                         # Converter imagem para PDF na memoria
                         doc = fitz.open(file_path)
                         img_w, img_h = doc[0].rect.width, doc[0].rect.height
@@ -3037,8 +3069,7 @@ class ImpositionEngine:
                         doc.close()
                         return fitz.open(stream=pdf_bytes, filetype="pdf")
                 except Exception as e:
-                    print(f"Erro ao carregar/converter arte como PDF ({file_path}): {e}")
-                    return None
+                    raise ValueError("Não foi possível validar a arte combinada") from e
 
             for model_idx, art in enumerate(sorted_artes):
                 qtd = int(art.get("qtd", 0))
@@ -3072,7 +3103,7 @@ class ImpositionEngine:
                 art_els = els1 + els2
                 
                 pdf_url = art.get("pdf_url")
-                pdf_verso_url = art.get("pdf_verso_url")
+                pdf_verso_url = art.get("local_verso_path") or art.get("pdf_verso_url")
                 local_path = art.get("local_path")
                 art_doc = None
                 # Em que página desta arte mora o verso do FxVersoUnico. Vai
@@ -3087,13 +3118,19 @@ class ImpositionEngine:
                         # Arquivo único: o verso já foi anexado lá no
                         # `_load_base_as_pdf`, e o índice está no cfg.
                         art_verso_page_idx = getattr(cfg, "verso_page_idx", None)
-                    elif local_path and os.path.exists(local_path):
-                        art_doc = _load_art_as_pdf(local_path, is_url=False)
-                    elif pdf_url:
-                        art_doc = _load_art_as_pdf(pdf_url, is_url=True)
-                        art_front_pages = len(art_doc) if art_doc else None
+                    elif local_path or pdf_url or pdf_verso_url:
+                        if local_path:
+                            art_doc = _load_art_as_pdf(local_path, is_url=False)
+                            pdf_cache[("local", model_idx)] = art_doc
+                        elif pdf_url:
+                            art_doc = _load_art_as_pdf(pdf_url, is_url=True)
+                        else:
+                            art_doc = fitz.open()
+                            art_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                            pdf_cache[("frente_vazia", model_idx)] = art_doc
+                        art_front_pages = len(art_doc)
                         if pdf_verso_url and art_doc:
-                            chave_verso = (pdf_url, pdf_verso_url)
+                            chave_verso = (local_path or pdf_url, pdf_verso_url)
                             if chave_verso in versos_mesclados:
                                 # Este par já foi mesclado por outro modelo:
                                 # reusar o documento e o índice, nunca anexar de
@@ -3105,7 +3142,8 @@ class ImpositionEngine:
                                 # arquivo separado. O FxVersoUnico anexa
                                 # SEMPRE, qualquer que seja o número de páginas
                                 # da frente — é justamente o caso das 9 páginas.
-                                verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
+                                verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=not bool(art.get("local_verso_path")))
+                                pdf_cache[("verso", model_idx)] = verso_doc
                                 if verso_doc:
                                     # Nunca alterar a fonte guardada por URL.
                                     # Se as duas URLs forem iguais, `verso_doc`
@@ -3133,7 +3171,7 @@ class ImpositionEngine:
                                                cfg.print_mode)] = art_doc
                                     versos_mesclados[chave_verso] = (art_doc, art_verso_page_idx)
                 except Exception as ex:
-                    print(f"[multi_artes] Erro ao preparar arte: {ex}")
+                    raise ValueError(f"Modelo {art.get('modelo', model_idx)}: arte obrigatória indisponível") from ex
 
                 if art.get("modo_pdf") and (not art_doc or art_verso_page_idx is None
                         or physical_qtd <= 0 or physical_qtd != art_front_pages):
@@ -3199,6 +3237,15 @@ class ImpositionEngine:
                         # caso de toda folha de um pedido so.
                         "pedido": art.get("pedido")
                     })
+
+        from integridade_impressao import verificar_espaco
+        entradas = [cfg.base_file, cfg.base_file_verso]
+        entradas += [a.get(chave) for a in cfg.multi_artes for chave in ("local_path", "local_verso_path")]
+        tamanho_artes = sum(os.path.getsize(p) for p in set(entradas) if p)
+        tamanho_recursos = getattr(self._url_cache, "total_bytes", 0)
+        verificar_espaco(os.path.dirname(os.path.abspath(cfg.out_pdf)),
+                         tamanho_artes * max(1, math.ceil(total_sheets / max(1, cfg.sheets_per_block)))
+                         + tamanho_recursos * 2 + cfg.total_items * 8192)
 
         if is_strict_assembly:
             # 1. Agrupar itens do multi_map por modelo
@@ -3356,7 +3403,7 @@ class ImpositionEngine:
                 if doc_base:
                     doc_base.close()
                 for doc in pdf_cache.values():
-                    if doc:
+                    if doc is not None and not doc.is_closed:
                         doc.close()
                 self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
                 print(f"[engine] strict_assembly: Gerado com sucesso (compactado).")
@@ -3440,7 +3487,7 @@ class ImpositionEngine:
             if doc_base:
                 doc_base.close()
             for doc in pdf_cache.values():
-                if doc:
+                if doc is not None and not doc.is_closed:
                     doc.close()
             
             self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels, folhas_por_set)
@@ -3628,12 +3675,6 @@ class ImpositionEngine:
                                     _rect_arte, current_doc_base, page_idx_front,
                                     keep_proportion=False, clip=_clip_arte
                                 )
-                        else:
-                            if cfg.layout_schema == "multi_artes":
-                                err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
-                                out_page_front.insert_textbox(
-                                    fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                                    err_msg, fontsize=8, color=(1,0,0))
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
                         for el in current_elements:
                             if el.get("face", "both") == "back":
@@ -3685,10 +3726,6 @@ class ImpositionEngine:
                             if _rect_arte is not None:
                                 temp_page.show_pdf_page(_rect_arte, current_doc_base, page_idx_front,
                                                         keep_proportion=False, clip=_clip_arte)
-                        else:
-                            if cfg.layout_schema == "multi_artes":
-                                err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
-                                temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
 
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
 
@@ -3960,7 +3997,7 @@ class ImpositionEngine:
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
-            if doc:
+            if doc is not None and not doc.is_closed:
                 doc.close()
         doc_out.close()
         print(f"[engine] Gerado: {cfg.out_pdf} ({total_sheets * (2 if is_duplex else 1)} folha(s) fisicas, {cfg.total_items} itens)")

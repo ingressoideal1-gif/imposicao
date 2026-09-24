@@ -4214,16 +4214,36 @@ async function alternarModeloAberto(itemId, osId) {
 window.alternarModeloAberto = alternarModeloAberto;
 
 async function enviarParaPedido(itemId, osId, contexto = {}) {
+    if (window.isImposing || window._preparacaoImpressao) return;
+    const carga = contexto.aindaAtual && state.pedidoSelecaoCarregando || {};
+    const anterior = contexto.aindaAtual || window.NavegacaoPainel?.iniciarAcao() || (() => true);
+    const atual = () => state.pedidoSelecaoCarregando === carga && anterior();
+    state.pedidoSelecaoCarregando = carga;
+    state.pedidoSelecaoErro = null;
+    try {
+        await carregarModeloParaPedido(itemId, osId, { ...contexto, aindaAtual: atual });
+    } catch (erro) {
+        if (atual()) {
+            state.pedidoSelecaoErro = 'Não foi possível carregar o modelo. Reabra antes de gerar: ' + erro.message;
+            toast(state.pedidoSelecaoErro, 'error');
+        }
+        throw erro;
+    } finally {
+        if (state.pedidoSelecaoCarregando === carga) state.pedidoSelecaoCarregando = null;
+    }
+}
+
+async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
     if (typeof podeAbrirView === 'function' && !podeAbrirView('view-pedido')) return;
     if (window.isImposing || (state.pedidoSelecaoCarregando && !contexto.aindaAtual)) return;
     state.pedidoSelecaoErro = null;
     const aindaAtual = contexto.aindaAtual || window.NavegacaoPainel?.iniciarAcao() || (() => true);
     const tarefas = [];
     const agendar = (fn, ms) => {
-        if (!contexto.aindaAtual) return setTimeout(() => { if (aindaAtual()) fn(); }, ms);
         const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
             try { if (aindaAtual()) await fn(); resolve(); } catch (error) { reject(error); }
         }, ms));
+        tarefa.catch(() => {}); // A falha será propagada ao drenar a preparação.
         tarefas.push(tarefa);
         return tarefa;
     };
@@ -4415,7 +4435,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
     agendar(() => {
-        let numId = item.numeracao_id;
+        let numId = item.amostra_num_id || item.numeracao_id;
         const fmtSelect = document.getElementById('ped-formato');
         const formatoId = fmtSelect ? fmtSelect.value : null;
         
@@ -4457,6 +4477,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
             
             await fetch(arteUrl)
                 .then(res => {
+                    if (!res.ok) throw new Error('Download da arte recusado: HTTP ' + res.status);
                     const ct = res.headers.get('content-type') || '';
                     return res.blob().then(blob => ({ blob, ct }));
                 })
@@ -4490,6 +4511,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
                 await fetch(item.verso_arte_url)
                     .then(res => {
+                        if (!res.ok) throw new Error('Download do verso recusado: HTTP ' + res.status);
                         const ct = res.headers.get('content-type') || '';
                         return res.blob().then(blob => ({ blob, ct }));
                     })
@@ -4572,13 +4594,24 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
             if (pedInfo) pedInfo.style.display = 'none';
             agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
         }
+        if (!arteUrl && (item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo)) {
+            const arquivo = await prepararVersoDoTrabalho(state, modoDeVersoDoModelo(item), null);
+            if (!aindaAtual()) return;
+            if (arquivo) {
+                const doc = await documentoDaArteParaPrevia(arquivo);
+                if (!aindaAtual()) { await doc.destroy(); return; }
+                state.pedArtVersoFile = arquivo;
+                guardarPdfDoVersoDaPrevia(doc);
+            }
+        }
     }, 700);
-    if (contexto.aindaAtual) await Promise.all(tarefas);
+    // Drenar também tarefas agendadas por outras tarefas antes de liberar.
+    for (let i = 0; i < tarefas.length; i++) await tarefas[i];
 }
 window.enviarParaPedido = enviarParaPedido;
 
 window.togglePedItemSelection = async function(itemId, osId) {
-    if (window.isImposing) return toast('Aguarde a geração terminar para mudar a seleção.', 'info');
+    if (window.isImposing || window._preparacaoImpressao) return toast('Aguarde a geração terminar para mudar a seleção.', 'info');
     if (!state.selectedOSItems) state.selectedOSItems = [];
     
     const itens = state.osItens[osId] || [];
@@ -6018,6 +6051,14 @@ function arteParaOMotor(arte, isMultiSelected) {
 window.arteParaOMotor = arteParaOMotor;
 
 window.runPedImposition = async function (mode, isRefazer) {
+    if (mode === 'print' && !confirmarRetomadaImpressao()) return;
+    if (window._preparacaoImpressao || window.isImposing) return;
+    window._preparacaoImpressao = true;
+    try { return await executarPedImposition(mode, isRefazer); }
+    catch (erro) { toast('Impressão bloqueada: ' + erro.message, 'error'); }
+    finally { window._preparacaoImpressao = false; }
+};
+async function executarPedImposition(mode, isRefazer) {
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
     const selecaoInicial = JSON.stringify(state.selectedOSItems || []);
@@ -6403,7 +6444,11 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
     let payloadNumeracao = numeracao ? JSON.parse(JSON.stringify(numeracao)) : null;
-    if (payloadNumeracao && state.csvData) {
+    const itemDoCsv = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    if (payloadNumeracao && itemDoCsv && typeof numeracaoConfirmadaDoModelo === 'function') {
+        const fonte = state.numeracoes.find(n => String(n.id) === String(numId));
+        payloadNumeracao = numeracaoConfirmadaDoModelo(fonte, itemDoCsv);
+    } else if (payloadNumeracao && state.csvData && !state.activeOSItem) {
         payloadNumeracao.csv_data = state.csvData;
     }
 
@@ -6864,6 +6909,7 @@ window.runPedImposition = async function (mode, isRefazer) {
             if (!selecaoAindaAtual()) throw new Error('A seleção mudou. Confira e gere novamente.');
         }
 
+        await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
         const res = await fetch(urlImpose, {
 
             method: 'POST',
@@ -6889,6 +6935,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.includes("text/event-stream")) {
             const reader = res.body.getReader();
+            const conferencia = criarConferenciaStream(JSON.parse(formData.get('payload')).integridade?.job_id);
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
             let currentEvent = null;
@@ -6913,6 +6960,7 @@ window.runPedImposition = async function (mode, isRefazer) {
             // tela terminava dizendo "concluído e arquivos salvos" sem arquivo.
             let arquivosRecebidos = 0;
 
+            try {
             while (true) {
                 if (cancelouNoMeio || window._printCancelRequested) break;
                 const { value, done } = await reader.read();
@@ -6937,6 +6985,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                                 const binStr = atob(fileObj.data);
                                 const bytes = new Uint8Array(binStr.length);
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                                await conferencia.arquivo(fileObj, bytes);
                                 const fBlob = await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, fileObj);
                                 arquivosRecebidos++;
 
@@ -7003,10 +7052,11 @@ window.runPedImposition = async function (mode, isRefazer) {
                                     await fallbackDownload();
                                 }
                             } catch (e) {
-                                if (faceDoTrabalho !== 'both') throw e;
-                                console.error("Erro ao processar arquivo do stream:", e);
-                                toast(`Erro ao salvar arquivo do lote: ${e.message}`, 'error');
+                                if (entrega) entrega.finalizar({ interrompido: true });
+                                throw e;
                             }
+                        } else if (currentEvent === "done" && dataStr) {
+                            conferencia.concluir(JSON.parse(dataStr));
                         } else if (currentEvent === "error" && dataStr) {
                             try {
                                 const errObj = JSON.parse(dataStr);
@@ -7015,6 +7065,16 @@ window.runPedImposition = async function (mode, isRefazer) {
                         }
                     }
                 }
+            }
+
+            if (cancelouNoMeio || window._printCancelRequested) {
+                cancelouNoMeio = true;
+                await reader.cancel().catch(() => {});
+            } else conferencia.verificar();
+            } catch (erro) {
+                if (entrega) entrega.finalizar({ interrompido: true });
+                await reader.cancel().catch(() => {});
+                throw erro;
             }
 
             if (arquivosRecebidos === 0) {
@@ -7238,7 +7298,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         if (pBar) pBar.style.width = '100%';
 
-        if (pText) pText.textContent = 'Concluído! (100%)';
+        if (pText) pText.textContent = 'Processamento encerrado.';
 
         setTimeout(() => {
             if (overlay) overlay.classList.remove('active');

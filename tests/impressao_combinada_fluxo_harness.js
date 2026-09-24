@@ -23,7 +23,10 @@ function fixture(options={}) {
     Object.assign(c,{
         console:{log(){},warn(){},error(){}}, FormData, Blob, AbortController,
         setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
-        impositionAbortController:null,
+        impositionAbortController:null, supabaseClient:null,
+        confirmarRetomadaImpressao:()=>true,
+        confirmarIntegridadeDoTrabalho:async()=>{},
+        crypto:require("node:crypto").webcrypto, TextDecoder, setTimeout, clearTimeout,
         toast:(...args)=>calls.notices.push(args),
         showDirectoryPicker:async()=>({getFileHandle:async name=>({createWritable:async()=>({
             write:async blob=>calls.saved.push({name,blob}),close:async()=>{},
@@ -44,6 +47,10 @@ function fixture(options={}) {
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
     const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
     vm.runInContext(pedido.slice(faceStart,pedido.indexOf('\n}',faceStart)+2),c);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8'),c);
+    c.confirmarIntegridadeDoTrabalho=async()=>{}; // Preparação real coberta pelo harness de integridade.
+    const executarInicio=pedido.indexOf('async function executarPedImposition(');
+    vm.runInContext(pedido.slice(executarInicio,pedido.indexOf('\n}',executarInicio)+2),c);
     vm.runInContext(section('runPedImposition'),c);
     return {c,elements,items,calls};
 }
@@ -135,12 +142,13 @@ async function tests() {
     for (let i=0; i<4; i++) doc.addPage([200+i, 300]);
     const bytes = await doc.save();
     for (const kind of ['pdf', 'json', 'stream']) for (const mode of ['pdf', 'print']) for (const face of ['front', 'back']) {
-        const file = {name:'sintetico.pdf',data:Buffer.from(bytes).toString('base64')};
-        const text = new TextEncoder().encode('event: file\ndata: '+JSON.stringify(file)+'\n\n');
+        const file = {name:'sintetico.pdf',data:Buffer.from(bytes).toString('base64'), index:1,
+            sha256:require('node:crypto').createHash('sha256').update(bytes).digest('hex')};
+        const text = new TextEncoder().encode('event: file\ndata: '+JSON.stringify(file)+'\n\nevent: done\ndata: {"files":1}\n\n');
         let read = false;
         const response = {ok:true, headers:{get:()=>kind==='pdf'?'application/pdf':kind==='json'?'application/json':'text/event-stream'},
             blob:async()=>new Blob([bytes]), json:async()=>({type:'multi_file',files:[file]}),
-            body:{getReader:()=>({read:async()=>read?{done:true}:(read=true,{done:false,value:text})})}};
+            body:{getReader:()=>({cancel:async()=>{},read:async()=>read?{done:true}:(read=true,{done:false,value:text})})}};
         const x=fixture({paginadoDuplex:true,response});
         x.c.PDFLib=PDFLib; x.c.TextDecoder=TextDecoder; x.c.atob=atob;
         x.c.state.printMode='duplex_unico';

@@ -350,7 +350,7 @@ def read_root():
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1018,11 +1018,11 @@ def _embed_system_fonts(numeracao_obj):
                     font_cache[fallback_url] = font_bytes
                     print(f"[impose] Fonte embutida via fallback frontend: {family} -> {fallback_url} ({len(font_bytes)} chars b64)")
                 except Exception as ex:
-                    print(f"[impose] Erro ao embutir fonte via fallback: {ex}")
+                    raise ValueError("Não foi possível preparar a fonte obrigatória") from ex
             else:
                 base14 = {"helv","helv-bold","hebo","times","tiro","times-bold","tibo","cour","cobo","cour-bold"}
                 if family_lower not in base14:
-                    print(f"[impose] ALERTA: Fonte '{family}' solicitada, mas não está no Catálogo Web e sem arquivo_url. Fallback Helvetica. Chaves disponíveis: {list(fontes_map.keys())[:10]}")
+                    raise ValueError(f"Fonte {family!r} não confirmada no catálogo. Atualize as fontes antes de imprimir.")
             continue
 
         fonte_info = fontes_map[chave]
@@ -1058,7 +1058,7 @@ def _embed_system_fonts(numeracao_obj):
             font_cache[url] = font_bytes
             print(f"[impose] Fonte embutida: {family} -> {url} ({len(font_bytes)} chars b64)")
         except Exception as ex:
-            print(f"[impose] Erro ao embutir fonte {family} de {url}: {ex}")
+            raise ValueError("Não foi possível preparar a fonte obrigatória") from ex
 
 # ─── QR IDEAL ─────────────────────────────────────────────────────────────────
 
@@ -1232,6 +1232,9 @@ async def impose_file(
         import csv
         import io
         data = json.loads(payload)
+        from integridade_impressao import validar_uploads
+        await validar_uploads(data, await request.form())
+        log_diag(f"[integridade] job={data['integridade']['job_id']} modelos={data['integridade']['modelos']} etapa=uploads_confirmados")
 
         formato = data.get("formato") or db.get_formato(data.get("formato_id"))
         saida   = data.get("saida") or db.get_saida(data.get("saida_id"))
@@ -1398,6 +1401,8 @@ async def impose_file(
                 csv_data = numeracao["csv_data"]
 
         temporarios = temp_manager.TrabalhoTemporario()
+        from integridade_impressao import verificar_espaco
+        verificar_espaco(temporarios.pasta, sum(a["size"] for a in data["integridade"]["arquivos"].values()))
         # Detectar extensão do arquivo enviado
         base_file_path = ""
         if file:
@@ -1410,7 +1415,7 @@ async def impose_file(
                 content = await file.read()
                 tmp_in.write(content)
                 base_file_path = tmp_in.name
-        elif data.get("schema") != "multi_artes" and not mapa_teatro_id:
+        elif not data.get("integridade") and data.get("schema") != "multi_artes" and not mapa_teatro_id:
             # Sem arquivo enviado e sem mapa de teatro: tentar buscar via cor_id se for template da cor
             if data.get("is_color_template") and data.get("cor_id"):
                 cor_id = data.get("cor_id")
@@ -1495,25 +1500,21 @@ async def impose_file(
             files_list = list(multi_artes_files) if multi_artes_files else []
         
         file_idx = 0
-        for ma in multi_artes_list:
-            wants_file = ma.get("has_raw_file")
-            if wants_file is None:
-                wants_file = (ma.get("pdf_url") == "local_file" or not ma.get("pdf_url"))
-
-            if wants_file and file_idx < len(files_list):
-                ma_file = files_list[file_idx]
-                file_idx += 1
-                if ma_file and hasattr(ma_file, "filename"):
-                    ext = os.path.splitext(ma_file.filename)[1] if ma_file.filename else ".pdf"
-                    with temporarios.arquivo(suffix=ext) as tmp_in:
-                        await ma_file.seek(0)
-                        content = await ma_file.read()
-                        if not content:
-                            log_diag(f"[multi_artes] ARQUIVO VAZIO: {ma_file.filename}")
+        for i, ma in enumerate(multi_artes_list):
+            for chave, destino in ((f"ma_file_{i}", "local_path"), (f"ma_verso_{i}", "local_verso_path")):
+                ma_file = form_data.get(chave)
+                if ma_file is None:
+                    continue
+                ext = os.path.splitext(ma_file.filename or "arte.pdf")[1].lower()
+                if ext not in (".pdf", ".jpg", ".jpeg", ".png"):
+                    raise ValueError("Formato de arte combinada não suportado")
+                with temporarios.arquivo(suffix=ext) as tmp_in:
+                    await ma_file.seek(0)
+                    while content := await ma_file.read(1024 * 1024):
                         tmp_in.write(content)
-                        ma["local_path"] = tmp_in.name
-                        temp_paths_ma.append(tmp_in.name)
-                        ma_files_map[ma_file.filename or f"arte_{file_idx}"] = tmp_in.name
+                    ma[destino] = tmp_in.name
+                    temp_paths_ma.append(tmp_in.name)
+                file_idx += 1
 
         log_diag(f"[multi_artes] form_data keys: {list(form_data.keys())}")
         log_diag(f"[multi_artes] {len(files_list)} arquivo(s) resolvidos via ma_file_i, multi_artes_list size: {len(multi_artes_list)}")
@@ -1534,7 +1535,7 @@ async def impose_file(
         # `tem_verso`/`verso_unico` no engine.py.
         print_mode_val = data.get("print_mode", "front")
         if data.get("schema") == "multi_artes" or len(multi_artes_list) > 0:
-            if print_mode_val == "front" and any(ma.get("pdf_verso_url") for ma in multi_artes_list):
+            if print_mode_val == "front" and any(ma.get("pdf_verso_url") or ma.get("local_verso_path") for ma in multi_artes_list):
                 print_mode_val = "duplex"
 
 
@@ -1624,7 +1625,10 @@ async def impose_file(
                     if vagas.acquire(timeout=1.0):
                         return
 
+            arquivos_emitidos = 0
+
             def on_file_gen(file_info):
+                nonlocal arquivos_emitidos
                 import base64
                 if cliente_saiu.is_set():
                     return
@@ -1647,8 +1651,13 @@ async def impose_file(
                     esperar_vaga()
                     if cliente_saiu.is_set():
                         return
+                    import hashlib
+                    arquivos_emitidos += 1
                     loop.call_soon_threadsafe(queue.put_nowait, {
                         "type": "file",
+                        "index": arquivos_emitidos,
+                        "job_id": data["integridade"]["job_id"],
+                        "sha256": hashlib.sha256(base64.b64decode(b64_data)).hexdigest(),
                         "name": name,
                         "file_type": ftype,
                         "data": b64_data,
@@ -1692,7 +1701,7 @@ async def impose_file(
                     while True:
                         item = await queue.get()
                         if item == "DONE":
-                            yield "event: done\ndata: {}\n\n"
+                            yield f"event: done\ndata: {json.dumps({'files': arquivos_emitidos})}\n\n"
                             break
                         if isinstance(item, dict) and item.get("type") == "error":
                             yield f"event: error\ndata: {json.dumps(item)}\n\n"
@@ -1852,6 +1861,10 @@ async def submit_print_job(
             shutil.copyfileobj(file.file, tmp)
             pdf_path = tmp.name
         selected_options = json.loads(options)
+        if selected_options.get("integridade_sha256"):
+            from integridade_impressao import validar_pdf_para_entrega
+            with open(pdf_path, "rb") as preparado:
+                validar_pdf_para_entrega(preparado.read(), selected_options["integridade_sha256"])
         success, msg = print_service.send_print_job_windows(
             printer_name=printer_name,
             pdf_path=pdf_path,
@@ -2054,6 +2067,7 @@ async def hotfolder_validar(request: Request):
 async def hotfolder_drop(
     file: UploadFile = File(...),
     folder: str = Form(...),
+    sha256: str | None = Form(None),
 ):
     """Grava o PDF na pasta observada. So aceita pasta ja registrada."""
     if not db.hot_folder_registrada(folder):
@@ -2063,6 +2077,9 @@ async def hotfolder_drop(
                    "pelo botao 'Escolher pasta'")
     dados = await file.read()
     try:
+        if isinstance(sha256, str):
+            from integridade_impressao import validar_pdf_para_entrega
+            validar_pdf_para_entrega(dados, sha256)
         caminho = hotfolder.soltar(folder, file.filename or "impressao.pdf", dados,
                                    metodo=db.metodo_hot_folder(folder))
     except Exception as e:

@@ -355,6 +355,8 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
 
 
 def process_queue():
+    job_id = None
+    reivindicado = False
     try:
         path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
         jobs = _supabase_request("GET", path)
@@ -394,6 +396,12 @@ def process_queue():
                     _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
                     continue
 
+                digest = ppd_options.get("integridade_sha256") if isinstance(ppd_options, dict) else None
+                if digest:
+                    from integridade_impressao import validar_pdf_para_entrega
+                    with open(temp_pdf.name, "rb") as preparado:
+                        validar_pdf_para_entrega(preparado.read(), digest)
+
                 # Hot folder: o trabalho vai para uma pasta observada pelo RIP, e nao
                 # para a fila do Windows. O caminho viaja dentro do ppd_options, que
                 # ja e uma coluna JSON — nao ha coluna nova no Supabase por causa
@@ -415,6 +423,8 @@ def process_queue():
             _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": final_status})
             print(f"[agent_worker] Job {job_id} {final_status}: {msg}", flush=True)
     except Exception as e:
+        if job_id and reivindicado:
+            _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
         print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
 
 # 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma

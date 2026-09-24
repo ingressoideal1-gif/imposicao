@@ -1157,7 +1157,7 @@ function codigoDoOperadorDaEstacao() {
     } catch (_) { return ''; }
 }
 
-async function chamarBancosPedido(acao, corpo) {
+async function chamarBancosPedido(acao, corpo, signal) {
     const local = window.location.hostname === 'localhost'
         || window.location.hostname === '127.0.0.1'
         || window.location.protocol === 'file:';
@@ -1176,7 +1176,7 @@ async function chamarBancosPedido(acao, corpo) {
         url = `${API_PAINEL}/api/bancos-pedido/${acao}`;
         headers.Authorization = 'Bearer ' + token;
     }
-    const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(corpo || {}) });
+    const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(corpo || {}), signal });
     const dados = await resp.json().catch(() => ({}));
     if (!resp.ok) {
         let detalhe = dados.detail || dados.error || `servidor respondeu ${resp.status}`;
@@ -1530,7 +1530,8 @@ async function garantirCsvDoTrabalho(ids) {
     const unicos = Array.from(new Set((ids || []).filter(Boolean).map(String)));
     for (const id of unicos) {
         const num = (state.numeracoes || []).find(n => String(n.id) === id);
-        if (num) await garantirCsvDaNumeracao(num);
+        if (!num) throw new Error('Numeração obrigatória não carregada: ' + id + '. Reabra o pedido.');
+        await garantirCsvDaNumeracao(num);
     }
 }
 window.garantirCsvDoTrabalho = garantirCsvDoTrabalho;
@@ -10291,7 +10292,8 @@ async function guardarPdfDoVersoDaImposicao(pdfV) {
 }
 window.guardarPdfDoVersoDaImposicao = guardarPdfDoVersoDaImposicao;
 
-async function loadImpArtFile(file) {
+async function loadImpArtFile(file, aindaAtual = () => true) {
+    if (!aindaAtual()) return;
     state.impArtFile = file;
 
     const ext = file.name.split('.').pop().toLowerCase();
@@ -10302,7 +10304,7 @@ async function loadImpArtFile(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
+                throw new Error('PDF.js não disponível.');
 
             }
 
@@ -10311,8 +10313,10 @@ async function loadImpArtFile(file) {
                 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
             const arrayBuffer = await file.arrayBuffer();
+            if (!aindaAtual()) return;
 
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            if (!aindaAtual()) return;
 
             
 
@@ -10327,6 +10331,7 @@ async function loadImpArtFile(file) {
 
 
             const page = await pdf.getPage(1);
+            if (!aindaAtual()) return;
 
             const vp = page.getViewport({ scale: 1 });
 
@@ -10347,6 +10352,7 @@ async function loadImpArtFile(file) {
             octx.fillRect(0, 0, off.width, off.height);
 
             await page.render({ canvasContext: octx, viewport: page.getViewport({ scale }) }).promise;
+            if (!aindaAtual()) return;
 
 
 
@@ -10403,12 +10409,14 @@ async function loadImpArtFile(file) {
             img.src = URL.createObjectURL(file);
 
             await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+            if (!aindaAtual()) return;
 
             
 
             // Obter o DPI da imagem a partir dos metadados
 
             const dpi = await getDpi(file);
+            if (!aindaAtual()) return;
 
             
 
@@ -10425,6 +10433,7 @@ async function loadImpArtFile(file) {
         updateImpSummary(); // Recalcular sumário e forçar redesenho do preview
 
     } catch (e) {
+        if (arguments.length > 1) throw e;
 
         toast('Erro ao carregar arte: ' + e.message, 'error');
 
@@ -12727,6 +12736,9 @@ window.textoDoCancelamento = textoDoCancelamento;
 let impositionAbortController = null;
 window.isImposing = false;
 window.runImposition = async function (mode, returnBlob = false) {
+    if (mode === 'print' && !confirmarRetomadaImpressao()) return;
+    if (state.imposicaoSelecaoCarregando || state.pedidoSelecaoCarregando) return toast('Aguarde o carregamento completo do modelo.', 'warning');
+    if (state.imposicaoSelecaoErro) return toast('Reabra o modelo: ' + state.imposicaoSelecaoErro, 'error');
     if ((state.selectedOSItems || []).length > 1 && itensDaImposicao(true).some(i => i.modo_pdf)) {
         return toast('Gere a combinação de PDFs paginados pela janela do Pedido no Painel de Produção.', 'warning');
     }
@@ -13220,7 +13232,11 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
     let payloadNumeracao = numeracao ? JSON.parse(JSON.stringify(numeracao)) : null;
-    if (payloadNumeracao && state.csvData) {
+    const itemDoCsv = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    if (payloadNumeracao && itemDoCsv && typeof numeracaoConfirmadaDoModelo === 'function') {
+        const fonte = state.numeracoes.find(n => String(n.id) === String(numId));
+        payloadNumeracao = numeracaoConfirmadaDoModelo(fonte, itemDoCsv);
+    } else if (payloadNumeracao && state.csvData && !state.activeOSItem) {
         payloadNumeracao.csv_data = state.csvData;
     }
 
@@ -13235,6 +13251,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
     // Injetar arquivo_url (URL TTF) nos elementos de numeração para que o engine
     // Python possa baixar fontes web mesmo sem acesso à tabela catalogo_fontes.
+    for (const arte of payloadMultiArtes) {
+        if (arte.numeracao) arte.numeracao = JSON.parse(JSON.stringify(arte.numeracao));
+        if (arte.numeracao_2) arte.numeracao_2 = JSON.parse(JSON.stringify(arte.numeracao_2));
+    }
     function _injectFontUrls(numObj) {
         if (!numObj || !numObj.elements || !state_fonts.catalogo) return;
         const catMap = {};
@@ -13748,6 +13768,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         // estacao, o ramo `else` da sondagem ja teria lancado.
         const urlImpose = `${baseUrl}/api/impose`;
 
+        await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
         const res = await fetch(urlImpose, {
 
             method: 'POST',
@@ -13769,10 +13790,12 @@ window.runImposition = async function (mode, returnBlob = false) {
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.includes("text/event-stream")) {
             const reader = res.body.getReader();
+            const conferencia = criarConferenciaStream(JSON.parse(formData.get('payload')).integridade?.job_id);
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
 
             let currentEvent = null;
+            try {
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
@@ -13796,6 +13819,7 @@ window.runImposition = async function (mode, returnBlob = false) {
                                 const binStr = atob(fileObj.data);
                                 const bytes = new Uint8Array(binStr.length);
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                                await conferencia.arquivo(fileObj, bytes);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
 
                                 const fallbackDownload = async () => {
@@ -13826,9 +13850,10 @@ window.runImposition = async function (mode, returnBlob = false) {
                                     await fallbackDownload();
                                 }
                             } catch (e) {
-                                console.error("Erro ao processar arquivo do stream:", e);
-                                toast(`Erro ao salvar arquivo do lote: ${e.message}`, 'error');
+                                throw e;
                             }
+                        } else if (currentEvent === "done" && dataStr) {
+                            conferencia.concluir(JSON.parse(dataStr));
                         } else if (currentEvent === "error" && dataStr) {
                             try {
                                 const errObj = JSON.parse(dataStr);
@@ -13839,6 +13864,12 @@ window.runImposition = async function (mode, returnBlob = false) {
                         }
                     }
                 }
+            }
+
+            conferencia.verificar();
+            } catch (erro) {
+                await reader.cancel().catch(() => {});
+                throw erro;
             }
 
             // Gerar/salvar PDF não altera o status de impressão
@@ -13987,7 +14018,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         if (pBar) pBar.style.width = '100%';
 
-        if (pText) pText.textContent = 'Concluído! (100%)';
+        if (pText) pText.textContent = 'Processamento encerrado.';
 
         setTimeout(() => {
             overlay.classList.remove('active');
@@ -18653,6 +18684,18 @@ function linhasDoModeloNoPayload(item, num) {
 }
 window.linhasDoModeloNoPayload = linhasDoModeloNoPayload;
 
+function numeracaoConfirmadaDoModelo(num, item) {
+    if (!num) return null;
+    let copia = JSON.parse(JSON.stringify(resolverNumeracaoParaModelo(num, item)));
+    if (copia.csv_data?.length) {
+        if (item?.csv_selecao) copia.csv_data = fatiaCsvDoItem(item, copia);
+        else if (vinculoDeBancoDoModelo(item)) copia.csv_data = linhasDoModeloNoPayload(item, copia);
+    }
+    return copia;
+}
+window.numeracaoConfirmadaDoModelo = numeracaoConfirmadaDoModelo;
+
+
 /**
  * O modelo tem MENOS linhas com dado do que a quantidade do pedido? Devolve
  * o que ha para dizer, ou null.
@@ -18912,7 +18955,7 @@ window.mesclarNumeracoesNoCatalogo = mesclarNumeracoesNoCatalogo;
  */
 async function recarregarNumeracoesDoPedido(osId, opcoes) {
     try {
-        if (typeof supabaseClient === 'undefined' || !supabaseClient) return 0;
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conexão de dados indisponível.');
         const itens = (state.osItens && state.osItens[osId]) || [];
         const ids = Array.from(new Set(itens.map(it => numeracaoIdDoItem(it)).filter(Boolean).map(String)));
         if (!ids.length) return 0;
@@ -18937,6 +18980,9 @@ async function recarregarNumeracoesDoPedido(osId, opcoes) {
         if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
         // A mesma forma que o api() entrega: sem METADATA, com print_mode. Sem
         // isto o lapis do card abria o editor com um elemento fantasma (v683).
+        if (ids.some(id => !(data || []).some(n => String(n.id) === id))) {
+            throw new Error('A consulta não retornou todas as numerações do pedido.');
+        }
         const frescas = (data || []).map(normalizarNumeracaoLida);
         // Linha que mudou no banco invalida tambem a PROMESSA guardada no
         // `_csvDaNumeracaoEmVoo`: sem isto, o `garantirCsvDaNumeracao` devolveria
@@ -18953,6 +18999,7 @@ async function recarregarNumeracoesDoPedido(osId, opcoes) {
         return mesclarNumeracoesNoCatalogo(state.numeracoes, frescas);
     } catch (e) {
         console.warn('[numeracoes] nao consegui reler as numeracoes do pedido:', (e && e.message) || e);
+        if (opcoes?.obrigatorio) throw new Error('Não foi possível confirmar a numeração do pedido. Reabra e tente novamente.');
         return 0;
     }
 }
@@ -32326,13 +32373,32 @@ const globalFuzzyMatch = (a, b) => {
  * com matching inteligente de formato, cor e numeração
  */
 async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}) {
+    if (window.isImposing || window._preparacaoImpressao) return;
+    const carga = {};
+    state.imposicaoSelecaoCarregando = carga;
+    state.imposicaoSelecaoErro = null;
+    const anterior = contexto.aindaAtual || (() => true);
+    const aindaAtual = () => state.imposicaoSelecaoCarregando === carga && anterior();
+    try { await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual }); }
+    catch (erro) { if (aindaAtual()) state.imposicaoSelecaoErro = erro.message; throw erro; }
+    finally { if (state.imposicaoSelecaoCarregando === carga) state.imposicaoSelecaoCarregando = null; }
+}
+async function carregarModeloParaImposicao(itemId, osId, switchTab = true, contexto = {}) {
     const aindaAtual = contexto.aindaAtual || (() => true);
     const mudarCampo = elemento => {
         const disparar = () => elemento.dispatchEvent(new Event('change'));
         if (contexto.restaurandoNavegacao && window.NavegacaoPainel) window.NavegacaoPainel.semGravacao(disparar);
         else disparar();
     };
-    const agendar = (fn, ms) => setTimeout(() => { if (aindaAtual()) fn(); }, ms);
+    const tarefas = [];
+    const agendar = (fn, ms) => {
+        const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
+            try { if (aindaAtual()) await fn(); resolve(); } catch (e) { reject(e); }
+        }, ms));
+        tarefa.catch(() => {});
+        tarefas.push(tarefa);
+        return tarefa;
+    };
     if (!aindaAtual()) return;
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
@@ -32358,7 +32424,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     // combinada), que desce logo abaixo -- uma numeracao, nao quarenta e nove.
     // As demais continuam chegando pela tela de Amostras, em segundo plano, e
     // a mescla preserva o que ja desceu.
-    await recarregarNumeracoesDoPedido(osId, { comBanco: false });
+    await recarregarNumeracoesDoPedido(osId, { comBanco: false, obrigatorio: true });
     if (!aindaAtual()) return;
 
     // O banco das numeracoes DESTE trabalho, antes de qualquer conta da tela.
@@ -32552,7 +32618,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     agendar(() => { renderImpOSQueue({ somenteLeitura: !!contexto.restaurandoNavegacao }); }, 600);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    if (!contexto.aindaAtual) agendar(async () => {
+    if (switchTab) agendar(async () => {
         // Prioridade 1: arte_url do próprio item
         // Prioridade 2: pdf_base64 da cor correspondente
         const arteUrl = item.arte_url || null;
@@ -32571,12 +32637,14 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            fetch(arteUrl)
+            await fetch(arteUrl)
                 .then(res => {
+                    if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                     const ct = res.headers.get('content-type') || '';
                     return res.blob().then(blob => ({ blob, ct }));
                 })
-                .then(({ blob, ct }) => {
+                .then(async ({ blob, ct }) => {
+                    if (!aindaAtual()) return;
                     const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
                     const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
                     if (!isPdf && !isImg) {
@@ -32585,7 +32653,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                     }
                     const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
                     state.expectedArteName = filename;
-                    loadImpArtFile(file);
+                    await loadImpArtFile(file, aindaAtual);
                     const impInfo = document.getElementById('imp-file-info');
                     if (impInfo) {
                         impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
@@ -32593,19 +32661,21 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                     }
                     agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
                 })
-                .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
+                .catch(err => { throw err; });
                 
             // Carregar Verso se houver
             guardarPdfDoVersoDaImposicao(null);   // zera o doc e a medida da pagina
             state.impArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                fetch(item.verso_arte_url)
+                await fetch(item.verso_arte_url)
                     .then(res => {
+                        if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                         const ct = res.headers.get('content-type') || '';
                         return res.blob().then(blob => ({ blob, ct }));
                     })
-                    .then(({ blob, ct }) => {
+                    .then(async ({ blob, ct }) => {
+                        if (!aindaAtual()) return;
                         const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
                         // O ARQUIVO, e não só o documento da prévia: um modelo
                         // sozinho não passa por `multi_artes` e manda a arte como
@@ -32613,16 +32683,17 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                         // chegaria ao motor sem verso nenhum (31/08/2026).
                         state.impArtVersoFile = new File([blob], filenameV, { type: ct || 'application/pdf' });
                         if (isPdf && typeof pdfjsLib !== 'undefined') {
-                            blob.arrayBuffer().then(arrayBuffer => {
-                                pdfjsLib.getDocument({ data: arrayBuffer }).promise
-                                    .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
+                            return blob.arrayBuffer().then(arrayBuffer => {
+                                if (!aindaAtual()) return;
+                                return pdfjsLib.getDocument({ data: arrayBuffer }).promise
+                                    .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaImposicao(pdfV); })
                                     .then(() => {
                                     agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
-                                }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da arte:', e));
+                                }).catch(e => { throw e; });
                             });
                         }
                     })
-                    .catch(err => console.warn('[OS→Imp] Erro ao baixar arte de verso via URL:', err));
+                    .catch(err => { throw err; });
             }
         } else if (corObj && corObj.pdf_base64) {
             state.isColorTemplate = true;
@@ -32637,7 +32708,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                 const filename = corObj.pdf_filename || `${corObj.name}.pdf`;
                 const file = new File([blob], filename, { type: 'application/pdf' });
                 state.expectedArteName = filename;
-                loadImpArtFile(file);
+                await loadImpArtFile(file, aindaAtual);
                 
                 // Carregar Verso da Cor se for Duplex
                 guardarPdfDoVersoDaImposicao(null);   // zera o doc e a medida da pagina
@@ -32656,8 +32727,8 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
                         corObj.pdf_verso_filename || `${corObj.name}_verso.pdf`,
                         { type: 'application/pdf' }
                     );
-                    pdfjsLib.getDocument({ data: bytesV }).promise
-                        .then(pdfV => guardarPdfDoVersoDaImposicao(pdfV))
+                    await pdfjsLib.getDocument({ data: bytesV }).promise
+                        .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaImposicao(pdfV); })
                         .then(() => {
                         agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
                     }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da cor:', e));
@@ -32688,7 +32759,18 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
             agendar(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
             console.warn(`[OS→Imp] Nenhuma arte ou gabarito de cor encontrado para item ${item.id}`);
         }
+        if (!arteUrl && (item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo)) {
+            const arquivo = await prepararVersoDoTrabalho(state, modoDeVersoDoModelo(item), null);
+            if (!aindaAtual()) return;
+            if (arquivo) {
+                const doc = await documentoDaArteParaPrevia(arquivo);
+                if (!aindaAtual()) { await doc.destroy(); return; }
+                state.impArtVersoFile = arquivo;
+                guardarPdfDoVersoDaImposicao(doc);
+            }
+        }
     }, 700);
+    for (let i = 0; i < tarefas.length; i++) await tarefas[i];
 }
 
 // -------------------------------------------------------------------------------
@@ -32713,7 +32795,7 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
     // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
     // gemea no `enviarParaImposicao`.
-    await recarregarNumeracoesDoPedido(osId, { comBanco: false });
+    await recarregarNumeracoesDoPedido(osId, { comBanco: false, obrigatorio: true });
     if (!aindaAtual()) return;
 
     const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
@@ -43528,6 +43610,8 @@ async function onPrintPrinterChange() {
 // Enviar job de impressão (suporta modo Local direto e Cloud Relay)
 // Quando há fila, processa sequencialmente
 async function sendPrintJob() {
+    if (!confirmarRetomadaImpressao()) return;
+    window._printCancelRequested = false;
     const sel = document.getElementById('print-direct-printer');
     const printerName = sel ? sel.value : '';
     if (!printerName) { toast('Selecione uma impressora.', 'error'); return; }
@@ -43561,6 +43645,7 @@ async function sendPrintJob() {
 
     for (let i = 0; i < queue.length; i++) {
         const item = queue[i];
+        if (item._envioAceito) { successCount++; continue; }
         const progress = Math.round((i / queue.length) * 100);
 
         if (statusText) statusText.textContent = `Enviando ${i + 1}/${queue.length}: ${item.name}...`;
@@ -43571,13 +43656,14 @@ async function sendPrintJob() {
         if (queueStatusEl) { queueStatusEl.textContent = '⏳ Enviando...'; queueStatusEl.style.color = '#fbbf24'; }
 
         try {
+            options.integridade_sha256 = await hashArquivoImpressao(item.blob);
             if (isLocalMode) {
                 const formData = new FormData();
                 formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(options));
 
-                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData });
+                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
                 if (!res.ok) {
                     const errText = await res.text();
                     throw new Error(errText || 'Falha ao enviar para impressora local.');
@@ -43600,23 +43686,25 @@ async function sendPrintJob() {
                 if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
 
                 const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
-                const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                await registrarEAguardarEnvioRemoto(supabaseClient, {
                     agent_id: window._activeAgentData.id,
                     file_url: urlData.publicUrl,
                     printer_name: printerName,
                     ppd_options: options,
                     status: 'pending'
                 });
-                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
             }
 
+            item._envioAceito = true;
             successCount++;
             if (queueStatusEl) { queueStatusEl.textContent = '✓ Enviado'; queueStatusEl.style.color = '#4ade80'; }
         } catch (e) {
             failCount++;
             if (queueStatusEl) { queueStatusEl.textContent = '✗ Erro'; queueStatusEl.style.color = '#ef4444'; }
             console.error(`[PrintModal] Erro ao enviar ${item.name}:`, e);
-            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+            toast(`Envio interrompido em "${item.name}". Confira a fila e o papel antes de retomar explicitamente.`, 'error');
+            window.registrarImpressaoInterrompida?.(successCount);
+            break;
         }
     }
 
@@ -44855,6 +44943,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
         }
 
         try {
+            itemOptions.integridade_sha256 = await hashArquivoImpressao(item.blob);
             if (isLocalMode && hotFolder) {
                 // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
                 // donos: o titulo do job no spooler e a ordem alfabetica em que
@@ -44862,7 +44951,8 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
                 const formData = new FormData();
                 formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
                 formData.append('folder', hotFolder);
-                const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData });
+                formData.append('sha256', itemOptions.integridade_sha256);
+                const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
                 if (!res.ok) {
                     let motivo = `HTTP ${res.status}`;
                     try { motivo = (await res.json()).detail || motivo; } catch (_) {}
@@ -44875,7 +44965,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
                 formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(itemOptions));
-                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData });
+                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
                 if (!res.ok) {
                     const errText = await res.text();
                     throw new Error(errText || 'Falha ao enviar para impressora local.');
@@ -44891,23 +44981,25 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
                     .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
                 if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
                 const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
-                const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                await registrarEAguardarEnvioRemoto(supabaseClient, {
                     agent_id: window._activeAgentData.id,
                     file_url: urlData.publicUrl,
                     // Sem impressora escolhida no modo hot folder, mas a coluna
                     // e o que o operador le no historico da fila — deixar vazio
                     // ali nao ajuda ninguem a saber para onde o trabalho foi.
                     printer_name: printerName || (hotFolder ? `HOT FOLDER: ${hotFolder}` : ''),
-                    ppd_options: options,
+                    ppd_options: itemOptions,
                     status: 'pending'
                 });
-                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
             }
             successCount++;
         } catch (e) {
             failCount++;
+            cancelado = true;
+            window.registrarImpressaoInterrompida?.(successCount);
             console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
-            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+            toast(`Envio interrompido em "${item.name}". Confira a fila e o papel antes de retomar explicitamente.`, 'error');
+            throw e;
         }
     }
 
@@ -44919,6 +45011,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
         // Entrega ESTES arquivos agora. Chamada uma vez por lote no caminho em
         // streaming, e uma vez so, com a fila inteira, nos outros.
         async entregar(itens) {
+            if (encerrada || cancelado || failCount) throw new Error('Entrega interrompida. Confira os envios anteriores e retome explicitamente.');
             let fila = itens;
             if (options.impressao_reversa || options.folha_a_folha) {
                 if (!avisouTransformacao) {
@@ -44951,6 +45044,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
         finalizar({ interrompido = false } = {}) {
             const ok = failCount === 0 && !cancelado && !interrompido;
             if (encerrada) return ok;
+            if (!ok && ordem > 0) window.registrarImpressaoInterrompida?.(successCount);
             encerrada = true;
 
             window.isPrinting = false;

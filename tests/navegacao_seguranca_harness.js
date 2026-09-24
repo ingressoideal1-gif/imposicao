@@ -20,7 +20,7 @@ function montar() {
         document: { getElementById: () => null },
         window: { addEventListener() {}, location: { pathname: '/', search: '' }, history: {} },
         Event: class { constructor(type) { this.type = type; } },
-        setTimeout(fn, ms) { tarefas.push({ fn, ms }); },
+        setTimeout(fn, ms) { tarefas.push({ fn, ms }); return setTimeout(fn, 0); },
         matchFormato: () => 'f', matchNumeracao: () => 'n',
         recarregarNumeracoesDoPedido: async () => {},
         updateImpSummary() {}, agendarRedesenhoDasFilas() {},
@@ -30,8 +30,8 @@ function montar() {
     });
     vm.runInContext(ler('navegacao-painel.js'), ctx);
     vm.runInContext(extrair(script, 'saveActiveOSItemField') + '\n'
-        + extrair(script, 'enviarParaImposicao') + '\n'
-        + extrair(pedido, 'enviarParaPedido'), ctx);
+        + extrair(script, 'enviarParaImposicao') + '\n' + extrair(script, 'carregarModeloParaImposicao') + '\n'
+        + extrair(pedido, 'enviarParaPedido') + '\n' + extrair(pedido, 'carregarModeloParaPedido'), ctx);
     ctx.document.getElementById = nome => {
         const campo = { 'imp-formato': 'formato_id', 'imp-saida': 'saida_id', 'imp-numeracao': 'numeracao_id' }[nome];
         if (!campo) return null;
@@ -46,7 +46,6 @@ function montar() {
         const { ctx, tarefas, escritas, filas, item } = montar();
         const antes = JSON.stringify(item);
         await ctx.enviarParaImposicao('m1', 'os', false, { aindaAtual: () => true, restaurandoNavegacao: true });
-        for (const tarefa of tarefas.sort((a, b) => a.ms - b.ms)) await tarefa.fn();
         assert.equal(escritas.length, 0, 'restaurar não salva por matching nem por onchange');
         assert.equal(JSON.stringify(item), antes, 'restaurar não altera dados do modelo');
         assert(filas.every(o => o.somenteLeitura === true));
@@ -55,7 +54,6 @@ function montar() {
     {
         const { ctx, tarefas, escritas } = montar();
         await ctx.enviarParaImposicao('m1', 'os', false, { aindaAtual: () => true });
-        for (const tarefa of tarefas.sort((a, b) => a.ms - b.ms)) await tarefa.fn();
         assert(escritas.some(e => e[2] === 'formato_id'));
         assert(escritas.some(e => e[2] === 'numeracao_id'));
         total++;

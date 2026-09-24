@@ -24,6 +24,7 @@ papel errado sem nenhum aviso.
 import os
 
 import pytest
+import fitz
 
 from engine import ImpositionConfig, ImpositionEngine
 
@@ -41,8 +42,13 @@ SAIDA = {"name": "A3", "width_mm": 300, "height_mm": 300}
 
 def montar(tmp_path, itens, **extra):
     """Um trabalho de `itens` celulas. 4 por folha -> itens/4 folhas."""
+    base = tmp_path / "base_ticket.pdf"
+    with fitz.open() as doc:
+        pagina = doc.new_page(width=283.46, height=141.73)
+        pagina.insert_text((20, 30), "ARTE SINTETICA")
+        doc.save(base)
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf",
+        base_file=str(base),
         out_pdf=str(tmp_path / "saida.pdf"),
         formato=extra.pop("formato", FORMATO),
         numeracao={"tipo": "SEQUENCIAL", "elements": []},

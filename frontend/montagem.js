@@ -4392,6 +4392,7 @@ async function gerarPdfDaMontagem() {
         const fd = new FormData();
         fd.append('payload', JSON.stringify(payload));
 
+        await confirmarIntegridadeDoTrabalho(fd, base, state, supabaseClient);
         const resp = await fetch(base + '/api/impose', { method: 'POST', body: fd });
         if (!resp.ok) {
             const detalhe = (typeof descreverErroHttp === 'function')

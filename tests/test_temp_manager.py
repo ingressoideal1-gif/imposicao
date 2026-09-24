@@ -221,7 +221,10 @@ def ambiente_impose(engine):
 
 
 PAYLOAD = {"formato": {"name": "sintetico"}, "saida": {"name": "sintetico"},
-           "numeracao": {"elements": []}, "suggested_filename": "mesmo.pdf"}
+           "numeracao": {"elements": []}, "suggested_filename": "mesmo.pdf",
+           "integridade": {"version": 1, "job_id": "12345678-1234-1234-1234-123456789abc",
+                           "arquivos": {}, "faces": [{"front": False, "back": False}],
+                           "modelos": [], "numeracoes": []}}
 
 
 @pytest.mark.parametrize("antes_do_primeiro", [False, True])
