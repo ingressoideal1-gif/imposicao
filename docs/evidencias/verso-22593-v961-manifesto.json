@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-09-25T13:08:23.563436+00:00",
+  "manifest": {
+    "version": "1.2.341",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.341.msi",
+    "sha256": "98bb171b0dc0ae229e4f24c59c55d0f3039335c8fad55d9bd7d14454a18ea55f",
+    "size": 156180480,
+    "notes": "Duplicar para Verso sem Modo PDF paginado e correcao de formato na Lista de Arte. Use painel v961. Instale em momento ocioso."
+  },
+  "public_matches": true
+}
