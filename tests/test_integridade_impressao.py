@@ -150,6 +150,23 @@ def test_upload_confirmado_e_cursor_rebobinado():
     assert upload.dados.tell() == 0
 
 
+def test_multipart_combinado_do_frontend_passa_no_validador_real():
+    import subprocess
+    import json
+    import base64
+    harness = Path(__file__).resolve().with_name('uploads_combinados_harness.js')
+    resultado = subprocess.run(['node', str(harness), '--json'], capture_output=True,
+                               text=True, encoding='utf-8', check=True, timeout=30)
+    trabalho = json.loads(resultado.stdout)
+    formulario = {k: Upload(base64.b64decode(v)) for k, v in trabalho['arquivos'].items()}
+    asyncio.run(validar_uploads(trabalho['payload'], formulario))
+    assert len(formulario) == 8
+    assert 'ma_file_1' not in formulario and 'ma_verso_2' not in formulario
+    formulario['file'] = Upload(b'arquivo individual residual')
+    with pytest.raises(ValueError, match='Upload não declarado'):
+        asyncio.run(validar_uploads(trabalho['payload'], formulario))
+
+
 @pytest.mark.parametrize("formulario", [{}, dict(file_verso=Upload(b"truncado")), dict(file=Upload(b"outro"))])
 def test_upload_ausente_corrompido_ou_inesperado_bloqueia(formulario):
     with pytest.raises(ValueError): asyncio.run(validar_uploads(contrato(), formulario))
