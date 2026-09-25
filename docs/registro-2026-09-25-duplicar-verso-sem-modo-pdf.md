@@ -164,3 +164,14 @@ foi enviada e nenhum dado do pedido foi modificado nesta entrega.
 O checkout operacional e suas três alterações não rastreadas foram preservados.
 A correção da Lista de Arte preserva a personalização compartilhada válida dos
 crachás e não desfaz o ajuste que o usuário realizou no cordão.
+
+### Atualização concorrente preservada no encerramento
+
+Após a comprovação da v961, `origin/main` recebeu a web **v962** (`e95e507d`),
+com limpeza de uploads residuais na combinação de modelos. Essa atualização
+foi integrada sem substituir as duas correções desta entrega; o MSI 1.2.341
+continua correspondendo ao commit de release v961 informado acima.
+Os 27 testes de integridade, duplicação no navegador e formato por modelo
+passaram após a integração. A web v962 também foi conferida nos dois domínios:
+**18/18 hashes coincidiram** (`evidencias/verso-22593-v962-web.json`). Para a
+validação operacional, reabrir o painel atual v962 ou posterior.
