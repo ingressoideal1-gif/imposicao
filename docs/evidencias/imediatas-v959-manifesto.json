@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-09-25T11:08:18.993556+00:00",
+  "version": "1.2.340",
+  "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.340.msi",
+  "sha256": "36b45e82a9c6d05985dfef41ebbd96bf0861958a5e8d4a20c90150250e44bc47",
+  "size": 156176384,
+  "notes": "Confirma PDF e salvamento exato do modelo; adia atualizacao durante processamento e envio ativos. Use painel v959. Instale em momento ocioso."
+}

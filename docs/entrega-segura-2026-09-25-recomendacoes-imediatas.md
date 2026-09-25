@@ -37,6 +37,19 @@ O escopo combina frontend e NewProd. Como o orquestrador `entrega-segura.ps1` n�
 - Rollback do agente requer código apropriado sob versão superior; não há downgrade automático. Não restaurar escrita ampla nem geração permissiva como recuperação.
 - A causa específica do incidente 22599 não foi comprovada por PDF/log da ocorrência. Prova operacional da LASER-01 permanece necessária.
 
-## Estado inicial do candidato
+## Publicação confirmada — 25/09/2026, 08h08 BRT
 
-Build e validações locais concluídos. A comprovação de publicação será acrescentada após a execução das etapas acima.
+- Commit funcional `47fe5b9badde4c624c7fde2135924018e9e7943b` integrado em `origin/main` por fast-forward. Tags `v959` e `agente-v1.2.340` publicadas nesse commit.
+- Cloudflare Pages: `success`, deployment `6d3cfb16-ad4d-4a68-b764-406ff2e2a12f`.
+- Quatro arquivos alterados em cada domínio (`imposicao.pages.dev` e `imposition.ai-ideal.com.br`): **8/8 hashes normalizados coincidiram** com a fonte, com cache buster.
+- MSI enviado sob nome novo. Download público confirmou **156.176.384 bytes** e SHA-256 `36b45e82a9c6d05985dfef41ebbd96bf0861958a5e8d4a20c90150250e44bc47`, idênticos ao arquivo local.
+- Somente após essa prova, `latest.json` foi ativado e relido às 08h08m18 BRT: versão **1.2.340**, URL, tamanho e hash conferidos.
+- Evidências: [deploy](evidencias/imediatas-v959-deploy.json), [web](evidencias/imediatas-v959-web-publico.json), [MSI](evidencias/imediatas-v959-msi-publico.json), [manifesto](evidencias/imediatas-v959-manifesto.json).
+
+## Estação e aceite físico
+
+Consulta somente de diagnóstico da LASER-01 às **08h08m32 BRT**: heartbeat de **08h08m19**, agente **1.2.339**, painel **957**. Esse sinal recente confirma a versão anterior em execução; não confirma instalação da 1.2.340. Essa consulta de versão da estação é distinta da auditoria de metadados de autorização que permanece bloqueada por HTTP 401 na API de gerenciamento.
+
+Em momento ocioso, atualizar o NewProd, confirmar **1.2.340**, reabrir o painel **v959** e fazer prova do pedido 22599, conferindo arte e numeração em cada face no PDF e no papel antes da tiragem. Nenhuma impressão foi enviada nesta entrega. Após falha parcial, conferir o que já saiu e exigir retomada explícita.
+
+Fonte, painel público, MSI e manifesto estão publicados e verificados. Atualização das seis estações e aceite físico permanecem pendentes.

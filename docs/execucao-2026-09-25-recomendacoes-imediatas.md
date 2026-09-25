@@ -1,5 +1,7 @@
 # Recomendações imediatas — execução em 25/09/2026
 
+Publicação posterior autorizada e concluída: painel v959 / NewProd 1.2.340. Ver [entrega segura e evidências](entrega-segura-2026-09-25-recomendacoes-imediatas.md). As referências a entrega local abaixo registram o estado ao concluir a implementação, antes dessa autorização.
+
 ## Escopo e estado da entrega
 
 Pedido: executar as recomendações imediatas da avaliação de 24/09. Implementação local na branch `fix/recomendacoes-imediatas-20260925`, baseada em `df13d5de`, no worktree `C:\ProjetosLocais\ideal-imposition-analise-22599`. O checkout operacional e os dois documentos não rastreados do dia anterior foram preservados.
