@@ -1,0 +1,20 @@
+{
+  "agent_version": "1.2.340",
+  "modules_present": [
+    "controle_producao",
+    "integridade_impressao",
+    "agent_worker",
+    "agent_version",
+    "app",
+    "engine",
+    "acesso_segredo"
+  ],
+  "frontend_bytes_match": [
+    "index.html",
+    "producao.html",
+    "script.js",
+    "criador-arte.js"
+  ],
+  "runtime_dlls_present": true,
+  "exe_sha256": "9622dcdffc48e31301d8642642672e9ee557d8fcfe1b9ffc9ce8161a72710bd3"
+}

@@ -36915,12 +36915,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     dataToUpdate = { ...dataToUpdate };
     delete dataToUpdate.qtd;
     delete dataToUpdate.quantidade;
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Sem conexão para confirmar o salvamento.');
 
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
-        console.warn('[SAVE] Item não encontrado no state. itemId=', itemId, '| osId=', osId);
-        return;
+        throw new Error('Modelo não encontrado. Reabra o pedido antes de salvar.');
     }
 
     // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
@@ -36929,8 +36928,10 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     // gravações de modelo atravessam.
     const bloqueio = bloqueioDeModeloAprovado(itemLocal, dataToUpdate);
     if (bloqueio) {
-        if (!bloqueio.silencioso) toast(bloqueio.motivo, 'warning');
-        return;
+        // Snapshot automatico de modelo aprovado continua sem alerta, mas
+        // nao devolve recibo de uma gravacao que nao aconteceu.
+        if (bloqueio.silencioso) return { confirmado: false, bloqueado: true };
+        throw new Error(bloqueio.motivo || 'Modelo aprovado: alteração bloqueada.');
     }
 
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
@@ -36939,7 +36940,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         const dbData = { ...dataToUpdate };
         
         // Auto-resolver amostra_cor_id e amostra_num_id se ausentes no payload ou no item
-        const resolved = resolveItemCorNumIds(itemLocal);
+        const resolved = resolveItemCorNumIds({ ...itemLocal });
         if (resolved.corId && !('amostra_cor_id' in dbData)) {
             dbData.amostra_cor_id = resolved.corId;
         }
@@ -37029,204 +37030,59 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             return;
         }
 
-        const gravacaoCriticaDeStatus = 'status_arte' in dbData || 'status_impressao' in dbData;
-        const colunasDeConfirmacao = gravacaoCriticaDeStatus
-            ? 'id, status_arte, status_impressao'
-            : 'id';
-
-        // 1. Atualizar em pedidos_modelos (se não for item virtual não carregado)
-        if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
-            console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', itemLocal.id);
-            Object.assign(itemLocal, dataToUpdate);
-            // O `Object.assign` copia a chave que veio e mais nada. Quando ela é
-            // a numeração — e é: é assim que o modelo passa a apontar para uma
-            // numeração nova salva no editor —, o espelho `numeracao_id` ficaria
-            // para trás.
-            if ('amostra_num_id' in dataToUpdate) {
-                sincronizarNumeracaoDoItem(itemLocal, dataToUpdate.amostra_num_id);
-            }
-            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
-            const cacheKey = itemLocal.id;
-            if (!overrides[cacheKey]) overrides[cacheKey] = {};
-            Object.assign(overrides[cacheKey], dataToUpdate);
-            localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
-        }
-        
-        let updatedCount = 0;
-        let linhaConfirmada = null;
-
-        // A) Tentar update por _pedidoModeloId ou ID do item
-        if (modeloId && modeloId !== '') {
-            const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
-            const { data: updateResult, error } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dbData)
-                .eq('id', queryModeloId)
-                .select(colunasDeConfirmacao);
-
-            if (!error && updateResult && updateResult.length > 0) {
-                if (gravacaoCriticaDeStatus && updateResult.length !== 1) {
-                    throw new Error('a gravação de status atingiu mais de um modelo por ID');
-                }
-                updatedCount = updateResult.length;
-                linhaConfirmada = updateResult[0];
-                console.log('[SAVE] OK por ID -> pedidos_modelos id=', queryModeloId, dbData);
-            } else if (error) {
-                console.error('[SAVE] Erro pedidos_modelos por ID:', error.message);
-            }
-        }
-
-        // B) Tentar update por id_produto_proposta_origem
-        if (updatedCount === 0 && itemId && !isNaN(parseInt(itemId))) {
-            const propOrigemId = parseInt(itemId);
-            const { data: res, error: err } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dbData)
-                .eq('id_produto_proposta_origem', propOrigemId)
-                .select(colunasDeConfirmacao);
-            if (!err && res && res.length > 0) {
-                if (gravacaoCriticaDeStatus && res.length !== 1) {
-                    throw new Error('a gravação de status encontrou mais de um modelo de origem');
-                }
-                updatedCount = res.length;
-                linhaConfirmada = res[0];
-                itemLocal._pedidoModeloId = res[0].id;
-                console.log('[SAVE] OK por id_produto_proposta_origem=', propOrigemId, dbData);
-            }
-        }
-
-        // C) Tentar update por id_int (número da OS) + ordem
+        // A identificacao nunca e ampliada depois de uma falha. Modelo virtual
+        // precisa ser materializado pelo fluxo de criacao, nao por este save.
         const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
-        const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
-
-        if (updatedCount === 0 && !isNaN(osNum)) {
-            const itemOrdem = itemLocal ? (itemLocal.ordem || 1) : 1;
-            const { data: res, error: err } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dbData)
-                .eq('id_int', osNum)
-                .eq('ordem', itemOrdem)
-                .select(colunasDeConfirmacao);
-            if (!err && res && res.length > 0) {
-                if (gravacaoCriticaDeStatus && res.length !== 1) {
-                    throw new Error('a gravação de status encontrou mais de um modelo na mesma ordem');
-                }
-                updatedCount = res.length;
-                linhaConfirmada = res[0];
-                itemLocal._pedidoModeloId = res[0].id;
-                console.log('[SAVE] OK por id_int + ordem=', osNum, itemOrdem, dbData);
-            }
+        const osNum = Number(osObj?.numero ?? String(osId).replace(/^vibe_/, ''));
+        const queryModeloId = Number(modeloId);
+        if (!Number.isSafeInteger(osNum) || osNum <= 0
+            || !Number.isSafeInteger(queryModeloId) || queryModeloId <= 0
+            || (itemLocal.id_int != null && Number(itemLocal.id_int) !== osNum)
+            || (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded)) {
+            throw new Error('Modelo não confirmado neste pedido. Reabra o pedido antes de salvar.');
+        }
+        const canonico = valor => Array.isArray(valor) ? valor.map(canonico)
+            : valor && typeof valor === 'object' ? Object.fromEntries(Object.keys(valor).sort().map(k => [k, canonico(valor[k])])) : valor;
+        const confere = (linha, dados) => Object.entries(dados).every(([k, v]) =>
+            JSON.stringify(canonico(linha[k])) === JSON.stringify(canonico(v)));
+        const colunas = ['id', 'id_int', 'id_produto_proposta_origem', ...Object.keys(dbData)];
+        const { data: linhas, error } = await vibeClient.from('pedidos_modelos')
+            .update(dbData).eq('id', queryModeloId).eq('id_int', osNum)
+            .select([...new Set(colunas)].join(', '));
+        if (error) throw new Error('Falha ao salvar o modelo: ' + error.message);
+        const linhaConfirmada = Array.isArray(linhas) && linhas.length === 1 && linhas[0];
+        if (!linhaConfirmada || String(linhaConfirmada.id) !== String(queryModeloId)
+            || Number(linhaConfirmada.id_int) !== osNum || !confere(linhaConfirmada, dbData)) {
+            throw new Error('O banco não confirmou exatamente o modelo e os valores enviados. Reabra o pedido.');
         }
 
-        // D) Tentar update por id_int (qualquer linha da OS)
-        if (updatedCount === 0 && !isNaN(osNum) && !gravacaoCriticaDeStatus) {
-            const { data: res, error: err } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dbData)
-                .eq('id_int', osNum)
-                .select('id');
-            if (!err && res && res.length > 0) {
-                updatedCount = res.length;
-                linhaConfirmada = res[0];
-                itemLocal._pedidoModeloId = res[0].id;
-                console.log('[SAVE] OK por id_int=', osNum, dbData);
-            }
-        }
-
-        // E) Se NENHUMA linha existia em pedidos_modelos, AUTO-CRIAR (INSERT) a linha agora!
-        if (updatedCount === 0 && !isNaN(osNum)) {
-            const insertPayload = {
-                id_int: osNum,
-                id_produto_proposta_origem: (!isNaN(parseInt(itemId))) ? parseInt(itemId) : null,
-                nome_modelo: itemLocal ? (itemLocal.nome_modelo || itemLocal.produto || 'Modelo') : 'Modelo',
-                quantidade: itemLocal ? (itemLocal.qtd || itemLocal.quantidade || 0) : 0,
-                ordem: itemLocal ? (itemLocal.ordem || 1) : 1,
-                status_arte: 'PENDENTE',
-                status_producao: 'PENDENTE',
-                ...dbData
-            };
-            const { data: insData, error: insErr } = await vibeClient
-                .from('pedidos_modelos')
-                .insert([insertPayload])
-                .select(colunasDeConfirmacao);
-            if (!insErr && insData && insData.length > 0) {
-                if (gravacaoCriticaDeStatus && insData.length !== 1) {
-                    throw new Error('a criação do status confirmou mais de um modelo');
-                }
-                updatedCount = insData.length;
-                linhaConfirmada = insData[0];
-                if (itemLocal) itemLocal._pedidoModeloId = insData[0].id;
-                console.log('[SAVE] INSERT OK em pedidos_modelos id=', insData[0].id, insertPayload);
-            } else if (insErr) {
-                console.error('[SAVE] Erro INSERT em pedidos_modelos:', insErr.message);
-            }
-        }
-
-        if (updatedCount === 0) {
-            throw new Error('o banco não confirmou nenhum modelo atualizado');
-        }
-        if (gravacaoCriticaDeStatus) {
-            if (!linhaConfirmada) throw new Error('o banco não devolveu o modelo atualizado');
-            if ('status_arte' in dbData
-                && String(linhaConfirmada.status_arte || '').trim().toUpperCase()
-                    !== String(dbData.status_arte || '').trim().toUpperCase()) {
-                throw new Error('o banco não confirmou status_arte do modelo');
-            }
-            if ('status_impressao' in dbData
-                && normalizarStatusImpressao(linhaConfirmada.status_impressao)
-                    !== normalizarStatusImpressao(dbData.status_impressao)) {
-                throw new Error('o banco não confirmou status_impressao do modelo');
-            }
-        }
-
-        // 2. ATUALIZAR PRODUTOS_PROPOSTA NO SUPABASE (SISTEMA VIBE)
+        // Espelho comercial apenas pelo vinculo devolvido pelo modelo persistido.
+        // O id do modelo nao e um id de produto; nome/ordem/pedido nao sao chave.
         const propData = {};
-        if ('amostra_cor_id' in dataToUpdate) propData.amostra_cor_id = dataToUpdate.amostra_cor_id;
-        if ('amostra_num_id' in dataToUpdate) propData.amostra_num_id = dataToUpdate.amostra_num_id;
-        if ('arte_url' in dataToUpdate) {
-            propData.arte_url = dataToUpdate.arte_url;
+        for (const campo of ['amostra_cor_id', 'amostra_num_id', 'arte_url', 'amostra_arte_base64']) {
+            if (campo in dbData) propData[campo] = dbData[campo];
         }
-        if ('amostra_arte_base64' in dataToUpdate) propData.amostra_arte_base64 = dataToUpdate.amostra_arte_base64;
-
-        if (Object.keys(propData).length > 0) {
-            const propId = itemLocal.id_produto_proposta_origem || (typeof itemLocal.id === 'number' || (!isNaN(parseInt(itemLocal.id)) && !String(itemLocal.id).includes('vibe')) ? parseInt(itemLocal.id) : null);
-            let propUpdated = false;
-
-            if (propId) {
-                const { error: propErr } = await vibeClient
-                    .from('produtos_proposta')
-                    .update(propData)
-                    .eq('id', propId);
-                if (!propErr) {
-                    propUpdated = true;
-                    console.log('[SAVE VIBE] OK -> produtos_proposta por ID=', propId, propData);
-                } else {
-                    console.warn('[SAVE VIBE] Erro ao atualizar produtos_proposta por ID:', propErr.message);
-                }
+        const origem = linhaConfirmada.id_produto_proposta_origem;
+        if (origem != null && Object.keys(propData).length) {
+            const propId = Number(origem);
+            if (!Number.isSafeInteger(propId) || propId <= 0) {
+                throw new Error('Modelo salvo, mas vínculo comercial inválido. Reabra o pedido.');
             }
-
-            if (!propUpdated && osId) {
-                const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
-                const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
-                if (!isNaN(osNum)) {
-                    let query = vibeClient.from('produtos_proposta').update(propData).eq('id_int', osNum);
-                    if (itemLocal.nome_modelo || itemLocal.produto) {
-                        query = query.eq('nome_produto', itemLocal.nome_modelo || itemLocal.produto);
-                    }
-                    const { error: propErr2 } = await query;
-                    if (!propErr2) {
-                        console.log('[SAVE VIBE] OK -> produtos_proposta por id_int=', osNum, propData);
-                    } else {
-                        console.warn('[SAVE VIBE] Erro ao atualizar produtos_proposta por id_int:', propErr2.message);
-                    }
-                }
+            const { data: produtos, error: erroProduto } = await vibeClient.from('produtos_proposta')
+                .update(propData).eq('id', propId).eq('id_int', osNum)
+                .select(['id', 'id_int', ...Object.keys(propData)].join(', '));
+            if (erroProduto || !Array.isArray(produtos) || produtos.length !== 1
+                || String(produtos[0].id) !== String(propId) || Number(produtos[0].id_int) !== osNum
+                || !confere(produtos[0], propData)) {
+                throw new Error('Modelo salvo, mas o espelho comercial não foi confirmado. Reabra o pedido antes de continuar.');
             }
         }
-
+        itemLocal._pedidoModeloId = linhaConfirmada.id;
         Object.assign(itemLocal, dataToUpdate);
         // `dataToUpdate` não tem `status_arte` — ele é derivado aqui. Sem copiar,
         // a faixa do card só saberia quem aprovou depois de um F5.
         if (dbData.status_arte) itemLocal.status_arte = dbData.status_arte;
+        if ('amostra_num_id' in dataToUpdate) sincronizarNumeracaoDoItem(itemLocal, dataToUpdate.amostra_num_id);
         if ('arte_url' in dataToUpdate) {
             itemLocal.url_arquivo_arte = dataToUpdate.arte_url;
             itemLocal.url_arquivo = dataToUpdate.arte_url;
@@ -37235,6 +37091,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             itemLocal.url_arquivo_arte_verso = dataToUpdate.verso_arte_url;
             itemLocal.verso_url_arquivo = dataToUpdate.verso_arte_url;
         }
+        return { confirmado: true, modelo: linhaConfirmada };
     } catch (e) {
         console.error('[SAVE] Erro em saveAmostraToDB:', e);
         throw e;

@@ -194,6 +194,7 @@ a = Analysis(
         'font_cache',
         'newprod_temp',
         'integridade_impressao',
+        'controle_producao',
         'agent_version',
         'balanca',
         # A balanca Urano da estacao, na porta serial. O 'serial.serialwin32' e o

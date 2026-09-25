@@ -396,12 +396,12 @@ function pedidoNaProducao(extra) {
     const inicio = SCRIPT.indexOf('async function saveAmostraToDB(');
     const fim = SCRIPT.indexOf('\n}', inicio);
     const f = SCRIPT.slice(inicio, fim + 2);
-    ok(f.indexOf("const gravacaoCriticaDeStatus = 'status_arte' in dbData || 'status_impressao' in dbData") > 0,
-        'save central reconhece gravações críticas de status');
-    ok(f.indexOf('&& !gravacaoCriticaDeStatus') > 0,
-        'status não usa o fallback amplo que atualiza qualquer linha do pedido');
-    ok(f.indexOf("throw new Error('o banco não confirmou status_arte do modelo')") > 0,
-        'status_arte só avança depois do valor devolvido pelo banco');
+    ok(f.includes('linhas.length === 1') && f.includes('!confere(linhaConfirmada, dbData)'),
+        'save central exige linha unica e todos os valores, incluindo status');
+    ok(f.includes(".eq('id', queryModeloId).eq('id_int', osNum)") && !f.includes(".eq('ordem'"),
+        'status e arte usam o modelo exato dentro do pedido, sem fallback');
+    ok(f.indexOf('!confere(linhaConfirmada, dbData)') < f.indexOf('Object.assign(itemLocal, dataToUpdate)'),
+        'memoria de status so avanca depois de confirmar o banco');
 })();
 
 // --- Resultado ---------------------------------------------------------------

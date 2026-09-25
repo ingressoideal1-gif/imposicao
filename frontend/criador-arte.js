@@ -1404,18 +1404,17 @@ async function salvarArteDoEditor() {
     const face = window.editorState.currentFace;
     const fc = window.editorState.fabricCanvas;
 
-    if (!item || !fc) return;
+    if (!item || !fc || window.editorState._salvando) return;
+    const contexto = window.editorState;
+    contexto._salvando = true;
+    const contextoAtual = () => window.editorState === contexto && contexto.activeItem === item
+        && contexto.currentFace === face && contexto.fabricCanvas === fc && contexto.osId === osId;
 
     try {
         toast('Gerando arquivo PDF da arte...', 'info');
 
         // 1. Exportar JSON de estrutura editável para futuras reedições 2D
         const jsonStructure = JSON.stringify(fc.toJSON());
-
-        if (item.id) {
-            localStorage.setItem(`ideal_arte_json_${item.id}_${face}`, jsonStructure);
-        }
-        localStorage.setItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`, jsonStructure);
 
         // 2. Exportar imagem PNG de alta resolução da Camada de Arte (Fabric.js)
         const base64PngUrl = fc.toDataURL({
@@ -1424,10 +1423,11 @@ async function salvarArteDoEditor() {
         });
 
         // 3. Converter a arte em um documento PDF físico proporcional às dimensões do formato (PDFLib)
-        let pdfUrlOrData = base64PngUrl; // fallback inicial se PDFLib falhar
-        try {
+        let pdfUrlOrData;
+        {
             const pdfLibObj = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
-            if (pdfLibObj && pdfLibObj.PDFDocument) {
+            if (!pdfLibObj?.PDFDocument) throw new Error('Gerador de PDF indisponível. Reabra o editor.');
+            {
                 const fmt = window.editorState.format || { width_mm: 180, height_mm: 50 };
                 const widthMm = fmt.width_mm || 180;
                 const heightMm = fmt.height_mm || 50;
@@ -1454,48 +1454,27 @@ async function salvarArteDoEditor() {
                 const fileName = `arte_criada_${face}_${osId}_${item.id || itemIdx}_${Date.now()}.pdf`;
 
                 // Fazer upload do arquivo PDF para o Storage do Supabase (para imposição e impressão)
-                if (typeof uploadToStorage === 'function') {
+                if (typeof uploadToStorage !== 'function') throw new Error('Envio de arquivo indisponível.');
+                {
                     const uploadedUrl = await uploadToStorage(pdfBlob, fileName, 'artes');
-                    if (uploadedUrl && typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
-                        pdfUrlOrData = uploadedUrl;
+                    if (typeof uploadedUrl !== 'string' || !/^https?:\/\//.test(uploadedUrl)) {
+                        throw new Error('O PDF não foi enviado ao servidor. A arte continua aberta para tentar novamente.');
                     }
+                    const controle = new AbortController();
+                    const limite = setTimeout(() => controle.abort(), 60000);
+                    try {
+                        const resposta = await fetch(uploadedUrl, { cache: 'no-store', signal: controle.signal });
+                        if (!resposta.ok) throw new Error('O servidor não confirmou o arquivo enviado.');
+                        const recebido = new Uint8Array(await resposta.arrayBuffer());
+                        if (recebido.length !== pdfBytes.length || recebido.some((v, i) => v !== pdfBytes[i])) {
+                            throw new Error('O arquivo no servidor difere do PDF gerado.');
+                        }
+                    } finally { clearTimeout(limite); }
+                    pdfUrlOrData = uploadedUrl;
                 }
             }
-        } catch (pdfErr) {
-            console.warn('[Criador de Arte] Erro ao gerar/enviar PDF da arte:', pdfErr);
         }
-
-        // 4. Atualizar o objeto local do item
-        if (face === 'verso') {
-            item.verso_amostra_arte_base64 = base64PngUrl;
-            item.verso_arte_url = pdfUrlOrData;
-            item.url_arquivo_arte_verso = pdfUrlOrData;
-            item.verso_url_arquivo = pdfUrlOrData;
-            item.verso_arte_json = jsonStructure;
-            if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_verso`, pdfUrlOrData);
-            localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_verso`, pdfUrlOrData);
-        } else {
-            item.amostra_arte_base64 = base64PngUrl;
-            item.arte_url = pdfUrlOrData;
-            item.url_arquivo_arte = pdfUrlOrData;
-            item.url_arquivo = pdfUrlOrData;
-            item.arte_json = jsonStructure;
-            if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_frente`, pdfUrlOrData);
-            localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_frente`, pdfUrlOrData);
-        }
-
-        // Limpar o input de arquivo bruto do DOM
-        const inputId = face === 'verso' ? `amostra-item-arte-verso-${itemIdx}` : `amostra-item-arte-${itemIdx}`;
-        const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${itemIdx}` : `amostra-item-arte-name-${itemIdx}`;
-        const removeBtnId = face === 'verso' ? `btn-remove-amostra-arte-verso-${itemIdx}` : `btn-remove-amostra-arte-${itemIdx}`;
-
-        const input = document.getElementById(inputId);
-        const nameLabel = document.getElementById(nameLabelId);
-        const removeBtn = document.getElementById(removeBtnId);
-
-        if (input) input.value = '';
-        if (nameLabel) nameLabel.textContent = 'Arte Criada (PDF)';
-        if (removeBtn) removeBtn.style.display = 'inline-block';
+        if (!contextoAtual()) throw new Error('O modelo ou a face mudou durante o envio. Reabra a arte antes de salvar.');
 
         // 5. Salvar no Supabase / Banco de Dados (pedidos_modelos + produtos_proposta)
         const dataToSave = face === 'verso' ? {
@@ -1513,13 +1492,57 @@ async function salvarArteDoEditor() {
         };
 
         // CRITICAL: Auto-resolver e preservar amostra_cor_id e amostra_num_id
-        const resolvedIds = (typeof resolveItemCorNumIds === 'function') ? resolveItemCorNumIds(item, itemIdx) : { corId: item.amostra_cor_id, numId: item.amostra_num_id };
+        const resolvedIds = (typeof resolveItemCorNumIds === 'function') ? resolveItemCorNumIds({ ...item }, itemIdx) : { corId: item.amostra_cor_id, numId: item.amostra_num_id };
         if (resolvedIds.corId) dataToSave.amostra_cor_id = resolvedIds.corId;
         if (resolvedIds.numId) dataToSave.amostra_num_id = resolvedIds.numId;
 
-        if (typeof saveAmostraToDB === 'function') {
-            await saveAmostraToDB(item.id, osId, dataToSave);
+        if (typeof saveAmostraToDB !== 'function') throw new Error('Salvamento do modelo indisponível.');
+        const recibo = await saveAmostraToDB(item.id, osId, dataToSave);
+        const campoArte = face === 'verso' ? 'verso_arte_url' : 'arte_url';
+        if (!recibo?.confirmado || recibo.modelo?.[campoArte] !== pdfUrlOrData) {
+            throw new Error('A gravação da arte não foi confirmada. Reabra o pedido antes de continuar.');
         }
+        try {
+            if (item.id) {
+                localStorage.setItem(`ideal_arte_json_${item.id}_${face}`, jsonStructure);
+                localStorage.setItem(`ideal_arte_url_${item.id}_${face}`, pdfUrlOrData);
+            }
+            localStorage.setItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`, jsonStructure);
+            localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_${face}`, pdfUrlOrData);
+        } catch (cacheErr) {
+            toast('PDF salvo no servidor; não foi possível guardar a edição neste navegador.', 'warning');
+        }
+        if (!contextoAtual()) {
+            toast('Arte salva no modelo original. Reabra o pedido para conferir.', 'success');
+            return;
+        }
+        // 4. Atualizar o objeto local do item
+        if (face === 'verso') {
+            item.verso_amostra_arte_base64 = base64PngUrl;
+            item.verso_arte_url = pdfUrlOrData;
+            item.url_arquivo_arte_verso = pdfUrlOrData;
+            item.verso_url_arquivo = pdfUrlOrData;
+            item.verso_arte_json = jsonStructure;
+        } else {
+            item.amostra_arte_base64 = base64PngUrl;
+            item.arte_url = pdfUrlOrData;
+            item.url_arquivo_arte = pdfUrlOrData;
+            item.url_arquivo = pdfUrlOrData;
+            item.arte_json = jsonStructure;
+        }
+
+        // Limpar o input de arquivo bruto do DOM
+        const inputId = face === 'verso' ? `amostra-item-arte-verso-${itemIdx}` : `amostra-item-arte-${itemIdx}`;
+        const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${itemIdx}` : `amostra-item-arte-name-${itemIdx}`;
+        const removeBtnId = face === 'verso' ? `btn-remove-amostra-arte-verso-${itemIdx}` : `btn-remove-amostra-arte-${itemIdx}`;
+
+        const input = document.getElementById(inputId);
+        const nameLabel = document.getElementById(nameLabelId);
+        const removeBtn = document.getElementById(removeBtnId);
+
+        if (input) input.value = '';
+        if (nameLabel) nameLabel.textContent = 'Arte Criada (PDF)';
+        if (removeBtn) removeBtn.style.display = 'inline-block';
 
         toast('Arte gerada em PDF e salva no modelo!', 'success');
 
@@ -1538,6 +1561,8 @@ async function salvarArteDoEditor() {
     } catch (err) {
         console.error('[Criador de Arte] Erro ao salvar arte:', err);
         toast('Erro ao salvar arte: ' + err.message, 'error');
+    } finally {
+        contexto._salvando = false;
     }
 }
 

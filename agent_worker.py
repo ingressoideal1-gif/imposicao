@@ -357,7 +357,12 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
 def process_queue():
     job_id = None
     reivindicado = False
+    reserva = None
     try:
+        from controle_producao import controle
+        reserva = controle.reservar()
+        if reserva is None:
+            return
         path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
         jobs = _supabase_request("GET", path)
         
@@ -426,6 +431,9 @@ def process_queue():
         if job_id and reivindicado:
             _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
         print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
+    finally:
+        if reserva is not None:
+            reserva.liberar()
 
 # 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma
 # unica janela de 6h, e as estacoes ficaram cegas a todas elas. O custo e baixo —
@@ -678,6 +686,9 @@ def sincronizar_painel():
     copia embutida no executavel, que o app.py semeia.
     """
     import security_config
+    from controle_producao import controle
+    if controle.ocupado():
+        return False
     from agent_version import AGENT_VERSION
     base = security_config.PAINEL_SYNC_BASE_URL.rstrip("/")
     temp = PAINEL_DIR + ".novo"
@@ -707,9 +718,14 @@ def sincronizar_painel():
         if not _painel_valido(temp):
             raise RuntimeError("conjunto incompleto apos o download")
 
-        os.makedirs(PAINEL_DIR, exist_ok=True)
-        for nome in security_config.PAINEL_ARQUIVOS:
-            os.replace(os.path.join(temp, nome), os.path.join(PAINEL_DIR, nome))
+        if not controle.iniciar_atualizacao():
+            return False
+        try:
+            os.makedirs(PAINEL_DIR, exist_ok=True)
+            for nome in security_config.PAINEL_ARQUIVOS:
+                os.replace(os.path.join(temp, nome), os.path.join(PAINEL_DIR, nome))
+        finally:
+            controle.cancelar_atualizacao()
 
         print(f"[agent_worker] Painel sincronizado ({len(security_config.PAINEL_ARQUIVOS)} arquivos).", flush=True)
         return True
@@ -923,6 +939,19 @@ def consultar_manifesto() -> dict:
 
 
 def verificar_atualizacao(forcado: bool = False):
+    from controle_producao import controle
+    if not controle.download_lock.acquire(blocking=False):
+        return
+    try:
+        if controle.ocupado():
+            _registrar_update("adiado_producao")
+            return
+        return _verificar_atualizacao_ociosa(forcado)
+    finally:
+        controle.download_lock.release()
+
+
+def _verificar_atualizacao_ociosa(forcado: bool = False):
     """Consulta o manifesto e instala a versao nova, se houver.
 
     Modelo pull: a URL do manifesto e fixa (security_config), o instalador
@@ -997,6 +1026,22 @@ def verificar_atualizacao(forcado: bool = False):
                           erro=f"esperado {sha_esperado[:12]} obtido {sha_obtido[:12]}")
         return
 
+    # Pode ter entrado trabalho durante o download. A tomada atomica impede
+    # novas admissoes ate o processo reiniciar; nunca forcar sobre producao.
+    from controle_producao import controle
+    if not controle.iniciar_atualizacao():
+        _registrar_update("adiado_producao", versao_alvo=versao_nova)
+        return
+    try:
+        _iniciar_instalador(destino, versao_nova)
+    except Exception as erro:
+        controle.cancelar_atualizacao()
+        _registrar_update("instalacao_nao_iniciada", versao_alvo=versao_nova, erro=erro)
+        raise
+
+
+def _iniciar_instalador(destino, versao_nova):
+    import subprocess
     # O MSI nao consegue substituir o exe enquanto ele roda, e o pacote nao tem
     # CloseApplication configurado — por isso um script solto encerra o agente,
     # instala em silencio e sobe a versao nova.

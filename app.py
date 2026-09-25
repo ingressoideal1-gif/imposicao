@@ -49,6 +49,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
+from controle_producao import ProtegerProducaoMiddleware
+app.add_middleware(ProtegerProducaoMiddleware)
 from propostas_api import router as propostas_router
 app.include_router(propostas_router)
 
@@ -380,6 +382,9 @@ async def trigger_update():
 
     import threading
     import agent_worker
+    from controle_producao import controle
+    if controle.ocupado():
+        raise HTTPException(status_code=409, detail="Atualização adiada: aguarde a produção e os envios terminarem.")
     threading.Thread(target=agent_worker.verificar_atualizacao,
                      kwargs={"forcado": True}, daemon=True).start()
     return {"status": "checking", "message": "Verificacao de atualizacao iniciada."}
@@ -1678,7 +1683,10 @@ async def impose_file(
                     engine.process()
                     _publicar_faixa_qr_ideal(config, data)
                 finally:
-                    temporarios.close()
+                    try:
+                        temporarios.close()
+                    finally:
+                        reserva_motor.liberar()
 
             async def run_engine_task():
                 try:
@@ -1691,7 +1699,16 @@ async def impose_file(
                     await asyncio.sleep(0.5)
                     await queue.put("DONE")
 
-            tarefa = asyncio.create_task(run_engine_task())
+            # A reserva nasce ANTES de agendar a thread e sobrevive ao navegador.
+            from controle_producao import controle
+            reserva_motor = controle.reservar()
+            if reserva_motor is None:
+                raise HTTPException(status_code=503, detail="NewProd em atualização; aguarde reiniciar.")
+            try:
+                tarefa = asyncio.create_task(run_engine_task())
+            except BaseException:
+                reserva_motor.liberar()
+                raise
             _IMPOSE_TASKS.add(tarefa)
             tarefa.add_done_callback(_IMPOSE_TASKS.discard)
             streaming_iniciado = True

@@ -256,12 +256,18 @@ def test_stream_desconectado_preserva_arquivos_ate_motor_terminar(raiz, antes_do
             await resposta.background()
         else:
             evento = await anext(resposta.body_iterator)
-            assert "event: file" in evento and inicio.is_set()
+            assert "event: file" in evento
+            # O callback pode acordar o consumidor antes de a thread marcar
+            # inicio; sincronizar explicitamente evita depender do escalonador.
+            assert await asyncio.to_thread(inicio.wait, 5)
             await resposta.body_iterator.aclose()
         assert caminhos[0].exists()
+        from controle_producao import controle
+        assert not controle.iniciar_atualizacao(), "fechar navegador nao libera atualizacao com motor ativo"
         continuar.set()
         await asyncio.gather(*ns['_IMPOSE_TASKS'])
         assert terminou.is_set() and not caminhos[0].exists()
+        assert not controle.ocupado()
     try:
         asyncio.run(rodar())
     finally:
