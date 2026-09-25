@@ -21,9 +21,15 @@ function funcao(nome) {
         for (const nome of ['style.css', 'cliente-modelo.css']) {
             await page.addStyleTag({ content: fs.readFileSync(path.join(raiz, 'frontend', nome), 'utf8').replace(/^@import[^\r\n]+/gm, '') });
         }
-        await page.addScriptTag({ content: ['escapeHtml', 'ehArquivoPdf', 'temArteVisivel', 'cabecalhoModeloCliente', 'blocoDeArteDoCliente', 'renderAmostrasOSItens'].map(funcao).join('\n') });
+        await page.addScriptTag({ content: ['escapeHtml', 'variacoesDoModeloCliente', 'ehArquivoPdf', 'temArteVisivel', 'cabecalhoModeloCliente', 'blocoDeArteDoCliente', 'renderAmostrasOSItens'].map(funcao).join('\n') });
         await page.evaluate(() => {
             window.temCsvVariavel = () => false;
+            window.resolverBancoDoCliente = (_item, num) => num;
+            window.problemaDoBancoCliente = () => null;
+            window.htmlAvisoBancoCliente = () => '';
+            window.pdfParesNoPortal = () => false;
+            window.pdfCopiaNoPortal = () => false;
+            window.deveDesenharVersoAoVivo = () => false;
             window.desenharContadorDeModelos = () => {};
             window.renderItemAmostraCombinada = () => {};
             window.atualizarBarraFinalCliente = () => {};
@@ -88,6 +94,35 @@ function funcao(nome) {
         assert.match(texto, /Cor: --/);
         await page.evaluate(() => mostrar({ ...modelo, amostra_cor_id: null, padrao: '<img src=x onerror=alert(1)>' }));
         assert.equal(await page.$('.amostra-modelo-dados img'), null);
+        await page.setViewport({ width: 320, height: 760 });
+        await page.evaluate(() => {
+            state.osItens.teste = [
+                { ...modelo, id: 'com-variacoes', variacoes_texto: 'Acabamento: Brilho • Impressão: Só Frente' },
+                { ...modelo, id: 'sem-variacoes', variacoes_texto: '' },
+            ];
+            renderAmostrasOSItens('teste');
+        });
+        const variacoes = await page.evaluate(() => {
+            const janelas = [...document.querySelectorAll('.amostra-modelo-janela')];
+            const faixa = janelas[0].querySelector('.amostra-modelo-variacoes');
+            const valor = faixa.querySelector('.amostra-modelo-variacao-valor');
+            return {
+                janelas: janelas.length,
+                faixas: document.querySelectorAll('.amostra-modelo-variacoes').length,
+                abaixoDaArte: faixa.getBoundingClientRect().top >= janelas[0].querySelector('.amostra-modelo-arte').getBoundingClientRect().bottom,
+                fontValor: parseFloat(getComputedStyle(valor).fontSize),
+                fontFaixa: parseFloat(getComputedStyle(faixa).fontSize),
+                corValor: getComputedStyle(valor).color,
+                semVazamento: document.documentElement.scrollWidth <= innerWidth,
+            };
+        });
+        assert.equal(variacoes.janelas, 2);
+        assert.equal(variacoes.faixas, 1);
+        assert(variacoes.abaixoDaArte && variacoes.semVazamento, JSON.stringify(variacoes));
+        assert(variacoes.fontValor > variacoes.fontFaixa);
+        assert.equal(variacoes.corValor, 'rgb(251, 191, 36)');
+        await page.evaluate(() => mostrar({ ...modelo, variacoes_texto: 'Acabamento: <img src=x onerror=alert(1)>' }));
+        assert.equal(await page.$('.amostra-modelo-variacoes img'), null);
         console.log('OK: layout em 1100/390/320px, cor do catalogo, cor pelo padrao, cor ausente, valores salvos, zeros, ausencia de numeracao, escape, verso e modo leitura.');
     } finally {
         await browser.close();

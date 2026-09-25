@@ -53,6 +53,24 @@
     overflow: auto;
     text-align: center;
 }
+.amostra-modelo-variacoes {
+    box-sizing: border-box;
+    width: calc(100% - 24px);
+    margin: 0 12px 12px;
+    padding: 9px 12px;
+    border-left: 3px solid #fbbf24;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.amostra-modelo-variacao-valor {
+    color: #fbbf24;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
 @media (max-width: 600px) {
     .amostra-modelo-arte { padding: 18px 10px; }
 }

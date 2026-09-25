@@ -253,6 +253,19 @@ function escapeHtml(valor) {
         .replace(/'/g, '&#39;');
 }
 
+function variacoesDoModeloCliente(item) {
+    const texto = String(item?.variacoes_texto || '').trim();
+    if (!texto) return '';
+    const partes = texto.split(/\s*•\s*/).map(parte => {
+        const separador = parte.indexOf(':');
+        if (separador < 0) return escapeHtml(parte.trim());
+        const rotulo = parte.slice(0, separador + 1).trim();
+        const valor = parte.slice(separador + 1).trim();
+        return `${escapeHtml(rotulo)} <span class="amostra-modelo-variacao-valor">${escapeHtml(valor)}</span>`;
+    }).filter(Boolean);
+    return `<div class="amostra-modelo-variacoes"><strong>Variações:</strong> ${partes.join(' • ')}</div>`;
+}
+
 /**
  * O modelo tem alguma coisa para o cliente ver?
  *
@@ -713,6 +726,7 @@ function renderAmostrasOSItens(osId) {
                 <div class="amostra-preview-container amostra-modelo-janela" style="position: relative; margin-top: 0;">
                     ${cabecalhoModeloCliente(item, idx, chip, selectedCor)}
                     <div class="amostra-modelo-arte">${blocoDeArteDoCliente(item, idx, ctxDaArte)}</div>
+                    ${variacoesDoModeloCliente(item)}
                     <div data-aviso-banco="${escapeHtml(String(item.id))}" role="status" style="padding: 8px; ${problemaBanco ? '' : 'display:none;'}">${htmlAvisoBancoCliente(problemaBanco)}</div>
                 </div>
                 ${decisao}
