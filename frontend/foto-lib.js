@@ -367,6 +367,34 @@
         };
     }
 
+    /** Pendências com um único par possível, sem disputar foto ou linha com outra dúvida. */
+    function ambiguasUnicas(ambiguas, casadas, divorcios) {
+        var grupos = ambiguas || [];
+        var fotosEmDuvida = Object.create(null), linhasEmDuvida = Object.create(null);
+        var fotosCasadas = Object.create(null), linhasCasadas = Object.create(null);
+        (casadas || []).forEach(function (c) {
+            fotosCasadas[c.arquivo] = true;
+            linhasCasadas[c.linha] = true;
+        });
+        grupos.forEach(function (a) {
+            (a.candidatos || []).forEach(function (c) {
+                fotosEmDuvida[c.arquivo] = (fotosEmDuvida[c.arquivo] || 0) + 1;
+            });
+            (a.linhas || []).forEach(function (li) {
+                linhasEmDuvida[li] = (linhasEmDuvida[li] || 0) + 1;
+            });
+        });
+        return grupos.reduce(function (pares, a, indice) {
+            if (!a.candidatos || a.candidatos.length !== 1 || !a.linhas || a.linhas.length !== 1) return pares;
+            var arquivo = a.candidatos[0].arquivo, linha = a.linhas[0];
+            if (!arquivo || !Number.isInteger(linha) || linha < 0 || fotosEmDuvida[arquivo] !== 1 ||
+                linhasEmDuvida[linha] !== 1 || fotosCasadas[arquivo] || linhasCasadas[linha] ||
+                (divorcios && divorcios[arquivo + '|' + linha])) return pares;
+            pares.push({ indice: indice, arquivo: arquivo, linha: linha });
+            return pares;
+        }, []);
+    }
+
     // ─── Cache de imagens ────────────────────────────────────────────────────
     //
     // O cache é por URL e NÃO por elemento, de propósito: o objeto do elemento é
@@ -699,6 +727,7 @@
         desenharJanelaFoto: desenharJanelaFoto,
         dpiNaJanela: dpiNaJanela,
         casarFotos: casarFotos,
+        ambiguasUnicas: ambiguasUnicas,
         normalizarTexto: normalizarTexto,
         urlCarregavel: urlCarregavel,
         repintor: repintor,

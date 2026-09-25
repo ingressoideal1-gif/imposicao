@@ -90,6 +90,23 @@ function casadaDe(r, nome) {
     ok(r.ambiguas.length === 1, 'a homonimia vira pendencia', r);
 })();
 
+(function aceitarAmbiguasEmLote() {
+    const duvidas = [
+        { candidatos: [{ arquivo: 'ana.jpg' }], linhas: [0] },
+        { candidatos: [{ arquivo: 'bruno.jpg' }], linhas: [1] },
+        { candidatos: [{ arquivo: 'carla.jpg' }, { arquivo: 'carla-2.jpg' }], linhas: [2] },
+        { candidatos: [{ arquivo: 'daniel.jpg' }], linhas: [3, 4] },
+        { candidatos: [{ arquivo: 'ana.jpg' }], linhas: [5] }
+    ];
+    const unicas = lib.ambiguasUnicas(duvidas, [], {});
+    ok(unicas.length === 1 && unicas[0].arquivo === 'bruno.jpg' && unicas[0].linha === 1,
+        'lote aceita apenas o par unico sem disputa entre duvidas', unicas);
+    ok(lib.ambiguasUnicas(duvidas, [{ arquivo: 'bruno.jpg', linha: 9 }], {}).length === 0,
+        'lote nao substitui foto ja casada', duvidas);
+    ok(lib.ambiguasUnicas(duvidas, [], { 'bruno.jpg|1': true }).length === 0,
+        'lote respeita par desfeito pelo operador', duvidas);
+})();
+
 // ─── 6. Sobras dos dois lados ─────────────────────────────────────────────────
 
 (function sobras() {

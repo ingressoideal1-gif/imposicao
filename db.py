@@ -797,7 +797,30 @@ def get_cor(cor_id: str) -> dict | None:
             return c
     return None
 
+def _cor_com_margens_visuais(data: dict) -> dict:
+    """Valida somente a área visual da Cor; nunca altera o formato vinculado."""
+    import math
+    campos = ("margem_esquerda_mm", "margem_direita_mm", "margem_superior_mm", "margem_inferior_mm")
+    if not any(data.get(campo) is not None for campo in campos):
+        return dict(data)
+    try:
+        valores = [float(data[campo]) for campo in campos]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("Informe as quatro margens da Cor em milímetros.") from None
+    if any(not math.isfinite(valor) or valor < 0 for valor in valores):
+        raise ValueError("As margens da Cor devem ser finitas e maiores ou iguais a zero.")
+    formato = get_formato(data.get("formato_id"))
+    if not formato:
+        raise ValueError("Formato base da Cor não encontrado.")
+    w, h = float(formato["width_mm"]), float(formato["height_mm"])
+    largura, altura = w + valores[0] + valores[1], h + valores[2] + valores[3]
+    if not all(math.isfinite(v) and v > 0 for v in (w, h, largura, altura)):
+        raise ValueError("Dimensões inválidas para a Cor.")
+    return {**data, **dict(zip(campos, valores)), "width_mm": round(largura, 6), "height_mm": round(altura, 6)}
+
+
 def add_cor(data: dict) -> str:
+    data = _cor_com_margens_visuais(data)
     new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("cor_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
     if IS_SUPABASE_ACTIVE:
@@ -813,7 +836,9 @@ def add_cor(data: dict) -> str:
             "pdf_base64": data.get("pdf_base64"),
             "frente_verso": bool(data.get("frente_verso", False)),
             "name_verso": data.get("name_verso", ""),
-            "pdf_verso_base64": data.get("pdf_verso_base64")
+            "pdf_verso_base64": data.get("pdf_verso_base64"),
+            **({"cor_referencia": data["cor_referencia"]} if "cor_referencia" in data else {}),
+            **{campo: data[campo] for campo in ("margem_esquerda_mm", "margem_direita_mm", "margem_superior_mm", "margem_inferior_mm") if campo in data}
         }
         _supabase_request("POST", "producao_cores", clean_data)
         return new_id
@@ -823,6 +848,7 @@ def add_cor(data: dict) -> str:
     return new_id
 
 def update_cor(cor_id: str, data: dict) -> bool:
+    data = _cor_com_margens_visuais(data)
     if IS_SUPABASE_ACTIVE:
         try:
             clean_data = {
@@ -836,7 +862,9 @@ def update_cor(cor_id: str, data: dict) -> bool:
                 "pdf_base64": data.get("pdf_base64"),
                 "frente_verso": bool(data.get("frente_verso", False)),
                 "name_verso": data.get("name_verso", ""),
-                "pdf_verso_base64": data.get("pdf_verso_base64")
+                "pdf_verso_base64": data.get("pdf_verso_base64"),
+                **({"cor_referencia": data["cor_referencia"]} if "cor_referencia" in data else {}),
+                **{campo: data[campo] for campo in ("margem_esquerda_mm", "margem_direita_mm", "margem_superior_mm", "margem_inferior_mm") if campo in data}
             }
             res = _supabase_request("PATCH", f"producao_cores?id=eq.{cor_id}", clean_data)
             return bool(res)

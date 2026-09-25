@@ -58,6 +58,13 @@ function ambiente() {
 }
 
 (async () => {
+    const segundoPlano = ambiente();
+    segundoPlano.ctx.document.hidden = true;
+    await segundoPlano.tick();
+    assert.equal(segundoPlano.chamadas.fetch, 1, 'consulta mesmo com a aba do navegador oculta');
+    await segundoPlano.tick();
+    assert.equal(segundoPlano.ctx.state.ordens[0].numero, 2, 'continua trazendo dados novos em segundo plano');
+
     const { ctx, lista, chamadas, tick } = ambiente();
     await tick();
     assert.equal(chamadas.fetch, 1);
@@ -65,16 +72,14 @@ function ambiente() {
     await tick();
     assert.equal(ctx.state.ordens[0].numero, 2, 'o segundo ciclo traz dados novos');
     assert.equal(chamadas.avisos, 2, 'cada carga concluída verifica os novos pedidos');
-    ctx.document.hidden = true;
-    await tick();
-    ctx.document.hidden = false;
     lista.classList.contains = () => false;
     await tick();
     lista.classList.contains = () => true;
     lista.offsetParent = null;
     await tick();
-    assert.equal(chamadas.fetch, 2, 'pausa com aba ou Lista de Arte oculta');
+    assert.equal(chamadas.fetch, 2, 'pausa ao sair da tela Lista de Arte');
     lista.offsetParent = {};
+    ctx.document.hidden = true;
 
     const fim = pendente();
     const entrou = pendente();
@@ -125,5 +130,5 @@ function ambiente() {
     await vibe.tick();
     assert.equal(vibe.chamadas.produtos, 3);
     assert.equal(vibe.chamadas.fetch, 0, 'não cai no fallback quando o Vibecode responde');
-    console.log('OK: atualização em 60 s, pausa fora da tela, dados novos, concorrência com botão, cargas complementares e recuperação de falha.');
+    console.log('OK: atualização em 60 s inclusive com aba oculta, pausa fora da tela, dados novos, concorrência e recuperação de falha em segundo plano.');
 })().catch(e => { console.error(e); process.exit(1); });

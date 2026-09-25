@@ -25925,6 +25925,9 @@ async function sincronizarStatusOrdensDinamico() {
 
     for (const os of state.ordens) {
         const osId = os.id;
+        // A sincronização automática não desfaz o retorno explícito ao designer.
+        if ((state.todasArtes || []).some(arte => parseInt(arte.id_int) === parseInt(os.numero || os.id_int)
+            && String(arte.status || '').trim().toUpperCase() === 'EM ARTE')) continue;
         const itens = state.osItens[osId] || [];
         if (itens.length === 0) continue;
 
@@ -25987,6 +25990,7 @@ async function reconciliarStatusPersistidosDaListaArte() {
         if (isNaN(numero)) return false;
         const arte = (state.todasArtes || []).find(a => parseInt(a.id_int, 10) === numero);
         const statusArte = String(arte && arte.status || '').trim().toUpperCase();
+        if (statusArte === 'EM ARTE') return false;
         return !pedidoSaiuDaArte(os) || statusDeCorrecao.includes(statusArte);
     });
 
@@ -26040,6 +26044,8 @@ async function sincronizarPedidosProntosParaEnvio() {
     try {
         const osParaVerificar = state.ordens.filter(os =>
             !pedidoIgnoradoNosPaineis(os)
+            && !(state.todasArtes || []).some(arte => parseInt(arte.id_int) === parseInt(os.numero || os.id_int)
+                && String(arte.status || '').trim().toUpperCase() === 'EM ARTE')
             && !IGNORAR.includes((os.status || '').trim().toUpperCase()));
         if (osParaVerificar.length === 0) return;
 
@@ -27864,6 +27870,10 @@ window.devolverArteParaAlteracao = devolverArteParaAlteracao;
 async function prepararModelosReprovadosParaRetornoAArte(os) {
     if (!os) {
         toast('Não foi possível retornar o pedido para Arte: pedido não carregado.', 'error');
+        return false;
+    }
+    if (pedidoCancelado(os)) {
+        toast('Pedido cancelado não pode retornar para Arte.', 'error');
         return false;
     }
     if (!pedidoSaiuDaArte(os)) return true;
@@ -30072,6 +30082,15 @@ function classificarPedidoNaArte(os) {
         return { statusCalculado: 'Corrigir Arte', fila: 'fila' };
     }
 
+    // O retorno gravado em pedidos_artes é uma decisão atual do atendimento.
+    // A abertura anterior do link e as aprovações dos modelos não desfazem essa
+    // decisão. Não usar os.status aqui: ele pode ser apenas um override local.
+    // Enviar Arte/Em Aprovação, gravados no próximo ciclo, encerram o retorno.
+    // Cancelamento e retrabalho após a saída para produção mantêm suas regras.
+    if (globalStatus === 'EM ARTE' && !pedidoSaiuDaArte(os)) {
+        return { statusCalculado: temItemReprovado ? 'Em Alteração' : 'Em Arte', fila: 'fila' };
+    }
+
     let fila;
     if (pedidoSaiuDaArte(os)) fila = 'concluidos';
     else if (isPendenteFila) fila = 'pendente';
@@ -30669,7 +30688,8 @@ function conferirNovosPedidosDoUsuario() {
 let _relogioDaListaLigado = false;
 async function atualizarListaArteAutomaticamente() {
     const lista = document.getElementById('view-lista-arte');
-    if (document.hidden || !lista || !lista.classList.contains('active')
+    // A aba do navegador pode estar oculta; a Lista de Arte continua atualizando.
+    if (!lista || !lista.classList.contains('active')
         || lista.offsetParent === null || _cargaOrdensEmAndamento) return;
     try {
         await loadOrdens();
@@ -35942,6 +35962,51 @@ window.voltarParaAtendimento = voltarParaAtendimento;
  * Usado quando o admin reprovador ou clica em "Voltar para Arte" após reprovação do cliente.
  * NÃO é 'REPROVADO' — 'REPROVADO' é o status gravado pelo CLIENTE. 'Em Arte' é o status de trabalho do designer.
  */
+async function registrarRetornoParaArte(os) {
+    const numero = parseInt(os && (os.numero || os.id_int));
+    if (!os || !Number.isFinite(numero) || typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Pedido ou banco indisponível para confirmar o retorno.');
+    }
+    const linhaExiste = await garantirLinhaDePedidoArte(numero);
+    if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
+    const artes = await atualizarPedidoArteConfirmado(numero, { status: 'Em Arte' });
+
+    if (os.id.startsWith('vibe_')) {
+        // Um pedido pode ainda não ter link. Se houver, confirmar todas as
+        // linhas existentes: data: [] não confirma uma atualização esperada.
+        const { data: links, error: erroLeitura } = await supabaseClient
+            .from('pedidos_links_cliente').select('id').eq('os_id', os.id);
+        if (erroLeitura) throw erroLeitura;
+        if (!Array.isArray(links)) throw new Error('Não foi possível conferir o link do pedido.');
+        if (links.length) {
+            const { data, error } = await supabaseClient.from('pedidos_links_cliente')
+                .update({ status_arte: 'Em Arte' }).eq('os_id', os.id)
+                .in('id', links.map(link => link.id)).select('id, status_arte');
+            if (error) throw error;
+            if (!Array.isArray(data) || links.some(link =>
+                !data.some(row => row.id === link.id && row.status_arte === 'Em Arte'))) {
+                throw new Error('O banco não confirmou o retorno no link do pedido. Atualize e tente novamente.');
+            }
+        }
+    } else {
+        const { data, error } = await supabaseClient.from('producao_ordens_servico')
+            .update({ status: 'Em Arte' }).eq('id', os.id).select('id, status');
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length !== 1 || data[0].id !== os.id || data[0].status !== 'Em Arte') {
+            throw new Error('O banco não confirmou o retorno da ordem de serviço.');
+        }
+    }
+
+    // Usar a resposta persistida também na classificação imediata, sem esperar
+    // F5 e sem conservar Em Aprovação/APROVADO na cópia de todasArtes.
+    const anteriores = state.todasArtes || [];
+    state.todasArtes = anteriores.filter(arte => parseInt(arte.id_int) !== numero)
+        .concat(artes.map(arte => ({ ...anteriores.find(anterior => anterior.id === arte.id), ...arte, id_int: numero })));
+    if (state.linksClienteData && state.linksClienteData[os.id]) {
+        state.linksClienteData[os.id].status_arte = 'Em Arte';
+    }
+}
+
 async function voltarParaArte() {
     const osId = state.amostrasOSAtivo;
     if (!osId) {
@@ -35954,37 +36019,13 @@ async function voltarParaArte() {
     try {
         const os = state.ordens.find(o => o.id === osId);
         if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
-        await substituirPendenteInformacao(os, novoStatus);
-
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const numero = parseInt(os && (os.numero || os.id_int));
-            const linhaExiste = await garantirLinhaDePedidoArte(numero);
-            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
-            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
-        }
+        await registrarRetornoParaArte(os);
 
         // 1. Atualizar localStorage
         gravarStatusOverride(osId, novoStatus);
 
         // 2. Atualizar estado em memória
         if (os) os.status = novoStatus;
-
-        // 3. Atualizar no banco Supabase
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (osId.startsWith('vibe_')) {
-                const { error } = await supabaseClient
-                    .from('pedidos_links_cliente')
-                    .update({ status_arte: novoStatus })
-                    .eq('os_id', osId);
-                if (error) throw error;
-            } else {
-                const { error } = await supabaseClient
-                    .from('producao_ordens_servico')
-                    .update({ status: novoStatus })
-                    .eq('id', osId);
-                if (error) throw error;
-            }
-        }
 
         toast(`Pedido #${os ? os.numero : ''} retornado para "Em Arte" — o designer pode corrigir.`, 'info');
         clearAmostrasOS();
@@ -36055,25 +36096,11 @@ window.voltarParaArteFromLista = async function(osId) {
     try {
         const os = state.ordens.find(o => o.id === osId);
         if (!await prepararModelosReprovadosParaRetornoAArte(os)) return;
-
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const numero = parseInt(os && (os.numero || os.id_int));
-            const linhaExiste = await garantirLinhaDePedidoArte(numero);
-            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
-            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
-        }
+        await registrarRetornoParaArte(os);
 
         gravarStatusOverride(osId, novoStatus);
 
         if (os) os.status = novoStatus;
-
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (osId.startsWith('vibe_')) {
-                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
-            } else {
-                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
-            }
-        }
 
         toast(`Pedido #${os ? os.numero : ''} retornado para "Em Arte".`, 'info');
         renderOrdens();
@@ -39966,9 +39993,48 @@ window.editImposicaoCustomNumeracao = async function(fieldId) {
     mostrarVoltarDaNumeracaoDoModelo();
 };
 
-/**
- * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
- */
+// Dados que não podem mudar entre a conferência e a gravação de PRONTO.
+function assinaturaDoPdfParaPronto(item) {
+    return JSON.stringify([!!item?.modo_pdf, item?.arte_url, item?.qtd ?? item?.quantidade,
+        item ? numeracaoIdDoItem(item) : null, item ? modoDeVersoDoModelo(item) : null]);
+}
+
+// Confere o original no clique, inclusive em lote; o viewer pode estar fechado
+// ou conter um arquivo anterior. Nunca usa a imagem da amostra como contagem.
+async function validarPaginasDoPdfParaPronto(item) {
+    if (!item?.modo_pdf) return;
+    const numeracaoId = numeracaoIdDoItem(item);
+    if (numeracaoId && !(state.numeracoes || []).some(n => String(n.id) === String(numeracaoId))) {
+        throw new Error('Não foi possível conferir o modo de impressão. Recarregue a numeração do modelo.');
+    }
+    const quantidade = Number(item.qtd ?? item.quantidade);
+    if (!Number.isSafeInteger(quantidade) || quantidade < 1) {
+        throw new Error('Informe uma quantidade inteira e positiva para o modelo.');
+    }
+    const modo = modoDeVersoDoModelo(item);
+    const paginasPorPeca = modo === 'duplex' || modo === 'pdf_odd_even' ? 2 : 1;
+    const esperadas = quantidade * paginasPorPeca;
+    const url = arteParaImpor(item.arte_url);
+    if (!url) throw new Error('Envie o PDF original do modelo.');
+    let tarefa;
+    try {
+        const resposta = await fetch(url, { cache: 'no-store' });
+        if (!resposta.ok) throw new Error('PDF indisponível');
+        tarefa = pdfjsLib.getDocument({ data: await resposta.arrayBuffer() });
+        const pdf = await tarefa.promise;
+        if (pdf.numPages !== esperadas) {
+            throw new Error(`PDF com ${pdf.numPages} páginas; esperado: ${esperadas} para ${quantidade} peças`
+                + (paginasPorPeca === 2 ? ' (frente e verso intercalados).' : ' (uma página por peça).'));
+        }
+    } catch (erro) {
+        if (erro.message?.startsWith('PDF com ')) throw erro;
+        throw new Error('Não foi possível conferir o PDF original. Reenvie o arquivo ou tente novamente.');
+    } finally {
+        if (tarefa?.destroy) await tarefa.destroy();
+    }
+}
+
+/** Salva a decisão de um item de amostra, após as travas de prontidão. */
 async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     // `opts.emLote`: chamada pelo botão em lote do pedido (`acaoEmLoteNoPedido`).
     // Grava e valida igual; só não avisa nem redesenha por modelo — o lote faz
@@ -39976,6 +40042,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     // true quando gravou e false em qualquer saída antecipada; o botão do card
     // ignora o retorno.
     const emLote = !!(opts && opts.emLote);
+    let pdfConferido = null;
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = (opts && opts.obs !== undefined) ? String(opts.obs) : (obsEl ? obsEl.value : '');
 
@@ -39991,6 +40058,20 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         const itens = state.osItens[osId] || [];
         const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
         const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
+
+        if (itemAlvo?.modo_pdf) {
+            try {
+                await garantirTabelasDaAmostra();
+                pdfConferido = assinaturaDoPdfParaPronto(itemAlvo);
+                await validarPaginasDoPdfParaPronto(itemAlvo);
+                if (pdfConferido !== assinaturaDoPdfParaPronto(itemAlvo)) {
+                    throw new Error('O modelo mudou durante a conferência. Tente novamente.');
+                }
+            } catch (erro) {
+                toast(`Modelo ${itemId} não pode ser marcado PRONTO: ${erro.message}`, 'warning');
+                return false;
+            }
+        }
 
         // A fatia orfa vem primeiro: a de Qtd descreve o mesmo sintoma e manda
         // consertar o lugar errado. Ver `distribuicaoOrfaDoModelo`.
@@ -40103,6 +40184,11 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             gravar.amostra_status = 'APROVADA';
         }
 
+        if (pdfConferido !== null && pdfConferido !== assinaturaDoPdfParaPronto(
+            (state.osItens[osId] || []).find(i => String(i.id) === String(itemId)))) {
+            toast('O modelo mudou durante a conferência do PDF. Tente marcar PRONTO novamente.', 'warning');
+            return false;
+        }
         if (liberaImpressao) {
             await salvarSaidaCorrecaoArteConfirmada(modeloPersistido, obs);
         } else {

@@ -258,6 +258,7 @@
 .gf-rodape{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid #1e293b;flex-wrap:wrap}
 .gf-btn{padding:7px 14px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
 .gf-btn:hover{background:#334155}
+.gf-btn:disabled{opacity:.45;cursor:not-allowed}
 .gf-btn.primario{background:#2563eb;border-color:#2563eb;color:#fff}
 .gf-btn.primario:disabled{opacity:.45;cursor:not-allowed}
 .gf-drop{border:2px dashed #334155;border-radius:10px;padding:34px;text-align:center;color:#94a3b8;cursor:pointer}
@@ -497,9 +498,16 @@
      * duas Anas; "ana.jpg → Nome: Ana · CPF: 123 · Cargo: Portaria" ajuda.
      */
     function pilhaAmbiguas(r) {
+        var unicas = window.ambiguasUnicas(r.ambiguas, r.casadas, divorcios);
         return `
         <div class="gf-pilha">
             <h3>❓ Ambíguas <span class="gf-tag">${r.ambiguas.length}</span></h3>
+            ${r.ambiguas.length ? `<div style="padding:8px 10px;border-bottom:1px solid #1e293b">
+                <button class="gf-btn" style="width:100%" onclick="window.__gfAceitarAmbiguas()" ${unicas.length ? '' : 'disabled'}>
+                    ✔ Aceitar todas as correspondências únicas (${unicas.length})
+                </button>
+                <div class="gf-tag" style="margin-top:5px">Disputas com mais de uma opção continuam para escolha individual.</div>
+            </div>` : ''}
             <div class="lista">
                 ${r.ambiguas.length ? r.ambiguas.map(function (a, i) {
             return `<div class="gf-duvida">
@@ -612,6 +620,19 @@
             if (li !== linha && !linhaCasada(li)) resultado.semFoto.push(li);
         });
         pintar();
+    };
+
+    window.__gfAceitarAmbiguas = function () {
+        var pares = window.ambiguasUnicas(resultado.ambiguas, resultado.casadas, divorcios);
+        if (!pares.length) return;
+        var indices = Object.create(null);
+        pares.forEach(function (p) {
+            ligar(p.arquivo, p.linha, 'manual');
+            indices[p.indice] = true;
+        });
+        resultado.ambiguas = resultado.ambiguas.filter(function (_, i) { return !indices[i]; });
+        pintar();
+        aviso(pares.length + ' correspondência(s) aceita(s). Confira e grave no banco quando terminar.');
     };
 
     window.__gfDesfazer = function (arquivo) {

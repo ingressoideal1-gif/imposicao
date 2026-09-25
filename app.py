@@ -554,13 +554,19 @@ def get_cor(cor_id: str, user: dict = Depends(get_current_user)):
 @app.post("/api/cores")
 async def create_cor(request: Request, user: dict = Depends(get_current_user)):
     data = await request.json()
-    new_id = db.add_cor(data)
+    try:
+        new_id = db.add_cor(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"id": new_id, "status": "success"}
 
 @app.put("/api/cores/{cor_id}")
 async def update_cor(cor_id: str, request: Request, user: dict = Depends(get_current_user)):
     data = await request.json()
-    ok = db.update_cor(cor_id, data)
+    try:
+        ok = db.update_cor(cor_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not ok:
         raise HTTPException(status_code=404, detail="Cor não encontrada")
     return {"status": "success"}

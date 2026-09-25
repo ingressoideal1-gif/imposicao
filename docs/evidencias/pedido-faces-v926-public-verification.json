@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "index.html",
+    "url": "https://imposition.ai-ideal.com.br/index.html?v=926&_entrega=1790003857003317700",
+    "local": "890c2fbe50696c1860427d6a84201ab9846a880668eaff3513df1020d7254eda",
+    "public": "890c2fbe50696c1860427d6a84201ab9846a880668eaff3513df1020d7254eda",
+    "match": true
+  },
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "cliente.html",
+    "url": "https://imposition.ai-ideal.com.br/cliente.html?v=926&_entrega=1790003857003930200",
+    "local": "6beb8fe2e081796062cf3d84c28c31bd4961d85ce86ea79cb4e15a3fff976ff6",
+    "public": "6beb8fe2e081796062cf3d84c28c31bd4961d85ce86ea79cb4e15a3fff976ff6",
+    "match": true
+  },
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "controle.html",
+    "url": "https://imposition.ai-ideal.com.br/controle.html?v=926&_entrega=1790003857004260700",
+    "local": "bc51c490fbc4fbfb2ca4f20869a24a7db6bd1316dd91772fff161aa1a16f3f63",
+    "public": "bc51c490fbc4fbfb2ca4f20869a24a7db6bd1316dd91772fff161aa1a16f3f63",
+    "match": true
+  },
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "producao.html",
+    "url": "https://imposition.ai-ideal.com.br/producao.html?v=926&_entrega=1790003857004686100",
+    "local": "969d4bfd19b834af4007085d9393e5c6b6b9a52720dd87140d201ddfb9346513",
+    "public": "969d4bfd19b834af4007085d9393e5c6b6b9a52720dd87140d201ddfb9346513",
+    "match": true
+  },
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "pedido.js",
+    "url": "https://imposition.ai-ideal.com.br/pedido.js?v=926&_entrega=1790003857005018400",
+    "local": "81af26cff5380bea8d624bc357eb9e6bc4dc98462bb15c0e7cc93604107be96b",
+    "public": "81af26cff5380bea8d624bc357eb9e6bc4dc98462bb15c0e7cc93604107be96b",
+    "match": true
+  },
+  {
+    "domain": "https://imposition.ai-ideal.com.br",
+    "file": "script.js",
+    "url": "https://imposition.ai-ideal.com.br/script.js?v=926&_entrega=1790003857005193500",
+    "local": "f269e56483a5ed65815a91fb70822752026e9de599a5b784f202bbbed086e502",
+    "public": "f269e56483a5ed65815a91fb70822752026e9de599a5b784f202bbbed086e502",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "index.html",
+    "url": "https://imposicao.pages.dev/index.html?v=926&_entrega=1790003857596452400",
+    "local": "890c2fbe50696c1860427d6a84201ab9846a880668eaff3513df1020d7254eda",
+    "public": "890c2fbe50696c1860427d6a84201ab9846a880668eaff3513df1020d7254eda",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "cliente.html",
+    "url": "https://imposicao.pages.dev/cliente.html?v=926&_entrega=1790003857608548200",
+    "local": "6beb8fe2e081796062cf3d84c28c31bd4961d85ce86ea79cb4e15a3fff976ff6",
+    "public": "6beb8fe2e081796062cf3d84c28c31bd4961d85ce86ea79cb4e15a3fff976ff6",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "controle.html",
+    "url": "https://imposicao.pages.dev/controle.html?v=926&_entrega=1790003857647675300",
+    "local": "bc51c490fbc4fbfb2ca4f20869a24a7db6bd1316dd91772fff161aa1a16f3f63",
+    "public": "bc51c490fbc4fbfb2ca4f20869a24a7db6bd1316dd91772fff161aa1a16f3f63",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "producao.html",
+    "url": "https://imposicao.pages.dev/producao.html?v=926&_entrega=1790003857776162200",
+    "local": "969d4bfd19b834af4007085d9393e5c6b6b9a52720dd87140d201ddfb9346513",
+    "public": "969d4bfd19b834af4007085d9393e5c6b6b9a52720dd87140d201ddfb9346513",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "pedido.js",
+    "url": "https://imposicao.pages.dev/pedido.js?v=926&_entrega=1790003857832695500",
+    "local": "81af26cff5380bea8d624bc357eb9e6bc4dc98462bb15c0e7cc93604107be96b",
+    "public": "81af26cff5380bea8d624bc357eb9e6bc4dc98462bb15c0e7cc93604107be96b",
+    "match": true
+  },
+  {
+    "domain": "https://imposicao.pages.dev",
+    "file": "script.js",
+    "url": "https://imposicao.pages.dev/script.js?v=926&_entrega=1790003857858973600",
+    "local": "f269e56483a5ed65815a91fb70822752026e9de599a5b784f202bbbed086e502",
+    "public": "f269e56483a5ed65815a91fb70822752026e9de599a5b784f202bbbed086e502",
+    "match": true
+  }
+]

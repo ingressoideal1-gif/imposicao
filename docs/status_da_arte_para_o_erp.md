@@ -25,6 +25,14 @@ não devem ser gravados em novos eventos.
 
 ## Precedência
 
+O retorno explícito pelo botão **Voltar para Arte** grava `Em Arte` e coloca
+o pedido ativo no card **Em Arte**. Enquanto esse estágio estiver persistido,
+a abertura anterior do link e a reconciliação automática das decisões antigas
+dos modelos não desfazem o retorno. Isso não apaga aprovações nem pendências
+de Entrega/Faturam.; uma nova decisão ou o envio da arte aplica novamente o
+fluxo abaixo. Cancelados permanecem fora da fila; pedidos que já saíram para
+produção só retornam pelos modelos marcados `Corrigir Arte`.
+
 1. Entrega/Faturam. igual a `CORRIGIR` grava `Corrigir Dados`.
 2. A decisão explícita de que faltam informações grava `Pendente Informação`.
 3. Sem correção de dados ou informação pendente, qualquer arte reprovada grava `Em Alteração`.

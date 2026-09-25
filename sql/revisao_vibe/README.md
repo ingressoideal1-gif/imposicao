@@ -1,6 +1,8 @@
 # Material para revisão do Vibe
 
-Os arquivos daqui **não foram aplicados** e não integram um migrador automático do Imposition. Devem ser incorporados pelo parceiro ao seu repositório, com a numeração e o cabeçalho adotados por ele.
+Os arquivos daqui não integram um migrador automático do Imposition. Devem ser incorporados pelo parceiro ao seu repositório, com a numeração e o cabeçalho adotados por ele. O par de 07/09 abaixo não foi aplicado. O arquivo `20260923_aprovacao_cliente_flag_arte.up.sql` foi aplicado em produção pelo SQL Editor em 23/09/2026; o `.down.sql` não foi aplicado. A aprovacao de arte pelo link sem login passou no teste real informado pelo usuario.
+
+O arquivo `20260923_entrega_preservar_recebedor.up.sql` foi aplicado em producao pelo SQL Editor em 23/09/2026; a consulta apos o `COMMIT` retornou `correcao_instalada=true` e hash iniciado por `580a50e5`. O `.down.sql` nao foi aplicado. Corrige somente a RPC de entrega para preservar os dados de recebedor informados no link apesar do gatilho `BEFORE INSERT` de `enderecos`. O usuario confirmou que a Entrega passou no pedido 22588; releitura e Nota ainda pendentes. Ver `docs/diagnostico-2026-09-23-entrega-nota-portal.md`.
 
 O par `20260907_fundo_apenas_backend.up.sql` / `.down.sql` contém transação, pré-condições e asserções posteriores. Não cria funções nem altera a leitura pública. Revoga EXECUTE de PUBLIC/anon/authenticated e concede a service_role somente nas duas assinaturas indicadas.
 

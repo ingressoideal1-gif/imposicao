@@ -128,7 +128,7 @@ function montarRetornoDoPedido(resposta, saiuDaArte = true, statusArte = 'REPROV
     const fonte = extrairFuncao('prepararModelosReprovadosParaRetornoAArte');
     const preparar = new Function(
         'state', 'STATUS_CORRIGIR_ARTE', 'ARTE_REPROVADOS', 'normalizarStatusImpressao',
-        'pedidoSaiuDaArte', 'sincronizarStatusConsolidadoPedidoArte', 'toast',
+        'pedidoSaiuDaArte', 'pedidoCancelado', 'sincronizarStatusConsolidadoPedidoArte', 'toast',
         'vibeClient', 'supabaseClient', 'console',
         fonte + '\nreturn prepararModelosReprovadosParaRetornoAArte;'
     )(
@@ -137,6 +137,7 @@ function montarRetornoDoPedido(resposta, saiuDaArte = true, statusArte = 'REPROV
         ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'],
         valor => valor,
         () => saiuDaArte,
+        () => false,
         async () => { chamadas.sincronizacoes++; },
         (msg, tipo) => chamadas.toasts.push({ msg, tipo }),
         cliente,

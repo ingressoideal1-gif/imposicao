@@ -1,10 +1,14 @@
 # Navegação, F5 e histórico — 22/09/2026
 
-Entrega local, sem commit, push, deploy, migração ou atualização do agente.
+Frontend publicado e verificado como **v936**, commit `06fbe57c7bfead0e5e81c99ea2ccd17bd346e915`, presente em `origin/main` e na tag anotada `v936`.
 
-Publicação autorizada posteriormente pelo usuário. A validação oficial `entrega-segura.ps1 verificar -Escopo Frontend` passou. A tentativa com `publicar -Escopo Frontend -Integracao Direta -Sim` parou em `git fetch origin --prune`: `Could not resolve host: github.com`. Consultas DNS de GitHub e do domínio público também falharam. Estado: `FALHA_ANTES_DA_PUBLICACAO`, sem efeitos remotos. Não foi atribuída versão de release. Retomar o mesmo comando quando a resolução DNS estiver disponível; a autorização de publicação deste escopo permanece válida.
+A publicação autorizada foi executada pelo fluxo `entrega-segura.ps1 publicar -Escopo Frontend -Integracao Direta -Sim`, com testes antes e depois do versionamento dos assets. Cloudflare Pages confirmou sucesso no deploy `95613e81-dbf8-4dec-91a6-864eb8dad9e8`.
 
-Base: referência local `origin/main`, commit `f079552e` (v935). Não houve fetch nem verificação da versão pública nesta tarefa. Trabalho em `C:\ProjetosLocais\ideal-imposition-navegacao`, branch `fix/navegacao-historico-20260922`. O checkout operacional `C:\ProjetosLocais\ideal-imposition` e seus três arquivos não rastreados permaneceram intactos.
+A resolução DNS padrão do Windows falhou. Consultar diretamente o DNS já configurado (`192.168.1.1`) funcionou; Git e consultas HTTPS usaram resolução restrita ao processo, mantendo a validação TLS. A tentativa de ajuste do DNS da interface foi negada por permissão administrativa e não alterou a configuração. VPN, rotas e arquivo hosts não foram modificados. O DNS padrão do Windows permanece pendente de correção administrativa.
+
+O verificador HTTP interno do fluxo falhou por DNS depois da integração; por isso, sua saída foi `FALHA_APOS_INTEGRACAO`. A comprovação pública foi concluída separadamente com curl, resolução direta, acompanhamento dos redirecionamentos HTTPS e parâmetros únicos contra cache. Os oito arquivos frontend alterados coincidiram por SHA-256 de texto normalizado nos dois domínios: `imposition.ai-ideal.com.br` e `imposicao.pages.dev`. Resultado: **ALL_MATCH=True, 16 comparações**, em 22/09/2026. Evidência detalhada local: `%TEMP%\ideal-v936-verificacao-publica.json`. Uma primeira consulta sem acompanhar redirecionamentos recebeu 308 nos HTML secundários; a verificação final acompanhou esses redirecionamentos.
+
+Base: `f079552e` (v935), confirmada por fetch antes da publicação. Trabalho em `C:\ProjetosLocais\ideal-imposition-navegacao`, branch `fix/navegacao-historico-20260922`. O checkout operacional `C:\ProjetosLocais\ideal-imposition` e seus três arquivos não rastreados permaneceram intactos.
 
 ## Comportamento
 
@@ -76,4 +80,4 @@ Puppeteer foi reutilizado de dependências já instaladas, sem instalação nem 
 
 ## Continuidade
 
-Retomar neste worktree para revisão e eventual publicação autorizada. Antes de publicar, integrar apenas este escopo sobre a base de entrega vigente, atualizar as versões dos assets pelo fluxo do projeto e validar os arquivos públicos após propagação. Nada foi copiado para `painel/` nem empacotado no agente. A versão operacional permanece disponível e inalterada.
+Publicação web concluída e verificada. Este fechamento documental permanece local no worktree de navegação. Nada foi copiado para `painel/` nem empacotado no agente. A validação real com login externo, dados operacionais e impressão permanece fora da comprovação desta entrega. Para eventual recuperação, preparar reversão revisável do commit v936 pelo fluxo de publicação, sem reset ou push forçado. Retomar neste worktree; não alinhar automaticamente o checkout operacional.
