@@ -148,15 +148,25 @@
         return valor;
     }
     const iguais = (a, b) => JSON.stringify(canonico(a)) === JSON.stringify(canonico(b));
+    function elementosParaConferencia(elementos) {
+        // A previa acrescenta canvas, imagens e controles de carregamento ao
+        // objeto compartilhado. Eles nao pertencem ao cadastro nem ao motor.
+        // Lista explicita: propriedades persistidas como _centerAnchor contam.
+        const temporarios = new Set(['_pdfCanvas', '_pdfLoading', '_svgImage',
+            '_svgLoading', '_pdfPreview', '_preloadFalhou', '_assinantes']);
+        return (elementos || []).map(el => el && Object.fromEntries(
+            Object.entries(el).filter(([chave]) => !temporarios.has(chave))));
+    }
     function conferirNumeracaoEnviada(esperada, enviada) {
         if (!esperada || !enviada) {
             if (esperada !== enviada) throw new Error('Numeração obrigatória ausente no trabalho.');
             return;
         }
-        const elementos = (esperada.elements || []).filter(e => !(['PDF', 'SVG'].includes(e.type)
+        const elementos = elementosParaConferencia(esperada.elements).filter(e => !(['PDF', 'SVG'].includes(e.type)
             && String(e.render_mode || 'print').trim().toLowerCase() === 'layout'));
-        if (elementos.length !== (enviada.elements || []).length
-            || elementos.some((e, i) => Object.keys(e).some(k => !iguais(e[k], enviada.elements[i][k])))
+        const enviados = elementosParaConferencia(enviada.elements);
+        if (elementos.length !== enviados.length
+            || elementos.some((e, i) => Object.keys(e).some(k => !iguais(e[k], enviados[i][k])))
             || ['tipo', 'ticket_qtd', 'print_mode'].some(k => !iguais(esperada[k] ?? null, enviada[k] ?? null))) {
             throw new Error('Elementos de numeração divergentes ou incompletos no trabalho. Reabra o modelo.');
         }
@@ -219,8 +229,10 @@
             for (const n of nums) {
                 const atual = (estado.numeracoes || []).find(x => String(x.id) === String(n.id));
                 const novo = raiz.normalizarNumeracaoLida ? raiz.normalizarNumeracaoLida(structuredClone(n)) : n;
-                const campos = ['elements', 'print_mode', 'tipo', 'ticket_qtd', 'updated_at', 'csv_url'];
+                const campos = ['print_mode', 'tipo', 'ticket_qtd', 'updated_at', 'csv_url'];
                 if (!atual || campos.some(k => !iguais(atual[k] ?? null, novo[k] ?? null))
+                    || !iguais(atual.elements == null ? null : elementosParaConferencia(atual.elements),
+                        novo.elements == null ? null : elementosParaConferencia(novo.elements))
                     || (atual.csv_data !== undefined && !iguais(atual.csv_data || [], novo.csv_data || []))) {
                     throw new Error('A numeração mudou ou não foi carregada integralmente. Reabra o pedido.');
                 }

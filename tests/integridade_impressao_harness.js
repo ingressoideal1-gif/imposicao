@@ -60,6 +60,45 @@ async function casos() {
         await recusa(() => c.executar(), 'numeração mudou');
     }
     {
+        const c = montar(); delete c.estado.numeracoes[0].elements;
+        await recusa(() => c.executar(), 'numeração mudou');
+    }
+    function comElementoGrafico() {
+        const c = montar();
+        c.num.elements = [{ type: 'PDF', face: 'front', render_mode: 'print',
+            pdf_content: 'data:application/pdf;base64,JVBERi0=', x_mm: 10, _centerAnchor: true }];
+        c.estado.numeracoes[0].elements = structuredClone(c.num.elements);
+        const payload = JSON.parse(c.fd.get('payload'));
+        payload.numeracao = structuredClone(c.num);
+        c.fd.set('payload', JSON.stringify(payload));
+        return c;
+    }
+    for (const campo of ['_pdfCanvas', '_pdfLoading', '_svgImage', '_svgLoading',
+        '_pdfPreview', '_preloadFalhou', '_assinantes']) {
+        const c = comElementoGrafico();
+        const temporario = campo === '_pdfCanvas' && typeof document !== 'undefined'
+            ? document.createElement('canvas') : {};
+        if (campo === '_assinantes') temporario.circular = temporario;
+        c.estado.numeracoes[0].elements[0][campo] = temporario;
+        await c.executar();
+        ok(c.estado.numeracoes[0].elements[0][campo] === temporario,
+            'cache de previa nao altera cadastro nem e removido: ' + campo);
+    }
+    for (const campo of ['pdf_content', 'x_mm', '_centerAnchor', 'face', 'render_mode']) {
+        const c = comElementoGrafico();
+        c.estado.numeracoes[0].elements[0]._pdfCanvas = {};
+        c.estado.numeracoes[0].elements[0][campo] = 'divergente';
+        await recusa(() => c.executar(), 'numeração mudou');
+    }
+    {
+        const c = comElementoGrafico();
+        c.estado.numeracoes[0].elements[0]._pdfCanvas = {};
+        const payload = JSON.parse(c.fd.get('payload'));
+        delete payload.numeracao.elements[0].pdf_content;
+        c.fd.set('payload', JSON.stringify(payload));
+        await recusa(() => c.executar(), 'Elementos de numeração');
+    }
+    {
         const c = montar(); c.modelo.arte_url = 'https://synthetic.test/changed';
         await recusa(() => c.executar(), 'configuração do modelo mudou');
     }
