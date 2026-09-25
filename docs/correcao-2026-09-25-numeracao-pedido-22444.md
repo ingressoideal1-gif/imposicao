@@ -29,4 +29,13 @@ Não remover esses campos do objeto compartilhado; projetar uma cópia para comp
 - Entrega segura simulada: escopo Frontend, versão prevista v960, referências de cache em `index.html` e `producao.html`.
 - Correção exclusivamente no frontend; o NewProd permanece 1.2.340. A cópia local do painel precisa receber a sincronização e ser reaberta para carregar o helper novo.
 
-A publicação e suas provas serão registradas após a conferência pública. A prova do PDF e a impressão física do 22444 permanecem distintas dos testes sintéticos.
+## Publicação confirmada
+
+- Commit `b0366894e09230ecbf4728676da6457e2840e1a3`, integrado em `origin/main`; tag `v960`.
+- Cloudflare Pages concluído com sucesso: deployment `222d17c2-c261-4d7d-b885-074c9d781cb1`.
+- O orquestrador encontrou hash antigo do helper na primeira conferência, durante propagação, e encerrou com `FALHA_APOS_INTEGRACAO`. Nenhuma republicação foi feita. A conferência posterior com cache buster confirmou **6/6** hashes normalizados de `index.html`, `producao.html` e `arte-de-impressao.js` nos dois domínios.
+- [Evidência pública](evidencias/pedido-22444-v960-web.json).
+
+Reabrir/recarregar o painel para receber o helper com `?v=960`; no endereço local da estação, aguardar a sincronização do painel pelo NewProd. O instalador 1.2.340 anterior contém o helper de v959; seu painel sincronizado recebe a correção online. Nenhum instalador foi reconstruído, nem foi alterado `latest.json` nesta correção.
+
+A prova do PDF e a impressão física do 22444 permanecem pendentes. O mecanismo foi reproduzido sinteticamente e corrigido; não houve captura do estado original do navegador nem geração com dados reais para declarar aceite operacional.
