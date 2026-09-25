@@ -48,14 +48,14 @@ testes usam unittest, também coletável por pytest. Nenhuma dependência foi
 instalada. Os harnesses usam Puppeteer já existente, via `NODE_PATH` apontando
 para `C:\ProjetosLocais\ideal-imposition\node_modules`.
 
-## Entrega pendente
+## Estado antes da autorização de publicação
 
 Código local validado, sem commit, push, build ou deploy. Para uso na estação,
 publicar o frontend e uma versão compatível do NewProd; o motor antigo continua
 recusando essa configuração. Verificar posteriormente a versão em execução e
 uma amostra física. Os testes não comprovam impressão física.
 
-## Preparação da entrega segura das duas correções
+## Preparação inicial da entrega segura das duas correções
 
 O usuário incluiu também a Lista de Arte. Candidato local: web **v960** e
 NewProd **1.2.341**, sem publicação. Cache dos cinco JS funcionais atualizado nas
@@ -112,7 +112,7 @@ assets nos dois domínios, upload sob nome novo, download e SHA-256 do MSI e só
 então ativação de `latest.json`. O build usa configuração secreta e pool já
 previstos pelo projeto; não foram lidos ou preparados nesta etapa.
 
-Permanecem pendentes autorização explícita de compilação/publicação, build,
+Na preparação inicial, permaneciam pendentes autorização de compilação/publicação, build,
 commit/push, deploy, MSI público, manifesto, instalação na estação e prova física.
 Recuperação: reversão rastreável do frontend; para o agente, código apropriado
 sob versão maior, sem sobrescrever MSI publicado ou depender de downgrade.
@@ -129,3 +129,38 @@ Build isolado em `build/release-1.2.341`, com dependências existentes e sem
 limpar saídas anteriores. A leitura do executável confirmou os módulos,
 a versão, as DLLs e bytes idênticos dos nove arquivos frontend da entrega.
 Evidência: `evidencias/verso-22593-v961-build.json`.
+
+## Publicação comprovada — 25/09/2026, 10h08 BRT
+
+- Código integrado em `main`: `1765afb411ad3eaf7af2dd7db7654c9761e45e8a`.
+  Tags públicas `v961` e `agente-v1.2.341` apontam para esse commit.
+- Cloudflare Pages: `success`, deployment
+  `5ddfc89a-e951-4cda-a0c8-0d9e334b43c7`.
+- Nove arquivos em cada domínio (`imposicao.pages.dev` e
+  `imposition.ai-ideal.com.br`): **18/18 hashes normalizados coincidiram**, com
+  cache buster. Inclui as quatro páginas HTML e os cinco JS modificados.
+- MSI `NewProd_Setup_v1.2.341.msi`: ProductVersion **1.2.341.0**,
+  **156.180.480 bytes**, SHA-256
+  `98bb171b0dc0ae229e4f24c59c55d0f3039335c8fad55d9bd7d14454a18ea55f`.
+  Upload sob nome novo; download pela URL pública simples confirmou tamanho e hash.
+- Somente após essa conferência, `latest.json` foi ativado e relido com cache
+  buster: versão, URL, tamanho e hash correspondem ao instalador verificado.
+- Provas em `docs/evidencias/verso-22593-v961-*.json`: build, versão/tamanho/hash
+  local do MSI, deploy, frontend público, MSI público, manifesto e estação.
+
+### Instalação e prova operacional pendentes
+
+Às **10h08m23 BRT**, a LASER-01 reportava agente **1.2.340**, painel **957**,
+com heartbeat às **10h08m04**. Portanto a publicação está comprovada, mas a
+instalação da **1.2.341** nessa estação ainda não está confirmada.
+
+Em momento ocioso, usar **Atualizar agora** no NewProd, confirmar **1.2.341**,
+reabrir o painel **v961** e conferir o pedido **22593/modelo 1001288**: Modo PDF
+desligado, primeira página da frente nas duas faces, dez peças e numeração
+correta por face. Conferir também os modelos/formato/cor da Lista de Arte com
+o ERP. Validar PDF e uma amostra física antes da tiragem. Nenhuma impressão
+foi enviada e nenhum dado do pedido foi modificado nesta entrega.
+
+O checkout operacional e suas três alterações não rastreadas foram preservados.
+A correção da Lista de Arte preserva a personalização compartilhada válida dos
+crachás e não desfaz o ajuste que o usuário realizou no cordão.
