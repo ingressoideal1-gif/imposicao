@@ -66,7 +66,7 @@ async function navegador() {
         await page.setRequestInterception(true);
         page.on('request', request => request.abort());
         await page.setContent('<main></main>');
-        await page.addScriptTag({ content: ['rasterDaAmostra', 'drawAmostraFace',
+        await page.addScriptTag({ content: ['rasterDaAmostra', 'drawAmostraFace', 'pdfDuplicarParaVersoDoModelo',
             'atualizarDadosDosCardsAmostra', 'escalaDaArteDoModelo'].map(extrair).join('\n') });
         const resultado = await page.evaluate(async () => {
             let asserts = 0;

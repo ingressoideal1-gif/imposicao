@@ -1,0 +1,25 @@
+{
+  "agent_version": "1.2.341",
+  "modules_present": [
+    "controle_producao",
+    "integridade_impressao",
+    "agent_worker",
+    "agent_version",
+    "app",
+    "engine",
+    "acesso_segredo"
+  ],
+  "frontend_bytes_match": [
+    "index.html",
+    "producao.html",
+    "cliente.html",
+    "controle.html",
+    "script.js",
+    "pedido.js",
+    "cliente.js",
+    "arte-de-impressao.js",
+    "cor-numeracao-do-modelo.js"
+  ],
+  "runtime_dlls_present": true,
+  "exe_sha256": "f6df05403bb34637b3a1d1b081db13580438f36b02d2b69142caaa8eb0d56f15"
+}

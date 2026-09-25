@@ -5117,8 +5117,8 @@ window.pdfDuplicarParaVersoDoModelo = pdfDuplicarParaVersoDoModelo;
 
 function validarPdfDuplicarParaVerso(item, schema, numeracaoId, pdfDoc) {
     if (!pdfDuplicarParaVersoDoModelo(item)) return null;
-    if (!item.modo_pdf || schema !== 'pdf_multiple') {
-        return 'Duplicar para Verso exige Modo PDF e regra Pdf Paginado.';
+    if (!!item.modo_pdf !== (schema === 'pdf_multiple')) {
+        return 'A regra Pdf Paginado deve ser usada somente com o Modo PDF ativado.';
     }
     const id = typeof numeracaoIdDoItem === 'function'
         ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
@@ -5129,6 +5129,8 @@ function validarPdfDuplicarParaVerso(item, schema, numeracaoId, pdfDoc) {
     if (!Number.isSafeInteger(quantidade) || quantidade < 1) {
         return 'A quantidade de peças do modelo deve ser um inteiro positivo.';
     }
+    // Fora do Modo PDF a quantidade vem do modelo, e a primeira arte se repete.
+    if (!item.modo_pdf) return null;
     if (!pdfDoc || !Number.isSafeInteger(pdfDoc.numPages)) {
         return 'Aguarde o carregamento do PDF original antes de gerar.';
     }
@@ -10956,7 +10958,7 @@ function drawPreview() {
                 //
                 // As duas telas de imposição precisam da mesma conta: divergir
                 // faria a mesma arte aparecer de um tamanho aqui e de outro lá.
-                if (isBack && !isMultiArtePdf
+                if (isBack && !isMultiArtePdf && state.printMode !== 'pdf_duplicate_back'
                         && state.impArtVersoPdfDoc && state.impArtVersoWidth) {
                     art_orig_w = state.impArtVersoWidth;
                     art_orig_h = state.impArtVersoHeight;
@@ -11012,7 +11014,7 @@ function drawPreview() {
 
                         } else {
 
-                            pageNum = (isBack && !state.impArtVersoPdfDoc) ? 2 : 1;
+                            pageNum = (isBack && state.printMode !== 'pdf_duplicate_back' && !state.impArtVersoPdfDoc) ? 2 : 1;
 
                         }
 
@@ -13023,7 +13025,7 @@ window.runImposition = async function (mode, returnBlob = false) {
     }
     if (pdfPares || pdfCopia) {
         // O formato pode ter outra regra padrão; neste modo o PDF do modelo é a fonte da paginação.
-        schema = 'pdf_multiple';
+        if (pdfPares || itemPdfPares.modo_pdf) schema = 'pdf_multiple';
         const pdfDoc = isPedTab ? state.pedArtPdfDoc : state.impArtPdfDoc;
         const erro = pdfPares
             ? validarPdfImparFrenteVersoPar(itemPdfPares, schema, numId, pdfDoc)
@@ -13348,7 +13350,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         _diag_cut_stack_mode: (isMultiSelected || state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent'),
 
         print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back' : state.printMode,
-        ...((pdfPares || pdfCopia) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
+        ...((pdfPares || (pdfCopia && itemPdfPares.modo_pdf)) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
 
         rotate_page: rotatePage,
 
@@ -38340,19 +38342,20 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     }
 
     // Determinar se tem arte selecionada ou salva para esta face
-    const inputId = face === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
+    const faceDaArte = face === 'back' && pdfDuplicarParaVersoDoModelo(item) ? 'front' : face;
+    const inputId = faceDaArte === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
     const arteInput = container ? container.querySelector(`#${inputId}`) : null;
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    let faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    let faceArteUrl = faceDaArte === 'back' ? item.verso_arte_url : item.arte_url;
     if (!faceArteUrl && item && item._dbLoaded !== true) {
-        const faceKey = face === 'back' ? 'verso' : 'frente';
+        const faceKey = faceDaArte === 'back' ? 'verso' : 'frente';
         faceArteUrl = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
                       localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
         if (faceArteUrl) {
-            if (face === 'back') item.verso_arte_url = faceArteUrl;
+            if (faceDaArte === 'back') item.verso_arte_url = faceArteUrl;
             else item.arte_url = faceArteUrl;
         }
     }
