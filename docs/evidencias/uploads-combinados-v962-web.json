@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-09-25T13:09:28.072Z",
+  "commit": "e95e507dea03fa713eaed76ea30905bbc339a6d7",
+  "files": [
+    {
+      "url": "https://imposicao.pages.dev/index.html?v=962&t=1790341767123",
+      "sha256": "9fac9374824b60d4ef5cc2d95f9761c42f426937ff2a4aed20a0d7614f5cf77a"
+    },
+    {
+      "url": "https://imposicao.pages.dev/producao.html?v=962&t=1790341767486",
+      "sha256": "fe5095b0e75448036b30e75e061601d3a35527b9216ef3b6be6b3e1950af9f2a"
+    },
+    {
+      "url": "https://imposicao.pages.dev/arte-de-impressao.js?v=962&t=1790341767589",
+      "sha256": "962fd890cbcff00de3de340185299876a34adf92d61b7f3d352af94d2b781b0a"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/index.html?v=962&t=1790341767644",
+      "sha256": "9fac9374824b60d4ef5cc2d95f9761c42f426937ff2a4aed20a0d7614f5cf77a"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/producao.html?v=962&t=1790341767928",
+      "sha256": "fe5095b0e75448036b30e75e061601d3a35527b9216ef3b6be6b3e1950af9f2a"
+    },
+    {
+      "url": "https://imposition.ai-ideal.com.br/arte-de-impressao.js?v=962&t=1790341768033",
+      "sha256": "962fd890cbcff00de3de340185299876a34adf92d61b7f3d352af94d2b781b0a"
+    }
+  ]
+}
