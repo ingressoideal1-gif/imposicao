@@ -324,6 +324,12 @@
                     const esperada = (estado.numeracoes || []).find(n => String(n.id) === String(enviada.id));
                     conferirNumeracaoEnviada(esperada, enviada);
                 }
+                // Neste modo o verso usa a própria arte da frente. Um original
+                // antigo de verso não pode voltar ao payload na conferência.
+                if (dados.print_mode === 'pdf_duplicate_back') {
+                    urlVerso = null;
+                    fd.delete(verso);
+                }
                 if (urlFrente && urlFrente !== 'local_file') await baixar(urlFrente, frente);
                 else if (fd.has(frente)) await registrar(frente, fd.get(frente));
                 if (urlVerso) await baixar(urlVerso, verso);

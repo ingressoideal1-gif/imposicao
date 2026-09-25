@@ -383,6 +383,10 @@ function pdfDaFaceNaPreviaPedido(isBack, schema, itemIndex) {
         return { documento: frente, pagina: itemIndex + 1 };
     }
 
+    if (state.printMode === 'pdf_duplicate_back') {
+        return { documento: frente, pagina: 1 };
+    }
+
     // No duplex individual, o motor usa a pagina 1 do arquivo separado quando
     // ela existe. Sem arquivo separado, preserva o PDF com as faces embutidas.
     if (isBack && verso) return { documento: verso, pagina: 1 };
@@ -1664,7 +1668,7 @@ function drawPedPreview() {
                 // separado — no 1000740, 104,35 mm contra os 110,70 da frente — e o
                 // motor lê o rect de cada página (`base_w_verso`). Desenhar o verso
                 // com a medida da frente o mostraria 6% maior do que sai no papel.
-                if (isBack && !isMultiArtePdf
+                if (isBack && !isMultiArtePdf && state.printMode !== 'pdf_duplicate_back'
                         && state.pedArtVersoPdfDoc && state.pedArtVersoWidth) {
                     art_orig_w = state.pedArtVersoWidth;
                     art_orig_h = state.pedArtVersoHeight;
@@ -6531,7 +6535,7 @@ async function executarPedImposition(mode, isRefazer) {
 
         print_mode: pdfPares ? 'duplex' : pdfCopia ? 'pdf_duplicate_back'
             : isMultiSelected ? modoDeVersoDoModelo(itensDaImposicao(true)[0]) : state.printMode,
-        ...((pdfPares || pdfCopia) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
+        ...((pdfPares || (pdfCopia && itemPdfPares.modo_pdf)) ? { pdf_expected_items: Number(itemPdfPares.qtd ?? itemPdfPares.quantidade) } : {}),
 
         rotate_page: rotatePage,
 

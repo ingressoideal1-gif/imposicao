@@ -13,14 +13,14 @@ async function casos() {
         ok(erro && erro.message.includes(texto), 'Recusa esperada: ' + texto + '; recebido ' + erro?.message);
     }
     const arte = new Blob(['%PDF-1.4\nsynthetic'], { type: 'application/pdf' });
-    function montar({ frente = 'https://synthetic.test/front', verso = 'https://synthetic.test/back', numeracao = true } = {}) {
-        const num = { id: 'n1', elements: [], print_mode: 'duplex', tipo: 'SEQUENCIAL' };
+    function montar({ frente = 'https://synthetic.test/front', verso = 'https://synthetic.test/back', numeracao = true, modo = 'duplex' } = {}) {
+        const num = { id: 'n1', elements: [], print_mode: modo, tipo: 'SEQUENCIAL' };
         const modelo = { id: 1, id_int: 123, quantidade: 3, bloco: '1', arte_url: frente,
             verso_arte_url: verso, amostra_num_id: numeracao ? 'n1' : null };
         const estado = { activeOSItem: { itemId: 1, osId: 'os' }, selectedOSItems: [],
             osItens: { os: [{ ...modelo, qtd: 3 }] }, numeracoes: numeracao ? [structuredClone(num)] : [],
             cores: [], vinculosDeBanco: {}, bancosDoPedido: [] };
-        const dados = { modelo: 1, formato: {}, saida: {}, print_mode: 'duplex',
+        const dados = { modelo: 1, formato: {}, saida: {}, print_mode: modo,
             numeracao_id: numeracao ? 'n1' : null, numeracao: numeracao ? structuredClone(num) : null };
         const fd = new FormData(); fd.set('payload', JSON.stringify(dados));
         let mudarConsulta = null;
@@ -41,6 +41,21 @@ async function casos() {
         const p = JSON.parse(c.fd.get('payload'));
         ok(p.integridade.faces[0].front && p.integridade.faces[0].back, 'ambas as artes confirmadas');
         ok(p.integridade.arquivos.file.sha256.length === 64, 'hash vincula os bytes');
+    }
+    {
+        const c = montar({ modo: 'pdf_duplicate_back' });
+        c.fd.set('file_verso', arte, 'verso-residual.pdf');
+        const baixar = globalThis.fetch;
+        globalThis.fetch = async url => {
+            if (url.endsWith('/back')) throw new Error('Não deve baixar o verso antigo');
+            return baixar(url);
+        };
+        await c.executar();
+        const p = JSON.parse(c.fd.get('payload'));
+        ok(c.fd.has('file') && !c.fd.has('file_verso'), 'duplicar usa apenas a arte original da frente');
+        ok(p.integridade.faces[0].front && !p.integridade.faces[0].back,
+            'manifesto corresponde aos arquivos enviados, sem verso separado');
+        ok(c.modelo.verso_arte_url.endsWith('/back'), 'preserva cadastro do verso anterior');
     }
     {
         const c = montar({ frente: null, numeracao: false });

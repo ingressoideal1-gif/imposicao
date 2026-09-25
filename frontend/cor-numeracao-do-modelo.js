@@ -36,7 +36,7 @@
  * no catalogo, entao "resolver pelo nome" nem sempre tem resposta.
  *
  * Por isso a regra da numeracao guarda o id em tres situacoes: quando ele
- * aponta para uma numeracao customizada, quando o nome dele ja e o texto do
+ * aponta para uma numeracao customizada compativel, quando o nome dele ja e o texto do
  * parceiro, e quando o texto casa com mais de uma linha do catalogo.
  *
  * ── O principio comum ──────────────────────────────────────────────────────
@@ -131,13 +131,32 @@
             saida.corTrocada = true;
         }
 
-        // Numeracao customizada e trabalho do operador: o ERP do parceiro nao
-        // tem como nomea-la, entao o texto dele nunca a substitui.
+        // Preservar personalizacoes, inclusive compartilhadas entre modelos.
+        // Excecao comprovada: numeracao de OUTRO modelo, de formato incompativel
+        // com a cor resolvida, e um unico gabarito do ERP compativel disponivel.
+        // Sem todas essas evidencias, nao adivinhar nem apagar a escolha.
+        var corResolvida = _acharPorId(cores, saida.corId);
+        function formatosDaNumeracao(num) {
+            return (Array.isArray(num.formato_ids) && num.formato_ids.length
+                ? num.formato_ids : (num.formato_id ? [num.formato_id] : [])).map(String);
+        }
+        function protegerPersonalizada(emCache) {
+            if (!emCache.is_custom) return false;
+            if (!linha.id || !emCache.os_item_id
+                || String(emCache.os_item_id) === String(linha.id)
+                || !corResolvida || !corResolvida.formato_id) return true;
+            var formato = String(corResolvida.formato_id);
+            var atuais = formatosDaNumeracao(emCache);
+            if (!atuais.length || atuais.indexOf(formato) >= 0) return true;
+            var candidatos = _acharPorNomeExato(numeracoes, linha.gabarito_operacional);
+            return candidatos.length !== 1
+                || formatosDaNumeracao(candidatos[0]).indexOf(formato) < 0;
+        }
         var novaNum = _idQueDeveValer(
             numeracoes,
             linha.gabarito_operacional,
             saida.numId,
-            function (emCache) { return !!emCache.is_custom; }
+            protegerPersonalizada
         );
         if (novaNum) {
             saida.numId = novaNum;

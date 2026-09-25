@@ -574,7 +574,7 @@ function renderAmostrasOSItens(osId) {
         // de o snapshot ter sido gerado na hora certa.
         const previaUtil = !!item.amostra_arte_base64 && !ehArquivoPdf(item.amostra_arte_base64);
         const desenhoAoVivo = temArteParaDesenhar && !item.modo_pdf
-                           && (temCsvVariavel(numDoModelo) || !previaUtil);
+                           && (pdfCopiaNoPortal(item) || temCsvVariavel(numDoModelo) || !previaUtil);
         // Se há de fato o que mostrar. Testar a verdade de `amostra_arte_base64`
         // não bastava: no carregamento do pedido esse campo cai para `arte_url`
         // quando ainda não há snapshot, então um modelo cuja arte é PDF entrava
@@ -3165,13 +3165,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     }
 
     // Determinar se tem arte selecionada ou salva para esta face
-    const inputId = face === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
+    const faceDaArte = face === 'back' && pdfCopiaNoPortal(item) ? 'front' : face;
+    const inputId = faceDaArte === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
     const arteInput = container ? container.querySelector(`#${inputId}`) : null;
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const faceArteUrl = arteDaFaceParaComposicao(item, face);
+    const faceArteUrl = arteDaFaceParaComposicao(item, faceDaArte);
     const hasSavedArte = !!faceArteUrl;
 
     // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio
