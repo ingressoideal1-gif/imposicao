@@ -12,8 +12,10 @@ O caso foi reproduzido sem dados reais: cinco modelos sintéticos, oito faces co
 - Nenhuma regra de bloco, quantidade, numeração ou validação do backend foi alterada.
 - Novo `tests/uploads_combinados_harness.js` exporta o formulário preparado para a regressão Python; teste confirma aceitação das oito faces e rejeição de um upload extra reintroduzido.
 - 25 testes Python de integridade passaram; harness combinado passou; 38 verificações de integridade no navegador passaram; diff e sintaxe conferidos.
-- Sem consultas/escritas de produção, envio à impressora ou novo MSI nesta correção. NewProd permanece 1.2.340; painel local deve sincronizar e ser recarregado.
+- Sem consultas/escritas de produção, envio à impressora ou novo MSI nesta correção. Painel local deve sincronizar e ser recarregado; esta entrega não altera o manifesto do agente.
 
 ## Entrega
 
-Correção preparada para publicação frontend v961. Confirmação pública será acrescentada após o deploy. Geração do pedido real e impressão física permanecem pendentes de validação operacional.
+O orquestrador interrompeu a primeira tentativa antes da publicação porque `origin/main` havia recebido três commits, incluindo v961 / agente 1.2.341 e a correção de duplicação do verso. O trabalho local foi commitado e o avanço integrado sem conflitos, preservando essas mudanças. O diff funcional desta entrega contra a nova base continua limitado à remoção dos três anexos residuais.
+
+Após a integração: 33 testes Python de integridade/duplicação de verso, 41 verificações no navegador e o harness combinado passaram. Correção preparada para publicação frontend v962. Confirmação pública será acrescentada após o deploy. Geração do pedido real e impressão física permanecem pendentes de validação operacional.
