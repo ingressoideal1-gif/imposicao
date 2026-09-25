@@ -44,7 +44,7 @@ Os worktrees originais continuam preservados, inclusive seus diffs locais.
 
 ## Pacote
 
-Web preparada: **v965**. Agente preparado: **1.2.342**.
+Web publicada: **v965**. Agente distribuído: **1.2.342**.
 
 PyInstaller e WiX concluídos. Inspeção do executável confirmou a versão,
 o helper de validação da Cor, o módulo de segredo e as três DLLs de impressão.
@@ -57,8 +57,28 @@ Os seis arquivos principais do frontend empacotado correspondem às fontes.
 
 O manifesto anterior aponta para 1.2.341. A consulta autenticada confirmou
 ausência do objeto 1.2.342 antes do envio e limite de 209715200 bytes no bucket.
-A ativação só ocorre após download público com tamanho e hash correspondentes.
-Os resultados efetivos da publicação serão registrados após a conferência.
+A ativação ocorreu após download público com tamanho e hash correspondentes.
+
+## Publicação confirmada
+
+- Commit funcional `c7327098387f798a4baf1f3218ef77b2d8dd2188` integrado em
+  `origin/main`; tags `v965` e `agente-v1.2.342` no mesmo código.
+- Cloudflare Pages concluiu com sucesso o deploy
+  `75e98f80-8cca-4f06-b3d6-70cc758cd9ae`.
+- **12/12 hashes normalizados conferiram**: `index.html`, `cliente.html`,
+  `producao.html`, `script.js`, `foto-lib.js` e `gerenciador-fotos.js`, em
+  `https://imposicao.pages.dev` e `https://imposition.ai-ideal.com.br`,
+  com parâmetros anticache.
+- MSI enviado com nome novo, sem sobrescrever versões anteriores. O download
+  pela URL pública simples confirmou o tamanho e SHA-256 registrados acima.
+- `latest.json` ativado somente depois dessa confirmação e relido publicamente
+  com cache-bust: versão 1.2.342, tamanho, URL e SHA-256 corretos.
+- Os 64 arquivos capturados nas sessões de origem continuam com os mesmos
+  hashes do inventário; nenhum worktree original foi sobrescrito ou limpo.
+
+Provas: `web-proof.json`, `msi-proof.json`, `latest-before.json`,
+`latest-candidate.json` e `latest-verified.json` no backup abaixo. O site e
+o instalador estão disponíveis; isso não equivale à instalação em cada estação.
 
 ## Recuperação e limites
 
