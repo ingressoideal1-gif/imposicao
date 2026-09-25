@@ -1,0 +1,150 @@
+{
+  "commit": "134620ff7ebcfbd10b916fa9a6849345a5d1a67c",
+  "time": "2026-09-25T16:36:09.128Z",
+  "results": [
+    {
+      "file": "frontend/cliente.html",
+      "url": "https://imposition.ai-ideal.com.br/cliente.html?_cores=1790354168584",
+      "status": 200,
+      "local": "18b57b38f6470b68fc71d77b06703744c58e484f2cc21cf89f0310ee262f40f8",
+      "public": "18b57b38f6470b68fc71d77b06703744c58e484f2cc21cf89f0310ee262f40f8",
+      "match": true
+    },
+    {
+      "file": "frontend/cliente.js",
+      "url": "https://imposition.ai-ideal.com.br/cliente.js?_cores=1790354168620",
+      "status": 200,
+      "local": "ffd1f212546dd0f7e0dd30b231cc7564734a557e7b955bac53031aa69161fa2a",
+      "public": "ffd1f212546dd0f7e0dd30b231cc7564734a557e7b955bac53031aa69161fa2a",
+      "match": true
+    },
+    {
+      "file": "frontend/controle.html",
+      "url": "https://imposition.ai-ideal.com.br/controle.html?_cores=1790354168621",
+      "status": 200,
+      "local": "fe8750d3db3a6bbd7fd0a34fb5d7f13a65788ab28423b91ead6fd7d6dab9ab75",
+      "public": "fe8750d3db3a6bbd7fd0a34fb5d7f13a65788ab28423b91ead6fd7d6dab9ab75",
+      "match": true
+    },
+    {
+      "file": "frontend/cor-margens.js",
+      "url": "https://imposition.ai-ideal.com.br/cor-margens.js?_cores=1790354168621",
+      "status": 200,
+      "local": "16aa329ee67c094d745e78e626cc258de156f34d9ad23ebe05665fb28fb3e233",
+      "public": "16aa329ee67c094d745e78e626cc258de156f34d9ad23ebe05665fb28fb3e233",
+      "match": true
+    },
+    {
+      "file": "frontend/criador-arte.js",
+      "url": "https://imposition.ai-ideal.com.br/criador-arte.js?_cores=1790354168622",
+      "status": 200,
+      "local": "8d827acbdc9812b6837239d897827d8db3ccef8b39e07b6a087432fc9b79e459",
+      "public": "8d827acbdc9812b6837239d897827d8db3ccef8b39e07b6a087432fc9b79e459",
+      "match": true
+    },
+    {
+      "file": "frontend/index.html",
+      "url": "https://imposition.ai-ideal.com.br/index.html?_cores=1790354168623",
+      "status": 200,
+      "local": "5ced086a74cab408fe64939d5b624accceebf6a280fc9ed0d7802977d5054aff",
+      "public": "5ced086a74cab408fe64939d5b624accceebf6a280fc9ed0d7802977d5054aff",
+      "match": true
+    },
+    {
+      "file": "frontend/pedido.js",
+      "url": "https://imposition.ai-ideal.com.br/pedido.js?_cores=1790354168623",
+      "status": 200,
+      "local": "9a1f48d1e6cec2dcd39a7263e5716c37d61f315314159ba567236fc37e6147da",
+      "public": "9a1f48d1e6cec2dcd39a7263e5716c37d61f315314159ba567236fc37e6147da",
+      "match": true
+    },
+    {
+      "file": "frontend/producao.html",
+      "url": "https://imposition.ai-ideal.com.br/producao.html?_cores=1790354168624",
+      "status": 200,
+      "local": "46c69ec79d21fad9fbea041de90d1efdd2d4e35bf591e41623b81c8507c6ccc5",
+      "public": "46c69ec79d21fad9fbea041de90d1efdd2d4e35bf591e41623b81c8507c6ccc5",
+      "match": true
+    },
+    {
+      "file": "frontend/script.js",
+      "url": "https://imposition.ai-ideal.com.br/script.js?_cores=1790354168624",
+      "status": 200,
+      "local": "4bd5cd8e4b7944cf4b0c878cae8fb1594be772fba25026ba2ab91e65809d2a11",
+      "public": "4bd5cd8e4b7944cf4b0c878cae8fb1594be772fba25026ba2ab91e65809d2a11",
+      "match": true
+    },
+    {
+      "file": "frontend/cliente.html",
+      "url": "https://imposicao.pages.dev/cliente.html?_cores=1790354168625",
+      "status": 200,
+      "local": "18b57b38f6470b68fc71d77b06703744c58e484f2cc21cf89f0310ee262f40f8",
+      "public": "18b57b38f6470b68fc71d77b06703744c58e484f2cc21cf89f0310ee262f40f8",
+      "match": true
+    },
+    {
+      "file": "frontend/cliente.js",
+      "url": "https://imposicao.pages.dev/cliente.js?_cores=1790354168626",
+      "status": 200,
+      "local": "ffd1f212546dd0f7e0dd30b231cc7564734a557e7b955bac53031aa69161fa2a",
+      "public": "ffd1f212546dd0f7e0dd30b231cc7564734a557e7b955bac53031aa69161fa2a",
+      "match": true
+    },
+    {
+      "file": "frontend/controle.html",
+      "url": "https://imposicao.pages.dev/controle.html?_cores=1790354168626",
+      "status": 200,
+      "local": "fe8750d3db3a6bbd7fd0a34fb5d7f13a65788ab28423b91ead6fd7d6dab9ab75",
+      "public": "fe8750d3db3a6bbd7fd0a34fb5d7f13a65788ab28423b91ead6fd7d6dab9ab75",
+      "match": true
+    },
+    {
+      "file": "frontend/cor-margens.js",
+      "url": "https://imposicao.pages.dev/cor-margens.js?_cores=1790354168627",
+      "status": 200,
+      "local": "16aa329ee67c094d745e78e626cc258de156f34d9ad23ebe05665fb28fb3e233",
+      "public": "16aa329ee67c094d745e78e626cc258de156f34d9ad23ebe05665fb28fb3e233",
+      "match": true
+    },
+    {
+      "file": "frontend/criador-arte.js",
+      "url": "https://imposicao.pages.dev/criador-arte.js?_cores=1790354168627",
+      "status": 200,
+      "local": "8d827acbdc9812b6837239d897827d8db3ccef8b39e07b6a087432fc9b79e459",
+      "public": "8d827acbdc9812b6837239d897827d8db3ccef8b39e07b6a087432fc9b79e459",
+      "match": true
+    },
+    {
+      "file": "frontend/index.html",
+      "url": "https://imposicao.pages.dev/index.html?_cores=1790354168628",
+      "status": 200,
+      "local": "5ced086a74cab408fe64939d5b624accceebf6a280fc9ed0d7802977d5054aff",
+      "public": "5ced086a74cab408fe64939d5b624accceebf6a280fc9ed0d7802977d5054aff",
+      "match": true
+    },
+    {
+      "file": "frontend/pedido.js",
+      "url": "https://imposicao.pages.dev/pedido.js?_cores=1790354168628",
+      "status": 200,
+      "local": "9a1f48d1e6cec2dcd39a7263e5716c37d61f315314159ba567236fc37e6147da",
+      "public": "9a1f48d1e6cec2dcd39a7263e5716c37d61f315314159ba567236fc37e6147da",
+      "match": true
+    },
+    {
+      "file": "frontend/producao.html",
+      "url": "https://imposicao.pages.dev/producao.html?_cores=1790354168628",
+      "status": 200,
+      "local": "46c69ec79d21fad9fbea041de90d1efdd2d4e35bf591e41623b81c8507c6ccc5",
+      "public": "46c69ec79d21fad9fbea041de90d1efdd2d4e35bf591e41623b81c8507c6ccc5",
+      "match": true
+    },
+    {
+      "file": "frontend/script.js",
+      "url": "https://imposicao.pages.dev/script.js?_cores=1790354168629",
+      "status": 200,
+      "local": "4bd5cd8e4b7944cf4b0c878cae8fb1594be772fba25026ba2ab91e65809d2a11",
+      "public": "4bd5cd8e4b7944cf4b0c878cae8fb1594be772fba25026ba2ab91e65809d2a11",
+      "match": true
+    }
+  ]
+}

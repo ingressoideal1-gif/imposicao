@@ -31,3 +31,15 @@ Nenhum novo MSI, alteração no motor ou teste físico de impressão faz parte d
 Após o push: aguardar Cloudflare e comparar hashes normalizados com cache-bust
 nos dois domínios, incluindo o novo helper. Rollback web deve preservar as
 entregas anteriores e as colunas; não apagar dados nem reduzir a versão do agente.
+
+## Comprovação concluída
+
+Publicado como **v964**, commit `134620ff7ebcfbd10b916fa9a6849345a5d1a67c`.
+Cloudflare confirmou sucesso no deployment
+`ed79c2a9-04b4-44dc-a397-b1d19c363228`. A primeira comparação do orquestrador
+ocorreu durante a propagação e ainda encontrou conteúdo anterior; não houve
+republicação. A comparação posterior confirmou **18/18 hashes normalizados**
+nos domínios `imposition.ai-ideal.com.br` e `imposicao.pages.dev`.
+
+Evidência: [comparação pública](evidencias/cores-formatos-v964-public-verification.json).
+Gravação autenticada e aceite físico continuam com os limites descritos acima.
