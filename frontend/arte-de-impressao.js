@@ -198,6 +198,14 @@
             }
             const dados = JSON.parse(fd.get('payload'));
             const artes = dados.multi_artes || [];
+            if (artes.length) {
+                // Combinacao usa exclusivamente as faces indexadas por modelo.
+                // Os formularios podem trazer a arte da selecao individual e
+                // o alias legado duplicado; nenhum deles pertence a este job.
+                fd.delete('file');
+                fd.delete('file_verso');
+                fd.delete('multi_artes_files');
+            }
             const alvos = artes.length ? artes : [dados];
             const ids = [...new Set(alvos.map(a => a.modelo).filter(v => v != null && /^\d+$/.test(String(v))).map(String))];
             async function consultar(tabela, idsConsulta) {
