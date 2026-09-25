@@ -116,3 +116,16 @@ Permanecem pendentes autorização explícita de compilação/publicação, buil
 commit/push, deploy, MSI público, manifesto, instalação na estação e prova física.
 Recuperação: reversão rastreável do frontend; para o agente, código apropriado
 sob versão maior, sem sobrescrever MSI publicado ou depender de downgrade.
+
+## Autorização e integração — 25/09/2026
+
+O usuário autorizou explicitamente compilar e publicar ambas as correções.
+A correção concorrente do pedido 22444, publicada em v960 (`0fac89b6`), foi
+integrada e preservada. Versão final desta entrega: **web v961 / NewProd 1.2.341**.
+Após a integração, a suíte direcionada repetiu **162 aprovações e as mesmas duas
+falhas preexistentes** descritas acima. Nenhum teste foi desabilitado.
+
+Build isolado em `build/release-1.2.341`, com dependências existentes e sem
+limpar saídas anteriores. A leitura do executável confirmou os módulos,
+a versão, as DLLs e bytes idênticos dos nove arquivos frontend da entrega.
+Evidência: `evidencias/verso-22593-v961-build.json`.
