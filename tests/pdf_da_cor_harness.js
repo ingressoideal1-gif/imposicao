@@ -85,7 +85,7 @@ function montar(fonte, linhas, cores) {
 
 (async function corSemArquivoNaoRepete() {
     const cor = { id: 'c2', name: 'Sem PDF' };
-    const { fn, banco } = montar(SCRIPT, {}, [cor]);   // o banco nao tem a linha
+    const { fn, banco } = montar(SCRIPT, { c2: { pdf_base64: null, pdf_verso_base64: null } }, [cor]);
 
     await fn(cor);
     ok(cor.pdf_base64 === null, 'cor sem arquivo fica com null, nao com undefined', String(cor.pdf_base64));
@@ -94,6 +94,22 @@ function montar(fonte, linhas, cores) {
 })();
 
 // ─── 3. Dois desenhos ao mesmo tempo, uma consulta so ────────────────────────
+
+(async function linhaAusentePermiteRecuperar() {
+    const cor = { id: 'ausente' };
+    const linhas = {};
+    const { fn, banco } = montar(SCRIPT, linhas, [cor]);
+    let falhou = false;
+    try { await fn(cor, { obrigatorio: true }); } catch (_) { falhou = true; }
+    ok(falhou && cor.pdf_base64 === undefined, 'linha ausente nao equivale a PDF vazio');
+    linhas.ausente = { pdf_base64: 'NOVO', pdf_verso_base64: null };
+    await fn(cor);
+    ok(cor.pdf_base64 === 'NOVO' && banco.consultas() === 2, 'nova tentativa recupera apos linha ausente');
+    linhas.ausente.pdf_base64 = 'ALTERADO';
+    const recarregada = { id: 'ausente' };
+    await fn(recarregada);
+    ok(recarregada.pdf_base64 === 'ALTERADO', 'catalogo recarregado nao reutiliza promessa antiga');
+})();
 
 (async function duasChamadasJuntasUmaConsulta() {
     const cor = { id: 'c3', name: 'UP' };

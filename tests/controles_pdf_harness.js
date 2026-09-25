@@ -21,7 +21,7 @@ function extrair(nome) {
             'pdfDuplicarParaVersoDoModelo', 'validarPdfDuplicarParaVerso',
             'blocoDeArteDoModelo', 'modeloEstaAprovado', 'bloqueioDeModeloAprovado',
             'toggleModoPdf', 'escalaDaArteDoModelo', 'atualizarCaixaDeEscalaDaArte',
-            'formatoDoModelo', 'salvarEscalaDaArte', 'pdfViewerAindaAtual',
+            'formatoDoProduto', 'formatoDoModelo', 'salvarEscalaDaArte', 'pdfViewerAindaAtual',
             'atualizarEstadoDoPdf', 'initPdfViewer', 'renderPdfViewerPage',
             'pdfViewerPrevPage', 'pdfViewerNextPage', 'limparVisualizadorPdf',
             'onItemArteUpload', 'drawAmostraFace', 'getPdfUrlForItem',

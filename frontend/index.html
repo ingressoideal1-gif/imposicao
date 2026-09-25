@@ -1005,7 +1005,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="cor-id">
-                    <div class="form-grid" style="grid-template-columns: 2fr 2fr 2fr 1fr 1fr; gap: 12px;">
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
                         <div class="form-group">
                             <label>Nome da Cor</label>
                             <input type="text" class="form-control" id="cor-name" placeholder="Ex: Azul Escuro">
@@ -1027,14 +1027,35 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Largura (mm)</label>
-                            <input type="number" class="form-control" id="cor-w" min="1" step="0.1">
+                            <label for="cor-w">Largura da Cor (mm)</label>
+                            <input type="number" class="form-control" id="cor-w" readonly aria-describedby="cor-formato-calculado">
                         </div>
                         <div class="form-group">
-                            <label>Altura (mm)</label>
-                            <input type="number" class="form-control" id="cor-h" min="1" step="0.1">
+                            <label for="cor-h">Altura da Cor (mm)</label>
+                            <input type="number" class="form-control" id="cor-h" readonly aria-describedby="cor-formato-calculado">
                         </div>
                     </div>
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px;">
+                        <div class="form-group">
+                            <label for="cor-margem-esquerda">Margem esquerda (mm)</label>
+                            <input class="form-control" id="cor-margem-esquerda" type="text" inputmode="decimal" value="0" oninput="atualizarFormatoDaCor()">
+                        </div>
+                        <div class="form-group">
+                            <label for="cor-margem-direita">Margem direita (mm)</label>
+                            <input class="form-control" id="cor-margem-direita" type="text" inputmode="decimal" value="0" oninput="atualizarFormatoDaCor()">
+                        </div>
+                        <div class="form-group">
+                            <label for="cor-margem-inferior">Margem inferior (mm)</label>
+                            <input class="form-control" id="cor-margem-inferior" type="text" inputmode="decimal" value="0" oninput="atualizarFormatoDaCor()">
+                        </div>
+                        <div class="form-group">
+                            <label for="cor-margem-superior">Margem superior (mm)</label>
+                            <input class="form-control" id="cor-margem-superior" type="text" inputmode="decimal" value="0" oninput="atualizarFormatoDaCor()">
+                        </div>
+                    </div>
+                    <p id="cor-formato-calculado" role="status" aria-live="polite" style="margin: 12px 0 4px; font-weight: 600;">Selecione o formato base para calcular o formato da Cor.</p>
+                    <p style="color: var(--text-dim); margin: 4px 0; font-size: 0.82rem;">As margens ampliam a referência de Cor. O tamanho da peça para impressão permanece o do Formato base.</p>
+                    <p id="cor-margens-legado" hidden style="color: var(--amber); font-size: 0.82rem;"></p>
                     <div class="divider" style="margin: 16px 0 12px 0;"></div>
                     
                     <div class="form-group" style="margin-bottom: 15px;">
@@ -4448,6 +4469,7 @@
     <script src="/supabase-config.js?v=948"></script>
     <script src="mapas.js?v=948"></script>
     <script src="cor-numeracao-do-modelo.js?v=961"></script>
+    <script src="cor-margens.js?v=964"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
@@ -4455,7 +4477,7 @@
     <script src="logo-do-frete.js?v=948"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=958"></script>
+    <script src="pagamento-do-pedido.js?v=964"></script>
     <script src="arte-de-impressao.js?v=962"></script>
     <script src="qr-canvas.js?v=948"></script>
     <script src="barcode-canvas.js?v=948"></script>
@@ -4479,12 +4501,12 @@
     <script src="/vendor/quill-2.0.3/quill.js"></script>
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=948"></script>
-    <script src="script.js?v=961"></script>
+    <script src="script.js?v=964"></script>
     <script src="dashboard-arte.js?v=948"></script>
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=948"></script>
-    <script src="criador-arte.js?v=959"></script>
-    <script src="/pedido.js?v=961"></script>
+    <script src="criador-arte.js?v=964"></script>
+    <script src="/pedido.js?v=964"></script>
     <script src="/producao-por-cor.js?v=948"></script>
     <script src="montagem.js?v=958"></script>
     <script src="acabamento.js?v=957"></script>

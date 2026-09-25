@@ -5042,7 +5042,7 @@ function renderPedOSQueue(opcoes = {}) {
                 nomeReal = prodObj.nomeReal || `Produto #${prodId}`;
                 setorPcp = prodObj.setor_pcp || '';
                 if (prodObj.id_formato) {
-                    const fmtObj = (state.formatos || []).find(f => String(f.id_formato_num) === String(prodObj.id_formato));
+                    const fmtObj = formatoDoProduto(prodObj);
                     if (fmtObj) formatoPadraoId = fmtObj.id;
                 }
             } else {
@@ -5052,25 +5052,7 @@ function renderPedOSQueue(opcoes = {}) {
 
         const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle; color: #ffffff;">${setorPcp}</span>` : '';
 
-        // Box level Formato & Saida calculation
-        let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
-        
-        // If there's a forced formato, auto-apply it to all items if missing
-        if (formatoPadraoId && !somenteLeitura) {
-            groupItens.forEach(item => {
-                if (String(item.formato_id) !== String(formatoPadraoId)) {
-                    item.formato_id = formatoPadraoId;
-                    setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
-                }
-                if (!item.saida_id) {
-                    const fObj = (state.formatos || []).find(f => String(f.id) === String(formatoPadraoId));
-                    if (fObj && fObj.default_saida_id) {
-                        item.saida_id = fObj.default_saida_id;
-                        setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
-                    }
-                }
-            });
-        }
+        const boxFmtSel = prepararFormatosDaFila(groupItens, formatoPadraoId, somenteLeitura);
 
         // ── O que o cabeçalho do produto diz: quanto tem e quanto falta ──────
         //

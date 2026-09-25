@@ -1407,7 +1407,7 @@ async function initClientePage(numero, token) {
                 // por `garantirPdfDaCor`, na hora de desenhar. Mesmo remédio do
                 // `csv_data` logo abaixo.
                 supabaseClient.from('producao_cores')
-                    .select('id, empresa_id, name, hex, pdf_url, pdf_filename, created_at, updated_at, formato_id, width_mm, height_mm, id_modelo_cor_num, name_verso, frente_verso, cor_referencia')
+                    .select('id, empresa_id, name, hex, pdf_url, pdf_filename, created_at, updated_at, formato_id, width_mm, height_mm, id_modelo_cor_num, name_verso, frente_verso, cor_referencia, margem_esquerda_mm, margem_direita_mm, margem_superior_mm, margem_inferior_mm')
                     .order('name', { ascending: true }),
                 // Colunas explicitas, sem `csv_data` e sem `elements`. Com
                 // `select('*')` o cliente baixava os bancos de TODAS as
@@ -3198,6 +3198,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         return;
     }
 
+    const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
     if (cor && cor.width_mm && cor.height_mm) {
@@ -3205,12 +3206,15 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         targetH = cor.height_mm;
     }
 
-    const finalWidth = Math.round(targetW * S);
-    const finalHeight = Math.round(targetH * S);
+    // O canvas externo é a Cor; o grupo de arte/numeração mantém a peça.
+    const larguraVisual = Math.round((areaCor ? areaCor.width_mm : targetW) * S);
+    const alturaVisual = Math.round((areaCor ? areaCor.height_mm : targetH) * S);
+    const finalWidth = areaCor ? Math.round(fmt.width_mm * S) : larguraVisual;
+    const finalHeight = areaCor ? Math.round(fmt.height_mm * S) : alturaVisual;
     if (finalWidth <= 0 || finalHeight <= 0) return;
 
-    canvas.width = finalWidth;
-    canvas.height = finalHeight;
+    canvas.width = larguraVisual;
+    canvas.height = alturaVisual;
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
 
@@ -3227,7 +3231,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const _desatualizado = () => canvas.__geracaoDesenho !== _geracao;
 
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.clearRect(0, 0, larguraVisual, alturaVisual);
     ctx.globalCompositeOperation = 'source-over';
 
     // ====== CAMADA 1: COR (PDF via pdf.js) ======
@@ -3252,7 +3256,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             const page = await pdf.getPage(pageNum);
 
             const viewport = page.getViewport({ scale: 1.0 });
-            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+            const pdfScale = ((areaCor ? areaCor.width_mm : fmt.width_mm) * 2.8346) / viewport.width;
             const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
 
             const offCanvas = document.createElement('canvas');
@@ -3263,7 +3267,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
             const dx = (finalWidth - offCanvas.width) / 2;
             const dy = (finalHeight - offCanvas.height) / 2;
-            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+            if (areaCor) ctx.drawImage(offCanvas, 0, 0, larguraVisual, alturaVisual);
+            else ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
             corRendered = true;
         } catch (e) {
             console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar cor PDF:`, e);
@@ -3274,7 +3279,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     if (!corRendered) {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, finalWidth, finalHeight);
+        ctx.fillRect(0, 0, larguraVisual, alturaVisual);
     }
 
     // ====== GRUPO ARTE + NUMERACAO ======
@@ -3686,7 +3691,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Agora sim: o grupo (arte + numeracao) multiplica, de uma vez so, sobre a cor.
     if (grupoTemConteudo) {
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(grupoCanvas, 0, 0);
+        ctx.drawImage(grupoCanvas, areaCor ? areaCor.margem_esquerda_mm * S : 0, areaCor ? areaCor.margem_superior_mm * S : 0);
         ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -3755,18 +3760,18 @@ async function renderItemAmostraCombinada(idx, osId) {
         preloadAmostraItemPdfElements(num, idx, osId, item);
     }
 
-    let fmt = null;
-    if (cor && cor.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-    }
-    if (!fmt && num && num.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-    }
-    if (!fmt && state.formatos.length > 0) {
-        fmt = state.formatos[0];
-    }
+    const fmt = formatoDaAmostraPdfNoPortal(item, num, cor);
     if (!fmt) {
-        fmt = { width_mm: 180, height_mm: 50 };
+        for (const face of ['', '-verso']) {
+            const canvas = container.querySelector(`#amostra-item-canvas${face}-${idx}`);
+            if (canvas) { canvas.width = 0; canvas.height = 0; canvas.style.display = 'none'; }
+            const aviso = container.querySelector(`#amostra-item-empty${face}-${idx}`);
+            if (aviso) {
+                aviso.textContent = 'Modelo sem formato vinculado. Solicite a correção à equipe de arte.';
+                aviso.style.display = 'flex';
+            }
+        }
+        return;
     }
 
     const S = 150 / 25.4;
@@ -3891,14 +3896,23 @@ async function initPdfViewer(idx, pdfUrl, osId) {
  */
 const pdfRenderQueue = {};
 
-function formatoDaAmostraPdfNoPortal(item, num) {
+function formatoDaAmostraPdfNoPortal(item, num, corSelecionada) {
     const formatos = state.formatos || [];
-    const cor = (state.cores || []).find(c => String(c.id) === String(item?.amostra_cor_id));
-    for (const id of [num?.formato_id, cor?.formato_id, item?.formato_id]) {
-        const fmt = formatos.find(f => String(f.id) === String(id));
-        if (fmt && Number(fmt.width_mm) > 0 && Number(fmt.height_mm) > 0) return fmt;
+    const cor = corSelecionada === undefined
+        ? (state.cores || []).find(c => String(c.id) === String(item?.amostra_cor_id)) : corSelecionada;
+    // A página do cliente não carrega script.js: mesma prioridade do painel.
+    const id = cor?.formato_id || num?.formato_id || item?.formato_id;
+    let fmt = id ? formatos.find(f => String(f.id) === String(id)) : null;
+    if (!id) {
+        const produtoId = item && (item._vibe_id_produto || item.id_produto || item.produto_id);
+        const produto = produtoId == null ? null : (state.produtosGlobais || []).find(p =>
+            (p.id_produto != null && String(p.id_produto) === String(produtoId)) || (p.id != null && String(p.id) === String(produtoId)));
+        if (produto?.id_formato) {
+            fmt = formatos.find(f => f.id_formato_num != null && String(f.id_formato_num) === String(produto.id_formato))
+                || formatos.find(f => String(f.id) === String(produto.id_formato));
+        }
     }
-    return null;
+    return fmt && Number(fmt.width_mm) > 0 && Number(fmt.height_mm) > 0 ? fmt : null;
 }
 
 function escalaDaArtePdfNoPortal(item) {

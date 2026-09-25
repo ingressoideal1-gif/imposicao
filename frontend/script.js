@@ -944,7 +944,7 @@ atualizarContagemDosGrupos();
 // com as duas colunas preenchidas — uma cor por vez, só a que vai ser desenhada.
 // Para saber se existe PDF sem baixá-lo, use `pdf_filename` (frente) e
 // `name_verso` (verso): as duas colunas são gravadas junto com o arquivo.
-const COLUNAS_DA_COR_NA_LISTA = 'id,empresa_id,name,hex,pdf_url,pdf_filename,created_at,updated_at,formato_id,width_mm,height_mm,id_modelo_cor_num,name_verso,frente_verso,cor_referencia';
+const COLUNAS_DA_COR_NA_LISTA = 'id,empresa_id,name,hex,pdf_url,pdf_filename,created_at,updated_at,formato_id,width_mm,height_mm,id_modelo_cor_num,name_verso,frente_verso,cor_referencia,margem_esquerda_mm,margem_direita_mm,margem_superior_mm,margem_inferior_mm';
 
 // O CATÁLOGO DE NUMERAÇÕES SEM O BANCO DE DADOS DE CADA UMA (26/08/2026).
 //
@@ -987,14 +987,15 @@ const COLUNAS_DA_NUMERACAO_NA_LISTA = 'id,empresa_id,name,formato_id,formato_ids
 
 const _pdfDeCorEmVoo = new Map();
 
-async function garantirPdfDaCor(cor) {
+async function garantirPdfDaCor(cor, opcoes = {}) {
     if (!cor || !cor.id) return cor;
     // `undefined` = a linha veio da lista enxuta. `null` = já foi buscado e a
     // cor não tem arquivo. Só o primeiro caso vai ao banco.
-    if (cor.pdf_base64 !== undefined) return cor;
+    if (cor.pdf_base64 !== undefined && !opcoes.atualizar) return cor;
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return cor;
 
     const chave = String(cor.id);
+    if (opcoes.atualizar) _pdfDeCorEmVoo.delete(chave);
     if (!_pdfDeCorEmVoo.has(chave)) {
         _pdfDeCorEmVoo.set(chave, supabaseClient
             .from('producao_cores')
@@ -1003,12 +1004,14 @@ async function garantirPdfDaCor(cor) {
             .maybeSingle()
             .then(({ data, error }) => {
                 if (error) throw error;
-                return data || { pdf_base64: null, pdf_verso_base64: null };
+                if (!data) throw new Error('Cor não encontrada ou sem acesso aos arquivos.');
+                return data;
             }));
     }
 
+    const busca = _pdfDeCorEmVoo.get(chave);
     try {
-        const linha = await _pdfDeCorEmVoo.get(chave);
+        const linha = await busca;
         cor.pdf_base64 = linha.pdf_base64 || null;
         cor.pdf_verso_base64 = linha.pdf_verso_base64 || null;
         // A mesma cor pode estar em duas referências (a do state e uma cópia).
@@ -1018,8 +1021,10 @@ async function garantirPdfDaCor(cor) {
             noEstado.pdf_verso_base64 = cor.pdf_verso_base64;
         }
     } catch (e) {
-        _pdfDeCorEmVoo.delete(chave);
         console.warn('[cores] Nao foi possivel baixar o PDF da cor ' + cor.id, e);
+        if (opcoes.obrigatorio) throw e;
+    } finally {
+        if (_pdfDeCorEmVoo.get(chave) === busca) _pdfDeCorEmVoo.delete(chave);
     }
     return cor;
 }
@@ -1787,7 +1792,36 @@ function normalizarNumeracaoLida(n) {
 }
 window.normalizarNumeracaoLida = normalizarNumeracaoLida;
 
+// O cadastro só anuncia sucesso depois de reler a configuração persistida.
 async function api(method, path, body = null) {
+    const resultado = await apiSemConfirmacao(method, path, body);
+    if (/^\/(?:formatos|cores)(?:\/[^/]+)?$/.test(path) && (method === 'POST' || method === 'PUT')) {
+        const id = method === 'POST' ? resultado?.id : path.split('/')[2];
+        if (!id) throw new Error('O salvamento do cadastro não retornou um identificador.');
+        const salvo = await apiSemConfirmacao('GET', `/${path.split('/')[1]}/${id}`);
+        if (!salvo || String(salvo.id) !== String(id)) {
+            throw new Error('Não foi possível confirmar o cadastro salvo. Recarregue o cadastro antes de tentar novamente.');
+        }
+        for (const [campo, esperado] of Object.entries(body || {})) {
+            if (!valorDoFormatoConfere(salvo[campo], esperado)) {
+                throw new Error(`O campo ${campo} do cadastro não foi confirmado. Recarregue o cadastro antes de tentar novamente.`);
+            }
+        }
+    }
+    return resultado;
+}
+
+function valorDoFormatoConfere(atual, esperado) {
+    if (typeof esperado === 'number') return Number.isFinite(esperado) && atual != null && atual !== '' && Number(atual) === esperado;
+    if (esperado && typeof esperado === 'object') {
+        if (!atual || typeof atual !== 'object' || Array.isArray(atual) !== Array.isArray(esperado)) return false;
+        const chaves = Object.keys(esperado);
+        return Object.keys(atual).length === chaves.length && chaves.every(k => valorDoFormatoConfere(atual[k], esperado[k]));
+    }
+    return atual === esperado;
+}
+
+async function apiSemConfirmacao(method, path, body = null) {
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && (path.startsWith('/formatos') || path.startsWith('/numeracoes') || path.startsWith('/saidas') || path.startsWith('/cores') || path.startsWith('/modelos_imposicao'))) {
 
@@ -1907,7 +1941,7 @@ async function api(method, path, body = null) {
 
                 let { data, error } = await supabaseClient.from(col).insert([insertPayload]).select().single();
 
-                if (error && (error.message || '').includes("Could not find the '")) {
+                if (!['producao_formatos', 'producao_cores'].includes(col) && error && (error.message || '').includes("Could not find the '")) {
                     const match = (error.message || '').match(/Could not find the '(.*?)' column/);
                     if (match && match[1]) {
                         const missingCol = match[1];
@@ -1921,6 +1955,9 @@ async function api(method, path, body = null) {
 
                 if (error) throw error;
 
+                if (['producao_formatos', 'producao_cores'].includes(col) && (!data || String(data.id) !== String(id))) {
+                    throw new Error('Nenhum cadastro foi retornado pelo salvamento.');
+                }
                 return { id: data ? data.id : id };
 
             } else if (method === 'PUT') {
@@ -1941,6 +1978,13 @@ async function api(method, path, body = null) {
 
                     delete updateData.id;
 
+                }
+
+                if (['producao_formatos', 'producao_cores'].includes(col)) {
+                    const { data, error } = await supabaseClient.from(col).update(updateData).eq('id', docId).select('*').single();
+                    if (error) throw error;
+                    if (!data || String(data.id) !== String(docId)) throw new Error('Nenhum cadastro foi confirmado na atualização.');
+                    return { status: 'success', id: data.id };
                 }
 
                 let { error } = await supabaseClient.from(col).update(updateData).eq('id', docId);
@@ -2503,6 +2547,20 @@ async function duplicateFmt(id) {
             offset_h_mm: parseFloat(f.offset_h_mm || 0),
             offset_v_mm: parseFloat(f.offset_v_mm || 0),
             rotations: f.rotations || {},
+            default_schema: f.default_schema ?? 'sequential',
+            default_saida_id: f.default_saida_id ?? null,
+            default_cut_stack_mode: f.default_cut_stack_mode ?? 'independent',
+            default_sheets_per_block: f.default_sheets_per_block ?? 50,
+            default_block_depth: f.default_block_depth ?? 1,
+            default_rotate_page: f.default_rotate_page ?? false,
+            has_cover: f.has_cover ?? false,
+            cover_scale: f.cover_scale ?? 80,
+            cover_offset_x: f.cover_offset_x ?? 0,
+            cover_offset_y: f.cover_offset_y ?? 0,
+            cover_font_size: f.cover_font_size ?? 12,
+            cover_font_color: f.cover_font_color ?? '#000000',
+            cover_font_x: f.cover_font_x ?? 10,
+            cover_font_y: f.cover_font_y ?? 10,
         };
 
         await api('POST', '/formatos', clone);
@@ -3060,22 +3118,13 @@ window.clearCorPdfFile = clearCorPdfFile;
 
 
 
+function atualizarFormatoDaCor() {
+    return CorMargens.atualizarFormulario(state.formatos);
+}
+window.atualizarFormatoDaCor = atualizarFormatoDaCor;
+
 function onCorFormatoSelect() {
-
-    const fmtId = document.getElementById('cor-formato').value;
-
-    if (!fmtId) return;
-
-    const fmt = state.formatos.find(f => f.id === fmtId);
-
-    if (fmt) {
-
-        document.getElementById('cor-w').value = fmt.width_mm;
-
-        document.getElementById('cor-h').value = fmt.height_mm;
-
-    }
-
+    atualizarFormatoDaCor();
 }
 
 window.onCorFormatoSelect = onCorFormatoSelect;
@@ -3191,7 +3240,7 @@ function renderCores() {
                             return `
                                 <tr style="cursor: pointer;" onclick="editCor('${c.id}')" title="Clique para editar/visualizar esta cor">
                                     <td><strong>${c.name}</strong></td>
-                                    <td>${c.width_mm} × ${c.height_mm} mm</td>
+                                    <td>${(fmt && c.margem_esquerda_mm != null ? CorMargens.calcular(fmt, c) : c).width_mm} × ${(fmt && c.margem_esquerda_mm != null ? CorMargens.calcular(fmt, c) : c).height_mm} mm</td>
                                     <td>${refCorBadge}</td>
                                     <td>${pdfLinks}</td>
 
@@ -3277,14 +3326,17 @@ async function duplicateCor(id) {
     if (!c) return;
 
     // A cópia leva o PDF junto, e ele não vem no catálogo.
-    await garantirPdfDaCor(c);
-
     try {
+        await garantirPdfDaCor(c, { obrigatorio: true, atualizar: true });
+        const medidas = CorMargens.temMargens(c)
+            ? CorMargens.calcular(state.formatos.find(f => String(f.id) === String(c.formato_id)), c)
+            : c;
         const clone = {
             name: c.name + ' (cópia)',
+            ...Object.fromEntries(CorMargens.campos.filter(campo => c[campo] != null).map(campo => [campo, c[campo]])),
             formato_id: c.formato_id,
-            width_mm: parseFloat(c.width_mm),
-            height_mm: parseFloat(c.height_mm),
+            width_mm: parseFloat(medidas.width_mm),
+            height_mm: parseFloat(medidas.height_mm),
             cor_referencia: c.cor_referencia || c.hex || "",
             pdf_base64: c.pdf_base64 || null,
             pdf_filename: c.pdf_filename || "",
@@ -3315,9 +3367,12 @@ async function saveCor() {
 
     const formatoId = document.getElementById('cor-formato').value;
 
-    const w = parseFloat(document.getElementById('cor-w').value);
-
-    const h = parseFloat(document.getElementById('cor-h').value);
+    if (document.getElementById('btn-cor-save')?.dataset.carregando === 'true') {
+        return toast('Aguarde o carregamento completo da Cor ou reabra o cadastro em caso de falha.', 'error');
+    }
+    const medidas = atualizarFormatoDaCor();
+    if (!medidas) return toast('Confira o formato base e as quatro margens.', 'error');
+    const w = medidas.width_mm, h = medidas.height_mm;
 
     const corReferencia = document.getElementById('cor-referencia')?.value.trim() || '';
 
@@ -3334,6 +3389,7 @@ async function saveCor() {
 
     const data = {
         name,
+        ...Object.fromEntries(CorMargens.campos.map(campo => [campo, medidas[campo]])),
         formato_id: formatoId,
         width_mm: w,
         height_mm: h,
@@ -3389,6 +3445,12 @@ async function editCor(id, contexto = {}) {
     const c = state.cores.find(x => x.id === id);
 
     if (!c) return;
+    const token = {};
+    state.corEdicaoAtual = token;
+    const btnSalvar = document.getElementById('btn-cor-save');
+    btnSalvar.dataset.carregando = 'true';
+    btnSalvar.disabled = true;
+
 
     
 
@@ -3406,9 +3468,8 @@ async function editCor(id, contexto = {}) {
 
     document.getElementById('cor-formato').value = c.formato_id;
 
-    document.getElementById('cor-w').value = c.width_mm;
-
-    document.getElementById('cor-h').value = c.height_mm;
+    CorMargens.preencherFormulario(c, state.formatos.find(f => String(f.id) === String(c.formato_id)));
+    atualizarFormatoDaCor();
 
     const refVal = c.cor_referencia || c.hex || '';
     const refInput = document.getElementById('cor-referencia');
@@ -3423,7 +3484,15 @@ async function editCor(id, contexto = {}) {
 
     // O PDF não veio no catálogo; buscar antes de preencher o formulário,
     // senão salvar em seguida gravaria a cor SEM o arquivo de referência.
-    await garantirPdfDaCor(c);
+    try {
+        await garantirPdfDaCor(c, { obrigatorio: true, atualizar: true });
+    } catch (e) {
+        if (state.corEdicaoAtual === token) toast('Não foi possível carregar os arquivos da Cor. Reabra o cadastro antes de salvar.', 'error');
+        return;
+    }
+    if (state.corEdicaoAtual !== token || (contexto.aindaAtual && !contexto.aindaAtual())) return;
+    delete btnSalvar.dataset.carregando;
+    atualizarFormatoDaCor();
 
     if (c.pdf_base64) {
         corPdfBase64 = c.pdf_base64;
@@ -3456,6 +3525,9 @@ window.editCor = editCor;
 
 
 function cancelCorEdit() {
+    state.corEdicaoAtual = null;
+    delete document.getElementById('btn-cor-save').dataset.carregando;
+    CorMargens.preencherFormulario(null, null);
     document.getElementById('cor-id').value = '';
     document.getElementById('cor-name').value = '';
     document.getElementById('cor-formato').value = '';
@@ -3478,6 +3550,7 @@ function cancelCorEdit() {
     document.getElementById('btn-cor-cancel').style.display = 'none';
     renderPdfPreview(null); // Resetar preview do PDF
     renderPdfVersoPreview(null); // Resetar preview do PDF do verso
+    atualizarFormatoDaCor();
 }
 
 window.cancelCorEdit = cancelCorEdit;
@@ -23806,6 +23879,7 @@ function getAmostraFormato() {
         const cor = state.cores.find(c => c.id === corId);
 
         if (cor) {
+            if (cor.margem_esquerda_mm != null) return state.formatos.find(f => String(f.id) === String(cor.formato_id)) || null;
 
             // Retorna dimensões do formato correspondentes à cor
 
@@ -24600,6 +24674,7 @@ function renderAmostraCombinada() {
 
     const cor = state.cores.find(c => c.id === corId);
 
+    const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
     let targetW = fmt.width_mm;
 
     let targetH = fmt.height_mm;
@@ -24620,21 +24695,22 @@ function renderAmostraCombinada() {
 
 
 
-    const finalWidth = Math.round(targetW * S);
+    const larguraVisual = Math.round((areaCor ? areaCor.width_mm : targetW) * S);
+    const alturaVisual = Math.round((areaCor ? areaCor.height_mm : targetH) * S);
+    const finalWidth = areaCor ? Math.round(fmt.width_mm * S) : larguraVisual;
+    const finalHeight = areaCor ? Math.round(fmt.height_mm * S) : alturaVisual;
 
-    const finalHeight = Math.round(targetH * S);
 
 
+    canvasComb.width = larguraVisual;
 
-    canvasComb.width = finalWidth;
-
-    canvasComb.height = finalHeight;
+    canvasComb.height = alturaVisual;
 
 
 
     const ctx = canvasComb.getContext('2d', { colorSpace: 'srgb' });
 
-    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.clearRect(0, 0, larguraVisual, alturaVisual);
 
 
 
@@ -24652,7 +24728,8 @@ function renderAmostraCombinada() {
 
         const dy = (finalHeight - corCanvas.height) / 2;
 
-        ctx.drawImage(corCanvas, dx, dy, corCanvas.width, corCanvas.height);
+        if (areaCor) ctx.drawImage(corCanvas, 0, 0, larguraVisual, alturaVisual);
+        else ctx.drawImage(corCanvas, dx, dy, corCanvas.width, corCanvas.height);
 
     } else {
 
@@ -24660,7 +24737,7 @@ function renderAmostraCombinada() {
 
         ctx.fillStyle = '#ffffff';
 
-        ctx.fillRect(0, 0, finalWidth, finalHeight);
+        ctx.fillRect(0, 0, larguraVisual, alturaVisual);
 
     }
 
@@ -24907,7 +24984,7 @@ function renderAmostraCombinada() {
 
         ctx.globalCompositeOperation = 'multiply';
 
-        ctx.drawImage(grupoCanvas, 0, 0);
+        ctx.drawImage(grupoCanvas, areaCor ? areaCor.margem_esquerda_mm * S : 0, areaCor ? areaCor.margem_superior_mm * S : 0);
 
         ctx.restore();
 
@@ -32382,7 +32459,13 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     const anterior = contexto.aindaAtual || (() => true);
     const aindaAtual = () => state.imposicaoSelecaoCarregando === carga && anterior();
     try { await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual }); }
-    catch (erro) { if (aindaAtual()) state.imposicaoSelecaoErro = erro.message; throw erro; }
+    catch (erro) {
+        if (aindaAtual()) {
+            state.imposicaoSelecaoErro = erro.message;
+            if (switchTab) toast(erro.message, 'error');
+        }
+        throw erro;
+    }
     finally { if (state.imposicaoSelecaoCarregando === carga) state.imposicaoSelecaoCarregando = null; }
 }
 async function carregarModeloParaImposicao(itemId, osId, switchTab = true, contexto = {}) {
@@ -32466,63 +32549,22 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
         if (navBtn) navBtn.click();
     }
 
-    // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
-    let formatoId = item.formato_id;
-
-    // Tentar encontrar o formato atrelado ao produto no banco de dados (via ID ou Nome)
-    if (!formatoId && state.produtosGlobais) {
-        // _vibe_id_produto primeiro: e o unico id de produto presente nos itens
-        // da pre-carga (mapVibecodeProdutoToOSItem), que nao tem id_produto nem
-        // produto_id. Sem ele, a busca por ID era pulada em silencio nesses itens
-        // e o fallback aplicava o primeiro formato do sistema.
-        // Mesma ordem tolerante usada em _getActiveProductInfo.
-        const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
-        let produtoObj = null;
-        if (prodId) {
-            produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
-        }
-        if (!produtoObj) {
-            const prodName = item.nome_produto_real || item.produto;
-            if (prodName) {
-                const cleanProdName = prodName.toLowerCase().trim();
-                produtoObj = state.produtosGlobais.find(p => {
-                    const nameMatch = (p.nomeReal || '').toLowerCase().trim() === cleanProdName || globalFuzzyMatch(p.nomeReal, prodName);
-                    if (nameMatch) return true;
-                    const apelidos = (p.apelidos || '').split(',').map(a => a.trim().toLowerCase());
-                    return apelidos.includes(cleanProdName) || apelidos.some(a => globalFuzzyMatch(a, prodName));
-                });
+    // Mesma resolução da prévia: vínculos explícitos, depois o produto do ERP.
+    const corDoItem = (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id || item.cor_id));
+    const numDoItem = (state.numeracoes || []).find(n => String(n.id) === String(item.amostra_num_id || item.numeracao_id));
+    const formatoResolvido = formatoDoModelo(item, corDoItem, numDoItem);
+    if (!formatoResolvido) {
+        for (const prefixo of ['imp', 'ped']) {
+            for (const campo of ['formato', 'saida', 'numeracao', 'numeracao-2']) {
+                const controle = document.getElementById(prefixo + '-' + campo);
+                if (controle) controle.value = '';
             }
         }
-        if (produtoObj && produtoObj.id_formato) {
-            formatoId = produtoObj.id_formato;
-            if (!contexto.restaurandoNavegacao) autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Imp] Formato matched via Produto "${produtoObj.nomeReal}" → ${formatoId}`);
-        }
+        if (typeof limparPreviaEnquantoCarrega === 'function') limparPreviaEnquantoCarrega();
+        throw new Error('Modelo sem formato válido vinculado. Defina o formato antes de preparar a impressão.');
     }
-    
-    // Tentar match do formato via Cor
-    if (!formatoId && item.cor) {
-        const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
-        if (corMatched && corMatched.formato_id) {
-            formatoId = corMatched.formato_id;
-            console.log(`[OS→Imp] Formato matched via Cor "${item.cor}" → ${formatoId}`);
-        }
-    }
+    const formatoId = formatoResolvido.id;
 
-    if (!formatoId && item.formato) {
-        formatoId = matchFormato(item.formato);
-        if (formatoId) {
-            if (!contexto.restaurandoNavegacao) autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Imp] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
-        }
-    }
-    
-    // Fallback: Se o formato não foi definido ou não bateu com nenhum produto, seleciona o 1º formato padrão do sistema
-    if (!formatoId && state.formatos && state.formatos.length > 0) {
-        formatoId = state.formatos[0].id;
-        console.log(`[OS→Imp] Fallback de Formato ativado: ${formatoId}`);
-    }
-    
     if (formatoId) {
         const fmtSelect = document.getElementById('imp-formato');
         if (fmtSelect) {
@@ -33017,7 +33059,7 @@ function renderImpOSQueue(opcoes = {}) {
                 nomeReal = prodObj.nomeReal || `Produto #${prodId}`;
                 setorPcp = prodObj.setor_pcp || '';
                 if (prodObj.id_formato) {
-                    const fmtObj = (state.formatos || []).find(f => String(f.id_formato_num) === String(prodObj.id_formato));
+                    const fmtObj = formatoDoProduto(prodObj);
                     if (fmtObj) formatoPadraoId = fmtObj.id;
                 }
             } else {
@@ -33027,31 +33069,12 @@ function renderImpOSQueue(opcoes = {}) {
 
         const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle; color: #ffffff;">${setorPcp}</span>` : '';
 
-        // Box level Formato & Saida calculation
-        let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
-        let boxSaiSel = groupItens[0].saida_id || '';
-        
-        // If there's a forced formato, auto-apply it to all items if missing
-        if (formatoPadraoId && !somenteLeitura) {
-            groupItens.forEach(item => {
-                if (String(item.formato_id) !== String(formatoPadraoId)) {
-                    item.formato_id = formatoPadraoId;
-                    setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
-                }
-                if (!item.saida_id) {
-                    const fObj = (state.formatos || []).find(f => String(f.id) === String(formatoPadraoId));
-                    if (fObj && fObj.default_saida_id) {
-                        item.saida_id = fObj.default_saida_id;
-                        boxSaiSel = fObj.default_saida_id; // Set header saídas as well
-                        setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
-                    }
-                }
-            });
-        }
+        const boxFmtSel = prepararFormatosDaFila(groupItens, formatoPadraoId, somenteLeitura);
+        const saidasDoGrupo = new Set(groupItens.map(item => item.saida_id || ''));
+        const boxSaiSel = saidasDoGrupo.size === 1 ? [...saidasDoGrupo][0] : '';
+        const dropdownFmtDisabled = somenteLeitura ? 'disabled' : '';
+        const fmtHeaderStyle = somenteLeitura ? selectHeaderStyleDisabled : selectHeaderStyle;
 
-        const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
-        const fmtHeaderStyle = formatoPadraoId ? selectHeaderStyleDisabled : selectHeaderStyle;
-        
         const formatosOptions = (state.formatos || []).map(f => {
             const sel = String(f.id) === String(boxFmtSel) ? 'selected' : '';
             return `<option value="${f.id}" ${sel}>${f.name}</option>`;
@@ -37354,15 +37377,35 @@ function avisarModeloSemFormato(container, idx, temVerso) {
 }
 window.avisarModeloSemFormato = avisarModeloSemFormato;
 
+function formatoDoProduto(produto) {
+    if (!produto?.id_formato) return null;
+    const formatos = state.formatos || [];
+    return formatos.find(f => f.id_formato_num != null && String(f.id_formato_num) === String(produto.id_formato))
+        || formatos.find(f => String(f.id) === String(produto.id_formato)) || null;
+}
+
+// Renderizar a fila só completa os campos ausentes; nunca substitui uma escolha.
+function prepararFormatosDaFila(itens, formatoPadraoId, somenteLeitura) {
+    if (!somenteLeitura) {
+        itens.forEach(item => {
+            if (!item.formato_id && formatoPadraoId) item.formato_id = formatoPadraoId;
+            const formato = (state.formatos || []).find(f => String(f.id) === String(item.formato_id));
+            if (!item.saida_id && formato?.default_saida_id) item.saida_id = formato.default_saida_id;
+        });
+    }
+    const formatos = new Set(itens.map(item => item.formato_id || ''));
+    return formatos.size === 1 ? [...formatos][0] : '';
+}
+
 function formatoDoModelo(item, cor, num) {
     if (!state.formatos || !state.formatos.length) return null;
     if (cor && cor.formato_id) {
         const f = state.formatos.find(x => String(x.id) === String(cor.formato_id));
-        if (f) return f;
+        return f || null;
     }
     if (num && num.formato_id) {
         const f = state.formatos.find(x => String(x.id) === String(num.formato_id));
-        if (f) return f;
+        return f || null;
     }
     // O FORMATO DO PRÓPRIO MODELO, POR ÚLTIMO (02/09/2026).
     //
@@ -37384,9 +37427,12 @@ function formatoDoModelo(item, cor, num) {
     // presentes, nada muda.
     if (item && item.formato_id) {
         const f = state.formatos.find(x => String(x.id) === String(item.formato_id));
-        if (f) return f;
+        return f || null;
     }
-    return null;
+    const produtoId = item && (item._vibe_id_produto || item.id_produto || item.produto_id);
+    const produto = produtoId == null ? null : (state.produtosGlobais || []).find(p =>
+        (p.id_produto != null && String(p.id_produto) === String(produtoId)) || (p.id != null && String(p.id) === String(produtoId)));
+    return formatoDoProduto(produto);
 }
 window.formatoDoModelo = formatoDoModelo;
 
@@ -38371,6 +38417,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     }
 
 
+    const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
     if (cor && cor.width_mm && cor.height_mm) {
@@ -38378,12 +38425,15 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         targetH = cor.height_mm;
     }
 
-    const finalWidth = Math.round(targetW * S);
-    const finalHeight = Math.round(targetH * S);
+    // O canvas externo é a Cor; o grupo de arte/numeração mantém a peça.
+    const larguraVisual = Math.round((areaCor ? areaCor.width_mm : targetW) * S);
+    const alturaVisual = Math.round((areaCor ? areaCor.height_mm : targetH) * S);
+    const finalWidth = areaCor ? Math.round(fmt.width_mm * S) : larguraVisual;
+    const finalHeight = areaCor ? Math.round(fmt.height_mm * S) : alturaVisual;
     if (finalWidth <= 0 || finalHeight <= 0) return;
 
-    canvas.width = finalWidth;
-    canvas.height = finalHeight;
+    canvas.width = larguraVisual;
+    canvas.height = alturaVisual;
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
 
@@ -38400,7 +38450,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const _desatualizado = () => canvas.__geracaoDesenho !== _geracao;
 
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.clearRect(0, 0, larguraVisual, alturaVisual);
     ctx.globalCompositeOperation = 'source-over';
 
     // ====== CAMADA 1: COR (PDF via pdf.js) ======
@@ -38412,7 +38462,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         try {
             const hasVersoFile = (face === 'back' && cor.pdf_verso_base64);
             const rawPdfData = hasVersoFile ? cor.pdf_verso_base64 : cor.pdf_base64;
-            const offCanvas = await rasterDaAmostra(['cor', rawPdfData, face, !!hasVersoFile, fmt.width_mm, S], async () => {
+            const offCanvas = await rasterDaAmostra(['cor', rawPdfData, face, !!hasVersoFile, fmt.width_mm, areaCor?.width_mm, areaCor?.height_mm, S], async () => {
                 const base64Data = rawPdfData.includes('base64,') ? rawPdfData.split('base64,')[1] : rawPdfData;
                 const binStr = atob(base64Data);
                 const bytes = new Uint8Array(binStr.length);
@@ -38427,7 +38477,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const page = await pdf.getPage(pageNum);
 
                     const viewport = page.getViewport({ scale: 1.0 });
-                    const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+                    const pdfScale = ((areaCor ? areaCor.width_mm : fmt.width_mm) * 2.8346) / viewport.width;
                     const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
 
                     const offCanvas = document.createElement('canvas');
@@ -38443,7 +38493,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
             const dx = (finalWidth - offCanvas.width) / 2;
             const dy = (finalHeight - offCanvas.height) / 2;
-            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+            if (areaCor) ctx.drawImage(offCanvas, 0, 0, larguraVisual, alturaVisual);
+            else ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
             corRendered = true;
         } catch (e) {
             console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar cor PDF:`, e);
@@ -38453,7 +38504,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     if (!corRendered) {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, finalWidth, finalHeight);
+        ctx.fillRect(0, 0, larguraVisual, alturaVisual);
     }
 
     // ====== GRUPO ARTE + NUMERACAO ======
@@ -38896,7 +38947,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // Agora sim: o grupo (arte + numeracao) multiplica, de uma vez so, sobre a cor.
     if (grupoTemConteudo) {
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(grupoCanvas, 0, 0);
+        ctx.drawImage(grupoCanvas, areaCor ? areaCor.margem_esquerda_mm * S : 0, areaCor ? areaCor.margem_superior_mm * S : 0);
         ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -39314,12 +39365,8 @@ async function regenerarAmostraDoModelo(osId, item, idx, S) {
         }
     }
 
-    // Resolver formato: cor > num > primeiro do state > fallback
-    let fmt = null;
-    if (cor && cor.formato_id)  fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
-    if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
-    if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
-    if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+    const fmt = formatoDoModelo(item, cor, num);
+    if (!fmt) throw new Error('Modelo sem formato válido vinculado. Defina o formato antes de gerar a amostra.');
 
     try {
         // ── FRENTE ──
@@ -45443,15 +45490,14 @@ async function exportarPdfModelos() {
 
             const corId = document.getElementById('amostra-item-cor-' + idx)?.value || item.amostra_cor_id;
             const numId = document.getElementById('amostra-item-num-' + idx)?.value || item.amostra_num_id;
-            const cor = corId ? state.cores.find(c => String(c.id) === String(corId)) : null;
+            let cor = corId ? state.cores.find(c => String(c.id) === String(corId)) : null;
             const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
             
-            let fmt = null;
-            if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-            if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-            if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
-            if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+            const fmt = formatoDoModelo(item, cor, num);
+            if (!fmt) throw new Error('Modelo ' + (item.modelo || item.id || idx + 1) + ' sem formato válido vinculado. Defina o formato antes de exportar.');
 
+            const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
+            if (areaCor) cor = { ...cor, width_mm: areaCor.width_mm, height_mm: areaCor.height_mm };
             let targetW = fmt.width_mm;
             let targetH = fmt.height_mm;
             if (cor && cor.width_mm && cor.height_mm) {
@@ -45490,7 +45536,7 @@ async function exportarPdfModelos() {
         }
     } catch (e) {
         console.error("Erro ao exportar PDF:", e);
-        toast('Erro ao gerar o PDF.', 'error');
+        toast(e.message || 'Erro ao gerar o PDF.', 'error');
     } finally {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
@@ -45501,6 +45547,33 @@ function arrayBufferHeaderIsPdf(buffer) {
     if (!buffer || buffer.byteLength < 4) return false;
     const bytes = new Uint8Array(buffer.slice(0, 4));
     return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+}
+
+// Uma falha no original interrompe o download completo; não substitui por amostra.
+async function adicionarArteOriginalAoPdf(pdfDoc, url, ptW, ptH, modelo, face) {
+    if (!url) {
+        pdfDoc.addPage([ptW, ptH]);
+        return;
+    }
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bytes = await response.arrayBuffer();
+        if (arrayBufferHeaderIsPdf(bytes)) {
+            const original = await window.PDFLib.PDFDocument.load(bytes);
+            const [page] = await pdfDoc.copyPages(original, [0]);
+            if (!page) throw new Error('PDF sem página');
+            page.setSize(ptW, ptH);
+            pdfDoc.addPage(page);
+        } else {
+            const header = new Uint8Array(bytes);
+            const png = [137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => header[i] === value);
+            const image = png ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+            pdfDoc.addPage([ptW, ptH]).drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+        }
+    } catch (error) {
+        throw new Error(`Modelo ${modelo}, ${face}: não foi possível carregar a arte original (${error.message}). Nenhum PDF foi exportado; a amostra não será usada.`);
+    }
 }
 
 // --- Exportação de PDF Somente Arte ---
@@ -45536,6 +45609,7 @@ async function exportarPdfSomenteArte() {
         const pdfDoc = await PDFDocument.create();
         const nums = [];
         let addedPages = 0;
+        let facesSemArte = 0;
 
         for (let idx = 0; idx < itens.length; idx++) {
             const item = itens[idx];
@@ -45545,15 +45619,12 @@ async function exportarPdfSomenteArte() {
             const cor = corId ? state.cores.find(c => String(c.id) === String(corId)) : null;
             const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
             
-            let fmt = null;
-            if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-            if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-            if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
-            if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+            const fmt = formatoDoModelo(item, cor, num);
+            if (!fmt) throw new Error('Modelo ' + (item.modelo || item.id || idx + 1) + ' sem formato válido vinculado. Defina o formato antes de exportar.');
 
             let targetW = fmt.width_mm;
             let targetH = fmt.height_mm;
-            if (cor && cor.width_mm && cor.height_mm) {
+            if (cor && cor.margem_esquerda_mm == null && cor.width_mm && cor.height_mm) {
                 targetW = cor.width_mm;
                 targetH = cor.height_mm;
             }
@@ -45561,74 +45632,11 @@ async function exportarPdfSomenteArte() {
             const ptW = targetW * (72 / 25.4);
             const ptH = targetH * (72 / 25.4);
 
-            let pageAdded = false;
-
-            // 1. Tentar carregar a arte original limpa da frente
-            if (item.arte_url) {
-                try {
-                    const response = await fetch(item.arte_url);
-                    if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-                    const arrayBuffer = await response.arrayBuffer();
-                    const isPdf = arrayBufferHeaderIsPdf(arrayBuffer);
-                    
-                    if (isPdf) {
-                        const originalDoc = await PDFDocument.load(arrayBuffer);
-                        const pages = await pdfDoc.copyPages(originalDoc, [0]);
-                        if (pages.length > 0) {
-                            const copiedPage = pages[0];
-                            copiedPage.setSize(ptW, ptH);
-                            pdfDoc.addPage(copiedPage);
-                            pageAdded = true;
-                        }
-                    } else {
-                        const page = pdfDoc.addPage([ptW, ptH]);
-                        let image;
-                        if (item.arte_url.toLowerCase().endsWith('.png')) {
-                            image = await pdfDoc.embedPng(arrayBuffer);
-                        } else {
-                            image = await pdfDoc.embedJpg(arrayBuffer);
-                        }
-                        page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
-                        pageAdded = true;
-                    }
-                } catch (e) {
-                    console.warn(`Falha ao carregar arte original frente para o modelo ${idx}, tentando fallback:`, e);
-                }
-            }
-
-            // Fallback para amostra_arte_base64 se falhar ou se não tiver arte_url
-            if (!pageAdded && item.amostra_arte_base64) {
-                try {
-                    const isPdf = item.amostra_arte_base64.startsWith('data:application/pdf') || item.amostra_arte_base64.includes('JVBERi');
-                    const base64Data = item.amostra_arte_base64.includes('base64,') ? item.amostra_arte_base64.split('base64,')[1] : item.amostra_arte_base64;
-
-                    if (isPdf) {
-                        const originalDoc = await PDFDocument.load(base64Data);
-                        const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
-                        copiedPage.setSize(ptW, ptH);
-                        pdfDoc.addPage(copiedPage);
-                        pageAdded = true;
-                    } else {
-                        const page = pdfDoc.addPage([ptW, ptH]);
-                        let image;
-                        if (item.amostra_arte_base64.startsWith('data:image/png')) {
-                            image = await pdfDoc.embedPng(base64Data);
-                        } else {
-                            image = await pdfDoc.embedJpg(base64Data);
-                        }
-                        page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
-                        pageAdded = true;
-                    }
-                } catch (e) {
-                    console.warn(`Falha ao carregar fallback base64 do modelo ${idx}:`, e);
-                }
-            }
-
-            // Se ainda não adicionou nenhuma página da frente, adiciona uma em branco
-            if (!pageAdded) {
-                pdfDoc.addPage([ptW, ptH]);
-                pageAdded = true;
-            }
+            // A exportação usa a mesma seleção de originais da impressão.
+            // A amostra composta nunca é uma alternativa à arte ausente.
+            const originalFrente = arteParaImpor(item.arte_url);
+            await adicionarArteOriginalAoPdf(pdfDoc, originalFrente, ptW, ptH, item.id || idx + 1, 'frente');
+            if (!originalFrente) facesSemArte++;
 
             // Mapear labels de página
             const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
@@ -45641,71 +45649,9 @@ async function exportarPdfSomenteArte() {
 
             // 2. Se for frente e verso, tratar arte do verso
             if (modeloTemVerso(item)) {
-                let versoPageAdded = false;
-                if (item.verso_arte_url) {
-                    try {
-                        const response = await fetch(item.verso_arte_url);
-                        if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-                        const arrayBuffer = await response.arrayBuffer();
-                        const isPdf = arrayBufferHeaderIsPdf(arrayBuffer);
-                        
-                        if (isPdf) {
-                            const originalDoc = await PDFDocument.load(arrayBuffer);
-                            const pages = await pdfDoc.copyPages(originalDoc, [0]);
-                            if (pages.length > 0) {
-                                const copiedPage = pages[0];
-                                copiedPage.setSize(ptW, ptH);
-                                pdfDoc.addPage(copiedPage);
-                                versoPageAdded = true;
-                            }
-                        } else {
-                            const page = pdfDoc.addPage([ptW, ptH]);
-                            let image;
-                            if (item.verso_arte_url.toLowerCase().endsWith('.png')) {
-                                image = await pdfDoc.embedPng(arrayBuffer);
-                            } else {
-                                image = await pdfDoc.embedJpg(arrayBuffer);
-                            }
-                            page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
-                            versoPageAdded = true;
-                        }
-                    } catch (e) {
-                        console.warn(`Falha ao carregar arte original verso para o modelo ${idx}, tentando fallback:`, e);
-                    }
-                }
-
-                // Fallback para verso_amostra_arte_base64
-                if (!versoPageAdded && item.verso_amostra_arte_base64) {
-                    try {
-                        const isPdf = item.verso_amostra_arte_base64.startsWith('data:application/pdf') || item.verso_amostra_arte_base64.includes('JVBERi');
-                        const base64Data = item.verso_amostra_arte_base64.includes('base64,') ? item.verso_amostra_arte_base64.split('base64,')[1] : item.verso_amostra_arte_base64;
-
-                        if (isPdf) {
-                            const originalDoc = await PDFDocument.load(base64Data);
-                            const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
-                            copiedPage.setSize(ptW, ptH);
-                            pdfDoc.addPage(copiedPage);
-                            versoPageAdded = true;
-                        } else {
-                            const page = pdfDoc.addPage([ptW, ptH]);
-                            let image;
-                            if (item.verso_amostra_arte_base64.startsWith('data:image/png')) {
-                                image = await pdfDoc.embedPng(base64Data);
-                            } else {
-                                image = await pdfDoc.embedJpg(base64Data);
-                            }
-                            page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
-                            versoPageAdded = true;
-                        }
-                    } catch (e) {
-                        console.warn(`Falha ao carregar fallback verso base64 do modelo ${idx}:`, e);
-                    }
-                }
-
-                if (!versoPageAdded) {
-                    pdfDoc.addPage([ptW, ptH]);
-                    versoPageAdded = true;
-                }
+                const originalVerso = arteParaImpor(item.verso_arte_url || item.url_arquivo_arte_verso);
+                await adicionarArteOriginalAoPdf(pdfDoc, originalVerso, ptW, ptH, item.id || idx + 1, 'verso');
+                if (!originalVerso) facesSemArte++;
 
                 nums.push(PDFNumber.of(addedPages));
                 nums.push(pdfDoc.context.obj({
@@ -45730,13 +45676,15 @@ async function exportarPdfSomenteArte() {
             link.click();
             URL.revokeObjectURL(link.href);
 
-            toast('PDF de Artes gerado com sucesso!', 'success');
+            toast(facesSemArte
+                ? `PDF de Artes gerado: ${facesSemArte} face(s) sem arte original ficaram em branco. Amostras não foram usadas.`
+                : 'PDF de Artes gerado com sucesso!', facesSemArte ? 'warning' : 'success');
         } else {
             toast('Nenhuma página pôde ser gerada.', 'warning');
         }
     } catch (e) {
         console.error("Erro ao exportar PDF Arte:", e);
-        toast('Erro ao gerar o PDF de Artes.', 'error');
+        toast(e.message || 'Erro ao gerar o PDF de Artes.', 'error');
     } finally {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
@@ -46141,15 +46089,12 @@ async function exportarPdfGabarito() {
             const cor = corId ? state.cores.find(c => String(c.id) === String(corId)) : null;
             const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
             
-            let fmt = null;
-            if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-            if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-            if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
-            if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+            const fmt = formatoDoModelo(item, cor, num);
+            if (!fmt) throw new Error('Modelo ' + (item.modelo || item.id || idx + 1) + ' sem formato válido vinculado. Defina o formato antes de exportar.');
 
             let targetW = fmt.width_mm;
             let targetH = fmt.height_mm;
-            if (cor && cor.width_mm && cor.height_mm) {
+            if (cor && cor.margem_esquerda_mm == null && cor.width_mm && cor.height_mm) {
                 targetW = cor.width_mm;
                 targetH = cor.height_mm;
             }
@@ -46286,7 +46231,7 @@ async function exportarPdfGabarito() {
         }
     } catch (e) {
         console.error("Erro ao exportar PDF Gabarito:", e);
-        toast('Erro ao gerar o PDF de Gabaritos.', 'error');
+        toast(e.message || 'Erro ao gerar o PDF de Gabaritos.', 'error');
     } finally {
         btn.innerHTML = originalHtml;
         btn.disabled = false;

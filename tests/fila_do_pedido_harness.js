@@ -19,6 +19,7 @@ const RAIZ = path.dirname(__dirname);
 const puppeteer = require('puppeteer');
 
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
 
 let total = 0, falhas = 0;
@@ -30,15 +31,16 @@ function ok(cond, oque, detalhe) {
 }
 
 function extrair(nome) {
-    const i = PEDIDO.indexOf('\nfunction ' + nome + '(');
+    const fonte = ['formatoDoProduto', 'prepararFormatosDaFila'].includes(nome) ? SCRIPT : PEDIDO;
+    const i = fonte.indexOf('\nfunction ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no pedido.js');
-    const fim = PEDIDO.indexOf('\n}', i);
-    return PEDIDO.slice(i, fim + 2);
+    const fim = fonte.indexOf('\n}', i);
+    return fonte.slice(i, fim + 2);
 }
 
 // As funcoes de verdade que decidem o que a fila mostra. As outras (salvar
 // campo, redesenhar barra, mover a janela) sao dubles: nao mudam o desenho.
-const REAIS = ['renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
+const REAIS = ['formatoDoProduto', 'prepararFormatosDaFila', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',

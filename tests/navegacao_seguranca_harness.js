@@ -13,7 +13,7 @@ function extrair(fonte, nome) {
 }
 function montar() {
     const tarefas = [], escritas = [], filas = [], mensagens = [];
-    const item = { id: 'm1', produto: 'Sintético', formato: 'F', numeracao: 'N' };
+    const item = { id: 'm1', produto: 'Sintético', formato_id: 'f', numeracao: 'N' };
     const ctx = vm.createContext({ console: { log() {}, warn() {}, error() {} },
         state: { osItens: { os: [item] }, formatos: [{ id: 'f', default_saida_id: 's' }],
             numeracoes: [{ id: 'n', name: 'N' }], cores: [], produtosGlobais: [], saidas: [] },
@@ -30,6 +30,7 @@ function montar() {
     });
     vm.runInContext(ler('navegacao-painel.js'), ctx);
     vm.runInContext(extrair(script, 'saveActiveOSItemField') + '\n'
+        + extrair(script, 'formatoDoProduto') + '\n' + extrair(script, 'formatoDoModelo') + '\n'
         + extrair(script, 'enviarParaImposicao') + '\n' + extrair(script, 'carregarModeloParaImposicao') + '\n'
         + extrair(pedido, 'enviarParaPedido') + '\n' + extrair(pedido, 'carregarModeloParaPedido'), ctx);
     ctx.document.getElementById = nome => {

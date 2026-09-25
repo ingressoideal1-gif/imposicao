@@ -11,7 +11,7 @@ window.editorState = {
     fabricCanvas: null,
     layer1Canvas: null,
     layer2Canvas: null,
-    format: { width_mm: 180, height_mm: 50 },
+    format: null,
     scalePxPerMm: 4.0, // Escala de visualização no editor (4px por mm para alta nitidez)
     zoom: 1.0,
     history: [],
@@ -101,13 +101,16 @@ async function setupEditorWorkspace() {
 
     const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
 
-    let fmt = null;
-    if (cor && cor.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
-    if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
-    if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
-    if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+    const fmt = formatoDoModelo(item, cor, num);
+    if (!fmt) {
+        window.editorState.format = null;
+        fecharCriadorDeArte();
+        toast('Modelo sem formato válido vinculado. Defina o formato antes de criar a arte.', 'error');
+        return;
+    }
 
     window.editorState.format = fmt;
+    const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
     const dimEl = document.getElementById('editor-modelo-dimensoes');
     if (dimEl) dimEl.textContent = `${fmt.width_mm} x ${fmt.height_mm} mm`;
 
@@ -116,20 +119,22 @@ async function setupEditorWorkspace() {
     window.editorState.scalePxPerMm = scalePx;
     const canvasW = Math.round(fmt.width_mm * scalePx);
     const canvasH = Math.round(fmt.height_mm * scalePx);
+    const larguraVisual = areaCor ? Math.round(areaCor.width_mm * scalePx) : canvasW;
+    const alturaVisual = areaCor ? Math.round(areaCor.height_mm * scalePx) : canvasH;
 
     const stackWrapper = document.getElementById('editor-canvas-stack');
     if (stackWrapper) {
-        stackWrapper.style.width = canvasW + 'px';
-        stackWrapper.style.height = canvasH + 'px';
+        stackWrapper.style.width = larguraVisual + 'px';
+        stackWrapper.style.height = alturaVisual + 'px';
     }
 
     // 1. Camada 1: Canvas de Cor (Background)
     const l1 = document.getElementById('editor-canvas-layer1');
     if (l1) {
-        l1.width = canvasW;
-        l1.height = canvasH;
-        l1.style.width = canvasW + 'px';
-        l1.style.height = canvasH + 'px';
+        l1.width = larguraVisual;
+        l1.height = alturaVisual;
+        l1.style.width = larguraVisual + 'px';
+        l1.style.height = alturaVisual + 'px';
     }
     window.editorState.layer1Canvas = l1;
 
@@ -228,6 +233,10 @@ async function setupEditorWorkspace() {
             }
             blendGroup.style.width = canvasW + 'px';
             blendGroup.style.height = canvasH + 'px';
+            // Somente posição DOM: Fabric, JSON e PDF continuam no Formato base.
+            blendGroup.style.transform = areaCor
+                ? `translate(${areaCor.margem_esquerda_mm * scalePx}px, ${areaCor.margem_superior_mm * scalePx}px)` : '';
+            blendGroup.style.outline = areaCor ? '1px dashed #0284c7' : '';
 
             const fabricWrapper = stackWrapper.querySelector('.canvas-container');
             if (fabricWrapper) {
@@ -480,6 +489,7 @@ async function carregarArteBaseNoCanvas(fc, rawArteSource) {
  * Renderiza a Camada 1 (Cor) no Canvas de Fundo
  */
 async function renderEditorLayer1Cor(cor, fmt, face) {
+    const areaCor = cor?.margem_esquerda_mm != null ? CorMargens.calcular(fmt, cor) : null;
     const l1 = window.editorState.layer1Canvas;
     if (!l1) return;
     const ctx = l1.getContext('2d');
@@ -526,7 +536,7 @@ async function renderEditorLayer1Cor(cor, fmt, face) {
                     const page = await pdf.getPage(pageNum);
 
                     const viewport = page.getViewport({ scale: 1.0 });
-                    const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+                    const pdfScale = ((areaCor ? areaCor.width_mm : fmt.width_mm) * 2.8346) / viewport.width;
                     const scaledViewport = page.getViewport({ scale: pdfScale * (scalePx / 2.8346) });
 
                     const offCanvas = document.createElement('canvas');
@@ -537,7 +547,8 @@ async function renderEditorLayer1Cor(cor, fmt, face) {
 
                     const dx = (l1.width - offCanvas.width) / 2;
                     const dy = (l1.height - offCanvas.height) / 2;
-                    ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                    if (areaCor) ctx.drawImage(offCanvas, 0, 0, l1.width, l1.height);
+                    else ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
                     corRendered = true;
                 } catch (e) {
                     console.warn('[Criador de Arte] Erro ao renderizar PDF da cor:', e);
@@ -1428,9 +1439,12 @@ async function salvarArteDoEditor() {
             const pdfLibObj = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
             if (!pdfLibObj?.PDFDocument) throw new Error('Gerador de PDF indisponível. Reabra o editor.');
             {
-                const fmt = window.editorState.format || { width_mm: 180, height_mm: 50 };
-                const widthMm = fmt.width_mm || 180;
-                const heightMm = fmt.height_mm || 50;
+                const fmt = window.editorState.format;
+                if (!fmt || !(Number(fmt.width_mm) > 0) || !(Number(fmt.height_mm) > 0)) {
+                    throw new Error('Modelo sem formato válido vinculado. Reabra o editor após definir o formato.');
+                }
+                const widthMm = Number(fmt.width_mm);
+                const heightMm = Number(fmt.height_mm);
 
                 // Converter mm em pontos PDF (72 pt por polegada; 1 polegada = 25.4 mm)
                 const widthPts = widthMm * (72 / 25.4);

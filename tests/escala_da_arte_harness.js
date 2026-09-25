@@ -115,6 +115,7 @@ function montarJanela({ formatos, item, num }) {
         + recortar(SCRIPT, 'function pdfImparFrenteVersoParDoModelo(', 'pdfImparFrenteVersoParDoModelo')
         + recortar(SCRIPT, 'function pdfDuplicarParaVersoDoModelo(', 'pdfDuplicarParaVersoDoModelo')
         + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')
+        + recortar(SCRIPT, 'function formatoDoProduto(', 'formatoDoProduto')
         + recortar(SCRIPT, 'function formatoDoModelo(', 'formatoDoModelo')
         + recortar(SCRIPT, 'function atualizarCaixaDeEscalaDaArte(', 'atualizarCaixaDeEscalaDaArte')
         + recortar(SCRIPT, 'function pdfViewerAindaAtual(', 'pdfViewerAindaAtual')
