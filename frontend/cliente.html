@@ -10,6 +10,7 @@
     <style>
         /* Ajustes básicos para o cliente rodar isolado, caso existam dependências no body geral */
         body { margin: 0; background-color: var(--bg); color: var(--text); font-family: sans-serif; }
+        #cliente-aviso-chat[hidden] { display: none; }
     </style>
     <!-- O `pdf-lib.min.js` saiu daqui: 525 KB bloqueando o primeiro pixel de uma
          página que o cliente abre no 4G, e `PDFLib` não é usado uma única vez no
@@ -55,6 +56,8 @@
                     <span id="cliente-os-itens-count" class="badge badge-blue"></span>
                 </div>
             </header>
+
+            <div id="cliente-aviso-chat" class="portal-aviso atencao" role="status" hidden></div>
 
             <!-- A trilha do pedido: as três etapas que fecham o pedido, e
                  quantas já foram. Ela vive FORA das seções porque vale para as
@@ -194,12 +197,12 @@
          para decidir o selo PAGO, para as duas telas não divergirem. -->
     <!-- Os icones desenhados, antes de qualquer tela que os use: as abas, os
          cartoes e os selos pedem o SVG a este arquivo em vez de escrever emoji. -->
-    <script src="/icones-cliente.js?v=964"></script>
+    <script src="/icones-cliente.js?v=966"></script>
     <script src="/pagamento-do-pedido.js?v=964"></script>
     <script src="/banco-do-modelo.js?v=897"></script>
     <script src="/cliente-bancos.js?v=897"></script>
     <script src="/cliente-dados.js?v=917"></script>
-    <script src="/cliente-shell.js?v=936"></script>
+    <script src="/cliente-shell.js?v=966"></script>
     <script src="/cliente-confirmacoes.js?v=903"></script>
     <script src="/cliente-entrega-form.js?v=907"></script>
     <script src="/cliente-entrega.js?v=903"></script>
@@ -207,6 +210,6 @@
     <script src="/cliente-faturamento.js?v=917"></script>
     <script src="/cliente-orcamento.js?v=897"></script>
     <script src="/cliente-pagamento.js?v=897"></script>
-    <script src="/cliente.js?v=964"></script>
+    <script src="/cliente.js?v=966"></script>
 </body>
 </html>

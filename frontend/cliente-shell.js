@@ -69,7 +69,7 @@ function seloDoStatus(statusArte) {
     if (s.indexOf('APR PARCIAL') >= 0 || s.indexOf('APROVADO PARCIAL') >= 0) {
         return { chave: 'aprovar', texto: 'Aprovação parcial', cor: '#f59e0b' };
     }
-    if (s.indexOf('ENVIAR ARTE') >= 0 || s.indexOf('AGUARD') >= 0) {
+    if (s.indexOf('ENVIAR ARTE') >= 0 || s.indexOf('AGUARD') >= 0 || s === 'EM APROVACAO') {
         return { chave: 'aprovar', texto: 'Aguardando sua aprovação', cor: '#f59e0b' };
     }
     if (s.indexOf('ALTERAC') >= 0 || s.indexOf('CORRECAO') >= 0 || s.indexOf('REPROVAD') >= 0) {

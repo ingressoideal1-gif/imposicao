@@ -499,8 +499,9 @@ const linhasDoEnvio = new Function(
     // Ela vivia entre a aprovacao e o fim, e escondia a pagina inteira.
     ok(CLIENTE.indexOf('mostrarConfirmacaoDadosCliente') < 0, 'a tela sequencial saiu');
     ok(CLIENTE.indexOf('clienteConfirmacoes') < 0, 'e o estado dela junto');
-    ok(/abrirSecao\('entrega'\)/.test(CLIENTE),
-        'quem aprova a arte e levado para a aba de entrega');
+    ok(/mostrarProximaEtapaAposArte\(\);/.test(CLIENTE)
+        && /botao\.onclick = \(\) => \{[\s\S]*?abrirSecao\(destino\)/.test(CLIENTE),
+        'aprovar mostra o recibo; confirmar o popup abre a proxima etapa');
 })();
 
 // ─── A conferencia que ele ja fez, lembrada na proxima visita ────────────────

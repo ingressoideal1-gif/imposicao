@@ -1304,10 +1304,15 @@ async function carregarMioloDasNumeracoes(linhasCruas) {
 
         if (!ids.length) return;
 
-        const { data: miolo } = await supabaseClient
+        const { data: miolo, error } = await supabaseClient
             .from('producao_numeracoes')
             .select('id, elements, csv_data')
             .in('id', ids);
+
+        if (error) throw error;
+        if (!Array.isArray(miolo) || ids.some(id => !miolo.some(n => String(n.id) === id))) {
+            throw new Error('Não foi possível carregar todas as numerações deste pedido.');
+        }
 
         (miolo || []).forEach(linha => {
             const n = (state.numeracoes || []).find(x => String(x.id) === String(linha.id));
@@ -1317,6 +1322,43 @@ async function carregarMioloDasNumeracoes(linhasCruas) {
         });
     } catch (e) {
         console.warn('Erro ao buscar os elementos e o banco das numeracoes:', e);
+        throw e;
+    }
+}
+
+function mostrarErroDeCargaCliente(linkInvalido = false) {
+    const loading = document.getElementById('cliente-loading');
+    const content = document.getElementById('cliente-content');
+    const abas = document.getElementById('portal-abas');
+    const trilha = document.getElementById('portal-trilha');
+    const erro = document.getElementById('cliente-error');
+    if (loading) loading.style.display = 'none';
+    if (content) content.style.display = 'none';
+    if (abas) abas.hidden = true;
+    if (trilha) trilha.hidden = true;
+    if (erro) {
+        erro.style.display = 'block';
+        erro.innerHTML = linkInvalido
+            ? '<h2>Link inválido ou desativado</h2><p>Solicite um link válido ao seu atendimento.</p>'
+            : '<h2>Não conseguimos carregar seu pedido</h2>'
+              + '<p>Confira sua conexão e tente novamente. Se continuar, fale com seu atendimento.</p>'
+              + '<button type="button" class="btn btn-primary" onclick="window.location.reload()">Tentar novamente</button>';
+    }
+}
+
+/** Uma falha no histórico não desfaz a decisão já persistida nem pede nova aprovação. */
+async function registrarChatCliente(mensagem) {
+    try {
+        const resposta = await supabaseClient.from('propostas_chat').insert(mensagem);
+        if (!resposta || resposta.error) throw new Error('Histórico não confirmado.');
+        return true;
+    } catch (e) {
+        const aviso = document.getElementById('cliente-aviso-chat');
+        if (aviso) {
+            aviso.textContent = 'Sua decisão foi salva, mas não conseguimos confirmar o registro no histórico do atendimento. Se solicitou alteração, avise seu atendente. Não é necessário aprovar novamente.';
+            aviso.hidden = false;
+        }
+        return false;
     }
 }
 
@@ -1328,7 +1370,6 @@ async function initClientePage(numero, token) {
     clienteState.token = token;
 
     const loadingEl = document.getElementById('cliente-loading');
-    const errorEl = document.getElementById('cliente-error');
     const contentEl = document.getElementById('cliente-content');
     const numeroEl = document.getElementById('cliente-pedido-numero');
     const clienteEl = document.getElementById('cliente-pedido-cliente');
@@ -1343,8 +1384,7 @@ async function initClientePage(numero, token) {
     }
 
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (errorEl) errorEl.style.display = 'block';
+        mostrarErroDeCargaCliente();
         return;
     }
 
@@ -1368,9 +1408,9 @@ async function initClientePage(numero, token) {
         // A função devolve TABLE, então o retorno é uma lista de zero ou uma.
         const linkData = Array.isArray(linhasDoLink) ? linhasDoLink[0] : linhasDoLink;
 
-        if (linkError || !linkData) {
-            if (loadingEl) loadingEl.style.display = 'none';
-            if (errorEl) errorEl.style.display = 'block';
+        if (linkError) throw linkError;
+        if (!linkData) {
+            mostrarErroDeCargaCliente(true);
             return;
         }
 
@@ -1386,6 +1426,9 @@ async function initClientePage(numero, token) {
         // no cabeçalho desta página; o `<p>` ficava vazio, e ninguém percebeu
         // porque campo vazio não parece defeito, parece pedido sem nome.
         const portal = await carregarPortal(numero, token);
+        if (!portal || !portal.pedido || typeof portal.pedido !== 'object' || Array.isArray(portal.pedido)) {
+            throw new Error('Dados do pedido indisponíveis.');
+        }
         // Só esta chamada conhece bancos separados e seus mapas por modelo.
         // Erro fica explícito no cartão; nunca vira fallback silencioso ao catálogo.
         await window.PortalBancos.carregar(numero, token, carregarBancosDoPortal);
@@ -1451,6 +1494,10 @@ async function initClientePage(numero, token) {
                 supabaseClient.from('produtos')
                     .select('id, id_produto, nomeReal, apelidos, id_formato')
             ]);
+            for (const resposta of [coresRes, numeracoesRes, formatosRes, produtosRes]) {
+                if (resposta.error) throw resposta.error;
+                if (!Array.isArray(resposta.data)) throw new Error('Catálogo indisponível.');
+            }
             state.cores = coresRes.data || [];
             const allNums = numeracoesRes.data || [];
             state.numeracoes = allNums.filter(n => {
@@ -1461,6 +1508,7 @@ async function initClientePage(numero, token) {
             state.produtosGlobais = produtosRes.data || [];
         } catch (err) {
             console.error('Erro ao carregar dados auxiliares do Supabase:', err);
+            throw err;
         }
 
         const osId = clienteState.osId;
@@ -1469,17 +1517,21 @@ async function initClientePage(numero, token) {
         // 1. Carregar itens do pedido via pedidos_modelos
         try {
             const queryNum = parseInt(numero);
-            const { data: prodItems } = await supabaseClient
+            const { data: prodItems, error: modelosError } = await supabaseClient
                 .from('pedidos_modelos')
                 .select('*')
                 .eq('id_int', queryNum)
                 .order('ordem', { ascending: true });
+            if (modelosError) throw modelosError;
+            if (!Array.isArray(prodItems)) throw new Error('Modelos indisponíveis.');
             
             // Buscar nome do produto original da proposta e id_produto
-            const { data: propData } = await supabaseClient
+            const { data: propData, error: produtosError } = await supabaseClient
                 .from('produtos_proposta')
                 .select('id, nome_produto, id_produto')
                 .eq('id_int', queryNum);
+            if (produtosError) throw produtosError;
+            if (!Array.isArray(propData)) throw new Error('Produtos do pedido indisponíveis.');
 
             // O MIOLO das numeracoes deste pedido — `elements` e `csv_data` —,
             // buscado ANTES de montar os itens.
@@ -1547,18 +1599,24 @@ async function initClientePage(numero, token) {
                     };
                 });
             }
-        } catch (e) { console.warn('Erro ao buscar pedidos_modelos:', e); }
+        } catch (e) { console.warn('Erro ao buscar pedidos_modelos:', e); throw e; }
 
         state.osItens[osId] = itensCarregados;
 
         // 2. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
+        let arteConsolidada = null;
         try {
             const queryNum = parseInt(numero);
             if (!isNaN(queryNum)) {
-                const { data: artes } = await supabaseClient
+                const { data: artes, error: artesError } = await supabaseClient
                     .from('pedidos_artes')
                     .select('*')
-                    .eq('id_int', queryNum);
+                    .eq('id_int', queryNum)
+                    .order('created_at', { ascending: false });
+                if (artesError) throw artesError;
+                if (!Array.isArray(artes)) throw new Error('Status das artes indisponível.');
+                // Mesma linha mais recente usada na consolidação das decisões.
+                arteConsolidada = artes[0] || null;
                 
                 if (artes && artes.length > 0) {
                     state.osItens[osId].forEach(item => {
@@ -1578,7 +1636,7 @@ async function initClientePage(numero, token) {
                     });
                 }
             }
-        } catch (err) { console.warn('Erro ao mesclar pedidos_artes:', err); }
+        } catch (err) { console.warn('Erro ao mesclar pedidos_artes:', err); throw err; }
 
 
         // Salvar a OS no state.ordens
@@ -1593,14 +1651,12 @@ async function initClientePage(numero, token) {
 
         const isVibeOS = osId.startsWith('vibe_');
 
-        // Buscar status da OS
-        // REGRA: linkData.status_arte é sempre a fonte primaria (sincronizado ao gerar link)
-        // Para OS locais, tentar producao_ordens_servico como fonte complementar
-        // NUNCA usar pedidos_artes.status (isso é status por ITEM, nao da OS)
-        let osStatus = linkData.status_arte ? linkData.status_arte.trim() : 'ARTE_EM_ANDAMENTO';
-        console.log('[ClienteView] osStatus inicial (linkData.status_arte):', osStatus, '| isVibeOS:', isVibeOS);
+        // pedidos_artes.status é consolidado por pedido nas decisões do portal.
+        // O link é um espelho; só serve de reserva para pedidos legados sem status.
+        const statusConsolidado = String(arteConsolidada?.status || '').trim();
+        let osStatus = statusConsolidado || (linkData.status_arte || '').trim() || 'ARTE_EM_ANDAMENTO';
 
-        if (!isVibeOS) {
+        if (!statusConsolidado && !isVibeOS) {
             // FIX-2: Para OS locais, producao_ordens_servico SÓ complementa se o status
             // do link ainda estiver em estado inicial (não-final). Isso evita sobrescrever
             // o que o cliente gravou (APROVADO/REPROVADO) com o status interno da OS.
@@ -1610,11 +1666,12 @@ async function initClientePage(numero, token) {
 
             if (!linkEstaEmEstadoFinal) {
                 try {
-                    const { data: osData } = await supabaseClient
+                    const { data: osData, error: osError } = await supabaseClient
                         .from('producao_ordens_servico')
                         .select('status')
                         .eq('id', osId)
                         .maybeSingle();
+                    if (osError) throw osError;
                     if (osData && osData.status && osData.status.trim() !== '') {
                         osStatus = osData.status.trim();
                         console.log('[ClienteView] osStatus via producao_ordens_servico:', osStatus);
@@ -1623,6 +1680,7 @@ async function initClientePage(numero, token) {
                     }
                 } catch (e) {
                     console.warn('Erro ao buscar status global da OS:', e);
+                    throw e;
                 }
             } else {
                 console.log('[ClienteView] Status final no link protegido — ignorando producao_ordens_servico:', osStatus);
@@ -1675,8 +1733,7 @@ async function initClientePage(numero, token) {
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (errorEl) errorEl.style.display = 'block';
+        mostrarErroDeCargaCliente();
     }
 }
 
@@ -1729,17 +1786,16 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                 parseInt(clienteState.numero), itens, clienteState.entregaStatus || ''
             );
 
-            // Log no chat da proposta
-            try {
-                await supabaseClient.from('propostas_chat').insert({
-                    id_int: parseInt(clienteState.numero),
-                    tipo: 'PRODUCAO',
-                    setor: 'Cliente',
-                    visivel_externo: true,
-                    mensagem: mensagemDaAprovacaoDeArte(),
-                    autor_nome: 'Cliente (aprovação online)',
-                });
-            } catch (e) { console.error('Erro log chat:', e); }
+            // A aprovação já foi persistida. O chat não pode prender o avanço
+            // se a requisição ficar sem resposta; seu recibo/erro é independente.
+            void registrarChatCliente({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: mensagemDaAprovacaoDeArte(),
+                autor_nome: 'Cliente (aprovação online)',
+            });
 
             // Arte aprovada. Falta conferir os dados -- que agora não são uma
             // tela sequencial, e sim duas abas que já estavam ali o tempo todo.
@@ -1751,7 +1807,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             redesenharSecao('arte');
             redesenharSecao('entrega');
             redesenharSecao('faturamento');
-            abrirSecao('entrega');
+            mostrarProximaEtapaAposArte();
         } 
         else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
             // Não fechar a decisão na tela quando o pedido/link recusou a escrita.
@@ -1777,16 +1833,14 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             });
 
             // Log no chat da proposta
-            try {
-                await supabaseClient.from('propostas_chat').insert({
-                    id_int: parseInt(clienteState.numero),
-                    tipo: 'PRODUCAO',
-                    setor: 'Cliente',
-                    visivel_externo: true,
-                    mensagem: `❌ O CLIENTE SOLICITOU ALTERAÇÃO DE ARTES via link online.${observacoesTexto}`,
-                    autor_nome: 'Cliente (alteração online)',
-                });
-            } catch (e) { console.error('Erro log chat:', e); }
+            await registrarChatCliente({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: `❌ O CLIENTE SOLICITOU ALTERAÇÃO DE ARTES via link online.${observacoesTexto}`,
+                autor_nome: 'Cliente (alteração online)',
+            });
 
             // A aba da arte passa a mostrar o que ele pediu, em vez de sumir.
             clienteState.statusArte = 'Em Alteração';
@@ -1809,6 +1863,40 @@ async function clienteFinalizarFluxo(fluxoTipo) {
 
 async function clienteAprovarTudo() {
     return clienteFinalizarFluxo('APROVAR_TUDO');
+}
+
+/** Recibo da aprovação; confirmar aqui navega, sem aprovar os dados. */
+function mostrarProximaEtapaAposArte() {
+    const anterior = document.getElementById('portal-artes-aprovadas');
+    if (anterior) anterior.remove();
+    const c = window.portalConfirmacoes || {};
+    const decidiu = valor => valor === true || valor === false;
+    const destino = !decidiu(c.entrega) ? 'entrega' : 'faturamento';
+    const faltaEntrega = !decidiu(c.entrega);
+    const faltaNota = !decidiu(c.faturamento);
+    const popup = document.createElement('dialog');
+    popup.id = 'portal-artes-aprovadas';
+    popup.setAttribute('aria-labelledby', 'portal-artes-aprovadas-titulo');
+    popup.setAttribute('aria-describedby', 'portal-artes-aprovadas-texto');
+    popup.style.cssText = 'width:min(420px,calc(100% - 32px));box-sizing:border-box;border:1px solid #22c55e;border-radius:16px;padding:24px;background:#17202e;color:#fff;box-shadow:0 20px 80px #0008;';
+    popup.innerHTML = '<h2 id="portal-artes-aprovadas-titulo" style="margin:0 0 16px;color:#86efac">Artes aprovadas</h2>'
+        + '<p id="portal-artes-aprovadas-texto" style="line-height:1.6;margin:0 0 24px"></p>'
+        + '<button type="button" class="portal-botao principal" style="width:100%;min-height:48px" autofocus></button>';
+    popup.querySelector('p').textContent = faltaEntrega
+        ? 'Falta a aprovação dos dados de entrega. Confira a entrega para continuar seu pedido.'
+        : faltaNota ? 'Falta a aprovação dos dados da nota. Confira a nota para continuar seu pedido.'
+        : 'Os dados já foram conferidos. Continue para revisar e finalizar seu pedido.';
+    const botao = popup.querySelector('button');
+    botao.textContent = faltaEntrega ? 'Conferir entrega' : faltaNota ? 'Conferir nota' : 'Revisar e finalizar';
+    botao.onclick = () => {
+        popup.close();
+        popup.remove();
+        abrirSecao(destino);
+    };
+    // Escape pode fechar o recibo; os caminhos normais da aba continuam disponíveis.
+    popup.addEventListener('close', () => popup.remove(), { once: true });
+    document.body.appendChild(popup);
+    popup.showModal();
 }
 
 /**
@@ -2323,7 +2411,7 @@ async function seguirSozinhoSeAprovouTudo(osId) {
     if (barra) {
         barra.style.display = '';
         barra.innerHTML = '<div class="portal-aviso ok" style="margin: 0; text-align: center;">'
-            + '✅ <b>Todas as artes aprovadas.</b> Levando você para os dados de entrega...'
+            + '✅ <b>Todas as artes aprovadas.</b> Preparando o próximo passo...'
             + '</div>';
     }
 
@@ -2370,21 +2458,19 @@ async function decisionAmostraItem(itemId, osId, status) {
             const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
             const prodNome = item ? item.produto : 'Produto';
             
-            // Enviar mensagem no chat da proposta
-            try {
-                await supabaseClient.from('propostas_chat').insert({
-                    id_int: parseInt(clienteState.numero),
-                    tipo: 'PRODUCAO',
-                    setor: 'Cliente',
-                    visivel_externo: true,
-                    mensagem: status === 'APROVADA' 
-                        ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
-                        : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
-                    autor_nome: 'Cliente (via link)',
-                });
-            } catch (chatErr) {
-                console.warn('Erro ao inserir mensagem no chat:', chatErr);
-            }
+            // Aprovação individual também não espera o chat para abrir a próxima
+            // etapa. Pedidos de alteração mantêm o fluxo existente.
+            const registroChat = registrarChatCliente({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: status === 'APROVADA'
+                    ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
+                    : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
+                autor_nome: 'Cliente (via link)',
+            });
+            if (status !== 'APROVADA') await registroChat;
             
             // A observação continua na versão afetada; o status é consolidado por pedido.
             if (status === 'REPROVADA') {
@@ -4424,6 +4510,11 @@ function desenharSecaoArte(osId) {
         avisoDaArte('impressora', '#38bdf8', 'Pedido em produção',
             'Suas artes já estão na impressora. Confira o prazo e o endereço na aba '
             + '<b>Entrega</b>.', true);
+    } else if (chave === 'correcao-dados') {
+        renderAmostrasOSItens(osId);
+        avisoDaArte('alerta', '#f59e0b', 'Dados em correção',
+            'Recebemos sua solicitação de correção dos dados. Confira as abas '
+            + '<b>Entrega</b> e <b>Nota</b> e aguarde o contato do seu atendimento.', true);
     } else if (chave === 'correcao') {
         renderAmostrasOSItens(osId);
         const pedidos = pedidosDeAlteracaoDoCliente(osId);

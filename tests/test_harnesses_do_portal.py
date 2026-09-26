@@ -35,6 +35,8 @@ HARNESSES = [
     "portal_orcamento_harness.js",
     "portal_persistencia_harness.js",
     "portal_entrega_cep_harness.js",
+    "portal_carga_status_chat_harness.js",
+    "portal_carga_status_chat_browser_harness.js",
 ]
 
 

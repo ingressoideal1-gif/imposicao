@@ -64,6 +64,7 @@ function ambiente() {
         problemaDoBancoCliente: () => false, numDoItem: () => null,
         renderAmostrasOSItens() {}, mensagemDaAprovacaoDeArte: () => 'aprovado',
         abrirSecao: secao => aberturas.push(secao),
+        mostrarProximaEtapaAposArte: () => aberturas.push('recibo-arte'),
         SECOES: ['arte', 'entrega', 'faturamento', 'orcamento', 'pagamento']
     });
     c.window = c;
@@ -71,7 +72,7 @@ function ambiente() {
         cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
     vm.runInContext(regras + '\n' + ['saveAmostraToDB', 'gravarStatusDoLink',
         'sincronizarStatusConsolidadoPedidoArteCliente', 'gravarCorrecaoDoCliente',
-        'clienteFinalizarFluxo', 'decisionAmostraItem'].map(funcao).join('\n') + '\n' + confirmacoes, c);
+        'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem'].map(funcao).join('\n') + '\n' + confirmacoes, c);
     c.avisoDeFinalizacao = (...args) => avisos.push(args);
     c.portalConfirmacoes.entrega = true;
     c.portalConfirmacoes.faturamento = true;
@@ -169,7 +170,7 @@ async function executar() {
         assert.notEqual(a.c.state.arteSomenteLeitura, true);
         confirmado = true;
         await a.c.clienteFinalizarFluxo('APROVAR_TUDO');
-        assert.deepEqual(a.aberturas, ['entrega']);
+        assert.deepEqual(a.aberturas, ['recibo-arte']);
         assert.equal(a.c.state.arteSomenteLeitura, true);
     });
     await teste('status consolidado recusa retorno vazio ou divergente e aceita todas as linhas confirmadas', async () => {
