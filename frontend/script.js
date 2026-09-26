@@ -26173,9 +26173,21 @@ function iniciarComplementoLista(nome, executar) {
 }
 
 function completarDadosDaLista() {
+    if (window.OrigemAprovacao) {
+        window.OrigemAprovacao.invalidar();
+        iniciarComplementoLista('origem-aprovacao', carregarOrigensAprovacao);
+    }
     iniciarComplementoLista('pagamentos', carregarPagamentosGlobais);
     iniciarComplementoLista('status', sincronizarStatusOrdensDinamico);
     iniciarComplementoLista('links', garantirLinksDosPedidosNaListaArte);
+}
+
+async function carregarOrigensAprovacao() {
+    if (!window.OrigemAprovacao) return;
+    await window.OrigemAprovacao.carregar(
+        typeof supabaseClient !== 'undefined' ? supabaseClient : null,
+        state.pedidosOrigemNaTela || []
+    );
 }
 
 function loadOrdens() {
@@ -29849,6 +29861,7 @@ async function atualizarPedidoArteConfirmado(numero, payload) {
         return linha[campo] !== valor;
     }));
     if (divergente) throw new Error('o banco devolveu um status de arte diferente do solicitado');
+    window.OrigemAprovacao?.invalidar();
     return data;
 }
 window.atualizarPedidoArteConfirmado = atualizarPedidoArteConfirmado;
@@ -29935,6 +29948,7 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
         }
     }
     (state.todasArtes || []).filter(a => a.id_int === numInt).forEach(a => { a.status = novoStatus; });
+    window.OrigemAprovacao?.invalidar();
     return novoStatus;
 }
 
@@ -31445,6 +31459,10 @@ function renderOrdens() {
             // A regra "todos os modelos prontos -> Enviar Arte" ficava aqui e gravava no
             // banco de dentro da renderização. Mudou para sincronizarPedidosProntosParaEnvio(),
             // que roda no carregamento: renderOrdens() agora só desenha.
+            state.pedidosOrigemNaTela = arteNaTela.map(os => os.numero);
+            if (window.OrigemAprovacao?.precisa(state.pedidosOrigemNaTela)) {
+                iniciarComplementoLista('origem-aprovacao', carregarOrigensAprovacao);
+            }
             tbodyArte.innerHTML = arteNaTela.map(os => {
                 const itensReais = (state.modelosGlobais && state.modelosGlobais[os.numero]) ? state.modelosGlobais[os.numero] : [];
                 // Se ainda não houver modelos criados no bd para essa OS, ele cai para o número de produtos
@@ -31557,9 +31575,10 @@ function renderOrdens() {
                         <td style="text-align: center; vertical-align: middle;">${previewDaArteDoPedidoHtml(os)}</td>
                         ${celulaDeTempoHtml(os)}
                         <td style="text-align: center; vertical-align: middle;">${formatPrazoBadge(os)}</td>
-                        <td style="text-align: center; vertical-align: middle;">${entregaHtml}</td>
+                        <td style="text-align: center; vertical-align: middle;">${entregaHtml}${window.OrigemAprovacao?.html(os.numero, 'dados', entregaStatus) || ''}</td>
                         <td style="text-align: center;">
                             ${getStatusBadge(os.status_calculado || os.status)}
+                            ${window.OrigemAprovacao?.html(os.numero, 'arte', os.status_calculado || os.status) || ''}
                             ${artProgressHtml}
                         </td>
                         ${celulaDePagamentoHtml(os)}
@@ -37134,6 +37153,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         // `dataToUpdate` não tem `status_arte` — ele é derivado aqui. Sem copiar,
         // a faixa do card só saberia quem aprovou depois de um F5.
         if (dbData.status_arte) itemLocal.status_arte = dbData.status_arte;
+        window.OrigemAprovacao?.invalidar();
         if ('amostra_num_id' in dataToUpdate) sincronizarNumeracaoDoItem(itemLocal, dataToUpdate.amostra_num_id);
         if ('arte_url' in dataToUpdate) {
             itemLocal.url_arquivo_arte = dataToUpdate.arte_url;

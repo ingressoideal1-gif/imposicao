@@ -1,0 +1,51 @@
+const assert = require('node:assert/strict');
+const origem = require('../frontend/origem-aprovacao.js');
+const chamadas = [];
+let responder = args => ({ data: args.p_pedidos.map(pedido => ({ pedido, arte:'Cliente',dados:'Atendente' })) });
+const banco = {
+    auth: { getSession: async () => ({ data: { session:{user:{id:'interno'}} } }) },
+    async rpc(nome,args) { chamadas.push({nome,args}); return nome === 'registrar_rede_atendimento' ? {data:true} : responder(args); }
+};
+(async () => {
+    await origem.carregar(banco,[123,123,-1,'inválido']);
+    assert.deepEqual(chamadas.map(c=>c.nome),['registrar_rede_atendimento','origens_aprovacao_lista']);
+    assert.deepEqual(chamadas[1].args,{p_pedidos:[123]});
+    assert.match(origem.html(123,'arte','APROVADO'),/>Cliente</);
+    assert.match(origem.html(123,'dados','APROVADO'),/>Atendente</);
+    for (const status of ['Em Arte','CANCELADA','Em Alteração','Enviar Arte']) assert.equal(origem.html(123,'arte',status),'');
+    assert.equal(origem.html(123,'dados','ALTERADO'),'');
+    assert.equal(origem.html(456,'arte','APROVADO'),'');
+    await origem.carregar(banco,[123]);
+    assert.equal(chamadas.length,2,'redesenho não repete RPC');
+    origem.invalidar();
+    assert.equal(origem.html(123,'arte','APROVADO'),'');
+    responder=()=>({error:{message:'migration not installed'}});
+    await origem.carregar(banco,[123]);
+    assert.equal(origem.html(123,'arte','APROVADO'),'');
+    assert.equal(origem.precisa([123]),false,'erro não cria ciclo de consultas');
+    origem.invalidar();
+    responder=()=>({data:[{pedido:123,arte:'<img onerror=alert(1)>',dados:'Cliente'},{pedido:999,arte:'Atendente'}]});
+    await origem.carregar(banco,[123]);
+    assert.equal(origem.html(123,'arte','APROVADO'),'');
+    assert.equal(origem.html(999,'arte','APROVADO'),'');
+    origem.invalidar();
+    let liberar;
+    responder=()=>new Promise(r=>{liberar=r;});
+    const antigo=origem.carregar(banco,[123]);
+    await new Promise(r=>setImmediate(r));
+    origem.invalidar();
+    responder=()=>({data:[{pedido:456,arte:'Cliente'}]});
+    await origem.carregar(banco,[456]);
+    liberar({data:[{pedido:123,arte:'Atendente'}]}); await antigo;
+    assert.equal(origem.html(123,'arte','APROVADO'),'');
+    assert.match(origem.html(456,'arte','APROVADO'),/>Cliente</);
+    origem.invalidar(); chamadas.length=0;
+    responder=args=>({data:args.p_pedidos.map(pedido=>({pedido,arte:'Cliente'}))});
+    await origem.carregar(banco,Array.from({length:401},(_,i)=>i+1));
+    assert.deepEqual(chamadas.slice(1).map(c=>c.args.p_pedidos.length),[200,200,1]);
+    origem.invalidar(); chamadas.length=0;
+    banco.auth.getSession=async()=>({data:{session:null}});
+    await origem.carregar(banco,[123]);
+    assert.equal(chamadas.length,0);assert.equal(origem.html(123,'arte','APROVADO'),'');
+    console.log('OK: origem por etapa, desconhecido, cache, lotes, concorrência, sessão e RPC ausente.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

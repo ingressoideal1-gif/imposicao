@@ -47,6 +47,7 @@ function ambiente() {
         return q;
     }};
     c.supabaseClient = cliente; c.vibeClient = cliente;
+    c.window = c; // Contexto do navegador, com o complemento opcional ainda ausente.
     vm.createContext(c);
     vm.runInContext('let _cargaOrdensEmAndamento=null;\n' + [
         'lerDadosLista','iniciarComplementoLista','completarDadosDaLista','loadOrdens',
