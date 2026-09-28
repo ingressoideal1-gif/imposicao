@@ -1,0 +1,180 @@
+{
+  "verified_at_utc": "2026-09-28T21:22:45.837399+00:00",
+  "source_commit": "3259f084f86933de43ae949f93aaae5b7951b660",
+  "tags": [
+    "v970",
+    "agente-v1.2.343"
+  ],
+  "tests_passed": 147,
+  "build": {
+    "agent_version": "1.2.343",
+    "engine_bytecode_matches": true,
+    "release_secret_module_present": true,
+    "printing_dlls_present": true,
+    "assets": [
+      {
+        "file": "index.html",
+        "sha256": "aaadc27d8572157673f8d79be0109e0a0c9bcb4c4ab717b6be26d35b9b36a29f"
+      },
+      {
+        "file": "cliente.html",
+        "sha256": "641f353bf5d36ace293e89c9cf0813a0d96ba8e0ae0612fded59845751bba37b"
+      },
+      {
+        "file": "producao.html",
+        "sha256": "ac932ddd880d6c828457fffa92d1cd8d5af8913953e74ff1803fdb5effb67de3"
+      },
+      {
+        "file": "script.js",
+        "sha256": "b844d128442a7fcd7f1b7ff6118e2a02bc4c5526fc16ba21884534891c6de3e8"
+      },
+      {
+        "file": "cliente.js",
+        "sha256": "98e83977344e8e15f303f926788fe8df67109fc3734028b213ceb6153ad37081"
+      },
+      {
+        "file": "pedido.js",
+        "sha256": "c1b45c915c03472d9c19fa5eb4b4b5afbfb73c579ea940c777d79fa9a2568af1"
+      }
+    ]
+  },
+  "cloudflare": {
+    "name": "Cloudflare Pages",
+    "status": "completed",
+    "conclusion": "success",
+    "details_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/e5372626-edff-4697-bc20-ceed16b46252",
+    "head_sha": "3259f084f86933de43ae949f93aaae5b7951b660",
+    "completed_at": "2026-09-28T21:18:55Z"
+  },
+  "web": [
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "index.html",
+      "url": "https://imposicao.pages.dev/?t=1790630379209883600",
+      "status": 200,
+      "expected": "c7cabe75b55349f7699f817d72b8f5b23a08c79db283fad195e0aa430ef61294",
+      "observed": "c7cabe75b55349f7699f817d72b8f5b23a08c79db283fad195e0aa430ef61294",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "cliente.html",
+      "url": "https://imposicao.pages.dev/cliente.html?t=1790630379210088000",
+      "status": 200,
+      "expected": "37d705232ddd6361baa16526f13714d91b4643e3b738e648181083abae46677b",
+      "observed": "37d705232ddd6361baa16526f13714d91b4643e3b738e648181083abae46677b",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "producao.html",
+      "url": "https://imposicao.pages.dev/producao.html?t=1790630379211883200",
+      "status": 200,
+      "expected": "f40f27659d475f99a4ecb8e9d110a23bc9319d9bf8c02d944962fed341b61a22",
+      "observed": "f40f27659d475f99a4ecb8e9d110a23bc9319d9bf8c02d944962fed341b61a22",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "script.js",
+      "url": "https://imposicao.pages.dev/script.js?v=970&t=1790630379212122700",
+      "status": 200,
+      "expected": "b844d128442a7fcd7f1b7ff6118e2a02bc4c5526fc16ba21884534891c6de3e8",
+      "observed": "b844d128442a7fcd7f1b7ff6118e2a02bc4c5526fc16ba21884534891c6de3e8",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "cliente.js",
+      "url": "https://imposicao.pages.dev/cliente.js?v=970&t=1790630379213618000",
+      "status": 200,
+      "expected": "98e83977344e8e15f303f926788fe8df67109fc3734028b213ceb6153ad37081",
+      "observed": "98e83977344e8e15f303f926788fe8df67109fc3734028b213ceb6153ad37081",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "pedido.js",
+      "url": "https://imposicao.pages.dev/pedido.js?v=970&t=1790630379240137400",
+      "status": 200,
+      "expected": "c1b45c915c03472d9c19fa5eb4b4b5afbfb73c579ea940c777d79fa9a2568af1",
+      "observed": "c1b45c915c03472d9c19fa5eb4b4b5afbfb73c579ea940c777d79fa9a2568af1",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "index.html",
+      "url": "https://imposition.ai-ideal.com.br/?t=1790630379812827000",
+      "status": 200,
+      "expected": "c7cabe75b55349f7699f817d72b8f5b23a08c79db283fad195e0aa430ef61294",
+      "observed": "c7cabe75b55349f7699f817d72b8f5b23a08c79db283fad195e0aa430ef61294",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "cliente.html",
+      "url": "https://imposition.ai-ideal.com.br/cliente.html?t=1790630379815107000",
+      "status": 200,
+      "expected": "37d705232ddd6361baa16526f13714d91b4643e3b738e648181083abae46677b",
+      "observed": "37d705232ddd6361baa16526f13714d91b4643e3b738e648181083abae46677b",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "producao.html",
+      "url": "https://imposition.ai-ideal.com.br/producao.html?t=1790630379844402800",
+      "status": 200,
+      "expected": "f40f27659d475f99a4ecb8e9d110a23bc9319d9bf8c02d944962fed341b61a22",
+      "observed": "f40f27659d475f99a4ecb8e9d110a23bc9319d9bf8c02d944962fed341b61a22",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "script.js",
+      "url": "https://imposition.ai-ideal.com.br/script.js?v=970&t=1790630379858676500",
+      "status": 200,
+      "expected": "b844d128442a7fcd7f1b7ff6118e2a02bc4c5526fc16ba21884534891c6de3e8",
+      "observed": "b844d128442a7fcd7f1b7ff6118e2a02bc4c5526fc16ba21884534891c6de3e8",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "cliente.js",
+      "url": "https://imposition.ai-ideal.com.br/cliente.js?v=970&t=1790630379940022700",
+      "status": 200,
+      "expected": "98e83977344e8e15f303f926788fe8df67109fc3734028b213ceb6153ad37081",
+      "observed": "98e83977344e8e15f303f926788fe8df67109fc3734028b213ceb6153ad37081",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "pedido.js",
+      "url": "https://imposition.ai-ideal.com.br/pedido.js?v=970&t=1790630380175054900",
+      "status": 200,
+      "expected": "c1b45c915c03472d9c19fa5eb4b4b5afbfb73c579ea940c777d79fa9a2568af1",
+      "observed": "c1b45c915c03472d9c19fa5eb4b4b5afbfb73c579ea940c777d79fa9a2568af1",
+      "match": true
+    }
+  ],
+  "msi_local": {
+    "file": "NewProd_Setup_v1.2.343.msi",
+    "product_version": "1.2.343.0",
+    "size": 156192768,
+    "sha256": "ce8d0993a1c449ab62c95799be4db5792562ca42429d5521716d161e24cd1820"
+  },
+  "msi_public": {
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.343.msi",
+    "sha256": "ce8d0993a1c449ab62c95799be4db5792562ca42429d5521716d161e24cd1820",
+    "size": 156192768,
+    "match": true
+  },
+  "manifest": {
+    "version": "1.2.343",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.343.msi",
+    "sha256": "ce8d0993a1c449ab62c95799be4db5792562ca42429d5521716d161e24cd1820",
+    "size": 156192768,
+    "notes": "Web v970: opcao individual MESCLAR COM A ARTE nos elementos PDF, com opacidade e frente/verso. Desmarcado preserva a composicao anterior. Atualize em momento ocioso."
+  },
+  "station_installation_verified": false,
+  "physical_print_verified": false
+}

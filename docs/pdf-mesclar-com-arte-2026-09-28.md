@@ -1,8 +1,8 @@
 # PDF da numeração: MESCLAR COM A ARTE
 
 Implementação na branch `feat/pdf-mesclar-arte`, criada de `origin/main`
-`8d6b9137`. Checkout operacional preservado. O estado abaixo registra a conclusão
-local; a preparação da publicação autorizada está ao final.
+`8d6b9137`. Checkout operacional preservado. Publicação concluída: web **v970**
+e NewProd **1.2.343**, com as provas públicas registradas ao final.
 
 ## Contrato confirmado
 
@@ -64,10 +64,10 @@ Puppeteer disponível via resolução normal do Node ou `NODE_PATH`.
 
 ## Entrega e retomada
 
-O código está pronto para revisão local. Para disponibilizar todas as saídas,
-será necessário publicar o frontend e atualizar o agente com o novo motor.
-Agente antigo não interpreta a flag. Nenhuma publicação, build de instalador,
-instalação ou impressão física foi executada nesta tarefa.
+O frontend e o motor precisam ser atualizados para disponibilizar todas as
+saídas. Agente antigo não interpreta a flag. A publicação autorizada está
+registrada abaixo; instalação na estação e impressão física são verificações
+separadas e não foram executadas nesta tarefa.
 
 Desmarcar a opção e salvar a numeração restaura a composição anterior do
 elemento. Como não há migração de dados, não existe SQL de reversão.
@@ -93,3 +93,27 @@ Backup, manifesto anterior e provas de build em
 `C:\ProjectBackups\pdf-mesclar-20260928-1790630091841`.
 Não instalar automaticamente em estação nem declarar impressão física com base
 na disponibilidade do instalador.
+
+## Publicação confirmada
+
+- Commit funcional `3259f084f86933de43ae949f93aaae5b7951b660` em `origin/main`.
+  Tags `v970` e `agente-v1.2.343` publicadas nesse commit.
+- Cloudflare Pages: deploy `e5372626-edff-4697-bc20-ceed16b46252`, concluído
+  com sucesso.
+- **12/12 hashes normalizados conferiram**, com parâmetros anticache: página
+  inicial, `cliente.html`, `producao.html`, `script.js`, `cliente.js` e
+  `pedido.js`, em `imposicao.pages.dev` e `imposition.ai-ideal.com.br`.
+- MSI enviado sob nome novo, sem sobrescrever objeto anterior. Download pela
+  URL pública simples confirmou `156192768` bytes e o SHA-256 registrado acima.
+- Somente depois dessa conferência, `latest.json` foi ativado e relido com
+  cache-bust: versão, URL, tamanho e SHA-256 corresponderam ao candidato.
+- Checkout operacional manteve os mesmos três arquivos não rastreados; as
+  alterações desta entrega ficaram no worktree isolado.
+
+Prova consolidada: [publicação web e MSI](evidencias/pdf-mesclar-v970-newprod-1.2.343.json).
+
+Para usar a opção na impressão, atualizar a estação para 1.2.343 em momento
+ocioso. A publicação não comprova essa instalação nem impressão física.
+Rollback completo do agente exige republicar o código anterior com versão
+**superior a 1.2.343**; apontar o manifesto para uma versão menor não provoca
+downgrade automático. Desmarcar a opção mantém a composição antiga sem rollback.
