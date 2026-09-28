@@ -522,15 +522,15 @@ input[type="color"].form-control {
 .badge-amber  { background: rgba(245,158,11,0.12);      color: var(--amber); }
 
 /* Numeracao exclusiva do cliente do pedido, no seletor de Numeracao do modelo:
-   amarela na lista e na caixa fechada. As demais continuam brancas. Pedido do
-   usuario em 27/08/2026 — ver `opcaoDeNumeracaoDoModelo` no script.js. */
-.num-opt-exclusiva            { color: var(--amber); }
-select.num-select-exclusiva   { color: var(--amber); }
+   laranja na lista e na caixa fechada. As demais continuam brancas. Pedido do
+   usuario em 28/09/2026 — ver `opcaoDeNumeracaoDoModelo` no script.js. */
+.num-opt-exclusiva            { color: #f97316; }
+select.num-select-exclusiva   { color: #f97316; }
 /* A opcao comum precisa DIZER o branco dela: a <option> herda a cor do
-   <select>, entao dentro de uma caixa amarela ela sairia amarela tambem — e a
-   regra do usuario e que so as exclusivas do cliente sejam amarelas. */
+   <select>, entao dentro de uma caixa laranja ela sairia laranja tambem — e a
+   regra do usuario e que so as exclusivas do cliente sejam laranjas. */
 select.num-select-exclusiva option                    { color: var(--text); }
-select.num-select-exclusiva option.num-opt-exclusiva  { color: var(--amber); }
+select.num-select-exclusiva option.num-opt-exclusiva  { color: #f97316; }
 
 /* EDITANDO UMA NUMERACAO EXCLUSIVA DE CLIENTE (27/08/2026)
    ------------------------------------------------------------------

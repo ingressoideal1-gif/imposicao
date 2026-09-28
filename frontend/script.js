@@ -9288,10 +9288,10 @@ function numeracaoEhCompartilhadaDoCliente(n) {
 window.numeracaoEhCompartilhadaDoCliente = numeracaoEhCompartilhadaDoCliente;
 
 /**
- * ── A numeração exclusiva sai AMARELA no dropdown do modelo (27/08/2026) ────
+ * ── A numeração exclusiva sai LARANJA no dropdown do modelo (28/09/2026) ────
  *
  * Pedido do usuário: na lista de arte, ao editar um pedido, as numerações
- * exclusivas do cliente daquele pedido aparecem em amarelo no seletor de
+ * exclusivas do cliente daquele pedido aparecem em laranja no seletor de
  * Numeração; as demais continuam brancas.
  *
  * O dropdown já mistura as duas famílias — o filtro de `renderAmostrasOSItens`
@@ -9314,6 +9314,12 @@ function numeracaoEhDoCliente(n, idCliente) {
 }
 window.numeracaoEhDoCliente = numeracaoEhDoCliente;
 
+/** Exclusivas do cliente primeiro; nomes alfabeticos em cada grupo. */
+function compararNumeracoesDoModelo(a, b, idCliente) {
+    const prioridade = Number(numeracaoEhDoCliente(b, idCliente)) - Number(numeracaoEhDoCliente(a, idCliente));
+    return prioridade || String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
+}
+
 /**
  * A `<option>` do seletor de Numeração de um modelo, já pintada.
  *
@@ -9334,7 +9340,7 @@ function opcaoDeNumeracaoDoModelo(n, idCliente, selecionada) {
 }
 window.opcaoDeNumeracaoDoModelo = opcaoDeNumeracaoDoModelo;
 
-/** Deixa a caixa fechada amarela quando a numeração escolhida é do cliente. */
+/** Deixa a caixa fechada laranja quando a numeração escolhida é do cliente. */
 function pintarSelectDeNumeracao(select) {
     if (!select || !select.options) return;
     const opt = select.options[select.selectedIndex];
@@ -34760,6 +34766,8 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
             return true; // Se não tiver cor selecionada, mostra todas as numerações
         });
 
+        filteredNumeracoes.sort((a, b) => compararNumeracoesDoModelo(a, b, idCliente));
+
         const numOpts = filteredNumeracoes.map(n =>
             opcaoDeNumeracaoDoModelo(n, idCliente, String(n.id) === String(resolvedNumId))
         ).join('');
@@ -36286,6 +36294,8 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
         }
         return false;
     });
+
+    filteredNums.sort((a, b) => compararNumeracoesDoModelo(a, b, idCliente));
 
     numSelect.innerHTML = '<option value="">-- Selecione uma Numeração --</option>' +
         filteredNums.map(n => opcaoDeNumeracaoDoModelo(n, idCliente, false)).join('');

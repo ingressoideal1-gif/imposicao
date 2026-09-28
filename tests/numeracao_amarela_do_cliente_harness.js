@@ -162,12 +162,12 @@ const { numeracaoEhDoCliente, opcaoDeNumeracaoDoModelo, pintarSelectDeNumeracao 
 // ─── A cor ───────────────────────────────────────────────────────────────────
 
 (function asDuasRegrasDeCorExistem() {
-    ok(/\.num-opt-exclusiva\s*\{[^}]*color:\s*var\(--amber\)/.test(CSS),
+    ok(/\.num-opt-exclusiva\s*\{[^}]*color:\s*#f97316/.test(CSS),
         'a opcao amarela tem regra no style.css');
-    ok(/select\.num-select-exclusiva\s*\{[^}]*color:\s*var\(--amber\)/.test(CSS),
+    ok(/select\.num-select-exclusiva\s*\{[^}]*color:\s*#f97316/.test(CSS),
         'e a caixa fechada tambem');
-    ok(/--amber:\s*#f59e0b/.test(CSS),
-        'e o amarelo e o mesmo --amber do resto do painel, e nao um tom novo');
+    ok(/color:\s*#f97316/.test(CSS),
+        'o destaque exclusivo usa laranja');
 
     // Medido no navegador em 27/08/2026: sem esta regra, a <option> comum
     // HERDA a cor do <select>, e dentro de uma caixa amarela ela saia amarela
@@ -175,7 +175,7 @@ const { numeracaoEhDoCliente, opcaoDeNumeracaoDoModelo, pintarSelectDeNumeracao 
     // amarelas — "as demais numeracoes permanecem em branco".
     ok(/select\.num-select-exclusiva option\s*\{[^}]*color:\s*var\(--text\)/.test(CSS),
         'a opcao comum diz o branco dela, mesmo dentro da caixa amarela');
-    ok(/select\.num-select-exclusiva option\.num-opt-exclusiva\s*\{[^}]*color:\s*var\(--amber\)/.test(CSS),
+    ok(/select\.num-select-exclusiva option\.num-opt-exclusiva\s*\{[^}]*color:\s*#f97316/.test(CSS),
         'e a exclusiva volta a ser amarela por cima dessa regra');
 })();
 
