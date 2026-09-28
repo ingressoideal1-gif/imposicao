@@ -37139,9 +37139,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
         // Espelho comercial apenas pelo vinculo devolvido pelo modelo persistido.
         // O id do modelo nao e um id de produto; nome/ordem/pedido nao sao chave.
+        // Cor e numeracao herdadas do modelo nao sao edicoes comerciais.
+        // Alternar modo PDF deve confirmar apenas o modelo, sem regravar o ERP.
         const propData = {};
         for (const campo of ['amostra_cor_id', 'amostra_num_id', 'arte_url', 'amostra_arte_base64']) {
-            if (campo in dbData) propData[campo] = dbData[campo];
+            if (campo in dataToUpdate && campo in dbData) propData[campo] = dbData[campo];
         }
         const origem = linhaConfirmada.id_produto_proposta_origem;
         if (origem != null && Object.keys(propData).length) {

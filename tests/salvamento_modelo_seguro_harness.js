@@ -29,7 +29,7 @@ function scenario(options = {}) {
         return q;
     } };
     const state = { osItens: { vibe_123: [item] } };
-    const ctx = { state, supabaseClient: client, vibeClient: client, console: { log() {}, warn() {}, error() {} },
+    const ctx = { window: {}, state, supabaseClient: client, vibeClient: client, console: { log() {}, warn() {}, error() {} },
         bloqueioDeModeloAprovado: () => options.block || null, resolveItemCorNumIds: () => ({}),
         findOSInState: () => ({ numero: 123 }), sincronizarNumeracaoDoItem() {}, normalizarStatusImpressao: s => s,
         toast() {}, localStorage: { getItem: () => null, setItem() {} } };
