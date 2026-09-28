@@ -2052,7 +2052,7 @@ function drawPedPreview() {
         // esta funcao: os elementos variaveis sao desenhados no GRUPO (arte + numeracao),
         // que so depois multiplica sobre a cor. Chame sempre passando gctx.
         let vdpDesenhados = 0;
-        const drawVdpElements = (currentNum, source_id, ctx) => {
+        const drawVdpElements = (currentNum, source_id, ctx, mesclar = false) => {
 
             if (currentNum && currentNum.elements) {
 
@@ -2092,6 +2092,7 @@ function drawPedPreview() {
                 const mostrarLayout = document.getElementById('ped-preview-toggle-amostra')?.checked === true;
 
                 currentNum.elements.forEach(el => {
+                    if (elementoMesclaComArte(el) !== mesclar) return;
 
                     // `elementoSoLayout` vem do script.js, que a index.html carrega
                     // antes deste arquivo (mesma dependência da drawImageContain).
@@ -2486,9 +2487,13 @@ function drawPedPreview() {
         if (multiArteItem) {
             drawVdpElements(artNum1, 1, gctx);
             drawVdpElements(artNum2, 2, gctx);
+            drawVdpElements(artNum1, 1, gctx, true);
+            drawVdpElements(artNum2, 2, gctx, true);
         } else {
             drawVdpElements(num, 1, gctx);
             drawVdpElements(num2, 2, gctx);
+            drawVdpElements(num, 1, gctx, true);
+            drawVdpElements(num2, 2, gctx, true);
         }
 
         // Registro de quantos elementos de numeração esta pose de fato pintou. Serve ao

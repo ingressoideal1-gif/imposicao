@@ -204,7 +204,8 @@ const MM = 72 / 25.4;
        'o elemento marcado como Layout continua fora do PDF de producao');
     ok(/opacity: opacidadeDoElemento\(el\)/.test(corpo),
        'a opacidade do elemento e respeitada, como no engine');
-    ok(/for \(const el of pdfEls\)/.test(corpo),
+    ok(/for \(const el of pdfEls.filter\(el => !elementoMesclaComArte\(el\)\)\)/.test(corpo)
+       && /for \(const el of pdfEls.filter\(elementoMesclaComArte\)\)/.test(corpo),
        'TODOS os elementos PDF entram, e nao so o primeiro');
     ok(/elements: num\.elements\.filter\(e => e\.type !== 'PDF'\)/.test(corpo),
        'o raster nao redesenha o que ja entrou vetorial (nada de rasterizar a arte)');

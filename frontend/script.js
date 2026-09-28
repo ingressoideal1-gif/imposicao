@@ -5458,7 +5458,7 @@ function drawCanvasFace(canvas, face) {
 
     ctx.clip();
 
-    state.numElements.forEach(el => {
+    elementosNaOrdemDeComposicao(state.numElements).forEach(el => {
         const elFace = el.face || 'both';
         if (face === 'back') {
             if (el.type === 'PICOTE') {
@@ -5806,7 +5806,28 @@ window.opacidadeDoElemento = opacidadeDoElemento;
  * faz no papel com o grupo de transparência do PDF. Sem isso os dois lados
  * discordariam justamente onde a arte se sobrepõe a si mesma.
  */
+// Apenas PDF com marcação explícita muda a composição; acervo antigo permanece normal.
+function elementoMesclaComArte(el) {
+    return !!el && el.type === 'PDF' && el.mesclar_com_arte === true;
+}
+
+function elementosNaOrdemDeComposicao(elements) {
+    return [...elements.filter(el => !elementoMesclaComArte(el)),
+            ...elements.filter(elementoMesclaComArte)];
+}
+
 function drawArteDoElemento(ctx, img, x, y, w, h, el) {
+    if (elementoMesclaComArte(el)) {
+        ctx.save();
+        try {
+            ctx.globalCompositeOperation = 'multiply';
+            drawArteDoElemento(ctx, img, x, y, w, h, { ...el, mesclar_com_arte: false });
+        } finally {
+            ctx.restore();
+        }
+        return;
+    }
+    // Caminho original, inclusive para documentos antigos sem o novo campo.
     const op = opacidadeDoElemento(el);
     if (op >= 1) { drawImageContain(ctx, img, x, y, w, h); return; }
     if (op <= 0) return;
@@ -8216,6 +8237,18 @@ function renderElementsList() {
                     </div>
                 </div>
 
+                ${el.type === 'PDF' ? `
+                <div class="form-group el-full">
+                    <label style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" ${elementoMesclaComArte(el) ? 'checked' : ''}
+                               onchange="updateEl('${el.id}','mesclar_com_arte',this.checked)">
+                        MESCLAR COM A ARTE
+                    </label>
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">
+                        Mescla este PDF sobre a arte e a numeração, respeitando sua opacidade.
+                    </div>
+                </div>` : ''}
+
                 <div class="form-group el-full">
                     <label>Opacidade do elemento: <span id="op-val-${el.id}">${Math.round(opAtual * 100)}%</span></label>
                     <input class="form-control" type="range" min="0" max="1" step="0.05" value="${opAtual}"
@@ -9884,7 +9917,7 @@ window.saveNumeracao = async function () {
             const oldSelected = state.selectedElId;
             state.selectedElId = null;
 
-            state.numElements.forEach(el => {
+            elementosNaOrdemDeComposicao(state.numElements).forEach(el => {
                 if (typeof drawElement === 'function') {
                     drawElement(pctx, el, S_100);
                 }
@@ -11375,7 +11408,7 @@ function drawPreview() {
 
             // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
-        const drawVdpElements = (currentNum, source_id) => {
+        const drawVdpElements = (currentNum, source_id, mesclar = false) => {
 
             if (currentNum && currentNum.elements) {
 
@@ -11390,6 +11423,7 @@ function drawPreview() {
                 }
 
                 currentNum.elements.forEach(el => {
+                    if (elementoMesclaComArte(el) !== mesclar) return;
 
                     // Esta janela reflete sempre o que vai sair na impressão: o
                     // elemento marcado como Layout não aparece aqui, de propósito.
@@ -11742,9 +11776,13 @@ function drawPreview() {
         if (schema === 'multi_artes' && multiArteItem) {
             drawVdpElements(multiArteItem.numeracao, 1);
             drawVdpElements(multiArteItem.numeracao_2, 2);
+            drawVdpElements(multiArteItem.numeracao, 1, true);
+            drawVdpElements(multiArteItem.numeracao_2, 2, true);
         } else {
             drawVdpElements(num, 1);
             drawVdpElements(num2, 2);
+            drawVdpElements(num, 1, true);
+            drawVdpElements(num2, 2, true);
         }
 
 
@@ -24198,7 +24236,9 @@ window.onAmostraNumeracaoSelect = function() {
 
     canvas.height = Math.round(fmt.height_mm * S);
 
-    const ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d');
+    canvas._semMescla = null;
+    canvas._desenharMesclados = null;
 
 
 
@@ -24225,8 +24265,11 @@ window.onAmostraNumeracaoSelect = function() {
     const MM2PT = 2.8346;
 
     if (num.elements) {
+        // Só a nova composição precisa de fundo transparente para mesclar com
+        // a arte. Desmarcado conserva inclusive o fundo da amostra avulsa antiga.
+        if (num.elements.some(elementoMesclaComArte)) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        num.elements.forEach(el => {
+        const desenharElementoDaAmostra = el => {
 
             const x = el.x_mm * S;
 
@@ -24246,7 +24289,15 @@ window.onAmostraNumeracaoSelect = function() {
 
 
 
-            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
+            if (elementoMesclaComArte(el)) {
+                if ((el.face || 'both') !== 'back' && el._pdfCanvas) {
+                    const w = (el.width_mm || 20) * S, h = (el.height_mm || 20) * S;
+                    ctx.beginPath();
+                    ctx.rect(-w / 2, -h / 2, w, h);
+                    ctx.clip();
+                    drawArteDoElemento(ctx, el._pdfCanvas, -w / 2, -h / 2, w, h, el);
+                }
+            } else if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
                 const fs = (el.font_size || 12) * S / 2.8346;
 
@@ -24409,7 +24460,31 @@ window.onAmostraNumeracaoSelect = function() {
 
             ctx.restore();
 
-        });
+        };
+        num.elements.filter(el => !elementoMesclaComArte(el)).forEach(desenharElementoDaAmostra);
+        if (num.elements.some(elementoMesclaComArte)) {
+            const base = document.createElement('canvas');
+            base.width = canvas.width;
+            base.height = canvas.height;
+            base.getContext('2d').drawImage(canvas, 0, 0);
+            canvas._semMescla = base;
+            canvas._desenharMesclados = destino => {
+                const anterior = ctx;
+                ctx = destino;
+                try { num.elements.filter(elementoMesclaComArte).forEach(desenharElementoDaAmostra); }
+                finally { ctx = anterior; }
+            };
+            canvas._desenharMesclados(ctx);
+            if (num.elements.some(el => elementoMesclaComArte(el) && !el._pdfCanvas && !el._preloadFalhou)) {
+                const carregados = num.elements.filter(el => elementoMesclaComArte(el) && el._pdfCanvas).length;
+                precarregarArtesDosElementos(num.elements).then(() => {
+                    if (String(document.getElementById('amostra-numeracao').value) === String(numId)
+                        && num.elements.filter(el => elementoMesclaComArte(el) && el._pdfCanvas).length > carregados) {
+                        onAmostraNumeracaoSelect();
+                    }
+                }).catch(() => {});
+            }
+        }
 
     }
 
@@ -24968,13 +25043,23 @@ function renderAmostraCombinada() {
 
         const dy = (finalHeight - numCanvas.height) / 2;
 
-        tempNumCtx.drawImage(numCanvas, dx, dy, numCanvas.width, numCanvas.height);
+        tempNumCtx.drawImage(numCanvas._semMescla || numCanvas, dx, dy, numCanvas.width, numCanvas.height);
 
         
 
         // A numeração entra no grupo, por cima da arte e sem multiply: ela cobre a arte
 
         grupoCtx.drawImage(tempNumCanvas, 0, 0);
+
+        if (numCanvas._desenharMesclados) {
+            grupoCtx.save();
+            grupoCtx.translate(dx, dy);
+            grupoCtx.beginPath();
+            grupoCtx.rect(0, 0, numCanvas.width, numCanvas.height);
+            grupoCtx.clip();
+            numCanvas._desenharMesclados(grupoCtx);
+            grupoCtx.restore();
+        }
 
         grupoTemConteudo = true;
 
@@ -37713,7 +37798,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
         item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
     ) || 1;
 
-    num.elements.forEach(el => {
+    elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
         const visivel = face === 'back'
             ? (elFace === 'back' || elFace === 'both')
@@ -38730,7 +38815,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
-        const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
+        let numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
         // Fundo transparente. NAO desenhar contorno do formato aqui: este canvas
         // e composto POR CIMA da arte, entao um strokeRect na borda cobria a
@@ -38754,7 +38839,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         ) || 1;
         const _ticketQtdAmostra = parseInt(num?.ticket_qtd || item?.ticket_qtd || 1) || 1;
         // Desenhar cada elemento da numeração
-        num.elements.forEach(el => {
+        const desenharElementoDaFace = el => {
             const elFace = el.face || 'both';
 
             // Filtrar elementos por face
@@ -38992,12 +39077,23 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 numCtx.restore();
             }
             numCtx.restore();
-        });
+        };
+        num.elements.filter(el => !elementoMesclaComArte(el)).forEach(desenharElementoDaFace);
 
         // A numeracao entra NO GRUPO, por cima da arte e sem multiply: ela cobre a arte.
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
         grupoCtx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        // Os PDFs marcados enxergam a arte E a numeração já compostas.
+        // Mesmo recorte e centralização do canvas original, sem deslocar elementos.
+        grupoCtx.save();
+        grupoCtx.translate(ndx, ndy);
+        grupoCtx.beginPath();
+        grupoCtx.rect(0, 0, numCanvas.width, numCanvas.height);
+        grupoCtx.clip();
+        numCtx = grupoCtx;
+        num.elements.filter(elementoMesclaComArte).forEach(desenharElementoDaFace);
+        grupoCtx.restore();
         grupoTemConteudo = true;
     }
 
@@ -46020,7 +46116,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt, face) {
     // Desenhar cada elemento da numeração (transparente por padrão)
     const faceDoGabarito = (face === 'back') ? 'back' : 'front';
 
-    num.elements.forEach(el => {
+    elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         // O gabarito é um PDF de produção: o elemento marcado como Layout fica
         // de fora, pela mesma razão que fica de fora da imposição.
         if (elementoSoLayout(el)) return;
@@ -46253,24 +46349,35 @@ async function exportarPdfGabarito() {
                 // apenas os seus.
                 const pdfEls = todosPdfEls.filter(e => elementoVisivelNaFace(e, face));
 
-                for (const el of pdfEls) {
+                const desenharPdfDoGabarito = async el => {
                     try {
                         const pdfData = await fetchPdfBytes(el.pdf_content);
-                        if (!pdfData) continue;
+                        if (!pdfData) return;
                         const originalDoc = await PDFDocument.load(pdfData);
                         const embutida = await pdfDoc.embedPage(originalDoc.getPage(0));
                         const caixa = caixaDoElementoPdfNaPagina(
                             el, fmt, embutida.width, embutida.height, ptW, ptH);
-                        if (!caixa) continue;
+                        if (!caixa) return;
+                        if (elementoMesclaComArte(el)) {
+                            // Opacidade e multiply valem para o PDF inteiro, não para
+                            // cada forma interna. Mantém vetor, como o grupo do motor.
+                            await embutida.embed();
+                            pdfDoc.context.lookup(embutida.ref).dict.set(PDFName.of('Group'),
+                                pdfDoc.context.obj({ S: 'Transparency', I: true, K: false }));
+                        }
                         currentPage.drawPage(embutida, {
                             x: caixa.x, y: caixa.y,
                             width: caixa.width, height: caixa.height,
                             rotate: degrees(caixa.rotate),
                             opacity: opacidadeDoElemento(el),
+                            ...(elementoMesclaComArte(el) ? { blendMode: window.PDFLib.BlendMode.Multiply } : {}),
                         });
                     } catch (e) {
                         console.warn(`Falha ao embutir o elemento PDF '${el.id}' do gabarito ${idx} (${face}):`, e);
                     }
+                };
+                for (const el of pdfEls.filter(el => !elementoMesclaComArte(el))) {
+                    await desenharPdfDoGabarito(el);
                 }
 
                 // 3. Registro legado: numeração antiga, sem elemento PDF, que guarda
@@ -46314,6 +46421,10 @@ async function exportarPdfGabarito() {
                     } catch (e) {
                         console.warn(`Falha ao rasterizar e embutir máscara visual do modelo ${idx} (${face}):`, e);
                     }
+                }
+
+                for (const el of pdfEls.filter(elementoMesclaComArte)) {
+                    await desenharPdfDoGabarito(el);
                 }
 
                 // A etiqueta da página diz de qual modelo e de qual face ela é,

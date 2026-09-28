@@ -536,7 +536,16 @@ def _recortar_celula(page, inicio, rect):
     doc.update_stream(novos[-1], doc.xref_stream(novos[-1]) + b"\nQ\n")
 
 
-def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
+def _mesclar_com_arte(el):
+    return el.get("type") == "PDF" and el.get("mesclar_com_arte") is True
+
+
+def _elementos_na_ordem_de_composicao(elements):
+    # sorted é estável e não muda a lista persistida nem a ordem de cada grupo.
+    return sorted(elements, key=_mesclar_com_arte)
+
+
+def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade, mesclar=False):
     """Cola a primeira pagina de `doc_origem` em `rect`, com opacidade.
 
     NADA E RASTERIZADO. A arte do cliente entra como veio — vetor continua
@@ -557,10 +566,10 @@ def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
       q/Q. Sem esse cerco a opacidade vazaria para tudo que fosse desenhado
       depois na mesma folha — a numeracao, o picote, o proximo modelo.
 
-    A 100% (o padrao) nada disto acontece: a chamada e exatamente o
+    A 100% sem mesclagem (o padrao) nada disto acontece: a chamada e exatamente o
     `show_pdf_page` de sempre, e a pagina nao ganha ExtGState nem grupo.
     """
-    if opacidade >= 1.0:
+    if opacidade >= 1.0 and not mesclar:
         page.show_pdf_page(
             rect, doc_origem, 0,
             keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
@@ -594,12 +603,13 @@ def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade):
 
     # Nome derivado do valor: dois elementos com a mesma opacidade compartilham
     # o estado, e cada valor diferente ganha o seu.
-    nome = "IdealAlfa%03d" % round(opacidade * 100)
+    nome = ("IdealMultiply" if mesclar else "IdealAlfa") + "%03d" % round(opacidade * 100)
     tipo, val = doc.xref_get_key(page.xref, "Resources")
     res = int(val.split()[0]) if tipo == "xref" else page.xref
     chave = "ExtGState" if res != page.xref else "Resources/ExtGState"
     tipo_gs, val_gs = doc.xref_get_key(res, chave)
-    corpo = "<</Type/ExtGState/ca %g/CA %g/BM/Normal>>" % (opacidade, opacidade)
+    corpo = "<</Type/ExtGState/ca %g/CA %g/BM/%s>>" % (
+        opacidade, opacidade, "Multiply" if mesclar else "Normal")
     if tipo_gs == "xref":
         doc.xref_set_key(int(val_gs.split()[0]), nome, corpo)
     else:
@@ -2710,7 +2720,7 @@ class ImpositionEngine:
                     rect = _caixa_girada(cx, cy, w_pt, h_pt, angle)
                     py_rotate = (360 - angle) % 360
                     # keep_proportion=True: encaixa sem distorcer, igual ao canvas.
-                    _colar_arte_pdf(page.parent, page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
+                    _colar_arte_pdf(page.parent, page, rect, pdf_doc, py_rotate, _opacidade_arte(el), _mesclar_com_arte(el))
                     pdf_doc.close()
                 except Exception as ex:
                     # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
@@ -3679,7 +3689,7 @@ class ImpositionEngine:
                                     keep_proportion=False, clip=_clip_arte
                                 )
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
-                        for el in current_elements:
+                        for el in _elementos_na_ordem_de_composicao(current_elements):
                             if el.get("face", "both") == "back":
                                 continue
                             rotated_el = dict(el)
@@ -3732,7 +3742,7 @@ class ImpositionEngine:
 
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
 
-                        for el in current_elements:
+                        for el in _elementos_na_ordem_de_composicao(current_elements):
                             if el.get("face", "both") == "back":
                                 continue
                             rotated_el = dict(el)
@@ -3911,7 +3921,7 @@ class ImpositionEngine:
                                 color=(0, 0, 0)
                             )
 
-                        for el in current_elements:
+                        for el in _elementos_na_ordem_de_composicao(current_elements):
                             # Filtrar elementos que são apenas para frente (exceto PICOTE)
                             if el.get("face", "both") == "front" and el.get("type") != "PICOTE":
                                 continue
@@ -4224,7 +4234,7 @@ class ImpositionEngine:
                         _rect_arte, current_doc_base, page_idx_front,
                         keep_proportion=False, clip=_clip_arte
                     )
-            for el in current_elements:
+            for el in _elementos_na_ordem_de_composicao(current_elements):
                 if el.get("face", "both") == "back":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
@@ -4271,7 +4281,7 @@ class ImpositionEngine:
                     temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front,
                                             keep_proportion=False, clip=_clip_arte)
 
-            for el in current_elements:
+            for el in _elementos_na_ordem_de_composicao(current_elements):
                 if el.get("face", "both") == "back":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
@@ -4374,7 +4384,7 @@ class ImpositionEngine:
                         _rect_arte, current_doc_base, page_idx_back,
                         keep_proportion=False, clip=_clip_arte
                     )
-            for el in current_elements:
+            for el in _elementos_na_ordem_de_composicao(current_elements):
                 if el.get("face", "both") == "front":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
@@ -4421,7 +4431,7 @@ class ImpositionEngine:
                     temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back,
                                             keep_proportion=False, clip=_clip_arte)
 
-            for el in current_elements:
+            for el in _elementos_na_ordem_de_composicao(current_elements):
                 if el.get("face", "both") == "front":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val

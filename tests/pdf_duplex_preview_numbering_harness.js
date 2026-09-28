@@ -24,7 +24,9 @@ function testar(arquivo) {
         save() {}, translate() {}, rotate() {}, restore() {},
     };
     const desenhar = new Function('state', 'window', 'buildCanvasFont',
-        extrair(fonte, 'drawNumeracaoElementsOverCanvas')
+        extrair(fonte, 'elementoMesclaComArte')
+        + extrair(fonte, 'elementosNaOrdemDeComposicao')
+        + extrair(fonte, 'drawNumeracaoElementsOverCanvas')
         + '\nreturn drawNumeracaoElementsOverCanvas;')(state, window, () => '12px sans-serif');
     const elemento = face => ({
         type: 'FIXED', fixed_value: face || 'sem-face', face,

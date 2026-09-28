@@ -38,7 +38,28 @@ function opacidadeDoElemento(el) {
 }
 
 /** Arte de um elemento PDF/SVG: sem distorcao e com a opacidade do elemento. */
+// Apenas PDF com marcação explícita muda a composição; acervo antigo permanece normal.
+function elementoMesclaComArte(el) {
+    return !!el && el.type === 'PDF' && el.mesclar_com_arte === true;
+}
+
+function elementosNaOrdemDeComposicao(elements) {
+    return [...elements.filter(el => !elementoMesclaComArte(el)),
+            ...elements.filter(elementoMesclaComArte)];
+}
+
 function drawArteDoElemento(ctx, img, x, y, w, h, el) {
+    if (elementoMesclaComArte(el)) {
+        ctx.save();
+        try {
+            ctx.globalCompositeOperation = 'multiply';
+            drawArteDoElemento(ctx, img, x, y, w, h, { ...el, mesclar_com_arte: false });
+        } finally {
+            ctx.restore();
+        }
+        return;
+    }
+    // Caminho original, inclusive para documentos antigos sem o novo campo.
     const op = opacidadeDoElemento(el);
     if (op >= 1) { drawImageContain(ctx, img, x, y, w, h); return; }
     if (op <= 0) return;
@@ -3517,7 +3538,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
-        const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
+        let numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
         // Fundo transparente. NAO desenhar contorno do formato aqui: este canvas
         // e composto POR CIMA da arte, entao um strokeRect na borda cobria a
@@ -3527,7 +3548,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // o ingresso e a propria borda do canvas, com a sombra do CSS.
 
         // Desenhar cada elemento da numeração
-        num.elements.forEach(el => {
+        const desenharElementoDaFace = el => {
             const elFace = el.face || 'both';
 
             // Filtrar elementos por face
@@ -3763,12 +3784,23 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 numCtx.restore();
             }
             numCtx.restore();
-        });
+        };
+        num.elements.filter(el => !elementoMesclaComArte(el)).forEach(desenharElementoDaFace);
 
         // A numeracao entra NO GRUPO, por cima da arte e sem multiply: ela cobre a arte.
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
         grupoCtx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        // Os PDFs marcados enxergam a arte E a numeração já compostas.
+        // Mesmo recorte e centralização do canvas original, sem deslocar elementos.
+        grupoCtx.save();
+        grupoCtx.translate(ndx, ndy);
+        grupoCtx.beginPath();
+        grupoCtx.rect(0, 0, numCanvas.width, numCanvas.height);
+        grupoCtx.clip();
+        numCtx = grupoCtx;
+        num.elements.filter(elementoMesclaComArte).forEach(desenharElementoDaFace);
+        grupoCtx.restore();
         grupoTemConteudo = true;
     }
 
@@ -4217,7 +4249,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
         item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
     ) || 1;
 
-    num.elements.forEach(el => {
+    elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
         const visivel = face === 'back'
             ? (elFace === 'back' || elFace === 'both')

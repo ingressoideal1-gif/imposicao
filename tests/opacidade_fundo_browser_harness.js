@@ -36,6 +36,7 @@ function extrair(nome, atribuida = false) {
             function isElSelected() { return false; }
             function temVerso() { return true; }
             ${['drawCanvasFace', 'drawCanvas', 'drawElement', 'elementoSoLayout',
+                'elementoMesclaComArte', 'elementosNaOrdemDeComposicao',
                 'drawImageContain', 'opacidadeDoElemento', 'drawArteDoElemento',
                 'avisoOpacidade', 'opacidadeDoFundoNoEditor', 'atualizarControlesDoFundo']
                 .map(n => extrair(n)).join('\n')}
