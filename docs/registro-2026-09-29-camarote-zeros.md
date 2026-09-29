@@ -1,5 +1,9 @@
 # Zeros nos elementos de Camarote
 
+Atualização: publicado como frontend v975 e NewProd 1.2.346.
+Ver [publicação e evidências](publicacao-2026-09-29-camarote-zeros.md).
+O restante deste registro documenta a implementação local anterior à publicação.
+
 Implementação local na branch `feat/camarote-zeros-20260929`, baseada em
 `origin/main` no commit `806eb138`. Checkout de trabalho:
 `C:\ProjetosLocais\ideal-imposition-camarote-zeros`.

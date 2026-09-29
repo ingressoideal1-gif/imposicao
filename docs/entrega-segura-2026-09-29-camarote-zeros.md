@@ -1,5 +1,10 @@
 # Entrega segura — zeros de Camarote
 
+Atualização: após autorização “publicar”, a entrega foi publicada e verificada
+como frontend v975 e NewProd 1.2.346. Ver
+[publicação e evidências](publicacao-2026-09-29-camarote-zeros.md).
+As seções abaixo preservam o plano e a simulação anteriores à autorização.
+
 ## Estado
 
 Preparação e simulação concluídas em 29/09/2026. **Frontend: VALIDADA**.

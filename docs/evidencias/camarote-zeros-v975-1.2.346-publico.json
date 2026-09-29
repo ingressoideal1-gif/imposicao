@@ -1,0 +1,202 @@
+{
+  "build": {
+    "version": "1.2.346",
+    "panel_version": 975,
+    "assets_match": true,
+    "assets": [
+      {
+        "file": "index.html",
+        "sha256": "01817d2c5727cec8851190065f44551a6de5cfffc5df7119887f13e0c0b53c5c"
+      },
+      {
+        "file": "producao.html",
+        "sha256": "9263baace443c7a71fcd07d913a83a83acf8d367befd3eb21152cab854f39eed"
+      },
+      {
+        "file": "script.js",
+        "sha256": "2d97a7c58ad9f6e3267175c8faba8b99f85b5ea971ee09a5bfd1dfdb6943d89c"
+      },
+      {
+        "file": "pedido.js",
+        "sha256": "a9d67a51346f24ccdfcc8c608ec80d7af28e0085b05cb316d9b13c6c7b34790e"
+      },
+      {
+        "file": "cliente.html",
+        "sha256": "0b10eeb1fc5a4e764175bf2c953a19a1a8f9534d95929b09e18c8503817a9180"
+      },
+      {
+        "file": "controle.html",
+        "sha256": "74e0b05dadbc3e3f9f828b0c3f55fc41c8950d6911337653257390e0de87f1eb"
+      },
+      {
+        "file": "cliente.js",
+        "sha256": "43bae1299dcb0d496f689d084ce45a4e9a2dffc55295d47b34ddc6a9a57da3ea"
+      }
+    ],
+    "printing_dlls_present": true,
+    "release_module_present": true,
+    "msi_size": 156200960,
+    "msi_sha256": "70a514e027c8e3a526392a9f28d0b10fe4b66cdf1d705861aff3ef1912afd5ce",
+    "tests_passed": 46,
+    "msi_product_version": "1.2.346.0",
+    "packaged_engine_checks": 36
+  },
+  "web": {
+    "verified_at": "2026-09-29T18:43:05.905766+00:00",
+    "version": 975,
+    "all_match": true,
+    "checks": [
+      {
+        "url": "https://imposition.ai-ideal.com.br/?v=975&t=1790707378674326600",
+        "file": "index.html",
+        "sha256": "5b464171d34ac49e298960136be0232373e3673d26cd883124d644fbcd9f4f38",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/producao.html?v=975&t=1790707379303672100",
+        "file": "producao.html",
+        "sha256": "87de24a3336c05c1e28e4c80bac394e6289fbcd9cd2aba8d28ffb9a66d5616a3",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/cliente.html?v=975&t=1790707379837569900",
+        "file": "cliente.html",
+        "sha256": "00fe892daff0b18bcf8e49521ac2c3c2a67601cfebde4dc7c037c6214f172ff0",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/controle.html?v=975&t=1790707380349946700",
+        "file": "controle.html",
+        "sha256": "0ad57c46fc66e6edd1e04570681b27e1e865908e03ec3edce312f87c697090eb",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/script.js?v=975&t=1790707380932633700",
+        "file": "script.js",
+        "sha256": "9daf8d9b24b42f33c507e6c26dbff1b9fb4ac646aff4c581c03b08fff50affc2",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/pedido.js?v=975&t=1790707381907614300",
+        "file": "pedido.js",
+        "sha256": "6df46efb66ace4ebb3f7b00183dde7f94ad62c975fde52a51745b07e86cf2143",
+        "matches": true
+      },
+      {
+        "url": "https://imposition.ai-ideal.com.br/cliente.js?v=975&t=1790707382436548400",
+        "file": "cliente.js",
+        "sha256": "97a6c66766fd55504a261a6a518cc6b4806c997a007580923200a7f983906159",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/?v=975&t=1790707382966055500",
+        "file": "index.html",
+        "sha256": "5b464171d34ac49e298960136be0232373e3673d26cd883124d644fbcd9f4f38",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/producao.html?v=975&t=1790707383509857200",
+        "file": "producao.html",
+        "sha256": "87de24a3336c05c1e28e4c80bac394e6289fbcd9cd2aba8d28ffb9a66d5616a3",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/cliente.html?v=975&t=1790707383888410900",
+        "file": "cliente.html",
+        "sha256": "00fe892daff0b18bcf8e49521ac2c3c2a67601cfebde4dc7c037c6214f172ff0",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/controle.html?v=975&t=1790707384250969500",
+        "file": "controle.html",
+        "sha256": "0ad57c46fc66e6edd1e04570681b27e1e865908e03ec3edce312f87c697090eb",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/script.js?v=975&t=1790707384628641600",
+        "file": "script.js",
+        "sha256": "9daf8d9b24b42f33c507e6c26dbff1b9fb4ac646aff4c581c03b08fff50affc2",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/pedido.js?v=975&t=1790707385174506700",
+        "file": "pedido.js",
+        "sha256": "6df46efb66ace4ebb3f7b00183dde7f94ad62c975fde52a51745b07e86cf2143",
+        "matches": true
+      },
+      {
+        "url": "https://imposicao.pages.dev/cliente.js?v=975&t=1790707385568866100",
+        "file": "cliente.js",
+        "sha256": "97a6c66766fd55504a261a6a518cc6b4806c997a007580923200a7f983906159",
+        "matches": true
+      }
+    ]
+  },
+  "msi": {
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.346.msi",
+    "size": 156200960,
+    "sha256": "70a514e027c8e3a526392a9f28d0b10fe4b66cdf1d705861aff3ef1912afd5ce",
+    "verified": true
+  },
+  "manifest": {
+    "verified_at": "2026-09-29T18:45:08.982682+00:00",
+    "manifest": {
+      "version": "1.2.346",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.346.msi",
+      "sha256": "70a514e027c8e3a526392a9f28d0b10fe4b66cdf1d705861aff3ef1912afd5ce",
+      "size": 156200960,
+      "notes": "Zeros (pad) em Camarote: Local, Pessoas e Pessoas 1/Total; mesma formatacao nas previas e no PDF. Sem pad, mantem o formato anterior."
+    },
+    "public_read_verified": true
+  },
+  "source": {
+    "source_commit": "31295e993ae80eb26a021391b8f23b353dfd5abf",
+    "web_commit": "71c36596",
+    "cloudflare": [
+      {
+        "name": "Cloudflare Pages",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/7801edfd-554a-4d12-bf92-6c09cd7f0e87"
+      }
+    ]
+  },
+  "preexisting_panel_sync": {
+    "base": "806eb138",
+    "preexisting": true,
+    "missing_assets": {
+      "vendor/quill-2.0.3/quill.core.css": [
+        "index.html",
+        "producao.html"
+      ],
+      "cor-margens.js": [
+        "index.html",
+        "producao.html",
+        "cliente.html"
+      ],
+      "vendor/quill-2.0.3/quill.js": [
+        "index.html",
+        "producao.html"
+      ],
+      "briefing-editor.js": [
+        "index.html",
+        "producao.html"
+      ],
+      "navegacao-painel.js": [
+        "index.html"
+      ],
+      "origem-aprovacao.js": [
+        "index.html"
+      ],
+      "dashboard-arte.js": [
+        "index.html",
+        "producao.html"
+      ],
+      "cliente-faturamento-form.js": [
+        "cliente.html"
+      ]
+    }
+  },
+  "station_install_verified": false,
+  "physical_print_verified": false
+}
