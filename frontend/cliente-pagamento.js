@@ -301,6 +301,35 @@ async function carregarLinkPagamentoDoPortal(dados, numero, token) {
     } catch { /* A indisponibilidade do pagamento não impede a aprovação das artes. */ }
 }
 
+/** Só libera a saída após a confirmação salva, inclusive ao voltar pelo e-mail. */
+function verificarEntregaAntesDePagar(evento) {
+    if (window.portalConfirmacoes?.entrega === true
+        && window.portalGravandoConfirmacao !== 'entrega'
+        && !window.portalErroConfirmacao?.entrega) return true;
+    if (evento) evento.preventDefault();
+    if (document.getElementById('portal-pagamento-entrega')) return false;
+    const popup = document.createElement('dialog');
+    popup.id = 'portal-pagamento-entrega';
+    popup.className = 'portal-pagamento-dialogo';
+    popup.setAttribute('aria-labelledby', 'portal-pagamento-entrega-titulo');
+    popup.setAttribute('aria-describedby', 'portal-pagamento-entrega-texto');
+    popup.innerHTML = '<h2 id="portal-pagamento-entrega-titulo">Confirme a entrega</h2>'
+        + '<p id="portal-pagamento-entrega-texto">Antes de realizar o pagamento, confirme os dados da ENTREGA</p>'
+        + '<div class="portal-modal-acoes">'
+        + '<button type="button" class="portal-botao principal" data-conferir autofocus>Conferir entrega</button>'
+        + '<button type="button" class="portal-botao" data-voltar>Voltar</button></div>';
+    popup.querySelector('[data-conferir]').onclick = () => {
+        popup.close();
+        popup.remove();
+        abrirSecao('entrega');
+    };
+    popup.querySelector('[data-voltar]').onclick = () => popup.close();
+    popup.addEventListener('close', () => popup.remove(), { once: true });
+    document.body.appendChild(popup);
+    popup.showModal();
+    return false;
+}
+
 function desenharSecaoPagamento() {
     const secao = document.getElementById('secao-pagamento');
     if (!secao) return;
@@ -336,17 +365,24 @@ function desenharSecaoPagamento() {
     }
 
     if (linkVibe) {
-        html += '<div class="portal-cartao">'
+        html += '<div class="portal-cartao portal-pagar-pedido">'
              + '<h2>' + tituloDoCartao('pagar', 'Pagamento') + '</h2>'
              + '<p>Escolha a forma de pagamento e gere a cobrança na página do pedido.</p>'
              + '<a class="portal-botao principal" href="' + escapeHtml(linkVibe)
-             + '" target="_blank" rel="noopener noreferrer">'
+             + '" target="_blank" rel="noopener noreferrer" data-pagar-pedido>'
              + iconeDoPagamento('fora', 18) + 'Pagar pedido</a></div>';
     }
 
     html += botaoDeAjuda(dados);
 
     secao.innerHTML = html;
+    const pagar = secao.querySelector('[data-pagar-pedido]');
+    if (pagar) {
+        pagar.addEventListener('click', verificarEntregaAntesDePagar);
+        pagar.addEventListener('auxclick', evento => {
+            if (evento.button === 1) verificarEntregaAntesDePagar(evento);
+        });
+    }
 }
 
 registrarSecao('pagamento', desenharSecaoPagamento);
