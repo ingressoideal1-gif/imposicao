@@ -66,6 +66,9 @@ async function carregarPortal(numero, token) {
     if (!data) return null;
 
     window.portalDados = data;
+    if (typeof carregarLinkPagamentoDoPortal === 'function') {
+        void carregarLinkPagamentoDoPortal(data, numero, token);
+    }
     return data;
 }
 

@@ -223,7 +223,7 @@ function painelDoPagamento(cobrancas, pedido) {
 }
 
 /** Um cartão por cobrança. */
-function cartaoDaCobranca(cobranca, indice, total) {
+function cartaoDaCobranca(cobranca, indice, total, temPagamentoVibe = false) {
     const st = rotuloDoStatus(cobranca.status);
     const venc = vencimentoEmDia(cobranca.vencimento);
     const paga = String(cobranca.status || '').toUpperCase() === 'PAID';
@@ -264,7 +264,7 @@ function cartaoDaCobranca(cobranca, indice, total) {
               + escapeHtml(String(cobranca.link).trim())
               + '" target="_blank" rel="noopener noreferrer">'
               + iconeDoPagamento('fora', 18) + 'Pagar agora</a>';
-    } else if (!paga) {
+    } else if (!paga && !temPagamentoVibe) {
         corpo += '<div class="portal-aviso calmo" style="margin-top: 14px; margin-bottom: 0;">'
               + 'O link desta cobrança ainda não foi liberado. Fale com seu atendimento.'
               + '</div>';
@@ -273,6 +273,32 @@ function cartaoDaCobranca(cobranca, indice, total) {
     return '<div class="portal-cartao"'
         + (podePagar(cobranca) ? ' style="border-color: ' + st.cor + '73;"' : '')
         + '>' + corpo + '</div>';
+}
+
+/** O Vibe resolve a situação do pedido no destino; aqui só conferimos o endereço. */
+function linkPagamentoVibeDoPortal(dados) {
+    const numero = String(dados.pedido && dados.pedido.numero || '');
+    const url = dados.linkPagamentoVibe;
+    if (!/^[1-9][0-9]{0,14}$/.test(numero) || typeof url !== 'string' || url.length > 2048) return '';
+    return new RegExp('^https://vibe[.]ai-ideal[.]com[.]br/p/' + numero + '-[A-Za-z0-9_-]+$').test(url) ? url : '';
+}
+
+function faltaLinkDeCobranca(dados) {
+    const cobrancas = dados.pagamentos || [];
+    return !cobrancas.length || cobrancas.some(c => c && !/^https?:\/\/\S+$/i.test(String(c.link || '').trim()));
+}
+
+/** Consulta opcional à nossa nuvem. O cache persistente evita repetir chamadas ao ERP. */
+async function carregarLinkPagamentoDoPortal(dados, numero, token) {
+    if (!faltaLinkDeCobranca(dados) || typeof supabaseClient === 'undefined' || !supabaseClient?.functions?.invoke) return;
+    try {
+        const { data, error } = await supabaseClient.functions.invoke('link-pagamento', {
+            body: { numero: String(numero), token }
+        });
+        if (error || !data || window.portalDados !== dados) return;
+        dados.linkPagamentoVibe = data.url;
+        if (linkPagamentoVibeDoPortal(dados)) desenharSecaoPagamento();
+    } catch { /* A indisponibilidade do pagamento não impede a aprovação das artes. */ }
 }
 
 function desenharSecaoPagamento() {
@@ -288,7 +314,8 @@ function desenharSecaoPagamento() {
     // pelo `statusDoPagamento`.
     let html = painelDoPagamento(cobrancas, pedido);
 
-    if (!cobrancas.length) {
+    const linkVibe = faltaLinkDeCobranca(dados) && linkPagamentoVibeDoPortal(dados);
+    if (!cobrancas.length && !linkVibe) {
         html += '<div class="portal-cartao">'
              + '<h2>' + tituloDoCartao('pagar', 'Pagamento') + '</h2>'
              + '<div class="portal-vazio">'
@@ -304,8 +331,17 @@ function desenharSecaoPagamento() {
         const emAberto = cobrancas.filter(c => String(c.status || '').toUpperCase() !== 'PAID');
         const quitadas = cobrancas.filter(c => String(c.status || '').toUpperCase() === 'PAID');
         html += emAberto.concat(quitadas)
-            .map(c => cartaoDaCobranca(c, cobrancas.indexOf(c), cobrancas.length))
+            .map(c => cartaoDaCobranca(c, cobrancas.indexOf(c), cobrancas.length, !!linkVibe))
             .join('');
+    }
+
+    if (linkVibe) {
+        html += '<div class="portal-cartao">'
+             + '<h2>' + tituloDoCartao('pagar', 'Pagamento') + '</h2>'
+             + '<p>Escolha a forma de pagamento e gere a cobrança na página do pedido.</p>'
+             + '<a class="portal-botao principal" href="' + escapeHtml(linkVibe)
+             + '" target="_blank" rel="noopener noreferrer">'
+             + iconeDoPagamento('fora', 18) + 'Pagar pedido</a></div>';
     }
 
     html += botaoDeAjuda(dados);
