@@ -43,7 +43,7 @@ def test_a_previa_de_imposicao_pede_as_fontes_e_redesenha():
 
 def test_a_janela_de_arte_aguarda_as_fontes():
     corpo = _corpo(_ler("frontend/script.js"), "async function drawAmostraFace(")
-    assert "await garantirFontesCarregadas(fontesDosElementos(" in corpo
+    assert "await aguardarRecursoDaPrevia(garantirFontesCarregadas(fontesDosElementos(" in corpo
 
 
 def test_o_link_do_cliente_aguarda_as_fontes():

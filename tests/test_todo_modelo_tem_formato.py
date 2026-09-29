@@ -94,7 +94,7 @@ def test_a_moldura_do_visualizador_nao_cai_mais_na_pagina_da_arte():
 
 def test_o_card_do_modelo_nao_cai_mais_no_primeiro_formato_do_catalogo():
     """`state.formatos[0]` não tem relação nenhuma com o modelo."""
-    corpo = _corpo(_ler("frontend/script.js"), "async function renderItemAmostraCombinada(")
+    corpo = _corpo(_ler("frontend/script.js"), "async function desenharItemAmostraCombinada(")
 
     assert "formatoDoModelo(item, cor, num)" in corpo, (
         "o card do modelo parou de consultar a cadeia do formato; repetir a "

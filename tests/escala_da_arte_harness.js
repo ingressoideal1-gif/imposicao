@@ -112,6 +112,7 @@ function montarJanela({ formatos, item, num }) {
 
     const corpo =
         'const ESCALA_ARTE_MIN = 1, ESCALA_ARTE_MAX = 400; function bloqueioDeModeloAprovado() { return null; }\n'
+        + recortar(SCRIPT, 'async function aguardarRecursoDaPrevia(', 'aguardarRecursoDaPrevia')
         + recortar(SCRIPT, 'function pdfImparFrenteVersoParDoModelo(', 'pdfImparFrenteVersoParDoModelo')
         + recortar(SCRIPT, 'function pdfDuplicarParaVersoDoModelo(', 'pdfDuplicarParaVersoDoModelo')
         + recortar(SCRIPT, 'function escalaDaArteDoModelo(', 'escalaDaArteDoModelo')

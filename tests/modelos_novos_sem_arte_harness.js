@@ -42,7 +42,9 @@ async function carregar(linhas = modelos, produto = produtos, artes = []) {
     const api = new Function('state', 'supabaseClient', 'isNumeracaoDuplex',
         'normalizarStatusImpressao', 'resolveItemCorNumIds', 'renderOSItens',
         'toast', 'console', 'localStorage', 'document', `
-        ${['loadOSItens', 'getPdfUrlForItem', 'donoDaArteNaUrl', 'origemDaArteDoModelo', 'cardTemOqueDesenhar'].map(extrair).join('\n')}
+        function aplicarRegraProdutoPrateleira() { return false; }
+        async function sincronizarAprovacaoProdutosPrateleira() {}
+        ${['lerDadosLista', 'loadOSItens', 'getPdfUrlForItem', 'donoDaArteNaUrl', 'origemDaArteDoModelo', 'cardTemOqueDesenhar'].map(extrair).join('\n')}
         return {loadOSItens, getPdfUrlForItem, origemDaArteDoModelo, cardTemOqueDesenhar};
     `)(state, supabaseClient, () => false, v => v || 'AGUARD.', () => {}, () => {},
         m => errors.push(m), {log() {}, warn() {}, error: m => errors.push(m)},

@@ -56,7 +56,7 @@ function extrair(nome) {
         reconciliarCorNumDoModelo: resolver, aplicarRegraProdutoPrateleira() {},
         isNumeracaoDuplex: n => n?.print_mode === 'duplex', normalizarStatusImpressao: x => x,
         resolveItemCorNumIds() {}, renderOSItens() {}, renderAmostrasOSItens() {},
-        recarregarNumeracoesDoPedido: async () => {}, setTimeout: fn => fn(),
+        recarregarNumeracoesDoPedido: async () => {}, setTimeout, clearTimeout, AbortController,
         toast: (msg, tipo) => { if (tipo === 'error') erros.push(msg); },
         supabaseClient: { from(tabela) {
             const q = { select() { return q; }, eq() { return q; }, order() { return q; },
@@ -68,7 +68,7 @@ function extrair(nome) {
         } },
     };
     vm.createContext(box);
-    vm.runInContext(extrair('loadOSItens') + '\n' + extrair('navigateToAmostrasFromOS'), box);
+    vm.runInContext(extrair('lerDadosLista') + extrair('loadOSItens') + '\n' + extrair('navigateToAmostrasFromOS'), box);
     await box.navigateToAmostrasFromOS('os');
     assert.deepEqual(erros, []);
     assert.equal(box.state.osItens.os[0].amostra_num_id, 'base');

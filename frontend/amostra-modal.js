@@ -254,6 +254,22 @@
     // ══════════════════════════════════════════════════════════════════════
 
     function desenharFaces() {
+        const estado = containerDoCard()?.querySelector(`[data-amostra-carga="${alvo.idx}"]`)?.dataset.estado;
+        if (estado && estado !== 'pronto') {
+            dom.corpo.innerHTML = '';
+            const aviso = document.createElement('div');
+            aviso.className = 'am-vazio';
+            aviso.textContent = estado === 'erro' ? 'Não foi possível carregar a prévia completa.' : 'Carregando arte…';
+            dom.corpo.appendChild(aviso);
+            if (estado === 'erro') {
+                const tentar = document.createElement('button');
+                tentar.className = 'am-b';
+                tentar.textContent = 'Tentar novamente';
+                tentar.onclick = () => window.renderItemAmostraCombinada(alvo.idx, alvo.osId);
+                dom.corpo.appendChild(tentar);
+            }
+            return;
+        }
         const faces = facesDoCard();
         dom.corpo.innerHTML = '';
         if (!faces.length) {
@@ -359,6 +375,10 @@
         if (!itemAtual()) { alvo = { idx: null, osId: null }; return; }
         montar();
         atualizar();
+        if (state.amostrasContainerId !== 'cliente-amostras-itens-container'
+            && typeof window.renderItemAmostraCombinada === 'function') {
+            window.renderItemAmostraCombinada(idx, osId);
+        }
     };
 
     window.AmostraModal = {

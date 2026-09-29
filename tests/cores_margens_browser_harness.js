@@ -124,7 +124,7 @@ function extract(source, name) {
         fs.mkdirSync(output, { recursive: true });
         await page.screenshot({ path: path.join(output, 'cadastro.png'), fullPage: true });
 
-        await page.addScriptTag({ content: extract(main, 'pdfDuplicarParaVersoDoModelo') + '\n' + extract(main, 'drawAmostraFace').replace('function drawAmostraFace(', 'function desenharPainel(') });
+        await page.addScriptTag({ content: extract(main, 'aguardarRecursoDaPrevia') + '\n' + extract(main, 'pdfDuplicarParaVersoDoModelo') + '\n' + extract(main, 'drawAmostraFace').replace('function drawAmostraFace(', 'function desenharPainel(') });
         await page.addScriptTag({ content: extract(portal, 'pdfCopiaNoPortal') + '\n' + extract(portal, 'arteDaFaceParaComposicao') + '\n'
             + extract(portal, 'drawAmostraFace').replace('function drawAmostraFace(', 'function desenharPortal(') });
         const visualResult = await page.evaluate(async () => {

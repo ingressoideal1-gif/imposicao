@@ -68,6 +68,8 @@ function montar(mundo) {
         // motivo do `garantirCsvDaNumeracao` logo acima: o que se prova aqui e a
         // logistica da gravacao, nao a escolha do banco.
         'resolverNumeracaoParaModelo',
+        'function aplicarRegraProdutoPrateleira() { return false; }\n' +
+        'function formatoDoModelo(item, cor, num) { return state.formatos.find(f => f.id === (cor?.formato_id || num?.formato_id)); }\n' +
         fonte + '\nreturn regenerarAmostraDoModelo;')(
         mundo.state || {},
         { createElement: () => ({ width: 100, height: 40, getContext: () => ({}) }) },

@@ -39,7 +39,7 @@ function extrair(src, nome) {
             page.on("console", msg => { if (["warn", "error"].includes(msg.type())) console.error(msg.text()); });
             await page.setContent('<div id="amostras-itens-container"></div><canvas id="frente"></canvas><canvas id="verso"></canvas>');
             const helpers = portal ? ['pdfCopiaNoPortal', 'arteDaFaceParaComposicao']
-                : ['pdfDuplicarParaVersoDoModelo', 'escalaDaArteDoModelo'];
+                : ['aguardarRecursoDaPrevia', 'pdfDuplicarParaVersoDoModelo', 'escalaDaArteDoModelo'];
             await page.addScriptTag({ content: [...helpers, 'drawAmostraFace'].map(n => extrair(src, n)).join('\n') });
             const resultado = await page.evaluate(async () => {
                 const item = { id: 'm', modo_pdf: false, amostra_num_id: 'n', _dbLoaded: true,

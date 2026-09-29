@@ -138,7 +138,7 @@ def test_a_releitura_do_pedido_tem_os_dois_modos():
     assert "const comBanco = !(opcoes && opcoes.comBanco === false);" in corpo, (
         "o modo enxuto tem de ser opt-in — o padrao traz as linhas"
     )
-    assert "recarregarNumeracoesDoPedido(realOSId, { comBanco: false })" in fonte, (
+    assert "recarregarNumeracoesDoPedido(realOSId, { comBanco: false, obrigatorio: true })" in fonte, (
         "a tela de Amostras voltou a esperar os 22 MB antes de abrir"
     )
 

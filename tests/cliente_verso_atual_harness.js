@@ -109,7 +109,7 @@ function selecionar(tipo, num) {
         state: { osItens: { os: [item] }, numeracoes: num ? [num] : [] },
         document: { getElementById: () => ({ value: num ? num.id : '' }) },
         pintarSelectDeNumeracao() {}, sincronizarNumeracaoDoItem() {},
-        isNumeracaoDuplex, pdfViewerState: {}, toast() {},
+        isNumeracaoDuplex, rotuloDoModoDeImpressao: () => 'Sequencial', pdfViewerState: {}, toast() {},
         renderAmostrasOSItens() {}, renderItemAmostraCombinada() {},
         saveAmostraToDB(id, os, data) { saves.push(data); return Promise.resolve(); }
     };
@@ -134,9 +134,9 @@ for (const tipo of tipos) {
 assert.equal(selecionar('Frente', { ...frente, print_mode: 'duplex_unico' }).item.verso, true);
 
 // A recomposição do canvas não pode reativar o campo antigo após a seleção.
-const render = extrair(painel, 'renderItemAmostraCombinada');
+const render = extrair(painel, 'desenharItemAmostraCombinada');
 const inicio = render.indexOf('const numIsDuplex =');
-const fim = render.indexOf('\n    if (num) {\n        preloadAmostraItemPdfElements', inicio);
+const fim = render.indexOf('\n    if (num) {\n        await preloadAmostraItemPdfElements', inicio);
 assert.ok(inicio > 0 && fim > inicio);
 const atualizarCanvas = new Function('item', 'num', 'isNumeracaoDuplex',
     render.slice(inicio, fim));

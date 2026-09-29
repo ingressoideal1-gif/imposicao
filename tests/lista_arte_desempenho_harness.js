@@ -66,7 +66,7 @@ async function navegador() {
         await page.setRequestInterception(true);
         page.on('request', request => request.abort());
         await page.setContent('<main></main>');
-        await page.addScriptTag({ content: ['rasterDaAmostra', 'drawAmostraFace', 'pdfDuplicarParaVersoDoModelo',
+        await page.addScriptTag({ content: ['aguardarRecursoDaPrevia', 'rasterDaAmostra', 'drawAmostraFace', 'pdfDuplicarParaVersoDoModelo',
             'atualizarDadosDosCardsAmostra', 'escalaDaArteDoModelo'].map(extrair).join('\n') });
         const resultado = await page.evaluate(async () => {
             let asserts = 0;
@@ -138,7 +138,9 @@ async function navegador() {
             await rasterDaAmostra(['grande'], () => ({ width: 5000, height: 5000 }));
             ok(rasterDaAmostra.cache.reduce((n, e) => n + e.bytes, 0) <= 64 * 1024 * 1024, 'bitmap grande não fica retido');
             falhar = true; cor.pdf_base64 = btoa('failure');
-            await pintar(); falhar = false; await pintar();
+            let falhou = false; try { await pintar(); } catch (_) { falhou = true; }
+            ok(falhou, 'falha de cor propagada, sem publicar composição incompleta');
+            falhar = false; await pintar();
             ok(destruidos === aberturas, 'PDF que falhou também é destruído');
 
             // Atualização parcial: nós editáveis e canvas reais mantêm identidade.
@@ -208,7 +210,7 @@ async function modelos() {
 
     // A abertura começa as duas leituras independentes; erro de modelo não é escondido.
     const tabelas = [], soltar = [];
-    const abertura = { state: { ordens: [{ id: 'os1', numero: 1 }], osItens: {} },
+    const abertura = { setTimeout, clearTimeout, AbortController, state: { ordens: [{ id: 'os1', numero: 1 }], osItens: {} },
         console: { error() {} }, toast() {},
         supabaseClient: { from: tabela => {
             const consulta = { select() { return this; }, eq() { return this; }, order() { return this; },
@@ -218,7 +220,7 @@ async function modelos() {
             return consulta;
         } }
     };
-    vm.createContext(abertura); vm.runInContext(extrair('loadOSItens'), abertura);
+    vm.createContext(abertura); vm.runInContext(extrair('lerDadosLista') + extrair('loadOSItens'), abertura);
     const abriu = abertura.loadOSItens('os1'); await tick();
     assert.deepEqual(tabelas, ['pedidos_modelos', 'produtos_proposta']);
     soltar.forEach(r => r()); await abriu;

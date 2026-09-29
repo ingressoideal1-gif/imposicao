@@ -470,7 +470,7 @@ function cenario(mapas) {
     const pagina = script.slice(script.indexOf('window.amostraCsvPagina'));
     ok(/numeracaoDoModelo\(item\)/.test(pagina.slice(0, pagina.indexOf('renderItemAmostraCombinada'))),
         'o paginador anda pelas linhas resolvidas');
-    const render = corpo('renderItemAmostraCombinada');
+    const render = corpo('desenharItemAmostraCombinada');
     ok(/resolverNumeracaoParaModelo\(num, item\)/.test(render),
         'o desenho do card resolve a peca pelo banco do pedido');
     const regen = corpo('regenerarAmostraDoModelo');
