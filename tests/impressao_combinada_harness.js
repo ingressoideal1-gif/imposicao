@@ -34,13 +34,13 @@ function scenario(mode, bar, quantities, options = {}) {
   };
   const pdf = tag=>({numPages:2,pagesCache:{page_1:{tag:tag+'F'},page_2:{tag:tag+'V'}}});
   const items = [96,97,98].map((n,i)=>({id:String(n),modelo:String(n),qtd:quantities[i],
-    formato_id:'f',saida_id:'s',numeracao_id:'n'+n,num_inicial:options.zeroStart ? 0 : n*10,num_final:n*10+quantities[i]-1,
+    amostra_cor_id:'cor',formato_id:'f',saida_id:'s',numeracao_id:'n'+n,num_inicial:options.zeroStart ? 0 : n*10,num_final:n*10+quantities[i]-1,
     arte_url:'mock'+n,modo_impressao:mode,bloco:4,cutstack_folhas:options.savedBlock||4,
     verso_tipo:options.back?'FRENTE E VERSO':'Frente',print_mode:options.back?'duplex':'front'}));
   const state = {formatos:[{id:'f',cols:2,rows:2,width_mm:50,height_mm:30,default_schema:'sequential',default_saida_id:'s'}],
     saidas:[{id:'s',width_mm:100,height_mm:60}],numeracoes:items.map(x=>({id:x.numeracao_id,tipo:options.ticket?'TICKET':'SEQUENCIAL',ticket_qtd:options.ticket||1,start:1,print_mode:options.back?'duplex':'front',elements:[{type:'TEXT',x_mm:5,y_mm:10,font_size:10,prefix:x.modelo+':',face:'both',ticket_pos:options.ticket||1}]})),
     osItens:{vibe_22247:items},selectedOSItems:items.map(x=>({osId:'vibe_22247',itemId:x.id})),
-    activeOSItem:{osId:'vibe_22247',itemId:'96'},modoSomaFolha:bar,cores:[],
+    activeOSItem:{osId:'vibe_22247',itemId:'96'},modoSomaFolha:bar,cores:[{id:'cor',formato_id:'f'}],
     pedArtPdfDoc:pdf('96'),pedArtWidth:141.73,pedArtHeight:85.038,
     multiArtesPdfCache:Object.fromEntries(items.map(x=>[x.arte_url,pdf(x.modelo)])),
     multiArtesPdfTamanho:Object.fromEntries(items.map(x=>[x.arte_url,{w:141.73,h:85.038}])),
@@ -73,7 +73,11 @@ function scenario(mode, bar, quantities, options = {}) {
   const scriptFns=['esquemaDaSelecaoCombinada','modoDeImpressaoDaSelecao','modoDeImpressaoDoModelo','modoSomaFolha','itensDaImposicao','itemAtivoDoPedido','temVerso','versoUnico','modoDeVersoDoModelo','escalaDaArteDoModelo','escalaDaArteDoTrabalho','blocagemDaSelecao','blocagemDoModelo','modoCutStackDaSelecao','porQueNaoCombina','problemaNaSelecao','alvosDaImpressao','numeracaoIdDoItem'];
   const pedidoFns=['pdfDaFaceNaPreviaPedido','numeracaoDaArteNaPreviaPedido','buildStrictAssemblySets','arteDoModeloParaFolha','arteParaOMotor','carregarPdfsDaCombinacaoPaginada','drawPedPreview'];
   const code=scriptFns.map(n=>extract(s,n)).concat(pedidoFns.map(n=>extract(p,n))).join('\n');
-  vm.createContext(sandbox);vm.runInContext(code,sandbox);vm.runInContext('drawPedPreview()',sandbox);
+  vm.createContext(sandbox);
+  for (const name of ['camposPendentesDoModelo', 'problemaNosCamposDosModelos', 'preencherFaixaDoModelo', 'elementoMesclaComArte']) {
+    vm.runInContext(extract(s, name), sandbox);
+  }
+  vm.runInContext(code,sandbox);vm.runInContext('drawPedPreview()',sandbox);
   if (options.context) return {sandbox,elements,items};
   const payload=vm.runInContext('state.selectedOSItems.map(x=>arteParaOMotor(arteDoModeloParaFolha(x,null,{comPrevia:false}),true))',sandbox);
   const extra=vm.runInContext(`({blocagem:blocagemDaSelecao(),alvos:alvosDaImpressao(state.selectedOSItems.length>1),blocosDiferentes:porQueNaoCombina(state.osItens.vibe_22247[0],{...state.osItens.vibe_22247[1],bloco:100}),problema:problemaNaSelecao()})`,sandbox);

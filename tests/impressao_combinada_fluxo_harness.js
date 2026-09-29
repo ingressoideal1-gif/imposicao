@@ -162,4 +162,5 @@ async function tests() {
     }
     console.log('OK: PDF/impressao, alvo congelado, refazer, bloqueios e troca assincrona de selecao');
 }
-tests().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports = {fixture};
+if (require.main === module) tests().catch(e=>{console.error(e);process.exitCode=1;});

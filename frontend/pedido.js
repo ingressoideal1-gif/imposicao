@@ -4384,10 +4384,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
 
     // --- PREENCHER FAIXA DE NUMERAÇÃO (ped-start / ped-end) ---
     agendar(() => {
-        const numStart = document.getElementById('ped-start');
-        const numEnd = document.getElementById('ped-end');
-        if (numStart && item.num_inicial) numStart.value = item.num_inicial;
-        if (numEnd && item.num_final) numEnd.value = item.num_final;
+        preencherFaixaDoModelo(item, 'ped');
 
         // --- CAMAROTE: preencher C_INI, Q_CAM e L_CAM ---
         const cIniHidden = document.getElementById('ped-c-ini');
@@ -5320,16 +5317,10 @@ function renderPedOSQueue(opcoes = {}) {
             const blocoVal = item.bloco !== undefined && item.bloco !== null ? item.bloco : '';
             const nomeDoModelo = item.produto || '--';
 
-            // Obter a numeração selecionada e resolver se é TICKET
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
-            let ticket_qtd = 1;
-            if (selectedNum && selectedNum.tipo === 'TICKET') {
-                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
-            }
 
-            const niValNum = parseInt(niVal) || 1;
-            const qtdValNum = parseInt(qtdVal) || 0;
-            const nfCalculado = qtdValNum > 0 ? (niValNum + (qtdValNum * ticket_qtd) - 1) : '';
+            // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
+            const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
 
             // Detectar CAMAROTE
             const isCamarote = selectedNum && (selectedNum.tipo === 'CAMAROTE' || selectedNum.type === 'CAMAROTE');
@@ -6134,6 +6125,8 @@ async function executarPedImposition(mode, isRefazer) {
     if (!selecaoAindaAtual()) return toast('A seleção mudou durante o carregamento. Confira e tente novamente.', 'warning');
     const erroSelecao = typeof problemaNaSelecao === 'function' ? problemaNaSelecao() : null;
     if (erroSelecao) return toast(erroSelecao, 'warning');
+    const camposPendentes = problemaNosCamposDosModelos();
+    if (camposPendentes) return toast(camposPendentes, 'error');
     if ((state.selectedOSItems || []).length > 1 && itensDaImposicao(true).some(i => i.modo_pdf)) {
         try { await carregarPdfsDaCombinacaoPaginada(state.selectedOSItems.slice()); }
         catch (e) { return toast(e.message, 'error'); }
@@ -6441,6 +6434,17 @@ async function executarPedImposition(mode, isRefazer) {
         payloadNumeracao = numeracaoConfirmadaDoModelo(fonte, itemDoCsv);
     } else if (payloadNumeracao && state.csvData && !state.activeOSItem) {
         payloadNumeracao.csv_data = state.csvData;
+    }
+
+    // Os campos da janela podem ainda pertencer ao modelo anterior durante a abertura.
+    // A faixa validada pertence ao modelo, não aos inputs compartilhados.
+    const pendenciasFinais = problemaNosCamposDosModelos();
+    if (pendenciasFinais) return desistir(pendenciasFinais);
+    if (!isMultiSelected && itemDoCsv && schema !== 'pdf_multiple' && schema !== 'multi_artes'
+            && !payloadNumeracao?.csv_data?.length && !state.csvData?.length
+            && !['CAMAROTE', 'TEATRO'].includes(payloadNumeracao?.tipo)) {
+        start = Number(itemDoCsv.num_inicial !== undefined ? itemDoCsv.num_inicial : itemDoCsv.numeracao_inicio);
+        end = Number(itemDoCsv.num_final !== undefined ? itemDoCsv.num_final : itemDoCsv.numeracao_fim);
     }
 
     // A mesma conferencia final do script.js, sobre o payload pronto. Aqui o

@@ -12920,6 +12920,9 @@ window.runImposition = async function (mode, returnBlob = false) {
         }
     }
 
+    const camposPendentes = problemaNosCamposDosModelos();
+    if (camposPendentes) return toast(camposPendentes, 'error');
+
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     let isMultiSelected = false;
@@ -13358,6 +13361,9 @@ window.runImposition = async function (mode, returnBlob = false) {
     } else if (payloadNumeracao && state.csvData && !state.activeOSItem) {
         payloadNumeracao.csv_data = state.csvData;
     }
+
+    const pendenciasFinais = problemaNosCamposDosModelos();
+    if (pendenciasFinais) return toast(pendenciasFinais, 'error');
 
     // A ultima conferencia, sobre o payload pronto. Ver `bancoVazioNoPayload`:
     // esta e a tela onde o operador escolhe a numeracao na lista, sem modelo — e
@@ -27359,6 +27365,78 @@ window.aplicarRegraProdutoPrateleira = aplicarRegraProdutoPrateleira;
 window.sincronizarAprovacaoProdutosPrateleira = sincronizarAprovacaoProdutosPrateleira;
 window.repararProdutosPrateleiraDosItens = repararProdutosPrateleiraDosItens;
 
+// Apenas valida: campos ausentes devem ser corrigidos pelo operador, nunca presumidos.
+function camposPendentesDoModelo(item) {
+    const faltam = [];
+    const presente = v => v !== undefined && v !== null && String(v).trim() !== '';
+    const inteiro = (v, minimo) => presente(v) && typeof v !== 'boolean'
+        && Number.isSafeInteger(Number(v)) && Number(v) >= minimo;
+    const valor = (principal, alternativo) => principal !== undefined ? principal : alternativo;
+    const qtd = valor(item.qtd, item.quantidade);
+    if (!inteiro(qtd, 1)) faltam.push('Quantidade');
+    const numId = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (!num) faltam.push('Numeração');
+    const corId = item.amostra_cor_id || item.cor_id || item.id_cor;
+    const cor = (state.cores || []).find(c => String(c.id) === String(corId));
+    if (!cor) faltam.push('Cor');
+    const fmt = typeof formatoDoModelo === 'function' ? formatoDoModelo(item)
+        : (state.formatos || []).find(f => String(f.id) === String(item.formato_id));
+    if (!fmt) faltam.push('Formato');
+    const saidaId = item.saida_id || fmt?.default_saida_id;
+    if (!(state.saidas || []).some(s => String(s.id) === String(saidaId))) faltam.push('Saída');
+    if (!presente(item.modo_impressao) && !presente(item.blocos) && !presente(fmt?.default_schema)) {
+        faltam.push('Modo de impressão');
+    }
+    if (!presente(num?.print_mode) && !presente(item.verso_tipo) && typeof item.frente_verso !== 'boolean') {
+        faltam.push('Frente/verso');
+    }
+    const camarote = num?.tipo === 'CAMAROTE';
+    const banco = !!num?.csv_data?.length || (typeof vinculoDeBancoDoModelo === 'function' && !!vinculoDeBancoDoModelo(item));
+    if (camarote) {
+        if (!inteiro(item.q_cam ?? item.Q_CAM ?? item.qtd_locais, 1)) faltam.push('Quantidade de locais (Q_CAM)');
+        if (!inteiro(item.l_cam ?? item.L_CAM ?? item.lotacao_cam, 1)) faltam.push('Lotação por local (L_CAM)');
+        if (!inteiro(item.c_ini ?? item.C_INI, 1)) faltam.push('Início do local (C_INI)');
+    } else {
+        if (!inteiro(item.bloco, 1)) faltam.push('Bloco');
+        // PDF paginado e banco usam páginas/linhas; não uma faixa sequencial.
+        if (!item.modo_pdf && !banco && num?.tipo !== 'TEATRO') {
+            const inicio = valor(item.num_inicial, item.numeracao_inicio);
+            const fim = valor(item.num_final, item.numeracao_fim);
+            if (!inteiro(inicio, 0)) faltam.push('Numeração inicial');
+            if (!inteiro(fim, 0)) faltam.push('Numeração final');
+            const vias = num?.tipo === 'TICKET' ? Number(num.ticket_qtd) : 1;
+            if (num?.tipo === 'TICKET' && !inteiro(num.ticket_qtd, 1)) faltam.push('Vias do TICKET');
+            if (inteiro(inicio, 0) && inteiro(fim, 0) && inteiro(qtd, 1)
+                    && Number(fim) - Number(inicio) + 1 !== Number(qtd) * vias) {
+                faltam.push('Faixa de numeração incompatível com a quantidade');
+            }
+        }
+    }
+    return faltam;
+}
+
+function problemaNosCamposDosModelos() {
+    const selecao = (state.selectedOSItems || []).length > 0 ? state.selectedOSItems
+        : state.activeOSItem ? [state.activeOSItem] : [];
+    const pendencias = [];
+    for (const alvo of selecao) {
+        const item = (state.osItens[alvo.osId] || []).find(i => String(i.id) === String(alvo.itemId));
+        const campos = item ? camposPendentesDoModelo(item) : ['Modelo não carregado'];
+        if (campos.length) pendencias.push('Modelo ' + alvo.itemId + ': ' + campos.join(', '));
+    }
+    return pendencias.length ? 'PDF e impressão bloqueados. Corrija os campos do modelo antes de continuar:\n'
+        + pendencias.join('\n') : null;
+}
+
+function preencherFaixaDoModelo(item, prefixo) {
+    if (document.getElementById(prefixo + '-schema')?.value === 'pdf_multiple' || state.csvData) return;
+    const inicio = document.getElementById(prefixo + '-start');
+    const fim = document.getElementById(prefixo + '-end');
+    if (inicio) inicio.value = (item.num_inicial !== undefined ? item.num_inicial : item.numeracao_inicio) ?? '';
+    if (fim) fim.value = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
+}
+
 /**
  * Atualiza a tiragem por modelo sem substituir artes e amostras em memória.
  */
@@ -27510,8 +27588,8 @@ async function loadOSItens(osId) {
                             numeracao_id: resolvedNumId || null,
                             tipo_numeracao: item.tipo_numeracao || item.gabarito_operacional || null,
                             qtd: item.quantidade ?? item.qtd ?? 0,
-                            num_inicial: item.numeracao_inicio || item.num_inicial,
-                            num_final: item.numeracao_fim || item.num_final,
+                            num_inicial: item.numeracao_inicio ?? item.num_inicial,
+                            num_final: item.numeracao_fim ?? item.num_final,
                             verso: itemVerso,
                             verso_tipo: resolvedVersoTipo,
                             impressao: normalizarStatusImpressao(item.status_impressao || item.status_producao || item.impressao),
@@ -32756,10 +32834,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
 
     // --- PREENCHER FAIXA DE NUMERAÇÃO ---
     agendar(() => {
-        const numStart = document.getElementById('imp-start');
-        const numEnd = document.getElementById('imp-end');
-        if (numStart && item.num_inicial) numStart.value = item.num_inicial;
-        if (numEnd && item.num_final) numEnd.value = item.num_final;
+        preencherFaixaDoModelo(item, 'imp');
     }, 400);
 
     agendar(() => {
@@ -33333,16 +33408,10 @@ function renderImpOSQueue(opcoes = {}) {
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const nomeDoModelo = item.produto || '--';
 
-            // Obter a numeração selecionada e resolver se é TICKET
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
-            let ticket_qtd = 1;
-            if (selectedNum && selectedNum.tipo === 'TICKET') {
-                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
-            }
 
-            const niValNum = parseInt(niVal) || 1;
-            const qtdValNum = parseInt(qtdVal) || 0;
-            const nfCalculado = qtdValNum > 0 ? (niValNum + (qtdValNum * ticket_qtd) - 1) : '';
+            // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
+            const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
 
             // Detectar CAMAROTE
             const isCamarote = selectedNum && (selectedNum.tipo === 'CAMAROTE' || selectedNum.type === 'CAMAROTE');
