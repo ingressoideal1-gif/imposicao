@@ -49,3 +49,24 @@ O teste obrigatorio da Lista de Arte tinha uma ancora desatualizada: a leitura d
 Esta validação não mede latência na estação e não comprova recuperação de um pedido real. A verificacao operacional posterior deve observar abertura, rolagem e nova tentativa na estação afetada, conferindo a versão efetivamente servida (web ou painel do agente). Não confundir disponibilidade pública do frontend com instalação do agente.
 
 Para continuar, usar a worktree acima e conferir se `origin/main` avançou. Não copiar todo o `script.js` para o checkout operacional antigo. Publicacao e comparacao dos arquivos publicos devem ser registradas abaixo depois da execucao.
+
+## Entrega publica v973 concluida
+
+- Commit funcional: `d39274b918e9270750169cb0a9e2370b32a389a2`, integrado por fast-forward em `origin/main`; tag anotada `v973` enviada.
+- Executado `entrega-segura.ps1 publicar -Escopo Frontend -Integracao Direta -Sim`, depois da simulacao validada. O fluxo repetiu as verificacoes depois de atualizar os parametros de cache em `index.html` e `producao.html`.
+- Todos os harnesses obrigatorios passaram, incluindo 25 verificacoes de recuperacao/modal/fidelidade/concorrencia, 163 da Lista de Arte e 19 cenarios de navegacao em navegador. As quatro falhas preexistentes da selecao ampliada permanecem registradas acima.
+- Cloudflare Pages concluiu o deploy `388da17b-ae3a-4430-af71-60b5cb7979a4`. A comparacao imediata do script ainda recebeu arquivo anterior e terminou com `FALHA_APOS_INTEGRACAO`. Sem repetir a publicacao, a nova consulta apos propagacao confirmou os oito resultados abaixo: quatro arquivos em cada dominio.
+- Verificacao em 29/09/2026, aproximadamente 12h26 (America/Sao_Paulo), com query unica e `Cache-Control: no-cache`. SHA-256 calculado depois de normalizar BOM e finais de linha, conforme o fluxo seguro do projeto.
+
+Dominios conferidos: `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`. Todos os hashes publicos coincidiram com os arquivos locais do commit funcional.
+
+| Arquivo/rota | SHA-256 normalizado, igual nos dois dominios |
+|---|---|
+| `index.html` / `/` | `1bb8fd46a8d9db8cd9be5fc73a93b360254a562a7ff0296f0d021fb4582f4bec` |
+| `producao.html` | `76f4ef8e4d4e5e2de1c82d861d27d2413ff248b1bf4b4a2e9e28ae3fea249498` |
+| `script.js?v=973` | `9c57ec8f56e54706c9e72d3050e2b3a76236726ae45002ccd59ceed8b16d8a79` |
+| `amostra-modal.js?v=973` | `4220cbca1fa28227a8d42d6cf45998706e4775968c5e6995e69508af2a983457` |
+
+Checkout operacional preservado em `21c4b722`, com os mesmos quatro arquivos locais nao rastreados. Nenhum banco compartilhado foi acessado ou alterado. Nao houve build, distribuicao ou instalacao do NewProd. A validacao de um pedido real na estacao continua pendente.
+
+Recuperacao, se necessaria: preparar uma nova branch isolada da `origin/main` atual, reverter o commit funcional acima por novo commit, revisar conflitos e executar os testes pertinentes. Republicar pelo fluxo seguro com nova versao de cache e conferir ambos os dominios. Nao usar reset ou forcar o historico remoto. A base anterior esta preservada em `7f52fc938413f164cc1c136e15104d412dfcb932`; nenhuma reversao foi executada nesta entrega.
