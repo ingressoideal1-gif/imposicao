@@ -93,3 +93,18 @@ Validacoes: 97 testes passaram na selecao de prazo, ordenacao, Lista de Arte, ra
 Fixtures foram atualizados para incluir o auxiliar de lotes, o timer de pintura e `window` no ambiente simulado dos links. Nenhuma assercao de negocio foi removida. A primeira invocacao pytest incluiu um arquivo inexistente e nao coletou testes; a selecao foi corrigida. `git diff --check` e sintaxe do novo diagnostico passaram.
 
 Recuperacao planejada: se necessaria, criar nova branch da `origin/main` atual e reverter o commit funcional desta entrega por novo commit. Executar os testes pertinentes, publicar com nova versao de cache e comparar arquivos nos dois dominios. Nao resetar o checkout operacional nem reescrever o historico. A base anterior fica preservada em `3a20538b658ad1562283625de89ce35f44bd1015`.
+
+## Publicacao v974 verificada
+
+- Commit funcional: `65e4b79ea85b0f827d8d1c339d111eed46ee0ce8`, integrado por fast-forward em `origin/main`. Tag anotada `v974` enviada.
+- Fluxo: `entrega-segura.ps1 publicar -Escopo Frontend -Integracao Direta`, primeiro com `-Simular`, depois com `-Sim`. Verificacoes obrigatorias passaram antes e depois da atualizacao do cache em `index.html` e `producao.html`.
+- Cloudflare Pages concluiu o deploy `8fb2a7ca-78f8-470b-b1d7-9a076a127cad`. A comparacao imediata recebeu HTML anterior, terminando com `FALHA_APOS_INTEGRACAO`. A publicacao nao foi repetida: aguardou-se a propagacao.
+- Em 29/09/2026, 12h42min40s -03:00, consultas novas com cache-buster e `Cache-Control: no-cache` confirmaram igualdade dos tres arquivos em **ambos** os dominios: `https://imposition.ai-ideal.com.br` e `https://imposicao.pages.dev`.
+
+| Arquivo | SHA-256 normalizado, identico local/publico |
+|---|---|
+| `/` (`index.html`) | `f805b27f27ffacd101786ede8c228b90aed2547760abc175c160d389e443545f` |
+| `/producao.html` | `e8442dea813663d80c5d0442c3a9bb7e582446168c192ea1eb7842022ee669a4` |
+| `/script.js?v=974` | `cab8ddd9ffbbed5fbc9c8e41043bdc732fdf4d33b83bb4ad998c4c85fc937d7d` |
+
+Normalizacao apenas de BOM e finais de linha. Checkout operacional preservado com os mesmos quatro arquivos locais nao rastreados. Nenhum acesso a banco compartilhado, SQL, build/instalacao do NewProd ou impressao fisica. Continua pendente medir a abertura na sessao real do usuario; a melhoria de aproximadamente 44% pertence ao cenario sintetico descrito.
