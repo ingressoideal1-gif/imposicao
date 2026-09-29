@@ -36,7 +36,7 @@ function ok(cond, oque, detalhe) {
 }
 
 function recortarAsync(nome) {
-    const i = SCRIPT.indexOf('\nasync function ' + nome + '(');
+    const i = SCRIPT.search(new RegExp('\\n(?:async )?function ' + nome + '\\('));
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no script.js');
     return SCRIPT.slice(i, SCRIPT.indexOf('\n}', i) + 2);
 }
@@ -68,6 +68,8 @@ function bancoFalso(opcoes) {
                 select() { return this; },
                 eq() { return this; },
                 in() { return this; },
+                order() { return this; },
+                range() { return this; },
                 update(payload) { this._op = 'update'; this._payload = payload; return this; },
                 // Thenable: o `await` do script.js cai aqui.
                 then(resolve, reject) {
@@ -89,7 +91,9 @@ function bancoFalso(opcoes) {
 // A sessao e conferida pela funcao de verdade do script.js, nao por uma copia:
 // se ela mudar de nome ou de regra, este harness quebra junto, como deve.
 const FONTE_COMPARTILHADA = SCRIPT.match(/const CLIENTE_BASE_URL = '[^']+';/)[0]
-    + '\n' + recortarAsync('temSessaoDoSupabase');
+    + '\n' + recortarAsync('temSessaoDoSupabase')
+    + '\n' + recortarAsync('lerDadosLista')
+    + '\n' + recortarAsync('pedidoIgnoradoNosPaineis');
 
 function montar(nome, banco, state, overrides) {
     const window = { location: { origin: 'https://ideal-imposition.vercel.app' } };

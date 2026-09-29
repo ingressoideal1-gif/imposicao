@@ -48,3 +48,11 @@ def test_data_e_hora_do_erp():
         cwd=RAIZ, timeout=30, capture_output=True, text=True, encoding="utf-8",
     )
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_lotes_modelos_e_falhas_dos_tempos():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "painel_prazos_lotes_harness.js")],
+        cwd=RAIZ, timeout=30, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr

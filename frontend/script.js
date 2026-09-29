@@ -26149,11 +26149,21 @@ async function sincronizarPedidosProntosParaEnvio() {
         const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
         if (numerosParaVerificar.length === 0) return;
 
-        // Uma única consulta para toda a lista
-        const { data: modelos } = await supabaseClient
-            .from('pedidos_modelos')
-            .select('id_int, status_arte')
-            .in('id_int', numerosParaVerificar);
+        // URLs pequenas e páginas completas: um pedido pode ter muitos modelos.
+        // Só reconciliar depois de todos os lotes terem sido lidos com sucesso.
+        const modelos = [];
+        for (let i = 0; i < numerosParaVerificar.length; i += 100) {
+            for (let offset = 0; ; offset += 500) {
+                const { data, error } = await supabaseClient
+                    .from('pedidos_modelos')
+                    .select('id_int, status_arte')
+                    .in('id_int', numerosParaVerificar.slice(i, i + 100))
+                    .order('id').range(offset, offset + 499);
+                if (error) throw error;
+                modelos.push(...(data || []));
+                if (!data || data.length < 500) break;
+            }
+        }
         if (!modelos || modelos.length === 0) return;
 
         const modelosPorPedido = {};
@@ -26939,11 +26949,11 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 ...produtos.map(p => p.id_int),
                 ...propostas.map(pr => pr.id_int),
             ].filter(Boolean))];
-            if (idsParaPrazo.length > 0) {
+            for (let i = 0; i < idsParaPrazo.length; i += 100) {
                 const { data: osData, error: osError } = await lerDadosLista(vibeClient
                     .from('propostas_os')
                     .select('id_int, data_termino, codigo_rastreamento')
-                    .in('id_int', idsParaPrazo), 'dados do ERP');
+                    .in('id_int', idsParaPrazo.slice(i, i + 100)), 'dados do ERP');
                 if (osError) throw osError;
                 (osData || []).forEach(linha => {
                     if (!linha) return;
@@ -26953,8 +26963,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 });
             }
         } catch (oe) {
-            if (oe.code === 'LISTA_LEITURA_TIMEOUT') throw oe;
-            console.warn('[Vibecode] Não foi possível ler propostas_os (prazo de entrega):', oe.message || oe);
+            throw new Error(`Não foi possível carregar os prazos de entrega. A lista anterior foi preservada. ${oe.message || oe}`);
         }
 
         // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
@@ -30357,12 +30366,14 @@ function anotarTempoNoCard(ordens) {
 
     const agora = Date.now();
     const paraGravar = [];
+    const anteriores = new Map();
 
     (ordens || []).forEach(os => {
         const num = parseInt(os.numero);
         if (!num || !os._fila_arte) return;
 
         const reg = state.temposNoCard[num];
+        anteriores.set(num, reg);
 
         // Pedido nunca visto: o relógio começa agora. Vale para todos os que já
         // existem hoje — não há histórico de onde tirar um começo melhor.
@@ -30411,15 +30422,24 @@ function anotarTempoNoCard(ordens) {
         paraGravar.push(novo);
     });
 
-    if (paraGravar.length) gravarTemposNoCard(paraGravar);
+    if (paraGravar.length) return Promise.resolve(gravarTemposNoCard(paraGravar)).then(salvou => {
+        if (salvou !== false) return;
+        // Reverter apenas esta tentativa; uma leitura/troca posterior tem precedência.
+        for (const novo of paraGravar) {
+            if (state.temposNoCard[novo.id_int] !== novo) continue;
+            const anterior = anteriores.get(novo.id_int);
+            if (anterior) state.temposNoCard[novo.id_int] = anterior;
+            else delete state.temposNoCard[novo.id_int];
+        }
+    });
 }
 
 let _gravandoTempos = false;
 
 /** Manda as trocas para o banco. Falha aqui não pode derrubar a lista. */
 async function gravarTemposNoCard(linhas) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-    if (_gravandoTempos) return;   // a próxima renderização tenta de novo
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return false;
+    if (_gravandoTempos) return false;   // a próxima renderização tenta de novo
     _gravandoTempos = true;
     try {
         const { error } = await supabaseClient
@@ -30430,8 +30450,10 @@ async function gravarTemposNoCard(linhas) {
             if (error.code === '42P01') state.temposNoCardAtivo = false;
             throw error;
         }
+        return true;
     } catch (e) {
         console.warn('[Tempo] Erro ao gravar troca de card:', e.message);
+        return false;
     } finally {
         _gravandoTempos = false;
     }
@@ -30637,6 +30659,7 @@ window.corDoTempoNoCard = corDoTempoNoCard;
 
 const NOME_DO_CARD = {
     fila: 'Em Arte',
+    pendente: 'Pendente',
     aprovacao: 'Fila de Aprovação',
     aprovados: 'Fila de Aprovados',
     concluidos: 'Pedidos Concluídos',

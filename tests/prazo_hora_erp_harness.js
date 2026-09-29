@@ -7,7 +7,7 @@ function extract(name) {
     assert.ok(start >= 0, name);
     return source.slice(start, source.indexOf('\n}', start) + 2);
 }
-const names = ['comporPrazoDoERP', 'carregarHorasDosPrazos', '_prazoDoPedido',
+const names = ['lerDadosLista', 'comporPrazoDoERP', 'carregarHorasDosPrazos', '_prazoDoPedido',
     'pedidoEstaAtrasado', 'pedidoEhParaHoje', 'formatPrazoBadge'];
 const api = new Function(names.map(extract).join('\n') + `\nreturn {${names}};`)();
 const inicio = source.indexOf('        let prazosPorPedido = {};');
@@ -29,6 +29,7 @@ function client(os, setores, error = null) {
                     assert.ok(ids.length <= 100);
                 } else {
                     assert.equal(table, 'propostas_os');
+                    assert.ok(ids.length <= 100);
                 }
                 return { data: (table === 'propostas_os' ? os : setores)
                     .filter(row => ids.some(id => String(id) === String(row.id_int))),
@@ -69,6 +70,16 @@ function client(os, setores, error = null) {
     const hours = await api.carregarHorasDosPrazos(paged, many.map(row => row.id_int));
     assert.equal(Object.keys(hours).length, 251);
     assert.equal(paged.calls.length, 3);
+    // Regressão: 4.685 pedidos nunca devem formar uma única URL.
+    const pedidos = Array.from({ length: 4685 }, (_, i) => ({ id_int: i + 1, data_termino: '2026-09-29' }));
+    const grande = client(pedidos, []);
+    const prazos = await carregar(grande, [], pedidos, logger);
+    assert.equal(Object.keys(prazos).length, 4685);
+    assert.equal(grande.calls.filter(c => c.table === 'propostas_os').length, 47);
+    const falha = { from() { return { select() { return { in() {
+        return Promise.resolve({ data: null, error: new Error('Bad Request') });
+    } }; } }; } };
+    await assert.rejects(carregar(falha, [], pedidos, logger), /prazos de entrega/);
     // NewProd: login local não pode depender da leitura anônima do Supabase.
     const avisos = [];
     let ativas = 0, maxAtivas = 0;
