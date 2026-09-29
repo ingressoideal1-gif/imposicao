@@ -1,0 +1,105 @@
+{
+  "source_commit": "a6d51bd8ecbb367cc96ccc416014984421cef4d5",
+  "frontend_commit": "69ca3240",
+  "deployment": "5782ce0c-d4d7-45e4-a1dc-eb0e0bdc0231",
+  "web": [
+    {
+      "base": "https://imposicao.pages.dev",
+      "file": "index.html",
+      "status": 200,
+      "match": true,
+      "sha256": "371ce436b3abe2c1bcd2b36879f938d9314731925b8e063cf8b787807090ac12"
+    },
+    {
+      "base": "https://imposicao.pages.dev",
+      "file": "producao.html",
+      "status": 200,
+      "match": true,
+      "sha256": "2b0f6081295e66d20148e80dea256ca5c3c564603d0a7115a01d6069499a83a9"
+    },
+    {
+      "base": "https://imposicao.pages.dev",
+      "file": "script.js",
+      "status": 200,
+      "match": true,
+      "sha256": "7635c5a52db94fd15eff735619329b6825402e1adba73b50a5dc0446422f9017"
+    },
+    {
+      "base": "https://imposition.ai-ideal.com.br",
+      "file": "index.html",
+      "status": 200,
+      "match": true,
+      "sha256": "371ce436b3abe2c1bcd2b36879f938d9314731925b8e063cf8b787807090ac12"
+    },
+    {
+      "base": "https://imposition.ai-ideal.com.br",
+      "file": "producao.html",
+      "status": 200,
+      "match": true,
+      "sha256": "2b0f6081295e66d20148e80dea256ca5c3c564603d0a7115a01d6069499a83a9"
+    },
+    {
+      "base": "https://imposition.ai-ideal.com.br",
+      "file": "script.js",
+      "status": 200,
+      "match": true,
+      "sha256": "7635c5a52db94fd15eff735619329b6825402e1adba73b50a5dc0446422f9017"
+    }
+  ],
+  "build": {
+    "version": "1.2.345",
+    "panel_version": 972,
+    "assets_match": true,
+    "assets": [
+      {
+        "file": "index.html",
+        "sha256": "478099af79b29b05d0b89c3459de7969216e94fb9899aadfa046f9cc1ea47ba9"
+      },
+      {
+        "file": "producao.html",
+        "sha256": "e5121e057455c949539f6f967eb753abca4c9ae33ad8b57668aac87e9c8f28dd"
+      },
+      {
+        "file": "script.js",
+        "sha256": "a6d6b4753c737ae443d6349b37652427ceabd28728a48664a42e2a46b373f0fe"
+      },
+      {
+        "file": "pedido.js",
+        "sha256": "e3e16c2c98a7de8364e705084afa461d3e0cc985816bbfb1670304d7e1835fce"
+      },
+      {
+        "file": "cliente.html",
+        "sha256": "97eba769628ddeff8d3b1366268fbbef964cbad60b0dc662397976b4f7f38a31"
+      },
+      {
+        "file": "controle.html",
+        "sha256": "c604436640fd8c5cf36340dde0bd12f124fcc08ce39cc890c303c319865e914d"
+      }
+    ],
+    "printing_dlls_present": true,
+    "release_module_present": true,
+    "msi_size": 156200960,
+    "msi_sha256": "202af7c55a233dcb95fb52a97247f97b53f82e1a32331359443b7314fa3d1451",
+    "tests_passed": 89,
+    "msi_product_version": "1.2.345.0"
+  },
+  "public_msi": {
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.345.msi",
+    "size": 156200960,
+    "sha256": "202af7c55a233dcb95fb52a97247f97b53f82e1a32331359443b7314fa3d1451",
+    "verified": true
+  },
+  "manifest": {
+    "verified_at": "2026-09-29T14:21:42.402894+00:00",
+    "manifest": {
+      "version": "1.2.345",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.345.msi",
+      "sha256": "202af7c55a233dcb95fb52a97247f97b53f82e1a32331359443b7314fa3d1451",
+      "size": 156200960,
+      "notes": "Painel v972: corrige prazos de entrega e sincronizacao de modelos em listas grandes; recupera tentativas rejeitadas de gravacao do tempo por etapa."
+    },
+    "public_read_verified": true
+  },
+  "database": "Operador confirmou CHECK contendo pendente via captura de pg_get_constraintdef.",
+  "station_installation_verified": false
+}

@@ -48,7 +48,8 @@ pendente. Esta é a evidência de aplicação; não houve execução remota pelo
 ## Entrega
 
 Entrega autorizada pelo usuário com "entrega segura". Worktree
-ideal-imposition-faixa-22770; checkout principal preservado. Para concluir em
-produção: publicar frontend e atualizar o NewProd;
+ideal-imposition-faixa-22770; checkout principal preservado. Frontend v972 e MSI 1.2.345 publicados e conferidos; evidências em
+docs/evidencias/newprod-prazos-v972-1.2.345-publico.json. Nas estações,
+instalar a atualização e
 conferir a tela autenticada e o console após recarregar. Testes locais não
 comprovam gravação no banco nem recuperação do painel já aberto.

@@ -21,6 +21,8 @@ havia encontrado o cache antigo; não foi necessário repetir a publicação.
 
 Backup e evidências: C:/ProjectBackups/newprod-prazos-1.2.345.
 Manifesto anterior preservado em latest-before.json (1.2.344).
-Publicação do MSI/manifesto será registrada após download público e conferência.
+MSI público baixado e conferido por tamanho e SHA-256. Manifesto ativado e
+relido publicamente em 2026-09-29T14:21:42Z apontando para 1.2.345.
+Evidência consolidada: docs/evidencias/newprod-prazos-v972-1.2.345-publico.json.
 Instalação na estação e recuperação da tela autenticada ainda não verificadas.
 Rollback do agente exige nova versão superior; não pressupor downgrade automático.
