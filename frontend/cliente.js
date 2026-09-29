@@ -3605,11 +3605,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                         cIni: item?.c_ini || item?.C_INI || 1
                     });
                     if (el.type === 'CAMAROTE_LOCAL') {
-                        label = `${el.prefix || ''}${_cam.local}`;
+                        label = `${el.prefix || ''}${String(_cam.local).padStart(el.pad || 0, '0')}`;
                     } else if (el.type === 'CAMAROTE_PESSOA') {
-                        label = `${el.prefix || ''}${_cam.pessoa}`;
+                        label = `${el.prefix || ''}${String(_cam.pessoa).padStart(el.pad || 0, '0')}`;
                     } else {
-                        label = `${el.prefix || ''}${_cam.pessoa}/${_cam.lotacao}`;
+                        label = `${el.prefix || ''}${String(_cam.pessoa).padStart(el.pad || 0, '0')}/${String(_cam.lotacao).padStart(el.pad || 0, '0')}`;
                     }
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
@@ -4287,12 +4287,12 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
             } else if (el.type === 'CAMAROTE_LOCAL') {
                 const _cIni = parseInt(item?.c_ini || item?.C_INI || 1);
-                label = `${el.prefix || ''}${_cIni}`;
+                label = `${el.prefix || ''}${String(_cIni).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA') {
-                label = `${el.prefix || ''}${pageNum}`;
+                label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                 const _lCamB = parseInt(item?.l_cam || item?.L_CAM || 5);
-                label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
+                label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}/${String(_lCamB).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
                 // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes

@@ -2169,15 +2169,15 @@ function drawPedPreview() {
                         const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
                         const _cIni = parseInt(document.getElementById('ped-c-ini')?.value) || 1;
                         const _localNum = _cIni + Math.floor(item_index / _lCam);
-                        val_str = `${el.prefix || ''}${_localNum}`;
+                        val_str = `${el.prefix || ''}${String(_localNum).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA') {
                         const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
-                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}`;
+                        val_str = `${el.prefix || ''}${String((item_index % _lCam) + 1).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                         const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
-                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}/${_lCam}`;
+                        val_str = `${el.prefix || ''}${String((item_index % _lCam) + 1).padStart(el.pad || 0, '0')}/${String(_lCam).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.source === 'database') {
 

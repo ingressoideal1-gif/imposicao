@@ -2188,19 +2188,13 @@ class ImpositionEngine:
                 val_str = f"{prefix_fila}{fila}\n{prefix_lugar}{num}"
             else:
                 val_str = f"{prefix_fila}{fila} - {prefix_lugar}{num}"
-        elif t == "CAMAROTE_LOCAL":
-            # val já foi calculado no loop principal como local_num
+        elif t in ("CAMAROTE_LOCAL", "CAMAROTE_PESSOA", "CAMAROTE_PESSOA_TOTAL"):
+            # O loop já resolveu local/pessoa; pad altera somente a apresentação.
+            pad = int(el.get("pad", 0) or 0)
             prefix = str(el.get("prefix", "") or "")
-            val_str = f"{prefix}{val}"
-        elif t == "CAMAROTE_PESSOA":
-            # val já foi calculado no loop principal como pessoa_num
-            prefix = str(el.get("prefix", "") or "")
-            val_str = f"{prefix}{val}"
-        elif t == "CAMAROTE_PESSOA_TOTAL":
-            # val = pessoa_num, _l_cam = lotacao por local
-            prefix = str(el.get("prefix", "") or "")
-            l_cam = el.get("_l_cam", 1)
-            val_str = f"{prefix}{val}/{l_cam}"
+            val_str = f"{prefix}{str(val).zfill(pad)}"
+            if t == "CAMAROTE_PESSOA_TOTAL":
+                val_str += "/" + str(el.get("_l_cam", 1)).zfill(pad)
         else:
             pad = int(el.get("pad", 0) or 0)
             prefix = str(el.get("prefix", "") or "")
