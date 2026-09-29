@@ -12,7 +12,7 @@ Nenhum commit, push, deploy, build MSI, upload ou ativação de manifesto execut
 Não houve leitura de credenciais, banco compartilhado ou instalação na estação.
 
 O `git fetch origin` confirmou a base `806eb138`. O checkout operacional conserva
-os mesmos cinco arquivos não rastreados, sem alterações desta tarefa.
+os mesmos quatro arquivos não rastreados, sem alterações desta tarefa.
 
 ## Pacotes revisáveis
 
