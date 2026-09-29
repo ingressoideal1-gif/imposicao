@@ -54,7 +54,8 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
                     1:{card:'concluidos',desde:iso(0,2),saiu_da_fila_em:iso(0,2),credito_segundos:5100},
                     2:{card:'concluidos',desde:iso(1,1),saiu_da_fila_em:iso(1,1),credito_segundos:9300},
                     3:{card:'fila',desde:iso(0,2),saiu_da_fila_em:null,credito_segundos:600},
-                    4:{card:'fila',desde:iso(0,3),saiu_da_fila_em:null,credito_segundos:1200}
+                    4:{card:'fila',desde:iso(0,3),saiu_da_fila_em:null,credito_segundos:1200},
+                    5:{card:'aprovacao',desde:iso(2,2),saiu_da_fila_em:iso(2,2),credito_segundos:4200}
                 }
             };
             function getOSDesigner(id, numero) { return state.todasArtes.find(a => a.id_int === Number(numero))?.designer_nome || ''; }
@@ -68,6 +69,8 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
         });
 
         assert.equal(await page.$$eval('.dashboard-arte-kpi', els => els.length), 6, 'seis indicadores principais');
+        assert.equal(await page.$eval('.dashboard-arte-kpi:first-child .dashboard-arte-kpi-label', el => el.textContent), 'Artes prontas/aprovadas');
+        assert.equal(await page.$eval('.dashboard-arte-kpi:first-child .dashboard-arte-kpi-valor', el => el.textContent), '3', 'inclui pronto para aprovação sem exigir conclusão');
         assert.equal(await page.$$eval('.dashboard-arte-tabela', els => els.length), 4, 'inclui tabela de todos os pedidos com arte pronta');
         assert.equal(await page.$$eval('#dashboard-arte-pedidos-prontos tbody tr', els => els.length), 3, 'lista prontos e concluídos');
         assert.ok(await page.$$eval('.dashboard-arte-barra-col', els => els.length) >= 7, 'série diária desenhada');

@@ -4,14 +4,14 @@ O card **Dashboard** é o primeiro card da Lista de Arte e troca a tabela operac
 
 ## Métricas atuais
 
-- Pedidos finalizados no período e comparação com o período anterior.
+- Artes prontas/aprovadas no período e comparação com o período anterior.
 - Tempo médio e mediano acumulado em `Em Arte` por pedido.
-- Percentual finalizado em até 2 horas (SLA inicial sugerido, apenas visual).
+- Percentual marcado como pronto em até 2 horas (SLA inicial sugerido, apenas visual).
 - Pedidos em arte agora e idade média do backlog.
 - Pedidos em alteração e aguardando aprovação agora.
-- Finalizações diárias, distribuição atual do fluxo e volume recebido.
-- Ranking por designer: finalizados, produtos, média, mediana, SLA, carga ativa, alterações e aprovações.
-- Ranking por atendente: finalizados, produtos, média, mediana, SLA, carga ativa, pendências e aprovações.
+- Artes prontas diárias, distribuição atual do fluxo e volume recebido.
+- Ranking por designer: prontos/aprovados, produtos, média, mediana, SLA, carga ativa, alterações e aprovações.
+- Ranking por atendente: prontos/aprovados, produtos, média, mediana, SLA, carga ativa, pendências e aprovações.
 - Produção por produto: pedidos, linhas de produto, quantidade e tempo médio dos pedidos que contêm o produto.
 - Lista histórica de pedidos com arte pronta, independente do período do dashboard e incluindo pedidos já concluídos. Cancelados e ignorados não entram; busca, designer e atendente continuam filtrando a lista.
 
@@ -19,11 +19,11 @@ O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `ped
 
 ## Regra de confiabilidade
 
-Uma linha histórica encontrada pela primeira vez já em `concluidos` recebe um `desde`, mas não comprova quando o trabalho terminou. Por isso, uma finalização só entra nas métricas quando `imposition_tempo_no_card.saiu_da_fila_em` prova que o painel observou a saída de `Em Arte`. Cancelamentos não contam como produtividade.
+As análises usam o momento em que o pedido sai de `Em Arte` e passa a pronto para aprovação, aprovado ou concluído. Não é necessário esperar o card `concluidos`. O pedido só entra no período quando `imposition_tempo_no_card.saiu_da_fila_em` comprova essa transição; registros históricos encontrados já prontos sem esse carimbo não recebem uma data inventada. Cancelamentos não contam como produtividade.
 
 O indicador de alteração é uma fotografia atual, não uma taxa histórica de retrabalho. O banco atual guarda apenas o último card de cada pedido, não todas as transições.
 
-A lista de artes prontas não depende de `saiu_da_fila_em`: ela mostra o conjunto operacional completo. Entram pedidos em Enviar Arte, Em Aprovação, aprovados e concluídos, mesmo quando a conclusão ocorreu antes do início do relógio. O carimbo continua obrigatório apenas para métricas de produtividade por período.
+A lista de artes prontas não depende de `saiu_da_fila_em`: ela mostra o conjunto operacional completo. Entram pedidos em Enviar Arte, Em Aprovação, aprovados e concluídos, mesmo quando ficaram prontos antes do início do relógio. O carimbo continua obrigatório apenas para métricas de produtividade por período.
 
 ## Evoluções recomendadas
 
