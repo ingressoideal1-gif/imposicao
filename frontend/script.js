@@ -6053,11 +6053,11 @@ function drawElement(ctx, el, S) {
             const lugar = `${el.prefix_lugar || ''}${_lVal}`;
             label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
         } else if (el.type === 'CAMAROTE_LOCAL') {
-            label = `${el.prefix || ''}7`;
+            label = `${el.prefix || ''}${String(7).padStart(el.pad || 0, '0')}`;
         } else if (el.type === 'CAMAROTE_PESSOA') {
-            label = `${el.prefix || ''}1`;
+            label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}`;
         } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-            label = `${el.prefix || ''}1/5`;
+            label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}/${String(5).padStart(el.pad || 0, '0')}`;
         } else if (el.source === 'database') {
             const colName = el.csv_column || '';
             const csvData = bancoDeAmostra();
@@ -6770,11 +6770,11 @@ function getElementSizeMM(el) {
                 const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? fila : `${fila} - ${lugar}`;
             } else if (el.type === 'CAMAROTE_LOCAL') {
-                label = `${el.prefix || ''}7`;
+                label = `${el.prefix || ''}${String(7).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA') {
-                label = `${el.prefix || ''}1`;
+                label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                label = `${el.prefix || ''}1/5`;
+                label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}/${String(5).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 label = textoDeExemploDoElemento(el);
             } else {
@@ -8316,6 +8316,11 @@ function renderElementsList() {
                 </div>
                 <div class="form-group"><label>Tamanho (pt)</label><input class="form-control el-font" type="number" value="${el.font_size || 12}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>
                 <div class="form-group"><label>Prefixo</label><input class="form-control" type="text" value="${el.prefix || ''}" placeholder="ex: Mesa , Cadeira …" onchange="updateEl('${el.id}','prefix',this.value)"></div>
+                <div class="form-group el-full">
+                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${el.pad || 0} dígitos = ${String(1).padStart(el.pad || 0, '0')})</span></label>
+                    <input class="form-control" type="number" value="${el.pad || 0}" min="0" max="10" step="1" oninput="const val = Math.max(0, Math.min(10, Math.trunc(+this.value) || 0)); const hint = document.getElementById('pad-hint-${el.id}'); hint.textContent = '(' + val + ' dígitos = ' + String(1).padStart(val, '0') + ')'; updateEl('${el.id}','pad',val)" onchange="this.value = Math.max(0, Math.min(10, Math.trunc(+this.value) || 0))">
+                    ${el.type === 'CAMAROTE_PESSOA_TOTAL' ? '<small style="color:var(--text-dim)">Aplica aos dois números: pessoa e total.</small>' : ''}
+                </div>
             `;
         }
         
@@ -11512,15 +11517,15 @@ function drawPreview() {
                         const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
                         const _qStart = start || 1;
                         const _localNum = _qStart + Math.floor(item_index / _lCam);
-                        val_str = `${el.prefix || ''}${_localNum}`;
+                        val_str = `${el.prefix || ''}${String(_localNum).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA') {
                         const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
-                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}`;
+                        val_str = `${el.prefix || ''}${String((item_index % _lCam) + 1).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                         const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
-                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}/${_lCam}`;
+                        val_str = `${el.prefix || ''}${String((item_index % _lCam) + 1).padStart(el.pad || 0, '0')}/${String(_lCam).padStart(el.pad || 0, '0')}`;
 
                     } else if (el.source === 'database') {
 
@@ -24347,11 +24352,11 @@ window.onAmostraNumeracaoSelect = function() {
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else if (el.type === 'CAMAROTE_LOCAL') {
-                    label = `${el.prefix || ''}7`;
+                    label = `${el.prefix || ''}${String(7).padStart(el.pad || 0, '0')}`;
                 } else if (el.type === 'CAMAROTE_PESSOA') {
-                    label = `${el.prefix || ''}1`;
+                    label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}`;
                 } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                    label = `${el.prefix || ''}1/5`;
+                    label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}/${String(5).padStart(el.pad || 0, '0')}`;
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
                     const csvData = bancoDeAmostra(num);
@@ -37965,12 +37970,12 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
             } else if (el.type === 'CAMAROTE_LOCAL') {
                 const _cIni = parseInt(item?.c_ini || item?.C_INI || 1);
-                label = `${el.prefix || ''}${_cIni}`;
+                label = `${el.prefix || ''}${String(_cIni).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA') {
-                label = `${el.prefix || ''}${pageNum}`;
+                label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                 const _lCamB = parseInt(item?.l_cam || item?.L_CAM || 5);
-                label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
+                label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}/${String(_lCamB).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
                 // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
@@ -39000,11 +39005,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                         cIni: item?.c_ini || item?.C_INI || 1
                     });
                     if (el.type === 'CAMAROTE_LOCAL') {
-                        label = `${el.prefix || ''}${_cam.local}`;
+                        label = `${el.prefix || ''}${String(_cam.local).padStart(el.pad || 0, '0')}`;
                     } else if (el.type === 'CAMAROTE_PESSOA') {
-                        label = `${el.prefix || ''}${_cam.pessoa}`;
+                        label = `${el.prefix || ''}${String(_cam.pessoa).padStart(el.pad || 0, '0')}`;
                     } else {
-                        label = `${el.prefix || ''}${_cam.pessoa}/${_cam.lotacao}`;
+                        label = `${el.prefix || ''}${String(_cam.pessoa).padStart(el.pad || 0, '0')}/${String(_cam.lotacao).padStart(el.pad || 0, '0')}`;
                     }
 
                 } else if (el.source === 'database') {
@@ -46375,11 +46380,11 @@ async function criarCanvasNumeracaoRasterizada(num, fmt, face) {
                 const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
             } else if (el.type === 'CAMAROTE_LOCAL') {
-                label = `${el.prefix || ''}7`;
+                label = `${el.prefix || ''}${String(7).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA') {
-                label = `${el.prefix || ''}1`;
+                label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}`;
             } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                label = `${el.prefix || ''}1/5`;
+                label = `${el.prefix || ''}${String(1).padStart(el.pad || 0, '0')}/${String(5).padStart(el.pad || 0, '0')}`;
             } else if (el.database_text && el.source === 'database') {
                 const linha = linhaDeAmostra(num);
                 label = linha ? window.formatarTextoDoBanco(el, linha[el.csv_column || ''])
