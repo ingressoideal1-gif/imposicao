@@ -450,7 +450,7 @@ function montarPortal(statusArte) {
     const doHash = (window.location.hash || '').replace('#', '');
     const inicial = secaoValida(doHash) ? doHash : 'arte';
     const jaVisitada = window.history?.state?.idealPortalSecao === inicial;
-    const abertura = jaVisitada ? inicial : secaoDeAbertura(statusArte, inicial);
+    const abertura = jaVisitada || inicial === 'pagamento' ? inicial : secaoDeAbertura(statusArte, inicial);
     abrirSecao(abertura, { substituir: true });
     if (!window._portalHistoricoLigado) {
         window._portalHistoricoLigado = true;
@@ -465,6 +465,9 @@ function montarPortal(statusArte) {
 
     const barra = document.getElementById('portal-abas');
     if (barra) barra.hidden = false;
+    if (inicial === 'pagamento' && typeof verificarEntregaAntesDePagar === 'function') {
+        verificarEntregaAntesDePagar();
+    }
 }
 
 window.SECOES = SECOES;
