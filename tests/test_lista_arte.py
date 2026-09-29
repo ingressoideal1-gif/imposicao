@@ -39,6 +39,15 @@ def test_atualizacao_automatica_da_lista_de_arte():
     assert "OK:" in (r.stdout or ""), "o teste não concluiu todos os ciclos"
 
 
+def test_lotes_paralelos_e_redesenho_agrupado():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "lista_arte_lotes_harness.js")],
+        cwd=RAIZ, timeout=30, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+
+
 def test_som_apenas_para_pedidos_do_login():
     r = subprocess.run(
         ["node", os.path.join(RAIZ, "tests", "lista_arte_som_browser_harness.js")],

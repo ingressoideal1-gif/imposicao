@@ -290,7 +290,7 @@ teste('Lista de Arte antecipa links uma vez e preserva os existentes', async () 
 teste('carregamento da Lista de Arte agenda links como complemento sem duplicar tarefas', async () => {
     // A carga atual é progressiva. Exercitar o agendador real substitui a
     // antiga exigência textual de bloquear a lista em Promise.all.
-    const ctx = vm.createContext({ console, _cargaOrdensEmAndamento: false,
+    const ctx = vm.createContext({ console, window: {}, setTimeout, clearTimeout, _cargaOrdensEmAndamento: false,
         renderOrdens() {}, carregarPagamentosGlobais: async () => {},
         sincronizarStatusOrdensDinamico: async () => {} });
     let chamadas = 0, liberar;

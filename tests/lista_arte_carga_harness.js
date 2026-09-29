@@ -82,6 +82,11 @@ function ambiente() {
         assert.equal(c.state.ordens,novasOrdens);
         assert.equal(c.state.todasArtes,novasArtes,'resposta vencida não entra no estado');
         assert.equal(c.state.modelosGlobais,novosModelos);
+        // Pode restar a pintura da prateleira, mas nenhum prazo de leitura.
+        for (const [id, timer] of timers) {
+            assert.equal(timer.ms,50,'somente o redesenho dos complementos pode ficar pendente');
+            timers.delete(id); timer.fn();
+        }
         assert.equal(timers.size,0);
     }
     {
@@ -91,10 +96,13 @@ function ambiente() {
         assert.equal(c.state.ordens,anteriores,'erro de produtos não vira lista vazia/fallback');
     }
     {
-        const {c} = ambiente(); let ultimaPintura;
+        const {c,timers} = ambiente(); let ultimaPintura;
         c.renderOrdens=()=>{ ultimaPintura=c.state.pagamentosGlobais; };
         c.carregarPagamentosGlobais=async()=>{ c.state.pagamentosGlobais={1:['sintético']}; };
         await c.loadOrdens(); await tick();
+        for (const [id, timer] of timers) {
+            assert.equal(timer.ms,50); timers.delete(id); timer.fn();
+        }
         assert.equal(ultimaPintura,c.state.pagamentosGlobais,'complemento rápido também é desenhado');
     }
     {

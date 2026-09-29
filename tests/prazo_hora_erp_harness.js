@@ -7,7 +7,7 @@ function extract(name) {
     assert.ok(start >= 0, name);
     return source.slice(start, source.indexOf('\n}', start) + 2);
 }
-const names = ['lerDadosLista', 'comporPrazoDoERP', 'carregarHorasDosPrazos', '_prazoDoPedido',
+const names = ['lerDadosLista', 'lerLotesDaLista', 'comporPrazoDoERP', 'carregarHorasDosPrazos', '_prazoDoPedido',
     'pedidoEstaAtrasado', 'pedidoEhParaHoje', 'formatPrazoBadge'];
 const api = new Function(names.map(extract).join('\n') + `\nreturn {${names}};`)();
 const inicio = source.indexOf('        let prazosPorPedido = {};');

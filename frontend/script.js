@@ -26257,6 +26257,22 @@ async function lerDadosLista(consulta, etapa, prazoMs = 30000) {
     }
 }
 
+// Mesmos lotes de 100, em ate tres leituras simultaneas. So entrega o conjunto
+// completo e na ordem original; uma falha aguarda as leituras ja iniciadas.
+async function lerLotesDaLista(ids, consultar) {
+    const linhas = [];
+    for (let i = 0; i < ids.length; i += 300) {
+        const resultados = await Promise.allSettled(Array.from(
+            { length: Math.min(3, Math.ceil((ids.length - i) / 100)) },
+            (_, lote) => Promise.resolve().then(() => consultar(ids.slice(i + lote * 100, i + (lote + 1) * 100)))
+        ));
+        const falha = resultados.find(r => r.status === 'rejected');
+        if (falha) throw falha.reason;
+        resultados.forEach(r => linhas.push(...(r.value || [])));
+    }
+    return linhas;
+}
+
 function mostrarEstadoCargaLista(mensagem, erro = false) {
     const lista = document.getElementById('view-lista-arte');
     if (!lista) return;
@@ -26285,8 +26301,15 @@ function iniciarComplementoLista(nome, executar) {
     const pendentes = iniciarComplementoLista.pendentes ||= new Map();
     if (pendentes.has(nome)) return pendentes.get(nome);
     const tarefa = Promise.resolve().then(executar).then(() => {
-        if (_cargaOrdensEmAndamento) iniciarComplementoLista.redesenhoPendente = true;
-        else renderOrdens();
+        iniciarComplementoLista.redesenhoPendente = true;
+        if (_cargaOrdensEmAndamento || iniciarComplementoLista.relogioRedesenho != null) return;
+        // Complementos que terminam juntos compartilham uma pintura da tabela.
+        iniciarComplementoLista.relogioRedesenho = setTimeout(() => {
+            iniciarComplementoLista.relogioRedesenho = null;
+            if (_cargaOrdensEmAndamento || !iniciarComplementoLista.redesenhoPendente) return;
+            iniciarComplementoLista.redesenhoPendente = false;
+            try { renderOrdens(); } catch (e) { console.warn('[Lista de Arte] Redesenho:', e); }
+        }, 50);
     })
         .catch(e => console.warn(`[Lista de Arte] ${nome}:`, e))
         .finally(() => pendentes.delete(nome));
@@ -26327,6 +26350,8 @@ function loadOrdens() {
         }).finally(() => {
             _cargaOrdensEmAndamento = null;
             if (iniciarComplementoLista.redesenhoPendente) {
+                clearTimeout(iniciarComplementoLista.relogioRedesenho);
+                iniciarComplementoLista.relogioRedesenho = null;
                 iniciarComplementoLista.redesenhoPendente = false;
                 renderOrdens();
             }
@@ -26964,19 +26989,20 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 ...produtos.map(p => p.id_int),
                 ...propostas.map(pr => pr.id_int),
             ].filter(Boolean))];
-            for (let i = 0; i < idsParaPrazo.length; i += 100) {
+            const linhasDosPrazos = await lerLotesDaLista(idsParaPrazo, async ids => {
                 const { data: osData, error: osError } = await lerDadosLista(vibeClient
                     .from('propostas_os')
                     .select('id_int, data_termino, codigo_rastreamento')
-                    .in('id_int', idsParaPrazo.slice(i, i + 100)), 'dados do ERP');
+                    .in('id_int', ids), 'dados do ERP');
                 if (osError) throw osError;
-                (osData || []).forEach(linha => {
-                    if (!linha) return;
-                    if (linha.data_termino) prazosPorPedido[String(linha.id_int)] = comporPrazoDoERP(linha.data_termino, null);
-                    const codigo = (linha.codigo_rastreamento || '').trim();
-                    if (codigo) rastreioPorPedido[String(linha.id_int)] = codigo;
-                });
-            }
+                return osData || [];
+            });
+            linhasDosPrazos.forEach(linha => {
+                if (!linha) return;
+                if (linha.data_termino) prazosPorPedido[String(linha.id_int)] = comporPrazoDoERP(linha.data_termino, null);
+                const codigo = (linha.codigo_rastreamento || '').trim();
+                if (codigo) rastreioPorPedido[String(linha.id_int)] = codigo;
+            });
         } catch (oe) {
             throw new Error(`Não foi possível carregar os prazos de entrega. A lista anterior foi preservada. ${oe.message || oe}`);
         }
@@ -28957,14 +28983,15 @@ async function carregarHorasDosPrazos(client, ids) {
         return horas;
     }
     // Até quatro setores por pedido; lotes pequenos evitam o limite de linhas da API.
-    for (let i = 0; i < ids.length; i += 100) {
+    const linhas = await lerLotesDaLista(ids, async lote => {
         const { data, error } = await client.from('propostas_os_setores')
-            .select('id_int, hora').in('id_int', ids.slice(i, i + 100));
+            .select('id_int, hora').in('id_int', lote);
         if (error) throw error;
-        for (const linha of data || []) {
-            if (linha && linha.hora != null && horas[String(linha.id_int)] == null) {
-                horas[String(linha.id_int)] = linha.hora;
-            }
+        return data || [];
+    });
+    for (const linha of linhas) {
+        if (linha && linha.hora != null && horas[String(linha.id_int)] == null) {
+            horas[String(linha.id_int)] = linha.hora;
         }
     }
     return horas;
