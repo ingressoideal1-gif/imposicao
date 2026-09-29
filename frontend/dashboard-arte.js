@@ -99,6 +99,7 @@
         const filtroAtendente = String(entrada.filtroAtendente || '');
         const buscaArtePronta = String(entrada.buscaArtePronta || '').trim().toLocaleLowerCase('pt-BR');
         const tempos = entrada.tempos || {};
+        const links = entrada.links || {};
         const produtosPorPedido = {};
         (entrada.produtos || []).forEach(produto => {
             const chave = String(produto.id_int);
@@ -123,6 +124,7 @@
             const reg = tempos[chave] || tempos[parseInt(chave, 10)] || null;
             const fila = os._fila_arte || 'fila';
             const cancelado = String(os.status_calculado || os.status || '').trim().toUpperCase() === 'CANCELADA';
+            const link = links[os.id] || null;
             const listaProdutos = produtosPorPedido[chave] || [];
             const pedido = {
                 os,
@@ -134,13 +136,20 @@
                 produtos: listaProdutos,
                 tempoAtual: segundosEmArteAgora(reg, agoraMs)
             };
-            // `saiu_da_fila_em` prova quando o painel observou a saída de
-            // “Em Arte”. A produtividade nasce nesse instante, quando a arte
-            // fica pronta para aprovação, e não quando o pedido chega à produção.
-            const prontoEm = pedidoTemArtePronta(pedido) && reg && reg.saiu_da_fila_em
-                ? new Date(reg.saiu_da_fila_em) : null;
+            // `arte_pronta_em` é o carimbo persistido quando a versão da arte
+            // fica pronta. O relógio de Em Arte é a alternativa para pedidos
+            // sem esse link, nunca a única fonte do volume produzido.
+            const carimboPronto = link && link.arte_pronta_em
+                ? link.arte_pronta_em
+                : (reg && reg.saiu_da_fila_em);
+            const prontoEm = pedidoTemArtePronta(pedido) && carimboPronto
+                ? new Date(carimboPronto) : null;
             pedido.prontoEm = prontoEm && Number.isFinite(prontoEm.getTime()) ? prontoEm : null;
-            pedido.duracao = pedido.prontoEm ? numero(reg.credito_segundos) : null;
+            // O carimbo persistido do link cobre o volume real. Duração só é
+            // exibida quando o relógio também observou a transição, evitando
+            // transformar snapshots históricos em tempos iguais a zero.
+            pedido.duracao = pedido.prontoEm && reg && reg.saiu_da_fila_em
+                ? numero(reg.credito_segundos) : null;
             return pedido;
         });
 
@@ -405,6 +414,7 @@
             artes: state.todasArtes || [],
             produtos: state.produtosPropostaGlobais || [],
             tempos: state.temposNoCard || {},
+            links: state.linksClienteData || {},
             dias: periodoDias,
             filtroDesigner,
             filtroAtendente,

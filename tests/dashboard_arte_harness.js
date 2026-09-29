@@ -20,7 +20,8 @@ const tempos = {
     101: { card: 'concluidos', desde: '2026-09-20T09:00:00-03:00', saiu_da_fila_em: null, credito_segundos: 0 },
     102: { card: 'fila', desde: '2026-09-20T13:00:00-03:00', saiu_da_fila_em: null, credito_segundos: 1800 },
     103: { card: 'concluidos', desde: '2026-09-20T11:00:00-03:00', saiu_da_fila_em: '2026-09-20T11:00:00-03:00', credito_segundos: 1200 },
-    104: { card: 'aprovacao', desde: '2026-09-20T14:00:00-03:00', saiu_da_fila_em: '2026-09-20T14:00:00-03:00', credito_segundos: 3600 },
+    // O relógio não observou esta saída, mas o fluxo real persistiu a hora da arte pronta no link.
+    104: { card: 'aprovacao', desde: '2026-09-20T14:00:00-03:00', saiu_da_fila_em: null, credito_segundos: 0 },
     105: { card: 'aprovados', desde: '2026-09-20T13:30:00-03:00', saiu_da_fila_em: '2026-09-20T13:30:00-03:00', credito_segundos: 7200 }
 };
 const artes = [
@@ -38,12 +39,16 @@ const produtos = [
     { id_int: 104, nome_produto: 'Pulseira', qtd: 1000 },
     { id_int: 105, nome_produto: 'Cartão', qtd: 10 }
 ];
+const links = {
+    e: { arte_pronta_em: '2026-09-20T14:00:00-03:00' }
+};
 
-const metricas = calcular({ ordens, tempos, artes, produtos, dias: 1, agora });
+const metricas = calcular({ ordens, tempos, links, artes, produtos, dias: 1, agora });
 assert.deepStrictEqual(metricas.prontosNoPeriodo.map(item => item.chave), ['100', '104', '105'],
     'conta as transições observadas para pronto, aprovação e aprovado sem esperar a conclusão');
-assert.strictEqual(metricas.media, 5400, 'usa o tempo acumulado em Em Arte');
-assert.strictEqual(metricas.mediana, 5400);
+assert.strictEqual(metricas.media, 6300, 'usa apenas durações observadas pelo relógio de Em Arte');
+assert.strictEqual(metricas.mediana, 6300);
+assert.strictEqual(metricas.cobertura, 2, 'o carimbo do link cobre o volume sem inventar duração');
 assert.strictEqual(Math.round(metricas.sla), 100, 'artes de até 2 horas cumprem o SLA sugerido');
 assert.strictEqual(metricas.ativos.length, 1);
 assert.strictEqual(metricas.mediaBacklog, 9000, 'idade atual inclui crédito anterior e trecho corrente');
@@ -58,21 +63,21 @@ assert.ok(!metricas.artesProntas.some(item => item.chave === '103'), 'cancelamen
 
 const ana = metricas.designers.find(item => item.designer === 'Ana');
 assert.strictEqual(ana.prontos, 2);
-assert.strictEqual(ana.media, 4500);
+assert.strictEqual(ana.media, 5400);
 const carla = metricas.atendentes.find(item => item.atendente === 'Carla');
 assert.strictEqual(carla.prontos, 2);
 assert.strictEqual(carla.produtos, 3);
 
-const filtradas = calcular({ ordens, tempos, artes, produtos, dias: 7, agora, filtroDesigner: 'Bia' });
+const filtradas = calcular({ ordens, tempos, links, artes, produtos, dias: 7, agora, filtroDesigner: 'Bia' });
 assert.strictEqual(filtradas.pedidos.length, 3, 'filtro do designer também recorta o dashboard');
 assert.deepStrictEqual(filtradas.prontosNoPeriodo.map(item => item.chave), ['105'], 'cancelamento não vira produtividade');
 assert.strictEqual(filtradas.ativos.length, 1);
 
-const porAtendente = calcular({ ordens, tempos, artes, produtos, dias: 7, agora, filtroAtendente: 'Diego' });
+const porAtendente = calcular({ ordens, tempos, links, artes, produtos, dias: 7, agora, filtroAtendente: 'Diego' });
 assert.strictEqual(porAtendente.pedidos.length, 3, 'filtro do atendente também recorta o dashboard');
 assert.strictEqual(porAtendente.ativos.length, 1);
 
-const buscaHistorico = calcular({ ordens, tempos, artes, produtos, dias: 1, agora, buscaArtePronta: '101' });
+const buscaHistorico = calcular({ ordens, tempos, links, artes, produtos, dias: 1, agora, buscaArtePronta: '101' });
 assert.deepStrictEqual(buscaHistorico.artesProntas.map(item => item.chave), ['101'],
     'busca encontra concluído histórico fora das métricas do período');
 

@@ -42778,10 +42778,11 @@ async function prepararLinkDaArtePronta(osId, numero) {
     const link = await getOrCreateLinkCliente(osId, numero);
     if (!link) return { ok: false, link: null, falhas: [{ nome: 'Link do cliente', motivo: 'link não confirmado' }] };
 
+    const arteProntaEm = new Date().toISOString();
     const { error } = await supabaseClient
         .from('pedidos_links_cliente')
         .update({
-            arte_pronta_em: new Date().toISOString(),
+            arte_pronta_em: arteProntaEm,
             cliente_abriu_em: null,
             status_arte: 'Enviar Arte'
         })
@@ -42796,6 +42797,7 @@ async function prepararLinkDaArtePronta(osId, numero) {
     // O estado em memória acompanha, senão a linha da tela continuaria dizendo
     // "Aguard. Aprovação" pela abertura da versão anterior até o próximo F5.
     if (state.linksClienteData && state.linksClienteData[osId]) {
+        state.linksClienteData[osId].arte_pronta_em = arteProntaEm;
         state.linksClienteData[osId].cliente_abriu_em = null;
         state.linksClienteData[osId].status_arte = 'Enviar Arte';
     }

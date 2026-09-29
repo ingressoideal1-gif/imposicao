@@ -50,12 +50,14 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
                     {id_int:2,nome_produto:'Credencial',qtd:80},{id_int:3,nome_produto:'Pulseira',qtd:1000},
                     {id_int:4,nome_produto:'Ingresso',qtd:300},{id_int:5,nome_produto:'Credencial',qtd:120}
                 ],
+                linksClienteData: {
+                    '5': {arte_pronta_em:iso(2,2),status_arte:'Em Aprovação'}
+                },
                 temposNoCard: {
                     1:{card:'concluidos',desde:iso(0,2),saiu_da_fila_em:iso(0,2),credito_segundos:5100},
                     2:{card:'concluidos',desde:iso(1,1),saiu_da_fila_em:iso(1,1),credito_segundos:9300},
                     3:{card:'fila',desde:iso(0,2),saiu_da_fila_em:null,credito_segundos:600},
-                    4:{card:'fila',desde:iso(0,3),saiu_da_fila_em:null,credito_segundos:1200},
-                    5:{card:'aprovacao',desde:iso(2,2),saiu_da_fila_em:iso(2,2),credito_segundos:4200}
+                    4:{card:'fila',desde:iso(0,3),saiu_da_fila_em:null,credito_segundos:1200}
                 }
             };
             function getOSDesigner(id, numero) { return state.todasArtes.find(a => a.id_int === Number(numero))?.designer_nome || ''; }

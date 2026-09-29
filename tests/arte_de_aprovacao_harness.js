@@ -285,6 +285,8 @@ function montarLote(mundo) {
     ok(/cliente_abriu_em: null/.test(trecho),
         'e zera a marca de que o cliente olhou, porque a arte e outra');
     ok(/arte_pronta_em:/.test(trecho), 'carimbando a versao nova da arte');
+    ok(/state\.linksClienteData\[osId\]\.arte_pronta_em = arteProntaEm/.test(trecho),
+        'e atualiza o carimbo em memoria para o dashboard contar sem esperar F5');
 })();
 
 (function oGerarLinkEsperaOPreparoAntesDeCopiar() {

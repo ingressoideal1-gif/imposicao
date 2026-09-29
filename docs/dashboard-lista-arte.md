@@ -15,15 +15,15 @@ O card **Dashboard** é o primeiro card da Lista de Arte e troca a tabela operac
 - Produção por produto: pedidos, linhas de produto, quantidade e tempo médio dos pedidos que contêm o produto.
 - Lista histórica de pedidos com arte pronta, independente do período do dashboard e incluindo pedidos já concluídos. Cancelados e ignorados não entram; busca, designer e atendente continuam filtrando a lista.
 
-O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `pedidos_artes`, `produtos_proposta` e `imposition_tempo_no_card`, já carregados pela Lista de Arte. A quantidade é a `qtd` comercial original, sem divisão ou conversão.
+O dashboard não altera cálculos, status ou filas. Ele usa `state.ordens`, `pedidos_artes`, `produtos_proposta`, `pedidos_links_cliente.arte_pronta_em` e `imposition_tempo_no_card`, já carregados pela Lista de Arte. A quantidade é a `qtd` comercial original, sem divisão ou conversão.
 
 ## Regra de confiabilidade
 
-As análises usam o momento em que o pedido sai de `Em Arte` e passa a pronto para aprovação, aprovado ou concluído. Não é necessário esperar o card `concluidos`. O pedido só entra no período quando `imposition_tempo_no_card.saiu_da_fila_em` comprova essa transição; registros históricos encontrados já prontos sem esse carimbo não recebem uma data inventada. Cancelamentos não contam como produtividade.
+As análises usam o momento em que o pedido sai de `Em Arte` e passa a pronto para aprovação, aprovado ou concluído. Não é necessário esperar o card `concluidos`. A data principal é `pedidos_links_cliente.arte_pronta_em`, persistida quando a versão da arte fica pronta; `imposition_tempo_no_card.saiu_da_fila_em` é a alternativa para pedidos sem esse link. O relógio continua sendo exigido para calcular duração, evitando inventar tempo para registros históricos. Cancelamentos não contam como produtividade.
 
 O indicador de alteração é uma fotografia atual, não uma taxa histórica de retrabalho. O banco atual guarda apenas o último card de cada pedido, não todas as transições.
 
-A lista de artes prontas não depende de `saiu_da_fila_em`: ela mostra o conjunto operacional completo. Entram pedidos em Enviar Arte, Em Aprovação, aprovados e concluídos, mesmo quando ficaram prontos antes do início do relógio. O carimbo continua obrigatório apenas para métricas de produtividade por período.
+A lista de artes prontas mostra o conjunto operacional completo. Entram pedidos em Enviar Arte, Em Aprovação, aprovados e concluídos, mesmo quando ficaram prontos antes do início do relógio. Para as métricas por período é necessário `arte_pronta_em` ou, como alternativa, `saiu_da_fila_em`.
 
 ## Evoluções recomendadas
 
