@@ -16,4 +16,4 @@ Atenciosamente,
 Atendimento: Alexandre Almeida`;
 await Deno.mkdir("design", {recursive:true});
 const orcamento = "✅ *5.000* Pulseiras: *R$ 950,00* (3 dias úteis)\n\nFrete via *Retirada Local: Grátis*\n\nO valor total do pedido ficou em *R$ 950,00*\n\nForma de pagamento: Pix";
-await Deno.writeTextFile("design/email-aprovacao-preview.html", layoutEmailArte(corpo, portal, link, "10000", orcamento, "Alexandre Almeida").html);
+await Deno.writeTextFile("design/email-aprovacao-preview.html", layoutEmailArte(corpo, portal, link, "10000", orcamento, "Alexandre Almeida", "https://vibe.ai-ideal.com.br/p/10000-sintetico").html);

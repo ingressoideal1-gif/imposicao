@@ -2,10 +2,11 @@
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
 import { layoutEmailArte } from "./email_artes_layout.ts";
+import { obterLinkPagamentoVibe, type DependenciasPagamento } from "./link_pagamento_vibe.ts";
 import { enviarSmtpArtes, type ConfigSmtpArtes, type MensagemArte } from "./smtp_artes.ts";
 
 type Quem = { id: string; email: string; permissoes: Record<string, unknown> | null };
-type Dependencias = {
+type Dependencias = DependenciasPagamento & {
   consultar?: typeof banco;
   ambiente?: (nome: string) => string | undefined;
   enviar?: (config: ConfigSmtpArtes, mensagem: MensagemArte) => Promise<void>;
@@ -128,7 +129,8 @@ export async function operarEmailArtes(
     const vendedor = typeof propostas[0]?.vendedor === "string" ? propostas[0].vendedor : "";
     // Links montados na estação também saem com o domínio público configurado.
     mensagem = { to, subject, text: body.replaceAll(corpo.link_url, estado.portal + caminho) };
-    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido), orcamento, vendedor));
+    const pagamento = await obterLinkPagamentoVibe(String(linhas[0].numero_pedido), linhas[0].token, deps);
+    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido), orcamento, vendedor, pagamento));
   }
   const referencia = crypto.randomUUID();
   try {

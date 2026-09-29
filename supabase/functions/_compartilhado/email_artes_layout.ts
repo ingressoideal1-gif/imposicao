@@ -3,7 +3,7 @@ const WHATSAPP = "555195343478"; // Mesmo atendimento de frontend/cliente-entreg
 const LOGO_EMPRESA = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788972058296_logo_ideal_2027.png";
 const LOGO_WHATSAPP = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1787694554509_Whatsapp.png";
 const IMAGEM_APROVACAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788965455974_Email.png";
-const IMAGEM_PAGAMENTO = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1788966314184_pagamento.png";
+import { urlPagamentoValida } from "./link_pagamento_vibe.ts";
 const escapar = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 function linhaHtml(linha: string): string {
@@ -19,7 +19,7 @@ function linhaHtml(linha: string): string {
   }).join("");
 }
 
-export function layoutEmailArte(texto: string, portal: string, link?: string, numero?: string, orcamento?: string, vendedor?: string) {
+export function layoutEmailArte(texto: string, portal: string, link?: string, numero?: string, orcamento?: string, vendedor?: string, linkPagamento?: string | null) {
   const atendente = (vendedor || "").replace(/\s+/g, " ").trim();
   if (link) {
     // Atualiza apenas a assinatura padrão, inclusive em mensagens de abas antigas.
@@ -35,7 +35,7 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
   const whatsapp = "https://api.whatsapp.com/send?phone=" + WHATSAPP + "&text=" + encodeURIComponent(
     `Olá${atendente ? ", " + atendente : ""}! Preciso de atendimento sobre a aprovação das artes${numero ? " do Pedido #" + numero : ""}.`);
   const destino = link || portal;
-  const pagamento = link ? link + "#pagamento" : "";
+  const pagamento = link && urlPagamentoValida(linkPagamento, numero || "") ? linkPagamento : "";
   const titulo = link ? "Suas artes estão prontas!" : "Seu e-mail de teste chegou.";
   const acao = link ? "Abrir aprovação interativa" : "Abrir painel";
   const linhas = fonte.filter(linha => !/^\s*-{3,}\s*$/.test(linha) && (!link || linha.trim() !== link));
@@ -69,12 +69,12 @@ ${link ? `<a href="${escapar(destino)}" style="display:block;max-width:252px;col
 ${link ? '<p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Confira o visual final, aprove ou solicite ajustes. Tudo no mesmo link.</p>' : ""}
 </td></tr></table>
 ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="padding:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;"><h2 style="margin:0 0 14px;color:#102b3f;font-size:18px;">Resumo do Orçamento</h2><div style="color:#334155;font-size:14px;line-height:1.75;overflow-wrap:anywhere;">${resumoHtml}</div></td></tr></table>` : ""}
-${pagamento ? `<a href="${escapar(pagamento)}" style="display:block;max-width:252px;margin-bottom:24px;color:#15803d;text-decoration:none;"><img src="${IMAGEM_PAGAMENTO}" width="252" alt="Realizar Pagamento" style="display:block;width:100%;max-width:252px;height:auto;border:0;"></a>` : ""}
+${pagamento ? `<a href="${escapar(pagamento)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:16px 24px;margin-bottom:24px;background:#15803d;border-radius:8px;color:#fff;font-weight:bold;text-decoration:none;">Pagar pedido</a>` : ""}
 ${detalhes ? `<div style="border-top:1px solid #e2e8f0;padding-top:22px;">${detalhes}</div>` : ""}
 </td></tr>
 <tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><a href="${escapar(whatsapp)}" style="display:block;padding:16px;color:#12664b;font-size:15px;font-weight:bold;line-height:32px;text-decoration:none;"><img src="${LOGO_WHATSAPP}" width="32" height="32" alt="WhatsApp" style="vertical-align:middle;border:0;margin-right:8px;">Falar com meu Atendimento</a></td></tr></table></td></tr>
 <tr><td style="padding:22px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.7;color:#64748b;">Se o botão não abrir, copie este endereço no navegador:<br><a href="${escapar(destino)}" style="color:#087f8c;word-break:break-all;">${escapar(destino)}</a><br><br>Ingresso Ideal &middot; Atendimento e aprovação de artes</td></tr>
 </table><!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
-  return { html, text: texto + (orcamento ? "\n\nRESUMO DO ORÇAMENTO:\n" + orcamento : "") + (pagamento ? "\n\nRealizar Pagamento:\n" + pagamento : "") + "\n\nFalar com meu Atendimento:\n" + whatsapp };
+  return { html, text: texto + (orcamento ? "\n\nRESUMO DO ORÇAMENTO:\n" + orcamento : "") + (pagamento ? "\n\nPagar pedido:\n" + pagamento : "") + "\n\nFalar com meu Atendimento:\n" + whatsapp };
 }

@@ -16,6 +16,7 @@ function contexto(linhas: unknown = [link], propostas: unknown = [{id_int:11,tex
   return { enviadas, consultas, deps: {
     ambiente: (nome: string) => env[nome],
     consultar: async (metodo: string, caminho: string) => {
+      if (caminho === 'rpc/reservar_link_pagamento_vibe') return {};
       assert.equal(metodo, "GET"); consultas.push(caminho);
       return caminho.startsWith("propostas?") ? propostas : linhas;
     },
@@ -38,6 +39,34 @@ Deno.test("email: todos os perfis com leitura enviam sem permissão administrati
     assert.equal(c.consultas[1], "propostas?id_int=eq.11&select=id_int,texto_whatsapp,vendedor&limit=2");
     assert.match(c.enviadas[0].html!, /Resumo do Orçamento[\s\S]*R\$ 148,05/);
     assert.match(c.enviadas[0].text, /Pagamento: Pix/);
+  }
+});
+
+Deno.test('email: Vibe indisponível não impede aprovação; sucesso inclui Pagar pedido', async () => {
+  for (const status of [200, 401, 404, 429, 500, 503]) {
+    const c = contexto(), consultar = c.deps.consultar;
+    const pagamento = 'https://vibe.ai-ideal.com.br/p/11-sintetico';
+    const logs: string[] = [];
+    await operarEmailArtes('enviar', entrada, quem, {
+      ...c.deps,
+      ambiente: nome => nome === 'VIBE_LINK_PGTO_KEY' ? 'chave-sintetica' : env[nome],
+      registrar: codigo => { logs.push(codigo); },
+      buscar: async () => new Response(JSON.stringify(status === 200 ? { id_int: 11, url: pagamento } : { erro: 'falha', mensagem: 'chave-sintetica' }), { status }),
+      consultar: async (metodo, caminho, dados) => {
+        if (caminho === 'rpc/reservar_link_pagamento_vibe') return { reserva: 'reserva-sintetica' };
+        if (caminho === 'rpc/concluir_link_pagamento_vibe') {
+          const p = dados as Record<string, string>;
+          return { url: p.p_url, codigo: p.p_codigo };
+        }
+        if (caminho.startsWith('pedidos_links_pagamento_vibe?')) return [{ url: pagamento }];
+        return consultar(metodo, caminho);
+      },
+    });
+    assert.equal(c.enviadas.length, 1);
+    assert.ok(c.enviadas[0].html!.includes(`href="${url}"`));
+    assert.equal(c.enviadas[0].html!.includes('Pagar pedido'), status === 200);
+    assert.doesNotMatch(JSON.stringify(c.enviadas) + JSON.stringify(logs), /chave-sintetica/);
+    assert.deepEqual(logs, status === 200 ? [] : [String(status)]);
   }
 });
 Deno.test("email: anônimo, cliente sem grade e usuário sem acesso não consultam nem enviam", async () => {
