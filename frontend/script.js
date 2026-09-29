@@ -26564,6 +26564,15 @@ async function carregarOrdensDados() {
         completarDadosDaLista();
         return true;
     } catch (e) {
+        // Restaurar a lista nao pode desfazer um pedido aberto enquanto ela
+        // consultava o servidor: os modelos completos pertencem a essa tela.
+        for (const osId of Object.keys(state.osItens || {})) {
+            if (String(state.amostrasOSAtivo || '') === osId
+                || String(state._aberturaArtes?.osId || '') === osId
+                || state._loadingOSItens?.[osId]) {
+                (anteriores.osItens ||= {})[osId] = state.osItens[osId];
+            }
+        }
         Object.assign(state, anteriores);
         console.error('Erro ao carregar OS:', e);
         mostrarEstadoCargaLista('Não foi possível atualizar os pedidos. ' + e.message, true);
@@ -27138,7 +27147,14 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
         // Pré-carregar itens no formato esperado pelo Imposition
         state.ordens.forEach(os => {
-            state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
+            // A lista pode terminar depois de abrir as artes. Seus produtos ERP
+            // sao apenas um resumo, nao os modelos completos de loadOSItens.
+            // Substitui-los aqui invalida o desenho em voo e perde arte/verso.
+            const artesEmUso = String(state.amostrasOSAtivo || '') === String(os.id)
+                || String(state._aberturaArtes?.osId || '') === String(os.id);
+            if (!state.osItens[os.id] || (!artesEmUso && !state._loadingOSItens?.[os.id])) {
+                state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
+            }
             delete os._itens_raw; // limpar dados brutos
         });
 
@@ -34138,6 +34154,7 @@ window.getOSItens = getOSItens;
 async function navigateToAmostrasFromOS(osId) {
     if (!podeAbrirView('view-amostras')) { avisarFaltaPermissao('view-amostras'); return; }
     const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
+    const abertura = { osId: null };
     try {
         console.log('[Nav] navigateToAmostrasFromOS chamado com osId:', osId);
 
@@ -34162,6 +34179,8 @@ async function navigateToAmostrasFromOS(osId) {
         }
 
         const realOSId = os.id || osId;
+        abertura.osId = realOSId;
+        state._aberturaArtes = abertura;
         console.log('[Nav] Usando realOSId:', realOSId, '| numero:', os.numero);
 
         // Sempre recarregar do banco ao abrir a OS para garantir arte_url/modo_pdf atualizados
@@ -34233,6 +34252,8 @@ async function navigateToAmostrasFromOS(osId) {
     } catch (e) {
         console.error('[Nav] Erro fatal em navigateToAmostrasFromOS:', e);
         toast('Erro ao abrir pedido: ' + (e.message || e), 'error');
+    } finally {
+        if (state._aberturaArtes === abertura) delete state._aberturaArtes;
     }
 }
 

@@ -76,7 +76,7 @@ async function browserTests() {
         const functions = ['aguardarRecursoDaPrevia', 'executarRasterDaPrevia', 'rasterDaAmostra', 'drawAmostraFace',
             'mostrarCargaDaPrevia', 'renderItemAmostraCombinada', 'desenharItemAmostraCombinada',
             'preloadAmostraItemPdfElements', 'pdfDuplicarParaVersoDoModelo', 'escalaDaArteDoModelo',
-            'modelosForaDoPdfProva', 'travarCardsDeModelosAprovados'];
+            'modelosForaDoPdfProva', 'travarCardsDeModelosAprovados', 'loadOrdensFromVibecode'];
         await page.addScriptTag({ content: functions.map(n => extract(n)).join('\n') });
         // Fixar a base anterior evita comparar o renderizador consigo mesmo depois do commit.
         const baseline = execFileSync('git', ['show', '7f52fc938413f164cc1c136e15104d412dfcb932:frontend/script.js'], { cwd: root, encoding: 'utf8', maxBuffer: 8e6 });
@@ -160,6 +160,53 @@ async function browserTests() {
                 }
             }
             ok(destroyed > 0, 'documentos liberados');
+
+            // A atualizacao iniciada na lista termina depois de abrir o pedido.
+            // Executa a funcao real do ERP durante a espera real do coordenador.
+            window.lerDadosLista = async q => typeof q === 'function' ? q() : q;
+            window.lerLotesDaLista = async (ids, consultar) => consultar(ids);
+            window.consultarPropostas = async () => ({ data: [{ id_int: 1 }], error: null });
+            window.vibeClient = { from() { return { select() { return this; }, in() { return Promise.resolve({ data: [], error: null }); } }; } };
+            window.aplicarNomesPreferenciaisDasPropostas = async () => {};
+            window.carregarHorasDosPrazos = async () => ({});
+            window.arteFoiLancada = () => true;
+            window.SINAIS_SAIU_DA_ARTE = [];
+            window.pedidosJaNaGrafica = () => new Set();
+            window.pedidoEntraNoPainel = () => true;
+            window.lerStatusOverride = () => null;
+            window.nomePreferencialDaProposta = () => 'Cliente sintetico';
+            window.mapVibecodeProdutoToOSItem = p => ({ id: p.id, _dbLoaded: false });
+            const produtosERP = [{ id: 'produto-erp', id_int: 1 }, { id: 'outro-erp', id_int: 2 }];
+            const modelosAbertos = state.osItens.os1;
+            state.osItens.vibe_1 = modelosAbertos;
+            state.amostrasOSAtivo = 'vibe_1';
+            container.dataset.amostrasOsId = 'vibe_1';
+            canvas.width = 1; canvas.height = 1;
+            let soltarFonte;
+            window.garantirFontesCarregadas = () => new Promise(r => { soltarFonte = r; });
+            const previaComListaEmVoo = renderItemAmostraCombinada(0, 'vibe_1');
+            while (!soltarFonte) await new Promise(r => setTimeout(r, 0));
+            ok(await loadOrdensFromVibecode([], produtosERP), 'atualizacao real da lista conclui');
+            soltarFonte();
+            ok(await previaComListaEmVoo === true, 'lista tardia nao abandona a previa aberta');
+            ok(state.osItens.vibe_1 === modelosAbertos, 'lista nao substitui modelos do pedido aberto por produtos ERP');
+            ok(state.osItens.vibe_2[0].id === 'outro-erp', 'outros pedidos continuam atualizando');
+            ok(container.querySelector('[data-amostra-carga]').dataset.estado === 'pronto', 'nao fica preso em Carregando arte');
+            ok(canvas.width > 1 && canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3] > 0, 'previa realmente desenhada sem F5');
+            clearTimeout(item._snapshotTimer);
+            window.garantirFontesCarregadas = async () => {};
+            state.amostrasOSAtivo = null;
+            state._aberturaArtes = { osId: 'vibe_1' };
+            await loadOrdensFromVibecode([], produtosERP);
+            ok(state.osItens.vibe_1 === modelosAbertos, 'protege intervalo entre carregar modelos e abrir a tela');
+            delete state._aberturaArtes;
+            state._loadingOSItens = { vibe_1: Promise.resolve() };
+            await loadOrdensFromVibecode([], produtosERP);
+            ok(state.osItens.vibe_1 === modelosAbertos, 'protege leitura de modelos em andamento');
+            state._loadingOSItens.vibe_1 = false;
+            await loadOrdensFromVibecode([], produtosERP);
+            ok(state.osItens.vibe_1[0].id === 'produto-erp', 'pedido fechado volta a receber resumo atualizado');
+            container.dataset.amostrasOsId = 'os1';
 
             // Navegar durante a espera de fonte nao pode pintar no destino antigo.
             const staleCanvas = document.createElement('canvas');

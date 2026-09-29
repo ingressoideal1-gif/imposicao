@@ -49,7 +49,7 @@ async function loadOSItens(id) {
     if (window.bloqueio) await window.bloqueio;
     state.osItens[id] = sessionStorage.getItem('semModelo') ? [] : [{ id: 'modelo-1' }];
 }
-async function recarregarNumeracoesDoPedido() {}
+async function recarregarNumeracoesDoPedido() { if (window.bloqueioNumeracoes) await window.bloqueioNumeracoes; }
 async function loadAll() { NavegacaoPainel.dadosProntos(); }
 function fecharJanelaDoModelo() { state.activeOSItem = null; }
 function cancelNumEdit() { document.getElementById('num-id').value = ''; window.customNumeracaoEditState = null; }
@@ -64,6 +64,9 @@ ${funcao('findOSInState')}
 ${funcao('getOSItens')}
 ${funcao('pedidoDoLinkDireto')}
 ${funcao('navigateToAmostrasFromOS')}
+${funcao('lerDadosLista')}
+${funcao('lerLotesDaLista')}
+${funcao('loadOrdensFromVibecode')}
 ${funcao('clearAmostrasOS')}
 ${showView}
 </script><script>${ler('navegacao-painel.js')}</script><script>
@@ -145,6 +148,35 @@ async function caso(nome, fn) { await fn(); total++; console.log('OK: ' + nome);
             await page.$eval('.main-content', el => { el.scrollTop = 600; });
             await page.goBack(); await ativa('view-lista-arte');
             assert.equal(await page.$eval('.main-content', el => el.scrollTop), 1250);
+        });
+        await caso('Lista tardia durante abertura preserva modelos antes de exibir as artes', async () => {
+            await page.evaluate(() => {
+                window.consultarPropostas = async () => ({ data: [{ id_int: 101 }], error: null });
+                window.vibeClient = { from() { return { select() { return this; }, in() { return Promise.resolve({ data: [], error: null }); } }; } };
+                window.aplicarNomesPreferenciaisDasPropostas = async () => {};
+                window.carregarHorasDosPrazos = async () => ({});
+                window.arteFoiLancada = () => true;
+                window.SINAIS_SAIU_DA_ARTE = [];
+                window.pedidosJaNaGrafica = () => new Set();
+                window.pedidoEntraNoPainel = () => true;
+                window.lerStatusOverride = () => null;
+                window.nomePreferencialDaProposta = () => 'Cliente sintetico';
+                window.mapVibecodeProdutoToOSItem = p => ({ id: p.id, _dbLoaded: false });
+                state.amostrasOSAtivo = null;
+                window.bloqueioNumeracoes = new Promise(r => { window.soltarNumeracoes = r; });
+                window.aberturaComLista = navigateToAmostrasFromOS('101');
+            });
+            await page.waitForFunction(() => state.osItens.vibe_101?.[0]?.id === 'modelo-1' && state._aberturaArtes);
+            const dados = await page.evaluate(async () => {
+                const completo = state.osItens.vibe_101;
+                const ok = await loadOrdensFromVibecode([], [{ id: 'produto-erp', id_int: 101 }]);
+                const preservado = completo === state.osItens.vibe_101;
+                soltarNumeracoes(); await aberturaComLista; bloqueioNumeracoes = null;
+                return { ok, preservado, modelo: state.osItens.vibe_101[0].id };
+            });
+            assert.deepEqual(dados, { ok: true, preservado: true, modelo: 'modelo-1' });
+            await ativa('view-amostras');
+            await page.evaluate(() => loadOrdens());
         });
         await caso('Dois pedidos na mesma tela têm histórico próprio e sobrevivem ao F5', async () => {
             await page.evaluate(() => navigateToAmostrasFromOS('101'));

@@ -96,6 +96,24 @@ function ambiente() {
         assert.equal(c.state.ordens,anteriores,'erro de produtos não vira lista vazia/fallback');
     }
     {
+        const {c,timers} = ambiente();
+        const antigos = c.state.osItens;
+        c.loadOrdensFromVibecode = async () => {
+            c.state.osItens = { ...c.state.osItens };
+            c.state.ordens = [{ id: 'novo', numero: 1 }];
+            return true;
+        };
+        c.bloqueada = 'pedidos_modelos';
+        const carga = c.loadOrdens(); await tick();
+        const modelos = [{ id: 'modelo-completo', _dbLoaded: true, arte_url: 'sintetica.pdf' }];
+        c.state.amostrasOSAtivo = 'novo';
+        c.state.osItens.novo = modelos;
+        for (const timer of [...timers.values()]) if (timer.ms === 30000) timer.fn();
+        assert.equal(await carga, false);
+        assert.equal(c.state.osItens, antigos, 'lista com erro continua restaurando seu estado anterior');
+        assert.equal(c.state.osItens.novo, modelos, 'erro da lista nao descarta modelos abertos durante a consulta');
+    }
+    {
         const {c,timers} = ambiente(); let ultimaPintura;
         c.renderOrdens=()=>{ ultimaPintura=c.state.pagamentosGlobais; };
         c.carregarPagamentosGlobais=async()=>{ c.state.pagamentosGlobais={1:['sintético']}; };
@@ -125,7 +143,11 @@ function ambiente() {
         const artes=c.state.todasArtes, modelos=c.state.modelosGlobais;
         const inicio=source.indexOf("    if (viewId === 'view-lista-arte') {");
         const hook=source.slice(inicio,source.indexOf('\n    }',inicio)+6);
+        c.conteudoPrincipal = { scrollTop: 0 };
+        c.viewAnterior = { id: 'view-amostras' };
+        c.state.posicaoListaArte = 500;
         vm.runInContext("const viewId='view-lista-arte';"+hook,c);
+        assert.equal(c.conteudoPrincipal.scrollTop,500,'retorno preserva a posicao junto com os dados');
         assert.equal(c.state.todasArtes,artes,'reabrir não zera artes');
         assert.equal(c.state.modelosGlobais,modelos,'reabrir não zera modelos');
         await c.loadOrdens();
