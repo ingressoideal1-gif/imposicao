@@ -1,0 +1,58 @@
+{
+  "source_commit": "78f35e14c74d5a168d90d37b64e1153e76df174b",
+  "tag": "agente-v1.2.344",
+  "build": {
+    "version": "1.2.344",
+    "panel_version": 971,
+    "assets_match": true,
+    "assets": [
+      {
+        "file": "index.html",
+        "sha256": "9e840dcade3511330a0965fed0dfa26d985ac5dbba7d10db22098c836185ab68"
+      },
+      {
+        "file": "cliente.html",
+        "sha256": "97eba769628ddeff8d3b1366268fbbef964cbad60b0dc662397976b4f7f38a31"
+      },
+      {
+        "file": "controle.html",
+        "sha256": "c604436640fd8c5cf36340dde0bd12f124fcc08ce39cc890c303c319865e914d"
+      },
+      {
+        "file": "producao.html",
+        "sha256": "85384f9ac9a6c043aafa0cdf1814c18a732987614406bc116d45257b56a597a5"
+      },
+      {
+        "file": "script.js",
+        "sha256": "2141b351a4a474093fa73fe02b953bbbb431f055ad98ee3305f7e8ce1ee364af"
+      },
+      {
+        "file": "pedido.js",
+        "sha256": "e3e16c2c98a7de8364e705084afa461d3e0cc985816bbfb1670304d7e1835fce"
+      }
+    ],
+    "printing_dlls_present": true,
+    "release_module_present": true,
+    "msi_size": 156200960,
+    "msi_sha256": "f60d37c05bbc102934c29559abf32323518fd813e54b5d9f665f8ff2742cf50e",
+    "msi_product_version": "1.2.344.0",
+    "tests_passed": 87
+  },
+  "public_msi": {
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.344.msi",
+    "size": 156200960,
+    "sha256": "f60d37c05bbc102934c29559abf32323518fd813e54b5d9f665f8ff2742cf50e",
+    "verified": true
+  },
+  "activation": {
+    "verified_at": "2026-09-29T13:52:24.729982+00:00",
+    "manifest": {
+      "version": "1.2.344",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.344.msi",
+      "sha256": "f60d37c05bbc102934c29559abf32323518fd813e54b5d9f665f8ff2742cf50e",
+      "size": 156200960,
+      "notes": "Painel v971: bloqueia PDF e impressao de modelos com campos obrigatorios incompletos; solicita correcao ao operador e impede reutilizar a faixa do modelo anterior."
+    },
+    "public_read_verified": true
+  }
+}
