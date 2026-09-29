@@ -56,7 +56,7 @@ Deno.test("layout: teste de remetente nao inventa link de aprovacao", () => {
   assert.match(r.html, /Abrir painel/);
   assert.doesNotMatch(r.html, /Abrir aprovação interativa|Realizar Pagamento|\/cliente\//);
 });
-Deno.test("layout: orcamento preserva valores do ERP e pagamento abre o Vibe", () => {
+Deno.test("layout: orcamento preserva valores do ERP e pagamento passa pela entrega no portal", () => {
   const orcamento = '✅ *100* Produto: *R$ 148,05*\nFrete: Grátis\nDesconto já aplicado\nPagamento: Pix\n<img src=x onerror=alert(1)>';
   const pagamento = 'https://vibe.ai-ideal.com.br/p/11-sintetico';
   const r = layoutEmailArte(`Olá!\n\nLINK DE APROVAÇÃO INTERATIVA:\n${link}`, portal, link, "11", orcamento, undefined, pagamento);
@@ -64,10 +64,16 @@ Deno.test("layout: orcamento preserva valores do ERP e pagamento abre o Vibe", (
   assert.match(r.html, /<strong>R\$ 148,05<\/strong>/);
   assert.match(r.html, /Frete: Grátis/);
   assert.doesNotMatch(r.html, /<img src=x/);
-  assert.ok(r.html.includes(`href="${pagamento}" target="_blank" rel="noopener noreferrer"`));
-  assert.ok(r.text.includes(pagamento));
+  assert.ok(r.html.includes(`href="${link}#pagamento" target="_blank" rel="noopener noreferrer"`));
+  assert.ok(r.text.includes(link + '#pagamento'));
+  assert.ok(!(r.html + r.text).includes(pagamento));
   assert.ok(r.html.indexOf('Abrir aprovação interativa') < r.html.indexOf('Resumo do Orçamento'));
   assert.ok(r.html.indexOf('Resumo do Orçamento') < r.html.indexOf('Pagar pedido'));
+});
+Deno.test('layout: substitui a aba do link sem perder os parâmetros do pedido', () => {
+  const r = layoutEmailArte('Confira', portal, link + '?origem=email#arte', '11', undefined, undefined, 'https://vibe.ai-ideal.com.br/p/11-sintetico');
+  assert.ok(r.html.includes(`href="${link}?origem=email#pagamento"`));
+  assert.ok(r.text.includes(link + '?origem=email#pagamento'));
 });
 Deno.test('layout: sem link valido não mostra botão de pagamento nem inventa destino', () => {
   for (const pagamento of [null, undefined, '', 'javascript:alert(1)', 'https://vibe.ai-ideal.com.br/p/22-outro']) {
