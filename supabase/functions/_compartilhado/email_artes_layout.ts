@@ -35,7 +35,8 @@ export function layoutEmailArte(texto: string, portal: string, link?: string, nu
   const whatsapp = "https://api.whatsapp.com/send?phone=" + WHATSAPP + "&text=" + encodeURIComponent(
     `Olá${atendente ? ", " + atendente : ""}! Preciso de atendimento sobre a aprovação das artes${numero ? " do Pedido #" + numero : ""}.`);
   const destino = link || portal;
-  const pagamento = link && urlPagamentoValida(linkPagamento, numero || "") ? linkPagamento : "";
+  // O e-mail passa pelo portal para conferir a entrega antes de sair para o Vibe.
+  const pagamento = link && urlPagamentoValida(linkPagamento, numero || "") ? link.split('#')[0] + '#pagamento' : "";
   const titulo = link ? "Suas artes estão prontas!" : "Seu e-mail de teste chegou.";
   const acao = link ? "Abrir aprovação interativa" : "Abrir painel";
   const linhas = fonte.filter(linha => !/^\s*-{3,}\s*$/.test(linha) && (!link || linha.trim() !== link));
@@ -69,7 +70,7 @@ ${link ? `<a href="${escapar(destino)}" style="display:block;max-width:252px;col
 ${link ? '<p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Confira o visual final, aprove ou solicite ajustes. Tudo no mesmo link.</p>' : ""}
 </td></tr></table>
 ${resumoHtml ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td style="padding:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;"><h2 style="margin:0 0 14px;color:#102b3f;font-size:18px;">Resumo do Orçamento</h2><div style="color:#334155;font-size:14px;line-height:1.75;overflow-wrap:anywhere;">${resumoHtml}</div></td></tr></table>` : ""}
-${pagamento ? `<a href="${escapar(pagamento)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:16px 24px;margin-bottom:24px;background:#15803d;border-radius:8px;color:#fff;font-weight:bold;text-decoration:none;">Pagar pedido</a>` : ""}
+${pagamento ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#15803d" style="border-radius:8px;mso-padding-alt:16px 24px;"><a href="${escapar(pagamento)}" target="_blank" rel="noopener noreferrer" style="display:block;padding:16px 24px;border:1px solid #15803d;border-radius:8px;color:#fff;font-size:16px;line-height:22px;font-weight:bold;text-align:center;text-decoration:none;">Pagar pedido</a></td></tr></table></td></tr></table>` : ""}
 ${detalhes ? `<div style="border-top:1px solid #e2e8f0;padding-top:22px;">${detalhes}</div>` : ""}
 </td></tr>
 <tr><td style="padding:0 28px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f0f8f7;border:1px solid #d5eae5;border-radius:10px;"><a href="${escapar(whatsapp)}" style="display:block;padding:16px;color:#12664b;font-size:15px;font-weight:bold;line-height:32px;text-decoration:none;"><img src="${LOGO_WHATSAPP}" width="32" height="32" alt="WhatsApp" style="vertical-align:middle;border:0;margin-right:8px;">Falar com meu Atendimento</a></td></tr></table></td></tr>
