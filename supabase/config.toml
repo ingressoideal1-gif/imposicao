@@ -530,3 +530,8 @@ verify_jwt = false
 # Publica porque o cliente abre o link do pedido sem login. A propria funcao
 # exige numero + token ativo, limita tentativas e nunca devolve a chave CPFHub.
 verify_jwt = false
+
+[functions.link-pagamento]
+# O cliente não tem sessão. A RPC exclusiva do servidor exige número + token ativo,
+# inclusive em cache. Chave Vibe nunca atravessa a Edge Function.
+verify_jwt = false
