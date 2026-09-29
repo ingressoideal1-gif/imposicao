@@ -1,0 +1,103 @@
+{
+  "verified_at": "2026-09-29T13:42:32.927Z",
+  "version": 971,
+  "commit": "a6f6d48b44f389deed6da6cc05468ddfd655fe52",
+  "checks": [
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "index.html",
+      "status": 200,
+      "local_sha256": "cb3b8b45005b4bc1705c285f832cc5103dd39ea6a99faaf28fd1239204e7148a",
+      "public_sha256": "cb3b8b45005b4bc1705c285f832cc5103dd39ea6a99faaf28fd1239204e7148a",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "cliente.html",
+      "status": 200,
+      "local_sha256": "d519cef56deb02d5db7785bc7a622591df6967a7e614b2bbf246b546a790e858",
+      "public_sha256": "d519cef56deb02d5db7785bc7a622591df6967a7e614b2bbf246b546a790e858",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "controle.html",
+      "status": 200,
+      "local_sha256": "cc48282a5dcdf0e51bf908eeccb8ffe67aa5ccc9f72408c50245dcfb0ea2b582",
+      "public_sha256": "cc48282a5dcdf0e51bf908eeccb8ffe67aa5ccc9f72408c50245dcfb0ea2b582",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "producao.html",
+      "status": 200,
+      "local_sha256": "123435053f706829d08b41bfd8402ff38ab3be718de2417f83b9cb2f4e1a199c",
+      "public_sha256": "123435053f706829d08b41bfd8402ff38ab3be718de2417f83b9cb2f4e1a199c",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "script.js",
+      "status": 200,
+      "local_sha256": "d9f0cf1a73a12cc1ef07f4fdaaf2a9628ee70a8c482022c13ff12d30f10c7fef",
+      "public_sha256": "d9f0cf1a73a12cc1ef07f4fdaaf2a9628ee70a8c482022c13ff12d30f10c7fef",
+      "match": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "file": "pedido.js",
+      "status": 200,
+      "local_sha256": "728ce63b47a130cfc5e89152a0318f442f880d1838cc8dc4178230024bc1b0c4",
+      "public_sha256": "728ce63b47a130cfc5e89152a0318f442f880d1838cc8dc4178230024bc1b0c4",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "index.html",
+      "status": 200,
+      "local_sha256": "cb3b8b45005b4bc1705c285f832cc5103dd39ea6a99faaf28fd1239204e7148a",
+      "public_sha256": "cb3b8b45005b4bc1705c285f832cc5103dd39ea6a99faaf28fd1239204e7148a",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "cliente.html",
+      "status": 200,
+      "local_sha256": "d519cef56deb02d5db7785bc7a622591df6967a7e614b2bbf246b546a790e858",
+      "public_sha256": "d519cef56deb02d5db7785bc7a622591df6967a7e614b2bbf246b546a790e858",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "controle.html",
+      "status": 200,
+      "local_sha256": "cc48282a5dcdf0e51bf908eeccb8ffe67aa5ccc9f72408c50245dcfb0ea2b582",
+      "public_sha256": "cc48282a5dcdf0e51bf908eeccb8ffe67aa5ccc9f72408c50245dcfb0ea2b582",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "producao.html",
+      "status": 200,
+      "local_sha256": "123435053f706829d08b41bfd8402ff38ab3be718de2417f83b9cb2f4e1a199c",
+      "public_sha256": "123435053f706829d08b41bfd8402ff38ab3be718de2417f83b9cb2f4e1a199c",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "script.js",
+      "status": 200,
+      "local_sha256": "d9f0cf1a73a12cc1ef07f4fdaaf2a9628ee70a8c482022c13ff12d30f10c7fef",
+      "public_sha256": "d9f0cf1a73a12cc1ef07f4fdaaf2a9628ee70a8c482022c13ff12d30f10c7fef",
+      "match": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "file": "pedido.js",
+      "status": 200,
+      "local_sha256": "728ce63b47a130cfc5e89152a0318f442f880d1838cc8dc4178230024bc1b0c4",
+      "public_sha256": "728ce63b47a130cfc5e89152a0318f442f880d1838cc8dc4178230024bc1b0c4",
+      "match": true
+    }
+  ]
+}
