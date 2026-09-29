@@ -48,7 +48,7 @@ function extrair(src, name) {
                         }
                     })
                 })})};
-                ${file.endsWith('cliente.js') ? extrair(src,'arteDaFaceParaComposicao') : extrair(src,'aguardarRecursoDaPrevia')}
+                ${file.endsWith('cliente.js') ? extrair(src,'arteDaFaceParaComposicao') : extrair(src,'aguardarRecursoDaPrevia') + '\n' + extrair(src,'executarRasterDaPrevia')}
                 ${['elementoMesclaComArte','elementosNaOrdemDeComposicao','opacidadeDoElemento',
                     'drawImageContain','drawArteDoElemento','drawAmostraFace',
                     'drawNumeracaoElementsOverCanvas'].map(n => extrair(src, n)).join('\n')}

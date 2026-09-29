@@ -143,7 +143,7 @@
                 </button>
                 <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5h4"/><path d="M8.6 2.5v5L4.2 15.1A1.5 1.5 0 0 0 5.5 17.5h9A1.5 1.5 0 0 0 15.8 15.1L11.4 7.5v-5"/><path d="M6.4 12h7.2"/></svg>
-                    Amostras
+                    <span id="nav-amostras-rotulo">Amostras</span>
                 </button>
                 <button class="nav-btn active" data-view="view-lista-impressao" id="nav-lista-impressao">
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5h9M3 10h9M3 14.5h5"/><path d="M13.2 13.4l1.7 1.7 3.1-3.4"/></svg>
@@ -2372,10 +2372,10 @@
                     <!-- Linha 1: quem e o pedido, a esquerda; a direita, as duas acoes
                          que levam para fora desta tela (enviar ao cliente, fechar). -->
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                        <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">Pedido <span id="amostras-os-numero"></span> <span id="amostras-os-vibe"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 6px;">—</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span> <span id="amostras-os-itens-count" class="badge badge-amber" style="margin-left: 6px;"></span></span>
+                        <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">Artes do pedido <span id="amostras-os-numero"></span> <span id="amostras-os-vibe"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 6px;">—</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span> <span id="amostras-os-itens-count" class="badge badge-amber" style="margin-left: 6px;"></span></span>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <button class="btn btn-warning btn-sm" id="btn-enviar-link-os-banner" onclick="gerarLinkClienteBanner()" style="font-size: 0.78rem; font-weight: 700; background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border:none; border-radius:8px; height:34px; padding:0 14px; display: inline-flex; align-items: center; gap: 6px; cursor:pointer;" title="Enviar e-mail de aprovação ao cliente sem abrir o editor">✉️ Enviar Link ao Cliente</button>
-                            <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem; height: 34px;">✕ Fechar Pedido</button>
+                            <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem; height: 34px;">← Voltar à Lista de Arte</button>
                         </div>
                     </div>
                     <!-- Linha 2: os arquivos do pedido e os dados do pedido. Cada grupo
@@ -4493,7 +4493,7 @@
     <script src="fonte-nome.js?v=948"></script>
     <script src="qr-ideal-colunas.js?v=948"></script>
     <script src="csv-editor.js?v=954"></script>
-    <script src="amostra-modal.js?v=973"></script>
+    <script src="amostra-modal.js?v=976"></script>
     <script src="texto-ajuste.js?v=948"></script>
     <script src="foto-lib.js?v=965"></script>
     <script src="gerenciador-fotos.js?v=965"></script>
@@ -4502,7 +4502,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=948"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=975"></script>
+    <script src="script.js?v=976"></script>
     <script src="dashboard-arte.js?v=948"></script>
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=948"></script>

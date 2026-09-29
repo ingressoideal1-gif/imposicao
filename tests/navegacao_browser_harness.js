@@ -17,8 +17,13 @@ function funcao(nome) {
 const inicioView = script.indexOf('window.showView = function(viewId) {');
 const showView = script.slice(inicioView, script.indexOf('\n};', inicioView) + 3);
 const views = [...new Set([...ler('index.html').matchAll(/id="(view-[a-z0-9-]+)"/g)].map(m => m[1]))];
+const botaoVoltar = ler('index.html').match(/<button[^>]+onclick="clearAmostrasOS\(\)"[^>]*>[^<]*<\/button>/)[0];
 const painel = `<!doctype html><meta charset="utf-8">
-${views.map(v => `<section id="${v}" class="view-section"></section>`).join('')}
+<style>.main-content { height: 500px; overflow-y: auto; } .view-section { display: none; }
+.view-section.active { display: block; } #view-lista-arte, #view-amostras { min-height: 3000px; }</style>
+<span id="nav-amostras-rotulo">Amostras</span><main class="main-content">
+${views.map(v => `<section id="${v}" class="view-section">${v === 'view-amostras' ? botaoVoltar : ''}</section>`).join('')}
+</main><input id="os-search-arte"><select id="os-filter-designer"><option value="designer">Designer</option></select>
 <input id="fmt-id"><input id="num-id"><input id="cor-id">
 <script>
 const state = { ordens: [], osItens: {}, cores: [{}], numeracoes: [{}], formatos: [] };
@@ -59,6 +64,7 @@ ${funcao('findOSInState')}
 ${funcao('getOSItens')}
 ${funcao('pedidoDoLinkDireto')}
 ${funcao('navigateToAmostrasFromOS')}
+${funcao('clearAmostrasOS')}
 ${showView}
 </script><script>${ler('navegacao-painel.js')}</script><script>
 function iniciarTeste() {
@@ -116,6 +122,29 @@ async function caso(nome, fn) { await fn(); total++; console.log('OK: ' + nome);
             await page.goBack(); await ativa('view-catalogo');
             await page.goForward(); await ativa('view-lista-arte');
             assert.equal(await page.evaluate(() => history.length), antes + 1);
+        });
+        await caso('Fechar pedido preserva filtros e posição da Lista de Arte', async () => {
+            await page.evaluate(() => {
+                state.filtroFilaTipo = 'aprovados';
+                document.getElementById('os-search-arte').value = '101';
+                document.querySelector('.main-content').scrollTop = 1250;
+            });
+            await page.evaluate(() => navigateToAmostrasFromOS('101'));
+            assert.equal(await page.$eval('.main-content', el => el.scrollTop), 0, 'pedido abre no topo');
+            await page.$eval('.main-content', el => { el.scrollTop = 400; });
+            await page.click('#view-amostras button');
+            await ativa('view-lista-arte');
+            assert.deepEqual(await page.evaluate(() => ({
+                top: document.querySelector('.main-content').scrollTop,
+                filtro: state.filtroFilaTipo, busca: document.getElementById('os-search-arte').value,
+                designer: document.getElementById('os-filter-designer').value
+            })), { top: 1250, filtro: 'aprovados', busca: '101', designer: 'designer' });
+        });
+        await caso('Voltar pelo navegador recupera a posição e não deixa o pedido afetar a lista', async () => {
+            await page.evaluate(() => navigateToAmostrasFromOS('101'));
+            await page.$eval('.main-content', el => { el.scrollTop = 600; });
+            await page.goBack(); await ativa('view-lista-arte');
+            assert.equal(await page.$eval('.main-content', el => el.scrollTop), 1250);
         });
         await caso('Dois pedidos na mesma tela têm histórico próprio e sobrevivem ao F5', async () => {
             await page.evaluate(() => navigateToAmostrasFromOS('101'));

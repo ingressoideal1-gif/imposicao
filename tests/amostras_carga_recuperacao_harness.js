@@ -73,7 +73,7 @@ async function browserTests() {
         await page.setRequestInterception(true);
         page.on('request', r => r.url().startsWith('data:') ? r.continue() : r.abort());
         await page.setContent('<main id="amostras-itens-container" data-amostras-os-id="os1"></main>');
-        const functions = ['aguardarRecursoDaPrevia', 'rasterDaAmostra', 'drawAmostraFace',
+        const functions = ['aguardarRecursoDaPrevia', 'executarRasterDaPrevia', 'rasterDaAmostra', 'drawAmostraFace',
             'mostrarCargaDaPrevia', 'renderItemAmostraCombinada', 'desenharItemAmostraCombinada',
             'preloadAmostraItemPdfElements', 'pdfDuplicarParaVersoDoModelo', 'escalaDaArteDoModelo',
             'modelosForaDoPdfProva', 'travarCardsDeModelosAprovados'];
@@ -161,6 +161,19 @@ async function browserTests() {
             }
             ok(destroyed > 0, 'documentos liberados');
 
+            // Navegar durante a espera de fonte nao pode pintar no destino antigo.
+            const staleCanvas = document.createElement('canvas');
+            staleCanvas.width = 20; staleCanvas.height = 20;
+            staleCanvas.getContext('2d').fillRect(0, 0, 20, 20);
+            const stalePixels = staleCanvas.toDataURL();
+            const fontsBefore = window.garantirFontesCarregadas;
+            let currentJob = true, releaseFont;
+            window.garantirFontesCarregadas = () => new Promise(r => { releaseFont = r; });
+            const staleJob = drawAmostraFace(item, 'front', staleCanvas, null, formatoDoModelo(), cor, null, 0, 'os1', 2, () => currentJob);
+            currentJob = false; releaseFont(); await staleJob;
+            window.garantirFontesCarregadas = fontsBefore;
+            ok(staleCanvas.toDataURL() === stalePixels, 'navegacao invalida o desenho antes de tocar no destino');
+
             // PDF de elemento: falha não fica permanente; dois modelos aguardam a mesma carga.
             const el = { type: 'PDF', pdf_content: 'https://synthetic.invalid/elemento.pdf', _preloadFalhou: true };
             let release;
@@ -182,12 +195,12 @@ async function browserTests() {
                 await new Promise(r => releases.push(r)); active--;
             };
             const jobs = state.osItens.os1.map((_, i) => renderItemAmostraCombinada(i, 'os1'));
-            ok(started === 2, 'somente dois modelos começam');
+            ok(started === 5, 'esperas de recursos nao ocupam as vagas de rasterizacao');
             container.dataset.amostrasOsId = 'outro';
             releases.splice(0).forEach(r => r());
             await Promise.all(jobs);
-            ok(started === 2 && peak === 2, 'trabalhos antigos na fila são descartados');
-            ok(renderItemAmostraCombinada.fila.ativos === 0, 'vagas liberadas');
+            ok(started === 5 && peak === 5, 'recursos independentes aguardados sem bloquear os demais');
+            ok(renderItemAmostraCombinada.fila.trabalhos.size === 0, 'trabalhos antigos removidos');
             container.dataset.amostrasOsId = 'os1';
             let calls = 0, unblock;
             window.desenharItemAmostraCombinada = async () => {

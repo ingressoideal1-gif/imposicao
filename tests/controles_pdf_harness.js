@@ -17,7 +17,7 @@ function extrair(nome) {
         page.on('pageerror', e => erros.push(e.message));
         await page.setContent('<main></main>');
         await page.addScriptTag({ content: [
-            'aguardarRecursoDaPrevia', 'fetchPdfBytes', 'pdfImparFrenteVersoParDoModelo', 'validarPdfImparFrenteVersoPar',
+            'aguardarRecursoDaPrevia', 'executarRasterDaPrevia', 'fetchPdfBytes', 'pdfImparFrenteVersoParDoModelo', 'validarPdfImparFrenteVersoPar',
             'pdfDuplicarParaVersoDoModelo', 'validarPdfDuplicarParaVerso',
             'blocoDeArteDoModelo', 'modeloEstaAprovado', 'bloqueioDeModeloAprovado',
             'toggleModoPdf', 'escalaDaArteDoModelo', 'atualizarCaixaDeEscalaDaArte',

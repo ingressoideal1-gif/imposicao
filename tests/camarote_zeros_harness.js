@@ -81,7 +81,7 @@ function extract(src, name) {
                 async function rasterDaAmostra(chave, desenhar) { return desenhar(); }
                 ${read('frontend/numero-da-pagina.js')}
                 ${read('frontend/texto-ajuste.js')}
-                ${file.endsWith('cliente.js') ? extract(src, 'arteDaFaceParaComposicao') : extract(src, 'aguardarRecursoDaPrevia')}
+                ${file.endsWith('cliente.js') ? extract(src, 'arteDaFaceParaComposicao') : extract(src, 'aguardarRecursoDaPrevia') + '\n' + extract(src, 'executarRasterDaPrevia')}
                 ${['elementoMesclaComArte', 'elementosNaOrdemDeComposicao', 'opacidadeDoElemento',
                     'drawImageContain', 'drawArteDoElemento', 'drawAmostraFace',
                     'drawNumeracaoElementsOverCanvas'].map(name => extract(src, name)).join('\n')}

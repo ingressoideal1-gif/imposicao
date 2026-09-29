@@ -375,7 +375,9 @@
         if (!itemAtual()) { alvo = { idx: null, osId: null }; return; }
         montar();
         atualizar();
+        const estado = containerDoCard()?.querySelector(`[data-amostra-carga="${idx}"]`)?.dataset.estado;
         if (state.amostrasContainerId !== 'cliente-amostras-itens-container'
+            && estado !== 'pronto' && estado !== 'carregando'
             && typeof window.renderItemAmostraCombinada === 'function') {
             window.renderItemAmostraCombinada(idx, osId);
         }

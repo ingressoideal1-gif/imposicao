@@ -31812,9 +31812,9 @@ function renderOrdens() {
 
 
                 return `
-                    <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
+                    <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir artes do pedido">
                         <td>
-                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir artes do pedido #${os.numero}">${os.numero}</span>
                         </td>
 
                         <td>
@@ -33997,6 +33997,13 @@ window.showView = function(viewId) {
     // A posição pertence ao histórico desta aba. Não altera o link público.
     if (!document.getElementById(viewId)) return;
 
+    // A lista e os modelos compartilham o mesmo elemento de rolagem.
+    // Guardar antes de esconder a lista, quando sua altura ainda está disponível.
+    const conteudoPrincipal = document.querySelector('.main-content');
+    if (viewAnterior?.id === 'view-lista-arte' && viewId !== viewAnterior.id && conteudoPrincipal) {
+        state.posicaoListaArte = conteudoPrincipal.scrollTop;
+    }
+
     // Trocar a view ativa
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
@@ -34016,6 +34023,9 @@ window.showView = function(viewId) {
     // Ativar o nav-btn correspondente, e abrir o grupo em que ele mora
     ativarBotaoDoMenu(viewId);
 
+    const rotuloAmostras = document.getElementById('nav-amostras-rotulo');
+    if (rotuloAmostras) rotuloAmostras.textContent = state.amostrasOSAtivo ? 'Artes do pedido' : 'Amostras';
+
     window.NavegacaoPainel?.registrar(viewId);
 
     // Hooks: carregar dados ao abrir certas views
@@ -34023,6 +34033,9 @@ window.showView = function(viewId) {
         if (!state.filtroFilaTipo) state.filtroFilaTipo = 'fila';
         renderOrdens();
         loadOrdens();
+        if (conteudoPrincipal && viewAnterior?.id !== viewId) {
+            conteudoPrincipal.scrollTop = state.posicaoListaArte || 0;
+        }
     }
  else if (viewId === 'view-lista-impressao') {
         loadOrdens();
@@ -34035,6 +34048,9 @@ window.showView = function(viewId) {
         renderImpOSQueue();
         const impPreview = document.getElementById('imp-preview-card-container');
         if (impPreview) impPreview.style.display = 'block';
+    }
+    if (viewId === 'view-amostras' && conteudoPrincipal && viewAnterior?.id !== viewId) {
+        conteudoPrincipal.scrollTop = 0;
     }
     if (viewId === 'view-fontes') {
         loadCatalogoFontes().then(() => renderCatFontesUI());
@@ -38255,14 +38271,17 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         // desenha na resolução final — nada é ampliado depois, então a página
         // continua nítida em qualquer escala. O que passa da borda do canvas é
         // aparado pelo próprio canvas, como o motor apara na célula.
-        const tarefa = page.render({
-            canvasContext: ctx,
-            viewport: viewport,
-            transform: [esc.h / 100, 0, 0, esc.v / 100, arteX, arteY],
-        });
-        canvas._pdfRenderTask = tarefa;
-        try { await aguardarRecursoDaPrevia(tarefa.promise, () => tarefa.cancel()); }
-        finally { if (canvas._pdfRenderTask === tarefa) canvas._pdfRenderTask = null; }
+        await executarRasterDaPrevia(idx, osId, async () => {
+            const tarefa = page.render({
+                canvasContext: ctx,
+                viewport: viewport,
+                transform: [esc.h / 100, 0, 0, esc.v / 100, arteX, arteY],
+            });
+            canvas._pdfRenderTask = tarefa;
+            try { await aguardarRecursoDaPrevia(tarefa.promise, () => tarefa.cancel()); }
+            finally { if (canvas._pdfRenderTask === tarefa) canvas._pdfRenderTask = null; }
+        }, () => viewerState.renderVersion === versao && pdfViewerAindaAtual(viewerState)
+            && document.getElementById(`amostra-pdf-canvas-${idx}`) === canvas);
         if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)
             || document.getElementById(`amostra-pdf-canvas-${idx}`) !== canvas) return;
 
@@ -38292,16 +38311,19 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
             const ctxVerso = versoCanvas.getContext('2d');
             ctxVerso.fillStyle = '#ffffff';
             ctxVerso.fillRect(0, 0, versoCanvas.width, versoCanvas.height);
-            const tarefaVerso = paginaVerso.render({
-                canvasContext: ctxVerso,
-                viewport: viewportVerso,
-                transform: [esc.h / 100, 0, 0, esc.v / 100,
-                    (larguraCelula - viewportVerso.width * esc.h / 100) / 2,
-                    (alturaCelula - viewportVerso.height * esc.v / 100) / 2],
-            });
-            versoCanvas._pdfRenderTask = tarefaVerso;
-            try { await aguardarRecursoDaPrevia(tarefaVerso.promise, () => tarefaVerso.cancel()); }
-            finally { if (versoCanvas._pdfRenderTask === tarefaVerso) versoCanvas._pdfRenderTask = null; }
+            await executarRasterDaPrevia(idx, osId, async () => {
+                const tarefaVerso = paginaVerso.render({
+                    canvasContext: ctxVerso,
+                    viewport: viewportVerso,
+                    transform: [esc.h / 100, 0, 0, esc.v / 100,
+                        (larguraCelula - viewportVerso.width * esc.h / 100) / 2,
+                        (alturaCelula - viewportVerso.height * esc.v / 100) / 2],
+                });
+                versoCanvas._pdfRenderTask = tarefaVerso;
+                try { await aguardarRecursoDaPrevia(tarefaVerso.promise, () => tarefaVerso.cancel()); }
+                finally { if (versoCanvas._pdfRenderTask === tarefaVerso) versoCanvas._pdfRenderTask = null; }
+            }, () => viewerState.renderVersion === versao && pdfViewerAindaAtual(viewerState)
+                && document.getElementById(`amostra-item-canvas-verso-${idx}`) === versoCanvas);
             if (viewerState.renderVersion !== versao || !pdfViewerAindaAtual(viewerState)) return;
             if (num && num.elements && num.elements.length > 0) {
                 drawNumeracaoElementsOverCanvas(ctxVerso, num, item, pageNum,
@@ -38506,9 +38528,11 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId, item) {
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = Math.round(vp.width);
                 offCanvas.height = Math.round(vp.height);
-                const render = page.render({ canvasContext: offCanvas.getContext('2d', { colorSpace: 'srgb' }),
-                    viewport: vp, background: 'rgba(0,0,0,0)' });
-                await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                await executarRasterDaPrevia(idx, osId, async () => {
+                    const render = page.render({ canvasContext: offCanvas.getContext('2d', { colorSpace: 'srgb' }),
+                        viewport: vp, background: 'rgba(0,0,0,0)' });
+                    await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                });
                 el._pdfCanvas = offCanvas;
                 delete el._preloadFalhou;
             } finally {
@@ -38532,6 +38556,36 @@ async function aguardarRecursoDaPrevia(promessa, cancelar, prazoMs = 20000) {
             }, prazoMs);
         })]);
     } finally { clearTimeout(relogio); }
+}
+
+// A vaga limita apenas rasterizacao pronta para executar, nunca rede/fontes.
+// A prioridade e relida quando uma vaga abre, acompanhando a rolagem atual.
+function executarRasterDaPrevia(idx, osId, executar, aindaAtual = () => true) {
+    const fila = executarRasterDaPrevia.fila ||= { ativos: 0, espera: [] };
+    const prioridade = () => {
+        const container = document.getElementById(state.amostrasContainerId || 'amostras-itens-container');
+        if (container?.dataset?.amostrasOsId && container.dataset.amostrasOsId !== String(osId)) return Infinity;
+        const ancora = container?.querySelector?.(`#amostra-item-header-${idx}`);
+        const area = ancora?.closest?.('.amostra-preview-container') || ancora;
+        const rect = area?.getBoundingClientRect?.();
+        if (!rect) return Infinity;
+        const altura = window.innerHeight || document.documentElement?.clientHeight || 0;
+        if (rect.bottom >= 0 && rect.top <= altura) return 0;
+        return rect.top > altura ? rect.top - altura + 1 : -rect.bottom + 1;
+    };
+    const iniciar = () => {
+        while (fila.ativos < 2 && fila.espera.length) {
+            fila.espera.sort((a, b) => a.prioridade() - b.prioridade());
+            const proximo = fila.espera.shift();
+            fila.ativos++;
+            Promise.resolve().then(() => proximo.aindaAtual() ? proximo.executar() : undefined)
+                .then(proximo.resolve, proximo.reject).finally(() => { fila.ativos--; iniciar(); });
+        }
+    };
+    return new Promise((resolve, reject) => {
+        fila.espera.push({ executar, aindaAtual, prioridade, resolve, reject });
+        iniciar();
+    });
 }
 
 /** Compartilha rasterizações em voo, com limite de 12 entradas/64 MiB.
@@ -38564,12 +38618,13 @@ async function rasterDaAmostra(chave, desenhar) {
     return entrada.promessa;
 }
 
-async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
+async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S, aindaAtual = () => true) {
     // Esperar as fontes da numeração antes de desenhar. Aqui dá para aguardar
     // de verdade (função async), então não há redesenho: sai certo de primeira.
     try {
         await aguardarRecursoDaPrevia(garantirFontesCarregadas(fontesDosElementos(num && num.elements)));
     } catch (_) { /* seguir mesmo assim */ }
+    if (!aindaAtual()) return;
 
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
@@ -38682,7 +38737,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     const destino = canvas;
     const _geracao = (destino.__geracaoDesenho = (destino.__geracaoDesenho || 0) + 1);
-    const _desatualizado = () => destino.__geracaoDesenho !== _geracao;
+    const _desatualizado = () => !aindaAtual() || destino.__geracaoDesenho !== _geracao;
     canvas = document.createElement('canvas');
     canvas.width = larguraVisual;
     canvas.height = alturaVisual;
@@ -38707,6 +38762,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     // O PDF da cor não vem no catálogo (ver garantirPdfDaCor). Sem esta
     // linha a amostra sairia sem a camada da cor, calada.
     if (cor) await garantirPdfDaCor(cor, { obrigatorio: true, prazoMs: 20000 });
+    if (_desatualizado()) return;
     let corRendered = false;
     if (cor && (cor.pdf_base64 || (face === 'back' && cor.pdf_verso_base64)) && typeof pdfjsLib !== 'undefined') {
         try {
@@ -38734,8 +38790,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     offCanvas.width = scaledViewport.width;
                     offCanvas.height = scaledViewport.height;
                     const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                    const render = page.render({ canvasContext: offCtx, viewport: scaledViewport });
-                    await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                    await executarRasterDaPrevia(idx, osId, async () => {
+                        const render = page.render({ canvasContext: offCtx, viewport: scaledViewport });
+                        await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                    });
 
                     return offCanvas;
                 } finally { await loadingTask.destroy(); }
@@ -38839,12 +38897,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                         offCanvas.width = Math.round(scaledViewport.width * fx);
                         offCanvas.height = Math.round(scaledViewport.height * fy);
                         const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                        const render = page.render({
-                            canvasContext: offCtx,
-                            viewport: scaledViewport,
-                            ...(fx === 1 && fy === 1 ? {} : { transform: [fx, 0, 0, fy, 0, 0] }),
+                        await executarRasterDaPrevia(idx, osId, async () => {
+                            const render = page.render({
+                                canvasContext: offCtx,
+                                viewport: scaledViewport,
+                                ...(fx === 1 && fy === 1 ? {} : { transform: [fx, 0, 0, fy, 0, 0] }),
+                            });
+                            await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
                         });
-                        await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
 
                         return offCanvas;
                     } finally { await loadingTask.destroy(); }
@@ -39285,8 +39345,8 @@ function mostrarCargaDaPrevia(container, idx, osId, situacao) {
     if (window.AmostraModal) window.AmostraModal.atualizar(idx, osId);
 }
 
-/** No máximo dois modelos desenham por vez. Requisições repetidas compartilham
- * a espera e consolidam alterações feitas enquanto o desenho estava em voo. */
+/** Esperas de recursos sao independentes. A rasterizacao tem sua propria fila;
+ * chamadas do mesmo modelo compartilham a espera e consolidam alteracoes. */
 async function renderItemAmostraCombinada(idx, osId) {
     const container = document.getElementById(state.amostrasContainerId || 'amostras-itens-container');
     const item = state.osItens[osId]?.[idx];
@@ -39297,7 +39357,7 @@ async function renderItemAmostraCombinada(idx, osId) {
         && (!container.dataset.amostrasOsId || container.dataset.amostrasOsId === String(osId))
         && (!ancora || container.contains(ancora));
     if (!atual()) return false;
-    const fila = renderItemAmostraCombinada.fila || (renderItemAmostraCombinada.fila = { ativos: 0, espera: [], trabalhos: new Map() });
+    const fila = renderItemAmostraCombinada.fila || (renderItemAmostraCombinada.fila = { trabalhos: new Map() });
     const chave = `${osId}:${idx}`;
     const anterior = fila.trabalhos.get(chave);
     if (anterior && anterior.item === item && anterior.ancora === ancora) {
@@ -39313,9 +39373,6 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
     mostrarCargaDaPrevia(container, idx, osId, 'carregando');
     trabalho.promessa = (async () => {
-        // Reservar a vaga antes de ceder, inclusive ao acordar o próximo.
-        if (fila.ativos >= 2) await new Promise(resolve => fila.espera.push(resolve));
-        else fila.ativos++;
         try {
             let falhas = 0;
             do {
@@ -39342,9 +39399,6 @@ async function renderItemAmostraCombinada(idx, osId) {
             return true;
         } finally {
             if (fila.trabalhos.get(chave) === trabalho) fila.trabalhos.delete(chave);
-            const proximo = fila.espera.shift();
-            if (proximo) proximo();
-            else fila.ativos--;
         }
     })();
     return trabalho.promessa;
@@ -39357,6 +39411,12 @@ async function desenharItemAmostraCombinada(idx, osId) {
 
     const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
     if (!item) return;
+
+    const ancora = container.querySelector(`#amostra-item-header-${idx}`)
+        || container.querySelector(`#amostra-item-canvas-${idx}`);
+    const aindaAtual = () => state.osItens[osId]?.[idx] === item
+        && (!container.dataset.amostrasOsId || container.dataset.amostrasOsId === String(osId))
+        && (!ancora || container.contains(ancora));
 
     // Quem esta desenhado agora, para o repinte do QR Ideal saber a quem voltar.
     if (!state._amostrasNaTela) state._amostrasNaTela = {};
@@ -39441,8 +39501,7 @@ async function desenharItemAmostraCombinada(idx, osId) {
     if (num) {
         await preloadAmostraItemPdfElements(num, idx, osId, item);
     }
-    if (state.osItens[osId]?.[idx] !== item
-        || (container.dataset.amostrasOsId && container.dataset.amostrasOsId !== String(osId))) return;
+    if (!aindaAtual()) return;
 
     // A MESMA CADEIA DO `formatoDoModelo` (02/09/2026): cor, numeração e, por
     // último, o formato do próprio modelo. Antes o card parava nos dois
@@ -39489,8 +39548,10 @@ async function desenharItemAmostraCombinada(idx, osId) {
         const canvasBack = container.querySelector(`#amostra-item-canvas-verso-${idx}`);
         const emptyBack = container.querySelector(`#amostra-item-empty-verso-${idx}`);
 
-        await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
-        await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
+        await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S, aindaAtual);
+        if (!aindaAtual()) return;
+        await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S, aindaAtual);
+        if (!aindaAtual()) return;
         
         // Snapshot para link do cliente (Frente e Verso) - somente se editado
         if (state.amostrasContainerId !== 'cliente-amostras-itens-container' && item._needsSnapshot) {
@@ -39509,7 +39570,8 @@ async function desenharItemAmostraCombinada(idx, osId) {
         const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
         const empty = container.querySelector(`#amostra-item-empty-${idx}`);
         
-        await drawAmostraFace(item, 'front', canvas, empty, fmt, cor, num, idx, osId, S);
+        await drawAmostraFace(item, 'front', canvas, empty, fmt, cor, num, idx, osId, S, aindaAtual);
+        if (!aindaAtual()) return;
         
         if (state.amostrasContainerId !== 'cliente-amostras-itens-container' && item._needsSnapshot) {
             delete item._needsSnapshot;
