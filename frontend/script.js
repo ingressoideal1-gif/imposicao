@@ -18193,6 +18193,37 @@ window.abrirBancoDoPedidoPorId = function (bancoId, osId) {
     });
 };
 
+/** Editor simples: banco novo ou colunas junto ao CSV já importado no pedido. */
+window.criarColunasDoPedido = async function (osId, bancoId) {
+    if (!window.PedidoColunas || !window.CsvEditor) {
+        toast('O editor de colunas não carregou. Recarregue a página.', 'error');
+        return;
+    }
+    const idInt = idIntDoPedido(osId);
+    if (!idInt) { toast('Não foi possível identificar este pedido.', 'error'); return; }
+    try {
+        // Ler ao abrir evita editar o snapshot de um pedido que ficou aberto há horas.
+        const resposta = await chamarBancosPedido('consultar', { id_int: idInt });
+        if (!document.getElementById('bancos-pedido-lista-' + osId)) return;
+        window.PedidoColunas.abrir({
+            pedido: idInt, idInt, bancoId, bancos: resposta.bancos || [], api: chamarBancosPedido,
+            aoSalvar: async () => {
+                toast('Colunas salvas no pedido. Use “Vem de” e “Colunas” no modelo.', 'success');
+                if (!document.getElementById('bancos-pedido-lista-' + osId)) return;
+                try {
+                    const atualizado = await chamarBancosPedido('consultar', { id_int: idInt });
+                    if (!document.getElementById('bancos-pedido-lista-' + osId)) return;
+                    state.bancosDoPedido = atualizado.bancos || [];
+                    state.vinculosDeBanco = Object.fromEntries((atualizado.vinculos || []).map(v => [String(v.modelo_id), v]));
+                    renderAmostrasOSItens(osId);
+                } catch (e) {
+                    toast('O banco foi salvo, mas a tela não atualizou. Reabra o pedido: ' + (e.message || e), 'error');
+                }
+            }
+        });
+    } catch (e) { toast('Não foi possível abrir as colunas: ' + (e.message || e), 'error'); }
+};
+
 /** Leva as renomeações de coluna para o `csv_mapa` de cada modelo do banco. */
 async function aplicarRenomeacoesNoMapa(osId, bancoId, renomeacoes) {
     if (!renomeacoes.length) return;
@@ -18385,7 +18416,7 @@ function desenharBoxDeBancos(osId) {
 
     if (!bancos.length) {
         alvo.innerHTML = `<div style="font-size:0.85rem; color:var(--text-dim); padding:4px 2px;">
-            Este pedido ainda não tem banco de dados. Suba um CSV ou busque de um
+            Este pedido ainda não tem banco de dados. Crie colunas, suba um CSV ou busque de um
             link compartilhado — depois, escolha o banco no "Vem de:" de cada modelo.
         </div>`;
         return;
@@ -18407,7 +18438,7 @@ function desenharBoxDeBancos(osId) {
                     title="O nome que aparece no Vem de: dos modelos"
                     onchange="renomearBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')">
                 <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;"
-                    title="${temLink ? 'Ligado à planilha: ' + esc(b.csv_url) : 'Criado de um arquivo CSV'}">${temLink ? '🌐' : '📄'} ${nLinhas} linha(s)</span>
+                    title="${temLink ? 'Ligado à planilha: ' + esc(b.csv_url) : 'Banco de dados deste pedido'}">${temLink ? '🌐' : '📄'} ${nLinhas} linha(s)</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                 <span style="font-size:0.78rem; ${leitores.length ? '' : 'color:var(--text-dim);'}" title="${esc(quemLe)}">
@@ -18423,6 +18454,8 @@ function desenharBoxDeBancos(osId) {
                     title="Trazer e enquadrar as fotos das pessoas deste banco">🖼️ Fotos</button>` : ''}
                 <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorId('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
                     style="font-size:0.75rem; padding:3px 8px;" title="Conferir e corrigir o conteúdo deste banco">📊 Conferir</button>
+                <button class="btn btn-sm btn-secondary" onclick="criarColunasDoPedido('${escapeJsAttr(osId)}', '${esc(String(b.id))}')"
+                    style="font-size:0.75rem; padding:3px 8px;" title="Acrescentar, renomear e preencher colunas neste banco">✏️ Editar colunas</button>
                 <button class="btn btn-sm btn-ghost btn-danger" onclick="excluirBancoDoPedido('${esc(String(b.id))}', '${escapeJsAttr(osId)}')"
                     style="font-size:0.75rem; padding:3px 8px;"
                     title="${leitores.length ? 'Para excluir, primeiro escolha a numeração no Vem de: dos modelos que leem este banco' : 'Excluir este banco do pedido'}">🗑</button>
@@ -35558,12 +35591,13 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                     🗂️ Gerenciamento de Bancos de Dados
                                 </div>
                                 <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
-                                    Os bancos (CSV) deste pedido. Cada modelo escolhe o seu em "Vem de:".
+                                    Os bancos de dados deste pedido. Cada modelo escolhe o seu em "Vem de:".
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                                 <button class="btn btn-sm btn-secondary" onclick="subirBancoPeloBox('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco deste pedido a partir de um arquivo CSV">📤 Subir CSV</button>
                                 <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorLink('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar bancos a partir de uma planilha compartilhada por link — cada página vira um banco">🌐 Buscar de link</button>
+                                <button class="btn btn-sm btn-secondary" onclick="criarColunasDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco ou acrescentar colunas a um CSV deste pedido">➕ Criar colunas</button>
                             </div>
                         </div>
                         <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>

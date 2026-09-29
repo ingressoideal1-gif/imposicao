@@ -1,0 +1,17 @@
+.pedido-colunas-overlay { position: fixed; inset: 0; z-index: 12000; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.pedido-colunas-modal { color: var(--text, #eee); background: var(--bg-card, #162032); border: 1px solid var(--border, #42516a); border-radius: 10px; padding: 20px; width: min(1100px, 100%); max-height: 94vh; overflow: auto; box-shadow: 0 12px 50px #0008; }
+.pedido-colunas-modal h2 { font-size: 1.2rem; margin: 0 0 14px; }
+.pedido-colunas-modal label { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.pedido-colunas-modal fieldset { border: 0; margin: 10px 0; padding: 0; min-width: 0; }
+.pedido-colunas-modal p, #pc-aviso { font-size: .85rem; line-height: 1.5; }
+.pedido-colunas-acoes { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.pedido-colunas-grade { max-height: 48vh; overflow: auto; margin-top: 10px; border: 1px solid var(--border, #42516a); }
+.pedido-colunas-grade table { border-collapse: separate; border-spacing: 0; width: 100%; }
+.pedido-colunas-grade th, .pedido-colunas-grade td { padding: 5px; border-bottom: 1px solid var(--border, #42516a); }
+.pedido-colunas-grade thead th { position: sticky; top: 0; background: var(--bg-card, #162032); z-index: 1; }
+.pedido-colunas-grade th input, .pedido-colunas-celula { min-width: 190px; }
+.pedido-colunas-celula { display: flex; gap: 4px; align-items: center; }
+.pedido-colunas-celula textarea { resize: vertical; min-height: 32px; width: 100%; }
+.pedido-colunas-celula button { color: var(--text, #eee); background: transparent; border: 1px solid var(--border, #42516a); border-radius: 4px; cursor: pointer; padding: 4px 8px; }
+#pc-erro { color: #fca5a5; white-space: pre-wrap; }
+.pedido-colunas-modal :focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
