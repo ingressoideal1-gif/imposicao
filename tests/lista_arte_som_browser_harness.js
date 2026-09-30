@@ -37,6 +37,7 @@ function extrair(nome) {
             ] }) }) };
             function populateDesignerFilter() {}
             function populateAtendenteFilter() {}
+            async function temSessaoDoSupabase() { return true; }
             window._currentUser = { id: 'designer-a' };
             window.avisos = [];
             function toast(texto) { avisos.push(texto); }

@@ -28356,6 +28356,10 @@ async function loadUsuarios(exigirSucesso = false) {
             console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
             return;
         }
+        // O código local do NewProd não cria sessão Supabase. Como nos links
+        // de cliente, não consultar tabelas privadas nesse fluxo: a lista de
+        // designers/atendentes não pode impedir a estação de carregar as OS.
+        if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) return;
         const { data, error } = await lerDadosLista(supabaseClient
             .from('usuarios')
             .select('user_id, nome_usuario, email, setor'), 'usuários');

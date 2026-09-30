@@ -20,6 +20,7 @@ function ambiente() {
         setTimeout: (fn, ms) => { const id = ++numeroTimer; timers.set(id, {fn, ms}); return id; },
         clearTimeout: id => timers.delete(id),
         bloqueada: '', falharProdutos: false, cargas: 0, renders: 0,
+        comSessao: true, negarUsuarios: false, leituras: [],
         mostrarEstadoCargaLista: (mensagem, erro) => estados.push({mensagem, erro}),
         renderOrdens: () => c.renders++, toast() {}, conferirNovosPedidosDoUsuario() {},
         carregarLinksExistentes: async () => {}, carregarTemposNoCard: async () => {},
@@ -30,11 +31,17 @@ function ambiente() {
         conferirColunasQrIdealDosPedidos() {}, populateDesignerFilter() {}, populateAtendenteFilter() {},
         loadOrdensFromVibecode: async () => { c.state.ordens = [{id:'novo',numero:1}]; return true; }
     };
-    const cliente = {from: tabela => {
+    const cliente = {
+        auth: { getSession: async () => ({ data: { session: c.comSessao ? { user: { id: 'sintetico' } } : null } }) },
+        from: tabela => {
+        c.leituras.push(tabela);
         const q = {
             select() { return this; }, order() { return this; }, in() { return this; }, eq() { return this; },
             abortSignal(signal) { this.signal = signal; return this; },
             then(resolve, reject) {
+                if (c.negarUsuarios && ['usuarios', 'producao_usuarios'].includes(tabela)) {
+                    return Promise.resolve({ error: Error('permission denied for table ' + tabela) }).then(resolve, reject);
+                }
                 const dados = tabela === 'produtos_proposta' ? [{id:1,id_int:1}] : [];
                 if (tabela === 'produtos_proposta') c.cargas++;
                 if (tabela === c.bloqueada) return new Promise(r => {
@@ -51,11 +58,31 @@ function ambiente() {
     vm.createContext(c);
     vm.runInContext('let _cargaOrdensEmAndamento=null;\n' + [
         'lerDadosLista','iniciarComplementoLista','completarDadosDaLista','loadOrdens',
-        'carregarOrdensDados','carregarArtesGlobais','loadUsuarios','carregarModelosGlobais'
+        'carregarOrdensDados','carregarArtesGlobais','loadUsuarios','carregarModelosGlobais','temSessaoDoSupabase'
     ].map(n => extrair(n)).join('\n'), c);
     return {c,timers,requests,estados};
 }
 (async () => {
+    {
+        const {c} = ambiente();
+        c.comSessao = false; c.negarUsuarios = true;
+        assert.equal(await c.loadOrdens(), true, 'estação sem sessão carrega ordens com usuários protegidos');
+        assert(c.renders > 0, 'ordens são desenhadas');
+        assert.equal(c.state.ordens[0].id, 'novo');
+        assert(!c.leituras.includes('usuarios'), 'estação não consulta usuários privados');
+        assert(!c.leituras.includes('producao_usuarios'), 'estação não tenta fallback privado');
+        c.falharProdutos = true;
+        const anteriores = c.state.ordens;
+        assert.equal(await c.loadOrdens(), false, 'erro real dos produtos continua bloqueando');
+        assert.equal(c.state.ordens, anteriores);
+    }
+    {
+        const {c} = ambiente(); c.negarUsuarios = true;
+        const anteriores = c.state.ordens;
+        assert.equal(await c.loadOrdens(), false, 'recusa de usuários com sessão continua visível');
+        assert.equal(c.state.ordens, anteriores);
+        assert(c.leituras.includes('usuarios') && c.leituras.includes('producao_usuarios'));
+    }
     for (const tabela of ['pedidos_artes','usuarios','produtos_proposta','pedidos_modelos']) {
         const {c,timers,requests,estados} = ambiente();
         const anterior = c.state.ordens;
