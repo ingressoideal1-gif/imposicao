@@ -51,12 +51,12 @@
             previas_prontas: avisos.filter(el => el.dataset.estado === 'pronto').length });
     }
     // Proxy conserva this, retorno, identidade da Promise e propriedades da fila/cache.
-    function observar(nome, iniciar, terminar) {
-        const original = window[nome];
+    function observar(nome, iniciar, terminar, dono = window) {
+        const original = dono[nome];
         if (typeof original !== 'function') { coleta.ausentes.push(nome); return; }
         const proxy = new Proxy(original, { apply(alvo, thisArg, args) {
             const c = seguro(atual);
-            const contexto = c ? seguro(() => iniciar(c, args)) : null;
+            const contexto = c ? seguro(() => iniciar(c, args, thisArg)) : null;
             let resultado;
             try { resultado = Reflect.apply(alvo, thisArg, args); }
             catch (erro) {
@@ -70,21 +70,112 @@
             }
             return resultado;
         } });
-        window[nome] = proxy;
-        restauracoes.push(() => { if (window[nome] === proxy) window[nome] = original; });
+        dono[nome] = proxy;
+        restauracoes.push(() => { if (dono[nome] === proxy) dono[nome] = original; });
+    }
+    // URLs ficam apenas neste mapa limitado em memoria. O JSON recebe referencias locais.
+    function chaveArquivo(entrada) {
+        if (typeof entrada !== 'string' || !/^(https?:\/\/|\/)/i.test(entrada)) return null;
+        const url = new URL(entrada, location.href);
+        url.hash = '';
+        return url.href;
+    }
+    function arquivo(c, entrada) {
+        const chave = chaveArquivo(entrada);
+        if (!chave) return null;
+        if (!c.arquivos.has(chave) && c.arquivos.size < 500) c.arquivos.set(chave, `arquivo-${c.arquivos.size + 1}`);
+        return c.arquivos.get(chave) || null;
+    }
+    function rota(c, entrada) {
+        const url = new URL(typeof entrada === 'string' ? entrada : entrada?.url || String(entrada), location.href);
+        const remoto = /\.supabase\.co$/i.test(url.hostname);
+        const caminho = url.pathname;
+        if (/\/(?:api\/)?proxy$/.test(caminho)) return {
+            rota: remoto ? 'proxy_nuvem' : url.origin === location.origin ? 'proxy_mesma_origem' : 'proxy_outro',
+            arquivo_ref: arquivo(c, url.searchParams.get('url')) };
+        const ref = c.arquivos.get(chaveArquivo(url.href));
+        if (ref || remoto && caminho.startsWith('/storage/')) return {
+            rota: remoto ? 'arquivo_supabase_direto' : 'arquivo_outro_direto', arquivo_ref: ref || arquivo(c, url.href) };
+        if (remoto && caminho.startsWith('/rest/v1/')) {
+            const tabela = caminho.split('/')[3];
+            const permitidas = ['pedidos_modelos', 'pedidos_artes', 'produtos_proposta', 'propostas_os',
+                'propostas_os_setores', 'producao_numeracoes', 'producao_cores', 'producao_formatos',
+                'catalogo_fontes', 'producao_os', 'producao_os_itens', 'propostas'];
+            return { rota: 'banco_rest', tabela: permitidas.includes(tabela) ? tabela : 'outra' };
+        }
+        if ((remoto || url.origin === location.origin) && caminho.includes('/api/propostas/')) {
+            const acao = caminho.split('/').at(-1);
+            return { rota: 'propostas', acao: ['consultar', 'pagamentos', 'cadastro', 'status'].includes(acao) ? acao : 'outra' };
+        }
+        return null;
+    }
+    function instalarRede() {
+        observar('urlDoProxy', (c, args) => arquivo(c, args[0]), (c, ref, _, erro) => {
+            if (ref && !erro) emitir(c, 'fallback_arquivo', { arquivo_ref: ref });
+        });
+        observar('requisitarPropostas', (c, args) => {
+            if (!['consultar', 'pagamentos'].includes(args[0]) || (args[2] && args[2] !== 'propostas')) return null;
+            const corpo = args[1] || {};
+            const numero = n => Number.isSafeInteger(n) && n >= 0 ? n : null;
+            const m = { inicio: agora(), etapa: 'consulta_propostas', pedido: null, rede: {
+                acao: args[0], consulta: ['numeros', 'status', 'nome', 'cliente'].includes(corpo.tipo) ? corpo.tipo : 'outra',
+                offset: numero(corpo.offset), limite: numero(corpo.limite),
+                quantidade_numeros: Array.isArray(corpo.numeros) ? corpo.numeros.length : null } };
+            c.pendentes.add(m);
+            return m;
+        }, (c, m, valor, erro) => {
+            if (!m) return;
+            c.pendentes.delete(m);
+            emitir(c, 'consulta_propostas', { ...m.rede, duracao_ms: arredondar(agora() - m.inicio),
+                linhas: Array.isArray(valor) ? valor.length : null, resultado: erro ? erroResumido(erro) : 'concluido' });
+        });
+        observar('fetch', (c, args) => {
+            const destino = rota(c, args[0]);
+            if (!destino) return null;
+            const m = { inicio: agora(), etapa: 'http_headers', pedido: null,
+                rede: { requisicao: ++c.requisicoes, ...destino } };
+            c.pendentes.add(m);
+            return m;
+        }, (c, m, resposta, erro) => {
+            if (!m) return;
+            c.pendentes.delete(m);
+            if (!ativa(c)) return;
+            if (resposta && typeof resposta === 'object') c.respostas.set(resposta, m.rede);
+            emitir(c, 'http_headers', { ...m.rede, duracao_ms: arredondar(agora() - m.inicio),
+                status_http: resposta?.status ?? null, resultado: erro ? (erro.name === 'TypeError' ? 'rede_ou_cors' : erroResumido(erro))
+                    : resposta?.ok ? 'concluido' : 'http_erro' });
+        });
+        // Observar somente o consumo que o produto ja faria; nunca clonar nem ler o corpo por conta propria.
+        for (const metodo of ['arrayBuffer', 'json', 'text']) {
+            if (typeof Response === 'undefined') break;
+            observar(metodo, (c, _, resposta) => {
+                const rede = c.respostas.get(resposta);
+                if (!rede) return null;
+                const m = { inicio: agora(), etapa: 'http_corpo', pedido: null, rede: { ...rede, leitura: metodo } };
+                c.pendentes.add(m);
+                return m;
+            }, (c, m, valor, erro) => {
+                if (!m) return;
+                c.pendentes.delete(m);
+                emitir(c, 'http_corpo', { ...m.rede, duracao_ms: arredondar(agora() - m.inicio),
+                    bytes_lidos: valor instanceof ArrayBuffer ? valor.byteLength : null,
+                    resultado: erro ? erroResumido(erro) : 'concluido' });
+            }, Response.prototype);
+        }
     }
     function etapa(nome, rotulo, obterPedido) {
         observar(nome, (c, args) => {
             const id = obterPedido ? obterPedido(args) : null;
             if (rotulo === 'modelos') contarModelos(c, id, 'antes_da_carga');
-            const medicao = { inicio: agora(), etapa: rotulo, pedido: pedido(id), id };
+            const rede = rotulo === 'obter_pdf' ? { arquivo_ref: arquivo(c, args[0]) } : {};
+            const medicao = { inicio: agora(), etapa: rotulo, pedido: pedido(id), id, rede };
             c.pendentes.add(medicao);
             return medicao;
         }, (c, m, valor, erro) => {
             if (!m) return;
             c.pendentes.delete(m);
             if (m.etapa === 'modelos') contarModelos(c, m.id, 'apos_carga');
-            emitir(c, 'etapa', { etapa: m.etapa, pedido: m.pedido,
+            emitir(c, 'etapa', { etapa: m.etapa, pedido: m.pedido, ...m.rede,
                 duracao_ms: arredondar(agora() - m.inicio),
                 resultado: erro ? erroResumido(erro) : valor === false ? 'nao_concluido' : 'concluido' });
         });
@@ -103,6 +194,7 @@
             : a.falhas > 0 ? 'falha_sem_previa' : 'sem_previa_ate_encerrar';
     }
     function instalar(c) {
+        instalarRede();
         observar('navigateToAmostrasFromOS', (sessao, args) => {
             encerrarAbertura(sessao, 'outra_abertura');
             if (sessao.aberturas.length >= MAX_ABERTURAS) { parar('limite_aberturas'); return null; }
@@ -175,7 +267,8 @@
             if (atualId !== id) contarModelos(sessao, atualId, 'apos_atualizar_lista');
         });
         observar('lerDadosLista', (_, args) => ({ inicio: agora(), etapa:
-            ['modelos do pedido', 'produtos do pedido', 'artes do pedido'].includes(args[1]) ? args[1] : null }),
+            ['modelos do pedido', 'produtos do pedido', 'artes do pedido', 'produtos', 'propostas',
+                'status dos pedidos', 'dados do ERP', 'horários dos prazos', 'modelos', 'pagamentos'].includes(args[1]) ? args[1] : null }),
         (sessao, ctx, valor, erro) => {
             if (!ctx?.etapa) return;
             emitir(sessao, 'resposta_consulta', { etapa: ctx.etapa, duracao_ms: arredondar(agora() - ctx.inicio),
@@ -183,7 +276,11 @@
                 resultado: erro || valor?.error ? erroResumido(erro || valor.error) : 'concluido' });
         });
         for (const [nome, rotulo, indice] of [
-            ['loadOrdens', 'lista'], ['loadAll', 'catalogos'], ['loadOSItens', 'modelos', 0],
+            ['loadOrdens', 'lista'], ['carregarOrdensDados', 'lista_dados'], ['loadAll', 'catalogos'], ['loadOSItens', 'modelos', 0],
+            ['carregarArtesGlobais', 'lista_artes'], ['carregarLinksExistentes', 'lista_links'],
+            ['carregarTemposNoCard', 'lista_relogios'], ['loadUsuarios', 'lista_usuarios'],
+            ['carregarModelosGlobais', 'lista_modelos'], ['carregarHorasDosPrazos', 'lista_horarios'],
+            ['carregarPagamentosGlobais', 'lista_pagamentos'], ['loadUltimosPedidos', 'historico_cliente'],
             ['recarregarNumeracoesDoPedido', 'numeracoes', 0], ['carregarBancosDoPedido', 'bancos', 0],
             ['fetchPdfBytes', 'obter_pdf'], ['garantirPdfDaCor', 'obter_cor'],
             ['garantirFontesCarregadas', 'fontes'], ['preloadAmostraItemPdfElements', 'elementos_pdf', 2],
@@ -231,7 +328,13 @@
                             const categoria = /\/rest\/|\/functions\//.test(url.pathname) ? 'consultas'
                                 : /\.(woff2?|ttf|otf)$/i.test(url.pathname) ? 'fontes'
                                 : /\/storage\//.test(url.pathname) ? 'arquivos' : 'outros';
-                            emitir(c, 'recurso', { categoria, duracao_ms: arredondar(e.duration),
+                            const exposto = e.requestStart > 0 && e.responseStart > 0;
+                            const intervalo = (fim, inicio) => exposto && fim >= inicio ? arredondar(fim - inicio) : null;
+                            emitir(c, 'recurso', { categoria, ...(rota(c, e.name) || {}), duracao_ms: arredondar(e.duration),
+                                timing_detalhado: exposto, dns_ms: intervalo(e.domainLookupEnd, e.domainLookupStart),
+                                conexao_ms: intervalo(e.connectEnd, e.connectStart),
+                                espera_primeiro_byte_ms: intervalo(e.responseStart, e.requestStart),
+                                transferencia_ms: intervalo(e.responseEnd, e.responseStart),
                                 bytes_transferidos: e.transferSize || 0,
                                 cache: e.transferSize > 0 ? 'rede' : e.decodedBodySize > 0 ? 'cache' : 'indeterminado' });
                         }
@@ -260,7 +363,8 @@
                 perfil: ['admin', 'designer', 'atendimento', 'impressor'].includes(role) ? role : 'outro',
                 viewport: { largura: innerWidth, altura: innerHeight, dpr: devicePixelRatio },
                 conexao_online: navigator.onLine },
-            eventos: [], aberturas: [], pendentes: new Set(), descartados: 0, ausentes: [], observados: [] };
+            eventos: [], aberturas: [], pendentes: new Set(), arquivos: new Map(), respostas: new WeakMap(),
+            requisicoes: 0, descartados: 0, ausentes: [], observados: [] };
         seguro(() => instalar(coleta));
         prazo = setTimeout(() => parar('limite_tempo'), MAX_MS);
         atualizarPainel();
@@ -271,9 +375,11 @@
         const c = coleta;
         seguro(() => contarModelos(c, estado().amostrasOSAtivo, 'encerramento'));
         encerrarAbertura(c, motivo);
-        for (const m of c.pendentes) emitir(c, 'etapa', { etapa: m.etapa, pedido: m.pedido,
+        for (const m of c.pendentes) emitir(c, 'etapa', { etapa: m.etapa, pedido: m.pedido, ...m.rede,
             duracao_ms: arredondar(agora() - m.inicio), resultado: 'pendente_ao_encerrar' });
         c.pendentes.clear();
+        c.arquivos.clear();
+        c.respostas = new WeakMap();
         c.duracao_ms = arredondar(agora() - c.inicio);
         c.encerramento = motivo;
         c.ativo = false;
@@ -292,14 +398,16 @@
     function relatorio() {
         const c = coleta;
         if (!c) return null;
-        return JSON.parse(JSON.stringify({ esquema: 1, modo: 'site_atual_sem_cache_experimental',
+        return JSON.parse(JSON.stringify({ esquema: 2, modo: 'site_atual_sem_cache_experimental',
             inicio_utc: c.inicio_utc, duracao_ms: c.duracao_ms ?? arredondar(agora() - c.inicio),
             ativo: c.ativo, encerramento: c.encerramento || null, ...c.identificacao, ambiente: c.ambiente,
             aberturas: c.aberturas, eventos: c.eventos, descartados: c.descartados,
             funcoes_ausentes: c.ausentes, observadores: c.observados,
             limites: ['tempos_sobrepostos_nao_somar', 'cache_http_pode_ser_indeterminado',
                 'primeira_abertura_nao_garante_cache_frio', 'primeira_previa_e_sinal_canvas_visivel_na_frame',
-                'sem_identificacao_automatica_do_usuario', 'eventos_de_rede_sao_da_sessao'] }));
+                'sem_identificacao_automatica_do_usuario', 'eventos_de_rede_sao_da_sessao',
+                'headers_incluem_rede_servidor_e_esperas_do_cliente', 'corpo_inclui_leitura_e_decodificacao',
+                'timings_entre_origens_podem_nao_ser_expostos', 'referencias_de_arquivo_valem_so_nesta_coleta'] }));
     }
     function exportar() {
         parar();
@@ -327,7 +435,7 @@
         painel = document.createElement('details');
         painel.id = 'diagnostico-artes';
         painel.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99999;width:min(340px,calc(100vw - 24px));padding:12px;background:#182234;color:white;border:1px solid #64748b;border-radius:8px;font:13px system-ui;box-sizing:border-box';
-        painel.innerHTML = `<summary style="cursor:pointer">Teste de carregamento das artes</summary>
+        painel.innerHTML = `<summary style="cursor:pointer">Teste de carregamento das artes — v2</summary>
             <p>Relatório local, sem envio automático. Exporte antes de fechar ou recarregar.</p>
             <label>Participante <input data-participante placeholder="designer-1" maxlength="32" style="width:100%;box-sizing:border-box"></label>
             <label>Estação <input data-estacao placeholder="pc-arte-1" maxlength="32" style="width:100%;box-sizing:border-box"></label>
