@@ -284,12 +284,12 @@ const api = new Function('document', 'state', 'window', `
     ok(i > 0, 'achei o loadOrdensFromVibecode');
     const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n/**', i + 10));
 
-    ok(/if \(!opcoes.somenteArteAtiva\)\s*\{\s*const \{ data: naGraficaData, error: naGraficaErr \} = await lerDadosLista\(sinal => consultarPropostas\(\{ tipo: 'status', status: SINAIS_SAIU_DA_ARTE \}, undefined, 'consultar', sinal\)/.test(corpo),
+    ok(/if \(!opcoes.somenteArteAtiva && !opcoes.numeroPedido\)\s*\{\s*const \{ data: naGraficaData, error: naGraficaErr \} = await lerDadosLista\(sinal => consultarPropostas\(\{ tipo: 'status', status: SINAIS_SAIU_DA_ARTE \}, undefined, 'consultar', sinal\)/.test(corpo),
        'ao consultar historico, as propostas sao lidas TAMBEM por status: a consulta que '
        + 'descobre o pedido que nao tem produto nem arte');
     ok(corpo.includes('(propostas || []).forEach(pr =>'),
        'depois de agrupar os produtos, as propostas que sobraram viram pedido');
-    ok(/if \(!correcoes.has\(String\(key\)\) && !pedidoEntraNoPainel\(key, pedidosComerciais, state\.todasArtes, jaNaGrafica\)\) return;/.test(corpo),
+    ok(/if \(!correcoes.has\(String\(key\)\) && !pedidoEntraNoPainel\(key, pedidosComerciais, artesDaConsulta, jaNaGrafica\)\) return;/.test(corpo),
        'o pedido sem produto passa pela MESMA porta dos outros -- a lista nao '
        + 'vira catalogo dos 8 mil pedidos do banco');
     ok(corpo.includes('const criarOS = (key, createdAt)'),

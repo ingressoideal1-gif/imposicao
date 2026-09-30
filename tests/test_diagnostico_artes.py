@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 
-@pytest.mark.parametrize("harness", ["diagnostico_artes_harness.js", "diagnostico_rede_artes_harness.js"])
+@pytest.mark.parametrize("harness", ["diagnostico_artes_harness.js", "diagnostico_rede_artes_harness.js", "lista_arte_pesquisa_browser_harness.js"])
 def test_diagnostico_artes(harness):
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(

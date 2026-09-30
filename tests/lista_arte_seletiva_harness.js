@@ -51,6 +51,7 @@ function environment() {
         return {
             select() { return this; }, order() { return this; }, abortSignal() { return this; },
             in(_col, values) { ids = [...values]; return this; },
+            eq(col, value) { if (col === 'id_int') ids = [value]; return this; },
             ilike(col, value) { assert.equal(col, 'status_impressao'); assert.equal(value, '%corrigir%arte%'); correction = true; return this; },
             range(a, b) { range = [a, b]; return this; },
             async then(resolve, reject) {
@@ -61,7 +62,7 @@ function environment() {
                         resolve({ error: Error('falha sintetica') }); return;
                     }
                     let data = [];
-                    if (table === 'produtos_proposta') data = products;
+                    if (table === 'produtos_proposta') data = ids ? products.filter(p => ids.includes(p.id_int)) : products;
                     if (correction) data = corrections.slice(range[0], range[1] + 1);
                     if (table === 'propostas_os') data = ids.map(id_int => ({ id_int, data_termino: '2026-10-01' }));
                     if (table === 'pedidos_modelos' && !correction) data = ids.map(id_int => ({ id: id_int, id_int, status_impressao: [4, 5].includes(id_int) ? 'Corrigir Arte' : 'Aguardando', quantidade: 300 }));
@@ -74,7 +75,7 @@ function environment() {
     vm.createContext(c);
     vm.runInContext('let _cargaOrdensEmAndamento = null; const STATUS_CORRIGIR_ARTE = "Corrigir Arte";\n'
         + constant('SINAIS_SAIU_DA_ARTE') + '\n' + constant('SINAIS_CANCELADO') + '\n'
-        + ['recorteDaCargaDeOrdens', 'loadOrdens', 'carregarOrdensDados', 'loadOrdensFromVibecode',
+        + ['recorteDaCargaDeOrdens', 'carregarPedidoPesquisado', 'loadOrdens', 'carregarOrdensDados', 'loadOrdensFromVibecode',
             'pedidosComCorrecaoDeArte', 'propostaAtivaNaListaArte', 'pedidoCancelado', 'pedidoSaiuDaArte',
             'modeloEmCorrecaoDeArte', 'normalizarStatusImpressao', 'pedidosJaNaGrafica', 'pedidoEntraNoPainel',
             'arteFoiLancada', 'lerDadosLista', 'lerLotesDaLista', 'comporPrazoDoERP', 'carregarModelosGlobais',
@@ -110,7 +111,34 @@ const tick = () => new Promise(r => setImmediate(r));
     ok(!logs.some(l => l.tipo === 'status') && c.state.listaArteSomenteAtivos, 'retorno ao trabalho volta ao recorte ativo');
     ui.search = '4843'; logs.length = 0;
     await c.loadOrdens();
-    ok(c.state.ordens.some(o => o.numero === 4843) && !c.state.listaArteSomenteAtivos, 'pesquisa explicita disponibiliza pedido antigo');
+    ok(c.state.ordens.some(o => o.numero === 4843) && c.state.listaArteSomenteAtivos, 'pesquisa por numero disponibiliza pedido antigo sem declarar historico completo');
+    ok(!logs.some(l => l.tipo === 'status') && logs.filter(l => l.tipo === 'numeros').every(l => l.numeros.length === 1 && l.numeros[0] === 4843), 'pesquisa consulta somente o numero solicitado');
+    ok(c.state.ordens.some(o => o.numero === 1), 'pesquisa preserva as filas ja carregadas');
+    ok(logs.filter(l => l.ids).every(l => l.ids.every(n => n === 4843)), 'modelos, produtos e prazos limitados ao pedido');
+    c.state.pagamentosGlobais = {1: [{status:'pago'}]}; logs.length = 0;
+    await c.carregarPagamentosGlobais([4843]);
+    ok(c.state.pagamentosGlobais[1][0].status==='pago' && logs.filter(l=>l.action==='pagamentos').every(l=>l.numeros.length===1 && l.numeros[0]===4843), 'pagamento pontual preserva outros pedidos e limita consulta');
+    const beforeFailure = c.state.ordens; ui.search = '4842'; c.failModels = true;
+    ok(await c.loadOrdens() === false && c.state.ordens === beforeFailure, 'erro na pesquisa preserva estado anterior');
+    c.failModels = false;
+    const stale = environment(); let unhold;
+    stale.ui.search = '4843'; stale.c.holdProducts = new Promise(r => { unhold = r; });
+    const oldSearch = stale.c.loadOrdens(); stale.ui.search = '4842'; unhold();
+    ok(await oldSearch === false && !stale.c.state.ordens.some(o => o.numero === 4843), 'resposta antiga nao entra depois de trocar a pesquisa');
+    const account = environment(); let finishAccount;
+    account.ui.search = '4843'; account.c._currentUser = {id:'conta-a'};
+    account.c.holdProducts = new Promise(r => {finishAccount = r;});
+    const oldAccount = account.c.loadOrdens(); account.c._currentUser = {id:'conta-b'}; finishAccount();
+    ok(await oldAccount === false && account.c.state.ordens.length === 0, 'troca de conta descarta resposta da pesquisa anterior');
+    ui.search = '4843'; logs.length = 0;
+    const openModels = [{id: 'modelo-completo', _dbLoaded: true}];
+    c.state.amostrasOSAtivo = 'vibe_4843'; c.state.osItens.vibe_4843 = openModels;
+    await c.loadOrdens();
+    ok(c.state.osItens.vibe_4843 === openModels, 'pesquisa nao substitui os modelos completos do pedido em uso');
+    ui.search = '99999'; await c.loadOrdens();
+    ok(!c.state.ordens.some(o=>o.numero===99999) && c.state.ordens.some(o=>o.numero===1), 'numero inexistente nao cria pedido ficticio nem apaga fila');
+    ui.search = 'Cliente'; logs.length = 0; await c.loadOrdens();
+    ok(logs.some(l => l.tipo === 'status'), 'pesquisa por nome preserva o historico textual');
     ui.search = ''; ui.view = 'view-lista-impressao'; logs.length = 0;
     await c.loadOrdens();
     ok(c.state.ordens.some(o => o.numero === 8) && logs.some(l => l.tipo === 'status'), 'outros paineis preservam sua carga');
@@ -164,7 +192,7 @@ const tick = () => new Promise(r => setImmediate(r));
     ok(!restricted.resultado.ids.includes(4843), 'filtro explicito de status continua restringindo a pesquisa');
     const uiTest = environment(); let scheduled;
     uiTest.c.setTimeout = fn => { scheduled = fn; return 1; }; uiTest.c.clearTimeout = () => {};
-    uiTest.c.state.listaArteSomenteAtivos = true; uiTest.ui.search = '4843';
+    uiTest.c.state.listaArteSomenteAtivos = true; uiTest.ui.search = 'Cliente';
     let loads = 0; uiTest.c.loadOrdens = () => { loads++; };
     uiTest.c.pesquisarPedidosNaListaArte(); scheduled();
     ok(loads === 1, 'digitacao solicita historico depois da espera');

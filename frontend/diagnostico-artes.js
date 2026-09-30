@@ -1,4 +1,4 @@
-/* Ensaio opt-in de desempenho. Sem rede propria, persistencia ou dados de arte.
+/* Ensaio opt-in de desempenho. Comparacao de rede somente por clique explicito.
  * Tempos sobrepostos nao devem ser somados. Ativacao: ?diagnostico_artes=1.
  */
 (function () {
@@ -111,7 +111,8 @@
     }
     function instalarRede() {
         observar('urlDoProxy', (c, args) => arquivo(c, args[0]), (c, ref, _, erro) => {
-            if (ref && !erro) emitir(c, 'fallback_arquivo', { arquivo_ref: ref });
+            if (ref && !erro) emitir(c, 'fallback_arquivo', { arquivo_ref: ref,
+                ...(c.comparando ? { experimento: 'comparacao_download' } : {}) });
         });
         observar('requisitarPropostas', (c, args) => {
             if (!['consultar', 'pagamentos'].includes(args[0]) || (args[2] && args[2] !== 'propostas')) return null;
@@ -133,7 +134,8 @@
             const destino = rota(c, args[0]);
             if (!destino) return null;
             const m = { inicio: agora(), etapa: 'http_headers', pedido: null,
-                rede: { requisicao: ++c.requisicoes, ...destino } };
+                rede: { requisicao: ++c.requisicoes, ...destino,
+                    ...(c.comparando ? { experimento: 'comparacao_download' } : {}) } };
             c.pendentes.add(m);
             return m;
         }, (c, m, resposta, erro) => {
@@ -195,6 +197,23 @@
     }
     function instalar(c) {
         instalarRede();
+        if (typeof window.loadOrdens === 'function') observar('loadOrdens', (sessao, args) => {
+            const views = ['view-lista-arte', 'view-lista-impressao', 'view-amostras'];
+            const view = views.find(v => document.getElementById(v)?.classList.contains('active')) || 'outra';
+            const busca = document.getElementById('os-search-arte')?.value.trim() || '';
+            const filtro = estado().filtroFilaTipo;
+            const recorte = args[0]?.completa ? 'completo' : seguro(() => recorteDaCargaDeOrdens()) || 'desconhecido';
+            emitir(sessao, 'solicitacao_lista', { view,
+                filtro: ['fila', 'todos', 'concluidos', 'dashboard', 'aprovacao', 'aprovados', 'pendente'].includes(filtro) ? filtro : 'outro',
+                pesquisa: !busca ? 'vazia' : /^\d{1,9}$/.test(busca) ? 'numero' : 'texto',
+                recorte: recorte.startsWith('pedido:') ? 'pedido' : recorte,
+                completa_explicita: !!args[0]?.completa,
+                carga_em_andamento: typeof _cargaOrdensEmAndamento !== 'undefined' && !!_cargaOrdensEmAndamento });
+        }, () => {});
+        if (typeof window.renderOrdens === 'function') observar('renderOrdens', () => agora(), (sessao, inicio, _, erro) => {
+            emitir(sessao, 'desenho_lista', { duracao_ms: arredondar(agora() - inicio),
+                pedidos: estado().ordens?.length || 0, resultado: erro ? erroResumido(erro) : 'concluido' });
+        });
         observar('navigateToAmostrasFromOS', (sessao, args) => {
             encerrarAbertura(sessao, 'outra_abertura');
             if (sessao.aberturas.length >= MAX_ABERTURAS) { parar('limite_aberturas'); return null; }
@@ -373,6 +392,8 @@
     function parar(motivo = 'operador') {
         if (!coleta?.ativo) return;
         const c = coleta;
+        c.comparacaoControle?.abort();
+        c.alvoComparacao = null;
         seguro(() => contarModelos(c, estado().amostrasOSAtivo, 'encerramento'));
         encerrarAbertura(c, motivo);
         for (const m of c.pendentes) emitir(c, 'etapa', { etapa: m.etapa, pedido: m.pedido, ...m.rede,
@@ -394,6 +415,64 @@
         seguro(() => contarModelos(c, estado().amostrasOSAtivo, 'relato_do_operador'));
         emitir(c, 'relato_do_operador', { etapas_pendentes: c.pendentes.size });
         if (painel) painel.querySelector('[role="status"]').textContent = 'Falha marcada. Pode fechar e reabrir o pedido; depois exporte.';
+    }
+    async function compararDownload() {
+        const c = atual();
+        if (!c) {
+            if (painel) painel.querySelector('[role="status"]').textContent = 'Inicie o diagnóstico e abra o pedido antes de comparar.';
+            return false;
+        }
+        if (c.comparando) return false;
+        // Reutiliza o mesmo arquivo nas rodadas desta coleta, mesmo ao trocar rede.
+        if (!c.alvoComparacao) {
+            const lentos = c.eventos.filter(e => e.etapa === 'obter_pdf' && e.arquivo_ref)
+                .sort((a, b) => b.duracao_ms - a.duracao_ms);
+            for (const evento of lentos) {
+                const entrada = [...c.arquivos].find(([url, ref]) => ref === evento.arquivo_ref
+                    && /^https:\/\/[^/]+\.supabase\.co\/storage\//i.test(url));
+                if (entrada) { c.alvoComparacao = entrada; break; }
+            }
+        }
+        if (!c.alvoComparacao || typeof urlDoProxy !== 'function') {
+            if (painel) painel.querySelector('[role="status"]').textContent = 'Abra um pedido e aguarde uma arte antes de comparar.';
+            return false;
+        }
+        c.comparando = true;
+        const [url, ref] = c.alvoComparacao;
+        const rodada = c.rodadaComparacao = (c.rodadaComparacao || 0) + 1;
+        const provas = [];
+        const rotas = rodada % 2 ? ['direto', 'proxy'] : ['proxy', 'direto'];
+        if (painel) painel.querySelector('[role="status"]').textContent = 'Comparando o mesmo arquivo. Aguarde; não recarregue a página.';
+        try {
+            for (const caminho of rotas) {
+                if (!ativa(c) || !atual()) break;
+                const controle = c.comparacaoControle = new AbortController();
+                const inicio = agora(); let headersMs = null, status = null;
+                const relogio = setTimeout(() => controle.abort(), 20000);
+                try {
+                    const response = await fetch(caminho === 'direto' ? url : urlDoProxy(url),
+                        { signal: controle.signal, cache: 'no-store', credentials: 'omit' });
+                    headersMs = arredondar(agora() - inicio); status = response.status;
+                    if (!response.ok) throw Error(`HTTP ${status}`);
+                    const bytes = await response.arrayBuffer();
+                    const corpoMs = arredondar(agora() - inicio - headersMs);
+                    const hash = await crypto.subtle.digest('SHA-256', bytes);
+                    provas.push({ caminho, hash: [...new Uint8Array(hash)].join(','), bytes: bytes.byteLength });
+                    emitir(c, 'comparacao_download', { rodada, caminho, arquivo_ref: ref, status_http: status,
+                        headers_ms: headersMs, corpo_ms: corpoMs, bytes: bytes.byteLength, resultado: 'concluido' });
+                } catch (erro) {
+                    emitir(c, 'comparacao_download', { rodada, caminho, arquivo_ref: ref, status_http: status,
+                        headers_ms: headersMs, duracao_ms: arredondar(agora() - inicio), resultado: erroResumido(erro) });
+                } finally { clearTimeout(relogio); }
+            }
+            const iguais = provas.length === 2 && provas[0].hash === provas[1].hash;
+            emitir(c, 'comparacao_download_fim', { rodada, arquivo_ref: ref, caminhos_concluidos: provas.length,
+                conteudo_igual: provas.length === 2 ? iguais : null });
+            if (ativa(c) && painel) painel.querySelector('[role="status"]').textContent =
+                provas.length === 2 ? (iguais ? 'Comparação concluída; conteúdo idêntico. Exporte o relatório.' : 'Comparação concluída; os conteúdos diferem.')
+                    : 'Comparação incompleta. Exporte o relatório para análise.';
+            return iguais;
+        } finally { c.comparando = false; c.comparacaoControle = null; }
     }
     function relatorio() {
         const c = coleta;
@@ -443,7 +522,9 @@
             <option value="reabertura_1">Reabertura 1</option><option value="reabertura_2">Reabertura 2</option><option value="reabertura_3">Reabertura 3</option></select></label>
             <p role="status" aria-live="polite"></p><button type="button" data-iniciar>Iniciar</button>
             <button type="button" data-parar>Encerrar</button> <button type="button" data-exportar>Exportar</button>
-            <p><button type="button" data-falha>Marcar travamento / modelos faltando</button></p>`;
+            <p><button type="button" data-falha>Marcar travamento / modelos faltando</button></p>
+            <p><button type="button" data-comparar>Comparar download direto / proxy</button></p>
+            <small>Teste manual: baixa novamente uma arte já observada pelos dois caminhos. Não altera a arte nem envia o relatório.</small>`;
         painel.querySelector('[data-iniciar]').onclick = () => {
             const ok = iniciar({ participante: painel.querySelector('[data-participante]').value.trim(),
                 estacao: painel.querySelector('[data-estacao]').value.trim(), fase: painel.querySelector('[data-fase]').value });
@@ -453,10 +534,11 @@
         painel.querySelector('[data-parar]').onclick = () => parar();
         painel.querySelector('[data-exportar]').onclick = exportar;
         painel.querySelector('[data-falha]').onclick = registrarFalha;
+        painel.querySelector('[data-comparar]').onclick = compararDownload;
         document.body.appendChild(painel);
         atualizarPainel();
     }
-    window.DiagnosticoArtes = { iniciar, parar, relatorio, exportar, registrarFalha };
+    window.DiagnosticoArtes = { iniciar, parar, relatorio, exportar, registrarFalha, compararDownload };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar, { once: true });
     else montar();
 })();
