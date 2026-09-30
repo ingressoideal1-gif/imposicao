@@ -151,7 +151,7 @@ function comPedidoEmArteDesde(state, quando) {
 
     const seg = (volta - api.inicioDoTempoNoCard({ numero: '20951' })) / 1000;
     ok(seg === 40 * 60, 'e a contagem segue de onde parou: 40 minutos', seg);
-    ok(api.formatarTempoNoCard(seg) === '00:40', 'mostrando 00:40', api.formatarTempoNoCard(seg));
+    ok(api.formatarTempoNoCard(seg) === '0:40h', 'mostrando 0:40h', api.formatarTempoNoCard(seg));
 })();
 
 (function exatamente60MinutosForaAindaDevolve() {
@@ -240,14 +240,18 @@ function comPedidoEmArteDesde(state, quando) {
 
 (function oFormatoDoRelogio() {
     const api = montar(estadoLimpo(), T0, []);
-    ok(api.formatarTempoNoCard(0) === '00:00', 'comeca em 00:00');
-    ok(api.formatarTempoNoCard(65 * 60) === '01:05', '3900 segundos viram 01:05');
-    ok(api.formatarTempoNoCard(59) === '00:00', 'menos de um minuto ainda e 00:00');
-    ok(api.formatarTempoNoCard(-5) === '00:00', 'relogio negativo nao existe');
-
-    // Passando de um dia continua em horas: "2d 2h" obrigaria a converter de
-    // cabeca para comparar com o vizinho da lista.
-    ok(api.formatarTempoNoCard(26 * 3600 + 30 * 60) === '26:30', 'mais de um dia continua em horas');
+    const casos = [
+        [0, '0:00h'], [65 * 60, '1:05h'], [59, '0:00h'], [-5, '0:00h'],
+        [2 * 3600 + 23 * 60, '2:23h'], [21 * 3600 + 45 * 60, '21:45h'],
+        [86400 - 1, '23:59h'], [86400, '+1 Dia'], [86401, '+1 Dia'],
+        [48 * 3600 - 1, '+1 Dia'], [48 * 3600, '+2 Dias'],
+        [96 * 3600, '+4 Dias'], [100 * 3600, '+4 Dias'],
+        [NaN, '0:00h'], [Infinity, '0:00h'], [undefined, '0:00h'],
+    ];
+    casos.forEach(([segundos, esperado]) => {
+        ok(api.formatarTempoNoCard(segundos) === esperado,
+            segundos + ' segundos mostram ' + esperado, api.formatarTempoNoCard(segundos));
+    });
 })();
 
 (function asQuatroCores() {

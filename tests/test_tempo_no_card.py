@@ -2,7 +2,7 @@
 """A coluna "Tempo" da Lista de Arte.
 
 Pedido do usuario em 19/08/2026: a coluna "Data Liberacao" vira "Tempo" e mostra
-ha quanto tempo o pedido esta no card em que esta ("01:05"). Verde ate 1h, azul
+ha quanto tempo o pedido esta no card em que esta ("1:05h", "+2 Dias"). Verde ate 1h, azul
 ate 2h, laranja ate 3h, vermelho depois -- nos tres cards de trabalho, por
 escolha dele. O pedido de maior tempo assume o topo da lista. As duas datas que
 estavam na coluna passaram para o titulo da celula.
@@ -47,6 +47,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @pytest.mark.parametrize("harness", [
     "tempo_no_card_harness.js",
+    "tempo_carga_harness.js",
     "tempo_na_tela_harness.js",
 ])
 def test_os_harness_do_tempo_no_card_passam(harness):

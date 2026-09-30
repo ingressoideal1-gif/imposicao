@@ -13,7 +13,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const RAIZ = path.dirname(__dirname);
-const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
+const puppeteer = require('puppeteer');
 
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
@@ -70,10 +70,12 @@ const servidor = http.createServer((req, res) => {
 
 // Um pedido por faixa de cor, mais um sem relogio nenhum.
 const CASOS = [
-    { numero: 20951, card: 'fila', minutos: 30, espera: '00:30', cor: 'rgb(34, 197, 94)', nome: 'verde' },
-    { numero: 20948, card: 'fila', minutos: 95, espera: '01:35', cor: 'rgb(59, 130, 246)', nome: 'azul' },
-    { numero: 20935, card: 'aprovacao', minutos: 150, espera: '02:30', cor: 'rgb(249, 115, 22)', nome: 'laranja' },
-    { numero: 20911, card: 'aprovados', minutos: 255, espera: '04:15', cor: 'rgb(239, 68, 68)', nome: 'vermelho' },
+    { numero: 20951, card: 'fila', minutos: 30, espera: '0:30h', cor: 'rgb(34, 197, 94)', nome: 'verde' },
+    { numero: 20948, card: 'fila', minutos: 95, espera: '1:35h', cor: 'rgb(59, 130, 246)', nome: 'azul' },
+    { numero: 20935, card: 'aprovacao', minutos: 150, espera: '2:30h', cor: 'rgb(249, 115, 22)', nome: 'laranja' },
+    { numero: 20911, card: 'aprovados', minutos: 255, espera: '4:15h', cor: 'rgb(239, 68, 68)', nome: 'vermelho' },
+    { numero: 20912, card: 'pendente', minutos: 48 * 60, espera: '+2 Dias', cor: 'rgb(239, 68, 68)', nome: 'vermelho' },
+    { numero: 20913, card: 'fila', minutos: 96 * 60, espera: '+4 Dias', cor: 'rgb(239, 68, 68)', nome: 'vermelho' },
 ];
 
 // O concluido nao tem faixa de cor nem relogio: tem o carimbo de quando entrou
@@ -86,7 +88,7 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
 
     const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
     const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 420 });
+    await page.setViewport({ width: 1200, height: 620 });
     await page.goto('http://localhost:' + porta + '/', { waitUntil: 'domcontentloaded' });
 
     const medido = await page.evaluate((codigo, casos, concluido) => {
@@ -130,6 +132,8 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
             cor: getComputedStyle(td).color,
             largura: Math.round(td.getBoundingClientRect().width),
             titulo: td.getAttribute('title') || '',
+            cabe: td.scrollWidth <= td.clientWidth,
+            quebra: getComputedStyle(td).whiteSpace,
         }));
 
         // A coluna do tempo cai debaixo do titulo "Tempo"?
@@ -146,6 +150,13 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
         const primeira = celulas[0];
         primeira.setAttribute('data-tempo-inicio', String(agora - 125 * 60000));
         atualizarRelogiosDaLista();
+        const depoisDoTick = { texto: primeira.textContent.trim(), cor: getComputedStyle(primeira).color };
+        const virada = celulas[1];
+        virada.setAttribute('data-tempo-inicio', String(Date.now() - (86400 - 30) * 1000));
+        atualizarRelogiosDaLista();
+        const antesDe24h = virada.textContent.trim();
+        virada.setAttribute('data-tempo-inicio', String(Date.now() - 86400 * 1000));
+        atualizarRelogiosDaLista();
 
         return {
             lidas,
@@ -161,7 +172,7 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
             semRelogio: corpo.querySelector('tr:last-child td:nth-child(5)').textContent.trim(),
             tituloSemRelogio: corpo.querySelector('tr:last-child td:nth-child(5)').getAttribute('title') || '',
             iTempo, iCelula, ths,
-            depoisDoTick: { texto: primeira.textContent.trim(), cor: getComputedStyle(primeira).color },
+            depoisDoTick, antesDe24h, depoisDe24h: virada.textContent.trim(),
         };
     }, CODIGO, CASOS, CONCLUIDO);
 
@@ -170,6 +181,7 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
         const l = medido.lidas[i] || {};
         ok(l.texto === c.espera, c.minutos + ' minutos aparecem como ' + c.espera, l.texto);
         ok(l.cor === c.cor, 'e em ' + c.nome, l.cor + ' (esperado ' + c.cor + ')');
+        ok(l.cabe && l.quebra === 'nowrap', 'tempo cabe em uma linha: ' + c.espera);
     });
 
     // ─── A escala vale nos quatro cards ──────────────────────────────────────
@@ -198,7 +210,9 @@ const CONCLUIDO = { numero: 20880, card: 'concluidos', desde: '2026-08-21T17:42:
     ok(/Libera/.test(medido.tituloSemRelogio), 'e nem assim perde as datas', medido.tituloSemRelogio);
 
     // ─── O tick troca numero E cor, sem redesenhar ───────────────────────────
-    ok(medido.depoisDoTick.texto === '02:05', 'o tick avanca o relogio sozinho', medido.depoisDoTick.texto);
+    ok(medido.depoisDoTick.texto === '2:05h', 'o tick avanca o relogio sozinho', medido.depoisDoTick.texto);
+    ok(medido.antesDe24h === '23:59h' && medido.depoisDe24h === '+1 Dia',
+        'o tick vira de horas para dias sem redesenhar', medido.antesDe24h + ' -> ' + medido.depoisDe24h);
     ok(medido.depoisDoTick.cor === 'rgb(249, 115, 22)',
         'e vira laranja ao passar de 2h, sem a lista ser redesenhada', medido.depoisDoTick.cor);
 

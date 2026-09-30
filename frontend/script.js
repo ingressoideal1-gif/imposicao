@@ -30449,16 +30449,25 @@ async function carregarTemposNoCard() {
     if (!state.temposNoCard) state.temposNoCard = {};
     try {
         if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) { state.temposNoCardAtivo = false; return; }
-        const { data, error } = await lerDadosLista(supabaseClient
-            .from('imposition_tempo_no_card')
-            .select('id_int, card, desde, credito_segundos, saiu_da_fila_em'), 'tempos dos pedidos');
-        if (error) {
-            if (error.code === '42P01') { state.temposNoCardAtivo = false; return; }
-            throw error;
+        const registros = [];
+        // Sem paginação, o limite da resposta faz relógios antigos parecerem
+        // novos e o próximo desenho sobrescreve o início com a hora atual.
+        for (let offset = 0; ; offset += 500) {
+            const { data, error } = await lerDadosLista(supabaseClient
+                .from('imposition_tempo_no_card')
+                .select('id_int, card, desde, credito_segundos, saiu_da_fila_em')
+                .order('id_int').range(offset, offset + 499), 'tempos dos pedidos');
+            if (error) {
+                if (error.code === '42P01') { state.temposNoCardAtivo = false; return; }
+                throw error;
+            }
+            registros.push(...(data || []));
+            if ((data || []).length < 500) break;
         }
-        (data || []).forEach(row => { state.temposNoCard[row.id_int] = row; });
+        // Só aplicar a leitura completa: falha intermediária preserva a memória.
+        registros.forEach(row => { state.temposNoCard[row.id_int] = row; });
         state.temposNoCardAtivo = true;
-        console.log(`[Tempo] ${(data || []).length} relogio(s) de card carregado(s).`);
+        console.log(`[Tempo] ${registros.length} relogio(s) de card carregado(s).`);
     } catch (e) {
         state.temposNoCardAtivo = false;
         console.warn('[Tempo] Erro ao carregar os tempos de card:', e.message);
@@ -30750,12 +30759,16 @@ function irParaPaginaImpressos(pagina) {
 }
 window.irParaPaginaImpressos = irParaPaginaImpressos;
 
-/** "01:05". Passando de um dia continua em horas ("26:30"), sem virar "2d 2h". */
+/** Horas e minutos até 24h; a partir daí, dias completos ("+2 Dias"). */
 function formatarTempoNoCard(segundos) {
-    const s = Math.max(0, Math.floor(segundos || 0));
+    const s = Number.isFinite(Number(segundos)) ? Math.max(0, Math.floor(Number(segundos))) : 0;
+    if (s >= 86400) {
+        const dias = Math.floor(s / 86400);
+        return '+' + dias + (dias === 1 ? ' Dia' : ' Dias');
+    }
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    return h + ':' + String(m).padStart(2, '0') + 'h';
 }
 window.formatarTempoNoCard = formatarTempoNoCard;
 
@@ -30842,7 +30855,7 @@ function celulaDeTempoHtml(os) {
     ]).join('  •  ');
 
     return `<td class="celula-tempo" data-tempo-inicio="${inicio}"
-                style="text-align: center; vertical-align: middle; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; color: ${corDoTempoNoCard(segundos)};"
+                style="text-align: center; vertical-align: middle; white-space: nowrap; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; color: ${corDoTempoNoCard(segundos)};"
                 title="${escapeHtml(titulo)}">${formatarTempoNoCard(segundos)}</td>`;
 }
 

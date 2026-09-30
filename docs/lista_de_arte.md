@@ -286,11 +286,13 @@ o atendente leria "não pago" onde a verdade é "não carregou".
 
 ### Tempo
 
-Substituiu a coluna "Data Liberação" em 19/08/2026. Mostra `HH:MM` desde a
-entrada no card atual, e continua em horas depois de um dia (`26:30`), para o
-número poder ser comparado com o do vizinho sem conversão de cabeça.
+Substituiu a coluna "Data Liberação" em 19/08/2026. Desde 30/09/2026, mostra
+horas e minutos desde a entrada no card atual (`2:23h`, `21:45h`). A partir de
+24 horas, mostra dias completos: `+1 Dia`, `+2 Dias`, `+4 Dias`. As frações de
+dia não são arredondadas para cima; 47h59 ainda aparece como `+1 Dia`.
+A ordenação e as cores continuam usando o tempo exato, não o texto abreviado.
 
-**As cores, nos três cards de trabalho:**
+**As cores, nos cards de trabalho:**
 
 | Faixa | Cor |
 |-------|-----|
@@ -442,7 +444,7 @@ sobrevive às duas trocas se o total fora couber nos 60 minutos.
 | Coluna | Para que serve |
 |--------|----------------|
 | `id_int` | O número do pedido (PK) |
-| `card` | `fila`, `aprovacao`, `aprovados` ou `concluidos` |
+| `card` | `fila`, `pendente`, `aprovacao`, `aprovados` ou `concluidos` |
 | `desde` | Quando entrou **neste** card |
 | `credito_segundos` | Tempo já acumulado em Em Arte, à espera de uma volta rápida |
 | `saiu_da_fila_em` | Quando saiu de Em Arte pela última vez |
@@ -450,6 +452,13 @@ sobrevive às duas trocas se o total fora couber nos 60 minutos.
 O crédito é **descontado do início** em vez de somado ao total
 (`inicioDoTempoNoCard`). Assim um número só serve para desenhar a célula, para o
 relógio andar sozinho e para ordenar a lista.
+
+A leitura dos relógios usa páginas de 500 registros, ordenadas pelo número do
+pedido. Só depois de todas as páginas carregarem a memória é atualizada. Se
+uma página falhar, o painel preserva os tempos anteriores e suspende novas
+gravações até uma carga bem-sucedida, evitando reiniciar relógios por leitura
+incompleta. A correção previne novos reinícios; não recupera inícios históricos
+que já tenham sido sobrescritos.
 
 O SQL está em [`sql/tempo_no_card.sql`](../sql/tempo_no_card.sql). Sem a tabela,
 a coluna mostra `--` e a lista continua funcionando: o painel não tenta escrever
