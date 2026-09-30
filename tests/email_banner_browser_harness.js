@@ -19,17 +19,47 @@ function extrair(nome, async = false) {
         await page.setContent('<!doctype html><body>' + botao + '</body>');
         const transporte = source.slice(source.indexOf('let emailOperacaoEmAndamento'), source.indexOf('window.abrirModalConfigEmail = abrirModalConfigEmail;', source.indexOf('let emailOperacaoEmAndamento')));
         await page.addScriptTag({content: `
-            const state = {amostrasOSAtivo:'vibe_11',ordens:[{id:'vibe_11',numero:11,cliente:'Cliente Exemplo'}]};
+            const state = {amostrasOSAtivo:'vibe_11',ordens:[{id:'vibe_11',numero:11,cliente:'Cliente Exemplo',status:'Enviar Arte'}],
+                todasArtes:[{id:'arte-11',id_int:11,status:'Enviar Arte'}],osItens:{vibe_11:[{amostra_status:'PRONTO'}]}};
             const localStorage = {getItem:()=> 'vibe_99',removeItem:()=>{}};
             const linksClienteEmAndamento = new Set();
             const CLIENTE_BASE_URL = 'https://portal.example';
             const API_PAINEL = 'https://synthetic.example';
             window.opcoes = {email:'cliente@example.com',link:true,preparo:true,http:true,automatico:false};
-            window.envios = []; window.avisos = []; window.preparos = 0;
+            window.envios = []; window.avisos = []; window.preparos = 0; window.retornos = [];
+            let statusLink = 'Enviar Arte';
+            window.gravacoes = []; window.fechamentos = 0;
+            async function garantirLinhaDePedidoArte(numero) {
+                window.retornos.push({osId:'vibe_11', numero});
+                return true;
+            }
+            function clearAmostrasOS() { window.fechamentos++; state.amostrasOSAtivo = null; }
+            function pedidoCancelado() { return false; }
+            function pedidoSaiuDaArte() { return false; }
+            function modeloEmCorrecaoDeArte() { return false; }
             function toast(msg) { window.avisos.push(msg); }
             const supabaseClient = {
                 auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})},
-                from:()=>{throw new Error('Cadastro deve usar o transporte autenticado');}
+                from:tabela=>{
+                    if (!['pedidos_links_cliente','pedidos_artes'].includes(tabela)) throw new Error('Tabela inesperada');
+                    let payload;
+                    const filtros = {};
+                    return {
+                        update(dados) { payload = dados; return this; },
+                        eq(campo, valor) { filtros[campo] = valor; return this; },
+                        select() {
+                            window.gravacoes.push({tabela,payload,filtros});
+                            if (opcoes.erroStatus) return {data:[],error:null};
+                            if (tabela === 'pedidos_links_cliente') {
+                                if (filtros.os_id !== 'vibe_11' || filtros.ativo !== true) throw new Error('Link sem filtro');
+                                statusLink = payload.status_arte;
+                                return {data:[{id:'link-11',os_id:'vibe_11',status_arte:statusLink}]};
+                            }
+                            if (filtros.id_int !== 11) throw new Error('Arte sem filtro');
+                            return {data:[{id:'arte-11',status:payload.status}]};
+                        }
+                    };
+                }
             };
             async function requisitarPropostas(acao, corpo) {
                 if (acao !== 'cadastro' || corpo.pedido !== 11 || corpo.escopo !== 'contato' || corpo.exigir_cadastro !== true)
@@ -39,7 +69,7 @@ function extrair(nome, async = false) {
             }
             async function buscarLinkClienteAtivo(id) {
                 return opcoes.link ? {os_id:id,numero_pedido:11,token:'abc123',ativo:true,
-                    status_arte:'Aguard. Aprovação',arte_pronta_em:'2026-09-01'} : null;
+                    status_arte:statusLink,arte_pronta_em:'2026-09-01'} : null;
             }
             async function prepararLinkDaArtePronta() {
                 window.preparos++;
@@ -59,6 +89,10 @@ function extrair(nome, async = false) {
             ${extrair('buscarDadosEmailCliente',true)}
             ${extrair('montarMensagemEmailCliente')}
             ${extrair('mostrarSucessoEnvioEmail')}
+            ${extrair('atualizarPedidoArteConfirmado',true)}
+            ${extrair('concluirEnvioLinkParaAtendimento',true)}
+            ${['ARTE_APROVADOS','ARTE_REPROVADOS','ARTE_EM_APROVACAO','ARTE_COM_O_DESIGNER'].map(nome => source.match(new RegExp('const ' + nome + ' =[^;]+;'))[0]).join('\n')}
+            ${extrair('classificarPedidoNaArte')}
             ${extrair('gerarLinkClienteBanner',true)}
         `});
         await page.click('#btn-enviar-link-os-banner');
@@ -78,9 +112,22 @@ function extrair(nome, async = false) {
         await page.evaluate(() => resolverEnvio());
         await page.waitForSelector('#modal-email-sucesso[open]');
         assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e=>e.textContent),'cliente@example.com');
+        assert.equal(await page.evaluate(() => retornos.length),0,'Aguarda confirmação do operador');
+        await page.evaluate(() => { opcoes.erroStatus = true; });
+        await page.click('#modal-email-sucesso button');
+        await page.waitForFunction(() => retornos.length === 1);
+        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),'vibe_11','Falha mantém pedido aberto');
+        assert.match(await page.$eval('#modal-email-sucesso', e=>e.textContent),/e-mail já foi enviado/);
+        await page.evaluate(() => { opcoes.erroStatus = false; });
         await page.click('#modal-email-sucesso button');
         await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
-        assert.equal(await page.evaluate(() => document.activeElement.id),'btn-enviar-link-os-banner');
+        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),null,'Confirmação devolve ao Atendimento');
+        assert.deepEqual(await page.evaluate(() => retornos),[{osId:'vibe_11',numero:11},{osId:'vibe_11',numero:11}]);
+        assert.equal(await page.evaluate(() => envios.length),1,'Repetir o retorno não reenvia e-mail');
+        assert.deepEqual(await page.evaluate(() => classificarPedidoNaArte(state.ordens[0])),
+            {statusCalculado:'Em Aprovação',fila:'aprovacao'},'Classificação real muda imediatamente de card/status');
+        assert.equal(await page.evaluate(() => state.linksClienteData.vibe_11.cliente_abriu_em),undefined,'Envio não inventa acesso do cliente');
+        await page.evaluate(() => { state.amostrasOSAtivo = 'vibe_11'; });
         await page.evaluate(() => gerarLinkClienteBanner());
         assert.equal(await page.evaluate(() => envios.length),1,'Novo clique após aceite não duplica mensagem');
         await page.evaluate(async () => {
@@ -111,6 +158,12 @@ function extrair(nome, async = false) {
         assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e=>e.textContent),'novo@example.com');
         assert.equal(await page.evaluate(() => envios.at(-1).os_id),'vibe_11','Pedido aberto prevalece sobre seleção antiga');
         assert.equal(await page.$('#modal-envio-email-cliente'),null,'Editor não é criado nem no sucesso nem na falha');
+        await page.evaluate(() => { opcoes.link=true; state.amostrasOSAtivo='vibe_99'; });
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
+        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),'vibe_99','Retorno do envio não fecha outro pedido');
+        assert.equal(await page.evaluate(() => fechamentos),1);
+        assert.equal(await page.evaluate(() => envios.length),3,'Escape conclui sem reenviar');
         assert.deepEqual(erros,[]);
         console.log('OK: banner envia sem editor; sucesso após aceite, duplicidade, cadastro inválido, preparo e falha');
     } finally { await browser.close(); }

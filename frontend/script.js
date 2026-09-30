@@ -42621,13 +42621,59 @@ async function gerarLinkClienteBanner() {
             }
             const mensagem = montarMensagemEmailCliente(activeOSId, osNum, linkUrl, cliente);
             await enviarMensagemEmailCliente({ os_id: activeOSId, link_url: linkUrl,
-                to: mensagem.clienteEmail, subject: mensagem.subject, body_text: mensagem.bodyText }, botao);
+                to: mensagem.clienteEmail, subject: mensagem.subject, body_text: mensagem.bodyText }, botao,
+                () => concluirEnvioLinkParaAtendimento(activeOSId, osNum));
         } finally {
             if (botao) botao.textContent = textoOriginal;
         }
     });
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
+
+// O envio já foi aceito. Repetir esta etapa nunca dispara outro e-mail nem
+// prepara novamente a arte (o retorno manual prepara e marca "Enviar Arte").
+async function concluirEnvioLinkParaAtendimento(osId, numero) {
+    const numInt = Number(numero);
+    const novoStatus = 'Em Aprovação';
+    if (!osId || !Number.isInteger(numInt) || numInt <= 0) throw new Error('Pedido inválido para retornar ao atendimento.');
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Supabase não configurado.');
+    if (!await garantirLinhaDePedidoArte(numInt)) throw new Error('Não foi possível preparar o registro da arte.');
+
+    const { data: links, error: erroLink } = await supabaseClient.from('pedidos_links_cliente')
+        .update({ status_arte: novoStatus }).eq('os_id', osId).eq('ativo', true)
+        .select('id, os_id, status_arte');
+    if (erroLink) throw erroLink;
+    if (!Array.isArray(links) || links.length !== 1 || links[0].os_id !== osId || links[0].status_arte !== novoStatus) {
+        throw new Error('O banco não confirmou o status no link do pedido.');
+    }
+    if (!osId.startsWith('vibe_')) {
+        const { data, error } = await supabaseClient.from('producao_ordens_servico')
+            .update({ status: novoStatus }).eq('id', osId).select('id, status');
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length !== 1 || data[0].id !== osId || data[0].status !== novoStatus) {
+            throw new Error('O banco não confirmou o status da ordem de serviço.');
+        }
+    }
+    const artes = await atualizarPedidoArteConfirmado(numInt, { status: novoStatus });
+    const linkPersistido = await buscarLinkClienteAtivo(osId);
+    if (!linkPersistido || linkPersistido.status_arte !== novoStatus) {
+        throw new Error('Não foi possível conferir o status salvo no link do pedido.');
+    }
+
+    // A classificação usa todasArtes antes do status da OS: atualizar ambos
+    // evita manter o card antigo até o próximo carregamento da lista.
+    const anteriores = state.todasArtes || [];
+    state.todasArtes = anteriores.filter(arte => Number(arte.id_int) !== numInt)
+        .concat(artes.map(arte => ({ ...anteriores.find(anterior => anterior.id === arte.id), ...arte, id_int: numInt })));
+    if (!state.linksClienteData) state.linksClienteData = {};
+    state.linksClienteData[osId] = linkPersistido;
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : state.ordens?.find(o => o.id === osId);
+    if (os) { os.status = novoStatus; os.status_calculado = novoStatus; }
+    gravarStatusOverride(osId, novoStatus);
+
+    // O envio pode terminar depois de o operador abrir outro pedido.
+    if (state.amostrasOSAtivo === osId) clearAmostrasOS();
+}
 
 /**
  * Os estágios que "a arte ficou pronta" pode substituir em `pedidos_artes.status`.
@@ -43015,7 +43061,7 @@ function ensureModalEmailElement() {
     return modal;
 }
 
-function mostrarSucessoEnvioEmail(destinatario, origem = document.activeElement) {
+function mostrarSucessoEnvioEmail(destinatario, origem = document.activeElement, aoConfirmar = null) {
     document.getElementById('modal-email-sucesso')?.close();
     const popup = document.createElement('dialog');
     popup.id = 'modal-email-sucesso';
@@ -43029,10 +43075,31 @@ function mostrarSucessoEnvioEmail(destinatario, origem = document.activeElement)
         <p style="margin:12px 0 24px;color:#64748b;font-size:13px;line-height:1.6;">A entrega na caixa de entrada pode levar alguns instantes. Confira também a pasta de spam.</p>
         <button type="button" autofocus style="width:100%;padding:12px;border:0;border-radius:9px;background:#0d9488;color:white;font:600 15px Inter,'Segoe UI',Arial,sans-serif;cursor:pointer;">Entendido</button>`;
     popup.querySelector('#modal-email-sucesso-destinatario').textContent = destinatario;
-    popup.querySelector('button').onclick = () => popup.close();
+    const confirmar = popup.querySelector('button');
+    confirmar.onclick = async () => {
+        if (confirmar.disabled) return;
+        confirmar.disabled = true;
+        try {
+            if (aoConfirmar) await aoConfirmar();
+            popup.close();
+        } catch (e) {
+            let erro = popup.querySelector('[role="alert"]');
+            if (!erro) {
+                erro = document.createElement('p');
+                erro.setAttribute('role', 'alert');
+                confirmar.before(erro);
+            }
+            erro.textContent = 'O e-mail já foi enviado, mas o retorno ao atendimento não foi concluído: '
+                + e.message + ' Clique novamente para tentar concluir sem reenviar o e-mail.';
+        } finally { confirmar.disabled = false; }
+    };
+    if (aoConfirmar) popup.addEventListener('cancel', evento => {
+        evento.preventDefault();
+        confirmar.click();
+    });
     popup.addEventListener('close', () => {
         popup.remove();
-        if (origem?.isConnected) origem.focus();
+        if (!aoConfirmar && origem?.isConnected) origem.focus();
     }, { once:true });
     document.body.appendChild(popup);
     popup.showModal();
@@ -43339,12 +43406,12 @@ async function dispararEmailDiretoCliente() {
     });
 }
 
-async function enviarMensagemEmailCliente(dados, origem) {
+async function enviarMensagemEmailCliente(dados, origem, aoConfirmar = null) {
     const assinatura = JSON.stringify(dados);
     if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
     await requisitarEmail('enviar', dados);
     emailUltimoEnvioAceito = assinatura;
-    mostrarSucessoEnvioEmail(dados.to, origem);
+    mostrarSucessoEnvioEmail(dados.to, origem, aoConfirmar);
 }
 
 window.abrirModalConfigEmail = abrirModalConfigEmail;
