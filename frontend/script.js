@@ -26373,13 +26373,45 @@ async function carregarOrigensAprovacao() {
     );
 }
 
-function loadOrdens() {
+function recorteDaCargaDeOrdens() {
+    const lista = typeof document !== 'undefined' && document.getElementById('view-lista-arte');
+    if (!lista?.classList?.contains('active')) return 'completo';
+    if (['concluidos', 'dashboard'].includes(state.filtroFilaTipo)) return 'completo';
+    // A pesquisa e uma solicitacao explicita de consultar tambem o historico.
+    if (document.getElementById('os-search-arte')?.value.trim()) return 'completo';
+    return 'arte';
+}
+
+function pesquisarPedidosNaListaArte() {
+    renderOrdens();
+    clearTimeout(pesquisarPedidosNaListaArte.timer);
+    pesquisarPedidosNaListaArte.timer = setTimeout(() => {
+        if (!document.getElementById('view-lista-arte')?.classList.contains('active')) return;
+        const precisaHistorico = recorteDaCargaDeOrdens() === 'completo';
+        if (precisaHistorico && state.listaArteSomenteAtivos === false && !_cargaOrdensEmAndamento) return;
+        loadOrdens();
+    }, 400);
+}
+window.pesquisarPedidosNaListaArte = pesquisarPedidosNaListaArte;
+
+function loadOrdens(opcoes = {}) {
+    const recorte = opcoes.completa ? 'completo' : recorteDaCargaDeOrdens();
+    // Uma abertura do historico durante a carga ativa precisa de sua propria
+    // leitura depois dela. Cliques do mesmo recorte continuam compartilhados.
+    if (_cargaOrdensEmAndamento && loadOrdens.recorte !== recorte) {
+        const cargaAtual = _cargaOrdensEmAndamento;
+        return cargaAtual.then(() => {
+            if (opcoes.completa || recorteDaCargaDeOrdens() === recorte) return loadOrdens(opcoes);
+            return false;
+        });
+    }
     // O botão, a abertura da tela e o relógio compartilham a mesma consulta.
     if (!_cargaOrdensEmAndamento) {
+        loadOrdens.recorte = recorte;
         mostrarEstadoCargaLista(state.ordens?.length
             ? 'Atualizando pedidos… Os dados anteriores permanecem disponíveis.'
             : 'Carregando pedidos…');
-        _cargaOrdensEmAndamento = carregarOrdensDados().then(ok => {
+        _cargaOrdensEmAndamento = carregarOrdensDados({ somenteArteAtiva: recorte === 'arte' }).then(ok => {
             if (ok) {
                 mostrarEstadoCargaLista('');
                 conferirNovosPedidosDoUsuario();
@@ -26398,10 +26430,11 @@ function loadOrdens() {
     return _cargaOrdensEmAndamento;
 }
 
-async function carregarOrdensDados() {
+async function carregarOrdensDados(opcoes = {}) {
     const anteriores = { ordens: state.ordens, osItens: state.osItens,
         modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
-        todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData };
+        todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData,
+        listaArteSomenteAtivos: state.listaArteSomenteAtivos };
     try {
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
         // Isso economiza uma consulta lenta que sempre falharia.
@@ -26439,12 +26472,13 @@ async function carregarOrdensDados() {
             if (produtosResult.error) throw produtosResult.error;
             const produtos = produtosResult.data || [];
             
-            if (produtos.length > 0) {
+            if (produtos.length > 0 || opcoes.somenteArteAtiva) {
                 console.log('[OS] Carregando do Vibecode...');
                 // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
-                const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos);
+                const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos, opcoes);
                 if (loaded) {
                     await carregarModelosGlobais(true);
+                    state.listaArteSomenteAtivos = !!opcoes.somenteArteAtiva;
                     renderOrdens();
 
                     // A coluna Pagamento chega depois do primeiro desenho, de
@@ -26593,6 +26627,7 @@ async function carregarOrdensDados() {
             }
         }
         await carregarModelosGlobais(true);
+        state.listaArteSomenteAtivos = false;
         renderOrdens();
         completarDadosDaLista();
         return true;
@@ -26923,7 +26958,32 @@ function conferirColunasQrIdealDosPedidos() {
  * Cada id_int = 1 proposta = 1 OS virtual
  * Retorna true se conseguiu carregar, false se não há dados
  */
-async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded = null) {
+async function pedidosComCorrecaoDeArte() {
+    const pedidos = new Set();
+    // Buscar somente identificadores de retrabalho, inclusive de pedidos sem
+    // produtos recentes. Paginacao evita perder correcoes em um teto de linhas.
+    for (let offset = 0; ; offset += 500) {
+        const { data, error } = await lerDadosLista(vibeClient.from('pedidos_modelos')
+            .select('id, id_int, status_impressao').ilike('status_impressao', '%corrigir%arte%')
+            .order('id').range(offset, offset + 499), 'pedidos com correcao de arte');
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('Resposta inválida ao consultar correções de arte.');
+        data.forEach(m => { if (m.id_int && modeloEmCorrecaoDeArte(m)) pedidos.add(String(m.id_int)); });
+        if (data.length < 500) return pedidos;
+    }
+}
+
+function propostaAtivaNaListaArte(proposta, correcoes) {
+    const numero = proposta.id_int;
+    const osId = `vibe_${numero}`;
+    const os = { numero, status_interno: proposta.status_interno,
+        status: lerStatusOverride(osId) || state.linksClienteData?.[osId]?.status_arte || 'Em Arte' };
+    if (pedidoCancelado(os)) return false;
+    if (correcoes.has(String(numero))) return true;
+    return !pedidoSaiuDaArte(os);
+}
+
+async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded = null, opcoes = {}) {
     try {
         let produtos = produtosPreloaded;
         if (!produtos) {
@@ -26939,7 +26999,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             produtos = data;
         }
 
-        if (!produtos || produtos.length === 0) return false;
+        if (!produtos || (!produtos.length && !opcoes.somenteArteAtiva)) return false;
+        const correcoes = opcoes.somenteArteAtiva ? await pedidosComCorrecaoDeArte() : new Set();
 
 
         // Buscar propostas (tabela pai) se existir e for acessível
@@ -26971,7 +27032,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         try {
             const idsComProduto = produtos.map(p => p.id_int).filter(Boolean);
             const idsComArte = (state.todasArtes || []).filter(arteFoiLancada).map(a => a.id_int).filter(Boolean);
-            const uniqueIdInts = [...new Set([...idsComProduto, ...idsComArte])];
+            const uniqueIdInts = [...new Set([...idsComProduto, ...idsComArte, ...[...correcoes].map(Number)])];
 
             const porNumero = new Map();
             const guardar = (linhas) => (linhas || []).forEach(l => {
@@ -26990,11 +27051,18 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             // resposta num teto de linhas, e se um dia esta consulta encostar
             // nele o que fica de fora tem de ser o pedido mais antigo — não o
             // que a gráfica está fabricando hoje. São 82 pedidos em 01/09/2026.
-            const { data: naGraficaData, error: naGraficaErr } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE }, undefined, 'consultar', sinal), 'status dos pedidos', 90000);
-            if (naGraficaErr) throw naGraficaErr;
-            guardar(naGraficaData);
+            if (!opcoes.somenteArteAtiva) {
+                const { data: naGraficaData, error: naGraficaErr } = await lerDadosLista(sinal => consultarPropostas({ tipo: 'status', status: SINAIS_SAIU_DA_ARTE }, undefined, 'consultar', sinal), 'status dos pedidos', 90000);
+                if (naGraficaErr) throw naGraficaErr;
+                guardar(naGraficaData);
+            }
 
             propostas = [...porNumero.values()];
+            if (opcoes.somenteArteAtiva) {
+                const concluidos = new Set(propostas.filter(p => !propostaAtivaNaListaArte(p, correcoes)).map(p => String(p.id_int)));
+                propostas = propostas.filter(p => !concluidos.has(String(p.id_int)));
+                produtos = produtos.filter(p => !concluidos.has(String(p.id_int)));
+            }
             await aplicarNomesPreferenciaisDasPropostas(vibeClient, propostas);
         } catch (pe) {
             throw pe;
@@ -27139,7 +27207,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
             // FILTRAR: Se for produção (não-dev) ou se tiver pedidosComerciais populada, filtra
             if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                if (!pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) {
+                if (!correcoes.has(String(key)) && !pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) {
                     return; // ignora este produto e não cria a OS
                 }
             }
@@ -27169,7 +27237,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         (propostas || []).forEach(pr => {
             const key = pr.id_int;
             if (!key || grouped[key]) return;
-            if (!pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) return;
+            if (!correcoes.has(String(key)) && !pedidoEntraNoPainel(key, pedidosComerciais, state.todasArtes, jaNaGrafica)) return;
             grouped[key] = criarOS(key, pr.created_at);
         });
 
@@ -31204,7 +31272,10 @@ function renderOrdens() {
     const totalConcluidosArte = ordensConcluidosArte.length;
 
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
-    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalConcluidosArte;
+    if (statPedidosConcluidosArteEl) {
+        statPedidosConcluidosArteEl.textContent = state.listaArteSomenteAtivos ? 'Consultar' : totalConcluidosArte;
+        statPedidosConcluidosArteEl.title = state.listaArteSomenteAtivos ? 'Clique para carregar os pedidos concluídos' : '';
+    }
 
     // Seleção da fila ativa. O dashboard usa os mesmos pedidos já classificados,
     // mas troca a tabela por uma visão analítica sem alterar nenhuma fila.
@@ -31236,6 +31307,15 @@ function renderOrdens() {
         baseOrdensArte = ordensTodos;
     } else if (activeFilaTipo === 'fila') {
         baseOrdensArte = ordensFilaArte;
+    }
+
+    // Uma pesquisa explicita tambem encontra pedidos antigos, sem obrigar o
+    // operador a adivinhar em qual card o pedido esta. Os filtros de acesso,
+    // designer, atendente e setor continuam aplicados abaixo.
+    if (searchArte && activeFilaTipo !== 'dashboard' && !state.filtroStatusArte) {
+        baseOrdensArte = [...ordensFilaArte, ...ordensPendentesArte, ...ordensAprovacao,
+            ...ordensAprovados, ...ordensConcluidosArte];
+        listaEhDosConcluidos = true;
     }
 
 

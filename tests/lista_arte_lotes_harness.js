@@ -43,7 +43,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         clearTimeout(id) { timers.delete(id); }, renderOrdens() { paints++; },
         state: { ordens: [] }, mostrarEstadoCargaLista() {}, conferirNovosPedidosDoUsuario() {}
     });
-    vm.runInContext('let _cargaOrdensEmAndamento = null;\n' + extract('iniciarComplementoLista') + '\n' + extract('loadOrdens'), c);
+    vm.runInContext('let _cargaOrdensEmAndamento = null;\n' + extract('iniciarComplementoLista') + '\n' + extract('recorteDaCargaDeOrdens') + '\n' + extract('loadOrdens'), c);
     await Promise.all(['a', 'b', 'c', 'd'].map(n => c.iniciarComplementoLista(n, async () => {})));
     assert.equal(timers.size, 1); assert.equal(paints, 0);
     function fire() { const fns = [...timers.values()]; timers.clear(); fns.forEach(fn => fn()); }

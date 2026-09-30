@@ -46,7 +46,7 @@ function ambiente() {
         fonte.match(/let _cargaOrdensEmAndamento = null;/)[0],
         fonte.match(/let _relogioDaListaLigado = false;/)[0],
         ...['lerDadosLista', 'iniciarComplementoLista', 'completarDadosDaLista',
-            'loadOrdens', 'carregarOrdensDados', 'atualizarListaArteAutomaticamente',
+            'recorteDaCargaDeOrdens', 'loadOrdens', 'carregarOrdensDados', 'atualizarListaArteAutomaticamente',
             'ligarRelogioDaLista'].map(extrair),
     ].join('\n'), ctx);
     ctx.ligarRelogioDaLista();

@@ -223,8 +223,8 @@ const { pedidoCancelado } = new Function(
     // divergem deixariam pedido fora de todos os cards ao mesmo tempo.
     ok(/const totalConcluidosArte = ordensConcluidosArte\.length;/.test(SCRIPT),
         'o card "Pedidos Concluidos" conta o balde que a classificacao encheu');
-    ok(/statPedidosConcluidosArteEl\.textContent = totalConcluidosArte/.test(SCRIPT),
-        'e esse total e o que vai para a tela');
+    ok(/statPedidosConcluidosArteEl\.textContent = state\.listaArteSomenteAtivos \? 'Consultar' : totalConcluidosArte/.test(SCRIPT),
+        'mostra o total completo, ou Consultar quando o historico ainda nao foi carregado');
 })();
 
 (function oFiltroDeStatusNaoRessuscita() {

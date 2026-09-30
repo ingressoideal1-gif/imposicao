@@ -126,7 +126,7 @@
         try {
             if (!permitida(rota.view)) throw new Error('Tela indisponível para este acesso.');
             if (rota.osId) {
-                if (!window.findOSInState(rota.osId)) await window.loadOrdens();
+                if (!window.findOSInState(rota.osId)) await window.loadOrdens({ completa: true });
                 if (!aindaAtual()) return;
                 const os = window.findOSInState(rota.osId);
                 if (!os) throw new Error('O pedido não está disponível.');

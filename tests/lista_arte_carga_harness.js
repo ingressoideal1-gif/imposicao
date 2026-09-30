@@ -57,7 +57,7 @@ function ambiente() {
     c.window = c; // Contexto do navegador, com o complemento opcional ainda ausente.
     vm.createContext(c);
     vm.runInContext('let _cargaOrdensEmAndamento=null;\n' + [
-        'lerDadosLista','iniciarComplementoLista','completarDadosDaLista','loadOrdens',
+        'lerDadosLista','iniciarComplementoLista','completarDadosDaLista','recorteDaCargaDeOrdens','loadOrdens',
         'carregarOrdensDados','carregarArtesGlobais','loadUsuarios','carregarModelosGlobais','temSessaoDoSupabase'
     ].map(n => extrair(n)).join('\n'), c);
     return {c,timers,requests,estados};
