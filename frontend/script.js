@@ -34753,7 +34753,7 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                         ` : `
                         <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
 
-                            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;">
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin-top: 12px;">
                             <!-- Navegacao das linhas do CSV. Fica escondida ate
                                  a numeracao ter elemento de banco de dados; quem
                                  mostra e preenche e atualizarNavCsvDaAmostra(). -->
