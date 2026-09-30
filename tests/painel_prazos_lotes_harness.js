@@ -8,14 +8,6 @@ async function models(fail){
  vm.createContext(ctx);vm.runInContext(extract('sincronizarPedidosProntosParaEnvio'),ctx);await ctx.sincronizarPedidosProntosParaEnvio();assert.equal(writes,0);assert.equal(calls,fail?2:48);assert.equal(sessions,fail?0:1);
 }
 (async()=>{await models(false);await models(true);
- const ctx={console:{warn(){}},state:{temposNoCard:{},temposNoCardAtivo:true},TEMPO_VOLTA_SEM_PERDER_SEG:3600,_gravandoTempos:false};let error=true,calls=0,release;
- ctx.supabaseClient={from(){return{upsert:async()=>{calls++;return{error:error?new Error('constraint'):null}}}}};
- vm.createContext(ctx);vm.runInContext(extract('gravarTemposNoCard')+'\n'+extract('anotarTempoNoCard'),ctx);
- const orders=[{numero:'1',_fila_arte:'pendente'}];await ctx.anotarTempoNoCard(orders);assert.equal(ctx.state.temposNoCard[1],undefined);
- error=false;await ctx.anotarTempoNoCard(orders);assert.equal(ctx.state.temposNoCard[1].card,'pendente');assert.equal(calls,2);
- ctx.supabaseClient.from=()=>({upsert:()=>new Promise(r=>release=r)});
- const old=ctx.state.temposNoCard[1];const pending=ctx.anotarTempoNoCard([{numero:'1',_fila_arte:'aprovacao'}]);
- await ctx.anotarTempoNoCard([{numero:'2',_fila_arte:'fila'}]);assert.equal(ctx.state.temposNoCard[2],undefined);
- const refreshed={card:'concluidos'};ctx.state.temposNoCard[1]=refreshed;release({error:new Error('offline')});await pending;assert.equal(ctx.state.temposNoCard[1],refreshed);
- console.log('OK: 4685 pedidos, paginacao de 501 modelos, falha parcial sem escrita, retry dos tempos e concorrencia.');
+ assert(!source.includes('function gravarTemposNoCard('), 'o navegador nao grava mais os inicios');
+ console.log('OK: 4685 pedidos, paginacao de 501 modelos, falha parcial sem escrita, relogios somente leitura.');
 })().catch(e=>{console.error(e);process.exitCode=1});

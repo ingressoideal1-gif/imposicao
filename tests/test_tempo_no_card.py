@@ -1,42 +1,5 @@
 # -*- coding: utf-8 -*-
-"""A coluna "Tempo" da Lista de Arte.
-
-Pedido do usuario em 19/08/2026: a coluna "Data Liberacao" vira "Tempo" e mostra
-ha quanto tempo o pedido esta no card em que esta ("1:05h", "+2 Dias"). Verde ate 1h, azul
-ate 2h, laranja ate 3h, vermelho depois -- nos tres cards de trabalho, por
-escolha dele. O pedido de maior tempo assume o topo da lista. As duas datas que
-estavam na coluna passaram para o titulo da celula.
-
-MENOS NOS CONCLUIDOS, desde 23/08/2026: "no Card Pedidos Concluidos retirar a
-marcacao de TEMPO, deixar fixo a data hora em que pedido entrou em Producao".
-Ali o trabalho de arte acabou, e um relogio so diz ha quanto tempo o pedido saiu
-da tela. A celula mostra parada a data e a hora da entrada na producao, e o
-titulo da coluna passa de "Tempo" a "Entrou em Producao". O que a mantem parada e
-ela sair SEM a classe `celula-tempo` e sem `data-tempo-inicio` -- os dois que o
-tique de meio minuto procura.
-
-O CARD e calculado no painel; o RELOGIO precisa de memoria. Essa memoria e a
-tabela `imposition_tempo_no_card` (uma linha por pedido), escrita pelo proprio
-painel quando ele percebe a troca. Foi a opcao escolhida contra um robo no
-servidor: o robo seria fiel ao relogio real mesmo com todos os paineis fechados,
-mas exigiria uma segunda copia da regra de classificacao, em SQL, que divergiria
-da do painel no primeiro ajuste. A consequencia aceita e que troca acontecida de
-madrugada so e registrada quando alguem abre o painel de manha.
-
-A REGRA DOS 60 MINUTOS e o coracao disto: em "Em Arte", sair e voltar em ate 60
-minutos nao apaga a contagem -- ela segue de onde parou. Passou de 60 minutos
-fora, volta ao zero, em verde. Nos demais cards zera a cada troca.
-
-Foi testando essa regra que apareceu um erro real da primeira implementacao: o
-pedido que passava por DOIS cards fora da arte (Aprovacao e depois Aprovados)
-perdia o credito no segundo salto, mesmo voltando em menos de 60 minutos. O que
-conta e ha quanto tempo ele saiu DA ARTE, e nao do card anterior.
-
-Sao dois harness: um roda a regra com um relogio de mentira, para adiantar as
-horas sem esperar por elas; o outro desenha a coluna num Chrome de verdade e
-confere que a cor chega ao pixel e que os digitos ficam alinhados de uma linha
-para a outra.
-"""
+"""Relogios de etapa persistidos pelo servidor, leitura e exibicao no painel."""
 import os
 import subprocess
 
@@ -48,6 +11,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 @pytest.mark.parametrize("harness", [
     "tempo_no_card_harness.js",
     "tempo_carga_harness.js",
+    "tempo_persistencia_harness.js",
     "tempo_na_tela_harness.js",
 ])
 def test_os_harness_do_tempo_no_card_passam(harness):

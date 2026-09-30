@@ -8,10 +8,10 @@
 // Das 29 tabelas que o painel usa, quatro nao liberam nada para o `anon`, e o
 // `loadOrdens()` pedia duas delas toda vez que carregava a lista:
 // `pedidos_links_cliente` (que guarda o TOKEN do link de cada cliente, fechado
-// de proposito em 16/08/2026) e `imposition_tempo_no_card`.
+// de proposito em 16/08/2026) e `imposition_etapas_arte`.
 //
 // Medido no log do Postgres em 01/09/2026, numa janela de 26h: 143 recusas em
-// `pedidos_links_cliente` e 44 em `imposition_tempo_no_card`. Nos `edge_logs`,
+// `pedidos_links_cliente` e 44 em `imposition_etapas_arte`. Nos `edge_logs`,
 // todas com `referer: http://127.0.0.1:9000/` -- nenhuma vinda do site.
 //
 // Dois estragos. O primeiro e ruido: ~190 erros por dia no painel do Supabase,
@@ -108,7 +108,7 @@ const DADOS = {
     pedidos_links_cliente: [
         { os_id: 'vibe_21346', numero_pedido: '21346', token: 'abc123', status_arte: 'Em Arte' },
     ],
-    imposition_tempo_no_card: [
+    imposition_etapas_arte: [
         { id_int: 21346, card: 'arte', desde: '2026-09-01T12:00:00Z' },
     ],
     pedidos_modelos: [
@@ -141,8 +141,8 @@ function ordensDeTeste() {
     const state = {};
     await montar('carregarTemposNoCard', banco, state, [])();
 
-    ok(banco.log.leituras.indexOf('imposition_tempo_no_card') < 0,
-        'sem sessao, nao le imposition_tempo_no_card',
+    ok(banco.log.leituras.indexOf('imposition_etapas_arte') < 0,
+        'sem sessao, nao le imposition_etapas_arte',
         'leu: ' + JSON.stringify(banco.log.leituras));
     // A coluna "Tempo" precisa degradar para "--" em vez de mentir um relogio:
     // e `temposNoCardAtivo` que segura tambem as ESCRITAS de troca de card.
@@ -215,8 +215,8 @@ function ordensDeTeste() {
     const state = {};
     await montar('carregarTemposNoCard', banco, state, [])();
 
-    ok(banco.log.leituras.indexOf('imposition_tempo_no_card') >= 0,
-        'com sessao, le imposition_tempo_no_card como sempre',
+    ok(banco.log.leituras.indexOf('imposition_etapas_arte') >= 0,
+        'com sessao, le imposition_etapas_arte como sempre',
         'leu: ' + JSON.stringify(banco.log.leituras));
     ok(state.temposNoCardAtivo === true,
         'com sessao, a coluna Tempo fica ligada',

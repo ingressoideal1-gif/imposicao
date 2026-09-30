@@ -15,16 +15,14 @@ const rows = Array.from({ length: 1205 }, (_, i) => ({
     credito_segundos: 0, saiu_da_fila_em: null,
 }));
 function context({ failPage = -1, session = true } = {}) {
-    const calls = [], writes = [];
+    const calls = [];
     const ctx = {
         state: { temposNoCard: {}, temposNoCardAtivo: true },
         console: { log() {}, warn() {} },
         temSessaoDoSupabase: async () => session,
         lerDadosLista: async promise => await promise,
-        gravarTemposNoCard: async batch => { writes.push(...batch); return true; },
-        TEMPO_VOLTA_SEM_PERDER_SEG: 3600,
         supabaseClient: { from(table) {
-            assert.equal(table, 'imposition_tempo_no_card');
+            assert.equal(table, 'imposition_etapas_arte');
             let start = 0, end = 999;
             return {
                 select() { return this; },
@@ -40,17 +38,15 @@ function context({ failPage = -1, session = true } = {}) {
         } },
     };
     vm.createContext(ctx);
-    vm.runInContext(extract('carregarTemposNoCard') + extract('anotarTempoNoCard'), ctx);
-    return { ctx, calls, writes };
+    vm.runInContext(extract('carregarTemposNoCard'), ctx);
+    return { ctx, calls };
 }
 (async () => {
-    const { ctx, calls, writes } = context();
+    const { ctx, calls } = context();
     await ctx.carregarTemposNoCard();
     assert.equal(Object.keys(ctx.state.temposNoCard).length, 1205, 'todos os relogios devem ser carregados');
     assert.deepEqual(calls, [[0, 499], [500, 999], [1000, 1499]]);
-    await ctx.anotarTempoNoCard([{ numero: '1205', _fila_arte: 'fila' }]);
     assert.equal(ctx.state.temposNoCard[1205].desde, rows[1204].desde);
-    assert.equal(writes.length, 0, 'pedido alem da primeira pagina nao pode reiniciar');
 
     const partial = context({ failPage: 2 });
     const previous = { ...rows[0], desde: '2026-09-01T12:00:00Z' };
@@ -59,13 +55,9 @@ function context({ failPage = -1, session = true } = {}) {
     assert.equal(partial.ctx.state.temposNoCard[1], previous, 'falha parcial preserva memoria anterior');
     assert.equal(Object.keys(partial.ctx.state.temposNoCard).length, 1);
     assert.equal(partial.ctx.state.temposNoCardAtivo, false);
-    await partial.ctx.anotarTempoNoCard([{ numero: '1205', _fila_arte: 'fila' }]);
-    assert.equal(partial.writes.length, 0, 'carga incompleta nao pode gravar novos inicios');
     await partial.ctx.carregarTemposNoCard();
     assert.equal(partial.ctx.state.temposNoCardAtivo, true, 'nova carga completa reativa os relogios');
     assert.equal(Object.keys(partial.ctx.state.temposNoCard).length, 1205);
-    await partial.ctx.anotarTempoNoCard([{ numero: '1205', _fila_arte: 'fila' }]);
-    assert.equal(partial.writes.length, 0, 'recuperacao mantem o inicio persistido');
 
     const anonymous = context({ session: false });
     await anonymous.ctx.carregarTemposNoCard();

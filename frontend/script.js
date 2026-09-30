@@ -30418,31 +30418,17 @@ window.pedidoEstaEmArte = pedidoEstaEmArte;
 // quanto tempo o pedido está no card em que está, e pinta o número conforme
 // esse tempo cresce. O de maior tempo assume o topo da lista.
 //
-// O card é calculado, mas o RELÓGIO precisa de memória — quando ele entrou ali.
-// Essa memória é a tabela `imposition_tempo_no_card`, uma linha por pedido, que
-// o próprio painel escreve quando percebe a troca. Foi a opção escolhida pelo
-// usuário contra um robô no servidor: o robô seria fiel ao relógio real mesmo
-// com todos os painéis fechados, mas exigiria uma segunda cópia da regra de
-// classificação, em SQL, que divergiria desta no primeiro ajuste.
-//
-// A consequência, conhecida e aceita: troca que acontece de madrugada só é
-// registrada quando alguém abre o painel de manhã, e o tempo conta dali.
+// O banco registra a entrada no card na transação que muda o status.
+// Abrir, filtrar e redesenhar a lista nunca cria nem reinicia um relógio.
+// A tabela nova não aceita escrita do navegador, inclusive de abas antigas.
 
 const TEMPO_AZUL_SEG = 1 * 3600;
 const TEMPO_LARANJA_SEG = 2 * 3600;
 const TEMPO_VERMELHO_SEG = 3 * 3600;
 
-// A ida rápida a outro card não apaga o tempo de arte: até este limite, a volta
-// devolve o cronômetro de onde parou.
-const TEMPO_VOLTA_SEM_PERDER_SEG = 60 * 60;
-
 /**
- * Lê a memória dos relógios. Sem a tabela, a coluna degrada para "--".
- *
- * Sem sessão também: `imposition_tempo_no_card` não libera nada para o `anon`,
- * então na estação isto era 44 recusas por dia. Desligar `temposNoCardAtivo` é
- * o mesmo caminho de degradação de quando a tabela não existe — e ele segura
- * também as ESCRITAS de troca de card, no `anotarTempoNoCard`.
+ * Lê os marcadores registrados pelo servidor. Sem sessão ou sem registro
+ * confirmado, a coluna mostra "--". Nenhum horário é criado pelo painel.
  */
 async function carregarTemposNoCard() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
@@ -30450,12 +30436,11 @@ async function carregarTemposNoCard() {
     try {
         if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) { state.temposNoCardAtivo = false; return; }
         const registros = [];
-        // Sem paginação, o limite da resposta faz relógios antigos parecerem
-        // novos e o próximo desenho sobrescreve o início com a hora atual.
+        // A leitura precisa alcançar todos os pedidos, inclusive depois do limite da API.
         for (let offset = 0; ; offset += 500) {
             const { data, error } = await lerDadosLista(supabaseClient
-                .from('imposition_tempo_no_card')
-                .select('id_int, card, desde, credito_segundos, saiu_da_fila_em')
+                .from('imposition_etapas_arte')
+                .select('id_int, card, desde')
                 .order('id_int').range(offset, offset + 499), 'tempos dos pedidos');
             if (error) {
                 if (error.code === '42P01') { state.temposNoCardAtivo = false; return; }
@@ -30465,7 +30450,7 @@ async function carregarTemposNoCard() {
             if ((data || []).length < 500) break;
         }
         // Só aplicar a leitura completa: falha intermediária preserva a memória.
-        registros.forEach(row => { state.temposNoCard[row.id_int] = row; });
+        state.temposNoCard = Object.fromEntries(registros.map(row => [row.id_int, row]));
         state.temposNoCardAtivo = true;
         console.log(`[Tempo] ${registros.length} relogio(s) de card carregado(s).`);
     } catch (e) {
@@ -30475,125 +30460,17 @@ async function carregarTemposNoCard() {
 }
 
 /**
- * Confere o card de cada pedido contra o que está gravado e registra as trocas.
- *
- * A memória local é atualizada na hora, antes de o banco responder: quem está
- * olhando a tela vê o relógio zerar no mesmo desenho em que o pedido mudou de
- * card. A escrita vai atrás, em lote e sem travar o desenho.
- */
-function anotarTempoNoCard(ordens) {
-    if (!state.temposNoCardAtivo) return;
-    if (!state.temposNoCard) state.temposNoCard = {};
-
-    const agora = Date.now();
-    const paraGravar = [];
-    const anteriores = new Map();
-
-    (ordens || []).forEach(os => {
-        const num = parseInt(os.numero);
-        if (!num || !os._fila_arte) return;
-
-        const reg = state.temposNoCard[num];
-        anteriores.set(num, reg);
-
-        // Pedido nunca visto: o relógio começa agora. Vale para todos os que já
-        // existem hoje — não há histórico de onde tirar um começo melhor.
-        if (!reg) {
-            const novo = {
-                id_int: num,
-                card: os._fila_arte,
-                desde: new Date(agora).toISOString(),
-                credito_segundos: 0,
-                saiu_da_fila_em: null,
-            };
-            state.temposNoCard[num] = novo;
-            paraGravar.push(novo);
-            return;
-        }
-
-        if (reg.card === os._fila_arte) return;
-
-        const novo = {
-            id_int: num,
-            card: os._fila_arte,
-            desde: new Date(agora).toISOString(),
-            // Entre dois cards fora da arte o crédito não se gasta: ele segue
-            // pendurado, esperando a volta. O que conta para a regra dos 60
-            // minutos é há quanto tempo o pedido saiu DA ARTE, e não do card
-            // anterior — ele pode passear por dois antes de voltar.
-            credito_segundos: reg.credito_segundos || 0,
-            saiu_da_fila_em: reg.saiu_da_fila_em || null,
-        };
-
-        if (reg.card === 'fila') {
-            // Saindo da arte: o cronômetro pausa, e o que ele marcava fica
-            // guardado à espera de uma volta rápida.
-            const corridos = Math.max(0, Math.floor((agora - new Date(reg.desde).getTime()) / 1000));
-            novo.credito_segundos = (reg.credito_segundos || 0) + corridos;
-            novo.saiu_da_fila_em = new Date(agora).toISOString();
-        } else if (os._fila_arte === 'fila') {
-            // Voltando para a arte: devolve o crédito só se a ida foi curta.
-            const fora = reg.saiu_da_fila_em
-                ? (agora - new Date(reg.saiu_da_fila_em).getTime()) / 1000
-                : Infinity;
-            novo.credito_segundos = fora <= TEMPO_VOLTA_SEM_PERDER_SEG ? (reg.credito_segundos || 0) : 0;
-        }
-
-        state.temposNoCard[num] = novo;
-        paraGravar.push(novo);
-    });
-
-    if (paraGravar.length) return Promise.resolve(gravarTemposNoCard(paraGravar)).then(salvou => {
-        if (salvou !== false) return;
-        // Reverter apenas esta tentativa; uma leitura/troca posterior tem precedência.
-        for (const novo of paraGravar) {
-            if (state.temposNoCard[novo.id_int] !== novo) continue;
-            const anterior = anteriores.get(novo.id_int);
-            if (anterior) state.temposNoCard[novo.id_int] = anterior;
-            else delete state.temposNoCard[novo.id_int];
-        }
-    });
-}
-
-let _gravandoTempos = false;
-
-/** Manda as trocas para o banco. Falha aqui não pode derrubar a lista. */
-async function gravarTemposNoCard(linhas) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return false;
-    if (_gravandoTempos) return false;   // a próxima renderização tenta de novo
-    _gravandoTempos = true;
-    try {
-        const { error } = await supabaseClient
-            .from('imposition_tempo_no_card')
-            .upsert(linhas.map(l => Object.assign({}, l, { atualizado_em: new Date().toISOString() })),
-                    { onConflict: 'id_int' });
-        if (error) {
-            if (error.code === '42P01') state.temposNoCardAtivo = false;
-            throw error;
-        }
-        return true;
-    } catch (e) {
-        console.warn('[Tempo] Erro ao gravar troca de card:', e.message);
-        return false;
-    } finally {
-        _gravandoTempos = false;
-    }
-}
-
-/**
  * O instante a partir do qual o tempo é contado, em milissegundos.
  *
- * O crédito guardado é descontado do começo em vez de somado ao total: assim um
- * número só — este — serve para desenhar, para o relógio andar sozinho e para
- * ordenar a lista.
+ * Toda entrada em um card inicia uma contagem nova, inclusive um retorno.
+ * O relógio de outra etapa não é exibido enquanto a leitura não acompanhar a troca.
  */
 function inicioDoTempoNoCard(os) {
     const reg = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
-    if (!reg || !reg.desde) return null;
+    if (!reg || !reg.desde || (os._fila_arte && reg.card !== os._fila_arte)) return null;
     const desde = new Date(reg.desde).getTime();
     if (!isFinite(desde)) return null;
-    const credito = (reg.card === 'fila' ? (reg.credito_segundos || 0) : 0) * 1000;
-    return desde - credito;
+    return desde;
 }
 window.inicioDoTempoNoCard = inicioDoTempoNoCard;
 
@@ -30798,10 +30675,8 @@ const NOME_DO_CARD = {
  * nada: o trabalho de arte acabou, e um número que só cresce diz apenas há
  * quanto tempo a lista está aberta. O que serve é o carimbo.
  *
- * O instante é o `desde` do relógio do card — o momento em que o painel viu o
- * pedido chegar aos concluídos, que é quando ele saiu da arte para a produção.
- * Não existe outro registro dessa hora: `liberarParaProducao()` grava o status
- * `EM PRODUCAO` na proposta, sem data.
+ * O instante é o `desde` registrado pelo servidor na entrada em Concluídos.
+ * Abrir a tela depois não altera o horário da transição.
  *
  * A célula sai SEM a classe `celula-tempo`, e por isso o tique de meio minuto
  * (`atualizarRelogiosDaLista`) passa por ela sem tocar: é o que a mantém fixa.
@@ -30838,13 +30713,13 @@ function celulaDeTempoHtml(os) {
 
     // Concluído não tem relógio: tem hora de entrada na produção.
     const registro = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
-    if (registro && registro.card === 'concluidos' && registro.desde) {
+    if (registro && registro.card === 'concluidos' && inicioDoTempoNoCard(os) !== null) {
         return celulaDeEntradaEmProducaoHtml(os, registro, datas);
     }
 
     const inicio = inicioDoTempoNoCard(os);
     if (inicio === null) {
-        const semRelogio = datas.concat(['(o tempo começa a contar no próximo desenho da lista)']).join('  •  ');
+        const semRelogio = datas.concat(['Horário de entrada nesta etapa não disponível.']).join('  •  ');
         return `<td style="text-align: center; vertical-align: middle; font-size: 0.82rem; color: var(--text-dim);" title="${escapeHtml(semRelogio)}">--</td>`;
     }
 
@@ -31302,9 +31177,7 @@ function renderOrdens() {
         else ordensFilaArte.push(os);
     });
 
-    // Antes de qualquer desenho: quem trocou de card tem o relógio reiniciado
-    // aqui, e a ordenação logo abaixo já usa o valor novo.
-    anotarTempoNoCard(state.ordens);
+    // Os horarios sao gravados no banco na transicao, nunca durante o desenho.
     ligarRelogioDaLista();
 
     // --- Calcular Estatísticas dos Cards KPI ---

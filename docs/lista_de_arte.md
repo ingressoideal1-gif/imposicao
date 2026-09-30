@@ -316,9 +316,7 @@ quanto tempo aquele pedido saiu da tela. Ali a célula mostra, parada, a **data 
 a hora em que o pedido entrou em produção** (dia em cima, hora embaixo), e o
 título da coluna passa de "Tempo" a **"Entrou em Produção"**.
 
-O instante é o mesmo `desde` da tabela `imposition_tempo_no_card` — o momento em
-que o painel viu o pedido chegar aos concluídos. Não há outro registro dessa
-hora: `liberarParaProducao()` grava o status `EM PRODUCAO` na proposta, sem data.
+O instante vem de `desde` em `imposition_etapas_arte`, gravado pelo banco quando o pedido entra em Concluídos.
 Como todo pedido nunca visto nasce com `desde = agora`, o histórico anterior a
 19/08/2026 carrega a hora da primeira vez que o painel o viu, e não a da
 liberação real.
@@ -411,58 +409,30 @@ filtro novo amanhã já nasce zerando a página sem ninguém precisar lembrar di
 
 ## Como o relógio funciona
 
-O card é **calculado**; o relógio precisa de **memória** — quando o pedido entrou
-ali. Essa memória é a tabela `imposition_tempo_no_card`, uma linha por pedido.
+**Contrato de 30/09/2026:** o tempo começa no momento em que o pedido entra no
+card/status. Atualizar, abrir outra aba e redesenhar a lista não mudam esse início.
+Cada nova entrada, inclusive retorno a uma etapa anterior, inicia uma contagem
+nova. A antiga regra de aproveitar crédito por até 60 minutos deixa de valer.
 
-**Quem escreve é o próprio painel**, quando desenha a lista e percebe que o card
-mudou (`anotarTempoNoCard`). Foi decisão do usuário em 19/08/2026, contra a
-alternativa de um robô no servidor: o robô seria fiel ao relógio real mesmo com
-todos os painéis fechados, mas exigiria reescrever a classificação em SQL,
-criando uma segunda cópia da regra que divergiria da do painel no primeiro
-ajuste.
+A aplicação de [tempo_etapas_servidor.sql](../sql/tempo_etapas_servidor.sql) foi
+confirmada pelo operador em 30/09/2026: 353 pedidos iniciais sem horário,
+quatro gatilhos ativos/diferidos e painel sem permissão de escrita. A nova tabela
+`imposition_etapas_arte` aceita somente leitura do painel. Gatilhos nas tabelas
+`pedidos_artes`, `pedidos_modelos`, `propostas` e `pedidos_links_cliente`
+registram o card final na transação que muda os dados. Mudança de texto dentro do
+mesmo card não reinicia a contagem. Os registros de entrada e saída ficam em
+`imposition_etapas_arte_historico`, preservados mesmo após outra transição.
 
-> [!NOTE]
-> Consequência conhecida e aceita: troca de card que acontece de madrugada só é
-> registrada quando alguém abre o painel de manhã, e o tempo passa a contar dali.
-> Na prática isso aproxima o número do tempo de trabalho observado.
+O frontend só carrega os marcadores, em páginas de 500 registros, e usa
+`inicioDoTempoNoCard` para exibição e ordenação. Uma falha intermediária preserva
+a leitura anterior completa. Se a etapa da tela não corresponde ao marcador,
+mostra `--` até a leitura acompanhar a mudança.
 
-### A regra dos 60 minutos
+A implantação cria um retrato da etapa atual **sem inventar um horário de início**.
+Para pedidos anteriores sem entrada historicamente comprovada, o tempo fica
+`--` até a próxima transição. A tabela antiga é preservada para investigação,
+mas não é fonte confiável para recuperar horários já sobrescritos em lote.
 
-No card **Em Arte** o tempo não se perde numa ida rápida a outro card:
-
-- saiu e voltou em **até 60 minutos** → a contagem segue de onde parou;
-- ficou **mais de 60 minutos** fora → volta ao zero, em verde.
-
-Nos demais cards a contagem zera a cada troca.
-
-O que conta é há quanto tempo o pedido saiu **da arte**, e não do card anterior —
-ele pode passear por Aprovação e Aprovados antes de voltar, e o crédito
-sobrevive às duas trocas se o total fora couber nos 60 minutos.
-
-### Como isso está guardado
-
-| Coluna | Para que serve |
-|--------|----------------|
-| `id_int` | O número do pedido (PK) |
-| `card` | `fila`, `pendente`, `aprovacao`, `aprovados` ou `concluidos` |
-| `desde` | Quando entrou **neste** card |
-| `credito_segundos` | Tempo já acumulado em Em Arte, à espera de uma volta rápida |
-| `saiu_da_fila_em` | Quando saiu de Em Arte pela última vez |
-
-O crédito é **descontado do início** em vez de somado ao total
-(`inicioDoTempoNoCard`). Assim um número só serve para desenhar a célula, para o
-relógio andar sozinho e para ordenar a lista.
-
-A leitura dos relógios usa páginas de 500 registros, ordenadas pelo número do
-pedido. Só depois de todas as páginas carregarem a memória é atualizada. Se
-uma página falhar, o painel preserva os tempos anteriores e suspende novas
-gravações até uma carga bem-sucedida, evitando reiniciar relógios por leitura
-incompleta. A correção previne novos reinícios; não recupera inícios históricos
-que já tenham sido sobrescritos.
-
-O SQL está em [`sql/tempo_no_card.sql`](../sql/tempo_no_card.sql). Sem a tabela,
-a coluna mostra `--` e a lista continua funcionando: o painel não tenta escrever
-nem enche o console.
 
 ---
 
@@ -842,7 +812,7 @@ botões pelo que chamam, a regra da orientação e o ícone do PDF.
 | Em que card o pedido cai | `classificarPedidoNaArte` |
 | O pedido está em arte? | `pedidoEstaEmArte` |
 | A miniatura da arte | `previewDaArteDoPedidoHtml` |
-| O relógio e a cor | `anotarTempoNoCard`, `inicioDoTempoNoCard`, `corDoTempoNoCard`, `celulaDeTempoHtml` |
+| O relógio e a cor | `carregarTemposNoCard`, `inicioDoTempoNoCard`, `corDoTempoNoCard`, `celulaDeTempoHtml` |
 | O carimbo dos concluídos | `celulaDeEntradaEmProducaoHtml` (e o `th-tempo-arte` em `renderOrdens`) |
 | O título da tela de Pedido | `pintarTituloDaTelaDePedido`, `ESTILO_CLIENTE_DO_PEDIDO` |
 | A caixa de designers | `renderDesignersBoxHTML` |
@@ -857,7 +827,7 @@ botões pelo que chamam, a regra da orientação e o ícone do PDF.
 |---------|-------|
 | `tests/test_lista_arte.py` | Os cinco cards e a separação de quem saiu da arte |
 | `tests/test_lista_arte_enxuta.py` | Designers contando só o Em Arte, linha sem links, coluna Preview |
-| `tests/test_tempo_no_card.py` | O relógio, a regra dos 60 minutos, as cores e a tela |
+| `tests/test_tempo_no_card.py` | A leitura do relógio, as cores e a tela |
 | `tests/test_regras_de_bloqueio.py` | As quatro travas do negócio |
 | `tests/test_link_do_pedido.py` | O link direto, as abas nomeadas e o menu do Vibe |
 | `tests/test_vibe_no_pedido.py` | O botão do Vibe dentro do pedido |
