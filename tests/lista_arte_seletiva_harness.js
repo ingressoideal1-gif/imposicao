@@ -201,5 +201,37 @@ const tick = () => new Promise(r => setImmediate(r));
     uiTest.ui.search = ''; uiTest.c.pesquisarPedidosNaListaArte(); scheduled();
     ok(loads === 2, 'limpar pesquisa recupera recorte ativo');
     ok(paints.length > 0 && completeCalls > selectiveCalls, 'carga seletiva reduz chamadas sem cortar historico solicitado');
+    // A lista termina de atualizar depois de abrir o Pedido. O produto resumido
+    // do ERP nao pode substituir o modelo completo entre desenhar a fila e clicar.
+    for (const pesquisa of [false, true]) for (const uso of ['pedido', 'modelo', 'combinacao']) {
+        const f = environment();
+        await f.c.loadOrdens();
+        Object.assign(f.c.state, {formatos:[], produtosGlobais:[]});
+        f.c.localStorage = {getItem: () => null};
+        vm.runInContext(extract('mapVibecodeProdutoToOSItem'), f.c);
+        let releaseProducts;
+        f.c.holdProducts = new Promise(resolve => {releaseProducts = resolve;});
+        if (pesquisa) f.ui.search = '1';
+        const refresh = f.c.loadOrdens();
+        await tick();
+        const modelo = {id:9001, modelo:'9001', bloco:25, _dbLoaded:true,
+            quantidade:100, num_inicial:1, num_final:100, arte_url:'arte-sintetica.pdf'};
+        const modelos = [modelo];
+        f.c.state.osItens.vibe_1 = modelos;
+        if (uso === 'pedido') f.c.state.pedidoAberto = {osId:'vibe_1'};
+        if (uso === 'modelo') f.c.state.activeOSItem = {osId:'vibe_1', itemId:9001};
+        if (uso === 'combinacao') f.c.state.selectedOSItems = [{osId:'vibe_1', itemId:9001}];
+        releaseProducts();
+        ok(await refresh, 'refresh tardio conclui');
+        ok(f.c.state.osItens.vibe_1 === modelos, `${pesquisa ? 'pesquisa' : 'lista'} preserva modelos em ${uso}`);
+        ok(f.c.state.osItens.vibe_1[0].bloco === 25 && f.c.state.osItens.vibe_1[0].id === 9001,
+            'bloco e identidade conservados antes do clique');
+        delete f.c.state.pedidoAberto;
+        delete f.c.state.activeOSItem;
+        f.c.state.selectedOSItems = [];
+        f.c.holdProducts = null;
+        ok(await f.c.loadOrdens(), 'pedido fechado pode atualizar');
+        ok(f.c.state.osItens.vibe_1[0].id === 'vibe_item_1', 'resumo ERP continua atualizando pedido fora de uso');
+    }
     console.log(JSON.stringify({ checks, syntheticCompletedProposals: 4744, selectiveCalls, completeCalls }));
 })().catch(e => { console.error(e); process.exitCode = 1; });

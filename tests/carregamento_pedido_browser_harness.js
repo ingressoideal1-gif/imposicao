@@ -4,9 +4,11 @@ const path = require('node:path');
 const http = require('node:http');
 const puppeteer = require('puppeteer');
 const src = fs.readFileSync(path.join(__dirname, '../frontend/pedido.js'), 'utf8');
-function func(nome) {
-    const start = src.indexOf('async function ' + nome + '(');
-    return src.slice(start, src.indexOf('\n}', start) + 2);
+const main = fs.readFileSync(path.join(__dirname, '../frontend/script.js'), 'utf8');
+function func(nome, source = src) {
+    const start = source.search(new RegExp('(?:async )?function ' + nome + '\\('));
+    if (start < 0) throw Error('Função ausente: ' + nome);
+    return source.slice(start, source.indexOf('\n}', start) + 2);
 }
 (async () => {
     const server = http.createServer((_, res) => res.end('<!doctype html><select id="ped-numeracao"><option value="n1">N1</option></select>'));
@@ -16,7 +18,8 @@ function func(nome) {
         browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
         await page.goto('http://127.0.0.1:' + server.address().port);
-        await page.addScriptTag({ content: func('enviarParaPedido') + '\n' + func('carregarModeloParaPedido') + '\n' + func('executarPedImposition') });
+        await page.addScriptTag({ content: func('preencherFaixaDoModelo', main) + '\n'
+            + func('enviarParaPedido') + '\n' + func('carregarModeloParaPedido') + '\n' + func('executarPedImposition') });
         const resultado = await page.evaluate(async () => {
             const avisos = [];
             Object.assign(window, {
@@ -56,7 +59,17 @@ function func(nome) {
             responder('https://synthetic.test/b.pdf'); await nova;
             responder('https://synthetic.test/a.pdf'); await antiga;
             if (state.activeOSItem.itemId !== 2 || state.pedArtFile.name !== 'b.pdf') throw Error('resposta antiga contaminou seleção');
-            return 'clique imediato bloqueado; arte e numeração aguardadas; erro bloqueia; resposta antiga descartada';
+            // Uma linha antiga na tela nunca pode abrir o primeiro produto de
+            // um cache substituido enquanto o operador estava prestes a clicar.
+            state.osItens.os = [{id:'vibe_item_sintetico', amostra_num_id:'n1'}];
+            let identidadeBloqueada = false;
+            try { await enviarParaPedido(2, 'os'); }
+            catch (erro) { identidadeBloqueada = erro.message.includes('modelo selecionado'); }
+            if (!identidadeBloqueada || state.activeOSItem.itemId !== 2) throw Error('clique em modelo ausente abriu outro modelo');
+            if (!state.pedidoSelecaoErro) throw Error('modelo ausente não bloqueou geração');
+            await executarPedImposition('pdf');
+            if (!avisos.at(-1).includes('modelo selecionado')) throw Error('geração não respeitou identidade ausente');
+            return 'clique imediato bloqueado; arte e numeração aguardadas; erro bloqueia; resposta antiga descartada; identidade preservada';
         });
         console.log('OK browser Pedido: ' + resultado);
     } finally { if (browser) await browser.close(); server.close(); }

@@ -4294,9 +4294,10 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
     };
     if (!aindaAtual()) return;
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
-    const item = itens.find(i => String(i.id) === String(itemId))
-        || (!contexto.restaurandoNavegacao ? itens[0] : null);
-    if (!item) return toast('Item não encontrado.', 'error');
+    const item = itens.find(i => String(i.id) === String(itemId));
+    // Um clique pertence ao modelo indicado na linha, nunca ao primeiro item
+    // de um resumo ERP que tenha substituído a lista durante o carregamento.
+    if (!item) throw new Error('O modelo selecionado não está mais carregado. Feche e reabra o pedido.');
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
     const trocouDeModelo = !state.activeOSItem

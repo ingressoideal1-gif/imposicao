@@ -26441,7 +26441,12 @@ async function carregarPedidoPesquisado(numero) {
         state.todasArtes = [...(state.todasArtes || []).filter(a => String(a.id_int) !== String(numero)), ...(artes.data || [])];
         state.modelosGlobais = { ...state.modelosGlobais, [numero]: modelos?.[numero] || [] };
         state.produtosPropostaGlobais = [...(state.produtosPropostaGlobais || []).filter(p => String(p.id_int) !== String(numero)), ...(produtos.data || [])];
-        if (String(state.amostrasOSAtivo || '') !== osId && String(state._aberturaArtes?.osId || '') !== osId && !state._loadingOSItens?.[osId]) {
+        const modelosEmUso = String(state.amostrasOSAtivo || '') === osId
+            || String(state._aberturaArtes?.osId || '') === osId
+            || String(state.pedidoAberto?.osId || '') === osId
+            || String(state.activeOSItem?.osId || '') === osId
+            || (state.selectedOSItems || []).some(alvo => String(alvo.osId) === osId);
+        if (!modelosEmUso && !state._loadingOSItens?.[osId]) {
             state.osItens = { ...state.osItens, [osId]: (produtos.data || []).map(p => mapVibecodeProdutoToOSItem(p, osId)) };
         }
         // Um pedido antigo adicionado nao torna a contagem de historico completa.
@@ -27331,12 +27336,15 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
         // Pré-carregar itens no formato esperado pelo Imposition
         state.ordens.forEach(os => {
-            // A lista pode terminar depois de abrir as artes. Seus produtos ERP
+            // A lista pode terminar depois de abrir as artes ou o Pedido. Seus produtos ERP
             // sao apenas um resumo, nao os modelos completos de loadOSItens.
             // Substitui-los aqui invalida o desenho em voo e perde arte/verso.
-            const artesEmUso = String(state.amostrasOSAtivo || '') === String(os.id)
-                || String(state._aberturaArtes?.osId || '') === String(os.id);
-            if (!state.osItens[os.id] || (!artesEmUso && !state._loadingOSItens?.[os.id])) {
+            const modelosEmUso = String(state.amostrasOSAtivo || '') === String(os.id)
+                || String(state._aberturaArtes?.osId || '') === String(os.id)
+                || String(state.pedidoAberto?.osId || '') === String(os.id)
+                || String(state.activeOSItem?.osId || '') === String(os.id)
+                || (state.selectedOSItems || []).some(alvo => String(alvo.osId) === String(os.id));
+            if (!state.osItens[os.id] || (!modelosEmUso && !state._loadingOSItens?.[os.id])) {
                 state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
             }
             delete os._itens_raw; // limpar dados brutos
