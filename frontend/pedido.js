@@ -3015,6 +3015,12 @@ function atualizarFacesDeImpressaoDoPedido() {
     if (!box) return;
     const chave = JSON.stringify([state.activeOSItem, state.selectedOSItems, state.printMode]);
     const comVerso = temVerso(state.printMode);
+    for (const face of ['front', 'back']) {
+        const campo = document.getElementById('ped-print-first-' + face);
+        if (!campo) continue;
+        if (box.dataset.selecao !== chave || (face === 'back' && !comVerso)) campo.checked = false;
+        campo.disabled = face === 'back' && !comVerso;
+    }
     if (box.dataset.selecao !== chave || !comVerso) {
         for (const face of ['front', 'back']) {
             const campo = document.getElementById('ped-print-only-' + face);
@@ -3029,6 +3035,33 @@ function selecionarFaceDeImpressaoDoPedido(face) {
     const campo = document.getElementById('ped-print-only-' + face);
     const outro = document.getElementById('ped-print-only-' + (face === 'front' ? 'back' : 'front'));
     if (campo?.checked && outro) outro.checked = false;
+    if (campo?.checked) {
+        for (const lado of ['front', 'back']) {
+            const primeira = document.getElementById('ped-print-first-' + lado);
+            if (primeira) primeira.checked = false;
+        }
+    }
+}
+
+function selecionarFolha1DoPedido() {
+    if (!folha1DoPedido()) return;
+    for (const face of ['front', 'back']) {
+        const campo = document.getElementById('ped-print-only-' + face);
+        if (campo) campo.checked = false;
+    }
+}
+
+function folha1DoPedido() {
+    const frente = document.getElementById('ped-print-first-front')?.checked === true;
+    const verso = document.getElementById('ped-print-first-back')?.checked === true;
+    if (!frente && !verso) return null;
+    if (verso && !temVerso(state.printMode)) return { erro: 'Este modelo não possui verso.' };
+    // Filtrar a folha original, sem reduzir a quantidade ou recalcular a blocagem.
+    return {
+        face: frente && verso ? 'both' : frente ? 'front' : 'back',
+        refazer_de: 1, refazer_ate: 1, refazer_set: 1, refazer_celulas: [],
+        sufixo: '_folha1'
+    };
 }
 
 function faceDeImpressaoDoPedido() {
@@ -3043,7 +3076,10 @@ async function selecionarFacesDoPdfDoPedido(blob, face, modo, arquivo = {}) {
     // Capas de identificação são arquivos auxiliares de uma face, fora do miolo.
     if (['capa', 'contracapa'].includes(arquivo.file_type)
         || /_set\d+(?:_\d+)?_(?:01_capa|03_contracapa)\.pdf$/i.test(arquivo.name || '')) return blob;
-    if (!temVerso(modo)) throw new Error('Este trabalho não possui verso. Confira o modelo selecionado.');
+    if (!temVerso(modo)) {
+        if (face === 'front') return blob;
+        throw new Error('Este trabalho não possui verso. Confira o modelo selecionado.');
+    }
     if (!window.PDFLib?.PDFDocument) throw new Error('Não foi possível carregar o leitor de PDF. Recarregue o painel.');
     const pdf = await window.PDFLib.PDFDocument.load(await blob.arrayBuffer());
     const total = pdf.getPageCount();
@@ -6043,10 +6079,13 @@ window.runPedImposition = async function (mode, isRefazer) {
 async function executarPedImposition(mode, isRefazer) {
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
+    const folha1 = folha1DoPedido();
+    if (folha1?.erro) return toast(folha1.erro, 'warning');
+    if (folha1 && isRefazer) return toast('Desmarque Folha 1 antes de usar Refazer Folhas ou Refazer Célula.', 'warning');
     const selecaoInicial = JSON.stringify(state.selectedOSItems || []);
     const ativoInicial = JSON.stringify(state.activeOSItem || null);
     // A confirmação pertence aos modelos capturados antes dos carregamentos.
-    const alvosDoTrabalho = (isRefazer ? [] : alvosDaImpressao((state.selectedOSItems || []).length > 1));
+    const alvosDoTrabalho = (isRefazer || folha1 ? [] : alvosDaImpressao((state.selectedOSItems || []).length > 1));
     const selecaoAindaAtual = () => selecaoInicial === JSON.stringify(state.selectedOSItems || [])
         && ativoInicial === JSON.stringify(state.activeOSItem || null);
     const validarContexto = window.PedidoJanelaExterna?.validarGeracao?.();
@@ -6137,9 +6176,9 @@ async function executarPedImposition(mode, isRefazer) {
 
     // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
     // agora, não um PDF vazio três minutos depois.
-    const refazer = typeof montarRefazerPayload === 'function'
+    const refazer = folha1 || (typeof montarRefazerPayload === 'function'
         ? montarRefazerPayload(isRefazer === true)
-        : { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' };
+        : { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' });
     if (refazer.erro) {
         return toast(refazer.erro, 'error');
     }
@@ -6332,7 +6371,7 @@ async function executarPedImposition(mode, isRefazer) {
     // trabalho original: sem ele, refazer 3 folhas gravava por cima do PDF da
     // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
     const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
-    const faceDoTrabalho = faceDeImpressaoDoPedido();
+    const faceDoTrabalho = folha1 ? folha1.face : faceDeImpressaoDoPedido();
     const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both' };
     const sufixoFace = faceDoTrabalho === 'both' ? '' : faceDoTrabalho === 'front' ? '_frente' : '_verso';
     const defaultFilename = `${baseFilename}${refazer.sufixo || ''}${sufixoFace}.pdf`;
@@ -6575,7 +6614,7 @@ async function executarPedImposition(mode, isRefazer) {
         l_cam: (state.activeOSItem ? parseInt(state.activeOSItem.l_cam) : null) || parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1,
 
         // Vem de montarRefazerPayload(isRefazer) — já validado. Os botões
-        // principais chamam sem `isRefazer` e por isso recebem tudo zerado.
+        // principais recebem tudo zerado, exceto na seleção explícita da Folha 1.
         refazer_de: refazer.refazer_de,
         refazer_ate: refazer.refazer_ate,
         refazer_set: refazer.refazer_set,

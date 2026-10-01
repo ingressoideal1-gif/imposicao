@@ -45,6 +45,7 @@ function fixture(options={}) {
     });
     vm.runInContext(extract(main,'nomeDosModelosCombinados'),c);
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
+    vm.runInContext(extract(pedido,'folha1DoPedido'),c);
     const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
     vm.runInContext(pedido.slice(faceStart,pedido.indexOf('\n}',faceStart)+2),c);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8'),c);

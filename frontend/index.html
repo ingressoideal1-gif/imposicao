@@ -2031,6 +2031,15 @@
                                                      driver. Continuam valendo no modo hot folder, onde o bloco
                                                      do driver inteiro fica desabilitado e vazio. -->
                                                 <div id="ped-print-modes-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
+                                                    <div id="ped-print-first-sheet">
+                                                        <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;cursor:pointer;">
+                                                            <input type="checkbox" id="ped-print-first-front" onchange="selecionarFolha1DoPedido()"> Folha 1 - FRENTE
+                                                        </label>
+                                                        <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;cursor:pointer;margin-top:8px;">
+                                                            <input type="checkbox" id="ped-print-first-back" onchange="selecionarFolha1DoPedido()" disabled> Folha 1 - VERSO
+                                                        </label>
+                                                        <div style="font-size:0.7rem;color:#94a3b8;margin-top:6px;">Gera PDF ou imprime somente as faces marcadas da primeira folha da imposi&ccedil;&atilde;o. Sem marca&ccedil;&atilde;o, gera todas as folhas. Verso dispon&iacute;vel em modelos frente e verso.</div>
+                                                    </div>
                                                     <div id="ped-print-faces" hidden>
                                                         <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;cursor:pointer;">
                                                             <input type="checkbox" id="ped-print-only-front" onchange="selecionarFaceDeImpressaoDoPedido('front')"> Apenas Frente
@@ -4478,7 +4487,7 @@
     <script src="logo-do-frete.js?v=948"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=975"></script>
+    <script src="pagamento-do-pedido.js?v=992"></script>
     <script src="arte-de-impressao.js?v=962"></script>
     <script src="qr-canvas.js?v=948"></script>
     <script src="barcode-canvas.js?v=948"></script>
@@ -4509,7 +4518,7 @@
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=948"></script>
     <script src="criador-arte.js?v=964"></script>
-    <script src="/pedido.js?v=975"></script>
+    <script src="/pedido.js?v=992"></script>
     <script src="/producao-por-cor.js?v=948"></script>
     <script src="montagem.js?v=958"></script>
     <script src="acabamento.js?v=957"></script>

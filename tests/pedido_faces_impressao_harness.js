@@ -14,13 +14,15 @@ function extract(source, name) {
 const fields = {
     'ped-print-faces': {dataset: {}, hidden: true},
     'ped-print-only-front': {checked: false},
-    'ped-print-only-back': {checked: false}
+    'ped-print-only-back': {checked: false},
+    'ped-print-first-front': {checked: false},
+    'ped-print-first-back': {checked: false}
 };
 const context = {window: {PDFLib}, Blob, console,
     state: {printMode: 'duplex', activeOSItem: {itemId: 1}, selectedOSItems: [1]},
     document: {getElementById: id => fields[id] || null}};
 vm.createContext(context);
-for (const name of ['temVerso', 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido', 'faceDeImpressaoDoPedido', 'selecionarFacesDoPdfDoPedido']) {
+for (const name of ['temVerso', 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido', 'faceDeImpressaoDoPedido', 'selecionarFacesDoPdfDoPedido', 'folha1DoPedido', 'selecionarFolha1DoPedido']) {
     vm.runInContext(extract(pedido, name), context);
 }
 async function main() {
@@ -36,14 +38,36 @@ async function main() {
     assert.equal(context.faceDeImpressaoDoPedido(), 'back');
     context.atualizarFacesDeImpressaoDoPedido();
     assert.equal(context.faceDeImpressaoDoPedido(), 'back'); // redesenho preserva a escolha
+    fields['ped-print-first-front'].checked = true;
+    context.selecionarFolha1DoPedido();
+    assert.equal(context.faceDeImpressaoDoPedido(), 'both');
+    assert.equal(context.folha1DoPedido().face, 'front');
+    fields['ped-print-first-back'].checked = true;
+    context.selecionarFolha1DoPedido();
+    assert.equal(context.folha1DoPedido().face, 'both');
+    context.atualizarFacesDeImpressaoDoPedido();
+    assert.equal(context.folha1DoPedido().face, 'both');
+    fields['ped-print-first-front'].checked = false;
+    assert.equal(context.folha1DoPedido().face, 'back');
+    fields['ped-print-only-back'].checked = true;
+    context.selecionarFaceDeImpressaoDoPedido('back');
+    assert.equal(context.folha1DoPedido(), null);
+    fields['ped-print-first-front'].checked = true;
     context.state.activeOSItem.itemId = 2;
     context.atualizarFacesDeImpressaoDoPedido();
+    assert.equal(context.folha1DoPedido(), null);
     assert.equal(context.faceDeImpressaoDoPedido(), 'both');
     context.state.printMode = 'front';
     fields['ped-print-only-back'].checked = true;
     context.atualizarFacesDeImpressaoDoPedido();
     assert.equal(fields['ped-print-faces'].hidden, true);
     assert.equal(context.faceDeImpressaoDoPedido(), 'both');
+    assert.equal(fields['ped-print-first-back'].disabled, true);
+    fields['ped-print-first-front'].checked = true;
+    context.atualizarFacesDeImpressaoDoPedido();
+    assert.equal(context.folha1DoPedido().face, 'front');
+    fields['ped-print-first-back'].checked = true;
+    assert.match(context.folha1DoPedido().erro, /não possui verso/);
 
     const {PDFDocument, PDFName, PDFString} = PDFLib;
     const pdf = await PDFDocument.create();
@@ -72,6 +96,7 @@ async function main() {
     }
     const single = await PDFDocument.create(); single.addPage();
     const odd = new Blob([await single.save()]);
+    assert.equal(await context.selecionarFacesDoPdfDoPedido(odd, 'front', 'front'), odd);
     await assert.rejects(context.selecionarFacesDoPdfDoPedido(odd, 'back', 'duplex'), /pares completos/);
     await assert.rejects(context.selecionarFacesDoPdfDoPedido(blob, 'back', 'front'), /não possui verso/);
     await assert.rejects(context.selecionarFacesDoPdfDoPedido(new Blob(['invalid']), 'front', 'duplex'));
