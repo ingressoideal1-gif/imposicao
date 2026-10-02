@@ -26127,13 +26127,13 @@ async function sincronizarStatusOrdensDinamico() {
 /**
  * Repara estados consolidados deixados por uma gravação interrompida ou por
  * uma aba antiga. Limita-se aos pedidos ainda na Arte e aos que saíram dela
- * carregando um status de correção; não percorre todo o histórico concluído.
+ * carregando um status de correção ou Enviar Arte; não percorre todo o histórico concluído.
  */
 async function reconciliarStatusPersistidosDaListaArte() {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return { verificados: 0, falhas: 0 };
     if (!await temSessaoDoSupabase()) return { verificados: 0, falhas: 0 };
 
-    const statusDeCorrecao = ['CORRIGIR DADOS', 'CORRIGIR ARTE', 'EM ALTERAÇÃO', 'EM ALTERACAO'];
+    const statusParaReconciliarAposArte = ['CORRIGIR DADOS', 'CORRIGIR ARTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ENVIAR ARTE'];
     const candidatos = (state.ordens || []).filter(os => {
         if (!os || pedidoCancelado(os) || pedidoIgnoradoNosPaineis(os)) return false;
         const numero = parseInt(os.numero || os.id_int, 10);
@@ -26141,7 +26141,7 @@ async function reconciliarStatusPersistidosDaListaArte() {
         const arte = (state.todasArtes || []).find(a => parseInt(a.id_int, 10) === numero);
         const statusArte = String(arte && arte.status || '').trim().toUpperCase();
         if (statusArte === 'EM ARTE') return false;
-        return !pedidoSaiuDaArte(os) || statusDeCorrecao.includes(statusArte);
+        return !pedidoSaiuDaArte(os) || statusParaReconciliarAposArte.includes(statusArte);
     });
 
     const falhas = [];
@@ -36279,6 +36279,23 @@ async function voltarParaAtendimento() {
     try {
         const os = state.ordens.find(o => o.id === osId);
 
+        if (os && pedidoCancelado(os)) {
+            toast('Pedido cancelado: não é possível retornar a arte para atendimento.', 'warning');
+            return;
+        }
+        // Após corrigir um modelo da produção, PRONTO restaura APROVADA.
+        // O botão de retorno deve consolidar esse resultado, sem gravar Enviar
+        // Arte nem preparar outra versão do link que já foi aprovada.
+        if (os && (pedidoSaiuDaArte(os) || itens.every(modeloEstaAprovado)
+            || itens.some(modeloEmCorrecaoDeArte))) {
+            const statusConsolidado = await sincronizarStatusConsolidadoPedidoArte(os.numero || os.id_int, itens);
+            if (!statusConsolidado) throw new Error('Não foi possível confirmar o status da arte do pedido.');
+            toast(`Pedido #${os.numero}: status da arte confirmado como "${statusConsolidado}".`, 'info');
+            clearAmostrasOS();
+            showView('view-lista-arte');
+            return;
+        }
+
         if (!todasProntas) {
             await gravarPedidoComoPendenteInformacao(osId, os);
             toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
@@ -40849,13 +40866,20 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
  * quem chama garante que ele foi recarregado.
  */
 async function promoverPedidoSeTodosProntos(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    // O lote também passa aqui depois de liberar uma correção da produção.
+    // Esse retorno preserva a aprovação anterior e não reinicia o envio ao cliente.
+    if (!os || pedidoCancelado(os) || pedidoSaiuDaArte(os)) return false;
+
     const todosItens = state.osItens[osId] || [];
     const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
-    if (!todosProntos) return false;
+    // A correção termina como APROVADA. Sem um PRONTO ainda aguardando aprovação,
+    // não existe arte nova para enviar, inclusive quando o status do ERP não carregou.
+    if (!todosProntos || !todosItens.some(i => i.amostra_status === 'PRONTO')
+        || todosItens.some(modeloEmCorrecaoDeArte)) return false;
 
     const novoStatusOS = 'Enviar Arte';
-    const os = state.ordens.find(o => o.id === osId);
-    if (!os || os.status === novoStatusOS) return false;
+    if (os.status === novoStatusOS) return false;
 
     // Adiantar nesta máquina
     gravarStatusOverride(osId, novoStatusOS);
