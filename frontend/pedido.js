@@ -5358,6 +5358,8 @@ function renderPedOSQueue(opcoes = {}) {
             const nomeDoModelo = item.produto || '--';
 
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
+            // A coluna espelha o cadastro da numeração, sem inferir pelo nome ou pelo verso legado.
+            const modoImpressaoDaNumeracao = selectedNum ? rotuloDoModoDeImpressao(selectedNum) : '—';
 
             // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
             const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
@@ -5402,7 +5404,7 @@ function renderPedOSQueue(opcoes = {}) {
 
             const cadeado = liberado
                 ? `<span class="ped-cadeado liberado" title="Campos liberados neste modelo até fechar a janela dele.">&#128275;</span>`
-                : `<span class="ped-cadeado" title="Qtd, N. inicial, Bloco, Cor, Numeração e Verso só mudam com a senha da gerência. Clique num deles para liberar." onclick="event.stopPropagation(); pedirSenhaDaGerencia('${jsItemId}')">&#128274;</span>`;
+                : `<span class="ped-cadeado" title="Qtd, N. inicial, Bloco, Cor e Numeração só mudam com a senha da gerência. Clique num deles para liberar." onclick="event.stopPropagation(); pedirSenhaDaGerencia('${jsItemId}')">&#128274;</span>`;
 
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="${classesDaLinha}" id="ped-queue-row-${item.id}"
@@ -5513,13 +5515,10 @@ function renderPedOSQueue(opcoes = {}) {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 6px; width: 120px; min-width: 120px;" title="Frente e Verso/Tipo de Verso">
+                    <td style="padding: 6px; width: 120px; min-width: 120px;" title="Modo de impressão da numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Verso')}
-                            <select style="${selectStyle}" ${liberado ? '' : porteiro} onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" data-trancado="${liberado ? '' : '1'}" onclick="event.stopPropagation()">
-                                <option value="Frente" ${item.verso_tipo === 'Frente' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
-                                <option value="FxVerso" ${item.verso_tipo === 'FxVerso' ? 'selected' : ''}>FxVerso</option>
-                            </select>
+                            <span class="ped-modo-impressao-da-numeracao" style="flex: 1; min-width: 0; padding: 6px 8px; font-size: 0.84rem; line-height: 1.3; color: #ffffff; white-space: normal; overflow-wrap: anywhere;">${escHtmlSimples(modoImpressaoDaNumeracao)}</span>
                         </div>
                     </td>
                     <td style="padding: 6px; width: 150px; min-width: 150px;" title="Status de Produção">
