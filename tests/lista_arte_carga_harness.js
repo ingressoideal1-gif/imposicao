@@ -229,6 +229,18 @@ function ambiente() {
         await page.evaluate(()=>mostrarEstadoCargaLista(''));
         assert.equal(await page.$eval('#lista-arte-estado-carga',el=>getComputedStyle(el).display),'none');
         assert.equal(await page.$$eval('#lista-arte-estado-carga',els=>els.length),1);
+        for (const painel of ['lista-impressao', 'acabamento']) {
+            await page.evaluate(painel => {
+                document.querySelectorAll('section').forEach(el=>el.classList.remove('active'));
+                const secao=document.createElement('section');secao.id=`view-${painel}`;secao.className='active';document.body.appendChild(secao);
+                mostrarEstadoCargaLista('Falha na fila. Dados anteriores preservados.',true);
+            },painel);
+            assert.equal(await page.$eval(`#${painel}-estado-carga`,el=>el.parentElement.classList.contains('active')),true);
+            await page.click(`#${painel}-estado-carga button`);
+            await page.evaluate(()=>mostrarEstadoCargaLista(''));
+            assert.equal(await page.$eval(`#${painel}-estado-carga`,el=>getComputedStyle(el).display),'none');
+        }
+        assert.equal(await page.evaluate(()=>tentativas),3,'retry funciona nos tres paineis');
     } finally { await browser.close(); }
     console.log('OK: timeout nas quatro fontes, abort, retry, resposta tardia descartada, dados preservados, navegação, complementos sem duplicação e propostas em até três lotes.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

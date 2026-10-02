@@ -24,8 +24,8 @@ function environment() {
         console: { log() {}, warn() {}, error() {} }, AbortController, setTimeout, clearTimeout,
         location: { hostname: 'imposition.ai-ideal.com.br', protocol: 'https:' },
         document: { getElementById(id) {
-            if (id === 'view-lista-arte') return { classList: { contains: () => ui.view === id } };
-            if (id === 'os-search-arte') return { value: ui.search };
+            if (['view-lista-arte', 'view-lista-impressao', 'view-acabamento'].includes(id)) return { classList: { contains: () => ui.view === id } };
+            if (['os-search-arte', 'os-search-impressao', 'os-search-acabamento'].includes(id)) return { value: ui.search };
             return null;
         } },
         failCorrections: false, failModels: false, holdProducts: null,
@@ -62,7 +62,10 @@ function environment() {
                         resolve({ error: Error('falha sintetica') }); return;
                     }
                     let data = [];
-                    if (table === 'produtos_proposta') data = ids ? products.filter(p => ids.includes(p.id_int)) : products;
+                    if (table === 'produtos_proposta') {
+                        data = ids ? products.filter(p => ids.includes(p.id_int)) : products;
+                        if (range) data = data.slice(range[0], range[1] + 1);
+                    }
                     if (correction) data = corrections.slice(range[0], range[1] + 1);
                     if (table === 'propostas_os') data = ids.map(id_int => ({ id_int, data_termino: '2026-10-01' }));
                     if (table === 'pedidos_modelos' && !correction) data = ids.map(id_int => ({ id: id_int, id_int, status_impressao: [4, 5].includes(id_int) ? 'Corrigir Arte' : 'Aguardando', quantidade: 300 }));
@@ -75,13 +78,15 @@ function environment() {
     vm.createContext(c);
     vm.runInContext('let _cargaOrdensEmAndamento = null; const STATUS_CORRIGIR_ARTE = "Corrigir Arte";\n'
         + constant('SINAIS_SAIU_DA_ARTE') + '\n' + constant('SINAIS_CANCELADO') + '\n'
+        + constant('SINAIS_NA_GRAFICA') + '\n' + constant('SINAIS_DEPOIS_DA_GRAFICA') + '\n'
         + ['recorteDaCargaDeOrdens', 'carregarPedidoPesquisado', 'loadOrdens', 'carregarOrdensDados', 'loadOrdensFromVibecode',
             'pedidosComCorrecaoDeArte', 'propostaAtivaNaListaArte', 'pedidoCancelado', 'pedidoSaiuDaArte',
             'modeloEmCorrecaoDeArte', 'normalizarStatusImpressao', 'pedidosJaNaGrafica', 'pedidoEntraNoPainel',
             'arteFoiLancada', 'lerDadosLista', 'lerLotesDaLista', 'comporPrazoDoERP', 'carregarModelosGlobais',
-            'carregarPagamentosGlobais', 'setFiltroFilaArte', 'pesquisarPedidosNaListaArte'].map(n => extract(n)).join('\n')
+            'carregarPagamentosGlobais', 'setFiltroFilaArte', 'pesquisarPedidosNaListaArte',
+            'carregarDadosDoRecorteGrafica', 'solicitarRecorteDoPainel', 'pesquisarPedidosNoPainelProducao', 'setFiltroPrazo'].map(n => extract(n)).join('\n')
         + '\n' + extract('consultarPropostas', config), c);
-    return { c, ui, logs, paints, products, corrections };
+    return { c, ui, logs, paints, products, corrections, proposals };
 }
 const tick = () => new Promise(r => setImmediate(r));
 (async () => {
@@ -141,12 +146,31 @@ const tick = () => new Promise(r => setImmediate(r));
     ok(logs.some(l => l.tipo === 'status'), 'pesquisa por nome preserva o historico textual');
     ui.search = ''; ui.view = 'view-lista-impressao'; logs.length = 0;
     await c.loadOrdens();
-    ok(c.state.ordens.some(o => o.numero === 8) && logs.some(l => l.tipo === 'status'), 'outros paineis preservam sua carga');
+    ok(c.state.ordens.some(o => o.numero === 8) && logs.some(l => l.tipo === 'status'), 'producao descobre retorno em acabamento por status');
+    ok(c.state.ordens.length === 2 && !c.state.ordens.some(o => o.numero === 4843), 'producao carrega somente os dois pedidos ativos');
+    ok(logs.filter(l => l.ids).every(l => l.ids.every(id => [4, 8].includes(id))), 'produtos, prazos e modelos da producao excluem historico');
+    ok(logs.filter(l => l.tipo === 'status').every(l => !l.status.includes('FINALIZADO')), 'producao nao solicita status concluidos');
+    ok(c.state.ordens.find(o=>o.numero===8)._itens_count === 0, 'retorno sem produto continua na fila');
+    ui.view = 'view-acabamento'; logs.length = 0; await c.loadOrdens();
+    ok(c.state.ordens.length === 2 && !c.state.ordens.some(o=>o.numero===7), 'acabamento carrega trabalho ativo; expedicao aguarda clique');
+    ok(logs.filter(l=>l.ids).every(l=>l.ids.every(id=>[4,8].includes(id))), 'acabamento restringe produtos, prazos e modelos');
+    c.AcabamentoPainel = {recorteCarga:()=> 'expedicao'}; logs.length=0; await c.loadOrdens();
+    ok(c.state.ordens.length===1 && c.state.ordens[0].numero===7, 'expedicao consulta somente estados posteriores a grafica');
+    ok(logs.some(l=>l.tipo==='status'&&l.status.includes('ENTREGUE')), 'expedicao preserva consulta de entregues');
+    ui.view='view-lista-impressao';c.state.filtroPrazo='impressos';logs.length=0;await c.loadOrdens();
+    ok(c.state.ordens.some(o=>o.numero===4843)&&!c.state.listaArteSomenteAtivos,'Impresso carrega historico completo quando solicitado');
+    c.state.filtroPrazo='geral';await c.loadOrdens();
+    ok(c.state.ordens.length===2,'voltar a Geral recupera fila restrita');
+    c.updateFiltroPrazoBotoes=()=>{};c.setFiltroPrazo('impressos');await c.loadOrdens();
+    ok(c.state.ordens.some(o=>o.numero===4843),'clique real em Impresso solicita historico');
+    c.setFiltroPrazo('impressos');await c.loadOrdens();
+    ok(c.state.ordens.length===2,'segundo clique em Impresso retoma fila ativa');
     ui.view = 'view-lista-arte'; c.failCorrections = true;
     const previous = c.state.ordens;
-    ok(await c.loadOrdens() === false && c.state.ordens === previous && !c.state.listaArteSomenteAtivos, 'falha de retrabalho preserva lista e abrangencia anterior');
+    const abrangenciaAnterior = c.state.listaArteSomenteAtivos;
+    ok(await c.loadOrdens() === false && c.state.ordens === previous && c.state.listaArteSomenteAtivos === abrangenciaAnterior, 'falha de retrabalho preserva lista e abrangencia anterior');
     c.failCorrections = false; c.failModels = true;
-    ok(await c.loadOrdens() === false && c.state.ordens === previous && !c.state.listaArteSomenteAtivos, 'falha de modelos restaura lista completa');
+    ok(await c.loadOrdens() === false && c.state.ordens === previous && c.state.listaArteSomenteAtivos === abrangenciaAnterior, 'falha de modelos restaura lista e abrangencia');
     c.failModels = false;
     ok(await c.loadOrdens(), 'retry recupera sem F5');
     const { c: other, products, corrections } = environment();
@@ -201,6 +225,32 @@ const tick = () => new Promise(r => setImmediate(r));
     uiTest.ui.search = ''; uiTest.c.pesquisarPedidosNaListaArte(); scheduled();
     ok(loads === 2, 'limpar pesquisa recupera recorte ativo');
     ok(paints.length > 0 && completeCalls > selectiveCalls, 'carga seletiva reduz chamadas sem cortar historico solicitado');
+    const paginatedProducts = environment(); paginatedProducts.ui.view = 'view-lista-impressao';
+    paginatedProducts.products.splice(0, paginatedProducts.products.length,
+        ...Array.from({length:501},(_,i)=>({id:i+9000,id_int:4,created_at:'2026-09-01'})));
+    ok(await paginatedProducts.c.loadOrdens() && paginatedProducts.c.state.ordens.find(o=>o.numero===4)._itens_count===501,
+        'produtos da fila alem de 500 sao preservados');
+    ok(paginatedProducts.logs.filter(l=>l.table==='produtos_proposta').length===2,'produtos da fila usam paginas ordenadas');
+    const empty = environment();empty.ui.view='view-lista-impressao';
+    empty.proposals.splice(0,empty.proposals.length);
+    ok(await empty.c.loadOrdens()&&empty.c.state.ordens.length===0,'fila vazia e resultado valido sem fallback historico');
+    ok(!empty.logs.some(l=>l.table==='produtos_proposta'||l.table==='propostas_os'), 'fila vazia nao busca produtos nem prazos globais');
+    const delivered=environment();delivered.ui.view='view-acabamento';delivered.c.AcabamentoPainel={recorteCarga:()=> 'expedicao'};
+    delivered.proposals.push({id_int:99999,status_interno:'ENTREGUE'});
+    ok(await delivered.c.loadOrdens()&&delivered.c.state.ordens.some(o=>o.numero===99999),'expedicao preserva pedido entregue antigo sem produto');
+    delivered.ui.search='99999';delivered.logs.length=0;await delivered.c.loadOrdens();
+    ok(delivered.logs.filter(l=>l.tipo==='numeros').every(l=>l.numeros.length===1&&l.numeros[0]===99999), 'pesquisa numerica do acabamento consulta um pedido');
+    const modelError=environment();modelError.ui.view='view-lista-impressao';await modelError.c.loadOrdens();
+    const modelPrevious=modelError.c.state.ordens;modelError.c.failModels=true;
+    ok(await modelError.c.loadOrdens()===false&&modelError.c.state.ordens===modelPrevious,'falha da fila de producao preserva pedidos anteriores');
+    const switched=environment();switched.ui.view='view-lista-impressao';let releaseProducts;
+    switched.c.holdProducts=new Promise(resolve=>{releaseProducts=resolve;});
+    const productionLoad=switched.c.loadOrdens();switched.ui.view='view-acabamento';const finishLoad=switched.c.loadOrdens();
+    releaseProducts();await Promise.all([productionLoad,finishLoad]);
+    ok(switched.c.state.recorteOrdensCarregado==='acabamento'&&switched.c.state.ordens.length===2,'troca de painel durante carga termina no recorte atual');
+    const discovery=environment();discovery.ui.view='view-lista-impressao';await discovery.c.loadOrdens();
+    const discoveryPrevious=discovery.c.state.ordens;discovery.c.requisitarPropostas=async()=>{throw Error('rede sintetica indisponivel');};
+    ok(await discovery.c.loadOrdens()===false&&discovery.c.state.ordens===discoveryPrevious,'falha na descoberta de fila nao aplica resultado parcial');
     // A lista termina de atualizar depois de abrir o Pedido. O produto resumido
     // do ERP nao pode substituir o modelo completo entre desenhar a fila e clicar.
     for (const pesquisa of [false, true]) for (const uso of ['pedido', 'modelo', 'combinacao']) {

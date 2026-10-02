@@ -284,7 +284,7 @@ const api = new Function('document', 'state', 'window', `
     ok(i > 0, 'achei o loadOrdensFromVibecode');
     const corpo = SCRIPT.slice(i, SCRIPT.indexOf('\n/**', i + 10));
 
-    ok(/if \(!opcoes.somenteArteAtiva && !opcoes.numeroPedido\)\s*\{\s*const \{ data: naGraficaData, error: naGraficaErr \} = await lerDadosLista\(sinal => consultarPropostas\(\{ tipo: 'status', status: SINAIS_SAIU_DA_ARTE \}, undefined, 'consultar', sinal\)/.test(corpo),
+    ok(/if \(!opcoes.somenteArteAtiva && !opcoes.numeroPedido && !opcoes.propostasPreloaded\)\s*\{\s*const \{ data: naGraficaData, error: naGraficaErr \} = await lerDadosLista\(sinal => consultarPropostas\(\{ tipo: 'status', status: SINAIS_SAIU_DA_ARTE \}, undefined, 'consultar', sinal\)/.test(corpo),
        'ao consultar historico, as propostas sao lidas TAMBEM por status: a consulta que '
        + 'descobre o pedido que nao tem produto nem arte');
     ok(corpo.includes('(propostas || []).forEach(pr =>'),

@@ -1487,6 +1487,8 @@
      * conjunto de pedidos. Por isso os dois chamam `pedidosDoPainel`.
      */
     async function carregarAcabamentoDosModelos() {
+        const geracao = tela.geracaoEstagios = (tela.geracaoEstagios || 0) + 1;
+        const prazo = tela.prazo;
         const numeros = pedidosDoPainel()
             .map(os => parseInt(os.numero))
             .filter(n => !isNaN(n));
@@ -1503,34 +1505,46 @@
             const mapa = {};
             // Em fatias, pelo mesmo motivo do `carregarModelosGlobais`: um `in`
             // com mil números estoura o tamanho da URL.
-            for (let i = 0; i < numeros.length; i += 200) {
-                const fatia = numeros.slice(i, i + 200);
-                const { data, error } = await supabaseClient
+            const ler = fn('lerDadosLista');
+            const consultar = async fatia => {
+                const consulta = supabaseClient
                     .from('pedidos_modelos')
                     .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em, id_produto_proposta_origem')
                     .in('id_int', fatia);
+                const { data, error } = ler ? await ler(consulta, 'estágios do acabamento') : await consulta;
                 if (error) throw error;
-                (data || []).forEach(m => {
-                    mapa[String(m.id)] = {
-                        status: m.acabamento_status || '',
-                        responsavel: m.acabamento_responsavel || '',
-                        foto: m.acabamento_foto_url || '',
-                        prontoEm: m.acabamento_pronto_em || '',
-                        // O produto que originou o modelo. É por ele que o
-                        // recorte por setor descobre a que setor o modelo
-                        // pertence — ver `setorDoModelo`. Vem de carona nesta
-                        // consulta, que já percorre os mesmos pedidos: uma coluna
-                        // a mais, nenhuma requisição a mais.
-                        produtoOrigem: (m.id_produto_proposta_origem === undefined
-                            || m.id_produto_proposta_origem === null)
-                            ? null : m.id_produto_proposta_origem,
-                    };
-                });
+                return data || [];
+            };
+            const dados = [];
+            for (let i = 0; i < numeros.length; i += 600) {
+                const lotes = await Promise.allSettled(Array.from({ length: Math.min(3, Math.ceil((numeros.length - i) / 200)) },
+                    (_, lote) => consultar(numeros.slice(i + lote * 200, i + (lote + 1) * 200))));
+                const falha = lotes.find(r => r.status === 'rejected');
+                if (falha) throw falha.reason;
+                lotes.forEach(r => dados.push(...r.value));
             }
+            if (geracao !== tela.geracaoEstagios || prazo !== tela.prazo) return;
+            dados.forEach(m => {
+                mapa[String(m.id)] = {
+                    status: m.acabamento_status || '',
+                    responsavel: m.acabamento_responsavel || '',
+                    foto: m.acabamento_foto_url || '',
+                    prontoEm: m.acabamento_pronto_em || '',
+                    // O produto que originou o modelo. É por ele que o
+                    // recorte por setor descobre a que setor o modelo
+                    // pertence — ver `setorDoModelo`. Vem de carona nesta
+                    // consulta, que já percorre os mesmos pedidos: uma coluna
+                    // a mais, nenhuma requisição a mais.
+                    produtoOrigem: (m.id_produto_proposta_origem === undefined
+                        || m.id_produto_proposta_origem === null)
+                        ? null : m.id_produto_proposta_origem,
+                };
+            });
             tela.acabamento = mapa;
             tela.numerosNoMapa = new Set(numeros.map(String));
             tela.erroAcabamento = '';
         } catch (e) {
+            if (geracao !== tela.geracaoEstagios || prazo !== tela.prazo) return;
             tela.erroAcabamento = (e && e.message) ? e.message : String(e);
             console.warn('[acabamento] não deu para ler o estágio dos modelos:', e);
             // Uma vez por sessão: repetir o aviso a cada desenho da tela viraria
@@ -1539,9 +1553,12 @@
                 tela.avisouDoBanco = true;
                 const aviso = fn('toast');
                 if (aviso) {
-                    aviso('O Painel do Acabamento ainda não foi ligado ao banco. '
+                    const faltaColuna = e?.code === '42703' || /column .*does not exist/i.test(tela.erroAcabamento);
+                    aviso(faltaColuna ? 'O Painel do Acabamento ainda não foi ligado ao banco. '
                         + 'Peça ao administrador para rodar a atualização do banco. '
-                        + 'Até lá a tela lista os pedidos, mas não guarda estágio nem responsável.',
+                        + 'Até lá a tela lista os pedidos, mas não guarda estágio nem responsável.'
+                        : 'Não foi possível ler os estágios do acabamento. '
+                        + 'Os dados anteriores foram preservados. Atualize para tentar novamente.',
                         'warning');
                 }
             }
@@ -1578,12 +1595,17 @@
     function completarEstagiosDaLista() {
         if (tela.buscandoEstagios || !faltamEstagiosNaLista()) return;
         tela.buscandoEstagios = true;
+        const listaInicial = pedidosDoPainel().map(os => String(os.numero)).join(',');
+        const prazoInicial = tela.prazo;
         carregarAcabamentoDosModelos()
             .catch(() => {})
             .then(() => {
                 tela.buscandoEstagios = false;
                 render();
                 if (tela.pedidoAberto) renderDetalhe();
+                // A fila pode mudar durante a leitura. Retomar apenas nesse caso;
+                // erro da mesma consulta espera o retry explícito do operador.
+                if (prazoInicial !== tela.prazo || listaInicial !== pedidosDoPainel().map(os => String(os.numero)).join(',')) completarEstagiosDaLista();
             });
     }
 
@@ -7622,6 +7644,8 @@
          * (28/08/2026): o segundo clique no botão aceso volta ao filtro que
          * estava ativo antes dele. Os outros três são escolha simples.
          */
+        recorteCarga() { return tela.prazo === 'expedicao' ? 'expedicao' : 'acabamento'; },
+
         setFiltroPrazo(valor) {
             const novo = ['hoje', 'atrasados', 'expedicao'].includes(valor) ? valor : 'geral';
             if (novo === 'expedicao' && tela.prazo === 'expedicao') {
@@ -7631,6 +7655,18 @@
                 tela.prazo = novo;
             }
             render();
+            const carregar = fn('solicitarRecorteDoPainel');
+            if (carregar) carregar();
+        },
+
+        pesquisar() {
+            render();
+            clearTimeout(tela.timerPesquisa);
+            tela.timerPesquisa = setTimeout(() => {
+                if (!document.getElementById('view-acabamento')?.classList.contains('active')) return;
+                const carregar = fn('solicitarRecorteDoPainel');
+                if (carregar) carregar();
+            }, 400);
         },
 
         /**

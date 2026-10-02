@@ -179,6 +179,11 @@ function medir(texto, soNaBarra) {
      * este arquivo mede -- e a barra ser fixa contra a janela.
      */
     async function entrarNaEscolha(quantos, marcar) {
+        // A carga inicial real deve encerrar antes de semear os dados sintéticos;
+        // seu rollback de erro não pode apagar a fixture enquanto abrimos o pedido.
+        await page.evaluate(async () => {
+            if (typeof _cargaOrdensEmAndamento !== 'undefined') await _cargaOrdensEmAndamento;
+        });
         await page.evaluate(semear, quantos);
         await page.evaluate(() => window.AcabamentoPainel.abrirPedido('os-1'));
         await page.waitForFunction(() =>
