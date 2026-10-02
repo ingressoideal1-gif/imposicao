@@ -31,7 +31,7 @@ function ok(cond, oque, detalhe) {
 }
 
 function extrair(nome) {
-    const fonte = ['formatoDoProduto', 'prepararFormatosDaFila'].includes(nome) ? SCRIPT : PEDIDO;
+    const fonte = ['formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao'].includes(nome) ? SCRIPT : PEDIDO;
     const i = fonte.indexOf('\nfunction ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no pedido.js');
     const fim = fonte.indexOf('\n}', i);
@@ -40,7 +40,7 @@ function extrair(nome) {
 
 // As funcoes de verdade que decidem o que a fila mostra. As outras (salvar
 // campo, redesenhar barra, mover a janela) sao dubles: nao mudam o desenho.
-const REAIS = ['formatoDoProduto', 'prepararFormatosDaFila', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
+const REAIS = ['formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',
@@ -408,8 +408,9 @@ function cenario(quantos, comCamarote) {
 
     // ── 10. A TRAVA DA GERENCIA ─────────────────────────────────────────────
     //
-    // Qtd, N. inicial, Bloco, Cor, Numeracao e Verso decidem o que sai no papel
-    // e o que o cliente contratou. A tela do Pedido fica aberta no chao de
+    // Qtd, N. inicial, Bloco, Cor e Numeracao decidem o que sai no papel
+    // e o que o cliente contratou. Verso apenas exibe o modo da numeracao.
+    // A tela do Pedido fica aberta no chao de
     // fabrica, e ate 29/08/2026 qualquer um que passasse podia mudar a
     // quantidade de uma tiragem com um clique.
     await desenhar(cenario(6, false));
@@ -424,7 +425,8 @@ function cenario(quantos, comCamarote) {
             bloco: trancado(por('Ingressos por Bloco')?.querySelector('input')),
             cor: trancado(por('Cor')?.querySelector('select')),
             numeracao: trancado(por('Numeração')?.querySelector('select')),
-            verso: trancado(por('Frente e Verso/Tipo de Verso')?.querySelector('select')),
+            versoInformativo: !!por('Modo de impressão da numeração')?.querySelector('.ped-modo-impressao-da-numeracao')
+                && !por('Modo de impressão da numeração')?.querySelector('select, input, [onchange]'),
             // fora da trava, de proposito
             status: trancado(por('Status de Produção')?.querySelector('select')),
             marcar: trancado(linha.querySelector('input[type="checkbox"]')),
@@ -432,12 +434,13 @@ function cenario(quantos, comCamarote) {
             cadeado: !!linha.querySelector('.ped-cadeado'),
         };
     });
-    for (const campo of ['qtd', 'numInicial', 'bloco', 'cor', 'numeracao', 'verso']) {
+    for (const campo of ['qtd', 'numInicial', 'bloco', 'cor', 'numeracao']) {
         ok(travados[campo] === true, `o campo ${campo} nasce travado pela senha da gerencia`, travados);
     }
     ok(travados.status === false,
        'o Status da impressao NAO passa pela trava: marcar o que ja saiu e o trabalho normal do operador',
        travados);
+    ok(travados.versoInformativo, 'Verso exibe o modo da numeracao sem uma escolha independente', travados);
     ok(travados.marcar === false,
        'nem a caixinha de marcar, que escolhe o que imprimir e nao altera o modelo', travados);
     ok(travados.somenteLeitura, 'o campo travado e readonly — nao da para digitar por cima', travados);
@@ -484,6 +487,50 @@ function cenario(quantos, comCamarote) {
     ok(liberado.outraContinuaTravada,
        'mas SO daquele modelo: a linha vizinha continua travada', liberado);
     ok(liberado.cadeadoAberto, 'e o cadeado da linha liberada mostra que ela esta aberta', liberado);
+
+    // A coluna traz o tipo exato, inclusive quando o nome ou o ERP dizem outra coisa.
+    const modos = [
+        ['front', 'Frente'],
+        ['duplex', 'FxVerso'],
+        ['duplex_unico', 'FxVersoUnico'],
+        ['pdf_odd_even', 'PDF Ímpar Frente e Verso Par'],
+        ['pdf_duplicate_back', 'Duplicar para Verso'],
+    ];
+    const estadoModos = cenario(7, false);
+    modos.forEach(([modo], i) => {
+        const item = estadoModos.osItens['1'][i];
+        const num = estadoModos.numeracoes.find(n => n.id === item.numeracao_id);
+        num.print_mode = modo;
+        num.name = 'Numeracao verso ' + i;
+        item.verso_tipo = modo === 'front' ? 'FxVerso' : 'Frente';
+    });
+    estadoModos.osItens['1'][5].numeracao_id = null;
+    estadoModos.osItens['1'][6].numeracao_id = 'inexistente';
+    estadoModos.modeloLiberado = 'm1';
+    await desenhar(estadoModos);
+    const colunaModos = await aba.evaluate(() => Array.from(
+        document.querySelectorAll('.ped-modo-impressao-da-numeracao'), el => el.textContent.trim()));
+    modos.forEach(([, rotulo], i) => ok(colunaModos[i] === rotulo, 'Verso exibe ' + rotulo + ' do cadastro', colunaModos));
+    ok(colunaModos[5] === '—' && colunaModos[6] === '—',
+       'sem numeracao encontrada, Verso nao inventa um modo a partir do ERP', colunaModos);
+    const atualizacao = await aba.evaluate(() => {
+        const itensAntes = JSON.stringify(state.osItens);
+        const num = state.numeracoes.find(n => n.id === state.osItens['1'][0].numeracao_id);
+        num.print_mode = 'pdf_odd_even';
+        renderPedOSQueue();
+        const celula = document.querySelector('#ped-queue-row-m1 td[title="Modo de impressão da numeração"]');
+        return {
+            texto: celula.textContent.trim(),
+            editavel: !!celula.querySelector('select, input, [onchange]'),
+            preservouModelo: itensAntes === JSON.stringify(state.osItens),
+            largura: celula.getBoundingClientRect().width,
+            conteudo: celula.scrollWidth,
+        };
+    });
+    ok(atualizacao.texto === modos[3][1], 'o redesenho acompanha a configuracao atual da numeracao', atualizacao);
+    ok(!atualizacao.editavel, 'a senha da gerencia nao torna Verso uma escolha independente', atualizacao);
+    ok(atualizacao.preservouModelo, 'exibir o modo nao altera campos do modelo', atualizacao);
+    ok(atualizacao.conteudo <= atualizacao.largura + 1, 'o nome longo do modo PDF cabe na coluna', atualizacao);
 
     await navegador.close();
 
