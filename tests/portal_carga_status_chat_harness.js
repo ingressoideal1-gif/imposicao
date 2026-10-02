@@ -69,7 +69,7 @@ function ambiente(opcoes = {}) {
         document: { getElementById: id => campos[id] || null, querySelector: () => ({ style: {} }) },
         PortalBancos: { carregar: async () => {} }, bancoDesenhosCliente: new Map(),
         carregarBancosDoPortal() {}, carregarPortal: async () => opcoes.portalNulo ? null
-            : { pedido: { id_cliente: 1, cliente: 'Cliente teste' }, entrega: { entrega_dados: '' } },
+            : opcoes.portal || { pedido: { id_cliente: 1, cliente: 'Cliente teste' }, entrega: { entrega_dados: '' } },
         numeracaoTemVersoNoPortal: () => false, armarMarcaDeQueOClienteOlhou() {},
         registrarSecao: (_nome, fn) => { c.desenharArte = fn; },
         montarPortal: status => { c.statusMontado = status; c.desenharArte(); },
@@ -86,7 +86,7 @@ function ambiente(opcoes = {}) {
     vm.createContext(c);
     const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
         cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-    vm.runInContext(regras + '\n' + ['initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+    vm.runInContext(regras + '\n' + ['rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
         'desenharSecaoArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem',
         'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente'].map(n => funcao(cliente, n)).join('\n')
         + '\n' + ['semAcento', 'seloDoStatus'].map(n => funcao(shell, n)).join('\n'), c);
@@ -95,6 +95,27 @@ function ambiente(opcoes = {}) {
 let total = 0;
 async function testar(nome, executar) { await executar(); total++; console.log('OK: ' + nome); }
 (async () => {
+    await testar('cabeçalho usa número do titular mesmo com faturamento em outro cadastro', async () => {
+        const a = ambiente({ portal: {
+            pedido: { cliente: 'Cliente Exemplo', id_cliente: 99 }, entrega: {},
+            cadastros_faturamento: [
+                { id_cliente: 99, tipo_relacao: 'Cadastro fiscal' },
+                { id_cliente: 14, tipo_relacao: 'Titular' }
+            ]
+        } });
+        await a.c.initClientePage('123', 'sintetico');
+        assert.equal(a.campos['cliente-pedido-cliente'].textContent, 'Cliente Exemplo - 14');
+        assert.equal(a.c.state.ordens[0].cliente, 'Cliente Exemplo');
+        a.c.state.osItens[a.osId] = [];
+        vm.runInContext(funcao(cliente, 'renderAmostrasOSItens'), a.c);
+        await a.c.renderAmostrasOSItens(a.osId);
+        assert.equal(a.campos['cliente-pedido-cliente'].textContent, 'Cliente Exemplo - 14');
+    });
+    await testar('sem número do titular mantém o nome sem usar o cadastro fiscal', async () => {
+        const a = ambiente();
+        await a.c.initClientePage('123', 'sintetico');
+        assert.equal(a.campos['cliente-pedido-cliente'].textContent, 'Cliente teste');
+    });
     for (const opcoes of [{ portalNulo: true }, { erroLink: true }, { miolo: true }, { mioloVazio: true },
         ...['pedidos_modelos', 'pedidos_artes', 'produtos_proposta', 'producao_cores', 'producao_numeracoes',
             'producao_formatos', 'produtos'].map(falha => ({ falha }))]) {

@@ -485,7 +485,7 @@ function renderAmostrasOSItens(osId) {
     const cliEl = document.getElementById(interno ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
     const countEl = document.getElementById(interno ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
     if (numEl) numEl.textContent = `#${os.numero}`;
-    if (cliEl) cliEl.textContent = os.cliente || '';
+    if (cliEl) cliEl.textContent = (interno ? os.cliente : os.cliente_cabecalho) || os.cliente || '';
     if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
 
     // Modelos que não têm o que mostrar. O cliente enxerga o card, mas a área da
@@ -1383,6 +1383,15 @@ async function registrarChatCliente(mensagem) {
     }
 }
 
+/** Nome comercial e número do titular; pedido.id_cliente é o cadastro fiscal. */
+function rotuloClientePortal(portal) {
+    const nome = String(portal?.pedido?.cliente || '').trim();
+    const cadastros = Array.isArray(portal?.cadastros_faturamento) ? portal.cadastros_faturamento : [];
+    const titular = cadastros.find(c => String(c?.tipo_relacao || '').trim().toLowerCase() === 'titular');
+    const numero = String(titular?.id_cliente ?? '').trim();
+    return nome && numero ? `${nome} - ${numero}` : nome || numero;
+}
+
 /**
  * Inicializa a página do cliente com validação de token
  */
@@ -1457,7 +1466,8 @@ async function initClientePage(numero, token) {
         const osCliente = (portal && portal.pedido && portal.pedido.cliente) || '';
         clienteState.idCliente = (portal && portal.pedido && portal.pedido.id_cliente) || null;
 
-        if (clienteEl) clienteEl.textContent = osCliente;
+        const clienteCabecalho = rotuloClientePortal(portal);
+        if (clienteEl) clienteEl.textContent = clienteCabecalho;
 
 
 
@@ -1665,6 +1675,7 @@ async function initClientePage(numero, token) {
             id: osId,
             numero: numero,
             cliente: osCliente,
+            cliente_cabecalho: clienteCabecalho,
             _itens_raw: itensCarregados
         };
         state.ordens = [os];

@@ -1856,9 +1856,12 @@ body.not-logged-in .app-shell {
 }
 
 .cliente-subtitle {
-    font-size: 0.86rem;
-    color: var(--text-dim);
-    margin: 2px 0 0;
+    font-size: 1.18rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text);
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
 }
 
 .cliente-section {

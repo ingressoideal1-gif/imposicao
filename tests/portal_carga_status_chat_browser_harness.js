@@ -15,7 +15,7 @@ function funcao(nome) {
 }
 const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
     cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-const codigo = regras + '\n' + ['initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+const codigo = regras + '\n' + ['rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
     'desenharSecaoArte', 'avisoDaArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'clienteAprovarTudo',
     'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente', 'escapeHtml',
     'decisionAmostraItem', 'seguirSozinhoSeAprovouTudo', 'mostrarProximaEtapaAposArte'].map(funcao).join('\n');
@@ -26,7 +26,13 @@ function preparar(cenario) {
     window.bancoDesenhosCliente = new Map();
     window.PortalBancos = { carregar: async () => {} };
     window.carregarBancosDoPortal = () => {};
-    window.carregarPortal = async () => ({ pedido: { cliente: 'Cliente teste' }, entrega: {} });
+    window.carregarPortal = async () => ({
+        pedido: { cliente: 'Cliente Exemplo com Nome Comprido', id_cliente: 99 }, entrega: {},
+        cadastros_faturamento: [
+            { id_cliente: 99, tipo_relacao: 'Cadastro fiscal' },
+            { id_cliente: 14, tipo_relacao: 'Titular' }
+        ]
+    });
     window.numeracaoTemVersoNoPortal = () => false;
     window.armarMarcaDeQueOClienteOlhou = () => {};
     window.cartaoDoQueFaltaNaArte = () => {};
@@ -97,6 +103,17 @@ function preparar(cenario) {
         await Promise.all([page.waitForNavigation(), page.click('#cliente-error button')]);
         await page.waitForFunction(() => window.testePronto === true);
         assert.equal(await page.$eval('#portal-selo', e => e.textContent), 'Aprovação parcial');
+        assert.equal(await page.$eval('#cliente-pedido-cliente', e => e.textContent), 'Cliente Exemplo com Nome Comprido - 14');
+        for (const largura of [320, 390, 1280]) {
+            await page.setViewport({ width: largura, height: 844 });
+            assert.equal(await page.$eval('#cliente-pedido-cliente', e => {
+                const estilo = getComputedStyle(e);
+                return Number(estilo.fontWeight) >= 700 && parseFloat(estilo.fontSize) >= 18
+                    && e.scrollWidth <= e.clientWidth;
+            }), true, 'nome destacado e sem corte em ' + largura);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        }
+        await page.setViewport({ width: 390, height: 844 });
         assert.equal(await page.$eval('#cliente-aviso-chat', e => getComputedStyle(e).display), 'none');
         await page.click('#btn-cliente-aprovar-tudo');
         await page.waitForSelector('#portal-artes-aprovadas[open]');
