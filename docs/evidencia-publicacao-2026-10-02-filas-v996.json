@@ -1,0 +1,146 @@
+{
+  "versao": "v996",
+  "commit_codigo": "d682d97f1c80974f29a026f849e8863b51cf4636",
+  "tag": "v996",
+  "deployment_cloudflare": "17ec859f-e3bc-41aa-8a8a-26fd95f37aad",
+  "integracao": "Direta",
+  "simulacao": "VALIDADA",
+  "publicacao": "PUBLICADA_E_VERIFICADA",
+  "publico": {
+    "versao": "v996",
+    "alvo": "Web",
+    "commit": "d682d97f1c80974f29a026f849e8863b51cf4636",
+    "verificado_em_utc": "2026-10-02T15:47:02.3269822-03:00",
+    "todos_iguais": true,
+    "assets": [
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "index.html",
+        "status": 200,
+        "esperado": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "obtido": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "producao.html",
+        "status": 200,
+        "esperado": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "obtido": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "script.js",
+        "status": 200,
+        "esperado": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "obtido": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "acabamento.js",
+        "status": 200,
+        "esperado": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "obtido": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "index.html",
+        "status": 200,
+        "esperado": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "obtido": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "producao.html",
+        "status": 200,
+        "esperado": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "obtido": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "script.js",
+        "status": 200,
+        "esperado": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "obtido": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "igual": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "acabamento.js",
+        "status": 200,
+        "esperado": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "obtido": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "igual": true
+      }
+    ]
+  },
+  "newprod_local": {
+    "versao": "v996",
+    "alvo": "Local",
+    "commit": "d682d97f1c80974f29a026f849e8863b51cf4636",
+    "verificado_em_utc": "2026-10-02T15:47:36.3696719-03:00",
+    "todos_iguais": true,
+    "assets": [
+      {
+        "dominio": "http://127.0.0.1:9000",
+        "arquivo": "index.html",
+        "status": 200,
+        "esperado": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "obtido": "491AB5D725F1BD1A48A1785256474E382EFD6AF9897A270EC5ED5C0F505E5F3D",
+        "igual": true
+      },
+      {
+        "dominio": "http://127.0.0.1:9000",
+        "arquivo": "producao.html",
+        "status": 200,
+        "esperado": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "obtido": "13A7E5F98CB8CFD3ABE108DB438CB471FAF45E03D93F410B31E39BAF767662DC",
+        "igual": true
+      },
+      {
+        "dominio": "http://127.0.0.1:9000",
+        "arquivo": "script.js",
+        "status": 200,
+        "esperado": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "obtido": "DE35CC1830F3EDC173540A94D7FE76BE0FBE57F14BC8C83D3B65BAE906EE21A4",
+        "igual": true
+      },
+      {
+        "dominio": "http://127.0.0.1:9000",
+        "arquivo": "acabamento.js",
+        "status": 200,
+        "esperado": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "obtido": "0CEE5D00D37488AB9DDA0F18CD0E8D787084EB5BE362ACFA40F4D707DC7D970D",
+        "igual": true
+      }
+    ]
+  },
+  "backup_local": "C:\\Users\\Junior\\AppData\\Local\\NewProd Agent\\backup-painel-antes-v996-20261002",
+  "teste_python": {
+    "passaram": 157,
+    "falharam": 3,
+    "falhas_reproduzidas_na_base_v995": true
+  },
+  "teste_recortes": {
+    "verificacoes": 93,
+    "concluidos_sinteticos": 4744,
+    "pedidos_producao_apos": 2,
+    "pedidos_acabamento_apos": 2,
+    "pedidos_carregados_antes": 4752
+  },
+  "teste_estagios": {
+    "verificacoes": 10,
+    "modelos_sinteticos": 601,
+    "concorrencia_maxima": 3
+  },
+  "limites": [
+    "Sem medicao da demora de 15 minutos com pedidos reais",
+    "Atualizacao local comprovada apenas neste computador",
+    "Sem instalacao MSI ou impressao fisica"
+  ]
+}
