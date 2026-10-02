@@ -12195,102 +12195,157 @@ window.nextPreviewPage = function() {
     drawPreview();
 };
 
-async function populateImpMapasTeatro() {
-    const sel = document.getElementById('imp-mapa-teatro');
-    if (!sel || sel.options.length > 1) return; // already populated
-
-    let mapas = window.state.mapas || [];
-    if (mapas.length === 0 && typeof supabaseClient !== 'undefined' && supabaseClient) {
-        const { data } = await supabaseClient.from('producao_mapas_teatro').select('id, name').order('name', { ascending: true });
-        if (data) mapas = data;
-    }
-
+function populateImpMapasTeatro(prefixo = 'imp') {
+    const sel = document.getElementById(prefixo + '-mapa-teatro');
+    if (!sel) return;
+    const mapas = window.state.mapas || [];
+    const assinatura = JSON.stringify(mapas.map(m => [m.id, m.name]));
+    if (sel.dataset.mapasAssinatura === assinatura) return;
     const current = sel.value;
-    sel.innerHTML = '<option value="">-- Selecione um mapa --</option>' + mapas.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-    if (current && mapas.some(m => String(m.id) === String(current))) {
-        sel.value = current;
+    sel.replaceChildren();
+    const vazio = document.createElement('option');
+    vazio.value = '';
+    vazio.textContent = '-- Selecione um mapa --';
+    sel.appendChild(vazio);
+    for (const mapa of mapas) {
+        const option = document.createElement('option');
+        option.value = String(mapa.id);
+        option.textContent = mapa.name || 'Mapa sem nome';
+        sel.appendChild(option);
     }
+    sel.value = mapas.some(m => String(m.id) === String(current)) ? current : '';
+    sel.dataset.mapasAssinatura = assinatura;
 }
 
 let _lastLoadedMapaTeatro = null;
-async function loadMapaTeatroData(mapaId) {
+let _mapaTeatroCarregando = null;
+let _mapaTeatroSolicitacao = 0;
+
+async function loadMapaTeatroData(mapaId, prefixo = 'imp', forcar = false) {
+    const seletor = document.getElementById(prefixo + '-mapa-teatro');
+    const desenhar = () => {
+        if (prefixo === 'ped' && typeof drawPedPreview === 'function') drawPedPreview();
+        else drawPreview();
+    };
     if (!mapaId) {
+        ++_mapaTeatroSolicitacao;
         state.csvData = null;
         _lastLoadedMapaTeatro = null;
-        drawPreview();
-        return;
+        _mapaTeatroCarregando = null;
+        desenhar();
+        return false;
     }
-    if (_lastLoadedMapaTeatro === String(mapaId)) return; // já carregado
-    _lastLoadedMapaTeatro = String(mapaId);
-    try {
-        let mapa = null;
-        if (window.state && window.state.mapas) {
-            mapa = window.state.mapas.find(x => String(x.id) === String(mapaId));
+    const id = String(mapaId);
+    const emCache = (window.state.mapas || []).find(m => String(m.id) === id);
+    const assinatura = emCache ? JSON.stringify(emCache.config) : null;
+    if (!forcar && _lastLoadedMapaTeatro?.id === id && _lastLoadedMapaTeatro.prefixo === prefixo
+        && _lastLoadedMapaTeatro.config === assinatura && state.csvData === _lastLoadedMapaTeatro.csvData) return true;
+    if (_mapaTeatroCarregando?.id === id && _mapaTeatroCarregando.prefixo === prefixo) {
+        if (forcar && !_mapaTeatroCarregando.forcar) {
+            await _mapaTeatroCarregando.promise;
+            return loadMapaTeatroData(id, prefixo, true);
         }
-        
-        if (!mapa) {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', mapaId).single();
-                if (!error && data) mapa = data;
-            } else {
-                mapa = await api('GET', `/mapas_teatro/${mapaId}`);
-            }
-        }
-        
-        if (mapa && mapa.config && mapa.config.setores) {
-            const tiposSufixos = {};
-            if (mapa.config.tiposAssento) {
-                for (const t of mapa.config.tiposAssento) {
-                    tiposSufixos[t.id] = (t.sufixo || '').trim();
+        return _mapaTeatroCarregando.promise;
+    }
+    const solicitacao = ++_mapaTeatroSolicitacao;
+    const aindaAtual = () => solicitacao === _mapaTeatroSolicitacao && (!seletor || String(seletor.value) === id)
+        && trabalhoUsaMapaTeatro(prefixo);
+    state.csvData = null; // não emprestar os assentos de outro mapa enquanto este carrega
+    _lastLoadedMapaTeatro = null;
+    const promise = (async () => {
+        try {
+            let mapa = forcar ? null : emCache;
+            if (!mapa) {
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', id).single();
+                    if (error) throw error;
+                    mapa = data;
+                } else {
+                    mapa = await api('GET', '/mapas_teatro/' + encodeURIComponent(id));
                 }
             }
-
+            if (!aindaAtual()) return false;
+            if (!mapa?.config || !Array.isArray(mapa.config.setores)) throw new Error('Mapa inválido ou indisponível.');
+            const tiposSufixos = {};
+            for (const tipo of mapa.config.tiposAssento || []) tiposSufixos[tipo.id] = (tipo.sufixo || '').trim();
             const csvData = [];
             for (const setor of mapa.config.setores) {
-                const cadeiras = setor.cadeiras || {};
-                const assentos = Object.values(cadeiras);
+                const assentos = Object.values(setor.cadeiras || {}).filter(a => a && a.tipo !== 'Apagado' && !a.isErased);
                 assentos.sort((a, b) => {
-                    // Evita falha se y/x for nulo ou invalido
                     if (a.y != null && b.y != null && a.x != null && b.x != null) {
-                        const ya = parseFloat(a.y), yb = parseFloat(b.y);
-                        const xa = parseFloat(a.x), xb = parseFloat(b.x);
-                        if (!isNaN(ya) && !isNaN(yb) && !isNaN(xa) && !isNaN(xb)) {
-                            return (ya - yb) || (xa - xb);
-                        }
+                        const ya = parseFloat(a.y), yb = parseFloat(b.y), xa = parseFloat(a.x), xb = parseFloat(b.x);
+                        if (![ya, yb, xa, xb].some(Number.isNaN)) return (ya - yb) || (xa - xb);
                     }
-                    const pa = String(a.prefixo || a.row_label || '');
-                    const pb = String(b.prefixo || b.row_label || '');
-                    if (pa !== pb) return pa.localeCompare(pb);
-                    const na = parseInt(a.num || a.col_label) || 0;
-                    const nb = parseInt(b.num || b.col_label) || 0;
-                    return na - nb;
+                    const pa = String(a.prefixo || a.row_label || ''), pb = String(b.prefixo || b.row_label || '');
+                    return pa.localeCompare(pb) || ((parseInt(a.num || a.col_label) || 0) - (parseInt(b.num || b.col_label) || 0));
                 });
                 for (const a of assentos) {
-                    if (a.tipo === 'Apagado' || a.isErased) continue;
-                    let numStr = String(a.num || a.col_label || '');
                     const sufixo = tiposSufixos[a.tipo];
-                    if (sufixo && sufixo !== "") {
-                        numStr += " " + sufixo;
-                    }
                     csvData.push({
                         Fila: String(a.prefixo || a.row_label || ''),
-                        Numero: numStr,
+                        Numero: String(a.num || a.col_label || '') + (sufixo ? ' ' + sufixo : ''),
                         Setor: String(setor.nome || '')
                     });
                 }
             }
+            window.state.mapas = window.state.mapas || [];
+            const idx = window.state.mapas.findIndex(m => String(m.id) === id);
+            if (idx >= 0) window.state.mapas[idx] = mapa;
+            else window.state.mapas.push(mapa);
             state.csvData = csvData;
             state.csvDataDerivado = false;
-            console.log(`[Teatro] Mapa carregado: ${csvData.length} assentos`);
-        } else {
-            state.csvData = null;
+            _lastLoadedMapaTeatro = { id, prefixo, config: JSON.stringify(mapa.config), csvData };
+            if (prefixo === 'ped') updatePedSummary();
+            else updateImpSummary();
+            desenhar();
+            return true;
+        } catch (e) {
+            if (aindaAtual()) {
+                state.csvData = null;
+                _lastLoadedMapaTeatro = null;
+                toast('Não foi possível carregar o mapa. Confira a conexão e selecione o mapa novamente.', 'error');
+                desenhar();
+            }
+            console.error('[Teatro] Erro ao carregar mapa:', e);
+            return false;
         }
-    } catch (err) {
-        console.error('[Teatro] Erro ao carregar mapa:', err);
-        state.csvData = null;
+    })();
+    _mapaTeatroCarregando = { id, prefixo, forcar, promise };
+    try {
+        return await promise;
+    } finally {
+        if (_mapaTeatroCarregando?.promise === promise) _mapaTeatroCarregando = null;
     }
-    updateImpSummary();
-    drawPreview();
+}
+
+function trabalhoUsaMapaTeatro(prefixo) {
+    return ['-numeracao', '-numeracao-2'].some(sufixo => {
+        const id = document.getElementById(prefixo + sufixo)?.value;
+        return state.numeracoes?.find(n => String(n.id) === String(id))?.tipo === 'TEATRO';
+    });
+}
+
+function liberarMapaTeatroDaTela(prefixo) {
+    if (_lastLoadedMapaTeatro?.prefixo !== prefixo && _mapaTeatroCarregando?.prefixo !== prefixo) return;
+    ++_mapaTeatroSolicitacao;
+    if (state.csvData === _lastLoadedMapaTeatro?.csvData) state.csvData = null;
+    _lastLoadedMapaTeatro = null;
+    _mapaTeatroCarregando = null;
+}
+
+async function garantirMapaTeatroDoTrabalho(prefixo) {
+    if (!trabalhoUsaMapaTeatro(prefixo)) return true;
+    const id = document.getElementById(prefixo + '-mapa-teatro')?.value;
+    if (!id || String(id).startsWith('local_')) {
+        toast('Selecione um mapa salvo antes de gerar ou imprimir.', 'warning');
+        return false;
+    }
+    if (!await loadMapaTeatroData(id, prefixo, true)) return false;
+    if (!state.csvData?.length) {
+        toast('O mapa selecionado não possui assentos para gerar ou imprimir.', 'warning');
+        return false;
+    }
+    return true;
 }
 
 function onImpNumeracaoSelect() {
@@ -12525,7 +12580,7 @@ function updateImpSummary() {
 
         }
 
-    } else if (num && num.csv_data && num.csv_data.length) {
+    } else if (num && num.csv_data && num.csv_data.length && !trabalhoUsaMapaTeatro('imp')) {
 
         // A fatia do modelo, nao o banco inteiro: varios modelos do mesmo pedido
         // costumam dividir o mesmo CSV.
@@ -12597,10 +12652,13 @@ function updateImpSummary() {
         // Carregar dados do mapa de teatro selecionado
         const mapaTeatro = document.getElementById('imp-mapa-teatro');
         if (mapaTeatro && mapaTeatro.value) {
-            loadMapaTeatroData(mapaTeatro.value);
+            loadMapaTeatroData(mapaTeatro.value, 'imp');
+        } else if (_lastLoadedMapaTeatro?.prefixo === 'imp' || _mapaTeatroCarregando?.prefixo === 'imp') {
+            loadMapaTeatroData('', 'imp');
         }
     } else {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'none';
+        liberarMapaTeatroDaTela('imp');
         if (impStartGroup) impStartGroup.style.display = 'block';
         if (impEndGroup) impEndGroup.style.display = 'block';
     }
@@ -12889,6 +12947,7 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Ver `garantirCsvDoTrabalho`: sem esta linha, uma numeracao com banco que
     // ainda nao desceu imprime numero sequencial no lugar dos nomes.
     await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('imp-numeracao'));
+    if (!await garantirMapaTeatroDoTrabalho('imp')) return;
 
     // E os bancos que sao do PEDIDO, pelo mesmo motivo (01/09/2026). Ate aqui
     // so a tela de Amostras os carregava: quem viesse direto para ca imprimia
@@ -13464,7 +13523,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         numeracao_2_id: num2Id || null,
 
-        mapa_teatro_id: document.getElementById('imp-mapa-teatro')?.value || null,
+        mapa_teatro_id: trabalhoUsaMapaTeatro('imp') ? document.getElementById('imp-mapa-teatro')?.value || null : null,
 
         saida_id: saiId,
 

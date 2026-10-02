@@ -3399,7 +3399,7 @@ function updatePedSummary() {
 
         }
 
-    } else if (num && num.csv_data && num.csv_data.length) {
+    } else if (num && num.csv_data && num.csv_data.length && !trabalhoUsaMapaTeatro('ped')) {
 
         // A fatia do modelo, nao o banco inteiro: varios modelos do mesmo pedido
         // costumam dividir o mesmo CSV. Espelha updateImpSummary no script.js —
@@ -3472,14 +3472,17 @@ function updatePedSummary() {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'block';
         if (impStartGroup) impStartGroup.style.display = 'none';
         if (impEndGroup) impEndGroup.style.display = 'none';
-        populateImpMapasTeatro();
+        populateImpMapasTeatro('ped');
         // Carregar dados do mapa de teatro selecionado
         const mapaTeatro = document.getElementById('ped-mapa-teatro');
         if (mapaTeatro && mapaTeatro.value) {
-            loadMapaTeatroData(mapaTeatro.value);
+            loadMapaTeatroData(mapaTeatro.value, 'ped');
+        } else if (_lastLoadedMapaTeatro?.prefixo === 'ped' || _mapaTeatroCarregando?.prefixo === 'ped') {
+            loadMapaTeatroData('', 'ped');
         }
     } else {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'none';
+        liberarMapaTeatroDaTela('ped');
         if (impStartGroup) impStartGroup.style.display = 'block';
         if (impEndGroup) impEndGroup.style.display = 'block';
     }
@@ -6100,6 +6103,7 @@ async function executarPedImposition(mode, isRefazer) {
     if (typeof garantirCsvDoTrabalho === 'function') {
         await garantirCsvDoTrabalho(idsDeNumeracaoDoTrabalho('ped-numeracao'));
     }
+    if (!await garantirMapaTeatroDoTrabalho('ped')) return;
 
     // E os bancos que sao do PEDIDO (01/09/2026). Esta era a tela do defeito do
     // 21460: ate aqui so a de Amostras os carregava, entao quem abrisse o pedido
@@ -6544,7 +6548,7 @@ async function executarPedImposition(mode, isRefazer) {
 
         numeracao_2_id: num2Id || null,
 
-        mapa_teatro_id: document.getElementById('ped-mapa-teatro')?.value || null,
+        mapa_teatro_id: trabalhoUsaMapaTeatro('ped') ? document.getElementById('ped-mapa-teatro')?.value || null : null,
 
         saida_id: saiId,
 

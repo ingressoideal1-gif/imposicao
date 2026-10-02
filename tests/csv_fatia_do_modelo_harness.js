@@ -188,7 +188,7 @@ function extrairFuncao(src, nome) {
     const pedido = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
 
     // O ramo "a numeração tem banco embutido" das duas telas de resumo.
-    const bancoEmbutido = /else if \(num && num\.csv_data && num\.csv_data\.length\) \{([\s\S]{0,900}?)state\.csvData = ([^\n;]+)/;
+    const bancoEmbutido = /else if \(num && num\.csv_data && num\.csv_data\.length && !trabalhoUsaMapaTeatro\('(?:imp|ped)'\)\) \{([\s\S]{0,900}?)state\.csvData = ([^\n;]+)/;
 
     const noScript = script.match(bancoEmbutido);
     const noPedido = pedido.match(bancoEmbutido);

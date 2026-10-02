@@ -19,6 +19,8 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 HARNESSES = [
+    "mapas_teatro_harness.js",  # cadastro, editor e carregamento nas duas telas
+    "mapas_teatro_browser_harness.js",  # editor real com transporte simulado
     "impressao_combinada_harness.js",  # previa completa e payload dos modelos selecionados
     "impressao_combinada_fluxo_harness.js",  # geracao e confirmacao com transporte simulado
     "csv_fatia_do_modelo_harness.js",   # a fatia do banco por modelo

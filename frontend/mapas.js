@@ -10,6 +10,8 @@ window.state.mapaAtual = null;
 let mapTool = 'select'; // 'select', 'erase'
 let canvasCtx = null;
 let mapCanvas = null;
+let mapaSalvando = false;
+let mapasCargaVersao = 0;
 
 // Sistema de Câmera (Pan/Zoom)
 let camera = { x: 0, y: 0, zoom: 1 };
@@ -54,16 +56,16 @@ window.undoMapHistory = function() {
     const previousConfig = window.state.mapaHistory.pop();
     window.state.mapaAtual.config = previousConfig;
     window.cadeirasSelecionadas = new Set();
+    const setores = previousConfig.setores || [];
+    window.setorSelecionadoIdx = setores.length ? Math.min(window.setorSelecionadoIdx ?? 0, setores.length - 1) : null;
     
     renderSetoresList();
     if (typeof carregarSetorNoSidebar === 'function') carregarSetorNoSidebar();
     if (typeof atualizarHeaderSetor === 'function') atualizarHeaderSetor();
     if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
-    window.requestAnimationFrame(() => {
-        if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
-            // will render automatically if loop is running
-        }
-    });
+    renderTiposAssentoList();
+    renderToolbarTipos();
+    window.requestAnimationFrame(renderMapa);
 }
 
 
@@ -99,26 +101,85 @@ function migrarDadosAntigos() {
         if (!s.id) s.id = 'setor_' + idx + '_' + Date.now();
     });
 
-    // Redistribui
+    // Redistribui sem sobrescrever cadeiras nem descartar um setor legado ausente.
+    const restantes = {};
     for (const key in global) {
         const c = global[key];
         const idx = c.setorIdx !== undefined ? c.setorIdx : 0;
         const setor = config.setores[idx];
-        if (setor) {
+        if (setor && !setor.cadeiras[key]) {
             setor.cadeiras[key] = c;
-        }
+        } else restantes[key] = c;
     }
 
-    config.cadeiras = {}; // esvazia o global
+    config.cadeiras = restantes;
     console.log('[Migração] Cadeiras migradas para setores individuais.');
 }
 
 // ==========================================
 // INICIALIZAÇÃO E FETCH
 // ==========================================
+function avisarMapa(mensagem, tipo = 'error') {
+    if (typeof window.toast === 'function') window.toast(mensagem, tipo);
+    else alert(mensagem);
+}
+
+function lerCacheMapas() {
+    try {
+        const mapas = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+        return Array.isArray(mapas) ? mapas : [];
+    } catch (e) {
+        console.error('[Mapas] Cache inválido:', e);
+        return [];
+    }
+}
+
+function gravarCacheMapas() {
+    try {
+        localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+    } catch (e) {
+        console.error('[Mapas] Não foi possível atualizar o cache:', e);
+        avisarMapa('Os dados do servidor foram recebidos, mas o cache deste navegador não pôde ser atualizado.', 'warning');
+    }
+}
+
+function contarCadeirasMapa(mapa) {
+    return (mapa.config?.setores || []).map(s => ({
+        setor: s.nome || 'Sem Nome',
+        quantidade: Object.values(s.cadeiras || {}).filter(c => c && c.tipo !== 'Apagado' && !c.isErased).length
+    }));
+}
+
+async function apiMapa(method, path = '', body) {
+    // Reutiliza a configuração do agente local já adotada pelo painel.
+    if (typeof api === 'function') return api(method, `/mapas_teatro${path}`, body);
+    const res = await fetch(`/api/mapas_teatro${path}`, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+function notificarMapasAtualizados() {
+    if (typeof populateImpMapasTeatro === 'function') {
+        populateImpMapasTeatro('imp');
+        populateImpMapasTeatro('ped');
+    }
+    for (const [prefixo, atualizar] of [['imp', window.updateImpSummary], ['ped', window.updatePedSummary]]) {
+        const grupo = document.getElementById(`${prefixo}-mapa-teatro-group`);
+        if (grupo && grupo.style.display === 'block' && (!grupo.getClientRects || grupo.getClientRects().length)
+            && typeof atualizar === 'function') {
+            try { atualizar(); } catch (e) { console.error('[Mapas] Erro ao atualizar a prévia:', e); }
+        }
+    }
+}
+
 async function fetchMapasTeatro() {
+    const cargaVersao = ++mapasCargaVersao;
     // 1. Carrega o cache local IMEDIATAMENTE
-    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+    const localData = lerCacheMapas();
     window.state.mapas = [...localData];
     
     // 2. Renderiza na tela para o usuário não ficar esperando ou ver tela vazia
@@ -130,40 +191,48 @@ async function fetchMapasTeatro() {
         let backendData = [];
         
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').order('name', { ascending: true });
-            if (!error && data) {
-                backendData = data;
-                success = true;
+            // Só remover entradas antigas após ler a lista completa, sem o limite padrão do PostgREST.
+            const tamanho = 500;
+            for (let inicio = 0; ; inicio += tamanho) {
+                const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*')
+                    .order('name', { ascending: true }).order('id', { ascending: true }).range(inicio, inicio + tamanho - 1);
+                if (error) throw error;
+                if (!Array.isArray(data)) throw new Error('Resposta inválida ao carregar mapas.');
+                backendData.push(...data);
+                if (data.length < tamanho) break;
             }
+            success = true;
         } else {
             // Fallback para api local se rodando em env dev sem supabase
-            const res = await fetch('/api/mapas_teatro');
-            if (res.ok) {
-                backendData = await res.json();
-                success = true;
-            }
+            backendData = await apiMapa('GET');
+            success = Array.isArray(backendData);
         }
         
-        if (success) {
-            // Merge robusto: Backend tem prioridade, mas mantemos o que só existe localmente
+        if (success && cargaVersao === mapasCargaVersao) {
+            // O servidor define os cadastros existentes; preserva apenas rascunhos locais legados.
             const mergedMap = new Map();
             
             backendData.forEach(m => mergedMap.set(m.id, m));
             
-            localData.forEach(m => {
-                if (!mergedMap.has(m.id)) {
+            lerCacheMapas().forEach(m => {
+                if (String(m.id).startsWith('local_') && !mergedMap.has(m.id)) {
                     mergedMap.set(m.id, m);
                 }
             });
             
             window.state.mapas = Array.from(mergedMap.values());
-            localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+            gravarCacheMapas();
             
             renderTabelaMapas();
+            notificarMapasAtualizados();
         }
     } catch(e) {
         console.error("Erro ao sincronizar mapas com backend (mantendo cache local):", e);
     }
+}
+
+function escaparMapaHtml(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function renderTabelaMapas(filtro) {
@@ -177,7 +246,7 @@ function renderTabelaMapas(filtro) {
     tbody.innerHTML = '';
     
     const mapasFiltrados = (window.state.mapas || []).filter(m =>
-        !termo || m.name.toLowerCase().includes(termo)
+        !termo || String(m.name || '').toLowerCase().includes(termo)
     );
     
     if (mapasFiltrados.length === 0) {
@@ -192,30 +261,32 @@ function renderTabelaMapas(filtro) {
         const config = mapa.config || {};
         const setores = config.setores || [];
         
-        let totalAssentos = 0;
-        setores.forEach(s => {
-            (s.fileiras || []).forEach(f => {
-                const count = Math.max(0, parseInt(f.fim) - parseInt(f.inicio) + 1);
-                const pulos = (f.pulos || []).length;
-                totalAssentos += (count - pulos);
-            });
-        });
+        const totalAssentos = contarCadeirasMapa(mapa).reduce((total, s) => total + s.quantidade, 0)
+            + Object.values(config.cadeiras || {}).filter(c => c && c.tipo !== 'Apagado' && !c.isErased).length;
 
         // Destaca o termo pesquisado no nome
+        const nome = String(mapa.name || 'Mapa sem nome');
+        const termoLiteral = termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const nomeFinal = termo
-            ? mapa.name.replace(new RegExp(`(${termo})`, 'gi'), '<mark style="background:rgba(59,130,246,0.35); color:inherit; border-radius:2px;">$1</mark>')
-            : mapa.name;
+            ? nome.split(new RegExp(`(${termoLiteral})`, 'gi')).map((parte, idx) => idx % 2
+                ? `<mark style="background:rgba(59,130,246,0.35); color:inherit; border-radius:2px;">${escaparMapaHtml(parte)}</mark>`
+                : escaparMapaHtml(parte)).join('')
+            : escaparMapaHtml(nome);
 
         tr.innerHTML = `
             <td><strong>${nomeFinal}</strong></td>
             <td>${setores.length} Setores</td>
             <td>${totalAssentos} Assentos</td>
             <td class="text-right">
-                <button class="btn btn-sm" onclick="editarMapaTeatro('${mapa.id}')">✏️ Editar</button>
-                <button class="btn btn-sm btn-secondary" onclick="duplicarMapaTeatro('${mapa.id}')" title="Duplicar mapa com todas as configurações">📋 Copiar</button>
-                <button class="btn btn-sm" onclick="excluirMapaTeatro('${mapa.id}')">🗑️ Excluir</button>
+                <button class="btn btn-sm">✏️ Editar</button>
+                <button class="btn btn-sm btn-secondary" title="Duplicar mapa com todas as configurações">📋 Copiar</button>
+                <button class="btn btn-sm">🗑️ Excluir</button>
             </td>
         `;
+        const botoes = tr.querySelectorAll('button');
+        botoes[0].onclick = () => editarMapaTeatro(mapa.id);
+        botoes[1].onclick = () => duplicarMapaTeatro(mapa.id);
+        botoes[2].onclick = () => excluirMapaTeatro(mapa.id);
         tbody.appendChild(tr);
     });
 }
@@ -248,161 +319,156 @@ window.editarMapaTeatro = function(id) {
     abrirModalMapaTeatro();
 }
 
-window.excluirMapaTeatro = async function(id) {
-    if (!confirm('Deseja realmente excluir este mapa?')) return;
-    
-    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        await supabaseClient.from('producao_mapas_teatro').delete().eq('id', id);
-    } else {
-        try {
-            await fetch(`/api/mapas_teatro/${id}`, { method: 'DELETE' });
-        } catch(e){}
+function valorDoMapaConfere(atual, esperado) {
+    if (esperado && typeof esperado === 'object') {
+        if (!atual || typeof atual !== 'object' || Array.isArray(atual) !== Array.isArray(esperado)) return false;
+        const chaves = Object.keys(esperado);
+        return Object.keys(atual).length === chaves.length && chaves.every(k => valorDoMapaConfere(atual[k], esperado[k]));
     }
-    
-    // Atualiza localstorage
-    window.state.mapas = window.state.mapas.filter(x => x.id !== id);
-    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
-    
-    await fetchMapasTeatro();
+    return atual === esperado;
 }
 
+async function persistirMapaTeatro(mapa) {
+    if (Object.keys(mapa.config.cadeiras || {}).length) {
+        const erro = new Error('Há cadeiras antigas sem setor ou com posições conflitantes. Elas foram preservadas; revise essa configuração antes de salvar.');
+        erro.code = 'MAPA_LEGADO';
+        throw erro;
+    }
+    const lugares_por_setor = contarCadeirasMapa(mapa);
+    const payload = {
+        name: mapa.name,
+        config: JSON.parse(JSON.stringify(mapa.config)),
+        total_lugares: lugares_por_setor.reduce((total, s) => total + s.quantidade, 0),
+        lugares_por_setor
+    };
+    const existente = mapa.id && !String(mapa.id).startsWith('local_');
+    let salvo;
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const query = existente
+            ? supabaseClient.from('producao_mapas_teatro').update(payload).eq('id', mapa.id)
+            : supabaseClient.from('producao_mapas_teatro').insert([payload]);
+        const { data, error } = await query.select('*').single();
+        if (error) throw error;
+        if (!data?.id || (existente && String(data.id) !== String(mapa.id))) {
+            throw new Error('O salvamento não confirmou exatamente um mapa.');
+        }
+        // Guarda o ID antes da releitura: falha de confirmação não deve causar outro INSERT na tentativa seguinte.
+        if (String(mapa.id).startsWith('local_')) mapa._idLocalAnterior = mapa.id;
+        mapa.id = data.id;
+        const confirmado = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', mapa.id).single();
+        if (confirmado.error) throw confirmado.error;
+        salvo = confirmado.data;
+    } else {
+        const resposta = await apiMapa(existente ? 'PUT' : 'POST', existente ? '/' + encodeURIComponent(mapa.id) : '', payload);
+        if (!existente) {
+            if (!resposta?.id) throw new Error('O salvamento não retornou o ID do mapa.');
+            if (String(mapa.id).startsWith('local_')) mapa._idLocalAnterior = mapa.id;
+            mapa.id = resposta.id;
+        }
+        salvo = await apiMapa('GET', '/' + encodeURIComponent(mapa.id));
+    }
+    if (!salvo || String(salvo.id) !== String(mapa.id)
+        || !Object.keys(payload).every(campo => valorDoMapaConfere(salvo[campo], payload[campo]))) {
+        throw new Error('Não foi possível confirmar os dados gravados. Suas alterações continuam no editor.');
+    }
+    return salvo;
+}
+
+function registrarMapaSalvo(salvo, idAnterior) {
+    ++mapasCargaVersao; // invalida consultas anteriores à gravação
+    window.state.mapas = (window.state.mapas || []).filter(m => m.id !== salvo.id && m.id !== idAnterior);
+    window.state.mapas.push(JSON.parse(JSON.stringify(salvo)));
+    window.state.mapas.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    gravarCacheMapas();
+    renderTabelaMapas();
+    notificarMapasAtualizados();
+}
+
+const mapasExcluindo = new Set();
+window.excluirMapaTeatro = async function(id) {
+    if (mapasExcluindo.has(id) || !confirm('Deseja realmente excluir este mapa?')) return;
+    mapasExcluindo.add(id);
+    try {
+        if (!String(id).startsWith('local_')) {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient.from('producao_mapas_teatro').delete().eq('id', id).select('id');
+                if (error) throw error;
+                if (!Array.isArray(data) || data.length !== 1 || String(data[0].id) !== String(id)) {
+                    throw new Error('A exclusão não confirmou exatamente um mapa. Atualize a lista antes de repetir.');
+                }
+                const confirmado = await supabaseClient.from('producao_mapas_teatro').select('id').eq('id', id).maybeSingle();
+                if (confirmado.error) throw confirmado.error;
+                if (confirmado.data) throw new Error('O mapa ainda existe no servidor.');
+            } else {
+                await apiMapa('DELETE', '/' + encodeURIComponent(id));
+                const restantes = await apiMapa('GET');
+                if (!Array.isArray(restantes) || restantes.some(m => String(m.id) === String(id))) {
+                    throw new Error('Não foi possível confirmar a exclusão do mapa.');
+                }
+            }
+        }
+        ++mapasCargaVersao;
+        window.state.mapas = window.state.mapas.filter(x => x.id !== id);
+        gravarCacheMapas();
+        renderTabelaMapas();
+        notificarMapasAtualizados();
+        avisarMapa('Mapa excluído.', 'success');
+    } catch (e) {
+        console.error('[Mapas] Erro ao excluir:', e);
+        avisarMapa('Não foi possível confirmar a exclusão. O mapa foi mantido na lista; atualize antes de repetir.');
+    } finally {
+        mapasExcluindo.delete(id);
+    }
+};
+
+const mapasDuplicando = new Set();
 window.duplicarMapaTeatro = async function(id) {
     const original = window.state.mapas.find(m => m.id === id);
-    if (!original) return;
-    
-    const novoNome = `Cópia de ${original.name}`;
-    if (!confirm(`Duplicar o mapa "${original.name}" como "${novoNome}"?`)) return;
-    
-    // Deep copy da config completa
-    const copia = {
-        name: novoNome,
-        config: JSON.parse(JSON.stringify(original.config || {}))
-    };
-    // Não copiamos o ID para que seja gerado um novo
-    
-    let novoId = null;
-    
+    if (!original || mapasDuplicando.has(id)) return;
+    const novoNome = 'Cópia de ' + original.name;
+    if (!confirm('Duplicar o mapa "' + original.name + '" como "' + novoNome + '"?')) return;
+    mapasDuplicando.add(id);
+    const copia = { name: novoNome, config: JSON.parse(JSON.stringify(original.config || {})) };
     try {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient
-                .from('producao_mapas_teatro')
-                .insert([{ name: copia.name, config: copia.config }])
-                .select();
-            if (data && data.length > 0) {
-                novoId = data[0].id;
-                copia.id = novoId;
-            } else if (error) {
-                console.error('Erro ao duplicar no Supabase:', error);
-            }
-        } else {
-            const res = await fetch('/api/mapas_teatro', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(copia)
-            });
-            if (res.ok) {
-                const saved = await res.json();
-                copia.id = saved.id;
-                novoId = saved.id;
-            }
-        }
-    } catch(e) {
-        console.error('Erro ao duplicar mapa:', e);
+        const salvo = await persistirMapaTeatro(copia);
+        registrarMapaSalvo(salvo);
+        avisarMapa('Mapa duplicado como "' + novoNome + '"!', 'success');
+    } catch (e) {
+        console.error('[Mapas] Erro ao duplicar:', e);
+        window.state.mapaAtual = copia;
+        abrirModalMapaTeatro();
+        avisarMapa('Não foi possível confirmar a cópia. Confira os dados no editor e tente Salvar Mapa novamente.');
+    } finally {
+        mapasDuplicando.delete(id);
     }
-    
-    // Salva no cache local mesmo sem backend
-    if (!copia.id) copia.id = 'local_' + Date.now();
-    window.state.mapas.push(copia);
-    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
-    
-    await fetchMapasTeatro();
-    
-    if (typeof window.toast === 'function') {
-        window.toast(`Mapa duplicado como "${novoNome}"!`, 'success');
-    }
-}
+};
 
 window.salvarMapaTeatro = async function() {
-    const m = window.state.mapaAtual;
-    m.name = document.getElementById('mapa-nome').value || 'Mapa sem nome';
-    
-    // Calcula totais de cadeiras por setor
-    let total_lugares = 0;
-    let lugares_por_setor = [];
-    if (m.config && m.config.setores) {
-        m.config.setores.forEach(s => {
-            const qtd = Object.keys(s.cadeiras || {}).length;
-            total_lugares += qtd;
-            lugares_por_setor.push({
-                setor: s.nome || 'Sem Nome',
-                quantidade: qtd
-            });
-        });
-    }
-    m.total_lugares = total_lugares;
-    m.lugares_por_setor = lugares_por_setor;
-    
-    let backendSuccess = false;
-    
+    const mapa = window.state.mapaAtual;
+    if (!mapa || mapaSalvando) return;
+    mapa.name = document.getElementById('mapa-nome').value.trim() || 'Mapa sem nome';
+    const idAnterior = mapa._idLocalAnterior || mapa.id;
+    const controles = Array.from(document.getElementById('modal-mapa-teatro').querySelectorAll('button, input, select'))
+        .map(el => ({ el, disabled: el.disabled }));
+    mapaSalvando = true;
+    controles.forEach(({ el }) => { el.disabled = true; });
+    let salvo;
     try {
-        if (m.id) {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const {error} = await supabaseClient.from('producao_mapas_teatro').update({
-                    name: m.name,
-                    config: m.config
-                }).eq('id', m.id);
-                if(!error) backendSuccess = true;
-            } else {
-                const res = await fetch(`/api/mapas_teatro/${m.id}`, {
-                    method: 'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify(m)
-                });
-                if(res.ok) backendSuccess = true;
-            }
-        } else {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
-                    name: m.name,
-                    config: m.config
-                }]).select();
-                if(data && data.length > 0) {
-                    m.id = data[0].id;
-                    backendSuccess = true;
-                }
-            } else {
-                const res = await fetch(`/api/mapas_teatro`, {
-                    method: 'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify(m)
-                });
-                if(res.ok) {
-                    const data = await res.json();
-                    if(data.id) m.id = data.id;
-                    backendSuccess = true;
-                }
-            }
-        }
-    } catch(e) {
-        console.error("Erro ao salvar mapa no backend:", e);
+        salvo = await persistirMapaTeatro(mapa);
+        registrarMapaSalvo(salvo, idAnterior);
+    } catch (e) {
+        console.error('[Mapas] Erro ao salvar:', e);
+        avisarMapa(e.code === 'MAPA_LEGADO' ? e.message
+            : 'Não foi possível confirmar o salvamento. Suas alterações continuam no editor; tente novamente.');
+    } finally {
+        mapaSalvando = false;
+        controles.forEach(({ el, disabled }) => { el.disabled = disabled; });
     }
-    
-    // Atualiza o cache local SEMPRE, mesmo se deu sucesso no backend (garantia máxima)
-    if (!m.id) {
-        m.id = 'local_' + Math.random().toString(36).substr(2, 9);
+    if (salvo) {
+        fecharModalMapaTeatro();
+        avisarMapa('Mapa salvo e confirmado.', 'success');
     }
-    window.state.mapas = window.state.mapas || [];
-    const idx = window.state.mapas.findIndex(x => x.id === m.id);
-    if (idx >= 0) {
-        window.state.mapas[idx] = JSON.parse(JSON.stringify(m));
-    } else {
-        window.state.mapas.push(JSON.parse(JSON.stringify(m)));
-    }
-    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
-    
-    fecharModalMapaTeatro();
-    await fetchMapasTeatro();
-}
+};
 
 // ==========================================
 // MODAL E SIDEBAR
@@ -415,7 +481,7 @@ function abrirModalMapaTeatro() {
     if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
-    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'seq';
+    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
 
 
     // Atualiza header do canvas com o nome do mapa
@@ -438,8 +504,11 @@ function abrirModalMapaTeatro() {
     window.cadeiraSelecionada = null;
     window.state.mapaHistory = [];
     window._camerasPorSetor = {}; // câmera independente por setor
+    isDraggingMap = false;
+    window.setMapTool('select');
 
     renderSetoresList();
+    carregarSetorNoSidebar();
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
     atualizarHeaderSetor();
@@ -448,9 +517,11 @@ function abrirModalMapaTeatro() {
 }
 
 window.fecharModalMapaTeatro = function() {
+    if (mapaSalvando) return;
     document.getElementById('modal-mapa-teatro').style.display = 'none';
     window.state.mapaAtual = null;
     if(window.requestAnimFrameId) cancelAnimationFrame(window.requestAnimFrameId);
+    window.requestAnimFrameId = null;
 }
 
 window.adicionarSetorMapa = function() {
@@ -460,7 +531,7 @@ window.adicionarSetorMapa = function() {
     if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
-    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'seq';
+    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
     const novoIdx = window.state.mapaAtual.config.setores.length;
     window.state.mapaAtual.config.setores.push({
         id: 'setor_' + novoIdx + '_' + Date.now(),
@@ -469,6 +540,7 @@ window.adicionarSetorMapa = function() {
         cadeiras: {}
     });
     window.setorSelecionadoIdx = novoIdx;
+    window.cadeirasSelecionadas = new Set();
     renderSetoresList();
     carregarSetorNoSidebar();
     atualizarHeaderSetor();
@@ -484,7 +556,7 @@ function renderSetoresList() {
 
     setores.forEach((s, idx) => {
         const ativo = idx === window.setorSelecionadoIdx;
-        const numAssentos = Object.keys(s.cadeiras || {}).length;
+        const numAssentos = Object.values(s.cadeiras || {}).filter(c => c && c.tipo !== 'Apagado' && !c.isErased).length;
 
         const div = document.createElement('div');
         div.style.cssText = `
@@ -545,6 +617,7 @@ function selecionarSetorComTransicao(idx) {
     }
 
     setTimeout(() => {
+        if (!window.state.mapaAtual || !window.state.mapaAtual.config.setores[idx]) return;
         // Salva câmera do setor que estava ativo
         if (!window._camerasPorSetor) window._camerasPorSetor = {};
         if (window.setorSelecionadoIdx !== null) {
@@ -595,6 +668,8 @@ window.excluirSetor = function(idx) {
     window.pushToMapHistory();
     // Simplesmente remove o setor (cadeiras ficam dentro do objeto do setor)
     window.state.mapaAtual.config.setores.splice(idx, 1);
+    window.cadeirasSelecionadas = new Set();
+    window._camerasPorSetor = {};
 
     const total = window.state.mapaAtual.config.setores.length;
     if (window.setorSelecionadoIdx === idx) {
@@ -612,12 +687,12 @@ window.excluirSetor = function(idx) {
 
 function carregarSetorNoSidebar() {
     const props = document.getElementById('mapa-setor-props');
-    if (window.setorSelecionadoIdx === null) {
+    const s = getSetorAtual();
+    if (!s) {
         props.style.display = 'none';
         return;
     }
     props.style.display = 'flex';
-    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
     document.getElementById('mapa-setor-nome').value = s.nome || '';
 }
 
@@ -626,6 +701,7 @@ window.atualizarSetorAtual = function() {
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
     s.nome = document.getElementById('mapa-setor-nome').value;
     renderSetoresList(); 
+    atualizarHeaderSetor();
 }
 
 window.setMapTool = function(tool) {
@@ -653,11 +729,13 @@ window.setMapTool = function(tool) {
 // MOTOR DO CANVAS
 // ==========================================
 function initMapCanvas() {
+    if (!window.state.mapaAtual) return;
+    if (window.requestAnimFrameId) cancelAnimationFrame(window.requestAnimFrameId);
     mapCanvas = document.getElementById('mapa-canvas');
     const container = document.getElementById('mapa-canvas-container');
     
-    mapCanvas.width = container.clientWidth;
-    mapCanvas.height = container.clientHeight;
+    mapCanvas.width = mapCanvas.clientWidth || container.clientWidth;
+    mapCanvas.height = mapCanvas.clientHeight || container.clientHeight;
     
     canvasCtx = mapCanvas.getContext('2d');
     
@@ -675,6 +753,12 @@ function initMapCanvas() {
 }
 
 function renderCanvasLoop() {
+    if (!canvasCtx || !window.state.mapaAtual) return;
+    renderMapa();
+    window.requestAnimFrameId = requestAnimationFrame(renderCanvasLoop);
+}
+
+function renderMapa() {
     if (!canvasCtx || !window.state.mapaAtual) return;
     
     canvasCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
@@ -715,7 +799,6 @@ function renderCanvasLoop() {
         canvasCtx.textAlign = 'center';
         canvasCtx.textBaseline = 'middle';
         canvasCtx.fillText('Selecione ou crie um Setor na barra lateral', mapCanvas.width/2, mapCanvas.height/2);
-        window.requestAnimFrameId = requestAnimationFrame(renderCanvasLoop);
         return;
     }
     const tipos = window.getTiposAssento();
@@ -724,10 +807,11 @@ function renderCanvasLoop() {
 
     for (const key in cadeiras) {
         const c = cadeiras[key];
+        if (!c || c.tipo === 'Apagado' || c.isErased) continue;
         const [cx, cy] = key.split(',').map(Number);
         
         // Mantém compatibilidade com mapas velhos que usavam string c.tipo
-        let tipoObj = tiposMap.get(c.tipo) || tiposMap.get('Normal') || tipos[0];
+        let tipoObj = tiposMap.get(c.tipo) || tiposMap.get('Normal') || tipos[0] || DEFAULT_TIPOS_ASSENTO[0];
         
         canvasCtx.fillStyle = tipoObj.cor;
         
@@ -774,13 +858,16 @@ function renderCanvasLoop() {
         legX += canvasCtx.measureText(label).width + 32;
     });
 
-    window.requestAnimFrameId = requestAnimationFrame(renderCanvasLoop);
+}
+
+function atualizarEstatisticasMapa() {
+    if (window.state.mapaAtual) renderSetoresList();
 }
 
 function getGridPos(evt) {
     const rect = mapCanvas.getBoundingClientRect();
-    const mx = evt.clientX - rect.left;
-    const my = evt.clientY - rect.top;
+    const mx = (evt.clientX - rect.left) * (rect.width ? mapCanvas.width / rect.width : 1);
+    const my = (evt.clientY - rect.top) * (rect.height ? mapCanvas.height / rect.height : 1);
     
     const worldX = (mx - camera.x) / camera.zoom;
     const worldY = (my - camera.y) / camera.zoom;
@@ -791,6 +878,8 @@ function getGridPos(evt) {
 }
 
 function onMapMouseDown(e) {
+    if (mapaSalvando) return;
+    window._borrachaComHistorico = false;
     if (e.button === 1 || e.button === 2 || (e.button === 0 && mapTool === 'pan')) {
         isDraggingMap = true;
         dragStart.x = e.clientX;
@@ -811,12 +900,12 @@ function onMapMouseDown(e) {
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
                 window.pushToMapHistory();
+                window._borrachaComHistorico = true;
                 delete cadeiras[key];
                 changed = true;
             }
         } else if (mapTool === 'restore') {
             if (!cadeiras[key]) {
-                window.pushToMapHistory();
                 
                 // Tenta pegar o prefixo da mesma fileira
                 let refPrefixo = document.getElementById('mapa-fileira-prefix').value || 'A';
@@ -839,10 +928,17 @@ function onMapMouseDown(e) {
                 } else if (cadeiras[`${pos.gx + 1},${pos.gy}`]) {
                     refNum = parseInt(cadeiras[`${pos.gx + 1},${pos.gy}`].num) - step;
                 }
+                refNum = refNum > 0 ? refNum : 1;
+                if (Object.values(cadeiras).some(c => c && c.tipo !== 'Apagado' && !c.isErased
+                    && c.prefixo === refPrefixo && Number(c.num) === refNum)) {
+                    avisarMapa(`O assento ${refPrefixo}${refNum} já existe. Ajuste o início ou o padrão antes de restaurar.`, 'warning');
+                    return;
+                }
+                window.pushToMapHistory();
                 
                 cadeiras[key] = {
                     prefixo: refPrefixo,
-                    num: refNum > 0 ? refNum : 1,
+                    num: refNum,
                     tipo: 'Normal'
                 };
                 changed = true;
@@ -872,6 +968,7 @@ function onMapMouseDown(e) {
 }
 
 function onMapMouseMove(e) {
+    if (mapaSalvando) return;
     if (isDraggingMap) {
         const dx = e.clientX - dragStart.x;
         const dy = e.clientY - dragStart.y;
@@ -889,9 +986,10 @@ function onMapMouseMove(e) {
 
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
-                // To avoid pushing to history 60 times a second while dragging erase, 
-                // we'll just push once if the mouse is down, but that's tricky here.
-                // It's ok, we can just push on mouse down, and here we just delete.
+                if (!window._borrachaComHistorico) {
+                    window.pushToMapHistory();
+                    window._borrachaComHistorico = true;
+                }
                 delete cadeiras[key];
                 window.requestAnimationFrame(renderMapa);
                 if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
@@ -912,13 +1010,14 @@ function onMapMouseMove(e) {
 
 function onMapMouseUp(e) {
     isDraggingMap = false;
+    window._borrachaComHistorico = false;
 }
 
 function onMapWheel(e) {
     e.preventDefault();
     const rect = mapCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const mx = (e.clientX - rect.left) * (rect.width ? mapCanvas.width / rect.width : 1);
+    const my = (e.clientY - rect.top) * (rect.height ? mapCanvas.height / rect.height : 1);
 
     const zoomFactor = 1.1;
     let newZoom = camera.zoom;
@@ -942,11 +1041,13 @@ window.gerarFileiraNoCanvas = function() {
         return;
     }
     
-    window.pushToMapHistory();
-    
     const prefixoRaw = document.getElementById('mapa-fileira-prefix').value || 'A';
-    const inicio = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
-    const fim = parseInt(document.getElementById('mapa-fileira-fim').value) || 30;
+    const inicio = Number(document.getElementById('mapa-fileira-inicio').value);
+    const fim = Number(document.getElementById('mapa-fileira-fim').value);
+    if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fim) || inicio < 1 || fim < inicio) {
+        avisarMapa('Informe um início positivo e um fim maior ou igual ao início.', 'warning');
+        return;
+    }
     const padrao = document.getElementById('mapa-fileira-padrao').value;
     
     // Suporte para múltiplas fileiras separadas por vírgula (ex: A, B, C) e ranges (ex: B-H ou 1-5)
@@ -989,8 +1090,23 @@ window.gerarFileiraNoCanvas = function() {
     if (prefixos.length === 0) prefixos.push('A');
     
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
-    if (!s.cadeiras) s.cadeiras = {};
-    const cadeiras = s.cadeiras;
+    // Prepara a inclusão em uma cópia; uma colisão não pode deixar meia fileira aplicada.
+    const cadeiras = JSON.parse(JSON.stringify(s.cadeiras || {}));
+    const fileiras = [...(s.fileiras || [])];
+    // O rótulo Fila + Número identifica o assento dentro do setor.
+    const rotulos = new Set(Object.values(cadeiras).filter(c => c && c.tipo !== 'Apagado' && !c.isErased)
+        .map(c => JSON.stringify([String(c.prefixo || ''), Number(c.num)])));
+    for (const prefixo of prefixos) {
+        for (let i = inicio; i <= fim; i++) {
+            if ((padrao === 'impar' && i % 2 === 0) || (padrao === 'par' && i % 2 !== 0)) continue;
+            const rotulo = JSON.stringify([prefixo, i]);
+            if (rotulos.has(rotulo)) {
+                avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste a fila ou o intervalo.`, 'warning');
+                return;
+            }
+            rotulos.add(rotulo);
+        }
+    }
     
     let numSeatsToAdd = 0;
     for (let i = inicio; i <= fim; i++) {
@@ -1001,7 +1117,7 @@ window.gerarFileiraNoCanvas = function() {
     
     for (let pIdx = 0; pIdx < prefixos.length; pIdx++) {
         const prefixo = prefixos[pIdx];
-        s.fileiras.push({ prefixo, inicio, fim, padrao });
+        fileiras.push({ prefixo, inicio, fim, padrao });
         
         let startY = null; 
         let startX = null; 
@@ -1069,6 +1185,10 @@ window.gerarFileiraNoCanvas = function() {
             if (padrao === 'par' && i % 2 !== 0) continue;
             
             let key = `${currentX},${startY}`;
+            if (cadeiras[key]) {
+                avisarMapa('Há uma cadeira no espaço da nova fileira. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');
+                return;
+            }
             cadeiras[key] = {
                 prefixo: prefixo,
                 num: i,
@@ -1077,6 +1197,11 @@ window.gerarFileiraNoCanvas = function() {
             currentX++;
         }
     }
+    window.pushToMapHistory();
+    s.cadeiras = cadeiras;
+    s.fileiras = fileiras;
+    atualizarEstatisticasMapa();
+    window.requestAnimationFrame(renderMapa);
 }
 
 window.marcarAssentoEspecial = function(tipo) {
@@ -1138,7 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Carrega os mapas do localStorage imediatamente (para não mostrar tabela vazia no F5)
-    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+    const localData = lerCacheMapas();
     if (localData.length > 0) {
         window.state.mapas = [...localData];
         // Aguarda o DOM estar pronto para renderizar a tabela
@@ -1173,8 +1298,8 @@ window.deletarSelecionadas = function() {
 
 document.addEventListener('keydown', function(e) {
     const modal = document.getElementById('modal-mapa-teatro');
-    if (!modal || modal.style.display !== 'flex') return;
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (!modal || modal.style.display !== 'flex' || mapaSalvando) return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
     
     // Spacebar: ativa ferramenta Mover (pan) enquanto pressionado
     if (e.code === 'Space' && !e.repeat) {
@@ -1203,7 +1328,6 @@ document.addEventListener('keydown', function(e) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
             e.preventDefault();
-            window.pushToMapHistory();
             const _sarrow = getSetorAtual();
             if (!_sarrow) return;
             const cadeiras = getCadeirasSetor(_sarrow);
@@ -1217,8 +1341,18 @@ document.addEventListener('keydown', function(e) {
             const toMove = [];
             window.cadeirasSelecionadas.forEach(key => {
                 let [gx, gy] = key.split(',').map(Number);
-                toMove.push({ key, gx, gy, c: cadeiras[key] });
+                if (cadeiras[key]) toMove.push({ key, gx, gy, c: cadeiras[key] });
             });
+            const chavesMovidas = new Set(toMove.map(item => item.key));
+            if (toMove.some(item => {
+                const destino = `${item.gx + dx},${item.gy + dy}`;
+                return cadeiras[destino] && !chavesMovidas.has(destino);
+            })) {
+                avisarMapa('Há uma cadeira no destino. Escolha um espaço livre para mover a seleção.', 'warning');
+                return;
+            }
+            if (!toMove.length) return;
+            window.pushToMapHistory();
             
             toMove.forEach(item => delete cadeiras[item.key]);
             
@@ -1228,6 +1362,7 @@ document.addEventListener('keydown', function(e) {
                 cadeiras[newKey] = item.c;
                 window.cadeirasSelecionadas.add(newKey);
             });
+            window.requestAnimationFrame(renderMapa);
         }
     }
 });
@@ -1259,21 +1394,22 @@ window.renderTiposAssentoList = function() {
         const div = document.createElement('div');
         div.style.cssText = 'background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:8px; position:relative;';
         
+        const cor = /^#[\da-f]{6}$/i.test(t.cor || '') ? t.cor : '#3498db';
         div.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <strong style="font-size:0.9rem; display:flex; align-items:center; gap:6px;">
-                    <span style="display:inline-block; width:12px; height:12px; background:${t.cor}; border-radius:3px;"></span>
-                    ${t.nome}
+                    <span style="display:inline-block; width:12px; height:12px; background:${cor}; border-radius:3px;"></span>
+                    ${escaparMapaHtml(t.nome)}
                 </strong>
                 <button class="btn btn-sm btn-secondary" onclick="removerTipoAssento(${i})" style="color:red; padding:2px 6px;" title="Remover Tipo">✖</button>
             </div>
             <div style="display:flex; gap:6px;">
-                <input type="text" class="form-control" value="${t.nome}" placeholder="Nome" onchange="atualizarTipoAssento(${i}, 'nome', this.value)" style="flex:1; min-width:0; padding:4px 8px; font-size:0.8rem;">
-                <input type="text" class="form-control" value="${t.sufixo}" placeholder="Sufixo" onchange="atualizarTipoAssento(${i}, 'sufixo', this.value)" style="width:60px; padding:4px 8px; font-size:0.8rem;" title="Sufixo (ex: Cad)">
+                <input type="text" class="form-control" value="${escaparMapaHtml(t.nome)}" placeholder="Nome" onchange="atualizarTipoAssento(${i}, 'nome', this.value)" style="flex:1; min-width:0; padding:4px 8px; font-size:0.8rem;">
+                <input type="text" class="form-control" value="${escaparMapaHtml(t.sufixo)}" placeholder="Sufixo" onchange="atualizarTipoAssento(${i}, 'sufixo', this.value)" style="width:60px; padding:4px 8px; font-size:0.8rem;" title="Sufixo (ex: Cad)">
             </div>
             <div style="display:flex; gap:6px; align-items:center;">
-                <input type="color" value="${t.cor}" onchange="atualizarTipoAssento(${i}, 'cor', this.value)" style="width:30px; height:24px; padding:0; border:none; cursor:pointer;" title="Cor no Mapa">
-                <input type="text" class="form-control" value="${t.icone}" placeholder="Ícone" onchange="atualizarTipoAssento(${i}, 'icone', this.value)" style="width:40px; padding:4px 8px; font-size:0.8rem; text-align:center;" title="Ícone">
+                <input type="color" value="${cor}" onchange="atualizarTipoAssento(${i}, 'cor', this.value)" style="width:30px; height:24px; padding:0; border:none; cursor:pointer;" title="Cor no Mapa">
+                <input type="text" class="form-control" value="${escaparMapaHtml(t.icone)}" placeholder="Ícone" onchange="atualizarTipoAssento(${i}, 'icone', this.value)" style="width:40px; padding:4px 8px; font-size:0.8rem; text-align:center;" title="Ícone">
             </div>
         `;
         container.appendChild(div);
@@ -1291,7 +1427,7 @@ window.renderToolbarTipos = function() {
         btn.className = 'btn btn-sm btn-secondary';
         btn.onclick = () => marcarAssentoEspecial(t.id);
         btn.title = `Marcar como ${t.nome}`;
-        btn.innerHTML = `${t.icone || '💺'} ${t.nome}`;
+        btn.textContent = `${t.icone || '💺'} ${t.nome}`;
         toolbar.appendChild(btn);
     });
 }
@@ -1309,7 +1445,7 @@ window.adicionarTipoAssentoMapa = function() {
     });
     renderTiposAssentoList();
     renderToolbarTipos();
-    renderCanvasLoop();
+    renderMapa();
 }
 
 window.atualizarTipoAssento = function(idx, field, value) {
@@ -1320,7 +1456,7 @@ window.atualizarTipoAssento = function(idx, field, value) {
     }
     renderTiposAssentoList();
     renderToolbarTipos();
-    renderCanvasLoop();
+    renderMapa();
 }
 
 window.removerTipoAssento = function(idx) {
@@ -1330,5 +1466,5 @@ window.removerTipoAssento = function(idx) {
     tipos.splice(idx, 1);
     renderTiposAssentoList();
     renderToolbarTipos();
-    renderCanvasLoop();
+    renderMapa();
 }

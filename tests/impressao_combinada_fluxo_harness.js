@@ -44,6 +44,7 @@ function fixture(options={}) {
         },
     });
     vm.runInContext(extract(main,'nomeDosModelosCombinados'),c);
+    vm.runInContext(main.slice(main.indexOf('function populateImpMapasTeatro('), main.indexOf('function onImpNumeracaoSelect()')), c);
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
     vm.runInContext(extract(pedido,'folha1DoPedido'),c);
     const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
