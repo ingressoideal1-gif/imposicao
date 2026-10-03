@@ -135,3 +135,39 @@ def test_storage_preserva_grafia_remota_das_pastas_no_zip(tmp_path,monkeypatch):
     backup.decifrar(destino/'teste.iib',aberto,chave.read_bytes())
     with zipfile.ZipFile(aberto) as z:
         assert set(z.namelist())=={'inventario.json','objetos/Pasta/um.pdf','objetos/pasta/dois.pdf'}
+
+
+@pytest.mark.parametrize('adulterar',[False,True])
+def test_storage_retomada_preserva_janela_e_pacote_concluido(tmp_path,monkeypatch,adulterar):
+    objects=[{'bucket_id':bucket,'name':'arquivo','bytes':4} for bucket in ['primeiro','segundo']]
+    monkeypatch.setattr(storage,'cli',lambda *a,**k:{'rows':[{'objects':objects}]})
+    def iniciar(cli,project,bucket,expected,folder):
+        if bucket=='segundo':raise RuntimeError('interrupcao sintetica')
+        (folder/'arquivo').write_bytes(b'test')
+    monkeypatch.setattr(storage,'baixar_objetos',iniciar)
+    chave=tmp_path/'chave';chave.write_bytes(bytes(range(32)))
+    destino=tmp_path/'backup'
+    with pytest.raises(RuntimeError,match='interrupcao sintetica'):
+        storage.copiar('sintetica',destino,chave,usar_http=True)
+    manifest_path=destino/'manifesto-storage.json'
+    before=json.loads(manifest_path.read_text())
+    assert 'completed_at' not in before
+    sealed=destino/'primeiro.iib';original=sealed.read_bytes()
+    monkeypatch.setattr(storage,'cli',lambda *a,**k:pytest.fail('Retomada deve manter o inventario original'))
+    def retomar(cli,project,bucket,missing,folder):
+        assert bucket=='segundo'
+        (folder/'arquivo').write_bytes(b'test')
+    monkeypatch.setattr(storage,'baixar_objetos',retomar)
+    if adulterar:
+        data=bytearray(original);data[-1]^=1;sealed.write_bytes(data)
+        with pytest.raises(ValueError,match='Pacote concluido divergente'):
+            storage.copiar('sintetica',destino,chave,usar_http=True,retomar=True)
+        assert 'completed_at' not in json.loads(manifest_path.read_text())
+    else:
+        assert storage.copiar('sintetica',destino,chave,usar_http=True,retomar=True)['objects']==2
+        after=json.loads(manifest_path.read_text())
+        assert after['started_at']==before['started_at'] and after['completed_at']
+        assert sealed.read_bytes()==original
+        assert not list(destino.glob('.manifesto-*'))
+        with pytest.raises(ValueError,match='backup ja concluido'):
+            storage.copiar('sintetica',destino,chave,usar_http=True,retomar=True)

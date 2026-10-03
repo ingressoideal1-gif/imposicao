@@ -140,6 +140,14 @@ objetos extras ou com tamanhos divergentes. Arquivos existentes não são
 sobrescritos. `-AgentPreCopiado` seleciona separadamente a estrutura produzida
 pela CLI; uma subpasta legítima com o nome do bucket nos GETs é preservada.
 
+Se o manifesto e `inventario-objetos.json` privado da tentativa estiverem
+íntegros, `-Http -RetomarEm CAMINHO-PRIVADO` completa o mesmo backup, mantendo
+o inventário e o início da janela originais. Confere SHA-256 dos pacotes já
+concluídos e retoma os objetos ausentes; recusa pacote divergente ou um backup
+que já tenha `completed_at`. Divergência persistente de tamanho continua
+impedindo conclusão e envio. Não use este modo para atualizar um snapshot
+antigo: uma nova captura exige um destino e inventário novos.
+
 O script registra somente buckets que têm objetos no inventário. Configurações
 de todos os buckets, inclusive vazios, precisam constar também do dump/metadados
 administrativos. Download em andamento ou manifesto sem `completed_at` não

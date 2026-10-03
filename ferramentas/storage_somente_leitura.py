@@ -12,6 +12,10 @@ from urllib.parse import quote
 import requests
 
 
+class TamanhoDivergente(ValueError):
+    """Objeto nao corresponde ao inventario; nenhuma publicacao parcial."""
+
+
 def chave_administrativa(cli_path, project):
     result = subprocess.run([str(cli_path), 'projects', 'api-keys', '--project-ref', project,
                              '--reveal', '--output-format', 'json'], capture_output=True)
@@ -63,11 +67,13 @@ def baixar_objetos(cli_path, project, bucket, objects, folder, workers=4):
                         target.flush()
                         os.fsync(target.fileno())
                 if item['bytes'] is not None and temporary.stat().st_size != item['bytes']:
-                    raise ValueError('Tamanho do objeto mudou durante o download')
+                    raise TamanhoDivergente('Tamanho do objeto mudou durante o download')
                 os.link(temporary, path)  # Publica somente arquivo completo, sem overwrite.
                 return
-            except (requests.RequestException, OSError):
+            except (requests.RequestException, OSError, TamanhoDivergente) as erro:
                 if attempt == 5:
+                    if isinstance(erro, TamanhoDivergente):
+                        raise
                     raise RuntimeError(f'Download interrompido apos repeticoes: HTTP {status}') from None
                 time.sleep(min(2 ** attempt, 8))
             finally:

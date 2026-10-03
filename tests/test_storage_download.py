@@ -54,6 +54,29 @@ def test_download_repete_timeout_sem_sobrescrever(tmp_path,servidor):
     assert (tmp_path/'arquivo').read_bytes()==b'test'
 
 
+def test_download_repete_resposta_curta_e_publica_so_tamanho_correto(tmp_path,servidor):
+    calls,_,responses,Response=servidor
+    class Curta(Response):
+        def iter_content(self,size):yield b'bad'
+    responses.append(Curta())
+    download.baixar_objetos('cli','projeto-sintetico','teste',[{'name':'arquivo','bytes':4}],tmp_path)
+    assert len(calls)==2
+    assert (tmp_path/'arquivo').read_bytes()==b'test'
+    assert not list(tmp_path.rglob('.transferindo-*'))
+
+
+def test_download_recusa_divergencia_persistente_e_limpa_temporarios(tmp_path,servidor):
+    calls,_,responses,Response=servidor
+    class Curta(Response):
+        def iter_content(self,size):yield b'bad'
+    responses.extend(Curta() for _ in range(6))
+    with pytest.raises(download.TamanhoDivergente):
+        download.baixar_objetos('cli','projeto-sintetico','teste',[{'name':'arquivo','bytes':4}],tmp_path)
+    assert len(calls)==6
+    assert not (tmp_path/'arquivo').exists()
+    assert not list(tmp_path.rglob('.transferindo-*'))
+
+
 @pytest.mark.parametrize('status',[302,403,404])
 def test_download_nao_segue_redirect_nem_esconde_objeto_ausente(tmp_path,servidor,status):
     calls,_,responses,Response=servidor

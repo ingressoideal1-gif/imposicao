@@ -2,8 +2,10 @@
 import argparse
 import datetime
 import json
+import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 import zipfile
 
@@ -11,6 +13,20 @@ from backup_portatil import cifrar, decifrar, ler_chave, sha256
 from storage_somente_leitura import baixar_objetos
 
 PROJECT = 'vwbtitjlpelrcnsytzqw'
+
+
+def publicar_manifesto(destino, dados):
+    temporario = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destino, prefix='.manifesto-', mode='w', encoding='utf-8', delete=False) as f:
+            temporario = Path(f.name)
+            json.dump(dados, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporario, destino / 'manifesto-storage.json')
+    finally:
+        if temporario is not None:
+            temporario.unlink(missing_ok=True)
 
 
 def cli(executable, *args, cwd=None):
@@ -46,42 +62,62 @@ def validar_objetos(bucket, objects):
             raise ValueError('Inventario de bucket divergente')
 
 
-def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False, pre_copiados=None):
+def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False, pre_copiados=None, retomar=False):
     destino = Path(destino).resolve()
-    if destino.exists():
-        raise ValueError('Use um destino novo em pasta privada')
-    destino.mkdir()
     private = destino / 'temporario-privado'
-    private.mkdir()
-    sql = private / 'inventario.sql'
-    sql.write_text("BEGIN READ ONLY; SET LOCAL statement_timeout='30s'; SELECT jsonb_agg(jsonb_build_object('bucket_id',bucket_id,'name',name,'bytes',(metadata->>'size')::bigint,'updated_at',updated_at)) AS objects FROM storage.objects; COMMIT;", encoding='utf-8')
-    result = cli(cli_path, 'db', 'query', '--linked', '--project-ref', PROJECT, '--file', str(sql))
-    objects = linhas(result)[0]['objects'] or []
-    if isinstance(objects,str):
-        objects = json.loads(objects)
-    (private / 'inventario-objetos.json').write_text(json.dumps(objects), encoding='utf-8')
+    if retomar:
+        if not usar_http or private.is_symlink():
+            raise ValueError('Retomada exige area privada existente e downloads GET')
+        local_manifest = json.loads((destino / 'manifesto-storage.json').read_text(encoding='utf-8'))
+        if local_manifest.get('project') != PROJECT or local_manifest.get('completed_at'):
+            raise ValueError('Projeto divergente ou backup ja concluido')
+        objects = json.loads((private / 'inventario-objetos.json').read_text(encoding='utf-8'))
+    else:
+        if destino.exists():
+            raise ValueError('Use um destino novo em pasta privada')
+        destino.mkdir()
+        private.mkdir()
+        sql = private / 'inventario.sql'
+        sql.write_text("BEGIN READ ONLY; SET LOCAL statement_timeout='30s'; SELECT jsonb_agg(jsonb_build_object('bucket_id',bucket_id,'name',name,'bytes',(metadata->>'size')::bigint,'updated_at',updated_at)) AS objects FROM storage.objects; COMMIT;", encoding='utf-8')
+        result = cli(cli_path, 'db', 'query', '--linked', '--project-ref', PROJECT, '--file', str(sql))
+        objects = linhas(result)[0]['objects'] or []
+        if isinstance(objects,str):
+            objects = json.loads(objects)
+        (private / 'inventario-objetos.json').write_text(json.dumps(objects), encoding='utf-8')
+        local_manifest = {'project': PROJECT, 'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                          'scope': 'All objects visible to project administrator, encrypted per bucket; database is separate.', 'buckets': []}
     # Nomes de objetos so ficam no inventario cifrado e na pasta local privada.
     buckets = sorted(set(x['bucket_id'] for x in objects))
     for bucket in buckets:
         if not re.fullmatch(r'[a-zA-Z0-9_-]+', bucket):
             raise ValueError('Nome de bucket inesperado')
         validar_objetos(bucket, [x for x in objects if x['bucket_id'] == bucket])
-    local_manifest = {'project': PROJECT, 'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                      'scope': 'All objects visible to project administrator, encrypted per bucket; database is separate.', 'buckets': []}
+    concluidos = {r['bucket']: r for r in local_manifest['buckets']}
+    if len(concluidos) != len(local_manifest['buckets']) or not set(concluidos).issubset(buckets):
+        raise ValueError('Manifesto de retomada divergente')
     key = ler_chave(chave)
     for bucket in buckets:
         expected = [x for x in objects if x['bucket_id'] == bucket]
+        if bucket in concluidos:
+            record = concluidos[bucket]
+            sealed = destino / (bucket + '.iib')
+            if (record['file'] != sealed.name or sealed.is_symlink() or sha256(sealed) != record['sha256'] or
+                    record['objects'] != len(expected) or record['bytes'] != sum(x['bytes'] or 0 for x in expected)):
+                raise ValueError('Pacote concluido divergente; retomada recusada')
+            print(json.dumps({'bucket_reused': bucket, 'objects': record['objects']}), flush=True)
+            continue
         pasta_cli = not usar_http
+        origem_get = private if retomar and (private / bucket).is_dir() else pre_copiados
         if bucket == 'agent-releases' and agent_pre_copiado is not None:
             folder = Path(agent_pre_copiado).resolve()
             if not folder.is_dir() or Path(agent_pre_copiado).is_symlink():
                 raise ValueError('Pasta pre-copiada invalida')
             pasta_cli = True
-        elif pre_copiados is not None and (Path(pre_copiados) / bucket).is_dir():
+        elif origem_get is not None and (Path(origem_get) / bucket).is_dir():
             if not usar_http:
                 raise ValueError('Retomada de objetos individuais exige downloads GET')
-            folder = (Path(pre_copiados) / bucket).resolve()
-            if Path(pre_copiados).is_symlink() or (Path(pre_copiados) / bucket).is_symlink():
+            folder = (Path(origem_get) / bucket).resolve()
+            if Path(origem_get).is_symlink() or (Path(origem_get) / bucket).is_symlink():
                 raise ValueError('Pasta pre-copiada invalida')
             existentes = list(folder.rglob('*'))
             if any(p.is_symlink() or not p.resolve().is_relative_to(folder) for p in existentes):
@@ -145,11 +181,11 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False, pr
         record = {'bucket': bucket, 'objects': len(metadata), 'bytes': sum(x['bytes'] or 0 for x in metadata),
                   'file': sealed.name, 'sha256': sha256(sealed)}
         local_manifest['buckets'].append(record)
-        (destino / 'manifesto-storage.json').write_text(json.dumps(local_manifest, indent=2),encoding='utf-8')
+        publicar_manifesto(destino, local_manifest)
         print(json.dumps({'bucket_completed': bucket, 'objects': len(metadata), 'bytes': record['bytes']}), flush=True)
     local_manifest['completed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     local_manifest['consistency'] = 'Object names and sizes match initial inventory; downloads span the recorded window. Not a transaction with database backup.'
-    (destino / 'manifesto-storage.json').write_text(json.dumps(local_manifest, indent=2), encoding='utf-8')
+    publicar_manifesto(destino, local_manifest)
     return {'storage_complete': True, 'buckets': len(buckets), 'objects': len(objects)}
 
 
@@ -161,9 +197,10 @@ if __name__ == '__main__':
     parser.add_argument('--agent-pre-copiado', help='Pasta privada de agent-releases copiada nesta janela; todos os objetos serao conferidos')
     parser.add_argument('--http', action='store_true', help='Downloads GET com repeticoes; credencial administrativa somente em memoria')
     parser.add_argument('--pre-copiados', help='Pasta privada de objetos GET de tentativa anterior; conferir novo inventario e completar apenas ausentes')
+    parser.add_argument('--retomar', action='store_true', help='Completar backup interrompido no mesmo destino; manter inventario e janela originais, conferir SHA-256 dos pacotes concluidos')
     args = parser.parse_args()
     try:
-        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado, args.http, args.pre_copiados)))
+        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado, args.http, args.pre_copiados, args.retomar)))
     except Exception as erro:
         print('Categoria: ' + type(erro).__name__, file=__import__('sys').stderr)
         print('Backup Storage incompleto. Nenhum arquivo original remoto foi modificado. Preserve a pasta privada para retomar.', file=__import__('sys').stderr)

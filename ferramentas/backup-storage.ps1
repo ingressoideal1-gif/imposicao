@@ -6,6 +6,7 @@ param(
  [string]$Python = (Join-Path (Split-Path -Parent $PSScriptRoot) '.venv\Scripts\python.exe'),
  [string]$AgentPreCopiado,
  [string]$PreCopiados,
+ [string]$RetomarEm,
  [switch]$Http
 )
 $ErrorActionPreference = 'Stop'
@@ -13,10 +14,17 @@ $area = [IO.Path]::GetFullPath($AreaBackup)
 if (-not (Get-Acl -LiteralPath $area).AreAccessRulesProtected) { throw 'Area do backup precisa ter ACL privada.' }
 $nome = 'storage-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $destino = Join-Path $area $nome
+if ($RetomarEm) {
+ $destino = [IO.Path]::GetFullPath($RetomarEm)
+ if (-not $destino.StartsWith($area + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Retomada deve ficar na area privada de backups.' }
+ $nome = Split-Path -Leaf $destino
+ if ($nome -notmatch '^storage-\d{8}-\d{6}$') { throw 'Destino de retomada inesperado.' }
+}
 $argumentosStorage = @((Join-Path $PSScriptRoot 'backup_storage.py'), '--cli', $Cli, '--destino', $destino, '--chave', $Chave)
 if ($AgentPreCopiado) { $argumentosStorage += @('--agent-pre-copiado', $AgentPreCopiado) }
 if ($Http) { $argumentosStorage += '--http' }
 if ($PreCopiados) { $argumentosStorage += @('--pre-copiados', $PreCopiados) }
+if ($RetomarEm) { $argumentosStorage += '--retomar' }
 & $Python @argumentosStorage
 if ($LASTEXITCODE -ne 0) { throw 'Backup Storage incompleto; nao sera enviado ao Drive.' }
 if (-not (Test-Path -LiteralPath $Drive)) { Write-Warning 'Copia externa pendente; Drive Desktop indisponivel.'; return }
