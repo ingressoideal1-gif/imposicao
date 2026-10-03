@@ -24,12 +24,14 @@ Guardar a evidência de conferência fora do Git público.
 
 1. Escolher uma janela fora da impressão e salvar o trabalho. Habilitar Intel
    VT-x / AMD SVM na BIOS/UEFI; verificar novamente a virtualização no Windows.
-2. Configurar WSL 2 com o procedimento oficial da Microsoft, em terminal
-   administrativo. Usar instalação sem distribuição e sem reinício automático
-   quando essas opções estiverem disponíveis: `wsl --install --no-distribution --no-reboot`.
-   Confirmar antes com `wsl --help`; não remover as opções para contornar erro.
+2. Preparar os recursos do WSL em terminal administrativo com os comandos
+   oficiais que suprimem reinício automático:
+   `dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart`
+   e `dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart`.
+   São instruções para a janela posterior; não foram executadas por este roteiro.
    Se o Windows solicitar reinício, parar e deixar a decisão ao operador.
-3. Depois do reinício manual, conferir `wsl --version` (mínimo 2.1.5).
+3. Depois do reinício manual, instalar/atualizar o WSL pelo procedimento
+   oficial atual e conferir `wsl --version` (mínimo 2.1.5).
    Instalar Docker por usuário, backend WSL 2, sem containers Windows.
    Conferir novamente assinatura e hash do arquivo antes de executá-lo.
    Não usar `--accept-license` automaticamente; o operador revisa os termos
@@ -51,3 +53,5 @@ apagar dados de outras tarefas. Registrar os recursos criados no ensaio.
 Referências: [instalação Docker](https://docs.docker.com/desktop/setup/install/windows-install/),
 [checksum da versão](https://desktop.docker.com/win/main/amd64/240920/checksums.txt)
 e [instalação WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+Os comandos de recursos sem reinício estão na
+[instrução manual Microsoft](https://learn.microsoft.com/en-us/windows/wsl/install-manual).
