@@ -1,11 +1,11 @@
 # `entrega-segura.ps1` — fluxo seguro de preparação e publicação
 
-**Estado:** primeira implementação local concluída; aguardando commit, publicação
-e primeira execução real acompanhada.
+**Estado:** implementado, integrado e utilizado nas entregas web pela Cloudflare Pages.
+Cada entrega exige suas próprias validações e comprovação pública.
 
-Este documento define o contrato do `entrega-segura.ps1`. Enquanto a primeira
-execução real não for acompanhada e aprovada, o procedimento em
-[`PUBLICAR.md`](PUBLICAR.md) continua sendo o procedimento operacional vigente.
+Este documento define o contrato do `entrega-segura.ps1`. O procedimento
+operacional está em [`PUBLICAR.md`](PUBLICAR.md). Os scripts `publicar.ps1` e
+`voltar.ps1` pertencem ao fluxo Vercel legado e estão bloqueados.
 
 ## Objetivo
 
