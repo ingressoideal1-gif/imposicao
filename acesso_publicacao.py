@@ -79,6 +79,18 @@ def _segredo():
             return valor
     except Exception:
         pass
+    # Credencial provisionada na estacao; nunca precisa viajar no executavel.
+    try:
+        import db
+        from segredos_estacao import recuperar_texto
+        caminho = os.path.join(db.DB_DIR, 'credencial-publicacao.json')
+        with open(caminho, encoding='utf-8') as arquivo:
+            protegido = json.load(arquivo)
+        valor = recuperar_texto(protegido, 'publicacao-faixas')
+        if valor:
+            return valor
+    except Exception:
+        pass
     try:
         import acesso_segredo
         return getattr(acesso_segredo, "SEGREDO", None)

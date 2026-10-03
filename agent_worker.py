@@ -664,6 +664,9 @@ PAINEL_DIR = os.path.join(db.DB_DIR, "painel")
 def _painel_valido(pasta: str) -> bool:
     """Todos os arquivos presentes, nao vazios, e o index parecendo HTML."""
     import security_config
+    from compatibilidade_painel import painel_compativel
+    if not painel_compativel(pasta):
+        return False
     for nome in security_config.PAINEL_ARQUIVOS:
         caminho = os.path.join(pasta, nome)
         if not os.path.isfile(caminho) or os.path.getsize(caminho) == 0:

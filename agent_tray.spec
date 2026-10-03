@@ -109,11 +109,8 @@ a = Analysis(
         ('Logo Ideal Dark.png', '.'),
     ] + _frontend_datas,
     hiddenimports=[
-        # Gerado pelo build_agent.ps1 e importado so dentro de uma funcao do
-        # acesso_publicacao.py, entao o PyInstaller nao o acha varrendo o
-        # codigo. Sem esta linha o agente sai sem o segredo e nao publica faixa
-        # nenhuma -- sem erro, sem aviso, ate a portaria do evento.
-        'acesso_segredo',
+        # A credencial de publicacao e provisionada com DPAPI na estacao.
+        # acesso_segredo fica explicitamente excluido deste executavel.
         'uvicorn.logging',
         'uvicorn.loops',
         'uvicorn.loops.auto',
@@ -207,7 +204,7 @@ a = Analysis(
     # NAO acrescente 'lxml' aqui: ele parece orfao, mas vem do svglib e e
     # obrigatorio para impor elementos SVG (ver engine.py). Foi ele, alias,
     # quem levou o pacote de 46,5 para 50,7 MB quando o SVG foi implementado.
-    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter'],
+    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter', 'acesso_segredo'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

@@ -278,13 +278,15 @@ def _semear_painel(destino: str, origem: str) -> bool:
     build por causa desta função.
     """
     try:
+        from compatibilidade_painel import renovar_conjunto
+        renovar = renovar_conjunto(destino, origem)
         os.makedirs(destino, exist_ok=True)
         for nome in os.listdir(origem):
             org = os.path.join(origem, nome)
             dst = os.path.join(destino, nome)
             if not os.path.isfile(org):
                 continue
-            if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(org):
+            if not renovar and os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(org):
                 continue
             shutil.copy2(org, dst)
         return os.path.isfile(os.path.join(destino, "index.html"))
@@ -358,6 +360,7 @@ def read_root():
     a configuração poderia fazer a nuvem se declarar estação de novo.
     """
     return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION,
+            "sessao_local_protocolo": 1,
             "agent_id": _agent_id_local(), "capabilities": ["impose", "print"],
             "onde": "nuvem" if security_config.is_cloud_runtime() else "local"}
 
