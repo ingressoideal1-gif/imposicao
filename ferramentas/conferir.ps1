@@ -39,16 +39,23 @@ Write-Host ""
 Write-Host "  CONFERENCIA DO IDEAL IMPOSITION" -ForegroundColor White
 Write-Host "  (so consulta — nada e alterado)" -ForegroundColor DarkGray
 
-# ─── 1. Commits nao publicados ───────────────────────────────────────────────
-Titulo "1. Commits feitos que ainda nao foram publicados"
-$pendentes = @()
+# ─── 1. Sincronia Git (nao comprova publicacao do site) ────────────────────────
+Titulo "1. Sincronia desta pasta com origin/main"
 git rev-parse --verify --quiet refs/remotes/origin/main | Out-Null
-if ($LASTEXITCODE -eq 0) { $pendentes = @(git log --oneline 'origin/main..HEAD') }
-if ($pendentes.Count -eq 0) {
-    Write-Host "     nenhum — o que esta commitado esta no ar" -ForegroundColor Green
+if ($LASTEXITCODE -eq 0) {
+    $contagem = ([string](git rev-list --left-right --count 'HEAD...origin/main')).Trim() -split '\s+'
+    if ($LASTEXITCODE -ne 0 -or $contagem.Count -ne 2) { throw 'Falha consultando divergencia Git.' }
+    $adiante = [int]$contagem[0]
+    $atras = [int]$contagem[1]
+    Write-Host "     adiante: $adiante; atras: $atras"
+    Write-Host '     Comparacao com a referencia local origin/main; consulte o remoto antes de integrar.' -ForegroundColor DarkGray
+    if ($atras -gt 0) { Alerta "Esta pasta esta $atras commit(s) atras de origin/main. Preserve o trabalho antes de alinhar." }
+    if ($adiante -gt 0) { Alerta "Ha $adiante commit(s) exclusivos desta pasta. Revise a integracao pela entrega segura." }
+    if ($adiante -eq 0 -and $atras -eq 0) {
+        Write-Host '     Git alinhado. A publicacao do site exige verificacao separada.' -ForegroundColor Green
+    }
 } else {
-    $pendentes | ForEach-Object { Write-Host "     $_" -ForegroundColor Yellow }
-    Alerta "$($pendentes.Count) commit(s) esperando publicacao. Rode: .\publicar.ps1 ""mensagem"""
+    Alerta 'origin/main indisponivel; sincronia Git nao foi comprovada.'
 }
 
 # ─── 2. Trabalho pendente ────────────────────────────────────────────────────
@@ -84,11 +91,12 @@ catch { $maquina = '(nao esta rodando aqui)' }
 Write-Host "     repositorio  : $repo"
 Write-Host "     publicado    : $manifesto"
 Write-Host "     esta maquina : $maquina"
-if ($repo -and $manifesto -eq $repo) {
+$versaoMaquina = [regex]::Match($maquina, '\d+\.\d+\.\d+').Value
+if ($repo -and $manifesto -eq $repo -and $versaoMaquina -eq $repo) {
     Write-Host "     em sincronia" -ForegroundColor Green
 } elseif ($manifesto -notlike '(*') {
     Write-Host "     DIVERGEM" -ForegroundColor Yellow
-    Alerta "Agente: repositorio esta em $repo e o publicado em $manifesto. Ver GUIA_AGENTE.md."
+    Alerta "Agente: repositorio=$repo; publicado=$manifesto; esta maquina=$maquina. Ver GUIA_AGENTE.md."
 }
 
 # As TRES linhas acima respondem "esta maquina esta em dia?". A pergunta que
