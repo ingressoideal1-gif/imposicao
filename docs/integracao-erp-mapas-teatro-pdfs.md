@@ -89,7 +89,7 @@ O download devolve os bytes `application/pdf` daquela revisão, após conferir s
 
 ## Modelos e artes de um pedido
 
-O fluxo preparado para **Lista de Arte → Gerenciamento de Bancos de Dados → Mapa de Teatro** associa cada setor a um modelo existente do pedido, usando as tabelas de bancos já disponíveis. A implementação desse fluxo está local e ainda depende de publicação web e atualização do NewProd; a entrega publicada dos PDFs permanece independente.
+O fluxo publicado no frontend **v1004** para **Lista de Arte → Gerenciamento de Bancos de Dados → Mapa de Teatro** associa cada setor a um modelo existente do pedido, usando as tabelas de bancos já disponíveis. Para imprimir os conjuntos com quantidades exatas, atualizar as estações para **NewProd 1.2.347**, cujo instalador e manifesto foram publicados e conferidos. Evidências: [Registro da publicação](publicacao-2026-10-03-mapa-teatro-pedido.md). A entrega dos PDFs permanece independente.
 
 O vínculo efetivo fica em **`public.pedidos_modelos_banco`**: `modelo_id` identifica o modelo existente e `banco_id` aponta para **`public.pedidos_bancos.id`**. O banco pertence ao pedido (`id_int`), traz o nome do mapa/setor (`nome`) e guarda em `csv_data` uma linha por lugar. Cada linha identifica `Mapa_ID`, `Mapa`, `Setor_ID`, `Setor`, `Revisao_Mapa`, `Conjunto`, `Fila`, `Numero` e `Bloco`. `Bloco` identifica o conjunto; a quantidade é o número de suas linhas, inclusive quando dois conjuntos têm quantidades diferentes.
 

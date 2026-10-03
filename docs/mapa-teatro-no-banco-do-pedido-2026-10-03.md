@@ -1,6 +1,6 @@
 # Mapa de Teatro nos bancos do pedido
 
-Implementação local em `feat/pedido-mapa-teatro-20261003`, baseada no commit publicado `5f84c7686192de011ffee146dd0948f50c9e696a` (v1003). Esta funcionalidade ainda não foi publicada nem instalada nas estações.
+Funcionalidade publicada no frontend **v1004** e no instalador **NewProd 1.2.347** em 03/10/2026, com conferência dos arquivos nos dois domínios e do instalador público. A instalação nas estações permanece a cargo da operação. Evidências e recuperação: [Registro da publicação](publicacao-2026-10-03-mapa-teatro-pedido.md).
 
 ## Fluxo na Lista de Arte
 
@@ -55,4 +55,4 @@ Validação: 30 testes Python focados passaram (14 novos testes do mapa, mais re
 
 Limitação da suíte antiga, reproduzida na base: `test_engine_modelos_somados.py` apresenta 16 falhas por fixtures incompatíveis com a validação atual de bancos; `test_banco_do_pedido_na_impressao.py` possui uma falha porque procura a validação somente nos primeiros 1200 caracteres, enquanto na base ela começa 1598 caracteres depois. Esses fluxos fora do escopo não foram modificados para contornar os testes.
 
-Publicação web, build/instalação do NewProd e teste de impressão física permanecem pendentes. Não houve alteração de schema, SQL remoto ou importação de mapas em pedidos reais.
+Publicação web, build do NewProd, download público com hash conferido e manifesto de atualização foram concluídos. Para imprimir esses bancos, atualizar as estações para **NewProd 1.2.347** pelo menu **Atualizar agora**. Instalação nas estações e teste de impressão física permanecem pendentes. Não houve alteração de schema, SQL remoto ou importação de mapas em pedidos reais.

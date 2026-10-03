@@ -1,0 +1,196 @@
+{
+  "frontend": {
+    "verificado_utc": "2026-10-03T16:34:30.5031472-03:00",
+    "versao": "v1004",
+    "commit": "037ded1cff1cd587acf411296a6426d27a3d4670",
+    "deployment_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/9a089a37-26da-4ec7-99f2-f84f8c329a2b",
+    "deployment_status": "success",
+    "resultados": [
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "index.html",
+        "sha256_local": "8f5ebae7b1ff884f562ffd9f47e3bf7c2972a892088da016b4808b2e06127fc8",
+        "sha256_publico": "8f5ebae7b1ff884f562ffd9f47e3bf7c2972a892088da016b4808b2e06127fc8",
+        "url": "https://imposition.ai-ideal.com.br/index.html?v=1004&_entrega=1791056063986"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "producao.html",
+        "sha256_local": "a13d047743962d909127d1117bb2ef58a6bff1abf1cdb1b8c0f66042f0c51a4f",
+        "sha256_publico": "a13d047743962d909127d1117bb2ef58a6bff1abf1cdb1b8c0f66042f0c51a4f",
+        "url": "https://imposition.ai-ideal.com.br/producao.html?v=1004&_entrega=1791056064690"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "cliente.html",
+        "sha256_local": "8ffc4da10acd366d3abe5fba574ef37e6e65ac5fba563f9162c8a599e8627b2f",
+        "sha256_publico": "8ffc4da10acd366d3abe5fba574ef37e6e65ac5fba563f9162c8a599e8627b2f",
+        "url": "https://imposition.ai-ideal.com.br/cliente.html?v=1004&_entrega=1791056065084"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "controle.html",
+        "sha256_local": "6679a30bb9bdd1ff4c02a3817e3f5b42d8a53ddefccad2c701ebad4c4e78b643",
+        "sha256_publico": "6679a30bb9bdd1ff4c02a3817e3f5b42d8a53ddefccad2c701ebad4c4e78b643",
+        "url": "https://imposition.ai-ideal.com.br/controle.html?v=1004&_entrega=1791056065415"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "script.js",
+        "sha256_local": "962b3f0e8092b729b1075e30cee5d5a8576e8cef5e654e329693d6a36726871e",
+        "sha256_publico": "962b3f0e8092b729b1075e30cee5d5a8576e8cef5e654e329693d6a36726871e",
+        "url": "https://imposition.ai-ideal.com.br/script.js?v=1004&_entrega=1791056065768"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "pedido.js",
+        "sha256_local": "a9e6e4908fe6ca48f6adcd215b49c41cd6bec6064d1f0d9dee27cb9b6aae3314",
+        "sha256_publico": "a9e6e4908fe6ca48f6adcd215b49c41cd6bec6064d1f0d9dee27cb9b6aae3314",
+        "url": "https://imposition.ai-ideal.com.br/pedido.js?v=1004&_entrega=1791056067122"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "teatro-banco.js",
+        "sha256_local": "6aa3756d4ef2f5030f08f3483c6846352b72f3d801ab09885672b65129d05d11",
+        "sha256_publico": "6aa3756d4ef2f5030f08f3483c6846352b72f3d801ab09885672b65129d05d11",
+        "url": "https://imposition.ai-ideal.com.br/teatro-banco.js?v=1004&_entrega=1791056067873"
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "arquivo": "mapa-teatro-do-pedido.js",
+        "sha256_local": "95adbe5134b2b3c72761c54f50885861867555ec7b489429d50bfaa9dde9cf02",
+        "sha256_publico": "95adbe5134b2b3c72761c54f50885861867555ec7b489429d50bfaa9dde9cf02",
+        "url": "https://imposition.ai-ideal.com.br/mapa-teatro-do-pedido.js?v=1004&_entrega=1791056068162"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "index.html",
+        "sha256_local": "8f5ebae7b1ff884f562ffd9f47e3bf7c2972a892088da016b4808b2e06127fc8",
+        "sha256_publico": "8f5ebae7b1ff884f562ffd9f47e3bf7c2972a892088da016b4808b2e06127fc8",
+        "url": "https://imposicao.pages.dev/index.html?v=1004&_entrega=1791056068444"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "producao.html",
+        "sha256_local": "a13d047743962d909127d1117bb2ef58a6bff1abf1cdb1b8c0f66042f0c51a4f",
+        "sha256_publico": "a13d047743962d909127d1117bb2ef58a6bff1abf1cdb1b8c0f66042f0c51a4f",
+        "url": "https://imposicao.pages.dev/producao.html?v=1004&_entrega=1791056068911"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "cliente.html",
+        "sha256_local": "8ffc4da10acd366d3abe5fba574ef37e6e65ac5fba563f9162c8a599e8627b2f",
+        "sha256_publico": "8ffc4da10acd366d3abe5fba574ef37e6e65ac5fba563f9162c8a599e8627b2f",
+        "url": "https://imposicao.pages.dev/cliente.html?v=1004&_entrega=1791056069062"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "controle.html",
+        "sha256_local": "6679a30bb9bdd1ff4c02a3817e3f5b42d8a53ddefccad2c701ebad4c4e78b643",
+        "sha256_publico": "6679a30bb9bdd1ff4c02a3817e3f5b42d8a53ddefccad2c701ebad4c4e78b643",
+        "url": "https://imposicao.pages.dev/controle.html?v=1004&_entrega=1791056069176"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "script.js",
+        "sha256_local": "962b3f0e8092b729b1075e30cee5d5a8576e8cef5e654e329693d6a36726871e",
+        "sha256_publico": "962b3f0e8092b729b1075e30cee5d5a8576e8cef5e654e329693d6a36726871e",
+        "url": "https://imposicao.pages.dev/script.js?v=1004&_entrega=1791056069285"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "pedido.js",
+        "sha256_local": "a9e6e4908fe6ca48f6adcd215b49c41cd6bec6064d1f0d9dee27cb9b6aae3314",
+        "sha256_publico": "a9e6e4908fe6ca48f6adcd215b49c41cd6bec6064d1f0d9dee27cb9b6aae3314",
+        "url": "https://imposicao.pages.dev/pedido.js?v=1004&_entrega=1791056069954"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "teatro-banco.js",
+        "sha256_local": "6aa3756d4ef2f5030f08f3483c6846352b72f3d801ab09885672b65129d05d11",
+        "sha256_publico": "6aa3756d4ef2f5030f08f3483c6846352b72f3d801ab09885672b65129d05d11",
+        "url": "https://imposicao.pages.dev/teatro-banco.js?v=1004&_entrega=1791056070094"
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "arquivo": "mapa-teatro-do-pedido.js",
+        "sha256_local": "95adbe5134b2b3c72761c54f50885861867555ec7b489429d50bfaa9dde9cf02",
+        "sha256_publico": "95adbe5134b2b3c72761c54f50885861867555ec7b489429d50bfaa9dde9cf02",
+        "url": "https://imposicao.pages.dev/mapa-teatro-do-pedido.js?v=1004&_entrega=1791056070302"
+      }
+    ]
+  },
+  "agente": {
+    "verificado_utc": "2026-10-03T16:40:24.2300529-03:00",
+    "commit": "ef4bdc258e55a9788e7063f06bca80ed3068bf76",
+    "versao": "1.2.347",
+    "tamanho_local": 156315648,
+    "tamanho_publico": 156315648,
+    "sha256_local": "e6a668a3da7d2cac3f64fda2c69d9ad163cfa5652386d2e4fc9e1927f05ae9a5",
+    "sha256_publico": "e6a668a3da7d2cac3f64fda2c69d9ad163cfa5652386d2e4fc9e1927f05ae9a5",
+    "manifesto_publico": {
+      "version": "1.2.347",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.347.msi",
+      "sha256": "e6a668a3da7d2cac3f64fda2c69d9ad163cfa5652386d2e4fc9e1927f05ae9a5",
+      "size": 156315648,
+      "notes": "Mapas de Teatro: setores associados a modelos existentes e conjuntos com quantidades exatas."
+    },
+    "procedimento_sha256": "b3f121b189181536e210c3786bcddac38a445328662b1d98146631756b3e106e",
+    "product_version": "1.2.347.0",
+    "instalado_nas_estacoes": false,
+    "impressao_fisica": false
+  },
+  "auditoria_pacote": {
+    "versao": "1.2.347",
+    "msi_bytes": 156315648,
+    "msi_sha256": "e6a668a3da7d2cac3f64fda2c69d9ad163cfa5652386d2e4fc9e1927f05ae9a5",
+    "exe_bytes": 141144809,
+    "exe_sha256": "5220a7e2647750beb83b393e88761799d9a97f426430cc50fd4c55ff9a8cc73e",
+    "modulos_obrigatorios_presentes": [
+      "app",
+      "engine",
+      "teatro_banco",
+      "agent_version",
+      "acesso_segredo"
+    ],
+    "capacidade": "mapa_teatro_blocos_v1",
+    "dlls_presentes": [
+      "mfc140u.dll",
+      "VCRUNTIME140.dll",
+      "VCRUNTIME140_1.dll"
+    ],
+    "painel_conferido": [
+      {
+        "arquivo": "index.html",
+        "sha256": "ea1de1bd11db978a113b8b6d4b2071766bbc34e0fc4cd472fb4a82e638e9800b"
+      },
+      {
+        "arquivo": "producao.html",
+        "sha256": "bdcf55b7e444ecd964eb1620797e57c67bf049af596e2db235e602cc664d6a43"
+      },
+      {
+        "arquivo": "script.js",
+        "sha256": "a97796546a6481500515e031950b93c9b66d725f11268ea643d9b326237bb9bc"
+      },
+      {
+        "arquivo": "pedido.js",
+        "sha256": "c749a04844dcf7eb834345f0cffd80aae5aa9855d3116e16347c6326359f0fe9"
+      },
+      {
+        "arquivo": "teatro-banco.js",
+        "sha256": "6aa3756d4ef2f5030f08f3483c6846352b72f3d801ab09885672b65129d05d11"
+      },
+      {
+        "arquivo": "mapa-teatro-do-pedido.js",
+        "sha256": "95adbe5134b2b3c72761c54f50885861867555ec7b489429d50bfaa9dde9cf02"
+      }
+    ],
+    "limite": "Inspecao estatica; nao executou o agente nem imprimiu."
+  },
+  "schema_alterado": false,
+  "escrita_em_pedidos_reais": false,
+  "dados_testes": "Sinteticos; Supabase e transporte de impressao simulados",
+  "checkout_operacional": "Preservado",
+  "regressao_python_focada": 30,
+  "falhas_preexistentes_reproduzidas": 17
+}
