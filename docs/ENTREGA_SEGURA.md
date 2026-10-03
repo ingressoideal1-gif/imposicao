@@ -236,7 +236,10 @@ O resumo deve terminar em exatamente um dos estados:
 | `PREPARADA` | Worktree criada; nada publicado |
 | `VALIDADA` | Verificações passaram; nada publicado |
 | `AGUARDANDO_INTEGRACAO` | Branch enviada, mas ainda fora de `main` |
-| `PUBLICADA_E_VERIFICADA` | Integração, hospedagem e hashes confirmados |
+| `PUBLICADA_E_VERIFICADA` | Integração, prova pública aplicável e Git principal alinhado |
+| `PUBLICADA_E_VERIFICADA_SINCRONIA_PENDENTE` | Entrega comprovada; a pasta principal ainda exige preservação/alinhamento |
+| `PRINCIPAL_ALINHADA` | Main principal alinhada por avanço direto, sem comprovar implantação |
+| `SINCRONIA_PENDENTE` | Pasta principal atrasada, divergente ou bloqueada por trabalho local |
 | `FALHA_ANTES_DA_PUBLICACAO` | Nenhuma mudança pública ocorreu |
 | `FALHA_APOS_INTEGRACAO` | Código integrou, mas implantação ou prova pública falhou |
 
@@ -267,7 +270,7 @@ O `entrega-segura.ps1` somente poderá substituir o procedimento atual quando:
 
 - possuir testes automatizados para as decisões e estados que podem ser
   ensaiados sem serviços reais;
-- provar que não modifica o checkout principal;
+- provar que preserva o checkout principal e só o atualiza por avanço direto com backup validado;
 - abortar diante de branch divergente e arquivo fora do escopo;
 - cobrir sucesso e falha de versionamento, push, hospedagem e comparação pública;
 - não vazar segredos nos logs;
@@ -279,3 +282,27 @@ simulação sem commit/push, validações locais, integração PR ou fast-forwar
 explícito, check do Cloudflare Pages e comparação pública. Os estados que
 dependem de GitHub e Cloudflare reais só serão considerados aprovados depois da
 primeira publicação acompanhada.
+
+## Sincronia da pasta principal
+
+O comando confere a pasta principal ao terminar a publicação. Compara os dois
+sentidos do histórico; enviar uma branch ou publicar o site não basta para
+declarar esta pasta alinhada. Sem `-BackupPrincipal`, a conferência não altera
+seus arquivos. Com esse parâmetro, tenta apenas avanço direto da `main`, após
+conferir hash AES-256-GCM e evidência de restauração com `git fsck`.
+
+Commits locais exclusivos, alterações rastreadas e arquivos locais ocupando
+caminhos novos da `main` impedem a atualização. Não usa stash, reset, limpeza
+nem sobrescrita. Preserve cada colisão antes de repetir a operação.
+
+Para conferir ou concluir o alinhamento separadamente, na worktree da entrega:
+
+```powershell
+.\entrega-segura.ps1 sincronizar -Python .\.venv\Scripts\python.exe
+.\entrega-segura.ps1 sincronizar -Python .\.venv\Scripts\python.exe -BackupPrincipal C:\ProjectBackups\IdealImpositionProtegido\backup-AAAAMMDD-HHMMSS-ID
+```
+
+`-Simular` impede o avanço direto, inclusive quando há `-BackupPrincipal`.
+O comando consulta o remoto antes de comparar. Código de saída 2 significa
+sincronia pendente, sem desfazer uma publicação já comprovada. O alinhamento
+Git não instala NewProd, não executa SQL e não valida impressão física.

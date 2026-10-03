@@ -46,7 +46,7 @@ jobs:
       - name: Regressao de seguranca, backup e PDF com dados sinteticos
         shell: pwsh
         run: |
-          python -m pytest -n 0 -p no:cacheprovider --basetemp "$env:RUNNER_TEMP/pytest-ideal" --tb=short tests/test_compatibilidade_painel.py tests/test_credencial_publicacao.py tests/test_backup_portatil.py tests/test_backup_storage.py tests/test_storage_download.py tests/test_seguranca_estacao.py tests/test_email_envio.py tests/test_acesso_local.py tests/test_propostas_sem_anon.py tests/test_o_javascript_do_frontend_compila.py tests/test_multi_artes.py
+          python -m pytest -n 0 -p no:cacheprovider --basetemp "$env:RUNNER_TEMP/pytest-ideal" --tb=short tests/test_sincronizar_git.py tests/test_compatibilidade_painel.py tests/test_credencial_publicacao.py tests/test_backup_portatil.py tests/test_backup_storage.py tests/test_storage_download.py tests/test_seguranca_estacao.py tests/test_email_envio.py tests/test_acesso_local.py tests/test_propostas_sem_anon.py tests/test_o_javascript_do_frontend_compila.py tests/test_multi_artes.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Contratos do navegador
         shell: pwsh

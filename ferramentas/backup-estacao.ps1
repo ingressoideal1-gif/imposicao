@@ -43,7 +43,7 @@ if (-not (Test-Path -LiteralPath $chave)) {
 if ([IO.Path]::GetFullPath($Drive).StartsWith($pasta + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'A chave nao pode ficar junto do backup remoto.' }
 if (-not $PSBoundParameters.ContainsKey('Runtime')) {
     $instalacao = Join-Path $env:LOCALAPPDATA 'NewProd Agent'
-    $Runtime = @(foreach ($nomeArquivo in @('formats_db.json','acessos_locais.json','qr_ideal_pool.bin','agent_config.json')) {
+    $Runtime = @(foreach ($nomeArquivo in @('formats_db.json','acessos_locais.json','qr_ideal_pool.bin','agent_config.json','credencial-publicacao.json')) {
         $arquivo = Join-Path $instalacao $nomeArquivo
         if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $arquivo }
     })

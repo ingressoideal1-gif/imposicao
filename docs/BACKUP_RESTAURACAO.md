@@ -12,7 +12,7 @@ o ambiente. Links, evidências e autorizações reais ficam fora do Git público
 |---|---|
 | Git | Todas as refs alcançáveis pelo bundle; branches e tags |
 | Trabalho pendente | Patches do índice e da árvore, arquivos não rastreados não ignorados de todas as worktrees |
-| Estação instalada | Arquivos existentes explicitamente selecionados: `formats_db.json`, `acessos_locais.json`, `qr_ideal_pool.bin`, `agent_config.json` |
+| Estação instalada | Arquivos existentes explicitamente selecionados: `formats_db.json`, `acessos_locais.json`, `qr_ideal_pool.bin`, `agent_config.json`, `credencial-publicacao.json` |
 | Configurações pessoais e `.env` ignorados | Não coletadas automaticamente; um arquivo adicional exige seleção explícita |
 | Banco compartilhado Supabase | Exportação administrativa e ensaio separados, com escopo autorizado e Docker funcional |
 | Storage Supabase | Requer cópia dos bytes dos objetos, além dos metadados do banco |
@@ -175,3 +175,10 @@ Referência: [restauração administrativa Supabase](https://supabase.com/docs/g
 
 Referências: [backups Supabase](https://supabase.com/docs/guides/platform/backups)
 e [proteção DPAPI](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata).
+
+O agendamento diário executa também o ensaio de restauração (`-Ensaiar`). Para
+trocar somente a ação de uma tarefa existente, preservando horário e conta,
+use `agendar-backup.ps1 -Aplicar -Atualizar` com os caminhos revisados do script,
+Python e repositório. A credencial de publicação protegida por DPAPI integra
+o pacote cifrado quando existe; a proteção DPAPI depende da conta Windows
+original. Em outro computador, seu provisionamento autorizado é separado.

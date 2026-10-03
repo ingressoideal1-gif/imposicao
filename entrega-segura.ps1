@@ -17,7 +17,7 @@
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('preparar', 'verificar', 'publicar')]
+    [ValidateSet('preparar', 'verificar', 'publicar', 'sincronizar')]
     [string]$Acao,
 
     [string]$Nome,
@@ -26,6 +26,10 @@ param(
     [string]$Escopo = 'Auto',
 
     [string]$Mensagem,
+
+    [string]$BackupPrincipal,
+
+    [string]$Python,
 
     [ValidateSet('PR', 'Direta')]
     [string]$Integracao = 'PR',
@@ -98,6 +102,36 @@ function Get-CheckoutPrincipal {
         throw "Diretorio Git comum inesperado: $absoluto"
     }
     return [IO.Path]::GetFullPath((Split-Path -Parent $absoluto))
+}
+
+function Invoke-SincronizarPrincipal {
+    $principal = Get-CheckoutPrincipal
+    $interpretador = $Python
+    if (-not $interpretador) {
+        foreach ($base in @($script:Raiz, $principal)) {
+            foreach ($ambiente in @('.venv', 'venv')) {
+                $candidato = Join-Path $base "$ambiente\Scripts\python.exe"
+                if (Test-Path -LiteralPath $candidato -PathType Leaf) { $interpretador = $candidato; break }
+            }
+            if ($interpretador) { break }
+        }
+    }
+    if (-not $interpretador) { throw 'Informe -Python para conferir a sincronia da pasta principal.' }
+    $argumentos = @((Join-Path $script:Raiz 'ferramentas\sincronizar_git.py'), '--raiz', $principal)
+    if ($BackupPrincipal -and -not $Simular) {
+        $argumentos += @('--aplicar', '--backup', $BackupPrincipal)
+    }
+    $saida = @(& $interpretador @argumentos)
+    $codigo = $LASTEXITCODE
+    if ($codigo -notin @(0, 2)) { throw 'Falha na conferencia da pasta principal; nenhum alinhamento foi comprovado.' }
+    $estado = ($saida -join [Environment]::NewLine) | ConvertFrom-Json
+    Write-Host "  Pasta principal: $principal"
+    Write-Host "  Git: $($estado.estado); adiante $($estado.adiante); atras $($estado.atras)"
+    foreach ($motivo in @($estado.motivos)) { if ($motivo) { Write-Host "  $motivo" -ForegroundColor Yellow } }
+    if ($codigo -eq 2) {
+        Write-Host '  Preserve o trabalho e forneca -BackupPrincipal com ensaio validado para alinhar.' -ForegroundColor Yellow
+    }
+    return $codigo
 }
 
 function Assert-Repositorio {
@@ -570,6 +604,11 @@ function Invoke-Publicar {
     Write-Host "  Commit integrado: $integrado" -ForegroundColor Green
     if ($versao -gt 0) { Write-Host "  Tag: v$versao" -ForegroundColor Green }
     Write-Host '  Frontend publicado nao comprova NewProd nem impressao fisica.'
+    $sincronia = Invoke-SincronizarPrincipal
+    if ($sincronia -ne 0) {
+        Write-Host 'ESTADO: PUBLICADA_E_VERIFICADA_SINCRONIA_PENDENTE' -ForegroundColor Yellow
+        return 2
+    }
     Write-Host 'ESTADO: PUBLICADA_E_VERIFICADA' -ForegroundColor Green
     return 0
 }
@@ -578,6 +617,13 @@ try {
     Set-Location $script:Raiz
     switch ($Acao) {
         'preparar' { Invoke-Preparar; exit 0 }
+        'sincronizar' {
+            Invoke-Git @('fetch', 'origin', '--prune') | Out-Null
+            $codigo = Invoke-SincronizarPrincipal
+            if ($codigo -eq 0) { Write-Host 'ESTADO: PRINCIPAL_ALINHADA' }
+            else { Write-Host 'ESTADO: SINCRONIA_PENDENTE' }
+            exit $codigo
+        }
         'verificar' {
             Invoke-Validacao $Escopo | Out-Null
             Write-Host 'ESTADO: VALIDADA' -ForegroundColor Green

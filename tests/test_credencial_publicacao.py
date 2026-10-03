@@ -32,3 +32,24 @@ def test_segredo_esta_excluido_do_executavel():
     opcoes = {k.arg: k.value for k in analise.keywords}
     assert 'acesso_segredo' in ast.literal_eval(opcoes['excludes'])
     assert 'acesso_segredo' not in ast.literal_eval(opcoes['hiddenimports'])
+
+
+def test_provisionamento_nao_executa_codigo_legado_e_preserva_destino(tmp_path):
+    import pytest
+    from ferramentas.provisionar_credencial_publicacao import provisionar
+    origem = tmp_path / 'acesso_segredo.py'
+    destino = tmp_path / 'credencial-publicacao.json'
+    origem.write_text("SEGREDO = 'sintetico'\nraise RuntimeError('nao executar')\n", encoding='utf-8')
+    provisionar(origem, destino)
+    envelope = json.loads(destino.read_text(encoding='utf-8'))
+    assert segredos_estacao.recuperar_texto(envelope, 'publicacao-faixas') == 'sintetico'
+    anterior = destino.read_bytes()
+    with pytest.raises(FileExistsError):
+        provisionar(origem, destino)
+    assert destino.read_bytes() == anterior
+
+
+def test_bytecode_e_lido_sem_executar_o_modulo():
+    from ferramentas.provisionar_credencial_publicacao import credencial_do_bytecode
+    codigo = compile("SEGREDO = 'sintetico'\nraise RuntimeError('nao executar')", 'sintetico', 'exec')
+    assert credencial_do_bytecode(codigo) == 'sintetico'
