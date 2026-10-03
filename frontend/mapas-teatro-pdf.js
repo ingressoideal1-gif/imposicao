@@ -31,6 +31,7 @@
             const codigos = { Normal: 'N', PCD: 'C', Obeso: 'O', Acompanhante: 'A' };
             [...tipos.values()].forEach((t, i) => { t.codigo = codigos[t.id] || 'T' + (i + 1); });
             return { id: String(s.id || 'setor-' + (idx + 1)), nome: String(s.nome || 'Setor ' + (idx + 1)), cadeiras, bounds: cadeiras.length ? bounds : null,
+                nomeConjunto: String(s.nomeConjunto || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila',
                 filas: [...filas].sort(([a], [b]) => a.localeCompare(b, 'pt-BR', { numeric: true })),
                 tipos: [...tipos.values()].filter(t => t.quantidade), quantidade: cadeiras.length,
                 arquivo: slug(mapa.name) + '--' + slug(s.nome) + '--setor-' + (idx + 1) + '.pdf' };
@@ -59,7 +60,7 @@
         const completo = await PDFDocument.create();
         completo.setTitle(plano.nome + ' — Ingresso Ideal');
         completo.setAuthor('Ingresso Ideal');
-        for (const setor of plano.setores.length ? plano.setores : [{ id: '', nome: 'Mapa sem setores', cadeiras: [], filas: [], tipos: [], quantidade: 0, arquivo: slug(plano.nome) + '.pdf' }]) {
+        for (const setor of plano.setores.length ? plano.setores : [{ id: '', nome: 'Mapa sem setores', nomeConjunto: 'Fila', cadeiras: [], filas: [], tipos: [], quantidade: 0, arquivo: slug(plano.nome) + '.pdf' }]) {
             const doc = await PDFDocument.create();
             doc.setTitle(plano.nome + ' — ' + setor.nome);
             doc.setAuthor('Ingresso Ideal');
@@ -82,29 +83,8 @@
             const horizontal = cols / rows > 1.15;
             const W = horizontal ? 1190.55 : 841.89, H = horizontal ? 841.89 : 1190.55;
             const area = { x: 34, y: 137, w: W - 249, h: H - 304 };
-            const maxFilas = Math.max(1, Math.floor((area.h - 100) / 17));
             const legenda = setor.tipos.map(t => ({ ...t, label: t.codigo + ' · ' + t.nome + (t.sufixo ? ' (' + t.sufixo + ')' : '') + ': ' + t.quantidade }));
             const legendaWidth = legenda.reduce((n, t) => n + largura(t.label, 9) + 34, 0);
-            const resumoExtra = setor.filas.length > maxFilas || legendaWidth > W - 68;
-            const maxLabel = setor.cadeiras.reduce((v, c) => Math.max(v, largura(c.label, 8, bold)), 0);
-            // A cadeira ocupa .74 do passo; o texto usa .85 dessa largura.
-            // A margem .62 garante ao menos 8 pontos também nos rótulos longos.
-            const minStep = Math.max(24, maxLabel / .62);
-            const stepGeral = Math.min((area.w - 20) / cols, (area.h - 20) / rows);
-            const precisaDetalhes = setor.quantidade > 0 && stepGeral < minStep;
-            const partes = [{ cadeiras: setor.cadeiras, minX: b?.minX || 0, minY: b?.minY || 0, cols, rows, titulo: precisaDetalhes ? 'Visão geral — rótulos nas páginas de detalhe' : 'Desenho do setor', rotulos: !precisaDetalhes }];
-            if (precisaDetalhes) {
-                const nx = Math.max(1, Math.floor((area.w - 20) / minStep)), ny = Math.max(1, Math.floor((area.h - 20) / minStep));
-                const grupos = new Map();
-                for (const c of setor.cadeiras) {
-                    const tx = Math.floor((c.x - b.minX) / nx), ty = Math.floor((c.y - b.minY) / ny), key = tx + ',' + ty;
-                    if (!grupos.has(key)) grupos.set(key, { tx, ty, cadeiras: [] });
-                    grupos.get(key).cadeiras.push(c);
-                }
-                if (grupos.size > 500) throw Error('Este setor exige mais de 500 páginas de detalhe. Revise sua distribuição antes de gerar o PDF.');
-                [...grupos.values()].sort((a, c) => a.ty - c.ty || a.tx - c.tx).forEach((g, i) => partes.push({ cadeiras: g.cadeiras, minX: b.minX + g.tx * nx, minY: b.minY + g.ty * ny,
-                    cols: nx, rows: ny, titulo: 'Detalhe ' + (i + 1) + ' de ' + grupos.size, rotulos: true }));
-            }
             function base(titulo) {
                 const page = doc.addPage([W, H]);
                 page.drawImage(logo, { x: 34, y: H - 66, width: 160, height: 160 * logo.height / logo.width });
@@ -120,18 +100,19 @@
                 texto(page, 'Ingresso Ideal · ' + data + ' (Brasília) · Revisão ' + revisao.slice(0, 12), 34, 32, 8, normal, W - 68, cinza);
                 return page;
             }
-            for (const parte of partes) {
-                const page = base(parte.titulo);
+            // Uma única prancha por setor: todos os lugares nas posições gravadas.
+            {
+                const page = base('Desenho do setor');
                 page.drawRectangle({ x: area.x, y: area.y, width: area.w, height: area.h, borderWidth: .6, borderColor: rgb(.87, .91, .94), color: rgb(.99, .995, 1) });
-                const step = Math.min((area.w - 20) / parte.cols, (area.h - 20) / parte.rows), side = step * .74;
-                const ox = (area.w - ((parte.cols - 1) * step + side)) / 2, oy = (area.h - ((parte.rows - 1) * step + side)) / 2;
+                const step = Math.min((area.w - 20) / cols, (area.h - 20) / rows), side = step * .74;
+                const ox = (area.w - ((cols - 1) * step + side)) / 2, oy = (area.h - ((rows - 1) * step + side)) / 2;
                 let n = 0;
-                for (const c of parte.cadeiras) {
-                    const x = area.x + ox + (c.x - parte.minX) * step, y = area.y + area.h - oy - (c.y - parte.minY) * step - side;
+                for (const c of setor.cadeiras) {
+                    const x = area.x + ox + (c.x - (b?.minX || 0)) * step, y = area.y + area.h - oy - (c.y - (b?.minY || 0)) * step - side;
                     const t = setor.tipos.find(t => t.id === c.tipo), color = cor(t?.cor);
                     page.drawRectangle({ x, y, width: side, height: side, borderWidth: .8, borderColor: color, color, opacity: .10, borderOpacity: 1 });
                     page.drawLine({ start: { x: x + side * .16, y: y + side * .14 }, end: { x: x + side * .84, y: y + side * .14 }, thickness: .9, color });
-                    if (parte.rotulos) {
+                    {
                         const size = Math.min(12, side * .46, side * .85 / Math.max(1, largura(c.label, 1, bold)));
                         texto(page, c.label, x + (side - largura(c.label, size, bold)) / 2, y + side * .48 - size * .30, size, bold);
                         if (c.tipo !== 'Normal') {
@@ -144,38 +125,25 @@
                 }
                 if (!setor.quantidade) texto(page, 'Não há assentos cadastrados neste setor.', area.x + 20, area.y + area.h / 2, 13);
                 const sx = W - 190;
-                texto(page, 'ASSENTOS POR FILA', sx, H - 205, 10, bold, 156, cinza);
-                setor.filas.slice(0, maxFilas).forEach(([fila, qtd], i) => {
-                    texto(page, 'Fila ' + fila, sx, H - 231 - i * 17, 11, normal, 112);
-                    texto(page, qtd, W - 61, H - 231 - i * 17, 11, bold, 30);
+                texto(page, ('Assentos por ' + setor.nomeConjunto).toUpperCase(), sx, H - 205, 10, bold, 156, cinza);
+                const passoLista = Math.min(17, (area.h - 100) / Math.max(1, setor.filas.length));
+                const fonteLista = Math.min(11, passoLista * .65);
+                setor.filas.forEach(([fila, qtd], i) => {
+                    texto(page, setor.nomeConjunto + ' ' + fila, sx, H - 231 - i * passoLista, fonteLista, normal, 112);
+                    texto(page, qtd, W - 61, H - 231 - i * passoLista, fonteLista, bold, 30);
                 });
-                if (setor.filas.length > maxFilas) texto(page, 'Lista completa no resumo.', sx, 170, 9, normal, 156, cinza);
                 texto(page, 'Total do mapa: ' + plano.total, sx, 146, 10, bold, 156);
                 texto(page, 'Espaços vazios preservados. Desenho esquemático, sem escala métrica.', 34, 115, 10, normal, W - 68, cinza);
                 texto(page, 'Palco e orientação física não informados no cadastro.', 34, 99, 9, normal, W - 68, cinza);
-                if (legendaWidth <= W - 68) {
+                {
+                    const escalaLegenda = Math.min(1, (W - 68) / Math.max(1, legendaWidth));
                     let lx = 34;
                     for (const t of legenda) {
-                        page.drawRectangle({ x: lx, y: 82, width: 10, height: 10, color: cor(t.cor) });
-                        texto(page, t.label, lx + 15, 83, 9);
-                        lx += largura(t.label, 9) + 34;
+                        page.drawRectangle({ x: lx, y: 82, width: 10 * escalaLegenda, height: 10 * escalaLegenda, color: cor(t.cor) });
+                        texto(page, t.label, lx + 15 * escalaLegenda, 83, 9 * escalaLegenda);
+                        lx += (largura(t.label, 9) + 34) * escalaLegenda;
                     }
-                } else texto(page, 'Legenda completa no resumo do setor.', 34, 83, 9, normal, W - 68, cinza);
-            }
-            // Resumo paginado: todas as filas e tipos, sem cortar listas longas.
-            const linhas = [['Assentos por fila', ''], ...setor.filas.map(([f, n]) => ['Fila ' + f, n]),
-                ['Tipos de assento', ''], ...setor.tipos.map(t => [String(t.nome) + (t.sufixo ? ' (' + t.sufixo + ')' : ''), t.quantidade]),
-                ['Total do setor', setor.quantidade], ['Total do mapa', plano.total]];
-            const porPagina = Math.floor((H - 270) / 21);
-            for (let inicio = 0; resumoExtra && inicio < linhas.length; inicio += porPagina) {
-                const page = base('Resumo do setor — contagem e legenda');
-                linhas.slice(inicio, inicio + porPagina).forEach(([nome, qtd], i) => {
-                    const y = H - 214 - i * 21;
-                    texto(page, nome, 45, y, 12, qtd === '' ? bold : normal, W - 150);
-                    texto(page, qtd, W - 100, y, 12, bold, 55);
-                    const tipo = setor.tipos.find(t => String(t.nome) + (t.sufixo ? ' (' + t.sufixo + ')' : '') === nome);
-                    if (tipo) page.drawRectangle({ x: W - 137, y: y - 1, width: 12, height: 12, color: cor(tipo.cor) });
-                });
+                }
             }
             const bytes = await doc.save();
             arquivos.push({ ...setor, bytes, paginas: doc.getPageCount() });
@@ -243,7 +211,7 @@
             box.appendChild(row);
         }
         linha('Mapa completo', resultado.arquivo, resultado.bytes);
-        resultado.arquivos.forEach(a => linha(a.nome, a.arquivo, a.bytes, a.quantidade + ' assentos / ' + a.paginas + ' páginas'));
+        resultado.arquivos.forEach(a => linha(a.nome, a.arquivo, a.bytes, a.quantidade + ' assentos / ' + a.paginas + (a.paginas === 1 ? ' página' : ' páginas')));
         const fechar = document.createElement('button'); fechar.className = 'btn btn-primary'; fechar.type = 'button'; fechar.textContent = 'Fechar'; fechar.style.marginTop = '20px';
         let fechado = false;
         const encerrar = () => {

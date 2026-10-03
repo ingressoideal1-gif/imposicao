@@ -294,6 +294,17 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: saida });
         await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
         await page.$eval('#mapa-nome', el => { el.value = 'Teatro sintético PDF'; });
+        assert.equal(await page.$eval('#mapa-conjunto-nome', el => el.value), 'Fila');
+        await page.$eval('#mapa-conjunto-nome', el => {
+            el.value = 'Mesa'; el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('blur'));
+        });
+        assert.equal(await page.$eval('#mapa-adicionar-conjunto', el => el.textContent), 'Adicionar Mesa no Mapa');
+        assert.equal(await page.evaluate(() => {
+            const y = id => document.getElementById(id).getBoundingClientRect().y;
+            return y('mapa-fileira-prefix') === y('mapa-fileira-inicio') && y('mapa-fileira-inicio') === y('mapa-fileira-fim');
+        }), true, 'identificador, início e fim alinhados');
+        await page.screenshot({ path: path.join(saida, 'editor-conjunto-' + arquivoHtml + '.png') });
         await page.evaluate(() => {
             const s = window.state.mapaAtual.config.setores[0], cs = Object.values(s.cadeiras);
             cs[0].tipo = 'PCD'; cs[1].tipo = 'Obeso'; cs[2].tipo = 'Acompanhante';
@@ -318,6 +329,10 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
             return { paginas: pdf.getPageCount(), bytes: Array.from(bytes), texto, tamanho: pdf.getPage(0).getSize() };
         });
         assert.equal(provaPdf.paginas, 1); assert.match(provaPdf.texto, /<3141> Tj/); assert.match(provaPdf.texto, /<3444> Tj/);
+        assert.ok(provaPdf.texto.includes('<' + Buffer.from('ASSENTOS POR MESA').toString('hex').toUpperCase() + '> Tj'));
+        assert.ok(provaPdf.texto.includes('<' + Buffer.from('Mesa 1').toString('hex').toUpperCase() + '> Tj'));
+        assert.ok(!provaPdf.texto.includes(Buffer.from('Fila ').toString('hex').toUpperCase()));
+        assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').config.setores[0].nomeConjunto), 'Mesa');
         assert.ok(provaPdf.tamanho.width > 800); assert.ok(provaPdf.texto.includes(' Do'), 'logo embutida no PDF');
         fs.writeFileSync(path.join(saida, 'mapa-sintetico-' + arquivoHtml + '.pdf'), Buffer.from(provaPdf.bytes));
         const arquivoDownload = await page.$eval('#mapa-pdfs-dialogo a[download]', el => el.download);
@@ -339,6 +354,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await page.click('#mapa-pdfs-dialogo button');
         // Falha dos recursos PDF mantém o mapa salvo; o botão permite repetir sem UPDATE.
         await page.evaluate(() => { editarMapaTeatro('mapa-browser-1'); window.pdfLibOriginal = PDFLib; window.PDFLib = null; });
+        assert.equal(await page.$eval('#mapa-conjunto-nome', el => el.value), 'Mesa');
         await page.$eval('#mapa-nome', el => { el.value = 'Mapa salvo PDF pendente'; });
         await salvarNoBrowser();
         assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').name), 'Mapa salvo PDF pendente');
@@ -353,26 +369,56 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
                 const fila = y < 26 ? String.fromCharCode(65 + y) : 'A' + String.fromCharCode(65 + y - 26);
                 cadeiras[(x + Math.floor(x / 25) * 2) + ',' + y] = { prefixo: fila, num: x + 1, tipo: 'Normal' };
             }
-            const m = { id: 'mapa-denso-sintetico', name: 'Teatro denso sintético', config: { setores: [{ id: 's-denso', nome: 'Plateia densa', cadeiras }] } };
+            const m = { id: 'mapa-denso-sintetico', name: 'Teatro denso sintético', config: { setores: [{ id: 's-denso', nome: 'Plateia densa', nomeConjunto: 'Camarote', cadeiras }] } };
             const r = await MapasTeatroPdf.gerar(m), doc = await PDFLib.PDFDocument.load(r.bytes);
-            return { total: r.total, paginas: doc.getPageCount(), bytes: Array.from(r.bytes) };
+            const texto = doc.getPages().map(p => p.node.Contents().asArray().map(ref =>
+                new TextDecoder().decode(PDFLib.decodePDFRawStream(doc.context.lookup(ref)).decode())).join('\n')).join('\n');
+            return { total: r.total, paginas: doc.getPageCount(), bytes: Array.from(r.bytes), texto };
         });
-        assert.equal(grande.total, 3000); assert.ok(grande.paginas > 1);
+        assert.equal(grande.total, 3000); assert.equal(grande.paginas, 1, 'setor denso fica inteiro em uma página');
+        assert.ok(grande.texto.includes('<' + Buffer.from('ASSENTOS POR CAMAROTE').toString('hex').toUpperCase() + '> Tj'));
+        const rotulosDensos = [...grande.texto.matchAll(/<([0-9A-F]+)> Tj/g)].map(m => Buffer.from(m[1], 'hex').toString('latin1')).filter(t => /^[A-Z]+\d+$/.test(t));
+        assert.equal(rotulosDensos.length, 3000); assert.equal(new Set(rotulosDensos).size, 3000, 'nenhum lugar omitido ou repetido');
+        for (const proibido of ['Detalhe ', 'Resumo do setor', 'páginas de detalhe', 'Lista completa no resumo']) {
+            assert.ok(!grande.texto.includes(Buffer.from(proibido, 'latin1').toString('hex').toUpperCase()));
+        }
         fs.writeFileSync(path.join(saida, 'mapa-denso-' + arquivoHtml + '.pdf'), Buffer.from(grande.bytes));
         const varios = await page.evaluate(async () => {
             const setores = [1, 2, 3, 4].map(n => ({ id: 'setor-' + n, nome: 'Setor ' + n,
+                ...(n > 1 ? { nomeConjunto: ['Fila', 'Mesa', 'Camarote', 'Sala'][n - 1] } : {}),
                 cadeiras: Object.fromEntries(Array.from({ length: n }, (_, x) => [x + ',0', { prefixo: 'A', num: x + 1, tipo: 'Normal' }])) }));
             setores[0].cadeiras['-2,0'] = { prefixo: 'A', num: 99, tipo: 'Apagado' };
             const r = await MapasTeatroPdf.gerar({ id: 'mapa-quatro-setores', name: 'Teatro quatro setores', config: { setores } });
             MapasTeatroPdf.abrir(r);
-            return { total: r.total, arquivos: r.arquivos.map(a => ({ id: a.id, qtd: a.quantidade, paginas: a.paginas })),
+            const arquivos = [];
+            for (const a of r.arquivos) {
+                const doc = await PDFLib.PDFDocument.load(a.bytes);
+                const texto = doc.getPages().map(p => p.node.Contents().asArray().map(ref =>
+                    new TextDecoder().decode(PDFLib.decodePDFRawStream(doc.context.lookup(ref)).decode())).join('\n')).join('\n');
+                arquivos.push({ id: a.id, qtd: a.quantidade, paginas: a.paginas, texto });
+            }
+            return { total: r.total, arquivos, bytes: Array.from(r.bytes),
+                nomes: r.arquivos.map(a => a.nomeConjunto),
                 paginas: (await PDFLib.PDFDocument.load(r.bytes)).getPageCount() };
         });
         assert.equal(varios.total, 10); assert.equal(varios.paginas, 4);
+        assert.deepEqual(varios.arquivos.map(a => a.paginas), [1, 1, 1, 1]);
         assert.deepEqual(varios.arquivos.map(a => a.qtd), [1, 2, 3, 4]);
         assert.deepEqual(varios.arquivos.map(a => a.id), ['setor-1', 'setor-2', 'setor-3', 'setor-4']);
+        assert.deepEqual(varios.nomes, ['Fila', 'Mesa', 'Camarote', 'Sala']);
+        varios.arquivos.forEach((a, i) => assert.ok(a.texto.includes('<' + Buffer.from('ASSENTOS POR ' + varios.nomes[i].toUpperCase()).toString('hex').toUpperCase() + '> Tj')));
+        fs.writeFileSync(path.join(saida, 'mapa-conjuntos-' + arquivoHtml + '.pdf'), Buffer.from(varios.bytes));
         assert.equal(await page.$$eval('#mapa-pdfs-dialogo a[download]', els => els.length), 5);
         await page.click('#mapa-pdfs-dialogo button');
+        // Legenda extensa não cria anexos nem omite assentos.
+        const comLegenda = await page.evaluate(async () => {
+            const tiposAssento = Array.from({ length: 24 }, (_, i) => ({ id: 'tipo-' + i, nome: 'Tipo de lugar com nome extenso ' + i, cor: '#3498db' }));
+            const cadeiras = Object.fromEntries(tiposAssento.map((t, i) => [i + ',0', { prefixo: 'A', num: i + 1, tipo: t.id }]));
+            const r = await MapasTeatroPdf.gerar({ id: 'mapa-legenda-sintetico', name: 'Legenda extensa', config: { tiposAssento, setores: [{ id: 's1', nome: 'Setor', cadeiras }, { id: 's2', nome: 'Vazio', cadeiras: {} }] } });
+            return { total: r.total, paginas: (await PDFLib.PDFDocument.load(r.bytes)).getPageCount(), paginasSetores: r.arquivos.map(a => a.paginas) };
+        });
+        assert.equal(comLegenda.total, 24); assert.equal(comLegenda.paginas, 2);
+        assert.deepEqual(comLegenda.paginasSetores, [1, 1]);
         // Persistência via módulo real, com serviço inteiramente simulado.
         await page.addScriptTag({ content: 'const VIBECODE_SUPABASE_URL = ' + JSON.stringify(origem) + ';' });
         await page.evaluate(() => {
@@ -435,8 +481,37 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         assert.equal(await page.evaluate(() => gravacoes.length), escritasAntesRetry);
         await page.screenshot({ path: path.join(saida, 'lista-pdfs-erp-' + arquivoHtml + '.png') });
         await page.keyboard.press('Escape');
+        // Troca real de setores: nomes independentes, edição livre e saída sem salvar.
+        await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
+        await page.click('button[onclick="adicionarSetorMapa()"]');
+        assert.equal(await page.$eval('#mapa-conjunto-nome', el => el.value), 'Fila');
+        await page.$eval('#mapa-conjunto-nome', el => {
+            el.value = 'Área VIP'; el.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await page.click('#mapa-setores-list > div:first-child');
+        await page.waitForFunction(() => window.setorSelecionadoIdx === 0);
+        assert.equal(await page.$eval('#mapa-conjunto-nome', el => el.value), 'Mesa');
+        await page.click('#mapa-setores-list > div:last-child');
+        await page.waitForFunction(() => window.setorSelecionadoIdx === 1);
+        assert.equal(await page.$eval('#mapa-conjunto-nome', el => el.value), 'Área VIP');
+        const livre = await page.evaluate(async () => {
+            const m = JSON.parse(JSON.stringify(window.state.mapaAtual));
+            const r = await MapasTeatroPdf.gerar(m);
+            m.config.setores[1].nomeConjunto = 'Sala';
+            const outro = await MapasTeatroPdf.gerar(m);
+            const doc = await PDFLib.PDFDocument.load(r.arquivos[1].bytes);
+            return { mudouRevisao: r.revisao !== outro.revisao, quantidadePreservada: r.total === outro.total,
+                texto: doc.getPages().map(p => p.node.Contents().asArray().map(ref =>
+                    new TextDecoder().decode(PDFLib.decodePDFRawStream(doc.context.lookup(ref)).decode())).join('\n')).join('\n') };
+        });
+        assert.equal(livre.mudouRevisao, true); assert.equal(livre.quantidadePreservada, true);
+        assert.ok(livre.texto.includes('<' + Buffer.from('ASSENTOS POR ÁREA VIP', 'latin1').toString('hex').toUpperCase() + '> Tj'));
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await verificarDialogo('Sair sem salvar?');
+        await page.click(dialogo + ' [data-role="ok"]');
+        await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         assert.deepEqual(erros, []);
-        console.log(`OK browser (${arquivoHtml}): salvar e confirmar; PDFs reais com logo, download, quatro setores e 3000 assentos; persistência ERP, consulta, upload interrompido e repetição sem regravar mapa; rótulos e CSV preservados; zero erros JavaScript.`);
+        console.log(`OK browser (${arquivoHtml}): nome do conjunto editável, por setor, salvo/reaberto, acentos e revisão; PDFs reais com logo, quatro conjuntos e 3000 assentos; persistência ERP, repetição e saída sem salvar; rótulos e CSV preservados; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));

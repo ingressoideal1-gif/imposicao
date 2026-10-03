@@ -644,6 +644,7 @@ window.adicionarSetorMapa = function() {
     window.state.mapaAtual.config.setores.push({
         id: 'setor_' + novoIdx + '_' + Date.now(),
         nome: 'Novo Setor',
+        nomeConjunto: 'Fila',
         fileiras: [],
         cadeiras: {}
     });
@@ -802,7 +803,34 @@ function carregarSetorNoSidebar() {
     }
     props.style.display = 'flex';
     document.getElementById('mapa-setor-nome').value = s.nome || '';
+    const campo = document.getElementById('mapa-conjunto-nome');
+    if (campo) campo.value = nomeConjuntoDoMapa(s);
+    atualizarRotuloConjuntoMapa(s);
 }
+
+function nomeConjuntoDoMapa(setor) {
+    return String(setor?.nomeConjunto || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila';
+}
+
+function atualizarRotuloConjuntoMapa(setor) {
+    const nome = nomeConjuntoDoMapa(setor);
+    const botao = document.getElementById('mapa-adicionar-conjunto');
+    if (botao) botao.textContent = 'Adicionar ' + nome + ' no Mapa';
+    const prefixo = document.getElementById('mapa-fileira-prefix');
+    if (prefixo) prefixo.setAttribute('aria-label', 'Identificador de ' + nome);
+}
+
+window.atualizarNomeConjuntoMapa = function(normalizarCampo = false) {
+    const s = getSetorAtual(), campo = document.getElementById('mapa-conjunto-nome');
+    if (!s || !campo) return;
+    const nome = nomeConjuntoDoMapa({ nomeConjunto: campo.value });
+    if (nome !== nomeConjuntoDoMapa(s)) {
+        window.pushToMapHistory();
+        s.nomeConjunto = nome;
+    }
+    if (normalizarCampo) campo.value = nome;
+    atualizarRotuloConjuntoMapa(s);
+};
 
 window.atualizarSetorAtual = function() {
     if (window.setorSelecionadoIdx === null) return;
@@ -1216,7 +1244,7 @@ function expandirFilasDoMapa(entrada) {
         const faixa = parte.match(/^([A-Za-z]+)\s*-\s*([A-Za-z]+)$/) || parte.match(/^(\d+)\s*-\s*(\d+)$/);
         if (faixa) prefixos.push(...expandirFaixaDoMapa(faixa[1], faixa[2], true, true).valores.map(String));
         else prefixos.push(/^[A-Za-z]$/.test(parte) ? parte.toUpperCase() : parte);
-        if (prefixos.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) throw new Error('Há filas demais para uma inclusão. Divida a criação em intervalos menores.');
+        if (prefixos.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) throw new Error('Há conjuntos demais para uma inclusão. Divida a criação em intervalos menores.');
     }
     return prefixos.length ? prefixos : ['A'];
 }
@@ -1264,7 +1292,7 @@ window.gerarFileiraNoCanvas = function() {
         for (const i of lugares) {
             const rotulo = JSON.stringify([prefixo, chaveEtiquetaDoMapa(i)]);
             if (rotulos.has(rotulo)) {
-                avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste a fila ou o intervalo.`, 'warning');
+                avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste o identificador do conjunto ou o intervalo.`, 'warning');
                 return;
             }
             rotulos.add(rotulo);
@@ -1341,7 +1369,7 @@ window.gerarFileiraNoCanvas = function() {
         for (const i of lugares) {
             let key = `${currentX},${startY}`;
             if (cadeiras[key]) {
-                avisarMapa('Há uma cadeira no espaço da nova fileira. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');
+                avisarMapa('Há uma cadeira no espaço do novo conjunto. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');
                 return;
             }
             cadeiras[key] = {

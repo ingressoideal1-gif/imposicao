@@ -1,6 +1,8 @@
 # PDFs dos Mapas de Teatro — integração na aplicação
 
-## Comportamento entregue
+Este documento registra o comportamento da v1002. A correção posterior passa a gerar **somente uma página por setor**, com todos os lugares do mapa, eliminando as páginas de detalhe e resumo descritas abaixo. Ver o estado atualizado em [PDFs persistentes](mapas-teatro-pdfs-persistentes-2026-10-03.md).
+
+## Comportamento entregue na v1002
 
 Após salvar e conferir a linha persistida, a aplicação gera o PDF completo e um PDF para cada setor. O popup de sucesso oferece **Ver PDFs**. Na lista **Mapas de Teatro**, o botão **PDFs** permite visualizar ou baixar esses documentos para mapas novos e já existentes. Essa abertura relê o mapa salvo antes de gerar, incluindo alterações feitas por outro operador.
 

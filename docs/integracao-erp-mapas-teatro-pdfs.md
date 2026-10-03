@@ -12,15 +12,21 @@ Tabela existente: **`public.producao_mapas_teatro`**. A prévia de 03/10/2026 co
 | Nome do mapa | `name` |
 | Setores | `config.setores[]` |
 | ID e nome do setor | `config.setores[].id` e `.nome` |
+| Nome do conjunto de assentos | `config.setores[].nomeConjunto` — por exemplo `Fila`, `Mesa`, `Camarote` ou `Sala` |
 | Assentos e posições | `config.setores[].cadeiras` |
 
 Contar as cadeiras ativas de cada setor, excluindo `tipo = 'Apagado'` e `isErased = true`. O nome serve para exibição; o vínculo é o par **mapa_id + setor_id**. Nunca associar artes pelo nome ou posição do modelo.
+
+`nomeConjunto` é texto livre por setor (até 40 caracteres), salvo dentro do JSONB `config` da tabela existente; não é uma nova coluna ou tabela. O editor permite alterar o título que antes era fixo como “Fila”. Na ausência de um nome, inclusive em mapas antigos, usar **Fila**. O identificador continua em `cadeiras["x,y"].prefixo` e o número/letra do assento em `.num`; mudar o nome do conjunto preserva essas etiquetas e posições.
+
+Exemplo: um setor com `nomeConjunto="Mesa"`, prefixo `1` e assentos `A` a `D` representa **Mesa 1**, com quatro assentos. O PDF usa “ASSENTOS POR MESA” e “Mesa 1: 4”. Outro setor do mesmo mapa pode usar “Camarote”. Esta alteração integra a atualização frontend de 03/10/2026, cujo estado de implantação consta no registro da entrega.
 
 Consulta de leitura:
 
 ```sql
 SELECT m.id AS mapa_id, m.name AS nome_mapa,
        s.setor->>'id' AS setor_id, s.setor->>'nome' AS nome_setor,
+       coalesce(nullif(trim(s.setor->>'nomeConjunto'),''),'Fila') AS nome_conjunto,
        (SELECT count(*) FROM jsonb_each(
           CASE WHEN jsonb_typeof(s.setor->'cadeiras')='object'
           THEN s.setor->'cadeiras' ELSE '{}'::jsonb END
@@ -40,6 +46,8 @@ ORDER BY m.name,m.id,s.ordem;
 
 Tabela da nova integração: **`public.producao_mapas_teatro_pdf_exportacoes`**. Um registro representa o conjunto completo de PDFs de uma revisão. Não são gravados links temporários no cadastro geográfico.
 
+Formato solicitado: **exatamente uma página por setor**, com todos os lugares ativos nas posições gravadas no mapa. Não há páginas adicionais de detalhe ou resumo. O PDF completo apenas reúne as mesmas pranchas: quatro setores resultam em quatro páginas, além dos quatro PDFs individuais de uma página. O desenho e a numeração são ajustados para caber em uma única prancha A3; em mapas densos, o tamanho visual dos rótulos diminui. Cadeiras apagadas e espaços vazios continuam sendo respeitados.
+
 | Campo | Conteúdo |
 | --- | --- |
 | `mapa_id` | UUID do mapa |
@@ -51,6 +59,8 @@ Tabela da nova integração: **`public.producao_mapas_teatro_pdf_exportacoes`**.
 | `criado_em`, `criado_por` | Data de conclusão e autor |
 
 Cada item de `arquivos` contém `tipo`, `setor_id`, `nome_setor`, `quantidade_assentos`, `storage_path`, `sha256_arquivo`, `tamanho_bytes` e `paginas`. O arquivo do mapa completo tem `tipo='mapa'` e `setor_id=null`; os demais têm `tipo='setor'` e o ID real do setor. A API acrescenta `pdf_recurso` ao resultado; esse endereço é calculado e não precisa ser gravado no banco.
+
+O nome do conjunto usado no PDF fica no setor correspondente em `snapshot.config.setores[].nomeConjunto`, com o mesmo fallback **Fila**. Para informações do cadastro atual, ler `producao_mapas_teatro.config`; para reproduzir uma exportação anterior, ler seu `snapshot`. `nomeConjunto` não é um campo adicional no manifesto `arquivos[]`. Alterar esse nome gera uma nova revisão dos dados e novos PDFs; os arquivos históricos conservam o texto da revisão exportada.
 
 O bucket **`mapas-teatro-pdfs` é privado**. O ERP usa sua sessão Supabase com permissão de leitura do mapa. Não enviar a chave de serviço para o navegador, nem usar a chave anônima como autorização. A configuração privada evita leitura pública direta, conforme a [documentação do Supabase](https://supabase.com/docs/guides/storage/buckets/fundamentals).
 
