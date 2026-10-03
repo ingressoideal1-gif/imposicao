@@ -89,9 +89,33 @@ O download devolve os bytes `application/pdf` daquela revisão, após conferir s
 
 ## Modelos e artes de um pedido
 
-O vínculo comercial recomendado continua em **`public.pedidos_modelos`**, individual por modelo: `mapa_teatro_id`, `mapa_teatro_setor_id`, revisão e snapshot do setor. Esses campos e o filtro de numeração por setor são uma entrega separada; esta implementação de PDFs **não cria nem ativa esses vínculos no motor**.
+O fluxo publicado no frontend **v1004** para **Lista de Arte → Gerenciamento de Bancos de Dados → Mapa de Teatro** associa cada setor a um modelo existente do pedido, usando as tabelas de bancos já disponíveis. Para imprimir os conjuntos com quantidades exatas, atualizar as estações para **NewProd 1.2.347**, cujo instalador e manifesto foram publicados e conferidos. Evidências: [Registro da publicação](publicacao-2026-10-03-mapa-teatro-pedido.md). A entrega dos PDFs permanece independente.
+
+O vínculo efetivo fica em **`public.pedidos_modelos_banco`**: `modelo_id` identifica o modelo existente e `banco_id` aponta para **`public.pedidos_bancos.id`**. O banco pertence ao pedido (`id_int`), traz o nome do mapa/setor (`nome`) e guarda em `csv_data` uma linha por lugar. Cada linha identifica `Mapa_ID`, `Mapa`, `Setor_ID`, `Setor`, `Revisao_Mapa`, `Conjunto`, `Fila`, `Numero` e `Bloco`. `Bloco` identifica o conjunto; a quantidade é o número de suas linhas, inclusive quando dois conjuntos têm quantidades diferentes.
+
+Os campos comerciais anteriormente propostos em `pedidos_modelos` (`mapa_teatro_id`, `mapa_teatro_setor_id` etc.) **não foram criados**. Não depender deles para localizar a associação desta implementação. Contrato detalhado e estado da entrega: [Mapa de Teatro nos bancos do pedido](mapa-teatro-no-banco-do-pedido-2026-10-03.md).
 
 Para quatro setores com quatro artes, cada modelo deverá apontar para o mesmo mapa e seu próprio setor. A quantidade deve corresponder às cadeiras daquele setor. O ERP não deve copiar o total do mapa para todos os modelos.
+
+Consulta de leitura para identificar modelo, mapa, setor e quantidade de cada conjunto depois da importação (substituir `12345` pelo número do pedido):
+
+```sql
+select b.id_int as pedido, v.modelo_id, b.id as banco_id,
+       lugar->>'Mapa_ID' as mapa_id, lugar->>'Mapa' as nome_mapa,
+       lugar->>'Revisao_Mapa' as revisao_mapa,
+       lugar->>'Setor_ID' as setor_id, lugar->>'Setor' as nome_setor,
+       lugar->>'Conjunto' as nome_conjunto, lugar->>'Bloco' as identificador_bloco,
+       count(*) as quantidade_lugares
+from public.pedidos_modelos_banco v
+join public.pedidos_bancos b on b.id = v.banco_id
+cross join lateral jsonb_array_elements(b.csv_data) as lugar
+where b.id_int = 12345 and lugar->>'Origem' = 'Mapa de Teatro'
+group by b.id_int, v.modelo_id, b.id,
+         lugar->>'Mapa_ID', lugar->>'Mapa', lugar->>'Revisao_Mapa',
+         lugar->>'Setor_ID', lugar->>'Setor', lugar->>'Conjunto', lugar->>'Bloco';
+```
+
+O total de um setor é a soma dos seus conjuntos. Usar a autorização de leitura já existente; esta funcionalidade não modifica as permissões de acesso do ERP. Alterações posteriores no desenho não atualizam automaticamente bancos de pedidos: identificar a revisão importada e fazer nova associação quando necessário.
 
 ## Convenção da revisão
 

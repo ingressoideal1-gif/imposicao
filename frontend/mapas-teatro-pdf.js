@@ -44,17 +44,15 @@
         const plano = preparar(mapa);
         const chave = JSON.stringify(ordenado({ id: mapa.id, name: mapa.name, config: mapa.config }));
         if (cache.has(chave)) return cache.get(chave);
-        const trabalho = construir(plano, chave);
+        const trabalho = window.MapaTeatroRevisao.revisao(mapa.config).then(revisao => construir(plano, revisao));
         cache.set(chave, trabalho);
         while (cache.size > 3) cache.delete(cache.keys().next().value);
         try { return await trabalho; } catch (e) { cache.delete(chave); throw e; }
     }
 
-    async function construir(plano, chave) {
+    async function construir(plano, revisao) {
         if (!window.PDFLib?.PDFDocument || !window.MAPA_TEATRO_LOGO_PNG) throw Error('Os recursos de PDF não carregaram. Atualize a página e tente novamente.');
         const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
-        const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(chave));
-        const revisao = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, '0')).join('');
         const data = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
         const arquivos = [];
         const completo = await PDFDocument.create();

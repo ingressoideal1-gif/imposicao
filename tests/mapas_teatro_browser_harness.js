@@ -159,6 +159,9 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await salvarNoBrowser();
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         // Executa os dois resumos reais: sem recursão, preservando o mapa como fonte do CSV.
+        for (const nome of ['itemAtivoDoPedido', 'itensDaImposicao', 'vinculoDeBancoDoModelo', 'bancoTeatroDoModelo']) {
+            await page.addScriptTag({ content: func(script, nome) });
+        }
         for (const prefixo of ['imp', 'ped']) {
             const quantidade = await page.evaluate(async p => {
                 populateImpMapasTeatro(p);
@@ -284,7 +287,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => window.respostaPopup === true);
         // Integração real do PDF no navegador: mesmas bibliotecas e logo do produto.
-        for (const arquivo of ['pdf-lib.min.js', 'mapas-teatro-logo.js', 'mapas-teatro-pdf.js']) {
+        for (const arquivo of ['pdf-lib.min.js', 'mapas-teatro-logo.js', 'mapa-teatro-revisao.js', 'mapas-teatro-pdf.js']) {
             await page.addScriptTag({ path: path.join(raiz, 'frontend', arquivo) });
             assert.ok(html.includes(arquivo), arquivo + ' incluído na página real');
         }
@@ -467,7 +470,9 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         assert.equal(await page.evaluate(() => enviosErp.length), 1);
         await page.keyboard.press('Escape');
         await page.evaluate(() => { editarMapaTeatro('mapa-browser-1'); falharEnvioErp = true; });
+        await page.waitForFunction(() => window.state.mapaAtual?.id === 'mapa-browser-1');
         await page.$eval('#mapa-nome', el => { el.value = 'Mapa salvo upload interrompido'; });
+        await page.evaluate(() => { window.state.mapaAtual.config.setores[0].nome = 'Setor alterado para testar upload'; });
         await abrirConfirmacaoSalvar(); await page.click(dialogo + ' [data-role="ok"]');
         await verificarDialogo('Mapa salvo');
         assert.match(await page.$eval(dialogo, el => el.textContent), /envio dos PDFs para o ERP está pendente/);
@@ -511,7 +516,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await page.click(dialogo + ' [data-role="ok"]');
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         assert.deepEqual(erros, []);
-        console.log(`OK browser (${arquivoHtml}): nome do conjunto editável, por setor, salvo/reaberto, acentos e revisão; PDFs reais com logo, quatro conjuntos e 3000 assentos; persistência ERP, repetição e saída sem salvar; rótulos e CSV preservados; zero erros JavaScript.`);
+        console.log(`OK: browser (${arquivoHtml}): nome do conjunto editável, por setor, salvo/reaberto, acentos e revisão; PDFs reais com logo, quatro conjuntos e 3000 assentos; persistência ERP, repetição e saída sem salvar; rótulos e CSV preservados; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));

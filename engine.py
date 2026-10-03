@@ -10,6 +10,7 @@ import qrcode
 from PIL import Image
 
 import color_profiles
+import teatro_banco
 
 # svglib/reportlab sao obrigatorios para impor elementos de tipo SVG.
 # O import fica no topo (e nao dentro do try do render) de proposito: ate a v488
@@ -1440,6 +1441,9 @@ def _folhas_por_set_da_tela(set_definitions, bloco):
     saida = []
     for s in set_definitions or []:
         n = int(s.get("num_sheets", 0) or 0)
+        if s.get("teatro"):
+            saida.append(n)
+            continue
         depth = max(1, int(s.get("depth", 1) or 1))
         for camada in range(depth):
             saida.append(max(0, min(int(bloco), n - camada * int(bloco))))
@@ -2757,6 +2761,21 @@ class ImpositionEngine:
 
     def _process(self):
         cfg = self.cfg
+        fontes_teatro = [a.get("numeracao") or {} for a in cfg.multi_artes] if cfg.multi_artes else [
+            {"tipo": cfg.num_tipo, "csv_data": cfg.csv_data or [], "elements": cfg.elements}]
+        bancos_teatro = [n.get("csv_data") or [] for n in fontes_teatro]
+        importados_teatro = [teatro_banco.grupos(rows) for rows in bancos_teatro]
+        ativos_teatro = [n.get("tipo") == "TEATRO" or bool(g)
+                        for n, g in zip(fontes_teatro, importados_teatro)]
+        tem_banco_teatro = any(importados_teatro)
+        tem_montagem_teatro = cfg.layout_schema != "pdf_multiple" and any(ativos_teatro)
+        if tem_montagem_teatro:
+            if not all(ativos_teatro):
+                raise ValueError("Combine os modelos de teatro somente com outros modelos de teatro.")
+            # Usa o executor de pilhas, com ceil(qtd/poses) folhas por modelo.
+            # TEATRO prevalece sobre opções salvas de blocos comerciais/fila.
+            cfg.layout_schema = "cut_stack"
+            cfg.cut_stack_mode = "strict_assembly"
         # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
         # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.
         self._conferir_e_aquecer_fotos()
@@ -2919,6 +2938,11 @@ class ImpositionEngine:
         versos_mesclados = {}
 
         is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
+        if tem_banco_teatro:
+            fontes = [a.get("numeracao") or {} for a in cfg.multi_artes] if cfg.multi_artes else [{"elements": cfg.elements}]
+            if any(not any(el.get("type") in ("TEATRO_FILA", "TEATRO_LUGAR", "TEATRO_COMBO")
+                           for el in num.get("elements", [])) for num in fontes):
+                raise ValueError("Escolha uma numeração com elementos de teatro para este setor.")
         if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0) or is_strict_assembly:
 
             if cfg.multi_artes and len(cfg.multi_artes) > 0:
@@ -3102,6 +3126,8 @@ class ImpositionEngine:
                 # tem o seu; sem isto o motor lia o banco do trabalho inteiro e
                 # dava a linha do vizinho a quem nao era dela.
                 art_csv = (num1_obj or {}).get("csv_data") or None
+                if tem_montagem_teatro and not cfg.multi_artes:
+                    art_csv = cfg.csv_data
                 if art_csv:
                     art_csv = [r for r in art_csv if r.get("__ativo", True) is not False]
 
@@ -3273,12 +3299,19 @@ class ImpositionEngine:
                 curr_idx += physical_qtd
                 
             stack_size = cfg.sheets_per_block  # Itens por bloco (ex: 50)
+            sets_teatro = teatro_banco.montar_sets([
+                {"items": items, "tipo": (sorted_artes[i].get("numeracao") or {}).get("tipo"), "rows": [r for r in (
+                    ((sorted_artes[i].get("numeracao") or {}).get("csv_data") or [])
+                    if cfg.multi_artes else (cfg.csv_data or [])
+                ) if r.get("__ativo", True) is not False]}
+                for i, items in enumerate(models_items)
+            ], poses_per_sheet) if tem_montagem_teatro else None
             
             # 2. Dividir cada modelo em blocos completos de stack_size
             complete_blocks = []  # lista de (model_idx, [itens do bloco])
             leftovers_by_model = [[] for _ in sorted_artes]
             
-            for j, items in enumerate(models_items):
+            for j, items in enumerate(models_items if sets_teatro is None else []):
                 num_blocks = len(items) // stack_size
                 for b in range(num_blocks):
                     block = items[b * stack_size : (b + 1) * stack_size]
@@ -3360,6 +3393,8 @@ class ImpositionEngine:
                     })
 
             # Executar o loop usando set_definitions
+            if sets_teatro is not None:
+                set_definitions = sets_teatro
             total_sheets = sum(s["num_sheets"] for s in set_definitions)
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
             
@@ -3428,7 +3463,7 @@ class ImpositionEngine:
             set_da_tela = 0
             for set_idx, set_def in enumerate(set_definitions):
                 depth = set_def.get("depth", 1)
-                stack_size = cfg.sheets_per_block
+                stack_size = set_def["num_sheets"] if set_def.get("teatro") else cfg.sheets_per_block
 
                 for layer_idx in range(depth):
                     set_da_tela += 1
@@ -4536,7 +4571,14 @@ class ImpositionEngine:
         v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
 
         # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
-        if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
+        if (item_start.get("csv_row") or {}).get("Origem") == "Mapa de Teatro":
+            row_start, row_end = item_start["csv_row"], item_end["csv_row"]
+            qtd = item_end["local_idx"] - item_start["local_idx"] + 1
+            bloco_str = row_start.get("Setor") or "Teatro"
+            def rotulo(row):
+                return f"{row.get('Conjunto', 'Fila')} {row['Fila']} / {row['Numero']}"
+            sufixo_str = f" - {rotulo(row_start)} a {rotulo(row_end)} ({qtd} lugares)"
+        elif getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
             camarote_num = cfg.c_ini + (bloco_num - 1)
             bloco_str = f"Camarote {camarote_num:02d}"
             sufixo_str = f" - de 1 a {cfg.l_cam}"
@@ -4618,7 +4660,7 @@ class ImpositionEngine:
         start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
         start_y = (cfg.sheet_h - (cfg.rows * cfg.item_h + (cfg.rows - 1) * cfg.gap_v)) / 2
 
-        stack_size = cfg.sheets_per_block
+        stack_size = set_def["num_sheets"] if set_def.get("teatro") else cfg.sheets_per_block
         poses = cfg.rows * cfg.cols
 
         def canto_da_celula(P):

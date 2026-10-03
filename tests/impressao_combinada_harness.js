@@ -70,7 +70,7 @@ function scenario(mode, bar, quantities, options = {}) {
     currentPreviewPage:options.page||1,ESCALA_ARTE_MIN:1,ESCALA_ARTE_MAX:400};
   sandbox.window=sandbox;
   sandbox.desenharTextoAjustado=(_ctx,_el,label)=>records.push({vdp:label});
-  const scriptFns=['esquemaDaSelecaoCombinada','modoDeImpressaoDaSelecao','modoDeImpressaoDoModelo','modoSomaFolha','itensDaImposicao','itemAtivoDoPedido','temVerso','versoUnico','modoDeVersoDoModelo','escalaDaArteDoModelo','escalaDaArteDoTrabalho','blocagemDaSelecao','blocagemDoModelo','modoCutStackDaSelecao','porQueNaoCombina','problemaNaSelecao','alvosDaImpressao','numeracaoIdDoItem'];
+  const scriptFns=['esquemaDaSelecaoCombinada','modoDeImpressaoDaSelecao','modoDeImpressaoDoModelo','modoSomaFolha','itensDaImposicao','itemAtivoDoPedido','temVerso','versoUnico','modoDeVersoDoModelo','escalaDaArteDoModelo','escalaDaArteDoTrabalho','blocagemDaSelecao','blocagemDoModelo','modoCutStackDaSelecao','porQueNaoCombina','problemaNaSelecao','alvosDaImpressao','numeracaoIdDoItem','vinculoDeBancoDoModelo','bancoTeatroDoModelo'];
   const pedidoFns=['pdfDaFaceNaPreviaPedido','numeracaoDaArteNaPreviaPedido','buildStrictAssemblySets','arteDoModeloParaFolha','arteParaOMotor','carregarPdfsDaCombinacaoPaginada','drawPedPreview'];
   const code=scriptFns.map(n=>extract(s,n)).concat(pedidoFns.map(n=>extract(p,n))).join('\n');
   vm.createContext(sandbox);

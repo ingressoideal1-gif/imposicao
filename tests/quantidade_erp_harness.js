@@ -24,7 +24,7 @@ function extrair(fonte, nome) {
             if (tabela === 'pedidos_artes') return { select: () => ({ eq: async () => ({ data: [] }) }) };
             assert.equal(tabela, 'pedidos_modelos');
             return { select(colunas) {
-                assert.equal(colunas, 'id,quantidade,numeracao_inicio,numeracao_fim');
+                assert.equal(colunas, 'id,quantidade,numeracao_inicio,numeracao_fim,mapa_teatro_id,mapa_teatro_setor_id,mapa_teatro_revisao,mapa_teatro_snapshot');
                 return { async eq(campo, valor) {
                     consultas++;
                     assert.equal(campo, 'id_int'); assert.equal(valor, 123);
@@ -49,6 +49,10 @@ function extrair(fonte, nome) {
     state.ordens = [{ id: 'vibe_123', numero: 123 }];
     ctx.renderOSItens = () => {};
     ctx.toast = mensagem => { throw new Error(mensagem); };
+    // O carregador atual usa paginação/timeout também para a leitura das artes.
+    Object.assign(ctx, { setTimeout, clearTimeout, AbortController });
+    ctx.window = ctx;
+    vm.runInContext(extrair(script, 'lerDadosLista'), ctx);
     vm.runInContext(extrair(script, 'loadOSItens'), ctx);
     resposta.data[0].quantidade = 1500;
     resposta.data[0].numeracao_fim = 1500;
@@ -68,6 +72,17 @@ function extrair(fonte, nome) {
     }
     assert.equal(JSON.stringify(state), antes);
     assert.equal(consultas, 3);
+    const snapshot = { versao: 1, mapa: { id: 'mapa' }, setor: { id: 'setor' }, cadeiras: [] };
+    Object.assign(resposta.data[0], { mapa_teatro_id: 'mapa', mapa_teatro_setor_id: 'setor',
+        mapa_teatro_revisao: 'a'.repeat(64), mapa_teatro_snapshot: snapshot });
+    await ctx.atualizarQuantidadesDoERP('vibe_123', 123);
+    assert.equal(item.mapa_teatro_snapshot, snapshot, 'Reabertura relê o snapshot mesmo com arte em cache');
+    assert.equal(state.modelosGlobais[123][0].mapa_teatro_setor_id, 'setor');
+    assert.equal(item.arte_url, 'arte.pdf');
+    for (const campo of ['mapa_teatro_id', 'mapa_teatro_setor_id', 'mapa_teatro_revisao', 'mapa_teatro_snapshot']) resposta.data[0][campo] = null;
+    await ctx.atualizarQuantidadesDoERP('vibe_123', 123);
+    assert.equal(item.mapa_teatro_snapshot, null, 'Vínculo removido no ERP não permanece no cache');
+    const depoisVinculo = JSON.stringify(state);
     let resumos = 0;
     ctx.updateImpSummary = () => resumos++;
     for (const nome of ['onImposicaoStartInput', 'onImposicaoEndInput']) {
@@ -76,11 +91,11 @@ function extrair(fonte, nome) {
         ctx[nome](8);
     }
     assert.equal(resumos, 2);
-    assert.equal(JSON.stringify(state), antes, 'Faixa temporária do PDF não altera modelo');
+    assert.equal(JSON.stringify(state), depoisVinculo, 'Faixa temporária do PDF não altera modelo');
     for (const falha of [{ data: [] }, { error: new Error('rede indisponível') }, { data: [{ id: 42, quantidade: 900 }] }]) {
         resposta = falha;
         await assert.rejects(ctx.atualizarQuantidadesDoERP('vibe_123', 123));
-        assert.equal(JSON.stringify(state), antes, 'Falha não pode aplicar resposta parcial');
+        assert.equal(JSON.stringify(state), depoisVinculo, 'Falha não pode aplicar resposta parcial');
     }
     console.log('OK: atualização por modelo, preservação de artes, zero, bloqueio de gravações e falhas de consulta.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

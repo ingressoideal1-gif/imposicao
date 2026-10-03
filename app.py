@@ -368,7 +368,7 @@ def read_root():
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_snapshot_v1"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1265,6 +1265,10 @@ async def impose_file(
         import csv
         import io
         data = json.loads(payload)
+        import teatro_snapshot
+        data["avisos_teatro"] = teatro_snapshot.aplicar(data, db.get_mapa_teatro)
+        for aviso_teatro in data["avisos_teatro"]:
+            print("[teatro] " + aviso_teatro, flush=True)
         from integridade_impressao import validar_uploads
         await validar_uploads(data, await request.form())
         log_diag(f"[integridade] job={data['integridade']['job_id']} modelos={data['integridade']['modelos']} etapa=uploads_confirmados")

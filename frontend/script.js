@@ -1354,6 +1354,8 @@ window.pecaDoModelo = pecaDoModelo;
  * distribuicao quando bebem do MESMO poco.
  */
 function fonteDoModelo(item) {
+    // O snapshot é histórico e somente leitura; não abrir/distribuir CSV do catálogo.
+    if (window.TeatroSnapshot?.tem(item)) return null;
     const vinc = vinculoDeBancoDoModelo(item);
     const banco = window.BancoDoModelo
         ? window.BancoDoModelo.bancoDoModelo(vinc, state.bancosDoPedido || [])
@@ -10887,10 +10889,20 @@ function drawPreview() {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
     const raw_items = Math.max(1, end - start + 1);
-    const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
+    const bancoTeatro = bancoTeatroDoModelo(itemAtivoDoPedido());
+    const usaTeatro = schema !== 'pdf_multiple' && (window.TeatroBanco?.usa(num) || !!bancoTeatro);
+    const linhasTeatro = usaTeatro ? bancoTeatro?.csv_data || state.csvData || num?.csv_data || [] : null;
+    if (schema !== 'pdf_multiple' && usaTeatro && window.TeatroBanco.configurarTela('imp', [{ ...num, csv_data: linhasTeatro }])) schema = 'cut_stack';
+    const total_items = linhasTeatro ? linhasTeatro.length : (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
+    let setsTeatro = null;
+    if (usaTeatro && linhasTeatro.length) {
+        setsTeatro = window.TeatroBanco.montarSets([{ rows: linhasTeatro, tipo: num?.tipo,
+            items: linhasTeatro.map((_, i) => ({ global_index: i })) }], poses_per_sheet);
+        total_sheets = setsTeatro.reduce((n, s) => n + s.num_sheets, 0);
+    }
 
     let is_strict_mode = false;
     let stack_size = 50;
@@ -10918,7 +10930,18 @@ function drawPreview() {
             if (S < 0) S = 0;
 
             let item_index = (S * poses_per_sheet) + P;
-            if (schema === "cut_stack") {
+            if (setsTeatro) {
+                let folha = S, set = setsTeatro[0];
+                for (const candidato of setsTeatro) {
+                    set = candidato;
+                    if (folha < candidato.num_sheets) break;
+                    folha -= candidato.num_sheets;
+                }
+                const itemTeatro = set.cell_allocations[P][folha];
+                if (!itemTeatro) continue;
+                item_index = itemTeatro.global_index;
+            }
+            if (schema === "cut_stack" && !setsTeatro) {
                 const cutstackMode = document.getElementById('imp-cutstack-mode')?.value || 'independent';
                 if (cutstackMode === 'strict') {
                     const full_sets = Math.floor(total_sheets / stack_size);
@@ -11359,7 +11382,13 @@ function drawPreview() {
                     const textY = -ch/2 + (yPdf * MM2PT * scale);
                     
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
-                    if (isNumCamarote) {
+                    const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets);
+                    if (capaTeatro) {
+                        const largura = ctx.measureText(capaTeatro.titulo).width;
+                        ctx.fillText(capaTeatro.titulo, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        ctx.fillText(capaTeatro.detalhe, textX + largura, textY);
+                    } else if (isNumCamarote) {
                         // Pegar c_ini e l_cam do item ativo (pedidos_modelos)
                         let cIni = 1, lCam = 1;
                         if (activeItem) {
@@ -11498,16 +11527,16 @@ function drawPreview() {
                         val_str = el.fixed_value || "";
 
                     } else if (el.type === 'TEATRO_FILA') {
-                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
+                        const filaVal = (linhasTeatro || state.csvData)?.[item_index]?.Fila || 'A';
                         val_str = `${el.prefix || ''}${filaVal}`;
 
                     } else if (el.type === 'TEATRO_LUGAR') {
-                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        const lugarVal = (linhasTeatro || state.csvData)?.[item_index]?.Numero || '22';
                         val_str = `${el.prefix || ''}${lugarVal}`;
 
                     } else if (el.type === 'TEATRO_COMBO') {
-                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
-                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        const filaVal = (linhasTeatro || state.csvData)?.[item_index]?.Fila || 'A';
+                        const lugarVal = (linhasTeatro || state.csvData)?.[item_index]?.Numero || '22';
                         const filaT = `${el.prefix_fila || ''}${filaVal}`;
                         const lugarT = `${el.prefix_lugar || ''}${lugarVal}`;
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
@@ -12319,6 +12348,8 @@ async function loadMapaTeatroData(mapaId, prefixo = 'imp', forcar = false) {
 }
 
 function trabalhoUsaMapaTeatro(prefixo) {
+    // Bancos de setores já fornecem as linhas do modelo; não carregar o mapa inteiro.
+    if (itensDaImposicao((state.selectedOSItems || []).length > 0).some(bancoTeatroDoModelo)) return false;
     return ['-numeracao', '-numeracao-2'].some(sufixo => {
         const id = document.getElementById(prefixo + sufixo)?.value;
         return state.numeracoes?.find(n => String(n.id) === String(id))?.tipo === 'TEATRO';
@@ -12367,7 +12398,7 @@ function onImpNumeracaoSelect() {
 }
 
 function updateImpSummary() {
-    const schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+    let schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
     const fmtSelect = document.getElementById('imp-formato');
     const numSelect = document.getElementById('imp-numeracao');
     const numSelect2 = document.getElementById('imp-numeracao-2');
@@ -12379,6 +12410,7 @@ function updateImpSummary() {
     
     const num = (state.numeracoes && numId) ? (state.numeracoes.find(n => String(n.id) === String(numId)) || null) : null;
     const num2 = (state.numeracoes && num2Id) ? (state.numeracoes.find(n => String(n.id) === String(num2Id)) || null) : null;
+    if (schema !== 'pdf_multiple' && window.TeatroBanco?.configurarTela('imp', [numeracaoDoModelo(itemAtivoDoPedido()) || num])) schema = 'cut_stack';
 
     const start = parseInt(document.getElementById('imp-start')?.value, 10) || 1;
     const end = parseInt(document.getElementById('imp-end')?.value, 10) || 100;
@@ -12644,7 +12676,7 @@ function updateImpSummary() {
     const impStartGroup = document.getElementById('imp-start-group');
     const impEndGroup = document.getElementById('imp-end-group');
     
-    if ((num && num.tipo === 'TEATRO') || (num2 && num2.tipo === 'TEATRO')) {
+    if (trabalhoUsaMapaTeatro('imp')) {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'block';
         if (impStartGroup) impStartGroup.style.display = 'none';
         if (impEndGroup) impEndGroup.style.display = 'none';
@@ -12732,6 +12764,11 @@ function updateImpSummary() {
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
+    if (schema !== 'pdf_multiple' && window.TeatroBanco?.usa(numeracaoDoModelo(itemAtivoDoPedido()) || num)) {
+        const rows = bancoTeatroDoModelo(itemAtivoDoPedido())?.csv_data || state.csvData || num?.csv_data || [];
+        const sets = rows.length ? window.TeatroBanco.montarSets([{ rows, tipo: num?.tipo, items: rows.map((_, i) => i) }], perSheet) : [];
+        sheets = sets.reduce((n, s) => n + s.num_sheets, 0);
+    }
     if (schema === 'cut_stack') {
         const stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
         if (cutstackMode === 'strict') {
@@ -13972,6 +14009,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         // estacao, o ramo `else` da sondagem ja teria lancado.
         const urlImpose = `${baseUrl}/api/impose`;
 
+        await window.TeatroBanco?.conferirMotor(formData, baseUrl, impositionAbortController.signal);
         await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
         const res = await fetch(urlImpose, {
 
@@ -18924,6 +18962,7 @@ window.linhasDoModeloNoPayload = linhasDoModeloNoPayload;
 function numeracaoConfirmadaDoModelo(num, item) {
     if (!num) return null;
     let copia = JSON.parse(JSON.stringify(resolverNumeracaoParaModelo(num, item)));
+    if (copia.teatro_snapshot_erro) throw Error(copia.teatro_snapshot_erro);
     if (copia.csv_data?.length) {
         if (item?.csv_selecao) copia.csv_data = fatiaCsvDoItem(item, copia);
         else if (vinculoDeBancoDoModelo(item)) copia.csv_data = linhasDoModeloNoPayload(item, copia);
@@ -19064,7 +19103,7 @@ function numeracaoDoModelo(item) {
 
     // ── O desvio do banco do pedido (27/08/2026) ────────────────────────────
     //
-    // Modelo sem vinculo sai por aqui com a MESMA numeracao de sempre, pela
+    // Modelo sem snapshot do ERP e sem vinculo sai com a MESMA numeracao, pela
     // mesma referencia. Tudo o que existia antes desta data cai neste return e
     // nao enxerga o caminho novo -- e e por isso que a mudanca nao altera
     // nenhum dos pedidos em andamento.
@@ -19085,9 +19124,14 @@ window.numeracaoDoModelo = numeracaoDoModelo;
  * o payload `multi_artes` da imposicao, que escolhe a numeracao pelo `num1_id`
  * da arte e nao pelo modelo. La a escolha nao pode mudar -- so a resolucao.
  *
- * Sem vinculo devolve o proprio `num`, pela mesma referencia.
+ * Sem snapshot do ERP e sem vinculo devolve o proprio `num`, pela mesma referencia.
  */
 function resolverNumeracaoParaModelo(num, item) {
+    if (window.TeatroSnapshot?.tem(item)) return window.TeatroSnapshot.resolver(num, item);
+    if (item?.mapa_teatro_snapshot || item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao) {
+        return num && { ...num, tipo: 'TEATRO', csv_data: [], csv_headers: [], csv_url: '',
+            erro_mapa_teatro: 'Recarregue a página para carregar o mapa enviado pelo ERP.' };
+    }
     const vinculo = vinculoDeBancoDoModelo(item);
     if (!num || !vinculo || !window.BancoDoModelo) return num;
 
@@ -19113,6 +19157,64 @@ function vinculoDeBancoDoModelo(item) {
     return mapa[String(item.id)] || null;
 }
 window.vinculoDeBancoDoModelo = vinculoDeBancoDoModelo;
+
+function bancoTeatroDoModelo(item) {
+    if (window.TeatroSnapshot?.tem(item)) {
+        try { return window.TeatroSnapshot.banco(item); }
+        catch (e) { return { csv_data: [], erro: e.message, origem_snapshot: true }; }
+    }
+    const vinculo = vinculoDeBancoDoModelo(item);
+    const banco = vinculo && window.BancoDoModelo?.bancoDoModelo(vinculo, state.bancosDoPedido || []);
+    return banco && Array.isArray(banco.csv_data) && banco.csv_data.some(r => r &&
+        (r.Origem === 'Mapa de Teatro' || (r.Mapa_ID && r.Setor_ID && r.Revisao_Mapa))) ? banco : null;
+}
+
+window.abrirMapaTeatroDoPedido = function (osId) {
+    if (!window.MapaTeatroDoPedido || !window.TeatroBanco) return toast('Recarregue a página para abrir os mapas.', 'error');
+    const idInt = Number(idIntDoPedido(osId));
+    if (!Number.isSafeInteger(idInt) || idInt < 1) return toast('Pedido não identificado.', 'error');
+    const ativo = () => String(state.amostrasOSAtivo || '') === String(osId);
+    const exigir = () => { if (!ativo()) throw Error('O pedido mudou. Reabra o mapa no pedido correto.'); };
+    window.MapaTeatroDoPedido.abrir({
+        idInt, ativo, itens: () => state.osItens[osId] || [],
+        bloqueio: item => window.TeatroSnapshot?.tem(item)
+            ? 'Este modelo usa o mapa salvo pelo ERP. Altere o vínculo no ERP para trocar o setor.'
+            : bloqueioDeModeloAprovado(item, { csv_selecao: null })?.motivo,
+        async listarMapas() {
+            const mapas = [];
+            for (let de = 0; ; de += 500) {
+                const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('id,name').order('name').order('id').range(de, de + 499);
+                if (error) throw error;
+                if (!Array.isArray(data)) throw Error('Não foi possível consultar os mapas.');
+                mapas.push(...data); exigir(); if (data.length < 500) return mapas;
+            }
+        },
+        async lerMapa(id) {
+            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', id).single();
+            if (error) throw error; if (!data || String(data.id) !== String(id)) throw Error('Mapa não encontrado.');
+            return data;
+        },
+        chamar: chamarBancosPedido,
+        async consultar() {
+            if (state._bancosEmVoo) await state._bancosEmVoo;
+            exigir(); return chamarBancosPedido('consultar', { id_int: idInt });
+        },
+        async limparSelecao(item) {
+            exigir();
+            const recibo = await saveAmostraToDB(item.id, osId, { csv_selecao: null });
+            if (!recibo?.confirmado) throw Error('Não foi possível confirmar a seleção de lugares do modelo.');
+        },
+        atualizar(dados) {
+            exigir(); state.bancosDoPedido = dados.bancos;
+            state.vinculosDeBanco = Object.fromEntries((dados.vinculos || []).map(v => [String(v.modelo_id), v]));
+            state._bancosPedidoDe = String(osId);
+        },
+        async concluido(resultado) {
+            exigir(); await renderAmostrasOSItens(osId);
+            toast(resultado.setores + ' setores associados; ' + resultado.lugares + ' lugares carregados.', 'success');
+        }
+    });
+};
 
 /**
  * O `csv_data` que esta aba ja baixou continua descrevendo a linha relida?
@@ -19465,7 +19567,27 @@ window.removerDistribuicaoDoModelo = async function (idx, osId) {
  * ou tudo certo) e `{ motivo, texto }` quando há. Só lê; não escreve nada.
  */
 function bancoDeDadosIncompletoDoModelo(item) {
+    if (!window.TeatroSnapshot && (item?.mapa_teatro_snapshot || item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao)) {
+        return { motivo: 'mapa_teatro', texto: 'Recarregue a página para carregar o mapa enviado pelo ERP.' };
+    }
     const num = numeracaoDoModelo(item);
+    if (num?.erro_mapa_teatro) return { motivo: 'mapa_teatro', texto: num.erro_mapa_teatro };
+    if (window.TeatroSnapshot?.tem(item)) {
+        const texto = window.TeatroSnapshot.problema(item, num);
+        if (texto) return { motivo: 'mapa_teatro', texto };
+    }
+    const teatro = bancoTeatroDoModelo(item);
+    if (teatro) {
+        try {
+            if (teatro.erro) throw Error(teatro.erro);
+            if (!window.TeatroBanco) throw Error('Recarregue a página para validar o banco do teatro.');
+            window.TeatroBanco.grupos(teatro.csv_data);
+            if (!num || !(num.elements || []).some(el => /^TEATRO_(FILA|LUGAR|COMBO)$/.test(el.type))) throw Error('Escolha uma numeração com elementos de teatro para este setor.');
+            if (quantidadeContratada(item) !== teatro.csv_data.length || item.csv_selecao
+                || teatro.csv_data.some(r => r.__ativo === false)
+                || linhasDoModeloNoPayload(item, num).length !== teatro.csv_data.length) throw Error('Use todos os lugares do setor e confira a quantidade do modelo no ERP.');
+        } catch (e) { return { motivo: 'mapa_teatro', texto: e.message }; }
+    }
     if (!num) return null;
     const deBanco = (num.elements || []).filter(el => el && el.source === 'database');
     if (!deBanco.length) return null;
@@ -20220,6 +20342,8 @@ function modoDeImpressaoDoModelo(item) {
 
     if (!item) return 'sequencial';
 
+    if (!item.modo_pdf && window.TeatroBanco?.usa(numeracaoDoModelo(item))) return 'blocado';
+
     const salvo = String(item.modo_impressao || '').toLowerCase();
 
     if (salvo === 'sequencial' || salvo === 'blocado') return salvo;
@@ -20244,7 +20368,7 @@ window.modoDeImpressaoDoModelo = modoDeImpressaoDoModelo;
 function blocagemDoModelo(item) {
 
     return {
-        modo: (item && item.cutstack_modo) || 'strict_assembly',
+        modo: window.TeatroBanco?.usa(numeracaoDoModelo(item)) ? 'strict_assembly' : (item && item.cutstack_modo) || 'strict_assembly',
         folhas: parseInt(item && item.cutstack_folhas) || parseInt(item && item.bloco) || 50
     };
 
@@ -20299,6 +20423,9 @@ window.blocagemDaSelecao = blocagemDaSelecao;
  * decide entre folha própria (cut_stack) e aproveitar a folha (multi_artes).
  */
 function esquemaDaSelecaoCombinada() {
+
+    const itensTeatro = itensDaImposicao(true);
+    if (itensTeatro.length && itensTeatro.every(it => window.TeatroBanco?.usa(numeracaoDoModelo(it)))) return 'cut_stack';
 
     if (modoDeImpressaoDaSelecao() === 'sequencial') return 'sequential';
 
@@ -20455,6 +20582,7 @@ function atualizarOpcoesDoModelo() {
     const modo = item ? modoDeImpressaoDoModelo(item) : 'sequencial';
 
     const travadoPorPdf = !!(item && item.modo_pdf);
+    const travadoPorTeatro = !travadoPorPdf && window.TeatroBanco?.usa(numeracaoDoModelo(item));
 
     const titulo = item ? ((item.modelo ? item.modelo + ' — ' : '') + rotuloDoModelo(item, 0)) : '';
 
@@ -20490,7 +20618,7 @@ function atualizarOpcoesDoModelo() {
 
             btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
 
-            btn.disabled = travadoPorPdf;
+            btn.disabled = travadoPorPdf || travadoPorTeatro;
 
         });
 
@@ -20508,9 +20636,9 @@ function atualizarOpcoesDoModelo() {
                     : pdfDuplicarParaVersoDoModelo(item)
                         ? '🔒 Modo PDF: cada página é uma peça e será repetida no verso. O PDF deve ter exatamente a quantidade de páginas do modelo.'
                         : '🔒 Modo PDF: cada página do arquivo é um ingresso, e a regra é imposta. Para mudar, desligue o Modo PDF na tela de arte do modelo.')
-                : '';
+                : travadoPorTeatro ? 'TEATRO: folhas = quantidade ÷ posições do formato, arredondando para cima. Os lugares são preenchidos verticalmente por modelo.' : '';
 
-            nota.style.display = travadoPorPdf ? 'block' : 'none';
+            nota.style.display = travadoPorPdf || travadoPorTeatro ? 'block' : 'none';
 
         }
 
@@ -21790,6 +21918,10 @@ window.abrirCsvDoModelo = async function(idx, osId) {
     const item = (state.osItens[osId] || [])[idx];
 
     if (!item) return;
+
+    if (window.TeatroSnapshot?.tem(item)) {
+        return toast('Os lugares vêm do mapa salvo pelo ERP. Altere o vínculo no ERP; a seleção parcial não se aplica a este modelo.', 'info');
+    }
 
     const fonte = fonteDoModelo(item);
 
@@ -27591,7 +27723,7 @@ async function atualizarQuantidadesDoERP(osId, numero) {
     const itens = state.osItens[osId] || [];
     if (!itens.length) return;
     const { data, error } = await supabaseClient.from('pedidos_modelos')
-        .select('id,quantidade,numeracao_inicio,numeracao_fim')
+        .select('id,quantidade,numeracao_inicio,numeracao_fim,mapa_teatro_id,mapa_teatro_setor_id,mapa_teatro_revisao,mapa_teatro_snapshot')
         .eq('id_int', Number(numero));
     if (error) throw error;
     // Valida o conjunto antes de modificar o cache. Vazio não confirma tiragem.
@@ -27610,6 +27742,10 @@ async function atualizarQuantidadesDoERP(osId, numero) {
             destino.quantidade = Number(modelo.quantidade);
             destino.num_inicial = destino.numeracao_inicio = modelo.numeracao_inicio;
             destino.num_final = destino.numeracao_fim = modelo.numeracao_fim;
+            for (const campo of ['mapa_teatro_id', 'mapa_teatro_setor_id', 'mapa_teatro_revisao', 'mapa_teatro_snapshot']) {
+                if (Object.prototype.hasOwnProperty.call(modelo, campo)) destino[campo] = modelo[campo];
+            }
+            delete destino._mapa_teatro_aviso;
         };
         aplicar(item);
         for (const copia of (state.modelosGlobais?.[numero] || [])) {
@@ -27888,6 +28024,8 @@ async function loadOSItens(osId, opcoes = {}) {
 
         // Mesmo com artes/amostras em cache, a tiragem continua vindo do ERP.
         if (!needsFullLoad && os.numero) await atualizarQuantidadesDoERP(osId, os.numero);
+        if (typeof window !== 'undefined') await window.TeatroSnapshot?.conferirPedido(state.osItens[osId],
+            typeof supabaseClient === 'undefined' ? null : supabaseClient);
 
         // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
         if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
@@ -35111,7 +35249,18 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
-                    Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.</span>
+                    ${bancoIncompleto.motivo === 'mapa_teatro'
+                        ? 'Confira o setor associado em <b>Mapa de Teatro</b>, sua quantidade no ERP e os elementos de teatro da numeração.'
+                        : 'Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.'}</span>
+                </div>` : '';
+
+        const bancoSnapshotERP = window.TeatroSnapshot?.tem(item) ? bancoTeatroDoModelo(item) : null;
+        const origemSnapshotERP = bancoSnapshotERP?.csv_data[0];
+        const faixaMapaERP = origemSnapshotERP ? `
+                <div style="margin:0 0 10px;padding:9px 12px;border-radius:8px;background:rgba(20,184,166,.10);border:1px solid rgba(20,184,166,.35);font-size:.8rem;">
+                    <b>Mapa de Teatro do ERP:</b> ${escapeHtml(origemSnapshotERP.Mapa)}<br>
+                    Setor: ${escapeHtml(origemSnapshotERP.Setor)} · ${bancoSnapshotERP.csv_data.length} lugares · Versão salva no pedido
+                    ${item._mapa_teatro_aviso ? `<br><span style="color:#fbbf24;">${escapeHtml(item._mapa_teatro_aviso)}</span>` : ''}
                 </div>` : '';
 
         const faixaSemGlifo = travaDeGlifo ? `
@@ -35392,6 +35541,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${faixaMapaERP}
                         ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
                         </div>
@@ -35555,6 +35705,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                 <button class="btn btn-sm btn-secondary" onclick="subirBancoPeloBox('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco deste pedido a partir de um arquivo CSV">📤 Subir CSV</button>
                                 <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorLink('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar bancos a partir de uma planilha compartilhada por link — cada página vira um banco">🌐 Buscar de link</button>
                                 <button class="btn btn-sm btn-secondary" onclick="criarColunasDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco ou acrescentar colunas a um CSV deste pedido">➕ Criar colunas</button>
+                                <button class="btn btn-sm btn-secondary" onclick="abrirMapaTeatroDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;">🗺️ Mapa de Teatro</button>
                             </div>
                         </div>
                         <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>
