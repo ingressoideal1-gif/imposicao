@@ -116,15 +116,24 @@ function Invoke-SincronizarPrincipal {
             if ($interpretador) { break }
         }
     }
-    if (-not $interpretador) { throw 'Informe -Python para conferir a sincronia da pasta principal.' }
-    $argumentos = @((Join-Path $script:Raiz 'ferramentas\sincronizar_git.py'), '--raiz', $principal)
-    if ($BackupPrincipal -and -not $Simular) {
-        $argumentos += @('--aplicar', '--backup', $BackupPrincipal)
+    if (-not $interpretador) {
+        if ($BackupPrincipal -and -not $Simular) { throw 'Informe -Python para aplicar o alinhamento com backup.' }
+        $contagem = ([string](& git -C $principal rev-list --left-right --count 'HEAD...origin/main')).Trim() -split '\s+'
+        if ($LASTEXITCODE -ne 0 -or $contagem.Count -ne 2) { throw 'Sincronia Git principal nao foi comprovada.' }
+        $branchPrincipal = [string](& git -C $principal branch --show-current)
+        if ($LASTEXITCODE -ne 0) { throw 'Branch principal nao foi comprovada.' }
+        $codigo = if ([int]$contagem[0] -eq 0 -and [int]$contagem[1] -eq 0 -and $branchPrincipal.Trim() -eq 'main') { 0 } else { 2 }
+        $estado = [pscustomobject]@{ estado = if ($codigo -eq 0) { 'ALINHADO' } else { 'PENDENTE' }; adiante = [int]$contagem[0]; atras = [int]$contagem[1]; motivos = @() }
+    } else {
+        $argumentos = @((Join-Path $script:Raiz 'ferramentas\sincronizar_git.py'), '--raiz', $principal)
+        if ($BackupPrincipal -and -not $Simular) {
+            $argumentos += @('--aplicar', '--backup', $BackupPrincipal)
+        }
+        $saida = @(& $interpretador @argumentos)
+        $codigo = $LASTEXITCODE
+        if ($codigo -notin @(0, 2)) { throw 'Falha na conferencia da pasta principal; nenhum alinhamento foi comprovado.' }
+        $estado = ($saida -join [Environment]::NewLine) | ConvertFrom-Json
     }
-    $saida = @(& $interpretador @argumentos)
-    $codigo = $LASTEXITCODE
-    if ($codigo -notin @(0, 2)) { throw 'Falha na conferencia da pasta principal; nenhum alinhamento foi comprovado.' }
-    $estado = ($saida -join [Environment]::NewLine) | ConvertFrom-Json
     Write-Host "  Pasta principal: $principal"
     Write-Host "  Git: $($estado.estado); adiante $($estado.adiante); atras $($estado.atras)"
     foreach ($motivo in @($estado.motivos)) { if ($motivo) { Write-Host "  $motivo" -ForegroundColor Yellow } }

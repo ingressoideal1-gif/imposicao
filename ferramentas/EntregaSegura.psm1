@@ -41,7 +41,7 @@ function Get-EscopoEntrega {
             $tipos += 'NewProd'; continue
         }
         if ($caminho -eq 'entrega-segura.ps1' -or $caminho -like 'ferramentas/*.psm1' -or
-            $caminho -like 'ferramentas/*.ps1') {
+            $caminho -like 'ferramentas/*.ps1' -or $caminho -eq 'ferramentas/sincronizar_git.py') {
             $tipos += 'Operacional'; continue
         }
         # Testes e documentacao acompanham o codigo principal. So definem o
@@ -82,7 +82,7 @@ function Test-CaminhoNoEscopo {
         'Documentacao'  { return $p -like 'docs/*' -or $p -match '^[^/]+\.md$' }
         'Operacional'   {
             return $p -eq 'entrega-segura.ps1' -or $p -like 'ferramentas/*.psm1' -or
-                   $p -like 'ferramentas/*.ps1'
+                   $p -like 'ferramentas/*.ps1' -or $p -eq 'ferramentas/sincronizar_git.py'
         }
         default         { return $false }
     }
