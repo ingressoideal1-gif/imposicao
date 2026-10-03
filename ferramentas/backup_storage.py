@@ -1,0 +1,145 @@
+"""Copia somente leitura do Storage e cifragem por bucket; nenhum upload Supabase."""
+import argparse
+import datetime
+import json
+import re
+import subprocess
+from pathlib import Path
+import zipfile
+
+from backup_portatil import cifrar, decifrar, ler_chave, sha256
+
+PROJECT = 'vwbtitjlpelrcnsytzqw'
+
+
+def cli(executable, *args, cwd=None):
+    result = subprocess.run([str(executable), *args, '--output-format', 'json'], capture_output=True, cwd=cwd)
+    if result.returncode:
+        raise RuntimeError('A CLI recusou a leitura ou copia; nenhuma escrita Supabase foi solicitada')
+    if args[:2] != ('db', 'query'):
+        return {}  # Progresso de copia pode ser NDJSON; nao expor nomes em logs.
+    return json.loads(result.stdout.decode('utf-8-sig')) if result.stdout.strip() else {}
+
+
+def linhas(dados):
+    if isinstance(dados, list):
+        return dados
+    return dados.get('rows', [])
+
+
+def validar_objetos(bucket, objects):
+    nomes = set()
+    for item in objects:
+        name = item['name']
+        parts = name.split('/')
+        reserved = re.compile(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)', re.I)
+        if (not name or name.startswith(('/', '\\')) or
+                any(p in ('', '..', '.') or p.endswith((' ', '.')) or reserved.match(p) for p in parts) or
+                any(c in name for c in '\\:<>"|?*') or any(ord(c) < 32 for c in name)):
+            raise ValueError('Objeto com caminho nao portavel para Windows')
+        folded = name.casefold()
+        if folded in nomes:
+            raise ValueError('Objetos com nomes conflitantes no Windows')
+        nomes.add(folded)
+        if item['bucket_id'] != bucket:
+            raise ValueError('Inventario de bucket divergente')
+
+
+def copiar(cli_path, destino, chave, agent_pre_copiado=None):
+    destino = Path(destino).resolve()
+    if destino.exists():
+        raise ValueError('Use um destino novo em pasta privada')
+    destino.mkdir()
+    private = destino / 'temporario-privado'
+    private.mkdir()
+    sql = private / 'inventario.sql'
+    sql.write_text("BEGIN READ ONLY; SET LOCAL statement_timeout='30s'; SELECT jsonb_agg(jsonb_build_object('bucket_id',bucket_id,'name',name,'bytes',(metadata->>'size')::bigint,'updated_at',updated_at)) AS objects FROM storage.objects; COMMIT;", encoding='utf-8')
+    result = cli(cli_path, 'db', 'query', '--linked', '--project-ref', PROJECT, '--file', str(sql))
+    objects = linhas(result)[0]['objects'] or []
+    if isinstance(objects,str):
+        objects = json.loads(objects)
+    # Nomes de objetos so ficam no inventario cifrado e na pasta local privada.
+    buckets = sorted(set(x['bucket_id'] for x in objects))
+    for bucket in buckets:
+        if not re.fullmatch(r'[a-zA-Z0-9_-]+', bucket):
+            raise ValueError('Nome de bucket inesperado')
+        validar_objetos(bucket, [x for x in objects if x['bucket_id'] == bucket])
+    local_manifest = {'project': PROJECT, 'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                      'scope': 'All objects visible to project administrator, encrypted per bucket; database is separate.', 'buckets': []}
+    key = ler_chave(chave)
+    for bucket in buckets:
+        expected = [x for x in objects if x['bucket_id'] == bucket]
+        if bucket == 'agent-releases' and agent_pre_copiado is not None:
+            folder = Path(agent_pre_copiado).resolve()
+            if not folder.is_dir() or Path(agent_pre_copiado).is_symlink():
+                raise ValueError('Pasta pre-copiada invalida')
+        else:
+            folder = private / bucket
+            folder.mkdir()
+            # A CLI interpreta C: como protocolo remoto. Destino relativo e
+            # cwd privado mantem a operacao no disco e evitam essa ambiguidade.
+            cli(cli_path, 'storage', 'cp', '--recursive', '--jobs', '4', '--linked', '--project-ref', PROJECT,
+                '--experimental', 'ss:///' + bucket + '/', '.', cwd=folder)
+        files = sorted(p for p in folder.rglob('*') if p.is_file())
+        for p in files:
+            if p.is_symlink() or not p.resolve().is_relative_to(folder):
+                raise ValueError('Arquivo copiado fora do destino privado')
+        # A CLI pode preservar o nome do bucket como nivel adicional.
+        if (folder / bucket).is_dir():
+            extras = [p for p in files if not p.is_relative_to(folder / bucket)]
+            if any(not p.is_relative_to(folder / 'supabase' / '.temp') for p in extras):
+                raise ValueError('Arquivos inesperados fora do bucket copiado')
+            source_root = folder / bucket
+            # A CLI cria metadados .temp de conexao no cwd, fora dos objetos.
+            # Nao lemos nem arquivamos esse cache de configuracao.
+            files = [p for p in files if p.is_relative_to(source_root)]
+        else:
+            source_root = folder
+        actual = {p.relative_to(source_root).as_posix(): p for p in files}
+        expected_names = {x['name'] for x in expected}
+        if set(actual) != expected_names:
+            raise ValueError('Objetos copiados nao correspondem ao inventario; preserve o resultado incompleto')
+        metadata = []
+        for item in expected:
+            p = actual[item['name']]
+            if item['bytes'] is not None and p.stat().st_size != item['bytes']:
+                raise ValueError('Objeto alterado durante a copia; snapshot nao declarado completo')
+            metadata.append({**item, 'sha256': sha256(p)})
+        archive_path = private / (bucket + '.zip')
+        with zipfile.ZipFile(archive_path, 'x', compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+            archive.writestr('inventario.json', json.dumps(metadata, ensure_ascii=False))
+            for name, p in actual.items():
+                archive.write(p, 'objetos/' + name)
+        sealed = destino / (bucket + '.iib')
+        cifrar(archive_path, sealed, key)
+        checked = private / (bucket + '-conferido.zip')
+        decifrar(sealed, checked, key)
+        if sha256(checked) != sha256(archive_path):
+            raise ValueError('Cifragem do bucket divergente')
+        # Remove apenas ZIPs descartaveis gerados pelo proprio script. A pasta
+        # privada dos objetos permanece para recuperacao; nunca e copiada ao Drive.
+        checked.unlink()
+        archive_path.unlink()
+        record = {'bucket': bucket, 'objects': len(metadata), 'bytes': sum(x['bytes'] or 0 for x in metadata),
+                  'file': sealed.name, 'sha256': sha256(sealed)}
+        local_manifest['buckets'].append(record)
+        (destino / 'manifesto-storage.json').write_text(json.dumps(local_manifest, indent=2),encoding='utf-8')
+        print(json.dumps({'bucket_completed': bucket, 'objects': len(metadata), 'bytes': record['bytes']}), flush=True)
+    local_manifest['completed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    local_manifest['consistency'] = 'Object names and sizes match initial inventory; downloads span the recorded window. Not a transaction with database backup.'
+    (destino / 'manifesto-storage.json').write_text(json.dumps(local_manifest, indent=2), encoding='utf-8')
+    return {'storage_complete': True, 'buckets': len(buckets), 'objects': len(objects)}
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--cli', required=True)
+    parser.add_argument('--destino', required=True)
+    parser.add_argument('--chave', required=True)
+    parser.add_argument('--agent-pre-copiado', help='Pasta privada de agent-releases copiada nesta janela; todos os objetos serao conferidos')
+    args = parser.parse_args()
+    try:
+        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado)))
+    except Exception:
+        print('Backup Storage incompleto. Nenhum arquivo original remoto foi modificado. Preserve a pasta privada para retomar.', file=__import__('sys').stderr)
+        raise SystemExit(1)
