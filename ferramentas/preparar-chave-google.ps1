@@ -9,7 +9,7 @@ $bytes = [IO.File]::ReadAllBytes($entrada)
 if ($bytes.Length -ne 32) { throw 'Chave invalida.' }
 try {
     $senha = [Convert]::ToBase64String($bytes)
-    $registro = [PSCustomObject]@{url='https://imposition.ai-ideal.com.br';username='backup-recuperacao-AES';password=$senha}
+    $registro = [PSCustomObject]@{url='https://backup-ideal-imposition.invalid';username='backup-recuperacao-AES';password=$senha}
     $linhas = @($registro | ConvertTo-Csv -NoTypeInformation)
     [IO.File]::WriteAllLines($saida, $linhas, (New-Object Text.UTF8Encoding($false)))
 } finally { [Array]::Clear($bytes,0,$bytes.Length); $senha=$null; $registro=$null; $linhas=$null }

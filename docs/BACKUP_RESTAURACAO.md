@@ -47,7 +47,9 @@ não envia a chave ao Drive. Em https://passwords.google.com, abrir Configuraç�
 Importar senhas e selecionar
 `C:\ProjectBackups\IdealImpositionChave\importar-google-passwords.csv`.
 Conferir a conta e a entrada `backup-recuperacao-AES`. A senha representa os
-32 bytes em Base64; recuperar com decodificação Base64, nunca usando o texto
+32 bytes associados a `backup-ideal-imposition.invalid`, endereço reservado
+que evita oferecer a chave no preenchimento do login real da aplicação.
+O valor está em Base64; recuperar com decodificação Base64, nunca usando o texto
 como uma senha arbitrária. A importação depende do operador e precisa ser
 conferida. Depois de confirmá-la, remover somente o CSV privado; preservar
 `recuperacao.key` para a rotina. Referência:
