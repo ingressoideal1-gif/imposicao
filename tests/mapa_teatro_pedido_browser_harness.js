@@ -28,7 +28,7 @@ async function executar() {
         await page.setRequestInterception(true);
         page.on('request',r=>r.url().startsWith('http://127.0.0.1:')?r.continue():r.abort());
         await page.goto('http://127.0.0.1:'+servidor.address().port);
-        for(const arquivo of ['teatro-banco.js','mapa-teatro-do-pedido.js','banco-do-modelo.js']) await page.addScriptTag({url:'/'+arquivo});
+        for(const arquivo of ['mapa-teatro-revisao.js','teatro-banco.js','mapa-teatro-do-pedido.js','banco-do-modelo.js']) await page.addScriptTag({url:'/'+arquivo});
         await page.evaluate(m=>{
             window.fixture={mapa:m,bancos:[],vinculos:[],chamadas:[],falhar:true,renderizado:0,toasts:[],delay:0};
             window.state={amostrasOSAtivo:'pedido',osItens:{pedido:m.config.setores.map((s,i)=>({id:'modelo-'+i,id_int:123,qtd:9,nome:'Arte '+s.nome,amostra_num_id:'teatro',bloco:50,arte_url:'arte-'+i,csv_selecao:i===0?['antigo']:null}))},bancosDoPedido:[],vinculosDeBanco:{},numeracoes:[{id:'teatro',tipo:'TEATRO',elements:[{type:'TEATRO_COMBO'}]}],selectedOSItems:[],activeOSItem:{osId:'pedido',itemId:'modelo-0'}};
@@ -85,7 +85,7 @@ async function executar() {
         await page.select('#mapa-teatro-pedido-select','mapa-ideal');
         await page.waitForSelector('select[data-setor-id="setor-3"]');
         for(let i=0;i<4;i++) await page.select('select[data-setor-id="setor-'+i+'"]','modelo-'+i);
-        await page.evaluate(()=>fixture.mapa.name='Teatro alterado');
+        await page.evaluate(()=>fixture.mapa.config.setores[0].nome='Setor alterado');
         await page.click('#mapa-teatro-pedido-popup .btn-primary');
         await page.waitForFunction(()=>document.querySelector('#mapa-teatro-pedido-status').textContent.includes('mapa foi alterado'));
         assert.equal(await page.evaluate(()=>fixture.chamadas.length),gravacoes);

@@ -14,9 +14,9 @@
         return v;
     }
     async function revisao(mapa) {
-        const bytes = new TextEncoder().encode(assinatura({ id: mapa.id, name: mapa.name, config: mapa.config }));
-        const hash = await root.crypto.subtle.digest('SHA-256', bytes);
-        return [...new Uint8Array(hash)].map(v => v.toString(16).padStart(2, '0')).join('');
+        const calculo = root.MapaTeatroRevisao || (typeof module !== 'undefined' && module.exports ? require('./mapa-teatro-revisao.js') : null);
+        if (!calculo) throw Error('O cálculo da revisão não carregou. Atualize a página.');
+        return calculo.revisao(mapa.config);
     }
     function preparar(mapa, rev) {
         id(mapa?.id);
@@ -186,12 +186,24 @@
         if (!configurarMontagem(payload)) return;
         const numeracoes = payload.multi_artes?.length ? payload.multi_artes.map(a => a.numeracao) : [payload.numeracao];
         for (const num of numeracoes) {
+            if (num?.teatro_modelo) {
+                const aviso = await root.TeatroSnapshot.conferir(num, async id => {
+                    if (root.supabaseClient) {
+                        const { data, error } = await root.supabaseClient.from('producao_mapas_teatro').select('id,config').eq('id', id).single();
+                        if (error) throw Error('Não foi possível conferir o mapa atual antes da geração.');
+                        return data;
+                    }
+                    return root.api('GET', '/mapas_teatro/' + encodeURIComponent(id));
+                });
+                if (aviso) root.toast?.(aviso, 'warning');
+            }
             grupos(num?.csv_data || []);
             if (!(num?.elements || []).some(el => /^TEATRO_(FILA|LUGAR|COMBO)$/.test(el.type))) throw Error('Escolha uma numeração com elementos de teatro para este setor.');
         }
         const resposta = await root.fetch(baseUrl + '/api/version', { signal });
         const info = resposta.ok ? await resposta.json() : null;
         if (!info?.capabilities?.includes('teatro_vertical_modelo_v1')) throw Error('Atualize o NewProd desta estação para imprimir TEATRO com preenchimento vertical por modelo.');
+        if (numeracoes.some(n => n?.teatro_modelo) && !info?.capabilities?.includes('teatro_snapshot_v1')) throw Error('Atualize o NewProd desta estação para gerar pelos snapshots do ERP.');
         formData.set('payload', JSON.stringify(payload));
     }
     const api = { HEADERS, ORIGEM, linhaDeMapa, usa, revisao, preparar, grupos, montarSets, capa, configurarMontagem, configurarTela, validarAssociacoes, bancoIgual, importar, conferirMotor };

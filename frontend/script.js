@@ -18960,6 +18960,7 @@ window.linhasDoModeloNoPayload = linhasDoModeloNoPayload;
 function numeracaoConfirmadaDoModelo(num, item) {
     if (!num) return null;
     let copia = JSON.parse(JSON.stringify(resolverNumeracaoParaModelo(num, item)));
+    if (copia.teatro_snapshot_erro) throw Error(copia.teatro_snapshot_erro);
     if (copia.csv_data?.length) {
         if (item?.csv_selecao) copia.csv_data = fatiaCsvDoItem(item, copia);
         else if (vinculoDeBancoDoModelo(item)) copia.csv_data = linhasDoModeloNoPayload(item, copia);
@@ -19124,6 +19125,12 @@ window.numeracaoDoModelo = numeracaoDoModelo;
  * Sem vinculo devolve o proprio `num`, pela mesma referencia.
  */
 function resolverNumeracaoParaModelo(num, item) {
+    if (num && window.TeatroSnapshot?.tem(item)) {
+        try {
+            const fonte = window.TeatroSnapshot.banco(item);
+            return { ...num, csv_data: fonte.csv_data, csv_headers: fonte.csv_headers, teatro_modelo: fonte.teatro_modelo };
+        } catch (e) { return { ...num, csv_data: [], teatro_snapshot_erro: e.message }; }
+    }
     const vinculo = vinculoDeBancoDoModelo(item);
     if (!num || !vinculo || !window.BancoDoModelo) return num;
 
@@ -19151,6 +19158,10 @@ function vinculoDeBancoDoModelo(item) {
 window.vinculoDeBancoDoModelo = vinculoDeBancoDoModelo;
 
 function bancoTeatroDoModelo(item) {
+    if (window.TeatroSnapshot?.tem(item)) {
+        try { return window.TeatroSnapshot.banco(item); }
+        catch (e) { return { csv_data: [], erro: e.message, origem_snapshot: true }; }
+    }
     const vinculo = vinculoDeBancoDoModelo(item);
     const banco = vinculo && window.BancoDoModelo?.bancoDoModelo(vinculo, state.bancosDoPedido || []);
     return banco && Array.isArray(banco.csv_data) && banco.csv_data.some(r => r &&
@@ -19557,6 +19568,7 @@ function bancoDeDadosIncompletoDoModelo(item) {
     const teatro = bancoTeatroDoModelo(item);
     if (teatro) {
         try {
+            if (teatro.erro) throw Error(teatro.erro);
             if (!window.TeatroBanco) throw Error('Recarregue a página para validar o banco do teatro.');
             window.TeatroBanco.grupos(teatro.csv_data);
             if (!num || !(num.elements || []).some(el => /^TEATRO_(FILA|LUGAR|COMBO)$/.test(el.type))) throw Error('Escolha uma numeração com elementos de teatro para este setor.');

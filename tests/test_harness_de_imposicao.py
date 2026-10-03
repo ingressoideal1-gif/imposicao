@@ -19,6 +19,8 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 HARNESSES = [
+    "teatro_snapshot_harness.js",  # snapshot Vibe, prioridade e fonte histórica
+    "mapa_teatro_revisao_harness.js",  # RFC 8785 e revisão somente da config
     "mapas_teatro_harness.js",  # cadastro, editor e carregamento nas duas telas
     "mapas_teatro_browser_harness.js",  # editor real com transporte simulado
     "impressao_combinada_harness.js",  # previa completa e payload dos modelos selecionados
