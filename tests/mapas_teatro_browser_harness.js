@@ -62,7 +62,7 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
         await page.evaluate(() => {
             window.toast = (msg, tipo) => { (window.avisos ||= []).push({ msg, tipo }); };
             window.confirm = () => true;
-            window.registros = []; window.falharUpdate = false;
+            window.registros = []; window.gravacoes = []; window.falharUpdate = false;
             window.supabaseClient = { from(tabela) {
                 if (tabela !== 'producao_mapas_teatro') throw Error('Tabela não autorizada no teste');
                 let acao = 'select', id, payload;
@@ -70,6 +70,10 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
                     range(a, b) { return Promise.resolve({ data: registros.slice(a, b + 1), error: null }); },
                     update(p) { acao = 'update'; payload = p; return q; }, insert(p) { acao = 'insert'; payload = p[0]; return q; },
                     async single() {
+                        if (payload && Object.keys(payload).some(k => !['name', 'config'].includes(k))) {
+                            return { data: null, error: { code: 'PGRST204', message: 'Coluna inexistente' } };
+                        }
+                        if (payload && !(acao === 'update' && falharUpdate)) gravacoes.push({ acao, payload: JSON.parse(JSON.stringify(payload)) });
                         if (acao === 'update' && falharUpdate) return { data: null, error: { message: 'Falha simulada' } };
                         if (acao === 'insert') { id = registros.length ? 'mapa-browser-' + registros.length : 'mapa-browser'; registros.push({ id, ...payload }); }
                         if (acao === 'update') registros[registros.findIndex(m => m.id === id)] = { id, ...payload };
@@ -86,7 +90,29 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
             function registrarContaDaTela(){} function itemAtivoDoPedido(){return null;}
             function atualizarFacesDeImpressaoDoPedido(){} function agendarRedesenhoDaPrevia(){drawPedPreview();}`
             + script.slice(script.indexOf('function populateImpMapasTeatro('), script.indexOf('function onImpNumeracaoSelect()'))
-            + func(script, 'updateImpSummary') + '\n' + func(pedido, 'updatePedSummary') });
+            + func(script, 'updateImpSummary') + '\n' + func(pedido, 'updatePedSummary')
+            + '\n' + func(script, 'confirmarPopup') + '\nwindow.confirmarPopup = confirmarPopup;' });
+        const dialogo = '[role="dialog"]';
+        async function verificarDialogo(titulo) {
+            await page.waitForSelector(dialogo, { visible: true });
+            await page.waitForFunction(t => document.querySelector('[role="dialog"] h3')?.textContent === t, {}, titulo);
+            assert.equal(await page.$eval(dialogo, el => {
+                const b = el.querySelector('[data-role="ok"]'), r = b.getBoundingClientRect();
+                return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b;
+            }), true, 'popup acima do editor e clicável');
+        }
+        async function abrirConfirmacaoSalvar() {
+            await page.click('button[onclick="salvarMapaTeatro()"]');
+            await verificarDialogo('Salvar mapa de teatro?');
+        }
+        async function salvarNoBrowser(falha = false) {
+            await abrirConfirmacaoSalvar();
+            await page.click(dialogo + ' [data-role="ok"]');
+            await verificarDialogo(falha ? 'Mapa não salvo' : 'Mapa salvo');
+            assert.equal(await page.$$eval(dialogo + ' button', els => els.length), 1);
+            await page.click(dialogo + ' [data-role="ok"]');
+            await page.waitForSelector(dialogo, { hidden: true });
+        }
         await page.click('#view-mapas button.btn-primary');
         await page.waitForSelector('#modal-mapa-teatro', { visible: true });
         await page.click('button[onclick="adicionarSetorMapa()"]');
@@ -112,18 +138,25 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
         assert.equal(await page.evaluate(() => Object.keys(window.state.mapaAtual.config.setores[0].cadeiras).length), 9);
         await page.evaluate(() => { window.falharUpdate = true; });
         // Primeiro salvamento é INSERT; o segundo provoca falha de UPDATE.
-        await page.click('button[onclick="salvarMapaTeatro()"]');
+        await abrirConfirmacaoSalvar();
+        assert.equal(await page.evaluate(() => gravacoes.length), 0);
+        await page.waitForFunction(() => document.activeElement?.dataset.role === 'cancel');
+        await page.keyboard.press('Enter');
+        await page.waitForSelector(dialogo, { hidden: true });
+        assert.equal(await page.evaluate(() => gravacoes.length), 0);
+        assert.equal(await page.$eval('#modal-mapa-teatro', el => el.style.display), 'flex');
+        await salvarNoBrowser();
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         assert.match(await page.$eval('#tbody-mapas', el => el.textContent), /9 Assentos/);
         await page.click('#tbody-mapas button');
         await page.waitForSelector('#mapa-setor-props', { visible: true });
         await page.$eval('#mapa-nome', el => { el.value = 'Alteração preservada'; });
-        await page.click('button[onclick="salvarMapaTeatro()"]');
+        await salvarNoBrowser(true);
         await page.waitForFunction(() => window.avisos.some(a => a.msg.includes('alterações continuam')));
         assert.equal(await page.$eval('#modal-mapa-teatro', el => el.style.display), 'flex');
         assert.equal(await page.$eval('#mapa-nome', el => el.value), 'Alteração preservada');
         await page.evaluate(() => { window.falharUpdate = false; });
-        await page.click('button[onclick="salvarMapaTeatro()"]');
+        await salvarNoBrowser();
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         // Executa os dois resumos reais: sem recursão, preservando o mapa como fonte do CSV.
         for (const prefixo of ['imp', 'ped']) {
@@ -183,9 +216,9 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
         await page.click('button[onclick="gerarFileiraNoCanvas()"]');
         assert.equal(await page.evaluate(() => JSON.stringify(window.state.mapaAtual.config)), antes);
         assert.ok(await page.evaluate(() => window.avisos.some(a => a.msg.includes('mesmo tipo'))));
-        await page.click('button[onclick="salvarMapaTeatro()"]');
+        await salvarNoBrowser();
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
-        assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').total_lugares), 16);
+        assert.equal(await page.evaluate(() => Object.keys(registros.find(m => m.id === 'mapa-browser-1').config.setores[0].cadeiras).length), 16);
         await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
         await page.waitForSelector('#mapa-setor-props', { visible: true });
         assert.equal(await page.evaluate(() => Object.values(window.state.mapaAtual.config.setores[0].cadeiras).filter(c => /^[A-D]$/.test(c.num)).length), 16);
@@ -197,8 +230,61 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
             }, prefixo);
             assert.equal(linhas.length, 16); assert.equal(new Set(linhas).size, 16);
         }
+        // Sem alterações, sair não abre popup. Alterar só o nome já protege a edição.
+        const antesGravacoes = await page.evaluate(() => gravacoes.length);
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
+        assert.equal(await page.$(dialogo), null);
+        await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
+        await page.$eval('#mapa-nome', el => { el.value = 'Nome pendente <img src=x onerror=alert(1)>'; });
+        await abrirConfirmacaoSalvar();
+        assert.equal(await page.$$eval(dialogo + ' img', els => els.length), 0);
+        assert.match(await page.$eval(dialogo, el => el.textContent), /<img src=x onerror=alert\(1\)>/);
+        await page.evaluate(() => { void salvarMapaTeatro(); void fecharModalMapaTeatro(); });
+        assert.equal(await page.$$eval(dialogo, els => els.length), 1);
+        await page.click(dialogo + ' [data-role="cancel"]');
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await verificarDialogo('Sair sem salvar?');
+        await page.keyboard.press('Escape');
+        await page.waitForSelector(dialogo, { hidden: true });
+        assert.equal(await page.$eval('#modal-mapa-teatro', el => el.style.display), 'flex');
+        assert.equal(await page.evaluate(() => {
+            const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented;
+        }), true);
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await verificarDialogo('Sair sem salvar?');
+        await page.waitForFunction(() => document.activeElement?.dataset.role === 'cancel');
+        await page.keyboard.press('Enter');
+        await page.waitForSelector(dialogo, { hidden: true });
+        assert.equal(await page.$eval('#modal-mapa-teatro', el => el.style.display), 'flex');
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await verificarDialogo('Sair sem salvar?');
+        await page.click(dialogo + ' [data-role="ok"]');
+        await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
+        assert.equal(await page.evaluate(() => gravacoes.length), antesGravacoes);
+        await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
+        assert.equal(await page.$eval('#mapa-nome', el => el.value), 'Novo Teatro');
+        assert.equal(await page.evaluate(() => {
+            const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented;
+        }), false);
+        await page.click('button[onclick="adicionarSetorMapa()"]');
+        await page.click('button[onclick="fecharModalMapaTeatro()"]');
+        await verificarDialogo('Sair sem salvar?');
+        await page.click(dialogo + ' [data-role="ok"]');
+        await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
+        // O popup compartilhado mantém seu comportamento padrão para os demais usos.
+        await page.evaluate(() => {
+            window.respostaPopup = null;
+            confirmarPopup({ titulo: 'Padrão' }).then(r => { window.respostaPopup = r; });
+        });
+        await verificarDialogo('Padrão');
+        assert.equal(await page.$eval(dialogo, el => el.style.zIndex), '100000');
+        assert.equal(await page.$$eval(dialogo + ' button', els => els.length), 2);
+        await page.waitForFunction(() => document.activeElement?.dataset.role === 'ok');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => window.respostaPopup === true);
         assert.deepEqual(erros, []);
-        console.log(`OK browser (${arquivoHtml}): criação, edição, digitação de faixas, seleção e restauração de letras, salvamento/reabertura simulados, erro misto sem mutação e CSV das duas telas; zero erros JavaScript.`);
+        console.log(`OK browser (${arquivoHtml}): salvar com name/config; popups de confirmação, sucesso e erro acima do editor; cancelar sem escrita; saída com alterações; Escape/Enter; recarregamento; rótulos e CSV preservados; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));

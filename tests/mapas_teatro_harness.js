@@ -16,7 +16,7 @@ const mapa = (id = 'm1', cadeiras = { '0,0': cadeira(1) }) => ({
 
 function montar(comConsumidor = false) {
     const nodes = new Map(), eventos = {}, storage = new Map(), frames = new Map(), timers = [];
-    const avisos = []; let frameId = 0;
+    const avisos = [], confirmacoes = []; let frameId = 0;
     const ctxCanvas = new Proxy({ measureText: texto => ({ width: texto.length * 6 }) }, {
         get(obj, k) { return k in obj ? obj[k] : (() => {}); }
     });
@@ -44,6 +44,8 @@ function montar(comConsumidor = false) {
     const c = { console: { log() {}, error() {}, warn() {} }, Set, Map, JSON, Date, Math,
         alert(msg) { avisos.push({ msg, tipo: 'alert' }); }, confirm() { return true; },
         toast(msg, tipo) { avisos.push({ msg, tipo }); },
+        async confirmarPopup(opcoes) { confirmacoes.push(opcoes); return true; },
+        addEventListener(tipo, fn) { (eventos[tipo] ||= []).push(fn); },
         setTimeout(fn) { timers.push(fn); }, requestAnimationFrame(fn) { frames.set(++frameId, fn); return frameId; },
         cancelAnimationFrame(id) { frames.delete(id); },
         fetch() { throw Error('Rede proibida no teste'); },
@@ -69,7 +71,7 @@ function montar(comConsumidor = false) {
         for (const fn of eventos.keydown || []) fn({ key, target: { tagName: 'BODY' }, preventDefault() {} });
     }
     function grid() { vm.runInContext('mapCanvas = document.getElementById("mapa-canvas"); camera = {x:0,y:0,zoom:1};', c); }
-    return { c, producao, get, storage, frames, timers, avisos, tecla, grid };
+    return { c, producao, get, storage, frames, timers, avisos, confirmacoes, eventos, tecla, grid };
 }
 
 function clienteSimulado(t, opcoes = {}) {
@@ -86,6 +88,9 @@ function clienteSimulado(t, opcoes = {}) {
         };
         async function executar(tipo) {
             chamadas.push({ acao, id, payload, tipo, range });
+            if (payload && opcoes.colunas && Object.keys(payload).some(k => !opcoes.colunas.includes(k))) {
+                return { data: null, error: { code: 'PGRST204', message: 'Coluna ausente na tabela simulada' } };
+            }
             if (opcoes.responder) return opcoes.responder({ acao, id, payload, tipo, range, rows, chamadas });
             if (opcoes.falhar === acao) return { data: null, error: { message: 'Falha sintética' } };
             if (acao === 'insert') { id = 'novo' + (++numero); rows.set(id, { id, ...payload }); }
@@ -108,6 +113,97 @@ async function teste(nome, fn) {
 }
 
 (async () => {
+    await teste('salvar funciona na tabela que possui somente name e config para gravação', async () => {
+        const t = montar(); const b = clienteSimulado(t, { colunas: ['name', 'config'] });
+        t.get('mapa-nome').value = 'Mapa gravado';
+        await t.c.salvarMapaTeatro();
+        assert.equal(t.get('modal-mapa-teatro').style.display, 'none');
+        assert.equal(b.rows.get('m1').name, 'Mapa gravado');
+        assert.ok(b.chamadas.some(x => x.acao === 'select' && x.id === 'm1'));
+    });
+    await teste('cancelar confirmação de salvar não envia dados nem fecha o editor', async () => {
+        const t = montar(); const b = clienteSimulado(t); t.get('mapa-nome').value = 'Nome pendente';
+        t.c.confirmarPopup = async o => { t.confirmacoes.push(o); return false; };
+        assert.equal(await t.c.salvarMapaTeatro(), false);
+        assert.equal(b.chamadas.length, 0); assert.equal(t.get('modal-mapa-teatro').style.display, 'flex');
+        assert.equal(t.get('mapa-nome').value, 'Nome pendente');
+    });
+    await teste('confirmação pendente bloqueia duplo clique e saída antes da resposta', async () => {
+        const t = montar(); const b = clienteSimulado(t); let responder;
+        t.c.confirmarPopup = o => { t.confirmacoes.push(o); return o.somenteOk ? Promise.resolve(true) : new Promise(r => { responder = r; }); };
+        const salvamento = t.c.salvarMapaTeatro();
+        await t.c.salvarMapaTeatro(); await t.c.fecharModalMapaTeatro();
+        assert.equal(b.chamadas.length, 0); assert.equal(t.confirmacoes.length, 1);
+        responder(true); assert.equal(await salvamento, true);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+        assert.equal(t.confirmacoes.at(-1).titulo, 'Mapa salvo');
+    });
+    await teste('fechar mapa existente sem alterações dispensa confirmação', async () => {
+        const t = montar(); t.c.editarMapaTeatro('m1');
+        assert.equal(await t.c.fecharModalMapaTeatro(), true);
+        assert.equal(t.confirmacoes.length, 0); assert.equal(t.c.state.mapaAtual, null);
+    });
+    await teste('alteração apenas no nome exige confirmação e cancelamento preserva a edição', async () => {
+        const t = montar(); t.c.editarMapaTeatro('m1'); t.get('mapa-nome').value = 'Nome não salvo';
+        t.c.confirmarPopup = async o => { t.confirmacoes.push(o); return false; };
+        assert.equal(await t.c.fecharModalMapaTeatro(), false);
+        assert.equal(t.confirmacoes[0].titulo, 'Sair sem salvar?'); assert.equal(t.confirmacoes[0].focoCancelar, true);
+        assert.equal(t.get('mapa-nome').value, 'Nome não salvo'); assert.equal(t.c.state.mapas[0].name, 'Teatro Sintético');
+    });
+    await teste('alterações de assentos exigem confirmação; descarte não altera o mapa cadastrado', async () => {
+        const t = montar(); t.c.editarMapaTeatro('m1'); t.c.state.mapaAtual.config.setores[0].cadeiras['1,0'] = cadeira('B');
+        assert.equal(await t.c.fecharModalMapaTeatro(), true); assert.equal(t.confirmacoes.length, 1);
+        assert.equal(Object.keys(t.c.state.mapas[0].config.setores[0].cadeiras).length, 1);
+        assert.equal(t.c.state.mapaAtual, null);
+    });
+    await teste('desfazer até o estado inicial permite sair sem alerta de alteração', async () => {
+        const t = montar(); t.c.editarMapaTeatro('m1'); t.c.pushToMapHistory();
+        t.c.state.mapaAtual.config.setores[0].cadeiras['1,0'] = cadeira(2); t.c.undoMapHistory();
+        await t.c.fecharModalMapaTeatro(); assert.equal(t.confirmacoes.length, 0);
+    });
+    await teste('mapa novo ainda não gravado pede confirmação antes de sair', async () => {
+        const t = montar(); t.c.novoMapaTeatro(); t.c.confirmarPopup = async o => { t.confirmacoes.push(o); return false; };
+        await t.c.fecharModalMapaTeatro(); assert.equal(t.confirmacoes.length, 1);
+        assert.equal(t.get('modal-mapa-teatro').style.display, 'flex'); assert.ok(!t.c.state.mapaAtual.id);
+    });
+    await teste('recarregar avisa somente quando existe alteração pendente', () => {
+        const t = montar(); t.c.editarMapaTeatro('m1'); let bloqueios = 0;
+        const evento = { preventDefault() { bloqueios++; } };
+        t.eventos.beforeunload[0](evento); assert.equal(bloqueios, 0);
+        t.get('mapa-nome').value = 'Outro nome'; t.eventos.beforeunload[0](evento);
+        assert.equal(bloqueios, 1); assert.equal(evento.returnValue, '');
+        t.get('mapa-nome').value = 'Teatro Sintético'; t.eventos.beforeunload[0](evento); assert.equal(bloqueios, 1);
+    });
+    await teste('gravação em andamento impede saída e recarregamento mesmo sem alteração anterior', async () => {
+        const t = montar(); t.c.editarMapaTeatro('m1'); let responder;
+        clienteSimulado(t, { responder({ acao, id, payload, rows }) {
+            if (acao === 'update') return new Promise(resolve => { responder = () => { rows.set(id, { id, ...payload }); resolve({ data: rows.get(id), error: null }); }; });
+            return { data: rows.get(id), error: null };
+        } });
+        const salvamento = t.c.salvarMapaTeatro(); await new Promise(r => setImmediate(r));
+        assert.equal(await t.c.fecharModalMapaTeatro(), false); assert.equal(t.get('mapa-nome').disabled, true);
+        let bloqueado = false; t.eventos.beforeunload[0]({ preventDefault() { bloqueado = true; } }); assert.ok(bloqueado);
+        responder(); await salvamento; assert.equal(t.get('mapa-nome').disabled, false);
+    });
+    await teste('erro de gravação abre popup visível e não oferece sucesso', async () => {
+        const t = montar(); clienteSimulado(t, { falhar: 'update' }); await t.c.salvarMapaTeatro();
+        assert.deepEqual(t.confirmacoes.map(o => o.titulo), ['Salvar mapa de teatro?', 'Mapa não salvo']);
+        assert.equal(t.confirmacoes[1].zIndex, 1000000); assert.equal(t.confirmacoes[1].somenteOk, true);
+        assert.equal(t.get('modal-mapa-teatro').style.display, 'flex');
+    });
+    await teste('confirmação indisponível não grava nem descarta os dados', async () => {
+        const t = montar(); const b = clienteSimulado(t); delete t.c.confirmarPopup;
+        await t.c.salvarMapaTeatro(); await t.c.fecharModalMapaTeatro(); assert.equal(b.chamadas.length, 0);
+        assert.equal(t.get('modal-mapa-teatro').style.display, 'flex');
+    });
+    await teste('mapa novo com ID recebido e confirmação de leitura falha continua protegido ao sair', async () => {
+        const t = montar(); clienteSimulado(t, { falhar: 'select' }); t.c.novoMapaTeatro();
+        await t.c.salvarMapaTeatro(); assert.equal(t.c.state.mapaAtual.id, 'novo1');
+        t.c.confirmarPopup = async o => { t.confirmacoes.push(o); return false; };
+        assert.equal(await t.c.fecharModalMapaTeatro(), false);
+        assert.equal(t.confirmacoes.at(-1).titulo, 'Sair sem salvar?');
+        let bloqueado = false; t.eventos.beforeunload[0]({ preventDefault() { bloqueado = true; } }); assert.ok(bloqueado);
+    });
     await teste('lista conta cadeiras e ignora assentos apagados', () => {
         const t = montar(); t.c.state.mapas[0].config.setores[0] = {
             nome: 'Plateia', fileiras: [{ inicio: 1, fim: 10, padrao: 'impar' }],
@@ -224,7 +320,7 @@ async function teste(nome, fn) {
     await teste('salvamento e reabertura preservam letras, filas numéricas e total real', async () => {
         const t=montar();const b=clienteSimulado(t);t.c.state.mapaAtual.config.setores[0].cadeiras={};
         for(const[k,v]of [['prefix','1-4'],['inicio','A'],['fim','D'],['padrao','sequencial']])t.get('mapa-fileira-'+k).value=v;
-        t.c.gerarFileiraNoCanvas();await t.c.salvarMapaTeatro();assert.equal(b.rows.get('m1').total_lugares,16);
+        t.c.gerarFileiraNoCanvas();await t.c.salvarMapaTeatro();assert.equal(Object.keys(b.rows.get('m1').config.setores[0].cadeiras).length,16);
         assert.equal(b.rows.get('m1').config.setores[0].fileiras[0].inicio,'A');assert.equal(b.rows.get('m1').config.setores[0].fileiras[0].fim,'D');
         t.c.editarMapaTeatro('m1');assert.deepEqual(Object.values(t.c.state.mapaAtual.config.setores[0].cadeiras).slice(0,4).map(c=>c.num),['A','B','C','D']);
     });
@@ -237,10 +333,10 @@ async function teste(nome, fn) {
         const t = montar(); t.c.adicionarSetorMapa(); t.c.undoMapHistory();
         assert.equal(t.c.setorSelecionadoIdx, 0); assert.equal(t.get('mapa-setor-nome').value, 'Plateia');
     });
-    await teste('adicionar e editar tipos não inicia novos loops de animação', () => {
+    await teste('adicionar e editar tipos não inicia novos loops de animação', async () => {
         const t = montar(); t.c.initMapCanvas(); assert.equal(t.frames.size, 1);
         t.c.adicionarTipoAssentoMapa(); t.c.atualizarTipoAssento(0, 'nome', 'Teste'); assert.equal(t.frames.size, 1);
-        t.c.fecharModalMapaTeatro(); assert.equal(t.frames.size, 0);
+        await t.c.fecharModalMapaTeatro(); assert.equal(t.frames.size, 0);
     });
     await teste('remover todos os tipos não quebra desenho com assentos', () => {
         const t = montar(); t.c.state.mapaAtual.config.tiposAssento = []; assert.doesNotThrow(() => t.c.initMapCanvas());
@@ -301,11 +397,11 @@ async function teste(nome, fn) {
         await t.c.salvarMapaTeatro(); assert.equal(t.get('modal-mapa-teatro').style.display, 'flex');
         assert.ok(!t.avisos.some(a => a.tipo === 'success'));
     });
-    await teste('update confirmado envia totais e confirma por releitura', async () => {
+    await teste('update confirmado preserva assentos e confirma por releitura sem colunas ausentes', async () => {
         const t = montar(); const b = clienteSimulado(t); t.get('mapa-nome').value = 'Alterado';
         await t.c.salvarMapaTeatro(); assert.equal(t.get('modal-mapa-teatro').style.display, 'none');
-        assert.equal(t.c.state.mapas[0].name, 'Alterado'); assert.equal(b.rows.get('m1').total_lugares, 1);
-        assert.deepEqual(b.rows.get('m1').lugares_por_setor, [{ setor: 'Plateia', quantidade: 1 }]);
+        assert.equal(t.c.state.mapas[0].name, 'Alterado'); assert.equal(Object.keys(b.rows.get('m1').config.setores[0].cadeiras).length, 1);
+        assert.deepEqual(Object.keys(b.chamadas.find(x => x.acao === 'update').payload).sort(), ['config', 'name']);
         assert.ok(b.chamadas.some(x => x.acao === 'select' && x.id === 'm1'));
     });
     await teste('duplo clique em salvar não duplica gravação', async () => {
@@ -348,7 +444,7 @@ async function teste(nome, fn) {
         const t = montar(); clienteSimulado(t); await t.c.duplicarMapaTeatro('m1');
         assert.equal(t.c.state.mapas.length, 2); const salvo = t.c.state.mapas.find(x => x.id !== 'm1');
         const original = t.c.state.mapas.find(x => x.id === 'm1');
-        assert.deepEqual(copia(salvo.config), copia(original.config)); assert.equal(salvo.total_lugares, 1);
+        assert.deepEqual(copia(salvo.config), copia(original.config)); assert.equal(Object.keys(salvo.config.setores[0].cadeiras).length, 1);
         salvo.config.setores[0].cadeiras['0,0'].num = 9;
         assert.equal(original.config.setores[0].cadeiras['0,0'].num, 1);
     });

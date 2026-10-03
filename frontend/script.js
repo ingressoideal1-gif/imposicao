@@ -32537,10 +32537,13 @@ function escHtmlSimples(txt) {
  * Popup de confirmação no estilo do painel.
  * Resolve true se o usuário confirmar, false se cancelar, fechar ou apertar Esc.
  */
-function confirmarPopup({ titulo = 'Confirmar', mensagem = '', detalhe = '', textoOk = 'Confirmar', textoCancelar = 'Cancelar' } = {}) {
+function confirmarPopup({ titulo = 'Confirmar', mensagem = '', detalhe = '', textoOk = 'Confirmar', textoCancelar = 'Cancelar', zIndex = 100000, somenteOk = false, focoCancelar = false } = {}) {
     return new Promise(resolve => {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.72); z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;';
+        overlay.style.zIndex = String(zIndex);
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
         overlay.innerHTML = `
             <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:470px; overflow:hidden;">
                 <div style="padding:18px 22px; border-bottom:1px solid rgba(148,163,184,0.2);">
@@ -32551,7 +32554,7 @@ function confirmarPopup({ titulo = 'Confirmar', mensagem = '', detalhe = '', tex
                     ${detalhe ? `<div style="margin-top:12px; color:#94a3b8; font-size:0.88rem; line-height:1.45;">${detalhe}</div>` : ''}
                 </div>
                 <div style="padding:16px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; justify-content:flex-end; gap:10px;">
-                    <button type="button" data-role="cancel" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:10px 18px; font-size:0.95rem; font-weight:600; cursor:pointer;">${textoCancelar}</button>
+                    ${somenteOk ? '' : `<button type="button" data-role="cancel" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:10px 18px; font-size:0.95rem; font-weight:600; cursor:pointer;">${textoCancelar}</button>`}
                     <button type="button" data-role="ok" style="border:none; background:linear-gradient(135deg,#34d399,#059669); color:#fff; border-radius:8px; padding:10px 18px; font-size:0.95rem; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(5,150,105,0.35);">${textoOk}</button>
                 </div>
             </div>`;
@@ -32566,17 +32569,17 @@ function confirmarPopup({ titulo = 'Confirmar', mensagem = '', detalhe = '', tex
         };
         const onKey = (ev) => {
             if (ev.key === 'Escape') { ev.preventDefault(); finalizar(false); }
-            else if (ev.key === 'Enter') { ev.preventDefault(); finalizar(true); }
+            else if (ev.key === 'Enter') { ev.preventDefault(); finalizar(!focoCancelar || ev.target === overlay.querySelector('[data-role="ok"]')); }
         };
 
         overlay.querySelector('[data-role="ok"]').addEventListener('click', () => finalizar(true));
-        overlay.querySelector('[data-role="cancel"]').addEventListener('click', () => finalizar(false));
+        overlay.querySelector('[data-role="cancel"]')?.addEventListener('click', () => finalizar(false));
         overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finalizar(false); });
         document.addEventListener('keydown', onKey, true);
 
         document.body.appendChild(overlay);
         setTimeout(() => {
-            const btnOk = overlay.querySelector('[data-role="ok"]');
+            const btnOk = overlay.querySelector(focoCancelar && !somenteOk ? '[data-role="cancel"]' : '[data-role="ok"]');
             if (btnOk) btnOk.focus();
         }, 30);
     });

@@ -11,6 +11,8 @@ let mapTool = 'select'; // 'select', 'erase'
 let canvasCtx = null;
 let mapCanvas = null;
 let mapaSalvando = false;
+let mapaConfirmando = false;
+let mapaReferenciaInicial = null;
 let mapasCargaVersao = 0;
 
 // Sistema de Câmera (Pan/Zoom)
@@ -334,12 +336,9 @@ async function persistirMapaTeatro(mapa) {
         erro.code = 'MAPA_LEGADO';
         throw erro;
     }
-    const lugares_por_setor = contarCadeirasMapa(mapa);
     const payload = {
         name: mapa.name,
-        config: JSON.parse(JSON.stringify(mapa.config)),
-        total_lugares: lugares_por_setor.reduce((total, s) => total + s.quantidade, 0),
-        lugares_por_setor
+        config: JSON.parse(JSON.stringify(mapa.config))
     };
     const existente = mapa.id && !String(mapa.id).startsWith('local_');
     let salvo;
@@ -443,9 +442,40 @@ window.duplicarMapaTeatro = async function(id) {
     }
 };
 
+function assinaturaEditorMapa() {
+    const mapa = window.state.mapaAtual;
+    if (!mapa) return null;
+    return JSON.stringify({ id: mapa.id, name: document.getElementById('mapa-nome').value.trim() || 'Mapa sem nome', config: mapa.config });
+}
+
+function mapaTemAlteracoes() {
+    const mapa = window.state.mapaAtual;
+    return !!mapa && (!mapa.id || assinaturaEditorMapa() !== mapaReferenciaInicial);
+}
+
+async function confirmarAcaoMapa(opcoes) {
+    mapaConfirmando = true;
+    try {
+        if (typeof window.confirmarPopup !== 'function') {
+            avisarMapa('A confirmação não pôde ser aberta. Suas alterações continuam no editor; recarregue somente depois de preservá-las.');
+            return false;
+        }
+        return await window.confirmarPopup({ ...opcoes, zIndex: 1000000 });
+    } finally {
+        mapaConfirmando = false;
+    }
+}
+
 window.salvarMapaTeatro = async function() {
     const mapa = window.state.mapaAtual;
-    if (!mapa || mapaSalvando) return;
+    if (!mapa || mapaSalvando || mapaConfirmando) return false;
+    const nome = document.getElementById('mapa-nome').value.trim() || 'Mapa sem nome';
+    const confirmou = await confirmarAcaoMapa({
+        titulo: 'Salvar mapa de teatro?',
+        mensagem: `Deseja salvar o mapa <strong>${escaparMapaHtml(nome)}</strong> com seus setores e assentos?`,
+        textoOk: 'Salvar mapa', textoCancelar: 'Continuar editando', focoCancelar: true
+    });
+    if (!confirmou || window.state.mapaAtual !== mapa) return false;
     mapa.name = document.getElementById('mapa-nome').value.trim() || 'Mapa sem nome';
     const idAnterior = mapa._idLocalAnterior || mapa.id;
     const controles = Array.from(document.getElementById('modal-mapa-teatro').querySelectorAll('button, input, select'))
@@ -458,16 +488,24 @@ window.salvarMapaTeatro = async function() {
         registrarMapaSalvo(salvo, idAnterior);
     } catch (e) {
         console.error('[Mapas] Erro ao salvar:', e);
-        avisarMapa(e.code === 'MAPA_LEGADO' ? e.message
-            : 'Não foi possível confirmar o salvamento. Suas alterações continuam no editor; tente novamente.');
+        const mensagem = e.code === 'MAPA_LEGADO' ? e.message
+            : 'Não foi possível confirmar o salvamento. Suas alterações continuam no editor; tente novamente.';
+        avisarMapa(mensagem);
+        await confirmarAcaoMapa({ titulo: 'Mapa não salvo', mensagem: escaparMapaHtml(mensagem),
+            textoOk: 'Voltar ao editor', somenteOk: true });
     } finally {
         mapaSalvando = false;
         controles.forEach(({ el, disabled }) => { el.disabled = disabled; });
     }
     if (salvo) {
-        fecharModalMapaTeatro();
+        encerrarEditorMapa();
         avisarMapa('Mapa salvo e confirmado.', 'success');
+        await confirmarAcaoMapa({ titulo: 'Mapa salvo',
+            mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.`,
+            textoOk: 'Concluir', somenteOk: true });
+        return true;
     }
+    return false;
 };
 
 // ==========================================
@@ -511,17 +549,37 @@ function abrirModalMapaTeatro() {
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
     atualizarHeaderSetor();
+    mapaReferenciaInicial = assinaturaEditorMapa();
 
     setTimeout(initMapCanvas, 100);
 }
 
-window.fecharModalMapaTeatro = function() {
-    if (mapaSalvando) return;
+function encerrarEditorMapa() {
     document.getElementById('modal-mapa-teatro').style.display = 'none';
     window.state.mapaAtual = null;
+    mapaReferenciaInicial = null;
     if(window.requestAnimFrameId) cancelAnimationFrame(window.requestAnimFrameId);
     window.requestAnimFrameId = null;
 }
+
+window.fecharModalMapaTeatro = async function() {
+    const mapa = window.state.mapaAtual;
+    if (!mapa || mapaSalvando || mapaConfirmando) return false;
+    if (mapaTemAlteracoes()) {
+        const confirmou = await confirmarAcaoMapa({ titulo: 'Sair sem salvar?',
+            mensagem: 'Este mapa tem alterações que ainda não foram salvas. Deseja descartá-las e sair?',
+            textoOk: 'Sair sem salvar', textoCancelar: 'Continuar editando', focoCancelar: true });
+        if (!confirmou || window.state.mapaAtual !== mapa) return false;
+    }
+    encerrarEditorMapa();
+    return true;
+};
+
+window.addEventListener('beforeunload', function(e) {
+    if (!mapaTemAlteracoes() && !mapaSalvando) return;
+    e.preventDefault();
+    e.returnValue = '';
+});
 
 window.adicionarSetorMapa = function() {
     window.pushToMapHistory();
@@ -1345,7 +1403,7 @@ window.deletarSelecionadas = function() {
 
 document.addEventListener('keydown', function(e) {
     const modal = document.getElementById('modal-mapa-teatro');
-    if (!modal || modal.style.display !== 'flex' || mapaSalvando) return;
+    if (!modal || modal.style.display !== 'flex' || mapaSalvando || mapaConfirmando) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
     
     // Spacebar: ativa ferramenta Mover (pan) enquanto pressionado

@@ -36,7 +36,7 @@ Verificações de sintaxe dos três arquivos JavaScript alterados e `git diff --
 
 Na validação inicial, as alterações eram locais. Salvamento/reabertura foram validados com transporte simulado, não no banco real. Motor PDF e impressão física não foram executados; a conferência dos consumidores verificou a preservação dos rótulos alfabéticos no CSV, sem comprovar ordenação final do motor. Não houve modificação de Python, schema ou acesso ao banco compartilhado nesta tarefa.
 
-A incompatibilidade de `total_lugares`/`lugares_por_setor` com o banco, identificada na exportação de 02/10/2026, não foi alterada nem reconsultada nesta tarefa. A leitura e geração restrita por setor/modelo e os PDFs automáticos continuam sendo tarefas próprias.
+A incompatibilidade de `total_lugares`/`lugares_por_setor` com o banco, identificada na exportação de 02/10/2026, não foi alterada na entrega das faixas. Sua correção posterior está descrita em [Salvamento e confirmações](mapas-teatro-salvamento-confirmacao-2026-10-03.md). A leitura e geração restrita por setor/modelo e os PDFs automáticos continuam sendo tarefas próprias.
 
 ## Publicação autorizada
 
