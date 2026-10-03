@@ -1982,7 +1982,14 @@ function drawPedPreview() {
                         }
                     }
 
-                    if (isNumCamarote) {
+                    const numCapa = multiArteItem ? numeracaoDaArteNaPreviaPedido(multiArteItem) : num;
+                    const capaTeatro = window.TeatroBanco?.capa(numCapa?.csv_data || [], item_local_index ?? item_index);
+                    if (capaTeatro) {
+                        const largura = ctx.measureText(capaTeatro.titulo).width;
+                        ctx.fillText(capaTeatro.titulo, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        ctx.fillText(capaTeatro.detalhe, textX + largura, textY);
+                    } else if (isNumCamarote) {
                         let cIni = 1, lCam = 1;
                         const targetObj = multiArteItem || activeOSItemObj;
                         if (targetObj) {
@@ -3468,7 +3475,7 @@ function updatePedSummary() {
     const impStartGroup = document.getElementById('ped-start-group');
     const impEndGroup = document.getElementById('ped-end-group');
     
-    if ((num && num.tipo === 'TEATRO') || (num2 && num2.tipo === 'TEATRO')) {
+    if (trabalhoUsaMapaTeatro('ped')) {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'block';
         if (impStartGroup) impStartGroup.style.display = 'none';
         if (impEndGroup) impEndGroup.style.display = 'none';
@@ -6947,6 +6954,7 @@ async function executarPedImposition(mode, isRefazer) {
             if (!selecaoAindaAtual()) throw new Error('A seleção mudou. Confira e gere novamente.');
         }
 
+        await window.TeatroBanco?.conferirMotor(formData, baseUrl, impositionAbortController.signal);
         await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
         const res = await fetch(urlImpose, {
 
@@ -7701,6 +7709,14 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
         }
     } else {
         models_items.push(multiMap);
+    }
+    if (typeof window !== 'undefined' && window.TeatroBanco) {
+        const modelos = models_items.map((items, i) => ({ items,
+            rows: hasArtes ? (artesList[i].numeracao || numeracaoDaArteNaPreviaPedido(artesList[i]))?.csv_data || []
+                : bancoTeatroDoModelo(itemAtivoDoPedido())?.csv_data || state.csvData || numeracaoDoModelo(itemAtivoDoPedido())?.csv_data || []
+        }));
+        const setsTeatro = window.TeatroBanco.montarSets(modelos, posesPerSheet);
+        if (setsTeatro) return setsTeatro;
     }
     let complete_blocks = [];
     let leftovers_by_model = models_items.map(() => []);

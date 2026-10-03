@@ -56,7 +56,11 @@ function montar(comConsumidor = false) {
     };
     c.window = c; vm.createContext(c); vm.runInContext(mapasFonte, c);
     if (comConsumidor) {
-        vm.runInContext('const state = { csvData: null, numeracoes: [{id:"n1",tipo:"TEATRO"}] };', c);
+        vm.runInContext('const state = { csvData: null, osItens: {}, numeracoes: [{id:"n1",tipo:"TEATRO"}] };', c);
+        for (const nome of ['itemAtivoDoPedido', 'itensDaImposicao', 'vinculoDeBancoDoModelo', 'bancoTeatroDoModelo']) {
+            const inicio = scriptFonte.indexOf('\nfunction ' + nome + '(');
+            vm.runInContext(scriptFonte.slice(inicio, scriptFonte.indexOf('\n}', inicio) + 2), c);
+        }
         vm.runInContext(consumidor, c);
     }
     const producao = comConsumidor ? vm.runInContext('state', c) : null;

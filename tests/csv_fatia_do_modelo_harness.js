@@ -354,7 +354,7 @@ function extrairFuncao(src, nome) {
     const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'numeracaoDoModelo', 'resolverNumeracaoParaModelo', 'vinculoDeBancoDoModelo',
                    'colunasDoBancoDaNumeracao', 'linhasComDadoDaNumeracao', 'fatiaCsvDoItem',
                    'rotuloDoModelo', 'celulasRepetidasDoPedido', 'textoDasCelulasRepetidas',
-                   'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
+                   'bancoTeatroDoModelo', 'bancoDeDadosIncompletoDoModelo', 'celulasEsperadasDoModelo', 'numeracaoEhDuplex',
                    // Os tres Modos de Impressao (31/08/2026): a divergencia
                    // nomeia o modo, e agora ha um terceiro nome a dizer.
                    'temVerso', 'versoUnico', 'rotuloDoModoDeImpressao',
