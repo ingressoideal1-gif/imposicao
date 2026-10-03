@@ -1,6 +1,6 @@
 # TEATRO — preenchimento vertical por modelo, 03/10/2026
 
-Correção local, preparada na cópia isolada `tmp_pedido-mapa-teatro-20261003`, sobre `812e9a9d`. Sem publicação, instalação, envio ao ERP, alteração de banco compartilhado ou impressão física nesta correção.
+Correção preparada na cópia isolada `tmp_pedido-mapa-teatro-20261003`, sobre `812e9a9d`, e publicada após autorização de entrega segura. Frontend v1005 e NewProd 1.2.348 conferidos publicamente. Sem instalação manual, envio ao ERP, alteração de banco compartilhado ou impressão física nesta correção.
 
 ## Regra e diagnóstico
 
@@ -31,6 +31,10 @@ Os dados do pedido 23096 lidos no diagnóstico anterior servem apenas como refer
 
 Enviar `docs/integracao-erp-mapas-teatro-v4.md`, que substitui as versões 2 e 3 e esclarece que `csv_data.Bloco` identifica o conjunto no banco, sem definir um bloco físico de impressão. O arquivo foi disponibilizado também em `C:\ProjetosLocais\ideal-imposition\docs`.
 
-Publicação web e distribuição/instalação do NewProd corrigido estão pendentes. Não basta publicar somente o frontend: a estação anterior não disponibiliza `teatro_vertical_modelo_v1` e será bloqueada de forma explícita.
+Frontend v1005: commit 867312ec6f8a3c62d05036720a3771edd84b4395; Cloudflare Pages confirmou sucesso e 16/16 arquivos normalizados corresponderam aos locais nos dois domínios. O primeiro hash divergente após o deploy era propagação: a nova conferência passou sem repetir a publicação.
 
-Recuperação: as mudanças estão locais no worktree e podem ser revistas pelo diff antes da entrega. O código do checkout operacional, os dados e a versão instalada não foram modificados. No checkout operacional foram apenas disponibilizados o contrato v4 e uma nota de correção no diagnóstico anterior do pedido.
+NewProd 1.2.348: commit 5490816f8ea96deec08fc95f3266066921c63e4e; tag agente-v1.2.348. MSI com ProductVersion 1.2.348.0 e 156319744 bytes. O download público bateu SHA-256 `29c64353f18628f8fbe9f6c7759a7cb702dac5b274af7f8246da12565b371686` antes da ativação de latest.json, cuja versão, URL, tamanho e hash foram relidos e conferidos. A auditoria do pacote verificou módulos, capacidade teatro_vertical_modelo_v1, DLLs e seis arquivos do painel idênticos à fonte. O módulo puro extraído do executável também produziu 11/65 folhas para 82/515 registros sintéticos em oito poses.
+
+Evidência: `evidencia-2026-10-03-teatro-vertical.json`. A estação local consultada antes da ativação ainda reportava NewProd 1.2.347, sem a capacidade nova; usar Atualizar agora na bandeja para instalar. Distribuição pública não comprova instalação nem impressão física.
+
+Recuperação: a fonte anterior está em v1004 e agente-v1.2.347. Para recuperar, republicar o código anterior com versões novas; o auto-update não instala downgrade. Não reutilizar nem sobrescrever o objeto MSI publicado. O código do checkout operacional, os dados e a versão instalada não foram modificados. No checkout operacional foram apenas disponibilizados o contrato v4 e uma nota de correção no diagnóstico anterior do pedido.

@@ -41,7 +41,7 @@ A prévia, o PDF e Refazer Folhas usam uma pilha por modelo. As capas indicam os
 
 O reconhecimento é automático pelo tipo da numeração ou pela origem do banco importado. Não exigir do operador a gravação de Blocado/Montagem estrita para marcar PRONTO. A validação de quantidade, setor, revisão e elementos permanece. O executor interno reutiliza cut_stack/strict_assembly com os sets calculados por modelo; essa configuração interna não significa um bloco por fila.
 
-A versão publicada anteriormente aplicava a regra por conjuntos; a correção está local, pendente de publicação e distribuição. O frontend corrigido exige a capacidade teatro_vertical_modelo_v1 da estação antes de enviar um trabalho TEATRO.
+A versão publicada anteriormente aplicava a regra por conjuntos; a correção foi publicada em v1005 e NewProd 1.2.348, com hashes públicos e manifesto conferidos. A instalação na estação permanece uma verificação separada. O frontend corrigido exige a capacidade teatro_vertical_modelo_v1 da estação antes de enviar um trabalho TEATRO.
 
 ## Confirmação e retomada
 
